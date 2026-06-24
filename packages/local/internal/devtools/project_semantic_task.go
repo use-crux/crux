@@ -2,6 +2,7 @@ package devtools
 
 import (
 	"context"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -13,11 +14,11 @@ type projectSemanticPatchTask struct {
 }
 
 type projectSemanticPatchTaskResult struct {
-	patch     IndexPatch
+	patch     projectindex.IndexPatch
 	err       error
 	startedAt time.Time
 	stage     string
-	request   ProjectSemanticIndexRequest
+	request   projectindex.ProjectSemanticIndexRequest
 }
 
 func (s *Service) startPlannedProjectSemanticPatch(
@@ -30,8 +31,8 @@ func (s *Service) startPlannedProjectSemanticPatch(
 	if mode == ProjectSemanticDisabled {
 		return nil
 	}
-	planner, hasPlanner := s.indexer.(ProjectSemanticPlanner)
-	_, hasIndexer := s.indexer.(ProjectSemanticIndexer)
+	planner, hasPlanner := s.indexer.(projectindex.ProjectSemanticPlanner)
+	_, hasIndexer := s.indexer.(projectindex.ProjectSemanticIndexer)
 	if !hasPlanner || !hasIndexer {
 		return nil
 	}
@@ -51,12 +52,12 @@ func (s *Service) startPlannedProjectSemanticPatch(
 func (s *Service) startProjectSemanticPatchTask(
 	ctx context.Context,
 	mode ProjectSemanticExecutionMode,
-	request ProjectSemanticIndexRequest,
+	request projectindex.ProjectSemanticIndexRequest,
 ) *projectSemanticPatchTask {
 	if mode == ProjectSemanticDisabled {
 		return nil
 	}
-	if _, ok := s.indexer.(ProjectSemanticIndexer); !ok {
+	if _, ok := s.indexer.(projectindex.ProjectSemanticIndexer); !ok {
 		return nil
 	}
 	taskCtx, cancel := context.WithCancel(ctx)
@@ -69,10 +70,10 @@ func (s *Service) startProjectSemanticPatchTask(
 
 func (s *Service) indexProjectSemanticPatchTask(
 	ctx context.Context,
-	request ProjectSemanticIndexRequest,
+	request projectindex.ProjectSemanticIndexRequest,
 	done chan<- projectSemanticPatchTaskResult,
 ) {
-	indexer, ok := s.indexer.(ProjectSemanticIndexer)
+	indexer, ok := s.indexer.(projectindex.ProjectSemanticIndexer)
 	if !ok {
 		done <- projectSemanticPatchTaskResult{stage: "missing-indexer", request: request}
 		return
@@ -108,7 +109,7 @@ func (t *projectSemanticPatchTask) stop() {
 
 func (s *Service) applyPlannedProjectSemanticPatch(
 	ctx context.Context,
-	request ProjectSemanticIndexRequest,
+	request projectindex.ProjectSemanticIndexRequest,
 	task *projectSemanticPatchTask,
 	lintPrefetch *projectLintPrefetchTask,
 	astIndex store.IndexData,
@@ -120,12 +121,12 @@ func (s *Service) applyPlannedProjectSemanticPatch(
 	if result.stage != "semantic" || !projectSemanticRequestEvidenceMatches(result.request, request) {
 		return s.applyProjectSemanticPatch(ctx, request, lintPrefetch)
 	}
-	patch := projectSemanticPatchWithAstSnapshot(result.patch, astIndex)
+	patch := projectindex.JoinSemanticPatch(result.patch, astIndex)
 	return s.applyProjectSemanticPatchResult(ctx, request, result.startedAt, patch, result.err, lintPrefetch)
 }
 
 func (s *Service) applyPlannedProjectSemanticPatchInBackground(
-	request ProjectSemanticIndexRequest,
+	request projectindex.ProjectSemanticIndexRequest,
 	task *projectSemanticPatchTask,
 	astIndex store.IndexData,
 ) {

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
 )
 
@@ -22,14 +22,14 @@ func TestProjectNativeStaticPlanReportsSubphaseTimings(t *testing.T) {
 		t.Fatalf("write source: %v", err)
 	}
 
-	result, err := BuildWithTimings(root, "timed-plan", devtools.ProjectNativeStaticConfig{
+	result, err := BuildWithTimings(root, "timed-plan", projectindex.ProjectNativeStaticConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})
 	if err != nil {
 		t.Fatalf("BuildWithTimings error = %v", err)
 	}
-	names := projectNativeStaticPlanTimingNames(result.Timings)
+	names := planTimingNames(result.Timings)
 	for _, name := range []string{
 		TimingFileSelection,
 		TimingSourceGraph,
@@ -41,7 +41,7 @@ func TestProjectNativeStaticPlanReportsSubphaseTimings(t *testing.T) {
 	}
 }
 
-func projectNativeStaticPlanTimingNames(timings []devtools.ProjectIndexPhaseTiming) []string {
+func planTimingNames(timings []projectindex.ProjectIndexPhaseTiming) []string {
 	names := make([]string, 0, len(timings))
 	for _, timing := range timings {
 		names = append(names, timing.Name)

@@ -1,6 +1,7 @@
 package devtools
 
 import (
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"sync"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -67,7 +68,7 @@ func (s *projectIndexWatchStatusStore) FullFallback(run ProjectWatchRunOptions, 
 
 func (s *projectIndexWatchStatusStore) IncrementalResult(
 	run ProjectWatchRunOptions,
-	result ProjectIndexIncrementalResult,
+	result projectindex.ProjectIndexIncrementalResult,
 	patchCount int,
 	semanticStatus string,
 ) {

@@ -2,11 +2,13 @@ pub(crate) mod analysis {
     pub(crate) mod parse;
     pub(crate) mod run;
     #[cfg(test)]
-    pub(crate) mod source_ref_tests;
-    #[cfg(test)]
-    pub(crate) mod tests;
-    #[cfg(test)]
-    pub(crate) mod tree_tests;
+    pub(crate) mod tests {
+        pub(crate) mod model;
+        pub(crate) mod source_refs;
+        pub(crate) mod tree;
+
+        pub(crate) use self::model::request_with_root_file_and_call_names;
+    }
 }
 
 pub(crate) mod contracts {
@@ -25,14 +27,14 @@ pub(crate) mod core {
 
 pub(crate) mod finalizer {
     pub(crate) mod events;
-    #[cfg(test)]
-    pub(crate) mod events_tests;
     pub(crate) mod lint_model;
-    #[cfg(test)]
-    pub(crate) mod lint_tests;
     pub(crate) mod run;
     #[cfg(test)]
-    pub(crate) mod tests;
+    pub(crate) mod tests {
+        pub(crate) mod events;
+        pub(crate) mod lint;
+        pub(crate) mod model;
+    }
 }
 
 pub(crate) mod lint {
@@ -74,23 +76,22 @@ pub(crate) mod read {
 }
 
 pub(crate) mod relation {
-    #[cfg(test)]
-    pub(crate) mod alias_tests;
     pub(crate) mod fallback;
-    #[cfg(test)]
-    pub(crate) mod fallback_tests;
-    #[cfg(test)]
-    pub(crate) mod gap_tests;
     pub(crate) mod gaps;
     pub(crate) mod model;
     pub(crate) mod policy;
-    #[cfg(test)]
-    pub(crate) mod policy_tests;
-    #[cfg(test)]
-    pub(crate) mod ref_tests;
     pub(crate) mod report;
     #[cfg(test)]
-    pub(crate) mod tests;
+    pub(crate) mod tests {
+        pub(crate) mod alias;
+        pub(crate) mod fallback;
+        pub(crate) mod gaps;
+        pub(crate) mod model;
+        pub(crate) mod policy;
+        pub(crate) mod refs;
+
+        pub(crate) use self::model::{definition, relation_ref};
+    }
 }
 
 pub(crate) mod source {

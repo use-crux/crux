@@ -4,15 +4,16 @@ import (
 	"context"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 func (s *Service) applyProjectSemanticPatch(
 	ctx context.Context,
-	request ProjectSemanticIndexRequest,
+	request projectindex.ProjectSemanticIndexRequest,
 	lintPrefetch *projectLintPrefetchTask,
 ) (store.IndexData, error) {
-	indexer, ok := s.indexer.(ProjectSemanticIndexer)
+	indexer, ok := s.indexer.(projectindex.ProjectSemanticIndexer)
 	if !ok {
 		index := s.indexReadModel()
 		lintRequest := projectLintIndexRequest(
@@ -39,9 +40,9 @@ func (s *Service) applyProjectSemanticPatch(
 
 func (s *Service) applyProjectSemanticPatchResult(
 	ctx context.Context,
-	request ProjectSemanticIndexRequest,
+	request projectindex.ProjectSemanticIndexRequest,
 	semanticStartedAt time.Time,
-	patch IndexPatch,
+	patch projectindex.IndexPatch,
 	semanticErr error,
 	lintPrefetch *projectLintPrefetchTask,
 ) (store.IndexData, error) {
@@ -60,7 +61,7 @@ func (s *Service) applyProjectSemanticPatchResult(
 		}
 		return index, applyErr
 	}
-	if err := validateIndexPatchBudget(patch, request.Budget); err != nil {
+	if err := projectindex.ValidatePatchBudget(patch, request.Budget); err != nil {
 		index, applied, applyErr := s.applyProjectSemanticDegradedPatch(ctx, request, semanticStartedAt, "index.semantic_budget_exceeded", err.Error())
 		if !applied {
 			s.watchStatus.SemanticStaleDropped(request.WatchRunID)
@@ -70,7 +71,7 @@ func (s *Service) applyProjectSemanticPatchResult(
 		return index, applyErr
 	}
 	if patch.Phase == "" {
-		patch.Phase = indexPatchPhaseSemantic
+		patch.Phase = projectindex.PhaseSemantic
 	}
 	if patch.Project.Root == "" {
 		patch.Project = store.ProjectIdentity{Root: request.Root, Name: request.ProjectName, ConfigFile: request.ConfigPath}
@@ -104,19 +105,19 @@ func (s *Service) applyProjectSemanticPatchResult(
 	return s.applyProjectLintPatch(ctx, lintRequest, request.IndexGeneration)
 }
 
-func (s *Service) applyProjectSemanticPatchInBackground(request ProjectSemanticIndexRequest) {
+func (s *Service) applyProjectSemanticPatchInBackground(request projectindex.ProjectSemanticIndexRequest) {
 	go func() {
 		if s == nil {
 			return
 		}
-		if _, ok := s.indexer.(ProjectSemanticIndexer); !ok {
+		if _, ok := s.indexer.(projectindex.ProjectSemanticIndexer); !ok {
 			return
 		}
 		_, _ = s.applyProjectSemanticPatch(s.ctx, request, nil)
 	}()
 }
 
-func semanticSourceProfileFromPatches(patches []IndexPatch) *SemanticSourceProfile {
+func semanticSourceProfileFromPatches(patches []projectindex.IndexPatch) *projectindex.SemanticSourceProfile {
 	for index := len(patches) - 1; index >= 0; index-- {
 		if patches[index].SemanticSourceProfile != nil {
 			return patches[index].SemanticSourceProfile
@@ -138,7 +139,7 @@ func watchSemanticStatusForMode(mode ProjectSemanticExecutionMode) string {
 
 func (s *Service) applyProjectSemanticDegradedPatch(
 	ctx context.Context,
-	request ProjectSemanticIndexRequest,
+	request projectindex.ProjectSemanticIndexRequest,
 	startedAt time.Time,
 	code string,
 	message string,
@@ -149,15 +150,15 @@ func (s *Service) applyProjectSemanticDegradedPatch(
 		project = *current.Project
 	}
 	finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
-	patch := IndexPatch{
+	patch := projectindex.IndexPatch{
 		SchemaVersion: current.SchemaVersion,
-		Phase:         indexPatchPhaseSemantic,
+		Phase:         projectindex.PhaseSemantic,
 		Project:       project,
 		StartedAt:     startedAt.UTC().Format(time.RFC3339Nano),
 		FinishedAt:    finishedAt,
 		Status:        "degraded",
 		Indexing:      store.IndexIndexingWithSemanticDegraded(current.Indexing, time.Since(startedAt), message),
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Diagnostics: []store.IndexDiagnostic{
 				{
 					ID:           "diagnostic:semantic:degraded",
@@ -172,13 +173,13 @@ func (s *Service) applyProjectSemanticDegradedPatch(
 	return s.applySemanticPatchIfCurrent(ctx, patch, request.IndexGeneration)
 }
 
-func (s *Service) applySemanticPatchIfCurrent(ctx context.Context, patch IndexPatch, generation uint64) (store.IndexData, bool, error) {
+func (s *Service) applySemanticPatchIfCurrent(ctx context.Context, patch projectindex.IndexPatch, generation uint64) (store.IndexData, bool, error) {
 	s.indexMu.Lock()
 	defer s.indexMu.Unlock()
-	if !s.indexGeneration.IsCurrent(generation) {
+	if !s.indexState.IsCurrent(generation) {
 		return s.indexReadModel(), false, nil
 	}
-	if err := s.commitIndexPatch(ctx, patch); err != nil {
+	if err := s.indexCache.Commit(ctx, patch); err != nil {
 		return store.IndexData{}, true, err
 	}
 	return s.applyIndexPatchLocked(patch), true, nil
@@ -186,17 +187,17 @@ func (s *Service) applySemanticPatchIfCurrent(ctx context.Context, patch IndexPa
 
 func (s *Service) applyReadySemanticPatchIfCurrent(
 	ctx context.Context,
-	patch IndexPatch,
+	patch projectindex.IndexPatch,
 	generation uint64,
 	startedAt time.Time,
 ) (store.IndexData, bool, error) {
 	s.indexMu.Lock()
 	defer s.indexMu.Unlock()
-	if !s.indexGeneration.IsCurrent(generation) {
+	if !s.indexState.IsCurrent(generation) {
 		return s.indexReadModel(), false, nil
 	}
 	current := s.store.GetIndex()
-	clearsSourceOnly := hasSourceOnlyDiagnostic(current.Diagnostics) && (patch.Status == "" || patch.Status == "ok")
+	clearsSourceOnly := projectindex.HasSourceOnlyDiagnostic(current.Diagnostics) && (patch.Status == "" || patch.Status == "ok")
 	indexing := store.IndexIndexingWithSemanticReady(
 		current.Indexing,
 		patch.FinishedAt,
@@ -210,15 +211,15 @@ func (s *Service) applyReadySemanticPatchIfCurrent(
 		if indexing.AST.Status == "degraded" {
 			indexing.AST.Status = "ready"
 		}
-		astDiagnostics := filterRuntimeIndexDiagnostics(s.indexPatch.DiagnosticsByPhase[indexPatchPhaseAST])
+		astDiagnostics := projectindex.FilterRuntimeDiagnostics(s.indexState.PhaseDiagnostics(projectindex.PhaseAST))
 		indexing.AST.DiagnosticCount = len(astDiagnostics)
-		s.indexPatch.DiagnosticsByPhase[indexPatchPhaseAST] = astDiagnostics
+		s.indexState.SetPhaseDiagnostics(projectindex.PhaseAST, astDiagnostics)
 		if patch.Facts.Diagnostics == nil {
 			patch.Facts.Diagnostics = []store.IndexDiagnostic{}
 		}
 	}
 	patch.Indexing = indexing
-	if err := s.commitIndexPatch(ctx, patch); err != nil {
+	if err := s.indexCache.Commit(ctx, patch); err != nil {
 		return store.IndexData{}, true, err
 	}
 	return s.applyIndexPatchLocked(patch), true, nil

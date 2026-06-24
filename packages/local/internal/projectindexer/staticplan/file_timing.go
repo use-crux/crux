@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
 const (
@@ -18,17 +18,17 @@ const (
 	TimingSelectionFinalize = "native.plan.selection_finalize"
 )
 
-func projectNativeStaticFileSelectionWithCallNamesTimed(
+func fileSelectionWithCallNamesTimed(
 	root string,
 	configFile string,
 	callNames []string,
-) (projectNativeStaticFileSelectionResult, []devtools.ProjectIndexPhaseTiming, error) {
-	discoveryCache := projectNativeStaticLoadDiscoveryCache(root)
+) (fileSelectionResult, []projectindex.ProjectIndexPhaseTiming, error) {
+	discoveryCache := loadDiscoveryCache(root)
 	defer discoveryCache.Save()
 
-	classified, skipped, timings, err := projectNativeStaticPrimaryCandidateFilesTimedWithCache(root, callNames, discoveryCache)
+	classified, skipped, timings, err := primaryCandidateFilesTimedWithCache(root, callNames, discoveryCache)
 	if err != nil {
-		return projectNativeStaticFileSelectionResult{}, timings, err
+		return fileSelectionResult{}, timings, err
 	}
 	finalizeStarted := time.Now()
 	primary := append([]string(nil), classified...)
@@ -37,40 +37,40 @@ func projectNativeStaticFileSelectionWithCallNamesTimed(
 	}
 	files := append([]string(nil), primary...)
 	supportStarted := time.Now()
-	for _, support := range projectNativeStaticSupportFilesWithCache(primary, discoveryCache) {
+	for _, support := range supportFilesWithCache(primary, discoveryCache) {
 		files = appendUniqueSorted(files, support)
 	}
 	timings = AppendTiming(timings, TimingSupportFiles, supportStarted, len(files)-len(primary))
 	timings = AppendTiming(timings, TimingSelectionFinalize, finalizeStarted, len(files))
-	return projectNativeStaticFileSelectionResult{
+	return fileSelectionResult{
 		Files:        files,
 		PrimaryFiles: primary,
 		Skipped:      skipped,
 	}, timings, nil
 }
 
-func projectNativeStaticPrimaryCandidateFilesTimed(
+func primaryCandidateFilesTimed(
 	root string,
 	callNames []string,
-) ([]string, []json.RawMessage, []devtools.ProjectIndexPhaseTiming, error) {
-	return projectNativeStaticPrimaryCandidateFilesTimedWithCache(root, callNames, nil)
+) ([]string, []json.RawMessage, []projectindex.ProjectIndexPhaseTiming, error) {
+	return primaryCandidateFilesTimedWithCache(root, callNames, nil)
 }
 
-func projectNativeStaticPrimaryCandidateFilesTimedWithCache(
+func primaryCandidateFilesTimedWithCache(
 	root string,
 	callNames []string,
-	discoveryCache *projectNativeStaticDiscoveryCache,
-) ([]string, []json.RawMessage, []devtools.ProjectIndexPhaseTiming, error) {
-	timings := []devtools.ProjectIndexPhaseTiming{}
+	discoveryCache *discoveryCache,
+) ([]string, []json.RawMessage, []projectindex.ProjectIndexPhaseTiming, error) {
+	timings := []projectindex.ProjectIndexPhaseTiming{}
 	walkStarted := time.Now()
-	candidates, err := projectNativeStaticCandidateFiles(root)
+	candidates, err := candidateFiles(root)
 	if err != nil {
 		return nil, nil, timings, err
 	}
 	timings = AppendTiming(timings, TimingFileWalk, walkStarted, len(candidates))
 
 	classifyStarted := time.Now()
-	classifications := projectNativeStaticClassifyCandidatesWithCache(candidates, callNames, discoveryCache)
+	classifications := classifyCandidatesWithCache(candidates, callNames, discoveryCache)
 	timings = AppendTiming(timings, TimingFileClassify, classifyStarted, len(classifications))
 
 	files := []string{}
@@ -90,22 +90,22 @@ func projectNativeStaticPrimaryCandidateFilesTimedWithCache(
 	return files, skipped, timings, nil
 }
 
-func projectNativeStaticCandidateFiles(root string) ([]string, error) {
+func candidateFiles(root string) ([]string, error) {
 	candidates := []string{}
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
 		if entry.IsDir() {
-			if path != root && projectNativeStaticIgnoredDir(entry.Name()) {
+			if path != root && ignoredDir(entry.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if projectNativeStaticIgnoredSourcePath(root, path) {
+		if ignoredSourcePath(root, path) {
 			return nil
 		}
-		if !projectNativeStaticCandidateSourceFile(path) {
+		if !candidateSourceFile(path) {
 			return nil
 		}
 		candidates = append(candidates, path)

@@ -19,6 +19,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/server"
+	qualityserver "github.com/use-crux/crux/packages/local/internal/server/quality"
 	"github.com/use-crux/crux/packages/local/internal/tui"
 )
 
@@ -299,13 +300,16 @@ func runTUI(devSrv *server.DevServer, serverURL string, port int, startup *start
 	)
 
 	// Phase 3: Launch Bubbletea TUI (server is ready, WS connected).
-	// Promotion spawns the embedded quality worker (lives in internal/server,
-	// which devtools can't import) — inject it here. Empty root/config let the
-	// worker run in the process cwd and auto-discover crux.config.ts.
+	// Promotion spawns the embedded quality worker through the server-owned
+	// Quality bridge. Empty root/config let the worker run in the process cwd
+	// and auto-discover crux.config.ts.
 	c := devtools.NewDirectClientFromService(devSrv.Devtools).
 		WithObservability(devSrv.Observability).
 		WithQualityPromote(func(ctx context.Context, experimentID, variant, pinID string) (api.QualityPromoteResult, error) {
-			return server.RunQualityPromote(ctx, "", "", server.QualityPromoteRequest{
+			return qualityserver.RunPromote(ctx, "", "", qualityserver.RunnerDeps{
+				FindNode:      server.FindNode,
+				ExtractRunner: server.ExtractQualityRunner,
+			}, qualityserver.PromoteRequest{
 				ExperimentID: experimentID,
 				Variant:      variant,
 				PinID:        pinID,

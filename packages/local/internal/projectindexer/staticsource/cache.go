@@ -1,15 +1,15 @@
 package staticsource
 
-import "github.com/use-crux/crux/packages/local/internal/devtools"
+import "github.com/use-crux/crux/packages/local/internal/projectindex"
 
 type cacheEntry struct {
 	CacheKey        string
 	SourceHash      string
-	SemanticProfile *devtools.SemanticSourceProfileFile
+	SemanticProfile *projectindex.SemanticSourceProfileFile
 }
 
 func cacheEntries(
-	entries []devtools.StaticCacheHit,
+	entries []projectindex.StaticCacheHit,
 ) map[string]cacheEntry {
 	out := map[string]cacheEntry{}
 	for _, entry := range entries {
@@ -25,7 +25,7 @@ func cacheEntries(
 	return out
 }
 
-func inputFiles(plan devtools.ProjectStaticSyntaxPlan) []string {
+func inputFiles(plan projectindex.ProjectStaticSyntaxPlan) []string {
 	if plan.FilesToParse == nil {
 		return UniqueFiles(plan.Files)
 	}
@@ -81,15 +81,15 @@ func readMap(
 func cachedProfile(
 	file string,
 	entry cacheEntry,
-) (devtools.SemanticSourceProfileFile, bool) {
+) (projectindex.SemanticSourceProfileFile, bool) {
 	if file == "" || entry.SemanticProfile == nil {
-		return devtools.SemanticSourceProfileFile{}, false
+		return projectindex.SemanticSourceProfileFile{}, false
 	}
 	profile := *entry.SemanticProfile
 	profile.File = file
 	profile.SourceHash = entry.SourceHash
 	if profile.SourceHash == "" {
-		return devtools.SemanticSourceProfileFile{}, false
+		return projectindex.SemanticSourceProfileFile{}, false
 	}
 	return profile, true
 }

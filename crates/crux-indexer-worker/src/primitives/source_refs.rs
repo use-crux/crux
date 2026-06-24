@@ -5,7 +5,7 @@ use serde_json::Value;
 use crate::{
     primitives::definition::{source_ref, source_ref_with_metadata},
     primitives::record_values::{property_value, resolve_static_value},
-    primitives::routing_model::{ResolvedSource, RoutingContext},
+    primitives::routing::model::{ResolvedSource, RoutingContext},
     protocol::{StaticFunctionCallValue, StaticSyntaxValue},
 };
 

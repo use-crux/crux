@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
@@ -18,6 +17,10 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
+	"github.com/use-crux/crux/packages/local/internal/server/bridge"
+	qualityserver "github.com/use-crux/crux/packages/local/internal/server/quality"
+	"github.com/use-crux/crux/packages/local/internal/server/resources"
+	"github.com/use-crux/crux/packages/local/internal/server/source"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -108,89 +111,27 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 	resourceInspection := resourceinspection.New(runtimeBridge)
 	devSvc.WithResourceInspection(resourceInspection)
 	wsHub := NewWSHub(ctx, devSvc, qualitySvc.Events(), observabilityEvents, runtimeBridge)
-	go discoverRuntimeBridgePeers(ctx, runtimeBridge, opt.ProjectRoot)
+	go bridge.DiscoverPeers(ctx, runtimeBridge, opt.ProjectRoot)
 
 	mux := http.NewServeMux()
+	qualityRunner := qualityserver.RunnerDeps{
+		FindNode:      FindNode,
+		ExtractRunner: ExtractQualityRunner,
+	}
 	readmodel.Mount(mux, endpoints.Deps{
 		Devtools:    devSvc,
 		Quality:     qualitySvc,
-		Evaluations: NewQualityEvaluationCollector(opt.ProjectRoot, opt.ConfigPath),
+		Evaluations: qualityserver.NewEvaluationCollector(opt.ProjectRoot, opt.ConfigPath, qualityRunner),
 	}, endpoints.Registry)
 
-	registerQualityRunEventsHTTP(mux, wsHub, qualitySvc.Events())
-	registerQualityPromoteHTTP(mux, opt.ProjectRoot, opt.ConfigPath, qualitySvc.Events())
+	qualityserver.RegisterRunEvents(mux, wsHub, qualitySvc.Events())
+	qualityserver.RegisterPromote(mux, opt.ProjectRoot, opt.ConfigPath, qualityRunner, qualitySvc.Events())
 
 	// WebSocket upgrade
 	mux.HandleFunc("/ws/ui", wsHub.HandleUpgrade)
-	mux.HandleFunc("/ws/runtime", handleRuntimeBridgeUpgrade(runtimeBridge))
-	mux.HandleFunc("GET /api/runtime/bridge/peers", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, runtimeBridge.Peers())
-	})
-	mux.HandleFunc("POST /api/runtime/bridge/peers", func(w http.ResponseWriter, r *http.Request) {
-		var peer runtimebridge.Peer
-		if err := json.NewDecoder(r.Body).Decode(&peer); err != nil {
-			http.Error(w, "invalid JSON body", http.StatusBadRequest)
-			return
-		}
-		if peer.Transport == "" {
-			peer.Transport = runtimebridge.TransportHTTP
-		}
-		// HTTP peers are dispatched to by the server, so confine their callback
-		// URL to loopback (these are local app runtimes) to prevent SSRF.
-		if peer.Transport == runtimebridge.TransportHTTP && !runtimebridge.IsLoopbackEndpoint(peer.EndpointURL) {
-			http.Error(w, "HTTP runtime peer endpointUrl must be a loopback address", http.StatusBadRequest)
-			return
-		}
-		writeJSON(w, runtimeBridge.RegisterPeer(peer, nil))
-	})
-	mux.HandleFunc("POST /api/runtime/bridge/commands", func(w http.ResponseWriter, r *http.Request) {
-		var req runtimebridge.DispatchRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON body", http.StatusBadRequest)
-			return
-		}
-		resp, err := runtimeBridge.Dispatch(r.Context(), req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		writeJSON(w, resp)
-	})
-	mux.HandleFunc("GET /api/resources/capabilities", func(w http.ResponseWriter, r *http.Request) {
-		caps, err := resourceInspection.Capabilities(r.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, caps)
-	})
-	mux.HandleFunc("GET /api/resources/{resourceId}", func(w http.ResponseWriter, r *http.Request) {
-		result, err := resourceInspection.Get(r.Context(), resourceinspection.GetRequest{
-			ResourceID: r.PathValue("resourceId"),
-			Key:        r.URL.Query().Get("key"),
-			PeerID:     r.URL.Query().Get("peerId"),
-		})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, result)
-	})
-	mux.HandleFunc("GET /api/resources/{resourceId}/entries", func(w http.ResponseWriter, r *http.Request) {
-		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-		result, err := resourceInspection.List(r.Context(), resourceinspection.ListRequest{
-			ResourceID: r.PathValue("resourceId"),
-			Prefix:     r.URL.Query().Get("prefix"),
-			Cursor:     r.URL.Query().Get("cursor"),
-			Limit:      limit,
-			PeerID:     r.URL.Query().Get("peerId"),
-		})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, result)
-	})
+	mux.HandleFunc("/ws/runtime", bridge.UpgradeHandler(runtimeBridge, originAllowed))
+	bridge.RegisterRoutes(mux, runtimeBridge)
+	resources.RegisterRoutes(mux, resourceInspection)
 
 	registerObservabilityHTTP(mux, observabilitySvc, qualitySvc.Events())
 
@@ -385,56 +326,7 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		http.NotFound(w, r)
 	})
 
-	// Source resolution — delegates to Node.js worker
-	sourceWorker := NewSourceWorker(opt.SourceResolverScript)
-	mux.HandleFunc("POST /api/resolve-source", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			Locations []SourceLocation `json:"locations"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		resolved, err := sourceWorker.ResolveLocations(r.Context(), req.Locations)
-		if err != nil {
-			slog.Error("source resolution failed", "error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, map[string]any{"locations": resolved})
-	})
-	mux.HandleFunc("POST /api/resolve-fn-source", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			File   string `json:"file"`
-			Line   int    `json:"line"`
-			Column *int   `json:"column,omitempty"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		result, err := sourceWorker.ResolveFnSource(r.Context(), req.File, req.Line, req.Column)
-		if err != nil {
-			slog.Error("fn source resolution failed", "error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, result)
-	})
-	mux.HandleFunc("POST /api/resolve-source-frame", func(w http.ResponseWriter, r *http.Request) {
-		var req SourceFrameRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-		result, err := sourceWorker.ResolveSourceFrame(r.Context(), req)
-		if err != nil {
-			slog.Error("source frame resolution failed", "error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, result)
-	})
+	source.RegisterRoutes(mux, opt.SourceResolverScript, embeddedSourceResolver)
 
 	// Static UI serving — must be registered last (catch-all for non-API paths).
 	if uiHandler := UIHandler(); uiHandler != nil {

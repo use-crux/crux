@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -14,7 +15,7 @@ func (s *Service) ReindexProjectRuntimeRich(ctx context.Context, root, configPat
 	if err != nil {
 		return store.IndexData{}, err
 	}
-	return s.applyProjectRuntimePatch(ctx, ProjectRuntimeIndexRequest{
+	return s.applyProjectRuntimePatch(ctx, projectindex.ProjectRuntimeIndexRequest{
 		Root:          root,
 		ConfigPath:    configPath,
 		ProjectName:   projectName,
@@ -23,8 +24,8 @@ func (s *Service) ReindexProjectRuntimeRich(ctx context.Context, root, configPat
 	})
 }
 
-func (s *Service) applyProjectRuntimePatch(ctx context.Context, request ProjectRuntimeIndexRequest) (store.IndexData, error) {
-	indexer, ok := s.indexer.(ProjectRuntimeIndexer)
+func (s *Service) applyProjectRuntimePatch(ctx context.Context, request projectindex.ProjectRuntimeIndexRequest) (store.IndexData, error) {
+	indexer, ok := s.indexer.(projectindex.ProjectRuntimeIndexer)
 	runtimeStartedAt := time.Now()
 	if !ok {
 		return s.applyProjectRuntimeDegradedPatch(ctx, request, runtimeStartedAt, "index.runtime_unavailable", "runtime-rich Project Index worker is not configured")
@@ -38,14 +39,14 @@ func (s *Service) applyProjectRuntimePatch(ctx context.Context, request ProjectR
 	if err != nil {
 		return s.applyProjectRuntimeDegradedPatch(ctx, request, runtimeStartedAt, "index.runtime_degraded", err.Error())
 	}
-	if err := validateIndexPatchBudget(patch, request.Budget); err != nil {
+	if err := projectindex.ValidatePatchBudget(patch, request.Budget); err != nil {
 		return s.applyProjectRuntimeDegradedPatch(ctx, request, runtimeStartedAt, "index.runtime_budget_exceeded", err.Error())
 	}
 	if patch.Invalidates != nil && patch.Invalidates.All {
 		return s.applyProjectRuntimeDegradedPatch(ctx, request, runtimeStartedAt, "index.runtime_invalid_patch", "runtime-rich patch cannot invalidate the source Project Index")
 	}
 	if patch.Phase == "" {
-		patch.Phase = indexPatchPhaseRuntime
+		patch.Phase = projectindex.PhaseRuntime
 	}
 	if patch.Project.Root == "" {
 		patch.Project = projectIdentityFromRuntimeRequest(request)
@@ -53,7 +54,7 @@ func (s *Service) applyProjectRuntimePatch(ctx context.Context, request ProjectR
 	if patch.FinishedAt == "" {
 		patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	if err := s.commitIndexPatch(ctx, patch); err != nil {
+	if err := s.indexCache.Commit(ctx, patch); err != nil {
 		return store.IndexData{}, err
 	}
 	return s.ApplyIndexPatch(ctx, patch), nil
@@ -61,19 +62,19 @@ func (s *Service) applyProjectRuntimePatch(ctx context.Context, request ProjectR
 
 func (s *Service) applyProjectRuntimeDegradedPatch(
 	ctx context.Context,
-	request ProjectRuntimeIndexRequest,
+	request projectindex.ProjectRuntimeIndexRequest,
 	startedAt time.Time,
 	code string,
 	message string,
 ) (store.IndexData, error) {
-	patch := IndexPatch{
+	patch := projectindex.IndexPatch{
 		SchemaVersion: request.PreviousIndex.SchemaVersion,
-		Phase:         indexPatchPhaseRuntime,
+		Phase:         projectindex.PhaseRuntime,
 		Project:       projectIdentityFromRuntimeRequest(request),
 		StartedAt:     startedAt.UTC().Format(time.RFC3339Nano),
 		FinishedAt:    time.Now().UTC().Format(time.RFC3339Nano),
 		Status:        "degraded",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Diagnostics: []store.IndexDiagnostic{
 				{
 					ID:           "diagnostic:runtime:degraded",
@@ -85,13 +86,13 @@ func (s *Service) applyProjectRuntimeDegradedPatch(
 			},
 		},
 	}
-	if err := s.commitIndexPatch(ctx, patch); err != nil {
+	if err := s.indexCache.Commit(ctx, patch); err != nil {
 		return store.IndexData{}, err
 	}
 	return s.ApplyIndexPatch(ctx, patch), nil
 }
 
-func projectIdentityFromRuntimeRequest(request ProjectRuntimeIndexRequest) store.ProjectIdentity {
+func projectIdentityFromRuntimeRequest(request projectindex.ProjectRuntimeIndexRequest) store.ProjectIdentity {
 	if request.PreviousIndex.Project != nil {
 		return *request.PreviousIndex.Project
 	}

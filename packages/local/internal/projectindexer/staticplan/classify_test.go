@@ -3,7 +3,7 @@ package staticplan
 import "testing"
 
 func TestProjectNativeStaticSignalMatcherKeepsSpacedCallAndConstructorSupport(t *testing.T) {
-	matcher := projectNativeStaticSignalMatcherForCallNames(nil)
+	matcher := signalMatcherForCallNames(nil)
 	for _, source := range []string{
 		"export const writer = prompt ({ id: 'writer' })",
 		"export const worker = new Agent ({ name: 'worker' })",

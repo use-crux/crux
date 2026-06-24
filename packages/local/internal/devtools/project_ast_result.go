@@ -1,19 +1,22 @@
 package devtools
 
-import "context"
+import (
+	"context"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+)
 
 func (s *Service) indexProjectAstPatch(
 	ctx context.Context,
 	root string,
 	configPath string,
 	projectName string,
-) (ProjectAstIndexResult, error) {
-	if indexer, ok := s.indexer.(ProjectAstResultIndexer); ok {
+) (projectindex.ProjectAstIndexResult, error) {
+	if indexer, ok := s.indexer.(projectindex.ProjectAstResultIndexer); ok {
 		return indexer.IndexProjectAstPatchWithResult(ctx, root, configPath, projectName)
 	}
 	patch, err := s.indexer.IndexProjectAstPatch(ctx, root, configPath, projectName)
 	if err != nil {
-		return ProjectAstIndexResult{}, err
+		return projectindex.ProjectAstIndexResult{}, err
 	}
-	return ProjectAstIndexResult{Patch: patch}, nil
+	return projectindex.ProjectAstIndexResult{Patch: patch}, nil
 }

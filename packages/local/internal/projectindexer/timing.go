@@ -1,6 +1,10 @@
 package projectindexer
 
-import "github.com/use-crux/crux/packages/local/internal/devtools"
+import (
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticplan"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticrun"
+)
 
 // ProjectIndexAstTiming captures production AST pipeline timings for benchmark
 // and architecture work. It is diagnostic metadata only; it is not part of the
@@ -10,7 +14,7 @@ type ProjectIndexAstTiming struct {
 	NativeParseAndForwardMs float64
 	NodeProjectionMs        float64
 	TotalMs                 float64
-	NodeTimings             []devtools.ProjectIndexPhaseTiming
+	NodeTimings             []projectindex.ProjectIndexPhaseTiming
 	NodeStarted             bool
 	UsedNativeStatic        bool
 	NodeReasons             []string
@@ -25,11 +29,11 @@ type ProjectIndexAstTiming struct {
 const (
 	projectIndexNodeReasonTypeScriptStaticCompiler = "typescript-static-compiler"
 	projectIndexNodeReasonStaticPlanInspection     = "static-plan-inspection"
-	projectIndexNodeReasonNativeStaticConfig       = "native-static-config"
-	projectIndexNodeReasonNativeStaticExtensions   = "native-static-extensions"
+	projectIndexNodeReasonNativeStaticConfig       = staticplan.ReasonConfig
+	projectIndexNodeReasonNativeStaticExtensions   = staticplan.ReasonExtensions
 	projectIndexNodeReasonSyntaxRecordProjection   = "syntax-record-projection"
-	projectIndexNodeReasonNativeStaticEmpty        = "native-static-empty-finalize"
-	projectIndexNodeReasonNativeStaticEvidence     = "native-static-extension-evidence"
+	projectIndexNodeReasonNativeStaticEmpty        = staticrun.ReasonEmpty
+	projectIndexNodeReasonNativeStaticEvidence     = staticrun.ReasonEvidence
 	projectIndexNodeReasonNativeStaticRules        = "native-static-rules"
-	projectIndexNodeReasonNativeStaticIncomplete   = "native-static-incomplete"
+	projectIndexNodeReasonNativeStaticIncomplete   = staticrun.ReasonIncomplete
 )

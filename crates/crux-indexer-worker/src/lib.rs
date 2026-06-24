@@ -26,54 +26,87 @@ pub(crate) mod syntax {
 }
 
 pub(crate) mod primitives {
-    pub(crate) mod agent_convex_facts;
-    pub(crate) mod agent_facts;
-    pub(crate) mod agent_metadata;
-    pub(crate) mod blackboard_facts;
-    pub(crate) mod composition_facts;
-    pub(crate) mod composition_output;
-    pub(crate) mod composition_relations;
-    pub(crate) mod composition_values;
-    pub(crate) mod context_facts;
-    pub(crate) mod data_access;
-    pub(crate) mod data_access_output;
+    pub(crate) mod agent {
+        pub(crate) mod convex;
+        pub(crate) mod facts;
+        pub(crate) mod metadata;
+    }
+    pub(crate) mod blackboard {
+        pub(crate) mod facts;
+    }
+    pub(crate) mod composition {
+        pub(crate) mod facts;
+        pub(crate) mod output;
+        pub(crate) mod relations;
+        pub(crate) mod values;
+    }
+    pub(crate) mod context {
+        pub(crate) mod facts;
+    }
+    pub(crate) mod data {
+        pub(crate) mod access;
+        pub(crate) mod output;
+    }
     pub(crate) mod definition;
-    pub(crate) mod eval_assertions;
-    pub(crate) mod eval_facts;
+    pub(crate) mod eval {
+        pub(crate) mod assertions;
+        pub(crate) mod facts;
+    }
     pub(crate) mod facts;
-    pub(crate) mod flow_facts;
-    pub(crate) mod flow_output;
-    pub(crate) mod injectable_facts;
-    pub(crate) mod injection;
-    pub(crate) mod injection_tools;
-    pub(crate) mod memory_blocks;
-    pub(crate) mod memory_facts;
-    pub(crate) mod memory_id;
-    pub(crate) mod memory_store;
-    pub(crate) mod prompt_facts;
-    pub(crate) mod rag_facts;
-    pub(crate) mod rag_metadata;
+    pub(crate) mod flow {
+        pub(crate) mod facts;
+        pub(crate) mod output;
+    }
+    pub(crate) mod injection {
+        pub(crate) mod injectable;
+        pub(crate) mod model;
+        pub(crate) mod tools;
+    }
+    pub(crate) mod memory {
+        pub(crate) mod blocks;
+        pub(crate) mod facts;
+        pub(crate) mod id;
+        pub(crate) mod store;
+    }
+    pub(crate) mod prompt {
+        pub(crate) mod facts;
+    }
+    pub(crate) mod rag {
+        pub(crate) mod facts;
+        pub(crate) mod metadata;
+    }
     pub(crate) mod record_values;
-    pub(crate) mod registry_facts;
-    pub(crate) mod routing_cascade;
-    pub(crate) mod routing_facts;
-    pub(crate) mod routing_fallback;
-    pub(crate) mod routing_model;
-    pub(crate) mod routing_output;
-    pub(crate) mod routing_router;
-    pub(crate) mod routing_source_refs;
-    pub(crate) mod runtime_join;
-    pub(crate) mod runtime_join_flow;
-    pub(crate) mod runtime_join_memory;
-    pub(crate) mod safety_facts;
+    pub(crate) mod registry {
+        pub(crate) mod facts;
+    }
+    pub(crate) mod routing {
+        pub(crate) mod cascade;
+        pub(crate) mod facts;
+        pub(crate) mod fallback;
+        pub(crate) mod model;
+        pub(crate) mod output;
+        pub(crate) mod router;
+        pub(crate) mod source_refs;
+    }
+    pub(crate) mod runtime {
+        pub(crate) mod flow;
+        pub(crate) mod join;
+        pub(crate) mod memory;
+    }
+    pub(crate) mod safety {
+        pub(crate) mod facts;
+    }
     pub(crate) mod schema;
-    pub(crate) mod schema_common;
-    pub(crate) mod schema_convex;
-    pub(crate) mod schema_zod;
-    pub(crate) mod scorer_facts;
+    pub(crate) mod scorer {
+        pub(crate) mod facts;
+    }
     pub(crate) mod source_refs;
-    pub(crate) mod tool_facts;
-    pub(crate) mod workspace_facts;
+    pub(crate) mod tool {
+        pub(crate) mod facts;
+    }
+    pub(crate) mod workspace {
+        pub(crate) mod facts;
+    }
 }
 
 pub(crate) mod static_compiler;

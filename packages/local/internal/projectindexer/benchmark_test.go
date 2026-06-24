@@ -3,6 +3,7 @@ package projectindexer
 import (
 	"context"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -227,7 +228,7 @@ func reportStaticTimingMetrics(b *testing.B, timing ProjectIndexAstTiming) {
 
 func reportPhaseTimingMetrics(
 	b *testing.B,
-	timings []devtools.ProjectIndexPhaseTiming,
+	timings []projectindex.ProjectIndexPhaseTiming,
 	names []string,
 ) {
 	timingsByName := make(map[string]float64, len(timings))

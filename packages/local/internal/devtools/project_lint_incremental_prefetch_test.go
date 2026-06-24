@@ -3,6 +3,7 @@ package devtools
 import (
 	"context"
 	"encoding/json"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ func TestReindexProjectIncrementalInlinePrefetchesLintFactsWhileSemanticRuns(t *
 	}
 	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
 	defer service.Shutdown()
-	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(incrementalLintPreviousIndex(), indexPatchPhaseAST, "ok"))
+	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(incrementalLintPreviousIndex(), projectindex.PhaseAST, "ok"))
 
 	done := make(chan error, 1)
 	go func() {
@@ -88,25 +89,25 @@ func incrementalLintPreviousIndex() store.IndexData {
 	}
 }
 
-func (i *incrementalConcurrentLintProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	return IndexPatch{}, nil
+func (i *incrementalConcurrentLintProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{}, nil
 }
 
-func (i *incrementalConcurrentLintProjectIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (ProjectIndexIncrementalResult, error) {
-	return ProjectIndexIncrementalResult{
-		Report: ProjectIndexIncrementalReport{
+func (i *incrementalConcurrentLintProjectIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (projectindex.ProjectIndexIncrementalResult, error) {
+	return projectindex.ProjectIndexIncrementalResult{
+		Report: projectindex.ProjectIndexIncrementalReport{
 			PlanKind:        "source-file-reindex",
 			GraphConfidence: "complete-enough-for-source-closure",
 			ChangedFiles:    []string{"/repo/src/writer.ts"},
 			AffectedFiles:   []string{"/repo/src/writer.ts"},
 		},
-		Patches: []IndexPatch{{
+		Patches: []projectindex.IndexPatch{{
 			SchemaVersion: 1,
-			Phase:         indexPatchPhaseAST,
+			Phase:         projectindex.PhaseAST,
 			Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
 			Status:        "ok",
-			Invalidates:   &IndexPatchInvalidation{Files: []string{"/repo/src/writer.ts"}},
-			Facts: IndexPatchFacts{
+			Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{"/repo/src/writer.ts"}},
+			Facts: projectindex.IndexPatchFacts{
 				Definitions: []store.ProjectDefinition{{
 					ID:       "prompt:writer",
 					Kind:     "prompt",
@@ -128,19 +129,19 @@ func (i *incrementalConcurrentLintProjectIndexer) IndexProjectIncremental(contex
 	}, nil
 }
 
-func (i *incrementalConcurrentLintProjectIndexer) IndexProjectSemanticPatch(ctx context.Context, _ ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *incrementalConcurrentLintProjectIndexer) IndexProjectSemanticPatch(ctx context.Context, _ projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	close(i.semanticStarted)
 	select {
 	case <-i.releaseSemantic:
 	case <-ctx.Done():
-		return IndexPatch{}, ctx.Err()
+		return projectindex.IndexPatch{}, ctx.Err()
 	}
-	return IndexPatch{
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseSemantic,
+		Phase:         projectindex.PhaseSemantic,
 		Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
 		Status:        "ok",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
 				ID:       "prompt:writer",
 				Kind:     "prompt",
@@ -156,19 +157,19 @@ func (i *incrementalConcurrentLintProjectIndexer) IndexProjectSemanticPatch(ctx 
 	}, nil
 }
 
-func (i *incrementalConcurrentLintProjectIndexer) PrefetchProjectLintFacts(context.Context, ProjectLintIndexRequest) (ProjectLintPrefetchResult, error) {
+func (i *incrementalConcurrentLintProjectIndexer) PrefetchProjectLintFacts(context.Context, projectindex.ProjectLintIndexRequest) (projectindex.ProjectLintPrefetchResult, error) {
 	close(i.prefetchStarted)
-	return ProjectLintPrefetchResult{
+	return projectindex.ProjectLintPrefetchResult{
 		RuleFacts: []json.RawMessage{json.RawMessage(`{"ruleResults":[{"ruleId":"extension.rule"}]}`)},
 	}, nil
 }
 
-func (i *incrementalConcurrentLintProjectIndexer) IndexProjectLintPatch(_ context.Context, req ProjectLintIndexRequest) (IndexPatch, error) {
+func (i *incrementalConcurrentLintProjectIndexer) IndexProjectLintPatch(_ context.Context, req projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
 	for _, definition := range req.PreviousIndex.Definitions {
 		if definition.ID == "prompt:writer" && definition.Quality != nil {
 			i.sawSemanticQuality = true
 		}
 	}
 	i.sawPrefetchedRuleFacts = req.Prefetch != nil && len(req.Prefetch.RuleFacts) == 1
-	return IndexPatch{}, nil
+	return projectindex.IndexPatch{}, nil
 }

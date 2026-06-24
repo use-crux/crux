@@ -4,11 +4,12 @@ import (
 	"context"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func (s *Service) applyProjectLintPatch(ctx context.Context, request ProjectLintIndexRequest, generation uint64) (store.IndexData, error) {
-	indexer, ok := s.indexer.(ProjectLintIndexer)
+func (s *Service) applyProjectLintPatch(ctx context.Context, request projectindex.ProjectLintIndexRequest, generation uint64) (store.IndexData, error) {
+	indexer, ok := s.indexer.(projectindex.ProjectLintIndexer)
 	if !ok {
 		return s.indexReadModel(), nil
 	}
@@ -24,11 +25,11 @@ func (s *Service) applyProjectLintPatch(ctx context.Context, request ProjectLint
 	if isEmptyIndexPatch(patch) {
 		return s.indexReadModel(), nil
 	}
-	if err := validateIndexPatchBudget(patch, request.Budget); err != nil {
+	if err := projectindex.ValidatePatchBudget(patch, request.Budget); err != nil {
 		return store.IndexData{}, err
 	}
 	if patch.Phase == "" {
-		patch.Phase = indexPatchPhaseQuality
+		patch.Phase = projectindex.PhaseQuality
 	}
 	if patch.Project.Root == "" {
 		patch.Project = store.ProjectIdentity{Root: request.Root, Name: request.ProjectName, ConfigFile: request.ConfigPath}
@@ -45,8 +46,8 @@ func projectLintIndexRequest(
 	projectName string,
 	index store.IndexData,
 	astUsedNativeStatic bool,
-) ProjectLintIndexRequest {
-	return ProjectLintIndexRequest{
+) projectindex.ProjectLintIndexRequest {
+	return projectindex.ProjectLintIndexRequest{
 		Root:                root,
 		ConfigPath:          configPath,
 		ProjectName:         projectName,
@@ -55,18 +56,18 @@ func projectLintIndexRequest(
 	}
 }
 
-func (s *Service) applyLintPatchIfCurrent(ctx context.Context, patch IndexPatch, generation uint64) (store.IndexData, error) {
+func (s *Service) applyLintPatchIfCurrent(ctx context.Context, patch projectindex.IndexPatch, generation uint64) (store.IndexData, error) {
 	s.indexMu.Lock()
 	defer s.indexMu.Unlock()
-	if !s.indexGeneration.IsCurrent(generation) {
+	if !s.indexState.IsCurrent(generation) {
 		return s.indexReadModel(), nil
 	}
-	if err := s.commitIndexPatch(ctx, patch); err != nil {
+	if err := s.indexCache.Commit(ctx, patch); err != nil {
 		return store.IndexData{}, err
 	}
 	return s.applyIndexPatchLocked(patch), nil
 }
 
-func isEmptyIndexPatch(patch IndexPatch) bool {
-	return !hasIndexPatchFacts(patch.Facts) && len(patch.FactEnvelopes) == 0
+func isEmptyIndexPatch(patch projectindex.IndexPatch) bool {
+	return !projectindex.HasPatchFacts(patch.Facts) && len(patch.FactEnvelopes) == 0
 }

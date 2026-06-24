@@ -33,9 +33,9 @@ func TestProjectNativeStaticFileSelectionIgnoresEmbeddedBuildArtifacts(t *testin
 	embedded := fileWithNativeStaticSource(t, root, "packages/local/internal/server/embed/project-indexer.mjs")
 	uiEmbedded := fileWithNativeStaticSource(t, root, "packages/local/internal/server/ui-embed/assets/app.js")
 
-	selection, err := projectNativeStaticFileSelection(root, "")
+	selection, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("fileSelection error = %v", err)
 	}
 	if !slices.Contains(selection.PrimaryFiles, authored) {
 		t.Fatalf("primary files = %v, want authored source %s", selection.PrimaryFiles, authored)
@@ -62,9 +62,9 @@ func TestProjectNativeStaticFileSelectionOnlyClassifiesStaticSourceCandidates(t 
 	rootTest := writeNativeStaticPlanCacheFixtureFile(t, root, "__tests__/fixture.ts", "export const fixture = prompt({ id: 'test' })\n")
 	nestedCache := writeNativeStaticPlanCacheFixtureFile(t, root, "packages/app/.crux/cache/index/static.ts", "export const cached = prompt({ id: 'cache' })\n")
 
-	selection, err := projectNativeStaticFileSelection(root, "")
+	selection, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("fileSelection error = %v", err)
 	}
 	if !slices.Contains(selection.PrimaryFiles, authored) {
 		t.Fatalf("primary files = %v, want authored source %s", selection.PrimaryFiles, authored)
@@ -94,7 +94,7 @@ func TestProjectNativeStaticSupportFilesIncludesRecursiveLocalImports(t *testing
 	helper := writeNativeStaticPlanCacheFixtureFile(t, root, "src/helpers/one.ts", "export { value } from './two'\n")
 	nested := writeNativeStaticPlanCacheFixtureFile(t, root, "src/helpers/two.ts", "export const value = 'two'\n")
 
-	support := projectNativeStaticSupportFiles([]string{primary})
+	support := supportFiles([]string{primary})
 	for _, file := range []string{helper, nested} {
 		if !slices.Contains(support, file) {
 			t.Fatalf("support files = %v, want %s", support, file)
@@ -107,17 +107,17 @@ func TestProjectNativeStaticFileSelectionReusesDiscoveryCacheForUnchangedSources
 	primary := writeNativeStaticPlanCacheFixtureFile(t, root, "src/primary.ts", "import './helper'\nexport const writer = prompt({ id: 'writer' })\n")
 	helper := writeNativeStaticPlanCacheFixtureFile(t, root, "src/helper.ts", "export const helper = 'cached'\n")
 
-	first, err := projectNativeStaticFileSelection(root, "")
+	first, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("first projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("first fileSelection error = %v", err)
 	}
 	if !slices.Contains(first.PrimaryFiles, primary) || !slices.Contains(first.Files, helper) {
 		t.Fatalf("first selection primary=%v files=%v, want primary and helper", first.PrimaryFiles, first.Files)
 	}
 
-	second, err := projectNativeStaticFileSelection(root, "")
+	second, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("second projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("second fileSelection error = %v", err)
 	}
 	if !slices.Contains(second.PrimaryFiles, primary) {
 		t.Fatalf("second primary files = %v, want cached primary %s", second.PrimaryFiles, primary)
@@ -132,9 +132,9 @@ func TestProjectNativeStaticDiscoveryCacheInvalidatesByCallNamesAndSourceFingerp
 	workflow := writeNativeStaticPlanCacheFixtureFile(t, root, "src/workflow.ts", "export const wf = defineWorkflow({ id: 'wf' })\n")
 	latePrompt := writeNativeStaticPlanCacheFixtureFile(t, root, "src/late-prompt.ts", "export const value = 'plain'\n")
 
-	defaultSelection, err := projectNativeStaticFileSelection(root, "")
+	defaultSelection, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("default projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("default fileSelection error = %v", err)
 	}
 	if slices.Contains(defaultSelection.PrimaryFiles, workflow) {
 		t.Fatalf("default primary files = %v, want no extension-only workflow", defaultSelection.PrimaryFiles)
@@ -144,26 +144,26 @@ func TestProjectNativeStaticDiscoveryCacheInvalidatesByCallNamesAndSourceFingerp
 	}
 
 	advanceFileContents(t, latePrompt, "export const writer = prompt({ id: 'late' })\n")
-	lateSelection, err := projectNativeStaticFileSelection(root, "")
+	lateSelection, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("late projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("late fileSelection error = %v", err)
 	}
 	if !slices.Contains(lateSelection.PrimaryFiles, latePrompt) {
 		t.Fatalf("late primary files = %v, want source fingerprint invalidation to add prompt", lateSelection.PrimaryFiles)
 	}
 
-	extensionSelection, err := projectNativeStaticFileSelectionWithCallNames(root, "", []string{"defineWorkflow"})
+	extensionSelection, err := fileSelectionWithCallNames(root, "", []string{"defineWorkflow"})
 	if err != nil {
-		t.Fatalf("extension projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("extension fileSelection error = %v", err)
 	}
 	if !slices.Contains(extensionSelection.PrimaryFiles, workflow) {
 		t.Fatalf("extension primary files = %v, want workflow after call-name change", extensionSelection.PrimaryFiles)
 	}
 
 	advanceFileContents(t, workflow, "export const wf = 'not static anymore'\n")
-	changedSelection, err := projectNativeStaticFileSelectionWithCallNames(root, "", []string{"defineWorkflow"})
+	changedSelection, err := fileSelectionWithCallNames(root, "", []string{"defineWorkflow"})
 	if err != nil {
-		t.Fatalf("changed projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("changed fileSelection error = %v", err)
 	}
 	if slices.Contains(changedSelection.PrimaryFiles, workflow) {
 		t.Fatalf("changed primary files = %v, want source fingerprint invalidation", changedSelection.PrimaryFiles)
@@ -176,18 +176,18 @@ func TestProjectNativeStaticDiscoveryCacheInvalidatesSameSizeSameModTimeSourceRe
 		"export const value = 'plain source without crux signals here'\n",
 	)
 
-	defaultSelection, err := projectNativeStaticFileSelection(root, "")
+	defaultSelection, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("default projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("default fileSelection error = %v", err)
 	}
 	if slices.Contains(defaultSelection.PrimaryFiles, latePrompt) {
 		t.Fatalf("default primary files = %v, want no plain source", defaultSelection.PrimaryFiles)
 	}
 
 	replaceFileContentsPreservingSizeAndModTime(t, latePrompt, "export const writer = prompt({ id: 'late' })\n")
-	changedSelection, err := projectNativeStaticFileSelection(root, "")
+	changedSelection, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("changed projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("changed fileSelection error = %v", err)
 	}
 	if !slices.Contains(changedSelection.PrimaryFiles, latePrompt) {
 		t.Fatalf("changed primary files = %v, want change-time invalidation to add prompt", changedSelection.PrimaryFiles)
@@ -198,9 +198,9 @@ func TestProjectNativeStaticSupportDiscoveryCacheInvalidatesWhenImportTargetAppe
 	root := t.TempDir()
 	primary := writeNativeStaticPlanCacheFixtureFile(t, root, "src/primary.ts", "import './late-helper'\nexport const writer = prompt({ id: 'writer' })\n")
 
-	first, err := projectNativeStaticFileSelection(root, "")
+	first, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("first projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("first fileSelection error = %v", err)
 	}
 	if len(first.Files) != 1 || !slices.Contains(first.Files, primary) {
 		t.Fatalf("first files = %v, want only primary before helper exists", first.Files)
@@ -208,9 +208,9 @@ func TestProjectNativeStaticSupportDiscoveryCacheInvalidatesWhenImportTargetAppe
 
 	helper := writeNativeStaticPlanCacheFixtureFile(t, root, "src/late-helper.ts", "export const late = 'helper'\n")
 	advanceFileModTime(t, helper)
-	second, err := projectNativeStaticFileSelection(root, "")
+	second, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("second projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("second fileSelection error = %v", err)
 	}
 	if !slices.Contains(second.Files, helper) {
 		t.Fatalf("second files = %v, want helper after import resolution invalidation", second.Files)
@@ -218,9 +218,9 @@ func TestProjectNativeStaticSupportDiscoveryCacheInvalidatesWhenImportTargetAppe
 
 	nested := writeNativeStaticPlanCacheFixtureFile(t, root, "src/nested.ts", "export const nested = 'helper'\n")
 	advanceFileContents(t, helper, "export { nested } from './nested'\n")
-	third, err := projectNativeStaticFileSelection(root, "")
+	third, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("third projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("third fileSelection error = %v", err)
 	}
 	if !slices.Contains(third.Files, nested) {
 		t.Fatalf("third files = %v, want nested helper after support import edit", third.Files)
@@ -233,18 +233,18 @@ func TestProjectNativeStaticSupportDiscoveryCacheInvalidatesSameSizeSameModTimeI
 	one := writeNativeStaticPlanCacheFixtureFile(t, root, "src/one.ts", "export const one = 'helper'\n")
 	two := writeNativeStaticPlanCacheFixtureFile(t, root, "src/two.ts", "export const two = 'helper'\n")
 
-	first, err := projectNativeStaticFileSelection(root, "")
+	first, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("first projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("first fileSelection error = %v", err)
 	}
 	if !slices.Contains(first.Files, one) || slices.Contains(first.Files, two) {
 		t.Fatalf("first files = %v, want import target one only", first.Files)
 	}
 
 	replaceFileContentsPreservingSizeAndModTime(t, primary, "import './two'\nexport const writer = prompt({ id: 'writer' })\n")
-	second, err := projectNativeStaticFileSelection(root, "")
+	second, err := fileSelection(root, "")
 	if err != nil {
-		t.Fatalf("second projectNativeStaticFileSelection error = %v", err)
+		t.Fatalf("second fileSelection error = %v", err)
 	}
 	if slices.Contains(second.Files, one) || !slices.Contains(second.Files, two) {
 		t.Fatalf("second files = %v, want change-time invalidation to select target two only", second.Files)

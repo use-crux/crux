@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticplan"
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -16,16 +16,16 @@ func TestProjectNativeStaticSourceInputUsesCachedProfileWithoutRereadingWarmHits
 	root := t.TempDir()
 	sourceText := "import { support } from './support'\nexport const writer = prompt({ id: support })\n"
 	supportText := "export const support = 'warm-cache'\n"
-	sourceFile := writeNativeStaticPlanCacheFixtureFile(t, root, "src/writer.ts", sourceText)
-	supportFile := writeNativeStaticPlanCacheFixtureFile(t, root, "src/support.ts", supportText)
-	sourceHash := nativeStaticPlanCacheFixtureHash(t, sourceFile)
+	sourceFile := writeFixtureFile(t, root, "src/writer.ts", sourceText)
+	supportFile := writeFixtureFile(t, root, "src/support.ts", supportText)
+	sourceHash := fixtureHash(t, sourceFile)
 
 	cacheKey := "static-cache-key:writer"
-	profile := devtools.SemanticSourceProfileFile{
+	profile := projectindex.SemanticSourceProfileFile{
 		File:        sourceFile,
 		SourceHash:  sourceHash,
 		SourceBytes: len([]byte(sourceText)),
-		Hints: &devtools.SemanticSourceProfileHints{
+		Hints: &projectindex.SemanticSourceProfileHints{
 			CruxCallNames:             []string{"prompt"},
 			NativeDirectCruxCandidate: true,
 		},
@@ -40,21 +40,21 @@ func TestProjectNativeStaticSourceInputUsesCachedProfileWithoutRereadingWarmHits
 	}); err != nil {
 		t.Fatalf("write cache extraction: %v", err)
 	}
-	writeNativeStaticPlanCacheManifest(t, root, map[string]any{
+	writeManifest(t, root, map[string]any{
 		"version":    staticcache.Epoch,
 		"root":       root,
 		"file":       "src/writer.ts",
 		"sourceHash": sourceHash,
 		"dependencies": []map[string]string{{
 			"file":       "src/support.ts",
-			"sourceHash": nativeStaticPlanCacheFixtureHash(t, supportFile),
+			"sourceHash": fixtureHash(t, supportFile),
 		}},
 		"configFiles":    []map[string]string{},
-		"compilerInputs": nativeStaticPlanCacheCompilerInputsFixture(t),
+		"compilerInputs": compilerInputsFixture(t),
 		"cacheKey":       cacheKey,
 	})
 
-	plan, err := staticplan.Build(root, "warm-cache", devtools.ProjectNativeStaticConfig{
+	plan, err := staticplan.Build(root, "warm-cache", projectindex.ProjectNativeStaticConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})
@@ -71,17 +71,17 @@ func TestProjectNativeStaticSourceInputUsesCachedProfileWithoutRereadingWarmHits
 		t.Fatalf("remove cached support: %v", err)
 	}
 
-	sourceInput, err := InputFromPlan(plan)
+	sourceInput, err := FromPlan(plan)
 	if err != nil {
 		t.Fatalf("source input from full warm hit plan: %v", err)
 	}
-	if !nativeStaticPrepareFilesContain(sourceInput.Files, sourceFile) {
+	if !containsPreparedFile(sourceInput.Files, sourceFile) {
 		t.Fatalf("prepare files = %+v, want cached source identity", sourceInput.Files)
 	}
-	if nativeStaticPrepareFilesContain(sourceInput.Files, supportFile) {
+	if containsPreparedFile(sourceInput.Files, supportFile) {
 		t.Fatalf("prepare files = %+v, want non-parsed support file omitted", sourceInput.Files)
 	}
-	if !nativeStaticPrepareFilesContain(sourceInput.PrimaryFiles, sourceFile) {
+	if !containsPreparedFile(sourceInput.PrimaryFiles, sourceFile) {
 		t.Fatalf("primary files = %+v, want cached source primary identity", sourceInput.PrimaryFiles)
 	}
 	if len(sourceInput.SourceTextByFile) != 0 {

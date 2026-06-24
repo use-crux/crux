@@ -3,12 +3,12 @@ package staticplan
 import (
 	"encoding/json"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-const projectNativeStaticSyntaxFrontendVersion = "oxc_parser@0.133.0+crux_native_group3.5"
+const syntaxFrontendVersion = "oxc_parser@0.133.0+crux_native_group3.5"
 
-var projectNativeStaticDefaultCallNames = []string{
+var defaultCallNames = []string{
 	"Agent",
 	"agent",
 	"blackboard",
@@ -39,7 +39,7 @@ var projectNativeStaticDefaultCallNames = []string{
 	"workspace",
 }
 
-var projectNativeStaticDefaultCallInterestNames = []string{
+var defaultCallInterestNames = []string{
 	"agent",
 	"blackboard",
 	"cascade",
@@ -69,14 +69,14 @@ var projectNativeStaticDefaultCallInterestNames = []string{
 	"workspace",
 }
 
-func projectNativeStaticSyntaxFrontend() devtools.SyntaxFrontend {
-	return devtools.SyntaxFrontend{Name: "oxc-rust", Version: projectNativeStaticSyntaxFrontendVersion}
+func syntaxFrontend() projectindex.SyntaxFrontend {
+	return projectindex.SyntaxFrontend{Name: "oxc-rust", Version: syntaxFrontendVersion}
 }
 
-func projectNativeStaticDefaultCallInterests() []devtools.StaticCallInterest {
-	out := make([]devtools.StaticCallInterest, 0, len(projectNativeStaticDefaultCallInterestNames))
-	for _, name := range projectNativeStaticDefaultCallInterestNames {
-		interest := devtools.StaticCallInterest{Name: name, Source: "extractor-pattern"}
+func defaultCallInterests() []projectindex.StaticCallInterest {
+	out := make([]projectindex.StaticCallInterest, 0, len(defaultCallInterestNames))
+	for _, name := range defaultCallInterestNames {
+		interest := projectindex.StaticCallInterest{Name: name, Source: "extractor-pattern"}
 		if name == "evaluate" {
 			arg := 1
 			interest.ConfigArg = &arg
@@ -86,21 +86,21 @@ func projectNativeStaticDefaultCallInterests() []devtools.StaticCallInterest {
 	return out
 }
 
-func projectNativeStaticDefaultConstructorInterests() []devtools.StaticConstructorInterest {
-	return []devtools.StaticConstructorInterest{{Name: "Agent", Source: "extractor-pattern"}}
+func defaultConstructorInterests() []projectindex.StaticConstructorInterest {
+	return []projectindex.StaticConstructorInterest{{Name: "Agent", Source: "extractor-pattern"}}
 }
 
-func projectNativeStaticDefaultStaticInterests() json.RawMessage {
+func defaultStaticInterests() json.RawMessage {
 	payload := map[string]any{
-		"calls":         projectNativeStaticDefaultCallInterests(),
-		"constructors":  projectNativeStaticDefaultConstructorInterests(),
+		"calls":         defaultCallInterests(),
+		"constructors":  defaultConstructorInterests(),
 		"compatibility": map[string]string{"mode": "declared"},
 	}
 	data, _ := json.Marshal(payload)
 	return data
 }
 
-func projectNativeStaticDefaultHost() json.RawMessage {
+func defaultHost() json.RawMessage {
 	families := []string{
 		"agent",
 		"blackboard",

@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-func projectNativeStaticDiscoveryCallNamesKey(callNames []string) string {
-	names := append([]string(nil), projectNativeStaticDefaultCallNames...)
+func discoveryCallNamesKey(callNames []string) string {
+	names := append([]string(nil), defaultCallNames...)
 	names = append(names, callNames...)
 	seen := map[string]bool{}
 	out := make([]string, 0, len(names))
@@ -27,7 +27,7 @@ func projectNativeStaticDiscoveryCallNamesKey(callNames []string) string {
 	return fmt.Sprintf("%x", sum)
 }
 
-func projectNativeStaticDiscoveryClassificationKey(file string, callNamesKey string) string {
+func discoveryClassificationKey(file string, callNamesKey string) string {
 	data, _ := json.Marshal(struct {
 		File         string `json:"file"`
 		CallNamesKey string `json:"callNamesKey"`
@@ -35,7 +35,7 @@ func projectNativeStaticDiscoveryClassificationKey(file string, callNamesKey str
 	}{
 		File:         file,
 		CallNamesKey: callNamesKey,
-		Version:      projectNativeStaticClassifierCacheVersion,
+		Version:      classifierCacheVersion,
 	})
 	sum := sha256.Sum256(data)
 	return fmt.Sprintf("%x", sum)

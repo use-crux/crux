@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
 type Manifest struct {
@@ -16,12 +16,12 @@ type Manifest struct {
 	RequiresCompatibilityEvidence       bool `json:"requiresCompatibilityEvidence"`
 }
 
-func RequiresTypeScriptRules(plan devtools.ProjectStaticSyntaxPlan) bool {
+func RequiresTypeScriptRules(plan projectindex.ProjectStaticSyntaxPlan) bool {
 	host, ok := Decode(plan)
 	return ok && (host.RequiresTypeScriptHostForRules || host.TypeScriptRuleCount > 0)
 }
 
-func NativeOnlyEligible(plan devtools.ProjectStaticSyntaxPlan) bool {
+func NativeOnlyEligible(plan projectindex.ProjectStaticSyntaxPlan) bool {
 	host, ok := Decode(plan)
 	return ok &&
 		host.NativeOnlyEligible &&
@@ -31,12 +31,12 @@ func NativeOnlyEligible(plan devtools.ProjectStaticSyntaxPlan) bool {
 		!host.RequiresCompatibilityEvidence
 }
 
-func Schedulable(plan devtools.ProjectStaticSyntaxPlan) bool {
+func Schedulable(plan projectindex.ProjectStaticSyntaxPlan) bool {
 	host, ok := Decode(plan)
 	return ok && !host.RequiresCompatibilityEvidence
 }
 
-func Decode(plan devtools.ProjectStaticSyntaxPlan) (Manifest, bool) {
+func Decode(plan projectindex.ProjectStaticSyntaxPlan) (Manifest, bool) {
 	raw := strings.TrimSpace(string(plan.StaticHost))
 	if raw == "" || raw == "null" {
 		return Manifest{}, false

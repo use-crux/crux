@@ -3,6 +3,8 @@ package devtools
 import (
 	"context"
 	"errors"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"slices"
 	"testing"
 	"time"
 
@@ -18,7 +20,7 @@ func TestReindexProjectIncrementalRunsPlannedSemanticDuringAstWork(t *testing.T)
 	}
 	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
 	defer service.Shutdown()
-	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, indexPatchPhaseAST, "ok"))
+	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, projectindex.PhaseAST, "ok"))
 
 	index, err := service.ReindexProjectIncremental(context.Background(), root, "", "project", []string{"src/writer.ts"}, nil)
 	if err != nil {
@@ -37,7 +39,7 @@ func TestReindexProjectIncrementalRunsPlannedSemanticDuringAstWork(t *testing.T)
 	assertStringSet(t, indexer.semanticReq.Files, []string{"src/writer.ts"})
 	assertStringSet(t, indexer.semanticReq.DependencyClosure, []string{"src/helper.ts", "src/writer.ts"})
 	helper := findSource(index.Sources, "src/helper.ts")
-	if helper == nil || !stringSliceContains(helper.Dependents, "src/writer.ts") {
+	if helper == nil || !slices.Contains(helper.Dependents, "src/writer.ts") {
 		t.Fatalf("sources = %+v, want joined helper support source", index.Sources)
 	}
 }
@@ -51,7 +53,7 @@ func TestReindexProjectIncrementalDiscardsPlannedSemanticWhenScopeDiffers(t *tes
 	}
 	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
 	defer service.Shutdown()
-	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, indexPatchPhaseAST, "ok"))
+	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, projectindex.PhaseAST, "ok"))
 
 	index, err := service.ReindexProjectIncremental(context.Background(), root, "", "project", []string{"src/writer.ts"}, nil)
 	if err != nil {
@@ -113,7 +115,7 @@ type plannedIncrementalSemanticProjectIndexer struct {
 	semanticStarted            chan struct{}
 	astObservedSemanticStarted bool
 	semanticSawPreviousIndex   bool
-	semanticReq                ProjectSemanticIndexRequest
+	semanticReq                projectindex.ProjectSemanticIndexRequest
 }
 
 type mismatchedPlannedIncrementalSemanticProjectIndexer struct {
@@ -122,30 +124,30 @@ type mismatchedPlannedIncrementalSemanticProjectIndexer struct {
 	semanticCalls   int
 }
 
-func (i *mismatchedPlannedIncrementalSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	return IndexPatch{}, errors.New("full AST should not run for mismatched planned incremental semantic test")
+func (i *mismatchedPlannedIncrementalSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{}, errors.New("full AST should not run for mismatched planned incremental semantic test")
 }
 
-func (i *mismatchedPlannedIncrementalSemanticProjectIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (ProjectIndexIncrementalResult, error) {
+func (i *mismatchedPlannedIncrementalSemanticProjectIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (projectindex.ProjectIndexIncrementalResult, error) {
 	select {
 	case <-i.semanticStarted:
 	case <-time.After(time.Second):
-		return ProjectIndexIncrementalResult{}, errors.New("planned incremental semantic work did not start before AST finished")
+		return projectindex.ProjectIndexIncrementalResult{}, errors.New("planned incremental semantic work did not start before AST finished")
 	}
-	return ProjectIndexIncrementalResult{
-		Report: ProjectIndexIncrementalReport{
+	return projectindex.ProjectIndexIncrementalResult{
+		Report: projectindex.ProjectIndexIncrementalReport{
 			PlanKind:        "source-file-reindex",
 			GraphConfidence: "complete-enough-for-source-closure",
 			ChangedFiles:    []string{"src/writer.ts"},
 			AffectedFiles:   []string{"src/writer.ts"},
 		},
-		Patches: []IndexPatch{{
+		Patches: []projectindex.IndexPatch{{
 			SchemaVersion: 1,
-			Phase:         indexPatchPhaseAST,
+			Phase:         projectindex.PhaseAST,
 			Project:       store.ProjectIdentity{Root: i.root, Name: "project"},
 			Status:        "ok",
-			Invalidates:   &IndexPatchInvalidation{Files: []string{"src/writer.ts"}},
-			Facts: IndexPatchFacts{
+			Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{"src/writer.ts"}},
+			Facts: projectindex.IndexPatchFacts{
 				Definitions: []store.ProjectDefinition{{
 					ID:       "prompt:writer",
 					Kind:     "prompt",
@@ -165,7 +167,7 @@ func (i *mismatchedPlannedIncrementalSemanticProjectIndexer) IndexProjectIncreme
 	}, nil
 }
 
-func (i *mismatchedPlannedIncrementalSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *mismatchedPlannedIncrementalSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	i.semanticCalls++
 	if i.semanticCalls == 1 {
 		close(i.semanticStarted)
@@ -174,32 +176,32 @@ func (i *mismatchedPlannedIncrementalSemanticProjectIndexer) IndexProjectSemanti
 	return plannedIncrementalSemanticPatch(req, "fallback"), nil
 }
 
-func (i *plannedIncrementalSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	return IndexPatch{}, errors.New("full AST should not run for planned incremental semantic test")
+func (i *plannedIncrementalSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{}, errors.New("full AST should not run for planned incremental semantic test")
 }
 
-func (i *plannedIncrementalSemanticProjectIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (ProjectIndexIncrementalResult, error) {
+func (i *plannedIncrementalSemanticProjectIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (projectindex.ProjectIndexIncrementalResult, error) {
 	select {
 	case <-i.semanticStarted:
 		i.astObservedSemanticStarted = true
 	case <-time.After(time.Second):
-		return ProjectIndexIncrementalResult{}, errors.New("planned incremental semantic work did not start before AST finished")
+		return projectindex.ProjectIndexIncrementalResult{}, errors.New("planned incremental semantic work did not start before AST finished")
 	}
-	return ProjectIndexIncrementalResult{
-		Report: ProjectIndexIncrementalReport{
+	return projectindex.ProjectIndexIncrementalResult{
+		Report: projectindex.ProjectIndexIncrementalReport{
 			PlanKind:          "source-file-reindex",
 			GraphConfidence:   "complete-enough-for-source-closure",
 			ChangedFiles:      []string{"src/writer.ts"},
 			AffectedFiles:     []string{"src/writer.ts"},
 			StaticParsedFiles: []string{"src/writer.ts"},
 		},
-		Patches: []IndexPatch{{
+		Patches: []projectindex.IndexPatch{{
 			SchemaVersion: 1,
-			Phase:         indexPatchPhaseAST,
+			Phase:         projectindex.PhaseAST,
 			Project:       store.ProjectIdentity{Root: i.root, Name: "project"},
 			Status:        "ok",
-			Invalidates:   &IndexPatchInvalidation{Files: []string{"src/writer.ts"}},
-			Facts: IndexPatchFacts{
+			Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{"src/writer.ts"}},
+			Facts: projectindex.IndexPatchFacts{
 				Definitions: []store.ProjectDefinition{{
 					ID:       "prompt:writer",
 					Kind:     "prompt",
@@ -216,13 +218,13 @@ func (i *plannedIncrementalSemanticProjectIndexer) IndexProjectIncremental(conte
 					Dependencies:  []string{"src/helper.ts"},
 				}},
 			},
-			SemanticSourceProfile: &SemanticSourceProfile{
+			SemanticSourceProfile: &projectindex.SemanticSourceProfile{
 				Complete: false,
-				Files: []SemanticSourceProfileFile{{
+				Files: []projectindex.SemanticSourceProfileFile{{
 					File:        "src/writer.ts",
 					SourceHash:  "writer",
 					SourceBytes: 10,
-					Hints:       &SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}},
+					Hints:       &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}},
 				}},
 				DependencyClosure: []string{"src/helper.ts", "src/writer.ts"},
 				SourceBytes:       10,
@@ -231,20 +233,20 @@ func (i *plannedIncrementalSemanticProjectIndexer) IndexProjectIncremental(conte
 	}, nil
 }
 
-func (i *plannedIncrementalSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *plannedIncrementalSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	i.semanticSawPreviousIndex = req.PreviousIndex != nil
 	i.semanticReq = req
 	close(i.semanticStarted)
 	return plannedIncrementalSemanticPatch(req, "semantic"), nil
 }
 
-func plannedIncrementalSemanticPatch(req ProjectSemanticIndexRequest, description string) IndexPatch {
-	return IndexPatch{
+func plannedIncrementalSemanticPatch(req projectindex.ProjectSemanticIndexRequest, description string) projectindex.IndexPatch {
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseSemantic,
+		Phase:         projectindex.PhaseSemantic,
 		Project:       store.ProjectIdentity{Root: req.Root, Name: req.ProjectName, ConfigFile: req.ConfigPath},
 		Status:        "ok",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
 				ID:          "prompt:writer",
 				Kind:        "prompt",
@@ -253,7 +255,7 @@ func plannedIncrementalSemanticPatch(req ProjectSemanticIndexRequest, descriptio
 				Fidelity:    "resolved",
 				Status:      "active",
 			}},
-			SourceRefs: []IndexSourceRefFact{{
+			SourceRefs: []projectindex.IndexSourceRefFact{{
 				DefinitionID: "prompt:writer",
 				Ref: store.ProjectSourceRef{
 					ID:     "prompt:writer:source:schema",

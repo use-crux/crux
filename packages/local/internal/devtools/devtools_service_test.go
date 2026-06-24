@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,16 +20,16 @@ type recordingProjectIndexer struct {
 
 type failingProjectIndexer struct{}
 
-func (failingProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	return IndexPatch{}, errors.New("index worker failed")
+func (failingProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{}, errors.New("index worker failed")
 }
 
 type staticIndexProjectIndexer struct {
 	index store.IndexData
 }
 
-func (i staticIndexProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	return indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok"), nil
+func (i staticIndexProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return indexPatchFromSnapshot(i.index, projectindex.PhaseAST, "ok"), nil
 }
 
 type blockingProjectIndexer struct {
@@ -39,30 +40,30 @@ type blockingProjectIndexer struct {
 
 type semanticPatchProjectIndexer struct {
 	index                    store.IndexData
-	semanticPatch            IndexPatch
+	semanticPatch            projectindex.IndexPatch
 	semanticErr              error
 	calledSemantic           bool
-	semanticReq              ProjectSemanticIndexRequest
-	astSemanticSourceProfile *SemanticSourceProfile
+	semanticReq              projectindex.ProjectSemanticIndexRequest
+	astSemanticSourceProfile *projectindex.SemanticSourceProfile
 }
 
 type blockingSemanticProjectIndexer struct {
 	index          store.IndexData
 	calledSemantic bool
-	semanticReq    ProjectSemanticIndexRequest
+	semanticReq    projectindex.ProjectSemanticIndexRequest
 }
 
 type delayedSemanticProjectIndexer struct {
 	index         store.IndexData
-	semanticPatch IndexPatch
+	semanticPatch projectindex.IndexPatch
 	started       chan struct{}
 	release       chan struct{}
-	semanticReq   ProjectSemanticIndexRequest
+	semanticReq   projectindex.ProjectSemanticIndexRequest
 }
 
 type queuedSemanticProjectIndexer struct {
 	indexes         []store.IndexData
-	semanticPatches []IndexPatch
+	semanticPatches []projectindex.IndexPatch
 	started         []chan struct{}
 	release         []chan struct{}
 	astCalls        int
@@ -71,7 +72,7 @@ type queuedSemanticProjectIndexer struct {
 
 type incrementalProjectIndexer struct {
 	index           store.IndexData
-	result          ProjectIndexIncrementalResult
+	result          projectindex.ProjectIndexIncrementalResult
 	previous        store.IndexData
 	files           []string
 	deletedFiles    []string
@@ -79,24 +80,24 @@ type incrementalProjectIndexer struct {
 	calledFull      bool
 	calledIncrement bool
 	calledSemantic  bool
-	semanticReq     ProjectSemanticIndexRequest
+	semanticReq     projectindex.ProjectSemanticIndexRequest
 	semanticStarted chan struct{}
 }
 
 type runtimePatchProjectIndexer struct {
 	index          store.IndexData
-	runtimePatch   IndexPatch
+	runtimePatch   projectindex.IndexPatch
 	runtimeErr     error
 	calledRuntime  bool
-	runtimeRequest ProjectRuntimeIndexRequest
+	runtimeRequest projectindex.ProjectRuntimeIndexRequest
 }
 
-func (i *incrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
+func (i *incrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
 	i.calledFull = true
-	return indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok"), nil
+	return indexPatchFromSnapshot(i.index, projectindex.PhaseAST, "ok"), nil
 }
 
-func (i *incrementalProjectIndexer) IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousIndex store.IndexData, files []string, deletedFiles []string, mode string) (ProjectIndexIncrementalResult, error) {
+func (i *incrementalProjectIndexer) IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousIndex store.IndexData, files []string, deletedFiles []string, mode string) (projectindex.ProjectIndexIncrementalResult, error) {
 	i.calledIncrement = true
 	i.previous = previousIndex
 	i.files = append([]string(nil), files...)
@@ -105,57 +106,57 @@ func (i *incrementalProjectIndexer) IndexProjectIncremental(ctx context.Context,
 	return i.result, nil
 }
 
-func (i *incrementalProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *incrementalProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	i.calledSemantic = true
 	i.semanticReq = req
 	if i.semanticStarted != nil {
 		close(i.semanticStarted)
 	}
-	return IndexPatch{
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseSemantic,
+		Phase:         projectindex.PhaseSemantic,
 		Project:       store.ProjectIdentity{Root: req.Root, Name: req.ProjectName, ConfigFile: req.ConfigPath},
 		Status:        "ok",
-		Facts:         IndexPatchFacts{},
+		Facts:         projectindex.IndexPatchFacts{},
 	}, nil
 }
 
-func (i *blockingSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	return indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok"), nil
+func (i *blockingSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return indexPatchFromSnapshot(i.index, projectindex.PhaseAST, "ok"), nil
 }
 
-func (i *blockingSemanticProjectIndexer) IndexProjectSemanticPatch(ctx context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *blockingSemanticProjectIndexer) IndexProjectSemanticPatch(ctx context.Context, req projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	i.calledSemantic = true
 	i.semanticReq = req
 	<-ctx.Done()
-	return IndexPatch{}, ctx.Err()
+	return projectindex.IndexPatch{}, ctx.Err()
 }
 
-func (i *delayedSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	return indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok"), nil
+func (i *delayedSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return indexPatchFromSnapshot(i.index, projectindex.PhaseAST, "ok"), nil
 }
 
-func (i *delayedSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *delayedSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	i.semanticReq = req
 	close(i.started)
 	<-i.release
 	return i.semanticPatch, nil
 }
 
-func (i *queuedSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
+func (i *queuedSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
 	if i.astCalls >= len(i.indexes) {
-		return IndexPatch{}, errors.New("unexpected AST index call")
+		return projectindex.IndexPatch{}, errors.New("unexpected AST index call")
 	}
 	index := i.indexes[i.astCalls]
 	i.astCalls++
-	return indexPatchFromSnapshot(index, indexPatchPhaseAST, "ok"), nil
+	return indexPatchFromSnapshot(index, projectindex.PhaseAST, "ok"), nil
 }
 
-func (i *queuedSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *queuedSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	call := i.semanticCalls
 	i.semanticCalls++
 	if call >= len(i.semanticPatches) {
-		return IndexPatch{}, errors.New("unexpected semantic index call")
+		return projectindex.IndexPatch{}, errors.New("unexpected semantic index call")
 	}
 	if call < len(i.started) && i.started[call] != nil {
 		close(i.started[call])
@@ -170,30 +171,30 @@ func (i *queuedSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Conte
 	return patch, nil
 }
 
-func (i *semanticPatchProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	patch := indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok")
+func (i *semanticPatchProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	patch := indexPatchFromSnapshot(i.index, projectindex.PhaseAST, "ok")
 	patch.SemanticSourceProfile = i.astSemanticSourceProfile
 	return patch, nil
 }
 
-func (i *semanticPatchProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *semanticPatchProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	i.calledSemantic = true
 	i.semanticReq = req
 	if i.semanticErr != nil {
-		return IndexPatch{}, i.semanticErr
+		return projectindex.IndexPatch{}, i.semanticErr
 	}
 	return i.semanticPatch, nil
 }
 
-func (i *runtimePatchProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	return indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok"), nil
+func (i *runtimePatchProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return indexPatchFromSnapshot(i.index, projectindex.PhaseAST, "ok"), nil
 }
 
-func (i *runtimePatchProjectIndexer) IndexProjectRuntimePatch(_ context.Context, req ProjectRuntimeIndexRequest) (IndexPatch, error) {
+func (i *runtimePatchProjectIndexer) IndexProjectRuntimePatch(_ context.Context, req projectindex.ProjectRuntimeIndexRequest) (projectindex.IndexPatch, error) {
 	i.calledRuntime = true
 	i.runtimeRequest = req
 	if i.runtimeErr != nil {
-		return IndexPatch{}, i.runtimeErr
+		return projectindex.IndexPatch{}, i.runtimeErr
 	}
 	return i.runtimePatch, nil
 }
@@ -206,7 +207,7 @@ func newBlockingProjectIndexer(index store.IndexData) *blockingProjectIndexer {
 	}
 }
 
-func (i *blockingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (IndexPatch, error) {
+func (i *blockingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (projectindex.IndexPatch, error) {
 	select {
 	case <-i.started:
 	default:
@@ -214,16 +215,16 @@ func (i *blockingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root,
 	}
 	select {
 	case <-ctx.Done():
-		return IndexPatch{}, ctx.Err()
+		return projectindex.IndexPatch{}, ctx.Err()
 	case <-i.release:
 		if i.index.Project == nil {
 			i.index.Project = &store.ProjectIdentity{Root: root, Name: projectName, ConfigFile: configPath}
 		}
-		return indexPatchFromSnapshot(i.index, indexPatchPhaseAST, "ok"), nil
+		return indexPatchFromSnapshot(i.index, projectindex.PhaseAST, "ok"), nil
 	}
 }
 
-func (r *recordingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (IndexPatch, error) {
+func (r *recordingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (projectindex.IndexPatch, error) {
 	r.deadline, r.hasDeadline = ctx.Deadline()
 	return indexPatchFromSnapshot(store.IndexData{
 		SchemaVersion: 1,
@@ -233,7 +234,7 @@ func (r *recordingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root
 		Relations:     []store.ProjectRelation{},
 		Diagnostics:   []store.IndexDiagnostic{},
 		Sources:       []store.IndexSourceFile{},
-	}, indexPatchPhaseAST, "ok"), nil
+	}, projectindex.PhaseAST, "ok"), nil
 }
 
 func TestServiceReindexProjectDefaultDeadlineAllowsAstDiscovery(t *testing.T) {
@@ -392,16 +393,16 @@ func TestReindexProjectIncrementalAppliesWorkerPatches(t *testing.T) {
 		},
 	}
 	indexer := &incrementalProjectIndexer{
-		result: ProjectIndexIncrementalResult{
-			Report: ProjectIndexIncrementalReport{PlanKind: "source-file-reindex", ChangedFiles: []string{"src/a.ts"}},
-			Patches: []IndexPatch{
+		result: projectindex.ProjectIndexIncrementalResult{
+			Report: projectindex.ProjectIndexIncrementalReport{PlanKind: "source-file-reindex", ChangedFiles: []string{"src/a.ts"}},
+			Patches: []projectindex.IndexPatch{
 				{
 					SchemaVersion: 1,
-					Phase:         indexPatchPhaseAST,
+					Phase:         projectindex.PhaseAST,
 					Project:       store.ProjectIdentity{Root: root, Name: "project"},
 					Status:        "ok",
-					Invalidates:   &IndexPatchInvalidation{Files: []string{"src/a.ts"}},
-					Facts: IndexPatchFacts{
+					Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{"src/a.ts"}},
+					Facts: projectindex.IndexPatchFacts{
 						Definitions: []store.ProjectDefinition{
 							{ID: "prompt:new", Kind: "prompt", Name: "new", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/a.ts", Line: 2}},
 						},
@@ -415,7 +416,7 @@ func TestReindexProjectIncrementalAppliesWorkerPatches(t *testing.T) {
 	}
 	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
 	defer service.Shutdown()
-	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, indexPatchPhaseAST, "ok"))
+	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, projectindex.PhaseAST, "ok"))
 
 	index, err := service.ReindexProjectIncremental(context.Background(), root, "", "project", []string{"src/a.ts"}, []string{"src/deleted.ts"})
 	if err != nil {
@@ -462,29 +463,29 @@ func TestReindexProjectIncrementalBackgroundSemanticRequestsAstOnly(t *testing.T
 	}
 	indexer := &incrementalProjectIndexer{
 		semanticStarted: make(chan struct{}),
-		result: ProjectIndexIncrementalResult{
-			Report: ProjectIndexIncrementalReport{
+		result: projectindex.ProjectIndexIncrementalResult{
+			Report: projectindex.ProjectIndexIncrementalReport{
 				PlanKind:              "source-file-reindex",
 				GraphConfidence:       "complete-enough-for-source-closure",
 				ChangedFiles:          []string{"src/a.ts"},
 				AffectedFiles:         []string{"src/a.ts"},
 				AffectedDefinitionIDs: []string{"prompt:a"},
 			},
-			Patches: []IndexPatch{
+			Patches: []projectindex.IndexPatch{
 				{
 					SchemaVersion: 1,
-					Phase:         indexPatchPhaseAST,
+					Phase:         projectindex.PhaseAST,
 					Project:       store.ProjectIdentity{Root: root, Name: "project"},
 					Status:        "ok",
-					Invalidates:   &IndexPatchInvalidation{Files: []string{"src/a.ts"}},
-					Facts:         IndexPatchFacts{},
+					Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{"src/a.ts"}},
+					Facts:         projectindex.IndexPatchFacts{},
 				},
 			},
 		},
 	}
 	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
 	defer service.Shutdown()
-	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, indexPatchPhaseAST, "ok"))
+	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, projectindex.PhaseAST, "ok"))
 
 	_, err := service.ReindexProjectIncrementalWithOptions(context.Background(), root, "", "project", []string{"src/a.ts"}, nil, ProjectReindexOptions{
 		Semantic: ProjectSemanticBackground,
@@ -532,8 +533,8 @@ func TestReindexProjectIncrementalRecordsWatchStatus(t *testing.T) {
 		Sources: []store.IndexSourceFile{{File: "src/a.ts", Status: "indexed", ShardID: "."}},
 	}
 	indexer := &incrementalProjectIndexer{
-		result: ProjectIndexIncrementalResult{
-			Report: ProjectIndexIncrementalReport{
+		result: projectindex.ProjectIndexIncrementalResult{
+			Report: projectindex.ProjectIndexIncrementalReport{
 				PlanKind:              "source-file-reindex",
 				GraphConfidence:       "complete-enough-for-source-closure",
 				ChangedFiles:          []string{"src/a.ts"},
@@ -542,19 +543,19 @@ func TestReindexProjectIncrementalRecordsWatchStatus(t *testing.T) {
 				AffectedDefinitionIDs: []string{"prompt:a"},
 				DurationMsByPhase:     map[string]float64{"planning": 1.5, "ast": 2.25},
 			},
-			Patches: []IndexPatch{{
+			Patches: []projectindex.IndexPatch{{
 				SchemaVersion: 1,
-				Phase:         indexPatchPhaseAST,
+				Phase:         projectindex.PhaseAST,
 				Project:       store.ProjectIdentity{Root: root, Name: "project"},
 				Status:        "ok",
-				Invalidates:   &IndexPatchInvalidation{Files: []string{"src/a.ts"}},
-				Facts:         IndexPatchFacts{},
+				Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{"src/a.ts"}},
+				Facts:         projectindex.IndexPatchFacts{},
 			}},
 		},
 	}
 	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
 	defer service.Shutdown()
-	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, indexPatchPhaseAST, "ok"))
+	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, projectindex.PhaseAST, "ok"))
 
 	_, err := service.ReindexProjectIncrementalWithOptions(context.Background(), root, "", "project", []string{"src/a.ts"}, []string{"src/deleted.ts"}, ProjectReindexOptions{
 		Semantic: ProjectSemanticDisabled,
@@ -632,8 +633,8 @@ func TestReindexProjectIncrementalFallsBackWithoutShardEvidence(t *testing.T) {
 			},
 			Sources: []store.IndexSourceFile{{File: "src/full.ts", Status: "active", DefinitionIDs: []string{"prompt:full"}}},
 		},
-		result: ProjectIndexIncrementalResult{
-			Report: ProjectIndexIncrementalReport{PlanKind: "source-file-reindex"},
+		result: projectindex.ProjectIndexIncrementalResult{
+			Report: projectindex.ProjectIndexIncrementalReport{PlanKind: "source-file-reindex"},
 		},
 	}
 	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
@@ -647,7 +648,7 @@ func TestReindexProjectIncrementalFallsBackWithoutShardEvidence(t *testing.T) {
 			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership"},
 		},
 		Sources: []store.IndexSourceFile{{File: "src/a.ts", Status: "indexed", DefinitionIDs: []string{"prompt:old"}}},
-	}, indexPatchPhaseAST, "ok"))
+	}, projectindex.PhaseAST, "ok"))
 
 	index, err := service.ReindexProjectIncremental(context.Background(), root, "", "project", []string{"src/a.ts"}, nil)
 	if err != nil {
@@ -674,14 +675,14 @@ func TestReindexProjectAppliesSemanticNoOpPatch(t *testing.T) {
 				{ID: "prompt:fresh", Kind: "prompt", Name: "fresh", Fidelity: "partial", Status: "active"},
 			},
 		},
-		semanticPatch: IndexPatch{
+		semanticPatch: projectindex.IndexPatch{
 			SchemaVersion: 1,
 			Phase:         "semantic",
 			Project:       store.ProjectIdentity{Root: root, Name: "project"},
 			StartedAt:     "2026-06-02T10:00:01.000Z",
 			FinishedAt:    "2026-06-02T10:00:01.001Z",
 			Status:        "ok",
-			Facts:         IndexPatchFacts{Diagnostics: []store.IndexDiagnostic{}},
+			Facts:         projectindex.IndexPatchFacts{Diagnostics: []store.IndexDiagnostic{}},
 		},
 	}
 	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
@@ -722,21 +723,21 @@ func TestReindexProjectPassesAstScopeToSemanticIndexer(t *testing.T) {
 				{ID: "prompt:a", Kind: "prompt", Name: "a", Fidelity: "partial", Status: "active"},
 			},
 		},
-		semanticPatch: IndexPatch{
+		semanticPatch: projectindex.IndexPatch{
 			SchemaVersion: 1,
 			Phase:         "semantic",
 			Project:       store.ProjectIdentity{Root: root, Name: "project"},
 			StartedAt:     "2026-06-02T10:00:01.000Z",
 			FinishedAt:    "2026-06-02T10:00:01.001Z",
 			Status:        "ok",
-			Facts:         IndexPatchFacts{},
+			Facts:         projectindex.IndexPatchFacts{},
 		},
-		astSemanticSourceProfile: &SemanticSourceProfile{
-			Files: []SemanticSourceProfileFile{{
+		astSemanticSourceProfile: &projectindex.SemanticSourceProfile{
+			Files: []projectindex.SemanticSourceProfileFile{{
 				File:        "src/a.ts",
 				SourceHash:  "hash-a",
 				SourceBytes: 12,
-				Hints:       &SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}, NativeDirectCruxCandidate: true},
+				Hints:       &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}, NativeDirectCruxCandidate: true},
 			}},
 			DependencyClosure: []string{"src/a.ts"},
 			SourceBytes:       12,
@@ -779,14 +780,14 @@ func TestReindexProjectBackgroundSemanticReturnsAfterASTAndAppliesSemanticLater(
 				{ID: "prompt:ast", Kind: "prompt", Name: "ast", Fidelity: "partial", Status: "active"},
 			},
 		},
-		semanticPatch: IndexPatch{
+		semanticPatch: projectindex.IndexPatch{
 			SchemaVersion: 1,
 			Phase:         "semantic",
 			Project:       store.ProjectIdentity{Root: root, Name: "project"},
 			StartedAt:     time.Now().UTC().Format(time.RFC3339Nano),
 			FinishedAt:    time.Now().UTC().Format(time.RFC3339Nano),
 			Status:        "ok",
-			Facts: IndexPatchFacts{
+			Facts: projectindex.IndexPatchFacts{
 				Definitions: []store.ProjectDefinition{
 					{ID: "prompt:ast", Kind: "prompt", Name: "ast", Description: "semantic", Fidelity: "resolved", Status: "active"},
 				},
@@ -857,12 +858,12 @@ func TestReindexProjectBackgroundSemanticDropsStaleGeneration(t *testing.T) {
 				},
 			},
 		},
-		semanticPatches: []IndexPatch{
+		semanticPatches: []projectindex.IndexPatch{
 			{
 				SchemaVersion: 1,
-				Phase:         indexPatchPhaseSemantic,
+				Phase:         projectindex.PhaseSemantic,
 				Status:        "ok",
-				Facts: IndexPatchFacts{
+				Facts: projectindex.IndexPatchFacts{
 					Definitions: []store.ProjectDefinition{
 						{ID: "prompt:ast", Kind: "prompt", Name: "ast", Description: "semantic-v1-stale", Fidelity: "resolved", Status: "active"},
 					},
@@ -871,9 +872,9 @@ func TestReindexProjectBackgroundSemanticDropsStaleGeneration(t *testing.T) {
 			},
 			{
 				SchemaVersion: 1,
-				Phase:         indexPatchPhaseSemantic,
+				Phase:         projectindex.PhaseSemantic,
 				Status:        "ok",
-				Facts: IndexPatchFacts{
+				Facts: projectindex.IndexPatchFacts{
 					Definitions: []store.ProjectDefinition{
 						{ID: "prompt:ast", Kind: "prompt", Name: "ast", Description: "semantic-v2-fresh", Fidelity: "resolved", Status: "active"},
 					},
@@ -924,14 +925,14 @@ func TestReindexProjectSemanticReadyClearsSourceOnlyDiagnostic(t *testing.T) {
 				{ID: "diagnostic:index:source-only", Severity: "warning", Code: "index.source_only", Message: "source only"},
 			},
 		},
-		semanticPatch: IndexPatch{
+		semanticPatch: projectindex.IndexPatch{
 			SchemaVersion: 1,
 			Phase:         "semantic",
 			Project:       store.ProjectIdentity{Root: root, Name: "project"},
 			StartedAt:     "2026-06-02T10:00:01.000Z",
 			FinishedAt:    "2026-06-02T10:00:01.001Z",
 			Status:        "ok",
-			Facts:         IndexPatchFacts{Diagnostics: []store.IndexDiagnostic{}},
+			Facts:         projectindex.IndexPatchFacts{Diagnostics: []store.IndexDiagnostic{}},
 		},
 	}
 	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
@@ -971,14 +972,14 @@ func TestReindexProjectSemanticReadyClearsSourceOnlyDiagnosticWithOtherDiagnosti
 				{ID: "relation.unresolved_reference:evaluation:writer", Severity: "warning", Code: "relation.unresolved_reference", Message: "unresolved relation"},
 			},
 		},
-		semanticPatch: IndexPatch{
+		semanticPatch: projectindex.IndexPatch{
 			SchemaVersion: 1,
 			Phase:         "semantic",
 			Project:       store.ProjectIdentity{Root: root, Name: "project"},
 			StartedAt:     "2026-06-02T10:00:01.000Z",
 			FinishedAt:    "2026-06-02T10:00:01.001Z",
 			Status:        "ok",
-			Facts:         IndexPatchFacts{Diagnostics: []store.IndexDiagnostic{}},
+			Facts:         projectindex.IndexPatchFacts{Diagnostics: []store.IndexDiagnostic{}},
 		},
 	}
 	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
@@ -1080,7 +1081,7 @@ func TestReindexProjectSemanticTimeoutDegradesSemanticOnly(t *testing.T) {
 
 func TestReindexProjectSemanticBudgetOverrunDegradesSemanticOnly(t *testing.T) {
 	oldBudget := projectIndexSemanticBudget
-	projectIndexSemanticBudget = IndexPatchBudget{MaxDefinitions: 1}
+	projectIndexSemanticBudget = projectindex.IndexPatchBudget{MaxDefinitions: 1}
 	t.Cleanup(func() {
 		projectIndexSemanticBudget = oldBudget
 	})
@@ -1094,14 +1095,14 @@ func TestReindexProjectSemanticBudgetOverrunDegradesSemanticOnly(t *testing.T) {
 				{ID: "prompt:fresh", Kind: "prompt", Name: "fresh", Fidelity: "resolved", Status: "active"},
 			},
 		},
-		semanticPatch: IndexPatch{
+		semanticPatch: projectindex.IndexPatch{
 			SchemaVersion: 1,
 			Phase:         "semantic",
 			Project:       store.ProjectIdentity{Root: root, Name: "project"},
 			StartedAt:     "2026-06-02T10:00:01.000Z",
 			FinishedAt:    "2026-06-02T10:00:01.001Z",
 			Status:        "ok",
-			Facts: IndexPatchFacts{
+			Facts: projectindex.IndexPatchFacts{
 				Definitions: []store.ProjectDefinition{
 					{ID: "prompt:one", Kind: "prompt", Name: "one", Fidelity: "resolved", Status: "active"},
 					{ID: "prompt:two", Kind: "prompt", Name: "two", Fidelity: "resolved", Status: "active"},
@@ -1427,7 +1428,7 @@ func TestIndexReadModelProjectsSafetyRelationTargetsIntoFacts(t *testing.T) {
 
 type sourceOnlyProjectIndexer struct{}
 
-func (sourceOnlyProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (IndexPatch, error) {
+func (sourceOnlyProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (projectindex.IndexPatch, error) {
 	return indexPatchFromSnapshot(store.IndexData{
 		SchemaVersion: 1,
 		Project:       &store.ProjectIdentity{Root: root, Name: projectName},
@@ -1437,7 +1438,7 @@ func (sourceOnlyProjectIndexer) IndexProjectAstPatch(ctx context.Context, root, 
 		Diagnostics: []store.IndexDiagnostic{
 			{ID: "diagnostic:index:source-only", Severity: "warning", Code: "index.source_only", Message: "source only"},
 		},
-	}, indexPatchPhaseAST, "ok"), nil
+	}, projectindex.PhaseAST, "ok"), nil
 }
 
 func TestReindexProjectUsesResolvedStaticAstIndex(t *testing.T) {
@@ -1460,7 +1461,7 @@ func TestReindexProjectUsesResolvedStaticAstIndex(t *testing.T) {
 	if findDefinition(index.Definitions, "prompt:static") == nil {
 		t.Fatalf("definitions = %+v, want resolved AST definition applied", index.Definitions)
 	}
-	if !isSourceOnlyIndex(index) {
+	if !projectindex.IsSourceOnlyIndex(index) {
 		t.Fatalf("diagnostics = %+v, want source_only status preserved", index.Diagnostics)
 	}
 }
@@ -1553,8 +1554,8 @@ func readIndexEvent(t *testing.T, events <-chan store.IndexData) store.IndexData
 
 func writeTestFactCache(t *testing.T, root string, index store.IndexData) {
 	t.Helper()
-	facts := NewSQLiteIndexFactStore()
-	patch := indexPatchFromSnapshot(index, indexPatchPhaseAST, "ok")
+	facts := projectindex.NewSQLiteIndexFactStore()
+	patch := indexPatchFromSnapshot(index, projectindex.PhaseAST, "ok")
 	if err := facts.CommitPhase(context.Background(), indexFactTransactionFromPatch(patch)); err != nil {
 		t.Fatalf("write test fact cache: %v", err)
 	}
@@ -1565,7 +1566,7 @@ func writeTestFactCache(t *testing.T, root string, index store.IndexData) {
 
 func readTestFactCache(t *testing.T, root string, projectName string) (store.IndexData, bool) {
 	t.Helper()
-	index, ok, err := NewSQLiteIndexFactStore().ProjectSnapshot(context.Background(), root, projectName)
+	index, ok, err := projectindex.NewSQLiteIndexFactStore().ProjectSnapshot(context.Background(), root, projectName)
 	if err != nil {
 		t.Fatalf("read test fact cache: %v", err)
 	}

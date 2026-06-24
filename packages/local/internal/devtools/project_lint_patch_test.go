@@ -3,6 +3,7 @@ package devtools
 import (
 	"context"
 	"encoding/json"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"testing"
 	"time"
 
@@ -67,13 +68,13 @@ type semanticAwareLintProjectIndexer struct {
 	sawSemanticQuality bool
 }
 
-func (i *semanticAwareLintProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	return IndexPatch{
+func (i *semanticAwareLintProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseAST,
+		Phase:         projectindex.PhaseAST,
 		Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
 		Status:        "ok",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
 				ID:       "prompt:writer",
 				Kind:     "prompt",
@@ -85,13 +86,13 @@ func (i *semanticAwareLintProjectIndexer) IndexProjectAstPatch(context.Context, 
 	}, nil
 }
 
-func (i *semanticAwareLintProjectIndexer) IndexProjectSemanticPatch(context.Context, ProjectSemanticIndexRequest) (IndexPatch, error) {
-	return IndexPatch{
+func (i *semanticAwareLintProjectIndexer) IndexProjectSemanticPatch(context.Context, projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseSemantic,
+		Phase:         projectindex.PhaseSemantic,
 		Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
 		Status:        "ok",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
 				ID:       "prompt:writer",
 				Kind:     "prompt",
@@ -107,19 +108,19 @@ func (i *semanticAwareLintProjectIndexer) IndexProjectSemanticPatch(context.Cont
 	}, nil
 }
 
-func (i *semanticAwareLintProjectIndexer) IndexProjectLintPatch(_ context.Context, req ProjectLintIndexRequest) (IndexPatch, error) {
+func (i *semanticAwareLintProjectIndexer) IndexProjectLintPatch(_ context.Context, req projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
 	i.lintCalls++
 	for _, definition := range req.PreviousIndex.Definitions {
 		if definition.ID == "prompt:writer" && definition.Quality != nil && len(definition.Quality.ExperimentIDs) == 1 {
 			i.sawSemanticQuality = true
 		}
 	}
-	return IndexPatch{
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseQuality,
+		Phase:         projectindex.PhaseQuality,
 		Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
 		Status:        "ok",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			LintFindings: []store.IndexLintFinding{{
 				ID:         "lint:quality.missing_baseline:prompt:writer",
 				RuleID:     "quality.missing_baseline",
@@ -150,14 +151,14 @@ func (i *concurrentLintProjectIndexer) IndexProjectAstPatch(
 	root string,
 	configPath string,
 	projectName string,
-) (IndexPatch, error) {
+) (projectindex.IndexPatch, error) {
 	_, _, _, _ = ctx, root, configPath, projectName
-	return IndexPatch{
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseAST,
+		Phase:         projectindex.PhaseAST,
 		Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
 		Status:        "ok",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
 				ID:       "prompt:writer",
 				Kind:     "prompt",
@@ -169,19 +170,19 @@ func (i *concurrentLintProjectIndexer) IndexProjectAstPatch(
 	}, nil
 }
 
-func (i *concurrentLintProjectIndexer) IndexProjectSemanticPatch(ctx context.Context, _ ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *concurrentLintProjectIndexer) IndexProjectSemanticPatch(ctx context.Context, _ projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	close(i.semanticStarted)
 	select {
 	case <-i.releaseSemantic:
 	case <-ctx.Done():
-		return IndexPatch{}, ctx.Err()
+		return projectindex.IndexPatch{}, ctx.Err()
 	}
-	return IndexPatch{
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseSemantic,
+		Phase:         projectindex.PhaseSemantic,
 		Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
 		Status:        "ok",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
 				ID:       "prompt:writer",
 				Kind:     "prompt",
@@ -197,19 +198,19 @@ func (i *concurrentLintProjectIndexer) IndexProjectSemanticPatch(ctx context.Con
 	}, nil
 }
 
-func (i *concurrentLintProjectIndexer) PrefetchProjectLintFacts(_ context.Context, _ ProjectLintIndexRequest) (ProjectLintPrefetchResult, error) {
+func (i *concurrentLintProjectIndexer) PrefetchProjectLintFacts(_ context.Context, _ projectindex.ProjectLintIndexRequest) (projectindex.ProjectLintPrefetchResult, error) {
 	close(i.prefetchStarted)
-	return ProjectLintPrefetchResult{
+	return projectindex.ProjectLintPrefetchResult{
 		RuleFacts: []json.RawMessage{json.RawMessage(`{"ruleResults":[{"ruleId":"extension.rule"}]}`)},
 	}, nil
 }
 
-func (i *concurrentLintProjectIndexer) IndexProjectLintPatch(_ context.Context, req ProjectLintIndexRequest) (IndexPatch, error) {
+func (i *concurrentLintProjectIndexer) IndexProjectLintPatch(_ context.Context, req projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
 	for _, definition := range req.PreviousIndex.Definitions {
 		if definition.ID == "prompt:writer" && definition.Quality != nil {
 			i.sawSemanticQuality = true
 		}
 	}
 	i.sawPrefetchedRuleFacts = req.Prefetch != nil && len(req.Prefetch.RuleFacts) == 1
-	return IndexPatch{}, nil
+	return projectindex.IndexPatch{}, nil
 }

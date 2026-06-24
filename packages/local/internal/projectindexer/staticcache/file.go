@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
 type Extraction struct {
-	File            string                              `json:"file,omitempty"`
-	Definitions     []json.RawMessage                   `json:"definitions"`
-	Relations       []json.RawMessage                   `json:"relations"`
-	Dependencies    []string                            `json:"dependencies"`
-	Diagnostics     []json.RawMessage                   `json:"diagnostics"`
-	SemanticProfile *devtools.SemanticSourceProfileFile `json:"semanticProfile,omitempty"`
+	File            string                                  `json:"file,omitempty"`
+	Definitions     []json.RawMessage                       `json:"definitions"`
+	Relations       []json.RawMessage                       `json:"relations"`
+	Dependencies    []string                                `json:"dependencies"`
+	Diagnostics     []json.RawMessage                       `json:"diagnostics"`
+	SemanticProfile *projectindex.SemanticSourceProfileFile `json:"semanticProfile,omitempty"`
 }
 
 func ReadExtraction(root string, cacheKey string) (Extraction, error) {

@@ -2,11 +2,10 @@ package semantic
 
 import (
 	"context"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/use-crux/crux/packages/local/internal/devtools"
 )
 
 func TestWorker_semanticPatchUsesDedicatedStreamProtocol(t *testing.T) {
@@ -86,10 +85,10 @@ func TestWorker_semanticPatchUsesDedicatedStreamProtocol(t *testing.T) {
 
 	patch, err := worker.IndexProjectSemanticPatch(
 		context.Background(),
-		devtools.ProjectSemanticIndexRequest{
+		projectindex.ProjectSemanticIndexRequest{
 			Root:        t.TempDir(),
 			ProjectName: "semantic-project",
-			Budget:      devtools.IndexPatchBudget{MaxDefinitions: 10},
+			Budget:      projectindex.IndexPatchBudget{MaxDefinitions: 10},
 		},
 	)
 	if err != nil {
@@ -171,10 +170,10 @@ func TestWorker_nativeBackendUsesSemanticWorker(t *testing.T) {
 
 	patch, err := worker.IndexProjectSemanticPatch(
 		context.Background(),
-		devtools.ProjectSemanticIndexRequest{
+		projectindex.ProjectSemanticIndexRequest{
 			Root:        t.TempDir(),
 			ProjectName: "semantic-project",
-			Budget:      devtools.IndexPatchBudget{MaxDefinitions: 10},
+			Budget:      projectindex.IndexPatchBudget{MaxDefinitions: 10},
 		},
 	)
 	if err != nil {
@@ -276,11 +275,11 @@ func TestWorker_reusesProcessAcrossSemanticRequests(t *testing.T) {
 	worker := New(Options{ScriptPath: script})
 	defer worker.Close()
 
-	req := devtools.ProjectSemanticIndexRequest{
+	req := projectindex.ProjectSemanticIndexRequest{
 		Root:        t.TempDir(),
 		ProjectName: "semantic-project",
 		Files:       []string{"src/a.ts"},
-		Budget:      devtools.IndexPatchBudget{MaxDefinitions: 10},
+		Budget:      projectindex.IndexPatchBudget{MaxDefinitions: 10},
 	}
 	if _, err := worker.IndexProjectSemanticPatch(context.Background(), req); err != nil {
 		t.Fatalf("first IndexProjectSemanticPatch error = %v", err)

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
 const Epoch = "static-parse-v38"
@@ -17,7 +17,7 @@ const Epoch = "static-parse-v38"
 type Status struct {
 	CacheHits    []string
 	CacheMisses  []string
-	CacheEntries []devtools.StaticCacheHit
+	CacheEntries []projectindex.StaticCacheHit
 }
 
 type manifestEntry struct {
@@ -49,7 +49,7 @@ func ManifestStatus(
 	status := Status{
 		CacheHits:    []string{},
 		CacheMisses:  []string{},
-		CacheEntries: []devtools.StaticCacheHit{},
+		CacheEntries: []projectindex.StaticCacheHit{},
 	}
 	for _, fileStatus := range statuses {
 		if !fileStatus.Hit {
@@ -57,7 +57,7 @@ func ManifestStatus(
 			continue
 		}
 		status.CacheHits = append(status.CacheHits, fileStatus.File)
-		status.CacheEntries = append(status.CacheEntries, devtools.StaticCacheHit{
+		status.CacheEntries = append(status.CacheEntries, projectindex.StaticCacheHit{
 			File:            fileStatus.File,
 			CacheKey:        fileStatus.Entry.CacheKey,
 			SourceHash:      fileStatus.Entry.SourceHash,

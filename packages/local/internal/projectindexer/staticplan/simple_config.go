@@ -6,61 +6,61 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
 var (
-	projectNativeStaticSimpleNativeAstPattern = regexp.MustCompile(`(?s)\bnativeAst\s*:\s*(true|false|\{[^{}]*\})`)
-	projectNativeStaticSimpleFrontendPattern  = regexp.MustCompile(`\bfrontend\s*:\s*['"]oxc['"]`)
-	projectNativeStaticSimpleExtensionPattern = regexp.MustCompile(`\bextensions\s*:`)
-	projectNativeStaticSimpleLintPattern      = regexp.MustCompile(`\blint\s*:`)
+	simpleNativeAstPattern = regexp.MustCompile(`(?s)\bnativeAst\s*:\s*(true|false|\{[^{}]*\})`)
+	simpleFrontendPattern  = regexp.MustCompile(`\bfrontend\s*:\s*['"]oxc['"]`)
+	simpleExtensionPattern = regexp.MustCompile(`\bextensions\s*:`)
+	simpleLintPattern      = regexp.MustCompile(`\blint\s*:`)
 )
 
 func InspectSimpleConfig(
 	root string,
 	configPath string,
-) (devtools.ProjectNativeStaticConfig, bool, error) {
-	configFile := projectNativeStaticResolveConfigFile(root, configPath)
+) (projectindex.ProjectNativeStaticConfig, bool, error) {
+	configFile := resolveConfigFile(root, configPath)
 	if configFile == "" {
-		return devtools.ProjectNativeStaticConfig{}, false, nil
+		return projectindex.ProjectNativeStaticConfig{}, false, nil
 	}
 	source, err := os.ReadFile(configFile)
 	if err != nil {
-		return devtools.ProjectNativeStaticConfig{}, false, nil
+		return projectindex.ProjectNativeStaticConfig{}, false, nil
 	}
 	config, ok := ParseSimpleConfig(root, configFile, string(source))
 	return config, ok, nil
 }
 
-func projectNativeStaticResolveConfigFile(root string, configPath string) string {
+func resolveConfigFile(root string, configPath string) string {
 	if configPath != "" {
 		if filepath.IsAbs(configPath) {
 			return configPath
 		}
 		return filepath.Join(root, configPath)
 	}
-	return projectNativeStaticFindConfigFile(root)
+	return findConfigFile(root)
 }
 
 func ParseSimpleConfig(
 	root string,
 	configFile string,
 	source string,
-) (devtools.ProjectNativeStaticConfig, bool) {
-	if projectNativeStaticSimpleExtensionPattern.MatchString(source) ||
-		projectNativeStaticSimpleLintPattern.MatchString(source) {
-		return devtools.ProjectNativeStaticConfig{}, false
+) (projectindex.ProjectNativeStaticConfig, bool) {
+	if simpleExtensionPattern.MatchString(source) ||
+		simpleLintPattern.MatchString(source) {
+		return projectindex.ProjectNativeStaticConfig{}, false
 	}
-	match := projectNativeStaticSimpleNativeAstPattern.FindStringSubmatch(source)
+	match := simpleNativeAstPattern.FindStringSubmatch(source)
 	if len(match) != 2 {
-		return devtools.ProjectNativeStaticConfig{}, false
+		return projectindex.ProjectNativeStaticConfig{}, false
 	}
 	value := strings.TrimSpace(match[1])
-	config := devtools.ProjectNativeStaticConfig{
+	config := projectindex.ProjectNativeStaticConfig{
 		Root:        root,
 		ConfigFile:  configFile,
-		Extensions:  []devtools.ProjectNativeStaticExtensionReference{},
-		Diagnostics: []devtools.ProjectNativeStaticConfigDiagnostic{},
+		Extensions:  []projectindex.ProjectNativeStaticExtensionReference{},
+		Diagnostics: []projectindex.ProjectNativeStaticConfigDiagnostic{},
 	}
 	switch value {
 	case "true":
@@ -70,10 +70,10 @@ func ParseSimpleConfig(
 		return config, true
 	default:
 		if !strings.HasPrefix(value, "{") || !strings.HasSuffix(value, "}") {
-			return devtools.ProjectNativeStaticConfig{}, false
+			return projectindex.ProjectNativeStaticConfig{}, false
 		}
 		config.NativeAstEnabled = true
-		if projectNativeStaticSimpleFrontendPattern.MatchString(value) {
+		if simpleFrontendPattern.MatchString(value) {
 			config.NativeAstFrontend = "oxc"
 		}
 		return config, true

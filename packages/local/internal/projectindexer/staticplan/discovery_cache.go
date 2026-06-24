@@ -11,51 +11,51 @@ import (
 )
 
 const (
-	projectNativeStaticDiscoveryCacheVersion    = "native-static-discovery-v2"
-	projectNativeStaticClassifierCacheVersion   = "classifier-v1"
-	projectNativeStaticImportScanCacheVersion   = "import-scan-v1"
-	projectNativeStaticDiscoveryCacheResultFile = "source-selection.json"
+	discoveryCacheVersion    = "native-static-discovery-v2"
+	classifierCacheVersion   = "classifier-v1"
+	importScanCacheVersion   = "import-scan-v1"
+	discoveryCacheResultFile = "source-selection.json"
 )
 
-type projectNativeStaticDiscoveryCache struct {
+type discoveryCache struct {
 	root string
 	file string
 
 	mu    sync.Mutex
-	data  projectNativeStaticDiscoveryCacheData
+	data  discoveryCacheData
 	dirty bool
 }
 
-type projectNativeStaticDiscoveryCacheData struct {
-	Version         string                                               `json:"version"`
-	Root            string                                               `json:"root"`
-	Classifications map[string]projectNativeStaticCachedClassification   `json:"classifications"`
-	Imports         map[string]projectNativeStaticCachedImportResolution `json:"imports"`
+type discoveryCacheData struct {
+	Version         string                            `json:"version"`
+	Root            string                            `json:"root"`
+	Classifications map[string]cachedClassification   `json:"classifications"`
+	Imports         map[string]cachedImportResolution `json:"imports"`
 }
 
-type projectNativeStaticCachedClassification struct {
-	Version      string                                      `json:"version"`
-	File         string                                      `json:"file"`
-	CallNamesKey string                                      `json:"callNamesKey"`
-	Fingerprint  projectNativeStaticDiscoveryFileFingerprint `json:"fingerprint"`
-	Result       projectNativeStaticCandidateClassification  `json:"result"`
+type cachedClassification struct {
+	Version      string                   `json:"version"`
+	File         string                   `json:"file"`
+	CallNamesKey string                   `json:"callNamesKey"`
+	Fingerprint  discoveryFileFingerprint `json:"fingerprint"`
+	Result       candidateClassification  `json:"result"`
 }
 
-type projectNativeStaticCachedImportResolution struct {
-	Version          string                                      `json:"version"`
-	File             string                                      `json:"file"`
-	Fingerprint      projectNativeStaticDiscoveryFileFingerprint `json:"fingerprint"`
-	Dependencies     []string                                    `json:"dependencies"`
-	ResolutionChecks []projectNativeStaticDiscoveryPathState     `json:"resolutionChecks"`
+type cachedImportResolution struct {
+	Version          string                   `json:"version"`
+	File             string                   `json:"file"`
+	Fingerprint      discoveryFileFingerprint `json:"fingerprint"`
+	Dependencies     []string                 `json:"dependencies"`
+	ResolutionChecks []discoveryPathState     `json:"resolutionChecks"`
 }
 
-type projectNativeStaticDiscoveryFileFingerprint struct {
+type discoveryFileFingerprint struct {
 	Size               int64 `json:"size"`
 	ModTimeUnixNano    int64 `json:"modTimeUnixNano"`
 	ChangeTimeUnixNano int64 `json:"changeTimeUnixNano,omitempty"`
 }
 
-type projectNativeStaticDiscoveryPathState struct {
+type discoveryPathState struct {
 	File               string `json:"file"`
 	Exists             bool   `json:"exists"`
 	IsDir              bool   `json:"isDir,omitempty"`
@@ -65,39 +65,39 @@ type projectNativeStaticDiscoveryPathState struct {
 	ChangeTimeUnixNano int64  `json:"changeTimeUnixNano,omitempty"`
 }
 
-func projectNativeStaticLoadDiscoveryCache(root string) *projectNativeStaticDiscoveryCache {
-	cacheFile := filepath.Join(root, ".crux", "cache", "index", projectNativeStaticDiscoveryCacheVersion, projectNativeStaticDiscoveryCacheResultFile)
-	cache := &projectNativeStaticDiscoveryCache{
+func loadDiscoveryCache(root string) *discoveryCache {
+	cacheFile := filepath.Join(root, ".crux", "cache", "index", discoveryCacheVersion, discoveryCacheResultFile)
+	cache := &discoveryCache{
 		root: root,
 		file: cacheFile,
-		data: projectNativeStaticDiscoveryCacheData{
-			Version:         projectNativeStaticDiscoveryCacheVersion,
+		data: discoveryCacheData{
+			Version:         discoveryCacheVersion,
 			Root:            root,
-			Classifications: map[string]projectNativeStaticCachedClassification{},
-			Imports:         map[string]projectNativeStaticCachedImportResolution{},
+			Classifications: map[string]cachedClassification{},
+			Imports:         map[string]cachedImportResolution{},
 		},
 	}
 	data, err := os.ReadFile(cacheFile)
 	if err != nil {
 		return cache
 	}
-	var decoded projectNativeStaticDiscoveryCacheData
+	var decoded discoveryCacheData
 	if err := json.Unmarshal(data, &decoded); err != nil ||
-		decoded.Version != projectNativeStaticDiscoveryCacheVersion ||
+		decoded.Version != discoveryCacheVersion ||
 		decoded.Root != root {
 		return cache
 	}
 	cache.data = decoded
 	if cache.data.Classifications == nil {
-		cache.data.Classifications = map[string]projectNativeStaticCachedClassification{}
+		cache.data.Classifications = map[string]cachedClassification{}
 	}
 	if cache.data.Imports == nil {
-		cache.data.Imports = map[string]projectNativeStaticCachedImportResolution{}
+		cache.data.Imports = map[string]cachedImportResolution{}
 	}
 	return cache
 }
 
-func (cache *projectNativeStaticDiscoveryCache) Save() {
+func (cache *discoveryCache) Save() {
 	if cache == nil {
 		return
 	}
@@ -106,7 +106,7 @@ func (cache *projectNativeStaticDiscoveryCache) Save() {
 		cache.mu.Unlock()
 		return
 	}
-	cache.data.Version = projectNativeStaticDiscoveryCacheVersion
+	cache.data.Version = discoveryCacheVersion
 	cache.data.Root = cache.root
 	data, err := json.Marshal(cache.data)
 	cache.mu.Unlock()
@@ -125,34 +125,34 @@ func (cache *projectNativeStaticDiscoveryCache) Save() {
 	}
 }
 
-func (cache *projectNativeStaticDiscoveryCache) CachedClassification(
+func (cache *discoveryCache) CachedClassification(
 	file string,
 	callNamesKey string,
-) (projectNativeStaticCandidateClassification, bool) {
-	fingerprint, ok := projectNativeStaticDiscoveryFingerprint(file)
+) (candidateClassification, bool) {
+	fingerprint, ok := discoveryFingerprint(file)
 	return cache.CachedClassificationWithFingerprint(file, callNamesKey, fingerprint, ok)
 }
 
-func (cache *projectNativeStaticDiscoveryCache) CachedClassificationWithFingerprint(
+func (cache *discoveryCache) CachedClassificationWithFingerprint(
 	file string,
 	callNamesKey string,
-	fingerprint projectNativeStaticDiscoveryFileFingerprint,
+	fingerprint discoveryFileFingerprint,
 	fingerprintOK bool,
-) (projectNativeStaticCandidateClassification, bool) {
+) (candidateClassification, bool) {
 	if cache == nil || !fingerprintOK {
-		return projectNativeStaticCandidateClassification{}, false
+		return candidateClassification{}, false
 	}
 	relativeFile := cache.relativeFile(file)
-	key := projectNativeStaticDiscoveryClassificationKey(relativeFile, callNamesKey)
+	key := discoveryClassificationKey(relativeFile, callNamesKey)
 	cache.mu.Lock()
 	entry, ok := cache.data.Classifications[key]
 	cache.mu.Unlock()
 	if !ok ||
-		entry.Version != projectNativeStaticClassifierCacheVersion ||
+		entry.Version != classifierCacheVersion ||
 		entry.File != relativeFile ||
 		entry.CallNamesKey != callNamesKey ||
 		entry.Fingerprint != fingerprint {
-		return projectNativeStaticCandidateClassification{}, false
+		return candidateClassification{}, false
 	}
 	result := entry.Result
 	result.File = file
@@ -160,20 +160,20 @@ func (cache *projectNativeStaticDiscoveryCache) CachedClassificationWithFingerpr
 	return result, true
 }
 
-func (cache *projectNativeStaticDiscoveryCache) StoreClassification(
+func (cache *discoveryCache) StoreClassification(
 	file string,
 	callNamesKey string,
-	result projectNativeStaticCandidateClassification,
+	result candidateClassification,
 ) {
-	fingerprint, ok := projectNativeStaticDiscoveryFingerprint(file)
+	fingerprint, ok := discoveryFingerprint(file)
 	cache.StoreClassificationWithFingerprint(file, callNamesKey, result, fingerprint, ok)
 }
 
-func (cache *projectNativeStaticDiscoveryCache) StoreClassificationWithFingerprint(
+func (cache *discoveryCache) StoreClassificationWithFingerprint(
 	file string,
 	callNamesKey string,
-	result projectNativeStaticCandidateClassification,
-	fingerprint projectNativeStaticDiscoveryFileFingerprint,
+	result candidateClassification,
+	fingerprint discoveryFileFingerprint,
 	fingerprintOK bool,
 ) {
 	if cache == nil || !fingerprintOK {
@@ -183,10 +183,10 @@ func (cache *projectNativeStaticDiscoveryCache) StoreClassificationWithFingerpri
 	stored := result
 	stored.File = relativeFile
 	stored.Bytes = fingerprint.Size
-	key := projectNativeStaticDiscoveryClassificationKey(relativeFile, callNamesKey)
+	key := discoveryClassificationKey(relativeFile, callNamesKey)
 	cache.mu.Lock()
-	cache.data.Classifications[key] = projectNativeStaticCachedClassification{
-		Version:      projectNativeStaticClassifierCacheVersion,
+	cache.data.Classifications[key] = cachedClassification{
+		Version:      classifierCacheVersion,
 		File:         relativeFile,
 		CallNamesKey: callNamesKey,
 		Fingerprint:  fingerprint,
@@ -196,14 +196,14 @@ func (cache *projectNativeStaticDiscoveryCache) StoreClassificationWithFingerpri
 	cache.mu.Unlock()
 }
 
-func (cache *projectNativeStaticDiscoveryCache) CachedImports(file string) ([]string, bool) {
-	fingerprint, ok := projectNativeStaticDiscoveryFingerprint(file)
+func (cache *discoveryCache) CachedImports(file string) ([]string, bool) {
+	fingerprint, ok := discoveryFingerprint(file)
 	return cache.CachedImportsWithFingerprint(file, fingerprint, ok)
 }
 
-func (cache *projectNativeStaticDiscoveryCache) CachedImportsWithFingerprint(
+func (cache *discoveryCache) CachedImportsWithFingerprint(
 	file string,
-	fingerprint projectNativeStaticDiscoveryFileFingerprint,
+	fingerprint discoveryFileFingerprint,
 	fingerprintOK bool,
 ) ([]string, bool) {
 	if cache == nil || !fingerprintOK {
@@ -214,13 +214,13 @@ func (cache *projectNativeStaticDiscoveryCache) CachedImportsWithFingerprint(
 	entry, ok := cache.data.Imports[relativeFile]
 	cache.mu.Unlock()
 	if !ok ||
-		entry.Version != projectNativeStaticImportScanCacheVersion ||
+		entry.Version != importScanCacheVersion ||
 		entry.File != relativeFile ||
 		entry.Fingerprint != fingerprint {
 		return nil, false
 	}
 	for _, expected := range entry.ResolutionChecks {
-		if !projectNativeStaticDiscoveryPathStateMatches(cache.root, expected) {
+		if !discoveryPathStateMatches(cache.root, expected) {
 			return nil, false
 		}
 	}
@@ -231,20 +231,20 @@ func (cache *projectNativeStaticDiscoveryCache) CachedImportsWithFingerprint(
 	return dependencies, true
 }
 
-func (cache *projectNativeStaticDiscoveryCache) StoreImports(
+func (cache *discoveryCache) StoreImports(
 	file string,
 	dependencies []string,
-	resolutionChecks []projectNativeStaticDiscoveryPathState,
+	resolutionChecks []discoveryPathState,
 ) {
-	fingerprint, ok := projectNativeStaticDiscoveryFingerprint(file)
+	fingerprint, ok := discoveryFingerprint(file)
 	cache.StoreImportsWithFingerprint(file, dependencies, resolutionChecks, fingerprint, ok)
 }
 
-func (cache *projectNativeStaticDiscoveryCache) StoreImportsWithFingerprint(
+func (cache *discoveryCache) StoreImportsWithFingerprint(
 	file string,
 	dependencies []string,
-	resolutionChecks []projectNativeStaticDiscoveryPathState,
-	fingerprint projectNativeStaticDiscoveryFileFingerprint,
+	resolutionChecks []discoveryPathState,
+	fingerprint discoveryFileFingerprint,
 	fingerprintOK bool,
 ) {
 	if cache == nil || !fingerprintOK {
@@ -255,15 +255,15 @@ func (cache *projectNativeStaticDiscoveryCache) StoreImportsWithFingerprint(
 		relativeDependencies = append(relativeDependencies, cache.relativeFile(dependency))
 	}
 	sort.Strings(relativeDependencies)
-	relativeChecks := make([]projectNativeStaticDiscoveryPathState, 0, len(resolutionChecks))
+	relativeChecks := make([]discoveryPathState, 0, len(resolutionChecks))
 	for _, check := range resolutionChecks {
 		check.File = cache.relativeFile(check.File)
 		relativeChecks = append(relativeChecks, check)
 	}
 	relativeFile := cache.relativeFile(file)
 	cache.mu.Lock()
-	cache.data.Imports[relativeFile] = projectNativeStaticCachedImportResolution{
-		Version:          projectNativeStaticImportScanCacheVersion,
+	cache.data.Imports[relativeFile] = cachedImportResolution{
+		Version:          importScanCacheVersion,
 		File:             relativeFile,
 		Fingerprint:      fingerprint,
 		Dependencies:     relativeDependencies,
@@ -273,26 +273,26 @@ func (cache *projectNativeStaticDiscoveryCache) StoreImportsWithFingerprint(
 	cache.mu.Unlock()
 }
 
-func (cache *projectNativeStaticDiscoveryCache) relativeFile(file string) string {
+func (cache *discoveryCache) relativeFile(file string) string {
 	if relative, err := filepath.Rel(cache.root, file); err == nil {
 		return filepath.ToSlash(relative)
 	}
 	return filepath.ToSlash(file)
 }
 
-func projectNativeStaticDiscoveryFingerprint(file string) (projectNativeStaticDiscoveryFileFingerprint, bool) {
+func discoveryFingerprint(file string) (discoveryFileFingerprint, bool) {
 	info, err := os.Stat(file)
 	if err != nil || info.IsDir() {
-		return projectNativeStaticDiscoveryFileFingerprint{}, false
+		return discoveryFileFingerprint{}, false
 	}
-	return projectNativeStaticDiscoveryFileFingerprint{
+	return discoveryFileFingerprint{
 		Size:               info.Size(),
 		ModTimeUnixNano:    info.ModTime().UnixNano(),
-		ChangeTimeUnixNano: projectNativeStaticChangeTimeUnixNano(info),
+		ChangeTimeUnixNano: changeTimeUnixNano(info),
 	}, true
 }
 
-func projectNativeStaticChangeTimeUnixNano(info os.FileInfo) int64 {
+func changeTimeUnixNano(info os.FileInfo) int64 {
 	if info == nil || info.Sys() == nil {
 		return 0
 	}
@@ -308,14 +308,14 @@ func projectNativeStaticChangeTimeUnixNano(info os.FileInfo) int64 {
 	}
 	for _, name := range []string{"Ctim", "Ctimespec"} {
 		field := value.FieldByName(name)
-		if timestamp, ok := projectNativeStaticUnixTimeField(field); ok {
+		if timestamp, ok := unixTimeField(field); ok {
 			return timestamp
 		}
 	}
 	return 0
 }
 
-func projectNativeStaticUnixTimeField(value reflect.Value) (int64, bool) {
+func unixTimeField(value reflect.Value) (int64, bool) {
 	if !value.IsValid() {
 		return 0, false
 	}
@@ -328,13 +328,13 @@ func projectNativeStaticUnixTimeField(value reflect.Value) (int64, bool) {
 	if value.Kind() != reflect.Struct {
 		return 0, false
 	}
-	sec, ok := projectNativeStaticIntField(value, "Sec")
+	sec, ok := intField(value, "Sec")
 	if !ok {
 		return 0, false
 	}
-	nsec, ok := projectNativeStaticIntField(value, "Nsec")
+	nsec, ok := intField(value, "Nsec")
 	if !ok {
-		nsec, ok = projectNativeStaticIntField(value, "Nsec")
+		nsec, ok = intField(value, "Nsec")
 	}
 	if !ok {
 		return 0, false
@@ -342,7 +342,7 @@ func projectNativeStaticUnixTimeField(value reflect.Value) (int64, bool) {
 	return sec*int64(time.Second) + nsec, true
 }
 
-func projectNativeStaticIntField(value reflect.Value, name string) (int64, bool) {
+func intField(value reflect.Value, name string) (int64, bool) {
 	field := value.FieldByName(name)
 	if !field.IsValid() {
 		return 0, false
@@ -361,8 +361,8 @@ func projectNativeStaticIntField(value reflect.Value, name string) (int64, bool)
 	}
 }
 
-func projectNativeStaticReadDiscoveryPathState(root string, file string) projectNativeStaticDiscoveryPathState {
-	state := projectNativeStaticDiscoveryPathState{File: filepath.ToSlash(file)}
+func readDiscoveryPathState(root string, file string) discoveryPathState {
+	state := discoveryPathState{File: filepath.ToSlash(file)}
 	if root != "" {
 		if relative, err := filepath.Rel(root, file); err == nil {
 			state.File = filepath.ToSlash(relative)
@@ -374,17 +374,17 @@ func projectNativeStaticReadDiscoveryPathState(root string, file string) project
 	}
 	state.Exists = true
 	state.IsDir = info.IsDir()
-	state.SourceFile = !info.IsDir() && projectNativeStaticCandidateSourceFile(file)
+	state.SourceFile = !info.IsDir() && candidateSourceFile(file)
 	state.Size = info.Size()
 	state.ModTimeUnixNano = info.ModTime().UnixNano()
-	state.ChangeTimeUnixNano = projectNativeStaticChangeTimeUnixNano(info)
+	state.ChangeTimeUnixNano = changeTimeUnixNano(info)
 	return state
 }
 
-func projectNativeStaticDiscoveryPathStateMatches(root string, expected projectNativeStaticDiscoveryPathState) bool {
+func discoveryPathStateMatches(root string, expected discoveryPathState) bool {
 	file := expected.File
 	if root != "" && !filepath.IsAbs(file) {
 		file = filepath.Join(root, filepath.FromSlash(file))
 	}
-	return projectNativeStaticReadDiscoveryPathState(root, file) == expected
+	return readDiscoveryPathState(root, file) == expected
 }

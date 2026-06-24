@@ -10,17 +10,17 @@ import (
 	"sync"
 )
 
-var projectNativeStaticImportSpecPattern = regexp.MustCompile(
+var importSpecPattern = regexp.MustCompile(
 	`(?m)(?:import|export)\s+(?:[^'"` + "`" + `]*?\s+from\s+)?["']([^"']+)["']|require\s*\(\s*["']([^"']+)["']\s*\)`,
 )
 
-func projectNativeStaticSupportFiles(primaryFiles []string) []string {
-	return projectNativeStaticSupportFilesWithCache(primaryFiles, nil)
+func supportFiles(primaryFiles []string) []string {
+	return supportFilesWithCache(primaryFiles, nil)
 }
 
-func projectNativeStaticSupportFilesWithCache(
+func supportFilesWithCache(
 	primaryFiles []string,
-	discoveryCache *projectNativeStaticDiscoveryCache,
+	discoveryCache *discoveryCache,
 ) []string {
 	selected := map[string]bool{}
 	queue := append([]string(nil), primaryFiles...)
@@ -39,7 +39,7 @@ func projectNativeStaticSupportFilesWithCache(
 			batch = append(batch, file)
 		}
 		queue = queue[:0]
-		for _, dependencies := range projectNativeStaticLocalImportFilesBatchWithCache(batch, discoveryCache) {
+		for _, dependencies := range localImportFilesBatchWithCache(batch, discoveryCache) {
 			for _, dependency := range dependencies {
 				if selected[dependency] {
 					continue
@@ -59,13 +59,13 @@ func projectNativeStaticSupportFilesWithCache(
 	return files
 }
 
-func projectNativeStaticLocalImportFilesBatch(files []string) [][]string {
-	return projectNativeStaticLocalImportFilesBatchWithCache(files, nil)
+func localImportFilesBatch(files []string) [][]string {
+	return localImportFilesBatchWithCache(files, nil)
 }
 
-func projectNativeStaticLocalImportFilesBatchWithCache(
+func localImportFilesBatchWithCache(
 	files []string,
-	discoveryCache *projectNativeStaticDiscoveryCache,
+	discoveryCache *discoveryCache,
 ) [][]string {
 	results := make([][]string, len(files))
 	if len(files) == 0 {
@@ -88,7 +88,7 @@ func projectNativeStaticLocalImportFilesBatchWithCache(
 		go func() {
 			defer wg.Done()
 			for fileIndex := range jobs {
-				results[fileIndex] = projectNativeStaticLocalImportFilesWithCache(files[fileIndex], discoveryCache)
+				results[fileIndex] = localImportFilesWithCache(files[fileIndex], discoveryCache)
 			}
 		}()
 	}
@@ -100,16 +100,16 @@ func projectNativeStaticLocalImportFilesBatchWithCache(
 	return results
 }
 
-func projectNativeStaticLocalImportFiles(file string) []string {
-	files, _ := projectNativeStaticScanLocalImportFiles(file, "")
+func localImportFiles(file string) []string {
+	files, _ := scanLocalImportFiles(file, "")
 	return files
 }
 
-func projectNativeStaticLocalImportFilesWithCache(
+func localImportFilesWithCache(
 	file string,
-	discoveryCache *projectNativeStaticDiscoveryCache,
+	discoveryCache *discoveryCache,
 ) []string {
-	fingerprint, fingerprintOK := projectNativeStaticDiscoveryFingerprint(file)
+	fingerprint, fingerprintOK := discoveryFingerprint(file)
 	if cached, ok := discoveryCache.CachedImportsWithFingerprint(file, fingerprint, fingerprintOK); ok {
 		return cached
 	}
@@ -117,22 +117,22 @@ func projectNativeStaticLocalImportFilesWithCache(
 	if discoveryCache != nil {
 		root = discoveryCache.root
 	}
-	files, resolutionChecks := projectNativeStaticScanLocalImportFiles(file, root)
+	files, resolutionChecks := scanLocalImportFiles(file, root)
 	discoveryCache.StoreImportsWithFingerprint(file, files, resolutionChecks, fingerprint, fingerprintOK)
 	return files
 }
 
-func projectNativeStaticScanLocalImportFiles(
+func scanLocalImportFiles(
 	file string,
 	root string,
-) ([]string, []projectNativeStaticDiscoveryPathState) {
+) ([]string, []discoveryPathState) {
 	source, err := os.ReadFile(file)
 	if err != nil {
 		return nil, nil
 	}
-	matches := projectNativeStaticImportSpecPattern.FindAllStringSubmatch(string(source), -1)
+	matches := importSpecPattern.FindAllStringSubmatch(string(source), -1)
 	files := []string{}
-	resolutionChecks := []projectNativeStaticDiscoveryPathState{}
+	resolutionChecks := []discoveryPathState{}
 	for _, match := range matches {
 		specifier := match[1]
 		if specifier == "" {
@@ -141,7 +141,7 @@ func projectNativeStaticScanLocalImportFiles(
 		if !strings.HasPrefix(specifier, ".") {
 			continue
 		}
-		resolved, checks := projectNativeStaticResolveImportWithChecks(root, filepath.Dir(file), specifier)
+		resolved, checks := resolveImportWithChecks(root, filepath.Dir(file), specifier)
 		resolutionChecks = append(resolutionChecks, checks...)
 		if resolved != "" {
 			files = appendUniqueSorted(files, resolved)
@@ -150,16 +150,16 @@ func projectNativeStaticScanLocalImportFiles(
 	return files, resolutionChecks
 }
 
-func projectNativeStaticResolveImport(fromDir string, specifier string) string {
-	resolved, _ := projectNativeStaticResolveImportWithChecks("", fromDir, specifier)
+func resolveImport(fromDir string, specifier string) string {
+	resolved, _ := resolveImportWithChecks("", fromDir, specifier)
 	return resolved
 }
 
-func projectNativeStaticResolveImportWithChecks(
+func resolveImportWithChecks(
 	root string,
 	fromDir string,
 	specifier string,
-) (string, []projectNativeStaticDiscoveryPathState) {
+) (string, []discoveryPathState) {
 	base := filepath.Clean(filepath.Join(fromDir, specifier))
 	candidates := []string{base}
 	if filepath.Ext(base) == "" {
@@ -170,9 +170,9 @@ func projectNativeStaticResolveImportWithChecks(
 			candidates = append(candidates, filepath.Join(base, "index"+ext))
 		}
 	}
-	checks := make([]projectNativeStaticDiscoveryPathState, 0, len(candidates))
+	checks := make([]discoveryPathState, 0, len(candidates))
 	for _, candidate := range candidates {
-		check := projectNativeStaticReadDiscoveryPathState(root, candidate)
+		check := readDiscoveryPathState(root, candidate)
 		checks = append(checks, check)
 		if check.Exists && !check.IsDir && check.SourceFile {
 			return candidate, checks
@@ -195,7 +195,7 @@ func appendUniqueSorted(values []string, next string) []string {
 	return values
 }
 
-func projectNativeStaticLongestLine(sample string) int {
+func longestLine(sample string) int {
 	longest := 0
 	for _, line := range strings.Split(sample, "\n") {
 		line = strings.TrimSuffix(line, "\r")

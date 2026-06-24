@@ -2,26 +2,26 @@ package staticplan
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/sourcegraph"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
 )
 
 type Result struct {
-	Plan    devtools.ProjectStaticSyntaxPlan
-	Timings []devtools.ProjectIndexPhaseTiming
+	Plan    projectindex.ProjectStaticSyntaxPlan
+	Timings []projectindex.ProjectIndexPhaseTiming
 }
 
 func Build(
 	root string,
 	projectName string,
-	config devtools.ProjectNativeStaticConfig,
-) (devtools.ProjectStaticSyntaxPlan, error) {
+	config projectindex.ProjectNativeStaticConfig,
+) (projectindex.ProjectStaticSyntaxPlan, error) {
 	result, err := BuildWithTimings(root, projectName, config)
 	if err != nil {
-		return devtools.ProjectStaticSyntaxPlan{}, err
+		return projectindex.ProjectStaticSyntaxPlan{}, err
 	}
 	return result.Plan, nil
 }
@@ -29,7 +29,7 @@ func Build(
 func BuildWithTimings(
 	root string,
 	projectName string,
-	config devtools.ProjectNativeStaticConfig,
+	config projectindex.ProjectNativeStaticConfig,
 ) (Result, error) {
 	return BuildWithExtensionManifest(root, projectName, config, nil)
 }
@@ -37,34 +37,34 @@ func BuildWithTimings(
 func BuildWithExtensionManifest(
 	root string,
 	projectName string,
-	config devtools.ProjectNativeStaticConfig,
-	extensionManifest *devtools.StaticExtensionHostManifestResult,
+	config projectindex.ProjectNativeStaticConfig,
+	extensionManifest *projectindex.StaticExtensionHostManifestResult,
 ) (Result, error) {
-	timings := []devtools.ProjectIndexPhaseTiming{}
+	timings := []projectindex.ProjectIndexPhaseTiming{}
 	var cacheInputs []json.RawMessage
 	if config.NativeAstEnabled {
 		cacheInputs = DefaultCacheCompilerInputs()
 	}
-	plan := devtools.ProjectStaticSyntaxPlan{
+	plan := projectindex.ProjectStaticSyntaxPlan{
 		Root:                     root,
 		ProjectName:              projectName,
 		ConfigFile:               config.ConfigFile,
-		CallNames:                append([]string(nil), projectNativeStaticDefaultCallNames...),
-		CallInterests:            projectNativeStaticDefaultCallInterests(),
+		CallNames:                append([]string(nil), defaultCallNames...),
+		CallInterests:            defaultCallInterests(),
 		ConstructorNames:         []string{"Agent"},
-		ConstructorInterests:     projectNativeStaticDefaultConstructorInterests(),
+		ConstructorInterests:     defaultConstructorInterests(),
 		PruneNativeFactCallNames: []string{"cascade", "fallback", "router"},
-		SyntaxFrontend:           projectNativeStaticSyntaxFrontend(),
+		SyntaxFrontend:           syntaxFrontend(),
 		NativeAstEnabled:         config.NativeAstEnabled,
-		StaticInterests:          projectNativeStaticDefaultStaticInterests(),
+		StaticInterests:          defaultStaticInterests(),
 		RelationSpecs:            nil,
 		RuleDescriptors:          nil,
 		LintConfig:               append(json.RawMessage(nil), config.Lint...),
 		CacheInputs:              cacheInputs,
-		StaticHost:               projectNativeStaticDefaultHost(),
+		StaticHost:               defaultHost(),
 	}
 	if config.NativeAstEnabled && extensionManifest != nil {
-		if err := projectNativeStaticMergeExtensionHostManifest(&plan, *extensionManifest); err != nil {
+		if err := mergeExtensionHostManifest(&plan, *extensionManifest); err != nil {
 			return Result{}, err
 		}
 	}
@@ -74,7 +74,7 @@ func BuildWithExtensionManifest(
 	if extensionManifest != nil {
 		fileSelectionCallNames = plan.CallNames
 	}
-	selection, selectionTimings, err := projectNativeStaticFileSelectionWithCallNamesTimed(
+	selection, selectionTimings, err := fileSelectionWithCallNamesTimed(
 		root,
 		config.ConfigFile,
 		fileSelectionCallNames,
@@ -89,9 +89,9 @@ func BuildWithExtensionManifest(
 	plan.Skipped = selection.Skipped
 
 	sourceGraphStarted := time.Now()
-	sourceGraph, err := json.Marshal(projectNativeStaticBuildSourceGraph(root))
+	sourceGraph, err := sourcegraph.Marshal(root)
 	if err != nil {
-		return Result{}, fmt.Errorf("encode native static source graph: %w", err)
+		return Result{}, err
 	}
 	timings = AppendTiming(timings, TimingSourceGraph, sourceGraphStarted, 1)
 	plan.SourceGraph = sourceGraph
@@ -104,7 +104,7 @@ func BuildWithExtensionManifest(
 	return Result{Plan: plan, Timings: timings}, nil
 }
 
-func applyCacheManifestStatus(plan *devtools.ProjectStaticSyntaxPlan) {
+func applyCacheManifestStatus(plan *projectindex.ProjectStaticSyntaxPlan) {
 	if plan == nil || len(plan.CacheInputs) == 0 {
 		return
 	}
@@ -120,11 +120,11 @@ func applyCacheManifestStatus(plan *devtools.ProjectStaticSyntaxPlan) {
 }
 
 func RefreshFileSelection(
-	plan *devtools.ProjectStaticSyntaxPlan,
+	plan *projectindex.ProjectStaticSyntaxPlan,
 	root string,
 	configFile string,
 ) error {
-	selection, err := projectNativeStaticFileSelectionWithCallNames(root, configFile, plan.CallNames)
+	selection, err := fileSelectionWithCallNames(root, configFile, plan.CallNames)
 	if err != nil {
 		return err
 	}

@@ -1,15 +1,15 @@
 package projectindexer
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
-	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticcache"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/statichost"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticrun"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticsource"
 )
 
 type projectNativeStaticSkeletonResult struct {
@@ -39,7 +39,7 @@ func (w *Worker) runNativeStaticCompilerSkeleton(
 		return projectNativeStaticSkeletonResult{}, fmt.Errorf("project syntax parser does not implement native static compiler")
 	}
 
-	identity := projectNativeStaticSkeletonIdentity()
+	identity := staticprotocol.SkeletonIdentity()
 	prepare, err := compiler.NativeStaticPrepare(ctx, staticprotocol.PrepareRequest{
 		ProtocolVersion: staticprotocol.Version,
 		Method:          staticprotocol.PrepareMethod,
@@ -59,7 +59,7 @@ func (w *Worker) runNativeStaticCompilerSkeleton(
 		Stream:          true,
 		Identity:        identity,
 		Plan:            prepare.Plan,
-		Files:           projectNativeStaticAnalyzeFiles(prepare.Plan.CacheMisses),
+		Files:           staticsource.AnalyzeFiles(prepare.Plan.CacheMisses),
 	}, nil)
 	if err != nil {
 		return projectNativeStaticSkeletonResult{}, fmt.Errorf("native static analyze: %w", err)
@@ -88,187 +88,29 @@ func (w *Worker) indexProjectAstPatchFromNativeStaticCompiler(
 	root string,
 	configPath string,
 	projectName string,
-	plan devtools.ProjectStaticSyntaxPlan,
+	plan projectindex.ProjectStaticSyntaxPlan,
 	compiler StaticCompiler,
-) (devtools.IndexPatch, ProjectIndexAstTiming, bool, error) {
-	started := time.Now()
-	sourceInput, err := projectNativeStaticSourceInputFromPlan(plan)
-	if err != nil {
-		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, err
-	}
-
-	identity := projectNativeStaticSkeletonIdentity()
-	prepare, err := compiler.NativeStaticPrepare(ctx, staticprotocol.PrepareRequest{
-		ProtocolVersion:          staticprotocol.Version,
-		Method:                   staticprotocol.PrepareMethod,
-		Root:                     root,
-		ConfigPath:               configPath,
-		ProjectName:              projectName,
-		Identity:                 identity,
-		Files:                    sourceInput.Files,
-		PrimaryFiles:             sourceInput.PrimaryFiles,
-		CallNames:                append([]string(nil), plan.CallNames...),
-		CallInterests:            projectSyntaxCallInterests(plan.CallInterests),
-		ConstructorNames:         append([]string(nil), plan.ConstructorNames...),
-		ConstructorInterests:     projectSyntaxConstructorInterests(plan.ConstructorInterests),
-		PruneNativeFactCallNames: append([]string(nil), plan.PruneNativeFactCallNames...),
-		CacheInputs:              append([]json.RawMessage(nil), plan.CacheInputs...),
-		ExtensionHost:            plan.StaticHost,
+) (projectindex.IndexPatch, ProjectIndexAstTiming, bool, error) {
+	result, err := staticrun.Run(ctx, staticrun.Request{
+		Root:         root,
+		ConfigPath:   configPath,
+		ProjectName:  projectName,
+		Plan:         plan,
+		Compiler:     compiler,
+		PatchOptions: staticPatchOptions(root),
+		Evidence: func(ctx context.Context, jobs []json.RawMessage) ([]json.RawMessage, error) {
+			return statichost.ExtractEvidenceFacts(ctx, statichost.ArtifactReaderFunc(w.streamArtifact), root, configPath, projectName, jobs)
+		},
 	})
 	if err != nil {
-		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, fmt.Errorf("native static prepare: %w", err)
+		return projectindex.IndexPatch{}, ProjectIndexAstTiming{}, false, err
 	}
-
-	analyzeSourceFiles := projectNativeStaticSourceFilesToAnalyze(prepare.Plan.CacheMisses, projectSyntaxPlanFilesToParse(plan))
-	analyzeFiles, err := projectNativeStaticAnalyzeFilesWithSourceText(analyzeSourceFiles, sourceInput.SourceTextByFile)
-	if err != nil {
-		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, err
+	timing := ProjectIndexAstTiming{
+		NativeParseAndForwardMs: result.NativeParseAndForwardMs,
+		NodeTimings:             result.NodeTimings,
 	}
-	analyzeRequest := staticprotocol.AnalyzeRequest{
-		ProtocolVersion:            staticprotocol.Version,
-		Method:                     staticprotocol.AnalyzeMethod,
-		Identity:                   identity,
-		Plan:                       prepare.Plan,
-		Files:                      analyzeFiles,
-		ExtensionEvidenceInterests: plan.StaticInterests,
+	if result.NodeReason != "" {
+		timing = projectIndexAstTimingNodeRequired(timing, result.NodeReason)
 	}
-	if compileStreamer, ok := compiler.(projectNativeStaticCompileStreamer); ok && projectStaticPlanNativeOnlyEligible(plan) {
-		return w.indexProjectAstPatchFromNativeStaticCompileStream(
-			ctx,
-			root,
-			plan,
-			compileStreamer,
-			identity,
-			started,
-			prepare.Plan,
-			analyzeFiles,
-			sourceInput,
-		)
-	}
-	analyze, evidenceFacts, evidenceNodeStarted, err := w.projectNativeStaticAnalyzeWithExtensionFacts(
-		ctx,
-		root,
-		configPath,
-		projectName,
-		compiler,
-		analyzeRequest,
-	)
-	timing := ProjectIndexAstTiming{NativeParseAndForwardMs: elapsedMs(started)}
-	if err != nil {
-		if evidenceNodeStarted {
-			return devtools.IndexPatch{}, projectIndexAstTimingNodeRequired(timing, projectIndexNodeReasonNativeStaticEvidence), false, nil
-		}
-		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, fmt.Errorf("native static analyze: %w", err)
-	}
-	extensionFacts, err := projectNativeStaticFinalizeExtensionFacts(plan)
-	if err != nil {
-		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, err
-	}
-	if evidenceNodeStarted {
-		timing = projectIndexAstTimingNodeRequired(timing, projectIndexNodeReasonNativeStaticEvidence)
-	}
-	extensionFacts = append(extensionFacts, evidenceFacts...)
-	replayedFacts, err := staticcache.ReplayFacts(root, projectName, prepare.Plan.CacheHits)
-	if err != nil {
-		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, err
-	}
-	nativeFacts := append(replayedFacts, analyze.Facts...)
-	emitBuiltinLints := false
-	finalizeRequest := staticprotocol.FinalizeRequest{
-		ProtocolVersion:  staticprotocol.Version,
-		Method:           staticprotocol.FinalizeMethod,
-		Identity:         identity,
-		NativeFacts:      nativeFacts,
-		ExtensionFacts:   extensionFacts,
-		RelationSpecs:    plan.RelationSpecs,
-		LintConfig:       plan.LintConfig,
-		LintFiles:        append([]string(nil), plan.Files...),
-		EmitBuiltinLints: nativeStaticBoolPtr(emitBuiltinLints),
-	}
-	patch, timings, usedNativeStatic, _, err := projectNativeStaticPatchFromFinalizeStream(ctx, root, compiler, finalizeRequest)
-	if err != nil {
-		return devtools.IndexPatch{}, ProjectIndexAstTiming{}, false, fmt.Errorf("native static finalize: %w", err)
-	}
-	if !usedNativeStatic {
-		if len(timings) == 0 {
-			return devtools.IndexPatch{}, projectIndexAstTimingNodeRequired(timing, projectIndexNodeReasonNativeStaticEmpty), false, nil
-		}
-		return devtools.IndexPatch{}, projectIndexAstTimingNodeRequired(timing, projectIndexNodeReasonNativeStaticIncomplete), false, nil
-	}
-	if sourceInput.SemanticSourceProfile != nil {
-		patch.SemanticSourceProfile = projectNativeStaticSemanticRequestProfile(sourceInput.SemanticSourceProfile, plan.Files)
-	}
-	if staticcache.StatusEnabledFromEnv() {
-		staticcache.WriteFromPatch(
-			root,
-			plan.CacheInputs,
-			projectNativeStaticCacheSourceInput(sourceInput),
-			prepare.Plan,
-			patch,
-		)
-	}
-	timing.NodeTimings = timings
-	return patch, timing, true, nil
-}
-
-func projectNativeStaticFinalizeExtensionFacts(plan devtools.ProjectStaticSyntaxPlan) ([]json.RawMessage, error) {
-	facts := []json.RawMessage{}
-	if fact, ok, err := projectNativeStaticGroupedFact("sourceGraph", plan.SourceGraph); err != nil {
-		return nil, err
-	} else if ok {
-		facts = append(facts, fact)
-	}
-	if fact, ok, err := projectNativeStaticGroupedFact("ruleDescriptors", plan.RuleDescriptors); err != nil {
-		return nil, err
-	} else if ok {
-		facts = append(facts, fact)
-	}
-	return facts, nil
-}
-
-func projectNativeStaticGroupedFact(key string, value json.RawMessage) (json.RawMessage, bool, error) {
-	value = bytes.TrimSpace(value)
-	if len(value) == 0 || bytes.Equal(value, []byte("null")) {
-		return nil, false, nil
-	}
-	data, err := json.Marshal(map[string]json.RawMessage{key: value})
-	if err != nil {
-		return nil, false, fmt.Errorf("native static grouped %s facts: %w", key, err)
-	}
-	return data, true, nil
-}
-
-func nativeStaticBoolPtr(value bool) *bool {
-	return &value
-}
-
-func projectNativeStaticSkeletonIdentity() staticprotocol.RunIdentity {
-	return staticprotocol.RunIdentity{
-		ProtocolVersion: staticprotocol.Version,
-		Compiler: staticprotocol.VersionIdentity{
-			Name:    "crux-native-static-skeleton",
-			Version: "phase-3",
-		},
-		Oxc: staticprotocol.VersionIdentity{
-			Name:    "oxc-rust",
-			Version: "phase-3",
-		},
-		PrimitiveManifest: staticprotocol.DigestIdentity{
-			Name:    "crux-first-party-primitives",
-			Version: "phase-3",
-		},
-		RelationPolicy: staticprotocol.DigestIdentity{
-			Name:    "crux-relation-policy",
-			Version: "phase-3",
-		},
-		ExtensionManifests: []staticprotocol.DigestIdentity{},
-		FirstPartyGraphRules: staticprotocol.DigestIdentity{
-			Name:    "crux-first-party-graph-rules",
-			Version: "phase-3",
-		},
-		CompilerProjection: staticprotocol.DigestIdentity{
-			Name:    "crux-static-projection",
-			Version: "phase-3",
-		},
-	}
+	return result.Patch, timing, result.Used, nil
 }

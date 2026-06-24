@@ -6,18 +6,18 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-type projectNativeStaticInterestManifest struct {
-	Calls         []devtools.StaticCallInterest        `json:"calls,omitempty"`
-	Constructors  []devtools.StaticConstructorInterest `json:"constructors,omitempty"`
-	Definitions   []string                             `json:"definitions,omitempty"`
-	Relations     []string                             `json:"relations,omitempty"`
-	Compatibility json.RawMessage                      `json:"compatibility,omitempty"`
+type interestManifest struct {
+	Calls         []projectindex.StaticCallInterest        `json:"calls,omitempty"`
+	Constructors  []projectindex.StaticConstructorInterest `json:"constructors,omitempty"`
+	Definitions   []string                                 `json:"definitions,omitempty"`
+	Relations     []string                                 `json:"relations,omitempty"`
+	Compatibility json.RawMessage                          `json:"compatibility,omitempty"`
 }
 
-type projectNativeStaticHostPlan struct {
+type hostPlan struct {
 	Extractors                          []json.RawMessage `json:"extractors,omitempty"`
 	BundledNativeExtractorCount         int               `json:"bundledNativeExtractorCount"`
 	BundledTypeScriptExtractorCount     int               `json:"bundledTypeScriptExtractorCount"`
@@ -31,35 +31,35 @@ type projectNativeStaticHostPlan struct {
 	NativeOnlyEligible                  bool              `json:"nativeOnlyEligible"`
 }
 
-func projectNativeStaticMergeExtensionHostManifest(
-	plan *devtools.ProjectStaticSyntaxPlan,
-	result devtools.StaticExtensionHostManifestResult,
+func mergeExtensionHostManifest(
+	plan *projectindex.ProjectStaticSyntaxPlan,
+	result projectindex.StaticExtensionHostManifestResult,
 ) error {
 	plan.CallNames = sortedUniqueStrings(append(plan.CallNames, result.Manifest.CallNames...))
-	if merged, ok, err := projectNativeStaticMergeInterests(plan.StaticInterests, result.Manifest.StaticInterests); err != nil {
+	if merged, ok, err := mergeInterests(plan.StaticInterests, result.Manifest.StaticInterests); err != nil {
 		return err
 	} else if ok {
 		plan.StaticInterests = merged
-		extensionInterests, err := projectNativeStaticDecodeInterests(result.Manifest.StaticInterests)
+		extensionInterests, err := decodeInterests(result.Manifest.StaticInterests)
 		if err != nil {
 			return err
 		}
-		plan.CallInterests = projectNativeStaticUniqueCallInterests(append(plan.CallInterests, extensionInterests.Calls...))
-		plan.ConstructorInterests = projectNativeStaticUniqueConstructorInterests(append(plan.ConstructorInterests, extensionInterests.Constructors...))
+		plan.CallInterests = uniqueCallInterests(append(plan.CallInterests, extensionInterests.Calls...))
+		plan.ConstructorInterests = uniqueConstructorInterests(append(plan.ConstructorInterests, extensionInterests.Constructors...))
 		for _, interest := range extensionInterests.Constructors {
 			plan.ConstructorNames = append(plan.ConstructorNames, interest.Name)
 		}
 		plan.ConstructorNames = sortedUniqueStrings(plan.ConstructorNames)
 	}
-	if merged, ok, err := projectNativeStaticMergeStaticHost(plan.StaticHost, result.Manifest.StaticHost); err != nil {
+	if merged, ok, err := mergeStaticHost(plan.StaticHost, result.Manifest.StaticHost); err != nil {
 		return err
 	} else if ok {
 		plan.StaticHost = merged
 	}
-	if projectNativeStaticJSONArrayHasItems(result.Manifest.RelationSpecs) {
+	if jsonArrayHasItems(result.Manifest.RelationSpecs) {
 		plan.RelationSpecs = append(json.RawMessage(nil), result.Manifest.RelationSpecs...)
 	}
-	if projectNativeStaticJSONArrayHasItems(result.RuleDescriptors) {
+	if jsonArrayHasItems(result.RuleDescriptors) {
 		plan.RuleDescriptors = append(json.RawMessage(nil), result.RuleDescriptors...)
 	}
 	if len(result.CacheInputs) > 0 {
@@ -70,24 +70,24 @@ func projectNativeStaticMergeExtensionHostManifest(
 	return nil
 }
 
-func projectNativeStaticMergeInterests(
+func mergeInterests(
 	baseRaw json.RawMessage,
 	extensionRaw json.RawMessage,
 ) (json.RawMessage, bool, error) {
 	if len(bytes.TrimSpace(extensionRaw)) == 0 {
 		return nil, false, nil
 	}
-	base, err := projectNativeStaticDecodeInterests(baseRaw)
+	base, err := decodeInterests(baseRaw)
 	if err != nil {
 		return nil, false, err
 	}
-	extension, err := projectNativeStaticDecodeInterests(extensionRaw)
+	extension, err := decodeInterests(extensionRaw)
 	if err != nil {
 		return nil, false, err
 	}
-	merged := projectNativeStaticInterestManifest{
-		Calls:         projectNativeStaticUniqueCallInterests(append(base.Calls, extension.Calls...)),
-		Constructors:  projectNativeStaticUniqueConstructorInterests(append(base.Constructors, extension.Constructors...)),
+	merged := interestManifest{
+		Calls:         uniqueCallInterests(append(base.Calls, extension.Calls...)),
+		Constructors:  uniqueConstructorInterests(append(base.Constructors, extension.Constructors...)),
 		Definitions:   sortedUniqueStrings(append(base.Definitions, extension.Definitions...)),
 		Relations:     sortedUniqueStrings(append(base.Relations, extension.Relations...)),
 		Compatibility: base.Compatibility,
@@ -102,33 +102,33 @@ func projectNativeStaticMergeInterests(
 	return data, true, nil
 }
 
-func projectNativeStaticDecodeInterests(raw json.RawMessage) (projectNativeStaticInterestManifest, error) {
+func decodeInterests(raw json.RawMessage) (interestManifest, error) {
 	if len(bytes.TrimSpace(raw)) == 0 {
-		return projectNativeStaticInterestManifest{}, nil
+		return interestManifest{}, nil
 	}
-	var interests projectNativeStaticInterestManifest
+	var interests interestManifest
 	if err := json.Unmarshal(raw, &interests); err != nil {
-		return projectNativeStaticInterestManifest{}, fmt.Errorf("decode native static interests: %w", err)
+		return interestManifest{}, fmt.Errorf("decode native static interests: %w", err)
 	}
 	return interests, nil
 }
 
-func projectNativeStaticMergeStaticHost(
+func mergeStaticHost(
 	baseRaw json.RawMessage,
 	extensionRaw json.RawMessage,
 ) (json.RawMessage, bool, error) {
 	if len(bytes.TrimSpace(extensionRaw)) == 0 {
 		return nil, false, nil
 	}
-	var base projectNativeStaticHostPlan
+	var base hostPlan
 	if err := json.Unmarshal(baseRaw, &base); err != nil {
 		return nil, false, fmt.Errorf("decode native static host: %w", err)
 	}
-	var extension projectNativeStaticHostPlan
+	var extension hostPlan
 	if err := json.Unmarshal(extensionRaw, &extension); err != nil {
 		return nil, false, fmt.Errorf("decode extension static host: %w", err)
 	}
-	merged := projectNativeStaticHostPlan{
+	merged := hostPlan{
 		Extractors:                          append(append([]json.RawMessage{}, base.Extractors...), extension.Extractors...),
 		BundledNativeExtractorCount:         base.BundledNativeExtractorCount + extension.BundledNativeExtractorCount,
 		BundledTypeScriptExtractorCount:     base.BundledTypeScriptExtractorCount + extension.BundledTypeScriptExtractorCount,
@@ -151,43 +151,43 @@ func projectNativeStaticMergeStaticHost(
 	return data, true, nil
 }
 
-func projectNativeStaticUniqueCallInterests(input []devtools.StaticCallInterest) []devtools.StaticCallInterest {
-	byKey := make(map[string]devtools.StaticCallInterest, len(input))
+func uniqueCallInterests(input []projectindex.StaticCallInterest) []projectindex.StaticCallInterest {
+	byKey := make(map[string]projectindex.StaticCallInterest, len(input))
 	for _, interest := range input {
 		interest.ImportFrom = sortedUniqueStrings(interest.ImportFrom)
-		byKey[projectNativeStaticInterestKey(interest.Name, interest.ImportFrom)] = interest
+		byKey[interestKey(interest.Name, interest.ImportFrom)] = interest
 	}
-	out := make([]devtools.StaticCallInterest, 0, len(byKey))
+	out := make([]projectindex.StaticCallInterest, 0, len(byKey))
 	for _, interest := range byKey {
 		out = append(out, interest)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		return projectNativeStaticInterestKey(out[i].Name, out[i].ImportFrom) < projectNativeStaticInterestKey(out[j].Name, out[j].ImportFrom)
+		return interestKey(out[i].Name, out[i].ImportFrom) < interestKey(out[j].Name, out[j].ImportFrom)
 	})
 	return out
 }
 
-func projectNativeStaticUniqueConstructorInterests(input []devtools.StaticConstructorInterest) []devtools.StaticConstructorInterest {
-	byKey := make(map[string]devtools.StaticConstructorInterest, len(input))
+func uniqueConstructorInterests(input []projectindex.StaticConstructorInterest) []projectindex.StaticConstructorInterest {
+	byKey := make(map[string]projectindex.StaticConstructorInterest, len(input))
 	for _, interest := range input {
 		interest.ImportFrom = sortedUniqueStrings(interest.ImportFrom)
-		byKey[projectNativeStaticInterestKey(interest.Name, interest.ImportFrom)] = interest
+		byKey[interestKey(interest.Name, interest.ImportFrom)] = interest
 	}
-	out := make([]devtools.StaticConstructorInterest, 0, len(byKey))
+	out := make([]projectindex.StaticConstructorInterest, 0, len(byKey))
 	for _, interest := range byKey {
 		out = append(out, interest)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		return projectNativeStaticInterestKey(out[i].Name, out[i].ImportFrom) < projectNativeStaticInterestKey(out[j].Name, out[j].ImportFrom)
+		return interestKey(out[i].Name, out[i].ImportFrom) < interestKey(out[j].Name, out[j].ImportFrom)
 	})
 	return out
 }
 
-func projectNativeStaticInterestKey(name string, imports []string) string {
+func interestKey(name string, imports []string) string {
 	return name + "\x00" + fmt.Sprint(imports)
 }
 
-func projectNativeStaticJSONArrayHasItems(raw json.RawMessage) bool {
+func jsonArrayHasItems(raw json.RawMessage) bool {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
 		return false

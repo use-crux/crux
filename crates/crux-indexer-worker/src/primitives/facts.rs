@@ -4,23 +4,23 @@ use rayon::prelude::*;
 use serde_json::Value;
 
 use crate::{
-    primitives::agent_facts::agent_facts,
-    primitives::blackboard_facts::blackboard_facts,
-    primitives::composition_facts::composition_facts,
-    primitives::context_facts::context_facts,
-    primitives::eval_facts::eval_facts,
-    primitives::flow_facts::flow_facts,
-    primitives::injectable_facts::injectable_facts,
-    primitives::memory_facts::memory_facts,
-    primitives::prompt_facts::prompt_facts,
-    primitives::rag_facts::rag_facts,
-    primitives::registry_facts::{registry_facts, registry_skill_facts},
-    primitives::routing_facts::project_routing_native_fact,
-    primitives::routing_model::{CallParts, RoutingContext},
-    primitives::safety_facts::safety_facts,
-    primitives::scorer_facts::scorer_facts,
-    primitives::tool_facts::project_tool_native_fact,
-    primitives::workspace_facts::workspace_facts,
+    primitives::agent::facts::agent_facts,
+    primitives::blackboard::facts::blackboard_facts,
+    primitives::composition::facts::composition_facts,
+    primitives::context::facts::context_facts,
+    primitives::eval::facts::eval_facts,
+    primitives::flow::facts::flow_facts,
+    primitives::injection::injectable::injectable_facts,
+    primitives::memory::facts::memory_facts,
+    primitives::prompt::facts::prompt_facts,
+    primitives::rag::facts::rag_facts,
+    primitives::registry::facts::{registry_facts, registry_skill_facts},
+    primitives::routing::facts::project_routing_native_fact,
+    primitives::routing::model::{CallParts, RoutingContext},
+    primitives::safety::facts::safety_facts,
+    primitives::scorer::facts::scorer_facts,
+    primitives::tool::facts::project_tool_native_fact,
+    primitives::workspace::facts::workspace_facts,
     protocol::{
         StaticImportRecord, StaticInitializerRecord, StaticNativeFactProjection, StaticSourceMatch,
         StaticSyntaxFileRecord,
@@ -146,8 +146,8 @@ fn workspace_native_fact(
     source_match: &StaticSourceMatch,
     records_by_file: Option<&HashMap<String, StaticSyntaxFileRecord>>,
 ) -> Option<StaticNativeFactProjection> {
-    let parts = crate::primitives::routing_model::call_parts(source_match)?;
-    let context = crate::primitives::routing_model::RoutingContext::new_with_records(
+    let parts = crate::primitives::routing::model::call_parts(source_match)?;
+    let context = crate::primitives::routing::model::RoutingContext::new_with_records(
         file,
         imports,
         local_initializers,
@@ -183,8 +183,8 @@ fn eval_native_fact(
     source_match: &StaticSourceMatch,
     records_by_file: Option<&HashMap<String, StaticSyntaxFileRecord>>,
 ) -> Option<StaticNativeFactProjection> {
-    let parts = crate::primitives::routing_model::call_parts(source_match)?;
-    let context = crate::primitives::routing_model::RoutingContext::new_with_records(
+    let parts = crate::primitives::routing::model::call_parts(source_match)?;
+    let context = crate::primitives::routing::model::RoutingContext::new_with_records(
         file,
         imports,
         local_initializers,
@@ -237,11 +237,11 @@ fn first_party_native_fact(
     project: FirstPartyProjector,
     records_by_file: Option<&HashMap<String, StaticSyntaxFileRecord>>,
 ) -> Option<StaticNativeFactProjection> {
-    let parts = crate::primitives::routing_model::call_parts(source_match)?;
+    let parts = crate::primitives::routing::model::call_parts(source_match)?;
     if should_skip_legacy_native_fact_packet(extractor, &parts, records_by_file) {
         return None;
     }
-    let context = crate::primitives::routing_model::RoutingContext::new_with_records(
+    let context = crate::primitives::routing::model::RoutingContext::new_with_records(
         file,
         imports,
         local_initializers,

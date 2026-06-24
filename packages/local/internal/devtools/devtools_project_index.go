@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -36,12 +37,12 @@ func (s *Service) ReindexProjectWithOptions(ctx context.Context, root, configPat
 	}()
 	startedAt := time.Now()
 	s.indexMu.Lock()
-	s.indexPatch = emptyIndexPatchState()
+	s.indexState.Reset()
 	s.indexMu.Unlock()
 	cacheLoaded := false
-	if cached, ok := s.loadIndexFactCache(ctx, root, projectName, startedAt); ok {
+	if cached, ok := s.indexCache.LoadSnapshot(ctx, root, projectName, startedAt); ok {
 		cacheLoaded = true
-		s.ApplyIndexPatch(ctx, indexPatchFromSnapshot(cached, indexPatchPhaseCache, "ok"))
+		s.ApplyIndexPatch(ctx, projectindex.PatchFromSnapshot(cached, projectindex.PhaseCache, "ok"))
 	}
 	astResult, err := s.indexProjectAstPatch(ctx, root, configPath, projectName)
 	if err != nil {
@@ -56,7 +57,7 @@ func (s *Service) ReindexProjectWithOptions(ctx context.Context, root, configPat
 	}
 	patch := astResult.Patch
 	if patch.Phase == "" {
-		patch.Phase = indexPatchPhaseAST
+		patch.Phase = projectindex.PhaseAST
 	}
 	if patch.Project.Root == "" {
 		patch.Project = store.ProjectIdentity{Root: root, Name: projectName, ConfigFile: configPath}
@@ -64,17 +65,17 @@ func (s *Service) ReindexProjectWithOptions(ctx context.Context, root, configPat
 	if patch.FinishedAt == "" {
 		patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	patch.Indexing = store.ReadyIndexIndexingStatus(patch.FinishedAt, time.Since(startedAt), len(patch.Facts.Sources), len(patch.Facts.Diagnostics), hasSourceOnlyDiagnostic(patch.Facts.Diagnostics))
+	patch.Indexing = store.ReadyIndexIndexingStatus(patch.FinishedAt, time.Since(startedAt), len(patch.Facts.Sources), len(patch.Facts.Diagnostics), projectindex.HasSourceOnlyDiagnostic(patch.Facts.Diagnostics))
 	if cacheLoaded && patch.Indexing.Cache != nil {
 		patch.Indexing.Cache.Status = "hit"
 		patch.Indexing.Cache.LoadedAt = startedAt.UTC().Format(time.RFC3339Nano)
 	}
-	if err := s.commitIndexPatch(ctx, patch); err != nil {
+	if err := s.indexCache.Commit(ctx, patch); err != nil {
 		return store.IndexData{}, err
 	}
 	index := s.ApplyIndexPatch(ctx, patch)
 	semanticRequest := projectSemanticIndexRequest(root, configPath, projectName, index, nil, patch.SemanticSourceProfile)
-	semanticRequest.IndexGeneration = s.indexGeneration.Current()
+	semanticRequest.IndexGeneration = s.indexState.CurrentGeneration()
 	semanticRequest.WatchRunID = options.Watch.RunID
 	semanticRequest.ASTUsedNativeStatic = astResult.UsedNativeStatic
 	lintPrefetch := s.startProjectLintPrefetch(ctx, projectLintIndexRequest(root, configPath, projectName, index, astResult.UsedNativeStatic))
@@ -121,7 +122,7 @@ func (s *Service) ReindexProjectIncrementalWithOptions(ctx context.Context, root
 	if s.indexer == nil {
 		return store.IndexData{}, fmt.Errorf("project index indexer is not configured")
 	}
-	indexer, ok := s.indexer.(ProjectIncrementalIndexer)
+	indexer, ok := s.indexer.(projectindex.ProjectIncrementalIndexer)
 	previous := s.store.GetIndex()
 	if options.hasWatchRun() {
 		s.watchStatus.Start(options.Watch, files, deletedFiles)
@@ -130,11 +131,11 @@ func (s *Service) ReindexProjectIncrementalWithOptions(ctx context.Context, root
 		s.watchStatus.FullFallback(options.Watch, files, deletedFiles, "missing-incremental-worker")
 		return s.ReindexProjectWithOptions(ctx, root, configPath, projectName, options)
 	}
-	if isEmptyIndex(previous) || len(previous.Sources) == 0 {
+	if projectindex.IsEmptyIndex(previous) || len(previous.Sources) == 0 {
 		s.watchStatus.FullFallback(options.Watch, files, deletedFiles, "missing-previous-source-graph")
 		return s.ReindexProjectWithOptions(ctx, root, configPath, projectName, options)
 	}
-	if !hasCompleteProjectShardEvidence(previous) {
+	if !projectindex.HasCompleteShardEvidence(previous) {
 		s.watchStatus.FullFallback(options.Watch, files, deletedFiles, "missing-shard-evidence")
 		return s.ReindexProjectWithOptions(ctx, root, configPath, projectName, options)
 	}
@@ -156,8 +157,8 @@ func (s *Service) ReindexProjectIncrementalWithOptions(ctx context.Context, root
 		}
 	}()
 	s.indexMu.Lock()
-	if isEmptyIndex(s.indexPatch.Index) {
-		s.indexPatch = applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(previous, indexPatchPhaseCache, "ok"))
+	if projectindex.IsEmptyIndex(s.indexState.Index()) {
+		s.indexState.Hydrate(previous, projectindex.PhaseCache, "ok")
 	}
 	s.indexMu.Unlock()
 	result, err := indexer.IndexProjectIncremental(ctx, root, configPath, projectName, previous, files, deletedFiles, "ast")
@@ -174,7 +175,7 @@ func (s *Service) ReindexProjectIncrementalWithOptions(ctx context.Context, root
 		if patch.FinishedAt == "" {
 			patch.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		}
-		if err := s.commitIndexPatch(ctx, patch); err != nil {
+		if err := s.indexCache.Commit(ctx, patch); err != nil {
 			return store.IndexData{}, err
 		}
 		index = s.ApplyIndexPatch(ctx, patch)
@@ -187,7 +188,7 @@ func (s *Service) ReindexProjectIncrementalWithOptions(ctx context.Context, root
 		result.Report.AffectedFiles,
 		semanticSourceProfileFromPatches(result.Patches),
 	)
-	semanticRequest.IndexGeneration = s.indexGeneration.Current()
+	semanticRequest.IndexGeneration = s.indexState.CurrentGeneration()
 	semanticRequest.WatchRunID = options.Watch.RunID
 	lintPrefetch := s.startProjectLintPrefetch(ctx, projectLintIndexRequest(root, configPath, projectName, index, false))
 	defer lintPrefetch.stop()

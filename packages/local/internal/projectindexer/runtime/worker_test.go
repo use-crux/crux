@@ -2,11 +2,11 @@ package runtime
 
 import (
 	"context"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -109,7 +109,7 @@ func TestWorker_runtimePatchUsesDedicatedStreamProtocol(t *testing.T) {
 
 	patch, err := worker.IndexProjectRuntimePatch(
 		context.Background(),
-		devtools.ProjectRuntimeIndexRequest{
+		projectindex.ProjectRuntimeIndexRequest{
 			Root:        t.TempDir(),
 			ProjectName: "runtime-project",
 			PreviousIndex: store.IndexData{
@@ -117,7 +117,7 @@ func TestWorker_runtimePatchUsesDedicatedStreamProtocol(t *testing.T) {
 					{ID: "prompt:previous", Kind: "prompt", Name: "previous", Fidelity: "partial", Status: "active"},
 				},
 			},
-			Budget: devtools.IndexPatchBudget{MaxDefinitions: 10},
+			Budget: projectindex.IndexPatchBudget{MaxDefinitions: 10},
 		},
 	)
 	if err != nil {

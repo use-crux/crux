@@ -2,6 +2,7 @@ package devtools
 
 import (
 	"context"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"testing"
 	"time"
 
@@ -36,20 +37,20 @@ type semanticTaskContextIndexer struct {
 	semanticRemaining time.Duration
 }
 
-func (i *semanticTaskContextIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	return IndexPatch{}, nil
+func (i *semanticTaskContextIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{}, nil
 }
 
-func (i *semanticTaskContextIndexer) PlanProjectSemanticRequest(ctx context.Context, root, configPath, projectName string) (ProjectSemanticIndexRequest, error) {
+func (i *semanticTaskContextIndexer) PlanProjectSemanticRequest(ctx context.Context, root, configPath, projectName string) (projectindex.ProjectSemanticIndexRequest, error) {
 	if deadline, ok := ctx.Deadline(); ok {
 		i.planRemaining = time.Until(deadline)
 	}
-	return ProjectSemanticIndexRequest{Root: root, ConfigPath: configPath, ProjectName: projectName}, nil
+	return projectindex.ProjectSemanticIndexRequest{Root: root, ConfigPath: configPath, ProjectName: projectName}, nil
 }
 
-func (i *semanticTaskContextIndexer) IndexProjectSemanticPatch(ctx context.Context, _ ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *semanticTaskContextIndexer) IndexProjectSemanticPatch(ctx context.Context, _ projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	if deadline, ok := ctx.Deadline(); ok {
 		i.semanticRemaining = time.Until(deadline)
 	}
-	return IndexPatch{SchemaVersion: 1, Phase: indexPatchPhaseSemantic, Status: "ok"}, nil
+	return projectindex.IndexPatch{SchemaVersion: 1, Phase: projectindex.PhaseSemantic, Status: "ok"}, nil
 }

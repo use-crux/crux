@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
 var semanticCallNames = []string{
@@ -59,11 +59,11 @@ var (
 	nativeDirectCallName = stringSet(nativeDirectCallNames)
 )
 
-func profileFromReads(reads []sourceRead) *devtools.SemanticSourceProfile {
+func profileFromReads(reads []sourceRead) *projectindex.SemanticSourceProfile {
 	if len(reads) == 0 {
 		return nil
 	}
-	files := make([]devtools.SemanticSourceProfileFile, 0, len(reads))
+	files := make([]projectindex.SemanticSourceProfileFile, 0, len(reads))
 	for _, read := range reads {
 		if profile, ok := profileFileFromRead(read); ok {
 			files = append(files, profile)
@@ -74,11 +74,11 @@ func profileFromReads(reads []sourceRead) *devtools.SemanticSourceProfile {
 
 func profileFileFromRead(
 	read sourceRead,
-) (devtools.SemanticSourceProfileFile, bool) {
+) (projectindex.SemanticSourceProfileFile, bool) {
 	if read.err != nil || read.file == "" {
-		return devtools.SemanticSourceProfileFile{}, false
+		return projectindex.SemanticSourceProfileFile{}, false
 	}
-	return devtools.SemanticSourceProfileFile{
+	return projectindex.SemanticSourceProfileFile{
 		File:        read.file,
 		SourceHash:  read.sourceHash,
 		SourceBytes: len(read.source),
@@ -87,8 +87,8 @@ func profileFileFromRead(
 }
 
 func ProfileFromFiles(
-	files []devtools.SemanticSourceProfileFile,
-) *devtools.SemanticSourceProfile {
+	files []projectindex.SemanticSourceProfileFile,
+) *projectindex.SemanticSourceProfile {
 	if len(files) == 0 {
 		return nil
 	}
@@ -96,16 +96,16 @@ func ProfileFromFiles(
 	for _, file := range files {
 		sourceBytes += file.SourceBytes
 	}
-	return &devtools.SemanticSourceProfile{
+	return &projectindex.SemanticSourceProfile{
 		Files:       files,
 		SourceBytes: sourceBytes,
 		Complete:    true,
 	}
 }
 
-func profileHints(source []byte) *devtools.SemanticSourceProfileHints {
+func profileHints(source []byte) *projectindex.SemanticSourceProfileHints {
 	callNames := CruxCallNames(source)
-	return &devtools.SemanticSourceProfileHints{
+	return &projectindex.SemanticSourceProfileHints{
 		CruxCallNames:             callNames,
 		HasZodObject:              bytes.Contains(source, []byte("z.object")),
 		NativeDirectCruxCandidate: isNativeDirectCandidateSource(source, callNames),

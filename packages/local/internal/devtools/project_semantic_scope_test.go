@@ -1,6 +1,7 @@
 package devtools
 
 import (
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"slices"
 	"testing"
 
@@ -26,25 +27,25 @@ func TestProjectSemanticIndexRequestFiltersRootsWithSourceProfileHints(t *testin
 			ProducedBy:    "@crux/indexer",
 			Capabilities:  []string{"source-dependencies"},
 		},
-	}, nil, &SemanticSourceProfile{
-		Files: []SemanticSourceProfileFile{
+	}, nil, &projectindex.SemanticSourceProfile{
+		Files: []projectindex.SemanticSourceProfileFile{
 			{
 				File:        writer,
 				SourceHash:  "hash-writer",
 				SourceBytes: 12,
-				Hints:       &SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}},
+				Hints:       &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}},
 			},
 			{
 				File:        helper,
 				SourceHash:  "hash-helper",
 				SourceBytes: 14,
-				Hints:       &SemanticSourceProfileHints{CruxCallNames: []string{}},
+				Hints:       &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{}},
 			},
 			{
 				File:        shared,
 				SourceHash:  "hash-shared",
 				SourceBytes: 16,
-				Hints:       &SemanticSourceProfileHints{CruxCallNames: []string{}},
+				Hints:       &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{}},
 			},
 		},
 		SourceBytes: 42,
@@ -84,25 +85,25 @@ func TestProjectSemanticIndexRequestUsesCompleteSourceProfileClosure(t *testing.
 			ProducedBy:    "@crux/indexer",
 			Capabilities:  []string{"source-dependencies"},
 		},
-	}, nil, &SemanticSourceProfile{
-		Files: []SemanticSourceProfileFile{
+	}, nil, &projectindex.SemanticSourceProfile{
+		Files: []projectindex.SemanticSourceProfileFile{
 			{
 				File:        writer,
 				SourceHash:  "hash-writer",
 				SourceBytes: 12,
-				Hints:       &SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}},
+				Hints:       &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}},
 			},
 			{
 				File:        shared,
 				SourceHash:  "hash-shared",
 				SourceBytes: 16,
-				Hints:       &SemanticSourceProfileHints{CruxCallNames: []string{}},
+				Hints:       &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{}},
 			},
 			{
 				File:        extra,
 				SourceHash:  "hash-extra",
 				SourceBytes: 18,
-				Hints:       &SemanticSourceProfileHints{CruxCallNames: []string{}},
+				Hints:       &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{}},
 			},
 		},
 		DependencyClosure: []string{extra, shared, writer},
@@ -158,12 +159,12 @@ func TestProjectSemanticIndexRequestKeepsExplicitScope(t *testing.T) {
 	root := t.TempDir()
 	helper := root + "/src/helper.ts"
 
-	req := projectSemanticIndexRequest(root, "", "project", store.IndexData{}, []string{helper}, &SemanticSourceProfile{
-		Files: []SemanticSourceProfileFile{{
+	req := projectSemanticIndexRequest(root, "", "project", store.IndexData{}, []string{helper}, &projectindex.SemanticSourceProfile{
+		Files: []projectindex.SemanticSourceProfileFile{{
 			File:        helper,
 			SourceHash:  "hash-helper",
 			SourceBytes: 14,
-			Hints:       &SemanticSourceProfileHints{CruxCallNames: []string{}},
+			Hints:       &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{}},
 		}},
 		SourceBytes: 14,
 		Complete:    true,
@@ -177,7 +178,7 @@ func TestProjectSemanticIndexRequestKeepsExplicitScope(t *testing.T) {
 	assertStringSlicesEqual(t, semanticProfileFiles(req.SourceProfile), []string{helper})
 }
 
-func semanticProfileFiles(profile *SemanticSourceProfile) []string {
+func semanticProfileFiles(profile *projectindex.SemanticSourceProfile) []string {
 	files := make([]string, 0, len(profile.Files))
 	for _, file := range profile.Files {
 		files = append(files, file.File)

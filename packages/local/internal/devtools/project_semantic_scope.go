@@ -1,17 +1,19 @@
 package devtools
 
 import (
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"slices"
 	"sort"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func projectSemanticIndexRequest(root, configPath, projectName string, index store.IndexData, files []string, sourceProfile *SemanticSourceProfile) ProjectSemanticIndexRequest {
+func projectSemanticIndexRequest(root, configPath, projectName string, index store.IndexData, files []string, sourceProfile *projectindex.SemanticSourceProfile) projectindex.ProjectSemanticIndexRequest {
 	selectedFiles := semanticFilesFromScope(index, files, sourceProfile)
 	dependencyClosure := semanticDependencyClosureFromIndex(index, selectedFiles)
 	dependencyClosure = semanticDependencyClosureFromSourceProfile(sourceProfile, selectedFiles, dependencyClosure)
 	previous := compactSemanticPreviousIndex(index, semanticPreviousIndexScopeFiles(selectedFiles, dependencyClosure))
-	return ProjectSemanticIndexRequest{
+	return projectindex.ProjectSemanticIndexRequest{
 		Root:              root,
 		ConfigPath:        configPath,
 		ProjectName:       projectName,
@@ -24,7 +26,7 @@ func projectSemanticIndexRequest(root, configPath, projectName string, index sto
 }
 
 func semanticDependencyClosureFromSourceProfile(
-	profile *SemanticSourceProfile,
+	profile *projectindex.SemanticSourceProfile,
 	files []string,
 	fallback []string,
 ) []string {
@@ -50,7 +52,7 @@ func semanticPreviousIndexScopeFiles(files []string, dependencyClosure []string)
 	return sortedUniqueStrings(append(append([]string(nil), files...), dependencyClosure...))
 }
 
-func semanticSourceProfileWithClosure(profile *SemanticSourceProfile, files []string, dependencyClosure []string) *SemanticSourceProfile {
+func semanticSourceProfileWithClosure(profile *projectindex.SemanticSourceProfile, files []string, dependencyClosure []string) *projectindex.SemanticSourceProfile {
 	if profile == nil {
 		return nil
 	}
@@ -62,7 +64,7 @@ func semanticSourceProfileWithClosure(profile *SemanticSourceProfile, files []st
 			closureFiles[file] = true
 		}
 	}
-	next.Files = make([]SemanticSourceProfileFile, 0, len(profile.Files))
+	next.Files = make([]projectindex.SemanticSourceProfileFile, 0, len(profile.Files))
 	profileFiles := map[string]bool{}
 	sourceBytes := 0
 	for _, file := range profile.Files {
@@ -121,7 +123,7 @@ func compactSemanticPreviousIndex(index store.IndexData, scopeFiles []string) st
 	return previous
 }
 
-func semanticFilesFromScope(index store.IndexData, files []string, sourceProfile *SemanticSourceProfile) []string {
+func semanticFilesFromScope(index store.IndexData, files []string, sourceProfile *projectindex.SemanticSourceProfile) []string {
 	if len(files) > 0 {
 		return sortedUniqueStrings(files)
 	}
@@ -135,11 +137,11 @@ func semanticFilesFromScope(index store.IndexData, files []string, sourceProfile
 	return semanticRootFilesFromSourceProfile(sortedUniqueStrings(sourceFiles), sourceProfile)
 }
 
-func semanticRootFilesFromSourceProfile(files []string, sourceProfile *SemanticSourceProfile) []string {
+func semanticRootFilesFromSourceProfile(files []string, sourceProfile *projectindex.SemanticSourceProfile) []string {
 	if sourceProfile == nil {
 		return files
 	}
-	profilesByFile := map[string]SemanticSourceProfileFile{}
+	profilesByFile := map[string]projectindex.SemanticSourceProfileFile{}
 	for _, file := range sourceProfile.Files {
 		if file.File != "" {
 			profilesByFile[file.File] = file
@@ -155,7 +157,7 @@ func semanticRootFilesFromSourceProfile(files []string, sourceProfile *SemanticS
 	return selected
 }
 
-func isSemanticRootSourceProfile(profile SemanticSourceProfileFile) bool {
+func isSemanticRootSourceProfile(profile projectindex.SemanticSourceProfileFile) bool {
 	if profile.Hints == nil {
 		return true
 	}
@@ -168,7 +170,7 @@ func isSemanticRootSourceProfile(profile SemanticSourceProfileFile) bool {
 }
 
 func semanticDependencyClosureFromIndex(index store.IndexData, files []string) []string {
-	if index.SourceGraph == nil || !stringSliceContains(index.SourceGraph.Capabilities, "source-dependencies") {
+	if index.SourceGraph == nil || !slices.Contains(index.SourceGraph.Capabilities, "source-dependencies") {
 		return nil
 	}
 	dependenciesByFile := map[string][]string{}
@@ -218,6 +220,6 @@ func sortedKeysFromBoolMap(values map[string]bool) []string {
 	return keys
 }
 
-func isZeroIndexPatchBudget(budget IndexPatchBudget) bool {
-	return budget == IndexPatchBudget{}
+func isZeroIndexPatchBudget(budget projectindex.IndexPatchBudget) bool {
+	return budget == projectindex.IndexPatchBudget{}
 }

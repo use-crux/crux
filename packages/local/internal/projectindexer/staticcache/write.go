@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -22,12 +22,12 @@ type entryMetadata struct {
 }
 
 type WritableExtraction struct {
-	File            string                              `json:"file"`
-	Definitions     []store.ProjectDefinition           `json:"definitions"`
-	Relations       []store.ProjectRelation             `json:"relations"`
-	Diagnostics     []store.IndexDiagnostic             `json:"diagnostics"`
-	Dependencies    []string                            `json:"dependencies"`
-	SemanticProfile *devtools.SemanticSourceProfileFile `json:"semanticProfile,omitempty"`
+	File            string                                  `json:"file"`
+	Definitions     []store.ProjectDefinition               `json:"definitions"`
+	Relations       []store.ProjectRelation                 `json:"relations"`
+	Diagnostics     []store.IndexDiagnostic                 `json:"diagnostics"`
+	Dependencies    []string                                `json:"dependencies"`
+	SemanticProfile *projectindex.SemanticSourceProfileFile `json:"semanticProfile,omitempty"`
 }
 
 func WriteFromPatch(
@@ -35,7 +35,7 @@ func WriteFromPatch(
 	cacheInputs []json.RawMessage,
 	sourceInput SourceInput,
 	plan staticprotocol.Plan,
-	patch devtools.IndexPatch,
+	patch projectindex.IndexPatch,
 ) {
 	if len(cacheInputs) == 0 {
 		return
@@ -80,8 +80,8 @@ type writeForFile struct {
 	Source          store.IndexSourceFile
 	ConfigFiles     []sourceHashRecord
 	CompilerInputs  []json.RawMessage
-	SemanticProfile *devtools.SemanticSourceProfileFile
-	Patch           devtools.IndexPatchFacts
+	SemanticProfile *projectindex.SemanticSourceProfileFile
+	Patch           projectindex.IndexPatchFacts
 }
 
 func writeFile(input writeForFile) error {

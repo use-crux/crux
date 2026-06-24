@@ -3,7 +3,7 @@ package staticcache
 import (
 	"slices"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -54,8 +54,8 @@ func patchSourceMap(sources []store.IndexSourceFile) map[string]store.IndexSourc
 	return out
 }
 
-func semanticProfileMap(profile *devtools.SemanticSourceProfile) map[string]*devtools.SemanticSourceProfileFile {
-	out := map[string]*devtools.SemanticSourceProfileFile{}
+func semanticProfileMap(profile *projectindex.SemanticSourceProfile) map[string]*projectindex.SemanticSourceProfileFile {
+	out := map[string]*projectindex.SemanticSourceProfileFile{}
 	if profile == nil {
 		return out
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/compiler"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -445,7 +446,7 @@ func TestWorker_indexProjectAstPatchFallsBackWhenNativeAstConfigDisabled(t *test
 		t.Fatalf("write script: %v", err)
 	}
 
-	syntaxParser := newSyntaxCompiler(shellPath(t), fakeIndexerWorker(t))
+	syntaxParser := compiler.New(shellPath(t), fakeIndexerWorker(t))
 	defer syntaxParser.Close()
 	worker := newTestWorkerWithProjectScript(t, script)
 	worker.WithSyntaxParser(syntaxParser)

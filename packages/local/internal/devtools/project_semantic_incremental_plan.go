@@ -2,7 +2,9 @@ package devtools
 
 import (
 	"context"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"path/filepath"
+	"slices"
 	"sort"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -27,7 +29,7 @@ func (s *Service) startPlannedProjectIncrementalSemanticPatch(
 
 func (s *Service) applyPlannedProjectIncrementalSemanticPatch(
 	ctx context.Context,
-	request ProjectSemanticIndexRequest,
+	request projectindex.ProjectSemanticIndexRequest,
 	task *projectSemanticPatchTask,
 	lintPrefetch *projectLintPrefetchTask,
 	astIndex store.IndexData,
@@ -39,12 +41,12 @@ func (s *Service) applyPlannedProjectIncrementalSemanticPatch(
 	if result.stage != "semantic" || !projectSemanticRequestScopeMatches(result.request, request) {
 		return s.applyProjectSemanticPatch(ctx, request, lintPrefetch)
 	}
-	patch := projectSemanticPatchWithAstSnapshot(result.patch, astIndex)
+	patch := projectindex.JoinSemanticPatch(result.patch, astIndex)
 	return s.applyProjectSemanticPatchResult(ctx, request, result.startedAt, patch, result.err, lintPrefetch)
 }
 
 func (s *Service) applyPlannedProjectIncrementalSemanticPatchInBackground(
-	request ProjectSemanticIndexRequest,
+	request projectindex.ProjectSemanticIndexRequest,
 	task *projectSemanticPatchTask,
 	astIndex store.IndexData,
 ) {
@@ -60,20 +62,20 @@ func projectIncrementalSemanticRequestFromPreviousGraph(
 	previous store.IndexData,
 	files []string,
 	deletedFiles []string,
-) (ProjectSemanticIndexRequest, bool) {
+) (projectindex.ProjectSemanticIndexRequest, bool) {
 	if len(files) == 0 || len(deletedFiles) > 0 || previous.SourceGraph == nil {
-		return ProjectSemanticIndexRequest{}, false
+		return projectindex.ProjectSemanticIndexRequest{}, false
 	}
-	if !stringSliceContains(previous.SourceGraph.Capabilities, "source-dependencies") ||
-		!stringSliceContains(previous.SourceGraph.Capabilities, "source-dependents") {
-		return ProjectSemanticIndexRequest{}, false
+	if !slices.Contains(previous.SourceGraph.Capabilities, "source-dependencies") ||
+		!slices.Contains(previous.SourceGraph.Capabilities, "source-dependents") {
+		return projectindex.ProjectSemanticIndexRequest{}, false
 	}
 	affectedFiles, ok := projectIncrementalAffectedFilesFromPreviousGraph(root, previous, files)
 	if !ok || len(affectedFiles) == 0 {
-		return ProjectSemanticIndexRequest{}, false
+		return projectindex.ProjectSemanticIndexRequest{}, false
 	}
 	dependencyClosure := semanticDependencyClosureFromIndex(previous, affectedFiles)
-	return ProjectSemanticIndexRequest{
+	return projectindex.ProjectSemanticIndexRequest{
 		Root:              root,
 		ConfigPath:        configPath,
 		ProjectName:       projectName,
@@ -135,17 +137,17 @@ func projectIncrementalCanonicalFile(root string, file string) string {
 	return absolute
 }
 
-func projectSemanticRequestScopeMatches(planned ProjectSemanticIndexRequest, final ProjectSemanticIndexRequest) bool {
+func projectSemanticRequestScopeMatches(planned projectindex.ProjectSemanticIndexRequest, final projectindex.ProjectSemanticIndexRequest) bool {
 	return stringSlicesEqual(sortedUniqueStrings(planned.Files), sortedUniqueStrings(final.Files)) &&
 		stringSlicesEqual(sortedUniqueStrings(planned.DependencyClosure), sortedUniqueStrings(final.DependencyClosure))
 }
 
-func projectSemanticRequestEvidenceMatches(planned ProjectSemanticIndexRequest, final ProjectSemanticIndexRequest) bool {
+func projectSemanticRequestEvidenceMatches(planned projectindex.ProjectSemanticIndexRequest, final projectindex.ProjectSemanticIndexRequest) bool {
 	return projectSemanticRequestScopeMatches(planned, final) &&
 		semanticSourceProfilesMatch(planned.SourceProfile, final.SourceProfile)
 }
 
-func semanticSourceProfilesMatch(planned *SemanticSourceProfile, final *SemanticSourceProfile) bool {
+func semanticSourceProfilesMatch(planned *projectindex.SemanticSourceProfile, final *projectindex.SemanticSourceProfile) bool {
 	if planned == nil || final == nil {
 		return planned == nil && final == nil
 	}
@@ -157,7 +159,7 @@ func semanticSourceProfilesMatch(planned *SemanticSourceProfile, final *Semantic
 	if len(planned.Files) != len(final.Files) {
 		return false
 	}
-	finalFiles := map[string]SemanticSourceProfileFile{}
+	finalFiles := map[string]projectindex.SemanticSourceProfileFile{}
 	for _, file := range final.Files {
 		finalFiles[file.File] = file
 	}

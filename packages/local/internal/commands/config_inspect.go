@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/cli"
+	"github.com/use-crux/crux/packages/local/internal/commandui"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/server"
 )
@@ -120,7 +121,7 @@ func resolveProjectConfigWithProgress(
 		return resolveProjectConfigForInspect(ctx, root, configPath, projectName)
 	}
 
-	frames := []rune(spinnerFrames)
+	frames := []rune(commandui.SpinnerFrames)
 	done := make(chan struct{})
 	stopped := make(chan struct{})
 	go func() {

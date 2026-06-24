@@ -10,102 +10,102 @@ import (
 )
 
 const (
-	projectNativeStaticMaxAuthoredSourceBytes = 1_000_000
-	projectNativeStaticSampleBytes            = 128 * 1024
+	maxAuthoredSourceBytes = 1_000_000
+	sampleBytes            = 128 * 1024
 )
 
-type projectNativeStaticFileSelectionResult struct {
+type fileSelectionResult struct {
 	Files        []string
 	PrimaryFiles []string
 	Skipped      []json.RawMessage
 }
 
-type projectNativeStaticCandidateClassification struct {
+type candidateClassification struct {
 	Action string `json:"action"`
 	File   string `json:"file"`
 	Bytes  int64  `json:"bytes"`
 	Reason string `json:"reason,omitempty"`
 }
 
-func projectNativeStaticFileSelection(root string, configFile string) (projectNativeStaticFileSelectionResult, error) {
-	return projectNativeStaticFileSelectionWithCallNames(root, configFile, nil)
+func fileSelection(root string, configFile string) (fileSelectionResult, error) {
+	return fileSelectionWithCallNames(root, configFile, nil)
 }
 
-func projectNativeStaticFileSelectionWithCallNames(
+func fileSelectionWithCallNames(
 	root string,
 	configFile string,
 	callNames []string,
-) (projectNativeStaticFileSelectionResult, error) {
-	selection, _, err := projectNativeStaticFileSelectionWithCallNamesTimed(root, configFile, callNames)
+) (fileSelectionResult, error) {
+	selection, _, err := fileSelectionWithCallNamesTimed(root, configFile, callNames)
 	if err != nil {
-		return projectNativeStaticFileSelectionResult{}, err
+		return fileSelectionResult{}, err
 	}
 	return selection, nil
 }
 
-func projectNativeStaticPrimaryCandidateFiles(root string, callNames []string) ([]string, []json.RawMessage, error) {
-	files, skipped, _, err := projectNativeStaticPrimaryCandidateFilesTimed(root, callNames)
+func primaryCandidateFiles(root string, callNames []string) ([]string, []json.RawMessage, error) {
+	files, skipped, _, err := primaryCandidateFilesTimed(root, callNames)
 	if err != nil {
 		return nil, nil, err
 	}
 	return files, skipped, nil
 }
 
-func projectNativeStaticClassifyCandidate(file string, callNames []string) projectNativeStaticCandidateClassification {
-	return projectNativeStaticClassifyCandidateWithMatcher(file, projectNativeStaticSignalMatcherForCallNames(callNames))
+func classifyCandidate(file string, callNames []string) candidateClassification {
+	return classifyCandidateWithMatcher(file, signalMatcherForCallNames(callNames))
 }
 
-func projectNativeStaticClassifyCandidateWithMatcher(
+func classifyCandidateWithMatcher(
 	file string,
-	matcher projectNativeStaticSignalMatcher,
-) projectNativeStaticCandidateClassification {
-	fingerprint, ok := projectNativeStaticDiscoveryFingerprint(file)
-	return projectNativeStaticClassifyCandidateWithMatcherAndFingerprint(file, matcher, fingerprint, ok)
+	matcher signalMatcher,
+) candidateClassification {
+	fingerprint, ok := discoveryFingerprint(file)
+	return classifyCandidateWithMatcherAndFingerprint(file, matcher, fingerprint, ok)
 }
 
-func projectNativeStaticClassifyCandidateWithMatcherAndFingerprint(
+func classifyCandidateWithMatcherAndFingerprint(
 	file string,
-	matcher projectNativeStaticSignalMatcher,
-	fingerprint projectNativeStaticDiscoveryFileFingerprint,
+	matcher signalMatcher,
+	fingerprint discoveryFileFingerprint,
 	fingerprintOK bool,
-) projectNativeStaticCandidateClassification {
-	if !projectNativeStaticCandidateSourceFile(file) {
-		return projectNativeStaticCandidateClassification{Action: "skip", File: file, Reason: "unsupported-extension"}
+) candidateClassification {
+	if !candidateSourceFile(file) {
+		return candidateClassification{Action: "skip", File: file, Reason: "unsupported-extension"}
 	}
 	if !fingerprintOK {
-		return projectNativeStaticCandidateClassification{Action: "skip", File: file, Reason: "read-failed"}
+		return candidateClassification{Action: "skip", File: file, Reason: "read-failed"}
 	}
 	bytes := fingerprint.Size
-	sample, err := projectNativeStaticReadSample(file, minInt64(bytes, projectNativeStaticSampleBytes))
+	sample, err := readSample(file, minInt64(bytes, sampleBytes))
 	if err != nil {
-		return projectNativeStaticCandidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "read-failed"}
+		return candidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "read-failed"}
 	}
-	if projectNativeStaticConfigNames[filepath.Base(file)] {
-		return projectNativeStaticCandidateClassification{Action: "index", File: file, Bytes: bytes}
+	if configNames[filepath.Base(file)] {
+		return candidateClassification{Action: "index", File: file, Bytes: bytes}
 	}
-	if projectNativeStaticLooksBundled(file, sample) {
-		return projectNativeStaticCandidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "bundled"}
+	if looksBundled(file, sample) {
+		return candidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "bundled"}
 	}
-	if projectNativeStaticLooksGenerated(sample) {
-		return projectNativeStaticCandidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "generated"}
+	if looksGenerated(sample) {
+		return candidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "generated"}
 	}
 	hasCruxSignals := matcher.HasCruxInterest(sample)
-	if bytes > projectNativeStaticMaxAuthoredSourceBytes && hasCruxSignals {
-		return projectNativeStaticCandidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "too-large-authored"}
+	if bytes > maxAuthoredSourceBytes && hasCruxSignals {
+		return candidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "too-large-authored"}
 	}
-	if projectNativeStaticLooksBase64Artifact(file, sample, bytes) {
-		return projectNativeStaticCandidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "base64-artifact"}
+	if looksBase64Artifact(file, sample, bytes) {
+		return candidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "base64-artifact"}
 	}
-	if bytes > projectNativeStaticMaxAuthoredSourceBytes {
-		return projectNativeStaticCandidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "too-large-uninteresting"}
+	if bytes > maxAuthoredSourceBytes {
+		return candidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "too-large-uninteresting"}
 	}
 	if !hasCruxSignals {
-		return projectNativeStaticCandidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "no-crux-signals"}
+		return candidateClassification{Action: "skip", File: file, Bytes: bytes, Reason: "no-crux-signals"}
 	}
-	return projectNativeStaticCandidateClassification{Action: "index", File: file, Bytes: bytes}
+	return candidateClassification{Action: "index", File: file, Bytes: bytes}
 }
 
-func projectNativeStaticReadSample(file string, bytes int64) (string, error) {
+func readSample(file string, bytes int64) (string, error) {
 	if bytes <= 0 {
 		return "", nil
 	}
@@ -122,7 +122,7 @@ func projectNativeStaticReadSample(file string, bytes int64) (string, error) {
 	return string(buffer[:read]), nil
 }
 
-func projectNativeStaticIgnoredDir(name string) bool {
+func ignoredDir(name string) bool {
 	switch name {
 	case "node_modules", ".git", ".next", ".turbo", "dist", "build", "coverage", "generated", ".venv", ".cache":
 		return true
@@ -131,7 +131,7 @@ func projectNativeStaticIgnoredDir(name string) bool {
 	}
 }
 
-func projectNativeStaticIgnoredSourcePath(root string, file string) bool {
+func ignoredSourcePath(root string, file string) bool {
 	relative, err := filepath.Rel(root, file)
 	if err != nil {
 		return true
@@ -140,7 +140,7 @@ func projectNativeStaticIgnoredSourcePath(root string, file string) bool {
 	base := filepath.Base(file)
 	return strings.HasPrefix(normalized, ".crux/cache/") ||
 		strings.Contains(normalized, "/.crux/cache/") ||
-		projectNativeStaticGeneratedBuildOutputPath(normalized) ||
+		generatedBuildOutputPath(normalized) ||
 		strings.HasPrefix(normalized, "__tests__/") ||
 		strings.HasPrefix(normalized, "__fixtures__/") ||
 		strings.Contains(normalized, "/__tests__/") ||
@@ -150,16 +150,16 @@ func projectNativeStaticIgnoredSourcePath(root string, file string) bool {
 		strings.HasSuffix(base, ".d.ts")
 }
 
-func projectNativeStaticGeneratedBuildOutputPath(relativeFile string) bool {
+func generatedBuildOutputPath(relativeFile string) bool {
 	return strings.HasPrefix(relativeFile, "packages/local/internal/server/embed/") ||
 		strings.HasPrefix(relativeFile, "packages/local/internal/server/ui-embed/")
 }
 
-func projectNativeStaticCandidateSourceFile(file string) bool {
+func candidateSourceFile(file string) bool {
 	if strings.HasSuffix(file, ".d.ts") {
 		return false
 	}
-	if projectNativeStaticConfigNames[filepath.Base(file)] {
+	if configNames[filepath.Base(file)] {
 		return true
 	}
 	switch filepath.Ext(file) {
@@ -170,7 +170,7 @@ func projectNativeStaticCandidateSourceFile(file string) bool {
 	}
 }
 
-var projectNativeStaticCruxSignalPatterns = []*regexp.Regexp{
+var cruxSignalPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`@crux/`),
 	regexp.MustCompile(`\bprompt\s*\(`),
 	regexp.MustCompile(`\bcontext\s*\(`),
@@ -198,51 +198,51 @@ var projectNativeStaticCruxSignalPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\bnew\s+Agent\s*\(`),
 }
 
-func projectNativeStaticHasCruxInterest(sample string, callNames []string) bool {
-	return projectNativeStaticSignalMatcherForCallNames(callNames).HasCruxInterest(sample)
+func hasCruxInterest(sample string, callNames []string) bool {
+	return signalMatcherForCallNames(callNames).HasCruxInterest(sample)
 }
 
-var projectNativeStaticGeneratedPattern = regexp.MustCompile(`(?i)(@generated|auto-generated|automatically generated|do not edit|do not modify)`)
+var generatedPattern = regexp.MustCompile(`(?i)(@generated|auto-generated|automatically generated|do not edit|do not modify)`)
 
-func projectNativeStaticLooksGenerated(sample string) bool {
-	return projectNativeStaticGeneratedPattern.MatchString(sample)
+func looksGenerated(sample string) bool {
+	return generatedPattern.MatchString(sample)
 }
 
-func projectNativeStaticLooksBundled(file string, sample string) bool {
+func looksBundled(file string, sample string) bool {
 	return strings.Contains(sample, "var __defProp = Object.defineProperty") ||
 		strings.Contains(sample, "var __commonJS =") ||
 		strings.Contains(sample, "__toESM") ||
 		strings.Contains(sample, "node_modules/.pnpm/") ||
 		strings.Contains(sample, "//# sourceMappingURL=") ||
-		projectNativeStaticLooksHashedAssetChunk(file, sample)
+		looksHashedAssetChunk(file, sample)
 }
 
-var projectNativeStaticHashedAssetChunkPattern = regexp.MustCompile(`/assets/[^/]+-[A-Za-z0-9_-]{8,}\.(?:[cm]?js|jsx)$`)
+var hashedAssetChunkPattern = regexp.MustCompile(`/assets/[^/]+-[A-Za-z0-9_-]{8,}\.(?:[cm]?js|jsx)$`)
 
-func projectNativeStaticLooksHashedAssetChunk(file string, sample string) bool {
+func looksHashedAssetChunk(file string, sample string) bool {
 	normalized := filepath.ToSlash(file)
-	if !projectNativeStaticHashedAssetChunkPattern.MatchString(normalized) {
+	if !hashedAssetChunkPattern.MatchString(normalized) {
 		return false
 	}
-	return strings.HasPrefix(sample, "import{") || strings.Contains(sample, `from"./`) || projectNativeStaticLongestLine(sample) > 2000
+	return strings.HasPrefix(sample, "import{") || strings.Contains(sample, `from"./`) || longestLine(sample) > 2000
 }
 
-var projectNativeStaticWhitespacePattern = regexp.MustCompile(`\s+`)
+var whitespacePattern = regexp.MustCompile(`\s+`)
 
-func projectNativeStaticLooksBase64Artifact(file string, sample string, bytes int64) bool {
+func looksBase64Artifact(file string, sample string, bytes int64) bool {
 	if bytes < 256_000 {
 		return false
 	}
 	name := strings.ToLower(filepath.Base(file))
 	artifactName := strings.Contains(name, "wasm") || strings.Contains(name, "base64")
-	longest := projectNativeStaticLongestLine(sample)
+	longest := longestLine(sample)
 	if artifactName && longest > 50_000 {
 		return true
 	}
 	if longest < 100_000 {
 		return false
 	}
-	compact := projectNativeStaticWhitespacePattern.ReplaceAllString(sample, "")
+	compact := whitespacePattern.ReplaceAllString(sample, "")
 	if compact == "" {
 		return false
 	}

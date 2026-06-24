@@ -1,6 +1,9 @@
 package devtools
 
-import "context"
+import (
+	"context"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+)
 
 // ProjectSemanticPrewarmer optionally starts the semantic backend before its
 // request payload is ready. Implementations must not mutate Project Index
@@ -13,7 +16,7 @@ func (s *Service) startProjectSemanticPrewarm(ctx context.Context, mode ProjectS
 	if mode == ProjectSemanticDisabled {
 		return
 	}
-	if _, ok := s.indexer.(ProjectSemanticIndexer); !ok {
+	if _, ok := s.indexer.(projectindex.ProjectSemanticIndexer); !ok {
 		return
 	}
 	prewarmer, ok := s.indexer.(ProjectSemanticPrewarmer)

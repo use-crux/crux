@@ -2,11 +2,11 @@ package semantic
 
 import (
 	"context"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -66,9 +66,9 @@ func TestWorker_streamsSemanticSourceProfileRequestBatches(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 
-	files := make([]devtools.SemanticSourceProfileFile, 150)
+	files := make([]projectindex.SemanticSourceProfileFile, 150)
 	for i := range files {
-		files[i] = devtools.SemanticSourceProfileFile{
+		files[i] = projectindex.SemanticSourceProfileFile{
 			File:        filepath.Join("src", "file.ts"),
 			SourceHash:  "hash",
 			SourceBytes: 10,
@@ -77,12 +77,12 @@ func TestWorker_streamsSemanticSourceProfileRequestBatches(t *testing.T) {
 	worker := New(Options{ScriptPath: script})
 	defer worker.Close()
 
-	_, err := worker.IndexProjectSemanticPatch(context.Background(), devtools.ProjectSemanticIndexRequest{
+	_, err := worker.IndexProjectSemanticPatch(context.Background(), projectindex.ProjectSemanticIndexRequest{
 		Root:        t.TempDir(),
 		ProjectName: "semantic-project",
 		Files:       []string{"src/a.ts"},
-		Budget:      devtools.IndexPatchBudget{MaxDefinitions: 10},
-		SourceProfile: &devtools.SemanticSourceProfile{
+		Budget:      projectindex.IndexPatchBudget{MaxDefinitions: 10},
+		SourceProfile: &projectindex.SemanticSourceProfile{
 			Files:             files,
 			DependencyClosure: []string{"src/a.ts"},
 			SourceBytes:       1500,
@@ -184,11 +184,11 @@ func TestWorker_streamsPreviousIndexRequestBatches(t *testing.T) {
 	worker := New(Options{ScriptPath: script})
 	defer worker.Close()
 
-	_, err := worker.IndexProjectSemanticPatch(context.Background(), devtools.ProjectSemanticIndexRequest{
+	_, err := worker.IndexProjectSemanticPatch(context.Background(), projectindex.ProjectSemanticIndexRequest{
 		Root:          t.TempDir(),
 		ProjectName:   "semantic-project",
 		Files:         []string{"src/a.ts"},
-		Budget:        devtools.IndexPatchBudget{MaxDefinitions: 10},
+		Budget:        projectindex.IndexPatchBudget{MaxDefinitions: 10},
 		PreviousIndex: &previous,
 	})
 	if err != nil {

@@ -3,6 +3,8 @@ package devtools
 import (
 	"context"
 	"errors"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"slices"
 	"testing"
 	"time"
 
@@ -85,11 +87,11 @@ func TestReindexProjectRunsPlannedSemanticDuringAstWork(t *testing.T) {
 	if definition == nil || definition.Description != "semantic" {
 		t.Fatalf("definitions = %+v, want semantic enrichment applied", index.Definitions)
 	}
-	if index.SourceGraph == nil || !stringSliceContains(index.SourceGraph.Capabilities, "source-dependencies") {
+	if index.SourceGraph == nil || !slices.Contains(index.SourceGraph.Capabilities, "source-dependencies") {
 		t.Fatalf("sourceGraph = %+v, want AST sourceGraph joined into semantic patch", index.SourceGraph)
 	}
 	helper := findSource(index.Sources, root+"/src/helper.ts")
-	if helper == nil || !stringSliceContains(helper.Dependents, root+"/src/writer.ts") {
+	if helper == nil || !slices.Contains(helper.Dependents, root+"/src/writer.ts") {
 		t.Fatalf("sources = %+v, want semantic support source row for helper", index.Sources)
 	}
 }
@@ -140,8 +142,8 @@ type mismatchedFullPlannedSemanticProjectIndexer struct {
 	semanticCalls   int
 }
 
-func (i *earlySemanticProjectIndexer) PlanProjectSemanticRequest(_ context.Context, root, configPath, projectName string) (ProjectSemanticIndexRequest, error) {
-	return ProjectSemanticIndexRequest{
+func (i *earlySemanticProjectIndexer) PlanProjectSemanticRequest(_ context.Context, root, configPath, projectName string) (projectindex.ProjectSemanticIndexRequest, error) {
+	return projectindex.ProjectSemanticIndexRequest{
 		Root:        root,
 		ConfigPath:  configPath,
 		ProjectName: projectName,
@@ -150,11 +152,11 @@ func (i *earlySemanticProjectIndexer) PlanProjectSemanticRequest(_ context.Conte
 			root + "/src/helper.ts",
 			root + "/src/writer.ts",
 		},
-		SourceProfile: &SemanticSourceProfile{
+		SourceProfile: &projectindex.SemanticSourceProfile{
 			Complete: true,
-			Files: []SemanticSourceProfileFile{
-				{File: root + "/src/writer.ts", SourceHash: "writer", SourceBytes: 10, Hints: &SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}}},
-				{File: root + "/src/helper.ts", SourceHash: "helper", SourceBytes: 10, Hints: &SemanticSourceProfileHints{CruxCallNames: []string{}}},
+			Files: []projectindex.SemanticSourceProfileFile{
+				{File: root + "/src/writer.ts", SourceHash: "writer", SourceBytes: 10, Hints: &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}}},
+				{File: root + "/src/helper.ts", SourceHash: "helper", SourceBytes: 10, Hints: &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{}}},
 			},
 			DependencyClosure: []string{
 				root + "/src/helper.ts",
@@ -165,19 +167,19 @@ func (i *earlySemanticProjectIndexer) PlanProjectSemanticRequest(_ context.Conte
 	}, nil
 }
 
-func (i *earlySemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
+func (i *earlySemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
 	select {
 	case <-i.semanticStarted:
 		i.astObservedSemanticStarted = true
 	case <-time.After(time.Second):
-		return IndexPatch{}, errors.New("planned semantic work did not start before AST finished")
+		return projectindex.IndexPatch{}, errors.New("planned semantic work did not start before AST finished")
 	}
-	return IndexPatch{
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseAST,
+		Phase:         projectindex.PhaseAST,
 		Project:       store.ProjectIdentity{Root: i.root, Name: "project"},
 		Status:        "ok",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
 				ID:       "prompt:writer",
 				Kind:     "prompt",
@@ -202,11 +204,11 @@ func (i *earlySemanticProjectIndexer) IndexProjectAstPatch(context.Context, stri
 				Capabilities:  []string{"source-dependencies"},
 			},
 		},
-		SemanticSourceProfile: &SemanticSourceProfile{
+		SemanticSourceProfile: &projectindex.SemanticSourceProfile{
 			Complete: true,
-			Files: []SemanticSourceProfileFile{
-				{File: i.root + "/src/writer.ts", SourceHash: "writer", SourceBytes: 10, Hints: &SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}}},
-				{File: i.root + "/src/helper.ts", SourceHash: "helper", SourceBytes: 10, Hints: &SemanticSourceProfileHints{CruxCallNames: []string{}}},
+			Files: []projectindex.SemanticSourceProfileFile{
+				{File: i.root + "/src/writer.ts", SourceHash: "writer", SourceBytes: 10, Hints: &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}}},
+				{File: i.root + "/src/helper.ts", SourceHash: "helper", SourceBytes: 10, Hints: &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{}}},
 			},
 			DependencyClosure: []string{
 				i.root + "/src/helper.ts",
@@ -217,15 +219,15 @@ func (i *earlySemanticProjectIndexer) IndexProjectAstPatch(context.Context, stri
 	}, nil
 }
 
-func (i *earlySemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *earlySemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	i.semanticSawPreviousIndex = req.PreviousIndex != nil
 	close(i.semanticStarted)
-	return IndexPatch{
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseSemantic,
+		Phase:         projectindex.PhaseSemantic,
 		Project:       store.ProjectIdentity{Root: req.Root, Name: req.ProjectName, ConfigFile: req.ConfigPath},
 		Status:        "ok",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
 				ID:          "prompt:writer",
 				Kind:        "prompt",
@@ -234,7 +236,7 @@ func (i *earlySemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Contex
 				Fidelity:    "resolved",
 				Status:      "active",
 			}},
-			SourceRefs: []IndexSourceRefFact{{
+			SourceRefs: []projectindex.IndexSourceRefFact{{
 				DefinitionID: "prompt:writer",
 				Ref: store.ProjectSourceRef{
 					ID:     "prompt:writer:source:schema",
@@ -247,20 +249,20 @@ func (i *earlySemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Contex
 	}, nil
 }
 
-func (i *mismatchedFullPlannedSemanticProjectIndexer) PlanProjectSemanticRequest(_ context.Context, root, configPath, projectName string) (ProjectSemanticIndexRequest, error) {
-	return ProjectSemanticIndexRequest{
+func (i *mismatchedFullPlannedSemanticProjectIndexer) PlanProjectSemanticRequest(_ context.Context, root, configPath, projectName string) (projectindex.ProjectSemanticIndexRequest, error) {
+	return projectindex.ProjectSemanticIndexRequest{
 		Root:              root,
 		ConfigPath:        configPath,
 		ProjectName:       projectName,
 		Files:             []string{root + "/src/writer.ts"},
 		DependencyClosure: []string{root + "/src/writer.ts"},
-		SourceProfile: &SemanticSourceProfile{
+		SourceProfile: &projectindex.SemanticSourceProfile{
 			Complete: true,
-			Files: []SemanticSourceProfileFile{{
+			Files: []projectindex.SemanticSourceProfileFile{{
 				File:        root + "/src/writer.ts",
 				SourceHash:  "stale",
 				SourceBytes: 10,
-				Hints:       &SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}},
+				Hints:       &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}},
 			}},
 			DependencyClosure: []string{root + "/src/writer.ts"},
 			SourceBytes:       10,
@@ -268,18 +270,18 @@ func (i *mismatchedFullPlannedSemanticProjectIndexer) PlanProjectSemanticRequest
 	}, nil
 }
 
-func (i *mismatchedFullPlannedSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
+func (i *mismatchedFullPlannedSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
 	select {
 	case <-i.semanticStarted:
 	case <-time.After(time.Second):
-		return IndexPatch{}, errors.New("planned semantic work did not start before AST finished")
+		return projectindex.IndexPatch{}, errors.New("planned semantic work did not start before AST finished")
 	}
-	return IndexPatch{
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseAST,
+		Phase:         projectindex.PhaseAST,
 		Project:       store.ProjectIdentity{Root: i.root, Name: "project"},
 		Status:        "ok",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
 				ID:       "prompt:writer",
 				Kind:     "prompt",
@@ -299,13 +301,13 @@ func (i *mismatchedFullPlannedSemanticProjectIndexer) IndexProjectAstPatch(conte
 				Capabilities:  []string{"source-dependencies"},
 			},
 		},
-		SemanticSourceProfile: &SemanticSourceProfile{
+		SemanticSourceProfile: &projectindex.SemanticSourceProfile{
 			Complete: true,
-			Files: []SemanticSourceProfileFile{{
+			Files: []projectindex.SemanticSourceProfileFile{{
 				File:        i.root + "/src/writer.ts",
 				SourceHash:  "fresh",
 				SourceBytes: 10,
-				Hints:       &SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}},
+				Hints:       &projectindex.SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}},
 			}},
 			DependencyClosure: []string{i.root + "/src/writer.ts"},
 			SourceBytes:       10,
@@ -313,7 +315,7 @@ func (i *mismatchedFullPlannedSemanticProjectIndexer) IndexProjectAstPatch(conte
 	}, nil
 }
 
-func (i *mismatchedFullPlannedSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *mismatchedFullPlannedSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	i.semanticCalls++
 	if i.semanticCalls == 1 {
 		close(i.semanticStarted)
@@ -322,13 +324,13 @@ func (i *mismatchedFullPlannedSemanticProjectIndexer) IndexProjectSemanticPatch(
 	return plannedFullSemanticPatch(req, "fallback"), nil
 }
 
-func plannedFullSemanticPatch(req ProjectSemanticIndexRequest, description string) IndexPatch {
-	return IndexPatch{
+func plannedFullSemanticPatch(req projectindex.ProjectSemanticIndexRequest, description string) projectindex.IndexPatch {
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseSemantic,
+		Phase:         projectindex.PhaseSemantic,
 		Project:       store.ProjectIdentity{Root: req.Root, Name: req.ProjectName, ConfigFile: req.ConfigPath},
 		Status:        "ok",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
 				ID:          "prompt:writer",
 				Kind:        "prompt",
@@ -360,13 +362,13 @@ func (i *prewarmSemanticProjectIndexer) PrewarmProjectSemantic(ctx context.Conte
 	}
 }
 
-func (i *prewarmSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
+func (i *prewarmSemanticProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
 	if i.expectPrewarm {
 		select {
 		case <-i.prewarmStarted:
 			i.astObservedPrewarm = true
 		case <-time.After(time.Second):
-			return IndexPatch{}, errors.New("semantic prewarm did not start before AST finished")
+			return projectindex.IndexPatch{}, errors.New("semantic prewarm did not start before AST finished")
 		}
 	}
 	return indexPatchFromSnapshot(store.IndexData{
@@ -375,16 +377,16 @@ func (i *prewarmSemanticProjectIndexer) IndexProjectAstPatch(context.Context, st
 		Definitions: []store.ProjectDefinition{
 			{ID: "prompt:ast", Kind: "prompt", Name: "ast", Fidelity: "partial", Status: "active"},
 		},
-	}, indexPatchPhaseAST, "ok"), nil
+	}, projectindex.PhaseAST, "ok"), nil
 }
 
-func (i *prewarmSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *prewarmSemanticProjectIndexer) IndexProjectSemanticPatch(_ context.Context, req projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	i.calledSemantic = true
-	return IndexPatch{
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseSemantic,
+		Phase:         projectindex.PhaseSemantic,
 		Project:       store.ProjectIdentity{Root: req.Root, Name: req.ProjectName, ConfigFile: req.ConfigPath},
 		Status:        "ok",
-		Facts:         IndexPatchFacts{},
+		Facts:         projectindex.IndexPatchFacts{},
 	}, nil
 }

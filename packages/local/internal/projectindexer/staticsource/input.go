@@ -2,14 +2,12 @@ package staticsource
 
 import (
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
-	"strings"
 	"sync"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/staticprotocol"
 )
 
@@ -17,7 +15,7 @@ type Input struct {
 	Files                 []staticprotocol.SourceFile
 	PrimaryFiles          []staticprotocol.SourceFile
 	SourceTextByFile      map[string]string
-	SemanticSourceProfile *devtools.SemanticSourceProfile
+	SemanticSourceProfile *projectindex.SemanticSourceProfile
 }
 
 type sourceRead struct {
@@ -27,22 +25,8 @@ type sourceRead struct {
 	err        error
 }
 
-type projectNativeStaticHostManifest struct {
-	NativeOnlyEligible                  bool `json:"nativeOnlyEligible"`
-	TypeScriptRuleCount                 int  `json:"typeScriptRuleCount"`
-	RequiresTypeScriptHostForBundled    bool `json:"requiresTypeScriptHostForBundled"`
-	RequiresTypeScriptHostForRules      bool `json:"requiresTypeScriptHostForRules"`
-	RequiresTypeScriptHostForExtensions bool `json:"requiresTypeScriptHostForExtensions"`
-	RequiresCompatibilityEvidence       bool `json:"requiresCompatibilityEvidence"`
-}
-
-func projectStaticPlanRequiresTypeScriptRules(plan devtools.ProjectStaticSyntaxPlan) bool {
-	host, ok := projectStaticPlanNativeStaticHostManifest(plan)
-	return ok && (host.RequiresTypeScriptHostForRules || host.TypeScriptRuleCount > 0)
-}
-
-func InputFromPlan(plan devtools.ProjectStaticSyntaxPlan) (Input, error) {
-	filesToParse := projectSyntaxPlanFilesToParse(plan)
+func FromPlan(plan projectindex.ProjectStaticSyntaxPlan) (Input, error) {
+	filesToParse := filesToParse(plan)
 	cacheEntries := cacheEntries(plan.CacheEntries)
 	primaryFileSet := primaryFileSet(plan)
 	analyzeFileSet := analyzeFileSet(filesToParse)
@@ -54,7 +38,7 @@ func InputFromPlan(plan devtools.ProjectStaticSyntaxPlan) (Input, error) {
 		PrimaryFiles:     []staticprotocol.SourceFile{},
 		SourceTextByFile: map[string]string{},
 	}
-	profileFiles := []devtools.SemanticSourceProfileFile{}
+	profileFiles := []projectindex.SemanticSourceProfileFile{}
 	for _, file := range files {
 		cacheEntry := cacheEntries[file]
 		read, readOK := readByFile[file]
@@ -156,7 +140,7 @@ func analyzeFileSet(files []string) map[string]bool {
 	return selected
 }
 
-func primaryFileSet(plan devtools.ProjectStaticSyntaxPlan) map[string]bool {
+func primaryFileSet(plan projectindex.ProjectStaticSyntaxPlan) map[string]bool {
 	files := append([]string(nil), plan.CacheHits...)
 	files = append(files, plan.CacheMisses...)
 	if plan.FilesToParse == nil || len(files) == 0 {
@@ -169,46 +153,6 @@ func primaryFileSet(plan devtools.ProjectStaticSyntaxPlan) map[string]bool {
 		}
 	}
 	return selected
-}
-
-func projectStaticPlanNativeOnlyEligible(plan devtools.ProjectStaticSyntaxPlan) bool {
-	host, ok := projectStaticPlanNativeStaticHostManifest(plan)
-	return ok &&
-		host.NativeOnlyEligible &&
-		!host.RequiresTypeScriptHostForBundled &&
-		!host.RequiresTypeScriptHostForExtensions &&
-		!host.RequiresTypeScriptHostForRules &&
-		!host.RequiresCompatibilityEvidence
-}
-
-func projectStaticPlanNativeStaticSchedulable(plan devtools.ProjectStaticSyntaxPlan) bool {
-	host, ok := projectStaticPlanNativeStaticHostManifest(plan)
-	return ok && !host.RequiresCompatibilityEvidence
-}
-
-func projectStaticPlanNativeStaticHostManifest(plan devtools.ProjectStaticSyntaxPlan) (projectNativeStaticHostManifest, bool) {
-	raw := strings.TrimSpace(string(plan.StaticHost))
-	if raw == "" || raw == "null" {
-		return projectNativeStaticHostManifest{}, false
-	}
-	var host projectNativeStaticHostManifest
-	if err := json.Unmarshal(plan.StaticHost, &host); err != nil {
-		return projectNativeStaticHostManifest{}, false
-	}
-	return host, true
-}
-
-func projectNativeStaticCacheKeys(entries []devtools.StaticCacheHit) map[string]string {
-	if len(entries) == 0 {
-		return nil
-	}
-	keys := make(map[string]string, len(entries))
-	for _, entry := range entries {
-		if entry.File != "" && entry.CacheKey != "" {
-			keys[entry.File] = entry.CacheKey
-		}
-	}
-	return keys
 }
 
 func AnalyzeFilesWithSourceText(files []staticprotocol.SourceFile, sourceTextByFile map[string]string) ([]staticprotocol.AnalyzeFile, error) {
@@ -225,6 +169,13 @@ func AnalyzeFilesWithSourceText(files []staticprotocol.SourceFile, sourceTextByF
 		})
 	}
 	return out, nil
+}
+
+func filesToParse(plan projectindex.ProjectStaticSyntaxPlan) []string {
+	if plan.FilesToParse != nil {
+		return plan.FilesToParse
+	}
+	return plan.Files
 }
 
 func FilesToAnalyze(

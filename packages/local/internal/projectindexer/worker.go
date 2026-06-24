@@ -8,8 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/nodeworker"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/indexwire"
+	"github.com/use-crux/crux/packages/local/internal/projectindexer/nodehost"
 	runtimeworker "github.com/use-crux/crux/packages/local/internal/projectindexer/runtime"
 	semanticworker "github.com/use-crux/crux/packages/local/internal/projectindexer/semantic"
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
@@ -30,39 +32,6 @@ type Worker struct {
 	activePlan     *projectStaticSyntaxPlanCall
 }
 
-type projectIndexRequest struct {
-	ProtocolVersion               int                                  `json:"protocolVersion,omitempty"`
-	Method                        string                               `json:"method"`
-	RequestID                     string                               `json:"requestId,omitempty"`
-	RequestKind                   string                               `json:"requestKind,omitempty"`
-	Root                          string                               `json:"root"`
-	ConfigPath                    string                               `json:"configPath,omitempty"`
-	ProjectName                   string                               `json:"projectName,omitempty"`
-	ResolutionMode                string                               `json:"resolutionMode,omitempty"`
-	SemanticBudget                *devtools.IndexPatchBudget           `json:"semanticBudget,omitempty"`
-	PreviousIndex                 *store.IndexData                     `json:"previousIndex,omitempty"`
-	PreviousDefinitions           []store.ProjectDefinition            `json:"previousIndexDefinitions,omitempty"`
-	PreviousSources               []store.IndexSourceFile              `json:"previousIndexSources,omitempty"`
-	Files                         []string                             `json:"files,omitempty"`
-	DeletedFiles                  []string                             `json:"deletedFiles,omitempty"`
-	SyntaxRecords                 []json.RawMessage                    `json:"syntaxRecords,omitempty"`
-	SyntaxRecordsBatch            []json.RawMessage                    `json:"syntaxRecordsBatch,omitempty"`
-	SyntaxFrontend                *devtools.SyntaxFrontend             `json:"syntaxFrontendIdentity,omitempty"`
-	NativeFactProjection          string                               `json:"nativeFactProjection,omitempty"`
-	Jobs                          []json.RawMessage                    `json:"jobs,omitempty"`
-	Graph                         json.RawMessage                      `json:"graph,omitempty"`
-	AvailableFacts                json.RawMessage                      `json:"availableFacts,omitempty"`
-	NativeLintFinalize            bool                                 `json:"nativeLintFinalize,omitempty"`
-	DependencyClosure             []string                             `json:"dependencyClosure,omitempty"`
-	SourceProfile                 *devtools.SemanticSourceProfile      `json:"sourceProfile,omitempty"`
-	SourceProfileFiles            []devtools.SemanticSourceProfileFile `json:"sourceProfileFiles,omitempty"`
-	Mode                          string                               `json:"mode,omitempty"`
-	MaxAffectedFiles              int                                  `json:"maxAffectedFiles,omitempty"`
-	IncludeStaticCacheStatus      bool                                 `json:"includeStaticCacheStatus,omitempty"`
-	StaticCacheHits               []devtools.StaticCacheHit            `json:"staticCacheHits,omitempty"`
-	NativeCompilerProtocolVersion int                                  `json:"nativeCompilerProtocolVersion,omitempty"`
-}
-
 const workerMaxResponseBytes = 16 * 1024 * 1024
 const workerProducer = "@crux/indexer/project-indexer"
 
@@ -71,7 +40,7 @@ func New(options WorkerOptions) *Worker {
 	return &Worker{
 		scriptPath:    options.ProjectIndexerScript,
 		scriptContent: options.Assets.ProjectIndexer,
-		worker:        newNodeStreamWorker("project-indexer", options.Assets.ProjectIndexer, options.ProjectIndexerScript),
+		worker:        nodehost.NewWorker("project-indexer", options.Assets.ProjectIndexer, options.ProjectIndexerScript, workerMaxResponseBytes),
 		semanticWorker: semanticworker.New(semanticworker.Options{
 			ScriptPath:    options.ProjectSemanticIndexerScript,
 			ScriptContent: options.Assets.ProjectSemanticIndexer,
@@ -95,7 +64,7 @@ func (w *Worker) LastAstTiming() ProjectIndexAstTiming {
 }
 
 // LastSemanticTimings returns diagnostic timing buckets from the latest semantic request.
-func (w *Worker) LastSemanticTimings() []devtools.ProjectIndexPhaseTiming {
+func (w *Worker) LastSemanticTimings() []projectindex.ProjectIndexPhaseTiming {
 	if w == nil || w.semanticWorker == nil {
 		return nil
 	}
@@ -115,14 +84,14 @@ func (w *Worker) recordLastAstTiming(timing ProjectIndexAstTiming) {
 // Config policy may be imported, but authored source modules are not executed;
 // richer runtime evidence is supplied by the dev server's staged indexing path.
 func (w *Worker) ResolveProjectModel(ctx context.Context, root, configPath, projectName string) (json.RawMessage, error) {
-	req := projectIndexRequest{
+	req := indexwire.Request{
 		Method:         "resolveProjectModel",
 		Root:           root,
 		ConfigPath:     configPath,
 		ProjectName:    projectName,
 		ResolutionMode: "config-policy",
 	}
-	return w.streamArtifact(ctx, req, devtools.ProjectIndexArtifactProjectModel)
+	return w.streamArtifact(ctx, req, projectindex.ProjectIndexArtifactProjectModel)
 }
 
 // InspectProjectConfig returns the JSON-safe effective Crux configuration for
@@ -130,19 +99,19 @@ func (w *Worker) ResolveProjectModel(ctx context.Context, root, configPath, proj
 // ResolveProjectModel it imports the project's config (in inert CRUX_INDEX=1
 // mode) so explicit overrides — not just defaults — are reflected.
 func (w *Worker) InspectProjectConfig(ctx context.Context, root, configPath, projectName string) (json.RawMessage, error) {
-	req := projectIndexRequest{
+	req := indexwire.Request{
 		Method:         "inspectProjectConfig",
 		Root:           root,
 		ConfigPath:     configPath,
 		ProjectName:    projectName,
 		ResolutionMode: "config-policy",
 	}
-	resp, err := w.streamArtifact(ctx, req, devtools.ProjectIndexArtifactProjectConfig)
+	resp, err := w.streamArtifact(ctx, req, projectindex.ProjectIndexArtifactProjectConfig)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, err
 		}
-		resp, err = w.sourceOnlyArtifactFallback(ctx, req, devtools.ProjectIndexArtifactProjectConfig, err)
+		resp, err = w.sourceOnlyArtifactFallback(ctx, req, projectindex.ProjectIndexArtifactProjectConfig, err)
 		if err != nil {
 			return nil, err
 		}
@@ -150,10 +119,10 @@ func (w *Worker) InspectProjectConfig(ctx context.Context, root, configPath, pro
 	return resp, nil
 }
 
-func (w *Worker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (devtools.IndexPatch, error) {
+func (w *Worker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (projectindex.IndexPatch, error) {
 	result, err := w.IndexProjectAstPatchWithResult(ctx, root, configPath, projectName)
 	if err != nil {
-		return devtools.IndexPatch{}, err
+		return projectindex.IndexPatch{}, err
 	}
 	return result.Patch, nil
 }
@@ -166,36 +135,36 @@ func (w *Worker) IndexProjectAstPatchWithResult(
 	root string,
 	configPath string,
 	projectName string,
-) (devtools.ProjectAstIndexResult, error) {
+) (projectindex.ProjectAstIndexResult, error) {
 	if w.syntaxParser != nil {
 		return w.indexProjectAstPatchResultFromNativeSyntaxRecords(ctx, root, configPath, projectName)
 	}
 	patch, err := w.indexProjectAstPatchFromTypeScript(ctx, root, configPath, projectName)
 	if err != nil {
-		return devtools.ProjectAstIndexResult{}, err
+		return projectindex.ProjectAstIndexResult{}, err
 	}
-	return devtools.ProjectAstIndexResult{Patch: patch}, nil
+	return projectindex.ProjectAstIndexResult{Patch: patch}, nil
 }
 
-func (w *Worker) indexProjectAstPatchFromTypeScript(ctx context.Context, root, configPath, projectName string) (devtools.IndexPatch, error) {
+func (w *Worker) indexProjectAstPatchFromTypeScript(ctx context.Context, root, configPath, projectName string) (projectindex.IndexPatch, error) {
 	started := time.Now()
-	req := projectIndexRequest{
+	req := indexwire.Request{
 		Method:         "indexProjectAst",
 		Root:           root,
 		ConfigPath:     configPath,
 		ProjectName:    projectName,
 		ResolutionMode: "source-only",
 	}
-	collector, err := w.streamCollector(ctx, req, devtools.IndexPatchBudget{})
+	collector, err := w.streamCollector(ctx, req, projectindex.IndexPatchBudget{})
 	if err != nil {
-		return devtools.IndexPatch{}, err
+		return projectindex.IndexPatch{}, err
 	}
 	patches, err := collector.Patches()
 	if err != nil {
-		return devtools.IndexPatch{}, err
+		return projectindex.IndexPatch{}, err
 	}
 	if len(patches) != 1 {
-		return devtools.IndexPatch{}, fmt.Errorf("project ast worker returned %d patches, want 1", len(patches))
+		return projectindex.IndexPatch{}, fmt.Errorf("project ast worker returned %d patches, want 1", len(patches))
 	}
 	w.recordLastAstTiming(projectIndexAstTimingNodeRequired(ProjectIndexAstTiming{
 		TotalMs:     elapsedMs(started),
@@ -234,25 +203,25 @@ func stringSliceContains(values []string, want string) bool {
 	return false
 }
 
-func (w *Worker) IndexProjectSemanticPatch(ctx context.Context, request devtools.ProjectSemanticIndexRequest) (devtools.IndexPatch, error) {
+func (w *Worker) IndexProjectSemanticPatch(ctx context.Context, request projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	if w.semanticWorker == nil {
-		return devtools.IndexPatch{}, fmt.Errorf("project semantic worker is not configured")
+		return projectindex.IndexPatch{}, fmt.Errorf("project semantic worker is not configured")
 	}
 	return w.semanticWorker.IndexProjectSemanticPatch(ctx, request)
 }
 
-func (w *Worker) IndexProjectRuntimePatch(ctx context.Context, request devtools.ProjectRuntimeIndexRequest) (devtools.IndexPatch, error) {
+func (w *Worker) IndexProjectRuntimePatch(ctx context.Context, request projectindex.ProjectRuntimeIndexRequest) (projectindex.IndexPatch, error) {
 	if w.runtimeWorker == nil {
-		return devtools.IndexPatch{}, fmt.Errorf("project runtime worker is not configured")
+		return projectindex.IndexPatch{}, fmt.Errorf("project runtime worker is not configured")
 	}
 	return w.runtimeWorker.IndexProjectRuntimePatch(ctx, request)
 }
 
-func (w *Worker) IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousIndex store.IndexData, files []string, deletedFiles []string, mode string) (devtools.ProjectIndexIncrementalResult, error) {
+func (w *Worker) IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousIndex store.IndexData, files []string, deletedFiles []string, mode string) (projectindex.ProjectIndexIncrementalResult, error) {
 	if mode == "" {
 		mode = "ast"
 	}
-	req := projectIndexRequest{
+	req := indexwire.Request{
 		Method:        "indexProjectIncremental",
 		Root:          root,
 		ConfigPath:    configPath,
@@ -262,9 +231,9 @@ func (w *Worker) IndexProjectIncremental(ctx context.Context, root, configPath, 
 		DeletedFiles:  deletedFiles,
 		Mode:          mode,
 	}
-	collector, err := w.streamCollector(ctx, req, devtools.IndexPatchBudget{})
+	collector, err := w.streamCollector(ctx, req, projectindex.IndexPatchBudget{})
 	if err != nil {
-		return devtools.ProjectIndexIncrementalResult{}, err
+		return projectindex.ProjectIndexIncrementalResult{}, err
 	}
 	return collector.IncrementalResult()
 }

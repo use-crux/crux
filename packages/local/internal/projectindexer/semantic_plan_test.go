@@ -3,14 +3,13 @@ package projectindexer
 import (
 	"context"
 	"encoding/json"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindexer/syntax"
-
-	"github.com/use-crux/crux/packages/local/internal/devtools"
 )
 
 func TestWorkerPlanProjectSemanticRequestUsesNativeStaticSourceProfile(t *testing.T) {
@@ -60,7 +59,7 @@ func TestWorkerSharesConcurrentStaticSyntaxPlan(t *testing.T) {
 	release := make(chan struct{})
 	var runs atomic.Int32
 	result := projectStaticSyntaxPlanResult{
-		Plan: devtools.ProjectStaticSyntaxPlan{
+		Plan: projectindex.ProjectStaticSyntaxPlan{
 			Root:        key.root,
 			ProjectName: key.projectName,
 			Files:       []string{"/repo/src/writer.ts"},
@@ -137,7 +136,7 @@ func (noopSyntaxParser) Concurrency() int { return 1 }
 
 func (noopSyntaxParser) Close() error { return nil }
 
-func semanticProfileContainsFile(profile *devtools.SemanticSourceProfile, file string) bool {
+func semanticProfileContainsFile(profile *projectindex.SemanticSourceProfile, file string) bool {
 	if profile == nil {
 		return false
 	}

@@ -2,6 +2,7 @@ package devtools
 
 import (
 	"context"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
 type projectLintPrefetchTask struct {
@@ -10,12 +11,12 @@ type projectLintPrefetchTask struct {
 }
 
 type projectLintPrefetchTaskResult struct {
-	prefetch ProjectLintPrefetchResult
+	prefetch projectindex.ProjectLintPrefetchResult
 	err      error
 }
 
-func (s *Service) startProjectLintPrefetch(ctx context.Context, request ProjectLintIndexRequest) *projectLintPrefetchTask {
-	indexer, ok := s.indexer.(ProjectLintPrefetchIndexer)
+func (s *Service) startProjectLintPrefetch(ctx context.Context, request projectindex.ProjectLintIndexRequest) *projectLintPrefetchTask {
+	indexer, ok := s.indexer.(projectindex.ProjectLintPrefetchIndexer)
 	if !ok {
 		return nil
 	}
@@ -31,7 +32,7 @@ func (s *Service) startProjectLintPrefetch(ctx context.Context, request ProjectL
 	return &projectLintPrefetchTask{cancel: cancel, done: done}
 }
 
-func (t *projectLintPrefetchTask) wait() (*ProjectLintPrefetchResult, error) {
+func (t *projectLintPrefetchTask) wait() (*projectindex.ProjectLintPrefetchResult, error) {
 	if t == nil {
 		return nil, nil
 	}
@@ -48,7 +49,7 @@ func (t *projectLintPrefetchTask) stop() {
 	}
 }
 
-func applyProjectLintPrefetch(request *ProjectLintIndexRequest, prefetch *projectLintPrefetchTask) error {
+func applyProjectLintPrefetch(request *projectindex.ProjectLintIndexRequest, prefetch *projectLintPrefetchTask) error {
 	if request == nil {
 		return nil
 	}

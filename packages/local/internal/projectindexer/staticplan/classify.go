@@ -8,20 +8,20 @@ import (
 	"sync"
 )
 
-type projectNativeStaticSignalMatcher struct {
-	patterns []projectNativeStaticSignalPattern
+type signalMatcher struct {
+	patterns []signalPattern
 }
 
-type projectNativeStaticSignalPattern struct {
+type signalPattern struct {
 	hint    string
 	pattern *regexp.Regexp
 }
 
-func projectNativeStaticSignalMatcherForCallNames(callNames []string) projectNativeStaticSignalMatcher {
-	patterns := make([]projectNativeStaticSignalPattern, 0, len(projectNativeStaticCruxSignalPatterns)+len(projectNativeStaticDefaultCallNames)+len(callNames))
-	for _, pattern := range projectNativeStaticCruxSignalPatterns {
-		patterns = append(patterns, projectNativeStaticSignalPattern{
-			hint:    projectNativeStaticSignalPatternHint(pattern.String()),
+func signalMatcherForCallNames(callNames []string) signalMatcher {
+	patterns := make([]signalPattern, 0, len(cruxSignalPatterns)+len(defaultCallNames)+len(callNames))
+	for _, pattern := range cruxSignalPatterns {
+		patterns = append(patterns, signalPattern{
+			hint:    signalPatternHint(pattern.String()),
 			pattern: pattern,
 		})
 	}
@@ -31,21 +31,21 @@ func projectNativeStaticSignalMatcherForCallNames(callNames []string) projectNat
 			return
 		}
 		seen[name] = true
-		patterns = append(patterns, projectNativeStaticSignalPattern{
+		patterns = append(patterns, signalPattern{
 			hint:    name,
 			pattern: regexp.MustCompile(`\b` + regexp.QuoteMeta(name) + `\s*\(`),
 		})
 	}
-	for _, name := range projectNativeStaticDefaultCallNames {
+	for _, name := range defaultCallNames {
 		appendName(name)
 	}
 	for _, name := range callNames {
 		appendName(name)
 	}
-	return projectNativeStaticSignalMatcher{patterns: patterns}
+	return signalMatcher{patterns: patterns}
 }
 
-func (m projectNativeStaticSignalMatcher) HasCruxInterest(sample string) bool {
+func (m signalMatcher) HasCruxInterest(sample string) bool {
 	for _, pattern := range m.patterns {
 		if pattern.hint != "" && !strings.Contains(sample, pattern.hint) {
 			continue
@@ -57,11 +57,11 @@ func (m projectNativeStaticSignalMatcher) HasCruxInterest(sample string) bool {
 	return false
 }
 
-func projectNativeStaticSignalPatternHint(pattern string) string {
+func signalPatternHint(pattern string) string {
 	if strings.Contains(pattern, "@crux/") {
 		return "@crux/"
 	}
-	names := append([]string(nil), projectNativeStaticDefaultCallNames...)
+	names := append([]string(nil), defaultCallNames...)
 	names = append(names, "workingState", "evaluation", "suite")
 	sort.Slice(names, func(i, j int) bool { return len(names[i]) > len(names[j]) })
 	for _, name := range names {
@@ -72,24 +72,24 @@ func projectNativeStaticSignalPatternHint(pattern string) string {
 	return ""
 }
 
-func projectNativeStaticClassifyCandidates(
+func classifyCandidates(
 	files []string,
 	callNames []string,
-) []projectNativeStaticCandidateClassification {
-	return projectNativeStaticClassifyCandidatesWithCache(files, callNames, nil)
+) []candidateClassification {
+	return classifyCandidatesWithCache(files, callNames, nil)
 }
 
-func projectNativeStaticClassifyCandidatesWithCache(
+func classifyCandidatesWithCache(
 	files []string,
 	callNames []string,
-	discoveryCache *projectNativeStaticDiscoveryCache,
-) []projectNativeStaticCandidateClassification {
-	classifications := make([]projectNativeStaticCandidateClassification, len(files))
+	discoveryCache *discoveryCache,
+) []candidateClassification {
+	classifications := make([]candidateClassification, len(files))
 	if len(files) == 0 {
 		return classifications
 	}
-	matcher := projectNativeStaticSignalMatcherForCallNames(callNames)
-	callNamesKey := projectNativeStaticDiscoveryCallNamesKey(callNames)
+	matcher := signalMatcherForCallNames(callNames)
+	callNamesKey := discoveryCallNamesKey(callNames)
 	workerCount := runtime.GOMAXPROCS(0)
 	if workerCount < 1 {
 		workerCount = 1
@@ -105,12 +105,12 @@ func projectNativeStaticClassifyCandidatesWithCache(
 			defer wg.Done()
 			for fileIndex := range jobs {
 				file := files[fileIndex]
-				fingerprint, fingerprintOK := projectNativeStaticDiscoveryFingerprint(file)
+				fingerprint, fingerprintOK := discoveryFingerprint(file)
 				if cached, ok := discoveryCache.CachedClassificationWithFingerprint(file, callNamesKey, fingerprint, fingerprintOK); ok {
 					classifications[fileIndex] = cached
 					continue
 				}
-				classification := projectNativeStaticClassifyCandidateWithMatcherAndFingerprint(
+				classification := classifyCandidateWithMatcherAndFingerprint(
 					file,
 					matcher,
 					fingerprint,

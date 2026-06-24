@@ -3,7 +3,7 @@ use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    primitives::runtime_join::routing_runtime_join,
+    primitives::runtime::join::routing_runtime_join,
     protocol::{SourceLocation, SourceSnippet},
 };
 

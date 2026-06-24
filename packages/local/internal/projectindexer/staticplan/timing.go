@@ -3,7 +3,7 @@ package staticplan
 import (
 	"time"
 
-	"github.com/use-crux/crux/packages/local/internal/devtools"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
 const (
@@ -16,15 +16,15 @@ const (
 )
 
 func AppendTiming(
-	timings []devtools.ProjectIndexPhaseTiming,
+	timings []projectindex.ProjectIndexPhaseTiming,
 	name string,
 	started time.Time,
 	count int,
-) []devtools.ProjectIndexPhaseTiming {
+) []projectindex.ProjectIndexPhaseTiming {
 	if name == "" || started.IsZero() {
 		return timings
 	}
-	return append(timings, devtools.ProjectIndexPhaseTiming{
+	return append(timings, projectindex.ProjectIndexPhaseTiming{
 		Name:       name,
 		DurationMs: elapsedMs(started),
 		Count:      count,

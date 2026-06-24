@@ -2,6 +2,7 @@ package devtools
 
 import (
 	"context"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ func BenchmarkReindexProjectIncrementalInlineOverlap(b *testing.B) {
 	}
 	service := NewService(store.NewStore(), nil).WithFactStore(nil).WithProjectIndexer(indexer)
 	defer service.Shutdown()
-	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(incrementalOverlapBenchmarkPreviousIndex(root, changedFile), indexPatchPhaseAST, "ok"))
+	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(incrementalOverlapBenchmarkPreviousIndex(root, changedFile), projectindex.PhaseAST, "ok"))
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -50,26 +51,26 @@ type incrementalOverlapBenchmarkIndexer struct {
 	prefetchCalls atomic.Int64
 }
 
-func (i *incrementalOverlapBenchmarkIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	return IndexPatch{}, nil
+func (i *incrementalOverlapBenchmarkIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{}, nil
 }
 
-func (i *incrementalOverlapBenchmarkIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (ProjectIndexIncrementalResult, error) {
+func (i *incrementalOverlapBenchmarkIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (projectindex.ProjectIndexIncrementalResult, error) {
 	time.Sleep(i.astDelay)
-	return ProjectIndexIncrementalResult{
-		Report: ProjectIndexIncrementalReport{
+	return projectindex.ProjectIndexIncrementalResult{
+		Report: projectindex.ProjectIndexIncrementalReport{
 			PlanKind:        "source-file-reindex",
 			GraphConfidence: "complete-enough-for-source-closure",
 			ChangedFiles:    []string{i.changedFile},
 			AffectedFiles:   []string{i.changedFile},
 		},
-		Patches: []IndexPatch{{
+		Patches: []projectindex.IndexPatch{{
 			SchemaVersion: 1,
-			Phase:         indexPatchPhaseAST,
+			Phase:         projectindex.PhaseAST,
 			Project:       store.ProjectIdentity{Root: i.root, Name: "benchmark", ConfigFile: "crux.config.ts"},
 			Status:        "ok",
-			Invalidates:   &IndexPatchInvalidation{Files: []string{i.changedFile}},
-			Facts: IndexPatchFacts{
+			Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{i.changedFile}},
+			Facts: projectindex.IndexPatchFacts{
 				Definitions: []store.ProjectDefinition{{
 					ID:       "prompt:writer",
 					Kind:     "prompt",
@@ -91,17 +92,17 @@ func (i *incrementalOverlapBenchmarkIndexer) IndexProjectIncremental(context.Con
 	}, nil
 }
 
-func (i *incrementalOverlapBenchmarkIndexer) IndexProjectSemanticPatch(ctx context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error) {
+func (i *incrementalOverlapBenchmarkIndexer) IndexProjectSemanticPatch(ctx context.Context, req projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
 	i.semanticCalls.Add(1)
 	if err := sleepBenchmarkPhase(ctx, i.semanticDelay); err != nil {
-		return IndexPatch{}, err
+		return projectindex.IndexPatch{}, err
 	}
-	return IndexPatch{
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
-		Phase:         indexPatchPhaseSemantic,
+		Phase:         projectindex.PhaseSemantic,
 		Project:       store.ProjectIdentity{Root: req.Root, Name: req.ProjectName, ConfigFile: req.ConfigPath},
 		Status:        "ok",
-		Facts: IndexPatchFacts{
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: []store.ProjectDefinition{{
 				ID:       "prompt:writer",
 				Kind:     "prompt",
@@ -113,16 +114,16 @@ func (i *incrementalOverlapBenchmarkIndexer) IndexProjectSemanticPatch(ctx conte
 	}, nil
 }
 
-func (i *incrementalOverlapBenchmarkIndexer) PrefetchProjectLintFacts(ctx context.Context, _ ProjectLintIndexRequest) (ProjectLintPrefetchResult, error) {
+func (i *incrementalOverlapBenchmarkIndexer) PrefetchProjectLintFacts(ctx context.Context, _ projectindex.ProjectLintIndexRequest) (projectindex.ProjectLintPrefetchResult, error) {
 	i.prefetchCalls.Add(1)
 	if err := sleepBenchmarkPhase(ctx, i.prefetchDelay); err != nil {
-		return ProjectLintPrefetchResult{}, err
+		return projectindex.ProjectLintPrefetchResult{}, err
 	}
-	return ProjectLintPrefetchResult{}, nil
+	return projectindex.ProjectLintPrefetchResult{}, nil
 }
 
-func (i *incrementalOverlapBenchmarkIndexer) IndexProjectLintPatch(context.Context, ProjectLintIndexRequest) (IndexPatch, error) {
-	return IndexPatch{}, nil
+func (i *incrementalOverlapBenchmarkIndexer) IndexProjectLintPatch(context.Context, projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{}, nil
 }
 
 func incrementalOverlapBenchmarkPreviousIndex(root string, changedFile string) store.IndexData {
