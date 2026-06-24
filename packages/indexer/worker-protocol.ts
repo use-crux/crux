@@ -18,6 +18,16 @@ export type {
   ProjectIndexPhaseSummary,
   ProjectIndexPhaseTiming,
   ProjectIndexWorkerEvent,
+} from './indexer/contracts/worker-events/schema'
+export {
+  PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
+  factEnvelopesFromIndexPatch,
+  indexPatchFromWorkerEvents,
+  indexPatchToWorkerEventStream,
+  indexPatchToWorkerEvents,
+  projectIndexArtifactToWorkerEvent,
+} from './indexer/contracts/worker-events/schema'
+export type {
   NativeStaticCompilerMethod,
   NativeStaticCompilerRequest,
   NativeStaticCompilerResponse,
@@ -30,10 +40,9 @@ export type {
   NativeStaticSourceFile,
   NativeStaticTelemetry,
   ParsedNativeStaticCompilerRequest,
-} from './indexer/worker-protocol'
+} from './indexer/contracts/native-static/schema'
 export {
   NATIVE_STATIC_COMPILER_PROTOCOL_VERSION,
-  PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
   NativeStaticAnalyzeRequestSchema,
   NativeStaticAnalyzeResponseSchema,
   NativeStaticCompilerRequestSchema,
@@ -50,10 +59,5 @@ export {
   NativeStaticRunIdentitySchema,
   NativeStaticSourceFileSchema,
   NativeStaticTelemetrySchema,
-  factEnvelopesFromIndexPatch,
-  indexPatchFromWorkerEvents,
-  indexPatchToWorkerEventStream,
-  indexPatchToWorkerEvents,
   parseNativeStaticCompilerRequest,
-  projectIndexArtifactToWorkerEvent,
-} from './indexer/worker-protocol'
+} from './indexer/contracts/native-static/schema'

@@ -24,6 +24,10 @@
       "types": "./extensions.ts",
       "import": "./extensions.ts"
     },
+    "./internal-host": {
+      "types": "./internal-host.ts",
+      "import": "./internal-host.ts"
+    },
     "./testing": {
       "types": "./testing.ts",
       "import": "./testing.ts"

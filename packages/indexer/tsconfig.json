@@ -20,7 +20,10 @@
   "include": [
     "index.ts",
     "extensions.ts",
+    "internal-host.ts",
     "testing.ts",
+    "worker-host.ts",
+    "worker-protocol.ts",
     "indexer/**/*.ts",
     "source-resolver.ts",
     "source-resolver/**/*.ts",

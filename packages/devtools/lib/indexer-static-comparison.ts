@@ -10,18 +10,18 @@
 
 import { readFileSync } from 'node:fs'
 import { relative } from 'node:path'
+import type { IndexerExtension } from '@crux/indexer/extensions'
 import type {
   StaticExtractionInstrumentation,
   StaticFileExtraction,
+  StaticSyntaxFrontendFactory,
   SourceReader,
-} from '@crux/indexer/indexer/static/extraction/engine'
-import type { IndexerExtension } from '@crux/indexer/indexer/extensions'
-import { staticDefinitionFiles } from '@crux/indexer/indexer/files'
-import { createStaticExtraction } from '@crux/indexer/indexer/static/extraction/engine'
+} from '@crux/indexer/internal-host'
 import {
+  createStaticExtraction,
   createTypeScriptStaticSyntaxFrontend,
-  type StaticSyntaxFrontendFactory,
-} from '@crux/indexer/indexer/static/syntax-record'
+  staticDefinitionFiles,
+} from '@crux/indexer/internal-host'
 import { createRustOxcStaticSyntaxFrontend } from '@crux/indexer/testing/rust-oxc-frontend'
 
 export type StaticFrontendName = 'typescript' | 'oxc-rust'

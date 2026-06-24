@@ -6,66 +6,26 @@ import {
   indexPatchToWorkerEvents,
   projectIndexArtifactToWorkerEvent,
 } from '../indexer/worker-protocol'
+import {
+  workerEventFixtureOptions,
+  workerEventFixturePatch,
+} from '../indexer/contracts/worker-events/fixtures'
 
 describe('project index worker protocol', () => {
-  it('streams patch facts in ordered batches and reconstructs the same patch', () => {
-    const patch: IndexPatch = {
-      schemaVersion: 1,
-      phase: 'ast',
-      project: { root: '/repo', name: 'fixture', configFile: 'crux.config.ts' },
-      startedAt: '2026-06-18T10:00:00.000Z',
-      finishedAt: '2026-06-18T10:00:00.001Z',
-      status: 'ok',
-      invalidates: { all: true },
-      facts: {
-        definitions: [
-          {
-            id: 'prompt:writer',
-            kind: 'prompt',
-            name: 'writer',
-            fidelity: 'partial',
-            status: 'active',
-            source: { file: '/repo/src/writer.ts', line: 3 },
-          },
-        ],
-        diagnostics: [
-          {
-            id: 'diagnostic:writer',
-            severity: 'info',
-            code: 'index.writer',
-            message: 'writer indexed',
-            source: { file: '/repo/src/writer.ts', line: 3 },
-          },
-        ],
-        sources: [
-          {
-            file: '/repo/src/writer.ts',
-            status: 'indexed',
-            shardId: '.',
-            definitionIds: ['prompt:writer'],
-            diagnostics: ['diagnostic:writer'],
-          },
-        ],
-        sourceGraph: {
-          schemaVersion: 1,
-          producedBy: '@crux/indexer',
-          capabilities: ['definition-ownership', 'diagnostic-ownership', 'project-shards'],
-          shards: [{ id: '.', root: '/repo', packageFile: '/repo/package.json' }],
-        },
-      },
-    }
+  it('streams contract fixture facts in ordered batches and reconstructs the same patch', () => {
+    const events = indexPatchToWorkerEvents(workerEventFixturePatch, workerEventFixtureOptions)
 
-    const events = indexPatchToWorkerEvents(patch, {
-      transactionId: 'tx-ast',
-      producer: { name: '@crux/indexer', version: 'test' },
-      maxFactsPerBatch: 2,
-    })
-
-    expect(events.map((event) => event.type)).toEqual(['phase:start', 'fact:batch', 'fact:batch', 'phase:done'])
+    expect(events.map((event) => event.type)).toEqual([
+      'phase:start',
+      'fact:batch',
+      'fact:batch',
+      'sourceProfile:batch',
+      'phase:done',
+    ])
     expect(events[1]).toMatchObject({ type: 'fact:batch', sequence: 0 })
     expect(events[2]).toMatchObject({ type: 'fact:batch', sequence: 1 })
 
-    expect(indexPatchFromWorkerEvents(events)).toEqual(patch)
+    expect(indexPatchFromWorkerEvents(events)).toEqual(workerEventFixturePatch)
   })
 
   it('streams semantic source profile rows outside phase metadata', () => {

@@ -13,6 +13,7 @@ describe('public indexer extension surface', () => {
     expect(Object.keys(parsed.exports ?? {}).sort()).toEqual([
       '.',
       './extensions',
+      './internal-host',
       './source-resolver',
       './testing',
       './worker-host',
@@ -35,12 +36,6 @@ describe('public indexer extension surface', () => {
       'inspectProjectNativeStaticConfig',
       'inspectProjectConfig',
       'indexProjectIncremental',
-      'astIndexPatchFromCompilerResult',
-      'compileProjectIndex',
-      'createProjectIndexCompiler',
-      'projectIndexSnapshotFromCompilerResult',
-      'runtimeIndexPatchFromCompilerResult',
-      'createStaticExtraction',
       'builtInRelationPolicies',
       'createRelationPolicyTable',
       'mergeRelationsByIdentity',
@@ -68,21 +63,8 @@ describe('public indexer extension surface', () => {
       'ProjectConfigList',
       'ProjectConfigOrigin',
       'ProjectConfigSetting',
-      'ProjectIndexCompiler',
-      'ProjectIndexCompileMode',
-      'ProjectIndexCompilerInput',
-      'ProjectIndexCompilerResult',
-      'CompilerOwnedProjection',
-      'ProjectIndexCompilerProfile',
-      'SourceReader',
-      'StaticExtractionEngine',
-      'StaticExtractionInstrumentation',
-      'StaticExtractionOptions',
       'StaticExtractionTiming',
       'StaticExtractionTimingName',
-      'StaticFileExtraction',
-      'StaticParseCacheHit',
-      'StaticParseCacheStore',
       'IncrementalExecutionMode',
       'IncrementalExecutionReport',
       'IncrementalIndexExecutionResult',
@@ -94,27 +76,8 @@ describe('public indexer extension surface', () => {
       'IndexPatchFacts',
       'IndexPatchPhase',
       'IndexPatchStatus',
-      'ProvidedStaticSyntaxRecordProvider',
-      'SemanticAnalyzeInput',
-      'SemanticAnalyzeResult',
-      'SemanticBackend',
-      'SemanticBackendCapabilities',
-      'SemanticBackendIdentity',
       'SemanticBackendName',
-      'SemanticBackendOption',
       'SemanticBackendSelection',
-      'SemanticBackendSelectionEnv',
-      'SemanticBackendSession',
-      'SemanticBackendSessionInput',
-      'SemanticCompilerDeclaration',
-      'SemanticCompilerNode',
-      'SemanticCompilerSourceFile',
-      'SemanticCompilerSymbol',
-      'SemanticCompilerType',
-      'SemanticCompilerView',
-      'SemanticEvidenceBatch',
-      'SemanticEvidenceBatchKind',
-      'SemanticEvidenceBatchSource',
       'SemanticSourceProfile',
       'SemanticSourceProfileFile',
       'SemanticSourceProfileHints',
@@ -139,6 +102,103 @@ describe('public indexer extension surface', () => {
     expect(source).not.toContain("from './indexer/static/extraction/match'")
     expect(source).not.toContain("from './indexer/static/extraction/tree-paths'")
     expect(source).not.toContain("from 'typescript'")
+  })
+
+  it('keeps the private host barrel explicit for Crux-owned workers', async () => {
+    const source = await readFile(join(testDir, '..', 'internal-host.ts'), 'utf8')
+
+    expect(namedValueExports(source)).toEqual([
+      'astIndexPatchFromCompilerResult',
+      'compileProjectIndex',
+      'createProjectIndexCompiler',
+      'projectIndexSnapshotFromCompilerResult',
+      'runtimeIndexPatchFromCompilerResult',
+      'createStaticExtraction',
+      'staticDefinitionFiles',
+      'createTypeScriptStaticSyntaxFrontend',
+      'createSemanticIndexService',
+      'createTypeScriptSemanticBackend',
+      'typescriptSemanticBackendCapabilities',
+      'typescriptSemanticBackendIdentity',
+      'createNativeSemanticBackend',
+      'nativeSemanticBackendCapabilities',
+      'nativeSemanticBackendIdentity',
+    ])
+    expect(namedTypeExports(source)).toEqual([
+      'ProjectIndexCompiler',
+      'ProjectIndexCompileMode',
+      'ProjectIndexCompilerInput',
+      'ProjectIndexCompilerResult',
+      'CompilerOwnedProjection',
+      'ProjectIndexCompilerProfile',
+      'SourceReader',
+      'StaticExtractionEngine',
+      'StaticExtractionInstrumentation',
+      'StaticExtractionOptions',
+      'StaticFileExtraction',
+      'StaticParseCacheHit',
+      'StaticParseCacheStore',
+      'ProvidedStaticSyntaxRecordProvider',
+      'StaticSyntaxFrontendFactory',
+      'SemanticAnalyzeInput',
+      'SemanticAnalyzeResult',
+      'SemanticBackend',
+      'SemanticBackendCapabilities',
+      'SemanticBackendIdentity',
+      'SemanticBackendOption',
+      'SemanticBackendSelectionEnv',
+      'SemanticBackendSession',
+      'SemanticBackendSessionInput',
+      'SemanticCompilerDeclaration',
+      'SemanticCompilerNode',
+      'SemanticCompilerSourceFile',
+      'SemanticCompilerSymbol',
+      'SemanticCompilerType',
+      'SemanticCompilerView',
+      'SemanticEvidenceBatch',
+      'SemanticEvidenceBatchKind',
+      'SemanticEvidenceBatchSource',
+      'SemanticIndexService',
+      'SemanticIndexServiceOptions',
+      'SemanticProjectSessionIdentity',
+      'TypeScriptSemanticBackendOptions',
+      'NativeSemanticBackendOptions',
+    ])
+    expect(source).toContain('@module')
+  })
+
+  it('keeps the worker protocol barrel backed by the contract spine', async () => {
+    const source = await readFile(join(testDir, '..', 'worker-protocol.ts'), 'utf8')
+
+    expect(namedValueExports(source)).toEqual([
+      'PROJECT_INDEX_WORKER_PROTOCOL_VERSION',
+      'factEnvelopesFromIndexPatch',
+      'indexPatchFromWorkerEvents',
+      'indexPatchToWorkerEventStream',
+      'indexPatchToWorkerEvents',
+      'projectIndexArtifactToWorkerEvent',
+      'NATIVE_STATIC_COMPILER_PROTOCOL_VERSION',
+      'NativeStaticAnalyzeRequestSchema',
+      'NativeStaticAnalyzeResponseSchema',
+      'NativeStaticCompilerRequestSchema',
+      'NativeStaticCompilerResponseSchema',
+      'NativeStaticFileInputSchema',
+      'NativeStaticFinalizeRequestSchema',
+      'NativeStaticFinalizeResponseSchema',
+      'NativeStaticParserCallInterestSchema',
+      'NativeStaticParserCallbackInterestSchema',
+      'NativeStaticParserConstructorInterestSchema',
+      'NativeStaticPrepareRequestSchema',
+      'NativeStaticPrepareResponseSchema',
+      'NativeStaticPreparedPlanSchema',
+      'NativeStaticRunIdentitySchema',
+      'NativeStaticSourceFileSchema',
+      'NativeStaticTelemetrySchema',
+      'parseNativeStaticCompilerRequest',
+    ])
+    expect(source).toContain('./indexer/contracts/worker-events/schema')
+    expect(source).toContain('./indexer/contracts/native-static/schema')
+    expect(source).not.toContain("from './indexer/worker-protocol'")
   })
 
   it('keeps the experimental authoring barrel intentionally small', async () => {
@@ -225,6 +285,33 @@ describe('public indexer extension surface', () => {
     expect(source).not.toContain('ts.Expression')
     expect(source).not.toContain('StaticFactParser')
     expect(source).not.toContain('internalNative')
+  })
+
+  it('keeps the source resolver barrel focused on source-map lookup', async () => {
+    const source = await readFile(join(testDir, '..', 'source-resolver.ts'), 'utf8')
+
+    expect(namedValueExports(source)).toEqual([
+      'SourceResolver',
+      'errorMessage',
+      'parseSourceResolverWorkerRequest',
+      'serializeSourceResolverWorkerResponse',
+    ])
+    expect(namedTypeExports(source)).toEqual([
+      'ParsedSourceResolverWorkerRequest',
+      'ResolvedFnSource',
+      'ResolvedLocation',
+      'ResolvedSourceFrame',
+      'SourceFrameLine',
+      'SourceFrameLineRole',
+      'SourceFrameOptions',
+      'SourceFrameResolution',
+      'SourceFrameResolverKind',
+      'SourceFrameUnavailable',
+      'SourceFrameUnavailableReason',
+      'SourceLocation',
+      'SourceResolverOptions',
+      'SourceResolverWorkerRequest',
+    ])
   })
 })
 

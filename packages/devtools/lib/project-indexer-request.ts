@@ -2,10 +2,9 @@ import type { ProjectIndexSnapshot } from '@crux/core/project-index'
 import type {
   IncrementalExecutionMode,
   IndexProjectAstFromSyntaxRecordsOptions,
-  ProvidedStaticSyntaxRecordProvider,
-  StaticParseCacheHit,
   SemanticBackendSelection,
 } from '@crux/indexer'
+import type { ProvidedStaticSyntaxRecordProvider, StaticParseCacheHit } from '@crux/indexer/internal-host'
 import type {
   CheckStaticRulesInput,
   ExtractStaticEvidenceBatchInput,

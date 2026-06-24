@@ -34,31 +34,9 @@ export type {
 } from './indexer/project-config-inspect'
 export { inspectProjectConfig } from './indexer/project-config-inspect'
 export { indexProjectIncremental } from './indexer/incremental'
-export {
-  astIndexPatchFromCompilerResult,
-  compileProjectIndex,
-  createProjectIndexCompiler,
-  projectIndexSnapshotFromCompilerResult,
-  runtimeIndexPatchFromCompilerResult,
-} from './indexer/compiler'
 export type {
-  ProjectIndexCompiler,
-  ProjectIndexCompileMode,
-  ProjectIndexCompilerInput,
-  ProjectIndexCompilerResult,
-} from './indexer/compiler'
-export type { CompilerOwnedProjection, ProjectIndexCompilerProfile } from './indexer/compiler/profile'
-export { createStaticExtraction } from './indexer/static/extraction/engine'
-export type {
-  SourceReader,
-  StaticExtractionEngine,
-  StaticExtractionInstrumentation,
-  StaticExtractionOptions,
   StaticExtractionTiming,
   StaticExtractionTimingName,
-  StaticFileExtraction,
-  StaticParseCacheHit,
-  StaticParseCacheStore,
 } from './indexer/static/extraction/engine'
 export type {
   IncrementalExecutionMode,
@@ -75,28 +53,9 @@ export type {
   IndexPatchPhase,
   IndexPatchStatus,
 } from './indexer/patches'
-export type { ProvidedStaticSyntaxRecordProvider } from './indexer/static/syntax-record'
 export type {
-  SemanticAnalyzeInput,
-  SemanticAnalyzeResult,
-  SemanticBackend,
-  SemanticBackendCapabilities,
-  SemanticBackendIdentity,
   SemanticBackendName,
-  SemanticBackendOption,
   SemanticBackendSelection,
-  SemanticBackendSelectionEnv,
-  SemanticBackendSession,
-  SemanticBackendSessionInput,
-  SemanticCompilerDeclaration,
-  SemanticCompilerNode,
-  SemanticCompilerSourceFile,
-  SemanticCompilerSymbol,
-  SemanticCompilerType,
-  SemanticCompilerView,
-  SemanticEvidenceBatch,
-  SemanticEvidenceBatchKind,
-  SemanticEvidenceBatchSource,
   SemanticSourceProfile,
   SemanticSourceProfileFile,
   SemanticSourceProfileHints,
