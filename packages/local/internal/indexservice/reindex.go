@@ -1,4 +1,4 @@
-package devtools
+package indexservice
 
 import (
 	"context"
@@ -19,7 +19,7 @@ func (s *Service) ReindexProjectWithOptions(ctx context.Context, root, configPat
 	}
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultProjectIndexReindexTimeout)
+		ctx, cancel = context.WithTimeout(ctx, DefaultProjectIndexReindexTimeout)
 		defer cancel()
 	}
 	semanticMode := options.semanticMode()
@@ -52,7 +52,7 @@ func (s *Service) ReindexProjectWithOptions(ctx context.Context, root, configPat
 		}
 		failed.Indexing = store.FailedIndexIndexingStatus(time.Since(startedAt), err.Error())
 		s.store.SetIndexData(failed)
-		s.indexEvents.Publish(s.indexReadModel())
+		s.publishIndex(s.indexReadModel())
 		return store.IndexData{}, err
 	}
 	patch := astResult.Patch
@@ -122,7 +122,7 @@ func (s *Service) ReindexProjectIncrementalWithOptions(ctx context.Context, root
 	if s.indexer == nil {
 		return store.IndexData{}, fmt.Errorf("project index indexer is not configured")
 	}
-	indexer, ok := s.indexer.(projectindex.ProjectIncrementalIndexer)
+	indexer, ok := s.indexer.(IncrementalClient)
 	previous := s.store.GetIndex()
 	if options.hasWatchRun() {
 		s.watchStatus.Start(options.Watch, files, deletedFiles)
@@ -141,7 +141,7 @@ func (s *Service) ReindexProjectIncrementalWithOptions(ctx context.Context, root
 	}
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultProjectIndexReindexTimeout)
+		ctx, cancel = context.WithTimeout(ctx, DefaultProjectIndexReindexTimeout)
 		defer cancel()
 	}
 	semanticMode := options.semanticMode()

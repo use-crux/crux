@@ -1,4 +1,4 @@
-package devtools
+package indexservice
 
 import (
 	"context"
@@ -11,7 +11,7 @@ func (s *Service) indexProjectAstPatch(
 	configPath string,
 	projectName string,
 ) (projectindex.ProjectAstIndexResult, error) {
-	if indexer, ok := s.indexer.(projectindex.ProjectAstResultIndexer); ok {
+	if indexer, ok := s.indexer.(ASTResultClient); ok {
 		return indexer.IndexProjectAstPatchWithResult(ctx, root, configPath, projectName)
 	}
 	patch, err := s.indexer.IndexProjectAstPatch(ctx, root, configPath, projectName)

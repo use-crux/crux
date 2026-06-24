@@ -1,4 +1,4 @@
-package devtools
+package indexservice
 
 import (
 	"context"
@@ -16,13 +16,13 @@ type projectLintPrefetchTaskResult struct {
 }
 
 func (s *Service) startProjectLintPrefetch(ctx context.Context, request projectindex.ProjectLintIndexRequest) *projectLintPrefetchTask {
-	indexer, ok := s.indexer.(projectindex.ProjectLintPrefetchIndexer)
+	indexer, ok := s.indexer.(LintPrefetchClient)
 	if !ok {
 		return nil
 	}
-	prefetchCtx, cancel := context.WithTimeout(ctx, projectIndexLintTimeout)
+	prefetchCtx, cancel := context.WithTimeout(ctx, ProjectIndexLintTimeout)
 	if isZeroIndexPatchBudget(request.Budget) {
-		request.Budget = projectIndexLintBudget
+		request.Budget = ProjectIndexLintBudget
 	}
 	done := make(chan projectLintPrefetchTaskResult, 1)
 	go func() {

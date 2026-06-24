@@ -1,4 +1,4 @@
-package devtools
+package indexservice
 
 import (
 	"context"
@@ -11,8 +11,7 @@ import (
 
 func TestPlannedProjectSemanticUsesOuterContextForPlanning(t *testing.T) {
 	indexer := &semanticTaskContextIndexer{}
-	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
-	defer service.Shutdown()
+	service := New(Options{Store: store.NewStore()}).WithProjectIndexer(indexer)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
@@ -24,10 +23,10 @@ func TestPlannedProjectSemanticUsesOuterContextForPlanning(t *testing.T) {
 	if result.err != nil {
 		t.Fatalf("planned semantic task error = %v", result.err)
 	}
-	if indexer.planRemaining <= projectIndexSemanticTimeout {
+	if indexer.planRemaining <= ProjectIndexSemanticTimeout {
 		t.Fatalf("plan context remaining = %s, want outer reindex context instead of semantic timeout", indexer.planRemaining)
 	}
-	if indexer.semanticRemaining <= 0 || indexer.semanticRemaining > projectIndexSemanticTimeout {
+	if indexer.semanticRemaining <= 0 || indexer.semanticRemaining > ProjectIndexSemanticTimeout {
 		t.Fatalf("semantic context remaining = %s, want semantic timeout", indexer.semanticRemaining)
 	}
 }

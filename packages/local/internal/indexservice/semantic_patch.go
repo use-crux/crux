@@ -1,4 +1,4 @@
-package devtools
+package indexservice
 
 import (
 	"context"
@@ -13,7 +13,7 @@ func (s *Service) applyProjectSemanticPatch(
 	request projectindex.ProjectSemanticIndexRequest,
 	lintPrefetch *projectLintPrefetchTask,
 ) (store.IndexData, error) {
-	indexer, ok := s.indexer.(projectindex.ProjectSemanticIndexer)
+	indexer, ok := s.indexer.(SemanticClient)
 	if !ok {
 		index := s.indexReadModel()
 		lintRequest := projectLintIndexRequest(
@@ -29,10 +29,10 @@ func (s *Service) applyProjectSemanticPatch(
 		return s.applyProjectLintPatch(ctx, lintRequest, request.IndexGeneration)
 	}
 	semanticStartedAt := time.Now()
-	semanticCtx, cancel := context.WithTimeout(ctx, projectIndexSemanticTimeout)
+	semanticCtx, cancel := context.WithTimeout(ctx, ProjectIndexSemanticTimeout)
 	defer cancel()
 	if isZeroIndexPatchBudget(request.Budget) {
-		request.Budget = projectIndexSemanticBudget
+		request.Budget = ProjectIndexSemanticBudget
 	}
 	patch, err := indexer.IndexProjectSemanticPatch(semanticCtx, request)
 	return s.applyProjectSemanticPatchResult(ctx, request, semanticStartedAt, patch, err, lintPrefetch)
@@ -50,7 +50,7 @@ func (s *Service) applyProjectSemanticPatchResult(
 		semanticStartedAt = time.Now()
 	}
 	if isZeroIndexPatchBudget(request.Budget) {
-		request.Budget = projectIndexSemanticBudget
+		request.Budget = ProjectIndexSemanticBudget
 	}
 	if semanticErr != nil {
 		index, applied, applyErr := s.applyProjectSemanticDegradedPatch(ctx, request, semanticStartedAt, "index.semantic_degraded", semanticErr.Error())
@@ -110,7 +110,7 @@ func (s *Service) applyProjectSemanticPatchInBackground(request projectindex.Pro
 		if s == nil {
 			return
 		}
-		if _, ok := s.indexer.(projectindex.ProjectSemanticIndexer); !ok {
+		if _, ok := s.indexer.(SemanticClient); !ok {
 			return
 		}
 		_, _ = s.applyProjectSemanticPatch(s.ctx, request, nil)

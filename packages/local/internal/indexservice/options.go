@@ -1,4 +1,4 @@
-package devtools
+package indexservice
 
 // ProjectSemanticExecutionMode controls how a Project Index refresh runs
 // semantic enrichment after the AST/source patch is available.

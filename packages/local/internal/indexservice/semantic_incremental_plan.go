@@ -1,4 +1,4 @@
-package devtools
+package indexservice
 
 import (
 	"context"
@@ -79,7 +79,7 @@ func projectIncrementalSemanticRequestFromPreviousGraph(
 		Root:              root,
 		ConfigPath:        configPath,
 		ProjectName:       projectName,
-		Budget:            projectIndexSemanticBudget,
+		Budget:            ProjectIndexSemanticBudget,
 		Files:             affectedFiles,
 		DependencyClosure: dependencyClosure,
 	}, true

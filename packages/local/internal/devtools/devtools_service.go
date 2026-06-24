@@ -6,11 +6,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/indexread"
+	"github.com/use-crux/crux/packages/local/internal/indexservice"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/quality"
@@ -25,11 +25,7 @@ type Service struct {
 	observability *observability.Service
 	resources     ResourceInspector
 	indexEvents   *IndexEventBus
-	indexer       projectindex.ProjectIndexer
-	indexCache    *projectindex.Cache
-	indexMu       sync.Mutex
-	indexState    *projectindex.State
-	watchStatus   projectIndexWatchStatusStore
+	indexService  *indexservice.Service
 	indexModel    *indexread.Model
 }
 
@@ -44,10 +40,14 @@ func NewService(s *store.Store, qualitySvc *quality.Service) *Service {
 		store:       s,
 		quality:     qualitySvc,
 		indexEvents: NewIndexEventBus(),
-		indexCache:  projectindex.NewCache(projectindex.NewSQLiteIndexFactStore()),
-		indexState:  projectindex.NewState(),
 		indexModel:  indexread.New(s, qualitySvc.Dir()),
 	}
+	service.indexService = indexservice.New(indexservice.Options{
+		Context:   ctx,
+		Store:     s,
+		ReadModel: service.indexReadModel,
+		Publish:   service.indexEvents.Publish,
+	})
 	service.startIndexChangePublisher()
 	return service
 }
@@ -71,21 +71,17 @@ func (s *Service) WithResourceInspection(inspector ResourceInspector) *Service {
 }
 
 func (s *Service) WithProjectIndexer(indexer projectindex.ProjectIndexer) *Service {
-	s.indexer = indexer
+	s.indexService.WithProjectIndexer(indexer)
 	return s
 }
 
 func (s *Service) WithFactStore(facts projectindex.FactStore) *Service {
-	if s.indexCache == nil {
-		s.indexCache = projectindex.NewCache(facts)
-	} else {
-		s.indexCache.SetFactStore(facts)
-	}
+	s.indexService.WithFactStore(facts)
 	return s
 }
 
 func (s *Service) HasProjectIndexer() bool {
-	return s.indexer != nil
+	return s.indexService.HasProjectIndexer()
 }
 
 func (s *Service) startIndexChangePublisher() {
@@ -149,21 +145,11 @@ func (s *Service) ProjectIndex(_ context.Context) (api.IndexData, error) {
 }
 
 func (s *Service) ProjectIndexWatchStatus(_ context.Context) (api.ProjectIndexWatchStatus, error) {
-	return s.watchStatus.Snapshot(), nil
+	return s.indexService.WatchStatus(), nil
 }
 
-func (s *Service) ApplyIndexPatch(_ context.Context, patch projectindex.IndexPatch) store.IndexData {
-	s.indexMu.Lock()
-	defer s.indexMu.Unlock()
-	return s.applyIndexPatchLocked(patch)
-}
-
-func (s *Service) applyIndexPatchLocked(patch projectindex.IndexPatch) store.IndexData {
-	applied := s.indexState.Apply(patch)
-	s.store.SetIndexData(applied)
-	index := s.indexReadModel()
-	s.indexEvents.Publish(index)
-	return index
+func (s *Service) ApplyIndexPatch(ctx context.Context, patch projectindex.IndexPatch) store.IndexData {
+	return s.indexService.ApplyIndexPatch(ctx, patch)
 }
 
 func (s *Service) indexReadModel() store.IndexData {

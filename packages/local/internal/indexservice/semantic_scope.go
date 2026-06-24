@@ -1,4 +1,4 @@
-package devtools
+package indexservice
 
 import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
@@ -17,7 +17,7 @@ func projectSemanticIndexRequest(root, configPath, projectName string, index sto
 		Root:              root,
 		ConfigPath:        configPath,
 		ProjectName:       projectName,
-		Budget:            projectIndexSemanticBudget,
+		Budget:            ProjectIndexSemanticBudget,
 		PreviousIndex:     &previous,
 		Files:             selectedFiles,
 		DependencyClosure: dependencyClosure,

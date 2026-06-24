@@ -1,4 +1,4 @@
-package devtools
+package indexservice
 
 import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"

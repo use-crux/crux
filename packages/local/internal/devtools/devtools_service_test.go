@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/use-crux/crux/packages/local/internal/indexservice"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"os"
 	"path/filepath"
@@ -251,8 +252,8 @@ func TestServiceReindexProjectDefaultDeadlineAllowsAstDiscovery(t *testing.T) {
 		t.Fatal("IndexProjectAstPatch context had no deadline")
 	}
 	remaining := time.Until(indexer.deadline)
-	if remaining < 55*time.Second || remaining > defaultProjectIndexReindexTimeout {
-		t.Fatalf("IndexProject deadline remaining = %s, want about %s", remaining, defaultProjectIndexReindexTimeout)
+	if remaining < 55*time.Second || remaining > indexservice.DefaultProjectIndexReindexTimeout {
+		t.Fatalf("IndexProject deadline remaining = %s, want about %s", remaining, indexservice.DefaultProjectIndexReindexTimeout)
 	}
 	if indexer.deadline.Before(start.Add(55 * time.Second)) {
 		t.Fatalf("IndexProject deadline = %s, want at least 55s from start", indexer.deadline)
@@ -1041,10 +1042,10 @@ func TestReindexProjectSemanticFailureDegradesSemanticOnly(t *testing.T) {
 }
 
 func TestReindexProjectSemanticTimeoutDegradesSemanticOnly(t *testing.T) {
-	oldTimeout := projectIndexSemanticTimeout
-	projectIndexSemanticTimeout = 10 * time.Millisecond
+	oldTimeout := indexservice.ProjectIndexSemanticTimeout
+	indexservice.ProjectIndexSemanticTimeout = 10 * time.Millisecond
 	t.Cleanup(func() {
-		projectIndexSemanticTimeout = oldTimeout
+		indexservice.ProjectIndexSemanticTimeout = oldTimeout
 	})
 
 	root := t.TempDir()
@@ -1080,10 +1081,10 @@ func TestReindexProjectSemanticTimeoutDegradesSemanticOnly(t *testing.T) {
 }
 
 func TestReindexProjectSemanticBudgetOverrunDegradesSemanticOnly(t *testing.T) {
-	oldBudget := projectIndexSemanticBudget
-	projectIndexSemanticBudget = projectindex.IndexPatchBudget{MaxDefinitions: 1}
+	oldBudget := indexservice.ProjectIndexSemanticBudget
+	indexservice.ProjectIndexSemanticBudget = projectindex.IndexPatchBudget{MaxDefinitions: 1}
 	t.Cleanup(func() {
-		projectIndexSemanticBudget = oldBudget
+		indexservice.ProjectIndexSemanticBudget = oldBudget
 	})
 
 	root := t.TempDir()

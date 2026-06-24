@@ -1,4 +1,4 @@
-package devtools
+package indexservice
 
 import (
 	"context"
@@ -19,21 +19,21 @@ func (s *Service) ReindexProjectRuntimeRich(ctx context.Context, root, configPat
 		Root:          root,
 		ConfigPath:    configPath,
 		ProjectName:   projectName,
-		Budget:        projectIndexRuntimeBudget,
+		Budget:        ProjectIndexRuntimeBudget,
 		PreviousIndex: index,
 	})
 }
 
 func (s *Service) applyProjectRuntimePatch(ctx context.Context, request projectindex.ProjectRuntimeIndexRequest) (store.IndexData, error) {
-	indexer, ok := s.indexer.(projectindex.ProjectRuntimeIndexer)
+	indexer, ok := s.indexer.(RuntimeClient)
 	runtimeStartedAt := time.Now()
 	if !ok {
 		return s.applyProjectRuntimeDegradedPatch(ctx, request, runtimeStartedAt, "index.runtime_unavailable", "runtime-rich Project Index worker is not configured")
 	}
-	runtimeCtx, cancel := context.WithTimeout(ctx, projectIndexRuntimeTimeout)
+	runtimeCtx, cancel := context.WithTimeout(ctx, ProjectIndexRuntimeTimeout)
 	defer cancel()
 	if isZeroIndexPatchBudget(request.Budget) {
-		request.Budget = projectIndexRuntimeBudget
+		request.Budget = ProjectIndexRuntimeBudget
 	}
 	patch, err := indexer.IndexProjectRuntimePatch(runtimeCtx, request)
 	if err != nil {

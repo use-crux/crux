@@ -1,4 +1,4 @@
-package devtools
+package indexservice
 
 import (
 	"context"
@@ -31,8 +31,8 @@ func (s *Service) startPlannedProjectSemanticPatch(
 	if mode == ProjectSemanticDisabled {
 		return nil
 	}
-	planner, hasPlanner := s.indexer.(projectindex.ProjectSemanticPlanner)
-	_, hasIndexer := s.indexer.(projectindex.ProjectSemanticIndexer)
+	planner, hasPlanner := s.indexer.(SemanticPlanner)
+	_, hasIndexer := s.indexer.(SemanticClient)
 	if !hasPlanner || !hasIndexer {
 		return nil
 	}
@@ -57,7 +57,7 @@ func (s *Service) startProjectSemanticPatchTask(
 	if mode == ProjectSemanticDisabled {
 		return nil
 	}
-	if _, ok := s.indexer.(projectindex.ProjectSemanticIndexer); !ok {
+	if _, ok := s.indexer.(SemanticClient); !ok {
 		return nil
 	}
 	taskCtx, cancel := context.WithCancel(ctx)
@@ -73,15 +73,15 @@ func (s *Service) indexProjectSemanticPatchTask(
 	request projectindex.ProjectSemanticIndexRequest,
 	done chan<- projectSemanticPatchTaskResult,
 ) {
-	indexer, ok := s.indexer.(projectindex.ProjectSemanticIndexer)
+	indexer, ok := s.indexer.(SemanticClient)
 	if !ok {
 		done <- projectSemanticPatchTaskResult{stage: "missing-indexer", request: request}
 		return
 	}
 	if isZeroIndexPatchBudget(request.Budget) {
-		request.Budget = projectIndexSemanticBudget
+		request.Budget = ProjectIndexSemanticBudget
 	}
-	semanticCtx, semanticCancel := context.WithTimeout(ctx, projectIndexSemanticTimeout)
+	semanticCtx, semanticCancel := context.WithTimeout(ctx, ProjectIndexSemanticTimeout)
 	defer semanticCancel()
 	startedAt := time.Now()
 	patch, err := indexer.IndexProjectSemanticPatch(semanticCtx, request)

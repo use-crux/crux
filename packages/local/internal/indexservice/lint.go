@@ -1,4 +1,4 @@
-package devtools
+package indexservice
 
 import (
 	"context"
@@ -9,14 +9,14 @@ import (
 )
 
 func (s *Service) applyProjectLintPatch(ctx context.Context, request projectindex.ProjectLintIndexRequest, generation uint64) (store.IndexData, error) {
-	indexer, ok := s.indexer.(projectindex.ProjectLintIndexer)
+	indexer, ok := s.indexer.(LintClient)
 	if !ok {
 		return s.indexReadModel(), nil
 	}
-	lintCtx, cancel := context.WithTimeout(ctx, projectIndexLintTimeout)
+	lintCtx, cancel := context.WithTimeout(ctx, ProjectIndexLintTimeout)
 	defer cancel()
 	if isZeroIndexPatchBudget(request.Budget) {
-		request.Budget = projectIndexLintBudget
+		request.Budget = ProjectIndexLintBudget
 	}
 	patch, err := indexer.IndexProjectLintPatch(lintCtx, request)
 	if err != nil {
