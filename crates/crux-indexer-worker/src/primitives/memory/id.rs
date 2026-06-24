@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use crate::{
+    native_static::primitives::context::PrimitiveContext,
     primitives::record_values::{property_value, resolve_static_value},
-    primitives::routing::model::RoutingContext,
     protocol::{LiteralValue, StaticSyntaxValue},
 };
 
@@ -14,7 +14,7 @@ pub(crate) struct MemoryIdInfo {
 }
 
 pub(crate) fn authored_memory_id(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     config: &StaticSyntaxValue,
 ) -> MemoryIdInfo {
     let Some(expression) = property_value(config, "id") else {

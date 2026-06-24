@@ -1,17 +1,17 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::definition::{NativeDefinitionInput, native_static_definition},
     primitives::memory::id::authored_memory_id,
     primitives::memory::store::{authored_store, authored_store_name, store_definition, store_id},
     primitives::record_values::{direct_string_property, property_value},
-    primitives::routing::model::{CallParts, RoutingContext},
     primitives::routing::output::extracted_facts,
     primitives::schema::syntax_value_to_json_schema,
 };
 
 pub(crate) fn blackboard_facts(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
 ) -> Option<Value> {
     if parts.callee_name != "blackboard" || parts.callee_direct == Some(false) {

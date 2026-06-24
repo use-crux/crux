@@ -1,3 +1,9 @@
+//! Shared context for first-party native static primitive projection.
+//!
+//! Syntax parsing produces source evidence only. Native static projection uses
+//! this context to resolve local and imported static values while building
+//! compiler-owned primitive facts.
+
 use std::collections::{HashMap, HashSet};
 
 use crate::{
@@ -15,7 +21,7 @@ pub(crate) use crate::primitives::routing::source_refs::{
     source_ref_for_callback_property, source_ref_for_property, source_ref_for_static_property,
 };
 
-pub(crate) struct RoutingContext<'a> {
+pub(crate) struct PrimitiveContext<'a> {
     pub file: &'a str,
     pub initializers: HashMap<&'a str, &'a StaticInitializerRecord>,
     imports: &'a [StaticImportRecord],
@@ -51,7 +57,7 @@ enum ResolveOutcome<'a> {
     NeedsImportedRecord,
 }
 
-impl<'a> RoutingContext<'a> {
+impl<'a> PrimitiveContext<'a> {
     pub fn new(
         file: &'a str,
         imports: &'a [StaticImportRecord],

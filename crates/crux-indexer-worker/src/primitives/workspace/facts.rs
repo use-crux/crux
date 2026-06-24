@@ -1,17 +1,17 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::definition::{NativeDefinitionInput, native_static_definition, safe_id},
     primitives::record_values::{
         direct_string_property, has_property, object_array_value, object_map_identifier_entries,
         object_value, property_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext},
     primitives::routing::output::extracted_facts,
 };
 
 pub(crate) fn workspace_facts(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
 ) -> Option<Value> {
     if parts.callee_name != "workspace" {
@@ -95,7 +95,7 @@ pub(crate) fn workspace_facts(
 
 fn workspace_mounts(
     config: &crate::protocol::StaticSyntaxValue,
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
 ) -> Vec<Value> {
     object_array_value(property_value(config, "mounts"), &context.initializers)
         .into_iter()

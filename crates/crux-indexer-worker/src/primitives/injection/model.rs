@@ -1,8 +1,8 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::PrimitiveContext,
     primitives::record_values::{property_value, resolve_static_value},
-    primitives::routing::model::RoutingContext,
     protocol::StaticSyntaxValue,
 };
 
@@ -16,7 +16,7 @@ pub(crate) struct UseEntry {
 }
 
 pub(crate) fn use_entries_for_property(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     object: &StaticSyntaxValue,
     property: &str,
 ) -> Vec<UseEntry> {
@@ -61,7 +61,7 @@ pub(crate) fn relation_refs_for_injection_use(
 }
 
 fn use_entries_from_value(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     value: &StaticSyntaxValue,
     inherited: InheritedUse,
 ) -> Vec<UseEntry> {
@@ -125,7 +125,7 @@ fn use_entries_from_value(
     }
 }
 
-fn match_use_entries(context: &RoutingContext<'_>, value: &StaticSyntaxValue) -> Vec<UseEntry> {
+fn match_use_entries(context: &PrimitiveContext<'_>, value: &StaticSyntaxValue) -> Vec<UseEntry> {
     let mut entries = Vec::new();
     if let Some(cases) = property_value(value, "cases") {
         if let StaticSyntaxValue::Object { properties, .. } =

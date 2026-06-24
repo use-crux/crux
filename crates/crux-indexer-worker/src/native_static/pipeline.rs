@@ -14,6 +14,7 @@ use crate::protocol::native_static::{
     NativeStaticFinalizeResponse, NativeStaticMethod, NativeStaticPlan, NativeStaticPrepareRequest,
     NativeStaticPrepareResponse,
 };
+use crate::static_compiler::analysis::run::NativeStaticAnalysisFacts;
 use crate::static_compiler::analysis::run::analyze_native_static_facts;
 use crate::static_compiler::core::evidence::extension_evidence_jobs;
 use crate::static_compiler::finalizer::events::{
@@ -26,7 +27,7 @@ use crate::static_compiler::relation::model::relation_policy_table_from_value_wi
 /// Native static analyze output before JSON-lines streaming.
 pub(crate) struct NativeStaticAnalyzeOutput {
     pub(crate) extension_evidence_jobs: Vec<Value>,
-    pub(crate) facts: Vec<Value>,
+    pub(crate) fact_groups: NativeStaticAnalysisFacts,
     pub(crate) response: NativeStaticAnalyzeResponse,
 }
 
@@ -87,7 +88,7 @@ pub(crate) fn analyze(request: &NativeStaticAnalyzeRequest) -> NativeStaticAnaly
 
     NativeStaticAnalyzeOutput {
         extension_evidence_jobs,
-        facts,
+        fact_groups: facts,
         response: NativeStaticAnalyzeResponse {
             protocol_version: NATIVE_STATIC_PROTOCOL_VERSION,
             method: NativeStaticMethod::Analyze,
@@ -194,7 +195,7 @@ pub(crate) fn compile(request: NativeStaticCompileRequest) -> NativeStaticFinali
         extension_evidence_interests: None,
     };
     let mut native_facts = request.native_facts;
-    native_facts.extend(analyze(&analyze_request).facts);
+    native_facts.extend(analyze(&analyze_request).fact_groups.into_wire_values());
 
     let finalize_request = NativeStaticFinalizeRequest {
         protocol_version: request.protocol_version,

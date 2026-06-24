@@ -30,7 +30,7 @@ pub(crate) fn write_analyze_stream<W: Write>(
         )?;
     }
 
-    for fact in output.facts {
+    for fact in output.fact_groups.into_wire_values() {
         write_json_line(
             stdout,
             &json!({

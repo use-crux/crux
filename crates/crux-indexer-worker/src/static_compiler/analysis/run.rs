@@ -4,18 +4,50 @@ use rayon::prelude::*;
 use serde_json::{Map, Value};
 
 use crate::{
-    primitives::facts::project_native_facts_with_records,
+    native_static::primitives::projection::project_native_facts_with_records,
     protocol::StaticSyntaxFileRecord,
     protocol::native_static::NativeStaticAnalyzeRequest,
     static_compiler::analysis::parse::{
         ParsedAnalyzeFile, parsed_analyze_file, primary_analyze_files,
     },
+    static_compiler::core::facts::NativeStaticIndexPatchFacts,
     static_compiler::core::scoped_definitions::{ScopedDefinition, scoped_definitions_by_variable},
     static_compiler::source::groups::grouped_source_facts,
     static_compiler::source::tree_paths::grouped_tree_path_definition_facts,
 };
 
-pub(crate) fn analyze_native_static_facts(request: &NativeStaticAnalyzeRequest) -> Vec<Value> {
+/// Typed fact groups emitted by native static analysis before wire serialization.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct NativeStaticAnalysisFacts {
+    groups: Vec<NativeStaticIndexPatchFacts>,
+}
+
+impl NativeStaticAnalysisFacts {
+    pub(crate) fn new(groups: Vec<NativeStaticIndexPatchFacts>) -> Self {
+        Self { groups }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &NativeStaticIndexPatchFacts> {
+        self.groups.iter()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+
+    pub(crate) fn into_wire_values(self) -> Vec<Value> {
+        self.groups
+            .into_iter()
+            .filter_map(|group| serde_json::to_value(group).ok())
+            .collect()
+    }
+}
+
+pub(crate) fn analyze_native_static_facts(
+    request: &NativeStaticAnalyzeRequest,
+) -> NativeStaticAnalysisFacts {
     let parsed_files = request
         .files
         .par_iter()
@@ -40,14 +72,15 @@ pub(crate) fn analyze_native_static_facts(request: &NativeStaticAnalyzeRequest) 
     analyzed
         .into_iter()
         .flat_map(|(_, groups)| groups)
-        .collect()
+        .collect::<Vec<_>>()
+        .into()
 }
 
 fn analyze_parsed_file(
     request: &NativeStaticAnalyzeRequest,
     parsed: &ParsedAnalyzeFile,
     records_by_file: &HashMap<String, StaticSyntaxFileRecord>,
-) -> Vec<Value> {
+) -> Vec<NativeStaticIndexPatchFacts> {
     let native_facts = project_native_facts_with_records(
         &parsed.record.file,
         &parsed.source_text,
@@ -82,7 +115,9 @@ fn analyze_parsed_file(
         &parsed.record,
         &native_facts,
         records_by_file,
-    ) {
+    )
+    .and_then(group_from_value)
+    {
         groups.push(tree_paths);
     }
     if let Some(source_group) = grouped_source_facts(
@@ -96,20 +131,25 @@ fn analyze_parsed_file(
             .filter_map(|import| import.resolved_file.clone())
             .collect(),
         !groups.is_empty(),
-    ) {
+    )
+    .and_then(group_from_value)
+    {
         groups.push(source_group);
     }
     groups
 }
 
-fn primary_definition_id(grouped: &Value) -> Option<String> {
+impl From<Vec<NativeStaticIndexPatchFacts>> for NativeStaticAnalysisFacts {
+    fn from(groups: Vec<NativeStaticIndexPatchFacts>) -> Self {
+        Self::new(groups)
+    }
+}
+
+fn primary_definition_id(grouped: &NativeStaticIndexPatchFacts) -> Option<String> {
     grouped
-        .get("definitions")
-        .and_then(Value::as_array)
-        .and_then(|definitions| definitions.first())
-        .and_then(|definition| definition.get("id"))
-        .and_then(Value::as_str)
-        .map(str::to_string)
+        .definitions
+        .first()
+        .map(|definition| definition.id.clone())
 }
 
 fn grouped_finalize_facts_from_extracted(
@@ -117,7 +157,7 @@ fn grouped_finalize_facts_from_extracted(
     root: &str,
     project_name: Option<&str>,
     scoped_definitions: &HashMap<String, ScopedDefinition>,
-) -> Option<Value> {
+) -> Option<NativeStaticIndexPatchFacts> {
     let definition_entries = extracted
         .get("definitions")
         .and_then(Value::as_array)
@@ -159,7 +199,11 @@ fn grouped_finalize_facts_from_extracted(
     insert_array(&mut grouped, "relationRefs", relation_refs);
     insert_array(&mut grouped, "sourceRefs", source_refs);
     insert_array(&mut grouped, "diagnostics", diagnostics);
-    Some(Value::Object(grouped))
+    group_from_value(Value::Object(grouped))
+}
+
+fn group_from_value(value: Value) -> Option<NativeStaticIndexPatchFacts> {
+    serde_json::from_value::<NativeStaticIndexPatchFacts>(value).ok()
 }
 
 struct OwnerDefinition {

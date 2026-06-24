@@ -1,6 +1,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::definition::{
         NativeDefinitionInput, native_static_definition, safe_id, source_ref_with_metadata,
     },
@@ -8,7 +9,6 @@ use crate::{
         direct_identifier, direct_string_property, has_property, object_map_identifier_entries,
         property_value, resolve_static_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext},
     primitives::routing::output::extracted_facts,
     primitives::source_refs::{helper_refs_for_property, property_source_ref},
     protocol::StaticSyntaxValue,
@@ -17,7 +17,7 @@ use crate::{
 const CONVEX_CALLBACK_PROPERTIES: [&str; 3] = ["usageHandler", "contextHandler", "prepare"];
 
 pub(crate) fn convex_agent_facts(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
 ) -> Option<Value> {
     if !is_convex_agent_match(parts) {
@@ -102,7 +102,7 @@ fn is_convex_agent_match(parts: &CallParts<'_>) -> bool {
 }
 
 fn prompt_ref_from_resolve_call(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     object: &StaticSyntaxValue,
 ) -> Option<String> {
     let value = property_value(object, "languageModel")?;
@@ -118,7 +118,7 @@ fn prompt_ref_from_resolve_call(
 }
 
 fn convex_agent_source_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     object: &StaticSyntaxValue,
 ) -> Option<Vec<Value>> {
@@ -163,7 +163,7 @@ fn convex_agent_source_refs(
 }
 
 fn tool_map_contributor_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     object: &StaticSyntaxValue,
 ) -> Option<Vec<Value>> {

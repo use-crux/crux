@@ -7,8 +7,8 @@ pub(crate) mod convex;
 pub(crate) mod zod;
 
 use crate::{
+    native_static::primitives::context::PrimitiveContext,
     primitives::record_values::property_value,
-    primitives::routing::model::RoutingContext,
     primitives::schema::common::{child_values, contains_root_namespace},
     primitives::schema::convex::convex_value_to_json_schema,
     primitives::schema::zod::zod_value_to_json_schema,
@@ -23,7 +23,7 @@ pub(crate) struct SchemaProjection {
 
 /// Projects a config property into JSON Schema and matching schema source refs.
 pub(crate) fn schema_property(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     object: &StaticSyntaxValue,
     property: &str,
@@ -62,14 +62,14 @@ pub(crate) fn schema_property(
 /// Projects a syntax-record value into JSON Schema when it matches a supported schema DSL.
 pub(crate) fn syntax_value_to_json_schema(
     value: Option<&StaticSyntaxValue>,
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
 ) -> Option<Value> {
     zod_value_to_json_schema(value, context, &mut HashSet::new())
         .or_else(|| convex_value_to_json_schema(value, context, &mut HashSet::new()))
 }
 
 fn nested_schema_source_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     property: &str,
     root: &StaticSyntaxValue,
@@ -82,7 +82,7 @@ fn nested_schema_source_refs(
 }
 
 fn visit_nested_schema_value(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     property: &str,
     value: &StaticSyntaxValue,

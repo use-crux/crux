@@ -1,6 +1,7 @@
 use serde_json::{Value, json};
 
 use crate::{
+    native_static::primitives::context::PrimitiveContext,
     primitives::composition::output::{CompositionChild, composition_child_relation_refs},
     primitives::composition::values::{identifier_array, pipeline_stage_target},
     primitives::definition::safe_id,
@@ -8,12 +9,11 @@ use crate::{
         direct_string_property, object_array_value, object_map_identifier_entries, property_value,
         reference_property,
     },
-    primitives::routing::model::RoutingContext,
     protocol::StaticSyntaxValue,
 };
 
 pub(crate) fn composition_references(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     call_name: &str,
     config: &StaticSyntaxValue,
     composition_id: &str,
@@ -34,7 +34,7 @@ pub(crate) fn composition_references(
 }
 
 fn composition_agent_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     call_name: &str,
     config: &StaticSyntaxValue,
 ) -> Vec<String> {
@@ -55,7 +55,7 @@ fn composition_agent_refs(
 }
 
 fn structural_relation_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     call_name: &str,
     config: &StaticSyntaxValue,
     composition_id: &str,
@@ -68,7 +68,7 @@ fn structural_relation_refs(
 }
 
 fn consensus_relation_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     config: &StaticSyntaxValue,
     composition_id: &str,
 ) -> Vec<Value> {
@@ -91,7 +91,7 @@ fn consensus_relation_refs(
 }
 
 fn swarm_relation_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     config: &StaticSyntaxValue,
     composition_id: &str,
 ) -> Vec<Value> {

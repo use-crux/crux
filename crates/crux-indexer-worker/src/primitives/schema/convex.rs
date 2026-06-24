@@ -3,15 +3,15 @@ use std::collections::HashSet;
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::PrimitiveContext,
     primitives::record_values::resolve_static_value,
-    primitives::routing::model::RoutingContext,
     primitives::schema::common::{is_root_namespace, literal_json, object_schema},
     protocol::{LiteralValue, StaticSyntaxValue},
 };
 
 pub(crate) fn convex_value_to_json_schema(
     value: Option<&StaticSyntaxValue>,
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     seen: &mut HashSet<String>,
 ) -> Option<Value> {
     if let Some(StaticSyntaxValue::Identifier { name }) = value {
@@ -56,7 +56,7 @@ pub(crate) fn convex_value_to_json_schema(
 
 fn convex_object_schema(
     value: &StaticSyntaxValue,
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     seen: &mut HashSet<String>,
 ) -> Value {
     let StaticSyntaxValue::Object { properties, .. } = value else {
@@ -107,7 +107,7 @@ fn literal_schema(value: &StaticSyntaxValue) -> Option<Value> {
 
 fn union_schema(
     args: &[StaticSyntaxValue],
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     seen: &mut HashSet<String>,
 ) -> Option<Value> {
     let variants = args

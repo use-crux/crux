@@ -1,8 +1,8 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::PrimitiveContext,
     primitives::data::access::{DataAccessRef, primitive_data_intelligence},
-    primitives::routing::model::RoutingContext,
     primitives::source_refs::helper_refs_for_property,
     protocol::StaticSyntaxValue,
 };
@@ -24,14 +24,14 @@ pub(crate) fn callback_role(property: &str) -> &'static str {
 }
 
 pub(crate) fn agent_callback_source_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     object: &StaticSyntaxValue,
 ) -> Option<Vec<Value>> {
     let mut source_refs = Vec::new();
     for property in AGENT_CALLBACK_PROPERTIES {
         if let Some(ref_value) =
-            crate::primitives::routing::model::source_ref_for_callback_property(
+            crate::native_static::primitives::context::source_ref_for_callback_property(
                 context,
                 definition_id,
                 object,

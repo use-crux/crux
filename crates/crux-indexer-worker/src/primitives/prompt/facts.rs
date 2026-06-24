@@ -1,6 +1,9 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{
+        CallParts, PrimitiveContext, source_ref_for_callback_property,
+    },
     primitives::data::access::{
         data_access_refs_for_properties, data_access_relation_refs, primitive_data_intelligence,
     },
@@ -11,7 +14,6 @@ use crate::{
     },
     primitives::injection::tools::{identifier_refs_for_property, tool_contributions_for_property},
     primitives::record_values::{direct_string_property, has_property},
-    primitives::routing::model::{CallParts, RoutingContext, source_ref_for_callback_property},
     primitives::routing::output::extracted_facts,
     primitives::schema::schema_property,
     primitives::source_refs::{
@@ -21,7 +23,7 @@ use crate::{
 
 const CALLBACK_PROPERTIES: [&str; 3] = ["prompt", "system", "tools"];
 
-pub(crate) fn prompt_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+pub(crate) fn prompt_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     if parts.callee_name != "prompt" {
         return None;
     }
@@ -119,7 +121,7 @@ pub(crate) fn prompt_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) 
 }
 
 fn prompt_callback_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     id: &str,
     config: &crate::protocol::StaticSyntaxValue,
 ) -> Option<Vec<Value>> {
@@ -136,7 +138,7 @@ fn prompt_callback_refs(
 }
 
 fn system_source_ref(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     id: &str,
     config: &crate::protocol::StaticSyntaxValue,
 ) -> Option<Option<Value>> {

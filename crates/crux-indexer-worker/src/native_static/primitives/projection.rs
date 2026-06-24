@@ -1,9 +1,16 @@
+//! First-party native static primitive projection.
+//!
+//! The syntax frontend produces backend-neutral evidence. This module owns the
+//! explicit step that turns matched calls and initializers into Crux primitive
+//! fact projections for native static compilation.
+
 use std::collections::HashMap;
 
 use rayon::prelude::*;
 use serde_json::Value;
 
 use crate::{
+    native_static::primitives::context::{self, CallParts, PrimitiveContext},
     primitives::agent::facts::agent_facts,
     primitives::blackboard::facts::blackboard_facts,
     primitives::composition::facts::composition_facts,
@@ -16,7 +23,6 @@ use crate::{
     primitives::rag::facts::rag_facts,
     primitives::registry::facts::{registry_facts, registry_skill_facts},
     primitives::routing::facts::project_routing_native_fact,
-    primitives::routing::model::{CallParts, RoutingContext},
     primitives::safety::facts::safety_facts,
     primitives::scorer::facts::scorer_facts,
     primitives::tool::facts::project_tool_native_fact,
@@ -27,7 +33,7 @@ use crate::{
     },
 };
 
-type FirstPartyProjector = fn(&RoutingContext<'_>, &CallParts<'_>) -> Option<Value>;
+type FirstPartyProjector = fn(&PrimitiveContext<'_>, &CallParts<'_>) -> Option<Value>;
 
 const FIRST_PARTY_PROJECTORS: [(&str, FirstPartyProjector); 13] = [
     ("context", context_facts),
@@ -68,6 +74,7 @@ pub(crate) fn project_native_facts(
     )
 }
 
+/// Project first-party facts with optional records for selected dependency files.
 pub(crate) fn project_native_facts_with_records(
     file: &str,
     source_text: &str,
@@ -146,8 +153,8 @@ fn workspace_native_fact(
     source_match: &StaticSourceMatch,
     records_by_file: Option<&HashMap<String, StaticSyntaxFileRecord>>,
 ) -> Option<StaticNativeFactProjection> {
-    let parts = crate::primitives::routing::model::call_parts(source_match)?;
-    let context = crate::primitives::routing::model::RoutingContext::new_with_records(
+    let parts = context::call_parts(source_match)?;
+    let context = PrimitiveContext::new_with_records(
         file,
         imports,
         local_initializers,
@@ -183,8 +190,8 @@ fn eval_native_fact(
     source_match: &StaticSourceMatch,
     records_by_file: Option<&HashMap<String, StaticSyntaxFileRecord>>,
 ) -> Option<StaticNativeFactProjection> {
-    let parts = crate::primitives::routing::model::call_parts(source_match)?;
-    let context = crate::primitives::routing::model::RoutingContext::new_with_records(
+    let parts = context::call_parts(source_match)?;
+    let context = PrimitiveContext::new_with_records(
         file,
         imports,
         local_initializers,
@@ -237,11 +244,11 @@ fn first_party_native_fact(
     project: FirstPartyProjector,
     records_by_file: Option<&HashMap<String, StaticSyntaxFileRecord>>,
 ) -> Option<StaticNativeFactProjection> {
-    let parts = crate::primitives::routing::model::call_parts(source_match)?;
+    let parts = context::call_parts(source_match)?;
     if should_skip_legacy_native_fact_packet(extractor, &parts, records_by_file) {
         return None;
     }
-    let context = crate::primitives::routing::model::RoutingContext::new_with_records(
+    let context = PrimitiveContext::new_with_records(
         file,
         imports,
         local_initializers,

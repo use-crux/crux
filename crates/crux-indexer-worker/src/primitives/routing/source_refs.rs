@@ -3,12 +3,12 @@
 use serde_json::Value;
 
 use crate::{
-    primitives::definition::source_ref, primitives::record_values::property_value,
-    primitives::routing::model::RoutingContext, protocol::StaticSyntaxValue,
+    native_static::primitives::context::PrimitiveContext, primitives::definition::source_ref,
+    primitives::record_values::property_value, protocol::StaticSyntaxValue,
 };
 
 pub(crate) fn source_ref_for_property(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     object: &StaticSyntaxValue,
     property: &str,
@@ -17,7 +17,7 @@ pub(crate) fn source_ref_for_property(
 }
 
 pub(crate) fn source_ref_for_callback_property(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     object: &StaticSyntaxValue,
     property: &str,
@@ -27,7 +27,7 @@ pub(crate) fn source_ref_for_callback_property(
 }
 
 pub(crate) fn source_ref_for_static_property(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     object: &StaticSyntaxValue,
     property: &str,
@@ -37,7 +37,7 @@ pub(crate) fn source_ref_for_static_property(
 }
 
 fn source_ref_for_resolved_property(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     object: &StaticSyntaxValue,
     property: &str,

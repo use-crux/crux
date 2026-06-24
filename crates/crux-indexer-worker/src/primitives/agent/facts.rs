@@ -1,6 +1,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::agent::convex::convex_agent_facts,
     primitives::agent::metadata::{
         AGENT_CALLBACK_PROPERTIES, agent_callback_source_refs, agent_fact_metadata,
@@ -15,12 +16,11 @@ use crate::{
     primitives::record_values::{
         direct_identifier, direct_string_property, property_value, resolve_static_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext},
     primitives::routing::output::extracted_facts,
     protocol::{LiteralValue, StaticSyntaxValue},
 };
 
-pub(crate) fn agent_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+pub(crate) fn agent_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     if let Some(facts) = convex_agent_facts(context, parts) {
         return Some(facts);
     }
@@ -133,7 +133,7 @@ pub(crate) fn agent_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -
 }
 
 fn identifier_array_property(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     object: &StaticSyntaxValue,
     property: &str,
 ) -> Vec<String> {
@@ -149,7 +149,7 @@ fn identifier_array_property(
 }
 
 fn tool_names_for_property(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     object: &StaticSyntaxValue,
     property: &str,
 ) -> Option<Vec<String>> {
@@ -175,7 +175,7 @@ fn tool_names_for_property(
 }
 
 fn handoff_ids(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     object: &StaticSyntaxValue,
     property: &str,
 ) -> Vec<String> {

@@ -23,6 +23,7 @@ fn analyze_emits_tree_path_definition_overlays_from_local_creators() {
         vec!["context".to_string(), "prompt".to_string()],
         &source,
     ));
+    let facts = facts.into_wire_values();
     let output = finalize_native_static_values(&facts, &[]);
 
     let context = output
@@ -72,6 +73,7 @@ fn analyze_emits_tree_path_definition_overlays_from_imported_leaves() {
         source_text: Some(helper_source.to_string()),
     });
     let facts = analyze_native_static_facts(&request);
+    let facts = facts.into_wire_values();
     std::fs::remove_dir_all(&root).ok();
     let output = finalize_native_static_values(&facts, &[]);
 
@@ -120,6 +122,7 @@ fn analyze_relation_refs_prefer_scoped_definition_aliases() {
         source_text: Some(helper_source.to_string()),
     });
     let facts = analyze_native_static_facts(&request);
+    let facts = facts.into_wire_values();
     std::fs::remove_dir_all(&root).ok();
     let policies = relation_policy_table_from_value(Some(&json!({
         "relations": [{
@@ -164,6 +167,7 @@ fn analyze_relation_refs_use_scoped_memory_definition_kind() {
         vec!["memory".to_string(), "prompt".to_string()],
         &source,
     ));
+    let facts = facts.into_wire_values();
     let policies = relation_policy_table_from_value(Some(&json!({
         "relations": [{
             "type": "prompt.uses_context",

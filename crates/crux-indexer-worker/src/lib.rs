@@ -9,6 +9,7 @@ pub(crate) mod protocol {
 pub(crate) mod syntax {
     pub(crate) mod argument_values;
     pub(crate) mod extract;
+    pub(crate) mod frontend;
     pub(crate) mod function_calls;
     pub(crate) mod function_values;
     pub(crate) mod imports;
@@ -51,7 +52,6 @@ pub(crate) mod primitives {
         pub(crate) mod assertions;
         pub(crate) mod facts;
     }
-    pub(crate) mod facts;
     pub(crate) mod flow {
         pub(crate) mod facts;
         pub(crate) mod output;
@@ -82,7 +82,6 @@ pub(crate) mod primitives {
         pub(crate) mod cascade;
         pub(crate) mod facts;
         pub(crate) mod fallback;
-        pub(crate) mod model;
         pub(crate) mod output;
         pub(crate) mod router;
         pub(crate) mod source_refs;

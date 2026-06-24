@@ -1,6 +1,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::definition::{
         NativeDefinitionInput, folded_index_child, native_static_definition, safe_id,
     },
@@ -8,13 +9,15 @@ use crate::{
         direct_identifier, direct_string_property, fallback_model_preview, fallback_options,
         json_object_property, object_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext},
     primitives::routing::output::{
         extracted_facts, fallback_option_facts, fallback_parent_facts, routing_target_relation_refs,
     },
 };
 
-pub(crate) fn fallback_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+pub(crate) fn fallback_facts(
+    context: &PrimitiveContext<'_>,
+    parts: &CallParts<'_>,
+) -> Option<Value> {
     let config = parts.object_arg.and_then(object_value);
     let options = fallback_options(parts.args);
     if options.is_empty() {
@@ -93,7 +96,7 @@ pub(crate) fn fallback_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>
 }
 
 fn option_child(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     fallback_id: &str,
     routing_id: Option<&str>,

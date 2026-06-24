@@ -3,9 +3,9 @@ use std::collections::HashSet;
 use serde_json::Value;
 
 use crate::{
+    native_static::primitives::context::{PrimitiveContext, ResolvedSource},
     primitives::definition::{source_ref, source_ref_with_metadata},
     primitives::record_values::{property_value, resolve_static_value},
-    primitives::routing::model::{ResolvedSource, RoutingContext},
     protocol::{StaticFunctionCallValue, StaticSyntaxValue},
 };
 
@@ -28,7 +28,7 @@ pub(crate) fn schema_source_ref(
 }
 
 pub(crate) fn property_source_ref(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     object: &StaticSyntaxValue,
     property: &str,
@@ -55,7 +55,7 @@ pub(crate) fn property_source_ref(
 }
 
 pub(crate) fn template_interpolation_source_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     object: &StaticSyntaxValue,
     property: &str,
@@ -98,7 +98,7 @@ pub(crate) fn template_interpolation_source_refs(
 }
 
 pub(crate) fn helper_refs_for_property(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     object: &StaticSyntaxValue,
     property: &str,
@@ -124,7 +124,7 @@ pub(crate) fn helper_refs_for_property(
 }
 
 fn collect_helper_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     calls: &[StaticFunctionCallValue],
     seen: &mut HashSet<String>,

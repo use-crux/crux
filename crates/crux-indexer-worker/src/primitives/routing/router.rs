@@ -1,6 +1,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext, source_ref_for_property},
     primitives::definition::{
         NativeDefinitionInput, folded_index_child, native_static_definition, safe_id,
     },
@@ -8,11 +9,10 @@ use crate::{
         direct_string_property, has_property, object_map_identifier_entries, object_value,
         property_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext, source_ref_for_property},
     primitives::routing::output::{extracted_facts, routing_target_relation_refs},
 };
 
-pub(crate) fn router_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+pub(crate) fn router_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     let config = object_value(parts.object_arg?)?;
     let routes =
         object_map_identifier_entries(property_value(config, "routes"), &context.initializers);
@@ -118,7 +118,7 @@ pub(crate) fn router_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) 
 }
 
 fn route_child(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     router_id: &str,
     routing_id: &str,

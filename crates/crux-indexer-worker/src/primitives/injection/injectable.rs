@@ -1,6 +1,9 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{
+        CallParts, PrimitiveContext, source_ref_for_callback_property,
+    },
     primitives::definition::{NativeDefinitionInput, native_static_definition, safe_id},
     primitives::injection::model::{
         relation_refs_for_injection_use, use_entries_for_property, use_entry_values,
@@ -10,7 +13,6 @@ use crate::{
         identifier_refs_for_property, tool_contributions_for_return_object_property,
     },
     primitives::record_values::{direct_string_property, property_value, resolve_static_value},
-    primitives::routing::model::{CallParts, RoutingContext, source_ref_for_callback_property},
     primitives::routing::output::extracted_facts,
     primitives::schema::schema_property,
     primitives::source_refs::helper_refs_for_property,
@@ -20,7 +22,7 @@ use crate::{
 const RETURN_PROPERTIES: [&str; 5] = ["contexts", "tools", "constraints", "guardrails", "metadata"];
 
 pub(crate) fn injectable_facts(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
 ) -> Option<Value> {
     if parts.callee_name != "injectable" || parts.callee_direct == Some(false) {
@@ -115,7 +117,7 @@ struct InjectableContributions {
 }
 
 fn injectable_contributions(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     object: &StaticSyntaxValue,
 ) -> InjectableContributions {
     let use_entries = use_entries_for_property(context, object, "contexts");
@@ -143,7 +145,7 @@ fn injectable_contributions(
 }
 
 fn injectable_return_object<'a>(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     config: &'a StaticSyntaxValue,
 ) -> Option<StaticSyntaxValue> {
     let value = property_value(config, "inject")?;

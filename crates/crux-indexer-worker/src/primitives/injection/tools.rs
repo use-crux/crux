@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::PrimitiveContext,
     primitives::record_values::{direct_identifier, property_value, resolve_static_value},
-    primitives::routing::model::RoutingContext,
     protocol::StaticSyntaxValue,
 };
 
@@ -14,7 +14,7 @@ pub(crate) struct ToolContributions {
 }
 
 pub(crate) fn tool_contributions_for_property(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     object: &StaticSyntaxValue,
     property: &str,
 ) -> ToolContributions {
@@ -43,7 +43,7 @@ pub(crate) fn tool_contributions_for_return_object_property(
 }
 
 pub(crate) fn identifier_refs_for_property(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     object: &StaticSyntaxValue,
     property: &str,
 ) -> Vec<String> {
@@ -60,7 +60,7 @@ pub(crate) fn identifier_refs_for_property(
 }
 
 fn tool_contributions_from_value(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     value: &StaticSyntaxValue,
 ) -> ToolContributions {
     match resolve_static_value(value, &context.initializers, &mut Default::default()) {
@@ -85,7 +85,7 @@ fn tool_contributions_from_value(
 }
 
 fn tool_contributions_from_factory_call(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     call_name: &str,
     seen: &mut HashSet<String>,
 ) -> ToolContributions {

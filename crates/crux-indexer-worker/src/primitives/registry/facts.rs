@@ -1,16 +1,20 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{
+        CallParts, PrimitiveContext, source_ref_for_callback_property,
+        source_ref_for_static_property,
+    },
     primitives::definition::{NativeDefinitionInput, native_static_definition, safe_id},
     primitives::record_values::{direct_identifier, direct_string_property, has_property},
-    primitives::routing::model::{
-        CallParts, RoutingContext, source_ref_for_callback_property, source_ref_for_static_property,
-    },
     primitives::routing::output::{extracted_facts, insert_string},
     protocol::StaticSyntaxValue,
 };
 
-pub(crate) fn registry_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+pub(crate) fn registry_facts(
+    context: &PrimitiveContext<'_>,
+    parts: &CallParts<'_>,
+) -> Option<Value> {
     if parts.callee_name != "registry" || parts.callee_direct == Some(false) {
         return None;
     }
@@ -67,7 +71,7 @@ pub(crate) fn registry_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>
 }
 
 pub(crate) fn registry_skill_facts(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
 ) -> Option<Value> {
     if parts.callee_name != "fromRegistry" {
@@ -162,7 +166,7 @@ fn bundled_registry_for_variable(registry_variable: &str) -> Option<BundledRegis
 }
 
 fn bundled_registry_definition(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     registry_variable: &str,
     bundled: &BundledRegistry,
@@ -195,7 +199,7 @@ fn bundled_registry_definition(
 }
 
 fn registry_name_for_variable(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     registry_variable: &str,
 ) -> Option<String> {
     let initializer = context.initializers.get(registry_variable)?;

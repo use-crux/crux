@@ -20,6 +20,8 @@ fn relation_refs_honor_from_variable_target_kind_type_and_source() {
         function_name: None,
     };
     let facts = NativeStaticIndexPatchFacts {
+        root: None,
+        project_name: None,
         definitions: vec![
             definition("workflow:daily", "workflow", "daily", None),
             definition(

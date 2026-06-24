@@ -1,6 +1,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::data::access::{DataAccessRef, data_access_refs_for_value},
     primitives::definition::{NativeDefinitionInput, native_static_definition, safe_id},
     primitives::flow::output::{
@@ -9,7 +10,6 @@ use crate::{
     primitives::record_values::{
         direct_string_property, has_property, property_value, resolve_static_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext},
     primitives::routing::output::extracted_facts,
     primitives::schema::syntax_value_to_json_schema,
     protocol::{LiteralValue, StaticFunctionCallValue, StaticSyntaxValue},
@@ -27,7 +27,7 @@ pub(crate) struct FlowSuspension {
     pub(crate) step_name: Option<String>,
 }
 
-pub(crate) fn flow_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+pub(crate) fn flow_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     if !matches!(parts.callee_name, "flow" | "cruxFlow") || parts.callee_direct == Some(false) {
         return None;
     }
@@ -102,7 +102,7 @@ pub(crate) fn flow_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) ->
 }
 
 fn flow_function_roots<'a>(
-    context: &'a RoutingContext<'a>,
+    context: &'a PrimitiveContext<'a>,
     config: Option<&'a StaticSyntaxValue>,
     parts: &'a CallParts<'a>,
 ) -> Vec<&'a StaticSyntaxValue> {
@@ -119,7 +119,7 @@ fn flow_function_roots<'a>(
 }
 
 fn flow_steps(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     flow_key: &str,
     roots: &[&StaticSyntaxValue],
 ) -> Option<Vec<FlowStep>> {
@@ -179,7 +179,7 @@ fn flow_suspensions(
     refs
 }
 
-fn args_keys(context: &RoutingContext<'_>, config: &StaticSyntaxValue) -> Option<Vec<String>> {
+fn args_keys(context: &PrimitiveContext<'_>, config: &StaticSyntaxValue) -> Option<Vec<String>> {
     let value = property_value(config, "args")?;
     let StaticSyntaxValue::Object { properties, .. } =
         resolve_static_value(value, &context.initializers, &mut Default::default())

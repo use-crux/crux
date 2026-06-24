@@ -1,18 +1,18 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext, ResolvedSource},
     primitives::data::access::primitive_data_intelligence,
     primitives::data::output::data_access_relation_refs,
     primitives::definition::{
         NativeDefinitionInput, folded_index_child, native_static_definition, safe_id, source_ref,
     },
     primitives::flow::facts::{FlowStep, FlowSuspension, function_calls},
-    primitives::routing::model::{CallParts, ResolvedSource, RoutingContext},
     protocol::{StaticFunctionCallValue, StaticSyntaxValue},
 };
 
 pub(crate) fn step_definitions(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     flow_id: &str,
     flow_key: &str,
@@ -132,7 +132,7 @@ pub(crate) fn flow_references(
 }
 
 pub(crate) fn step_target_source_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     target_variable: &str,
 ) -> Option<Vec<Value>> {
@@ -215,7 +215,7 @@ pub(crate) fn flow_intelligence(
 }
 
 fn helper_source_refs(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     definition_id: &str,
     resolved: &ResolvedSource<'_>,
 ) -> Option<Vec<Value>> {

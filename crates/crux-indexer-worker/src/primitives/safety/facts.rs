@@ -1,16 +1,18 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{
+        CallParts, PrimitiveContext, source_ref_for_callback_property,
+    },
     primitives::definition::{NativeDefinitionInput, native_static_definition, safe_id},
     primitives::record_values::{
         direct_identifier, direct_string_property, property_value, resolve_static_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext, source_ref_for_callback_property},
     primitives::routing::output::{extracted_facts, insert_string},
     protocol::{LiteralValue, StaticSyntaxValue},
 };
 
-pub(crate) fn safety_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+pub(crate) fn safety_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     if parts.callee_direct == Some(false) {
         return None;
     }
@@ -21,7 +23,7 @@ pub(crate) fn safety_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) 
     }
 }
 
-fn constraint_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+fn constraint_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     let config = parts.object_arg?;
     let explicit_name = direct_string_property(config, "name");
     let local_id = explicit_name
@@ -85,7 +87,7 @@ fn constraint_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Opti
     })
 }
 
-fn guardrail_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+fn guardrail_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     let config = parts.object_arg?;
     let explicit_name = direct_string_property(config, "name");
     let local_id = explicit_name
@@ -151,7 +153,7 @@ struct SafetyOutput<'a> {
 }
 
 fn safety_output<'a>(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     _parts: &CallParts<'_>,
     config: &StaticSyntaxValue,
     id: String,
@@ -193,7 +195,7 @@ struct AppliesToRefs {
     metadata: Option<Value>,
 }
 
-fn applies_to_refs(config: &StaticSyntaxValue, context: &RoutingContext<'_>) -> AppliesToRefs {
+fn applies_to_refs(config: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -> AppliesToRefs {
     let mut refs = Vec::new();
     let mut metadata = Vec::new();
     for name in ["appliesTo", "target", "targets", "for"] {
@@ -227,7 +229,7 @@ fn identifier_property(config: &StaticSyntaxValue, property: &str) -> Option<Str
 fn identifier_array_property(
     config: &StaticSyntaxValue,
     property: &str,
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
 ) -> Vec<String> {
     let Some(value) = property_value(config, property) else {
         return Vec::new();

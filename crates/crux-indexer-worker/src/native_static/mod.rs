@@ -6,4 +6,5 @@
 //! reaching into compiler internals.
 
 pub(crate) mod pipeline;
+pub(crate) mod primitives;
 pub(crate) mod telemetry;

@@ -3,13 +3,13 @@ use std::collections::HashSet;
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::definition::{
         NativeDefinitionInput, folded_index_child, native_static_definition, safe_id,
     },
     primitives::record_values::{
         has_property, number_property, property_value, resolve_static_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext},
     primitives::schema::syntax_value_to_json_schema,
     protocol::StaticSyntaxValue,
 };
@@ -30,7 +30,7 @@ pub(crate) struct MemoryBlocksProjection {
 }
 
 pub(crate) fn memory_blocks(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     config: &StaticSyntaxValue,
     definition_key: &str,
@@ -90,7 +90,7 @@ pub(crate) fn default_memory_block_schema(kind: &str) -> Option<Value> {
 }
 
 fn memory_block_metadata(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     config: &StaticSyntaxValue,
 ) -> Vec<MemoryBlockMetadata> {
     let Some(blocks_value) = property_value(config, "blocks") else {
@@ -107,7 +107,7 @@ fn memory_block_metadata(
 }
 
 fn memory_block_metadata_from_call(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     value: &StaticSyntaxValue,
 ) -> Option<MemoryBlockMetadata> {
     let resolved = resolve_static_value(value, &context.initializers, &mut HashSet::new());
@@ -131,7 +131,7 @@ fn memory_block_metadata_from_call(
 }
 
 fn block_definition(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     definition_key: &str,
     memory_id: &str,
@@ -226,7 +226,7 @@ fn memory_block_kind_for_call(call_name: &str, config: &StaticSyntaxValue) -> Op
 
 fn object_arg<'a>(
     value: &'a StaticSyntaxValue,
-    context: &RoutingContext<'a>,
+    context: &PrimitiveContext<'a>,
 ) -> Option<&'a StaticSyntaxValue> {
     let resolved = resolve_static_value(value, &context.initializers, &mut HashSet::new());
     matches!(resolved, StaticSyntaxValue::Object { .. }).then_some(resolved)
@@ -235,7 +235,7 @@ fn object_arg<'a>(
 fn nested_string_property(
     object: &StaticSyntaxValue,
     path: &[&str],
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
 ) -> Option<String> {
     let mut current = object;
     for segment in path {

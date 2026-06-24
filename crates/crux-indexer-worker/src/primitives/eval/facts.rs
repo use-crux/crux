@@ -1,6 +1,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::definition::{
         NativeDefinitionInput, folded_index_child, native_static_definition, safe_id,
     },
@@ -8,13 +9,12 @@ use crate::{
     primitives::record_values::{
         direct_identifier, direct_string_property, object_array_value, property_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext},
     primitives::routing::output::extracted_facts,
     protocol::{LiteralValue, StaticSyntaxValue},
 };
 
 pub(crate) fn eval_facts(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     source_text: &str,
 ) -> Option<Value> {
@@ -91,7 +91,7 @@ struct EvaluationCase {
 }
 
 fn evaluation_cases(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     config: &StaticSyntaxValue,
     evaluation_definition_id: &str,
@@ -198,7 +198,7 @@ fn coverage_target_from_evaluation_id(explicit_id: &str) -> Option<String> {
     (!rest.is_empty()).then(|| format!("{target_prefix}:{}", safe_id(rest)))
 }
 
-fn case_count(config: &StaticSyntaxValue, context: &RoutingContext<'_>) -> usize {
+fn case_count(config: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -> usize {
     object_array_value(property_value(config, "data"), &context.initializers).len()
 }
 

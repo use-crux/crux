@@ -13,6 +13,8 @@ use crate::static_compiler::relation::model::{
 #[test]
 fn relation_ref_aliases_enrich_duplicate_target_use_entries() {
     let facts = NativeStaticIndexPatchFacts {
+        root: None,
+        project_name: None,
         definitions: vec![
             definition(
                 "prompt:answer",
@@ -63,6 +65,8 @@ fn relation_ref_aliases_enrich_duplicate_target_use_entries() {
 #[test]
 fn relation_ref_aliases_do_not_enrich_duplicate_resolved_variables() {
     let facts = NativeStaticIndexPatchFacts {
+        root: None,
+        project_name: None,
         definitions: vec![
             definition(
                 "prompt:branching",

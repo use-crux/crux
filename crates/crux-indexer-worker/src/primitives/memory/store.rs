@@ -1,11 +1,11 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::definition::{NativeDefinitionInput, native_static_definition, safe_id},
     primitives::record_values::{
         direct_string_property, property_value, reference_property, resolve_static_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext},
     protocol::StaticSyntaxValue,
 };
 
@@ -17,7 +17,7 @@ pub(crate) struct StoreInfo {
 }
 
 pub(crate) fn authored_store(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     config: &StaticSyntaxValue,
 ) -> Option<StoreInfo> {
     let store_value = property_value(config, "store")?;
@@ -43,7 +43,7 @@ pub(crate) fn authored_store(
 }
 
 pub(crate) fn store_definition(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     owner_key: &str,
     parent_definition_id: &str,
@@ -114,7 +114,7 @@ fn store_fact_metadata(owner_key: &str, store: &StoreInfo) -> Value {
     Value::Object(facts)
 }
 
-fn store_component(context: &RoutingContext<'_>, value: &StaticSyntaxValue) -> Option<String> {
+fn store_component(context: &PrimitiveContext<'_>, value: &StaticSyntaxValue) -> Option<String> {
     direct_string_property(value, "component")
         .or_else(|| reference_property(value, "component", &context.initializers))
 }

@@ -1,8 +1,8 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::PrimitiveContext,
     primitives::record_values::{property_value, reference_property, resolve_static_value},
-    primitives::routing::model::RoutingContext,
     protocol::StaticSyntaxValue,
 };
 
@@ -12,7 +12,7 @@ pub(crate) struct PipelineTarget {
 }
 
 pub(crate) fn pipeline_stage_target(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     stage: &StaticSyntaxValue,
 ) -> Option<PipelineTarget> {
     for property in ["agent", "flow", "prompt", "tool"] {
@@ -24,7 +24,7 @@ pub(crate) fn pipeline_stage_target(
 }
 
 pub(crate) fn identifier_array(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     object: &StaticSyntaxValue,
     property: &str,
 ) -> Vec<String> {

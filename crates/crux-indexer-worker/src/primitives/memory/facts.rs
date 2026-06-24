@@ -1,6 +1,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::definition::{NativeDefinitionInput, native_static_definition, safe_id},
     primitives::memory::blocks::{
         MemoryBlockMetadata, default_memory_block_schema, memory_block_metadata_values,
@@ -9,11 +10,10 @@ use crate::{
     primitives::memory::id::authored_memory_id,
     primitives::memory::store::{authored_store, authored_store_name, store_definition, store_id},
     primitives::record_values::direct_string_property,
-    primitives::routing::model::{CallParts, RoutingContext},
     primitives::routing::output::extracted_facts,
 };
 
-pub(crate) fn memory_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+pub(crate) fn memory_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     if parts.callee_name != "memory" || parts.callee_direct == Some(false) {
         return None;
     }

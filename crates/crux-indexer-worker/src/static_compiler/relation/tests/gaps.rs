@@ -11,6 +11,8 @@ use crate::static_compiler::relation::tests::{definition, relation_ref};
 #[test]
 fn missing_policy_is_conserved_as_unresolved_reference_and_diagnostic() {
     let facts = NativeStaticIndexPatchFacts {
+        root: None,
+        project_name: None,
         definitions: vec![definition(
             "prompt:writer",
             "prompt",
@@ -44,6 +46,8 @@ fn missing_policy_is_conserved_as_unresolved_reference_and_diagnostic() {
 #[test]
 fn duplicate_missing_policy_refs_count_once_per_relation_identity() {
     let facts = NativeStaticIndexPatchFacts {
+        root: None,
+        project_name: None,
         definitions: vec![definition(
             "evaluation:quality",
             "evaluation",
@@ -84,6 +88,8 @@ fn duplicate_missing_policy_refs_count_once_per_relation_identity() {
 #[test]
 fn missing_policy_gap_count_keeps_first_owner_scope() {
     let facts = NativeStaticIndexPatchFacts {
+        root: None,
+        project_name: None,
         definitions: vec![
             definition(
                 "evaluation:first",

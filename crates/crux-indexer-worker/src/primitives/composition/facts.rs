@@ -1,6 +1,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::composition::output::{CompositionChild, composition_child_definitions},
     primitives::composition::relations::composition_references,
     primitives::composition::values::{identifier_array, insert_string, insert_string_array},
@@ -8,13 +9,12 @@ use crate::{
     primitives::record_values::{
         direct_string_property, object_map_identifier_entries, property_value, reference_property,
     },
-    primitives::routing::model::{CallParts, RoutingContext},
     primitives::routing::output::extracted_facts,
     protocol::StaticSyntaxValue,
 };
 
 pub(crate) fn composition_facts(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
 ) -> Option<Value> {
     if parts.callee_direct == Some(false) {
@@ -72,7 +72,7 @@ fn parent_metadata(
 }
 
 fn composition_metadata(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     call_name: &str,
     config: &StaticSyntaxValue,
 ) -> Map<String, Value> {

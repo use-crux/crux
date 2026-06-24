@@ -55,6 +55,7 @@ fn analyze_resolves_imported_helper_source_refs_from_selected_files() {
         source_text: Some(helper_source),
     });
     let facts = analyze_native_static_facts(&request);
+    let facts = facts.into_wire_values();
     std::fs::remove_dir_all(&root).ok();
 
     let context_group = facts
@@ -108,6 +109,7 @@ fn analyze_keeps_local_helper_data_accesses() {
         vec!["context".to_string()],
         &source,
     ));
+    let facts = facts.into_wire_values();
     let context_group = facts
         .iter()
         .find(|fact| fact["definitions"][0]["id"] == "context:plan-context")

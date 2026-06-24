@@ -5,8 +5,8 @@ pub(crate) use crate::primitives::data::output::{
 };
 
 use crate::{
+    native_static::primitives::context::PrimitiveContext,
     primitives::record_values::{property_value, resolve_static_value},
-    primitives::routing::model::RoutingContext,
     protocol::{LiteralValue, SourceLocation, StaticFunctionCallValue, StaticSyntaxValue},
 };
 
@@ -21,14 +21,14 @@ pub(crate) struct DataAccessRef {
 }
 
 pub(crate) fn data_access_refs_for_config_object(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     object: &StaticSyntaxValue,
 ) -> Vec<DataAccessRef> {
     data_access_refs_from_value(context, Some(object), 1)
 }
 
 pub(crate) fn data_access_refs_for_value(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     value: &StaticSyntaxValue,
     max_helper_depth: usize,
 ) -> Vec<DataAccessRef> {
@@ -36,7 +36,7 @@ pub(crate) fn data_access_refs_for_value(
 }
 
 pub(crate) fn data_access_refs_for_properties(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     object: &StaticSyntaxValue,
     properties: &[&str],
 ) -> Vec<DataAccessRef> {
@@ -65,7 +65,7 @@ pub(crate) fn unique_data_accesses(accesses: Vec<DataAccessRef>) -> Vec<DataAcce
 }
 
 fn data_access_refs_from_value(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     value: Option<&StaticSyntaxValue>,
     max_helper_depth: usize,
 ) -> Vec<DataAccessRef> {
@@ -138,7 +138,7 @@ fn data_access_refs_from_calls(calls: &[StaticFunctionCallValue]) -> Vec<DataAcc
 }
 
 fn helper_data_access_refs_from_calls(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     calls: &[StaticFunctionCallValue],
     seen: &mut HashSet<String>,
     depth: usize,

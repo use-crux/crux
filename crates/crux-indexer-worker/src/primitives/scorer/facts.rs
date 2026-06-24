@@ -3,17 +3,19 @@ use std::collections::HashSet;
 use serde_json::{Map, Value};
 
 use crate::{
+    native_static::primitives::context::{
+        CallParts, PrimitiveContext, source_ref_for_callback_property,
+    },
     primitives::definition::{NativeDefinitionInput, native_static_definition, safe_id},
     primitives::record_values::{
         direct_identifier, direct_string_property, has_property, json_object_property,
         number_property, property_value, resolve_static_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext, source_ref_for_callback_property},
     primitives::routing::output::{extracted_facts, insert_number, insert_string},
     protocol::{LiteralValue, StaticSyntaxValue},
 };
 
-pub(crate) fn scorer_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+pub(crate) fn scorer_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     if parts.callee_name != "llmJudge" || parts.callee_direct == Some(false) {
         return None;
     }
@@ -171,7 +173,7 @@ fn identifier_property(config: &StaticSyntaxValue, property: &str) -> Option<Str
 fn resolved_object_property<'a>(
     config: &'a StaticSyntaxValue,
     property: &str,
-    context: &RoutingContext<'a>,
+    context: &PrimitiveContext<'a>,
 ) -> Option<&'a StaticSyntaxValue> {
     let value = property_value(config, property)?;
     match resolve_static_value(value, &context.initializers, &mut HashSet::new()) {
@@ -183,7 +185,7 @@ fn resolved_object_property<'a>(
 fn boolean_property(
     config: &StaticSyntaxValue,
     property: &str,
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
 ) -> Option<bool> {
     let value = property_value(config, property)?;
     match resolve_static_value(value, &context.initializers, &mut HashSet::new()) {

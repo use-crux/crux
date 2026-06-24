@@ -14,6 +14,10 @@ use serde_json::Value;
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct NativeStaticIndexPatchFacts {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub root: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_name: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub definitions: Vec<NativeStaticDefinition>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

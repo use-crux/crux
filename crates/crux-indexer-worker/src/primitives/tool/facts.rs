@@ -3,13 +3,15 @@ use std::collections::HashMap;
 use serde_json::{Map, Value};
 
 use crate::{
+    native_static::primitives::context::{
+        PrimitiveContext, call_parts, source_ref_for_callback_property,
+    },
     primitives::data::access::{
         data_access_refs_for_config_object, data_access_refs_for_properties,
         data_access_relation_refs, primitive_data_intelligence, unique_data_accesses,
     },
     primitives::definition::{NativeDefinitionInput, native_static_definition, safe_id},
     primitives::record_values::{direct_string_property, has_property},
-    primitives::routing::model::{RoutingContext, call_parts, source_ref_for_callback_property},
     primitives::routing::output::extracted_facts,
     primitives::schema::{SchemaProjection, schema_property},
     primitives::source_refs::helper_refs_for_property,
@@ -45,7 +47,7 @@ pub(crate) fn project_tool_native_fact(
                 return None;
             }
             let object = call.object_arg?;
-            let context = RoutingContext::new_with_records(
+            let context = PrimitiveContext::new_with_records(
                 file,
                 imports,
                 local_initializers,
@@ -74,7 +76,7 @@ pub(crate) fn project_tool_native_fact(
             if !is_tool_schema_object(object) {
                 return None;
             }
-            let context = RoutingContext::from_initializers_with_records(
+            let context = PrimitiveContext::from_initializers_with_records(
                 file,
                 imports,
                 local_initializers,
@@ -104,7 +106,7 @@ pub(crate) fn project_tool_native_fact(
     })
 }
 
-fn tool_facts(context: &RoutingContext<'_>, parts: &ToolParts<'_>) -> Option<Value> {
+fn tool_facts(context: &PrimitiveContext<'_>, parts: &ToolParts<'_>) -> Option<Value> {
     let explicit_name = direct_string_property(parts.object, "name")
         .or_else(|| direct_string_property(parts.object, "title"));
     let local_id = explicit_name

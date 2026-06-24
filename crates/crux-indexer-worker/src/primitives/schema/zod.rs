@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::PrimitiveContext,
     primitives::record_values::resolve_static_value,
-    primitives::routing::model::RoutingContext,
     primitives::schema::common::{
         insert_schema_value, is_root_namespace, literal_json, object_schema, string_literals,
     },
@@ -13,7 +13,7 @@ use crate::{
 
 pub(crate) fn zod_value_to_json_schema(
     value: Option<&StaticSyntaxValue>,
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     seen: &mut HashSet<String>,
 ) -> Option<Value> {
     if let Some(StaticSyntaxValue::Identifier { name }) = value {
@@ -89,7 +89,7 @@ pub(crate) fn zod_value_to_json_schema(
 
 fn zod_object_schema(
     value: &StaticSyntaxValue,
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     seen: &mut HashSet<String>,
 ) -> Value {
     let StaticSyntaxValue::Object { properties, .. } = value else {
@@ -135,7 +135,7 @@ fn numeric_zod_bound(mut schema: Value, arg: Option<&StaticSyntaxValue>, bound: 
 
 fn is_optional_zod_value(
     value: &StaticSyntaxValue,
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     seen: &mut HashSet<String>,
 ) -> bool {
     matches!(

@@ -23,6 +23,7 @@ fn analyze_uses_plan_call_names_instead_of_prompt_hardcode() {
 
     let facts =
         analyze_native_static_facts(&request_with_call_names(vec!["prompt".to_string()], source));
+    let facts = facts.into_wire_values();
     assert_eq!(facts[0]["definitions"][0]["id"], "prompt:refund");
 }
 
@@ -45,6 +46,7 @@ fn analyze_emits_source_rows_from_syntax_record_dependencies() {
         vec!["prompt".to_string()],
         source,
     ));
+    let facts = facts.into_wire_values();
     std::fs::remove_dir_all(&root).ok();
 
     let source_group = facts
@@ -88,6 +90,7 @@ fn analyze_uses_support_files_for_records_without_emitting_owner_rows() {
     });
 
     let facts = analyze_native_static_facts(&request);
+    let facts = facts.into_wire_values();
     std::fs::remove_dir_all(&root).ok();
 
     assert!(
@@ -125,6 +128,7 @@ fn analyze_suppresses_duplicate_definition_packets_by_first_source_order() {
         vec!["llmJudge".to_string()],
         &source,
     ));
+    let facts = facts.into_wire_values();
     let scorer_groups = facts
         .iter()
         .filter(|fact| fact["definitions"][0]["id"] == "scorer:judge")
@@ -153,6 +157,7 @@ fn analyze_relation_refs_are_finalize_compatible() {
         vec!["agent".to_string(), "prompt".to_string()],
         &source,
     ));
+    let facts = facts.into_wire_values();
 
     let agent_group = facts
         .iter()

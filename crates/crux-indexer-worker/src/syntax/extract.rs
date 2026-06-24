@@ -1,96 +1,45 @@
-use std::collections::{HashMap, HashSet};
-
-use oxc_allocator::Allocator;
-use oxc_parser::Parser;
-use oxc_span::SourceType;
+use std::collections::HashSet;
 
 use crate::{
-    primitives::facts::project_native_facts,
+    native_static::primitives::projection::project_native_facts,
     protocol::{
-        FRONTEND_NAME, FRONTEND_VERSION, IndexDiagnostic, ParseRequest, StaticSyntaxFileRecord,
-        StaticSyntaxFrontendIdentity,
+        ParseRequest, StaticNativeFactProjection, StaticSourceMatch, StaticSyntaxFileRecord,
     },
-    syntax::imports::collect_import_records,
-    syntax::initializers::collect_local_initializers,
-    syntax::match_interests::CalleeMatcher,
-    syntax::match_statements::collect_matches,
-    syntax::source::{SourceView, sha256},
+    syntax::frontend::parse_source,
 };
 
+/// Parse a legacy static syntax record and attach native fact projections.
+///
+/// New native static compilation should call `syntax::frontend::parse_source`
+/// first and run primitive projection explicitly through `native_static`.
+/// This wrapper preserves the existing static syntax worker payload.
 pub fn parse_static_syntax_record(input: ParseRequest) -> Result<StaticSyntaxFileRecord, String> {
-    let allocator = Allocator::default();
-    let source_type = SourceType::from_path(&input.file)
-        .unwrap_or_default()
-        .with_module(true);
-    let parsed = Parser::new(&allocator, &input.source, source_type).parse();
-    let view = SourceView::new(&input.file, &input.source);
-    let imports = collect_import_records(&input.root, &input.file, &parsed.program.body, &view);
-    let imports_by_local_name = imports
-        .iter()
-        .map(|item| (item.local_name.clone(), item.clone()))
-        .collect::<HashMap<_, _>>();
-    let call_matcher = CalleeMatcher::for_calls(input.call_names, input.call_interests);
-    let constructor_matcher = CalleeMatcher::for_constructors(
-        input.constructor_names,
-        input.constructor_interests,
-        vec!["Agent".to_string()],
-    );
-    let matches = collect_matches(
-        &input.root,
-        &input.file,
-        &view,
-        &parsed.program.body,
-        &imports_by_local_name,
-        &call_matcher,
-        &constructor_matcher,
-    );
-    let local_initializers =
-        collect_local_initializers(&view, &parsed.program.body, &imports_by_local_name);
-    let native_facts = project_native_facts(
-        &input.file,
-        &input.source,
-        &imports,
-        &local_initializers,
-        &matches,
-    );
+    let source_text = input.source.clone();
     let prune_native_fact_call_names = input
         .prune_native_fact_call_names
-        .into_iter()
+        .iter()
+        .cloned()
         .collect::<HashSet<_>>();
-    let matches = prune_native_fact_matches(matches, &native_facts, &prune_native_fact_call_names);
+    let mut record = parse_source(input)?;
+    let native_facts = project_native_facts(
+        &record.file,
+        &source_text,
+        &record.imports,
+        &record.local_initializers,
+        &record.matches,
+    );
+    record.matches =
+        prune_native_fact_matches(record.matches, &native_facts, &prune_native_fact_call_names);
+    record.native_facts = native_facts;
 
-    Ok(StaticSyntaxFileRecord {
-        schema_version: 1,
-        frontend: StaticSyntaxFrontendIdentity {
-            name: FRONTEND_NAME.to_string(),
-            version: FRONTEND_VERSION.to_string(),
-        },
-        file: input.file.clone(),
-        source_hash: sha256(&input.source),
-        imports,
-        matches,
-        native_facts,
-        local_initializers,
-        diagnostics: parsed
-            .errors
-            .into_iter()
-            .enumerate()
-            .map(|(index, error)| IndexDiagnostic {
-                id: format!("syntax:{}:{index}", input.file),
-                severity: "error".to_string(),
-                code: "index.syntax_parse".to_string(),
-                message: error.to_string(),
-                source: view.location_for_offset(0),
-            })
-            .collect(),
-    })
+    Ok(record)
 }
 
 fn prune_native_fact_matches(
-    matches: Vec<crate::protocol::StaticSourceMatch>,
-    native_facts: &[crate::protocol::StaticNativeFactProjection],
+    matches: Vec<StaticSourceMatch>,
+    native_facts: &[StaticNativeFactProjection],
     prune_call_names: &HashSet<String>,
-) -> Vec<crate::protocol::StaticSourceMatch> {
+) -> Vec<StaticSourceMatch> {
     if prune_call_names.is_empty() || native_facts.is_empty() {
         return matches;
     }
@@ -111,18 +60,18 @@ fn prune_native_fact_matches(
 }
 
 fn prune_native_fact_match(
-    source_match: crate::protocol::StaticSourceMatch,
+    source_match: StaticSourceMatch,
     prune_call_names: &HashSet<String>,
-) -> crate::protocol::StaticSourceMatch {
+) -> StaticSourceMatch {
     match source_match {
-        crate::protocol::StaticSourceMatch::Call {
+        StaticSourceMatch::Call {
             variable_name,
             local_name,
             exported,
             callee,
             source,
             ..
-        } if prune_call_names.contains(&callee.name) => crate::protocol::StaticSourceMatch::Call {
+        } if prune_call_names.contains(&callee.name) => StaticSourceMatch::Call {
             variable_name,
             local_name,
             exported,

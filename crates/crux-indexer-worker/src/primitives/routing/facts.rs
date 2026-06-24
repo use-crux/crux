@@ -1,7 +1,7 @@
 use crate::{
+    native_static::primitives::context::{PrimitiveContext, call_parts},
     primitives::routing::cascade::cascade_facts,
     primitives::routing::fallback::fallback_facts,
-    primitives::routing::model::{RoutingContext, call_parts},
     primitives::routing::router::router_facts,
     protocol::{
         StaticImportRecord, StaticInitializerRecord, StaticNativeFactExtractorIdentity,
@@ -21,7 +21,7 @@ pub(crate) fn project_routing_native_fact(
     if parts.callee_direct == Some(false) {
         return None;
     }
-    let context = RoutingContext::new(file, imports, local_initializers, &parts);
+    let context = PrimitiveContext::new(file, imports, local_initializers, &parts);
     let facts = match parts.callee_name {
         "router" => router_facts(&context, &parts)?,
         "cascade" => cascade_facts(&context, &parts)?,

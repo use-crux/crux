@@ -1,6 +1,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::composition::values::{PipelineTarget, pipeline_stage_target},
     primitives::definition::{
         NativeDefinitionInput, folded_index_child, native_static_definition, safe_id,
@@ -8,7 +9,6 @@ use crate::{
     primitives::record_values::{
         direct_string_property, object_array_value, object_map_identifier_entries, property_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext},
     protocol::StaticSyntaxValue,
 };
 
@@ -19,7 +19,7 @@ pub(crate) struct CompositionChild {
 }
 
 pub(crate) fn composition_child_definitions(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     config: &StaticSyntaxValue,
     composition_id: &str,
@@ -42,7 +42,7 @@ pub(crate) fn composition_child_relation_refs(
 }
 
 fn parallel_branch_definitions(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     config: &StaticSyntaxValue,
     composition_id: &str,
@@ -97,7 +97,7 @@ fn parallel_branch_definitions(
 }
 
 fn pipeline_stage_definitions(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     config: &StaticSyntaxValue,
     composition_id: &str,
@@ -156,7 +156,7 @@ fn pipeline_stage_definitions(
 }
 
 fn child_definition(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     id: String,
     kind: &'static str,

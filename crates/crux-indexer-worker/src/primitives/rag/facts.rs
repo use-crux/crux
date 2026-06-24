@@ -1,6 +1,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext},
     primitives::definition::{
         NativeDefinitionInput, folded_index_child, native_static_definition, safe_id,
     },
@@ -8,12 +9,11 @@ use crate::{
     primitives::record_values::{
         direct_identifier, direct_string_property, object_array_value, property_value,
     },
-    primitives::routing::model::{CallParts, RoutingContext},
     primitives::routing::output::{extracted_facts, insert_string},
     protocol::StaticSyntaxValue,
 };
 
-pub(crate) fn rag_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+pub(crate) fn rag_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     if parts.callee_direct == Some(false) {
         return None;
     }
@@ -24,7 +24,7 @@ pub(crate) fn rag_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> 
     }
 }
 
-fn retriever_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+fn retriever_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     let config = parts.object_arg?;
     let explicit_id = direct_string_property(config, "id");
     let id = format!(
@@ -83,7 +83,7 @@ fn retriever_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Optio
     ))
 }
 
-fn pipeline_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+fn pipeline_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     let retriever_ref = parts.args.first().and_then(direct_identifier);
     let id = format!("rag.pipeline:{}", safe_id(parts.variable_name));
     let stages = pipeline_stages(context, parts, &id);
@@ -160,7 +160,7 @@ struct PipelineStage {
 }
 
 fn pipeline_stages(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     pipeline_id: &str,
 ) -> Vec<PipelineStage> {
@@ -172,7 +172,7 @@ fn pipeline_stages(
 }
 
 fn pipeline_stage(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     pipeline_id: &str,
     stage: &StaticSyntaxValue,

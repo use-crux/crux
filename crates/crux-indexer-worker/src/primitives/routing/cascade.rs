@@ -1,6 +1,7 @@
 use serde_json::{Map, Value, json};
 
 use crate::{
+    native_static::primitives::context::{CallParts, PrimitiveContext, source_ref_for_property},
     primitives::definition::{
         NativeDefinitionInput, folded_index_child, native_static_definition, safe_id,
     },
@@ -8,7 +9,6 @@ use crate::{
         direct_string_property, has_property, json_object_property, number_property,
         object_array_value, object_value, property_value, reference_property,
     },
-    primitives::routing::model::{CallParts, RoutingContext, source_ref_for_property},
     primitives::routing::output::{
         child_facts_with_target, extracted_facts, insert_number, insert_string, metadata_bool,
         routing_target_relation_refs,
@@ -16,7 +16,10 @@ use crate::{
     protocol::StaticSyntaxValue,
 };
 
-pub(crate) fn cascade_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+pub(crate) fn cascade_facts(
+    context: &PrimitiveContext<'_>,
+    parts: &CallParts<'_>,
+) -> Option<Value> {
     let config = object_value(parts.object_arg?)?;
     let tiers = object_array_value(property_value(config, "tiers"), &context.initializers);
     if tiers.is_empty() {
@@ -92,7 +95,7 @@ pub(crate) fn cascade_facts(context: &RoutingContext<'_>, parts: &CallParts<'_>)
 }
 
 fn tier_child(
-    context: &RoutingContext<'_>,
+    context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
     cascade_id: &str,
     routing_id: &str,

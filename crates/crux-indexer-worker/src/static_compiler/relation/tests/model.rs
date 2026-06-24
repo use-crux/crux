@@ -104,6 +104,8 @@ fn relation_refs_bind_and_project_injection_read_model_metadata() {
         Some(json!({ "exportName": "brandContext" })),
     );
     let facts = NativeStaticIndexPatchFacts {
+        root: None,
+        project_name: None,
         definitions: vec![prompt, context],
         relation_refs: vec![NativeStaticRelationRef {
             to_variable: Some("brandContext".to_string()),
@@ -145,6 +147,8 @@ fn relation_refs_bind_and_project_injection_read_model_metadata() {
 #[test]
 fn eval_coverage_refs_do_not_resolve_through_project_wide_variable_fallback() {
     let facts = NativeStaticIndexPatchFacts {
+        root: None,
+        project_name: None,
         definitions: vec![
             definition(
                 "evaluation:classify-check",
@@ -186,6 +190,8 @@ fn eval_coverage_refs_do_not_resolve_through_project_wide_variable_fallback() {
 #[test]
 fn routing_target_relations_project_child_target_metadata() {
     let facts = NativeStaticIndexPatchFacts {
+        root: None,
+        project_name: None,
         definitions: vec![definition(
             "routing.router.route:support",
             "routing.router.route",
