@@ -2,9 +2,8 @@ package server
 
 import (
 	"embed"
-	"fmt"
 
-	"github.com/use-crux/crux/packages/local/internal/nodeworker"
+	"github.com/use-crux/crux/packages/local/internal/localassets"
 )
 
 //go:embed embed/quality-runner.mjs
@@ -26,42 +25,38 @@ var embeddedProjectRuntimeIndexer []byte
 // The file is version-stamped by content hash — only re-extracted when the
 // binary changes. Returns the absolute path to the extracted file.
 func ExtractEmbedded(name string, content []byte) (string, error) {
-	return nodeworker.ExtractEmbedded(name, content)
+	return localassets.ExtractEmbedded(name, content)
 }
 
 // ExtractQualityRunner extracts the embedded quality-runner.mjs to the cache directory.
 func ExtractQualityRunner() (string, error) {
-	return ExtractEmbedded("quality-runner", embeddedQualityRunner)
+	return localassets.ExtractQualityRunner(embeddedQualityRunner)
 }
 
 // ExtractSourceResolver extracts the embedded source-resolver.mjs to the cache directory.
 func ExtractSourceResolver() (string, error) {
-	return ExtractEmbedded("source-resolver", embeddedSourceResolver)
+	return localassets.ExtractSourceResolver(embeddedSourceResolver)
 }
 
 // ExtractProjectIndexer extracts the embedded project-indexer.mjs to the cache directory.
 func ExtractProjectIndexer() (string, error) {
-	return ExtractEmbedded("project-indexer", embeddedProjectIndexer)
+	return localassets.ExtractProjectIndexer(embeddedProjectIndexer)
 }
 
 // ExtractProjectSemanticIndexer extracts the embedded semantic indexer worker to the cache directory.
 func ExtractProjectSemanticIndexer() (string, error) {
-	return ExtractEmbedded("project-semantic-indexer", embeddedProjectSemanticIndexer)
+	return localassets.ExtractProjectSemanticIndexer(embeddedProjectSemanticIndexer)
 }
 
 // ExtractProjectRuntimeIndexer extracts the embedded runtime indexer worker to the cache directory.
 func ExtractProjectRuntimeIndexer() (string, error) {
-	return ExtractEmbedded("project-runtime-indexer", embeddedProjectRuntimeIndexer)
+	return localassets.ExtractProjectRuntimeIndexer(embeddedProjectRuntimeIndexer)
 }
 
 // FindNode locates the node binary, returning its path or an error with
 // a user-friendly message.
 func FindNode() (string, error) {
-	path, err := nodeworker.FindNodePath()
-	if err != nil {
-		return "", fmt.Errorf("Node.js not found. Install Node.js >= 24 or set CRUX_NODE_PATH: %w", err)
-	}
-	return path, nil
+	return localassets.FindNode()
 }
 
 // Unused import guard — embed package must be imported for //go:embed to work.

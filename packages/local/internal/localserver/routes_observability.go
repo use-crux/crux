@@ -1,4 +1,4 @@
-package server
+package localserver
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/quality"
 )
 
-func registerObservabilityHTTP(mux *http.ServeMux, service *observability.Service, qualityEvents *quality.EventBus) {
+func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Service, qualityEvents *quality.EventBus) {
 	mux.HandleFunc("POST /api/observability/records", func(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
