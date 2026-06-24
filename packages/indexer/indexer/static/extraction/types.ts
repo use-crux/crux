@@ -11,7 +11,7 @@ import type { SourceReader } from './source-io'
 /**
  * Configuration for a static extraction run.
  *
- * Static extraction is the syntax-only Project Index pass. It is designed for the common compiler
+ * Static extraction is the source-syntax Project Index pass. It is designed for the common compiler
  * path first: provide a project root, optionally add trusted extension manifests, and extract files
  * into immutable definitions, relations, diagnostics, and source dependencies.
  *

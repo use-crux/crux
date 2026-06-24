@@ -1,5 +1,5 @@
 /**
- * Instrumentation hooks for the syntax-only Project Index pipeline.
+ * Instrumentation hooks for the static extraction Project Index pipeline.
  *
  * These hooks report compiler-owned phase timings. They intentionally expose
  * stable phase names and durations, not parser-native ASTs or checker objects,

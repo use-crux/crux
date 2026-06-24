@@ -15,7 +15,7 @@ import type { ExtractedFacts } from '../extensions'
  * source-file dependencies that must invalidate the result.
  */
 export interface StaticParseResult {
-  /** Definitions proven by the static compiler phase for this file. */
+  /** Definitions proven by the static extraction phase for this file. */
   definitions: ProjectDefinition[]
   /** Relations resolved from source-local and imported static references. */
   relations: ProjectRelation[]

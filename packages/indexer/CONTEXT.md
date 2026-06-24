@@ -191,7 +191,7 @@ extension API; it is the way first-party native fast paths avoid hidden hardcode
 _Avoid_: native plugin manifest, tsgo primitive registry
 
 **Experimental Indexer Config**:
-The top-level `experimental.indexer` config bucket for unstable Project Indexer behavior, currently
+The top-level `experimental.indexer` config bucket for unstable Crux Indexer behavior, currently
 `experimental.indexer.native: true | { engine?: 'tsgo'; tsserverPath?: string }`.
 _Avoid_: indexer.semantic backend config, public unstableApi flag
 

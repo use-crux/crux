@@ -1,3 +1,15 @@
+/**
+ * Public Crux Indexer entry point.
+ *
+ * This barrel exposes the high-level compiler facades for building Project
+ * Index snapshots, patches, project-model reads, config inspection, relation
+ * policies, incremental execution reports, and host-visible timing data.
+ * Low-level compiler, parser, semantic backend, and worker-host contracts live
+ * behind explicit subpaths so this surface stays stable for SDK consumers.
+ *
+ * @module
+ */
+
 export type {
   IndexProjectAstFromSyntaxRecordProviderOptions,
   IndexProjectAstFromSyntaxRecordsOptions,

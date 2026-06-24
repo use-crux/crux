@@ -12,7 +12,7 @@ use crate::{
 ///
 /// New native static compilation should call `syntax::frontend::parse_source`
 /// first and run primitive projection explicitly through `native_static`.
-/// This wrapper preserves the existing static syntax worker payload.
+/// This wrapper preserves the existing static syntax protocol payload.
 pub fn parse_static_syntax_record(input: ParseRequest) -> Result<StaticSyntaxFileRecord, String> {
     let source_text = input.source.clone();
     let prune_native_fact_call_names = input

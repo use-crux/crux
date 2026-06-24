@@ -11,7 +11,7 @@ import { flowFactsFromEvidence } from './flow-facts'
  *
  * The function owns index identity, folded step definitions, and relation refs. Source traversal for
  * steps/suspensions is delegated to `internalFlowTraversal` so this layer can stay focused on fact
- * projection while preserving the existing static compiler contract.
+ * projection while preserving the existing static extraction contract.
  */
 export function flowFactsFromStaticContext(ctx: StaticCallContext): ExtractedFacts | undefined {
   if (ctx.callName !== 'flow' && ctx.callName !== 'cruxFlow') return undefined

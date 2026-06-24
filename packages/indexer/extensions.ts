@@ -11,6 +11,8 @@
  *
  * Treat this subpath as experimental until the third-party loading, trust, versioning, and fixture
  * package contract is finalized.
+ *
+ * @module
  */
 export {
   callPattern,

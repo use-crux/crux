@@ -36,7 +36,7 @@ Relation resolution is centralized behind the root-exported relation model helpe
 
 Every relation type that reaches compiler output must be declared in the active policy table. Undeclared static refs and pre-resolved semantic/project relations remain visible as evidence, but `RelationResolutionReport.policyGaps` and `relation.policy_gap` diagnostics make the missing declaration explicit during indexing.
 
-The experimental extension boundary lives behind `@crux/indexer/extensions`. It is currently for first-party indexer internals, not stable third-party plugin loading. Crux Indexer Extensions use role-based compiler slots such as extractors, resolvers, rules, and emitters; normal extractors return immutable extracted facts and unresolved references rather than mutating the index graph directly. Degraded extractor diagnostics and declared source-file dependencies are preserved in compiler output. The built-in index lint pass now runs through the internal rule slot, after definitions and relations are resolved and before lint config/suppression filtering, and index rules must declare metadata before registry construction succeeds. This lets existing static extraction and linting move onto a query-ready compiler shape while preserving the stable `indexProject*` entry points.
+The experimental extension boundary lives behind `@crux/indexer/extensions`. It is currently for first-party indexer internals, not stable third-party extension loading. Crux Indexer Extensions use role-based compiler slots such as extractors, resolvers, rules, and emitters; normal extractors return immutable extracted facts and unresolved references rather than mutating the index graph directly. Degraded extractor diagnostics and declared source-file dependencies are preserved in compiler output. The built-in index lint pass now runs through the internal rule slot, after definitions and relations are resolved and before lint config/suppression filtering, and index rules must declare metadata before registry construction succeeds. This lets existing static extraction and linting move onto a query-ready compiler shape while preserving the stable `indexProject*` entry points.
 
 The public loading foundation is intentionally explicit and non-magical. `crux.config.ts` carries an
 inert `indexer` config bag through `@crux/core`; `@crux/indexer` enforces it at compiler startup.
@@ -67,7 +67,7 @@ with pnpm workspaces and monorepos. Set `experimental.indexer.native.tsserverPat
 First-party compatibility extraction such as Convex agent declarations, `new Agent(...)`, and bare
 object-literal tool schemas now runs through internal extension slots. Compiler-owned projections such
 as source-reference projection, runtime prepare projection, and prompt/context tree path projection
-are explicit in the default compiler profile. They are not public parser plugins.
+are explicit in the default compiler profile. They are not public parser extension points.
 
 `crux dev` intentionally starts with a bounded static/AST pass so the local server can publish useful
 Project Index data quickly. That first pass may include an `index.source_only` diagnostic as a status
@@ -112,8 +112,6 @@ If a feature spans static facts, semantic facts, and the Go-owned index snapshot
 
 ```ts
 import {
-  compileProjectIndex,
-  createStaticExtraction,
   indexProject,
   indexProjectIncremental,
   inspectProjectConfig,
@@ -124,4 +122,11 @@ import { SourceResolver } from '@crux/indexer/source-resolver'
 import { defineIndexerExtensionFixture, extractFixtureSource } from '@crux/indexer/testing'
 ```
 
-Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. `createStaticExtraction` is the supported compiler-owned static extraction boundary for tools that need source-file facts, and `@crux/indexer/testing` is the supported source-text fixture surface for extension tests. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party plugin support is stabilized. Internal `indexer/*` modules are not package exports.
+Crux-owned worker hosts can use private host subpaths while the package remains private:
+
+```ts
+import { compileProjectIndex, createStaticExtraction } from '@crux/indexer/internal-host'
+import { indexPatchFromWorkerEvents } from '@crux/indexer/worker-protocol'
+```
+
+Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. `createStaticExtraction` is a Crux-owned static extraction boundary for bundled tools that need source-file facts, and `@crux/indexer/testing` is the supported source-text fixture surface for extension tests. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party extension support is stabilized. Internal `indexer/*` modules are not package exports; `internal-host` and `worker-*` subpaths are host bridges, not general SDK entry points.

@@ -1,3 +1,14 @@
+/**
+ * Project Index worker protocol entry point.
+ *
+ * This host-facing barrel re-exports the TypeScript-owned worker-event and
+ * native-static protocol schemas from the contract spine. Bundled Crux workers
+ * and local runtime hosts should import this subpath instead of reaching into
+ * compiler internals.
+ *
+ * @module
+ */
+
 export type {
   IndexPatchToWorkerEventsOptions,
   ProjectIndexArtifactDoneEvent,

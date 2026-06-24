@@ -1,9 +1,9 @@
 /**
- * Baseline inventory for the native runtime architecture refactor.
+ * Current inventory for the native runtime architecture refactor.
  *
- * The inventory is intentionally data-only and test-owned. It records where the
- * current contract definitions and mirrors live before Phase 2 starts moving
- * them behind a visible contract spine.
+ * The inventory is intentionally data-only and test-owned. It records the
+ * canonical TypeScript contract spine plus the Go/Rust mirrors that must stay
+ * aligned while the native runtime boundary evolves.
  *
  * @module
  */
@@ -86,9 +86,15 @@ const inventory = {
       typescript: [
         contractFile(
           'typescript',
-          'packages/indexer/indexer/worker-protocol/types.ts',
-          'V2 event discriminated union, fact envelope map, and artifact payload map.',
+          'packages/indexer/indexer/contracts/worker-events/schema.ts',
+          'Canonical contract-spine barrel for worker events, fact envelopes, artifacts, and stream helpers.',
           'canonical-types',
+        ),
+        contractFile(
+          'typescript',
+          'packages/indexer/indexer/contracts/worker-events/fixtures.ts',
+          'TypeScript-owned worker-event fixtures used by schema and stream round-trip tests.',
+          'test',
         ),
         contractFile(
           'typescript',
@@ -112,30 +118,42 @@ const inventory = {
       go: [
         contractFile(
           'go',
-          'packages/local/internal/projectindex/worker_protocol.go',
+          'packages/local/internal/projectindexwire/worker_protocol.go',
           'Host-side V2 worker event collector and transaction validation.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindex/worker_protocol_facts.go',
+          'packages/local/internal/projectindexwire/worker_protocol_facts.go',
           'Fact envelope decoding into Go Project Index patch facts.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindex/worker_protocol_source_profile.go',
+          'packages/local/internal/projectindexwire/worker_protocol_source_profile.go',
           'Source-profile batch decoding for semantic preflight handoff.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindex/worker_artifact.go',
+          'packages/local/internal/projectindexwire/worker_artifact.go',
           'Artifact event decoding outside the durable patch fact stream.',
           'host-mirror',
         ),
+        contractFile(
+          'go',
+          'packages/local/internal/projectindexwire/shared_fixtures_test.go',
+          'Shared fixture decoder for the TypeScript-owned worker event stream JSON.',
+          'test',
+        ),
       ],
       rust: [
+        contractFile(
+          'rust',
+          'crates/crux-indexer-worker/src/protocol/worker.rs',
+          'Rust worker response envelope and static syntax stream event ABI.',
+          'native-mirror',
+        ),
         contractFile(
           'rust',
           'crates/crux-indexer-worker/src/static_compiler/finalizer/events.rs',
@@ -145,7 +163,7 @@ const inventory = {
       ],
     },
     fixtureGap:
-      'No shared worker-event fixture files are consumed by TypeScript, Go, and Rust for success, error, artifact, and out-of-order stream cases.',
+      'Shared success-path worker-event fixtures are consumed by TypeScript, Go, and Rust; remaining gaps are artifact, phase-error, and out-of-order stream fixtures.',
   },
   'static-syntax-records': {
     id: 'static-syntax-records',
@@ -157,8 +175,14 @@ const inventory = {
       typescript: [
         contractFile(
           'typescript',
+          'packages/indexer/indexer/contracts/static-syntax/schema.ts',
+          'Canonical contract-spine barrel for static syntax frontend and record ABI.',
+          'canonical-types',
+        ),
+        contractFile(
+          'typescript',
           'packages/indexer/indexer/static/syntax-record/types.ts',
-          'Canonical static syntax frontend and record ABI.',
+          'Implementation owner for static syntax frontend and record types.',
           'canonical-types',
         ),
         contractFile(
@@ -177,46 +201,52 @@ const inventory = {
       go: [
         contractFile(
           'go',
-          'packages/local/internal/projectindex/static_plan.go',
+          'packages/local/internal/indexhost/native/staticplan/plan/build.go',
           'Go-owned static syntax plan sent to native parser hosts.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindexer/syntaxrecord/request.go',
+          'packages/local/internal/indexhost/native/syntax/record/request.go',
           'Static syntax plan to Rust/Oxc parser request conversion.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindexer/syntaxrecord/collect.go',
+          'packages/local/internal/indexhost/native/syntax/record/collect.go',
           'Static syntax record collection from a configured parser host.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindexer/syntax/event.go',
-          'Streaming syntax worker event decoder.',
+          'packages/local/internal/indexhost/native/syntax/event.go',
+          'Streaming static syntax event decoder.',
           'streaming',
+        ),
+        contractFile(
+          'go',
+          'packages/local/internal/indexhost/native/syntax/shared_fixtures_test.go',
+          'Shared fixture decoder for static syntax record JSON.',
+          'test',
         ),
       ],
       rust: [
         contractFile(
           'rust',
-          'crates/crux-indexer-worker/src/protocol/syntax_record.rs',
-          'Rust static syntax record ABI structs and frontend identity.',
+          'crates/crux-indexer-worker/src/protocol/static_syntax.rs',
+          'Rust static syntax record, request, response, and stream event ABI.',
           'native-mirror',
         ),
         contractFile(
           'rust',
-          'crates/crux-indexer-worker/src/protocol/syntax_worker.rs',
-          'Rust syntax worker request, response, and stream event ABI.',
-          'native-mirror',
+          'crates/crux-indexer-worker/src/shared_fixtures_tests.rs',
+          'Shared fixture decoder for static syntax record JSON.',
+          'test',
         ),
       ],
     },
     fixtureGap:
-      'No shared static syntax record fixture directory covers imports, interests, constructor calls, object values, callbacks, diagnostics, and native fact packets across all three languages.',
+      'A shared static syntax record fixture covers imports, call matches, object values, and native fact packets; remaining gaps are constructor matches, callback summaries, and parser diagnostic cases.',
   },
   'native-static-protocol': {
     id: 'native-static-protocol',
@@ -228,14 +258,20 @@ const inventory = {
       typescript: [
         contractFile(
           'typescript',
-          'packages/indexer/indexer/worker-protocol/native-static.ts',
-          'Zod schemas and inferred TypeScript types for native static requests and responses.',
+          'packages/indexer/indexer/contracts/native-static/schema.ts',
+          'Canonical contract-spine barrel for native static requests, responses, identity, telemetry, and parser interests.',
           'schema',
         ),
         contractFile(
           'typescript',
-          'packages/indexer/indexer/worker-protocol/native-static-parser-interests.ts',
-          'Shared parser-interest schema fragment used by native static and syntax records.',
+          'packages/indexer/indexer/contracts/native-static/fixtures.ts',
+          'TypeScript-owned native static request/response fixtures.',
+          'test',
+        ),
+        contractFile(
+          'typescript',
+          'packages/indexer/indexer/worker-protocol/native-static.ts',
+          'Implementation owner for Zod schemas and inferred TypeScript native static protocol types.',
           'schema',
         ),
         contractFile(
@@ -248,52 +284,52 @@ const inventory = {
       go: [
         contractFile(
           'go',
-          'packages/local/internal/projectindexer/staticprotocol/types.go',
+          'packages/local/internal/indexhost/native/protocol/types.go',
           'Go mirror of native static request, response, identity, plan, and telemetry structs.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindexer/staticprotocol/stream.go',
+          'packages/local/internal/indexhost/native/protocol/stream.go',
           'Go streaming decoder for analyze/finalize/compile native static events.',
           'streaming',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindexer/staticprotocol/validation.go',
+          'packages/local/internal/indexhost/native/protocol/validation.go',
           'Go protocol version, method, and worker response validation.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindexer/staticprotocol/identity.go',
+          'packages/local/internal/indexhost/native/protocol/identity.go',
           'Go construction of native static cache-sensitive run identity.',
           'host-mirror',
+        ),
+        contractFile(
+          'go',
+          'packages/local/internal/indexhost/native/protocol/shared_fixtures_test.go',
+          'Shared fixture decoder for native static protocol JSON.',
+          'test',
         ),
       ],
       rust: [
         contractFile(
           'rust',
-          'crates/crux-indexer-worker/src/protocol/static_compiler.rs',
+          'crates/crux-indexer-worker/src/protocol/native_static.rs',
           'Rust native static request, response, identity, plan, and telemetry ABI.',
           'native-mirror',
         ),
         contractFile(
           'rust',
-          'crates/crux-indexer-worker/src/protocol/static_compile.rs',
-          'Rust compile request ABI split from other native static methods.',
-          'native-mirror',
-        ),
-        contractFile(
-          'rust',
-          'crates/crux-indexer-worker/src/static_compiler/protocol/tests.rs',
-          'Rust realistic JSON round-trip tests for native static protocol structs.',
+          'crates/crux-indexer-worker/src/shared_fixtures_tests.rs',
+          'Shared fixture decoder for native static protocol JSON and pipeline behavior.',
           'test',
         ),
       ],
     },
     fixtureGap:
-      'TypeScript and Rust have in-memory protocol JSON tests, but there is no shared fixture set decoded by TypeScript, Go, and Rust for every method, telemetry shape, stream event, and error case.',
+      'A shared native static protocol fixture is decoded by TypeScript, Go, and Rust for every method; remaining gaps are explicit protocol-error and invalid-stream fixtures.',
   },
   'semantic-evidence': {
     id: 'semantic-evidence',
@@ -305,8 +341,14 @@ const inventory = {
       typescript: [
         contractFile(
           'typescript',
-          'packages/indexer/indexer/semantic/evidence.ts',
-          'Canonical semantic evidence batch kinds and projection helpers.',
+          'packages/indexer/indexer/contracts/semantic/schema.ts',
+          'Canonical contract-spine barrel for backend-neutral semantic evidence.',
+          'canonical-types',
+        ),
+        contractFile(
+          'typescript',
+          'packages/indexer/indexer/semantic/evidence/projection.ts',
+          'Implementation owner for semantic evidence batch kinds and projection helpers.',
           'canonical-types',
         ),
         contractFile(
@@ -325,7 +367,7 @@ const inventory = {
       go: [
         contractFile(
           'go',
-          'packages/local/internal/projectindexer/semantic/worker.go',
+          'packages/local/internal/indexhost/semantic/worker.go',
           'Go semantic worker host consumes Project Index patch events, not semantic evidence structs.',
           'host-mirror',
         ),

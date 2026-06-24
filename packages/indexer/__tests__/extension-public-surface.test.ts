@@ -6,6 +6,21 @@ import { describe, expect, it } from 'vitest'
 const testDir = dirname(fileURLToPath(import.meta.url))
 
 describe('public indexer extension surface', () => {
+  it('documents package entry barrels as module surfaces', async () => {
+    for (const file of [
+      'index.ts',
+      'extensions.ts',
+      'internal-host.ts',
+      'source-resolver.ts',
+      'testing.ts',
+      'worker-host.ts',
+      'worker-protocol.ts',
+    ]) {
+      const source = await readFile(join(testDir, '..', file), 'utf8')
+      expect(source, file).toContain('@module')
+    }
+  })
+
   it('keeps package subpath exports limited to stable entry points', async () => {
     const source = await readFile(join(testDir, '..', 'package.json'), 'utf8')
     const parsed = JSON.parse(source) as { exports?: Record<string, unknown> }
