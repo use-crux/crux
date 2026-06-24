@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProjectAstFromSyntaxRecords, inspectProjectStaticSyntaxPlan } from '../index'
+import { indexProjectAstFromSyntaxRecords, inspectProjectStaticSyntaxPlan } from '..'
 import {
   createTypeScriptStaticSyntaxFrontend,
   RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,

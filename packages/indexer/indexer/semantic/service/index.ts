@@ -30,7 +30,7 @@ export type {
   SemanticEvidenceBatch,
   SemanticEvidenceBatchKind,
   SemanticEvidenceBatchSource,
-} from '../evidence'
+} from '../evidence/projection'
 export type {
   SemanticSourceProfile,
   SemanticSourceProfileFile,
@@ -40,7 +40,7 @@ export {
   collectProjectedSemanticEvidence,
   projectSemanticEvidenceBatches,
   semanticEvidenceBatchesFromFacts,
-} from '../evidence'
+} from '../evidence/projection'
 export {
   createSemanticBackendFromSelection,
   semanticBackendSelectionFromConfig,
@@ -54,10 +54,10 @@ export {
   typescriptSemanticBackendCapabilities,
   typescriptSemanticBackendIdentity,
   type TypeScriptSemanticBackendOptions,
-} from './typescript-backend'
+} from '../typescript/backend'
 export {
   createNativeSemanticBackend,
   nativeSemanticBackendCapabilities,
   nativeSemanticBackendIdentity,
   type NativeSemanticBackendOptions,
-} from './native-backend'
+} from '../native/tsgo/backend'

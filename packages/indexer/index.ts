@@ -3,7 +3,7 @@ export type {
   IndexProjectAstFromSyntaxRecordsOptions,
   IndexProjectOptions,
   IndexProjectRuntimeOptions,
-} from './indexer/index'
+} from './indexer'
 export type { ProjectModelResolutionMode } from '@crux/core/project-index'
 export {
   indexProject,
@@ -12,7 +12,7 @@ export {
   indexProjectAstFromSyntaxRecords,
   indexProjectRuntime,
   indexProjectSemantic,
-} from './indexer/index'
+} from './indexer'
 export type { ResolveProjectModelOptions } from './indexer/project-model'
 export { resolveProjectModel } from './indexer/project-model'
 export type { InspectProjectStaticSyntaxPlanOptions, ProjectStaticSyntaxPlan } from './indexer/static-plan'
@@ -75,7 +75,7 @@ export {
   relationIdentity,
   resolveRelationModel,
   withResolvedRelationReadModel,
-} from './indexer/relations/index'
+} from './indexer/relations'
 export type {
   IndexRelationPolicy,
   IndexRelationPresentation,
@@ -86,4 +86,4 @@ export type {
   RelationResolutionReport,
   UnresolvedRelationReason,
   UnresolvedRelationRef,
-} from './indexer/relations/index'
+} from './indexer/relations'

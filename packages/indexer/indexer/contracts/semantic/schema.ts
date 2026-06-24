@@ -12,13 +12,13 @@ export type {
   SemanticEvidenceBatch,
   SemanticEvidenceBatchKind,
   SemanticEvidenceBatchSource,
-} from '../../semantic/evidence'
+} from '../../semantic/evidence/projection'
 export {
   collectProjectedSemanticEvidence,
   projectSemanticEvidenceBatches,
   semanticEvidenceBatchKinds,
   semanticEvidenceBatchesFromFacts,
-} from '../../semantic/evidence'
+} from '../../semantic/evidence/projection'
 export type {
   SemanticSourceProfile,
   SemanticSourceProfileFile,

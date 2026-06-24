@@ -13,16 +13,16 @@ import {
   internalIdentifierRefsForConfigProperty,
   internalObjectMapIdentifierEntries,
   internalToolNamesForConfigProperty,
-} from '../extensions/internal-config'
+} from '../extensions/static-record-adapter/config'
 import {
   internalDataAccessRefsForConfigObject,
   internalDataAccessRefsForConfigProperties,
-} from '../extensions/internal-data-access'
-import { internalStaticCallContext, internalStaticRecordContext } from '../extensions/internal-native'
+} from '../extensions/static-record-adapter/data-access'
+import { internalStaticCallContext, internalStaticRecordContext } from '../extensions/static-record-adapter/native-context'
 import {
   createStaticRecordSourceResolver,
   staticRecordProjectSourceRef,
-} from '../extensions/static-record-source-resolver'
+} from '../extensions/static-record-adapter/source-resolver'
 import type { StaticCallValue, StaticObjectValue, StaticSyntaxValue } from '../static/syntax-record/types'
 import { resolveStaticSyntaxValue, staticObjectPropertyValue } from '../static/syntax-record/value'
 import { primitiveDataIntelligence, uniqueDataAccesses, type PrimitiveDataAccessRef } from './data-access'

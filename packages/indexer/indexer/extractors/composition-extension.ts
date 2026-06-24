@@ -2,7 +2,7 @@ import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/projec
 import { foldedIndexChild } from '../index-presentation'
 import type { StaticRelationRef } from '../types'
 import { facts, type IndexExtractor, type ExtractContext, type StaticObjectReader } from '../extensions'
-import { internalObjectMapIdentifierEntries } from '../extensions/internal-config'
+import { internalObjectMapIdentifierEntries } from '../extensions/static-record-adapter/config'
 
 type CompositionTargetProperty = 'agent' | 'flow' | 'prompt' | 'tool'
 

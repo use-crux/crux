@@ -4,7 +4,7 @@ import {
   compileProjectIndex,
   projectIndexSnapshotFromCompilerResult,
 } from '../compiler'
-import { indexProjectSemantic } from '../index'
+import { indexProjectSemantic } from '..'
 import { incrementalExecutionReport } from './execution-report'
 import type { IncrementalIndexExecutionResult, IndexProjectIncrementalOptions } from './execution-types'
 import { indexInvalidationFromDecision } from './invalidation'

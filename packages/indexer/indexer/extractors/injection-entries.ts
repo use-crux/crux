@@ -4,7 +4,7 @@ import type { StaticRelationRef } from '../types'
 import type { ExtractContext } from '../extensions'
 import { propertyName } from '../ast/literals'
 import { resolveIdentifierSourceNode } from '../ast/source-refs'
-import { internalStaticCallContext, internalStaticRecordContext, type InternalStaticRecordContext } from '../extensions/internal-native'
+import { internalStaticCallContext, internalStaticRecordContext, type InternalStaticRecordContext } from '../extensions/static-record-adapter/native-context'
 import type { StaticObjectValue, StaticSyntaxValue } from '../static/syntax-record/types'
 import {
   createStaticSyntaxInitializerMap,

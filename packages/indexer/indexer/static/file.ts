@@ -4,7 +4,7 @@ import { collectTopLevelInitializers, scopedInitializersForNode } from '../ast/i
 import { collectImportBindings, type ImportBinding } from '../ast/imports'
 import { readSourceFile } from '../ast/parse'
 import type { ExtractedFacts } from '../extensions'
-import { staticFoundDefinitionsFromExtractedFacts } from '../extensions/static-normalizer'
+import { staticFoundDefinitionsFromExtractedFacts } from '../extensions/static-record-adapter/normalizer'
 import type { StaticFoundDefinition } from '../types'
 import type { StaticFactParser } from './extraction/parser'
 import { staticParseResultFromFacts } from './read-model'

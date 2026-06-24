@@ -12,8 +12,8 @@ import {
   type IndexerExtension,
   type StaticExtractionInput,
 } from '../indexer/extensions'
-import { internalStaticCallContext, internalTypeScriptContext } from '../indexer/extensions/internal-native'
-import { createExtractContext } from '../indexer/extensions/runtime'
+import { internalStaticCallContext, internalTypeScriptContext } from '../indexer/extensions/static-record-adapter/native-context'
+import { createExtractContext } from '../indexer/extensions/runtime/engine'
 import { indexLintFinding } from '../indexer/lints/rules'
 
 describe('indexer extension runtime', () => {

@@ -1,6 +1,6 @@
 import type { IndexDiagnostic, IndexRuleDescriptor, ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
 import type { ExtensionRuleInput, ExtensionRuleResult, IndexDependency, IndexerExtension } from '../../extensions'
-import type { ExtensionRuntimeManifest } from '../../extensions/runtime'
+import type { ExtensionRuntimeManifest } from '../../extensions/runtime/engine'
 import type { ProjectIndexCompilerProfile } from '../../compiler/profile'
 import type { SemanticSourceProfileFile } from '../../semantic/source-profile'
 import type { StaticExtractionInstrumentation } from '../instrumentation'

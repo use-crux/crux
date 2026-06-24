@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { collectImportBindings } from '../ast/imports'
 import { createSourceFile } from '../ast/parse'
 import { sha256 } from '../cache-identity'
-import { isNativeDirectCandidateCallSet, isSemanticPrimitiveCallName } from './tsgo-native-direct-manifest'
+import { isNativeDirectCandidateCallSet, isSemanticPrimitiveCallName } from './native/direct-projectors/manifest'
 
 const defaultConcurrency = 64
 

@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SourceResolver } from '../source-resolver'
-import type { SourceResolverFileSystem } from '../source-resolver/index'
+import type { SourceResolverFileSystem } from '../source-resolver'
 
 const roots: string[] = []
 

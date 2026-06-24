@@ -32,7 +32,7 @@ export type {
   ResolveIndexerExtensionReferencesInput,
   ResolveIndexerExtensionReferencesResult,
 } from './indexer/extensions'
-export type { IndexerExtensionManifestValidation } from './indexer/extensions/manifest'
+export type { IndexerExtensionManifestValidation } from './indexer/extensions/loading/manifest'
 import type {
   IndexExtractor as InternalIndexExtractor,
   DefinitionBuilder,

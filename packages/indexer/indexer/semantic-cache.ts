@@ -15,8 +15,8 @@ import {
   semanticEvidenceBatchesFromFacts,
   type SemanticEvidenceBatch,
   type SemanticEvidenceBatchSource,
-} from './semantic/evidence'
-import { semanticIndexEvidenceBatches } from './semantic/facts'
+} from './semantic/evidence/projection'
+import { semanticIndexEvidenceBatches } from './semantic/evidence/facts'
 import {
   measureSemanticTimingAsync,
   type SemanticIndexInstrumentation,

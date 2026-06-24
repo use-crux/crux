@@ -1,6 +1,6 @@
 import type { IndexerExtension } from '../extensions'
 import { relationSpecFromPolicy } from '../extensions'
-import { indexRelationPolicies } from '../relations/index'
+import { indexRelationPolicies } from '../relations'
 import { agentIndexExtractor } from './agent-extension'
 import { compositionIndexExtractor } from './composition-extension'
 import { contextIndexExtractor } from './context-extension'

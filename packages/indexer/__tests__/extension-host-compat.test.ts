@@ -6,7 +6,7 @@ import {
   checkStaticRules,
   extractStaticEvidenceBatch,
   loadStaticExtensionHostManifest,
-} from '../indexer/extensions/static-extension-host'
+} from '../indexer/extensions/static-evidence/host'
 import { indexLintFinding } from '../indexer/lints/rules'
 import { createTypeScriptStaticSyntaxFrontend } from '../indexer/static/syntax-record'
 import { checkStaticRulesForProject, loadStaticExtensionHostManifestForProject } from '../worker-host'

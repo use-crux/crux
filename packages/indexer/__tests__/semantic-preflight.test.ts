@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ProjectIndexSnapshot } from '@crux/core/project-index'
-import { indexProjectAst, indexProjectSemantic } from '../index'
+import { indexProjectAst, indexProjectSemantic } from '..'
 import { applyIndexPatch, emptyIndexPatchState } from '../indexer/patches'
 
 const roots: string[] = []

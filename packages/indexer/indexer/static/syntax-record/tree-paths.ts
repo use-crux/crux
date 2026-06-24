@@ -1,6 +1,6 @@
 import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
 import type { IndexerExtensionRuntime } from '../../extensions'
-import { staticFoundDefinitionsFromExtractedFacts } from '../../extensions/static-normalizer'
+import { staticFoundDefinitionsFromExtractedFacts } from '../../extensions/static-record-adapter/normalizer'
 import type { StaticFoundDefinition } from '../../types'
 import type { StaticSyntaxFileRecord, StaticSyntaxValue } from './types'
 import { createNativeFactIndex, extractedFacts } from './native-facts'

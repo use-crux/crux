@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { IndexSourceFile, ProjectIndexSnapshot, ProjectDefinition } from '@crux/core/project-index'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProject } from '../index'
+import { indexProject } from '..'
 import {
   indexInvalidationFromDecision,
   explainIncrementalDecision,

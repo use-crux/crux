@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   indexProjectAstFromSyntaxRecordProvider,
   type StaticExtractionTiming,
-} from '../index'
+} from '..'
 import { createProvidedStaticSyntaxFrontend, createTypeScriptStaticSyntaxFrontend } from '../indexer/static/syntax-record'
 
 const roots: string[] = []

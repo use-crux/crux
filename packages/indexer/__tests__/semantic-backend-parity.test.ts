@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProjectSemantic } from '../index'
+import { indexProjectSemantic } from '..'
 import type { IndexPatchFacts } from '../indexer/patches'
 import { createNativeSemanticBackend, createSemanticIndexService, createTypeScriptSemanticBackend } from '../indexer/semantic/service'
 import {

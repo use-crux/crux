@@ -10,7 +10,7 @@ import {
 } from '../preflight'
 import { semanticSupportSources } from '../../semantic-support'
 import { measureSemanticTiming, measureSemanticTimingAsync } from '../instrumentation'
-import { collectProjectedSemanticEvidence } from '../evidence'
+import { collectProjectedSemanticEvidence } from '../evidence/projection'
 import { semanticProjectSessionIdentity } from './session'
 import {
   createSemanticBackendFromSelection,

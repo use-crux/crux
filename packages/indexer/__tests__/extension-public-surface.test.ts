@@ -309,6 +309,7 @@ describe('public indexer extension surface', () => {
       'SourceFrameUnavailable',
       'SourceFrameUnavailableReason',
       'SourceLocation',
+      'SourceResolverFileSystem',
       'SourceResolverOptions',
       'SourceResolverWorkerRequest',
     ])

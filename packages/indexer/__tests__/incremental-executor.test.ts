@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProject, indexProjectIncremental, indexProjectSemantic } from '../index'
+import { indexProject, indexProjectIncremental, indexProjectSemantic } from '..'
 import { applyIndexPatch, indexPatchFromSnapshot, emptyIndexPatchState } from '../indexer/patches'
 
 const roots: string[] = []

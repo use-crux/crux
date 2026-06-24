@@ -7,7 +7,7 @@ import {
   relationDiagnosticsFromReport,
   relationIdentity,
   resolveRelationModel,
-} from '../indexer/relations/index'
+} from '../indexer/relations'
 import { staticParseResultFromFacts } from '../indexer/static/read-model'
 import type { IndexRelationPolicy } from '../indexer/relations/types'
 import type { StaticFoundDefinition } from '../indexer/types'

@@ -1,6 +1,6 @@
 import type { ExtractedFacts, IndexerExtensionRuntime } from '../../extensions'
 import { extractedFactsFromStaticExtractionResult } from '../../extensions'
-import type { StaticRecordExtractorIdentity } from '../../extensions/static-record-runtime'
+import type { StaticRecordExtractorIdentity } from '../../extensions/static-record-adapter/runtime'
 import type { StaticNativeFactProjection, StaticSyntaxFileRecord } from './types'
 
 /**

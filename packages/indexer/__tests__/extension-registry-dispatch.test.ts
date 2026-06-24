@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createExtensionRegistry, extractorsForCall } from '../indexer/extensions/registry'
+import { createExtensionRegistry, extractorsForCall } from '../indexer/extensions/runtime/registry'
 import type { IndexerExtension } from '../indexer/extensions'
 
 describe('extension registry dispatch', () => {

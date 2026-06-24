@@ -14,7 +14,7 @@ export {
   type CheckStaticRulesForProjectInput,
   type ExtractStaticEvidenceBatchForProjectInput,
   type StaticExtensionWorkerProjectInput,
-} from './indexer/extensions/static-extension-worker'
+} from './indexer/extensions/static-evidence/worker'
 export {
   loadStaticExtensionHostManifestForProject,
   type LoadStaticExtensionHostManifestForProjectInput,
@@ -27,4 +27,4 @@ export type {
   ExtractStaticEvidenceBatchResult,
   LoadStaticExtensionHostManifestInput,
   LoadStaticExtensionHostManifestResult,
-} from './indexer/extensions/static-extension-host'
+} from './indexer/extensions/static-evidence/host'

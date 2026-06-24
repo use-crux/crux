@@ -1,8 +1,8 @@
-export { createDefinitionBuilder, createEmptySourceRefBuilder, createReferenceBuilder } from './builders'
-export { facts, none, projectDefinition } from './facts'
-export { callPattern, newPattern, patternCallNames } from './patterns'
-export { relationSpecFromPolicy, validateRelationSpecs } from './relation-specs'
-export { isIndexerExtensionAllowed, validateIndexerExtensionManifest } from './manifest'
+export { createDefinitionBuilder, createEmptySourceRefBuilder, createReferenceBuilder } from './public-contract/builders'
+export { facts, none, projectDefinition } from './public-contract/facts'
+export { callPattern, newPattern, patternCallNames } from './public-contract/patterns'
+export { relationSpecFromPolicy, validateRelationSpecs } from './public-contract/relation-specs'
+export { isIndexerExtensionAllowed, validateIndexerExtensionManifest } from './loading/manifest'
 export {
   INDEXER_EXTENSION_API_VERSION,
   loadIndexerExtensionReferences,
@@ -13,15 +13,15 @@ export {
   type ResolvedIndexerExtension,
   type ResolveIndexerExtensionReferencesInput,
   type ResolveIndexerExtensionReferencesResult,
-} from './loading'
+} from './loading/references'
 export {
   createExtensionRegistry,
   extractorsForCall,
   type ExtensionRegistry,
   type RegisteredExtractor,
-} from './registry'
-export { staticFoundDefinitionFromExtractedFacts, staticFoundDefinitionsFromExtractedFacts } from './static-normalizer'
-export { createStaticRecordEvidenceReader, type StaticRecordEvidenceReaderInput } from './static-evidence'
+} from './runtime/registry'
+export { staticFoundDefinitionFromExtractedFacts, staticFoundDefinitionsFromExtractedFacts } from './static-record-adapter/normalizer'
+export { createStaticRecordEvidenceReader, type StaticRecordEvidenceReaderInput } from './static-evidence/record-reader'
 export {
   checkStaticRules,
   extractStaticEvidenceBatch,
@@ -40,7 +40,7 @@ export {
   type StaticExtensionHostNodeReport,
   type StaticExtensionHostRuntimeInput,
   type StaticRuleGraphInput,
-} from './static-extension-host'
+} from './static-evidence/host'
 export {
   checkStaticRulesForProject,
   extractStaticEvidenceBatchForProject,
@@ -49,13 +49,13 @@ export {
   type ExtractStaticEvidenceBatchForProjectInput,
   type LoadStaticExtensionHostManifestForProjectInput,
   type StaticExtensionWorkerProjectInput,
-} from './static-extension-worker'
+} from './static-evidence/worker'
 export type {
   StaticExtensionNativeFinalizeFacts,
   StaticExtensionNativeRelationRef,
-} from './static-extension-host-facts'
-export { staticInterestManifestFromExtensions } from './static-interest'
-export { createStaticExtensionRegistry, extractFactsWithExtensionRegistry } from './static-adapter'
+} from './static-evidence/host-facts'
+export { staticInterestManifestFromExtensions } from './static-evidence/interests'
+export { createStaticExtensionRegistry, extractFactsWithExtensionRegistry } from './static-record-adapter/adapter'
 export {
   createIndexerExtensionRuntime,
   checkExtensionRules,
@@ -70,13 +70,13 @@ export {
   type StaticExtractionProjectionInput,
   type StaticExtractionInput,
   type StaticExtractionResult,
-} from './runtime'
+} from './runtime/engine'
 export type {
   StaticExtensionHostManifest,
   StaticExtractorHostMode,
   StaticExtractorHostPlan,
-} from './extension-host-manifest'
-export type { StaticRecordExtractionInput } from './static-record-runtime'
+} from './native-coverage/host-manifest'
+export type { StaticRecordExtractionInput } from './static-record-adapter/runtime'
 export type {
   IndexEmitter,
   IndexExtractor,
@@ -134,4 +134,4 @@ export type {
   StaticObjectMapIdentifierEntry,
   StaticObjectReader,
   UnresolvedReference,
-} from './types'
+} from './public-contract/types'

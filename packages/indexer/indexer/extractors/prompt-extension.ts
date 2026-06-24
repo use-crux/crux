@@ -1,7 +1,7 @@
 import type { StaticRelationRef } from '../types'
 import { facts, type IndexExtractor, type ExtractContext, type ExtractedSourceRef } from '../extensions'
-import { internalIdentifierRefsForConfigProperty } from '../extensions/internal-config'
-import { internalDataAccessRefsForConfigProperties } from '../extensions/internal-data-access'
+import { internalIdentifierRefsForConfigProperty } from '../extensions/static-record-adapter/config'
+import { internalDataAccessRefsForConfigProperties } from '../extensions/static-record-adapter/data-access'
 import { primitiveDataIntelligence, type PrimitiveDataAccessRef } from './data-access'
 import {
   injectionUseEntriesForConfigProperty,

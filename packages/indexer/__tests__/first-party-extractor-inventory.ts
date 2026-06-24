@@ -1,5 +1,5 @@
 import { createIndexerExtensionRuntime } from '../indexer/extensions'
-import { nativeStaticExtractorCoverage } from '../indexer/extensions/native-static-coverage'
+import { nativeStaticExtractorCoverage } from '../indexer/extensions/native-coverage/coverage'
 import { cruxCoreExtension } from '../indexer/extractors/crux-core-extension'
 
 /**

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProject } from '../index'
+import { indexProject } from '..'
 import { loadIndexerExtensionReferences } from '../indexer/extensions'
 
 const testDir = dirname(fileURLToPath(import.meta.url))

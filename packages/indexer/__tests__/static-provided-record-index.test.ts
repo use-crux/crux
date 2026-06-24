@@ -7,7 +7,7 @@ import {
   indexProjectAstFromSyntaxRecordProvider,
   indexProjectAstFromSyntaxRecords,
   inspectProjectStaticSyntaxPlan,
-} from '../index'
+} from '..'
 import {
   createTypeScriptStaticSyntaxFrontend,
   RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,

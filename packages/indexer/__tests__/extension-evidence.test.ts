@@ -1,7 +1,7 @@
 import type { ProjectDefinitionKind } from '@crux/core/project-index'
 import { describe, expect, it } from 'vitest'
 import { createIndexerExtensionRuntime, facts, type IndexerExtension } from '../indexer/extensions'
-import { createStaticRecordEvidenceReader } from '../indexer/extensions/static-evidence'
+import { createStaticRecordEvidenceReader } from '../indexer/extensions/static-evidence/record-reader'
 import { createTypeScriptStaticSyntaxFrontend } from '../indexer/static/syntax-record'
 
 describe('indexer extension evidence contract', () => {

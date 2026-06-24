@@ -1,5 +1,5 @@
 import type { SemanticAnalyzeInput, SemanticBackendIdentity } from '../service/types'
-import type { SemanticEvidenceBatchSource } from '../evidence'
+import type { SemanticEvidenceBatchSource } from '../evidence/projection'
 
 /** Native semantic engine implementations available behind the native backend. */
 export type NativeSemanticEngineName = 'tsgo'

@@ -1,5 +1,5 @@
 import { type IndexExtractor } from '../extensions'
-import { internalStaticCallContext } from '../extensions/internal-native'
+import { internalStaticCallContext } from '../extensions/static-record-adapter/native-context'
 import { routingFactsFromStaticContext } from './routing'
 import { routingFactsFromRecordContext } from './routing-record'
 
