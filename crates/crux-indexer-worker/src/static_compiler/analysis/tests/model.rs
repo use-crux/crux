@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use crate::protocol::static_compiler::{
+use crate::protocol::native_static::{
     NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeFile, NativeStaticAnalyzeRequest,
     NativeStaticDigestIdentity, NativeStaticMethod, NativeStaticPlan, NativeStaticRunIdentity,
     NativeStaticSourceFile, NativeStaticVersionIdentity,

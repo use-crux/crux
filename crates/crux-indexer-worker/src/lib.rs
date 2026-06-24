@@ -1,10 +1,9 @@
 pub(crate) mod protocol {
-    pub(crate) mod static_compile;
-    pub(crate) mod static_compiler;
-    pub(crate) mod syntax_record;
-    pub(crate) mod syntax_worker;
+    pub(crate) mod native_static;
+    pub(crate) mod static_syntax;
+    pub(crate) mod worker;
 
-    pub(crate) use syntax_record::*;
+    pub(crate) use static_syntax::*;
 }
 
 pub(crate) mod syntax {
@@ -109,26 +108,14 @@ pub(crate) mod primitives {
     }
 }
 
+pub(crate) mod native_static;
+mod server;
 pub(crate) mod static_compiler;
 
-pub(crate) mod worker {
-    pub(crate) mod analyze_stream;
-    pub(crate) mod compile_stream;
-    pub(crate) mod finalize_stream;
-    pub(crate) mod io;
-    pub(crate) mod parse;
-    pub(crate) mod static_compiler;
-    #[cfg(test)]
-    pub(crate) mod static_compiler_tests;
-    #[cfg(test)]
-    pub(crate) mod stream_tests;
-    pub(crate) mod syntax;
-    pub(crate) mod telemetry;
-}
-
-mod serve;
-
-pub use serve::run_from_args;
+pub use server::run_from_args;
 
 #[cfg(test)]
-pub(crate) use serve::{parse_serve_request, write_serve_response};
+pub(crate) use server::{parse_serve_request, write_serve_response};
+
+#[cfg(test)]
+mod architecture_tests;

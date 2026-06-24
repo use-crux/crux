@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use crate::protocol::static_compiler::{
+use crate::protocol::native_static::{
     NativeStaticCacheTelemetry, NativeStaticFactTelemetry, NativeStaticFileTelemetry,
     NativeStaticNativeOnlyTelemetry, NativeStaticTelemetry, NativeStaticTiming,
 };

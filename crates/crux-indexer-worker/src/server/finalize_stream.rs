@@ -2,9 +2,9 @@ use std::io::Write;
 
 use serde_json::json;
 
-use crate::protocol::static_compiler::NativeStaticFinalizeRequest;
-use crate::worker::io::write_json_line;
-use crate::worker::static_compiler::handle_finalize;
+use crate::native_static::pipeline;
+use crate::protocol::native_static::NativeStaticFinalizeRequest;
+use crate::server::io::write_json_line;
 
 /// Write native static finalization as Project Index patch-event stream chunks.
 ///
@@ -16,7 +16,7 @@ pub(crate) fn write_finalize_stream<W: Write>(
     id: u64,
     request: NativeStaticFinalizeRequest,
 ) -> Result<(), String> {
-    let mut response = handle_finalize(request);
+    let mut response = pipeline::finalize(request);
     for event in response.events.drain(..) {
         write_json_line(
             stdout,

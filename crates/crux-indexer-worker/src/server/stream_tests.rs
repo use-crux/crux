@@ -1,11 +1,11 @@
 use serde_json::json;
 
 use crate::parse_serve_request;
-use crate::protocol::static_compiler::{
+use crate::protocol::native_static::{
     NATIVE_STATIC_ANALYZE_METHOD, NATIVE_STATIC_COMPILE_METHOD, NATIVE_STATIC_FINALIZE_METHOD,
     NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeResponse, NativeStaticFinalizeResponse,
 };
-use crate::worker::static_compiler_tests::{
+use crate::server::native_static_tests::{
     run_identity_json, serve_response_lines_json, skeleton_plan_json,
 };
 

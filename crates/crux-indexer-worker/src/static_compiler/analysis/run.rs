@@ -6,7 +6,7 @@ use serde_json::{Map, Value};
 use crate::{
     primitives::facts::project_native_facts_with_records,
     protocol::StaticSyntaxFileRecord,
-    protocol::static_compiler::NativeStaticAnalyzeRequest,
+    protocol::native_static::NativeStaticAnalyzeRequest,
     static_compiler::analysis::parse::{
         ParsedAnalyzeFile, parsed_analyze_file, primary_analyze_files,
     },

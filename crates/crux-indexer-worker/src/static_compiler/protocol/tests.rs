@@ -2,7 +2,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
-use crate::protocol::static_compiler::{
+use crate::protocol::native_static::{
     NATIVE_STATIC_ANALYZE_METHOD, NATIVE_STATIC_FINALIZE_METHOD, NATIVE_STATIC_PREPARE_METHOD,
     NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeRequest, NativeStaticAnalyzeResponse,
     NativeStaticFinalizeRequest, NativeStaticFinalizeResponse, NativeStaticPrepareRequest,

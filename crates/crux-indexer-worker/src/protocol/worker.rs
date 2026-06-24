@@ -1,8 +1,32 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::protocol::{
     StaticSyntaxCallInterest, StaticSyntaxConstructorInterest, StaticSyntaxFileRecord,
 };
+
+/// Generic JSON-lines response envelope shared by compiler worker methods.
+///
+/// The envelope is intentionally small: routing and streaming stay in
+/// `server`, while protocol modules own the serializable wire shape that Go
+/// validates at the process boundary.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkerResponseEnvelope {
+    pub id: u64,
+    pub ok: bool,
+    pub response: Value,
+}
+
+impl WorkerResponseEnvelope {
+    pub(crate) fn ok<T: Serialize>(id: u64, response: T) -> Self {
+        Self {
+            id,
+            ok: true,
+            response: serde_json::to_value(response).expect("worker response should serialize"),
+        }
+    }
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]

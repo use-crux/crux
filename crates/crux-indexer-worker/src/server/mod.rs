@@ -1,9 +1,22 @@
-use std::io::{self, BufRead, Write};
+use std::io::{BufRead, Write, stdin, stdout};
 
 use serde_json::Value;
 
 use crate::protocol::WorkerRequest;
-use crate::worker;
+
+mod analyze_stream;
+mod compile_stream;
+mod finalize_stream;
+mod io;
+mod native_static;
+mod parse;
+mod static_syntax;
+
+#[cfg(test)]
+pub(crate) mod native_static_tests;
+
+#[cfg(test)]
+mod stream_tests;
 
 pub fn run_from_args() -> Result<(), String> {
     let mode = std::env::args().nth(1);
@@ -14,8 +27,8 @@ pub fn run_from_args() -> Result<(), String> {
 }
 
 fn serve() -> Result<(), String> {
-    let stdin = io::stdin();
-    let mut stdout = io::stdout().lock();
+    let stdin = stdin();
+    let mut stdout = stdout().lock();
     for line in stdin.lock().lines() {
         let line = line.map_err(|error| error.to_string())?;
         if line.trim().is_empty() {
@@ -30,14 +43,13 @@ fn serve() -> Result<(), String> {
 #[derive(Debug)]
 pub(crate) enum ServeRequest {
     Syntax(WorkerRequest),
-    NativeStatic(worker::static_compiler::NativeStaticWorkerRequest),
+    NativeStatic(native_static::NativeStaticWorkerRequest),
 }
 
 pub(crate) fn parse_serve_request(line: &str) -> Result<ServeRequest, String> {
     let value: Value = serde_json::from_str(line).map_err(|error| error.to_string())?;
-    if worker::parse::has_worker_method(&value) {
-        return worker::parse::parse_native_static_worker_request(value)
-            .map(ServeRequest::NativeStatic);
+    if parse::has_worker_method(&value) {
+        return parse::parse_native_static_worker_request(value).map(ServeRequest::NativeStatic);
     }
     serde_json::from_value::<WorkerRequest>(value)
         .map(ServeRequest::Syntax)
@@ -49,9 +61,9 @@ pub(crate) fn write_serve_response<W: Write>(
     request: ServeRequest,
 ) -> Result<(), String> {
     match request {
-        ServeRequest::Syntax(request) => worker::syntax::write_response(stdout, request),
+        ServeRequest::Syntax(request) => static_syntax::write_response(stdout, request),
         ServeRequest::NativeStatic(request) => {
-            worker::static_compiler::write_native_static_worker_response(stdout, request)
+            native_static::write_native_static_worker_response(stdout, request)
         }
     }
 }

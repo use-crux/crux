@@ -1,99 +1,37 @@
-//! JSON-lines worker adapter for the native static compiler skeleton.
+//! Stage facade for the native static compiler.
 //!
-//! Phase 3 keeps syntax records intact while adding an internal branch for the
-//! Phase 2 native static structs.
+//! `server` owns JSON-lines IO. This module owns the stage-level compiler
+//! behavior and returns protocol-shaped values without writing to stdout.
 
-use std::io::Write;
-
-use serde::Serialize;
 use serde_json::Value;
 
-use crate::protocol::static_compiler::{
-    NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeRequest, NativeStaticCompileRequest,
-    NativeStaticFactTelemetry, NativeStaticFinalizeRequest, NativeStaticFinalizeResponse,
-    NativeStaticMethod, NativeStaticPlan, NativeStaticPrepareRequest, NativeStaticPrepareResponse,
+use crate::native_static::telemetry::{
+    cache_telemetry, count_fact_telemetry, fact_telemetry_from_counts, file_telemetry, telemetry,
 };
+use crate::protocol::native_static::{
+    NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeRequest, NativeStaticAnalyzeResponse,
+    NativeStaticCompileRequest, NativeStaticFactTelemetry, NativeStaticFinalizeRequest,
+    NativeStaticFinalizeResponse, NativeStaticMethod, NativeStaticPlan, NativeStaticPrepareRequest,
+    NativeStaticPrepareResponse,
+};
+use crate::static_compiler::analysis::run::analyze_native_static_facts;
+use crate::static_compiler::core::evidence::extension_evidence_jobs;
 use crate::static_compiler::finalizer::events::{
     NativeStaticFinalizeEventOptions, project_from_fact_values, project_patch_events,
 };
 use crate::static_compiler::finalizer::run::finalize_native_static_values_with_lint_facts;
 use crate::static_compiler::lint::filter::NativeStaticLintOptions;
 use crate::static_compiler::relation::model::relation_policy_table_from_value_with_builtins;
-use crate::worker::analyze_stream::write_analyze_stream;
-use crate::worker::finalize_stream::write_finalize_stream;
-use crate::worker::io::write_json_line;
-use crate::worker::telemetry::{
-    cache_telemetry, count_fact_telemetry, fact_telemetry_from_counts, file_telemetry, telemetry,
-};
 
-/// A native static request wrapped in the existing JSON-lines worker envelope.
-#[derive(Debug)]
-pub(crate) enum NativeStaticWorkerRequest {
-    Prepare(u64, NativeStaticPrepareRequest),
-    Analyze(u64, NativeStaticAnalyzeRequest),
-    Finalize(u64, NativeStaticFinalizeRequest),
-    Compile(u64, NativeStaticCompileRequest),
+/// Native static analyze output before JSON-lines streaming.
+pub(crate) struct NativeStaticAnalyzeOutput {
+    pub(crate) extension_evidence_jobs: Vec<Value>,
+    pub(crate) facts: Vec<Value>,
+    pub(crate) response: NativeStaticAnalyzeResponse,
 }
 
-/// JSON-lines response envelope for native static compiler requests.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct NativeStaticWorkerResponse {
-    id: u64,
-    ok: bool,
-    response: Value,
-}
-
-impl NativeStaticWorkerResponse {
-    fn ok<T: Serialize>(id: u64, response: T) -> Self {
-        Self {
-            id,
-            ok: true,
-            response: serde_json::to_value(response)
-                .expect("native static response should serialize"),
-        }
-    }
-}
-
-/// Produce a normalized placeholder response for the requested native stage.
-pub(crate) fn handle_native_static_worker_request(
-    request: NativeStaticWorkerRequest,
-) -> NativeStaticWorkerResponse {
-    match request {
-        NativeStaticWorkerRequest::Prepare(id, request) => {
-            NativeStaticWorkerResponse::ok(id, handle_prepare(request))
-        }
-        NativeStaticWorkerRequest::Analyze(_, _) => {
-            unreachable!("nativeStaticAnalyze is stream-only")
-        }
-        NativeStaticWorkerRequest::Finalize(id, request) => {
-            NativeStaticWorkerResponse::ok(id, handle_finalize(request))
-        }
-        NativeStaticWorkerRequest::Compile(_, _) => {
-            unreachable!("nativeStaticCompile is stream-only")
-        }
-    }
-}
-
-pub(crate) fn write_native_static_worker_response<W: Write>(
-    stdout: &mut W,
-    request: NativeStaticWorkerRequest,
-) -> Result<(), String> {
-    match request {
-        NativeStaticWorkerRequest::Analyze(id, request) if request.stream => {
-            write_analyze_stream(stdout, id, request)
-        }
-        NativeStaticWorkerRequest::Finalize(id, request) if request.stream => {
-            write_finalize_stream(stdout, id, request)
-        }
-        NativeStaticWorkerRequest::Compile(id, request) if request.stream => {
-            crate::worker::compile_stream::write_compile_stream(stdout, id, request)
-        }
-        request => write_json_line(stdout, &handle_native_static_worker_request(request)),
-    }
-}
-
-fn handle_prepare(request: NativeStaticPrepareRequest) -> NativeStaticPrepareResponse {
+/// Prepare a native static plan from selected source files and cache identity.
+pub(crate) fn prepare(request: NativeStaticPrepareRequest) -> NativeStaticPrepareResponse {
     let files = request.files;
     let primary_files = request.primary_files.unwrap_or_else(|| files.clone());
     let cache_hits = files
@@ -137,9 +75,38 @@ fn handle_prepare(request: NativeStaticPrepareRequest) -> NativeStaticPrepareRes
     }
 }
 
-pub(crate) fn handle_finalize(
-    request: NativeStaticFinalizeRequest,
-) -> NativeStaticFinalizeResponse {
+/// Analyze prepared files into native static facts and extension evidence jobs.
+pub(crate) fn analyze(request: &NativeStaticAnalyzeRequest) -> NativeStaticAnalyzeOutput {
+    let extension_evidence_jobs = extension_evidence_jobs(request);
+    let facts = analyze_native_static_facts(request);
+    let selected = request.plan.files.len() as u64;
+    let cache_hits = request.plan.cache_hits.len() as u64;
+    let cache_misses = request.plan.cache_misses.len() as u64;
+    let analyzed = request.files.len() as u64;
+    let skipped = selected.saturating_sub(analyzed);
+
+    NativeStaticAnalyzeOutput {
+        extension_evidence_jobs,
+        facts,
+        response: NativeStaticAnalyzeResponse {
+            protocol_version: NATIVE_STATIC_PROTOCOL_VERSION,
+            method: NativeStaticMethod::Analyze,
+            facts: Vec::new(),
+            diagnostics: Vec::new(),
+            extension_evidence_jobs: Vec::new(),
+            telemetry: telemetry(
+                "analyze",
+                analyzed,
+                file_telemetry(selected, cache_hits, cache_misses, analyzed, skipped),
+                cache_telemetry(cache_hits, cache_misses, 0),
+                NativeStaticFactTelemetry::default(),
+            ),
+        },
+    }
+}
+
+/// Finalize native and extension facts into Project Index patch events.
+pub(crate) fn finalize(request: NativeStaticFinalizeRequest) -> NativeStaticFinalizeResponse {
     let policies = relation_policy_table_from_value_with_builtins(request.relation_specs.as_ref());
     let lint_options = NativeStaticLintOptions {
         emit_builtin_lints: request.emit_builtin_lints.unwrap_or(true),
@@ -213,4 +180,41 @@ pub(crate) fn handle_finalize(
             facts,
         ),
     }
+}
+
+/// Analyze and finalize a native-only compile request in one pipeline call.
+pub(crate) fn compile(request: NativeStaticCompileRequest) -> NativeStaticFinalizeResponse {
+    let analyze_request = NativeStaticAnalyzeRequest {
+        protocol_version: request.protocol_version,
+        method: NativeStaticMethod::Analyze,
+        stream: true,
+        identity: request.identity.clone(),
+        plan: request.plan,
+        files: request.files,
+        extension_evidence_interests: None,
+    };
+    let mut native_facts = request.native_facts;
+    native_facts.extend(analyze(&analyze_request).facts);
+
+    let finalize_request = NativeStaticFinalizeRequest {
+        protocol_version: request.protocol_version,
+        method: NativeStaticMethod::Finalize,
+        stream: true,
+        identity: request.identity,
+        native_facts,
+        extension_facts: request.extension_facts,
+        lint_facts: Vec::new(),
+        relation_specs: request.relation_specs,
+        rule_results: None,
+        lint_config: request.lint_config,
+        lint_files: request.lint_files,
+        emit_builtin_lints: request.emit_builtin_lints,
+        patch_phase: None,
+        patch_invalidates: None,
+        cache: None,
+    };
+
+    let mut response = finalize(finalize_request);
+    response.method = NativeStaticMethod::Compile;
+    response
 }

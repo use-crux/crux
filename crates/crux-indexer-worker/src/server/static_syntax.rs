@@ -5,12 +5,12 @@ use std::sync::mpsc;
 
 use rayon::prelude::*;
 
-use crate::protocol::syntax_worker::BatchWorkerFileRequest;
+use crate::protocol::worker::BatchWorkerFileRequest;
 use crate::protocol::{
     self, BatchWorkerRequest, ParseRequest, SingleWorkerRequest, WorkerRequest, WorkerResponse,
     WorkerStreamEvent,
 };
-use crate::worker::io::write_json_line;
+use crate::server::io::write_json_line;
 
 pub(crate) fn write_response<W: Write>(
     stdout: &mut W,

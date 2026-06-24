@@ -1,11 +1,11 @@
 use serde_json::Value;
 
-use crate::protocol::static_compiler::{
+use crate::protocol::native_static::{
     NATIVE_STATIC_ANALYZE_METHOD, NATIVE_STATIC_COMPILE_METHOD, NATIVE_STATIC_FINALIZE_METHOD,
     NATIVE_STATIC_PREPARE_METHOD, NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeRequest,
     NativeStaticCompileRequest, NativeStaticFinalizeRequest, NativeStaticPrepareRequest,
 };
-use crate::worker::static_compiler::NativeStaticWorkerRequest;
+use crate::server::native_static::NativeStaticWorkerRequest;
 
 /// Return whether a JSON value looks like an internal native static request.
 pub(crate) fn has_worker_method(value: &Value) -> bool {

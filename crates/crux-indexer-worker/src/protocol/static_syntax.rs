@@ -1,7 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-pub use crate::protocol::syntax_worker::{
+pub use crate::protocol::worker::{
     BatchWorkerRequest, SingleWorkerRequest, WorkerRequest, WorkerResponse, WorkerStreamEvent,
 };
 
