@@ -13,10 +13,14 @@ coverage
 # Rust build outputs
 target/
 
-# Native CLI build outputs
+# Local runtime build outputs
 packages/cli/crux
 packages/cli/bin
 packages/cli/dist
+packages/local/crux
+packages/local/crux.exe
+packages/local/crux-indexer-worker
+packages/local/crux-indexer-worker.exe
 
 .crux
 

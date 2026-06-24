@@ -277,7 +277,7 @@ func TestProjectIndexWorker_indexProjectAstPatchErrorsWhenNativeAstEnabledWithou
 			}
 			if (req.method === 'indexProjectAstFromSyntaxRecords') {
 				const record = req.syntaxRecords?.[0]
-				if (record?.sourceHash !== 'syntax-worker-hash' || record?.frontend?.name !== 'oxc-rust') {
+				if (record?.sourceHash !== 'indexer-worker-hash' || record?.frontend?.name !== 'oxc-rust') {
 					process.stdout.write(JSON.stringify({
 						protocolVersion: 2,
 						type: 'phase:error',
@@ -337,9 +337,9 @@ func TestProjectIndexWorker_indexProjectAstPatchErrorsWhenNativeAstEnabledWithou
 		t.Fatalf("write script: %v", err)
 	}
 
-	syntaxWorker := &streamOnlyProjectSyntaxParser{}
+	syntaxParser := &streamOnlyProjectSyntaxParser{}
 	worker := NewProjectIndexWorker(script)
-	worker.WithProjectSyntaxWorker(syntaxWorker)
+	worker.WithProjectSyntaxParser(syntaxParser)
 	defer worker.Close()
 
 	_, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static")
@@ -445,10 +445,10 @@ func TestProjectIndexWorker_indexProjectAstPatchFallsBackWhenNativeAstConfigDisa
 		t.Fatalf("write script: %v", err)
 	}
 
-	syntaxWorker := NewProjectSyntaxWorker(shellPath(t), fakeNativeSyntaxWorker(t))
-	defer syntaxWorker.Close()
+	syntaxParser := NewProjectIndexerWorkerProcess(shellPath(t), fakeIndexerWorker(t))
+	defer syntaxParser.Close()
 	worker := NewProjectIndexWorker(script)
-	worker.WithProjectSyntaxWorker(syntaxWorker)
+	worker.WithProjectSyntaxParser(syntaxParser)
 	defer worker.Close()
 
 	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-disabled")
@@ -557,22 +557,22 @@ func TestProjectIndexWorker_corruptAstStreamDoesNotUpdateServiceStore(t *testing
 	}
 }
 
-func fakeNativeSyntaxWorker(t *testing.T) string {
+func fakeIndexerWorker(t *testing.T) string {
 	t.Helper()
 	telemetry := `"telemetry":{"node":{"started":false,"reasons":[]},"nativeOnly":{"eligible":false,"reasons":["test-skeleton"]},"timings":[],"files":{"selected":1,"cacheHits":0,"cacheMisses":1,"analyzed":1,"skipped":0},"cache":{"readHits":0,"readMisses":1,"writes":0,"writeErrors":0},"facts":{"definitions":0,"relations":0,"sourceRefs":0,"diagnostics":0,"lintFindings":0,"ruleDescriptors":0,"sources":0,"sourceGraph":0}}`
 	script := strings.ReplaceAll(`while IFS= read -r line; do
 id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
-  *nativeStaticPrepare*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"nativeStaticPrepare","plan":{"root":"/unused","files":[{"file":"/unused.ts","sourceHash":"syntax-worker-hash"}],"cacheHits":[],"cacheMisses":[{"file":"/unused.ts","sourceHash":"syntax-worker-hash"}]},"diagnostics":[],$TELEMETRY}}\n' "$id" ;;
+  *nativeStaticPrepare*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"nativeStaticPrepare","plan":{"root":"/unused","files":[{"file":"/unused.ts","sourceHash":"indexer-worker-hash"}],"cacheHits":[],"cacheMisses":[{"file":"/unused.ts","sourceHash":"indexer-worker-hash"}]},"diagnostics":[],$TELEMETRY}}\n' "$id" ;;
   *nativeStaticAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"nativeStaticAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id" ;;
   *nativeStaticFinalize*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"nativeStaticFinalize","events":[],$TELEMETRY}}\n' "$id" ;;
-  *'"files"'*callNames*prompt*) printf '{"id":%s,"type":"record","index":0,"record":{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":"/unused.ts","sourceHash":"syntax-worker-hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}}\n{"id":%s,"type":"done","count":1}\n' "$id" "$id" ;;
-  *callNames*prompt*) printf '{"id":%s,"ok":true,"record":{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":"/unused.ts","sourceHash":"syntax-worker-hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}}\n' "$id" ;;
-  *) printf '{"id":1,"ok":false,"error":"unexpected syntax request"}\n' ;;
+  *'"files"'*callNames*prompt*) printf '{"id":%s,"type":"record","index":0,"record":{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":"/unused.ts","sourceHash":"indexer-worker-hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}}\n{"id":%s,"type":"done","count":1}\n' "$id" "$id" ;;
+  *callNames*prompt*) printf '{"id":%s,"ok":true,"record":{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":"/unused.ts","sourceHash":"indexer-worker-hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}}\n' "$id" ;;
+  *) printf '{"id":1,"ok":false,"error":"unexpected indexer worker request"}\n' ;;
 esac
 done
 `, "$TELEMETRY", telemetry)
-	return writeShellScript(t, "native-syntax-worker.sh", script)
+	return writeShellScript(t, "indexer-worker.sh", script)
 }
 
 func findTestDefinition(definitions []store.ProjectDefinition, id string) *store.ProjectDefinition {

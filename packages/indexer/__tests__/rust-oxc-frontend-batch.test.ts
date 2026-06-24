@@ -7,11 +7,11 @@ import { createRustOxcStaticSyntaxFrontend } from '../testing/rust-oxc-frontend'
 
 describe('Rust/Oxc syntax frontend batch protocol', () => {
   it('parses many files through one worker request', async () => {
-    const worker = await writeFakeSyntaxWorker()
-    const previousWorker = process.env.CRUX_INDEXER_SYNTAX_WORKER
-    const previousBatch = process.env.CRUX_INDEXER_SYNTAX_BATCH
-    process.env.CRUX_INDEXER_SYNTAX_WORKER = worker
-    process.env.CRUX_INDEXER_SYNTAX_BATCH = '1'
+    const worker = await writeFakeIndexerWorker()
+    const previousWorker = process.env.CRUX_INDEXER_WORKER
+    const previousBatch = process.env.CRUX_INDEXER_WORKER_BATCH
+    process.env.CRUX_INDEXER_WORKER = worker
+    process.env.CRUX_INDEXER_WORKER_BATCH = '1'
     try {
       const frontend = createRustOxcStaticSyntaxFrontend()
       expect(frontend.parseFiles).toBeTypeOf('function')
@@ -24,19 +24,19 @@ describe('Rust/Oxc syntax frontend batch protocol', () => {
       expect(records?.map((record) => record.file)).toEqual(['/fixture/src/a.ts', '/fixture/src/b.ts'])
       expect(records?.map((record) => record.diagnostics[0]?.message)).toEqual(['batch:2:0', 'batch:2:1'])
     } finally {
-      restoreEnv('CRUX_INDEXER_SYNTAX_WORKER', previousWorker)
-      restoreEnv('CRUX_INDEXER_SYNTAX_BATCH', previousBatch)
+      restoreEnv('CRUX_INDEXER_WORKER', previousWorker)
+      restoreEnv('CRUX_INDEXER_WORKER_BATCH', previousBatch)
     }
   })
 
   it('can send a disk-source batch request without embedding source text', async () => {
-    const worker = await writeFakeSyntaxWorker()
-    const previousWorker = process.env.CRUX_INDEXER_SYNTAX_WORKER
-    const previousBatch = process.env.CRUX_INDEXER_SYNTAX_BATCH
-    const previousReadFiles = process.env.CRUX_INDEXER_SYNTAX_READ_FILES
-    process.env.CRUX_INDEXER_SYNTAX_WORKER = worker
-    process.env.CRUX_INDEXER_SYNTAX_BATCH = '1'
-    process.env.CRUX_INDEXER_SYNTAX_READ_FILES = '1'
+    const worker = await writeFakeIndexerWorker()
+    const previousWorker = process.env.CRUX_INDEXER_WORKER
+    const previousBatch = process.env.CRUX_INDEXER_WORKER_BATCH
+    const previousReadFiles = process.env.CRUX_INDEXER_WORKER_READ_FILES
+    process.env.CRUX_INDEXER_WORKER = worker
+    process.env.CRUX_INDEXER_WORKER_BATCH = '1'
+    process.env.CRUX_INDEXER_WORKER_READ_FILES = '1'
     try {
       const frontend = createRustOxcStaticSyntaxFrontend()
       const records = await frontend.parseFiles?.([
@@ -46,9 +46,9 @@ describe('Rust/Oxc syntax frontend batch protocol', () => {
 
       expect(records?.map((record) => record.diagnostics[0]?.message)).toEqual(['disk:2:0', 'disk:2:1'])
     } finally {
-      restoreEnv('CRUX_INDEXER_SYNTAX_WORKER', previousWorker)
-      restoreEnv('CRUX_INDEXER_SYNTAX_BATCH', previousBatch)
-      restoreEnv('CRUX_INDEXER_SYNTAX_READ_FILES', previousReadFiles)
+      restoreEnv('CRUX_INDEXER_WORKER', previousWorker)
+      restoreEnv('CRUX_INDEXER_WORKER_BATCH', previousBatch)
+      restoreEnv('CRUX_INDEXER_WORKER_READ_FILES', previousReadFiles)
     }
   })
 })
@@ -57,7 +57,7 @@ function syntaxInput(file: string, source: string): StaticSyntaxFileInput {
   return { root: '/fixture', file, source }
 }
 
-async function writeFakeSyntaxWorker(): Promise<string> {
+async function writeFakeIndexerWorker(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'crux-rust-oxc-worker-'))
   const worker = join(dir, 'worker.mjs')
   await writeFile(

@@ -29,12 +29,12 @@ func (w *ProjectIndexWorker) runNativeStaticCompilerSkeleton(
 	projectName string,
 	files []projectNativeStaticSourceFile,
 ) (projectNativeStaticSkeletonResult, error) {
-	if w == nil || w.syntaxWorker == nil {
+	if w == nil || w.syntaxParser == nil {
 		return projectNativeStaticSkeletonResult{}, fmt.Errorf("project native static compiler is not configured")
 	}
-	compiler, ok := w.syntaxWorker.(ProjectNativeStaticCompiler)
+	compiler, ok := w.syntaxParser.(ProjectNativeStaticCompiler)
 	if !ok {
-		return projectNativeStaticSkeletonResult{}, fmt.Errorf("project syntax worker does not implement native static compiler")
+		return projectNativeStaticSkeletonResult{}, fmt.Errorf("project syntax parser does not implement native static compiler")
 	}
 
 	identity := projectNativeStaticSkeletonIdentity()

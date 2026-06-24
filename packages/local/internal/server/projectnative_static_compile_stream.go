@@ -14,7 +14,7 @@ type projectNativeStaticCompileStreamer interface {
 	NativeStaticCompileStream(context.Context, projectNativeStaticCompileRequest, projectNativeStaticFinalizeStreamHandler) (projectNativeStaticFinalizeResponse, error)
 }
 
-func (w *ProjectSyntaxWorker) NativeStaticCompileStream(
+func (w *ProjectIndexerWorkerProcess) NativeStaticCompileStream(
 	ctx context.Context,
 	request projectNativeStaticCompileRequest,
 	handle projectNativeStaticFinalizeStreamHandler,
@@ -74,7 +74,7 @@ func (w *ProjectSyntaxWorker) NativeStaticCompileStream(
 	return response, nil
 }
 
-func (p *ProjectSyntaxWorkerPool) NativeStaticCompileStream(
+func (p *ProjectIndexerWorkerPool) NativeStaticCompileStream(
 	ctx context.Context,
 	request projectNativeStaticCompileRequest,
 	handle projectNativeStaticFinalizeStreamHandler,

@@ -27,7 +27,7 @@ type projectNativeStaticAnalyzeStreamEvent struct {
 	Error                 string                              `json:"error,omitempty"`
 }
 
-func (w *ProjectSyntaxWorker) NativeStaticAnalyzeStream(
+func (w *ProjectIndexerWorkerProcess) NativeStaticAnalyzeStream(
 	ctx context.Context,
 	request projectNativeStaticAnalyzeRequest,
 	handle projectNativeStaticAnalyzeStreamHandler,
@@ -91,7 +91,7 @@ func (w *ProjectSyntaxWorker) NativeStaticAnalyzeStream(
 	return response, nil
 }
 
-func (p *ProjectSyntaxWorkerPool) NativeStaticAnalyzeStream(
+func (p *ProjectIndexerWorkerPool) NativeStaticAnalyzeStream(
 	ctx context.Context,
 	request projectNativeStaticAnalyzeRequest,
 	handle projectNativeStaticAnalyzeStreamHandler,

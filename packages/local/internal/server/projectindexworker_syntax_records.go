@@ -11,19 +11,19 @@ import (
 )
 
 func (w *ProjectIndexWorker) collectProjectSyntaxRecords(ctx context.Context, plan devtools.ProjectStaticSyntaxPlan) ([]json.RawMessage, error) {
-	if w.syntaxWorker == nil {
-		return nil, fmt.Errorf("project syntax worker is not configured")
+	if w.syntaxParser == nil {
+		return nil, fmt.Errorf("project syntax parser is not configured")
 	}
 	files := projectSyntaxPlanFilesToParse(plan)
 	records := make([]json.RawMessage, len(files))
 	if len(files) == 0 {
 		return records, nil
 	}
-	if batchParser, ok := w.syntaxWorker.(ProjectSyntaxBatchParser); ok {
+	if batchParser, ok := w.syntaxParser.(ProjectSyntaxBatchParser); ok {
 		return w.collectProjectSyntaxRecordsBatch(ctx, plan, batchParser)
 	}
 
-	concurrency := w.syntaxWorker.Concurrency()
+	concurrency := w.syntaxParser.Concurrency()
 	if concurrency < 1 {
 		concurrency = 1
 	}
@@ -123,7 +123,7 @@ func (w *ProjectIndexWorker) parseProjectSyntaxRecord(ctx context.Context, plan 
 	if err != nil {
 		return nil, fmt.Errorf("read source for native syntax record %s: %w", file, err)
 	}
-	record, err := w.syntaxWorker.ParseFile(ctx, ProjectSyntaxParseRequest{
+	record, err := w.syntaxParser.ParseFile(ctx, ProjectSyntaxParseRequest{
 		Root:                     plan.Root,
 		File:                     file,
 		Source:                   string(source),

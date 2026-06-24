@@ -72,7 +72,7 @@ func TestProjectIndexWorkerNativeStaticReplaysWarmStaticCacheFacts(t *testing.T)
 
 	compiler := &nativeStaticCacheReplayCompiler{root: root}
 	worker := NewProjectIndexWorker("")
-	worker.WithProjectSyntaxWorker(compiler)
+	worker.WithProjectSyntaxParser(compiler)
 	defer worker.Close()
 
 	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-cache-replay")

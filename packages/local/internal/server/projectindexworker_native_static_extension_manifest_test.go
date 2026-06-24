@@ -51,7 +51,7 @@ func TestProjectIndexWorkerNativeStaticLoadsConfiguredExtensionManifestWithoutNo
 
 	compiler := &nativeStaticExtensionManifestCompiler{root: root, sourceFile: sourceFile}
 	worker := NewProjectIndexWorker(script)
-	worker.WithProjectSyntaxWorker(compiler)
+	worker.WithProjectSyntaxParser(compiler)
 	defer worker.Close()
 
 	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-extension-manifest")

@@ -15,38 +15,38 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 )
 
-const projectIndexerSyntaxWorkerEnv = "CRUX_INDEXER_SYNTAX_WORKER"
-const projectIndexerSyntaxWorkerPoolSizeEnv = "CRUX_INDEXER_SYNTAX_WORKER_POOL_SIZE"
+const projectIndexerWorkerEnv = "CRUX_INDEXER_WORKER"
+const projectIndexerWorkerPoolSizeEnv = "CRUX_INDEXER_WORKER_POOL_SIZE"
 const projectIndexerNativeStaticCacheStatusEnv = "CRUX_INDEXER_NATIVE_STATIC_CACHE_STATUS"
 
 var osExecutable = os.Executable
 
-// WithProjectSyntaxWorker enables the native Rust/Oxc static syntax path.
-func (w *ProjectIndexWorker) WithProjectSyntaxWorker(worker ProjectSyntaxParser) *ProjectIndexWorker {
-	w.syntaxWorker = worker
+// WithProjectSyntaxParser overrides the parser used for static syntax records.
+func (w *ProjectIndexWorker) WithProjectSyntaxParser(worker ProjectSyntaxParser) *ProjectIndexWorker {
+	w.syntaxParser = worker
 	return w
 }
 
-func projectSyntaxWorkerFromEnv() ProjectSyntaxParser {
-	commandPath, ok := projectSyntaxWorkerCommandPath()
+func projectIndexerWorkerFromEnv() ProjectSyntaxParser {
+	commandPath, ok := projectIndexerWorkerCommandPath()
 	if !ok {
 		return nil
 	}
-	if strings.TrimSpace(os.Getenv(projectIndexerSyntaxWorkerPoolSizeEnv)) == "" {
-		return NewAdaptiveProjectSyntaxWorkerPool(defaultProjectSyntaxWorkerPoolSize(), commandPath, "serve")
+	if strings.TrimSpace(os.Getenv(projectIndexerWorkerPoolSizeEnv)) == "" {
+		return NewAdaptiveProjectIndexerWorkerPool(defaultProjectIndexerWorkerPoolSize(), commandPath, "serve")
 	}
-	return NewProjectSyntaxWorkerPool(projectSyntaxWorkerPoolSizeFromEnv(), commandPath, "serve")
+	return NewProjectIndexerWorkerPool(projectIndexerWorkerPoolSizeFromEnv(), commandPath, "serve")
 }
 
-func projectSyntaxWorkerCommandPath() (string, bool) {
-	if explicit := strings.TrimSpace(os.Getenv(projectIndexerSyntaxWorkerEnv)); explicit != "" {
+func projectIndexerWorkerCommandPath() (string, bool) {
+	if explicit := strings.TrimSpace(os.Getenv(projectIndexerWorkerEnv)); explicit != "" {
 		return explicit, true
 	}
 	executable, err := osExecutable()
 	if err != nil || executable == "" {
 		return "", false
 	}
-	candidate := filepath.Join(filepath.Dir(executable), projectSyntaxWorkerBinaryName())
+	candidate := filepath.Join(filepath.Dir(executable), projectIndexerWorkerBinaryName())
 	info, err := os.Stat(candidate)
 	if err != nil || info.IsDir() {
 		return "", false
@@ -54,27 +54,27 @@ func projectSyntaxWorkerCommandPath() (string, bool) {
 	return candidate, true
 }
 
-func projectSyntaxWorkerBinaryName() string {
+func projectIndexerWorkerBinaryName() string {
 	if runtime.GOOS == "windows" {
-		return "crux-indexer-syntax.exe"
+		return "crux-indexer-worker.exe"
 	}
-	return "crux-indexer-syntax"
+	return "crux-indexer-worker"
 }
 
-func projectSyntaxWorkerPoolSizeFromEnv() int {
-	explicit := strings.TrimSpace(os.Getenv(projectIndexerSyntaxWorkerPoolSizeEnv))
+func projectIndexerWorkerPoolSizeFromEnv() int {
+	explicit := strings.TrimSpace(os.Getenv(projectIndexerWorkerPoolSizeEnv))
 	if explicit == "" {
-		return defaultProjectSyntaxWorkerPoolSize()
+		return defaultProjectIndexerWorkerPoolSize()
 	}
 	size, err := strconv.Atoi(explicit)
 	if err != nil || size < 1 {
-		slog.Warn("invalid project syntax worker pool size", "env", projectIndexerSyntaxWorkerPoolSizeEnv, "value", explicit)
-		return defaultProjectSyntaxWorkerPoolSize()
+		slog.Warn("invalid project indexer worker pool size", "env", projectIndexerWorkerPoolSizeEnv, "value", explicit)
+		return defaultProjectIndexerWorkerPoolSize()
 	}
 	return size
 }
 
-func defaultProjectSyntaxWorkerPoolSize() int {
+func defaultProjectIndexerWorkerPoolSize() int {
 	size := runtime.GOMAXPROCS(0)
 	if size < 1 {
 		return 1
@@ -91,7 +91,7 @@ func nativeStaticCacheStatusEnabled() bool {
 }
 
 // InspectProjectStaticSyntaxPlan returns the static parser plan used by the
-// native syntax worker path.
+// Rust/Oxc indexer worker path.
 func (w *ProjectIndexWorker) InspectProjectStaticSyntaxPlan(ctx context.Context, root, configPath, projectName string) (devtools.ProjectStaticSyntaxPlan, error) {
 	result, err := w.inspectProjectStaticSyntaxPlan(ctx, root, configPath, projectName)
 	if err != nil {
@@ -150,7 +150,7 @@ func (w *ProjectIndexWorker) indexProjectAstPatchResultFromNativeSyntaxRecords(c
 		}
 		return devtools.ProjectAstIndexResult{Patch: patch}, nil
 	}
-	compiler, ok := w.syntaxWorker.(ProjectNativeStaticCompiler)
+	compiler, ok := w.syntaxParser.(ProjectNativeStaticCompiler)
 	if !ok {
 		timing.TotalMs = elapsedMs(started)
 		w.recordLastAstTiming(timing)

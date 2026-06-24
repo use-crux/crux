@@ -16,10 +16,10 @@ const (
 	projectNativeStaticCompileMethod   = "nativeStaticCompile"
 )
 
-// ProjectNativeStaticCompiler is the Go-owned boundary for the Rust native
-// static compiler skeleton. It is intentionally separate from syntax-record
-// parsing so tests can prove the new compiler lane does not call Node
-// projection or syntax-record bridges.
+// ProjectNativeStaticCompiler is the Go-owned boundary for the Rust/Oxc static
+// compiler lane. It is intentionally separate from syntax-record parsing so
+// tests can prove the compiler lane does not call Node projection or
+// syntax-record bridges.
 type ProjectNativeStaticCompiler interface {
 	NativeStaticPrepare(context.Context, projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error)
 	NativeStaticAnalyzeStream(context.Context, projectNativeStaticAnalyzeRequest, projectNativeStaticAnalyzeStreamHandler) (projectNativeStaticAnalyzeResponse, error)
@@ -222,7 +222,7 @@ type projectNativeStaticWorkerResponse[Resp any] struct {
 	Error    string `json:"error,omitempty"`
 }
 
-func (w *ProjectSyntaxWorker) NativeStaticPrepare(ctx context.Context, request projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
+func (w *ProjectIndexerWorkerProcess) NativeStaticPrepare(ctx context.Context, request projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
 	id := w.nextID.Add(1)
 	request.ID = id
 	envelope, err := projectNativeStaticCall[projectNativeStaticWorkerResponse[projectNativeStaticPrepareResponse]](ctx, w, request)
@@ -236,7 +236,7 @@ func (w *ProjectSyntaxWorker) NativeStaticPrepare(ctx context.Context, request p
 	return response, validateProjectNativeStaticResponse(response.ProtocolVersion, response.Method, projectNativeStaticPrepareMethod)
 }
 
-func (w *ProjectSyntaxWorker) NativeStaticFinalize(ctx context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
+func (w *ProjectIndexerWorkerProcess) NativeStaticFinalize(ctx context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
 	id := w.nextID.Add(1)
 	request.ID = id
 	envelope, err := projectNativeStaticCall[projectNativeStaticWorkerResponse[projectNativeStaticFinalizeResponse]](ctx, w, request)
@@ -250,7 +250,7 @@ func (w *ProjectSyntaxWorker) NativeStaticFinalize(ctx context.Context, request 
 	return response, validateProjectNativeStaticResponse(response.ProtocolVersion, response.Method, projectNativeStaticFinalizeMethod)
 }
 
-func projectNativeStaticCall[Resp any](ctx context.Context, worker *ProjectSyntaxWorker, request any) (Resp, error) {
+func projectNativeStaticCall[Resp any](ctx context.Context, worker *ProjectIndexerWorkerProcess, request any) (Resp, error) {
 	var zero Resp
 	if worker == nil || worker.worker == nil {
 		return zero, fmt.Errorf("project native static compiler is not configured")

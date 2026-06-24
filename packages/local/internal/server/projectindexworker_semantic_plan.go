@@ -16,7 +16,7 @@ func (w *ProjectIndexWorker) PlanProjectSemanticRequest(
 	configPath string,
 	projectName string,
 ) (devtools.ProjectSemanticIndexRequest, error) {
-	if w == nil || w.syntaxWorker == nil {
+	if w == nil || w.syntaxParser == nil {
 		return devtools.ProjectSemanticIndexRequest{}, fmt.Errorf("semantic planning requires native static source planning")
 	}
 	planResult, err := w.inspectProjectStaticSyntaxPlan(ctx, root, configPath, projectName)

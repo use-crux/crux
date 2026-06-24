@@ -12,7 +12,7 @@ import { RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static/synt
 
 const DEFAULT_CONSTRUCTOR_NAMES = ['Agent'] as const
 const MIN_RUSTC_VERSION = [1, 93, 0] as const
-const WORKER_MANIFEST = fileURLToPath(new URL('../native/syntax/Cargo.toml', import.meta.url))
+const WORKSPACE_MANIFEST = fileURLToPath(new URL('../../../Cargo.toml', import.meta.url))
 const INDEXER_PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
 
 interface RustOxcWorkerRequest {
@@ -220,7 +220,10 @@ function ensureWorkerStarted(state: RustOxcWorkerState): ChildProcessWithoutNull
   })
   child.on('error', (error) => rejectAll(state, error))
   child.on('exit', (code, signal) => {
-    rejectAll(state, new Error(`Rust/Oxc syntax worker exited code=${code ?? 'null'} signal=${signal ?? 'null'} ${state.stderr}`))
+    rejectAll(
+      state,
+      new Error(`Rust/Oxc indexer worker exited code=${code ?? 'null'} signal=${signal ?? 'null'} ${state.stderr}`),
+    )
     state.child = undefined
     state.lines?.close()
     state.lines = undefined
@@ -233,7 +236,7 @@ function handleWorkerLine(state: RustOxcWorkerState, line: string): void {
   try {
     response = JSON.parse(line) as RustOxcWorkerResponse
   } catch (error) {
-    rejectAll(state, new Error(`Invalid Rust/Oxc syntax worker response: ${errorMessage(error)}`))
+    rejectAll(state, new Error(`Invalid Rust/Oxc indexer worker response: ${errorMessage(error)}`))
     return
   }
   const pending = state.pending.get(response.id)
@@ -244,7 +247,7 @@ function handleWorkerLine(state: RustOxcWorkerState, line: string): void {
   } else if (response.ok && 'records' in response) {
     pending.resolve(response.records)
   } else {
-    pending.reject(new Error(response.error ?? 'Rust/Oxc syntax worker failed'))
+    pending.reject(new Error(response.error ?? 'Rust/Oxc indexer worker failed'))
   }
   scheduleIdleShutdown(state)
 }
@@ -277,24 +280,36 @@ function disposeWorker(state: RustOxcWorkerState): void {
 }
 
 function workerCommand(): { readonly bin: string; readonly args: readonly string[] } {
-  const explicitWorker = process.env.CRUX_INDEXER_SYNTAX_WORKER
-  if (explicitWorker) return { bin: explicitWorker, args: ['serve'] }
+  const explicitWorker = workerEnvValue('CRUX_INDEXER_WORKER')
+  if (explicitWorker.value) return { bin: explicitWorker.value, args: ['serve'] }
   const status = rustOxcSyntaxFrontendTestStatus()
   if (!status.available) {
-    throw new Error(`Rust/Oxc syntax worker test helper is unavailable: ${status.reason ?? 'unknown reason'}`)
+    throw new Error(`Rust/Oxc indexer worker test helper is unavailable: ${status.reason ?? 'unknown reason'}`)
   }
   return {
     bin: 'cargo',
-    args: ['run', '--quiet', '--manifest-path', WORKER_MANIFEST, '--', 'serve'],
+    args: [
+      'run',
+      '--quiet',
+      '--manifest-path',
+      WORKSPACE_MANIFEST,
+      '--package',
+      'crux-indexer-worker',
+      '--bin',
+      'crux-indexer-worker',
+      '--',
+      'serve',
+    ],
   }
 }
 
 function rustOxcWorkerPoolSize(): number {
-  const explicit = process.env.CRUX_INDEXER_SYNTAX_WORKER_POOL_SIZE
-  if (explicit !== undefined) {
-    const parsed = Number(explicit)
+  const explicit = workerEnvValue('CRUX_INDEXER_WORKER_POOL_SIZE')
+  if (explicit.value !== undefined) {
+    const value = explicit.value
+    const parsed = Number(value)
     if (!Number.isInteger(parsed) || parsed <= 0) {
-      throw new Error(`CRUX_INDEXER_SYNTAX_WORKER_POOL_SIZE must be a positive integer, received ${explicit}`)
+      throw new Error(`${explicit.name} must be a positive integer, received ${value}`)
     }
     return parsed
   }
@@ -302,11 +317,11 @@ function rustOxcWorkerPoolSize(): number {
 }
 
 function rustOxcBatchEnabled(): boolean {
-  return process.env.CRUX_INDEXER_SYNTAX_BATCH !== '0'
+  return workerEnvValue('CRUX_INDEXER_WORKER_BATCH').value !== '0'
 }
 
 function rustOxcReadSourceFromDiskEnabled(): boolean {
-  return process.env.CRUX_INDEXER_SYNTAX_READ_FILES === '1'
+  return workerEnvValue('CRUX_INDEXER_WORKER_READ_FILES').value === '1'
 }
 
 function workerFileRequest(input: StaticSyntaxFileInput, readSourceFromDisk: boolean): RustOxcWorkerFileRequest {
@@ -328,7 +343,7 @@ function detectRustOxcSyntaxFrontendTestStatus(): RustOxcSyntaxFrontendTestStatu
   if (rustOxcTestsSkippedByEnv()) {
     return { available: false, reason: 'CRUX_INDEXER_SKIP_RUST_OXC_TESTS is enabled' }
   }
-  if (process.env.CRUX_INDEXER_SYNTAX_WORKER) return { available: true }
+  if (workerEnvValue('CRUX_INDEXER_WORKER').value) return { available: true }
   const cargo = commandOutput('cargo', ['--version'])
   if (!cargo.ok) return { available: false, reason: cargo.reason }
   const rustc = commandOutput('rustc', ['--version'])
@@ -344,7 +359,10 @@ function detectRustOxcSyntaxFrontendTestStatus(): RustOxcSyntaxFrontendTestStatu
   return { available: true }
 }
 
-function commandOutput(command: string, args: readonly string[]): { readonly ok: true; readonly output: string } | { readonly ok: false; readonly reason: string } {
+function commandOutput(
+  command: string,
+  args: readonly string[],
+): { readonly ok: true; readonly output: string } | { readonly ok: false; readonly reason: string } {
   const result = spawnSync(command, [...args], { encoding: 'utf8' })
   if (result.error) return { ok: false, reason: `${command} is unavailable: ${result.error.message}` }
   if (result.status !== 0) {
@@ -377,4 +395,9 @@ function formatVersion(version: readonly [number, number, number]): string {
 function rustOxcTestsSkippedByEnv(): boolean {
   const value = process.env.CRUX_INDEXER_SKIP_RUST_OXC_TESTS?.trim().toLowerCase()
   return value === '1' || value === 'true' || value === 'yes' || value === 'on'
+}
+
+function workerEnvValue(name: string): { readonly name: string; readonly value: string | undefined } {
+  const value = process.env[name]?.trim()
+  return { name, value: value || undefined }
 }

@@ -9,10 +9,10 @@ DEVTOOLS_DIST := ../devtools/dist
 DEVTOOLS_UI := ../devtools/ui/dist
 EMBED_DIR := internal/server/embed
 UI_EMBED_DIR := internal/server/ui-embed
-NATIVE_SYNTAX_MANIFEST := ../indexer/native/syntax/Cargo.toml
-NATIVE_SYNTAX_TARGET_DIR := ../indexer/native/syntax/target
+INDEXER_WORKER_MANIFEST := ../../Cargo.toml
+INDEXER_WORKER_TARGET_DIR := ../../target
 HOST_EXE_EXT := $(if $(filter Windows_NT,$(OS)),.exe,)
-NATIVE_SYNTAX_BINARY := crux-indexer-syntax$(HOST_EXE_EXT)
+INDEXER_WORKER_BINARY := crux-indexer-worker$(HOST_EXE_EXT)
 
 $(EMBED_DIR) $(UI_EMBED_DIR) dist:
 	mkdir -p $@
@@ -22,7 +22,7 @@ help:
 	@echo "Crux Local targets:"
 	@echo "  make build           Build devtools workers/UI, embed them, then build ./crux"
 	@echo "  make build-devtools  Build bundled Node workers and React UI"
-	@echo "  make build-native-syntax  Build the current-platform Rust/Oxc syntax worker"
+	@echo "  make build-indexer-worker  Build the current-platform Rust/Oxc indexer worker"
 	@echo "  make embed           Copy built devtools assets into Go embed directories"
 	@echo "  make build-go        Build only the Go binary using current embedded assets"
 	@echo "  make all             Build devtools assets, embed them, then cross-compile all platforms"
@@ -91,13 +91,13 @@ embed-ui: $(UI_EMBED_DIR)
 		exit 1; \
 	fi
 
-.PHONY: build-native-syntax
-build-native-syntax:
-	$(CARGO) build --release --manifest-path "$(NATIVE_SYNTAX_MANIFEST)"
-	cp "$(NATIVE_SYNTAX_TARGET_DIR)/release/$(NATIVE_SYNTAX_BINARY)" "$(NATIVE_SYNTAX_BINARY)"
+.PHONY: build-indexer-worker
+build-indexer-worker:
+	$(CARGO) build --release --manifest-path "$(INDEXER_WORKER_MANIFEST)" --package crux-indexer-worker --bin crux-indexer-worker
+	cp "$(INDEXER_WORKER_TARGET_DIR)/release/$(INDEXER_WORKER_BINARY)" "$(INDEXER_WORKER_BINARY)"
 
 .PHONY: build
-build: build-devtools embed build-native-syntax build-go
+build: build-devtools embed build-indexer-worker build-go
 
 .PHONY: build-go
 build-go:
@@ -138,7 +138,7 @@ win32-arm64: dist
 
 .PHONY: clean
 clean:
-	rm -rf dist/ $(BINARY) $(NATIVE_SYNTAX_BINARY)
+	rm -rf dist/ $(BINARY) $(INDEXER_WORKER_BINARY)
 
 .PHONY: test
 test:

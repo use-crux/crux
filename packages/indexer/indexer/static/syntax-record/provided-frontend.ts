@@ -110,8 +110,8 @@ export interface ProvidedStaticSyntaxFrontendOptions {
 /**
  * Creates a syntax frontend from records supplied by an external parser.
  *
- * This is the Go/Rust handoff adapter: Go can parse files through a native
- * syntax worker, then ask Node to project those records through the existing
+ * This is the Go/Rust handoff adapter: Go can parse files through the Rust/Oxc
+ * indexer worker, then ask Node to project those records through the existing
  * compiler and trusted TypeScript extension runtime without exposing parser AST
  * objects or pointers.
  */

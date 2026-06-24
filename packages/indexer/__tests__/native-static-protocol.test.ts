@@ -170,7 +170,7 @@ describe('native static compiler protocol', () => {
 function nativeStaticRunIdentity(): NativeStaticRunIdentity {
   return {
     protocolVersion: NATIVE_STATIC_COMPILER_PROTOCOL_VERSION,
-    compiler: { name: 'crux-indexer-syntax', version: 'test' },
+    compiler: { name: 'crux-indexer-worker', version: 'test' },
     oxc: { name: 'oxc_parser', version: '0.133.0' },
     primitiveManifest: { name: '@crux/indexer/primitives', version: 'phase-2', digest: 'sha256:primitives' },
     relationPolicy: { name: '@crux/indexer/relations', version: 'phase-2', digest: 'sha256:relations' },

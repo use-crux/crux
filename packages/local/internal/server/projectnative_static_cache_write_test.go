@@ -24,7 +24,7 @@ func TestProjectIndexWorkerNativeStaticWritesWarmStaticCacheManifest(t *testing.
 
 	compiler := &nativeStaticCacheWriteCompiler{root: root, sourceFile: sourceFile}
 	worker := NewProjectIndexWorker("")
-	worker.WithProjectSyntaxWorker(compiler)
+	worker.WithProjectSyntaxParser(compiler)
 	defer worker.Close()
 
 	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-cache-write")

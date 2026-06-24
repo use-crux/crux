@@ -21,7 +21,7 @@ func TestProjectIndexWorkerCollectProjectSyntaxRecordsUsesParserConcurrency(t *t
 		fileWithSource(t, root, "src/three.ts"),
 	}
 	parser := newBlockingProjectSyntaxParser(2, len(files))
-	worker := &ProjectIndexWorker{syntaxWorker: parser}
+	worker := &ProjectIndexWorker{syntaxParser: parser}
 
 	resultCh := make(chan struct {
 		records []json.RawMessage
@@ -67,7 +67,7 @@ func TestProjectIndexWorkerCollectProjectSyntaxRecordsBatchUsesDiskSourceHandoff
 		filepath.Join(root, "src", "two.ts"),
 	}
 	parser := &recordingBatchProjectSyntaxParser{}
-	worker := &ProjectIndexWorker{syntaxWorker: parser}
+	worker := &ProjectIndexWorker{syntaxParser: parser}
 
 	records, err := worker.collectProjectSyntaxRecords(context.Background(), devtools.ProjectStaticSyntaxPlan{
 		Root:                     root,
@@ -116,7 +116,7 @@ func TestProjectIndexWorkerCollectProjectSyntaxRecordsUsesFilesToParse(t *testin
 		fileWithSource(t, root, "src/two.ts"),
 	}
 	parser := &recordingProjectSyntaxParser{concurrency: 2}
-	worker := &ProjectIndexWorker{syntaxWorker: parser}
+	worker := &ProjectIndexWorker{syntaxParser: parser}
 
 	records, err := worker.collectProjectSyntaxRecords(context.Background(), devtools.ProjectStaticSyntaxPlan{
 		Root:             root,
@@ -159,7 +159,7 @@ func TestProjectSyntaxParseRequestsFromPlanUsesEmptyFilesToParse(t *testing.T) {
 	}
 }
 
-func TestAdaptiveProjectSyntaxWorkerCount(t *testing.T) {
+func TestAdaptiveProjectIndexerWorkerCount(t *testing.T) {
 	tests := []struct {
 		name        string
 		requests    int
@@ -175,15 +175,15 @@ func TestAdaptiveProjectSyntaxWorkerCount(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := adaptiveProjectSyntaxWorkerCount(test.requests, test.maxWorkers); got != test.wantWorkers {
-				t.Fatalf("adaptiveProjectSyntaxWorkerCount(%d, %d) = %d, want %d", test.requests, test.maxWorkers, got, test.wantWorkers)
+			if got := adaptiveProjectIndexerWorkerCount(test.requests, test.maxWorkers); got != test.wantWorkers {
+				t.Fatalf("adaptiveProjectIndexerWorkerCount(%d, %d) = %d, want %d", test.requests, test.maxWorkers, got, test.wantWorkers)
 			}
 		})
 	}
 }
 
-func TestProjectSyntaxWorkerPoolActiveWorkerCount(t *testing.T) {
-	adaptive := &ProjectSyntaxWorkerPool{workers: make([]*ProjectSyntaxWorker, 4), adaptive: true}
+func TestProjectIndexerWorkerPoolActiveWorkerCount(t *testing.T) {
+	adaptive := &ProjectIndexerWorkerPool{workers: make([]*ProjectIndexerWorkerProcess, 4), adaptive: true}
 	if got := adaptive.activeWorkerCount(16); got != 1 {
 		t.Fatalf("adaptive active workers for small project = %d, want 1", got)
 	}
@@ -199,7 +199,7 @@ func TestProjectSyntaxWorkerPoolActiveWorkerCount(t *testing.T) {
 	if got := adaptive.activeWorkerCount(2400); got != 4 {
 		t.Fatalf("adaptive active workers for large project = %d, want 4", got)
 	}
-	fixed := &ProjectSyntaxWorkerPool{workers: make([]*ProjectSyntaxWorker, 4)}
+	fixed := &ProjectIndexerWorkerPool{workers: make([]*ProjectIndexerWorkerProcess, 4)}
 	if got := fixed.activeWorkerCount(16); got != 4 {
 		t.Fatalf("fixed active workers = %d, want 4", got)
 	}

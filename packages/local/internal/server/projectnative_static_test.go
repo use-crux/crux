@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-func TestProjectSyntaxWorkerNativeStaticCompilerCallsCommandWorker(t *testing.T) {
-	worker := NewProjectSyntaxWorker(shellPath(t), fakeNativeStaticCompilerWorker(t))
+func TestProjectIndexerWorkerNativeStaticCompilerCallsCommandWorker(t *testing.T) {
+	worker := NewProjectIndexerWorkerProcess(shellPath(t), fakeNativeStaticCompilerWorker(t))
 	defer worker.Close()
 
 	identity := projectNativeStaticSkeletonIdentity()
@@ -62,7 +62,7 @@ func TestProjectSyntaxWorkerNativeStaticCompilerCallsCommandWorker(t *testing.T)
 
 func TestProjectIndexWorkerRunNativeStaticCompilerSkeletonDoesNotUseSyntaxRecords(t *testing.T) {
 	compiler := &recordingNativeStaticCompiler{}
-	worker := &ProjectIndexWorker{syntaxWorker: compiler}
+	worker := &ProjectIndexWorker{syntaxParser: compiler}
 	files := []projectNativeStaticSourceFile{
 		{File: "/repo/src/cached.ts", SourceHash: "sha256:cached", CacheKey: "static:cached"},
 		{File: "/repo/src/miss.ts", SourceHash: "sha256:miss"},

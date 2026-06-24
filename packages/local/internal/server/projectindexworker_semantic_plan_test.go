@@ -17,7 +17,7 @@ func TestProjectIndexWorkerPlanProjectSemanticRequestUsesNativeStaticSourceProfi
 	primary := writeNativeStaticPlanCacheFixtureFile(t, root, "src/writer.ts", "import './helper'\nexport const writer = prompt({ id: 'writer' })\n")
 	helper := writeNativeStaticPlanCacheFixtureFile(t, root, "src/helper.ts", "export const helper = 'writer'\n")
 
-	worker := NewProjectIndexWorker("").WithProjectSyntaxWorker(noopProjectSyntaxParser{})
+	worker := NewProjectIndexWorker("").WithProjectSyntaxParser(noopProjectSyntaxParser{})
 	defer worker.Close()
 
 	request, err := worker.PlanProjectSemanticRequest(context.Background(), root, "", "project")

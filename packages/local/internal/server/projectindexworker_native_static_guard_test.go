@@ -67,7 +67,7 @@ func runNativeStaticGuardFallback(t *testing.T, extensionEvidenceJobs bool) (dev
 
 	compiler := &nativeStaticGuardCompiler{root: root, sourceFile: sourceFile, extensionEvidenceJobs: extensionEvidenceJobs}
 	worker := NewProjectIndexWorker(script)
-	worker.WithProjectSyntaxWorker(compiler)
+	worker.WithProjectSyntaxParser(compiler)
 	defer worker.Close()
 
 	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-guard")

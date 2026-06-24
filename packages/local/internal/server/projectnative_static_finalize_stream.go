@@ -20,7 +20,7 @@ type projectNativeStaticFinalizeStreamEvent struct {
 	Error    string                               `json:"error,omitempty"`
 }
 
-func (w *ProjectSyntaxWorker) NativeStaticFinalizeStream(
+func (w *ProjectIndexerWorkerProcess) NativeStaticFinalizeStream(
 	ctx context.Context,
 	request projectNativeStaticFinalizeRequest,
 	handle projectNativeStaticFinalizeStreamHandler,
@@ -80,7 +80,7 @@ func (w *ProjectSyntaxWorker) NativeStaticFinalizeStream(
 	return response, nil
 }
 
-func (p *ProjectSyntaxWorkerPool) NativeStaticFinalizeStream(
+func (p *ProjectIndexerWorkerPool) NativeStaticFinalizeStream(
 	ctx context.Context,
 	request projectNativeStaticFinalizeRequest,
 	handle projectNativeStaticFinalizeStreamHandler,

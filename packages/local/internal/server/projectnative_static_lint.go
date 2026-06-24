@@ -13,7 +13,7 @@ func (w *ProjectIndexWorker) IndexProjectLintPatch(ctx context.Context, request 
 	if w == nil || !request.ASTUsedNativeStatic {
 		return devtools.IndexPatch{}, nil
 	}
-	compiler, ok := w.syntaxWorker.(ProjectNativeStaticCompiler)
+	compiler, ok := w.syntaxParser.(ProjectNativeStaticCompiler)
 	if !ok {
 		return devtools.IndexPatch{}, fmt.Errorf("native static lint finalize requires a native static compiler")
 	}

@@ -80,7 +80,7 @@ func TestProjectIndexWorkerNativeStaticErrorsWhenFinalizeHasNoPatch(t *testing.T
 
 	compiler := &nativeStaticNoPatchCompiler{sourceFile: sourceFile}
 	worker := NewProjectIndexWorker(script)
-	worker.WithProjectSyntaxWorker(compiler)
+	worker.WithProjectSyntaxParser(compiler)
 	defer worker.Close()
 
 	_, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-fallback")

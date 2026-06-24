@@ -14,8 +14,8 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 )
 
-func TestProjectSyntaxWorkerNativeStaticAnalyzeStreamAcceptsChunkedEvents(t *testing.T) {
-	worker := NewProjectSyntaxWorker(shellPath(t), fakeNativeStaticAnalyzeStreamWorker(t))
+func TestProjectIndexerWorkerNativeStaticAnalyzeStreamAcceptsChunkedEvents(t *testing.T) {
+	worker := NewProjectIndexerWorkerProcess(shellPath(t), fakeNativeStaticAnalyzeStreamWorker(t))
 	defer worker.Close()
 
 	identity := projectNativeStaticSkeletonIdentity()
@@ -53,8 +53,8 @@ func TestProjectSyntaxWorkerNativeStaticAnalyzeStreamAcceptsChunkedEvents(t *tes
 	}
 }
 
-func TestProjectSyntaxWorkerNativeStaticAnalyzeStreamRejectsUnlabeledEvents(t *testing.T) {
-	worker := NewProjectSyntaxWorker(shellPath(t), fakeNativeStaticAnalyzeUnlabeledEventWorker(t))
+func TestProjectIndexerWorkerNativeStaticAnalyzeStreamRejectsUnlabeledEvents(t *testing.T) {
+	worker := NewProjectIndexerWorkerProcess(shellPath(t), fakeNativeStaticAnalyzeUnlabeledEventWorker(t))
 	defer worker.Close()
 
 	_, err := worker.NativeStaticAnalyzeStream(context.Background(), projectNativeStaticAnalyzeRequest{
@@ -74,8 +74,8 @@ func TestProjectSyntaxWorkerNativeStaticAnalyzeStreamRejectsUnlabeledEvents(t *t
 	}
 }
 
-func TestProjectSyntaxWorkerNativeStaticAnalyzeStreamIgnoresDoneResponseFacts(t *testing.T) {
-	worker := NewProjectSyntaxWorker(shellPath(t), fakeNativeStaticAnalyzeDoneFactsWorker(t))
+func TestProjectIndexerWorkerNativeStaticAnalyzeStreamIgnoresDoneResponseFacts(t *testing.T) {
+	worker := NewProjectIndexerWorkerProcess(shellPath(t), fakeNativeStaticAnalyzeDoneFactsWorker(t))
 	defer worker.Close()
 
 	response, err := worker.NativeStaticAnalyzeStream(context.Background(), projectNativeStaticAnalyzeRequest{
@@ -98,8 +98,8 @@ func TestProjectSyntaxWorkerNativeStaticAnalyzeStreamIgnoresDoneResponseFacts(t 
 	}
 }
 
-func TestProjectSyntaxWorkerNativeStaticFinalizeStreamAcceptsPatchEvents(t *testing.T) {
-	worker := NewProjectSyntaxWorker(shellPath(t), fakeNativeStaticFinalizeStreamWorker(t))
+func TestProjectIndexerWorkerNativeStaticFinalizeStreamAcceptsPatchEvents(t *testing.T) {
+	worker := NewProjectIndexerWorkerProcess(shellPath(t), fakeNativeStaticFinalizeStreamWorker(t))
 	defer worker.Close()
 
 	events := []json.RawMessage{}

@@ -19,7 +19,7 @@ type ProjectIndexWorker struct {
 	worker         *nodeworker.Worker
 	semanticWorker *ProjectSemanticWorker
 	runtimeWorker  *ProjectRuntimeWorker
-	syntaxWorker   ProjectSyntaxParser
+	syntaxParser   ProjectSyntaxParser
 	timingsMu      sync.Mutex
 	lastAstTiming  ProjectIndexAstTiming
 	planMu         sync.Mutex
@@ -69,7 +69,7 @@ func NewProjectIndexWorker(scriptPath string) *ProjectIndexWorker {
 		worker:         newNodeStreamWorker("project-indexer", embeddedProjectIndexer, scriptPath),
 		semanticWorker: NewProjectSemanticWorker(""),
 		runtimeWorker:  NewProjectRuntimeWorker(""),
-		syntaxWorker:   projectSyntaxWorkerFromEnv(),
+		syntaxParser:   projectIndexerWorkerFromEnv(),
 	}
 }
 
@@ -156,7 +156,7 @@ func (w *ProjectIndexWorker) IndexProjectAstPatchWithResult(
 	configPath string,
 	projectName string,
 ) (devtools.ProjectAstIndexResult, error) {
-	if w.syntaxWorker != nil {
+	if w.syntaxParser != nil {
 		return w.indexProjectAstPatchResultFromNativeSyntaxRecords(ctx, root, configPath, projectName)
 	}
 	patch, err := w.indexProjectAstPatchFromTypeScript(ctx, root, configPath, projectName)
@@ -276,8 +276,8 @@ func (w *ProjectIndexWorker) Close() error {
 			closeErrs = append(closeErrs, err)
 		}
 	}
-	if w.syntaxWorker != nil {
-		if err := w.syntaxWorker.Close(); err != nil {
+	if w.syntaxParser != nil {
+		if err := w.syntaxParser.Close(); err != nil {
 			closeErrs = append(closeErrs, err)
 		}
 	}

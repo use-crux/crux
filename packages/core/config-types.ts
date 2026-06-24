@@ -59,7 +59,7 @@ export interface CruxExperimentalIndexerNativeAstConfig {
    * Native static syntax frontend.
    *
    * `oxc` is the first implementation and is hosted by the local Go runtime
-   * through the Rust/Oxc syntax worker. Future native frontends can graduate
+   * through the Rust/Oxc indexer worker. Future native frontends can graduate
    * behind this unstable object without changing stable `indexer` config.
    */
   readonly frontend?: 'oxc'
