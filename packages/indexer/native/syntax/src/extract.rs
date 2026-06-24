@@ -46,7 +46,13 @@ pub fn parse_static_syntax_record(input: ParseRequest) -> Result<StaticSyntaxFil
     );
     let local_initializers =
         collect_local_initializers(&view, &parsed.program.body, &imports_by_local_name);
-    let native_facts = project_native_facts(&input.file, &imports, &local_initializers, &matches);
+    let native_facts = project_native_facts(
+        &input.file,
+        &input.source,
+        &imports,
+        &local_initializers,
+        &matches,
+    );
     let prune_native_fact_call_names = input
         .prune_native_fact_call_names
         .into_iter()

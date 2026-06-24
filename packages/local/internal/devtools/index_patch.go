@@ -53,8 +53,8 @@ type SemanticSourceProfileFile struct {
 
 type SemanticSourceProfileHints struct {
 	CruxCallNames             []string `json:"cruxCallNames,omitempty"`
-	HasZodObject              bool     `json:"hasZodObject,omitempty"`
-	NativeDirectCruxCandidate bool     `json:"nativeDirectCruxCandidate,omitempty"`
+	HasZodObject              bool     `json:"hasZodObject"`
+	NativeDirectCruxCandidate bool     `json:"nativeDirectCruxCandidate"`
 }
 
 type IndexPatchInvalidation struct {
@@ -156,6 +156,13 @@ func applyIndexPatch(state indexPatchState, patch IndexPatch) indexPatchState {
 	next.Index.Definitions = applyPatchSourceRefs(next.Index.Definitions, patch.Facts.SourceRefs)
 	next.Index.Relations = mergePatchFacts(next.Index.Relations, next.RelationPhases, patch.Phase, patch.Facts.Relations, relationMergeKey)
 	next.RelationPhases = updatePatchPhases(next.RelationPhases, patch.Phase, relationKeys(patch.Facts.Relations))
+	if patch.Phase == indexPatchPhaseQuality && patch.Facts.LintFindings != nil {
+		next.Index.LintFindings, next.LintFindingPhases = removeLintFindingsByPhase(
+			next.Index.LintFindings,
+			next.LintFindingPhases,
+			indexPatchPhaseQuality,
+		)
+	}
 	next.Index.LintFindings = mergePatchFacts(next.Index.LintFindings, next.LintFindingPhases, patch.Phase, patch.Facts.LintFindings, func(item store.IndexLintFinding) string { return item.ID })
 	next.LintFindingPhases = updatePatchPhases(next.LintFindingPhases, patch.Phase, lintFindingIDs(patch.Facts.LintFindings))
 	if patch.Facts.RuleDescriptors != nil {
@@ -167,6 +174,9 @@ func applyIndexPatch(state indexPatchState, patch IndexPatch) indexPatchState {
 		next.Index.SourceGraph = patch.Facts.SourceGraph
 	}
 	if patch.Facts.Diagnostics != nil {
+		if patch.Phase == indexPatchPhaseQuality {
+			next.DiagnosticsByPhase[patch.Phase] = nil
+		}
 		next.DiagnosticsByPhase[patch.Phase] = mergePatchDiagnostics(next.DiagnosticsByPhase[patch.Phase], patch.Facts.Diagnostics)
 		next.Index.Diagnostics = diagnosticsFromPatchPhases(next.DiagnosticsByPhase)
 	}
@@ -632,6 +642,21 @@ func filterPhaseMapByIndexLintFindings(phases map[string]IndexPatchPhase, findin
 		}
 	}
 	return next
+}
+
+func removeLintFindingsByPhase(findings []store.IndexLintFinding, phases map[string]IndexPatchPhase, phase IndexPatchPhase) ([]store.IndexLintFinding, map[string]IndexPatchPhase) {
+	nextFindings := make([]store.IndexLintFinding, 0, len(findings))
+	nextPhases := map[string]IndexPatchPhase{}
+	for _, finding := range findings {
+		if phases[finding.ID] == phase {
+			continue
+		}
+		nextFindings = append(nextFindings, finding)
+		if current := phases[finding.ID]; current != "" {
+			nextPhases[finding.ID] = current
+		}
+	}
+	return nextFindings, nextPhases
 }
 
 func sourceFileMatches(source *store.SourceLoc, files map[string]bool) bool {

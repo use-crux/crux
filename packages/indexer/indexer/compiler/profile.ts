@@ -1,4 +1,4 @@
-import type { IndexerExtension, IndexerExtensionRuntime } from '../extensions'
+import type { IndexerExtension, IndexerExtensionRuntime, ResolvedIndexerExtension } from '../extensions'
 import { createIndexerExtensionRuntime } from '../extensions'
 import { cruxCoreExtension } from '../extractors/crux-core-extension'
 export { compilerProfileCacheInputs } from '../cache-identity'
@@ -57,6 +57,33 @@ export function createProjectIndexCompilerRuntime(
   return {
     profile,
     extensionRuntime: createIndexerExtensionRuntime({ extensions: profile.extensions }),
+  }
+}
+
+/**
+ * Appends dynamically loaded extension manifests and their package identities to a compiler profile.
+ *
+ * Extension manifests expose their own behavior version, while the installed package version captures
+ * the concrete code artifact selected by user config. Both must participate in cache identity so a
+ * warm static cache cannot hide a package upgrade that leaves the manifest version unchanged.
+ */
+export function compilerProfileWithResolvedExtensions(
+  profile: ProjectIndexCompilerProfile,
+  extensions: readonly ResolvedIndexerExtension[],
+): ProjectIndexCompilerProfile {
+  if (extensions.length === 0) return profile
+  return {
+    ...profile,
+    extensions: [...profile.extensions, ...extensions.map((entry) => entry.extension)],
+    projections: [
+      ...(profile.projections ?? []),
+      ...extensions.map((entry) => ({
+        name: `indexer-extension-package:${entry.reference.package}#${entry.reference.export ?? 'default'}`,
+        version: entry.packageVersion ?? entry.extension.version,
+        phase: 'parse' as const,
+        reason: 'Configured Indexer extension package identity participates in static cache invalidation.',
+      })),
+    ],
   }
 }
 

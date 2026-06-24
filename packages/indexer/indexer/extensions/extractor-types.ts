@@ -7,6 +7,7 @@ import type {
   StaticArgumentReader,
   StaticObjectReader,
 } from './authoring-types'
+import type { IndexDependency } from './cache-dependency-types'
 import type { NativeSyntaxHandle } from './internal-native'
 import type { ExtensionIdentity } from './manifest-types'
 
@@ -289,20 +290,4 @@ export interface ExtractedSourceRef {
   readonly ref: ProjectSourceRef
 }
 
-/**
- * Dependency that can invalidate cached extraction or query results.
- *
- * V1 static parsing derives most dependencies from source imports, config
- * boundary files, and extension identities. The explicit type is present so
- * later semantic/query stages can declare additional source or compiler inputs
- * without changing extractor result shapes.
- */
-export type IndexDependency =
-  | { readonly kind: 'source-file'; readonly file: string }
-  | { readonly kind: 'config-file'; readonly file: string }
-  | { readonly kind: 'compiler-profile'; readonly name: string; readonly version: string }
-  | { readonly kind: 'compiler-projection'; readonly name: string; readonly version: string; readonly phase: string }
-  | { readonly kind: 'syntax-frontend'; readonly name: string; readonly version: string }
-  | { readonly kind: 'extension'; readonly name: string; readonly version: string }
-  | { readonly kind: 'extractor'; readonly extension: string; readonly name: string }
-  | { readonly kind: 'rule'; readonly extension: string; readonly name: string }
+export type { IndexDependency } from './cache-dependency-types'

@@ -7,9 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/devtools"
 )
 
-func TestProjectIndexWorker_indexProjectAstPatchStreamsNativeSyntaxRecords(t *testing.T) {
+func TestProjectIndexWorker_indexProjectAstPatchFromNativeSyntaxRecordStreamStreamsLegacyRecords(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -144,12 +146,21 @@ func TestProjectIndexWorker_indexProjectAstPatchStreamsNativeSyntaxRecords(t *te
 
 	parser := &streamOnlyProjectSyntaxParser{}
 	worker := NewProjectIndexWorker(script)
-	worker.WithProjectSyntaxWorker(parser)
 	defer worker.Close()
 
-	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-stream")
+	plan := devtools.ProjectStaticSyntaxPlan{
+		Root:             root,
+		ProjectName:      "native-stream",
+		Files:            []string{filepath.Join(root, "src", "one.ts"), filepath.Join(root, "src", "two.ts")},
+		CallNames:        []string{"prompt"},
+		ConstructorNames: []string{"Agent"},
+		SyntaxFrontend:   devtools.SyntaxFrontend{Name: "oxc-rust", Version: "test"},
+		NativeAstEnabled: true,
+		StaticInterests:  json.RawMessage(`{}`),
+	}
+	patch, timing, err := worker.indexProjectAstPatchFromNativeSyntaxRecordStream(context.Background(), root, "", "native-stream", plan, parser)
 	if err != nil {
-		t.Fatalf("IndexProjectAstPatch error = %v", err)
+		t.Fatalf("indexProjectAstPatchFromNativeSyntaxRecordStream error = %v", err)
 	}
 	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:native-stream" {
 		t.Fatalf("definitions = %+v, want streamed native definition", patch.Facts.Definitions)
@@ -157,6 +168,18 @@ func TestProjectIndexWorker_indexProjectAstPatchStreamsNativeSyntaxRecords(t *te
 	if len(parser.requests) != 2 {
 		t.Fatalf("stream parser requests = %d, want 2", len(parser.requests))
 	}
+	if timing.RecordCount != 2 || timing.ChunkCount < 1 {
+		t.Fatalf("timing = %+v, want streamed record counts", timing)
+	}
+}
+
+func containsTimingReason(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 type streamOnlyProjectSyntaxParser struct {

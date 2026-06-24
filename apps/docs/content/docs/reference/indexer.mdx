@@ -71,8 +71,32 @@ native-only facts. This applies to first-party and extension-authored primitives
 is optional, but backend parity is required.
 
 Use `crux config inspect` to verify the selected config. The Project Model includes
-`experimental.indexer.native`, `experimental.indexer.nativeEngine`, and
-`experimental.indexer.tsserverPath` provenance when the flag is present.
+`experimental.indexer.nativeAst`, `experimental.indexer.native`, `experimental.indexer.nativeEngine`,
+and `experimental.indexer.tsserverPath` provenance when those flags are present.
+
+## Experimental native static AST compiler
+
+Static Project Index extraction has a separate native beta:
+
+```ts
+import { config } from '@crux/core'
+
+export default config({
+  experimental: {
+    indexer: {
+      nativeAst: true,
+    },
+  },
+})
+```
+
+`experimental.indexer.nativeAst: true` or `{ frontend: 'oxc' }` lets `@crux/local` run the
+Go-orchestrated Rust/Oxc native static compiler for the AST/source pass. When the beta gates pass,
+the native compiler emits Project Index patch facts directly instead of sending Rust/Oxc syntax
+records through TypeScript projection. Node can still start for config/static-plan inspection and
+for TypeScript-authored extension or rule compatibility work. This flag does not select the native
+semantic backend; use `experimental.indexer.native` separately for TypeScript-Go semantic
+enrichment.
 
 ## Responsibilities
 

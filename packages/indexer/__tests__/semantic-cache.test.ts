@@ -5,6 +5,7 @@ import { SEMANTIC_FACTS_CACHE_EPOCH } from '../indexer/cache-identity'
 import type { IndexPatchFacts } from '../indexer/patches'
 import { semanticIndexFactsCached } from '../indexer/semantic-cache'
 import type { SemanticBackendIdentity } from '../indexer/semantic/service'
+import type { SemanticSourceProfile } from '../indexer/semantic/source-profile'
 
 const roots: string[] = []
 
@@ -27,9 +28,11 @@ describe('semantic facts cache', () => {
     const backendIdentity: SemanticBackendIdentity = { name: 'test-cache', version: 'v1' }
     const facts = cachedFacts()
     let producerCalls = 0
+    const timingNames: string[] = []
 
     const first = await semanticIndexFactsCached(root, [file], {
       backendIdentity,
+      instrumentation: { onTiming: (timing) => timingNames.push(timing.name) },
       async *produceEvidence() {
         producerCalls += 1
         yield { kind: 'definitions', facts: facts.definitions ?? [] }
@@ -43,6 +46,7 @@ describe('semantic facts cache', () => {
 
     const second = await semanticIndexFactsCached(root, [file], {
       backendIdentity,
+      instrumentation: { onTiming: (timing) => timingNames.push(timing.name) },
       async *produceEvidence() {
         throw new Error('producer should not run for semantic cache hits')
       },
@@ -50,6 +54,8 @@ describe('semantic facts cache', () => {
 
     expect(second.definitions).toEqual(facts.definitions)
     expect(producerCalls).toBe(1)
+    expect(timingNames).toContain('semantic.cache.miss')
+    expect(timingNames).toContain('semantic.cache.hit')
   })
 
   it('ignores JSON semantic fact caches after the hard binary cache migration', async () => {
@@ -90,6 +96,73 @@ describe('semantic facts cache', () => {
       expect.stringMatching(/\.json$/),
     ])
   })
+
+  it('uses order-insensitive source profile cache identity', async () => {
+    const root = await fixtureRoot()
+    const left = join(root, 'src/left.ts')
+    const right = join(root, 'src/right.ts')
+    await writeFile(left, `export const left = true`)
+    await writeFile(right, `export const right = true`)
+    const backendIdentity: SemanticBackendIdentity = { name: 'test-cache-order', version: 'v1' }
+    const facts = cachedFacts()
+    const timingNames: string[] = []
+    let producerCalls = 0
+
+    await semanticIndexFactsCached(root, [left, right], {
+      backendIdentity,
+      sourceProfile: semanticSourceProfileFixture(root, [left, right]),
+      instrumentation: { onTiming: (timing) => timingNames.push(timing.name) },
+      async *produceEvidence() {
+        producerCalls += 1
+        yield { kind: 'definitions', facts: facts.definitions ?? [] }
+      },
+    })
+
+    const cached = await semanticIndexFactsCached(root, [right, left], {
+      backendIdentity,
+      sourceProfile: semanticSourceProfileFixture(root, [right, left]),
+      instrumentation: { onTiming: (timing) => timingNames.push(timing.name) },
+      async *produceEvidence() {
+        throw new Error('producer should not run for equivalent semantic source profile order')
+      },
+    })
+
+    expect(cached.definitions).toEqual(facts.definitions)
+    expect(producerCalls).toBe(1)
+    expect(timingNames).toContain('semantic.cache.miss')
+    expect(timingNames).toContain('semantic.cache.hit')
+    await expect(cacheFileNames(root)).resolves.toHaveLength(1)
+  })
+
+  it('normalizes relative and absolute source profile files', async () => {
+    const root = await fixtureRoot()
+    const file = join(root, 'src/writer.ts')
+    await writeFile(file, `export const writer = true`)
+    const backendIdentity: SemanticBackendIdentity = { name: 'test-cache-paths', version: 'v1' }
+    const facts = cachedFacts()
+    let producerCalls = 0
+
+    await semanticIndexFactsCached(root, [file], {
+      backendIdentity,
+      sourceProfile: semanticSourceProfileFixture(root, [file]),
+      async *produceEvidence() {
+        producerCalls += 1
+        yield { kind: 'definitions', facts: facts.definitions ?? [] }
+      },
+    })
+
+    const cached = await semanticIndexFactsCached(root, [file], {
+      backendIdentity,
+      sourceProfile: semanticSourceProfileFixture(root, ['src/writer.ts']),
+      async *produceEvidence() {
+        throw new Error('producer should not run for equivalent semantic source profile paths')
+      },
+    })
+
+    expect(cached.definitions).toEqual(facts.definitions)
+    expect(producerCalls).toBe(1)
+    await expect(cacheFileNames(root)).resolves.toHaveLength(1)
+  })
 })
 
 function cachedFacts(): IndexPatchFacts {
@@ -109,4 +182,17 @@ function cachedFacts(): IndexPatchFacts {
 
 async function cacheFileNames(root: string): Promise<readonly string[]> {
   return (await readdir(join(root, '.crux/cache/index', SEMANTIC_FACTS_CACHE_EPOCH))).sort()
+}
+
+function semanticSourceProfileFixture(root: string, files: readonly string[]): SemanticSourceProfile {
+  return {
+    files: files.map((file) => ({
+      file,
+      sourceHash: file.endsWith('left.ts') ? 'left-hash' : 'right-hash',
+      sourceBytes: 24,
+    })),
+    dependencyClosure: files,
+    sourceBytes: files.length * 24,
+    complete: true,
+  }
 }

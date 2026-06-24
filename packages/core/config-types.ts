@@ -89,11 +89,13 @@ export interface CruxExperimentalIndexerConfig {
    */
   readonly native?: boolean | CruxExperimentalIndexerNativeConfig
   /**
-   * Enable the experimental native static AST/syntax-record frontend.
+   * Enable the experimental native static AST compiler path.
    *
-   * Set to `true` to let the local Go runtime use Rust/Oxc for static syntax
-   * parsing when the native worker is available. This flag is deliberately
-   * separate from `native`, which controls semantic TypeScript-Go enrichment.
+   * Set to `true` to let the local Go runtime use Rust/Oxc for the static
+   * Project Index pass when the native worker is available. Node may still be
+   * required for config loading, TypeScript-authored extensions, or rule
+   * compatibility work. This flag is deliberately separate from `native`,
+   * which controls semantic TypeScript-Go enrichment.
    */
   readonly nativeAst?: boolean | CruxExperimentalIndexerNativeAstConfig
 }

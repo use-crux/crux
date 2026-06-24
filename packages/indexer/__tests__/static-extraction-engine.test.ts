@@ -87,7 +87,7 @@ describe('static extraction engine', () => {
     expect(extraction.identity.cacheInputs).toEqual(
       expect.arrayContaining([
         { kind: 'extension', name: '@acme/workflows', version: '1' },
-        { kind: 'syntax-frontend', name: 'oxc-rust', version: 'oxc_parser@0.133.0+crux_native_routing.2' },
+        { kind: 'syntax-frontend', name: 'oxc-rust', version: 'oxc_parser@0.133.0+crux_native_group3.5' },
       ]),
     )
   }, 30_000)
@@ -313,7 +313,7 @@ describe('static extraction engine', () => {
     expect(extracted.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('prompt-audit')
   }, 30_000)
 
-  itWithRustOxc('does not emit partial native prompt facts from the Rust/Oxc frontend', async () => {
+  itWithRustOxc('emits complete native prompt facts from the Rust/Oxc frontend', async () => {
     const root = '/fixture'
     const file = '/fixture/src/prompts.ts'
     const source = [
@@ -324,7 +324,12 @@ describe('static extraction engine', () => {
     const rustFrontend = createRustOxcStaticSyntaxFrontend({ callNames: ['prompt'] })
     const record = await rustFrontend.parseFile({ root, file, source })
 
-    expect(record.nativeFacts ?? []).toEqual([])
+    expect(record.nativeFacts ?? []).toMatchObject([
+      {
+        matchIndex: 0,
+        replaces: [{ extension: '@crux/indexer/crux-core', extractor: 'prompt' }],
+      },
+    ])
 
     const tsExtraction = createStaticExtraction({
       root,

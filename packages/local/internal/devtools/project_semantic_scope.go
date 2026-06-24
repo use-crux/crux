@@ -7,9 +7,10 @@ import (
 )
 
 func projectSemanticIndexRequest(root, configPath, projectName string, index store.IndexData, files []string, sourceProfile *SemanticSourceProfile) ProjectSemanticIndexRequest {
-	selectedFiles := semanticFilesFromScope(index, files)
-	previous := compactSemanticPreviousIndex(index)
+	selectedFiles := semanticFilesFromScope(index, files, sourceProfile)
 	dependencyClosure := semanticDependencyClosureFromIndex(index, selectedFiles)
+	dependencyClosure = semanticDependencyClosureFromSourceProfile(sourceProfile, selectedFiles, dependencyClosure)
+	previous := compactSemanticPreviousIndex(index, semanticPreviousIndexScopeFiles(selectedFiles, dependencyClosure))
 	return ProjectSemanticIndexRequest{
 		Root:              root,
 		ConfigPath:        configPath,
@@ -18,20 +19,57 @@ func projectSemanticIndexRequest(root, configPath, projectName string, index sto
 		PreviousIndex:     &previous,
 		Files:             selectedFiles,
 		DependencyClosure: dependencyClosure,
-		SourceProfile:     semanticSourceProfileWithClosure(sourceProfile, dependencyClosure),
+		SourceProfile:     semanticSourceProfileWithClosure(sourceProfile, selectedFiles, dependencyClosure),
 	}
 }
 
-func semanticSourceProfileWithClosure(profile *SemanticSourceProfile, dependencyClosure []string) *SemanticSourceProfile {
+func semanticDependencyClosureFromSourceProfile(
+	profile *SemanticSourceProfile,
+	files []string,
+	fallback []string,
+) []string {
+	if profile == nil || !profile.Complete || len(profile.DependencyClosure) == 0 {
+		return fallback
+	}
+	closure := sortedUniqueStrings(profile.DependencyClosure)
+	closureSet := map[string]bool{}
+	for _, file := range closure {
+		if file != "" {
+			closureSet[file] = true
+		}
+	}
+	for _, file := range files {
+		if file != "" && !closureSet[file] {
+			return fallback
+		}
+	}
+	return closure
+}
+
+func semanticPreviousIndexScopeFiles(files []string, dependencyClosure []string) []string {
+	return sortedUniqueStrings(append(append([]string(nil), files...), dependencyClosure...))
+}
+
+func semanticSourceProfileWithClosure(profile *SemanticSourceProfile, files []string, dependencyClosure []string) *SemanticSourceProfile {
 	if profile == nil {
 		return nil
 	}
 	next := *profile
-	next.Files = append([]SemanticSourceProfileFile(nil), profile.Files...)
-	next.DependencyClosure = sortedUniqueStrings(append(append([]string(nil), profile.DependencyClosure...), dependencyClosure...))
+	next.DependencyClosure = sortedUniqueStrings(append(append(append([]string(nil), profile.DependencyClosure...), files...), dependencyClosure...))
+	closureFiles := map[string]bool{}
+	for _, file := range next.DependencyClosure {
+		if file != "" {
+			closureFiles[file] = true
+		}
+	}
+	next.Files = make([]SemanticSourceProfileFile, 0, len(profile.Files))
 	profileFiles := map[string]bool{}
 	sourceBytes := 0
-	for _, file := range next.Files {
+	for _, file := range profile.Files {
+		if len(closureFiles) > 0 && !closureFiles[file.File] {
+			continue
+		}
+		next.Files = append(next.Files, file)
 		if file.File != "" {
 			profileFiles[file.File] = true
 		}
@@ -48,20 +86,42 @@ func semanticSourceProfileWithClosure(profile *SemanticSourceProfile, dependency
 	return &next
 }
 
-func compactSemanticPreviousIndex(index store.IndexData) store.IndexData {
-	return store.IndexData{
+func compactSemanticPreviousIndex(index store.IndexData, scopeFiles []string) store.IndexData {
+	previous := store.IndexData{
 		SchemaVersion: index.SchemaVersion,
 		Project:       index.Project,
 		IndexedAt:     index.IndexedAt,
 		Indexing:      index.Indexing,
 		Lint:          index.Lint,
-		Definitions:   append([]store.ProjectDefinition(nil), index.Definitions...),
-		Sources:       append([]store.IndexSourceFile(nil), index.Sources...),
 		SourceGraph:   index.SourceGraph,
 	}
+	if len(scopeFiles) == 0 {
+		previous.Definitions = append([]store.ProjectDefinition(nil), index.Definitions...)
+		previous.Sources = append([]store.IndexSourceFile(nil), index.Sources...)
+		return previous
+	}
+	scope := map[string]bool{}
+	for _, file := range scopeFiles {
+		if file != "" {
+			scope[file] = true
+		}
+	}
+	previous.Definitions = make([]store.ProjectDefinition, 0, len(index.Definitions))
+	for _, definition := range index.Definitions {
+		if definition.Source == nil || definition.Source.File == "" || scope[definition.Source.File] {
+			previous.Definitions = append(previous.Definitions, definition)
+		}
+	}
+	previous.Sources = make([]store.IndexSourceFile, 0, len(index.Sources))
+	for _, source := range index.Sources {
+		if source.File == "" || scope[source.File] {
+			previous.Sources = append(previous.Sources, source)
+		}
+	}
+	return previous
 }
 
-func semanticFilesFromScope(index store.IndexData, files []string) []string {
+func semanticFilesFromScope(index store.IndexData, files []string, sourceProfile *SemanticSourceProfile) []string {
 	if len(files) > 0 {
 		return sortedUniqueStrings(files)
 	}
@@ -72,7 +132,39 @@ func semanticFilesFromScope(index store.IndexData, files []string) []string {
 		}
 		sourceFiles = append(sourceFiles, source.File)
 	}
-	return sortedUniqueStrings(sourceFiles)
+	return semanticRootFilesFromSourceProfile(sortedUniqueStrings(sourceFiles), sourceProfile)
+}
+
+func semanticRootFilesFromSourceProfile(files []string, sourceProfile *SemanticSourceProfile) []string {
+	if sourceProfile == nil {
+		return files
+	}
+	profilesByFile := map[string]SemanticSourceProfileFile{}
+	for _, file := range sourceProfile.Files {
+		if file.File != "" {
+			profilesByFile[file.File] = file
+		}
+	}
+	selected := make([]string, 0, len(files))
+	for _, file := range files {
+		profile, ok := profilesByFile[file]
+		if !ok || isSemanticRootSourceProfile(profile) {
+			selected = append(selected, file)
+		}
+	}
+	return selected
+}
+
+func isSemanticRootSourceProfile(profile SemanticSourceProfileFile) bool {
+	if profile.Hints == nil {
+		return true
+	}
+	hints := profile.Hints
+	hasCurrentShapeHints := hints.CruxCallNames != nil || hints.HasZodObject || hints.NativeDirectCruxCandidate
+	if !hasCurrentShapeHints {
+		return true
+	}
+	return len(hints.CruxCallNames) > 0
 }
 
 func semanticDependencyClosureFromIndex(index store.IndexData, files []string) []string {

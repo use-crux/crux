@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { deserialize, serialize } from 'node:v8'
 import ts from 'typescript'
 import {
@@ -17,7 +17,11 @@ import {
   type SemanticEvidenceBatchSource,
 } from './semantic/evidence'
 import { semanticIndexEvidenceBatches } from './semantic/facts'
-import { measureSemanticTimingAsync, type SemanticIndexInstrumentation } from './semantic/instrumentation'
+import {
+  measureSemanticTimingAsync,
+  type SemanticIndexInstrumentation,
+  type SemanticIndexTimingName,
+} from './semantic/instrumentation'
 import { DEFAULT_SEMANTIC_PREFLIGHT_BUDGET } from './semantic/preflight'
 import type { SemanticBackendIdentity } from './semantic/service'
 import { semanticSourceProfile, type SemanticSourceProfile } from './semantic/source-profile'
@@ -74,21 +78,28 @@ export async function* semanticIndexEvidenceBatchesCached(
     options.produceEvidence ??
     (() => semanticIndexEvidenceBatches(root, files, { instrumentation: options.instrumentation }))
 
+  if (cacheMode === 'disabled') {
+    emitSemanticCacheOutcome(options.instrumentation, 'semantic.cache.disabled')
+    yield* produceEvidence({ cacheIdentity })
+    return
+  }
+
   if (!cacheInput) {
+    emitSemanticCacheOutcome(options.instrumentation, 'semantic.cache.unkeyed')
     yield* produceEvidence({})
     return
   }
 
   const cacheFile = cacheFileForIdentity(root, SEMANTIC_FACTS_CACHE_EPOCH, cacheInput, 'bin')
-  if (cacheMode === 'read-write') {
-    const cached = await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.read', () =>
-      readCache(cacheFile),
-    )
-    if (cached) {
-      yield* semanticEvidenceBatchesFromFacts(cached)
-      return
-    }
+  const cached = await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.read', () =>
+    readCache(cacheFile),
+  )
+  if (cached) {
+    emitSemanticCacheOutcome(options.instrumentation, 'semantic.cache.hit')
+    yield* semanticEvidenceBatchesFromFacts(cached)
+    return
   }
+  emitSemanticCacheOutcome(options.instrumentation, 'semantic.cache.miss')
 
   const emitted: SemanticEvidenceBatch[] = []
   for await (const batch of produceEvidence({ cacheIdentity })) {
@@ -96,11 +107,7 @@ export async function* semanticIndexEvidenceBatchesCached(
     yield batch
   }
   const facts = await collectProjectedSemanticEvidence(emitted)
-  if (cacheMode === 'read-write') {
-    await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.write', () =>
-      writeCache(cacheFile, facts),
-    )
-  }
+  await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.write', () => writeCache(cacheFile, facts))
 }
 
 async function semanticCacheKeyInput(
@@ -120,11 +127,14 @@ async function semanticCacheKeyInput(
   | undefined
 > {
   try {
-    if (!sourceProfile.complete || sourceProfile.files.length !== sourceProfile.dependencyClosure.length) return undefined
-    const fileInputs = sourceProfile.files.map((file) => ({
-      file: relative(root, file.file).replace(/\\/g, '/'),
-      sourceHash: file.sourceHash,
-    }))
+    if (!sourceProfile.complete || sourceProfile.files.length !== sourceProfile.dependencyClosure.length)
+      return undefined
+    const fileInputs = sourceProfile.files
+      .map((file) => ({
+        file: relative(root, resolve(root, file.file)).replace(/\\/g, '/'),
+        sourceHash: file.sourceHash,
+      }))
+      .sort(compareCacheFileInputs)
 
     const configFiles: ConfigFileHash[] = (
       await Promise.all(
@@ -141,6 +151,7 @@ async function semanticCacheKeyInput(
         }),
       )
     ).filter((file): file is ConfigFileHash => Boolean(file))
+    configFiles.sort(compareCacheFileInputs)
 
     return {
       version: SEMANTIC_FACTS_CACHE_EPOCH,
@@ -154,6 +165,10 @@ async function semanticCacheKeyInput(
   } catch {
     return undefined
   }
+}
+
+function compareCacheFileInputs(left: ConfigFileHash, right: ConfigFileHash): number {
+  return left.file.localeCompare(right.file)
 }
 
 async function readCache(file: string): Promise<IndexPatchFacts | undefined> {
@@ -194,4 +209,15 @@ function isIndexPatchFacts(value: unknown): value is IndexPatchFacts {
 
 function arrayOrMissing(value: unknown): boolean {
   return value === undefined || Array.isArray(value)
+}
+
+function emitSemanticCacheOutcome(
+  instrumentation: SemanticIndexInstrumentation | undefined,
+  name: SemanticIndexTimingName,
+): void {
+  try {
+    instrumentation?.onTiming?.({ name, durationMs: 0 })
+  } catch {
+    // Cache outcome counters are diagnostic-only and must not affect indexing.
+  }
 }

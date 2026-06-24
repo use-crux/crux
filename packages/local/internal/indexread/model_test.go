@@ -147,6 +147,38 @@ func TestModelIndexReportsQualityLoadFailureAsDiagnostic(t *testing.T) {
 	}
 }
 
+func TestApplyIndexLintPolicyAcceptsScopedExtensionRuleSuppressions(t *testing.T) {
+	root := t.TempDir()
+	sourceFile := filepath.Join(root, "workflow.ts")
+	if err := os.WriteFile(sourceFile, []byte("// crux-lint-disable-next-line @acme/rules/require-owner -- external owner registry\nworkflow();\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	index := store.IndexData{
+		Sources: []store.IndexSourceFile{{File: sourceFile, Status: "indexed"}},
+		LintFindings: []store.IndexLintFinding{{
+			ID:         "lint:@acme/rules/require-owner:workflow",
+			Severity:   "warning",
+			RuleID:     "@acme/rules/require-owner",
+			Category:   "quality",
+			Maturity:   "experimental",
+			Confidence: "medium",
+			Profiles:   []string{"recommended"},
+			Title:      "Require owner",
+			Message:    "Workflow is missing owner metadata.",
+			Source:     &store.SourceLoc{File: sourceFile, Line: 2},
+			Evidence:   []store.IndexLintEvidence{},
+			Fixes:      []store.IndexLintFix{},
+		}},
+	}
+
+	applyIndexLintPolicy(&index)
+
+	if len(index.LintFindings) != 0 {
+		t.Fatalf("lint findings = %+v, want suppressed extension finding", index.LintFindings)
+	}
+}
+
 func TestModelIndexEnrichesPromptEvalQualityFromStoreSnapshot(t *testing.T) {
 	st := store.NewStore()
 	promptID := "brief.prompt"

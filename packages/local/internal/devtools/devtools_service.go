@@ -15,57 +15,8 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/indexread"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/quality"
-	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
-
-// ProjectIndexer owns source discovery for the Project Index.
-type ProjectIndexer interface {
-	IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (IndexPatch, error)
-}
-
-// ProjectSemanticIndexRequest describes one semantic Project Index enrichment
-// request after AST/source indexing has selected the relevant project scope.
-type ProjectSemanticIndexRequest struct {
-	Root              string
-	ConfigPath        string
-	ProjectName       string
-	IndexGeneration   uint64
-	WatchRunID        uint64
-	Budget            IndexPatchBudget
-	PreviousIndex     *store.IndexData
-	Files             []string
-	DependencyClosure []string
-	SourceProfile     *SemanticSourceProfile
-}
-
-type ProjectSemanticIndexer interface {
-	IndexProjectSemanticPatch(ctx context.Context, req ProjectSemanticIndexRequest) (IndexPatch, error)
-}
-
-// ProjectRuntimeIndexRequest describes an explicit runtime-rich indexing pass.
-// It receives the already-applied source/semantic snapshot as immutable input
-// and must return only runtime-phase evidence.
-type ProjectRuntimeIndexRequest struct {
-	Root          string
-	ConfigPath    string
-	ProjectName   string
-	Budget        IndexPatchBudget
-	PreviousIndex store.IndexData
-}
-
-// ProjectRuntimeIndexer owns explicit runtime-rich evidence collection.
-type ProjectRuntimeIndexer interface {
-	IndexProjectRuntimePatch(ctx context.Context, req ProjectRuntimeIndexRequest) (IndexPatch, error)
-}
-
-type ProjectIncrementalIndexer interface {
-	IndexProjectIncremental(ctx context.Context, root, configPath, projectName string, previousIndex store.IndexData, files []string, deletedFiles []string, mode string) (ProjectIndexIncrementalResult, error)
-}
-
-type ResourceInspector interface {
-	List(context.Context, resourceinspection.ListRequest) (resourceinspection.ResourceResult, error)
-}
 
 type Service struct {
 	ctx             context.Context
@@ -82,31 +33,6 @@ type Service struct {
 	indexGeneration projectIndexGeneration
 	watchStatus     projectIndexWatchStatusStore
 	indexModel      *indexread.Model
-}
-
-const defaultProjectIndexReindexTimeout = 120 * time.Second
-
-var projectIndexSemanticTimeout = 30 * time.Second
-var projectIndexRuntimeTimeout = 30 * time.Second
-
-var projectIndexSemanticBudget = IndexPatchBudget{
-	MaxFiles:        5000,
-	MaxDefinitions:  2500,
-	MaxRelations:    10000,
-	MaxSourceRefs:   20000,
-	MaxDiagnostics:  250,
-	MaxLintFindings: 1000,
-	MaxSources:      10000,
-	MaxBytes:        8 * 1024 * 1024,
-}
-
-var projectIndexRuntimeBudget = IndexPatchBudget{
-	MaxDefinitions:  2500,
-	MaxRelations:    10000,
-	MaxSourceRefs:   20000,
-	MaxDiagnostics:  250,
-	MaxLintFindings: 1000,
-	MaxBytes:        8 * 1024 * 1024,
 }
 
 func NewService(s *store.Store, qualitySvc *quality.Service) *Service {

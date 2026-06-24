@@ -11,7 +11,7 @@ import (
 )
 
 var qualityIndexSafeIDPattern = regexp.MustCompile(`[^a-zA-Z0-9_.:-]+`)
-var indexLintSuppressionPattern = regexp.MustCompile(`crux-lint-disable-(next-line|line|file)\s+([a-zA-Z0-9_.-]+)(?:\s+--\s*(.*))?`)
+var indexLintSuppressionPattern = regexp.MustCompile(`crux-lint-disable-(next-line|line|file)\s+([@a-zA-Z0-9_./-]+)(?:\s+--\s*(.*))?`)
 
 // enrichFileBackedQuality attaches file-backed quality asset links to an index copy.
 // The source/indexer index remains authoritative; this is a read-model join.

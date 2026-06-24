@@ -25,6 +25,8 @@ export interface StaticExtractionOptions {
   readonly profile?: ProjectIndexCompilerProfile
   /** Trusted extension manifests appended to the compiler profile for this engine instance. */
   readonly extensions?: readonly IndexerExtension[]
+  /** Internal compiler inputs that affect static output but are resolved outside extension manifests. */
+  readonly additionalCacheInputs?: readonly IndexDependency[]
   /** Source text provider. Defaults to filesystem reads; fixture tests usually pass an in-memory reader. */
   readonly sources?: SourceReader
   /**

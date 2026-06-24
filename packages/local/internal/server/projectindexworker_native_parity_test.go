@@ -4,11 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"reflect"
-	"sort"
 	"testing"
-
-	"github.com/use-crux/crux/packages/local/internal/devtools"
 )
 
 func TestProjectIndexWorkerNativeStaticMatchesTypeScriptProductionPath(t *testing.T) {
@@ -22,6 +18,7 @@ func TestProjectIndexWorkerNativeStaticMatchesTypeScriptProductionPath(t *testin
 	if err := os.RemoveAll(filepath.Join(root, ".crux", "cache", "index")); err != nil {
 		t.Fatalf("clear index cache: %v", err)
 	}
+	configPath := writeNativeStaticParityConfig(t, root)
 
 	jsWorker := NewProjectIndexWorker("")
 	jsWorker.WithProjectSyntaxWorker(nil)
@@ -30,85 +27,70 @@ func TestProjectIndexWorkerNativeStaticMatchesTypeScriptProductionPath(t *testin
 	defer nativeWorker.Close()
 
 	ctx := context.Background()
-	jsPatch, err := jsWorker.IndexProjectAstPatch(ctx, root, "", "parity-js")
+	plan, err := nativeWorker.InspectProjectStaticSyntaxPlan(ctx, root, configPath, "parity-native-plan")
+	if err != nil {
+		t.Fatalf("inspect native static syntax plan: %v", err)
+	}
+	if !plan.NativeAstEnabled {
+		t.Fatalf("native static syntax plan did not enable nativeAst for config %q", configPath)
+	}
+	if len(projectSyntaxPlanFilesToParse(plan)) == 0 {
+		t.Fatalf("native static syntax plan selected no files to parse")
+	}
+	jsPatch, err := jsWorker.IndexProjectAstPatch(ctx, root, configPath, "parity-js")
 	if err != nil {
 		t.Fatalf("TypeScript IndexProjectAstPatch error = %v", err)
 	}
 	if err := os.RemoveAll(filepath.Join(root, ".crux", "cache", "index")); err != nil {
 		t.Fatalf("clear index cache before native: %v", err)
 	}
-	nativePatch, err := nativeWorker.IndexProjectAstPatch(ctx, root, "", "parity-native")
+	nativePatch, err := nativeWorker.IndexProjectAstPatch(ctx, root, configPath, "parity-native")
 	if err != nil {
 		t.Fatalf("native IndexProjectAstPatch error = %v", err)
 	}
+	assertNativeSyntaxPathRan(t, nativeWorker.LastAstTiming())
 
-	assertSameIDs(t, "definitions", definitionIDs(jsPatch), definitionIDs(nativePatch))
-	assertSameIDs(t, "relations", relationIDs(jsPatch), relationIDs(nativePatch))
-	assertSameIDs(t, "diagnostics", diagnosticIDs(jsPatch), diagnosticIDs(nativePatch))
-	assertSameIDs(t, "lintFindings", lintFindingIDs(jsPatch), lintFindingIDs(nativePatch))
-	assertSameIDs(t, "sourceRefs", sourceRefIDs(jsPatch), sourceRefIDs(nativePatch))
+	if len(nativePatch.Facts.LintFindings) != 0 {
+		t.Fatalf("native AST lint findings = %d, want post-merge quality lint phase", len(nativePatch.Facts.LintFindings))
+	}
+	assertProjectIndexFactsEqual(
+		t,
+		"project index static graph",
+		projectIndexStaticGraphFactsForParity(jsPatch.Facts),
+		projectIndexStaticGraphFactsForParity(nativePatch.Facts),
+	)
 }
 
-func assertSameIDs(t *testing.T, label string, want []string, got []string) {
+func writeNativeStaticParityConfig(t testing.TB, root string) string {
 	t.Helper()
-	sort.Strings(want)
-	sort.Strings(got)
-	if reflect.DeepEqual(want, got) {
+	configPath := filepath.Join("packages", "indexer", ".crux", "cache", "native-static-parity.config.ts")
+	absoluteConfigPath := filepath.Join(root, configPath)
+	if err := os.MkdirAll(filepath.Dir(absoluteConfigPath), 0o755); err != nil {
+		t.Fatalf("create native static parity config dir: %v", err)
+	}
+	source := []byte("import { config } from '@crux/core'\n\nexport default config({\n  experimental: { indexer: { nativeAst: { frontend: 'oxc' } } },\n})\n")
+	if err := os.WriteFile(absoluteConfigPath, source, 0o600); err != nil {
+		t.Fatalf("write native static parity config: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(absoluteConfigPath)
+	})
+	return configPath
+}
+
+func assertNativeSyntaxPathRan(t testing.TB, timing ProjectIndexAstTiming) {
+	t.Helper()
+	if timing.RecordCount > 0 && timing.NativeParseAndForwardMs > 0 {
 		return
 	}
-	t.Fatalf("%s mismatch\nmissing from native: %v\nextra in native: %v", label, missingIDs(want, got), missingIDs(got, want))
-}
-
-func missingIDs(want []string, got []string) []string {
-	gotSet := make(map[string]bool, len(got))
-	for _, id := range got {
-		gotSet[id] = true
+	if timing.NativeParseAndForwardMs > 0 && !containsTimingReason(timing.NodeReasons, projectIndexNodeReasonSyntaxRecordProjection) {
+		return
 	}
-	missing := make([]string, 0)
-	for _, id := range want {
-		if !gotSet[id] {
-			missing = append(missing, id)
-		}
-	}
-	return missing
-}
-
-func definitionIDs(patch devtools.IndexPatch) []string {
-	ids := make([]string, 0, len(patch.Facts.Definitions))
-	for _, definition := range patch.Facts.Definitions {
-		ids = append(ids, definition.ID)
-	}
-	return ids
-}
-
-func relationIDs(patch devtools.IndexPatch) []string {
-	ids := make([]string, 0, len(patch.Facts.Relations))
-	for _, relation := range patch.Facts.Relations {
-		ids = append(ids, relation.ID)
-	}
-	return ids
-}
-
-func diagnosticIDs(patch devtools.IndexPatch) []string {
-	ids := make([]string, 0, len(patch.Facts.Diagnostics))
-	for _, diagnostic := range patch.Facts.Diagnostics {
-		ids = append(ids, diagnostic.ID)
-	}
-	return ids
-}
-
-func lintFindingIDs(patch devtools.IndexPatch) []string {
-	ids := make([]string, 0, len(patch.Facts.LintFindings))
-	for _, finding := range patch.Facts.LintFindings {
-		ids = append(ids, finding.ID)
-	}
-	return ids
-}
-
-func sourceRefIDs(patch devtools.IndexPatch) []string {
-	ids := make([]string, 0, len(patch.Facts.SourceRefs))
-	for _, ref := range patch.Facts.SourceRefs {
-		ids = append(ids, ref.DefinitionID+"/"+ref.Ref.ID)
-	}
-	return ids
+	t.Fatalf(
+		"native syntax path did not run: recordCount=%d nativeParseForwardMs=%0.3f nodeReasons=%v totalMs=%0.3f",
+		timing.RecordCount,
+		timing.NativeParseAndForwardMs,
+		timing.NodeReasons,
+		timing.TotalMs,
+	)
 }

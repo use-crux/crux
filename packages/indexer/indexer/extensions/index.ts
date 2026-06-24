@@ -22,6 +22,38 @@ export {
 } from './registry'
 export { staticFoundDefinitionFromExtractedFacts, staticFoundDefinitionsFromExtractedFacts } from './static-normalizer'
 export { createStaticRecordEvidenceReader, type StaticRecordEvidenceReaderInput } from './static-evidence'
+export {
+  checkStaticRules,
+  extractStaticEvidenceBatch,
+  loadStaticExtensionHostManifest,
+  type CheckStaticRulesInput,
+  type CheckStaticRulesResult,
+  type ExtractStaticEvidenceBatchInput,
+  type ExtractStaticEvidenceBatchItemResult,
+  type ExtractStaticEvidenceBatchResult,
+  type LoadStaticExtensionHostManifestInput,
+  type LoadStaticExtensionHostManifestResult,
+  type StaticExtensionEvidenceExtractor,
+  type StaticExtensionEvidenceJob,
+  type StaticExtensionHostMethod,
+  type StaticExtensionHostNodeReason,
+  type StaticExtensionHostNodeReport,
+  type StaticExtensionHostRuntimeInput,
+  type StaticRuleGraphInput,
+} from './static-extension-host'
+export {
+  checkStaticRulesForProject,
+  extractStaticEvidenceBatchForProject,
+  loadStaticExtensionHostManifestForProject,
+  type CheckStaticRulesForProjectInput,
+  type ExtractStaticEvidenceBatchForProjectInput,
+  type LoadStaticExtensionHostManifestForProjectInput,
+  type StaticExtensionWorkerProjectInput,
+} from './static-extension-worker'
+export type {
+  StaticExtensionNativeFinalizeFacts,
+  StaticExtensionNativeRelationRef,
+} from './static-extension-host-facts'
 export { staticInterestManifestFromExtensions } from './static-interest'
 export { createStaticExtensionRegistry, extractFactsWithExtensionRegistry } from './static-adapter'
 export {

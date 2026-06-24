@@ -1,5 +1,11 @@
-import type { ProjectIndexSnapshot, ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
+import type {
+  ProjectIndexSnapshot,
+  ProjectDefinition,
+  ProjectRelation,
+  IndexRuleDescriptor,
+} from '@crux/core/project-index'
 import { applyIndexLintConfig } from '../lints/config'
+import { indexLintFindings } from '../lints/findings'
 import { applyIndexLintSuppressions } from '../lints/suppressions'
 import { builtInIndexRuleDescriptors } from '../lints/rules'
 import { astIndexPatchFromCompilerResult, type ProjectIndexCompilerResult } from '../compiler'
@@ -58,15 +64,23 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
     parsed.dependencies.forEach((dependency) => graphBuilder.addDependency(file, dependency))
   }
   const ruleResult = extraction.rules.check({ definitions, relations })
-  const ruleDescriptors = [...builtInIndexRuleDescriptors(), ...extraction.rules.descriptors]
+  const lintRuleOutputs = [...indexLintFindings({ definitions, relations }), ...ruleResult.outputs]
+  const ruleDescriptors = mergeRuleDescriptors([
+    ...input.previousIndex.ruleDescriptors,
+    ...builtInIndexRuleDescriptors(),
+    ...extraction.rules.descriptors,
+  ])
+  const lintDiagnostics = [...ruleResult.diagnostics]
   const lintFindings = applyIndexLintConfig({
     config: input.previousIndex.lint,
     configFile: input.previousIndex.project.configFile,
-    diagnostics: [...ruleResult.diagnostics],
+    diagnostics: lintDiagnostics,
+    ruleDescriptors,
     findings: applyIndexLintSuppressions({
       files: input.decision.affectedFiles,
-      findings: ruleResult.outputs,
-      diagnostics: [...ruleResult.diagnostics],
+      findings: lintRuleOutputs,
+      diagnostics: lintDiagnostics,
+      ruleDescriptors,
     }),
   })
   const sources = graphSources(graphBuilder.graph)
@@ -82,7 +96,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
       lint: input.previousIndex.lint,
       definitions,
       relations,
-      diagnostics: [],
+      diagnostics: lintDiagnostics,
       lintFindings,
       ruleDescriptors,
       sources,
@@ -90,7 +104,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
     },
     sources,
     graphEvidence: { dependenciesByFile },
-    diagnostics: [],
+    diagnostics: lintDiagnostics,
     lintFindings,
     ruleDescriptors,
     sourceGraph: input.previousIndex.sourceGraph,
@@ -112,6 +126,12 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
 
 function previousDependents(previousIndex: ProjectIndexSnapshot, file: string): readonly string[] {
   return previousIndex.sources.find((source) => source.file === file)?.dependents ?? []
+}
+
+function mergeRuleDescriptors(descriptors: readonly IndexRuleDescriptor[]): readonly IndexRuleDescriptor[] {
+  const byId = new Map<string, IndexRuleDescriptor>()
+  for (const descriptor of descriptors) byId.set(descriptor.id, descriptor)
+  return [...byId.values()]
 }
 
 function semanticSourceProfileForPartial(

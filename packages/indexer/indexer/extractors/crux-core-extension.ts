@@ -1,5 +1,4 @@
 import type { IndexerExtension } from '../extensions'
-import { cruxIndexLintRule } from '../lints/extension'
 import { relationSpecFromPolicy } from '../extensions'
 import { indexRelationPolicies } from '../relations/index'
 import { agentIndexExtractor } from './agent-extension'
@@ -32,6 +31,9 @@ export const cruxCoreExtension: IndexerExtension = {
     indexer: '^0.1.0',
     projectIndexSchema: 1,
   },
+  static: {
+    evidence: { mode: 'declared' },
+  },
   extractors: [
     ragRetrieverIndexExtractor,
     safetyIndexExtractor,
@@ -51,6 +53,5 @@ export const cruxCoreExtension: IndexerExtension = {
     routingIndexExtractor,
     flowIndexExtractor,
   ],
-  rules: [cruxIndexLintRule],
   relations: indexRelationPolicies.map(relationSpecFromPolicy),
 }

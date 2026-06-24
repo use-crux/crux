@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
@@ -14,8 +15,10 @@ import (
 // ProjectSemanticWorker runs semantic Project Index enrichment through its own
 // V2 NDJSON worker process.
 type ProjectSemanticWorker struct {
-	scriptPath string
-	worker     *nodeworker.Worker
+	scriptPath  string
+	worker      *nodeworker.Worker
+	mu          sync.Mutex
+	lastTimings []devtools.ProjectIndexPhaseTiming
 }
 
 // NewProjectSemanticWorker creates a semantic worker backed by project-semantic-indexer.mjs.
@@ -40,17 +43,18 @@ func (w *ProjectSemanticWorker) IndexProjectSemanticPatch(ctx context.Context, r
 	if len(request.DependencyClosure) > 0 {
 		req.DependencyClosure = request.DependencyClosure
 	}
-	patches, err := w.streamPatches(ctx, req, request.Budget)
+	patches, timings, err := w.streamPatches(ctx, req, request.Budget)
 	if err != nil {
 		return devtools.IndexPatch{}, err
 	}
+	w.setLastTimings(timings)
 	if len(patches) != 1 {
 		return devtools.IndexPatch{}, fmt.Errorf("project semantic worker returned %d patches, want 1", len(patches))
 	}
 	return patches[0], nil
 }
 
-func (w *ProjectSemanticWorker) streamPatches(ctx context.Context, req projectIndexRequest, budget devtools.IndexPatchBudget) ([]devtools.IndexPatch, error) {
+func (w *ProjectSemanticWorker) streamPatches(ctx context.Context, req projectIndexRequest, budget devtools.IndexPatchBudget) ([]devtools.IndexPatch, []devtools.ProjectIndexPhaseTiming, error) {
 	collector := devtools.NewProjectIndexPatchStreamCollector(devtools.ProjectIndexPatchStreamOptions{
 		Root:             req.Root,
 		Budget:           budget,
@@ -62,9 +66,13 @@ func (w *ProjectSemanticWorker) streamPatches(ctx context.Context, req projectIn
 		return collector.CompletedPatchCount() >= 1
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return collector.Patches()
+	patches, err := collector.Patches()
+	if err != nil {
+		return nil, nil, err
+	}
+	return patches, collector.Timings(), nil
 }
 
 func (w *ProjectSemanticWorker) streamRequest(ctx context.Context, req projectIndexRequest, handle func(json.RawMessage) error, done func() bool) error {
@@ -84,6 +92,22 @@ func (w *ProjectSemanticWorker) Close() error {
 		return nil
 	}
 	return w.worker.Close()
+}
+
+// LastSemanticTimings returns diagnostic timing buckets from the latest semantic request.
+func (w *ProjectSemanticWorker) LastSemanticTimings() []devtools.ProjectIndexPhaseTiming {
+	if w == nil {
+		return nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]devtools.ProjectIndexPhaseTiming(nil), w.lastTimings...)
+}
+
+func (w *ProjectSemanticWorker) setLastTimings(timings []devtools.ProjectIndexPhaseTiming) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lastTimings = append([]devtools.ProjectIndexPhaseTiming(nil), timings...)
 }
 
 func semanticWorkerRequestBatch(req projectIndexRequest) []any {

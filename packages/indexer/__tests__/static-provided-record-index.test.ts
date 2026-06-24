@@ -47,6 +47,24 @@ describe('provided static syntax record indexing', () => {
     expect(plan.callNames).toContain('prompt')
     expect(plan.constructorNames).toContain('Agent')
     expect(plan.pruneNativeFactCallNames).toEqual(['cascade', 'fallback', 'router'])
+    expect(plan.relationSpecs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'prompt.uses_context', fidelity: 'partial', runtimeJoin: true }),
+      ]),
+    )
+    expect(plan.ruleDescriptors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'prompt.missing_input_schema', source: 'builtin' }),
+      ]),
+    )
+    expect(plan.sourceGraph).toEqual(
+      expect.objectContaining({
+        schemaVersion: 1,
+        producedBy: '@crux/indexer',
+        capabilities: expect.arrayContaining(['project-shards', 'source-dependencies']),
+        shards: expect.arrayContaining([expect.objectContaining({ id: '.', root })]),
+      }),
+    )
     expect(plan.nativeAstEnabled).toBe(false)
   })
 

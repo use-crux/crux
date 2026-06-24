@@ -27,3 +27,41 @@ export {
   indexPatchToWorkerEvents,
   indexPatchToWorkerEventStream,
 } from './patch-events'
+export type {
+  NativeStaticCompilerMethod,
+  NativeStaticCompilerRequest,
+  NativeStaticCompilerResponse,
+  NativeStaticFileInput,
+  NativeStaticPreparedPlan,
+  NativeStaticRunIdentity,
+  NativeStaticSourceFile,
+  NativeStaticTelemetry,
+} from './native-static'
+export type { ParsedNativeStaticCompilerRequest } from './native-static-parse'
+export type {
+  NativeStaticParserCallInterest,
+  NativeStaticParserCallbackInterest,
+  NativeStaticParserConstructorInterest,
+} from './native-static-parser-interests'
+export {
+  NATIVE_STATIC_COMPILER_PROTOCOL_VERSION,
+  NativeStaticAnalyzeRequestSchema,
+  NativeStaticAnalyzeResponseSchema,
+  NativeStaticCompilerRequestSchema,
+  NativeStaticCompilerResponseSchema,
+  NativeStaticFileInputSchema,
+  NativeStaticFinalizeRequestSchema,
+  NativeStaticFinalizeResponseSchema,
+  NativeStaticPrepareRequestSchema,
+  NativeStaticPrepareResponseSchema,
+  NativeStaticPreparedPlanSchema,
+  NativeStaticRunIdentitySchema,
+  NativeStaticSourceFileSchema,
+  NativeStaticTelemetrySchema,
+} from './native-static'
+export { parseNativeStaticCompilerRequest } from './native-static-parse'
+export {
+  NativeStaticParserCallInterestSchema,
+  NativeStaticParserCallbackInterestSchema,
+  NativeStaticParserConstructorInterestSchema,
+} from './native-static-parser-interests'

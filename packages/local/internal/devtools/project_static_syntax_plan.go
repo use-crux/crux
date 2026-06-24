@@ -4,11 +4,17 @@ import "encoding/json"
 
 // ProjectStaticSyntaxPlan is the Node-owned plan for native static parsing.
 type ProjectStaticSyntaxPlan struct {
-	Root                     string                      `json:"root"`
-	ProjectName              string                      `json:"projectName,omitempty"`
-	ConfigFile               string                      `json:"configFile,omitempty"`
-	Files                    []string                    `json:"files"`
-	FilesToParse             []string                    `json:"filesToParse"`
+	Root        string `json:"root"`
+	ProjectName string `json:"projectName,omitempty"`
+	ConfigFile  string `json:"configFile,omitempty"`
+	// Files contains primary extraction files plus support files needed for cross-file record lookups.
+	Files []string `json:"files"`
+	// PrimaryFiles contains extraction targets only. It is Go-internal because
+	// the Rust protocol receives typed source identities instead of this plan.
+	PrimaryFiles []string `json:"-"`
+	// FilesToParse contains primary cache misses plus support records the native host must still provide.
+	FilesToParse []string `json:"filesToParse"`
+	// CacheHits and CacheMisses describe primary extraction files only.
 	CacheHits                []string                    `json:"cacheHits,omitempty"`
 	CacheMisses              []string                    `json:"cacheMisses,omitempty"`
 	CacheEntries             []StaticCacheHit            `json:"cacheEntries,omitempty"`
@@ -21,6 +27,11 @@ type ProjectStaticSyntaxPlan struct {
 	SyntaxFrontend           SyntaxFrontend              `json:"syntaxFrontend"`
 	NativeAstEnabled         bool                        `json:"nativeAstEnabled,omitempty"`
 	StaticInterests          json.RawMessage             `json:"staticInterests,omitempty"`
+	RelationSpecs            json.RawMessage             `json:"relationSpecs,omitempty"`
+	RuleDescriptors          json.RawMessage             `json:"ruleDescriptors,omitempty"`
+	LintConfig               json.RawMessage             `json:"lintConfig,omitempty"`
+	CacheInputs              []json.RawMessage           `json:"cacheInputs,omitempty"`
+	SourceGraph              json.RawMessage             `json:"sourceGraph,omitempty"`
 	StaticHost               json.RawMessage             `json:"staticHost,omitempty"`
 }
 
@@ -54,6 +65,10 @@ type StaticCallbackInterest struct {
 type StaticCacheHit struct {
 	File     string `json:"file"`
 	CacheKey string `json:"cacheKey"`
+	// SourceHash is the validated source hash stored in the static cache manifest.
+	SourceHash string `json:"sourceHash,omitempty"`
+	// SemanticProfile is transient AST-to-semantic handoff metadata replayed from cache.
+	SemanticProfile *SemanticSourceProfileFile `json:"semanticProfile,omitempty"`
 }
 
 // SyntaxFrontend identifies the parser frontend that produced syntax records.

@@ -17,12 +17,18 @@ import type {
 import type { ProjectModelResolutionMode } from '@crux/core/project-index'
 import { indexDefinitionsFromSnapshot, serializeIndex } from '@crux/core/project-index/serializers'
 import { applyIndexLintConfig } from '../lints/config'
+import { indexLintFindings } from '../lints/findings'
 import { applyIndexLintSuppressions } from '../lints/suppressions'
 import { builtInIndexRuleDescriptors, validateBuiltInIndexRuleManifests } from '../lints/rules'
 import { loadProjectConfig, type LoadedProjectConfig } from '../config'
 import { discoverProjectDefinitions, type ProjectDiscoveryResult } from '../discovery'
 import { sourceTooLargeDiagnostic } from '../diagnostics'
-import { loadIndexerExtensionReferences, type IndexerExtensionRuntime as ExtensionRuntime } from '../extensions'
+import {
+  loadIndexerExtensionReferences,
+  type IndexDependency,
+  type IndexerExtensionRuntime as ExtensionRuntime,
+  type ResolvedIndexerExtension,
+} from '../extensions'
 import { staticDefinitionFileSelection, type StaticDefinitionFileSelection } from '../files'
 import { createIndexGraphBuilder, graphSources } from '../graph/builder'
 import { dedupeById, mergeDefinitionsById } from '../merge'
@@ -38,11 +44,17 @@ import {
   type StaticExtractionInstrumentation,
   type StaticParseCacheHit,
 } from '../static/extraction/engine'
-import type { NativeFactProjectionMode, StaticSyntaxFrontend, StaticSyntaxFrontendFactory } from '../static/syntax-record'
+import { staticExtensionPackageCacheInputs } from '../static/extraction/identity'
+import type {
+  NativeFactProjectionMode,
+  StaticSyntaxFrontend,
+  StaticSyntaxFrontendFactory,
+} from '../static/syntax-record'
 import type { SemanticSourceProfile, SemanticSourceProfileFile } from '../semantic/source-profile'
 import type { SourceGraph } from '../types'
 import { suppressRichImportDiagnosticsForStaticDefinitions } from './diagnostics'
 import {
+  compilerProfileWithResolvedExtensions,
   createProjectIndexCompilerRuntime,
   cruxCoreCompilerProfile,
   type ProjectIndexCompilerRuntime,
@@ -199,6 +211,7 @@ async function compileProjectIndexWithRuntime(input: {
     root: loadedInputs.root,
     profile: runtimeResult.runtime.profile,
     syntaxFrontend: input.input.staticSyntaxFrontend,
+    additionalCacheInputs: runtimeResult.cacheInputs,
     instrumentation: input.input.staticInstrumentation,
     cacheHits: input.input.staticCacheHits,
     nativeFactProjection: input.input.nativeFactProjection,
@@ -377,10 +390,11 @@ async function compilerRuntimeForLoadedInputs(input: {
 }): Promise<{
   readonly runtime: ProjectIndexCompilerRuntime
   readonly diagnostics: readonly IndexDiagnostic[]
+  readonly cacheInputs: readonly IndexDependency[]
 }> {
   const configuredExtensions = input.loaded.indexer?.extensions ?? []
   if (configuredExtensions.length === 0) {
-    return { runtime: input.baseRuntime, diagnostics: [] }
+    return { runtime: input.baseRuntime, diagnostics: [], cacheInputs: [] }
   }
 
   const loaded = await loadIndexerExtensionReferences({
@@ -388,16 +402,26 @@ async function compilerRuntimeForLoadedInputs(input: {
     config: input.loaded.indexer,
   })
   if (loaded.extensions.length === 0) {
-    return { runtime: input.baseRuntime, diagnostics: loaded.diagnostics }
+    return { runtime: input.baseRuntime, diagnostics: loaded.diagnostics, cacheInputs: [] }
   }
 
   return {
-    runtime: createProjectIndexCompilerRuntime({
-      ...input.baseRuntime.profile,
-      extensions: [...input.baseRuntime.profile.extensions, ...loaded.extensions.map((entry) => entry.extension)],
-    }),
+    runtime: createProjectIndexCompilerRuntime(
+      compilerProfileWithResolvedExtensions(input.baseRuntime.profile, loaded.extensions),
+    ),
     diagnostics: loaded.diagnostics,
+    cacheInputs: extensionPackageCacheInputs(loaded.extensions),
   }
+}
+
+function extensionPackageCacheInputs(extensions: readonly ResolvedIndexerExtension[]): readonly IndexDependency[] {
+  return staticExtensionPackageCacheInputs(
+    extensions.map((extension) => ({
+      packageName: extension.reference.package,
+      exportName: extension.reference.export,
+      packageVersion: extension.packageVersion,
+    })),
+  )
 }
 
 function appendInitialDiagnostics(
@@ -503,15 +527,16 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
     definitions: merged.definitions,
     relations: merged.relations,
   })
+  const ruleDescriptors = compilerRuleDescriptors(input.extensionRuntime)
   const lintPolicy = applyCompilerLintPolicy({
     config: loaded.lint,
     configFile: loaded.configFile,
     diagnostics: [...merged.diagnostics, ...ruleResult.diagnostics],
     findings: ruleResult.outputs,
     files: staticFiles,
+    ruleDescriptors,
   })
   const sourceGraph = projectCompilerSourceGraph(input.shards)
-  const ruleDescriptors = compilerRuleDescriptors(input.extensionRuntime)
   const sources = projectCompilerSourceRows({
     sources: mergeSources([...initialSources, ...discovered.sources]),
     definitions: merged.definitions,
@@ -596,10 +621,20 @@ function runCompilerIndexRules(input: {
   readonly definitions: readonly ProjectDefinition[]
   readonly relations: readonly ProjectRelation[]
 }) {
-  return input.extensionRuntime.checkRules({
+  const extensionRules = input.extensionRuntime.checkRules({
     definitions: input.definitions,
     relations: input.relations,
   })
+  return {
+    outputs: [
+      ...indexLintFindings({
+        definitions: input.definitions,
+        relations: input.relations,
+      }),
+      ...extensionRules.outputs,
+    ],
+    diagnostics: extensionRules.diagnostics,
+  }
 }
 
 function applyCompilerLintPolicy(input: {
@@ -608,6 +643,7 @@ function applyCompilerLintPolicy(input: {
   readonly diagnostics: readonly IndexDiagnostic[]
   readonly findings: readonly IndexLintFinding[]
   readonly files: readonly string[]
+  readonly ruleDescriptors: readonly IndexRuleDescriptor[]
 }): {
   readonly diagnostics: readonly IndexDiagnostic[]
   readonly findings: readonly IndexLintFinding[]
@@ -617,10 +653,12 @@ function applyCompilerLintPolicy(input: {
     config: input.config,
     configFile: input.configFile,
     diagnostics,
+    ruleDescriptors: input.ruleDescriptors,
     findings: applyIndexLintSuppressions({
       files: input.files,
       findings: [...input.findings],
       diagnostics,
+      ruleDescriptors: input.ruleDescriptors,
     }),
   })
   return { diagnostics, findings }

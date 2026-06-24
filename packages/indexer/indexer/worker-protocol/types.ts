@@ -11,9 +11,15 @@
 import type { ProjectModelProvenance, ResolvedProjectModel } from '@crux/core/project-index'
 import type { IndexPatch, IndexPatchFacts, IndexPatchPhase } from '../patches'
 import type { ProjectConfigInspect } from '../project-config-inspect'
+import type { ProjectNativeStaticConfig } from '../native-static-inspect'
 import type { ProjectStaticSyntaxPlan } from '../static-plan'
 import type { StaticExtractionTimingName } from '../static/instrumentation'
 import type { SemanticSourceProfileFile } from '../semantic/source-profile'
+import type {
+  CheckStaticRulesResult,
+  ExtractStaticEvidenceBatchResult,
+  LoadStaticExtensionHostManifestResult,
+} from '../extensions'
 
 /** Current Project Index worker stream protocol version. */
 export const PROJECT_INDEX_WORKER_PROTOCOL_VERSION = 2 as const
@@ -107,8 +113,16 @@ export interface ProjectIndexArtifactMap {
   readonly projectModel: ResolvedProjectModel
   /** Effective configuration read model rendered by `crux config inspect`. */
   readonly projectConfig: ProjectConfigInspect
+  /** Executable-config fragment used before Go/Rust-owned native static planning. */
+  readonly projectNativeStaticConfig: ProjectNativeStaticConfig
   /** Static syntax parsing plan consumed by native parser hosts. */
   readonly projectStaticSyntaxPlan: ProjectStaticSyntaxPlan
+  /** Data-only extension runtime manifest loaded by the TypeScript static host. */
+  readonly staticExtensionHostManifest: LoadStaticExtensionHostManifestResult
+  /** TypeScript extractor facts produced from native static evidence jobs. */
+  readonly staticExtensionEvidenceBatch: ExtractStaticEvidenceBatchResult
+  /** TypeScript rule outputs produced from a native-finalized static graph. */
+  readonly staticRuleCheck: CheckStaticRulesResult
 }
 
 /** JSON artifact kinds supported by the V2 worker stream. */

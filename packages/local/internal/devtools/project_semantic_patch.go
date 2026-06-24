@@ -7,10 +7,25 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func (s *Service) applyProjectSemanticPatch(ctx context.Context, request ProjectSemanticIndexRequest) (store.IndexData, error) {
+func (s *Service) applyProjectSemanticPatch(
+	ctx context.Context,
+	request ProjectSemanticIndexRequest,
+	lintPrefetch *projectLintPrefetchTask,
+) (store.IndexData, error) {
 	indexer, ok := s.indexer.(ProjectSemanticIndexer)
 	if !ok {
-		return s.indexReadModel(), nil
+		index := s.indexReadModel()
+		lintRequest := projectLintIndexRequest(
+			request.Root,
+			request.ConfigPath,
+			request.ProjectName,
+			index,
+			request.ASTUsedNativeStatic,
+		)
+		if err := applyProjectLintPrefetch(&lintRequest, lintPrefetch); err != nil {
+			return store.IndexData{}, err
+		}
+		return s.applyProjectLintPatch(ctx, lintRequest, request.IndexGeneration)
 	}
 	semanticStartedAt := time.Now()
 	semanticCtx, cancel := context.WithTimeout(ctx, projectIndexSemanticTimeout)
@@ -19,8 +34,25 @@ func (s *Service) applyProjectSemanticPatch(ctx context.Context, request Project
 		request.Budget = projectIndexSemanticBudget
 	}
 	patch, err := indexer.IndexProjectSemanticPatch(semanticCtx, request)
-	if err != nil {
-		index, applied, applyErr := s.applyProjectSemanticDegradedPatch(ctx, request, semanticStartedAt, "index.semantic_degraded", err.Error())
+	return s.applyProjectSemanticPatchResult(ctx, request, semanticStartedAt, patch, err, lintPrefetch)
+}
+
+func (s *Service) applyProjectSemanticPatchResult(
+	ctx context.Context,
+	request ProjectSemanticIndexRequest,
+	semanticStartedAt time.Time,
+	patch IndexPatch,
+	semanticErr error,
+	lintPrefetch *projectLintPrefetchTask,
+) (store.IndexData, error) {
+	if semanticStartedAt.IsZero() {
+		semanticStartedAt = time.Now()
+	}
+	if isZeroIndexPatchBudget(request.Budget) {
+		request.Budget = projectIndexSemanticBudget
+	}
+	if semanticErr != nil {
+		index, applied, applyErr := s.applyProjectSemanticDegradedPatch(ctx, request, semanticStartedAt, "index.semantic_degraded", semanticErr.Error())
 		if !applied {
 			s.watchStatus.SemanticStaleDropped(request.WatchRunID)
 		} else if applyErr == nil {
@@ -59,7 +91,17 @@ func (s *Service) applyProjectSemanticPatch(ctx context.Context, request Project
 	} else {
 		s.watchStatus.SemanticReady(request.WatchRunID)
 	}
-	return index, nil
+	lintRequest := projectLintIndexRequest(
+		request.Root,
+		request.ConfigPath,
+		request.ProjectName,
+		index,
+		request.ASTUsedNativeStatic,
+	)
+	if err := applyProjectLintPrefetch(&lintRequest, lintPrefetch); err != nil {
+		return store.IndexData{}, err
+	}
+	return s.applyProjectLintPatch(ctx, lintRequest, request.IndexGeneration)
 }
 
 func (s *Service) applyProjectSemanticPatchInBackground(request ProjectSemanticIndexRequest) {
@@ -67,7 +109,10 @@ func (s *Service) applyProjectSemanticPatchInBackground(request ProjectSemanticI
 		if s == nil {
 			return
 		}
-		_, _ = s.applyProjectSemanticPatch(s.ctx, request)
+		if _, ok := s.indexer.(ProjectSemanticIndexer); !ok {
+			return
+		}
+		_, _ = s.applyProjectSemanticPatch(s.ctx, request, nil)
 	}()
 }
 

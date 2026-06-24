@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
-import type { IndexDiagnostic, IndexLintFinding, SourceLocation } from '@crux/core/project-index'
-import { knownIndexLintRuleId, type IndexLintRuleId } from './rules'
+import type { IndexDiagnostic, IndexLintFinding, IndexRuleDescriptor, SourceLocation } from '@crux/core/project-index'
+import { createKnownIndexLintRuleIds } from './rule-ids'
 
 type SuppressionScope = 'next-line' | 'line' | 'file'
 
@@ -23,17 +23,18 @@ export function applyIndexLintSuppressions(input: {
   readonly files: readonly string[]
   readonly findings: readonly IndexLintFinding[]
   readonly diagnostics: IndexDiagnostic[]
+  /** Rule descriptors visible to this lint finalization pass. */
+  readonly ruleDescriptors?: readonly Pick<IndexRuleDescriptor, 'id'>[]
 }): IndexLintFinding[] {
+  const knownRuleIds = createKnownIndexLintRuleIds(input.ruleDescriptors)
   const suppressions = parseIndexLintSuppressions(input.files)
   for (const suppression of suppressions) {
-    if (!knownIndexLintRuleId(suppression.ruleId)) {
+    if (!knownRuleIds.has(suppression.ruleId)) {
       input.diagnostics.push(unknownRuleDiagnostic(suppression))
     }
   }
 
-  const active = suppressions.filter((suppression): suppression is IndexLintSuppression & { ruleId: IndexLintRuleId } =>
-    knownIndexLintRuleId(suppression.ruleId),
-  )
+  const active = suppressions.filter((suppression) => knownRuleIds.has(suppression.ruleId))
   const kept: IndexLintFinding[] = []
 
   for (const finding of input.findings) {
@@ -66,7 +67,7 @@ function parseIndexLintSuppressions(files: readonly string[]): IndexLintSuppress
     }
     const lines = text.split(/\r?\n/)
     lines.forEach((lineText, index) => {
-      const match = /crux-lint-disable-(next-line|line|file)\s+([a-zA-Z0-9_.-]+)(?:\s+--\s*(.*))?/.exec(lineText)
+      const match = /crux-lint-disable-(next-line|line|file)\s+([@a-zA-Z0-9_./-]+)(?:\s+--\s*(.*))?/.exec(lineText)
       if (!match) return
       const line = index + 1
       const scope = match[1] as SuppressionScope
@@ -90,10 +91,7 @@ function parseIndexLintSuppressions(files: readonly string[]): IndexLintSuppress
 /**
  * Returns whether a suppression directive applies to a finding.
  */
-function suppresses(
-  suppression: IndexLintSuppression & { ruleId: IndexLintRuleId },
-  finding: IndexLintFinding,
-): boolean {
+function suppresses(suppression: IndexLintSuppression, finding: IndexLintFinding): boolean {
   if (finding.ruleId !== suppression.ruleId) return false
   if (!finding.source || finding.source.file !== suppression.file) return false
   if (suppression.scope === 'file') return true

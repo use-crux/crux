@@ -69,7 +69,10 @@ func TestProjectSemanticWorker_semanticPatchUsesDedicatedStreamProtocol(t *testi
 						finishedAt: new Date(0).toISOString(),
 						status: 'ok'
 					},
-					summary: { factCount: 1 }
+					summary: {
+						factCount: 1,
+						timings: [{ name: 'semantic.cache.hit', durationMs: 0, count: 1 }]
+					}
 				}
 			]
 			for (const event of events) process.stdout.write(JSON.stringify(event) + '\n')
@@ -97,6 +100,10 @@ func TestProjectSemanticWorker_semanticPatchUsesDedicatedStreamProtocol(t *testi
 	}
 	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:semantic" {
 		t.Fatalf("definitions = %+v, want streamed semantic definition", patch.Facts.Definitions)
+	}
+	timings := worker.LastSemanticTimings()
+	if len(timings) != 1 || timings[0].Name != "semantic.cache.hit" || timings[0].Count != 1 {
+		t.Fatalf("semantic timings = %+v, want semantic cache hit timing", timings)
 	}
 }
 

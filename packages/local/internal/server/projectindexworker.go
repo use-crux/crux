@@ -22,49 +22,41 @@ type ProjectIndexWorker struct {
 	syntaxWorker   ProjectSyntaxParser
 	timingsMu      sync.Mutex
 	lastAstTiming  ProjectIndexAstTiming
-}
-
-// ProjectIndexAstTiming captures production AST pipeline timings for benchmark
-// and architecture work. It is diagnostic metadata only; it is not part of the
-// Project Index read model.
-type ProjectIndexAstTiming struct {
-	PlanMs                  float64
-	NativeParseAndForwardMs float64
-	NodeProjectionMs        float64
-	TotalMs                 float64
-	NodeTimings             []devtools.ProjectIndexPhaseTiming
-	RecordCount             int
-	RecordBytes             int
-	ChunkCount              int
-	MaxChunkBytes           int
+	planMu         sync.Mutex
+	activePlan     *projectStaticSyntaxPlanCall
 }
 
 type projectIndexRequest struct {
-	ProtocolVersion          int                                  `json:"protocolVersion,omitempty"`
-	Method                   string                               `json:"method"`
-	RequestID                string                               `json:"requestId,omitempty"`
-	RequestKind              string                               `json:"requestKind,omitempty"`
-	Root                     string                               `json:"root"`
-	ConfigPath               string                               `json:"configPath,omitempty"`
-	ProjectName              string                               `json:"projectName,omitempty"`
-	ResolutionMode           string                               `json:"resolutionMode,omitempty"`
-	SemanticBudget           *devtools.IndexPatchBudget           `json:"semanticBudget,omitempty"`
-	PreviousIndex            *store.IndexData                     `json:"previousIndex,omitempty"`
-	PreviousDefinitions      []store.ProjectDefinition            `json:"previousIndexDefinitions,omitempty"`
-	PreviousSources          []store.IndexSourceFile              `json:"previousIndexSources,omitempty"`
-	Files                    []string                             `json:"files,omitempty"`
-	DeletedFiles             []string                             `json:"deletedFiles,omitempty"`
-	SyntaxRecords            []json.RawMessage                    `json:"syntaxRecords,omitempty"`
-	SyntaxRecordsBatch       []json.RawMessage                    `json:"syntaxRecordsBatch,omitempty"`
-	SyntaxFrontend           *devtools.SyntaxFrontend             `json:"syntaxFrontendIdentity,omitempty"`
-	NativeFactProjection     string                               `json:"nativeFactProjection,omitempty"`
-	DependencyClosure        []string                             `json:"dependencyClosure,omitempty"`
-	SourceProfile            *devtools.SemanticSourceProfile      `json:"sourceProfile,omitempty"`
-	SourceProfileFiles       []devtools.SemanticSourceProfileFile `json:"sourceProfileFiles,omitempty"`
-	Mode                     string                               `json:"mode,omitempty"`
-	MaxAffectedFiles         int                                  `json:"maxAffectedFiles,omitempty"`
-	IncludeStaticCacheStatus bool                                 `json:"includeStaticCacheStatus,omitempty"`
-	StaticCacheHits          []devtools.StaticCacheHit            `json:"staticCacheHits,omitempty"`
+	ProtocolVersion               int                                  `json:"protocolVersion,omitempty"`
+	Method                        string                               `json:"method"`
+	RequestID                     string                               `json:"requestId,omitempty"`
+	RequestKind                   string                               `json:"requestKind,omitempty"`
+	Root                          string                               `json:"root"`
+	ConfigPath                    string                               `json:"configPath,omitempty"`
+	ProjectName                   string                               `json:"projectName,omitempty"`
+	ResolutionMode                string                               `json:"resolutionMode,omitempty"`
+	SemanticBudget                *devtools.IndexPatchBudget           `json:"semanticBudget,omitempty"`
+	PreviousIndex                 *store.IndexData                     `json:"previousIndex,omitempty"`
+	PreviousDefinitions           []store.ProjectDefinition            `json:"previousIndexDefinitions,omitempty"`
+	PreviousSources               []store.IndexSourceFile              `json:"previousIndexSources,omitempty"`
+	Files                         []string                             `json:"files,omitempty"`
+	DeletedFiles                  []string                             `json:"deletedFiles,omitempty"`
+	SyntaxRecords                 []json.RawMessage                    `json:"syntaxRecords,omitempty"`
+	SyntaxRecordsBatch            []json.RawMessage                    `json:"syntaxRecordsBatch,omitempty"`
+	SyntaxFrontend                *devtools.SyntaxFrontend             `json:"syntaxFrontendIdentity,omitempty"`
+	NativeFactProjection          string                               `json:"nativeFactProjection,omitempty"`
+	Jobs                          []json.RawMessage                    `json:"jobs,omitempty"`
+	Graph                         json.RawMessage                      `json:"graph,omitempty"`
+	AvailableFacts                json.RawMessage                      `json:"availableFacts,omitempty"`
+	NativeLintFinalize            bool                                 `json:"nativeLintFinalize,omitempty"`
+	DependencyClosure             []string                             `json:"dependencyClosure,omitempty"`
+	SourceProfile                 *devtools.SemanticSourceProfile      `json:"sourceProfile,omitempty"`
+	SourceProfileFiles            []devtools.SemanticSourceProfileFile `json:"sourceProfileFiles,omitempty"`
+	Mode                          string                               `json:"mode,omitempty"`
+	MaxAffectedFiles              int                                  `json:"maxAffectedFiles,omitempty"`
+	IncludeStaticCacheStatus      bool                                 `json:"includeStaticCacheStatus,omitempty"`
+	StaticCacheHits               []devtools.StaticCacheHit            `json:"staticCacheHits,omitempty"`
+	NativeCompilerProtocolVersion int                                  `json:"nativeCompilerProtocolVersion,omitempty"`
 }
 
 const projectIndexWorkerMaxResponseBytes = 16 * 1024 * 1024
@@ -89,6 +81,14 @@ func (w *ProjectIndexWorker) LastAstTiming() ProjectIndexAstTiming {
 	w.timingsMu.Lock()
 	defer w.timingsMu.Unlock()
 	return w.lastAstTiming
+}
+
+// LastSemanticTimings returns diagnostic timing buckets from the latest semantic request.
+func (w *ProjectIndexWorker) LastSemanticTimings() []devtools.ProjectIndexPhaseTiming {
+	if w == nil || w.semanticWorker == nil {
+		return nil
+	}
+	return w.semanticWorker.LastSemanticTimings()
 }
 
 func (w *ProjectIndexWorker) recordLastAstTiming(timing ProjectIndexAstTiming) {
@@ -140,10 +140,30 @@ func (w *ProjectIndexWorker) InspectProjectConfig(ctx context.Context, root, con
 }
 
 func (w *ProjectIndexWorker) IndexProjectAstPatch(ctx context.Context, root, configPath, projectName string) (devtools.IndexPatch, error) {
-	if w.syntaxWorker != nil {
-		return w.indexProjectAstPatchFromNativeSyntaxRecords(ctx, root, configPath, projectName)
+	result, err := w.IndexProjectAstPatchWithResult(ctx, root, configPath, projectName)
+	if err != nil {
+		return devtools.IndexPatch{}, err
 	}
-	return w.indexProjectAstPatchFromTypeScript(ctx, root, configPath, projectName)
+	return result.Patch, nil
+}
+
+// IndexProjectAstPatchWithResult returns the AST/source patch with per-run
+// metadata used by later phases. Unlike LastAstTiming, this result belongs to
+// the current call and is safe to pass through concurrent service scheduling.
+func (w *ProjectIndexWorker) IndexProjectAstPatchWithResult(
+	ctx context.Context,
+	root string,
+	configPath string,
+	projectName string,
+) (devtools.ProjectAstIndexResult, error) {
+	if w.syntaxWorker != nil {
+		return w.indexProjectAstPatchResultFromNativeSyntaxRecords(ctx, root, configPath, projectName)
+	}
+	patch, err := w.indexProjectAstPatchFromTypeScript(ctx, root, configPath, projectName)
+	if err != nil {
+		return devtools.ProjectAstIndexResult{}, err
+	}
+	return devtools.ProjectAstIndexResult{Patch: patch}, nil
 }
 
 func (w *ProjectIndexWorker) indexProjectAstPatchFromTypeScript(ctx context.Context, root, configPath, projectName string) (devtools.IndexPatch, error) {
@@ -166,8 +186,41 @@ func (w *ProjectIndexWorker) indexProjectAstPatchFromTypeScript(ctx context.Cont
 	if len(patches) != 1 {
 		return devtools.IndexPatch{}, fmt.Errorf("project ast worker returned %d patches, want 1", len(patches))
 	}
-	w.recordLastAstTiming(ProjectIndexAstTiming{TotalMs: elapsedMs(started), NodeTimings: collector.Timings()})
+	w.recordLastAstTiming(projectIndexAstTimingNodeRequired(ProjectIndexAstTiming{
+		TotalMs:     elapsedMs(started),
+		NodeTimings: collector.Timings(),
+	}, projectIndexNodeReasonTypeScriptStaticCompiler))
 	return patches[0], nil
+}
+
+func projectIndexAstTimingNodeRequired(timing ProjectIndexAstTiming, reasons ...string) ProjectIndexAstTiming {
+	if len(reasons) == 0 {
+		return timing
+	}
+	timing.NodeStarted = true
+	timing.NativeOnlyEligible = false
+	timing.NodeReasons = appendUniqueStrings(timing.NodeReasons, reasons...)
+	timing.NativeOnlyReasons = appendUniqueStrings(timing.NativeOnlyReasons, reasons...)
+	return timing
+}
+
+func appendUniqueStrings(values []string, next ...string) []string {
+	for _, value := range next {
+		if value == "" || stringSliceContains(values, value) {
+			continue
+		}
+		values = append(values, value)
+	}
+	return values
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *ProjectIndexWorker) IndexProjectSemanticPatch(ctx context.Context, request devtools.ProjectSemanticIndexRequest) (devtools.IndexPatch, error) {

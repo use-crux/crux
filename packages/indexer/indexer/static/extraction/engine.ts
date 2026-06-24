@@ -61,6 +61,7 @@ export function createStaticExtraction(options: StaticExtractionOptions): Static
     extensionRuntime: runtime.extensionRuntime,
     syntaxFrontend: syntaxFrontend.identity,
     nativeFactProjection: options.nativeFactProjection,
+    additionalCacheInputs: options.additionalCacheInputs,
   })
   const sources = options.sources ?? nodeSourceReader()
   const cacheEnabled = options.cache !== 'none'

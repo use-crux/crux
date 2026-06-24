@@ -126,6 +126,10 @@ async function completeSemanticSourceProfile(
 
   const profileByFile = new Map(sourceProfile.files.map((file) => [file.file, file]))
   const missingFiles = dependencyClosure.filter((file) => !profileByFile.has(file))
+  const existingClosureSourceBytes = dependencyClosure.reduce(
+    (sum, file) => sum + (profileByFile.get(file)?.sourceBytes ?? 0),
+    0,
+  )
   const missingProfile =
     missingFiles.length > 0
       ? await semanticSourceProfile('', missingFiles, {
@@ -134,7 +138,7 @@ async function completeSemanticSourceProfile(
           maxSourceBytes:
             budget.maxSourceBytes === undefined
               ? undefined
-              : Math.max(0, budget.maxSourceBytes - sourceProfile.sourceBytes),
+              : Math.max(0, budget.maxSourceBytes - existingClosureSourceBytes),
         })
       : undefined
 
@@ -142,7 +146,7 @@ async function completeSemanticSourceProfile(
     profileByFile.set(file.file, file)
   }
 
-  const profileFiles = [...profileByFile.values()].sort(compareProfileFiles)
+  const profileFiles = dependencyClosure.flatMap((file) => profileByFile.get(file) ?? []).sort(compareProfileFiles)
   const sourceBytes = profileFiles.reduce((sum, file) => sum + file.sourceBytes, 0)
   return {
     files: profileFiles,

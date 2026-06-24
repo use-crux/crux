@@ -1,13 +1,25 @@
 import { resolve } from 'node:path'
-import type { ProjectModelResolutionMode } from '@crux/core/project-index'
+import type {
+  IndexRuleDescriptor,
+  ProjectIndexShard,
+  ProjectIndexSnapshot,
+  ProjectModelResolutionMode,
+} from '@crux/core/project-index'
 import { loadConfigPolicyProjectConfig, loadProjectConfig } from './config'
 import {
+  compilerProfileWithResolvedExtensions,
   createProjectIndexCompilerRuntime,
   cruxCoreCompilerProfile,
   type ProjectIndexCompilerRuntime,
 } from './compiler/profile'
 import { loadIndexerExtensionReferences } from './extensions'
-import type { StaticEvidenceInterestManifest, StaticExtensionHostManifest } from './extensions'
+import type {
+  IndexDependency,
+  RelationSpec,
+  ResolvedIndexerExtension,
+  StaticEvidenceInterestManifest,
+  StaticExtensionHostManifest,
+} from './extensions'
 import type { StaticCandidateClassification } from './candidates'
 import { staticDefinitionFileSelection } from './files'
 import {
@@ -17,9 +29,12 @@ import {
   staticExtractionNativeFactPruneCallNames,
 } from './static/extraction/setup'
 import { staticParseCacheManifestStatus } from './static/extraction/cache'
-import { staticExtractionIdentity } from './static/extraction/identity'
+import { staticExtensionPackageCacheInputs, staticExtractionIdentity } from './static/extraction/identity'
 import type { StaticParseCacheHit } from './static/extraction/types'
 import { nativeStaticAstSelectionFromConfig } from './native-static-config'
+import { staticSyntaxPlanFileSelection } from './static-plan-support-files'
+import { builtInIndexRuleDescriptors } from './lints/rules'
+import { discoverProjectShards } from './shards/discovery'
 import {
   RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
   type StaticSyntaxCallInterest,
@@ -62,13 +77,19 @@ export interface ProjectStaticSyntaxPlan {
   readonly projectName?: string
   /** Config file selected while planning, if one was discovered. */
   readonly configFile?: string
-  /** Absolute source files the compiler will ask the syntax frontend to parse. */
+  /** Absolute primary and support source files that may be needed by the syntax frontend. */
   readonly files: readonly string[]
-  /** Subset of `files` that the native host must parse. Omitted when cache status was not requested. */
+  /**
+   * Subset of `files` that the native host must parse.
+   *
+   * When cache status is requested, this includes primary extraction cache
+   * misses plus local import records needed as cross-file lookup evidence.
+   * Omitted when cache status was not requested.
+   */
   readonly filesToParse?: readonly string[]
-  /** Files with a valid static extraction cache hit for the native syntax frontend. */
+  /** Primary files with a valid static extraction cache hit for the native syntax frontend. */
   readonly cacheHits?: readonly string[]
-  /** Files that need native syntax records because no exact static cache entry exists. */
+  /** Primary files that need native syntax records because no exact static cache entry exists. */
   readonly cacheMisses?: readonly string[]
   /** Validated cache entries that Node projection may consume without recomputing exact keys. */
   readonly cacheEntries?: readonly StaticParseCacheHit[]
@@ -90,6 +111,12 @@ export interface ProjectStaticSyntaxPlan {
   readonly nativeAstEnabled: boolean
   /** Backend-neutral evidence interests requested by extensions. */
   readonly staticInterests: StaticEvidenceInterestManifest
+  /** Data-only relation policies used by native static finalization. */
+  readonly relationSpecs: readonly RelationSpec[]
+  /** Data-only rule descriptors used by native static finalization and devtools catalogs. */
+  readonly ruleDescriptors: readonly IndexRuleDescriptor[]
+  /** Compiler-owned source graph metadata used by native static source-row finalization. */
+  readonly sourceGraph: ProjectIndexSnapshot['sourceGraph']
   /** TypeScript extension-host requirements after native static coverage is applied. */
   readonly staticHost: StaticExtensionHostManifest
 }
@@ -106,15 +133,27 @@ export async function inspectProjectStaticSyntaxPlan(
 ): Promise<ProjectStaticSyntaxPlan> {
   const root = resolve(options.root)
   const loaded = await loadProjectConfig(root, options.configPath, options.resolutionMode ?? 'source-only')
+  const shardGraph = discoverProjectShards(root)
   const nativeAstSelection = await nativeAstSelectionForPlan(root, options.configPath, loaded.loaded.experimental)
-  const runtime = await projectIndexCompilerRuntimeForPlan(root, loaded.loaded.indexer)
+  const runtimeResult = await projectIndexCompilerRuntimeForPlan(root, loaded.loaded.indexer)
+  const runtime = runtimeResult.runtime
   const callNames = [...staticExtractionCallNames(runtime.profile, runtime.extensionRuntime)].sort()
   const staticSelection = staticDefinitionFileSelection(root, {
     additionalCallNames: runtime.extensionRuntime.manifest.callNames,
   })
-  const files = staticSyntaxPlanFiles(staticSelection.files, loaded.loaded.configFile)
+  const primaryFiles = staticSyntaxPlanPrimaryFiles(staticSelection.files, loaded.loaded.configFile)
+  const fileSelection = await staticSyntaxPlanFileSelection({ root, primaryFiles })
+  const files = fileSelection.files
   const cacheStatus = options.includeCacheStatus
-    ? await nativeStaticSyntaxCacheStatus({ root, files, runtime })
+    ? await nativeStaticSyntaxCacheStatus({
+        root,
+        files: fileSelection.primaryFiles,
+        runtime,
+        additionalCacheInputs: runtimeResult.cacheInputs,
+      })
+    : undefined
+  const filesToParse = cacheStatus
+    ? [...new Set([...cacheStatus.cacheMisses, ...fileSelection.recordSupportFiles])].sort()
     : undefined
   return {
     root,
@@ -123,7 +162,7 @@ export async function inspectProjectStaticSyntaxPlan(
     files,
     ...(cacheStatus
       ? {
-          filesToParse: cacheStatus.cacheMisses,
+          filesToParse,
           cacheHits: cacheStatus.cacheHits,
           cacheMisses: cacheStatus.cacheMisses,
           cacheEntries: cacheStatus.cacheEntries,
@@ -138,7 +177,25 @@ export async function inspectProjectStaticSyntaxPlan(
     syntaxFrontend: RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
     nativeAstEnabled: nativeAstSelection.enabled,
     staticInterests: runtime.extensionRuntime.manifest.staticInterests,
+    relationSpecs: runtime.extensionRuntime.manifest.relationSpecs,
+    ruleDescriptors: [...builtInIndexRuleDescriptors(), ...runtime.extensionRuntime.ruleDescriptors],
+    sourceGraph: projectStaticSyntaxPlanSourceGraph(shardGraph.shards),
     staticHost: runtime.extensionRuntime.manifest.staticHost,
+  }
+}
+
+function projectStaticSyntaxPlanSourceGraph(shards: readonly ProjectIndexShard[]): ProjectIndexSnapshot['sourceGraph'] {
+  return {
+    schemaVersion: 1,
+    producedBy: '@crux/indexer',
+    capabilities: [
+      'source-dependencies',
+      'source-dependents',
+      'definition-ownership',
+      'diagnostic-ownership',
+      'project-shards',
+    ],
+    shards: [...(shards ?? [])],
   }
 }
 
@@ -157,6 +214,7 @@ async function nativeStaticSyntaxCacheStatus(input: {
   readonly root: string
   readonly files: readonly string[]
   readonly runtime: ProjectIndexCompilerRuntime
+  readonly additionalCacheInputs: readonly IndexDependency[]
 }): Promise<{
   readonly cacheHits: readonly string[]
   readonly cacheMisses: readonly string[]
@@ -166,6 +224,7 @@ async function nativeStaticSyntaxCacheStatus(input: {
     profile: input.runtime.profile,
     extensionRuntime: input.runtime.extensionRuntime,
     syntaxFrontend: RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
+    additionalCacheInputs: input.additionalCacheInputs,
   })
   return staticParseCacheManifestStatus({
     root: input.root,
@@ -177,23 +236,40 @@ async function nativeStaticSyntaxCacheStatus(input: {
 async function projectIndexCompilerRuntimeForPlan(
   root: string,
   indexerConfig: Awaited<ReturnType<typeof loadProjectConfig>>['loaded']['indexer'],
-): Promise<ProjectIndexCompilerRuntime> {
+): Promise<{
+  readonly runtime: ProjectIndexCompilerRuntime
+  readonly cacheInputs: readonly IndexDependency[]
+}> {
   const baseRuntime = createProjectIndexCompilerRuntime(cruxCoreCompilerProfile)
   const configuredExtensions = indexerConfig?.extensions ?? []
-  if (configuredExtensions.length === 0) return baseRuntime
+  if (configuredExtensions.length === 0) return { runtime: baseRuntime, cacheInputs: [] }
 
   const loaded = await loadIndexerExtensionReferences({
     root,
     config: indexerConfig,
   })
-  if (loaded.extensions.length === 0) return baseRuntime
-  return createProjectIndexCompilerRuntime({
-    ...baseRuntime.profile,
-    extensions: [...baseRuntime.profile.extensions, ...loaded.extensions.map((entry) => entry.extension)],
-  })
+  if (loaded.extensions.length === 0) return { runtime: baseRuntime, cacheInputs: [] }
+  return {
+    runtime: createProjectIndexCompilerRuntime(
+      compilerProfileWithResolvedExtensions(baseRuntime.profile, loaded.extensions),
+    ),
+    cacheInputs: extensionPackageCacheInputs(loaded.extensions),
+  }
 }
 
-function staticSyntaxPlanFiles(files: readonly string[], configFile: string | undefined): readonly string[] {
+function extensionPackageCacheInputs(
+  extensions: readonly ResolvedIndexerExtension[],
+): readonly IndexDependency[] {
+  return staticExtensionPackageCacheInputs(
+    extensions.map((extension) => ({
+      packageName: extension.reference.package,
+      exportName: extension.reference.export,
+      packageVersion: extension.packageVersion,
+    })),
+  )
+}
+
+function staticSyntaxPlanPrimaryFiles(files: readonly string[], configFile: string | undefined): readonly string[] {
   if (!configFile) return files
   return [...new Set([...files, configFile])].sort()
 }

@@ -9,16 +9,139 @@ mod match_build;
 mod match_expressions;
 mod match_interests;
 mod match_statements;
+mod native_agent_convex_facts;
+mod native_agent_facts;
+mod native_agent_metadata;
+mod native_blackboard_facts;
+mod native_composition_facts;
+mod native_composition_output;
+mod native_composition_relations;
+mod native_composition_values;
+mod native_context_facts;
+mod native_data_access;
+mod native_data_access_output;
 mod native_definition;
+mod native_eval_assertions;
+mod native_eval_facts;
 mod native_facts;
+mod native_flow_facts;
+mod native_flow_output;
+mod native_injectable_facts;
+mod native_injection;
+mod native_injection_tools;
+mod native_memory_blocks;
+mod native_memory_facts;
+mod native_memory_id;
+mod native_memory_store;
+mod native_prompt_facts;
+mod native_rag_facts;
+mod native_rag_metadata;
 mod native_record_values;
+mod native_registry_facts;
 mod native_routing_cascade;
 mod native_routing_facts;
 mod native_routing_fallback;
 mod native_routing_model;
 mod native_routing_output;
 mod native_routing_router;
+mod native_routing_source_refs;
 mod native_runtime_join;
+mod native_runtime_join_flow;
+mod native_runtime_join_memory;
+mod native_safety_facts;
+mod native_schema;
+mod native_schema_common;
+mod native_schema_convex;
+mod native_schema_zod;
+mod native_scorer_facts;
+mod native_source_refs;
+mod native_static_analyze;
+mod native_static_analyze_parse;
+#[cfg(test)]
+mod native_static_analyze_source_ref_tests;
+#[cfg(test)]
+mod native_static_analyze_tests;
+#[cfg(test)]
+mod native_static_analyze_tree_tests;
+mod native_static_compile_protocol;
+mod native_static_definition_merge;
+mod native_static_evidence;
+mod native_static_facts;
+mod native_static_finalize;
+mod native_static_finalize_events;
+#[cfg(test)]
+mod native_static_finalize_events_tests;
+mod native_static_finalize_lint_model;
+#[cfg(test)]
+mod native_static_finalize_lint_tests;
+#[cfg(test)]
+mod native_static_finalize_tests;
+mod native_static_input_contract_schema;
+mod native_static_input_contracts;
+#[cfg(test)]
+mod native_static_input_contracts_tests;
+mod native_static_lint_builder;
+mod native_static_lint_contracts;
+mod native_static_lint_core_rules;
+mod native_static_lint_definition_tail;
+mod native_static_lint_emit;
+mod native_static_lint_filter;
+mod native_static_lint_filter_rules;
+mod native_static_lint_helpers;
+mod native_static_lint_injection_entries;
+mod native_static_lint_injection_evidence;
+mod native_static_lint_injection_evidence_data;
+mod native_static_lint_injection_inputs;
+mod native_static_lint_injection_model;
+mod native_static_lint_injection_model_helpers;
+mod native_static_lint_injection_rules;
+mod native_static_lint_propagation;
+mod native_static_lint_relation_rules;
+mod native_static_lint_routing;
+mod native_static_lints;
+mod native_static_protocol;
+#[cfg(test)]
+mod native_static_protocol_tests;
+mod native_static_read_model;
+mod native_static_read_model_helpers;
+mod native_static_read_model_injection;
+mod native_static_read_model_routing;
+#[cfg(test)]
+mod native_static_relation_alias_tests;
+mod native_static_relation_fallback;
+#[cfg(test)]
+mod native_static_relation_fallback_tests;
+#[cfg(test)]
+mod native_static_relation_gap_tests;
+mod native_static_relation_gaps;
+mod native_static_relation_policy;
+#[cfg(test)]
+mod native_static_relation_policy_tests;
+#[cfg(test)]
+mod native_static_relation_ref_tests;
+mod native_static_relation_report;
+mod native_static_relations;
+#[cfg(test)]
+mod native_static_relations_tests;
+mod native_static_scoped_definitions;
+mod native_static_source_groups;
+mod native_static_source_model;
+#[cfg(test)]
+mod native_static_source_model_tests;
+mod native_static_tree_paths;
+mod native_static_worker;
+mod native_static_worker_compile_stream;
+mod native_static_worker_finalize_stream;
+mod native_static_worker_io;
+mod native_static_worker_parse;
+mod native_static_worker_stream;
+#[cfg(test)]
+mod native_static_worker_stream_tests;
+mod native_static_worker_telemetry;
+#[cfg(test)]
+mod native_static_worker_tests;
+mod native_tool_facts;
+mod native_workspace_facts;
 mod object_values;
 mod protocol;
 mod resolve;
@@ -32,6 +155,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use rayon::prelude::*;
+use serde_json::Value;
 
 use protocol::{
     BatchWorkerRequest, ParseRequest, SingleWorkerRequest, WorkerRequest, WorkerResponse,
@@ -55,11 +179,39 @@ fn serve() -> Result<(), String> {
         if line.trim().is_empty() {
             continue;
         }
-        let request: WorkerRequest =
-            serde_json::from_str(&line).map_err(|error| error.to_string())?;
-        write_worker_response(&mut stdout, request)?;
+        let request = parse_serve_request(&line)?;
+        write_serve_response(&mut stdout, request)?;
     }
     Ok(())
+}
+
+#[derive(Debug)]
+pub(crate) enum ServeRequest {
+    Syntax(WorkerRequest),
+    NativeStatic(native_static_worker::NativeStaticWorkerRequest),
+}
+
+pub(crate) fn parse_serve_request(line: &str) -> Result<ServeRequest, String> {
+    let value: Value = serde_json::from_str(line).map_err(|error| error.to_string())?;
+    if native_static_worker_parse::has_worker_method(&value) {
+        return native_static_worker_parse::parse_native_static_worker_request(value)
+            .map(ServeRequest::NativeStatic);
+    }
+    serde_json::from_value::<WorkerRequest>(value)
+        .map(ServeRequest::Syntax)
+        .map_err(|error| error.to_string())
+}
+
+pub(crate) fn write_serve_response<W: Write>(
+    stdout: &mut W,
+    request: ServeRequest,
+) -> Result<(), String> {
+    match request {
+        ServeRequest::Syntax(request) => write_worker_response(stdout, request),
+        ServeRequest::NativeStatic(request) => {
+            native_static_worker::write_native_static_worker_response(stdout, request)
+        }
+    }
 }
 
 fn write_worker_response<W: Write>(stdout: &mut W, request: WorkerRequest) -> Result<(), String> {

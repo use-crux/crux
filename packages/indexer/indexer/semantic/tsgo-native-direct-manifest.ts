@@ -113,6 +113,26 @@ export interface NativeDirectSourceRefSpec {
   readonly metadata?: ProjectSourceRef['metadata']
 }
 
+function nativeDirectToolPrimitive(callName: 'tool' | 'createTool'): NativeDirectPrimitiveSpec {
+  return {
+    callName,
+    definitionKind: 'tool',
+    nameProperties: ['name', 'title'],
+    emitDefinition: 'withMetadata',
+    schema: [
+      { property: 'input', metadataKey: 'inputSchema' },
+      { property: 'parameters', metadataKey: 'inputSchema' },
+      { property: 'output', metadataKey: 'outputSchema' },
+    ],
+    sourceRefs: [
+      { property: 'execute', role: 'execute' },
+      { property: 'run', role: 'callback' },
+      { property: 'handler', role: 'handler' },
+    ],
+    dependencies: [],
+  }
+}
+
 /**
  * Internal manifest for first-party source shapes that can be projected
  * directly from TypeScript-Go AST evidence.
@@ -167,23 +187,8 @@ export const nativeDirectPrimitiveManifest = [
       },
     ],
   },
-  {
-    callName: 'tool',
-    definitionKind: 'tool',
-    nameProperties: ['name', 'title'],
-    emitDefinition: 'withMetadata',
-    schema: [
-      { property: 'input', metadataKey: 'inputSchema' },
-      { property: 'parameters', metadataKey: 'inputSchema' },
-      { property: 'output', metadataKey: 'outputSchema' },
-    ],
-    sourceRefs: [
-      { property: 'execute', role: 'execute' },
-      { property: 'run', role: 'callback' },
-      { property: 'handler', role: 'handler' },
-    ],
-    dependencies: [],
-  },
+  nativeDirectToolPrimitive('tool'),
+  nativeDirectToolPrimitive('createTool'),
   {
     callName: 'prompt',
     definitionKind: 'prompt',

@@ -20,10 +20,7 @@ pub(crate) struct EvidenceSlice {
 }
 
 impl CalleeMatcher {
-    pub(crate) fn for_calls(
-        names: Vec<String>,
-        interests: Vec<StaticSyntaxCallInterest>,
-    ) -> Self {
+    pub(crate) fn for_calls(names: Vec<String>, interests: Vec<StaticSyntaxCallInterest>) -> Self {
         Self::new(
             names,
             interests

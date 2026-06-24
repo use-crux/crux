@@ -215,6 +215,60 @@ describe('semantic index service', () => {
     expect(analyzeCalls[0]?.sourceProfile.files).toEqual([semanticProfile])
   })
 
+  it('narrows superset source profiles to the semantic dependency closure', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    const writer = join(root, 'src/writer.ts')
+    const helper = join(root, 'src/helper.ts')
+    const writerSource = `import { prompt } from '@crux/core'\nexport const writer = prompt({ id: 'writer' })`
+    const helperSource = `export const helper = true`
+    await writeFile(writer, writerSource)
+    await writeFile(helper, helperSource)
+
+    const writerProfile = semanticSourceProfileFileFromSource(writer, writerSource)
+    const helperProfile = semanticSourceProfileFileFromSource(helper, helperSource)
+    const analyzeCalls: SemanticAnalyzeInput[] = []
+    const backend: SemanticBackend<'test-semantic'> = {
+      identity: { name: 'test-semantic', version: 'v1' },
+      capabilities: {
+        apiStability: 'stable',
+        factProduction: 'complete',
+        sessionReuse: 'none',
+        transport: 'in-process',
+      },
+      createSession(input) {
+        return {
+          identity: input.identity,
+          async *analyze(analyzeInput) {
+            analyzeCalls.push(analyzeInput)
+            yield { kind: 'definitions', facts: [] }
+          },
+        }
+      },
+    }
+
+    const patch = await createSemanticIndexService({ backend }).indexFiles({
+      root,
+      files: [writer],
+      projectName: 'semantic-service',
+      sourceProfile: {
+        files: [helperProfile, writerProfile],
+        dependencyClosure: [],
+        sourceBytes: helperProfile.sourceBytes + writerProfile.sourceBytes,
+        complete: true,
+      },
+    })
+
+    expect(patch.status).toBe('ok')
+    expect(analyzeCalls[0]?.dependencyClosure).toEqual([writer])
+    expect(analyzeCalls[0]?.sourceProfile).toEqual({
+      files: [writerProfile],
+      dependencyClosure: [writer],
+      sourceBytes: writerProfile.sourceBytes,
+      complete: true,
+    })
+  })
+
   it('uses source-profile hints to avoid analyzing files without semantic primitive calls', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })

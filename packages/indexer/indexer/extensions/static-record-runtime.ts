@@ -28,6 +28,8 @@ export interface StaticRecordExtractionInput {
   readonly recordsByFile?: ReadonlyMap<string, StaticSyntaxFileRecord>
   /** Compiler-owned extractor identities that a native fact packet already replaced. */
   readonly skipExtractors?: readonly StaticRecordExtractorIdentity[]
+  /** Optional host-selected extractor identities for one declared evidence job. */
+  readonly onlyExtractors?: readonly StaticRecordExtractorIdentity[]
 }
 
 /** Extractor identity used to skip bundled TS extractors replaced by native facts. */
@@ -47,7 +49,7 @@ export function extractStaticRecordWithRegistry(
   input: StaticRecordExtractionInput,
 ): StaticExtractionResult {
   const registered = extractorsForStaticRecordMatch(registry, input.match).filter(
-    (item) => !shouldSkipExtractor(item, input.skipExtractors),
+    (item) => shouldRunExtractor(item, input.onlyExtractors) && !shouldSkipExtractor(item, input.skipExtractors),
   )
   if (registered.length === 0) return { kind: 'no-match' }
 
@@ -75,6 +77,14 @@ export function extractStaticRecordWithRegistry(
   }
 
   return noneResult ?? { kind: 'no-match' }
+}
+
+function shouldRunExtractor(
+  item: RegisteredExtractor,
+  onlyExtractors: readonly StaticRecordExtractorIdentity[] | undefined,
+): boolean {
+  if (!onlyExtractors || onlyExtractors.length === 0) return true
+  return onlyExtractors.some((only) => only.extension === item.extension.name && only.extractor === item.extractor.name)
 }
 
 function shouldSkipExtractor(

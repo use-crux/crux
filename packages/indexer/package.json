@@ -32,6 +32,10 @@
       "types": "./worker-protocol.ts",
       "import": "./worker-protocol.ts"
     },
+    "./worker-host": {
+      "types": "./worker-host.ts",
+      "import": "./worker-host.ts"
+    },
     "./source-resolver": {
       "types": "./source-resolver.ts",
       "import": "./source-resolver.ts"

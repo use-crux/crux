@@ -18,6 +18,12 @@ export { resolveProjectModel } from './indexer/project-model'
 export type { InspectProjectStaticSyntaxPlanOptions, ProjectStaticSyntaxPlan } from './indexer/static-plan'
 export { inspectProjectStaticSyntaxPlan } from './indexer/static-plan'
 export type {
+  InspectProjectNativeStaticConfigOptions,
+  ProjectNativeStaticConfig,
+  ProjectNativeStaticExtensionReference,
+} from './indexer/native-static-inspect'
+export { inspectProjectNativeStaticConfig } from './indexer/native-static-inspect'
+export type {
   InspectProjectConfigOptions,
   ProjectConfigFileOrigin,
   ProjectConfigFileStatus,
@@ -97,6 +103,11 @@ export type {
   NativeSemanticBackendSelection,
   TypeScriptSemanticBackendSelection,
 } from './indexer/semantic/service'
+export type {
+  SemanticIndexInstrumentation,
+  SemanticIndexTiming,
+  SemanticIndexTimingName,
+} from './indexer/semantic/instrumentation'
 export {
   builtInRelationPolicies,
   createRelationPolicyTable,

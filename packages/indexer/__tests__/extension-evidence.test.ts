@@ -118,16 +118,16 @@ describe('indexer extension evidence contract', () => {
     })
 
     expect(runtime.manifest.staticHost.extractors.map(({ name, mode }) => `${name}:${mode}`)).toEqual([
-      'prompt:typescript-bundled',
+      'prompt:native-covered',
       'routing:native-covered',
     ])
     expect(runtime.manifest.staticHost).toEqual(
       expect.objectContaining({
-        bundledNativeExtractorCount: 1,
-        bundledTypeScriptExtractorCount: 1,
+        bundledNativeExtractorCount: 2,
+        bundledTypeScriptExtractorCount: 0,
         extensionTypeScriptExtractorCount: 0,
-        requiresTypeScriptHostForBundled: true,
-        nativeOnlyEligible: false,
+        requiresTypeScriptHostForBundled: false,
+        nativeOnlyEligible: true,
       }),
     )
   })

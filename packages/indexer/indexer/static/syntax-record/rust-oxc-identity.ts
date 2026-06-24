@@ -1,6 +1,6 @@
 import type { StaticSyntaxFrontend } from './types'
 
-const RUST_OXC_VERSION = 'oxc_parser@0.133.0+crux_native_routing.2'
+const RUST_OXC_VERSION = 'oxc_parser@0.133.0+crux_native_group3.5'
 
 /**
  * Syntax frontend identity emitted by the native Rust/Oxc worker.

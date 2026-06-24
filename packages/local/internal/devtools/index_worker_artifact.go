@@ -14,8 +14,16 @@ const (
 	ProjectIndexArtifactProjectModel ProjectIndexArtifactKind = "projectModel"
 	// ProjectIndexArtifactProjectConfig is the effective config inspect model.
 	ProjectIndexArtifactProjectConfig ProjectIndexArtifactKind = "projectConfig"
+	// ProjectIndexArtifactNativeStaticConfig is the config-only native static planning input.
+	ProjectIndexArtifactNativeStaticConfig ProjectIndexArtifactKind = "projectNativeStaticConfig"
 	// ProjectIndexArtifactStaticSyntaxPlan is the native static parser plan.
 	ProjectIndexArtifactStaticSyntaxPlan ProjectIndexArtifactKind = "projectStaticSyntaxPlan"
+	// ProjectIndexArtifactStaticExtensionHostManifest is a data-only TS extension runtime manifest.
+	ProjectIndexArtifactStaticExtensionHostManifest ProjectIndexArtifactKind = "staticExtensionHostManifest"
+	// ProjectIndexArtifactStaticExtensionEvidenceBatch is a TS compatibility extractor result.
+	ProjectIndexArtifactStaticExtensionEvidenceBatch ProjectIndexArtifactKind = "staticExtensionEvidenceBatch"
+	// ProjectIndexArtifactStaticRuleCheck is a TS compatibility rule result.
+	ProjectIndexArtifactStaticRuleCheck ProjectIndexArtifactKind = "staticRuleCheck"
 )
 
 // ProjectIndexArtifactStreamOptions configures host-side validation for a JSON

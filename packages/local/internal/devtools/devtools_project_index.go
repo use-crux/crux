@@ -21,6 +21,19 @@ func (s *Service) ReindexProjectWithOptions(ctx context.Context, root, configPat
 		ctx, cancel = context.WithTimeout(ctx, defaultProjectIndexReindexTimeout)
 		defer cancel()
 	}
+	semanticMode := options.semanticMode()
+	s.startProjectSemanticPrewarm(ctx, semanticMode)
+	plannedSemanticCtx := ctx
+	if semanticMode == ProjectSemanticBackground {
+		plannedSemanticCtx = s.ctx
+	}
+	plannedSemantic := s.startPlannedProjectSemanticPatch(plannedSemanticCtx, semanticMode, root, configPath, projectName)
+	plannedSemanticDetached := false
+	defer func() {
+		if !plannedSemanticDetached {
+			plannedSemantic.stop()
+		}
+	}()
 	startedAt := time.Now()
 	s.indexMu.Lock()
 	s.indexPatch = emptyIndexPatchState()
@@ -30,7 +43,7 @@ func (s *Service) ReindexProjectWithOptions(ctx context.Context, root, configPat
 		cacheLoaded = true
 		s.ApplyIndexPatch(ctx, indexPatchFromSnapshot(cached, indexPatchPhaseCache, "ok"))
 	}
-	patch, err := s.indexer.IndexProjectAstPatch(ctx, root, configPath, projectName)
+	astResult, err := s.indexProjectAstPatch(ctx, root, configPath, projectName)
 	if err != nil {
 		failed := s.store.GetIndex()
 		if failed.Project == nil && root != "" {
@@ -41,6 +54,7 @@ func (s *Service) ReindexProjectWithOptions(ctx context.Context, root, configPat
 		s.indexEvents.Publish(s.indexReadModel())
 		return store.IndexData{}, err
 	}
+	patch := astResult.Patch
 	if patch.Phase == "" {
 		patch.Phase = indexPatchPhaseAST
 	}
@@ -62,15 +76,36 @@ func (s *Service) ReindexProjectWithOptions(ctx context.Context, root, configPat
 	semanticRequest := projectSemanticIndexRequest(root, configPath, projectName, index, nil, patch.SemanticSourceProfile)
 	semanticRequest.IndexGeneration = s.indexGeneration.Current()
 	semanticRequest.WatchRunID = options.Watch.RunID
-	switch options.semanticMode() {
+	semanticRequest.ASTUsedNativeStatic = astResult.UsedNativeStatic
+	lintPrefetch := s.startProjectLintPrefetch(ctx, projectLintIndexRequest(root, configPath, projectName, index, astResult.UsedNativeStatic))
+	defer lintPrefetch.stop()
+	switch semanticMode {
 	case ProjectSemanticDisabled:
 		s.watchStatus.SemanticDisabled(options.Watch.RunID)
-		return index, nil
+		lintRequest := projectLintIndexRequest(root, configPath, projectName, index, astResult.UsedNativeStatic)
+		if err := applyProjectLintPrefetch(&lintRequest, lintPrefetch); err != nil {
+			return store.IndexData{}, err
+		}
+		return s.applyProjectLintPatch(ctx, lintRequest, semanticRequest.IndexGeneration)
 	case ProjectSemanticBackground:
-		s.applyProjectSemanticPatchInBackground(semanticRequest)
+		var err error
+		lintRequest := projectLintIndexRequest(root, configPath, projectName, index, astResult.UsedNativeStatic)
+		if err := applyProjectLintPrefetch(&lintRequest, lintPrefetch); err != nil {
+			return store.IndexData{}, err
+		}
+		index, err = s.applyProjectLintPatch(ctx, lintRequest, semanticRequest.IndexGeneration)
+		if err != nil {
+			return store.IndexData{}, err
+		}
+		if plannedSemantic != nil {
+			plannedSemanticDetached = true
+			s.applyPlannedProjectSemanticPatchInBackground(semanticRequest, plannedSemantic, index)
+		} else {
+			s.applyProjectSemanticPatchInBackground(semanticRequest)
+		}
 		return index, nil
 	default:
-		index, err = s.applyProjectSemanticPatch(ctx, semanticRequest)
+		index, err = s.applyPlannedProjectSemanticPatch(ctx, semanticRequest, plannedSemantic, lintPrefetch, index)
 		if err != nil {
 			return store.IndexData{}, err
 		}
@@ -108,6 +143,18 @@ func (s *Service) ReindexProjectIncrementalWithOptions(ctx context.Context, root
 		ctx, cancel = context.WithTimeout(ctx, defaultProjectIndexReindexTimeout)
 		defer cancel()
 	}
+	semanticMode := options.semanticMode()
+	s.startProjectSemanticPrewarm(ctx, semanticMode)
+	var plannedSemantic *projectSemanticPatchTask
+	if semanticMode == ProjectSemanticInline {
+		plannedSemantic = s.startPlannedProjectIncrementalSemanticPatch(ctx, semanticMode, root, configPath, projectName, previous, files, deletedFiles)
+	}
+	plannedSemanticDetached := false
+	defer func() {
+		if !plannedSemanticDetached {
+			plannedSemantic.stop()
+		}
+	}()
 	s.indexMu.Lock()
 	if isEmptyIndex(s.indexPatch.Index) {
 		s.indexPatch = applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(previous, indexPatchPhaseCache, "ok"))
@@ -115,6 +162,7 @@ func (s *Service) ReindexProjectIncrementalWithOptions(ctx context.Context, root
 	s.indexMu.Unlock()
 	result, err := indexer.IndexProjectIncremental(ctx, root, configPath, projectName, previous, files, deletedFiles, "ast")
 	if err != nil {
+		plannedSemantic.stop()
 		s.watchStatus.FullFallback(options.Watch, files, deletedFiles, "incremental-worker-error")
 		return s.ReindexProjectWithOptions(ctx, root, configPath, projectName, options)
 	}
@@ -141,15 +189,35 @@ func (s *Service) ReindexProjectIncrementalWithOptions(ctx context.Context, root
 	)
 	semanticRequest.IndexGeneration = s.indexGeneration.Current()
 	semanticRequest.WatchRunID = options.Watch.RunID
-	s.watchStatus.IncrementalResult(options.Watch, result, len(result.Patches), watchSemanticStatusForMode(options.semanticMode()))
-	switch options.semanticMode() {
+	lintPrefetch := s.startProjectLintPrefetch(ctx, projectLintIndexRequest(root, configPath, projectName, index, false))
+	defer lintPrefetch.stop()
+	s.watchStatus.IncrementalResult(options.Watch, result, len(result.Patches), watchSemanticStatusForMode(semanticMode))
+	switch semanticMode {
 	case ProjectSemanticDisabled:
 		s.watchStatus.SemanticDisabled(options.Watch.RunID)
-		return index, nil
+		lintRequest := projectLintIndexRequest(root, configPath, projectName, index, false)
+		if err := applyProjectLintPrefetch(&lintRequest, lintPrefetch); err != nil {
+			return store.IndexData{}, err
+		}
+		return s.applyProjectLintPatch(ctx, lintRequest, semanticRequest.IndexGeneration)
 	case ProjectSemanticBackground:
-		s.applyProjectSemanticPatchInBackground(semanticRequest)
+		var err error
+		lintRequest := projectLintIndexRequest(root, configPath, projectName, index, false)
+		if err := applyProjectLintPrefetch(&lintRequest, lintPrefetch); err != nil {
+			return store.IndexData{}, err
+		}
+		index, err = s.applyProjectLintPatch(ctx, lintRequest, semanticRequest.IndexGeneration)
+		if err != nil {
+			return store.IndexData{}, err
+		}
+		if plannedSemantic != nil {
+			plannedSemanticDetached = true
+			s.applyPlannedProjectIncrementalSemanticPatchInBackground(semanticRequest, plannedSemantic, index)
+		} else {
+			s.applyProjectSemanticPatchInBackground(semanticRequest)
+		}
 	default:
-		index, err = s.applyProjectSemanticPatch(ctx, semanticRequest)
+		index, err = s.applyPlannedProjectIncrementalSemanticPatch(ctx, semanticRequest, plannedSemantic, lintPrefetch, index)
 		if err != nil {
 			return store.IndexData{}, err
 		}

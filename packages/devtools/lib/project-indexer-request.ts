@@ -6,6 +6,11 @@ import type {
   StaticParseCacheHit,
   SemanticBackendSelection,
 } from '@crux/indexer'
+import type {
+  CheckStaticRulesInput,
+  ExtractStaticEvidenceBatchInput,
+  LoadStaticExtensionHostManifestInput,
+} from '@crux/indexer/worker-host'
 import {
   createProjectIndexSyntaxRecordSpool,
   type ProjectIndexSyntaxRecordSpool,
@@ -55,6 +60,16 @@ export interface ProjectIndexWorkerRequest {
   readonly staticCacheHits?: readonly StaticParseCacheHit[]
   /** Internal native syntax-record fact lane requested by the host. */
   readonly nativeFactProjection?: NativeFactProjectionMode
+  /** Native compiler protocol version supported by a manifest-loading caller. */
+  readonly nativeCompilerProtocolVersion?: LoadStaticExtensionHostManifestInput['nativeCompilerProtocolVersion']
+  /** Native static evidence jobs forwarded to the TypeScript compatibility host. */
+  readonly jobs?: ExtractStaticEvidenceBatchInput['jobs']
+  /** Native-finalized graph facts forwarded to TypeScript index rules. */
+  readonly graph?: CheckStaticRulesInput['graph']
+  /** Optional auxiliary facts available to TypeScript index rules. */
+  readonly availableFacts?: CheckStaticRulesInput['availableFacts']
+  /** Native finalization owns lint config/suppression for rule outputs. */
+  readonly nativeLintFinalize?: boolean
   /**
    * Internal, non-JSON syntax record provider attached after chunk assembly.
    */

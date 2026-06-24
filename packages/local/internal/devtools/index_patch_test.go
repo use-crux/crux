@@ -193,6 +193,71 @@ func TestApplyIndexPatchMergesSourceRowsByUnion(t *testing.T) {
 	assertStringSet(t, source.Diagnostics, []string{"diagnostic:a", "diagnostic:semantic"})
 }
 
+func TestApplyIndexPatchQualityLintPatchReplacesQualityFindingsOnly(t *testing.T) {
+	state := applyIndexPatch(emptyIndexPatchState(), IndexPatch{
+		SchemaVersion: 1,
+		Phase:         indexPatchPhaseAST,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+		Status:        "ok",
+		Facts: IndexPatchFacts{
+			LintFindings: []store.IndexLintFinding{
+				{ID: "lint:@acme/rules/require-owner:workflow", RuleID: "@acme/rules/require-owner", Severity: "warning"},
+			},
+			Diagnostics: []store.IndexDiagnostic{
+				{ID: "diagnostic:ast", Severity: "info", Code: "index.ast", Message: "ast"},
+			},
+		},
+	})
+	state = applyIndexPatch(state, IndexPatch{
+		SchemaVersion: 1,
+		Phase:         indexPatchPhaseQuality,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+		Status:        "ok",
+		Facts: IndexPatchFacts{
+			LintFindings: []store.IndexLintFinding{
+				{ID: "lint:quality.missing_baseline:old", RuleID: "quality.missing_baseline", Severity: "info"},
+			},
+			Diagnostics: []store.IndexDiagnostic{
+				{ID: "diagnostic:quality:old", Severity: "info", Code: "index.lint_unused_suppression", Message: "old"},
+			},
+		},
+	})
+
+	next := applyIndexPatch(state, IndexPatch{
+		SchemaVersion: 1,
+		Phase:         indexPatchPhaseQuality,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+		Status:        "ok",
+		Facts: IndexPatchFacts{
+			LintFindings: []store.IndexLintFinding{
+				{ID: "lint:quality.missing_baseline:new", RuleID: "quality.missing_baseline", Severity: "info"},
+			},
+			Diagnostics: []store.IndexDiagnostic{
+				{ID: "diagnostic:quality:new", Severity: "info", Code: "index.lint_unused_suppression", Message: "new"},
+			},
+		},
+	})
+
+	if findTestLintFinding(next.Index.LintFindings, "lint:@acme/rules/require-owner:workflow") == nil {
+		t.Fatalf("AST extension lint finding was removed: %+v", next.Index.LintFindings)
+	}
+	if findTestLintFinding(next.Index.LintFindings, "lint:quality.missing_baseline:old") != nil {
+		t.Fatalf("stale quality lint finding survived: %+v", next.Index.LintFindings)
+	}
+	if findTestLintFinding(next.Index.LintFindings, "lint:quality.missing_baseline:new") == nil {
+		t.Fatalf("replacement quality lint finding missing: %+v", next.Index.LintFindings)
+	}
+	if findTestDiagnostic(next.Index.Diagnostics, "diagnostic:ast") == nil {
+		t.Fatalf("AST diagnostic was removed: %+v", next.Index.Diagnostics)
+	}
+	if findTestDiagnostic(next.Index.Diagnostics, "diagnostic:quality:old") != nil {
+		t.Fatalf("stale quality diagnostic survived: %+v", next.Index.Diagnostics)
+	}
+	if findTestDiagnostic(next.Index.Diagnostics, "diagnostic:quality:new") == nil {
+		t.Fatalf("replacement quality diagnostic missing: %+v", next.Index.Diagnostics)
+	}
+}
+
 func TestApplyIndexPatchFinalizesInjectionInputContractsAfterSemanticPatch(t *testing.T) {
 	state := applyIndexPatch(emptyIndexPatchState(), IndexPatch{
 		SchemaVersion: 1,

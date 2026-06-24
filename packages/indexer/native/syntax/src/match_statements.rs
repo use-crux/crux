@@ -4,9 +4,9 @@ use oxc_ast::ast::*;
 
 use crate::{
     initializers::scoped_initializers_for_function,
-    match_interests::CalleeMatcher,
     match_build::{MatchContext, match_from_declarator, new_match, traversal_needles},
     match_expressions::{visit_expression, visit_expression_call},
+    match_interests::CalleeMatcher,
     protocol::{StaticImportRecord, StaticInitializerRecord, StaticSourceMatch},
     source::SourceView,
 };
@@ -21,7 +21,8 @@ pub(crate) fn collect_matches(
     constructor_matcher: &CalleeMatcher,
 ) -> Vec<StaticSourceMatch> {
     let mut matches = Vec::new();
-    let traversal_needles = traversal_needles(call_matcher.names(), constructor_matcher.names(), imports);
+    let traversal_needles =
+        traversal_needles(call_matcher.names(), constructor_matcher.names(), imports);
     let needle_index = view.needle_index(&traversal_needles);
     for statement in statements {
         visit_statement(

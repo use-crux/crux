@@ -1,5 +1,6 @@
 import type { IndexDependency, IndexerExtensionRuntime } from '../../extensions'
 import { compilerProfileCacheInputs, type ProjectIndexCompilerProfile } from '../../compiler/profile'
+import { runtimeManifestCacheInputs } from '../../extensions/runtime-manifest-cache-inputs'
 import type { NativeFactProjectionMode, StaticSyntaxFrontendIdentity } from '../syntax-record'
 
 /**
@@ -24,9 +25,12 @@ export function staticExtractionIdentity(input: {
   readonly extensionRuntime: IndexerExtensionRuntime
   readonly syntaxFrontend: StaticSyntaxFrontendIdentity
   readonly nativeFactProjection?: NativeFactProjectionMode
+  readonly additionalCacheInputs?: readonly IndexDependency[]
 }): StaticExtractionIdentity {
   const cacheInputs = stableDependencies([
     ...input.extensionRuntime.manifest.cacheInputs,
+    ...runtimeManifestCacheInputs(input.extensionRuntime.manifest),
+    ...(input.additionalCacheInputs ?? []),
     ...compilerProfileCacheInputs(input.profile),
     syntaxFrontendIdentity(input.syntaxFrontend),
     ...nativeFactProjectionIdentity(input.nativeFactProjection),
@@ -39,6 +43,29 @@ export function staticExtractionIdentity(input: {
     cacheInputs,
     callNames,
   })
+}
+
+export interface StaticExtensionPackageCacheInput {
+  readonly packageName: string
+  readonly exportName?: string
+  readonly packageVersion?: string
+}
+
+/** Captures installed extension package versions that are not part of the extension manifest. */
+export function staticExtensionPackageCacheInputs(
+  extensions: readonly StaticExtensionPackageCacheInput[],
+): readonly IndexDependency[] {
+  return extensions.flatMap((extension) =>
+    extension.packageVersion
+      ? [
+          {
+            kind: 'extension',
+            name: `package:${extension.packageName}#${extension.exportName ?? 'default'}`,
+            version: extension.packageVersion,
+          },
+        ]
+      : [],
+  )
 }
 
 /** Captures the selected syntax frontend as an explicit cache dependency. */

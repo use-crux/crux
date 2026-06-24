@@ -60,6 +60,27 @@ func TestWorkerCallTypedAndWorkerError(t *testing.T) {
 	}
 }
 
+func TestWorkerPrewarmStartsProcess(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "started")
+	worker := New(Script{Name: "fake-prewarm"}, WithCommand(shellPath(t), fakePrewarmWorker(t), marker))
+	defer worker.Close()
+
+	if err := worker.Prewarm(context.Background()); err != nil {
+		t.Fatalf("Prewarm error = %v", err)
+	}
+	waitForFile(t, marker)
+
+	resp, err := Call[struct {
+		Value string `json:"value"`
+	}](context.Background(), worker, map[string]string{"mode": "ok"})
+	if err != nil {
+		t.Fatalf("Call error = %v", err)
+	}
+	if resp.Value != "ok" {
+		t.Fatalf("resp.Value = %q, want ok", resp.Value)
+	}
+}
+
 func TestWorkerKillsAndRespawnsAfterOversizedResponse(t *testing.T) {
 	worker := New(Script{Name: "fake"}, WithMaxResponseBytes(32), WithCommand(shellPath(t), fakePersistentWorker(t)))
 	defer worker.Close()
@@ -236,6 +257,16 @@ done
 	return writeShellScript(t, "persistent-worker.sh", script)
 }
 
+func fakePrewarmWorker(t *testing.T) string {
+	t.Helper()
+	script := `printf started > "$1"
+while IFS= read -r line; do
+  printf '{"value":"ok"}\n'
+done
+`
+	return writeShellScript(t, "prewarm-worker.sh", script)
+}
+
 func fakeStreamWorker(t *testing.T) string {
 	t.Helper()
 	script := `printf '{"type":"first"}\n'
@@ -286,4 +317,18 @@ func shellPath(t *testing.T) string {
 		t.Skip("shell script subprocess tests require a POSIX shell")
 	}
 	return "/bin/sh"
+}
+
+func waitForFile(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("file %s was not created", path)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

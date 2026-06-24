@@ -203,7 +203,7 @@ func TestProjectIndexWorker_indexProjectAstFromSyntaxRecordsUsesProvidedRecords(
 	}
 }
 
-func TestProjectIndexWorker_indexProjectAstPatchUsesConfiguredNativeSyntaxWorker(t *testing.T) {
+func TestProjectIndexWorker_indexProjectAstPatchErrorsWhenNativeAstEnabledWithoutNativeStaticCompiler(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -215,6 +215,7 @@ func TestProjectIndexWorker_indexProjectAstPatchUsesConfiguredNativeSyntaxWorker
 	if err := os.WriteFile(filepath.Join(root, "src", "writer.ts"), []byte("export const writer = prompt({ id: 'native' })"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
+	writeNativeStaticEnabledConfig(t, root)
 
 	dir := t.TempDir()
 	script := filepath.Join(dir, "native-project-indexer.mjs")
@@ -256,23 +257,20 @@ func TestProjectIndexWorker_indexProjectAstPatchUsesConfiguredNativeSyntaxWorker
 				}) + '\n')
 				return
 			}
-			if (req.method === 'inspectProjectStaticSyntaxPlan') {
+			if (req.method === 'inspectProjectNativeStaticConfig') {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
 					type: 'artifact:done',
-					transactionId: 'artifact-static-plan',
-					artifact: 'projectStaticSyntaxPlan',
+					transactionId: 'artifact-native-static-config',
+					artifact: 'projectNativeStaticConfig',
 					root: req.root,
 					payload: {
 						root: req.root,
-						projectName: req.projectName,
-						files: [req.root + '/src/writer.ts'],
-						skipped: [],
-						callNames: ['prompt'],
-						constructorNames: ['Agent'],
-						syntaxFrontend: { name: 'oxc-rust', version: 'test' },
+						configFile: req.root + '/crux.config.ts',
 						nativeAstEnabled: true,
-						staticInterests: {}
+						nativeAstFrontend: 'oxc',
+						extensions: [],
+						diagnostics: []
 					}
 				}) + '\n')
 				return
@@ -339,18 +337,17 @@ func TestProjectIndexWorker_indexProjectAstPatchUsesConfiguredNativeSyntaxWorker
 		t.Fatalf("write script: %v", err)
 	}
 
-	syntaxWorker := NewProjectSyntaxWorker(shellPath(t), fakeNativeSyntaxWorker(t))
-	defer syntaxWorker.Close()
+	syntaxWorker := &streamOnlyProjectSyntaxParser{}
 	worker := NewProjectIndexWorker(script)
 	worker.WithProjectSyntaxWorker(syntaxWorker)
 	defer worker.Close()
 
-	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static")
-	if err != nil {
-		t.Fatalf("IndexProjectAstPatch error = %v", err)
+	_, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static")
+	if err == nil {
+		t.Fatal("IndexProjectAstPatch error = nil, want native static compiler requirement error")
 	}
-	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:native" {
-		t.Fatalf("definitions = %+v, want native syntax projection result", patch.Facts.Definitions)
+	if !strings.Contains(err.Error(), "requires a native static compiler") {
+		t.Fatalf("IndexProjectAstPatch error = %v, want native static compiler requirement error", err)
 	}
 }
 
@@ -461,6 +458,17 @@ func TestProjectIndexWorker_indexProjectAstPatchFallsBackWhenNativeAstConfigDisa
 	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:ts" {
 		t.Fatalf("definitions = %+v, want TypeScript AST fallback result", patch.Facts.Definitions)
 	}
+	timing := worker.LastAstTiming()
+	if !containsTimingReason(timing.NodeReasons, projectIndexNodeReasonTypeScriptStaticCompiler) {
+		t.Fatalf("timing.NodeReasons = %v, want %q", timing.NodeReasons, projectIndexNodeReasonTypeScriptStaticCompiler)
+	}
+	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection) ||
+		containsTimingReason(timing.NodeReasons, projectIndexNodeReasonNativeStaticConfig) {
+		t.Fatalf("timing.NodeReasons = %v, want no native planning Node reason without config", timing.NodeReasons)
+	}
+	if !timing.NodeStarted || timing.NativeOnlyEligible {
+		t.Fatalf("timing = %+v, want node-required native-only-ineligible fallback", timing)
+	}
 }
 
 func TestProjectIndexWorker_corruptAstStreamDoesNotUpdateServiceStore(t *testing.T) {
@@ -551,14 +559,20 @@ func TestProjectIndexWorker_corruptAstStreamDoesNotUpdateServiceStore(t *testing
 
 func fakeNativeSyntaxWorker(t *testing.T) string {
 	t.Helper()
-	return writeShellScript(t, "native-syntax-worker.sh", `while IFS= read -r line; do
+	telemetry := `"telemetry":{"node":{"started":false,"reasons":[]},"nativeOnly":{"eligible":false,"reasons":["test-skeleton"]},"timings":[],"files":{"selected":1,"cacheHits":0,"cacheMisses":1,"analyzed":1,"skipped":0},"cache":{"readHits":0,"readMisses":1,"writes":0,"writeErrors":0},"facts":{"definitions":0,"relations":0,"sourceRefs":0,"diagnostics":0,"lintFindings":0,"ruleDescriptors":0,"sources":0,"sourceGraph":0}}`
+	script := strings.ReplaceAll(`while IFS= read -r line; do
+id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
-  *'"files"'*callNames*prompt*) printf '{"id":1,"type":"record","index":0,"record":{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":"/unused.ts","sourceHash":"syntax-worker-hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}}\n{"id":1,"type":"done","count":1}\n' ;;
-  *callNames*prompt*) printf '{"id":1,"ok":true,"record":{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":"/unused.ts","sourceHash":"syntax-worker-hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}}\n' ;;
+  *nativeStaticPrepare*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"nativeStaticPrepare","plan":{"root":"/unused","files":[{"file":"/unused.ts","sourceHash":"syntax-worker-hash"}],"cacheHits":[],"cacheMisses":[{"file":"/unused.ts","sourceHash":"syntax-worker-hash"}]},"diagnostics":[],$TELEMETRY}}\n' "$id" ;;
+  *nativeStaticAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"nativeStaticAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id" ;;
+  *nativeStaticFinalize*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"nativeStaticFinalize","events":[],$TELEMETRY}}\n' "$id" ;;
+  *'"files"'*callNames*prompt*) printf '{"id":%s,"type":"record","index":0,"record":{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":"/unused.ts","sourceHash":"syntax-worker-hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}}\n{"id":%s,"type":"done","count":1}\n' "$id" "$id" ;;
+  *callNames*prompt*) printf '{"id":%s,"ok":true,"record":{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":"/unused.ts","sourceHash":"syntax-worker-hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}}\n' "$id" ;;
   *) printf '{"id":1,"ok":false,"error":"unexpected syntax request"}\n' ;;
 esac
 done
-`)
+`, "$TELEMETRY", telemetry)
+	return writeShellScript(t, "native-syntax-worker.sh", script)
 }
 
 func findTestDefinition(definitions []store.ProjectDefinition, id string) *store.ProjectDefinition {

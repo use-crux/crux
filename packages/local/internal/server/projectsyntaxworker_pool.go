@@ -137,6 +137,34 @@ func (p *ProjectSyntaxWorkerPool) ParseFilesStream(ctx context.Context, requests
 	return nil
 }
 
+// NativeStaticPrepare runs the native static compiler prepare stage on one
+// command worker. Native static compilation is a run-level protocol, not a
+// per-file parse workload, so the pool must not shard it across processes.
+func (p *ProjectSyntaxWorkerPool) NativeStaticPrepare(ctx context.Context, request projectNativeStaticPrepareRequest) (projectNativeStaticPrepareResponse, error) {
+	worker, err := p.nativeStaticCompilerWorker()
+	if err != nil {
+		return projectNativeStaticPrepareResponse{}, err
+	}
+	return worker.NativeStaticPrepare(ctx, request)
+}
+
+// NativeStaticFinalize runs native static relation/fact finalization on one
+// command worker so event ordering stays owned by the compiler process.
+func (p *ProjectSyntaxWorkerPool) NativeStaticFinalize(ctx context.Context, request projectNativeStaticFinalizeRequest) (projectNativeStaticFinalizeResponse, error) {
+	worker, err := p.nativeStaticCompilerWorker()
+	if err != nil {
+		return projectNativeStaticFinalizeResponse{}, err
+	}
+	return worker.NativeStaticFinalize(ctx, request)
+}
+
+func (p *ProjectSyntaxWorkerPool) nativeStaticCompilerWorker() (*ProjectSyntaxWorker, error) {
+	if p == nil || len(p.workers) == 0 {
+		return nil, fmt.Errorf("project syntax worker pool is not configured")
+	}
+	return p.workers[0], nil
+}
+
 func (p *ProjectSyntaxWorkerPool) activeWorkerCount(requestCount int) int {
 	if p == nil || len(p.workers) == 0 || requestCount <= 0 {
 		return 0

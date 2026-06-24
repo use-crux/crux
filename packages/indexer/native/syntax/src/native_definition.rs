@@ -93,20 +93,41 @@ pub(crate) fn folded_index_child(
 
 pub(crate) fn source_ref(
     definition_id: &str,
+    role: &str,
     property: &str,
     symbol: &str,
     source: &SourceLocation,
     function_name: Option<&str>,
     snippet: Option<&SourceSnippet>,
 ) -> Value {
+    source_ref_with_metadata(
+        definition_id,
+        role,
+        property,
+        symbol,
+        source,
+        function_name,
+        snippet,
+        None,
+    )
+}
+
+pub(crate) fn source_ref_with_metadata(
+    definition_id: &str,
+    role: &str,
+    property: &str,
+    symbol: &str,
+    source: &SourceLocation,
+    function_name: Option<&str>,
+    snippet: Option<&SourceSnippet>,
+    metadata: Option<Value>,
+) -> Value {
     let mut ref_value = Map::new();
     ref_value.insert(
         "id".to_string(),
-        Value::String(format!(
-            "{definition_id}:source:callback:{property}:{symbol}"
-        )),
+        Value::String(format!("{definition_id}:source:{role}:{property}:{symbol}")),
     );
-    ref_value.insert("role".to_string(), Value::String("callback".to_string()));
+    ref_value.insert("role".to_string(), Value::String(role.to_string()));
     ref_value.insert("property".to_string(), Value::String(property.to_string()));
     ref_value.insert("symbol".to_string(), Value::String(symbol.to_string()));
     ref_value.insert(
@@ -120,6 +141,9 @@ pub(crate) fn source_ref(
         "fidelity".to_string(),
         Value::String("resolved".to_string()),
     );
+    if let Some(metadata) = metadata {
+        ref_value.insert("metadata".to_string(), metadata);
+    }
     json!({
         "definitionId": definition_id,
         "ref": Value::Object(ref_value),
@@ -158,7 +182,7 @@ fn definition_fingerprint(kind: &str, name: &str, file: &str, text: Option<&str>
     })
 }
 
-fn fingerprint_json<T: Serialize>(value: &T) -> String {
+pub(crate) fn fingerprint_json<T: Serialize>(value: &T) -> String {
     let encoded = serde_json::to_string(value).unwrap_or_default();
     let mut hasher = Sha256::new();
     hasher.update(encoded.as_bytes());

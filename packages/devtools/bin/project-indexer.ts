@@ -12,10 +12,10 @@ import {
   indexProjectAstFromSyntaxRecordProvider,
   indexProjectAstFromSyntaxRecords,
   indexProjectIncremental,
+  inspectProjectNativeStaticConfig,
   inspectProjectStaticSyntaxPlan,
   inspectProjectConfig,
   resolveProjectModel,
-  type StaticExtractionTiming,
 } from '@crux/indexer'
 import { isProjectModelResolutionMode, type ProjectModelResolutionMode } from '@crux/core/project-index'
 import {
@@ -32,6 +32,8 @@ import {
   writeProjectIndexPhaseError,
   type ProjectIndexWorkerErrorContext,
 } from './project-indexer-protocol'
+import { writeStaticHostArtifactRequest } from './project-indexer-static-host'
+import { createStaticTimingCollector, providedRecordCacheSizeFromEnv } from './project-indexer-static-timing'
 
 const rl = createInterface({
   input: process.stdin,
@@ -143,6 +145,16 @@ async function runAssembledRequest(
           await writeArtifactEvent(writeResponse, 'projectConfig', config, req.root)
           break
         }
+        case 'inspectProjectNativeStaticConfig': {
+          if (!req.root) throw new Error('inspectProjectNativeStaticConfig requires root')
+          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+          const config = await inspectProjectNativeStaticConfig({
+            root: req.root,
+            configPath: req.configPath,
+          })
+          await writeArtifactEvent(writeResponse, 'projectNativeStaticConfig', config, req.root)
+          break
+        }
         case 'inspectProjectStaticSyntaxPlan': {
           if (!req.root) throw new Error('inspectProjectStaticSyntaxPlan requires root')
           assertProjectIndexWorkerProtocolV2(req.protocolVersion)
@@ -154,6 +166,13 @@ async function runAssembledRequest(
             includeCacheStatus: req.includeStaticCacheStatus,
           })
           await writeArtifactEvent(writeResponse, 'projectStaticSyntaxPlan', plan, req.root)
+          break
+        }
+        case 'loadStaticExtensionHostManifest':
+        case 'extractStaticEvidenceBatch':
+        case 'checkStaticRules': {
+          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+          await writeStaticHostArtifactRequest(writeResponse, req)
           break
         }
         case 'indexProjectAst': {
@@ -256,40 +275,6 @@ async function cleanupProjectIndexWorkerRequest(req: ProjectIndexWorkerRequest):
 
 function requestResolutionMode(value: unknown): ProjectModelResolutionMode | undefined {
   return isProjectModelResolutionMode(value) ? value : undefined
-}
-
-function createStaticTimingCollector(): {
-  readonly instrumentation: { readonly onTiming: (timing: StaticExtractionTiming) => void }
-  readonly summary: () => readonly { readonly name: string; readonly durationMs: number; readonly count: number }[]
-} {
-  const timings = new Map<string, { durationMs: number; count: number }>()
-  return {
-    instrumentation: {
-      onTiming: (timing) => {
-        const current = timings.get(timing.name) ?? { durationMs: 0, count: 0 }
-        current.durationMs += timing.durationMs
-        current.count += 1
-        timings.set(timing.name, current)
-      },
-    },
-    summary: () =>
-      [...timings]
-        .map(([name, timing]) => ({
-          name,
-          durationMs: timing.durationMs,
-          count: timing.count,
-        }))
-        .sort((left, right) => left.name.localeCompare(right.name)),
-  }
-}
-
-function providedRecordCacheSizeFromEnv(): number | undefined {
-  const value = process.env.CRUX_INDEXER_PROVIDED_RECORD_CACHE_SIZE
-  if (!value || value.trim() === '') {
-    return process.env.CRUX_INDEXER_MEMORY_PROFILE?.toLowerCase() === 'low-rss' ? 128 : undefined
-  }
-  const parsed = Number.parseInt(value, 10)
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
 }
 
 rl.on('close', () => {

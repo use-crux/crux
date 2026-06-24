@@ -736,7 +736,7 @@ func TestReindexProjectPassesAstScopeToSemanticIndexer(t *testing.T) {
 				File:        "src/a.ts",
 				SourceHash:  "hash-a",
 				SourceBytes: 12,
-				Hints:       &SemanticSourceProfileHints{NativeDirectCruxCandidate: true},
+				Hints:       &SemanticSourceProfileHints{CruxCallNames: []string{"prompt"}, NativeDirectCruxCandidate: true},
 			}},
 			DependencyClosure: []string{"src/a.ts"},
 			SourceBytes:       12,

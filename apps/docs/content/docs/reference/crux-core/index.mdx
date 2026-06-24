@@ -193,6 +193,12 @@ experimental because the current TypeScript-Go engine depends on the unstable up
 native-preview API; Crux expects supported semantic facts to match the default backend without a
 JavaScript TypeScript semantic fallback.
 
+`experimental.indexer.nativeAst` is a separate beta for the static AST/source pass. Set it to `true`
+or `{ frontend: 'oxc' }` to let `@crux/local` use the Go-orchestrated Rust/Oxc native static
+compiler when the native worker is available. Node may still run for config/static-plan inspection,
+TypeScript-authored extensions, or rule compatibility work, and this flag does not enable the native
+semantic backend.
+
 ## TypeScript Guarantees
 
 Crux APIs are designed to preserve inference across composition. Context input schemas merge into `prompt()` inputs, grounded retrieval composes through `use`, and retriever tool names are typed for common manual cases:

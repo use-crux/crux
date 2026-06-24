@@ -6,7 +6,7 @@ pub use crate::worker_protocol::{
 };
 
 pub const FRONTEND_NAME: &str = "oxc-rust";
-pub const FRONTEND_VERSION: &str = "oxc_parser@0.133.0+crux_native_routing.1";
+pub const FRONTEND_VERSION: &str = "oxc_parser@0.133.0+crux_native_group3.5";
 
 #[derive(Debug)]
 pub struct ParseRequest {
@@ -20,38 +20,43 @@ pub struct ParseRequest {
     pub prune_native_fact_call_names: Vec<String>,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticSyntaxCallInterest {
     pub name: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub import_from: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub config_arg: Option<usize>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub properties: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub callbacks: Vec<StaticSyntaxCallbackInterest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticSyntaxConstructorInterest {
     pub name: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub import_from: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub config_arg: Option<usize>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub properties: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub callbacks: Vec<StaticSyntaxCallbackInterest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StaticSyntaxCallbackInterest {
     pub property: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_depth: Option<usize>,
 }
 
