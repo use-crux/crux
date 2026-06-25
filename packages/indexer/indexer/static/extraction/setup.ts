@@ -1,7 +1,7 @@
 import type { IndexerExtensionRuntime } from '../../extensions'
 import type { IndexerExtension } from '../../extensions'
 import type { ProjectIndexCompilerProfile } from '../../compiler/profile'
-import type { StaticSyntaxCallInterest, StaticSyntaxConstructorInterest } from '../syntax-record'
+import type { StaticSyntaxCallInterest, StaticSyntaxConstructorInterest } from '../../static-index/syntax/record'
 
 const nativeRoutingPruneCalls = new Set(['router', 'cascade', 'fallback'])
 const cruxCoreExtensionName = '@crux/indexer/crux-core'

@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { StaticSyntaxFileInput } from '../indexer/static/syntax-record'
+import type { StaticSyntaxFileInput } from '../indexer/static-index/syntax'
 import { createRustOxcStaticSyntaxFrontend } from '../testing/rust-oxc-frontend'
 
 describe('Rust/Oxc syntax frontend batch protocol', () => {

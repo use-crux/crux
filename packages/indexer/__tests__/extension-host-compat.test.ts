@@ -8,7 +8,7 @@ import {
   loadStaticExtensionHostManifest,
 } from '../indexer/static-index/extension-host/evidence/host'
 import { indexLintFinding } from '../indexer/lints/rules'
-import { createTypeScriptStaticSyntaxFrontend } from '../indexer/static/syntax-record'
+import { createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
 import { checkStaticRulesForProject, loadStaticExtensionHostManifestForProject } from '../host/static-compat'
 
 describe('static extension host compatibility layer', () => {

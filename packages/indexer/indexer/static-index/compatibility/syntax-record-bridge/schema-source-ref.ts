@@ -1,9 +1,9 @@
 import type { JsonSchema } from '@crux/core/project-index'
 import type { ExtractedSourceRef } from '../../../extensions/public-contract/types'
-import type { StaticSyntaxValue } from '../../../static/syntax-record/types'
-import { staticRecordSchemaProperty, staticSyntaxValueToJsonSchema } from '../../../static/syntax-record/schema'
-import { staticObjectPropertyValue } from '../../../static/syntax-record/value'
-import type { StaticObjectValue } from '../../../static/syntax-record/types'
+import type { StaticSyntaxValue } from '../../syntax/record/types'
+import { staticRecordSchemaProperty, staticSyntaxValueToJsonSchema } from '../../syntax/record/schema'
+import { staticObjectPropertyValue } from '../../syntax/record/value'
+import type { StaticObjectValue } from '../../syntax/record/types'
 import {
   createStaticRecordSourceResolver,
   type ResolvedStaticRecordSource,

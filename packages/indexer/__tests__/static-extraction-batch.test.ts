@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { cacheKeyInputFromSyntaxRecord } from '../indexer/static/extraction/cache-key'
 import { createStaticExtraction, type SourceReader } from '../indexer/static/extraction/engine'
 import { createParseMemo } from '../indexer/static/extraction/source-io'
-import { createProvidedStaticSyntaxFrontend, createStaticRecordProjectionCache } from '../indexer/static/syntax-record'
+import { createProvidedStaticSyntaxFrontend, createStaticRecordProjectionCache } from '../indexer/static-index/syntax'
 import type {
   ProvidedStaticSyntaxRecordProvider,
   StaticSyntaxFileInput,
   StaticSyntaxFileRecord,
   StaticSyntaxFrontend,
-} from '../indexer/static/syntax-record'
+} from '../indexer/static-index/syntax'
 
 describe('static extraction batch frontend', () => {
   it('uses a frontend batch parser for cache-disabled multi-file extraction', async () => {

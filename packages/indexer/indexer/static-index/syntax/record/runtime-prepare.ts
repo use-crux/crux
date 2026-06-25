@@ -1,5 +1,5 @@
 import type { InjectionUseFacts } from '@crux/core/project-index'
-import type { ExtractedFacts } from '../../extensions'
+import type { ExtractedFacts } from '../../../extensions'
 import type { StaticFunctionValue, StaticObjectValue, StaticSyntaxFileRecord, StaticSyntaxValue } from './types'
 import {
   createStaticSyntaxInitializerMap,

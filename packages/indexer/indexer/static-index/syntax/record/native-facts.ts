@@ -1,6 +1,6 @@
-import type { ExtractedFacts, IndexerExtensionRuntime } from '../../extensions'
-import { extractedFactsFromStaticExtractionResult } from '../../extensions'
-import type { StaticRecordExtractorIdentity } from '../../static-index/compatibility/syntax-record-bridge/runtime'
+import type { ExtractedFacts, IndexerExtensionRuntime } from '../../../extensions'
+import { extractedFactsFromStaticExtractionResult } from '../../../extensions'
+import type { StaticRecordExtractorIdentity } from '../../compatibility/syntax-record-bridge/runtime'
 import type { StaticNativeFactProjection, StaticSyntaxFileRecord } from './types'
 
 /**

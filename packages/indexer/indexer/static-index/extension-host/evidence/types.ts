@@ -4,7 +4,7 @@ import type {
   StaticCalleeRecord,
   StaticFunctionCallValue,
   StaticSyntaxValue,
-} from '../../../static/syntax-record'
+} from '../../syntax/record'
 
 export type StaticEvidenceInterestSource = 'manifest' | 'extractor-pattern'
 

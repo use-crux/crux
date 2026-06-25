@@ -5,8 +5,8 @@ import type {
   StaticObjectValue,
   StaticSourceMatch,
   StaticSyntaxFileRecord,
-} from '../../../static/syntax-record/types'
-import type { StaticSyntaxInitializerMap } from '../../../static/syntax-record/value'
+} from '../../syntax/record/types'
+import type { StaticSyntaxInitializerMap } from '../../syntax/record/value'
 import type { ExtractContext } from '../../../extensions/public-contract/extractor-types'
 
 const nativeSyntaxHandleBrand: unique symbol = Symbol('crux.indexer.nativeSyntaxHandle')

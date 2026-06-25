@@ -1,7 +1,7 @@
 import type { IndexDependency, IndexerExtensionRuntime } from '../../extensions'
 import { compilerProfileCacheInputs, type ProjectIndexCompilerProfile } from '../../compiler/profile'
 import { runtimeManifestCacheInputs } from '../../extensions/runtime/manifest-cache-inputs'
-import type { NativeFactProjectionMode, StaticSyntaxFrontendIdentity } from '../syntax-record'
+import type { NativeFactProjectionMode, StaticSyntaxFrontendIdentity } from '../../static-index/syntax/record'
 
 /**
  * Structural identity for one static extraction engine.

@@ -8,7 +8,7 @@ import { createParseMemo, type SourceReader } from '../indexer/static/extraction
 import {
   createTypeScriptStaticSyntaxFrontend,
   parseStaticFactsFromSyntaxRecords,
-} from '../indexer/static/syntax-record'
+} from '../indexer/static-index/syntax'
 import { createStaticExtractionParser } from '../indexer/static/extraction/parser'
 
 describe('indexer extension record runtime', () => {

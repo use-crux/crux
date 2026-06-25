@@ -17,7 +17,7 @@ export {
 } from '../indexer/compiler'
 export { createStaticExtraction } from '../indexer/static/extraction/engine'
 export { staticDefinitionFiles } from '../indexer/files'
-export { createTypeScriptStaticSyntaxFrontend } from '../indexer/static/syntax-record'
+export { createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
 
 export type {
   ProjectIndexCompileMode,
@@ -40,5 +40,5 @@ export type {
 export type {
   ProvidedStaticSyntaxRecordProvider,
   StaticSyntaxFrontendFactory,
-} from '../indexer/static/syntax-record'
+} from '../indexer/static-index/syntax'
 

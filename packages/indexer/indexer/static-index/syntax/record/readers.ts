@@ -1,4 +1,4 @@
-import type { StaticArgumentReader, StaticCallObjectReader, StaticObjectReader } from '../../extensions/public-contract/types'
+import type { StaticArgumentReader, StaticCallObjectReader, StaticObjectReader } from '../../../extensions/public-contract/types'
 import type { StaticObjectValue, StaticSyntaxValue } from './types'
 import {
   resolveStaticSyntaxValue,

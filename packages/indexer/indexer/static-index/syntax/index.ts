@@ -9,3 +9,4 @@
  */
 
 export { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from './frontends/oxc'
+export * from './record'

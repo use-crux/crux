@@ -11,13 +11,13 @@ import type {
   StaticFunctionValue,
   StaticObjectValue,
   StaticSyntaxValue,
-} from '../static/syntax-record/types'
+} from '../static-index/syntax/record/types'
 import {
   resolveStaticSyntaxValue,
   staticObjectPropertyValue,
   staticObjectValue,
   type StaticSyntaxInitializerMap,
-} from '../static/syntax-record/value'
+} from '../static-index/syntax/record/value'
 import type { PrimitiveDataAccessRef } from './data-access'
 import { flowFactsFromEvidence, type FlowStepEvidence, type FlowSuspensionEvidence } from './flow-facts'
 

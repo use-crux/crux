@@ -39,7 +39,7 @@ import {
   type StaticSyntaxCallInterest,
   type StaticSyntaxConstructorInterest,
   type StaticSyntaxFrontendIdentity,
-} from '../../static/syntax-record'
+} from '../syntax'
 import { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../syntax/frontends/oxc'
 
 const DEFAULT_CONSTRUCTOR_NAMES = ['Agent'] as const

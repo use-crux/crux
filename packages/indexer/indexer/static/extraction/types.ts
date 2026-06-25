@@ -4,7 +4,7 @@ import type { ExtensionRuntimeManifest } from '../../extensions/runtime/engine'
 import type { ProjectIndexCompilerProfile } from '../../compiler/profile'
 import type { SemanticSourceProfileFile } from '../../semantic/source-profile'
 import type { StaticExtractionInstrumentation } from '../instrumentation'
-import type { NativeFactProjectionMode, StaticSyntaxFrontend, StaticSyntaxFrontendFactory } from '../syntax-record'
+import type { NativeFactProjectionMode, StaticSyntaxFrontend, StaticSyntaxFrontendFactory } from '../../static-index/syntax/record'
 import type { StaticExtractionIdentity } from './identity'
 import type { SourceReader } from './source-io'
 

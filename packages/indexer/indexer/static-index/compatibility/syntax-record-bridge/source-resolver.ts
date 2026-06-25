@@ -5,13 +5,13 @@ import type {
   StaticObjectValue,
   StaticSyntaxFileRecord,
   StaticSyntaxValue,
-} from '../../../static/syntax-record/types'
+} from '../../syntax/record/types'
 import {
   createStaticSyntaxInitializerMap,
   resolveStaticSyntaxValue,
   staticObjectPropertyValue,
   type StaticSyntaxInitializerMap,
-} from '../../../static/syntax-record/value'
+} from '../../syntax/record/value'
 
 /** Resolved source evidence for an identifier or property path in a syntax record. */
 export interface ResolvedStaticRecordSource {

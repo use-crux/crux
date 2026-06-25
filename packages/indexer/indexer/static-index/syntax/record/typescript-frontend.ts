@@ -1,34 +1,32 @@
 import { createHash } from 'node:crypto'
-import { relative } from 'node:path'
 import ts from 'typescript'
 import type {
-  StaticCalleeRecord,
   StaticImportRecord,
   StaticInitializerRecord,
-  StaticNewSourceMatch,
-  StaticObjectValue,
   StaticSourceMatch,
   StaticSyntaxFileInput,
   StaticSyntaxFileRecord,
   StaticSyntaxFrontend,
   StaticSyntaxFrontendOptions,
 } from './types'
-import { collectImportBindings } from '../../ast/imports'
-import { createSourceFile } from '../../ast/parse'
-import { sourceForNode, sourceSnippetForNode } from '../../ast/snippets'
+import { collectImportBindings } from '../../../ast/imports'
+import { createSourceFile } from '../../../ast/parse'
+import { sourceForNode, sourceSnippetForNode } from '../../../ast/snippets'
 import {
   createStaticSyntaxCalleeMatcher,
   type StaticSyntaxCalleeMatcher,
-  type StaticSyntaxEvidenceSlice,
 } from './interests'
 import {
-  expressionName,
+  callMatch,
+  matchFromInitializer,
+  newMatch,
+  type TypeScriptStaticSyntaxMatchInput,
+} from './typescript-matches'
+import {
   staticCalleeRecordFromExpression,
   staticFunctionInitializersFromNode,
   staticFunctionValueFromNode,
   staticInitializerRecordsFromDeclaration,
-  staticObjectValueFromExpression,
-  staticSyntaxValueFromExpression,
 } from './typescript-values'
 
 const DEFAULT_CONSTRUCTOR_NAMES = ['Agent'] as const
@@ -176,14 +174,7 @@ function collectLocalInitializers(
   return records
 }
 
-function collectMatches(input: {
-  readonly root: string
-  readonly file: string
-  readonly sourceFile: ts.SourceFile
-  readonly importsByLocalName: ReadonlyMap<string, StaticImportRecord>
-  readonly callMatcher: StaticSyntaxCalleeMatcher
-  readonly constructorMatcher: StaticSyntaxCalleeMatcher
-}): readonly StaticSourceMatch[] {
+function collectMatches(input: TypeScriptStaticSyntaxMatchInput): readonly StaticSourceMatch[] {
   const matches: StaticSourceMatch[] = []
 
   const visit = (node: ts.Node, scopedInitializers: readonly StaticInitializerRecord[] = []): void => {
@@ -218,126 +209,11 @@ function collectMatches(input: {
   return matches
 }
 
-function matchFromInitializer(
-  input: Parameters<typeof collectMatches>[0],
-  variableName: string,
-  initializer: ts.Expression,
-  exported: boolean,
-  scopedInitializers: readonly StaticInitializerRecord[] = [],
-): StaticSourceMatch | undefined {
-  if (ts.isObjectLiteralExpression(initializer)) {
-    return {
-      kind: 'object',
-      variableName,
-      localName: fallbackLocalName(input.root, input.file, variableName),
-      exported,
-      object: staticObjectValueFromExpression(input.sourceFile, initializer, input.importsByLocalName),
-      source: sourceForNode(input.sourceFile, initializer),
-      snippet: sourceSnippetForNode(input.sourceFile, initializer),
-      ...(scopedInitializers.length > 0 ? { localInitializers: scopedInitializers } : {}),
-    }
-  }
-  if (ts.isCallExpression(initializer)) {
-    const callee = staticCalleeRecordFromExpression(initializer.expression, input.importsByLocalName)
-    return input.callMatcher.allows(callee)
-      ? callMatch(input, variableName, initializer, exported, scopedInitializers)
-      : undefined
-  }
-  if (ts.isNewExpression(initializer)) return newMatch(input, variableName, initializer, exported, scopedInitializers)
-  return undefined
-}
-
-function callMatch(
-  input: Parameters<typeof collectMatches>[0],
-  variableName: string,
-  call: ts.CallExpression,
-  exported: boolean,
-  scopedInitializers: readonly StaticInitializerRecord[] = [],
-): StaticSourceMatch {
-  const callee = staticCalleeRecordFromExpression(call.expression, input.importsByLocalName)
-  const evidence = input.callMatcher.evidenceFor(callee)
-  const objectArg = objectArgument(call.arguments, evidence)
-  const objectValue = objectArg
-    ? slicedObjectValue(staticObjectValueFromExpression(input.sourceFile, objectArg, input.importsByLocalName), evidence)
-    : undefined
-  return {
-    kind: 'call',
-    variableName,
-    localName: fallbackLocalName(input.root, input.file, variableName),
-    exported,
-    callee,
-    args: call.arguments.map((arg) => staticSyntaxValueFromExpression(input.sourceFile, arg, input.importsByLocalName)),
-    ...(objectValue ? { objectArg: objectValue } : {}),
-    source: sourceForNode(input.sourceFile, call),
-    snippet: sourceSnippetForNode(input.sourceFile, call),
-    ...(scopedInitializers.length > 0 ? { localInitializers: scopedInitializers } : {}),
-  }
-}
-
-function newMatch(
-  input: Parameters<typeof collectMatches>[0],
-  variableName: string,
-  node: ts.NewExpression,
-  exported: boolean,
-  scopedInitializers: readonly StaticInitializerRecord[] = [],
-): StaticNewSourceMatch | undefined {
-  const name = expressionName(node.expression)
-  if (!name) return undefined
-  const callee = staticCalleeRecordFromExpression(node.expression, input.importsByLocalName)
-  if (!input.constructorMatcher.allows(callee)) return undefined
-  const evidence = input.constructorMatcher.evidenceFor(callee)
-  const objectArg = objectArgument([...(node.arguments ?? [])], evidence)
-  const objectValue = objectArg
-    ? slicedObjectValue(staticObjectValueFromExpression(input.sourceFile, objectArg, input.importsByLocalName), evidence)
-    : undefined
-  return {
-    kind: 'new',
-    variableName,
-    localName: fallbackLocalName(input.root, input.file, variableName),
-    exported,
-    callee,
-    args: [...(node.arguments ?? [])].map((arg) =>
-      staticSyntaxValueFromExpression(input.sourceFile, arg, input.importsByLocalName),
-    ),
-    ...(objectValue ? { objectArg: objectValue } : {}),
-    source: sourceForNode(input.sourceFile, node),
-    snippet: sourceSnippetForNode(input.sourceFile, node),
-    ...(scopedInitializers.length > 0 ? { localInitializers: scopedInitializers } : {}),
-  }
-}
-
-function objectArgument(
-  args: readonly ts.Expression[],
-  evidence: StaticSyntaxEvidenceSlice | undefined,
-): ts.ObjectLiteralExpression | undefined {
-  if (evidence?.configArg !== undefined) {
-    const arg = args[evidence.configArg]
-    return arg && ts.isObjectLiteralExpression(arg) ? arg : undefined
-  }
-  return args.find((arg): arg is ts.ObjectLiteralExpression => ts.isObjectLiteralExpression(arg))
-}
-
-function slicedObjectValue(
-  object: StaticObjectValue,
-  evidence: StaticSyntaxEvidenceSlice | undefined,
-): StaticObjectValue | undefined {
-  if (!evidence) return object
-  if (evidence.properties.size === 0) return undefined
-  return {
-    ...object,
-    properties: object.properties.filter((property) => !property.spread && evidence.properties.has(property.name)),
-  }
-}
-
 function hasExportModifier(node: ts.Node): boolean {
   return Boolean(
     ts.canHaveModifiers(node) &&
     ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
   )
-}
-
-function fallbackLocalName(root: string, file: string, variableName: string): string {
-  return `${relative(root, file).replace(/\\/g, '/')}:${variableName}`
 }
 
 function sourceForPosition(sourceFile: ts.SourceFile, position: number) {

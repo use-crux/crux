@@ -23,8 +23,8 @@ import {
   createStaticRecordSourceResolver,
   staticRecordProjectSourceRef,
 } from '../static-index/compatibility/syntax-record-bridge/source-resolver'
-import type { StaticCallValue, StaticObjectValue, StaticSyntaxValue } from '../static/syntax-record/types'
-import { resolveStaticSyntaxValue, staticObjectPropertyValue } from '../static/syntax-record/value'
+import type { StaticCallValue, StaticObjectValue, StaticSyntaxValue } from '../static-index/syntax/record/types'
+import { resolveStaticSyntaxValue, staticObjectPropertyValue } from '../static-index/syntax/record/value'
 import { primitiveDataIntelligence, uniqueDataAccesses, type PrimitiveDataAccessRef } from './data-access'
 
 const callbackProperties = ['handler', 'run', 'execute', 'contextHandler', 'usageHandler'] as const

@@ -188,19 +188,19 @@ const inventory = {
         ),
         contractFile(
           'typescript',
-          'packages/indexer/indexer/static/syntax-record/types.ts',
+          'packages/indexer/indexer/static-index/syntax/record/types.ts',
           'Implementation owner for static syntax frontend and record types.',
           'canonical-types',
         ),
         contractFile(
           'typescript',
-          'packages/indexer/indexer/static/syntax-record/value-types.ts',
+          'packages/indexer/indexer/static-index/syntax/record/value-types.ts',
           'JSON-safe static value and match model used by syntax records.',
           'canonical-types',
         ),
         contractFile(
           'typescript',
-          'packages/indexer/indexer/static/syntax-record/schema.ts',
+          'packages/indexer/indexer/static-index/syntax/record/schema.ts',
           'Schema projection helpers over record-backed static values.',
           'schema',
         ),

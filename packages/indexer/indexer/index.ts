@@ -18,7 +18,7 @@ import {
   type ProvidedStaticSyntaxRecordProvider,
   type StaticSyntaxFileRecord,
   type StaticSyntaxFrontendIdentity,
-} from './static/syntax-record'
+} from './static-index/syntax'
 
 export interface IndexProjectOptions {
   /** Project root used for source discovery and config lookup. */

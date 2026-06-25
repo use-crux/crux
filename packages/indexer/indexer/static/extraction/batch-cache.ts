@@ -1,4 +1,4 @@
-import type { StaticSyntaxFileRecord } from '../syntax-record'
+import type { StaticSyntaxFileRecord } from '../../static-index/syntax/record'
 import { withStaticExtractionTiming, type StaticExtractionInstrumentation } from '../instrumentation'
 import { cacheKeyInputFromSyntaxRecord, type StaticParseCacheKeyContext } from './cache-key'
 import type { ParseMemo } from './source-io'

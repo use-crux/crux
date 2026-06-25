@@ -1,4 +1,4 @@
-import { createStaticRecordObjectReader } from '../../../static/syntax-record/readers'
+import { createStaticRecordObjectReader } from '../../syntax/record/readers'
 import type {
   StaticFunctionCallValue,
   StaticFunctionValue,
@@ -6,13 +6,13 @@ import type {
   StaticSourceMatch,
   StaticSyntaxFileRecord,
   StaticSyntaxValue,
-} from '../../../static/syntax-record/types'
+} from '../../syntax/record/types'
 import {
   createStaticSyntaxInitializerMap,
   resolveStaticSyntaxValue,
   staticObjectPropertyValue,
   type StaticSyntaxInitializerMap,
-} from '../../../static/syntax-record/value'
+} from '../../syntax/record/value'
 import type {
   StaticCallbackSummary,
   StaticCallbackSummaryInput,

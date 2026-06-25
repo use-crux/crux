@@ -3,7 +3,7 @@ import { join, relative } from 'node:path'
 import { collectImportBindings } from '../../ast/imports'
 import { sha256, STATIC_PARSE_CACHE_EPOCH } from '../../cache-identity'
 import { indexCacheBoundaryFileNames } from '../../incremental/boundaries'
-import type { StaticSyntaxFileRecord } from '../syntax-record'
+import type { StaticSyntaxFileRecord } from '../../static-index/syntax/record'
 import type { ParseMemo } from './source-io'
 import type { StaticParseCacheEntryMetadata, StaticParseCacheSourceHash } from './types'
 

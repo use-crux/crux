@@ -3,7 +3,7 @@
  *
  * Static syntax records are parser evidence, not parser ASTs. This spine path
  * keeps the ABI discoverable for TypeScript callers and cross-language fixture
- * work while the extraction implementation remains under `static/syntax-record`.
+ * work while the extraction implementation remains under `static-index/syntax/record`.
  *
  * @module
  */
@@ -39,11 +39,11 @@ export type {
   StaticSyntaxValue,
   StaticTemplateValue,
   StaticUnsupportedValue,
-} from '../../indexer/static/syntax-record'
+} from '../../indexer/static-index/syntax'
 export {
   OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
 } from '../../indexer/static-index/syntax'
 export {
   staticRecordSchemaProperty,
   staticSyntaxValueToJsonSchema,
-} from '../../indexer/static/syntax-record/schema'
+} from '../../indexer/static-index/syntax/record/schema'

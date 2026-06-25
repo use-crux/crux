@@ -6,7 +6,7 @@ import { indexProjectAstFromSyntaxRecords, inspectProjectStaticSyntaxPlan } from
 import {
   createTypeScriptStaticSyntaxFrontend,
   type StaticSyntaxFileRecord,
-} from '../indexer/static/syntax-record'
+} from '../indexer/static-index/syntax'
 import { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static-index/syntax'
 
 const roots: string[] = []

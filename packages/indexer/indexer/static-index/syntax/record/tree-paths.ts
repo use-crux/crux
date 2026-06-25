@@ -1,7 +1,7 @@
 import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
-import type { IndexerExtensionRuntime } from '../../extensions'
-import { staticFoundDefinitionsFromExtractedFacts } from '../../static-index/compatibility/syntax-record-bridge/normalizer'
-import type { StaticFoundDefinition } from '../../types'
+import type { IndexerExtensionRuntime } from '../../../extensions'
+import { staticFoundDefinitionsFromExtractedFacts } from '../../compatibility/syntax-record-bridge/normalizer'
+import type { StaticFoundDefinition } from '../../../types'
 import type { StaticSyntaxFileRecord, StaticSyntaxValue } from './types'
 import { createNativeFactIndex, extractedFacts } from './native-facts'
 

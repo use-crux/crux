@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createTypeScriptStaticSyntaxFrontend,
   type StaticSyntaxFileRecord,
-} from '../indexer/static/syntax-record'
+} from '../indexer/static-index/syntax'
 import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
 
 describe('static syntax records', () => {

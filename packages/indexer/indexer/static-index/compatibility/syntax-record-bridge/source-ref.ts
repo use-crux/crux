@@ -6,8 +6,8 @@ import type {
   StaticObjectValue,
   StaticSyntaxFileRecord,
   StaticSyntaxValue,
-} from '../../../static/syntax-record/types'
-import { resolveStaticSyntaxValue, staticObjectPropertyValue } from '../../../static/syntax-record/value'
+} from '../../syntax/record/types'
+import { resolveStaticSyntaxValue, staticObjectPropertyValue } from '../../syntax/record/value'
 import {
   createStaticRecordSourceResolver,
   resolvedRecordObjectProperty,

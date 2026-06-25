@@ -2,7 +2,7 @@ import ts from 'typescript'
 import type { ExtractContext } from '../../../extensions/public-contract/types'
 import { internalStaticCallContext, internalStaticRecordContext } from './native-context'
 import { resolvedSourceNodeForProperty } from '../../../ast/source-refs'
-import { staticObjectPropertyValue } from '../../../static/syntax-record/value'
+import { staticObjectPropertyValue } from '../../syntax/record/value'
 import {
   primitiveDataAccessRefs,
   primitiveDataAccessRefsWithHelpers,

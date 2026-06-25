@@ -5,7 +5,7 @@ import {
   createTypeScriptStaticSyntaxFrontend,
   type StaticSyntaxFrontend,
   type StaticSyntaxFrontendFactory,
-} from '../syntax-record'
+} from '../../static-index/syntax/record'
 import { extractFilesWithBatchFrontend, parseWithRecordMemo, semanticProfileForFile } from './batch'
 import { cacheKeyInput, createStaticParseCacheKeyContext, noStaticParseCache, persistentStaticParseCache } from './cache'
 import { staticExtractionIdentity } from './identity'

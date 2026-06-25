@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { StaticExtractionInstrumentation } from '../instrumentation'
+import type { StaticExtractionInstrumentation } from '../../../static/instrumentation'
 import type {
   StaticSyntaxFileInput,
   StaticSyntaxFileRecord,

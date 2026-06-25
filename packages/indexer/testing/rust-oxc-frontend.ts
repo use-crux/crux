@@ -7,7 +7,7 @@ import type {
   StaticSyntaxFileRecord,
   StaticSyntaxFrontend,
   StaticSyntaxFrontendOptions,
-} from '../indexer/static/syntax-record'
+} from '../indexer/static-index/syntax'
 import { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static-index/syntax'
 
 const DEFAULT_CONSTRUCTOR_NAMES = ['Agent'] as const

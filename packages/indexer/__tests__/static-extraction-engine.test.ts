@@ -9,7 +9,7 @@ import {
   createTypeScriptStaticSyntaxFrontend,
   type StaticSourceMatch,
   type StaticSyntaxFileRecord,
-} from '../indexer/static/syntax-record'
+} from '../indexer/static-index/syntax'
 import { createRustOxcStaticSyntaxFrontend, rustOxcSyntaxFrontendTestStatus } from '../testing/rust-oxc-frontend'
 import {
   assertDeterministicExtraction,

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { it } from 'vitest'
 import { createStaticExtraction, type SourceReader } from '../indexer/static/extraction/engine'
-import { createProvidedStaticSyntaxFrontend } from '../indexer/static/syntax-record'
+import { createProvidedStaticSyntaxFrontend } from '../indexer/static-index/syntax'
 import { createRustOxcStaticSyntaxFrontend, rustOxcSyntaxFrontendTestStatus } from '../testing/rust-oxc-frontend'
 
 const rustOxcStatus = rustOxcSyntaxFrontendTestStatus()

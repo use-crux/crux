@@ -1,8 +1,8 @@
-import type { StaticFunctionCallValue, StaticSyntaxValue } from '../../../static/syntax-record/types'
+import type { StaticFunctionCallValue, StaticSyntaxValue } from '../../syntax/record/types'
 import {
   resolveStaticSyntaxValue,
   type StaticSyntaxInitializerMap,
-} from '../../../static/syntax-record/value'
+} from '../../syntax/record/value'
 import type { PrimitiveDataAccessRef } from '../../../extractors/data-access'
 
 /** Derives visible data-access facts from normalized syntax-record values. */

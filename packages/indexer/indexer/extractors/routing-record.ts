@@ -7,7 +7,7 @@ import {
   staticRecordProjectSourceRef,
 } from '../static-index/compatibility/syntax-record-bridge/source-resolver'
 import type { ProjectSourceRef } from '@crux/core/project-index'
-import { staticObjectPropertyValue, staticObjectValue } from '../static/syntax-record/value'
+import { staticObjectPropertyValue, staticObjectValue } from '../static-index/syntax/record/value'
 import { fallbackFactsFromRecordContext } from './routing-record-fallback'
 import { routingTargetRelationRefs } from './routing-record-targets'
 

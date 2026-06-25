@@ -1,5 +1,5 @@
 import { TextDecoder } from 'node:util'
-import { withStaticExtractionTiming, type StaticExtractionInstrumentation } from '../instrumentation'
+import { withStaticExtractionTiming, type StaticExtractionInstrumentation } from '../../../static/instrumentation'
 import type {
   ProvidedStaticSyntaxRecordProvider,
   SerializedStaticSyntaxRecord,

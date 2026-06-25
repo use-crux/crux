@@ -1,13 +1,13 @@
 import { safeId } from '../../../definitions'
 import { staticDefinition } from '../../../static/definition-builder'
-import { createStaticRecordArgumentReader, createStaticRecordObjectReader } from '../../../static/syntax-record/readers'
+import { createStaticRecordArgumentReader, createStaticRecordObjectReader } from '../../syntax/record/readers'
 import type {
   StaticInitializerRecord,
   StaticObjectValue,
   StaticSourceMatch,
   StaticSyntaxFileRecord,
-} from '../../../static/syntax-record/types'
-import type { StaticSyntaxInitializerMap } from '../../../static/syntax-record/value'
+} from '../../syntax/record/types'
+import type { StaticSyntaxInitializerMap } from '../../syntax/record/value'
 import { createDefinitionBuilder, createReferenceBuilder } from '../../../extensions/public-contract/builders'
 import { createStaticRecordSyntaxHandle } from './native-context'
 import { createStaticRecordSourceRefBuilder } from './source-ref'

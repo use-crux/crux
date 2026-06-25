@@ -6,7 +6,7 @@ import {
   indexProjectAstFromSyntaxRecordProvider,
   type StaticExtractionTiming,
 } from '..'
-import { createProvidedStaticSyntaxFrontend, createTypeScriptStaticSyntaxFrontend } from '../indexer/static/syntax-record'
+import { createProvidedStaticSyntaxFrontend, createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')

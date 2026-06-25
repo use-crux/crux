@@ -11,7 +11,7 @@ import {
   type StaticSyntaxFileInput,
   type StaticSyntaxFileRecord,
   type StaticSyntaxFrontend,
-} from '../syntax-record'
+} from '../../static-index/syntax/record'
 import { cacheStateForParsedBatchMiss, staticCacheWriteConcurrency } from './batch-cache'
 import { cacheMissRecordBatchSize, chunksOf } from './batch-utils'
 import { createStaticParseCacheKeyContext, type StaticParseCacheKeyContext } from './cache-key'

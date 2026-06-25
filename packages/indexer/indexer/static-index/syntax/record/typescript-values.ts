@@ -9,8 +9,8 @@ import type {
   StaticObjectValue,
   StaticSyntaxValue,
 } from './types'
-import { propertyName } from '../../ast/literals'
-import { sourceForNode, sourceSnippetForNode } from '../../ast/snippets'
+import { propertyName } from '../../../ast/literals'
+import { sourceForNode, sourceSnippetForNode } from '../../../ast/snippets'
 
 /**
  * Converts a TypeScript expression into a backend-neutral syntax value.

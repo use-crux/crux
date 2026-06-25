@@ -148,6 +148,7 @@ describe('indexer architecture boundaries', () => {
       'static-index/protocol/telemetry.ts',
       'static-index/syntax/index.ts',
       'static-index/syntax/frontends/oxc.ts',
+      'static-index/syntax/record/index.ts',
       'static-index/extension-host/index.ts',
       'static-index/extension-host/host-plan/index.ts',
       'static-index/extension-host/evidence/index.ts',
@@ -168,6 +169,7 @@ describe('indexer architecture boundaries', () => {
       'contracts/native-static/schema.ts',
       'contracts/native-static/fixtures.ts',
       'static-index/extension-host/coverage/index.ts',
+      'static/syntax-record/index.ts',
     ]) {
       expect(existsSync(join(indexerDir, file)), file).toBe(false)
     }

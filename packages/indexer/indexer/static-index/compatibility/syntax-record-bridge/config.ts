@@ -2,8 +2,8 @@ import ts from 'typescript'
 import type { ConfigReader, ExtractContext, StaticObjectMapIdentifierEntry } from '../../../extensions/public-contract/types'
 import { propertyName } from '../../../ast/literals'
 import { internalStaticCallContext, internalStaticRecordContext } from './native-context'
-import { resolveStaticSyntaxValue, staticObjectPropertyValue } from '../../../static/syntax-record/value'
-import type { StaticSyntaxValue } from '../../../static/syntax-record/types'
+import { resolveStaticSyntaxValue, staticObjectPropertyValue } from '../../syntax/record/value'
+import type { StaticSyntaxValue } from '../../syntax/record/types'
 
 /**
  * Private static parser payload used by config helpers that still need object-literal access.

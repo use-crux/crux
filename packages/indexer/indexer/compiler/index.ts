@@ -49,7 +49,7 @@ import type {
   NativeFactProjectionMode,
   StaticSyntaxFrontend,
   StaticSyntaxFrontendFactory,
-} from '../static/syntax-record'
+} from '../static-index/syntax'
 import type { SemanticSourceProfile, SemanticSourceProfileFile } from '../semantic/source-profile'
 import type { SourceGraph } from '../types'
 import { suppressRichImportDiagnosticsForStaticDefinitions } from './diagnostics'

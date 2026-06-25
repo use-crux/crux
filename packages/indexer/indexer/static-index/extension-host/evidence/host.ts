@@ -11,7 +11,7 @@ import type {
   StaticSourceMatch,
   StaticSyntaxFileRecord,
   StaticSyntaxFrontendIdentity,
-} from '../../../static/syntax-record'
+} from '../../syntax/record'
 import { loadIndexerExtensionReferences } from '../../../extensions/loading/references'
 import {
   createIndexerExtensionRuntime,

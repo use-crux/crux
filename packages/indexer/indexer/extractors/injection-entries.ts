@@ -5,13 +5,13 @@ import type { ExtractContext } from '../extensions'
 import { propertyName } from '../ast/literals'
 import { resolveIdentifierSourceNode } from '../ast/source-refs'
 import { internalStaticCallContext, internalStaticRecordContext, type InternalStaticRecordContext } from '../static-index/compatibility/syntax-record-bridge/native-context'
-import type { StaticObjectValue, StaticSyntaxValue } from '../static/syntax-record/types'
+import type { StaticObjectValue, StaticSyntaxValue } from '../static-index/syntax/record/types'
 import {
   createStaticSyntaxInitializerMap,
   resolveStaticSyntaxValue,
   type StaticSyntaxInitializerMap,
   staticObjectPropertyValue,
-} from '../static/syntax-record/value'
+} from '../static-index/syntax/record/value'
 
 type InjectionOwner = 'prompt' | 'context' | 'injectable'
 

@@ -1,9 +1,9 @@
-import type { StaticObjectValue, StaticSourceMatch, StaticSyntaxFileRecord } from '../../../static/syntax-record/types'
+import type { StaticObjectValue, StaticSourceMatch, StaticSyntaxFileRecord } from '../../syntax/record/types'
 import {
   createStaticSyntaxInitializerMap,
   staticObjectValue,
   type StaticSyntaxInitializerMap,
-} from '../../../static/syntax-record/value'
+} from '../../syntax/record/value'
 import type { IndexExtractor } from '../../../extensions/public-contract/types'
 import {
   extractorsForCall,
