@@ -5,7 +5,6 @@
 //! finalization.
 
 pub(crate) use crux_indexer_protocol as protocol;
-pub(crate) use crux_indexer_syntax_oxc as syntax;
 
 mod agent {
     pub(crate) mod convex;
@@ -79,7 +78,6 @@ mod scorer {
     pub(crate) mod facts;
 }
 mod source_refs;
-pub mod static_syntax;
 mod tool {
     pub(crate) mod facts;
 }

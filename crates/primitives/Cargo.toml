@@ -9,7 +9,6 @@ publish = false
 
 [dependencies]
 crux-indexer-protocol.workspace = true
-crux-indexer-syntax-oxc.workspace = true
 rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true

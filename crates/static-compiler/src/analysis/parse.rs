@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    primitives::static_syntax::parse_static_syntax_record,
+    compat::static_syntax::parse_static_syntax_record,
     protocol::static_index::{StaticIndexAnalyzeFile, StaticIndexAnalyzeRequest},
     protocol::{ParseRequest, StaticSyntaxFileRecord},
 };

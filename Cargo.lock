@@ -120,7 +120,6 @@ name = "crux-indexer-primitives"
 version = "0.1.0"
 dependencies = [
  "crux-indexer-protocol",
- "crux-indexer-syntax-oxc",
  "rayon",
  "serde",
  "serde_json",
@@ -166,10 +165,8 @@ dependencies = [
 name = "crux-indexer-worker"
 version = "0.1.0"
 dependencies = [
- "crux-indexer-primitives",
  "crux-indexer-protocol",
  "crux-indexer-static-compiler",
- "crux-indexer-syntax-oxc",
  "rayon",
  "serde",
  "serde_json",

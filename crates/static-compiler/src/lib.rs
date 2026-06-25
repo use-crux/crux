@@ -29,6 +29,8 @@ pub(crate) mod contracts {
     pub(crate) mod tests;
 }
 
+pub mod compat;
+
 pub(crate) mod core {
     pub(crate) mod definition_merge;
     pub(crate) mod evidence;

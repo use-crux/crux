@@ -5,6 +5,8 @@ use std::sync::mpsc;
 
 use rayon::prelude::*;
 
+use crux_indexer_static_compiler::compat::parse_static_syntax_record;
+
 use crate::protocol::worker::BatchWorkerFileRequest;
 use crate::protocol::{
     self, BatchWorkerRequest, ParseRequest, SingleWorkerRequest, WorkerRequest, WorkerResponse,
@@ -128,7 +130,7 @@ fn parse_record(request: SingleWorkerRequest) -> Result<protocol::StaticSyntaxFi
         constructor_interests: request.constructor_interests,
         prune_native_fact_call_names: request.prune_native_fact_call_names,
     };
-    crate::primitives::static_syntax::parse_static_syntax_record(input)
+    parse_static_syntax_record(input)
 }
 
 fn parse_records(
@@ -174,7 +176,7 @@ fn parse_batch_file_record(
         file.source,
         file.read_source_from_disk,
     )?;
-    crate::primitives::static_syntax::parse_static_syntax_record(ParseRequest {
+    parse_static_syntax_record(ParseRequest {
         root: file.root,
         file: file.file,
         source,

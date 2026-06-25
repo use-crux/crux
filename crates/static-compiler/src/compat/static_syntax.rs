@@ -1,18 +1,24 @@
+//! Compatibility helpers for the legacy Static Syntax worker payload.
+//!
+//! Static Index compilation should parse syntax evidence and run primitive
+//! projection as separate compiler stages. The legacy syntax worker protocol
+//! still expects records with first-party native fact projections attached, so
+//! this module keeps that parse-plus-project bridge at the compiler boundary.
+
 use std::collections::HashSet;
 
 use crate::{
-    projection::project_native_facts,
+    primitives::projection::project_static_syntax_record,
     protocol::{
         ParseRequest, StaticNativeFactProjection, StaticSourceMatch, StaticSyntaxFileRecord,
     },
-    syntax::frontend::parse_source,
 };
 
-/// Parse a legacy static syntax record and attach native fact projections.
+/// Parse a Static Syntax record and attach first-party native fact projections.
 ///
-/// New static compiler flows should call `syntax::frontend::parse_source`
-/// first and run primitive projection explicitly through `static-compiler`.
-/// This wrapper preserves the existing static syntax protocol payload.
+/// This is a compatibility facade for callers that still need the legacy
+/// Static Syntax worker response shape. New Static Index paths should keep the
+/// parse and primitive projection stages explicit.
 pub fn parse_static_syntax_record(input: ParseRequest) -> Result<StaticSyntaxFileRecord, String> {
     let source_text = input.source.clone();
     let prune_native_fact_call_names = input
@@ -20,14 +26,8 @@ pub fn parse_static_syntax_record(input: ParseRequest) -> Result<StaticSyntaxFil
         .iter()
         .cloned()
         .collect::<HashSet<_>>();
-    let mut record = parse_source(input)?;
-    let native_facts = project_native_facts(
-        &record.file,
-        &source_text,
-        &record.imports,
-        &record.local_initializers,
-        &record.matches,
-    );
+    let mut record = crux_indexer_syntax_oxc::parse_source(input)?;
+    let native_facts = project_static_syntax_record(&record, &source_text);
     record.matches =
         prune_native_fact_matches(record.matches, &native_facts, &prune_native_fact_call_names);
     record.native_facts = native_facts;

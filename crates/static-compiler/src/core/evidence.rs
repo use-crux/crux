@@ -2,7 +2,7 @@ use rayon::prelude::*;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::primitives::static_syntax::parse_static_syntax_record;
+use crate::compat::static_syntax::parse_static_syntax_record;
 use crate::protocol::static_index::StaticIndexAnalyzeRequest;
 use crate::protocol::{
     ParseRequest, StaticCalleeRecord, StaticSourceMatch, StaticSyntaxCallInterest,

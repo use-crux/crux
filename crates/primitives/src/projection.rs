@@ -57,6 +57,34 @@ const FIRST_PARTY_PROJECTORS: [(&str, FirstPartyProjector); 13] = [
 /// extractor contract or it emits no native packet and falls back to the TypeScript extension
 /// runtime. Partial "simple" primitive packets are not allowed because they hide coverage gaps and
 /// can suppress user extensions that inspect the same source match.
+pub fn project_static_syntax_record(
+    record: &StaticSyntaxFileRecord,
+    source_text: &str,
+) -> Vec<StaticNativeFactProjection> {
+    project_static_syntax_record_with_records(record, source_text, None)
+}
+
+/// Projects first-party static facts from a parsed Static Syntax record.
+///
+/// `records_by_file` may include dependency records from the same Static Index
+/// scope. When provided, primitive projectors can resolve supported local
+/// references without owning parsing or source loading.
+pub fn project_static_syntax_record_with_records(
+    record: &StaticSyntaxFileRecord,
+    source_text: &str,
+    records_by_file: Option<&HashMap<String, StaticSyntaxFileRecord>>,
+) -> Vec<StaticNativeFactProjection> {
+    project_native_facts_with_records(
+        &record.file,
+        source_text,
+        &record.imports,
+        &record.local_initializers,
+        &record.matches,
+        records_by_file,
+    )
+}
+
+/// Projects first-party static facts from already extracted Static Syntax evidence.
 pub fn project_native_facts(
     file: &str,
     source_text: &str,

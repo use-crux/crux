@@ -7,7 +7,7 @@ use crate::{
     analysis::parse::{ParsedAnalyzeFile, parsed_analyze_file, primary_analyze_files},
     core::facts::StaticIndexIndexPatchFacts,
     core::scoped_definitions::{ScopedDefinition, scoped_definitions_by_variable},
-    primitives::projection::project_native_facts_with_records,
+    primitives::projection::project_static_syntax_record_with_records,
     protocol::StaticSyntaxFileRecord,
     protocol::static_index::StaticIndexAnalyzeRequest,
     source::groups::grouped_source_facts,
@@ -74,12 +74,9 @@ fn analyze_parsed_file(
     parsed: &ParsedAnalyzeFile,
     records_by_file: &HashMap<String, StaticSyntaxFileRecord>,
 ) -> Vec<StaticIndexIndexPatchFacts> {
-    let native_facts = project_native_facts_with_records(
-        &parsed.record.file,
+    let native_facts = project_static_syntax_record_with_records(
+        &parsed.record,
         &parsed.source_text,
-        &parsed.record.imports,
-        &parsed.record.local_initializers,
-        &parsed.record.matches,
         Some(records_by_file),
     );
     let scoped_definitions =

@@ -121,10 +121,13 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
         (crates.join("syntax-oxc/src"), "syntax/frontend.rs"),
         (crates.join("facts/src"), "lib.rs"),
         (crates.join("primitives/src"), "projection.rs"),
-        (crates.join("primitives/src"), "static_syntax.rs"),
         (crates.join("lints/src"), "findings.rs"),
         (crates.join("lints/src"), "builtin_rule_descriptors.json"),
         (crates.join("static-compiler/src"), "lib.rs"),
+        (
+            crates.join("static-compiler/src"),
+            "compat/static_syntax.rs",
+        ),
         (crates.join("static-compiler/src"), "pipeline.rs"),
         (crates.join("static-compiler/src"), "finalizer/run.rs"),
         (src.clone(), "worker/mod.rs"),
@@ -178,7 +181,7 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
 
 #[test]
 fn rust_responsibility_modules_follow_dependency_direction() {
-    assert_no_forbidden_crate_uses("worker", &["index_compiler"], &[]);
+    assert_no_forbidden_crate_uses("worker", &["index_compiler", "primitives"], &[]);
     let static_index_transport = fs::read_to_string(crate_src().join("worker/static_index.rs"))
         .expect("Static Index transport source should be readable");
     assert!(

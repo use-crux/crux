@@ -1,4 +1,3 @@
-pub(crate) use crux_indexer_primitives as primitives;
 pub(crate) use crux_indexer_protocol as protocol;
 
 mod worker;

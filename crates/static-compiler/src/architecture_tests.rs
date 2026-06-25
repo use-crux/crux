@@ -7,6 +7,23 @@ use crate::protocol::static_index::{
 };
 
 #[test]
+fn primitives_crate_does_not_depend_on_syntax_frontend() {
+    let static_compiler_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let primitives_manifest = static_compiler_dir
+        .parent()
+        .expect("static compiler crate should live under crates/")
+        .join("primitives/Cargo.toml");
+    let manifest = std::fs::read_to_string(&primitives_manifest)
+        .expect("primitives manifest should be readable");
+
+    assert!(
+        !manifest.contains("crux-indexer-syntax-oxc"),
+        "crux-indexer-primitives must project from Static Syntax evidence without depending on \
+         the Oxc syntax frontend"
+    );
+}
+
+#[test]
 fn syntax_frontend_is_pure_and_static_compiler_projects_facts() {
     let root = "/workspace/acme".to_string();
     let file = "src/prompts/refund.ts".to_string();
