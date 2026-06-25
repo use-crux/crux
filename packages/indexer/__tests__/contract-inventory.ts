@@ -150,7 +150,7 @@ const inventory = {
       rust: [
         contractFile(
           'rust',
-          'crates/crux-indexer-worker/src/protocol/worker.rs',
+          'crates/protocol/src/worker.rs',
           'Rust worker response envelope and static syntax stream event ABI.',
           'native-mirror',
         ),
@@ -233,8 +233,14 @@ const inventory = {
       rust: [
         contractFile(
           'rust',
-          'crates/crux-indexer-worker/src/protocol/static_syntax.rs',
+          'crates/protocol/src/static_syntax.rs',
           'Rust static syntax record, request, response, and stream event ABI.',
+          'native-mirror',
+        ),
+        contractFile(
+          'rust',
+          'crates/syntax-oxc/src/syntax/frontend.rs',
+          'Rust/Oxc parser frontend that emits static syntax records before native fact projection.',
           'native-mirror',
         ),
         contractFile(
@@ -316,7 +322,7 @@ const inventory = {
       rust: [
         contractFile(
           'rust',
-          'crates/crux-indexer-worker/src/protocol/native_static.rs',
+          'crates/protocol/src/native_static.rs',
           'Rust native static request, response, identity, plan, and telemetry ABI.',
           'native-mirror',
         ),

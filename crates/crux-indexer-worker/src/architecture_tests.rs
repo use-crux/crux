@@ -12,6 +12,13 @@ fn crate_src() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
+fn crates_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("worker crate should live under crates/")
+        .to_path_buf()
+}
+
 fn rust_files_under(root: &Path) -> Vec<PathBuf> {
     let mut pending = vec![root.to_path_buf()];
     let mut files = Vec::new();
@@ -108,23 +115,41 @@ fn assert_no_forbidden_crate_uses(module: &str, forbidden: &[&str], allowed_file
 #[test]
 fn rust_runtime_boundaries_use_responsibility_module_names() {
     let src = crate_src();
+    let crates = crates_dir();
+
+    let expected_files = [
+        (crates.join("protocol/src"), "worker.rs"),
+        (crates.join("protocol/src"), "static_syntax.rs"),
+        (crates.join("protocol/src"), "native_static.rs"),
+        (crates.join("syntax-oxc/src"), "syntax/frontend.rs"),
+        (crates.join("facts/src"), "lib.rs"),
+        (crates.join("extractors/src"), "projection.rs"),
+        (crates.join("extractors/src"), "static_syntax.rs"),
+        (crates.join("lints/src"), "findings.rs"),
+        (crates.join("lints/src"), "builtin_rule_descriptors.json"),
+        (src.clone(), "worker/mod.rs"),
+        (src.clone(), "worker/static_syntax.rs"),
+        (src.clone(), "worker/native_static.rs"),
+        (src.clone(), "index_compiler/mod.rs"),
+        (src.clone(), "index_compiler/pipeline.rs"),
+        (src.clone(), "index_compiler/finalizer/run.rs"),
+    ];
+    for (root, path) in expected_files {
+        assert!(
+            root.join(path).is_file(),
+            "expected Rust responsibility boundary file {}/{}",
+            root.display(),
+            path
+        );
+    }
 
     for path in [
         "worker/mod.rs",
         "worker/static_syntax.rs",
         "worker/native_static.rs",
-        "protocol/worker.rs",
-        "protocol/static_syntax.rs",
-        "protocol/native_static.rs",
-        "syntax/frontend.rs",
         "index_compiler/mod.rs",
         "index_compiler/pipeline.rs",
         "index_compiler/finalizer/run.rs",
-        "extractors/context/mod.rs",
-        "extractors/projection.rs",
-        "extractors/prompt/facts.rs",
-        "extractors/static_syntax.rs",
-        "lints/findings.rs",
     ] {
         assert!(
             src.join(path).is_file(),
@@ -138,6 +163,10 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
         "native_static",
         "static_compiler",
         "primitives",
+        "protocol",
+        "syntax",
+        "extractors",
+        "lints",
         "syntax/extract.rs",
         "protocol/static_compile.rs",
         "protocol/static_compiler.rs",
@@ -153,18 +182,6 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
 
 #[test]
 fn rust_responsibility_modules_follow_dependency_direction() {
-    assert_no_forbidden_crate_uses(
-        "protocol",
-        &["syntax", "extractors", "index_compiler", "lints", "worker"],
-        &[],
-    );
-    assert_no_forbidden_crate_uses(
-        "syntax",
-        &["extractors", "index_compiler", "lints", "worker"],
-        &[],
-    );
-    assert_no_forbidden_crate_uses("extractors", &["index_compiler", "lints", "worker"], &[]);
-    assert_no_forbidden_crate_uses("lints", &["syntax", "extractors", "worker"], &[]);
     assert_no_forbidden_crate_uses("index_compiler", &["worker"], &[]);
 }
 
@@ -174,7 +191,7 @@ fn phase9_syntax_frontend_is_pure_and_native_static_pipeline_projects_facts() {
     let file = "src/prompts/refund.ts".to_string();
     let source = "export const refundPrompt = prompt({ id: 'refund' })".to_string();
 
-    let record = crate::syntax::frontend::parse_source(ParseRequest {
+    let record = crux_indexer_syntax_oxc::parse_source(ParseRequest {
         root: root.clone(),
         file: file.clone(),
         source: source.clone(),

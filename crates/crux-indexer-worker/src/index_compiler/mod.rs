@@ -28,7 +28,7 @@ pub(crate) mod contracts {
 pub(crate) mod core {
     pub(crate) mod definition_merge;
     pub(crate) mod evidence;
-    pub(crate) mod facts;
+    pub(crate) use crux_indexer_facts as facts;
     pub(crate) mod scoped_definitions;
 }
 

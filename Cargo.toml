@@ -1,5 +1,12 @@
 [workspace]
-members = ["crates/crux-indexer-worker"]
+members = [
+    "crates/protocol",
+    "crates/syntax-oxc",
+    "crates/facts",
+    "crates/extractors",
+    "crates/lints",
+    "crates/crux-indexer-worker",
+]
 resolver = "3"
 
 [workspace.package]
@@ -9,6 +16,11 @@ license = "Apache-2.0"
 repository = "https://github.com/use-crux/crux.git"
 
 [workspace.dependencies]
+crux-indexer-protocol = { path = "crates/protocol" }
+crux-indexer-syntax-oxc = { path = "crates/syntax-oxc" }
+crux-indexer-facts = { path = "crates/facts" }
+crux-indexer-extractors = { path = "crates/extractors" }
+crux-indexer-lints = { path = "crates/lints" }
 oxc_allocator = "0.133.0"
 oxc_ast = "0.133.0"
 oxc_parser = "0.133.0"

@@ -2,7 +2,7 @@
 
 This is the current baseline for the native runtime architecture refactor. It
 records the ownership and contract inventory after the TypeScript contract
-spine, Go host split, and Rust native-static module split.
+spine, Go host split, and Rust native indexer crate split.
 
 The executable inventory lives in
 `packages/indexer/__tests__/contract-inventory.ts`; this document explains the
@@ -15,7 +15,12 @@ same baseline for humans.
 | `packages/core` | TypeScript SDK core | Durable Project Index data types, rule manifest types, provider-agnostic contracts | Provider SDKs, React, Convex, local runtime, indexer implementation |
 | `packages/indexer` | TypeScript Project Index Compiler | Public indexer API, extension authoring API, worker schemas, static syntax ABI, semantic evidence contract, TypeScript correctness baseline, cache identity | Go process lifetime, local persistence, devtools quality enrichment, Rust/Oxc internals |
 | `packages/local` | Go local runtime | CLI/server/TUI, worker supervision, cancellation, budgets, Project Index store/cache loading, snapshot state, devtools read models, HTTP/WebSocket routes | Public extension API, TypeScript compiler semantics, raw parser/checker APIs |
-| `crates/crux-indexer-worker` | Rust native implementation | Oxc static syntax frontend and native static compiler behavior that has parity fixtures | Public SDK contracts, Go orchestration, independent user-facing Project Index semantics |
+| `crates/protocol` | Rust native protocol mirror | Data-only worker, static syntax, and native static JSON ABI shapes | Parsing, fact projection, linting, process I/O |
+| `crates/syntax-oxc` | Rust/Oxc syntax frontend | Oxc parsing into backend-neutral static syntax records | Native static fact projection, linting, worker transport |
+| `crates/facts` | Rust native fact model | Normalized native static fact structs shared by compiler finalization and lints | Worker transport, parsing, domain extraction |
+| `crates/extractors` | Rust first-party extractor application logic | Crux domain projection from static syntax evidence into native static fact packets | Compiler finalization, worker transport, lint filtering |
+| `crates/lints` | Rust first-party lint application logic | Built-in fact-based lint findings and descriptor filtering over normalized facts | Parser/frontend behavior, relation/source finalization, worker transport |
+| `crates/crux-indexer-worker` | Rust native worker and compiler implementation | Existing binary/process adapter plus native static compiler orchestration/finalization with parity fixtures | Public SDK contracts, Go orchestration, independent user-facing Project Index semantics, first-party extractor/lint internals |
 
 The durable boundary is Project Index facts, semantic evidence, static syntax
 records, and patch/event streams. Raw TypeScript AST nodes, Oxc AST nodes,
@@ -26,9 +31,9 @@ runtime.
 
 | Contract group | Current canonical TypeScript area | Current Go mirror | Current Rust mirror | Mirror status |
 | --- | --- | --- | --- | --- |
-| `worker-events` | `contracts/worker-events/schema.ts` plus `indexer/worker-protocol/*` implementation files | `internal/projectindexwire/worker_protocol*` and artifacts | `protocol/worker.rs`; `index_compiler/finalizer/events.rs` emits event JSON | Partial mirror |
-| `static-syntax-records` | `contracts/static-syntax/schema.ts` plus `indexer/static/syntax-record/*` implementation files | `internal/indexhost/native/staticplan`, `internal/indexhost/native/syntax/record`, and syntax stream decoder | `protocol/static_syntax.rs` | Mirrored |
-| `native-static-protocol` | `contracts/native-static/schema.ts` plus `indexer/worker-protocol/native-static*` implementation files | `internal/indexhost/native/protocol/*` | `protocol/native_static.rs` | Mirrored |
+| `worker-events` | `contracts/worker-events/schema.ts` plus `indexer/worker-protocol/*` implementation files | `internal/projectindexwire/worker_protocol*` and artifacts | `crates/protocol/src/worker.rs`; `index_compiler/finalizer/events.rs` emits event JSON | Partial mirror |
+| `static-syntax-records` | `contracts/static-syntax/schema.ts` plus `indexer/static/syntax-record/*` implementation files | `internal/indexhost/native/staticplan`, `internal/indexhost/native/syntax/record`, and syntax stream decoder | `crates/protocol/src/static_syntax.rs`; `crates/syntax-oxc/src/syntax/frontend.rs` | Mirrored |
+| `native-static-protocol` | `contracts/native-static/schema.ts` plus `indexer/worker-protocol/native-static*` implementation files | `internal/indexhost/native/protocol/*` | `crates/protocol/src/native_static.rs` | Mirrored |
 | `semantic-evidence` | `contracts/semantic/schema.ts`, `indexer/semantic/evidence/projection.ts`, and service/native contracts | `internal/indexhost/semantic/worker.go` consumes patch events, not semantic evidence structs | None today | TypeScript-only |
 
 ## Parity Fixture Gaps
