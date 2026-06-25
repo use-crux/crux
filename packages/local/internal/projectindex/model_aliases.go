@@ -41,9 +41,9 @@ type StaticCallbackInterest = model.StaticCallbackInterest
 type StaticCacheHit = model.StaticCacheHit
 type SyntaxFrontend = model.SyntaxFrontend
 
-type ProjectNativeStaticConfig = model.ProjectNativeStaticConfig
-type ProjectNativeStaticExtensionReference = model.ProjectNativeStaticExtensionReference
-type ProjectNativeStaticConfigDiagnostic = model.ProjectNativeStaticConfigDiagnostic
+type ProjectStaticIndexConfig = model.ProjectStaticIndexConfig
+type ProjectStaticIndexExtensionReference = model.ProjectStaticIndexExtensionReference
+type ProjectStaticIndexConfigDiagnostic = model.ProjectStaticIndexConfigDiagnostic
 
 type StaticExtensionHostManifestResult = model.StaticExtensionHostManifestResult
 type StaticExtensionRuntimeManifest = model.StaticExtensionRuntimeManifest

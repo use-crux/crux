@@ -5,23 +5,23 @@ use serde_json::{Map, Value};
 
 use crate::{
     analysis::parse::{ParsedAnalyzeFile, parsed_analyze_file, primary_analyze_files},
-    core::facts::NativeStaticIndexPatchFacts,
+    core::facts::StaticIndexIndexPatchFacts,
     core::scoped_definitions::{ScopedDefinition, scoped_definitions_by_variable},
     primitives::projection::project_native_facts_with_records,
     protocol::StaticSyntaxFileRecord,
-    protocol::native_static::NativeStaticAnalyzeRequest,
+    protocol::static_index::StaticIndexAnalyzeRequest,
     source::groups::grouped_source_facts,
     source::tree_paths::grouped_tree_path_definition_facts,
 };
 
-/// Typed fact groups emitted by native static analysis before wire serialization.
+/// Typed fact groups emitted by Static Index analysis before wire serialization.
 #[derive(Debug, Clone, Default, PartialEq)]
-pub(crate) struct NativeStaticAnalysisFacts {
-    groups: Vec<NativeStaticIndexPatchFacts>,
+pub(crate) struct StaticIndexAnalysisFacts {
+    groups: Vec<StaticIndexIndexPatchFacts>,
 }
 
-impl NativeStaticAnalysisFacts {
-    pub(crate) fn new(groups: Vec<NativeStaticIndexPatchFacts>) -> Self {
+impl StaticIndexAnalysisFacts {
+    pub(crate) fn new(groups: Vec<StaticIndexIndexPatchFacts>) -> Self {
         Self { groups }
     }
 
@@ -38,9 +38,9 @@ impl NativeStaticAnalysisFacts {
     }
 }
 
-pub(crate) fn analyze_native_static_facts(
-    request: &NativeStaticAnalyzeRequest,
-) -> NativeStaticAnalysisFacts {
+pub(crate) fn analyze_static_index_facts(
+    request: &StaticIndexAnalyzeRequest,
+) -> StaticIndexAnalysisFacts {
     let parsed_files = request
         .files
         .par_iter()
@@ -70,10 +70,10 @@ pub(crate) fn analyze_native_static_facts(
 }
 
 fn analyze_parsed_file(
-    request: &NativeStaticAnalyzeRequest,
+    request: &StaticIndexAnalyzeRequest,
     parsed: &ParsedAnalyzeFile,
     records_by_file: &HashMap<String, StaticSyntaxFileRecord>,
-) -> Vec<NativeStaticIndexPatchFacts> {
+) -> Vec<StaticIndexIndexPatchFacts> {
     let native_facts = project_native_facts_with_records(
         &parsed.record.file,
         &parsed.source_text,
@@ -132,13 +132,13 @@ fn analyze_parsed_file(
     groups
 }
 
-impl From<Vec<NativeStaticIndexPatchFacts>> for NativeStaticAnalysisFacts {
-    fn from(groups: Vec<NativeStaticIndexPatchFacts>) -> Self {
+impl From<Vec<StaticIndexIndexPatchFacts>> for StaticIndexAnalysisFacts {
+    fn from(groups: Vec<StaticIndexIndexPatchFacts>) -> Self {
         Self::new(groups)
     }
 }
 
-fn primary_definition_id(grouped: &NativeStaticIndexPatchFacts) -> Option<String> {
+fn primary_definition_id(grouped: &StaticIndexIndexPatchFacts) -> Option<String> {
     grouped
         .definitions
         .first()
@@ -150,7 +150,7 @@ fn grouped_finalize_facts_from_extracted(
     root: &str,
     project_name: Option<&str>,
     scoped_definitions: &HashMap<String, ScopedDefinition>,
-) -> Option<NativeStaticIndexPatchFacts> {
+) -> Option<StaticIndexIndexPatchFacts> {
     let definition_entries = extracted
         .get("definitions")
         .and_then(Value::as_array)
@@ -195,8 +195,8 @@ fn grouped_finalize_facts_from_extracted(
     group_from_value(Value::Object(grouped))
 }
 
-fn group_from_value(value: Value) -> Option<NativeStaticIndexPatchFacts> {
-    serde_json::from_value::<NativeStaticIndexPatchFacts>(value).ok()
+fn group_from_value(value: Value) -> Option<StaticIndexIndexPatchFacts> {
+    serde_json::from_value::<StaticIndexIndexPatchFacts>(value).ok()
 }
 
 struct OwnerDefinition {

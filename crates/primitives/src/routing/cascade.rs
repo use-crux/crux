@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext, source_ref_for_property},
-    definition::{NativeDefinitionInput, folded_index_child, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, folded_index_child, safe_id, static_index_definition},
     protocol::StaticSyntaxValue,
     record_values::{
         direct_string_property, has_property, json_object_property, number_property,
@@ -71,7 +71,7 @@ pub(crate) fn cascade_facts(
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id: id.clone(),
             kind: "routing.cascade",
             name: routing_id,
@@ -152,7 +152,7 @@ fn tier_child(
         "intelligence".to_string(),
         json!({"confidence": "static", "control": {"mode": "cascade", "ordering": "ordered"}}),
     );
-    let mut definition = native_static_definition(NativeDefinitionInput {
+    let mut definition = static_index_definition(NativeDefinitionInput {
         id: definition_id.clone(),
         kind: "routing.cascade.tier",
         name: format!("tier {}", index + 1),

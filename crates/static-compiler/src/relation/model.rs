@@ -1,4 +1,4 @@
-//! Relation binding and canonicalization for native static finalization.
+//! Relation binding and canonicalization for Static Index finalization.
 //!
 //! This module mirrors the TypeScript relation resolver's public contract:
 //! relation identity is a normalized triple, higher-fidelity evidence replaces
@@ -7,8 +7,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::core::facts::{
-    NativeStaticDefinition, NativeStaticFidelity, NativeStaticIndexPatchFacts,
-    NativeStaticRelation, NativeStaticRelationRef, NativeStaticSourceLocation,
+    StaticIndexDefinition, StaticIndexFidelity, StaticIndexIndexPatchFacts, StaticIndexRelation,
+    StaticIndexRelationRef, StaticIndexSourceLocation,
 };
 use crate::read::injection::{ResolvedInjectionUseEntryTarget, is_injection_use_relation_type};
 use crate::read::model::with_resolved_relation_read_model_with_ref_targets;
@@ -16,23 +16,22 @@ use crate::relation::fallback::fallback_relation_target_id;
 pub(crate) use crate::relation::fallback::safe_use_entry_id;
 use crate::relation::gaps::record_policy_gap_once;
 pub(crate) use crate::relation::policy::{
-    NativeStaticRelationPolicyTable, relation_policy_table_from_value_with_builtins,
+    StaticIndexRelationPolicyTable, relation_policy_table_from_value_with_builtins,
 };
 #[cfg(test)]
 pub(crate) use crate::relation::policy::{
     built_in_relation_policy_table, relation_policy_table_from_value,
 };
 use crate::relation::report::{
-    NativeStaticRelationFactRef, NativeStaticRelationPolicyGap,
-    NativeStaticRelationResolutionReport, fact_ref, relation_diagnostics, relation_report,
-    unresolved_ref,
+    StaticIndexRelationFactRef, StaticIndexRelationPolicyGap, StaticIndexRelationResolutionReport,
+    fact_ref, relation_diagnostics, relation_report, unresolved_ref,
 };
 
 /// Resolver output plus the report needed for relation diagnostics.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct NativeStaticRelationModel {
-    pub facts: NativeStaticIndexPatchFacts,
-    pub report: NativeStaticRelationResolutionReport,
+pub(crate) struct StaticIndexRelationModel {
+    pub facts: StaticIndexIndexPatchFacts,
+    pub report: StaticIndexRelationResolutionReport,
 }
 
 /// Returns the canonical graph edge identity for a relation triple.
@@ -42,9 +41,9 @@ pub(crate) fn relation_identity(relation_type: &str, from: &str, to: &str) -> St
 
 /// Merges relation evidence by semantic identity with fidelity-aware replacement.
 pub(crate) fn merge_relations_by_identity(
-    relations: impl IntoIterator<Item = NativeStaticRelation>,
-) -> Vec<NativeStaticRelation> {
-    let mut by_identity = BTreeMap::<String, NativeStaticRelation>::new();
+    relations: impl IntoIterator<Item = StaticIndexRelation>,
+) -> Vec<StaticIndexRelation> {
+    let mut by_identity = BTreeMap::<String, StaticIndexRelation>::new();
     for mut relation in relations {
         let identity = relation_identity(&relation.r#type, &relation.from, &relation.to);
         let should_replace = by_identity
@@ -60,16 +59,16 @@ pub(crate) fn merge_relations_by_identity(
 }
 
 /// Resolves native/extension facts into canonical relations and enriched definitions.
-pub(crate) fn resolve_native_static_relation_model(
-    mut facts: NativeStaticIndexPatchFacts,
-    policies: &NativeStaticRelationPolicyTable,
-) -> NativeStaticRelationModel {
+pub(crate) fn resolve_static_index_relation_model(
+    mut facts: StaticIndexIndexPatchFacts,
+    policies: &StaticIndexRelationPolicyTable,
+) -> StaticIndexRelationModel {
     let definitions_by_id = definitions_by_id(&facts.definitions);
     let existing_relations = std::mem::take(&mut facts.relations);
     let mut relations = existing_relations.clone();
     let mut use_entry_targets = Vec::<ResolvedInjectionUseEntryTarget>::new();
     let mut unresolved = Vec::new();
-    let mut policy_gaps = BTreeMap::<String, NativeStaticRelationPolicyGap>::new();
+    let mut policy_gaps = BTreeMap::<String, StaticIndexRelationPolicyGap>::new();
     let mut seen_policy_gap_refs = BTreeSet::<String>::new();
 
     for relation_ref in &facts.relation_refs {
@@ -140,7 +139,7 @@ pub(crate) fn resolve_native_static_relation_model(
             record_policy_gap_once(
                 &mut policy_gaps,
                 &mut seen_policy_gap_refs,
-                NativeStaticRelationFactRef {
+                StaticIndexRelationFactRef {
                     owner_definition_id: relation.from.clone(),
                     ref_type: relation.r#type.clone(),
                     to_id: Some(relation.to.clone()),
@@ -164,14 +163,14 @@ pub(crate) fn resolve_native_static_relation_model(
     facts.canonicalize();
 
     let report = relation_report(facts.relations.len(), unresolved, policy_gaps);
-    NativeStaticRelationModel { facts, report }
+    StaticIndexRelationModel { facts, report }
 }
 
 fn resolved_use_entry_target(
-    relation_ref: &NativeStaticRelationRef,
+    relation_ref: &StaticIndexRelationRef,
     relation_type: &str,
     to_id: &str,
-    fidelity: NativeStaticFidelity,
+    fidelity: StaticIndexFidelity,
 ) -> Option<ResolvedInjectionUseEntryTarget> {
     if !is_injection_use_relation_type(relation_type) {
         return None;
@@ -189,10 +188,10 @@ fn project_relation(
     relation_type: &str,
     from: &str,
     to: &str,
-    fidelity: NativeStaticFidelity,
-    source: Option<NativeStaticSourceLocation>,
-) -> NativeStaticRelation {
-    NativeStaticRelation {
+    fidelity: StaticIndexFidelity,
+    source: Option<StaticIndexSourceLocation>,
+) -> StaticIndexRelation {
+    StaticIndexRelation {
         id: relation_identity(relation_type, from, to),
         r#type: relation_type.to_string(),
         from: from.to_string(),
@@ -204,8 +203,8 @@ fn project_relation(
 }
 
 fn definitions_by_id(
-    definitions: &[NativeStaticDefinition],
-) -> BTreeMap<String, &NativeStaticDefinition> {
+    definitions: &[StaticIndexDefinition],
+) -> BTreeMap<String, &StaticIndexDefinition> {
     definitions
         .iter()
         .map(|definition| (definition.id.clone(), definition))
@@ -213,9 +212,9 @@ fn definitions_by_id(
 }
 
 fn target_definition<'a>(
-    relation_ref: &NativeStaticRelationRef,
-    definitions: &'a [NativeStaticDefinition],
-) -> Option<&'a NativeStaticDefinition> {
+    relation_ref: &StaticIndexRelationRef,
+    definitions: &'a [StaticIndexDefinition],
+) -> Option<&'a StaticIndexDefinition> {
     if let Some(to_id) = &relation_ref.to_id {
         return definitions
             .iter()
@@ -236,8 +235,8 @@ fn target_definition<'a>(
 
 fn definition_by_variable<'a>(
     variable: &str,
-    definitions: &'a [NativeStaticDefinition],
-) -> Option<&'a NativeStaticDefinition> {
+    definitions: &'a [StaticIndexDefinition],
+) -> Option<&'a StaticIndexDefinition> {
     let safe_variable = safe_use_entry_id(variable);
     definitions.iter().find(|definition| {
         definition.name == variable
@@ -247,7 +246,7 @@ fn definition_by_variable<'a>(
     })
 }
 
-fn definition_export_name(definition: &NativeStaticDefinition) -> Option<String> {
+fn definition_export_name(definition: &StaticIndexDefinition) -> Option<String> {
     definition
         .metadata
         .as_ref()
@@ -257,21 +256,21 @@ fn definition_export_name(definition: &NativeStaticDefinition) -> Option<String>
 }
 
 fn relation_fidelity(
-    from: Option<&&NativeStaticDefinition>,
-    target: Option<&NativeStaticDefinition>,
+    from: Option<&&StaticIndexDefinition>,
+    target: Option<&StaticIndexDefinition>,
     explicit_target: bool,
-) -> NativeStaticFidelity {
+) -> StaticIndexFidelity {
     let from_resolved = from
-        .map(|definition| definition.fidelity == NativeStaticFidelity::Resolved)
+        .map(|definition| definition.fidelity == StaticIndexFidelity::Resolved)
         .unwrap_or(false);
     let target_resolved = explicit_target
         || target
-            .map(|definition| definition.fidelity == NativeStaticFidelity::Resolved)
+            .map(|definition| definition.fidelity == StaticIndexFidelity::Resolved)
             .unwrap_or(false);
     if from_resolved && target_resolved {
-        NativeStaticFidelity::Resolved
+        StaticIndexFidelity::Resolved
     } else {
-        NativeStaticFidelity::Partial
+        StaticIndexFidelity::Partial
     }
 }
 

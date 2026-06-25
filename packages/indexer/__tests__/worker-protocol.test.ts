@@ -10,7 +10,7 @@ import {
   workerEventFixtureOptions,
   workerEventFixturePatch,
 } from '../indexer/contracts/worker-events/fixtures'
-import { readNativeRuntimeSharedFixture } from '../indexer/contracts/fixtures'
+import { readStaticIndexRuntimeSharedFixture } from '../indexer/contracts/fixtures'
 
 describe('project index worker protocol', () => {
   it('streams contract fixture facts in ordered batches and reconstructs the same patch', () => {
@@ -30,7 +30,7 @@ describe('project index worker protocol', () => {
   })
 
   it('reconstructs the shared worker event fixture file', () => {
-    const fixture = readNativeRuntimeSharedFixture('worker-events')
+    const fixture = readStaticIndexRuntimeSharedFixture('worker-events')
 
     expect(fixture.events.map((event) => event.type)).toEqual([
       'phase:start',

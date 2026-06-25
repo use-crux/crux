@@ -1,5 +1,5 @@
 /**
- * Aggregate fixture entry point for the native runtime contract spine.
+ * Aggregate fixture entry point for the Static Index runtime contract spine.
  *
  * Contract-specific fixture modules stay near their schemas. This index gives
  * cross-language test generation one stable place to discover the fixture
@@ -9,12 +9,12 @@
  */
 
 /** Contract groups with shared TypeScript fixture payloads. */
-export const nativeRuntimeContractFixtureGroups = ['worker-events', 'static-index'] as const
+export const staticIndexRuntimeContractFixtureGroups = ['worker-events', 'static-index'] as const
 
 export {
-  readNativeRuntimeSharedFixture,
-  type NativeRuntimeSharedFixtureMap,
-  type NativeRuntimeSharedFixtureName,
+  readStaticIndexRuntimeSharedFixture,
+  type StaticIndexRuntimeSharedFixtureMap,
+  type StaticIndexRuntimeSharedFixtureName,
   type StaticIndexIdentitySharedFixture,
   type StaticIndexProtocolSharedFixture,
 } from './shared'

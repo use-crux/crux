@@ -52,7 +52,7 @@ keeps extension tests on the public source-text-to-facts path rather than hand-b
 contexts.
 
 `@crux/indexer/worker-protocol` is the TypeScript-owned contract spine for worker-event and
-native-static host protocols. `@crux/indexer/worker-host` exposes JSON-safe compatibility helpers for
+static-index host protocols. `@crux/indexer/worker-host` exposes JSON-safe compatibility helpers for
 bundled worker binaries. `@crux/indexer/internal-host` is a private Crux-owned bridge for local
 runtime workers that still need compiler, static extraction, or semantic backend internals. Before
 public release, each host-only surface must be removed, made intentionally public, or kept

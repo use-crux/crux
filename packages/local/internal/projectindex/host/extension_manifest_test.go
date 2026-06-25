@@ -15,7 +15,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
-func TestWorkerNativeStaticLoadsConfiguredExtensionManifestWithoutNodeStaticPlan(t *testing.T) {
+func TestWorkerStaticIndexLoadsConfiguredExtensionManifestWithoutNodeStaticPlan(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -33,36 +33,36 @@ func TestWorkerNativeStaticLoadsConfiguredExtensionManifestWithoutNodeStaticPlan
 		t.Fatalf("write config: %v", err)
 	}
 	cacheKey := "static-cache-key:workflow-extension"
-	writeNativeStaticPlanCacheFile(t, root, cacheKey)
-	writeNativeStaticPlanCacheManifest(t, root, map[string]any{
+	writeStaticIndexPlanCacheFile(t, root, cacheKey)
+	writeStaticIndexPlanCacheManifest(t, root, map[string]any{
 		"version":        "static-parse-v38",
 		"root":           root,
 		"file":           "src/workflow.ts",
-		"sourceHash":     nativeStaticPlanCacheFixtureHash(t, sourceFile),
+		"sourceHash":     staticIndexPlanCacheFixtureHash(t, sourceFile),
 		"dependencies":   []map[string]string{},
 		"configFiles":    []map[string]string{},
-		"compilerInputs": nativeStaticPlanCacheCompilerInputsWithExtensionFixture(t),
+		"compilerInputs": staticIndexPlanCacheCompilerInputsWithExtensionFixture(t),
 		"cacheKey":       cacheKey,
 	})
 
-	script := filepath.Join(t.TempDir(), "native-static-extension-manifest-indexer.mjs")
-	if err := os.WriteFile(script, []byte(nativeStaticExtensionManifestIndexerScript(
-		nativeStaticPlanCacheCompilerInputsWithExtensionFixtureJSON(t),
+	script := filepath.Join(t.TempDir(), "static-index-extension-manifest-indexer.mjs")
+	if err := os.WriteFile(script, []byte(staticIndexExtensionManifestIndexerScript(
+		staticIndexPlanCacheCompilerInputsWithExtensionFixtureJSON(t),
 	)), 0o600); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
 
-	compiler := &nativeStaticExtensionManifestCompiler{root: root, sourceFile: sourceFile}
+	compiler := &staticIndexExtensionManifestCompiler{root: root, sourceFile: sourceFile}
 	worker := newTestWorkerWithProjectScript(t, script)
 	worker.WithSyntaxParser(compiler)
 	defer worker.Close()
 
-	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-extension-manifest")
+	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "static-index-extension-manifest")
 	if err != nil {
 		t.Fatalf("IndexProjectAstPatch error = %v", err)
 	}
-	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:native-static-cutover" {
-		t.Fatalf("definitions = %+v, want native static finalize result", patch.Facts.Definitions)
+	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:static-index-cutover" {
+		t.Fatalf("definitions = %+v, want Static Index finalize result", patch.Facts.Definitions)
 	}
 	if !compiler.sawFirstPartyCall || !compiler.sawExtensionCall {
 		t.Fatalf("prepare saw prompt=%v defineWorkflow=%v, want merged first-party and extension call names", compiler.sawFirstPartyCall, compiler.sawExtensionCall)
@@ -75,8 +75,8 @@ func TestWorkerNativeStaticLoadsConfiguredExtensionManifestWithoutNodeStaticPlan
 	}
 	timing := worker.LastAstTiming()
 	for _, reason := range []string{
-		projectIndexNodeReasonNativeStaticConfig,
-		projectIndexNodeReasonNativeStaticExtensions,
+		projectIndexNodeReasonStaticIndexConfig,
+		projectIndexNodeReasonStaticIndexExtensions,
 	} {
 		if !containsTimingReason(timing.NodeReasons, reason) {
 			t.Fatalf("timing.NodeReasons = %v, want %q", timing.NodeReasons, reason)
@@ -90,7 +90,7 @@ func TestWorkerNativeStaticLoadsConfiguredExtensionManifestWithoutNodeStaticPlan
 	}
 }
 
-func nativeStaticExtensionManifestIndexerScript(cacheInputs string) string {
+func staticIndexExtensionManifestIndexerScript(cacheInputs string) string {
 	return fmt.Sprintf(`
 		import readline from 'node:readline'
 		const rl = readline.createInterface({ input: process.stdin, terminal: false })
@@ -106,12 +106,12 @@ func nativeStaticExtensionManifestIndexerScript(cacheInputs string) string {
 				}) + '\n')
 				return
 			}
-			if (req.method === 'inspectProjectNativeStaticConfig') {
+			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
 					type: 'artifact:done',
-					transactionId: 'artifact-native-static-config',
-					artifact: 'projectNativeStaticConfig',
+					transactionId: 'artifact-static-index-config',
+					artifact: 'projectStaticIndexConfig',
 					root: req.root,
 					payload: {
 						root: req.root,
@@ -189,7 +189,7 @@ func nativeStaticExtensionManifestIndexerScript(cacheInputs string) string {
 	`, cacheInputs)
 }
 
-type nativeStaticExtensionManifestCompiler struct {
+type staticIndexExtensionManifestCompiler struct {
 	root                       string
 	sourceFile                 string
 	sawFirstPartyCall          bool
@@ -201,7 +201,7 @@ type nativeStaticExtensionManifestCompiler struct {
 	sawSourceCacheHit          bool
 }
 
-func (c *nativeStaticExtensionManifestCompiler) NativeStaticPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+func (c *staticIndexExtensionManifestCompiler) StaticIndexPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
 	c.sawFirstPartyCall = stringSliceContains(request.CallNames, "prompt")
 	c.sawExtensionCall = stringSliceContains(request.CallNames, "defineWorkflow")
 	c.sawExtensionHost = bytes.Contains(request.ExtensionHost, []byte(`"extensionTypeScriptExtractorCount":1`))
@@ -231,11 +231,11 @@ func (c *nativeStaticExtensionManifestCompiler) NativeStaticPrepare(_ context.Co
 			CacheMisses: misses,
 		},
 		Diagnostics: []json.RawMessage{},
-		Telemetry:   nativeStaticTestTelemetry(len(request.Files), len(hits), len(misses), 0),
+		Telemetry:   staticIndexTestTelemetry(len(request.Files), len(hits), len(misses), 0),
 	}, nil
 }
 
-func (c *nativeStaticExtensionManifestCompiler) NativeStaticAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+func (c *staticIndexExtensionManifestCompiler) StaticIndexAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
 	if !request.Stream {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
 	}
@@ -243,17 +243,17 @@ func (c *nativeStaticExtensionManifestCompiler) NativeStaticAnalyzeStream(_ cont
 	if !c.sawExtensionInterest {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("analyze interests = %s, want defineWorkflow", request.ExtensionEvidenceInterests)
 	}
-	return nativeStaticTestAnalyzeStream(protocol.AnalyzeResponse{
+	return staticIndexTestAnalyzeStream(protocol.AnalyzeResponse{
 		ProtocolVersion:       protocol.Version,
 		Method:                protocol.AnalyzeMethod,
-		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","fact":{"id":"prompt:native-static-cutover","kind":"prompt","name":"native-static-cutover","fidelity":"resolved","status":"active"}}`)},
+		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","fact":{"id":"prompt:static-index-cutover","kind":"prompt","name":"static-index-cutover","fidelity":"resolved","status":"active"}}`)},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
-		Telemetry:             nativeStaticTestTelemetry(len(request.Plan.Files), 0, len(request.Files), len(request.Files)),
+		Telemetry:             staticIndexTestTelemetry(len(request.Plan.Files), 0, len(request.Files), len(request.Files)),
 	}, handle)
 }
 
-func (c *nativeStaticExtensionManifestCompiler) NativeStaticFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+func (c *staticIndexExtensionManifestCompiler) StaticIndexFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
 	c.sawExtensionRelation = bytes.Contains(request.RelationSpecs, []byte("@acme/workflow/uses_tool"))
 	for _, fact := range request.ExtensionFacts {
 		if bytes.Contains(fact, []byte("@acme/rules/require-owner")) {
@@ -263,7 +263,7 @@ func (c *nativeStaticExtensionManifestCompiler) NativeStaticFinalize(_ context.C
 	if !c.sawExtensionRelation || !c.sawExtensionRuleDescriptor {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize relationSpecs=%s extensionFacts=%s, want extension metadata", request.RelationSpecs, request.ExtensionFacts)
 	}
-	events, err := nativeStaticCutoverEvents(c.root)
+	events, err := staticIndexCutoverEvents(c.root)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
@@ -271,31 +271,31 @@ func (c *nativeStaticExtensionManifestCompiler) NativeStaticFinalize(_ context.C
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Events:          events,
-		Telemetry:       nativeStaticTestTelemetry(1, 0, 1, 1),
+		Telemetry:       staticIndexTestTelemetry(1, 0, 1, 1),
 	}, nil
 }
 
-func (c *nativeStaticExtensionManifestCompiler) NativeStaticFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func (c *staticIndexExtensionManifestCompiler) StaticIndexFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	if !request.Stream {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
-	response, err := c.NativeStaticFinalize(ctx, request)
+	response, err := c.StaticIndexFinalize(ctx, request)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return nativeStaticTestFinalizeStream(response, handle)
+	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticExtensionManifestCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexExtensionManifestCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by extension manifest test")
 }
 
-func (c *nativeStaticExtensionManifestCompiler) Concurrency() int { return 1 }
+func (c *staticIndexExtensionManifestCompiler) Concurrency() int { return 1 }
 
-func (c *nativeStaticExtensionManifestCompiler) Close() error { return nil }
+func (c *staticIndexExtensionManifestCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*nativeStaticExtensionManifestCompiler)(nil)
-var _ StaticCompiler = (*nativeStaticExtensionManifestCompiler)(nil)
+var _ syntax.Parser = (*staticIndexExtensionManifestCompiler)(nil)
+var _ StaticCompiler = (*staticIndexExtensionManifestCompiler)(nil)
 
 func containsPhaseTiming(timings []projectindex.ProjectIndexPhaseTiming, name string) bool {
 	for _, timing := range timings {

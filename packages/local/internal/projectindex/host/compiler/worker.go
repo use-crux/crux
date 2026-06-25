@@ -13,14 +13,14 @@ import (
 // It is separate from syntax-record parsing so callers can prove the compiler
 // lane does not call Node projection or syntax-record bridges.
 type Static interface {
-	NativeStaticPrepare(context.Context, protocol.PrepareRequest) (protocol.PrepareResponse, error)
-	NativeStaticAnalyzeStream(context.Context, protocol.AnalyzeRequest, protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error)
-	NativeStaticFinalize(context.Context, protocol.FinalizeRequest) (protocol.FinalizeResponse, error)
-	NativeStaticFinalizeStream(context.Context, protocol.FinalizeRequest, protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error)
+	StaticIndexPrepare(context.Context, protocol.PrepareRequest) (protocol.PrepareResponse, error)
+	StaticIndexAnalyzeStream(context.Context, protocol.AnalyzeRequest, protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error)
+	StaticIndexFinalize(context.Context, protocol.FinalizeRequest) (protocol.FinalizeResponse, error)
+	StaticIndexFinalizeStream(context.Context, protocol.FinalizeRequest, protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error)
 }
 
 type CompileStreamer interface {
-	NativeStaticCompileStream(context.Context, protocol.CompileRequest, protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error)
+	StaticIndexCompileStream(context.Context, protocol.CompileRequest, protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error)
 }
 
 type Worker struct {
@@ -51,7 +51,7 @@ func (p *Pool) compilerWorker() (*Worker, error) {
 	return &Worker{Worker: worker}, nil
 }
 
-func (w *Worker) NativeStaticPrepare(ctx context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+func (w *Worker) StaticIndexPrepare(ctx context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
 	id := w.NextID()
 	request.ID = id
 	envelope, err := call[protocol.WorkerResponse[protocol.PrepareResponse]](ctx, w, request)
@@ -65,7 +65,7 @@ func (w *Worker) NativeStaticPrepare(ctx context.Context, request protocol.Prepa
 	return response, protocol.ValidateResponse(response.ProtocolVersion, response.Method, protocol.PrepareMethod)
 }
 
-func (w *Worker) NativeStaticFinalize(ctx context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+func (w *Worker) StaticIndexFinalize(ctx context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
 	id := w.NextID()
 	request.ID = id
 	envelope, err := call[protocol.WorkerResponse[protocol.FinalizeResponse]](ctx, w, request)
@@ -79,26 +79,26 @@ func (w *Worker) NativeStaticFinalize(ctx context.Context, request protocol.Fina
 	return response, protocol.ValidateResponse(response.ProtocolVersion, response.Method, protocol.FinalizeMethod)
 }
 
-func (p *Pool) NativeStaticPrepare(ctx context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+func (p *Pool) StaticIndexPrepare(ctx context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
 	worker, err := p.compilerWorker()
 	if err != nil {
 		return protocol.PrepareResponse{}, err
 	}
-	return worker.NativeStaticPrepare(ctx, request)
+	return worker.StaticIndexPrepare(ctx, request)
 }
 
-func (p *Pool) NativeStaticFinalize(ctx context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+func (p *Pool) StaticIndexFinalize(ctx context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
 	worker, err := p.compilerWorker()
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return worker.NativeStaticFinalize(ctx, request)
+	return worker.StaticIndexFinalize(ctx, request)
 }
 
 func call[Resp any](ctx context.Context, worker *Worker, request any) (Resp, error) {
 	var zero Resp
 	if worker == nil || worker.Process() == nil {
-		return zero, fmt.Errorf("project native static compiler is not configured")
+		return zero, fmt.Errorf("project Static Index compiler is not configured")
 	}
 	return nodeprocess.Call[Resp](ctx, worker.Process(), request)
 }

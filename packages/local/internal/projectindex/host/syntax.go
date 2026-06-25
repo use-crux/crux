@@ -40,9 +40,9 @@ func (w *Worker) InspectProjectStaticSyntaxPlan(ctx context.Context, root, confi
 	return result.Plan, nil
 }
 
-// InspectProjectNativeStaticConfig imports only executable config policy needed
-// by Go/Rust-owned native static planning.
-func (w *Worker) InspectProjectNativeStaticConfig(ctx context.Context, root, configPath string) (projectindex.ProjectNativeStaticConfig, error) {
+// InspectProjectStaticIndexConfig imports only executable config policy needed
+// by Go/Rust-owned Static Index planning.
+func (w *Worker) InspectProjectStaticIndexConfig(ctx context.Context, root, configPath string) (projectindex.ProjectStaticIndexConfig, error) {
 	return planner.LoadConfig(ctx, planner.ArtifactReaderFunc(w.streamArtifact), root, configPath)
 }
 
@@ -81,16 +81,16 @@ func (w *Worker) indexProjectAstPatchResultFromNativeSyntaxRecords(ctx context.C
 	if !ok {
 		timing.TotalMs = elapsedMs(started)
 		w.recordLastAstTiming(timing)
-		return projectindex.ProjectAstIndexResult{}, fmt.Errorf("nativeAst indexing requires a native static compiler; syntax-record projection fallback is disabled")
+		return projectindex.ProjectAstIndexResult{}, fmt.Errorf("nativeAst indexing requires a Static Index compiler; syntax-record projection fallback is disabled")
 	}
 
 	if !compat.Schedulable(plan) {
 		timing.TotalMs = elapsedMs(started)
 		w.recordLastAstTiming(timing)
-		return projectindex.ProjectAstIndexResult{}, fmt.Errorf("native static AST indexing is not schedulable for this static plan; syntax-record projection fallback is disabled")
+		return projectindex.ProjectAstIndexResult{}, fmt.Errorf("Static Index AST indexing is not schedulable for this static plan; syntax-record projection fallback is disabled")
 	}
 
-	patch, nativeTiming, usedNativeStatic, err := w.indexProjectAstPatchFromNativeStaticCompiler(ctx, root, configPath, projectName, plan, compiler)
+	patch, nativeTiming, usedStaticIndex, err := w.indexProjectAstPatchFromStaticIndexCompiler(ctx, root, configPath, projectName, plan, compiler)
 	nativeTiming.PlanMs = timing.PlanMs
 	nativeTiming.NodeTimings = append(planResult.Timings, nativeTiming.NodeTimings...)
 	nativeTiming.NativeOnlyEligible = timing.NativeOnlyEligible
@@ -102,14 +102,14 @@ func (w *Worker) indexProjectAstPatchResultFromNativeSyntaxRecords(ctx context.C
 		w.recordLastAstTiming(nativeTiming)
 		return projectindex.ProjectAstIndexResult{}, err
 	}
-	if usedNativeStatic {
-		nativeTiming.UsedNativeStatic = true
+	if usedStaticIndex {
+		nativeTiming.UsedStaticIndex = true
 		w.recordLastAstTiming(nativeTiming)
-		return projectindex.ProjectAstIndexResult{Patch: patch, UsedNativeStatic: true}, nil
+		return projectindex.ProjectAstIndexResult{Patch: patch, UsedStaticIndex: true}, nil
 	}
 	w.recordLastAstTiming(nativeTiming)
 	return projectindex.ProjectAstIndexResult{}, fmt.Errorf(
-		"native static AST indexing did not produce a complete patch; syntax-record projection fallback is disabled (reasons: %s)",
+		"Static Index AST indexing did not produce a complete patch; syntax-record projection fallback is disabled (reasons: %s)",
 		strings.Join(nativeTiming.NodeReasons, ", "),
 	)
 }

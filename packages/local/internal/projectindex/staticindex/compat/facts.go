@@ -87,7 +87,7 @@ func GroupedFact(key string, value json.RawMessage) (json.RawMessage, bool, erro
 	}
 	data, err := json.Marshal(map[string]json.RawMessage{key: value})
 	if err != nil {
-		return nil, false, fmt.Errorf("native static grouped %s facts: %w", key, err)
+		return nil, false, fmt.Errorf("Static Index grouped %s facts: %w", key, err)
 	}
 	return data, true, nil
 }

@@ -21,7 +21,7 @@ func (s *Service) applyProjectSemanticPatch(
 			request.ConfigPath,
 			request.ProjectName,
 			index,
-			request.ASTUsedNativeStatic,
+			request.ASTUsedStaticIndex,
 		)
 		if err := applyProjectLintPrefetch(&lintRequest, lintPrefetch); err != nil {
 			return store.IndexData{}, err
@@ -97,7 +97,7 @@ func (s *Service) applyProjectSemanticPatchResult(
 		request.ConfigPath,
 		request.ProjectName,
 		index,
-		request.ASTUsedNativeStatic,
+		request.ASTUsedStaticIndex,
 	)
 	if err := applyProjectLintPrefetch(&lintRequest, lintPrefetch); err != nil {
 		return store.IndexData{}, err

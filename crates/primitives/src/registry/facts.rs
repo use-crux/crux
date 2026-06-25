@@ -5,7 +5,7 @@ use crate::{
         CallParts, PrimitiveContext, source_ref_for_callback_property,
         source_ref_for_static_property,
     },
-    definition::{NativeDefinitionInput, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, safe_id, static_index_definition},
     protocol::StaticSyntaxValue,
     record_values::{direct_identifier, direct_string_property, has_property},
     routing::output::{extracted_facts, insert_string},
@@ -55,7 +55,7 @@ pub(crate) fn registry_facts(
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id,
             kind: "registry",
             name: registry_name,
@@ -138,7 +138,7 @@ pub(crate) fn registry_skill_facts(
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id,
             kind: "skill",
             name: identifier,
@@ -187,7 +187,7 @@ fn bundled_registry_definition(
     metadata.insert("bundled".to_string(), Value::Bool(true));
     metadata.insert("facts".to_string(), Value::Object(facts));
 
-    native_static_definition(NativeDefinitionInput {
+    static_index_definition(NativeDefinitionInput {
         id: bundled.id.to_string(),
         kind: "registry",
         name: bundled.name.to_string(),

@@ -16,14 +16,14 @@ import (
 
 func TestWorkerIndexProjectLintPatchUsesNativeQualityFinalize(t *testing.T) {
 	root := "/repo"
-	compiler := &nativeStaticLintCompiler{root: root}
+	compiler := &staticIndexLintCompiler{root: root}
 	worker := &Worker{syntaxParser: compiler}
-	worker.recordLastAstTiming(ProjectIndexAstTiming{UsedNativeStatic: true})
+	worker.recordLastAstTiming(ProjectIndexAstTiming{UsedStaticIndex: true})
 
 	patch, err := worker.IndexProjectLintPatch(context.Background(), projectindex.ProjectLintIndexRequest{
-		Root:                root,
-		ProjectName:         "native-static-lint",
-		ASTUsedNativeStatic: true,
+		Root:               root,
+		ProjectName:        "static-index-lint",
+		ASTUsedStaticIndex: true,
 		PreviousIndex: store.IndexData{
 			Definitions: []store.ProjectDefinition{{
 				ID:       "quality-target:writer",
@@ -55,7 +55,7 @@ func TestWorkerIndexProjectLintPatchUsesNativeQualityFinalize(t *testing.T) {
 }
 
 func TestWorkerIndexProjectLintPatchSkipsTypeScriptAstRuns(t *testing.T) {
-	compiler := &nativeStaticLintCompiler{root: "/repo"}
+	compiler := &staticIndexLintCompiler{root: "/repo"}
 	worker := &Worker{syntaxParser: compiler}
 
 	patch, err := worker.IndexProjectLintPatch(context.Background(), projectindex.ProjectLintIndexRequest{
@@ -76,17 +76,17 @@ func TestWorkerIndexProjectLintPatchSkipsTypeScriptAstRuns(t *testing.T) {
 }
 
 func TestWorkerIndexProjectLintPatchUsesPrefetchedRuleFacts(t *testing.T) {
-	compiler := &nativeStaticLintCompiler{
+	compiler := &staticIndexLintCompiler{
 		root:              "/repo",
 		wantExtensionFact: []byte("rule:prefetched"),
 	}
 	worker := &Worker{syntaxParser: compiler}
-	worker.recordLastAstTiming(ProjectIndexAstTiming{UsedNativeStatic: true})
+	worker.recordLastAstTiming(ProjectIndexAstTiming{UsedStaticIndex: true})
 
 	_, err := worker.IndexProjectLintPatch(context.Background(), projectindex.ProjectLintIndexRequest{
-		Root:                "/repo",
-		ProjectName:         "native-static-lint",
-		ASTUsedNativeStatic: true,
+		Root:               "/repo",
+		ProjectName:        "static-index-lint",
+		ASTUsedStaticIndex: true,
 		PreviousIndex: store.IndexData{
 			Definitions: []store.ProjectDefinition{{
 				ID:       "prompt:writer",
@@ -116,7 +116,7 @@ func TestWorkerIndexProjectLintPatchUsesPrefetchedRuleFacts(t *testing.T) {
 	}
 }
 
-type nativeStaticLintCompiler struct {
+type staticIndexLintCompiler struct {
 	root                   string
 	finalizeCalls          int
 	finalizeLintFacts      json.RawMessage
@@ -124,15 +124,15 @@ type nativeStaticLintCompiler struct {
 	wantExtensionFact      []byte
 }
 
-func (c *nativeStaticLintCompiler) NativeStaticPrepare(context.Context, protocol.PrepareRequest) (protocol.PrepareResponse, error) {
-	return protocol.PrepareResponse{}, fmt.Errorf("NativeStaticPrepare should not be called by lint finalize")
+func (c *staticIndexLintCompiler) StaticIndexPrepare(context.Context, protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+	return protocol.PrepareResponse{}, fmt.Errorf("StaticIndexPrepare should not be called by lint finalize")
 }
 
-func (c *nativeStaticLintCompiler) NativeStaticAnalyzeStream(context.Context, protocol.AnalyzeRequest, protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
-	return protocol.AnalyzeResponse{}, fmt.Errorf("NativeStaticAnalyzeStream should not be called by lint finalize")
+func (c *staticIndexLintCompiler) StaticIndexAnalyzeStream(context.Context, protocol.AnalyzeRequest, protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+	return protocol.AnalyzeResponse{}, fmt.Errorf("StaticIndexAnalyzeStream should not be called by lint finalize")
 }
 
-func (c *nativeStaticLintCompiler) NativeStaticFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+func (c *staticIndexLintCompiler) StaticIndexFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
 	c.finalizeCalls++
 	if request.PatchPhase != "quality" {
 		return protocol.FinalizeResponse{}, fmt.Errorf("patch phase = %q, want quality", request.PatchPhase)
@@ -161,7 +161,7 @@ func (c *nativeStaticLintCompiler) NativeStaticFinalize(_ context.Context, reque
 	if !bytes.Contains(c.finalizeLintFacts, []byte(`"definitions"`)) {
 		return protocol.FinalizeResponse{}, fmt.Errorf("lint facts = %s, want definitions", c.finalizeLintFacts)
 	}
-	events, err := nativeStaticLintPatchEvents(c.root)
+	events, err := staticIndexLintPatchEvents(c.root)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
@@ -169,34 +169,34 @@ func (c *nativeStaticLintCompiler) NativeStaticFinalize(_ context.Context, reque
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Events:          events,
-		Telemetry:       nativeStaticTestTelemetry(0, 0, 0, 0),
+		Telemetry:       staticIndexTestTelemetry(0, 0, 0, 0),
 	}, nil
 }
 
-func (c *nativeStaticLintCompiler) NativeStaticFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func (c *staticIndexLintCompiler) StaticIndexFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	if !request.Stream {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
-	response, err := c.NativeStaticFinalize(ctx, request)
+	response, err := c.StaticIndexFinalize(ctx, request)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return nativeStaticTestFinalizeStream(response, handle)
+	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticLintCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexLintCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by lint finalize")
 }
 
-func (c *nativeStaticLintCompiler) Concurrency() int { return 1 }
+func (c *staticIndexLintCompiler) Concurrency() int { return 1 }
 
-func (c *nativeStaticLintCompiler) Close() error { return nil }
+func (c *staticIndexLintCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*nativeStaticLintCompiler)(nil)
-var _ StaticCompiler = (*nativeStaticLintCompiler)(nil)
+var _ syntax.Parser = (*staticIndexLintCompiler)(nil)
+var _ StaticCompiler = (*staticIndexLintCompiler)(nil)
 
-func nativeStaticLintPatchEvents(root string) ([]json.RawMessage, error) {
-	tx := "tx-native-static-lint"
+func staticIndexLintPatchEvents(root string) ([]json.RawMessage, error) {
+	tx := "tx-static-index-lint"
 	values := []any{
 		map[string]any{"protocolVersion": 2, "type": "phase:start", "transactionId": tx, "phase": "quality", "root": root, "startedAt": "1970-01-01T00:00:00.000Z"},
 		map[string]any{
@@ -236,8 +236,8 @@ func nativeStaticLintPatchEvents(root string) ([]json.RawMessage, error) {
 			"type":            "phase:done",
 			"transactionId":   tx,
 			"phase":           "quality",
-			"patch":           map[string]any{"schemaVersion": 1, "phase": "quality", "project": map[string]any{"root": root, "name": "native-static-lint"}, "startedAt": "1970-01-01T00:00:00.000Z", "finishedAt": "1970-01-01T00:00:00.000Z", "status": "ok"},
-			"summary":         map[string]any{"factCount": 1, "decision": map[string]any{"nativeStaticComplete": true}},
+			"patch":           map[string]any{"schemaVersion": 1, "phase": "quality", "project": map[string]any{"root": root, "name": "static-index-lint"}, "startedAt": "1970-01-01T00:00:00.000Z", "finishedAt": "1970-01-01T00:00:00.000Z", "status": "ok"},
+			"summary":         map[string]any{"factCount": 1, "decision": map[string]any{"staticIndexComplete": true}},
 		},
 	}
 	events := make([]json.RawMessage, 0, len(values))

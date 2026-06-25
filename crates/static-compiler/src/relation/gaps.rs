@@ -3,14 +3,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::relation::report::{
-    NativeStaticRelationFactRef, NativeStaticRelationPolicyGap, record_policy_gap,
+    StaticIndexRelationFactRef, StaticIndexRelationPolicyGap, record_policy_gap,
 };
 
 /// Records a missing relation-policy reference using TypeScript-compatible grouping.
 pub(crate) fn record_policy_gap_once(
-    policy_gaps: &mut BTreeMap<String, NativeStaticRelationPolicyGap>,
+    policy_gaps: &mut BTreeMap<String, StaticIndexRelationPolicyGap>,
     seen: &mut BTreeSet<String>,
-    fact: NativeStaticRelationFactRef,
+    fact: StaticIndexRelationFactRef,
 ) {
     if seen.insert(policy_gap_ref_key(&fact)) {
         let relation_type = fact.ref_type.clone();
@@ -23,7 +23,7 @@ pub(crate) fn record_policy_gap_once(
     }
 }
 
-fn policy_gap_ref_key(fact: &NativeStaticRelationFactRef) -> String {
+fn policy_gap_ref_key(fact: &StaticIndexRelationFactRef) -> String {
     format!(
         "{}\u{0}{}\u{0}{}",
         fact.ref_type,

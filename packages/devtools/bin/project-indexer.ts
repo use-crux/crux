@@ -12,7 +12,7 @@ import {
   indexProjectAstFromSyntaxRecordProvider,
   indexProjectAstFromSyntaxRecords,
   indexProjectIncremental,
-  inspectProjectNativeStaticConfig,
+  inspectProjectStaticIndexConfig,
   inspectProjectStaticSyntaxPlan,
   inspectProjectConfig,
   resolveProjectModel,
@@ -145,14 +145,14 @@ async function runAssembledRequest(
           await writeArtifactEvent(writeResponse, 'projectConfig', config, req.root)
           break
         }
-        case 'inspectProjectNativeStaticConfig': {
-          if (!req.root) throw new Error('inspectProjectNativeStaticConfig requires root')
+        case 'inspectProjectStaticIndexConfig': {
+          if (!req.root) throw new Error('inspectProjectStaticIndexConfig requires root')
           assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          const config = await inspectProjectNativeStaticConfig({
+          const config = await inspectProjectStaticIndexConfig({
             root: req.root,
             configPath: req.configPath,
           })
-          await writeArtifactEvent(writeResponse, 'projectNativeStaticConfig', config, req.root)
+          await writeArtifactEvent(writeResponse, 'projectStaticIndexConfig', config, req.root)
           break
         }
         case 'inspectProjectStaticSyntaxPlan': {

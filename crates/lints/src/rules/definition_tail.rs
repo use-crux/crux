@@ -4,9 +4,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Map, Value, json};
 
-use crate::builder::{NativeStaticLintBuilder, NativeStaticLintFindingInput, definition_evidence};
+use crate::builder::{StaticIndexLintBuilder, StaticIndexLintFindingInput, definition_evidence};
 use crate::emit::push_definition_finding;
-use crate::facts::{NativeStaticDefinition, NativeStaticLintFinding, NativeStaticRelation};
+use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding, StaticIndexRelation};
 use crate::helpers::{
     has_retention_policy, long_lived_memory_blocks, memory_is_long_lived, metadata_value,
     workspace_allows_writes,
@@ -18,15 +18,15 @@ use crate::rules::routing::{
 pub(crate) struct DefinitionTailContext<'a> {
     pub(crate) guardrail_targets: &'a BTreeSet<String>,
     pub(crate) consensus_policies: &'a BTreeSet<String>,
-    pub(crate) outgoing: &'a [&'a NativeStaticRelation],
-    pub(crate) cascade_tiers: &'a BTreeMap<String, Vec<&'a NativeStaticDefinition>>,
+    pub(crate) outgoing: &'a [&'a StaticIndexRelation],
+    pub(crate) cascade_tiers: &'a BTreeMap<String, Vec<&'a StaticIndexDefinition>>,
 }
 
 pub(crate) fn definition_tail_findings(
-    builder: &NativeStaticLintBuilder,
-    definition: &NativeStaticDefinition,
+    builder: &StaticIndexLintBuilder,
+    definition: &StaticIndexDefinition,
     context: DefinitionTailContext<'_>,
-) -> Vec<NativeStaticLintFinding> {
+) -> Vec<StaticIndexLintFinding> {
     let mut findings = Vec::new();
     append_state_findings(builder, definition, &context, &mut findings);
     append_routing_findings(builder, definition, &context, &mut findings);
@@ -34,10 +34,10 @@ pub(crate) fn definition_tail_findings(
 }
 
 fn append_state_findings(
-    builder: &NativeStaticLintBuilder,
-    definition: &NativeStaticDefinition,
+    builder: &StaticIndexLintBuilder,
+    definition: &StaticIndexDefinition,
     context: &DefinitionTailContext<'_>,
-    findings: &mut Vec<NativeStaticLintFinding>,
+    findings: &mut Vec<StaticIndexLintFinding>,
 ) {
     if definition.kind == "workspace"
         && workspace_allows_writes(definition)
@@ -104,10 +104,10 @@ fn append_state_findings(
 }
 
 fn append_routing_findings(
-    builder: &NativeStaticLintBuilder,
-    definition: &NativeStaticDefinition,
+    builder: &StaticIndexLintBuilder,
+    definition: &StaticIndexDefinition,
     context: &DefinitionTailContext<'_>,
-    findings: &mut Vec<NativeStaticLintFinding>,
+    findings: &mut Vec<StaticIndexLintFinding>,
 ) {
     if is_routing_root(definition) && metadata_bool(definition, "hasStableId") != Some(true) {
         push_definition_finding(
@@ -157,10 +157,10 @@ fn append_routing_findings(
 }
 
 fn append_routing_child_findings(
-    builder: &NativeStaticLintBuilder,
-    definition: &NativeStaticDefinition,
+    builder: &StaticIndexLintBuilder,
+    definition: &StaticIndexDefinition,
     context: &DefinitionTailContext<'_>,
-    findings: &mut Vec<NativeStaticLintFinding>,
+    findings: &mut Vec<StaticIndexLintFinding>,
 ) {
     if is_routing_child(definition)
         && routing_child_has_unresolved_target(definition, context.outgoing)
@@ -193,7 +193,7 @@ fn append_routing_child_findings(
     }) else {
         return;
     };
-    if let Some(finding) = builder.finding(NativeStaticLintFindingInput {
+    if let Some(finding) = builder.finding(StaticIndexLintFindingInput {
         rule_id: "routing.cascade_unreachable_tier",
         key: &format!("{}:{}", definition.id, unreachable.id),
         message: format!(
@@ -213,6 +213,6 @@ fn append_routing_child_findings(
     }
 }
 
-fn metadata_bool(definition: &NativeStaticDefinition, key: &str) -> Option<bool> {
+fn metadata_bool(definition: &StaticIndexDefinition, key: &str) -> Option<bool> {
     metadata_value(definition, key).and_then(Value::as_bool)
 }

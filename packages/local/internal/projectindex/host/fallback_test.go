@@ -13,7 +13,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
-func TestWorkerNativeStaticErrorsWhenFinalizeHasNoPatch(t *testing.T) {
+func TestWorkerStaticIndexErrorsWhenFinalizeHasNoPatch(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -26,9 +26,9 @@ func TestWorkerNativeStaticErrorsWhenFinalizeHasNoPatch(t *testing.T) {
 	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'fallback' })"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
-	writeNativeStaticEnabledConfig(t, root)
+	writeStaticIndexEnabledConfig(t, root)
 
-	script := filepath.Join(t.TempDir(), "native-static-fallback-indexer.mjs")
+	script := filepath.Join(t.TempDir(), "static-index-fallback-indexer.mjs")
 	if err := os.WriteFile(script, []byte(`
 		import readline from 'node:readline'
 		const rl = readline.createInterface({ input: process.stdin, terminal: false })
@@ -53,12 +53,12 @@ func TestWorkerNativeStaticErrorsWhenFinalizeHasNoPatch(t *testing.T) {
 		rl.on('line', (line) => {
 			const req = assemble(JSON.parse(line))
 			if (!req) return
-			if (req.method === 'inspectProjectNativeStaticConfig') {
+			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
 					type: 'artifact:done',
-					transactionId: 'artifact-native-static-config',
-					artifact: 'projectNativeStaticConfig',
+					transactionId: 'artifact-static-index-config',
+					artifact: 'projectStaticIndexConfig',
 					root: req.root,
 					payload: {
 						root: req.root,
@@ -81,27 +81,27 @@ func TestWorkerNativeStaticErrorsWhenFinalizeHasNoPatch(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 
-	compiler := &nativeStaticNoPatchCompiler{sourceFile: sourceFile}
+	compiler := &staticIndexNoPatchCompiler{sourceFile: sourceFile}
 	worker := newTestWorkerWithProjectScript(t, script)
 	worker.WithSyntaxParser(compiler)
 	defer worker.Close()
 
-	_, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-fallback")
+	_, err := worker.IndexProjectAstPatch(context.Background(), root, "", "static-index-fallback")
 	if err == nil {
-		t.Fatal("IndexProjectAstPatch error = nil, want native static incomplete error")
+		t.Fatal("IndexProjectAstPatch error = nil, want Static Index incomplete error")
 	}
-	if !strings.Contains(err.Error(), "native static AST indexing did not produce a complete patch") {
-		t.Fatalf("IndexProjectAstPatch error = %v, want native static incomplete error", err)
+	if !strings.Contains(err.Error(), "Static Index AST indexing did not produce a complete patch") {
+		t.Fatalf("IndexProjectAstPatch error = %v, want Static Index incomplete error", err)
 	}
 	if compiler.finalizeCalls != 1 || compiler.streamParseCalls != 0 {
 		t.Fatalf("compiler calls = finalize %d stream %d, want native attempt without syntax fallback", compiler.finalizeCalls, compiler.streamParseCalls)
 	}
 	timing := worker.LastAstTiming()
-	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonNativeStaticConfig) {
-		t.Fatalf("timing.NodeReasons = %v, want no %q for simple native config", timing.NodeReasons, projectIndexNodeReasonNativeStaticConfig)
+	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig) {
+		t.Fatalf("timing.NodeReasons = %v, want no %q for simple native config", timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig)
 	}
-	if !containsTimingReason(timing.NodeReasons, projectIndexNodeReasonNativeStaticEmpty) {
-		t.Fatalf("timing.NodeReasons = %v, want %q", timing.NodeReasons, projectIndexNodeReasonNativeStaticEmpty)
+	if !containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexEmpty) {
+		t.Fatalf("timing.NodeReasons = %v, want %q", timing.NodeReasons, projectIndexNodeReasonStaticIndexEmpty)
 	}
 	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonSyntaxRecordProjection) {
 		t.Fatalf("timing.NodeReasons = %v, want no syntax-record projection", timing.NodeReasons)
@@ -111,7 +111,7 @@ func TestWorkerNativeStaticErrorsWhenFinalizeHasNoPatch(t *testing.T) {
 	}
 }
 
-type nativeStaticNoPatchCompiler struct {
+type staticIndexNoPatchCompiler struct {
 	sourceFile       string
 	prepareCalls     int
 	analyzeCalls     int
@@ -119,7 +119,7 @@ type nativeStaticNoPatchCompiler struct {
 	streamParseCalls int
 }
 
-func (c *nativeStaticNoPatchCompiler) NativeStaticPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+func (c *staticIndexNoPatchCompiler) StaticIndexPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
 	c.prepareCalls++
 	return protocol.PrepareResponse{
 		ProtocolVersion: protocol.Version,
@@ -131,51 +131,51 @@ func (c *nativeStaticNoPatchCompiler) NativeStaticPrepare(_ context.Context, req
 			CacheMisses: append([]protocol.SourceFile(nil), request.Files...),
 		},
 		Diagnostics: []json.RawMessage{},
-		Telemetry:   nativeStaticTestTelemetry(len(request.Files), 0, len(request.Files), 0),
+		Telemetry:   staticIndexTestTelemetry(len(request.Files), 0, len(request.Files), 0),
 	}, nil
 }
 
-func (c *nativeStaticNoPatchCompiler) NativeStaticAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+func (c *staticIndexNoPatchCompiler) StaticIndexAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
 	c.analyzeCalls++
 	if !request.Stream {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
 	}
-	return nativeStaticTestAnalyzeStream(protocol.AnalyzeResponse{
+	return staticIndexTestAnalyzeStream(protocol.AnalyzeResponse{
 		ProtocolVersion:       protocol.Version,
 		Method:                protocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","fact":{"id":"prompt:native-no-patch"}}`)},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
-		Telemetry:             nativeStaticTestTelemetry(len(request.Plan.Files), 0, len(request.Files), len(request.Files)),
+		Telemetry:             staticIndexTestTelemetry(len(request.Plan.Files), 0, len(request.Files), len(request.Files)),
 	}, handle)
 }
 
-func (c *nativeStaticNoPatchCompiler) NativeStaticFinalize(context.Context, protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+func (c *staticIndexNoPatchCompiler) StaticIndexFinalize(context.Context, protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
 	c.finalizeCalls++
 	return protocol.FinalizeResponse{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Events:          []json.RawMessage{},
-		Telemetry:       nativeStaticTestTelemetry(1, 0, 1, 1),
+		Telemetry:       staticIndexTestTelemetry(1, 0, 1, 1),
 	}, nil
 }
 
-func (c *nativeStaticNoPatchCompiler) NativeStaticFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func (c *staticIndexNoPatchCompiler) StaticIndexFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	if !request.Stream {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
-	response, err := c.NativeStaticFinalize(ctx, request)
+	response, err := c.StaticIndexFinalize(ctx, request)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return nativeStaticTestFinalizeStream(response, handle)
+	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticNoPatchCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexNoPatchCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by fallback test")
 }
 
-func (c *nativeStaticNoPatchCompiler) ParseFilesStream(_ context.Context, requests []syntax.Request, handle syntax.RecordHandler) error {
+func (c *staticIndexNoPatchCompiler) ParseFilesStream(_ context.Context, requests []syntax.Request, handle syntax.RecordHandler) error {
 	c.streamParseCalls++
 	if len(requests) != 1 || requests[0].File != c.sourceFile {
 		return fmt.Errorf("stream requests = %+v, want %s", requests, c.sourceFile)
@@ -184,10 +184,10 @@ func (c *nativeStaticNoPatchCompiler) ParseFilesStream(_ context.Context, reques
 	return handle(0, record)
 }
 
-func (c *nativeStaticNoPatchCompiler) Concurrency() int { return 1 }
+func (c *staticIndexNoPatchCompiler) Concurrency() int { return 1 }
 
-func (c *nativeStaticNoPatchCompiler) Close() error { return nil }
+func (c *staticIndexNoPatchCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*nativeStaticNoPatchCompiler)(nil)
-var _ syntax.StreamParser = (*nativeStaticNoPatchCompiler)(nil)
-var _ StaticCompiler = (*nativeStaticNoPatchCompiler)(nil)
+var _ syntax.Parser = (*staticIndexNoPatchCompiler)(nil)
+var _ syntax.StreamParser = (*staticIndexNoPatchCompiler)(nil)
+var _ StaticCompiler = (*staticIndexNoPatchCompiler)(nil)

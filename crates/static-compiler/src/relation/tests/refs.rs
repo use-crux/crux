@@ -3,23 +3,21 @@ use std::collections::BTreeMap;
 use serde_json::json;
 
 use crate::core::facts::{
-    NativeStaticDefinition, NativeStaticFidelity, NativeStaticIndexPatchFacts,
-    NativeStaticRelationRef, NativeStaticSourceLocation,
+    StaticIndexDefinition, StaticIndexFidelity, StaticIndexIndexPatchFacts, StaticIndexRelationRef,
+    StaticIndexSourceLocation,
 };
-use crate::relation::model::{
-    NativeStaticRelationPolicyTable, resolve_native_static_relation_model,
-};
-use crate::relation::policy::NativeStaticRelationPolicy;
+use crate::relation::model::{StaticIndexRelationPolicyTable, resolve_static_index_relation_model};
+use crate::relation::policy::StaticIndexRelationPolicy;
 
 #[test]
 fn relation_refs_honor_from_variable_target_kind_type_and_source() {
-    let source = NativeStaticSourceLocation {
+    let source = StaticIndexSourceLocation {
         file: "src/workflow.ts".to_string(),
         line: 12,
         column: Some(4),
         function_name: None,
     };
-    let facts = NativeStaticIndexPatchFacts {
+    let facts = StaticIndexIndexPatchFacts {
         root: None,
         project_name: None,
         definitions: vec![
@@ -37,7 +35,7 @@ fn relation_refs_honor_from_variable_target_kind_type_and_source() {
                 Some(json!({ "exportName": "writerTool" })),
             ),
         ],
-        relation_refs: vec![NativeStaticRelationRef {
+        relation_refs: vec![StaticIndexRelationRef {
             type_by_target_kind: BTreeMap::from([(
                 "tool".to_string(),
                 "workflow.step.uses_tool".to_string(),
@@ -49,7 +47,7 @@ fn relation_refs_honor_from_variable_target_kind_type_and_source() {
         }],
         ..Default::default()
     };
-    let policies = NativeStaticRelationPolicyTable::new(vec![vec![NativeStaticRelationPolicy {
+    let policies = StaticIndexRelationPolicyTable::new(vec![vec![StaticIndexRelationPolicy {
         r#type: "workflow.uses_target".to_string(),
         from_kinds: vec!["workflow.step".to_string()],
         to_kinds: vec!["tool".to_string()],
@@ -58,7 +56,7 @@ fn relation_refs_honor_from_variable_target_kind_type_and_source() {
         runtime_join: false,
     }]]);
 
-    let model = resolve_native_static_relation_model(facts, &policies);
+    let model = resolve_static_index_relation_model(facts, &policies);
 
     assert_eq!(model.report.counts.resolved, 1);
     assert_eq!(model.facts.relations[0].r#type, "workflow.step.uses_tool");
@@ -72,8 +70,8 @@ fn definition(
     kind: &str,
     name: &str,
     metadata: Option<serde_json::Value>,
-) -> NativeStaticDefinition {
-    NativeStaticDefinition {
+) -> StaticIndexDefinition {
+    StaticIndexDefinition {
         id: id.to_string(),
         kind: kind.to_string(),
         name: name.to_string(),
@@ -83,7 +81,7 @@ fn definition(
         source: None,
         source_snippet: None,
         source_refs: Vec::new(),
-        fidelity: NativeStaticFidelity::Resolved,
+        fidelity: StaticIndexFidelity::Resolved,
         status: Some("active".to_string()),
         fingerprint: None,
         metadata,
@@ -91,8 +89,8 @@ fn definition(
     }
 }
 
-fn relation_ref(owner_definition_id: &str, relation_type: &str) -> NativeStaticRelationRef {
-    NativeStaticRelationRef {
+fn relation_ref(owner_definition_id: &str, relation_type: &str) -> StaticIndexRelationRef {
+    StaticIndexRelationRef {
         owner_definition_id: owner_definition_id.to_string(),
         r#type: relation_type.to_string(),
         type_by_target_kind: BTreeMap::new(),

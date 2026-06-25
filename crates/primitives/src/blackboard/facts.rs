@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext},
-    definition::{NativeDefinitionInput, native_static_definition},
+    definition::{NativeDefinitionInput, static_index_definition},
     memory::id::authored_memory_id,
     memory::store::{authored_store, authored_store_name, store_definition, store_id},
     record_values::{direct_string_property, property_value},
@@ -75,7 +75,7 @@ pub(crate) fn blackboard_facts(
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id: id.clone(),
             kind: "blackboard",
             name: id_info

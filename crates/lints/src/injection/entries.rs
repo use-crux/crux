@@ -4,20 +4,20 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
-use crate::builder::{NativeStaticLintBuilder, NativeStaticLintFindingInput};
-use crate::facts::{NativeStaticDefinition, NativeStaticLintFinding};
+use crate::builder::{StaticIndexLintBuilder, StaticIndexLintFindingInput};
+use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding};
 use crate::injection::evidence::{
     contribution_source, entry_evidence, entry_message, injected_source_label, related_ids,
     tool_contribution_evidence, tool_label,
 };
-use crate::injection::model::NativeStaticInjectionModel;
+use crate::injection::model::StaticIndexInjectionModel;
 
 pub(crate) fn injection_entry_findings(
-    builder: &NativeStaticLintBuilder,
-    definition: &NativeStaticDefinition,
-    model: &NativeStaticInjectionModel,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-) -> Vec<NativeStaticLintFinding> {
+    builder: &StaticIndexLintBuilder,
+    definition: &StaticIndexDefinition,
+    model: &StaticIndexInjectionModel,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+) -> Vec<StaticIndexLintFinding> {
     let mut findings = Vec::new();
     for entry in &model.unresolved_entries {
         findings.extend(entry_finding(
@@ -48,11 +48,11 @@ pub(crate) fn injection_entry_findings(
 }
 
 pub(crate) fn indirect_tool_surface_findings(
-    builder: &NativeStaticLintBuilder,
-    prompt: &NativeStaticDefinition,
-    model: &NativeStaticInjectionModel,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-) -> Vec<NativeStaticLintFinding> {
+    builder: &StaticIndexLintBuilder,
+    prompt: &StaticIndexDefinition,
+    model: &StaticIndexInjectionModel,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+) -> Vec<StaticIndexLintFinding> {
     let mut seen = BTreeSet::<String>::new();
     model
         .tool_contributions
@@ -77,7 +77,7 @@ pub(crate) fn indirect_tool_surface_findings(
         .filter_map(|contribution| {
             let source = contribution_source(contribution, by_id);
             let label = tool_label(contribution);
-            builder.finding(NativeStaticLintFindingInput {
+            builder.finding(StaticIndexLintFindingInput {
                 rule_id: "prompt.indirect_tool_surface",
                 key: &format!(
                     "{}:{}:{}",
@@ -114,11 +114,11 @@ pub(crate) fn indirect_tool_surface_findings(
 }
 
 fn dynamic_tool_findings(
-    builder: &NativeStaticLintBuilder,
-    definition: &NativeStaticDefinition,
-    model: &NativeStaticInjectionModel,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-) -> Vec<NativeStaticLintFinding> {
+    builder: &StaticIndexLintBuilder,
+    definition: &StaticIndexDefinition,
+    model: &StaticIndexInjectionModel,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+) -> Vec<StaticIndexLintFinding> {
     let mut seen = BTreeSet::<String>::new();
     model
         .tool_contributions
@@ -135,7 +135,7 @@ fn dynamic_tool_findings(
         })
         .filter_map(|contribution| {
             let source = contribution_source(contribution, by_id);
-            builder.finding(NativeStaticLintFindingInput {
+            builder.finding(StaticIndexLintFindingInput {
                 rule_id: "injection.dynamic_tools",
                 key: &format!(
                     "{}:{}:{}",
@@ -176,22 +176,22 @@ fn dynamic_tool_findings(
 }
 
 fn entry_finding(
-    builder: &NativeStaticLintBuilder,
-    definition: &NativeStaticDefinition,
+    builder: &StaticIndexLintBuilder,
+    definition: &StaticIndexDefinition,
     entry: &Value,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
     rule_id: &str,
     fallback_key: &str,
     entry_label: &str,
     definition_label: &str,
-) -> Option<NativeStaticLintFinding> {
+) -> Option<StaticIndexLintFinding> {
     let owner_id = entry
         .get("ownerDefinitionId")
         .and_then(Value::as_str)
         .unwrap_or(definition.id.as_str());
     let owner = by_id.get(owner_id).copied();
     let variable = entry.get("variable").and_then(Value::as_str);
-    builder.finding(NativeStaticLintFindingInput {
+    builder.finding(StaticIndexLintFindingInput {
         rule_id,
         key: &format!(
             "{}:{}:{}",

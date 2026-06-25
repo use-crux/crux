@@ -1,4 +1,4 @@
-//! Data-only Rust ABI shapes for the native static compiler protocol.
+//! Data-only Rust ABI shapes for the Static Index compiler protocol.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -20,9 +20,9 @@ pub const STATIC_INDEX_FINALIZE_METHOD: &str = "staticIndexFinalize";
 /// Method string for streamed Static Index compile.
 pub const STATIC_INDEX_COMPILE_METHOD: &str = "staticIndexCompile";
 
-/// Native static compiler method discriminator.
+/// Static Index compiler method discriminator.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum NativeStaticMethod {
+pub enum StaticIndexMethod {
     #[serde(rename = "staticIndexPrepare")]
     Prepare,
     #[serde(rename = "staticIndexAnalyze")]
@@ -33,24 +33,24 @@ pub enum NativeStaticMethod {
     Compile,
 }
 
-/// Complete identity for a native static compiler run.
+/// Complete identity for a Static Index compiler run.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticRunIdentity {
+pub struct StaticIndexRunIdentity {
     pub protocol_version: u8,
-    pub compiler: NativeStaticVersionIdentity,
-    pub oxc: NativeStaticVersionIdentity,
-    pub primitive_manifest: NativeStaticDigestIdentity,
-    pub relation_policy: NativeStaticDigestIdentity,
-    pub extension_manifests: Vec<NativeStaticDigestIdentity>,
-    pub rule_descriptors: NativeStaticDigestIdentity,
-    pub compiler_projection: NativeStaticDigestIdentity,
+    pub compiler: StaticIndexVersionIdentity,
+    pub oxc: StaticIndexVersionIdentity,
+    pub primitive_manifest: StaticIndexDigestIdentity,
+    pub relation_policy: StaticIndexDigestIdentity,
+    pub extension_manifests: Vec<StaticIndexDigestIdentity>,
+    pub rule_descriptors: StaticIndexDigestIdentity,
+    pub compiler_projection: StaticIndexDigestIdentity,
 }
 
 /// Name/version identity for compiler-owned components.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticVersionIdentity {
+pub struct StaticIndexVersionIdentity {
     pub name: String,
     pub version: String,
 }
@@ -58,7 +58,7 @@ pub struct NativeStaticVersionIdentity {
 /// Name/version identity with an optional digest for cache-sensitive inputs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticDigestIdentity {
+pub struct StaticIndexDigestIdentity {
     pub name: String,
     pub version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,32 +68,32 @@ pub struct NativeStaticDigestIdentity {
 /// Compiler-owned Static Index identity manifest before project extension input is added.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticIdentityManifest {
+pub struct StaticIndexIdentityManifest {
     pub protocol_version: u8,
-    pub compiler: NativeStaticVersionIdentity,
-    pub oxc_frontend: NativeStaticVersionIdentity,
-    pub primitive_manifest: NativeStaticDigestIdentity,
-    pub relation_policy: NativeStaticDigestIdentity,
-    pub rule_descriptors: NativeStaticDigestIdentity,
-    pub compiler_projection: NativeStaticDigestIdentity,
+    pub compiler: StaticIndexVersionIdentity,
+    pub oxc_frontend: StaticIndexVersionIdentity,
+    pub primitive_manifest: StaticIndexDigestIdentity,
+    pub relation_policy: StaticIndexDigestIdentity,
+    pub rule_descriptors: StaticIndexDigestIdentity,
+    pub compiler_projection: StaticIndexDigestIdentity,
 }
 
-/// Cross-stage telemetry for one native static compiler run.
+/// Cross-stage telemetry for one Static Index compiler run.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticTelemetry {
-    pub node: NativeStaticNodeTelemetry,
-    pub native_only: NativeStaticNativeOnlyTelemetry,
-    pub timings: Vec<NativeStaticTiming>,
-    pub files: NativeStaticFileTelemetry,
-    pub cache: NativeStaticCacheTelemetry,
-    pub facts: NativeStaticFactTelemetry,
+pub struct StaticIndexTelemetry {
+    pub node: StaticIndexNodeTelemetry,
+    pub native_only: StaticIndexNativeOnlyTelemetry,
+    pub timings: Vec<StaticIndexTiming>,
+    pub files: StaticIndexFileTelemetry,
+    pub cache: StaticIndexCacheTelemetry,
+    pub facts: StaticIndexFactTelemetry,
 }
 
 /// Whether Node started, plus machine-readable reasons when it did.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticNodeTelemetry {
+pub struct StaticIndexNodeTelemetry {
     pub started: bool,
     pub reasons: Vec<String>,
 }
@@ -101,7 +101,7 @@ pub struct NativeStaticNodeTelemetry {
 /// Whether the run was eligible for native-only execution.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticNativeOnlyTelemetry {
+pub struct StaticIndexNativeOnlyTelemetry {
     pub eligible: bool,
     pub reasons: Vec<String>,
 }
@@ -109,7 +109,7 @@ pub struct NativeStaticNativeOnlyTelemetry {
 /// Named timing measurement. `count` is for batched work such as files or jobs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticTiming {
+pub struct StaticIndexTiming {
     pub name: String,
     pub duration_ms: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -119,7 +119,7 @@ pub struct NativeStaticTiming {
 /// File counts reported by prepare/analyze/finalize.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticFileTelemetry {
+pub struct StaticIndexFileTelemetry {
     pub selected: u64,
     pub cache_hits: u64,
     pub cache_misses: u64,
@@ -130,7 +130,7 @@ pub struct NativeStaticFileTelemetry {
 /// Static cache counters for the run.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticCacheTelemetry {
+pub struct StaticIndexCacheTelemetry {
     pub read_hits: u64,
     pub read_misses: u64,
     pub writes: u64,
@@ -140,7 +140,7 @@ pub struct NativeStaticCacheTelemetry {
 /// Project Index fact counters emitted by the run.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticFactTelemetry {
+pub struct StaticIndexFactTelemetry {
     pub definitions: u64,
     pub relations: u64,
     pub source_refs: u64,
@@ -154,7 +154,7 @@ pub struct NativeStaticFactTelemetry {
 /// Selected source file identity used by prepare and prepared plans.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticSourceFile {
+pub struct StaticIndexSourceFile {
     pub file: String,
     pub source_hash: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -164,15 +164,15 @@ pub struct NativeStaticSourceFile {
 /// Prepared source plan passed from prepare into analyze.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticPlan {
+pub struct StaticIndexPlan {
     pub root: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_name: Option<String>,
-    pub files: Vec<NativeStaticSourceFile>,
+    pub files: Vec<StaticIndexSourceFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub primary_files: Option<Vec<NativeStaticSourceFile>>,
-    pub cache_hits: Vec<NativeStaticSourceFile>,
-    pub cache_misses: Vec<NativeStaticSourceFile>,
+    pub primary_files: Option<Vec<StaticIndexSourceFile>>,
+    pub cache_hits: Vec<StaticIndexSourceFile>,
+    pub cache_misses: Vec<StaticIndexSourceFile>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub call_names: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -188,7 +188,7 @@ pub struct NativeStaticPlan {
 /// Analyze-stage file payload. `sourceText` is present when Rust cannot read.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticAnalyzeFile {
+pub struct StaticIndexAnalyzeFile {
     pub file: String,
     pub source_hash: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -198,18 +198,18 @@ pub struct NativeStaticAnalyzeFile {
 /// `staticIndexPrepare` request.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticPrepareRequest {
+pub struct StaticIndexPrepareRequest {
     pub protocol_version: u8,
-    pub method: NativeStaticMethod,
+    pub method: StaticIndexMethod,
     pub root: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config_path: Option<String>,
-    pub identity: NativeStaticRunIdentity,
-    pub files: Vec<NativeStaticSourceFile>,
+    pub identity: StaticIndexRunIdentity,
+    pub files: Vec<StaticIndexSourceFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub primary_files: Option<Vec<NativeStaticSourceFile>>,
+    pub primary_files: Option<Vec<StaticIndexSourceFile>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub call_names: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -229,25 +229,25 @@ pub struct NativeStaticPrepareRequest {
 /// `staticIndexPrepare` response.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticPrepareResponse {
+pub struct StaticIndexPrepareResponse {
     pub protocol_version: u8,
-    pub method: NativeStaticMethod,
-    pub plan: NativeStaticPlan,
+    pub method: StaticIndexMethod,
+    pub plan: StaticIndexPlan,
     pub diagnostics: Vec<Value>,
-    pub telemetry: NativeStaticTelemetry,
+    pub telemetry: StaticIndexTelemetry,
 }
 
 /// `staticIndexAnalyze` request.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticAnalyzeRequest {
+pub struct StaticIndexAnalyzeRequest {
     pub protocol_version: u8,
-    pub method: NativeStaticMethod,
+    pub method: StaticIndexMethod,
     #[serde(default, skip_serializing_if = "is_false")]
     pub stream: bool,
-    pub identity: NativeStaticRunIdentity,
-    pub plan: NativeStaticPlan,
-    pub files: Vec<NativeStaticAnalyzeFile>,
+    pub identity: StaticIndexRunIdentity,
+    pub plan: StaticIndexPlan,
+    pub files: Vec<StaticIndexAnalyzeFile>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extension_evidence_interests: Option<Value>,
 }
@@ -259,26 +259,26 @@ fn is_false(value: &bool) -> bool {
 /// `staticIndexAnalyze` response.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticAnalyzeResponse {
+pub struct StaticIndexAnalyzeResponse {
     pub protocol_version: u8,
-    pub method: NativeStaticMethod,
+    pub method: StaticIndexMethod,
     pub facts: Vec<Value>,
     pub diagnostics: Vec<Value>,
     pub extension_evidence_jobs: Vec<Value>,
-    pub telemetry: NativeStaticTelemetry,
+    pub telemetry: StaticIndexTelemetry,
 }
 
 /// `staticIndexCompile` request for native-only AST indexing.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticCompileRequest {
+pub struct StaticIndexCompileRequest {
     pub protocol_version: u8,
-    pub method: NativeStaticMethod,
+    pub method: StaticIndexMethod,
     #[serde(default, skip_serializing_if = "is_false")]
     pub stream: bool,
-    pub identity: NativeStaticRunIdentity,
-    pub plan: NativeStaticPlan,
-    pub files: Vec<NativeStaticAnalyzeFile>,
+    pub identity: StaticIndexRunIdentity,
+    pub plan: StaticIndexPlan,
+    pub files: Vec<StaticIndexAnalyzeFile>,
     pub native_facts: Vec<Value>,
     pub extension_facts: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -294,12 +294,12 @@ pub struct NativeStaticCompileRequest {
 /// `staticIndexFinalize` request.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticFinalizeRequest {
+pub struct StaticIndexFinalizeRequest {
     pub protocol_version: u8,
-    pub method: NativeStaticMethod,
+    pub method: StaticIndexMethod,
     #[serde(default, skip_serializing_if = "is_false")]
     pub stream: bool,
-    pub identity: NativeStaticRunIdentity,
+    pub identity: StaticIndexRunIdentity,
     pub native_facts: Vec<Value>,
     pub extension_facts: Vec<Value>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -325,9 +325,9 @@ pub struct NativeStaticFinalizeRequest {
 /// `staticIndexFinalize` response.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NativeStaticFinalizeResponse {
+pub struct StaticIndexFinalizeResponse {
     pub protocol_version: u8,
-    pub method: NativeStaticMethod,
+    pub method: StaticIndexMethod,
     pub events: Vec<Value>,
-    pub telemetry: NativeStaticTelemetry,
+    pub telemetry: StaticIndexTelemetry,
 }

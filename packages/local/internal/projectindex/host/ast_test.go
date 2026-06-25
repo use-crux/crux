@@ -14,15 +14,15 @@ import (
 )
 
 func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
-	worker := compiler.New(shellPath(t), fakeNativeStaticCompilerWorker(t))
+	worker := compiler.New(shellPath(t), fakeStaticIndexCompilerWorker(t))
 	defer worker.Close()
 
 	identity := protocol.SkeletonIdentity()
-	prepare, err := worker.NativeStaticPrepare(context.Background(), protocol.PrepareRequest{
+	prepare, err := worker.StaticIndexPrepare(context.Background(), protocol.PrepareRequest{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.PrepareMethod,
 		Root:            "/repo",
-		ProjectName:     "native-static",
+		ProjectName:     "static-index",
 		Identity:        identity,
 		Files: []protocol.SourceFile{
 			{File: "/repo/src/cached.ts", SourceHash: "sha256:cached", CacheKey: "static:cached"},
@@ -30,13 +30,13 @@ func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("NativeStaticPrepare error = %v", err)
+		t.Fatalf("StaticIndexPrepare error = %v", err)
 	}
 	if len(prepare.Plan.CacheHits) != 1 || len(prepare.Plan.CacheMisses) != 1 {
 		t.Fatalf("prepare plan = %+v, want one hit and one miss", prepare.Plan)
 	}
 
-	analyze, err := worker.NativeStaticAnalyzeStream(context.Background(), protocol.AnalyzeRequest{
+	analyze, err := worker.StaticIndexAnalyzeStream(context.Background(), protocol.AnalyzeRequest{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.AnalyzeMethod,
 		Identity:        identity,
@@ -44,13 +44,13 @@ func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
 		Files:           sourceprofile.AnalyzeFiles(prepare.Plan.CacheMisses),
 	}, nil)
 	if err != nil {
-		t.Fatalf("NativeStaticAnalyzeStream error = %v", err)
+		t.Fatalf("StaticIndexAnalyzeStream error = %v", err)
 	}
 	if len(analyze.Facts) != 0 || analyze.Telemetry.Files.Analyzed != 1 {
 		t.Fatalf("analyze response = %+v, want empty skeleton facts for one analyzed file", analyze)
 	}
 
-	finalize, err := worker.NativeStaticFinalize(context.Background(), protocol.FinalizeRequest{
+	finalize, err := worker.StaticIndexFinalize(context.Background(), protocol.FinalizeRequest{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Identity:        identity,
@@ -58,24 +58,24 @@ func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
 		ExtensionFacts:  []json.RawMessage{},
 	})
 	if err != nil {
-		t.Fatalf("NativeStaticFinalize error = %v", err)
+		t.Fatalf("StaticIndexFinalize error = %v", err)
 	}
 	if len(finalize.Events) != 0 {
 		t.Fatalf("finalize events = %s, want empty skeleton event stream", finalize.Events)
 	}
 }
 
-func TestWorkerRunNativeStaticCompilerSkeletonDoesNotUseSyntaxRecords(t *testing.T) {
-	compiler := &recordingNativeStaticCompiler{}
+func TestWorkerRunStaticIndexCompilerSkeletonDoesNotUseSyntaxRecords(t *testing.T) {
+	compiler := &recordingStaticIndexCompiler{}
 	worker := &Worker{syntaxParser: compiler}
 	files := []protocol.SourceFile{
 		{File: "/repo/src/cached.ts", SourceHash: "sha256:cached", CacheKey: "static:cached"},
 		{File: "/repo/src/miss.ts", SourceHash: "sha256:miss"},
 	}
 
-	result, err := worker.runNativeStaticCompilerSkeleton(context.Background(), "/repo", "", "native-static-skeleton", files)
+	result, err := worker.runStaticIndexCompilerSkeleton(context.Background(), "/repo", "", "static-index-skeleton", files)
 	if err != nil {
-		t.Fatalf("runNativeStaticCompilerSkeleton error = %v", err)
+		t.Fatalf("runStaticIndexCompilerSkeleton error = %v", err)
 	}
 
 	if compiler.parseCalls != 0 || compiler.batchParseCalls != 0 {
@@ -95,7 +95,7 @@ func TestWorkerRunNativeStaticCompilerSkeletonDoesNotUseSyntaxRecords(t *testing
 	}
 }
 
-type recordingNativeStaticCompiler struct {
+type recordingStaticIndexCompiler struct {
 	prepareCalls    int
 	analyzeCalls    int
 	finalizeCalls   int
@@ -104,7 +104,7 @@ type recordingNativeStaticCompiler struct {
 	analyzeFiles    []protocol.AnalyzeFile
 }
 
-func (c *recordingNativeStaticCompiler) NativeStaticPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+func (c *recordingStaticIndexCompiler) StaticIndexPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
 	c.prepareCalls++
 	var hits []protocol.SourceFile
 	var misses []protocol.SourceFile
@@ -126,66 +126,66 @@ func (c *recordingNativeStaticCompiler) NativeStaticPrepare(_ context.Context, r
 			CacheMisses: misses,
 		},
 		Diagnostics: []json.RawMessage{},
-		Telemetry:   nativeStaticTestTelemetry(len(request.Files), len(hits), len(misses), 0),
+		Telemetry:   staticIndexTestTelemetry(len(request.Files), len(hits), len(misses), 0),
 	}, nil
 }
 
-func (c *recordingNativeStaticCompiler) NativeStaticAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+func (c *recordingStaticIndexCompiler) StaticIndexAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
 	c.analyzeCalls++
 	c.analyzeFiles = append([]protocol.AnalyzeFile(nil), request.Files...)
-	return nativeStaticTestAnalyzeStream(protocol.AnalyzeResponse{
+	return staticIndexTestAnalyzeStream(protocol.AnalyzeResponse{
 		ProtocolVersion:       protocol.Version,
 		Method:                protocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
-		Telemetry:             nativeStaticTestTelemetry(len(request.Plan.Files), len(request.Plan.CacheHits), len(request.Plan.CacheMisses), len(request.Files)),
+		Telemetry:             staticIndexTestTelemetry(len(request.Plan.Files), len(request.Plan.CacheHits), len(request.Plan.CacheMisses), len(request.Files)),
 	}, handle)
 }
 
-func (c *recordingNativeStaticCompiler) NativeStaticFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+func (c *recordingStaticIndexCompiler) StaticIndexFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
 	c.finalizeCalls++
 	return protocol.FinalizeResponse{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Events: []json.RawMessage{
-			json.RawMessage(`{"protocolVersion":2,"type":"phase:start","transactionId":"native-static-skeleton","phase":"ast","root":"/repo","startedAt":"1970-01-01T00:00:00.000Z"}`),
-			json.RawMessage(`{"protocolVersion":2,"type":"phase:done","transactionId":"native-static-skeleton","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":"/repo"},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok"},"summary":{"factCount":0}}`),
+			json.RawMessage(`{"protocolVersion":2,"type":"phase:start","transactionId":"static-index-skeleton","phase":"ast","root":"/repo","startedAt":"1970-01-01T00:00:00.000Z"}`),
+			json.RawMessage(`{"protocolVersion":2,"type":"phase:done","transactionId":"static-index-skeleton","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":"/repo"},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok"},"summary":{"factCount":0}}`),
 		},
-		Telemetry: nativeStaticTestTelemetry(0, 0, 0, 0),
+		Telemetry: staticIndexTestTelemetry(0, 0, 0, 0),
 	}, nil
 }
 
-func (c *recordingNativeStaticCompiler) NativeStaticFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func (c *recordingStaticIndexCompiler) StaticIndexFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	if !request.Stream {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
-	response, err := c.NativeStaticFinalize(ctx, request)
+	response, err := c.StaticIndexFinalize(ctx, request)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return nativeStaticTestFinalizeStream(response, handle)
+	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *recordingNativeStaticCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *recordingStaticIndexCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	c.parseCalls++
-	return nil, fmt.Errorf("ParseFile should not be called by native static skeleton")
+	return nil, fmt.Errorf("ParseFile should not be called by Static Index skeleton")
 }
 
-func (c *recordingNativeStaticCompiler) ParseFiles(context.Context, []syntax.Request) ([]json.RawMessage, error) {
+func (c *recordingStaticIndexCompiler) ParseFiles(context.Context, []syntax.Request) ([]json.RawMessage, error) {
 	c.batchParseCalls++
-	return nil, fmt.Errorf("ParseFiles should not be called by native static skeleton")
+	return nil, fmt.Errorf("ParseFiles should not be called by Static Index skeleton")
 }
 
-func (c *recordingNativeStaticCompiler) Concurrency() int {
+func (c *recordingStaticIndexCompiler) Concurrency() int {
 	return 1
 }
 
-func (c *recordingNativeStaticCompiler) Close() error {
+func (c *recordingStaticIndexCompiler) Close() error {
 	return nil
 }
 
-func nativeStaticTestTelemetry(selected, hits, misses, analyzed int) protocol.Telemetry {
+func staticIndexTestTelemetry(selected, hits, misses, analyzed int) protocol.Telemetry {
 	return protocol.Telemetry{
 		Node:       protocol.NodeTelemetry{Started: false, Reasons: []string{}},
 		NativeOnly: protocol.NativeOnlyTelemetry{Eligible: false, Reasons: []string{"phase-3-skeleton"}},
@@ -207,11 +207,11 @@ func nativeStaticTestTelemetry(selected, hits, misses, analyzed int) protocol.Te
 	}
 }
 
-var _ syntax.Parser = (*recordingNativeStaticCompiler)(nil)
-var _ syntax.BatchParser = (*recordingNativeStaticCompiler)(nil)
-var _ StaticCompiler = (*recordingNativeStaticCompiler)(nil)
+var _ syntax.Parser = (*recordingStaticIndexCompiler)(nil)
+var _ syntax.BatchParser = (*recordingStaticIndexCompiler)(nil)
+var _ StaticCompiler = (*recordingStaticIndexCompiler)(nil)
 
-func nativeStaticTestAnalyzeStream(response protocol.AnalyzeResponse, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+func staticIndexTestAnalyzeStream(response protocol.AnalyzeResponse, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
 	if handle == nil {
 		return response, nil
 	}
@@ -227,7 +227,7 @@ func nativeStaticTestAnalyzeStream(response protocol.AnalyzeResponse, handle pro
 	return response, nil
 }
 
-func nativeStaticTestFinalizeStream(response protocol.FinalizeResponse, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func staticIndexTestFinalizeStream(response protocol.FinalizeResponse, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	if handle != nil {
 		for _, event := range response.Events {
 			if err := handle(protocol.FinalizeStreamEvent{
@@ -243,18 +243,18 @@ func nativeStaticTestFinalizeStream(response protocol.FinalizeResponse, handle p
 	return response, nil
 }
 
-func fakeNativeStaticCompilerWorker(t *testing.T) string {
+func fakeStaticIndexCompilerWorker(t *testing.T) string {
 	t.Helper()
 	telemetry := `"telemetry":{"node":{"started":false,"reasons":[]},"nativeOnly":{"eligible":false,"reasons":["phase-3-skeleton"]},"timings":[],"files":{"selected":2,"cacheHits":1,"cacheMisses":1,"analyzed":1,"skipped":0},"cache":{"readHits":1,"readMisses":1,"writes":0,"writeErrors":0},"facts":{"definitions":0,"relations":0,"sourceRefs":0,"diagnostics":0,"lintFindings":0,"ruleDescriptors":0,"sources":0,"sourceGraph":0}}`
 	script := strings.ReplaceAll(`while IFS= read -r line; do
 id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
-  *staticIndexPrepare*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"staticIndexPrepare","plan":{"root":"/repo","projectName":"native-static","files":[{"file":"/repo/src/cached.ts","sourceHash":"sha256:cached","cacheKey":"static:cached"},{"file":"/repo/src/miss.ts","sourceHash":"sha256:miss"}],"cacheHits":[{"file":"/repo/src/cached.ts","sourceHash":"sha256:cached","cacheKey":"static:cached"}],"cacheMisses":[{"file":"/repo/src/miss.ts","sourceHash":"sha256:miss"}]},"diagnostics":[],$TELEMETRY}}\n' "$id" ;;
+  *staticIndexPrepare*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"staticIndexPrepare","plan":{"root":"/repo","projectName":"static-index","files":[{"file":"/repo/src/cached.ts","sourceHash":"sha256:cached","cacheKey":"static:cached"},{"file":"/repo/src/miss.ts","sourceHash":"sha256:miss"}],"cacheHits":[{"file":"/repo/src/cached.ts","sourceHash":"sha256:cached","cacheKey":"static:cached"}],"cacheMisses":[{"file":"/repo/src/miss.ts","sourceHash":"sha256:miss"}]},"diagnostics":[],$TELEMETRY}}\n' "$id" ;;
   *staticIndexAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"staticIndexAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id" ;;
   *staticIndexFinalize*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"staticIndexFinalize","events":[],$TELEMETRY}}\n' "$id" ;;
-  *) printf '{"error":"unexpected native static request"}\n' ;;
+  *) printf '{"error":"unexpected Static Index request"}\n' ;;
 esac
 done
 `, "$TELEMETRY", telemetry)
-	return writeShellScript(t, "native-static-worker.sh", script)
+	return writeShellScript(t, "static-index-worker.sh", script)
 }

@@ -120,7 +120,7 @@ _Avoid_: static hook, lifecycle phase
 The source-only Project Index lane that produces source graph rows, definitions, references,
 diagnostics, lint facts, and semantic source-profile handoff without TypeScript type checking. It is
 the product responsibility that may be implemented by TypeScript today and Rust/Oxc later.
-_Avoid_: native-static, AST phase, native AST compiler
+_Avoid_: static-index, AST phase, native AST compiler
 
 **Static Syntax**:
 File-local parser evidence consumed by the Static Index lane before facts are projected into the

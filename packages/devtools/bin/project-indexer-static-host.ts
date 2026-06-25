@@ -8,7 +8,7 @@ import type { ProjectIndexWorkerRequest } from '../lib/project-indexer-request'
 import { writeArtifactEvent, type ProjectIndexWorkerWriter } from './project-indexer-protocol'
 
 /**
- * Writes TypeScript compatibility-host artifacts for native static indexing.
+ * Writes TypeScript compatibility-host artifacts for Static Index compilation.
  *
  * Go sends native evidence jobs or finalized graph facts as JSON; this worker
  * loads the trusted project extension runtime and returns grouped facts.

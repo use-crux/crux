@@ -1,4 +1,4 @@
-//! Definition merge behavior for native static finalization.
+//! Definition merge behavior for Static Index finalization.
 //!
 //! This mirrors the TypeScript compiler's `mergeDefinitionsById` contract:
 //! one row per definition id, with higher-fidelity core fields and later
@@ -8,15 +8,13 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
 
-use crate::core::facts::{
-    NativeStaticDefinition, NativeStaticFidelity, NativeStaticProjectSourceRef,
-};
+use crate::core::facts::{StaticIndexDefinition, StaticIndexFidelity, StaticIndexProjectSourceRef};
 
 /// Merges duplicate Project Index definitions by stable definition id.
 pub(crate) fn merge_definitions_by_id(
-    definitions: Vec<NativeStaticDefinition>,
-) -> Vec<NativeStaticDefinition> {
-    let mut merged = BTreeMap::<String, NativeStaticDefinition>::new();
+    definitions: Vec<StaticIndexDefinition>,
+) -> Vec<StaticIndexDefinition> {
+    let mut merged = BTreeMap::<String, StaticIndexDefinition>::new();
     for definition in definitions {
         match merged.remove(&definition.id) {
             Some(existing) => {
@@ -34,9 +32,9 @@ pub(crate) fn merge_definitions_by_id(
 }
 
 fn merge_definition(
-    existing: NativeStaticDefinition,
-    incoming: NativeStaticDefinition,
-) -> NativeStaticDefinition {
+    existing: StaticIndexDefinition,
+    incoming: StaticIndexDefinition,
+) -> StaticIndexDefinition {
     let keep_existing_core = fidelity_rank(existing.fidelity) >= fidelity_rank(incoming.fidelity);
     let metadata = if keep_existing_core {
         merge_metadata(incoming.metadata.as_ref(), existing.metadata.as_ref())
@@ -141,10 +139,10 @@ fn merge_list(base: Option<&Value>, overlay: Option<&Value>) -> Option<Vec<Value
 }
 
 fn merge_source_refs(
-    existing: Vec<NativeStaticProjectSourceRef>,
-    incoming: Vec<NativeStaticProjectSourceRef>,
-) -> Vec<NativeStaticProjectSourceRef> {
-    let mut refs: Vec<NativeStaticProjectSourceRef> = Vec::new();
+    existing: Vec<StaticIndexProjectSourceRef>,
+    incoming: Vec<StaticIndexProjectSourceRef>,
+) -> Vec<StaticIndexProjectSourceRef> {
+    let mut refs: Vec<StaticIndexProjectSourceRef> = Vec::new();
     for ref_ in existing.into_iter().chain(incoming) {
         if let Some(index) = refs.iter().position(|current| current.id == ref_.id) {
             refs[index] = ref_;
@@ -155,10 +153,10 @@ fn merge_source_refs(
     refs
 }
 
-fn fidelity_rank(fidelity: NativeStaticFidelity) -> u8 {
+fn fidelity_rank(fidelity: StaticIndexFidelity) -> u8 {
     match fidelity {
-        NativeStaticFidelity::Resolved => 3,
-        NativeStaticFidelity::Partial => 2,
-        NativeStaticFidelity::Error => 1,
+        StaticIndexFidelity::Resolved => 3,
+        StaticIndexFidelity::Partial => 2,
+        StaticIndexFidelity::Error => 1,
     }
 }

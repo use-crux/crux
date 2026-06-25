@@ -14,24 +14,24 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
-func TestWorkerNativeStaticCompilerUsesCompileStreamWhenNativeOnly(t *testing.T) {
+func TestWorkerStaticIndexCompilerUsesCompileStreamWhenNativeOnly(t *testing.T) {
 	root := t.TempDir()
 	srcDir := filepath.Join(root, "src")
 	if err := os.MkdirAll(srcDir, 0o755); err != nil {
 		t.Fatalf("mkdir src: %v", err)
 	}
 	sourceFile := filepath.Join(srcDir, "writer.ts")
-	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'native-static-cutover' })"), 0o600); err != nil {
+	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'static-index-cutover' })"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
 
 	compiler := &staticIndexCompileCutoverCompiler{
-		nativeStaticCutoverCompiler: nativeStaticCutoverCompiler{root: root, sourceFile: sourceFile},
+		staticIndexCutoverCompiler: staticIndexCutoverCompiler{root: root, sourceFile: sourceFile},
 	}
 	worker := &Worker{}
 	plan := projectindex.ProjectStaticSyntaxPlan{
 		Root:             root,
-		ProjectName:      "native-static-cutover",
+		ProjectName:      "static-index-cutover",
 		Files:            []string{sourceFile},
 		PrimaryFiles:     []string{sourceFile},
 		FilesToParse:     []string{sourceFile},
@@ -44,30 +44,30 @@ func TestWorkerNativeStaticCompilerUsesCompileStreamWhenNativeOnly(t *testing.T)
 		SourceGraph:      json.RawMessage(`{"schemaVersion":1,"producedBy":"@crux/indexer","capabilities":[],"shards":[]}`),
 	}
 
-	patch, _, usedNativeStatic, err := worker.indexProjectAstPatchFromNativeStaticCompiler(context.Background(), root, "", "native-static-cutover", plan, compiler)
+	patch, _, usedStaticIndex, err := worker.indexProjectAstPatchFromStaticIndexCompiler(context.Background(), root, "", "static-index-cutover", plan, compiler)
 	if err != nil {
-		t.Fatalf("indexProjectAstPatchFromNativeStaticCompiler error = %v", err)
+		t.Fatalf("indexProjectAstPatchFromStaticIndexCompiler error = %v", err)
 	}
-	if !usedNativeStatic {
-		t.Fatal("usedNativeStatic = false, want true")
+	if !usedStaticIndex {
+		t.Fatal("usedStaticIndex = false, want true")
 	}
-	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:native-static-cutover" {
-		t.Fatalf("definitions = %+v, want native static compile stream result", patch.Facts.Definitions)
+	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:static-index-cutover" {
+		t.Fatalf("definitions = %+v, want Static Index compile stream result", patch.Facts.Definitions)
 	}
 	if patch.SemanticSourceProfile == nil || len(patch.SemanticSourceProfile.Files) != 1 || patch.SemanticSourceProfile.Files[0].File != sourceFile {
 		t.Fatalf("semantic source profile = %+v, want Go-owned source input profile", patch.SemanticSourceProfile)
 	}
 	if compiler.compileCalls != 1 || compiler.analyzeCalls != 0 || compiler.finalizeCalls != 0 {
-		t.Fatalf("native static calls = compile %d analyze %d finalize %d, want compile only after prepare", compiler.compileCalls, compiler.analyzeCalls, compiler.finalizeCalls)
+		t.Fatalf("Static Index calls = compile %d analyze %d finalize %d, want compile only after prepare", compiler.compileCalls, compiler.analyzeCalls, compiler.finalizeCalls)
 	}
 }
 
 type staticIndexCompileCutoverCompiler struct {
-	nativeStaticCutoverCompiler
+	staticIndexCutoverCompiler
 	compileCalls int
 }
 
-func (c *staticIndexCompileCutoverCompiler) NativeStaticCompileStream(_ context.Context, request protocol.CompileRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func (c *staticIndexCompileCutoverCompiler) StaticIndexCompileStream(_ context.Context, request protocol.CompileRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	c.compileCalls++
 	if !request.Stream {
 		return protocol.FinalizeResponse{}, fmt.Errorf("compile stream flag = false, want true")
@@ -78,15 +78,15 @@ func (c *staticIndexCompileCutoverCompiler) NativeStaticCompileStream(_ context.
 	if len(request.ExtensionFacts) != 1 || !bytes.Contains(request.ExtensionFacts[0], []byte("sourceGraph")) {
 		return protocol.FinalizeResponse{}, fmt.Errorf("compile extension facts = %s, want source graph", request.ExtensionFacts)
 	}
-	events, err := nativeStaticCutoverEvents(c.root)
+	events, err := staticIndexCutoverEvents(c.root)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return nativeStaticTestFinalizeStream(protocol.FinalizeResponse{
+	return staticIndexTestFinalizeStream(protocol.FinalizeResponse{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.CompileMethod,
 		Events:          events,
-		Telemetry:       nativeStaticTestTelemetry(1, 0, 1, len(request.Files)),
+		Telemetry:       staticIndexTestTelemetry(1, 0, 1, len(request.Files)),
 	}, handle)
 }
 

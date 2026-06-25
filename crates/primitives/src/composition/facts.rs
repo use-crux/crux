@@ -5,7 +5,7 @@ use crate::{
     composition::relations::composition_references,
     composition::values::{identifier_array, insert_string, insert_string_array},
     context::{CallParts, PrimitiveContext},
-    definition::{NativeDefinitionInput, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, safe_id, static_index_definition},
     protocol::StaticSyntaxValue,
     record_values::{
         direct_string_property, object_map_identifier_entries, property_value, reference_property,
@@ -30,7 +30,7 @@ pub(crate) fn composition_facts(
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id,
             kind,
             name: parts.variable_name.to_string(),

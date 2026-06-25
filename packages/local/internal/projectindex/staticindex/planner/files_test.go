@@ -10,12 +10,12 @@ import (
 	"time"
 )
 
-func fileWithNativeStaticSource(t testing.TB, root string, name string) string {
+func fileWithStaticIndexSource(t testing.TB, root string, name string) string {
 	t.Helper()
-	return writeNativeStaticPlanCacheFixtureFile(t, root, name, "export const writer = prompt({ id: 'writer' })\n")
+	return writeStaticIndexPlanCacheFixtureFile(t, root, name, "export const writer = prompt({ id: 'writer' })\n")
 }
 
-func writeNativeStaticPlanCacheFixtureFile(t testing.TB, root, name, source string) string {
+func writeStaticIndexPlanCacheFixtureFile(t testing.TB, root, name, source string) string {
 	t.Helper()
 	file := filepath.Join(root, filepath.FromSlash(name))
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
@@ -27,11 +27,11 @@ func writeNativeStaticPlanCacheFixtureFile(t testing.TB, root, name, source stri
 	return file
 }
 
-func TestProjectNativeStaticFileSelectionIgnoresEmbeddedBuildArtifacts(t *testing.T) {
+func TestProjectStaticIndexFileSelectionIgnoresEmbeddedBuildArtifacts(t *testing.T) {
 	root := t.TempDir()
-	authored := fileWithNativeStaticSource(t, root, "packages/core/src/writer.ts")
-	embedded := fileWithNativeStaticSource(t, root, "packages/local/internal/server/embed/project-indexer.mjs")
-	uiEmbedded := fileWithNativeStaticSource(t, root, "packages/local/internal/server/ui-embed/assets/app.js")
+	authored := fileWithStaticIndexSource(t, root, "packages/core/src/writer.ts")
+	embedded := fileWithStaticIndexSource(t, root, "packages/local/internal/server/embed/project-indexer.mjs")
+	uiEmbedded := fileWithStaticIndexSource(t, root, "packages/local/internal/server/ui-embed/assets/app.js")
 
 	selection, err := fileSelection(root, "")
 	if err != nil {
@@ -54,13 +54,13 @@ func TestProjectNativeStaticFileSelectionIgnoresEmbeddedBuildArtifacts(t *testin
 	}
 }
 
-func TestProjectNativeStaticFileSelectionOnlyClassifiesStaticSourceCandidates(t *testing.T) {
+func TestProjectStaticIndexFileSelectionOnlyClassifiesStaticSourceCandidates(t *testing.T) {
 	root := t.TempDir()
-	authored := fileWithNativeStaticSource(t, root, "src/writer.ts")
-	unsupported := writeNativeStaticPlanCacheFixtureFile(t, root, "README.md", "prompt({ id: 'docs' })\n")
-	rootFixture := writeNativeStaticPlanCacheFixtureFile(t, root, "__fixtures__/fixture.ts", "export const fixture = prompt({ id: 'fixture' })\n")
-	rootTest := writeNativeStaticPlanCacheFixtureFile(t, root, "__tests__/fixture.ts", "export const fixture = prompt({ id: 'test' })\n")
-	nestedCache := writeNativeStaticPlanCacheFixtureFile(t, root, "packages/app/.crux/cache/index/static.ts", "export const cached = prompt({ id: 'cache' })\n")
+	authored := fileWithStaticIndexSource(t, root, "src/writer.ts")
+	unsupported := writeStaticIndexPlanCacheFixtureFile(t, root, "README.md", "prompt({ id: 'docs' })\n")
+	rootFixture := writeStaticIndexPlanCacheFixtureFile(t, root, "__fixtures__/fixture.ts", "export const fixture = prompt({ id: 'fixture' })\n")
+	rootTest := writeStaticIndexPlanCacheFixtureFile(t, root, "__tests__/fixture.ts", "export const fixture = prompt({ id: 'test' })\n")
+	nestedCache := writeStaticIndexPlanCacheFixtureFile(t, root, "packages/app/.crux/cache/index/static.ts", "export const cached = prompt({ id: 'cache' })\n")
 
 	selection, err := fileSelection(root, "")
 	if err != nil {
@@ -88,11 +88,11 @@ func TestProjectNativeStaticFileSelectionOnlyClassifiesStaticSourceCandidates(t 
 	}
 }
 
-func TestProjectNativeStaticSupportFilesIncludesRecursiveLocalImports(t *testing.T) {
+func TestProjectStaticIndexSupportFilesIncludesRecursiveLocalImports(t *testing.T) {
 	root := t.TempDir()
-	primary := writeNativeStaticPlanCacheFixtureFile(t, root, "src/primary.ts", "import './helpers/one'\nexport const writer = prompt({ id: 'writer' })\n")
-	helper := writeNativeStaticPlanCacheFixtureFile(t, root, "src/helpers/one.ts", "export { value } from './two'\n")
-	nested := writeNativeStaticPlanCacheFixtureFile(t, root, "src/helpers/two.ts", "export const value = 'two'\n")
+	primary := writeStaticIndexPlanCacheFixtureFile(t, root, "src/primary.ts", "import './helpers/one'\nexport const writer = prompt({ id: 'writer' })\n")
+	helper := writeStaticIndexPlanCacheFixtureFile(t, root, "src/helpers/one.ts", "export { value } from './two'\n")
+	nested := writeStaticIndexPlanCacheFixtureFile(t, root, "src/helpers/two.ts", "export const value = 'two'\n")
 
 	support := supportFiles([]string{primary})
 	for _, file := range []string{helper, nested} {
@@ -102,10 +102,10 @@ func TestProjectNativeStaticSupportFilesIncludesRecursiveLocalImports(t *testing
 	}
 }
 
-func TestProjectNativeStaticFileSelectionReusesDiscoveryCacheForUnchangedSources(t *testing.T) {
+func TestProjectStaticIndexFileSelectionReusesDiscoveryCacheForUnchangedSources(t *testing.T) {
 	root := t.TempDir()
-	primary := writeNativeStaticPlanCacheFixtureFile(t, root, "src/primary.ts", "import './helper'\nexport const writer = prompt({ id: 'writer' })\n")
-	helper := writeNativeStaticPlanCacheFixtureFile(t, root, "src/helper.ts", "export const helper = 'cached'\n")
+	primary := writeStaticIndexPlanCacheFixtureFile(t, root, "src/primary.ts", "import './helper'\nexport const writer = prompt({ id: 'writer' })\n")
+	helper := writeStaticIndexPlanCacheFixtureFile(t, root, "src/helper.ts", "export const helper = 'cached'\n")
 
 	first, err := fileSelection(root, "")
 	if err != nil {
@@ -127,10 +127,10 @@ func TestProjectNativeStaticFileSelectionReusesDiscoveryCacheForUnchangedSources
 	}
 }
 
-func TestProjectNativeStaticDiscoveryCacheInvalidatesByCallNamesAndSourceFingerprint(t *testing.T) {
+func TestProjectStaticIndexDiscoveryCacheInvalidatesByCallNamesAndSourceFingerprint(t *testing.T) {
 	root := t.TempDir()
-	workflow := writeNativeStaticPlanCacheFixtureFile(t, root, "src/workflow.ts", "export const wf = defineWorkflow({ id: 'wf' })\n")
-	latePrompt := writeNativeStaticPlanCacheFixtureFile(t, root, "src/late-prompt.ts", "export const value = 'plain'\n")
+	workflow := writeStaticIndexPlanCacheFixtureFile(t, root, "src/workflow.ts", "export const wf = defineWorkflow({ id: 'wf' })\n")
+	latePrompt := writeStaticIndexPlanCacheFixtureFile(t, root, "src/late-prompt.ts", "export const value = 'plain'\n")
 
 	defaultSelection, err := fileSelection(root, "")
 	if err != nil {
@@ -170,9 +170,9 @@ func TestProjectNativeStaticDiscoveryCacheInvalidatesByCallNamesAndSourceFingerp
 	}
 }
 
-func TestProjectNativeStaticDiscoveryCacheInvalidatesSameSizeSameModTimeSourceRewrite(t *testing.T) {
+func TestProjectStaticIndexDiscoveryCacheInvalidatesSameSizeSameModTimeSourceRewrite(t *testing.T) {
 	root := t.TempDir()
-	latePrompt := writeNativeStaticPlanCacheFixtureFile(t, root, "src/late-prompt.ts",
+	latePrompt := writeStaticIndexPlanCacheFixtureFile(t, root, "src/late-prompt.ts",
 		"export const value = 'plain source without crux signals here'\n",
 	)
 
@@ -194,9 +194,9 @@ func TestProjectNativeStaticDiscoveryCacheInvalidatesSameSizeSameModTimeSourceRe
 	}
 }
 
-func TestProjectNativeStaticSupportDiscoveryCacheInvalidatesWhenImportTargetAppears(t *testing.T) {
+func TestProjectStaticIndexSupportDiscoveryCacheInvalidatesWhenImportTargetAppears(t *testing.T) {
 	root := t.TempDir()
-	primary := writeNativeStaticPlanCacheFixtureFile(t, root, "src/primary.ts", "import './late-helper'\nexport const writer = prompt({ id: 'writer' })\n")
+	primary := writeStaticIndexPlanCacheFixtureFile(t, root, "src/primary.ts", "import './late-helper'\nexport const writer = prompt({ id: 'writer' })\n")
 
 	first, err := fileSelection(root, "")
 	if err != nil {
@@ -206,7 +206,7 @@ func TestProjectNativeStaticSupportDiscoveryCacheInvalidatesWhenImportTargetAppe
 		t.Fatalf("first files = %v, want only primary before helper exists", first.Files)
 	}
 
-	helper := writeNativeStaticPlanCacheFixtureFile(t, root, "src/late-helper.ts", "export const late = 'helper'\n")
+	helper := writeStaticIndexPlanCacheFixtureFile(t, root, "src/late-helper.ts", "export const late = 'helper'\n")
 	advanceFileModTime(t, helper)
 	second, err := fileSelection(root, "")
 	if err != nil {
@@ -216,7 +216,7 @@ func TestProjectNativeStaticSupportDiscoveryCacheInvalidatesWhenImportTargetAppe
 		t.Fatalf("second files = %v, want helper after import resolution invalidation", second.Files)
 	}
 
-	nested := writeNativeStaticPlanCacheFixtureFile(t, root, "src/nested.ts", "export const nested = 'helper'\n")
+	nested := writeStaticIndexPlanCacheFixtureFile(t, root, "src/nested.ts", "export const nested = 'helper'\n")
 	advanceFileContents(t, helper, "export { nested } from './nested'\n")
 	third, err := fileSelection(root, "")
 	if err != nil {
@@ -227,11 +227,11 @@ func TestProjectNativeStaticSupportDiscoveryCacheInvalidatesWhenImportTargetAppe
 	}
 }
 
-func TestProjectNativeStaticSupportDiscoveryCacheInvalidatesSameSizeSameModTimeImportRewrite(t *testing.T) {
+func TestProjectStaticIndexSupportDiscoveryCacheInvalidatesSameSizeSameModTimeImportRewrite(t *testing.T) {
 	root := t.TempDir()
-	primary := writeNativeStaticPlanCacheFixtureFile(t, root, "src/primary.ts", "import './one'\nexport const writer = prompt({ id: 'writer' })\n")
-	one := writeNativeStaticPlanCacheFixtureFile(t, root, "src/one.ts", "export const one = 'helper'\n")
-	two := writeNativeStaticPlanCacheFixtureFile(t, root, "src/two.ts", "export const two = 'helper'\n")
+	primary := writeStaticIndexPlanCacheFixtureFile(t, root, "src/primary.ts", "import './one'\nexport const writer = prompt({ id: 'writer' })\n")
+	one := writeStaticIndexPlanCacheFixtureFile(t, root, "src/one.ts", "export const one = 'helper'\n")
+	two := writeStaticIndexPlanCacheFixtureFile(t, root, "src/two.ts", "export const two = 'helper'\n")
 
 	first, err := fileSelection(root, "")
 	if err != nil {

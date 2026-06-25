@@ -1,6 +1,6 @@
 //! Relation-derived Project Index read-model enrichment.
 //!
-//! The canonical graph edge remains `NativeStaticRelation`; this module mirrors
+//! The canonical graph edge remains `StaticIndexRelation`; this module mirrors
 //! dependency bucket projection while sibling modules handle use-entry and
 //! routing-specific metadata.
 
@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::Value;
 
 use crate::contracts::input::with_expanded_input_contracts;
-use crate::core::facts::{NativeStaticDefinition, NativeStaticRelation};
+use crate::core::facts::{StaticIndexDefinition, StaticIndexRelation};
 use crate::read::helpers::{definition_metadata, object_entry};
 use crate::read::injection::{
     ResolvedInjectionUseEntryTarget, with_resolved_injection_use_entry_ref_targets,
@@ -21,17 +21,17 @@ use crate::relation::model::string_set;
 /// Applies all relation-derived metadata projections to definition facts.
 #[cfg(test)]
 pub(crate) fn with_resolved_relation_read_model(
-    definitions: Vec<NativeStaticDefinition>,
-    relations: &[NativeStaticRelation],
-) -> Vec<NativeStaticDefinition> {
+    definitions: Vec<StaticIndexDefinition>,
+    relations: &[StaticIndexRelation],
+) -> Vec<StaticIndexDefinition> {
     with_resolved_relation_read_model_with_ref_targets(definitions, relations, &[])
 }
 
 pub(crate) fn with_resolved_relation_read_model_with_ref_targets(
-    definitions: Vec<NativeStaticDefinition>,
-    relations: &[NativeStaticRelation],
+    definitions: Vec<StaticIndexDefinition>,
+    relations: &[StaticIndexRelation],
     use_entry_targets: &[ResolvedInjectionUseEntryTarget],
-) -> Vec<NativeStaticDefinition> {
+) -> Vec<StaticIndexDefinition> {
     with_expanded_input_contracts(
         with_resolved_injection_use_entry_ref_targets(
             with_resolved_injection_use_entry_targets(
@@ -48,9 +48,9 @@ pub(crate) fn with_resolved_relation_read_model_with_ref_targets(
 }
 
 fn with_resolved_relation_dependency_facts(
-    definitions: Vec<NativeStaticDefinition>,
-    relations: &[NativeStaticRelation],
-) -> Vec<NativeStaticDefinition> {
+    definitions: Vec<StaticIndexDefinition>,
+    relations: &[StaticIndexRelation],
+) -> Vec<StaticIndexDefinition> {
     let mut dependencies_by_definition =
         BTreeMap::<String, BTreeMap<String, BTreeSet<String>>>::new();
     for relation in relations {

@@ -1,11 +1,11 @@
 use serde_json::json;
 
 use crate::parse_serve_request;
-use crate::protocol::native_static::{
-    NativeStaticAnalyzeResponse, NativeStaticFinalizeResponse, STATIC_INDEX_ANALYZE_METHOD,
-    STATIC_INDEX_COMPILE_METHOD, STATIC_INDEX_FINALIZE_METHOD, STATIC_INDEX_PROTOCOL_VERSION,
+use crate::protocol::static_index::{
+    STATIC_INDEX_ANALYZE_METHOD, STATIC_INDEX_COMPILE_METHOD, STATIC_INDEX_FINALIZE_METHOD,
+    STATIC_INDEX_PROTOCOL_VERSION, StaticIndexAnalyzeResponse, StaticIndexFinalizeResponse,
 };
-use crate::worker::native_static_tests::{
+use crate::worker::static_index_tests::{
     run_identity_json, serve_response_lines_json, skeleton_plan_json,
 };
 
@@ -35,7 +35,7 @@ fn analyze_request_is_accepted_through_stream_worker_path() {
 
     let done = events.last().expect("done event");
     let stage = done["response"].clone();
-    let parsed: NativeStaticAnalyzeResponse =
+    let parsed: StaticIndexAnalyzeResponse =
         serde_json::from_value(stage.clone()).expect("analyze response should deserialize");
 
     assert!(parsed.facts.is_empty());
@@ -193,7 +193,7 @@ fn finalize_stream_emits_patch_events_and_done_response() {
 
     let done = events.last().expect("done event");
     assert_eq!(done["type"], "done");
-    let parsed: NativeStaticFinalizeResponse = serde_json::from_value(done["response"].clone())
+    let parsed: StaticIndexFinalizeResponse = serde_json::from_value(done["response"].clone())
         .expect("finalize response should deserialize");
     assert!(parsed.events.is_empty());
     assert_eq!(done["response"]["method"], STATIC_INDEX_FINALIZE_METHOD);

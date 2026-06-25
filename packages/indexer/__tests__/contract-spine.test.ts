@@ -14,10 +14,10 @@ import {
   staticIndexCompilerRequestFixtures,
   staticIndexCompilerResponseFixtures,
 } from '../indexer/contracts/static-index/fixtures'
-import { nativeRuntimeContractFixtureGroups } from '../indexer/contracts/fixtures'
+import { staticIndexRuntimeContractFixtureGroups } from '../indexer/contracts/fixtures'
 import { projectSemanticEvidenceBatches, semanticEvidenceBatchKinds } from '../indexer/contracts/semantic/schema'
 
-describe('native runtime contract spine', () => {
+describe('Static Index runtime contract spine', () => {
   it('round-trips worker event fixtures through the contract path', () => {
     const events = indexPatchToWorkerEvents(workerEventFixturePatch, workerEventFixtureOptions)
     const json = JSON.parse(JSON.stringify(events))
@@ -51,6 +51,6 @@ describe('native runtime contract spine', () => {
   })
 
   it('indexes fixture groups from one contract fixtures path', () => {
-    expect(nativeRuntimeContractFixtureGroups).toEqual(['worker-events', 'static-index'])
+    expect(staticIndexRuntimeContractFixtureGroups).toEqual(['worker-events', 'static-index'])
   })
 })

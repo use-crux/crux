@@ -38,7 +38,7 @@ describe('static cache identity', () => {
       extensions: [workflowExtension({ relationType: '@acme/workflows/starts_tool' })],
     })
 
-    expect(namedDigestDependency(base.identity.cacheInputs, 'native-primitive-manifest', 'crux-native-static-host')).toEqual(
+    expect(namedDigestDependency(base.identity.cacheInputs, 'native-primitive-manifest', 'crux-static-index-host')).toEqual(
       expect.any(String),
     )
     expect(namedDigestDependency(base.identity.cacheInputs, 'static-evidence-manifest', 'runtime-static-interests')).toEqual(

@@ -12,11 +12,11 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
-func TestWorkerPlanProjectSemanticRequestUsesNativeStaticSourceProfile(t *testing.T) {
+func TestWorkerPlanProjectSemanticRequestUsesStaticIndexSourceProfile(t *testing.T) {
 	root := t.TempDir()
-	writeNativeStaticEnabledConfig(t, root)
-	primary := writeNativeStaticPlanCacheFixtureFile(t, root, "src/writer.ts", "import './helper'\nexport const writer = prompt({ id: 'writer' })\n")
-	helper := writeNativeStaticPlanCacheFixtureFile(t, root, "src/helper.ts", "export const helper = 'writer'\n")
+	writeStaticIndexEnabledConfig(t, root)
+	primary := writeStaticIndexPlanCacheFixtureFile(t, root, "src/writer.ts", "import './helper'\nexport const writer = prompt({ id: 'writer' })\n")
+	helper := writeStaticIndexPlanCacheFixtureFile(t, root, "src/helper.ts", "export const helper = 'writer'\n")
 
 	worker := newTestWorker(t).WithSyntaxParser(noopSyntaxParser{})
 	defer worker.Close()

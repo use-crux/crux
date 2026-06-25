@@ -9,18 +9,18 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
-func nativeStaticRulesIndexerScript() string {
+func staticIndexRulesIndexerScript() string {
 	return `
 		import readline from 'node:readline'
 		const rl = readline.createInterface({ input: process.stdin, terminal: false })
 		rl.on('line', (line) => {
 			const req = JSON.parse(line)
-			if (req.method === 'inspectProjectNativeStaticConfig') {
+			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
 					type: 'artifact:done',
-					transactionId: 'artifact-native-static-config',
-					artifact: 'projectNativeStaticConfig',
+					transactionId: 'artifact-static-index-config',
+					artifact: 'projectStaticIndexConfig',
 					root: req.root,
 					payload: {
 						root: req.root,
@@ -119,14 +119,14 @@ func nativeStaticRulesIndexerScript() string {
 	`
 }
 
-type nativeStaticRuleCompiler struct {
+type staticIndexRuleCompiler struct {
 	root                   string
 	sourceFile             string
 	finalizeCalls          int
 	finalizeExtensionFacts json.RawMessage
 }
 
-func (c *nativeStaticRuleCompiler) NativeStaticPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+func (c *staticIndexRuleCompiler) StaticIndexPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
 	return protocol.PrepareResponse{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.PrepareMethod,
@@ -137,25 +137,25 @@ func (c *nativeStaticRuleCompiler) NativeStaticPrepare(_ context.Context, reques
 			CacheMisses: append([]protocol.SourceFile(nil), request.Files...),
 		},
 		Diagnostics: []json.RawMessage{},
-		Telemetry:   nativeStaticTestTelemetry(len(request.Files), 0, len(request.Files), 0),
+		Telemetry:   staticIndexTestTelemetry(len(request.Files), 0, len(request.Files), 0),
 	}, nil
 }
 
-func (c *nativeStaticRuleCompiler) NativeStaticAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+func (c *staticIndexRuleCompiler) StaticIndexAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
 	if !request.Stream {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
 	}
-	return nativeStaticTestAnalyzeStream(protocol.AnalyzeResponse{
+	return staticIndexTestAnalyzeStream(protocol.AnalyzeResponse{
 		ProtocolVersion:       protocol.Version,
 		Method:                protocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","fact":{"id":"prompt:native-rule-input","kind":"prompt","name":"native-rule-input","fidelity":"resolved","status":"active"}}`)},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
-		Telemetry:             nativeStaticTestTelemetry(len(request.Plan.Files), 0, len(request.Files), len(request.Files)),
+		Telemetry:             staticIndexTestTelemetry(len(request.Plan.Files), 0, len(request.Files), len(request.Files)),
 	}, handle)
 }
 
-func (c *nativeStaticRuleCompiler) NativeStaticFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+func (c *staticIndexRuleCompiler) StaticIndexFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
 	c.finalizeCalls++
 	if c.finalizeCalls == 1 && (request.EmitBuiltinLints == nil || *request.EmitBuiltinLints) {
 		return protocol.FinalizeResponse{}, fmt.Errorf("AST finalize emitBuiltinLints = %v, want false", request.EmitBuiltinLints)
@@ -170,7 +170,7 @@ func (c *nativeStaticRuleCompiler) NativeStaticFinalize(_ context.Context, reque
 	if request.PatchPhase != "" {
 		phase = request.PatchPhase
 	}
-	events, err := nativeStaticRuleEvents(c.root, phase, c.finalizeCalls == 2)
+	events, err := staticIndexRuleEvents(c.root, phase, c.finalizeCalls == 2)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
@@ -178,44 +178,44 @@ func (c *nativeStaticRuleCompiler) NativeStaticFinalize(_ context.Context, reque
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Events:          events,
-		Telemetry:       nativeStaticTestTelemetry(1, 0, 1, 1),
+		Telemetry:       staticIndexTestTelemetry(1, 0, 1, 1),
 	}, nil
 }
 
-func (c *nativeStaticRuleCompiler) NativeStaticFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func (c *staticIndexRuleCompiler) StaticIndexFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	if !request.Stream {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
-	response, err := c.NativeStaticFinalize(ctx, request)
+	response, err := c.StaticIndexFinalize(ctx, request)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return nativeStaticTestFinalizeStream(response, handle)
+	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticRuleCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
-	return nil, fmt.Errorf("ParseFile should not be called by native static rule scheduling")
+func (c *staticIndexRuleCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+	return nil, fmt.Errorf("ParseFile should not be called by Static Index rule scheduling")
 }
 
-func (c *nativeStaticRuleCompiler) Concurrency() int { return 1 }
+func (c *staticIndexRuleCompiler) Concurrency() int { return 1 }
 
-func (c *nativeStaticRuleCompiler) Close() error { return nil }
+func (c *staticIndexRuleCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*nativeStaticRuleCompiler)(nil)
-var _ StaticCompiler = (*nativeStaticRuleCompiler)(nil)
+var _ syntax.Parser = (*staticIndexRuleCompiler)(nil)
+var _ StaticCompiler = (*staticIndexRuleCompiler)(nil)
 
-func nativeStaticRuleEvents(root string, phase string, includeRule bool) ([]json.RawMessage, error) {
+func staticIndexRuleEvents(root string, phase string, includeRule bool) ([]json.RawMessage, error) {
 	facts := []any{
-		nativeStaticRuleFact(root, phase, "definitions", "definitions:prompt:native-rule-input", map[string]any{"id": "prompt:native-rule-input", "kind": "prompt", "name": "native-rule-input", "fidelity": "resolved", "status": "active"}),
-		nativeStaticRuleFact(root, phase, "ruleDescriptors", "ruleDescriptors:@acme/rules/native-rule", map[string]any{"id": "@acme/rules/native-rule", "source": "extension", "extension": map[string]any{"name": "@acme/rules"}, "title": "Native rule", "description": "Native rule", "severity": "warning", "requires": []any{"definitions"}}),
+		staticIndexRuleFact(root, phase, "definitions", "definitions:prompt:native-rule-input", map[string]any{"id": "prompt:native-rule-input", "kind": "prompt", "name": "native-rule-input", "fidelity": "resolved", "status": "active"}),
+		staticIndexRuleFact(root, phase, "ruleDescriptors", "ruleDescriptors:@acme/rules/native-rule", map[string]any{"id": "@acme/rules/native-rule", "source": "extension", "extension": map[string]any{"name": "@acme/rules"}, "title": "Native rule", "description": "Native rule", "severity": "warning", "requires": []any{"definitions"}}),
 	}
 	if includeRule {
-		facts = append(facts, nativeStaticRuleFact(root, phase, "lintFindings", "lintFindings:rule:native-rule", map[string]any{"id": "rule:native-rule", "ruleId": "@acme/rules/native-rule", "severity": "warning", "message": "native rule", "evidence": []any{}}))
+		facts = append(facts, staticIndexRuleFact(root, phase, "lintFindings", "lintFindings:rule:native-rule", map[string]any{"id": "rule:native-rule", "ruleId": "@acme/rules/native-rule", "severity": "warning", "message": "native rule", "evidence": []any{}}))
 	}
-	return nativeStaticRulePatchEvents(root, phase, facts)
+	return staticIndexRulePatchEvents(root, phase, facts)
 }
 
-func nativeStaticRuleFact(root, phase, kind, factID string, fact map[string]any) map[string]any {
+func staticIndexRuleFact(root, phase, kind, factID string, fact map[string]any) map[string]any {
 	return map[string]any{
 		"schemaVersion": 1,
 		"factId":        factID,
@@ -229,9 +229,9 @@ func nativeStaticRuleFact(root, phase, kind, factID string, fact map[string]any)
 	}
 }
 
-func nativeStaticRulePatchEvents(root string, phase string, facts []any) ([]json.RawMessage, error) {
-	tx := "tx-native-static-rules"
-	patch := map[string]any{"schemaVersion": 1, "phase": phase, "project": map[string]any{"root": root, "name": "native-static-rules"}, "startedAt": "1970-01-01T00:00:00.000Z", "finishedAt": "1970-01-01T00:00:00.000Z", "status": "ok"}
+func staticIndexRulePatchEvents(root string, phase string, facts []any) ([]json.RawMessage, error) {
+	tx := "tx-static-index-rules"
+	patch := map[string]any{"schemaVersion": 1, "phase": phase, "project": map[string]any{"root": root, "name": "static-index-rules"}, "startedAt": "1970-01-01T00:00:00.000Z", "finishedAt": "1970-01-01T00:00:00.000Z", "status": "ok"}
 	if phase == "ast" {
 		patch["invalidates"] = map[string]any{"all": true}
 	}
@@ -244,7 +244,7 @@ func nativeStaticRulePatchEvents(root string, phase string, facts []any) ([]json
 			"transactionId":   tx,
 			"phase":           phase,
 			"patch":           patch,
-			"summary":         map[string]any{"factCount": len(facts), "decision": map[string]any{"nativeStaticComplete": true}},
+			"summary":         map[string]any{"factCount": len(facts), "decision": map[string]any{"staticIndexComplete": true}},
 		},
 	}
 	events := make([]json.RawMessage, 0, len(values))

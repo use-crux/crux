@@ -1,27 +1,27 @@
-//! Telemetry helpers for the native static JSON-lines worker.
+//! Telemetry helpers for the Static Index JSON-lines worker.
 
 use serde_json::Value;
 
-use crate::finalizer::run::NativeStaticFinalizeFactCounts;
-use crate::protocol::native_static::{
-    NativeStaticCacheTelemetry, NativeStaticFactTelemetry, NativeStaticFileTelemetry,
-    NativeStaticNativeOnlyTelemetry, NativeStaticTelemetry, NativeStaticTiming,
+use crate::finalizer::run::StaticIndexFinalizeFactCounts;
+use crate::protocol::static_index::{
+    StaticIndexCacheTelemetry, StaticIndexFactTelemetry, StaticIndexFileTelemetry,
+    StaticIndexNativeOnlyTelemetry, StaticIndexTelemetry, StaticIndexTiming,
 };
 
 pub(crate) fn telemetry(
     stage: &str,
     count: u64,
-    files: NativeStaticFileTelemetry,
-    cache: NativeStaticCacheTelemetry,
-    facts: NativeStaticFactTelemetry,
-) -> NativeStaticTelemetry {
-    NativeStaticTelemetry {
+    files: StaticIndexFileTelemetry,
+    cache: StaticIndexCacheTelemetry,
+    facts: StaticIndexFactTelemetry,
+) -> StaticIndexTelemetry {
+    StaticIndexTelemetry {
         node: Default::default(),
-        native_only: NativeStaticNativeOnlyTelemetry {
+        native_only: StaticIndexNativeOnlyTelemetry {
             reasons: vec!["phase-3-skeleton".to_string()],
             ..Default::default()
         },
-        timings: vec![NativeStaticTiming {
+        timings: vec![StaticIndexTiming {
             name: stage.to_string(),
             duration_ms: 0.0,
             count: Some(count),
@@ -38,8 +38,8 @@ pub(crate) fn file_telemetry(
     cache_misses: u64,
     analyzed: u64,
     skipped: u64,
-) -> NativeStaticFileTelemetry {
-    NativeStaticFileTelemetry {
+) -> StaticIndexFileTelemetry {
+    StaticIndexFileTelemetry {
         selected,
         cache_hits,
         cache_misses,
@@ -52,8 +52,8 @@ pub(crate) fn cache_telemetry(
     read_hits: u64,
     read_misses: u64,
     writes: u64,
-) -> NativeStaticCacheTelemetry {
-    NativeStaticCacheTelemetry {
+) -> StaticIndexCacheTelemetry {
+    StaticIndexCacheTelemetry {
         read_hits,
         read_misses,
         writes,
@@ -62,9 +62,9 @@ pub(crate) fn cache_telemetry(
 }
 
 pub(crate) fn fact_telemetry_from_counts(
-    counts: NativeStaticFinalizeFactCounts,
-) -> NativeStaticFactTelemetry {
-    NativeStaticFactTelemetry {
+    counts: StaticIndexFinalizeFactCounts,
+) -> StaticIndexFactTelemetry {
+    StaticIndexFactTelemetry {
         definitions: counts.definitions as u64,
         relations: counts.relations as u64,
         source_refs: counts.source_refs as u64,
@@ -78,8 +78,8 @@ pub(crate) fn fact_telemetry_from_counts(
 
 pub(crate) fn count_fact_telemetry<'a>(
     values: impl Iterator<Item = &'a Value>,
-) -> NativeStaticFactTelemetry {
-    let mut facts = NativeStaticFactTelemetry::default();
+) -> StaticIndexFactTelemetry {
+    let mut facts = StaticIndexFactTelemetry::default();
     for value in values {
         match value.get("kind").and_then(Value::as_str) {
             Some("definition" | "definitions") => facts.definitions += 1,

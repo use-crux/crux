@@ -871,7 +871,7 @@ function resolveLocalExpression(ctx: ExtractContext, expression: ts.Expression):
   return ts.isIdentifier(expression) ? (localInitializers(ctx).get(expression.text) ?? expression) : expression
 }
 
-/** Returns source-local initializers from the compiler-owned native static context. */
+/** Returns source-local initializers from the compiler-owned Static Index context. */
 function localInitializers(ctx: ExtractContext): ReadonlyMap<string, ts.Expression> {
   return internalStaticCallContext(ctx)?.localInitializers ?? new Map()
 }

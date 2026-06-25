@@ -54,7 +54,7 @@ func ReplayFacts(
 	facts := make([]json.RawMessage, 0, len(cacheHits))
 	for index, result := range results {
 		if result.err != nil {
-			return nil, fmt.Errorf("native static cache replay %s: %w", cacheHits[index].File, result.err)
+			return nil, fmt.Errorf("Static Index cache replay %s: %w", cacheHits[index].File, result.err)
 		}
 		if len(result.fact) > 0 {
 			facts = append(facts, result.fact)

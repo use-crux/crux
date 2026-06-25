@@ -3,7 +3,7 @@ use serde_json::{Map, Value, json};
 use crate::{
     composition::values::{PipelineTarget, pipeline_stage_target},
     context::{CallParts, PrimitiveContext},
-    definition::{NativeDefinitionInput, folded_index_child, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, folded_index_child, safe_id, static_index_definition},
     protocol::StaticSyntaxValue,
     record_values::{
         direct_string_property, object_array_value, object_map_identifier_entries, property_value,
@@ -161,7 +161,7 @@ fn child_definition(
     name: String,
     metadata: Map<String, Value>,
 ) -> Value {
-    native_static_definition(NativeDefinitionInput {
+    static_index_definition(NativeDefinitionInput {
         id,
         kind,
         name,

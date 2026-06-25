@@ -4,13 +4,13 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
-use crate::core::facts::{NativeStaticDefinition, NativeStaticRelation};
+use crate::core::facts::{StaticIndexDefinition, StaticIndexRelation};
 use crate::read::helpers::definition_metadata;
 
 pub(crate) fn with_resolved_routing_target_metadata(
-    definitions: Vec<NativeStaticDefinition>,
-    relations: &[NativeStaticRelation],
-) -> Vec<NativeStaticDefinition> {
+    definitions: Vec<StaticIndexDefinition>,
+    relations: &[StaticIndexRelation],
+) -> Vec<StaticIndexDefinition> {
     let targets = relations
         .iter()
         .filter_map(|relation| {

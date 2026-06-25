@@ -2,7 +2,7 @@ package planner
 
 import "testing"
 
-func TestProjectNativeStaticSignalMatcherKeepsSpacedCallAndConstructorSupport(t *testing.T) {
+func TestProjectStaticIndexSignalMatcherKeepsSpacedCallAndConstructorSupport(t *testing.T) {
 	matcher := signalMatcherForCallNames(nil)
 	for _, source := range []string{
 		"export const writer = prompt ({ id: 'writer' })",

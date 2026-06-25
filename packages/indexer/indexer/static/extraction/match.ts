@@ -173,7 +173,7 @@ export function expressionName(expression: ts.Expression): string | undefined {
 }
 
 /**
- * Creates the parser-era helper bag that first-party extractors still receive through native static
+ * Creates the parser-era helper bag that first-party extractors still receive through Static Index
  * contexts.
  *
  * New extension code should prefer the stable `ExtractContext` builders. This helper is kept local to

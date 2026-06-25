@@ -204,7 +204,7 @@ func TestWorker_indexProjectAstFromSyntaxRecordsUsesProvidedRecords(t *testing.T
 	}
 }
 
-func TestWorker_indexProjectAstPatchErrorsWhenNativeAstEnabledWithoutNativeStaticCompiler(t *testing.T) {
+func TestWorker_indexProjectAstPatchErrorsWhenNativeAstEnabledWithoutStaticIndexCompiler(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestWorker_indexProjectAstPatchErrorsWhenNativeAstEnabledWithoutNativeStati
 	if err := os.WriteFile(filepath.Join(root, "src", "writer.ts"), []byte("export const writer = prompt({ id: 'native' })"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
-	writeNativeStaticEnabledConfig(t, root)
+	writeStaticIndexEnabledConfig(t, root)
 
 	dir := t.TempDir()
 	script := filepath.Join(dir, "native-project-indexer.mjs")
@@ -258,12 +258,12 @@ func TestWorker_indexProjectAstPatchErrorsWhenNativeAstEnabledWithoutNativeStati
 				}) + '\n')
 				return
 			}
-			if (req.method === 'inspectProjectNativeStaticConfig') {
+			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
 					type: 'artifact:done',
-					transactionId: 'artifact-native-static-config',
-					artifact: 'projectNativeStaticConfig',
+					transactionId: 'artifact-static-index-config',
+					artifact: 'projectStaticIndexConfig',
 					root: req.root,
 					payload: {
 						root: req.root,
@@ -343,12 +343,12 @@ func TestWorker_indexProjectAstPatchErrorsWhenNativeAstEnabledWithoutNativeStati
 	worker.WithSyntaxParser(syntaxParser)
 	defer worker.Close()
 
-	_, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static")
+	_, err := worker.IndexProjectAstPatch(context.Background(), root, "", "static-index")
 	if err == nil {
-		t.Fatal("IndexProjectAstPatch error = nil, want native static compiler requirement error")
+		t.Fatal("IndexProjectAstPatch error = nil, want Static Index compiler requirement error")
 	}
-	if !strings.Contains(err.Error(), "requires a native static compiler") {
-		t.Fatalf("IndexProjectAstPatch error = %v, want native static compiler requirement error", err)
+	if !strings.Contains(err.Error(), "requires a Static Index compiler") {
+		t.Fatalf("IndexProjectAstPatch error = %v, want Static Index compiler requirement error", err)
 	}
 }
 
@@ -464,7 +464,7 @@ func TestWorker_indexProjectAstPatchFallsBackWhenNativeAstConfigDisabled(t *test
 		t.Fatalf("timing.NodeReasons = %v, want %q", timing.NodeReasons, projectIndexNodeReasonTypeScriptStaticCompiler)
 	}
 	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection) ||
-		containsTimingReason(timing.NodeReasons, projectIndexNodeReasonNativeStaticConfig) {
+		containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig) {
 		t.Fatalf("timing.NodeReasons = %v, want no native planning Node reason without config", timing.NodeReasons)
 	}
 	if !timing.NodeStarted || timing.NativeOnlyEligible {

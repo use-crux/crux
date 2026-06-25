@@ -20,11 +20,11 @@ import {
   type StaticIndexSourceFile,
   type StaticIndexTelemetry,
 } from './schema'
-import { readNativeRuntimeSharedFixture } from '../fixtures/shared'
+import { readStaticIndexRuntimeSharedFixture } from '../fixtures/shared'
 
 /** Shared Static Index compiler-owned identity manifest fixture. */
 export const staticIndexIdentityManifestFixture = StaticIndexIdentityManifestSchema.parse(
-  readNativeRuntimeSharedFixture('static-index-identity'),
+  readStaticIndexRuntimeSharedFixture('static-index-identity'),
 ) satisfies StaticIndexIdentityManifest
 
 /** Shared Static Index run identity fixture. */

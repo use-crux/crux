@@ -3,7 +3,7 @@ use serde_json::{Map, Value, json};
 use crate::{
     context::{CallParts, PrimitiveContext},
     data::access::{DataAccessRef, data_access_refs_for_value},
-    definition::{NativeDefinitionInput, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, safe_id, static_index_definition},
     flow::output::{flow_fact_metadata, flow_intelligence, flow_references, step_definitions},
     protocol::{LiteralValue, StaticFunctionCallValue, StaticSyntaxValue},
     record_values::{direct_string_property, has_property, property_value, resolve_static_value},
@@ -82,7 +82,7 @@ pub(crate) fn flow_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) 
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id,
             kind: "flow",
             name: explicit_name.unwrap_or_else(|| parts.variable_name.to_string()),

@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 
-use crate::protocol::native_static::{
-    NativeStaticFinalizeResponse, NativeStaticPrepareResponse, STATIC_INDEX_FINALIZE_METHOD,
-    STATIC_INDEX_PREPARE_METHOD, STATIC_INDEX_PROTOCOL_VERSION,
+use crate::protocol::static_index::{
+    STATIC_INDEX_FINALIZE_METHOD, STATIC_INDEX_PREPARE_METHOD, STATIC_INDEX_PROTOCOL_VERSION,
+    StaticIndexFinalizeResponse, StaticIndexPrepareResponse,
 };
 use crate::{parse_serve_request, write_serve_response};
 
@@ -21,7 +21,7 @@ fn prepare_request_is_accepted_through_worker_path() {
     assert_eq!(response["id"], 101);
     assert_eq!(response["ok"], true);
     let stage = response["response"].clone();
-    let parsed: NativeStaticPrepareResponse =
+    let parsed: StaticIndexPrepareResponse =
         serde_json::from_value(stage.clone()).expect("prepare response should deserialize");
 
     assert_eq!(parsed.plan.files.len(), 2);
@@ -72,7 +72,7 @@ fn finalize_request_is_accepted_through_worker_path() {
     assert_eq!(response["id"], 103);
     assert_eq!(response["ok"], true);
     let stage = response["response"].clone();
-    let parsed: NativeStaticFinalizeResponse =
+    let parsed: StaticIndexFinalizeResponse =
         serde_json::from_value(stage.clone()).expect("finalize response should deserialize");
 
     assert_eq!(parsed.events.len(), 3);
@@ -108,12 +108,12 @@ fn malformed_and_unknown_requests_remain_strict_without_breaking_syntax_requests
     assert!(
         unknown
             .expect_err("unknown method should be rejected")
-            .contains("unknown native static worker method staticIndexUnknown")
+            .contains("unknown Static Index worker method staticIndexUnknown")
     );
 
     let response = serve_response_json(json!({
         "id": 405,
-        "method": "not-native-static",
+        "method": "not-static-index",
         "root": "/repo",
         "file": "/repo/src/a.ts",
         "source": "export const a = 1"
@@ -149,7 +149,7 @@ pub(crate) fn serve_response_lines_json(request: Value) -> Vec<Value> {
 pub(crate) fn run_identity_json() -> Value {
     json!({
         "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
-        "compiler": version_identity_json("crux-native-static", "0.1.0"),
+        "compiler": version_identity_json("crux-static-index", "0.1.0"),
         "oxc": version_identity_json("oxc-rust", "oxc_parser@0.133.0+crux_native_group3.5"),
         "primitiveManifest": digest_identity_json("crux-first-party-primitives"),
         "relationPolicy": digest_identity_json("crux-relation-policy"),

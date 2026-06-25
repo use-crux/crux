@@ -2,7 +2,7 @@ package model
 
 import "encoding/json"
 
-// ProjectStaticSyntaxPlan is the Node-owned plan for native static parsing.
+// ProjectStaticSyntaxPlan is the Node-owned plan for Static Index parsing.
 type ProjectStaticSyntaxPlan struct {
 	Root        string `json:"root"`
 	ProjectName string `json:"projectName,omitempty"`

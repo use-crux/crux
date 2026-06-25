@@ -4,13 +4,13 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde_json::{Value, json};
 
-use crate::facts::{NativeStaticLintFinding, NativeStaticRelation};
+use crate::facts::{StaticIndexLintFinding, StaticIndexRelation};
 use crate::helpers::{PROPAGATING_RELATION_TYPES, owned_string_array};
 
 pub(crate) fn propagate_findings(
-    findings: Vec<NativeStaticLintFinding>,
-    relations: &[NativeStaticRelation],
-) -> Vec<NativeStaticLintFinding> {
+    findings: Vec<StaticIndexLintFinding>,
+    relations: &[StaticIndexRelation],
+) -> Vec<StaticIndexLintFinding> {
     let incoming = incoming_propagating_relations(relations);
     findings
         .into_iter()
@@ -19,9 +19,9 @@ pub(crate) fn propagate_findings(
 }
 
 fn propagate_finding(
-    mut finding: NativeStaticLintFinding,
-    incoming: &BTreeMap<&str, Vec<&NativeStaticRelation>>,
-) -> NativeStaticLintFinding {
+    mut finding: StaticIndexLintFinding,
+    incoming: &BTreeMap<&str, Vec<&StaticIndexRelation>>,
+) -> StaticIndexLintFinding {
     let Some(root) = finding_root(&finding) else {
         return finding;
     };
@@ -81,9 +81,9 @@ fn propagate_finding(
 }
 
 fn incoming_propagating_relations(
-    relations: &[NativeStaticRelation],
-) -> BTreeMap<&str, Vec<&NativeStaticRelation>> {
-    let mut incoming = BTreeMap::<&str, Vec<&NativeStaticRelation>>::new();
+    relations: &[StaticIndexRelation],
+) -> BTreeMap<&str, Vec<&StaticIndexRelation>> {
+    let mut incoming = BTreeMap::<&str, Vec<&StaticIndexRelation>>::new();
     for relation in relations {
         if PROPAGATING_RELATION_TYPES.contains(&relation.r#type.as_str()) {
             incoming
@@ -95,7 +95,7 @@ fn incoming_propagating_relations(
     incoming
 }
 
-fn finding_root(finding: &NativeStaticLintFinding) -> Option<String> {
+fn finding_root(finding: &StaticIndexLintFinding) -> Option<String> {
     finding
         .extra
         .get("primaryDefinitionId")
@@ -104,11 +104,11 @@ fn finding_root(finding: &NativeStaticLintFinding) -> Option<String> {
         .or_else(|| related_definition_ids(finding).into_iter().next())
 }
 
-fn related_definition_ids(finding: &NativeStaticLintFinding) -> Vec<String> {
+fn related_definition_ids(finding: &StaticIndexLintFinding) -> Vec<String> {
     string_array_field(finding, "relatedDefinitionIds")
 }
 
-fn string_array_field(finding: &NativeStaticLintFinding, key: &str) -> Vec<String> {
+fn string_array_field(finding: &StaticIndexLintFinding, key: &str) -> Vec<String> {
     finding
         .extra
         .get(key)

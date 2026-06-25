@@ -4,13 +4,13 @@ use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
 
-use crate::facts::{NativeStaticDefinition, NativeStaticRelation};
+use crate::facts::{StaticIndexDefinition, StaticIndexRelation};
 use crate::helpers::metadata_value;
 
 pub(crate) fn injection_outgoing_relations<'a>(
-    relations: &'a [NativeStaticRelation],
-) -> BTreeMap<&'a str, Vec<&'a NativeStaticRelation>> {
-    let mut outgoing = BTreeMap::<&str, Vec<&NativeStaticRelation>>::new();
+    relations: &'a [StaticIndexRelation],
+) -> BTreeMap<&'a str, Vec<&'a StaticIndexRelation>> {
+    let mut outgoing = BTreeMap::<&str, Vec<&StaticIndexRelation>>::new();
     for relation in relations {
         if injection_relation_type(&relation.r#type) {
             outgoing
@@ -22,7 +22,7 @@ pub(crate) fn injection_outgoing_relations<'a>(
     outgoing
 }
 
-pub(crate) fn facts_use_entries(definition: &NativeStaticDefinition) -> Vec<Value> {
+pub(crate) fn facts_use_entries(definition: &StaticIndexDefinition) -> Vec<Value> {
     metadata_value(definition, "facts")
         .and_then(|facts| facts.get("useEntries"))
         .and_then(Value::as_array)
@@ -30,15 +30,15 @@ pub(crate) fn facts_use_entries(definition: &NativeStaticDefinition) -> Vec<Valu
         .unwrap_or_default()
 }
 
-pub(crate) fn tools_facts(definition: &NativeStaticDefinition) -> Option<Value> {
+pub(crate) fn tools_facts(definition: &StaticIndexDefinition) -> Option<Value> {
     let tools = metadata_value(definition, "facts")?.get("tools")?;
     (tools.get("hasTools").and_then(Value::as_bool) == Some(true)).then(|| tools.clone())
 }
 
 pub(crate) fn use_entry_for_target(
-    owner: &NativeStaticDefinition,
-    target: &NativeStaticDefinition,
-    relation: &NativeStaticRelation,
+    owner: &StaticIndexDefinition,
+    target: &StaticIndexDefinition,
+    relation: &StaticIndexRelation,
 ) -> Option<Value> {
     facts_use_entries(owner).into_iter().find(|entry| {
         entry

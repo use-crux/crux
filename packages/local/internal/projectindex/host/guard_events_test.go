@@ -2,8 +2,8 @@ package host
 
 import "encoding/json"
 
-func nativeStaticGuardEvents(root string) ([]json.RawMessage, error) {
-	tx := "tx-native-static-extension-host"
+func staticIndexGuardEvents(root string) ([]json.RawMessage, error) {
+	tx := "tx-static-index-extension-host"
 	values := []any{
 		map[string]any{
 			"protocolVersion": 2,
@@ -46,7 +46,7 @@ func nativeStaticGuardEvents(root string) ([]json.RawMessage, error) {
 			"patch": map[string]any{
 				"schemaVersion": 1,
 				"phase":         "ast",
-				"project":       map[string]any{"root": root, "name": "native-static-guard"},
+				"project":       map[string]any{"root": root, "name": "static-index-guard"},
 				"startedAt":     "1970-01-01T00:00:00.000Z",
 				"finishedAt":    "1970-01-01T00:00:00.000Z",
 				"status":        "ok",
@@ -54,7 +54,7 @@ func nativeStaticGuardEvents(root string) ([]json.RawMessage, error) {
 			},
 			"summary": map[string]any{
 				"factCount": 1,
-				"decision":  map[string]any{"nativeStaticComplete": true},
+				"decision":  map[string]any{"staticIndexComplete": true},
 			},
 		},
 	}

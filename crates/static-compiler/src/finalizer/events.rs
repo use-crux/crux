@@ -1,34 +1,34 @@
 use serde_json::{Map, Value, json};
 
-use crate::{core::facts::NativeStaticIndexPatchFacts, finalizer::run::NativeStaticFinalizeOutput};
+use crate::{core::facts::StaticIndexIndexPatchFacts, finalizer::run::StaticIndexFinalizeOutput};
 
 const PROJECT_INDEX_PRODUCER_NAME: &str = "@crux/indexer/project-indexer";
 const AST_PHASE: &str = "ast";
-const TRANSACTION_ID: &str = "native-static-finalize";
+const TRANSACTION_ID: &str = "static-index-finalize";
 const EPOCH: &str = "1970-01-01T00:00:00.000Z";
 const MAX_FACTS_PER_BATCH: usize = 100;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct NativeStaticFinalizeProject {
+pub(crate) struct StaticIndexFinalizeProject {
     pub root: String,
     pub project_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct NativeStaticFinalizeEventOptions<'a> {
+pub(crate) struct StaticIndexFinalizeEventOptions<'a> {
     pub phase: &'a str,
     pub invalidates: Option<&'a Value>,
 }
 
-pub(crate) fn project_from_fact_values(values: &[Value]) -> Option<NativeStaticFinalizeProject> {
+pub(crate) fn project_from_fact_values(values: &[Value]) -> Option<StaticIndexFinalizeProject> {
     values.iter().find_map(project_from_fact_value)
 }
 
 pub(crate) fn project_patch_events(
-    output: &NativeStaticFinalizeOutput,
-    project: &NativeStaticFinalizeProject,
+    output: &StaticIndexFinalizeOutput,
+    project: &StaticIndexFinalizeProject,
     producer_version: &str,
-    options: NativeStaticFinalizeEventOptions<'_>,
+    options: StaticIndexFinalizeEventOptions<'_>,
 ) -> Vec<Value> {
     if output.counts.is_empty() {
         return Vec::new();
@@ -81,13 +81,13 @@ pub(crate) fn project_patch_events(
         "patch": patch,
         "summary": {
             "factCount": fact_count,
-            "decision": { "nativeStaticComplete": true },
+            "decision": { "staticIndexComplete": true },
         },
     }));
     events
 }
 
-fn project_from_fact_value(value: &Value) -> Option<NativeStaticFinalizeProject> {
+fn project_from_fact_value(value: &Value) -> Option<StaticIndexFinalizeProject> {
     let root = value
         .get("root")
         .and_then(Value::as_str)
@@ -111,10 +111,10 @@ fn project_from_fact_value(value: &Value) -> Option<NativeStaticFinalizeProject>
                 .and_then(Value::as_str)
         })
         .map(str::to_string);
-    Some(NativeStaticFinalizeProject { root, project_name })
+    Some(StaticIndexFinalizeProject { root, project_name })
 }
 
-fn project_json(project: &NativeStaticFinalizeProject) -> Value {
+fn project_json(project: &StaticIndexFinalizeProject) -> Value {
     let mut value = Map::new();
     value.insert("root".to_string(), Value::String(project.root.clone()));
     if let Some(name) = &project.project_name {
@@ -124,7 +124,7 @@ fn project_json(project: &NativeStaticFinalizeProject) -> Value {
 }
 
 fn fact_envelopes(
-    facts: &NativeStaticIndexPatchFacts,
+    facts: &StaticIndexIndexPatchFacts,
     project_root: &str,
     producer_version: &str,
     phase: &str,

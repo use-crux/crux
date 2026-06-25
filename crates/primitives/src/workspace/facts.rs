@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext},
-    definition::{NativeDefinitionInput, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, safe_id, static_index_definition},
     record_values::{
         direct_string_property, has_property, object_array_value, object_map_identifier_entries,
         object_value, property_value,
@@ -67,7 +67,7 @@ pub(crate) fn workspace_facts(
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id: id.clone(),
             kind: "workspace",
             name: explicit_id.unwrap_or_else(|| parts.variable_name.to_string()),

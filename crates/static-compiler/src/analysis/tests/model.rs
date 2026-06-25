@@ -1,11 +1,11 @@
 use serde_json::json;
 
-use crate::analysis::run::analyze_native_static_facts;
-use crate::finalizer::run::finalize_native_static_values_with_policies;
-use crate::protocol::native_static::{
-    NativeStaticAnalyzeFile, NativeStaticAnalyzeRequest, NativeStaticDigestIdentity,
-    NativeStaticMethod, NativeStaticPlan, NativeStaticRunIdentity, NativeStaticSourceFile,
-    NativeStaticVersionIdentity, STATIC_INDEX_PROTOCOL_VERSION,
+use crate::analysis::run::analyze_static_index_facts;
+use crate::finalizer::run::finalize_static_index_values_with_policies;
+use crate::protocol::static_index::{
+    STATIC_INDEX_PROTOCOL_VERSION, StaticIndexAnalyzeFile, StaticIndexAnalyzeRequest,
+    StaticIndexDigestIdentity, StaticIndexMethod, StaticIndexPlan, StaticIndexRunIdentity,
+    StaticIndexSourceFile, StaticIndexVersionIdentity,
 };
 use crate::relation::model::relation_policy_table_from_value;
 
@@ -14,7 +14,7 @@ fn analyze_uses_plan_call_names_instead_of_prompt_hardcode() {
     let source = "export const refundPrompt = prompt({ id: 'refund' })";
 
     assert!(
-        analyze_native_static_facts(&request_with_call_names(
+        analyze_static_index_facts(&request_with_call_names(
             vec!["defineWorkflow".to_string()],
             source,
         ))
@@ -22,7 +22,7 @@ fn analyze_uses_plan_call_names_instead_of_prompt_hardcode() {
     );
 
     let facts =
-        analyze_native_static_facts(&request_with_call_names(vec!["prompt".to_string()], source));
+        analyze_static_index_facts(&request_with_call_names(vec!["prompt".to_string()], source));
     let facts = facts.into_wire_values();
     assert_eq!(facts[0]["definitions"][0]["id"], "prompt:refund");
 }
@@ -30,7 +30,7 @@ fn analyze_uses_plan_call_names_instead_of_prompt_hardcode() {
 #[test]
 fn analyze_emits_source_rows_from_syntax_record_dependencies() {
     let root =
-        std::env::temp_dir().join(format!("crux-native-static-analyze-{}", std::process::id()));
+        std::env::temp_dir().join(format!("crux-static-index-analyze-{}", std::process::id()));
     let src_dir = root.join("src");
     std::fs::remove_dir_all(&root).ok();
     std::fs::create_dir_all(&src_dir).expect("test src dir");
@@ -40,7 +40,7 @@ fn analyze_emits_source_rows_from_syntax_record_dependencies() {
     let file = src_dir.join("prompt.ts");
     let source = "import { brand } from './context'\nexport const refundPrompt = prompt({ id: 'refund', use: [brand] })";
 
-    let facts = analyze_native_static_facts(&request_with_root_file_and_call_names(
+    let facts = analyze_static_index_facts(&request_with_root_file_and_call_names(
         root.to_string_lossy().to_string(),
         file.to_string_lossy().to_string(),
         vec!["prompt".to_string()],
@@ -66,7 +66,7 @@ fn analyze_emits_source_rows_from_syntax_record_dependencies() {
 #[test]
 fn analyze_uses_support_files_for_records_without_emitting_owner_rows() {
     let root =
-        std::env::temp_dir().join(format!("crux-native-static-support-{}", std::process::id()));
+        std::env::temp_dir().join(format!("crux-static-index-support-{}", std::process::id()));
     let src_dir = root.join("src");
     std::fs::remove_dir_all(&root).ok();
     std::fs::create_dir_all(&src_dir).expect("test src dir");
@@ -83,13 +83,13 @@ fn analyze_uses_support_files_for_records_without_emitting_owner_rows() {
         prompt_source,
     );
     request.plan.primary_files = Some(request.plan.files.clone());
-    request.files.push(NativeStaticAnalyzeFile {
+    request.files.push(StaticIndexAnalyzeFile {
         file: helper_file.to_string_lossy().to_string(),
         source_hash: "sha256:helper".to_string(),
         source_text: Some(helper_source.to_string()),
     });
 
-    let facts = analyze_native_static_facts(&request);
+    let facts = analyze_static_index_facts(&request);
     let facts = facts.into_wire_values();
     std::fs::remove_dir_all(&root).ok();
 
@@ -122,7 +122,7 @@ fn analyze_suppresses_duplicate_definition_packets_by_first_source_order() {
         "const second = llmJudge({ id: 'judge', criteria: 'later' })",
     ]
     .join("\n");
-    let facts = analyze_native_static_facts(&request_with_root_file_and_call_names(
+    let facts = analyze_static_index_facts(&request_with_root_file_and_call_names(
         "/workspace/acme".to_string(),
         "src/scorers.ts".to_string(),
         vec!["llmJudge".to_string()],
@@ -153,7 +153,7 @@ fn analyze_relation_refs_are_finalize_compatible() {
         "export const supportAgent = agent({ id: 'support-agent', prompt: supportPrompt })",
     ]
     .join("\n");
-    let facts = analyze_native_static_facts(&request_with_call_names(
+    let facts = analyze_static_index_facts(&request_with_call_names(
         vec!["agent".to_string(), "prompt".to_string()],
         &source,
     ));
@@ -184,7 +184,7 @@ fn analyze_relation_refs_are_finalize_compatible() {
         }]
     })))
     .expect("agent prompt relation policy");
-    let output = finalize_native_static_values_with_policies(&facts, &[], &policies);
+    let output = finalize_static_index_values_with_policies(&facts, &[], &policies);
     assert!(
         output
             .model
@@ -195,7 +195,7 @@ fn analyze_relation_refs_are_finalize_compatible() {
     );
 }
 
-fn request_with_call_names(call_names: Vec<String>, source: &str) -> NativeStaticAnalyzeRequest {
+fn request_with_call_names(call_names: Vec<String>, source: &str) -> StaticIndexAnalyzeRequest {
     request_with_root_file_and_call_names(
         "/workspace/acme".to_string(),
         "src/prompts/refund.ts".to_string(),
@@ -209,16 +209,16 @@ pub(crate) fn request_with_root_file_and_call_names(
     file: String,
     call_names: Vec<String>,
     source: &str,
-) -> NativeStaticAnalyzeRequest {
-    NativeStaticAnalyzeRequest {
+) -> StaticIndexAnalyzeRequest {
+    StaticIndexAnalyzeRequest {
         protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
-        method: NativeStaticMethod::Analyze,
+        method: StaticIndexMethod::Analyze,
         stream: true,
         identity: run_identity(),
-        plan: NativeStaticPlan {
+        plan: StaticIndexPlan {
             root,
             project_name: Some("acme".to_string()),
-            files: vec![NativeStaticSourceFile {
+            files: vec![StaticIndexSourceFile {
                 file: file.clone(),
                 source_hash: "sha256:source-refund".to_string(),
                 cache_key: None,
@@ -232,7 +232,7 @@ pub(crate) fn request_with_root_file_and_call_names(
             constructor_interests: Vec::new(),
             prune_native_fact_call_names: Vec::new(),
         },
-        files: vec![NativeStaticAnalyzeFile {
+        files: vec![StaticIndexAnalyzeFile {
             file,
             source_hash: "sha256:source-refund".to_string(),
             source_text: Some(source.to_string()),
@@ -241,10 +241,10 @@ pub(crate) fn request_with_root_file_and_call_names(
     }
 }
 
-fn run_identity() -> NativeStaticRunIdentity {
-    NativeStaticRunIdentity {
+fn run_identity() -> StaticIndexRunIdentity {
+    StaticIndexRunIdentity {
         protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
-        compiler: version_identity("crux-native-static"),
+        compiler: version_identity("crux-static-index"),
         oxc: version_identity("oxc-rust"),
         primitive_manifest: digest_identity("crux-first-party-primitives"),
         relation_policy: digest_identity("crux-relation-policy"),
@@ -254,15 +254,15 @@ fn run_identity() -> NativeStaticRunIdentity {
     }
 }
 
-fn version_identity(name: &str) -> NativeStaticVersionIdentity {
-    NativeStaticVersionIdentity {
+fn version_identity(name: &str) -> StaticIndexVersionIdentity {
+    StaticIndexVersionIdentity {
         name: name.to_string(),
         version: "test".to_string(),
     }
 }
 
-fn digest_identity(name: &str) -> NativeStaticDigestIdentity {
-    NativeStaticDigestIdentity {
+fn digest_identity(name: &str) -> StaticIndexDigestIdentity {
+    StaticIndexDigestIdentity {
         name: name.to_string(),
         version: "test".to_string(),
         digest: None,

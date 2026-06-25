@@ -2,7 +2,7 @@ use std::io::Write;
 
 use serde_json::json;
 
-use crate::protocol::native_static::NativeStaticCompileRequest;
+use crate::protocol::static_index::StaticIndexCompileRequest;
 use crate::worker::io::write_json_line;
 use crux_indexer_static_compiler::pipeline;
 
@@ -14,7 +14,7 @@ use crux_indexer_static_compiler::pipeline;
 pub(crate) fn write_compile_stream<W: Write>(
     stdout: &mut W,
     id: u64,
-    request: NativeStaticCompileRequest,
+    request: StaticIndexCompileRequest,
 ) -> Result<(), String> {
     let mut response = pipeline::compile(request);
     for event in response.events.drain(..) {

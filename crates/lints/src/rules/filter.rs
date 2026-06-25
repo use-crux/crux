@@ -5,9 +5,9 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use crate::builder::builtin_rule_descriptors;
-use crate::facts::{NativeStaticLintFinding, NativeStaticRuleDescriptor};
+use crate::facts::{StaticIndexLintFinding, StaticIndexRuleDescriptor};
 
-pub(crate) fn finding_profiles(finding: &NativeStaticLintFinding) -> BTreeSet<String> {
+pub(crate) fn finding_profiles(finding: &StaticIndexLintFinding) -> BTreeSet<String> {
     finding
         .extra
         .get("profiles")
@@ -19,7 +19,7 @@ pub(crate) fn finding_profiles(finding: &NativeStaticLintFinding) -> BTreeSet<St
         .collect()
 }
 
-pub(crate) fn known_rule_ids(rule_descriptors: &[NativeStaticRuleDescriptor]) -> BTreeSet<String> {
+pub(crate) fn known_rule_ids(rule_descriptors: &[StaticIndexRuleDescriptor]) -> BTreeSet<String> {
     let mut known = builtin_rule_descriptors()
         .into_iter()
         .map(|descriptor| descriptor.id)

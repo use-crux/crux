@@ -5,7 +5,7 @@ use crate::{
     data::access::primitive_data_intelligence,
     data::output::data_access_relation_refs,
     definition::{
-        NativeDefinitionInput, folded_index_child, native_static_definition, safe_id, source_ref,
+        NativeDefinitionInput, folded_index_child, safe_id, source_ref, static_index_definition,
     },
     flow::facts::{FlowStep, FlowSuspension, function_calls},
     protocol::{StaticFunctionCallValue, StaticSyntaxValue},
@@ -51,7 +51,7 @@ pub(crate) fn step_definitions(
             if let Some(intelligence) = primitive_data_intelligence(&accesses) {
                 metadata.insert("intelligence".to_string(), intelligence);
             }
-            let mut definition = native_static_definition(NativeDefinitionInput {
+            let mut definition = static_index_definition(NativeDefinitionInput {
                 id: definition_id,
                 kind: "flow.step",
                 name: step_name.clone(),

@@ -60,7 +60,7 @@ export interface CheckStaticRulesForProjectInput extends StaticExtensionWorkerPr
 }
 
 /**
- * Loads the project-scoped static extension host manifest for native static planning.
+ * Loads the project-scoped static extension host manifest for Static Index planning.
  *
  * This worker boundary imports no project source and performs no syntax/file/cache planning. It
  * only asks config loading for source-only inert indexer settings, loads configured trusted

@@ -1,6 +1,6 @@
 //! Built-in Crux Project Index lint application logic.
 //!
-//! This crate consumes normalized native static facts and appends built-in
+//! This crate consumes normalized Static Index facts and appends built-in
 //! findings. It does not own compiler finalization or worker transport.
 
 pub(crate) use crux_indexer_facts as facts;

@@ -1,6 +1,6 @@
 package host
 
-func nativeStaticGuardIndexerScript() string {
+func staticIndexGuardIndexerScript() string {
 	return `
 		import readline from 'node:readline'
 		const rl = readline.createInterface({ input: process.stdin, terminal: false })
@@ -25,12 +25,12 @@ func nativeStaticGuardIndexerScript() string {
 		rl.on('line', (line) => {
 			const req = assemble(JSON.parse(line))
 			if (!req) return
-			if (req.method === 'inspectProjectNativeStaticConfig') {
+			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
 					type: 'artifact:done',
-					transactionId: 'artifact-native-static-config',
-					artifact: 'projectNativeStaticConfig',
+					transactionId: 'artifact-static-index-config',
+					artifact: 'projectStaticIndexConfig',
 					root: req.root,
 					payload: {
 						root: req.root,

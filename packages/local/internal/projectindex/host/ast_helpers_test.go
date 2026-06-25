@@ -8,12 +8,12 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
-func writeNativeStaticEnabledConfig(t testing.TB, root string) string {
+func writeStaticIndexEnabledConfig(t testing.TB, root string) string {
 	t.Helper()
 	configFile := filepath.Join(root, "crux.config.ts")
 	source := []byte("import { config } from '@crux/core'\nexport default config({ experimental: { indexer: { nativeAst: true } } })\n")
 	if err := os.WriteFile(configFile, source, 0o600); err != nil {
-		t.Fatalf("write native static config: %v", err)
+		t.Fatalf("write Static Index config: %v", err)
 	}
 	return configFile
 }

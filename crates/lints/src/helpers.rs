@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
-use crate::facts::{NativeStaticDefinition, NativeStaticRelation};
+use crate::facts::{StaticIndexDefinition, StaticIndexRelation};
 
 pub(crate) const COVERAGE_TARGET_KINDS: &[&str] = &[
     "prompt",
@@ -80,8 +80,8 @@ pub(crate) const PROPAGATING_RELATION_TYPES: &[&str] = &[
 ];
 
 pub(crate) fn covered_definition_ids(
-    definitions: &[NativeStaticDefinition],
-    relations: &[NativeStaticRelation],
+    definitions: &[StaticIndexDefinition],
+    relations: &[StaticIndexRelation],
 ) -> BTreeSet<String> {
     let mut covered = relations
         .iter()
@@ -109,13 +109,13 @@ pub(crate) fn covered_definition_ids(
     covered
 }
 
-pub(crate) fn should_require_coverage(definition: &NativeStaticDefinition) -> bool {
+pub(crate) fn should_require_coverage(definition: &StaticIndexDefinition) -> bool {
     definition.status.as_deref() != Some("missing")
         && COVERAGE_TARGET_KINDS.contains(&definition.kind.as_str())
 }
 
 pub(crate) fn targets_by_relation(
-    relations: &[NativeStaticRelation],
+    relations: &[StaticIndexRelation],
     relation_type: &str,
 ) -> BTreeSet<String> {
     relations
@@ -126,7 +126,7 @@ pub(crate) fn targets_by_relation(
 }
 
 pub(crate) fn relation_sources(
-    relations: &[NativeStaticRelation],
+    relations: &[StaticIndexRelation],
     relation_types: &[&str],
 ) -> BTreeSet<String> {
     relations
@@ -137,9 +137,9 @@ pub(crate) fn relation_sources(
 }
 
 pub(crate) fn relations_by_source<'a>(
-    relations: &'a [NativeStaticRelation],
-) -> BTreeMap<&'a str, Vec<&'a NativeStaticRelation>> {
-    let mut by_source = BTreeMap::<&str, Vec<&NativeStaticRelation>>::new();
+    relations: &'a [StaticIndexRelation],
+) -> BTreeMap<&'a str, Vec<&'a StaticIndexRelation>> {
+    let mut by_source = BTreeMap::<&str, Vec<&StaticIndexRelation>>::new();
     for relation in relations {
         by_source
             .entry(relation.from.as_str())
@@ -150,11 +150,11 @@ pub(crate) fn relations_by_source<'a>(
 }
 
 pub(crate) fn child_definitions_by_parent<'a>(
-    definitions: &'a [NativeStaticDefinition],
+    definitions: &'a [StaticIndexDefinition],
     kind: &str,
     metadata_key: &str,
-) -> BTreeMap<String, Vec<&'a NativeStaticDefinition>> {
-    let mut by_parent = BTreeMap::<String, Vec<&NativeStaticDefinition>>::new();
+) -> BTreeMap<String, Vec<&'a StaticIndexDefinition>> {
+    let mut by_parent = BTreeMap::<String, Vec<&StaticIndexDefinition>>::new();
     for definition in definitions {
         if definition.kind != kind {
             continue;
@@ -175,7 +175,7 @@ pub(crate) fn child_definitions_by_parent<'a>(
     by_parent
 }
 
-pub(crate) fn workspace_allows_writes(definition: &NativeStaticDefinition) -> bool {
+pub(crate) fn workspace_allows_writes(definition: &StaticIndexDefinition) -> bool {
     if metadata_value(definition, "hasTools").and_then(Value::as_bool) == Some(true) {
         return true;
     }
@@ -196,19 +196,19 @@ pub(crate) fn workspace_allows_writes(definition: &NativeStaticDefinition) -> bo
         })
 }
 
-pub(crate) fn has_conflict_policy(definition: &NativeStaticDefinition) -> bool {
+pub(crate) fn has_conflict_policy(definition: &StaticIndexDefinition) -> bool {
     metadata_str(definition, "conflictPolicy").is_some_and(|value| !value.is_empty())
 }
 
-pub(crate) fn memory_is_long_lived(definition: &NativeStaticDefinition) -> bool {
+pub(crate) fn memory_is_long_lived(definition: &StaticIndexDefinition) -> bool {
     !long_lived_memory_blocks(definition).is_empty()
 }
 
-pub(crate) fn has_retention_policy(definition: &NativeStaticDefinition) -> bool {
+pub(crate) fn has_retention_policy(definition: &StaticIndexDefinition) -> bool {
     metadata_str(definition, "evictionPolicy").is_some_and(|value| !value.is_empty())
 }
 
-pub(crate) fn long_lived_memory_blocks(definition: &NativeStaticDefinition) -> Vec<Value> {
+pub(crate) fn long_lived_memory_blocks(definition: &StaticIndexDefinition) -> Vec<Value> {
     metadata_value(definition, "blocks")
         .and_then(Value::as_array)
         .into_iter()
@@ -227,21 +227,21 @@ pub(crate) fn long_lived_memory_blocks(definition: &NativeStaticDefinition) -> V
 }
 
 pub(crate) fn metadata_value<'a>(
-    definition: &'a NativeStaticDefinition,
+    definition: &'a StaticIndexDefinition,
     key: &str,
 ) -> Option<&'a Value> {
     definition.metadata.as_ref()?.get(key)
 }
 
 pub(crate) fn metadata_str<'a>(
-    definition: &'a NativeStaticDefinition,
+    definition: &'a StaticIndexDefinition,
     key: &str,
 ) -> Option<&'a str> {
     metadata_value(definition, key).and_then(Value::as_str)
 }
 
 pub(crate) fn metadata_path<'a>(
-    definition: &'a NativeStaticDefinition,
+    definition: &'a StaticIndexDefinition,
     path: &[&str],
 ) -> Option<&'a Value> {
     let mut current = definition.metadata.as_ref()?;
@@ -261,7 +261,7 @@ pub(crate) fn is_record(value: Option<&Value>) -> bool {
     value.is_some_and(|value| value.is_object())
 }
 
-pub(crate) fn numeric_metadata(definition: &NativeStaticDefinition, key: &str) -> usize {
+pub(crate) fn numeric_metadata(definition: &StaticIndexDefinition, key: &str) -> usize {
     metadata_value(definition, key)
         .and_then(Value::as_u64)
         .map(|value| value as usize)

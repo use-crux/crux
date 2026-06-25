@@ -11,15 +11,15 @@ import (
 )
 
 func TestSyntaxCompilerPoolUsesCommandWorker(t *testing.T) {
-	pool := compiler.NewPool(2, shellPath(t), fakeNativeStaticCompilerWorker(t))
+	pool := compiler.NewPool(2, shellPath(t), fakeStaticIndexCompilerWorker(t))
 	defer pool.Close()
 
 	identity := protocol.SkeletonIdentity()
-	prepare, err := pool.NativeStaticPrepare(context.Background(), protocol.PrepareRequest{
+	prepare, err := pool.StaticIndexPrepare(context.Background(), protocol.PrepareRequest{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.PrepareMethod,
 		Root:            "/repo",
-		ProjectName:     "native-static",
+		ProjectName:     "static-index",
 		Identity:        identity,
 		Files: []protocol.SourceFile{
 			{File: "/repo/src/cached.ts", SourceHash: "sha256:cached", CacheKey: "static:cached"},
@@ -27,10 +27,10 @@ func TestSyntaxCompilerPoolUsesCommandWorker(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("NativeStaticPrepare error = %v", err)
+		t.Fatalf("StaticIndexPrepare error = %v", err)
 	}
 
-	analyze, err := pool.NativeStaticAnalyzeStream(context.Background(), protocol.AnalyzeRequest{
+	analyze, err := pool.StaticIndexAnalyzeStream(context.Background(), protocol.AnalyzeRequest{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.AnalyzeMethod,
 		Identity:        identity,
@@ -38,10 +38,10 @@ func TestSyntaxCompilerPoolUsesCommandWorker(t *testing.T) {
 		Files:           sourceprofile.AnalyzeFiles(prepare.Plan.CacheMisses),
 	}, nil)
 	if err != nil {
-		t.Fatalf("NativeStaticAnalyzeStream error = %v", err)
+		t.Fatalf("StaticIndexAnalyzeStream error = %v", err)
 	}
 
-	finalize, err := pool.NativeStaticFinalize(context.Background(), protocol.FinalizeRequest{
+	finalize, err := pool.StaticIndexFinalize(context.Background(), protocol.FinalizeRequest{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Identity:        identity,
@@ -49,7 +49,7 @@ func TestSyntaxCompilerPoolUsesCommandWorker(t *testing.T) {
 		ExtensionFacts:  []json.RawMessage{},
 	})
 	if err != nil {
-		t.Fatalf("NativeStaticFinalize error = %v", err)
+		t.Fatalf("StaticIndexFinalize error = %v", err)
 	}
 	if len(finalize.Events) != 0 {
 		t.Fatalf("finalize events = %d, want skeleton pool response", len(finalize.Events))

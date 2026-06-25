@@ -73,7 +73,7 @@ func BenchmarkWorkerIndexProjectAstPatch(b *testing.B) {
 	configPath := os.Getenv("CRUX_INDEXER_BENCH_CONFIG")
 	assertNativePath := os.Getenv("CRUX_INDEXER_BENCH_NATIVE_AST") == "1"
 	if assertNativePath {
-		configPath = writeNativeStaticParityConfig(b, root)
+		configPath = writeStaticIndexParityConfig(b, root)
 	}
 	clearCache := os.Getenv("CRUX_INDEXER_BENCH_CLEAR_CACHE") == "1"
 	worker := newTestWorker(b)
@@ -137,7 +137,7 @@ func BenchmarkWorkerReindexProjectGraphPipeline(b *testing.B) {
 	configPath := os.Getenv("CRUX_INDEXER_BENCH_CONFIG")
 	assertNativePath := os.Getenv("CRUX_INDEXER_BENCH_NATIVE_AST") == "1"
 	if assertNativePath {
-		configPath = writeNativeStaticParityConfig(b, root)
+		configPath = writeStaticIndexParityConfig(b, root)
 	}
 	clearCache := os.Getenv("CRUX_INDEXER_BENCH_CLEAR_CACHE") == "1"
 	qualityRoot := b.TempDir()
@@ -213,9 +213,9 @@ func reportTimingReasonMetrics(b *testing.B, timing ProjectIndexAstTiming) {
 		projectIndexNodeReasonTypeScriptStaticCompiler,
 		projectIndexNodeReasonStaticPlanInspection,
 		projectIndexNodeReasonSyntaxRecordProjection,
-		projectIndexNodeReasonNativeStaticEmpty,
-		projectIndexNodeReasonNativeStaticEvidence,
-		projectIndexNodeReasonNativeStaticIncomplete,
+		projectIndexNodeReasonStaticIndexEmpty,
+		projectIndexNodeReasonStaticIndexEvidence,
+		projectIndexNodeReasonStaticIndexIncomplete,
 	} {
 		metricName := strings.NewReplacer("-", "_").Replace(reason)
 		b.ReportMetric(boolMetric(containsTimingReason(timing.NodeReasons, reason)), metricName+"_reason/op")

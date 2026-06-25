@@ -14,7 +14,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
-func TestWorkerNativeStaticBuildsPlanWithoutNodeStaticPlan(t *testing.T) {
+func TestWorkerStaticIndexBuildsPlanWithoutNodeStaticPlan(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestWorkerNativeStaticBuildsPlanWithoutNodeStaticPlan(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(sourceFile), 0o755); err != nil {
 		t.Fatalf("mkdir src: %v", err)
 	}
-	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'native-static-cutover' })"), 0o600); err != nil {
+	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'static-index-cutover' })"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
 	configFile := filepath.Join(root, "crux.config.ts")
@@ -32,25 +32,25 @@ func TestWorkerNativeStaticBuildsPlanWithoutNodeStaticPlan(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	script := filepath.Join(t.TempDir(), "native-static-config-only-indexer.mjs")
-	if err := os.WriteFile(script, []byte(nativeStaticConfigOnlyIndexerScript()), 0o600); err != nil {
+	script := filepath.Join(t.TempDir(), "static-index-config-only-indexer.mjs")
+	if err := os.WriteFile(script, []byte(staticIndexConfigOnlyIndexerScript()), 0o600); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
 
-	compiler := &nativeStaticConfigOnlyCompiler{root: root, sourceFile: sourceFile}
+	compiler := &staticIndexConfigOnlyCompiler{root: root, sourceFile: sourceFile}
 	worker := newTestWorkerWithProjectScript(t, script)
 	worker.WithSyntaxParser(compiler)
 	defer worker.Close()
 
-	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-plan")
+	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "static-index-plan")
 	if err != nil {
 		t.Fatalf("IndexProjectAstPatch error = %v", err)
 	}
-	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:native-static-cutover" {
-		t.Fatalf("definitions = %+v, want native static finalize result", patch.Facts.Definitions)
+	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:static-index-cutover" {
+		t.Fatalf("definitions = %+v, want Static Index finalize result", patch.Facts.Definitions)
 	}
 	if compiler.prepareCalls != 1 || compiler.analyzeCalls != 1 || compiler.finalizeCalls != 1 {
-		t.Fatalf("native static calls = prepare %d analyze %d finalize %d, want 1 each", compiler.prepareCalls, compiler.analyzeCalls, compiler.finalizeCalls)
+		t.Fatalf("Static Index calls = prepare %d analyze %d finalize %d, want 1 each", compiler.prepareCalls, compiler.analyzeCalls, compiler.finalizeCalls)
 	}
 	if !compiler.sawWriter || !compiler.sawConfig {
 		t.Fatalf("prepare saw writer=%v config=%v, want Go-selected source and config files", compiler.sawWriter, compiler.sawConfig)
@@ -59,15 +59,15 @@ func TestWorkerNativeStaticBuildsPlanWithoutNodeStaticPlan(t *testing.T) {
 	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection) {
 		t.Fatalf("timing.NodeReasons = %v, want no full static plan inspection", timing.NodeReasons)
 	}
-	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonNativeStaticConfig) {
+	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig) {
 		t.Fatalf("timing.NodeReasons = %v, want simple nativeAst config parsed without Node", timing.NodeReasons)
 	}
-	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonNativeStaticRules) {
+	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexRules) {
 		t.Fatalf("timing.NodeReasons = %v, want no first-party rule worker", timing.NodeReasons)
 	}
 }
 
-func TestProjectNativeStaticSimpleConfigParser(t *testing.T) {
+func TestProjectStaticIndexSimpleConfigParser(t *testing.T) {
 	root := t.TempDir()
 	configFile := filepath.Join(root, "crux.config.ts")
 
@@ -92,7 +92,7 @@ func TestProjectNativeStaticSimpleConfigParser(t *testing.T) {
 	}
 }
 
-func nativeStaticConfigOnlyIndexerScript() string {
+func staticIndexConfigOnlyIndexerScript() string {
 	return `
 		import readline from 'node:readline'
 		const rl = readline.createInterface({ input: process.stdin, terminal: false })
@@ -108,12 +108,12 @@ func nativeStaticConfigOnlyIndexerScript() string {
 				}) + '\n')
 				return
 			}
-			if (req.method === 'inspectProjectNativeStaticConfig') {
+			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
 					type: 'artifact:done',
-					transactionId: 'artifact-native-static-config',
-					artifact: 'projectNativeStaticConfig',
+					transactionId: 'artifact-static-index-config',
+					artifact: 'projectStaticIndexConfig',
 					root: req.root,
 					payload: {
 						root: req.root,
@@ -149,7 +149,7 @@ func nativeStaticConfigOnlyIndexerScript() string {
 	`
 }
 
-type nativeStaticConfigOnlyCompiler struct {
+type staticIndexConfigOnlyCompiler struct {
 	root          string
 	sourceFile    string
 	prepareCalls  int
@@ -159,7 +159,7 @@ type nativeStaticConfigOnlyCompiler struct {
 	sawConfig     bool
 }
 
-func (c *nativeStaticConfigOnlyCompiler) NativeStaticPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+func (c *staticIndexConfigOnlyCompiler) StaticIndexPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
 	c.prepareCalls++
 	if request.Root != c.root {
 		return protocol.PrepareResponse{}, fmt.Errorf("prepare root = %q, want %q", request.Root, c.root)
@@ -191,11 +191,11 @@ func (c *nativeStaticConfigOnlyCompiler) NativeStaticPrepare(_ context.Context, 
 			CacheMisses: append([]protocol.SourceFile(nil), request.Files...),
 		},
 		Diagnostics: []json.RawMessage{},
-		Telemetry:   nativeStaticTestTelemetry(len(request.Files), 0, len(request.Files), 0),
+		Telemetry:   staticIndexTestTelemetry(len(request.Files), 0, len(request.Files), 0),
 	}, nil
 }
 
-func (c *nativeStaticConfigOnlyCompiler) NativeStaticAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+func (c *staticIndexConfigOnlyCompiler) StaticIndexAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
 	c.analyzeCalls++
 	if !request.Stream {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
@@ -203,17 +203,17 @@ func (c *nativeStaticConfigOnlyCompiler) NativeStaticAnalyzeStream(_ context.Con
 	if len(request.ExtensionEvidenceInterests) == 0 {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("analyze missing static interests")
 	}
-	return nativeStaticTestAnalyzeStream(protocol.AnalyzeResponse{
+	return staticIndexTestAnalyzeStream(protocol.AnalyzeResponse{
 		ProtocolVersion:       protocol.Version,
 		Method:                protocol.AnalyzeMethod,
-		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","fact":{"id":"prompt:native-static-cutover","kind":"prompt","name":"native-static-cutover","fidelity":"resolved","status":"active"}}`)},
+		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","fact":{"id":"prompt:static-index-cutover","kind":"prompt","name":"static-index-cutover","fidelity":"resolved","status":"active"}}`)},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
-		Telemetry:             nativeStaticTestTelemetry(len(request.Plan.Files), 0, len(request.Files), len(request.Files)),
+		Telemetry:             staticIndexTestTelemetry(len(request.Plan.Files), 0, len(request.Files), len(request.Files)),
 	}, handle)
 }
 
-func (c *nativeStaticConfigOnlyCompiler) NativeStaticFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+func (c *staticIndexConfigOnlyCompiler) StaticIndexFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
 	c.finalizeCalls++
 	if len(request.NativeFacts) != 1 {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize native facts = %d, want 1", len(request.NativeFacts))
@@ -227,7 +227,7 @@ func (c *nativeStaticConfigOnlyCompiler) NativeStaticFinalize(_ context.Context,
 	if request.EmitBuiltinLints == nil || *request.EmitBuiltinLints {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize emitBuiltinLints = %v, want false for AST finalize", request.EmitBuiltinLints)
 	}
-	events, err := nativeStaticCutoverEvents(c.root)
+	events, err := staticIndexCutoverEvents(c.root)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
@@ -235,28 +235,28 @@ func (c *nativeStaticConfigOnlyCompiler) NativeStaticFinalize(_ context.Context,
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Events:          events,
-		Telemetry:       nativeStaticTestTelemetry(1, 0, 1, 1),
+		Telemetry:       staticIndexTestTelemetry(1, 0, 1, 1),
 	}, nil
 }
 
-func (c *nativeStaticConfigOnlyCompiler) NativeStaticFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func (c *staticIndexConfigOnlyCompiler) StaticIndexFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	if !request.Stream {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
-	response, err := c.NativeStaticFinalize(ctx, request)
+	response, err := c.StaticIndexFinalize(ctx, request)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return nativeStaticTestFinalizeStream(response, handle)
+	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticConfigOnlyCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
-	return nil, fmt.Errorf("ParseFile should not be called by native static config-only plan")
+func (c *staticIndexConfigOnlyCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+	return nil, fmt.Errorf("ParseFile should not be called by Static Index config-only plan")
 }
 
-func (c *nativeStaticConfigOnlyCompiler) Concurrency() int { return 1 }
+func (c *staticIndexConfigOnlyCompiler) Concurrency() int { return 1 }
 
-func (c *nativeStaticConfigOnlyCompiler) Close() error { return nil }
+func (c *staticIndexConfigOnlyCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*nativeStaticConfigOnlyCompiler)(nil)
-var _ StaticCompiler = (*nativeStaticConfigOnlyCompiler)(nil)
+var _ syntax.Parser = (*staticIndexConfigOnlyCompiler)(nil)
+var _ StaticCompiler = (*staticIndexConfigOnlyCompiler)(nil)

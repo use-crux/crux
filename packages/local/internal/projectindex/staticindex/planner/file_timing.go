@@ -82,7 +82,7 @@ func primaryCandidateFilesTimedWithCache(
 		}
 		raw, marshalErr := json.Marshal(classification)
 		if marshalErr != nil {
-			return nil, nil, timings, fmt.Errorf("select native static files: %w", marshalErr)
+			return nil, nil, timings, fmt.Errorf("select Static Index files: %w", marshalErr)
 		}
 		skipped = append(skipped, raw)
 	}
@@ -112,7 +112,7 @@ func candidateFiles(root string) ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("select native static files: %w", err)
+		return nil, fmt.Errorf("select Static Index files: %w", err)
 	}
 	return candidates, nil
 }

@@ -1,11 +1,11 @@
 use serde_json::json;
 
-use crate::analysis::run::analyze_native_static_facts;
+use crate::analysis::run::analyze_static_index_facts;
 use crate::analysis::tests::request_with_root_file_and_call_names;
 use crate::finalizer::run::{
-    finalize_native_static_values, finalize_native_static_values_with_policies,
+    finalize_static_index_values, finalize_static_index_values_with_policies,
 };
-use crate::protocol::native_static::NativeStaticAnalyzeFile;
+use crate::protocol::static_index::StaticIndexAnalyzeFile;
 use crate::relation::model::relation_policy_table_from_value;
 
 #[test]
@@ -17,14 +17,14 @@ fn analyze_emits_tree_path_definition_overlays_from_local_creators() {
         "export const prompts = createPrompts({ qa: { answer } })",
     ]
     .join("\n");
-    let facts = analyze_native_static_facts(&request_with_root_file_and_call_names(
+    let facts = analyze_static_index_facts(&request_with_root_file_and_call_names(
         "/workspace/acme".to_string(),
         "src/prompts/refund.ts".to_string(),
         vec!["context".to_string(), "prompt".to_string()],
         &source,
     ));
     let facts = facts.into_wire_values();
-    let output = finalize_native_static_values(&facts, &[]);
+    let output = finalize_static_index_values(&facts, &[]);
 
     let context = output
         .model
@@ -48,7 +48,7 @@ fn analyze_emits_tree_path_definition_overlays_from_local_creators() {
 #[test]
 fn analyze_emits_tree_path_definition_overlays_from_imported_leaves() {
     let root = std::env::temp_dir().join(format!(
-        "crux-native-static-tree-paths-{}",
+        "crux-static-index-tree-paths-{}",
         std::process::id()
     ));
     let src_dir = root.join("src");
@@ -67,15 +67,15 @@ fn analyze_emits_tree_path_definition_overlays_from_imported_leaves() {
         vec!["prompt".to_string()],
         main_source,
     );
-    request.files.push(NativeStaticAnalyzeFile {
+    request.files.push(StaticIndexAnalyzeFile {
         file: helper_file.to_string_lossy().to_string(),
         source_hash: "sha256:shared".to_string(),
         source_text: Some(helper_source.to_string()),
     });
-    let facts = analyze_native_static_facts(&request);
+    let facts = analyze_static_index_facts(&request);
     let facts = facts.into_wire_values();
     std::fs::remove_dir_all(&root).ok();
-    let output = finalize_native_static_values(&facts, &[]);
+    let output = finalize_static_index_values(&facts, &[]);
 
     let prompt = output
         .model
@@ -93,7 +93,7 @@ fn analyze_emits_tree_path_definition_overlays_from_imported_leaves() {
 #[test]
 fn analyze_relation_refs_prefer_scoped_definition_aliases() {
     let root = std::env::temp_dir().join(format!(
-        "crux-native-static-scoped-alias-{}",
+        "crux-static-index-scoped-alias-{}",
         std::process::id()
     ));
     let src_dir = root.join("src");
@@ -116,12 +116,12 @@ fn analyze_relation_refs_prefer_scoped_definition_aliases() {
         vec!["agent".to_string(), "prompt".to_string()],
         &main_source,
     );
-    request.files.push(NativeStaticAnalyzeFile {
+    request.files.push(StaticIndexAnalyzeFile {
         file: helper_file.to_string_lossy().to_string(),
         source_hash: "sha256:quality".to_string(),
         source_text: Some(helper_source.to_string()),
     });
-    let facts = analyze_native_static_facts(&request);
+    let facts = analyze_static_index_facts(&request);
     let facts = facts.into_wire_values();
     std::fs::remove_dir_all(&root).ok();
     let policies = relation_policy_table_from_value(Some(&json!({
@@ -135,7 +135,7 @@ fn analyze_relation_refs_prefer_scoped_definition_aliases() {
         }]
     })))
     .expect("agent prompt relation policy");
-    let output = finalize_native_static_values_with_policies(&facts, &[], &policies);
+    let output = finalize_static_index_values_with_policies(&facts, &[], &policies);
 
     let relation_ids = output
         .model
@@ -161,7 +161,7 @@ fn analyze_relation_refs_use_scoped_memory_definition_kind() {
         "export const editPrompt = prompt({ id: 'edit', use: [agentMemory] })",
     ]
     .join("\n");
-    let facts = analyze_native_static_facts(&request_with_root_file_and_call_names(
+    let facts = analyze_static_index_facts(&request_with_root_file_and_call_names(
         "/workspace/acme".to_string(),
         "src/prompts/edit.ts".to_string(),
         vec!["memory".to_string(), "prompt".to_string()],
@@ -179,7 +179,7 @@ fn analyze_relation_refs_use_scoped_memory_definition_kind() {
         }]
     })))
     .expect("prompt use relation policy");
-    let output = finalize_native_static_values_with_policies(&facts, &[], &policies);
+    let output = finalize_static_index_values_with_policies(&facts, &[], &policies);
 
     let relation_ids = output
         .model

@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	discoveryCacheVersion    = "native-static-discovery-v2"
+	discoveryCacheVersion    = "static-index-discovery-v2"
 	classifierCacheVersion   = "classifier-v1"
 	importScanCacheVersion   = "import-scan-v1"
 	discoveryCacheResultFile = "source-selection.json"

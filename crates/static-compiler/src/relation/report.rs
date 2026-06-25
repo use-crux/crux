@@ -5,23 +5,23 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use crate::core::facts::{
-    NativeStaticDiagnostic, NativeStaticDiagnosticSeverity, NativeStaticRelationRef,
-    NativeStaticSourceLocation,
+    StaticIndexDiagnostic, StaticIndexDiagnosticSeverity, StaticIndexRelationRef,
+    StaticIndexSourceLocation,
 };
 
 /// Conservation report for relation references that could not become edges.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct NativeStaticRelationResolutionReport {
-    pub unresolved: Vec<NativeStaticUnresolvedRelationRef>,
-    pub policy_gaps: Vec<NativeStaticRelationPolicyGap>,
-    pub counts: NativeStaticRelationResolutionCounts,
+pub(crate) struct StaticIndexRelationResolutionReport {
+    pub unresolved: Vec<StaticIndexUnresolvedRelationRef>,
+    pub policy_gaps: Vec<StaticIndexRelationPolicyGap>,
+    pub counts: StaticIndexRelationResolutionCounts,
 }
 
 /// Aggregate resolver counts exposed in diagnostics and tests.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct NativeStaticRelationResolutionCounts {
+pub(crate) struct StaticIndexRelationResolutionCounts {
     pub resolved: usize,
     pub unresolved: usize,
     pub policy_gaps: usize,
@@ -30,25 +30,25 @@ pub(crate) struct NativeStaticRelationResolutionCounts {
 /// Normalized evidence for one relation ref that did not bind.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct NativeStaticUnresolvedRelationRef {
+pub(crate) struct StaticIndexUnresolvedRelationRef {
     pub reason: String,
-    pub fact: NativeStaticRelationFactRef,
+    pub fact: StaticIndexRelationFactRef,
 }
 
 /// Missing-policy group reported by relation type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct NativeStaticRelationPolicyGap {
+pub(crate) struct StaticIndexRelationPolicyGap {
     #[serde(rename = "type")]
     pub r#type: String,
-    pub sample_fact: NativeStaticRelationFactRef,
+    pub sample_fact: StaticIndexRelationFactRef,
     pub count: usize,
 }
 
 /// Resolver-owned view of relation-ref evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct NativeStaticRelationFactRef {
+pub(crate) struct StaticIndexRelationFactRef {
     pub owner_definition_id: String,
     pub ref_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -56,11 +56,11 @@ pub(crate) struct NativeStaticRelationFactRef {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub to_variable: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<NativeStaticSourceLocation>,
+    pub source: Option<StaticIndexSourceLocation>,
 }
 
-pub(crate) fn fact_ref(relation_ref: &NativeStaticRelationRef) -> NativeStaticRelationFactRef {
-    NativeStaticRelationFactRef {
+pub(crate) fn fact_ref(relation_ref: &StaticIndexRelationRef) -> StaticIndexRelationFactRef {
+    StaticIndexRelationFactRef {
         owner_definition_id: relation_ref.owner_definition_id.clone(),
         ref_type: relation_ref.r#type.clone(),
         to_id: relation_ref.to_id.clone(),
@@ -71,22 +71,22 @@ pub(crate) fn fact_ref(relation_ref: &NativeStaticRelationRef) -> NativeStaticRe
 
 pub(crate) fn unresolved_ref(
     reason: &str,
-    fact: NativeStaticRelationFactRef,
-) -> NativeStaticUnresolvedRelationRef {
-    NativeStaticUnresolvedRelationRef {
+    fact: StaticIndexRelationFactRef,
+) -> StaticIndexUnresolvedRelationRef {
+    StaticIndexUnresolvedRelationRef {
         reason: reason.to_string(),
         fact,
     }
 }
 
 pub(crate) fn record_policy_gap(
-    gaps: &mut BTreeMap<String, NativeStaticRelationPolicyGap>,
+    gaps: &mut BTreeMap<String, StaticIndexRelationPolicyGap>,
     relation_type: &str,
-    fact: NativeStaticRelationFactRef,
+    fact: StaticIndexRelationFactRef,
 ) {
     gaps.entry(relation_type.to_string())
         .and_modify(|gap| gap.count += 1)
-        .or_insert_with(|| NativeStaticRelationPolicyGap {
+        .or_insert_with(|| StaticIndexRelationPolicyGap {
             r#type: relation_type.to_string(),
             sample_fact: fact,
             count: 1,
@@ -94,10 +94,10 @@ pub(crate) fn record_policy_gap(
 }
 
 pub(crate) fn relation_diagnostics(
-    unresolved: &[NativeStaticUnresolvedRelationRef],
-    policy_gaps: &BTreeMap<String, NativeStaticRelationPolicyGap>,
-) -> Vec<NativeStaticDiagnostic> {
-    let unresolved = unresolved.iter().map(|entry| NativeStaticDiagnostic {
+    unresolved: &[StaticIndexUnresolvedRelationRef],
+    policy_gaps: &BTreeMap<String, StaticIndexRelationPolicyGap>,
+) -> Vec<StaticIndexDiagnostic> {
+    let unresolved = unresolved.iter().map(|entry| StaticIndexDiagnostic {
         id: format!(
             "relation.unresolved_reference:{}:{}:{}",
             entry.fact.owner_definition_id,
@@ -109,7 +109,7 @@ pub(crate) fn relation_diagnostics(
                 .or(entry.fact.to_id.as_deref())
                 .unwrap_or("unknown")
         ),
-        severity: NativeStaticDiagnosticSeverity::Warning,
+        severity: StaticIndexDiagnosticSeverity::Warning,
         code: "relation.unresolved_reference".to_string(),
         message: format!(
             "Could not resolve {} relation target: {}.",
@@ -119,9 +119,9 @@ pub(crate) fn relation_diagnostics(
         related_definition_ids: vec![entry.fact.owner_definition_id.clone()],
         suggested_fix: None,
     });
-    let gaps = policy_gaps.values().map(|gap| NativeStaticDiagnostic {
+    let gaps = policy_gaps.values().map(|gap| StaticIndexDiagnostic {
         id: format!("relation.policy_gap:{}", gap.r#type),
-        severity: NativeStaticDiagnosticSeverity::Warning,
+        severity: StaticIndexDiagnosticSeverity::Warning,
         code: "relation.policy_gap".to_string(),
         message: format!(
             "No relation policy matched {} \"{}\" relation reference(s).",
@@ -136,12 +136,12 @@ pub(crate) fn relation_diagnostics(
 
 pub(crate) fn relation_report(
     resolved: usize,
-    unresolved: Vec<NativeStaticUnresolvedRelationRef>,
-    policy_gaps: BTreeMap<String, NativeStaticRelationPolicyGap>,
-) -> NativeStaticRelationResolutionReport {
+    unresolved: Vec<StaticIndexUnresolvedRelationRef>,
+    policy_gaps: BTreeMap<String, StaticIndexRelationPolicyGap>,
+) -> StaticIndexRelationResolutionReport {
     let policy_gaps = policy_gaps.into_values().collect::<Vec<_>>();
-    NativeStaticRelationResolutionReport {
-        counts: NativeStaticRelationResolutionCounts {
+    StaticIndexRelationResolutionReport {
+        counts: StaticIndexRelationResolutionCounts {
             resolved,
             unresolved: unresolved.len(),
             policy_gaps: policy_gaps.len(),

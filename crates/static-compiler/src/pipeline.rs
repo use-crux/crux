@@ -5,35 +5,35 @@
 
 use serde_json::Value;
 
-use crate::analysis::run::NativeStaticAnalysisFacts;
-use crate::analysis::run::analyze_native_static_facts;
+use crate::analysis::run::StaticIndexAnalysisFacts;
+use crate::analysis::run::analyze_static_index_facts;
 use crate::core::evidence::extension_evidence_jobs;
 use crate::finalizer::events::{
-    NativeStaticFinalizeEventOptions, project_from_fact_values, project_patch_events,
+    StaticIndexFinalizeEventOptions, project_from_fact_values, project_patch_events,
 };
-use crate::finalizer::run::finalize_native_static_values_with_lint_facts;
-use crate::lints::filter::NativeStaticLintOptions;
-use crate::protocol::native_static::{
-    NativeStaticAnalyzeRequest, NativeStaticAnalyzeResponse, NativeStaticCompileRequest,
-    NativeStaticFactTelemetry, NativeStaticFinalizeRequest, NativeStaticFinalizeResponse,
-    NativeStaticMethod, NativeStaticPlan, NativeStaticPrepareRequest, NativeStaticPrepareResponse,
-    STATIC_INDEX_PROTOCOL_VERSION,
+use crate::finalizer::run::finalize_static_index_values_with_lint_facts;
+use crate::lints::filter::StaticIndexLintOptions;
+use crate::protocol::static_index::{
+    STATIC_INDEX_PROTOCOL_VERSION, StaticIndexAnalyzeRequest, StaticIndexAnalyzeResponse,
+    StaticIndexCompileRequest, StaticIndexFactTelemetry, StaticIndexFinalizeRequest,
+    StaticIndexFinalizeResponse, StaticIndexMethod, StaticIndexPlan, StaticIndexPrepareRequest,
+    StaticIndexPrepareResponse,
 };
 use crate::relation::model::relation_policy_table_from_value_with_builtins;
 use crate::telemetry::{
     cache_telemetry, count_fact_telemetry, fact_telemetry_from_counts, file_telemetry, telemetry,
 };
 
-/// Native static analyze output before JSON-lines streaming.
-pub struct NativeStaticAnalyzeOutput {
+/// Static Index analyze output before JSON-lines streaming.
+pub struct StaticIndexAnalyzeOutput {
     pub extension_evidence_jobs: Vec<Value>,
-    fact_groups: NativeStaticAnalysisFacts,
-    pub response: NativeStaticAnalyzeResponse,
+    fact_groups: StaticIndexAnalysisFacts,
+    pub response: StaticIndexAnalyzeResponse,
 }
 
-impl NativeStaticAnalyzeOutput {
+impl StaticIndexAnalyzeOutput {
     /// Consume the compiler output and return worker-stream-ready values.
-    pub fn into_wire_parts(self) -> (Vec<Value>, Vec<Value>, NativeStaticAnalyzeResponse) {
+    pub fn into_wire_parts(self) -> (Vec<Value>, Vec<Value>, StaticIndexAnalyzeResponse) {
         (
             self.extension_evidence_jobs,
             self.fact_groups.into_wire_values(),
@@ -42,8 +42,8 @@ impl NativeStaticAnalyzeOutput {
     }
 }
 
-/// Prepare a native static plan from selected source files and cache identity.
-pub fn prepare(request: NativeStaticPrepareRequest) -> NativeStaticPrepareResponse {
+/// Prepare a Static Index plan from selected source files and cache identity.
+pub fn prepare(request: StaticIndexPrepareRequest) -> StaticIndexPrepareResponse {
     let files = request.files;
     let primary_files = request.primary_files.unwrap_or_else(|| files.clone());
     let cache_hits = files
@@ -60,10 +60,10 @@ pub fn prepare(request: NativeStaticPrepareRequest) -> NativeStaticPrepareRespon
     let hit_count = cache_hits.len() as u64;
     let miss_count = cache_misses.len() as u64;
 
-    NativeStaticPrepareResponse {
+    StaticIndexPrepareResponse {
         protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
-        method: NativeStaticMethod::Prepare,
-        plan: NativeStaticPlan {
+        method: StaticIndexMethod::Prepare,
+        plan: StaticIndexPlan {
             root: request.root,
             project_name: request.project_name,
             files,
@@ -82,27 +82,27 @@ pub fn prepare(request: NativeStaticPrepareRequest) -> NativeStaticPrepareRespon
             selected,
             file_telemetry(selected, hit_count, miss_count, 0, selected),
             cache_telemetry(hit_count, miss_count, 0),
-            NativeStaticFactTelemetry::default(),
+            StaticIndexFactTelemetry::default(),
         ),
     }
 }
 
-/// Analyze prepared files into native static facts and extension evidence jobs.
-pub fn analyze(request: &NativeStaticAnalyzeRequest) -> NativeStaticAnalyzeOutput {
+/// Analyze prepared files into Static Index facts and extension evidence jobs.
+pub fn analyze(request: &StaticIndexAnalyzeRequest) -> StaticIndexAnalyzeOutput {
     let extension_evidence_jobs = extension_evidence_jobs(request);
-    let facts = analyze_native_static_facts(request);
+    let facts = analyze_static_index_facts(request);
     let selected = request.plan.files.len() as u64;
     let cache_hits = request.plan.cache_hits.len() as u64;
     let cache_misses = request.plan.cache_misses.len() as u64;
     let analyzed = request.files.len() as u64;
     let skipped = selected.saturating_sub(analyzed);
 
-    NativeStaticAnalyzeOutput {
+    StaticIndexAnalyzeOutput {
         extension_evidence_jobs,
         fact_groups: facts,
-        response: NativeStaticAnalyzeResponse {
+        response: StaticIndexAnalyzeResponse {
             protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
-            method: NativeStaticMethod::Analyze,
+            method: StaticIndexMethod::Analyze,
             facts: Vec::new(),
             diagnostics: Vec::new(),
             extension_evidence_jobs: Vec::new(),
@@ -111,21 +111,21 @@ pub fn analyze(request: &NativeStaticAnalyzeRequest) -> NativeStaticAnalyzeOutpu
                 analyzed,
                 file_telemetry(selected, cache_hits, cache_misses, analyzed, skipped),
                 cache_telemetry(cache_hits, cache_misses, 0),
-                NativeStaticFactTelemetry::default(),
+                StaticIndexFactTelemetry::default(),
             ),
         },
     }
 }
 
 /// Finalize native and extension facts into Project Index patch events.
-pub fn finalize(request: NativeStaticFinalizeRequest) -> NativeStaticFinalizeResponse {
+pub fn finalize(request: StaticIndexFinalizeRequest) -> StaticIndexFinalizeResponse {
     let policies = relation_policy_table_from_value_with_builtins(request.relation_specs.as_ref());
-    let lint_options = NativeStaticLintOptions {
+    let lint_options = StaticIndexLintOptions {
         emit_builtin_lints: request.emit_builtin_lints.unwrap_or(true),
         config: request.lint_config.clone(),
         files: request.lint_files.clone(),
     };
-    let finalized = finalize_native_static_values_with_lint_facts(
+    let finalized = finalize_static_index_values_with_lint_facts(
         &request.native_facts,
         &request.extension_facts,
         &request.lint_facts,
@@ -172,7 +172,7 @@ pub fn finalize(request: NativeStaticFinalizeRequest) -> NativeStaticFinalizeRes
                 &finalized,
                 project,
                 &request.identity.compiler.version,
-                NativeStaticFinalizeEventOptions {
+                StaticIndexFinalizeEventOptions {
                     phase: patch_phase,
                     invalidates: patch_invalidates,
                 },
@@ -180,9 +180,9 @@ pub fn finalize(request: NativeStaticFinalizeRequest) -> NativeStaticFinalizeRes
         })
         .unwrap_or_default();
 
-    NativeStaticFinalizeResponse {
+    StaticIndexFinalizeResponse {
         protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
-        method: NativeStaticMethod::Finalize,
+        method: StaticIndexMethod::Finalize,
         events,
         telemetry: telemetry(
             "finalize",
@@ -195,10 +195,10 @@ pub fn finalize(request: NativeStaticFinalizeRequest) -> NativeStaticFinalizeRes
 }
 
 /// Analyze and finalize a native-only compile request in one pipeline call.
-pub fn compile(request: NativeStaticCompileRequest) -> NativeStaticFinalizeResponse {
-    let analyze_request = NativeStaticAnalyzeRequest {
+pub fn compile(request: StaticIndexCompileRequest) -> StaticIndexFinalizeResponse {
+    let analyze_request = StaticIndexAnalyzeRequest {
         protocol_version: request.protocol_version,
-        method: NativeStaticMethod::Analyze,
+        method: StaticIndexMethod::Analyze,
         stream: true,
         identity: request.identity.clone(),
         plan: request.plan,
@@ -208,9 +208,9 @@ pub fn compile(request: NativeStaticCompileRequest) -> NativeStaticFinalizeRespo
     let mut native_facts = request.native_facts;
     native_facts.extend(analyze(&analyze_request).fact_groups.into_wire_values());
 
-    let finalize_request = NativeStaticFinalizeRequest {
+    let finalize_request = StaticIndexFinalizeRequest {
         protocol_version: request.protocol_version,
-        method: NativeStaticMethod::Finalize,
+        method: StaticIndexMethod::Finalize,
         stream: true,
         identity: request.identity,
         native_facts,
@@ -227,6 +227,6 @@ pub fn compile(request: NativeStaticCompileRequest) -> NativeStaticFinalizeRespo
     };
 
     let mut response = finalize(finalize_request);
-    response.method = NativeStaticMethod::Compile;
+    response.method = StaticIndexMethod::Compile;
     response
 }

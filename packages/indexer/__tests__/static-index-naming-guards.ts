@@ -1,10 +1,9 @@
 /**
  * Static Index naming guards for the pre-launch runtime reorg.
  *
- * The guards are test-owned on purpose: Phase 1 records the old vocabulary
- * that later phases must remove, while some implementation surfaces still keep
- * those names in live files. The source scanner gives future phases a narrow
- * place to tighten the rules from "identified" to "gone".
+ * The guards are test-owned on purpose: earlier phases recorded the old
+ * vocabulary, and Phase 8 tightened the scanner so stale implementation names
+ * must stay gone while documented compatibility keys remain explicit.
  *
  * @module
  */
@@ -16,12 +15,22 @@ import { extname, join, relative } from 'node:path'
 export interface StaticIndexVocabularyReplacementMap {
   /** Implementation-first source-only compiler name. */
   readonly 'native-static': 'static-index'
+  /** Camel-case implementation-first source-only compiler name. */
+  readonly nativeStatic: 'staticIndex'
+  /** Pascal-case implementation-first source-only compiler name. */
+  readonly NativeStatic: 'StaticIndex'
+  /** Human-readable implementation-first source-only compiler name. */
+  readonly 'native static': 'Static Index'
   /** Public config field that names the parser implementation instead of the product lane. */
   readonly nativeAst: 'staticIndex' | 'staticSyntax' | 'oxcSyntax'
   /** Old Go package noun for code that hosts Project Index work instead of compiling it. */
   readonly projectindexer: 'projectindex'
   /** Rust module name to keep only for protocol ABI files until the protocol rename phase. */
   readonly native_static: 'static_index'
+  /** Constant-style implementation-first source-only compiler name. */
+  readonly NATIVE_STATIC: 'STATIC_INDEX'
+  /** Legacy worker override environment variable for the Static Index worker. */
+  readonly CRUX_INDEXER_WORKER: 'CRUX_STATIC_INDEX_WORKER'
 }
 
 /** Old vocabulary term covered by the Static Index reorg guard. */
@@ -32,7 +41,7 @@ export type StaticIndexReplacement<TTerm extends DeprecatedStaticIndexTerm> =
   StaticIndexVocabularyReplacementMap[TTerm]
 
 /** Reorg phase that owns at least one removal for a deprecated term. */
-export type StaticIndexTargetPhase = 2 | 4 | 5 | 6 | 7
+export type StaticIndexTargetPhase = 2 | 4 | 5 | 6 | 7 | 8
 
 /** Source root scanned by the naming guard. */
 export type StaticIndexGuardRoot = 'packages/indexer/indexer' | 'packages/local/internal' | 'crates'
@@ -47,6 +56,8 @@ export interface StaticIndexVocabularyGuard<TTerm extends DeprecatedStaticIndexT
   readonly targetedPhases: readonly StaticIndexTargetPhase[]
   /** Implementation roots where the term is currently meaningful enough to scan. */
   readonly roots: readonly StaticIndexGuardRoot[]
+  /** Implementation paths where the deprecated term is retained as a user-facing compatibility key. */
+  readonly allowedPaths?: readonly string[]
   /** Protocol ABI paths that may keep the old Rust module name until the protocol phase. */
   readonly protocolOnlyPaths?: readonly string[]
 }
@@ -91,14 +102,43 @@ export const staticIndexVocabularyGuards = defineStaticIndexVocabularyGuards([
   {
     term: 'native-static',
     replacements: ['static-index'],
-    targetedPhases: [2, 5, 6, 7],
+    targetedPhases: [2, 5, 6, 7, 8],
+    roots: ['packages/indexer/indexer', 'packages/local/internal', 'crates'],
+  },
+  {
+    term: 'nativeStatic',
+    replacements: ['staticIndex'],
+    targetedPhases: [7, 8],
+    roots: ['packages/indexer/indexer', 'packages/local/internal', 'crates'],
+  },
+  {
+    term: 'NativeStatic',
+    replacements: ['StaticIndex'],
+    targetedPhases: [7, 8],
+    roots: ['packages/indexer/indexer', 'packages/local/internal', 'crates'],
+  },
+  {
+    term: 'native static',
+    replacements: ['Static Index'],
+    targetedPhases: [5, 6, 7, 8],
     roots: ['packages/indexer/indexer', 'packages/local/internal', 'crates'],
   },
   {
     term: 'nativeAst',
     replacements: ['staticIndex', 'staticSyntax', 'oxcSyntax'],
-    targetedPhases: [2, 5, 7],
+    targetedPhases: [2, 5, 7, 8],
     roots: ['packages/indexer/indexer', 'packages/local/internal'],
+    allowedPaths: [
+      'packages/indexer/indexer/project-config-inspect-types.ts',
+      'packages/indexer/indexer/project-config-inspect.ts',
+      'packages/indexer/indexer/static-index/config/index.ts',
+      'packages/local/internal/commands/config_inspect.go',
+      'packages/local/internal/projectindex/host/static.go',
+      'packages/local/internal/projectindex/host/syntax.go',
+      'packages/local/internal/projectindex/model/static_index_config.go',
+      'packages/local/internal/projectindex/model/static_plan.go',
+      'packages/local/internal/projectindex/staticindex/planner/simple_config.go',
+    ],
   },
   {
     term: 'projectindexer',
@@ -109,9 +149,20 @@ export const staticIndexVocabularyGuards = defineStaticIndexVocabularyGuards([
   {
     term: 'native_static',
     replacements: ['static_index'],
-    targetedPhases: [6, 7],
+    targetedPhases: [6, 7, 8],
     roots: ['crates'],
-    protocolOnlyPaths: ['crates/protocol/src/native_static.rs'],
+  },
+  {
+    term: 'NATIVE_STATIC',
+    replacements: ['STATIC_INDEX'],
+    targetedPhases: [7, 8],
+    roots: ['packages/indexer/indexer', 'packages/local/internal', 'crates'],
+  },
+  {
+    term: 'CRUX_INDEXER_WORKER',
+    replacements: ['CRUX_STATIC_INDEX_WORKER'],
+    targetedPhases: [8],
+    roots: ['packages/indexer/indexer', 'packages/local/internal'],
   },
 ])
 
@@ -188,6 +239,7 @@ function collectMatchesInFile(
 ): void {
   const repoPath = toRepoPath(repoRoot, absolutePath)
   const protocolOnly = isProtocolOnlyPath(repoPath, guard)
+  if (isAllowedPath(repoPath, guard)) return
 
   if (repoPath.includes(guard.term)) {
     matches.push({ path: repoPath, source: 'path', protocolOnly })
@@ -221,6 +273,10 @@ function shouldInspectFile(repoPath: string, size: number): boolean {
 
 function isProtocolOnlyPath(repoPath: string, guard: StaticIndexVocabularyGuard): boolean {
   return Boolean(guard.protocolOnlyPaths?.some((path) => repoPath === path || repoPath.startsWith(`${path}/`)))
+}
+
+function isAllowedPath(repoPath: string, guard: StaticIndexVocabularyGuard): boolean {
+  return Boolean(guard.allowedPaths?.some((path) => repoPath === path || repoPath.startsWith(`${path}/`)))
 }
 
 function toRepoPath(repoRoot: string, absolutePath: string): string {

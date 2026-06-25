@@ -280,7 +280,7 @@ function disposeWorker(state: RustOxcWorkerState): void {
 }
 
 function workerCommand(): { readonly bin: string; readonly args: readonly string[] } {
-  const explicitWorker = workerEnvValue('CRUX_INDEXER_WORKER')
+  const explicitWorker = workerEnvValue('CRUX_STATIC_INDEX_WORKER')
   if (explicitWorker.value) return { bin: explicitWorker.value, args: ['serve'] }
   const status = rustOxcSyntaxFrontendTestStatus()
   if (!status.available) {
@@ -304,7 +304,7 @@ function workerCommand(): { readonly bin: string; readonly args: readonly string
 }
 
 function rustOxcWorkerPoolSize(): number {
-  const explicit = workerEnvValue('CRUX_INDEXER_WORKER_POOL_SIZE')
+  const explicit = workerEnvValue('CRUX_STATIC_INDEX_WORKER_POOL_SIZE')
   if (explicit.value !== undefined) {
     const value = explicit.value
     const parsed = Number(value)
@@ -317,11 +317,11 @@ function rustOxcWorkerPoolSize(): number {
 }
 
 function rustOxcBatchEnabled(): boolean {
-  return workerEnvValue('CRUX_INDEXER_WORKER_BATCH').value !== '0'
+  return workerEnvValue('CRUX_STATIC_INDEX_WORKER_BATCH').value !== '0'
 }
 
 function rustOxcReadSourceFromDiskEnabled(): boolean {
-  return workerEnvValue('CRUX_INDEXER_WORKER_READ_FILES').value === '1'
+  return workerEnvValue('CRUX_STATIC_INDEX_WORKER_READ_FILES').value === '1'
 }
 
 function workerFileRequest(input: StaticSyntaxFileInput, readSourceFromDisk: boolean): RustOxcWorkerFileRequest {
@@ -343,7 +343,7 @@ function detectRustOxcSyntaxFrontendTestStatus(): RustOxcSyntaxFrontendTestStatu
   if (rustOxcTestsSkippedByEnv()) {
     return { available: false, reason: 'CRUX_INDEXER_SKIP_RUST_OXC_TESTS is enabled' }
   }
-  if (workerEnvValue('CRUX_INDEXER_WORKER').value) return { available: true }
+  if (workerEnvValue('CRUX_STATIC_INDEX_WORKER').value) return { available: true }
   const cargo = commandOutput('cargo', ['--version'])
   if (!cargo.ok) return { available: false, reason: cargo.reason }
   const rustc = commandOutput('rustc', ['--version'])

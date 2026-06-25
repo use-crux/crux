@@ -8,27 +8,27 @@ import (
 	"testing"
 )
 
-type nativeStaticProtocolSharedFixture struct {
+type staticIndexProtocolSharedFixture struct {
 	Requests  []json.RawMessage `json:"requests"`
 	Responses []json.RawMessage `json:"responses"`
 }
 
 func TestSharedStaticIndexIdentityFixtureMatchesManifest(t *testing.T) {
 	var fixture IdentityManifest
-	readSharedNativeRuntimeFixture(t, "static-index-identity.json", &fixture)
+	readSharedStaticIndexRuntimeFixture(t, "static-index-identity.json", &fixture)
 
 	if got, want := fixture, StaticIndexIdentityManifest(); got != want {
 		t.Fatalf("identity manifest = %+v, want %+v", got, want)
 	}
 }
 
-func TestSharedNativeStaticProtocolFixtureDecodes(t *testing.T) {
-	var fixture nativeStaticProtocolSharedFixture
-	readSharedNativeRuntimeFixture(t, "native-static-protocol.json", &fixture)
+func TestSharedStaticIndexProtocolFixtureDecodes(t *testing.T) {
+	var fixture staticIndexProtocolSharedFixture
+	readSharedStaticIndexRuntimeFixture(t, "static-index-protocol.json", &fixture)
 
 	requestMethods := make([]string, 0, len(fixture.Requests))
 	for _, raw := range fixture.Requests {
-		method := nativeStaticFixtureMethod(t, raw)
+		method := staticIndexFixtureMethod(t, raw)
 		requestMethods = append(requestMethods, method)
 		switch method {
 		case PrepareMethod:
@@ -75,7 +75,7 @@ func TestSharedNativeStaticProtocolFixtureDecodes(t *testing.T) {
 	}
 
 	for _, raw := range fixture.Responses {
-		switch method := nativeStaticFixtureMethod(t, raw); method {
+		switch method := staticIndexFixtureMethod(t, raw); method {
 		case PrepareMethod:
 			var response PrepareResponse
 			if err := json.Unmarshal(raw, &response); err != nil {
@@ -102,20 +102,20 @@ func TestSharedNativeStaticProtocolFixtureDecodes(t *testing.T) {
 	}
 }
 
-func nativeStaticFixtureMethod(t *testing.T, raw json.RawMessage) string {
+func staticIndexFixtureMethod(t *testing.T, raw json.RawMessage) string {
 	t.Helper()
 	var header struct {
 		Method string `json:"method"`
 	}
 	if err := json.Unmarshal(raw, &header); err != nil {
-		t.Fatalf("decode native static fixture method: %v", err)
+		t.Fatalf("decode Static Index fixture method: %v", err)
 	}
 	return header.Method
 }
 
-func readSharedNativeRuntimeFixture(t *testing.T, name string, out any) {
+func readSharedStaticIndexRuntimeFixture(t *testing.T, name string, out any) {
 	t.Helper()
-	path := sharedNativeRuntimeFixturePath(t, name)
+	path := sharedStaticIndexRuntimeFixturePath(t, name)
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read shared fixture %s: %v", path, err)
@@ -125,7 +125,7 @@ func readSharedNativeRuntimeFixture(t *testing.T, name string, out any) {
 	}
 }
 
-func sharedNativeRuntimeFixturePath(t *testing.T, name string) string {
+func sharedStaticIndexRuntimeFixturePath(t *testing.T, name string) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {

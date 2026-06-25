@@ -176,8 +176,8 @@ export function errorContextForMethod(method: string | undefined): ProjectIndexW
       return { kind: 'artifact', method, artifact: 'projectModel' }
     case 'inspectProjectConfig':
       return { kind: 'artifact', method, artifact: 'projectConfig' }
-    case 'inspectProjectNativeStaticConfig':
-      return { kind: 'artifact', method, artifact: 'projectNativeStaticConfig' }
+    case 'inspectProjectStaticIndexConfig':
+      return { kind: 'artifact', method, artifact: 'projectStaticIndexConfig' }
     case 'inspectProjectStaticSyntaxPlan':
       return { kind: 'artifact', method, artifact: 'projectStaticSyntaxPlan' }
     case 'loadStaticExtensionHostManifest':

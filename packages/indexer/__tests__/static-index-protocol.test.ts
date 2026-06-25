@@ -9,7 +9,7 @@ import {
   staticIndexCompilerResponseFixtures,
   staticIndexRunIdentityFixture,
 } from '../indexer/contracts/static-index/fixtures'
-import { readNativeRuntimeSharedFixture } from '../indexer/contracts/fixtures'
+import { readStaticIndexRuntimeSharedFixture } from '../indexer/contracts/fixtures'
 
 describe('Static Index compiler protocol', () => {
   it('validates Static Index compiler requests and responses as JSON fixtures', () => {
@@ -25,7 +25,7 @@ describe('Static Index compiler protocol', () => {
   })
 
   it('validates the shared Static Index protocol fixture file', () => {
-    const fixture = readNativeRuntimeSharedFixture('native-static-protocol')
+    const fixture = readStaticIndexRuntimeSharedFixture('static-index-protocol')
 
     expect(fixture.requests.map((request) => request.method)).toEqual([
       'staticIndexPrepare',
@@ -50,8 +50,8 @@ describe('Static Index compiler protocol', () => {
   })
 
   it('uses the shared Static Index identity manifest for every protocol request', () => {
-    const manifest = readNativeRuntimeSharedFixture('static-index-identity')
-    const fixture = readNativeRuntimeSharedFixture('native-static-protocol')
+    const manifest = readStaticIndexRuntimeSharedFixture('static-index-identity')
+    const fixture = readStaticIndexRuntimeSharedFixture('static-index-protocol')
 
     expect(manifest).toMatchObject({
       protocolVersion: 1,

@@ -1,4 +1,4 @@
-//! Descriptor-backed helpers for native static lint findings.
+//! Descriptor-backed helpers for Static Index lint findings.
 //!
 //! Built-in rule metadata stays in `builtin_rule_descriptors.json`
 //! so Rust rule logic does not duplicate title, category, profile, fixes, or
@@ -9,23 +9,23 @@ use std::collections::BTreeMap;
 use serde_json::{Map, Value, json};
 
 use crate::facts::{
-    NativeStaticDefinition, NativeStaticDiagnosticSeverity, NativeStaticFidelity,
-    NativeStaticLintFinding, NativeStaticRelation, NativeStaticRuleDescriptor,
-    NativeStaticSourceLocation,
+    StaticIndexDefinition, StaticIndexDiagnosticSeverity, StaticIndexFidelity,
+    StaticIndexLintFinding, StaticIndexRelation, StaticIndexRuleDescriptor,
+    StaticIndexSourceLocation,
 };
 
 /// Returns built-in static lint descriptors from the native manifest.
-pub fn builtin_rule_descriptors() -> Vec<NativeStaticRuleDescriptor> {
+pub fn builtin_rule_descriptors() -> Vec<StaticIndexRuleDescriptor> {
     serde_json::from_str(include_str!("builtin_rule_descriptors.json"))
-        .expect("built-in native static rule descriptor manifest is valid JSON")
+        .expect("built-in Static Index rule descriptor manifest is valid JSON")
 }
 
 /// Builder that materializes normalized Project Index lint findings.
-pub(crate) struct NativeStaticLintBuilder {
-    descriptors: BTreeMap<String, NativeStaticRuleDescriptor>,
+pub(crate) struct StaticIndexLintBuilder {
+    descriptors: BTreeMap<String, StaticIndexRuleDescriptor>,
 }
 
-impl NativeStaticLintBuilder {
+impl StaticIndexLintBuilder {
     /// Creates a builder backed by the built-in descriptor manifest.
     pub(crate) fn new() -> Self {
         Self {
@@ -39,8 +39,8 @@ impl NativeStaticLintBuilder {
     /// Builds one lint finding from rule metadata and finding-local evidence.
     pub(crate) fn finding(
         &self,
-        input: NativeStaticLintFindingInput,
-    ) -> Option<NativeStaticLintFinding> {
+        input: StaticIndexLintFindingInput,
+    ) -> Option<StaticIndexLintFinding> {
         let descriptor = self.descriptors.get(input.rule_id)?;
         let docs_url = descriptor.extra.get("docsUrl").and_then(Value::as_str);
         let suppression = descriptor.extra.get("suppression").cloned();
@@ -96,7 +96,7 @@ impl NativeStaticLintBuilder {
             extra.insert("suppression".to_string(), value);
         }
 
-        Some(NativeStaticLintFinding {
+        Some(StaticIndexLintFinding {
             id: format!("lint:{}:{}", input.rule_id, sanitize_finding_key(input.key)),
             severity: descriptor_severity(descriptor),
             rule_id: input.rule_id.to_string(),
@@ -107,12 +107,12 @@ impl NativeStaticLintBuilder {
     }
 }
 
-/// Input accepted by `NativeStaticLintBuilder::finding`.
-pub(crate) struct NativeStaticLintFindingInput<'a> {
+/// Input accepted by `StaticIndexLintBuilder::finding`.
+pub(crate) struct StaticIndexLintFindingInput<'a> {
     pub(crate) rule_id: &'a str,
     pub(crate) key: &'a str,
     pub(crate) message: String,
-    pub(crate) source: Option<&'a NativeStaticSourceLocation>,
+    pub(crate) source: Option<&'a StaticIndexSourceLocation>,
     pub(crate) primary_definition_id: Option<&'a str>,
     pub(crate) related_definition_ids: Vec<String>,
     pub(crate) evidence: Vec<Value>,
@@ -120,7 +120,7 @@ pub(crate) struct NativeStaticLintFindingInput<'a> {
 }
 
 /// Builds evidence that points at a definition and its source location.
-pub(crate) fn definition_evidence(definition: &NativeStaticDefinition, label: &str) -> Value {
+pub(crate) fn definition_evidence(definition: &StaticIndexDefinition, label: &str) -> Value {
     let mut evidence = Map::new();
     evidence.insert("kind".to_string(), Value::String("definition".to_string()));
     evidence.insert("label".to_string(), Value::String(label.to_string()));
@@ -143,7 +143,7 @@ pub(crate) fn definition_evidence(definition: &NativeStaticDefinition, label: &s
 }
 
 /// Builds evidence that points at a relation and its source location.
-pub(crate) fn relation_evidence(relation: &NativeStaticRelation, label: &str) -> Value {
+pub(crate) fn relation_evidence(relation: &StaticIndexRelation, label: &str) -> Value {
     let mut evidence = Map::new();
     evidence.insert("kind".to_string(), Value::String("relation".to_string()));
     evidence.insert("label".to_string(), Value::String(label.to_string()));
@@ -173,19 +173,19 @@ pub(crate) fn string_array<'a>(values: impl IntoIterator<Item = &'a str>) -> Val
 }
 
 pub(crate) fn to_value<T: serde::Serialize>(value: &T) -> Value {
-    serde_json::to_value(value).expect("native static lint value should serialize")
+    serde_json::to_value(value).expect("Static Index lint value should serialize")
 }
 
-fn descriptor_severity(descriptor: &NativeStaticRuleDescriptor) -> NativeStaticDiagnosticSeverity {
+fn descriptor_severity(descriptor: &StaticIndexRuleDescriptor) -> StaticIndexDiagnosticSeverity {
     match descriptor.extra.get("severity").and_then(Value::as_str) {
-        Some("warning") => NativeStaticDiagnosticSeverity::Warning,
-        Some("error") => NativeStaticDiagnosticSeverity::Error,
-        _ => NativeStaticDiagnosticSeverity::Info,
+        Some("warning") => StaticIndexDiagnosticSeverity::Warning,
+        Some("error") => StaticIndexDiagnosticSeverity::Error,
+        _ => StaticIndexDiagnosticSeverity::Info,
     }
 }
 
 fn finding_fixes(
-    descriptor: &NativeStaticRuleDescriptor,
+    descriptor: &StaticIndexRuleDescriptor,
     docs_url: Option<&str>,
     suppression: Option<&Value>,
     extra_fixes: Vec<Value>,
@@ -253,10 +253,10 @@ fn sanitize_finding_key(value: &str) -> String {
         .collect()
 }
 
-fn fidelity_json_name(fidelity: NativeStaticFidelity) -> &'static str {
+fn fidelity_json_name(fidelity: StaticIndexFidelity) -> &'static str {
     match fidelity {
-        NativeStaticFidelity::Resolved => "resolved",
-        NativeStaticFidelity::Partial => "partial",
-        NativeStaticFidelity::Error => "error",
+        StaticIndexFidelity::Resolved => "resolved",
+        StaticIndexFidelity::Partial => "partial",
+        StaticIndexFidelity::Error => "error",
     }
 }

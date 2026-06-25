@@ -1,13 +1,13 @@
 use serde_json::json;
 
 use crate::finalizer::run::{
-    finalize_native_static_values, finalize_native_static_values_with_policies,
+    finalize_static_index_values, finalize_static_index_values_with_policies,
 };
 use crate::relation::model::relation_policy_table_from_value;
 
 #[test]
 fn finalize_binds_grouped_relation_refs_and_emits_fact_batch() {
-    let output = finalize_native_static_values(
+    let output = finalize_static_index_values(
         &[json!({
             "definitions": [
                 {
@@ -62,7 +62,7 @@ fn finalize_binds_grouped_relation_refs_and_emits_fact_batch() {
 
 #[test]
 fn finalize_keeps_placeholder_phase_three_facts_non_materialized() {
-    let output = finalize_native_static_values(
+    let output = finalize_static_index_values(
         &[
             json!({ "kind": "definition", "id": "definition:prompt:refundPrompt" }),
             json!({ "kind": "relation", "id": "relation:uses:a:b" }),
@@ -90,7 +90,7 @@ fn finalize_uses_manifest_relation_policies_for_extension_facts() {
     })))
     .expect("manifest relation policies should parse");
 
-    let output = finalize_native_static_values_with_policies(
+    let output = finalize_static_index_values_with_policies(
         &[json!({
             "definitions": [
                 {
@@ -126,7 +126,7 @@ fn finalize_uses_manifest_relation_policies_for_extension_facts() {
 
 #[test]
 fn finalize_materializes_grouped_rule_descriptors() {
-    let output = finalize_native_static_values(
+    let output = finalize_static_index_values(
         &[],
         &[json!({
             "ruleDescriptors": [{
@@ -153,7 +153,7 @@ fn finalize_materializes_grouped_rule_descriptors() {
 
 #[test]
 fn finalize_merges_duplicate_definitions_by_id() {
-    let output = finalize_native_static_values(
+    let output = finalize_static_index_values(
         &[json!({
             "definitions": [
                 {
@@ -221,7 +221,7 @@ fn finalize_merges_duplicate_definitions_by_id() {
 
 #[test]
 fn finalize_emits_builtin_resource_write_without_read_lint() {
-    let output = finalize_native_static_values(
+    let output = finalize_static_index_values(
         &[json!({
             "definitions": [
                 {

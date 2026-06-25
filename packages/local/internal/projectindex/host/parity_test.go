@@ -12,18 +12,18 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax/record"
 )
 
-func TestWorkerNativeStaticMatchesTypeScriptProductionPath(t *testing.T) {
+func TestWorkerStaticIndexMatchesTypeScriptProductionPath(t *testing.T) {
 	root := os.Getenv("CRUX_INDEXER_PARITY_ROOT")
 	if root == "" {
 		t.Skip("set CRUX_INDEXER_PARITY_ROOT to run production static parity")
 	}
 	if os.Getenv(syntax.WorkerEnv) == "" {
-		t.Skipf("set %s to run production native static parity", syntax.WorkerEnv)
+		t.Skipf("set %s to run production Static Index parity", syntax.WorkerEnv)
 	}
 	if err := os.RemoveAll(filepath.Join(root, ".crux", "cache", "index")); err != nil {
 		t.Fatalf("clear index cache: %v", err)
 	}
-	configPath := writeNativeStaticParityConfig(t, root)
+	configPath := writeStaticIndexParityConfig(t, root)
 
 	jsWorker := newTestWorker(t)
 	jsWorker.WithSyntaxParser(nil)
@@ -34,13 +34,13 @@ func TestWorkerNativeStaticMatchesTypeScriptProductionPath(t *testing.T) {
 	ctx := context.Background()
 	plan, err := nativeWorker.InspectProjectStaticSyntaxPlan(ctx, root, configPath, "parity-native-plan")
 	if err != nil {
-		t.Fatalf("inspect native static syntax plan: %v", err)
+		t.Fatalf("inspect Static Index syntax plan: %v", err)
 	}
 	if !plan.NativeAstEnabled {
-		t.Fatalf("native static syntax plan did not enable nativeAst for config %q", configPath)
+		t.Fatalf("Static Index syntax plan did not enable nativeAst for config %q", configPath)
 	}
 	if len(record.Files(plan)) == 0 {
-		t.Fatalf("native static syntax plan selected no files to parse")
+		t.Fatalf("Static Index syntax plan selected no files to parse")
 	}
 	jsPatch, err := jsWorker.IndexProjectAstPatch(ctx, root, configPath, "parity-js")
 	if err != nil {
@@ -66,16 +66,16 @@ func TestWorkerNativeStaticMatchesTypeScriptProductionPath(t *testing.T) {
 	)
 }
 
-func writeNativeStaticParityConfig(t testing.TB, root string) string {
+func writeStaticIndexParityConfig(t testing.TB, root string) string {
 	t.Helper()
-	configPath := filepath.Join("packages", "indexer", ".crux", "cache", "native-static-parity.config.ts")
+	configPath := filepath.Join("packages", "indexer", ".crux", "cache", "static-index-parity.config.ts")
 	absoluteConfigPath := filepath.Join(root, configPath)
 	if err := os.MkdirAll(filepath.Dir(absoluteConfigPath), 0o755); err != nil {
-		t.Fatalf("create native static parity config dir: %v", err)
+		t.Fatalf("create Static Index parity config dir: %v", err)
 	}
 	source := []byte("import { config } from '@crux/core'\n\nexport default config({\n  experimental: { indexer: { nativeAst: { frontend: 'oxc' } } },\n})\n")
 	if err := os.WriteFile(absoluteConfigPath, source, 0o600); err != nil {
-		t.Fatalf("write native static parity config: %v", err)
+		t.Fatalf("write Static Index parity config: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = os.Remove(absoluteConfigPath)

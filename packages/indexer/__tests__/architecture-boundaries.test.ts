@@ -47,7 +47,7 @@ describe('indexer architecture boundaries', () => {
       'authoring-types.ts',
       'facts.ts',
       'loading.ts',
-      'native-static-coverage.ts',
+      'static-index-coverage.ts',
       'runtime.ts',
       'static-adapter.ts',
       'static-evidence.ts',
@@ -133,7 +133,7 @@ describe('indexer architecture boundaries', () => {
     }
   })
 
-  it('records the old static-index vocabulary that later phases must remove', () => {
+  it('records the deprecated Static Index vocabulary with its final replacements', () => {
     expect(
       staticIndexVocabularyGuards.map(({ term, replacements, targetedPhases }) => ({
         term,
@@ -141,26 +141,41 @@ describe('indexer architecture boundaries', () => {
         targetedPhases,
       })),
     ).toEqual([
-      { term: 'native-static', replacements: ['static-index'], targetedPhases: [2, 5, 6, 7] },
-      { term: 'nativeAst', replacements: ['staticIndex', 'staticSyntax', 'oxcSyntax'], targetedPhases: [2, 5, 7] },
+      { term: 'native-static', replacements: ['static-index'], targetedPhases: [2, 5, 6, 7, 8] },
+      { term: 'nativeStatic', replacements: ['staticIndex'], targetedPhases: [7, 8] },
+      { term: 'NativeStatic', replacements: ['StaticIndex'], targetedPhases: [7, 8] },
+      { term: 'native static', replacements: ['Static Index'], targetedPhases: [5, 6, 7, 8] },
+      { term: 'nativeAst', replacements: ['staticIndex', 'staticSyntax', 'oxcSyntax'], targetedPhases: [2, 5, 7, 8] },
       { term: 'projectindexer', replacements: ['projectindex'], targetedPhases: [4, 5] },
-      { term: 'native_static', replacements: ['static_index'], targetedPhases: [6, 7] },
+      { term: 'native_static', replacements: ['static_index'], targetedPhases: [6, 7, 8] },
+      { term: 'NATIVE_STATIC', replacements: ['STATIC_INDEX'], targetedPhases: [7, 8] },
+      { term: 'CRUX_INDEXER_WORKER', replacements: ['CRUX_STATIC_INDEX_WORKER'], targetedPhases: [8] },
     ])
   })
 
-  it('keeps the static-index rename guard connected to current source roots', () => {
+  it('keeps stale Static Index implementation vocabulary out of source roots', () => {
     const observations = collectStaticIndexVocabularyObservations(repoRoot)
 
     expect(observations.map(({ guard }) => guard.term)).toEqual([
       'native-static',
+      'nativeStatic',
+      'NativeStatic',
+      'native static',
       'nativeAst',
       'projectindexer',
       'native_static',
+      'NATIVE_STATIC',
+      'CRUX_INDEXER_WORKER',
     ])
-    expect(observationFor(observations, 'native-static').matches.length).toBeGreaterThan(0)
-    expect(observationFor(observations, 'nativeAst').matches.length).toBeGreaterThan(0)
+    expect(observationFor(observations, 'native-static').matches).toEqual([])
+    expect(observationFor(observations, 'nativeStatic').matches).toEqual([])
+    expect(observationFor(observations, 'NativeStatic').matches).toEqual([])
+    expect(observationFor(observations, 'native static').matches).toEqual([])
+    expect(observationFor(observations, 'nativeAst').matches).toEqual([])
     expect(observationFor(observations, 'projectindexer').matches).toEqual([])
-    expect(observationFor(observations, 'native_static').matches.some((match) => !match.protocolOnly)).toBe(true)
+    expect(observationFor(observations, 'native_static').matches).toEqual([])
+    expect(observationFor(observations, 'NATIVE_STATIC').matches).toEqual([])
+    expect(observationFor(observations, 'CRUX_INDEXER_WORKER').matches).toEqual([])
   })
 })
 
@@ -180,7 +195,7 @@ function redundantContextualNames(root: string): readonly string[] {
       /^static-record-adapter\/static-(adapter|normalizer)\.ts$/,
       /^static-record-adapter\/internal-/,
       /^static-evidence\/static-(evidence|extension|interest)/,
-      /^native-coverage\/(native-static|extension-host)/,
+      /^native-coverage\/(static-index|extension-host)/,
       /^runtime\/runtime/,
       /^loading\/loading/,
       /^evidence\/evidence\.ts$/,

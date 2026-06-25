@@ -49,10 +49,10 @@ func FromEventsUnchecked(
 	collector := NewCollector(options)
 	for _, event := range events {
 		if err := collector.Handle(event); err != nil {
-			return projectindex.IndexPatch{}, nil, false, fmt.Errorf("native static finalize event stream: %w", err)
+			return projectindex.IndexPatch{}, nil, false, fmt.Errorf("Static Index finalize event stream: %w", err)
 		}
 	}
-	return Result(collector, "native static finalize")
+	return Result(collector, "Static Index finalize")
 }
 
 func Result(
@@ -71,6 +71,6 @@ func Result(
 }
 
 func Complete(decision map[string]any) bool {
-	complete, ok := decision["nativeStaticComplete"].(bool)
+	complete, ok := decision["staticIndexComplete"].(bool)
 	return ok && complete
 }

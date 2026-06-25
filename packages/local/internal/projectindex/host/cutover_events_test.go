@@ -2,8 +2,8 @@ package host
 
 import "encoding/json"
 
-func nativeStaticCutoverEvents(root string) ([]json.RawMessage, error) {
-	tx := "tx-native-static-cutover"
+func staticIndexCutoverEvents(root string) ([]json.RawMessage, error) {
+	tx := "tx-static-index-cutover"
 	values := []any{
 		map[string]any{
 			"protocolVersion": 2,
@@ -21,17 +21,17 @@ func nativeStaticCutoverEvents(root string) ([]json.RawMessage, error) {
 			"facts": []any{
 				map[string]any{
 					"schemaVersion": 1,
-					"factId":        "definitions:prompt:native-static-cutover",
+					"factId":        "definitions:prompt:static-index-cutover",
 					"kind":          "definitions",
 					"phase":         "ast",
 					"projectRoot":   root,
 					"producer":      map[string]any{"name": workerProducer, "version": "test"},
 					"fidelity":      "authoritative",
-					"provenance":    map[string]any{"kind": "runtime", "attribute": "test.nativeStaticCutover"},
+					"provenance":    map[string]any{"kind": "runtime", "attribute": "test.staticIndexCutover"},
 					"fact": map[string]any{
-						"id":       "prompt:native-static-cutover",
+						"id":       "prompt:static-index-cutover",
 						"kind":     "prompt",
-						"name":     "native-static-cutover",
+						"name":     "static-index-cutover",
 						"fidelity": "resolved",
 						"status":   "active",
 					},
@@ -46,7 +46,7 @@ func nativeStaticCutoverEvents(root string) ([]json.RawMessage, error) {
 			"patch": map[string]any{
 				"schemaVersion": 1,
 				"phase":         "ast",
-				"project":       map[string]any{"root": root, "name": "native-static-cutover"},
+				"project":       map[string]any{"root": root, "name": "static-index-cutover"},
 				"startedAt":     "1970-01-01T00:00:00.000Z",
 				"finishedAt":    "1970-01-01T00:00:00.000Z",
 				"status":        "ok",
@@ -54,7 +54,7 @@ func nativeStaticCutoverEvents(root string) ([]json.RawMessage, error) {
 			},
 			"summary": map[string]any{
 				"factCount": 1,
-				"decision":  map[string]any{"nativeStaticComplete": true},
+				"decision":  map[string]any{"staticIndexComplete": true},
 			},
 		},
 	}

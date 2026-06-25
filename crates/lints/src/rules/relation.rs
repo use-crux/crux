@@ -1,22 +1,22 @@
-//! Relation-driven built-in lint rules for native static graph facts.
+//! Relation-driven built-in lint rules for Static Index graph facts.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
 use crate::builder::{
-    NativeStaticLintBuilder, NativeStaticLintFindingInput, definition_evidence, relation_evidence,
+    StaticIndexLintBuilder, StaticIndexLintFindingInput, definition_evidence, relation_evidence,
     string_array,
 };
 use crate::contracts::{is_state_resource_read_relation, is_state_resource_write_relation};
-use crate::facts::{NativeStaticDefinition, NativeStaticLintFinding, NativeStaticRelation};
+use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding, StaticIndexRelation};
 use crate::helpers::has_conflict_policy;
 
 pub(crate) fn relation_lint_findings(
-    builder: &NativeStaticLintBuilder,
-    relations: &[NativeStaticRelation],
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-) -> Vec<NativeStaticLintFinding> {
+    builder: &StaticIndexLintBuilder,
+    relations: &[StaticIndexRelation],
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+) -> Vec<StaticIndexLintFinding> {
     let mut findings = state_resource_write_without_read_findings(builder, by_id, relations);
     for relation in relations {
         if relation.r#type == "agent.can_handoff_to" {
@@ -30,10 +30,10 @@ pub(crate) fn relation_lint_findings(
 }
 
 fn append_handoff_finding(
-    builder: &NativeStaticLintBuilder,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-    relation: &NativeStaticRelation,
-    findings: &mut Vec<NativeStaticLintFinding>,
+    builder: &StaticIndexLintBuilder,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+    relation: &StaticIndexRelation,
+    findings: &mut Vec<StaticIndexLintFinding>,
 ) {
     let Some(agent) = by_id.get(relation.from.as_str()) else {
         return;
@@ -42,7 +42,7 @@ fn append_handoff_finding(
     if agent.kind != "agent" || target.is_some_and(|target| target.kind == "agent") {
         return;
     }
-    if let Some(finding) = builder.finding(NativeStaticLintFindingInput {
+    if let Some(finding) = builder.finding(StaticIndexLintFindingInput {
         rule_id: "agent.unobservable_handoff",
         key: &format!("{}:{}", relation.from, relation.to),
         message: format!(
@@ -63,10 +63,10 @@ fn append_handoff_finding(
 }
 
 fn append_shared_blackboard_finding(
-    builder: &NativeStaticLintBuilder,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-    relation: &NativeStaticRelation,
-    findings: &mut Vec<NativeStaticLintFinding>,
+    builder: &StaticIndexLintBuilder,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+    relation: &StaticIndexRelation,
+    findings: &mut Vec<StaticIndexLintFinding>,
 ) {
     let Some(swarm) = by_id.get(relation.from.as_str()) else {
         return;
@@ -77,7 +77,7 @@ fn append_shared_blackboard_finding(
     if has_conflict_policy(blackboard) {
         return;
     }
-    if let Some(finding) = builder.finding(NativeStaticLintFindingInput {
+    if let Some(finding) = builder.finding(StaticIndexLintFindingInput {
         rule_id: "shared_blackboard_without_policy",
         key: &format!("{}:{}", relation.from, relation.to),
         message: format!(
@@ -103,11 +103,11 @@ fn append_shared_blackboard_finding(
 }
 
 fn state_resource_write_without_read_findings(
-    builder: &NativeStaticLintBuilder,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-    relations: &[NativeStaticRelation],
-) -> Vec<NativeStaticLintFinding> {
-    let mut writes_by_target = BTreeMap::<&str, Vec<&NativeStaticRelation>>::new();
+    builder: &StaticIndexLintBuilder,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+    relations: &[StaticIndexRelation],
+) -> Vec<StaticIndexLintFinding> {
+    let mut writes_by_target = BTreeMap::<&str, Vec<&StaticIndexRelation>>::new();
     let mut read_targets = BTreeSet::<&str>::new();
     for relation in relations {
         if is_state_resource_read_relation(relation) {
@@ -143,7 +143,7 @@ fn state_resource_write_without_read_findings(
                 relation_evidence(relation, "Visible write without a matching read")
             }),
         );
-        let Some(mut finding) = builder.finding(NativeStaticLintFindingInput {
+        let Some(mut finding) = builder.finding(StaticIndexLintFindingInput {
             rule_id: "resource.write_without_read",
             key: target_id,
             message: format!(
@@ -179,7 +179,7 @@ fn state_resource_write_without_read_findings(
     findings
 }
 
-fn state_resource_label(target_id: &str, target: Option<&NativeStaticDefinition>) -> String {
+fn state_resource_label(target_id: &str, target: Option<&StaticIndexDefinition>) -> String {
     target
         .map(|definition| format!("{} \"{}\"", definition.kind, definition.name))
         .unwrap_or_else(|| format!("State resource \"{target_id}\""))

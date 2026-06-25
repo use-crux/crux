@@ -19,7 +19,7 @@ pub(crate) struct NativeDefinitionInput<'a> {
 }
 
 /// Builds the Project Definition shape emitted by the TypeScript static definition builder.
-pub(crate) fn native_static_definition(input: NativeDefinitionInput<'_>) -> Value {
+pub(crate) fn static_index_definition(input: NativeDefinitionInput<'_>) -> Value {
     let mut definition = Map::new();
     definition.insert("id".to_string(), Value::String(input.id.clone()));
     definition.insert("kind".to_string(), Value::String(input.kind.to_string()));

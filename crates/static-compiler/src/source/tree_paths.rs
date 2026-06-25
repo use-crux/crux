@@ -1,4 +1,4 @@
-//! Record-backed prompt/context tree path projection for native static analyze.
+//! Record-backed prompt/context tree path projection for Static Index analyze.
 //!
 //! The TypeScript compiler adds path overlays from `createPrompts` and `createContexts` trees
 //! after primitive extraction. Native analyze emits the same minimal duplicate definitions and lets

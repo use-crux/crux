@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Map, Value};
 
 use crate::contracts::contract_input_contributions;
-use crate::facts::{NativeStaticDefinition, NativeStaticRelation};
+use crate::facts::{StaticIndexDefinition, StaticIndexRelation};
 use crate::injection::model_helpers::{
     can_own_injection, combine_conditionality, entry_projection, facts_use_entries,
     injection_outgoing_relations, is_dynamic_use_entry, string_array_field, tools_facts,
@@ -13,7 +13,7 @@ use crate::injection::model_helpers::{
 };
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct NativeStaticInjectionModel {
+pub(crate) struct StaticIndexInjectionModel {
     pub(crate) input_contributions: Vec<Value>,
     pub(crate) tool_contributions: Vec<Value>,
     pub(crate) dynamic_entries: Vec<Value>,
@@ -29,10 +29,10 @@ struct WalkState {
 }
 
 pub(crate) fn build_all_injection_models<'a>(
-    definitions: &'a [NativeStaticDefinition],
-    relations: &'a [NativeStaticRelation],
-    by_id: &BTreeMap<&'a str, &'a NativeStaticDefinition>,
-) -> BTreeMap<&'a str, NativeStaticInjectionModel> {
+    definitions: &'a [StaticIndexDefinition],
+    relations: &'a [StaticIndexRelation],
+    by_id: &BTreeMap<&'a str, &'a StaticIndexDefinition>,
+) -> BTreeMap<&'a str, StaticIndexInjectionModel> {
     let outgoing = injection_outgoing_relations(relations);
     definitions
         .iter()
@@ -45,13 +45,13 @@ pub(crate) fn build_all_injection_models<'a>(
 }
 
 fn build_injection_model<'a>(
-    root: &'a NativeStaticDefinition,
-    by_id: &BTreeMap<&'a str, &'a NativeStaticDefinition>,
-    outgoing: &BTreeMap<&'a str, Vec<&'a NativeStaticRelation>>,
-) -> Option<NativeStaticInjectionModel> {
-    let mut model = NativeStaticInjectionModel {
+    root: &'a StaticIndexDefinition,
+    by_id: &BTreeMap<&'a str, &'a StaticIndexDefinition>,
+    outgoing: &BTreeMap<&'a str, Vec<&'a StaticIndexRelation>>,
+) -> Option<StaticIndexInjectionModel> {
+    let mut model = StaticIndexInjectionModel {
         input_contributions: contract_input_contributions(root),
-        ..NativeStaticInjectionModel::default()
+        ..StaticIndexInjectionModel::default()
     };
     let mut visited_edges = BTreeSet::<String>::new();
     visit(
@@ -71,12 +71,12 @@ fn build_injection_model<'a>(
 }
 
 fn visit<'a>(
-    definition: &'a NativeStaticDefinition,
-    by_id: &BTreeMap<&'a str, &'a NativeStaticDefinition>,
-    outgoing: &BTreeMap<&'a str, Vec<&'a NativeStaticRelation>>,
+    definition: &'a StaticIndexDefinition,
+    by_id: &BTreeMap<&'a str, &'a StaticIndexDefinition>,
+    outgoing: &BTreeMap<&'a str, Vec<&'a StaticIndexRelation>>,
     state: WalkState,
     visited_edges: &mut BTreeSet<String>,
-    model: &mut NativeStaticInjectionModel,
+    model: &mut StaticIndexInjectionModel,
 ) {
     for entry in facts_use_entries(definition) {
         if is_dynamic_use_entry(&entry) {
@@ -141,9 +141,9 @@ fn visit<'a>(
 }
 
 fn append_tool_contributions(
-    definition: &NativeStaticDefinition,
+    definition: &StaticIndexDefinition,
     state: &WalkState,
-    model: &mut NativeStaticInjectionModel,
+    model: &mut StaticIndexInjectionModel,
 ) {
     let Some(tools) = tools_facts(definition) else {
         return;
@@ -173,7 +173,7 @@ fn append_tool_contributions(
 }
 
 fn tool_contribution(
-    definition: &NativeStaticDefinition,
+    definition: &StaticIndexDefinition,
     state: &WalkState,
     named: Option<(&str, String)>,
 ) -> Value {

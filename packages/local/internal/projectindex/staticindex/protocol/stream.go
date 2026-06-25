@@ -33,7 +33,7 @@ type FinalizeStreamEvent struct {
 func DecodeAnalyzeStreamEvent(raw json.RawMessage) (AnalyzeStreamEvent, error) {
 	var event AnalyzeStreamEvent
 	if err := json.Unmarshal(raw, &event); err != nil {
-		return AnalyzeStreamEvent{}, fmt.Errorf("decode native static analyze stream event: %w", err)
+		return AnalyzeStreamEvent{}, fmt.Errorf("decode Static Index analyze stream event: %w", err)
 	}
 	return event, nil
 }
@@ -41,23 +41,23 @@ func DecodeAnalyzeStreamEvent(raw json.RawMessage) (AnalyzeStreamEvent, error) {
 func DecodeFinalizeStreamEvent(raw json.RawMessage) (FinalizeStreamEvent, error) {
 	var event FinalizeStreamEvent
 	if err := json.Unmarshal(raw, &event); err != nil {
-		return FinalizeStreamEvent{}, fmt.Errorf("decode native static finalize stream event: %w", err)
+		return FinalizeStreamEvent{}, fmt.Errorf("decode Static Index finalize stream event: %w", err)
 	}
 	return event, nil
 }
 
 func AnalyzeStreamError(message string) error {
 	if message == "" {
-		return fmt.Errorf("native static analyze stream failed")
+		return fmt.Errorf("Static Index analyze stream failed")
 	}
-	return fmt.Errorf("native static analyze stream failed: %s", message)
+	return fmt.Errorf("Static Index analyze stream failed: %s", message)
 }
 
 func FinalizeStreamError(message string) error {
 	if message == "" {
-		return fmt.Errorf("native static finalize stream failed")
+		return fmt.Errorf("Static Index finalize stream failed")
 	}
-	return fmt.Errorf("native static finalize stream failed: %s", message)
+	return fmt.Errorf("Static Index finalize stream failed: %s", message)
 }
 
 func AppendRawMessage(values []json.RawMessage, value json.RawMessage) []json.RawMessage {

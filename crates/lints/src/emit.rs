@@ -2,14 +2,14 @@
 
 use serde_json::Value;
 
-use crate::builder::{NativeStaticLintBuilder, NativeStaticLintFindingInput};
-use crate::facts::{NativeStaticDefinition, NativeStaticLintFinding};
+use crate::builder::{StaticIndexLintBuilder, StaticIndexLintFindingInput};
+use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding};
 
 pub(crate) fn push_definition_finding(
-    builder: &NativeStaticLintBuilder,
-    findings: &mut Vec<NativeStaticLintFinding>,
+    builder: &StaticIndexLintBuilder,
+    findings: &mut Vec<StaticIndexLintFinding>,
     rule_id: &str,
-    definition: &NativeStaticDefinition,
+    definition: &StaticIndexDefinition,
     message: String,
     evidence_groups: Vec<Value>,
 ) {
@@ -20,7 +20,7 @@ pub(crate) fn push_definition_finding(
             value => vec![value],
         })
         .collect::<Vec<_>>();
-    if let Some(finding) = builder.finding(NativeStaticLintFindingInput {
+    if let Some(finding) = builder.finding(StaticIndexLintFindingInput {
         rule_id,
         key: definition.id.as_str(),
         message,

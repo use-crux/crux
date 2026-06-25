@@ -1,15 +1,15 @@
 /**
- * Current inventory for the native runtime architecture refactor.
+ * Current inventory for the Static Index runtime architecture refactor.
  *
  * The inventory is intentionally data-only and test-owned. It records the
  * canonical TypeScript contract spine plus the Go/Rust mirrors that must stay
- * aligned while the native runtime boundary evolves.
+ * aligned while the Static Index runtime boundary evolves.
  *
  * @module
  */
 
-/** Contract groups that have to stay visible through the native runtime split. */
-export const nativeRuntimeContractIds = [
+/** Contract groups that have to stay visible through the Static Index runtime split. */
+export const staticIndexRuntimeContractIds = [
   'worker-events',
   'static-syntax-records',
   'static-index',
@@ -17,16 +17,13 @@ export const nativeRuntimeContractIds = [
 ] as const
 
 /** Stable identifier for one current contract group. */
-export type NativeRuntimeContractId = (typeof nativeRuntimeContractIds)[number]
-
-/** Legacy contract identifier kept only to make target replacement rows explicit. */
-export type NativeRuntimeLegacyContractId = 'native-static-protocol'
+export type StaticIndexRuntimeContractId = (typeof staticIndexRuntimeContractIds)[number]
 
 /** Language/runtime that owns or mirrors a contract file today. */
-export type NativeRuntimeContractOwner = 'typescript' | 'go' | 'rust'
+export type StaticIndexRuntimeContractOwner = 'typescript' | 'go' | 'rust'
 
 /** Current file role inside a contract group. */
-export type NativeRuntimeContractFileKind =
+export type StaticIndexRuntimeContractFileKind =
   | 'canonical-types'
   | 'schema'
   | 'parser'
@@ -36,7 +33,7 @@ export type NativeRuntimeContractFileKind =
   | 'test'
 
 /** One source file that participates in a current cross-language contract. */
-export interface NativeRuntimeContractFile<TOwner extends NativeRuntimeContractOwner = NativeRuntimeContractOwner> {
+export interface StaticIndexRuntimeContractFile<TOwner extends StaticIndexRuntimeContractOwner = StaticIndexRuntimeContractOwner> {
   /** Runtime or language owner for this file. */
   readonly owner: TOwner
   /** Repository-relative path. */
@@ -44,40 +41,39 @@ export interface NativeRuntimeContractFile<TOwner extends NativeRuntimeContractO
   /** Short reason this file belongs in the contract inventory. */
   readonly role: string
   /** Machine-readable role used by the inventory test and docs. */
-  readonly kind: NativeRuntimeContractFileKind
+  readonly kind: StaticIndexRuntimeContractFileKind
 }
 
 /** Owner-bucketed file list for one contract group. */
-export type NativeRuntimeContractFilesByOwner = {
-  readonly [TOwner in NativeRuntimeContractOwner]: readonly NativeRuntimeContractFile<TOwner>[]
+export type StaticIndexRuntimeContractFilesByOwner = {
+  readonly [TOwner in StaticIndexRuntimeContractOwner]: readonly StaticIndexRuntimeContractFile<TOwner>[]
 }
 
 /** Whether a current contract already has all intended language mirrors. */
-export type NativeRuntimeContractMirrorStatus = 'mirrored' | 'partial-mirror' | 'typescript-only'
+export type StaticIndexRuntimeContractMirrorStatus = 'mirrored' | 'partial-mirror' | 'typescript-only'
 
-interface NativeRuntimeContractEntryBase<TId extends NativeRuntimeContractId> {
+interface StaticIndexRuntimeContractEntryBase<TId extends StaticIndexRuntimeContractId> {
   readonly id: TId
   readonly label: string
   readonly boundary: string
-  readonly renamesFrom?: NativeRuntimeLegacyContractId
   readonly canonicalOwner: 'typescript'
-  readonly mirrorStatus: NativeRuntimeContractMirrorStatus
-  readonly filesByOwner: NativeRuntimeContractFilesByOwner
+  readonly mirrorStatus: StaticIndexRuntimeContractMirrorStatus
+  readonly filesByOwner: StaticIndexRuntimeContractFilesByOwner
   readonly fixtureGap: string
 }
 
 /** Public inventory row with owner buckets and a flattened file list. */
-export interface NativeRuntimeContractEntry<TId extends NativeRuntimeContractId = NativeRuntimeContractId>
-  extends NativeRuntimeContractEntryBase<TId> {
+export interface StaticIndexRuntimeContractEntry<TId extends StaticIndexRuntimeContractId = StaticIndexRuntimeContractId>
+  extends StaticIndexRuntimeContractEntryBase<TId> {
   /** Flattened files in TypeScript, Go, Rust order. */
-  readonly files: readonly NativeRuntimeContractFile[]
+  readonly files: readonly StaticIndexRuntimeContractFile[]
 }
 
-type NativeRuntimeContractIndex = {
-  readonly [TId in NativeRuntimeContractId]: NativeRuntimeContractEntryBase<TId>
+type StaticIndexRuntimeContractIndex = {
+  readonly [TId in StaticIndexRuntimeContractId]: StaticIndexRuntimeContractEntryBase<TId>
 }
 
-const contractOwners = ['typescript', 'go', 'rust'] as const satisfies readonly NativeRuntimeContractOwner[]
+const contractOwners = ['typescript', 'go', 'rust'] as const satisfies readonly StaticIndexRuntimeContractOwner[]
 
 const inventory = {
   'worker-events': {
@@ -261,9 +257,7 @@ const inventory = {
   'static-index': {
     id: 'static-index',
     label: 'Static Index compiler protocol',
-    boundary:
-      'Target Static Index prepare, analyze, finalize, and compile handoff that replaces current native-static protocol naming.',
-    renamesFrom: 'native-static-protocol',
+    boundary: 'Static Index prepare, analyze, finalize, and compile handoff for source-only Project Index compilation.',
     canonicalOwner: 'typescript',
     mirrorStatus: 'mirrored',
     filesByOwner: {
@@ -303,7 +297,7 @@ const inventory = {
         contractFile(
           'go',
           'packages/local/internal/projectindex/staticindex/protocol/stream.go',
-          'Go streaming decoder for analyze/finalize/compile native static events.',
+          'Go streaming decoder for analyze/finalize/compile Static Index events.',
           'streaming',
         ),
         contractFile(
@@ -315,33 +309,33 @@ const inventory = {
         contractFile(
           'go',
           'packages/local/internal/projectindex/staticindex/protocol/identity.go',
-          'Go construction of native static cache-sensitive run identity.',
+          'Go construction of Static Index cache-sensitive run identity.',
           'host-mirror',
         ),
         contractFile(
           'go',
           'packages/local/internal/projectindex/staticindex/protocol/shared_fixtures_test.go',
-          'Shared fixture decoder for native static protocol JSON.',
+          'Shared fixture decoder for Static Index protocol JSON.',
           'test',
         ),
       ],
       rust: [
         contractFile(
           'rust',
-          'crates/protocol/src/native_static.rs',
-          'Rust protocol ABI to rename only when TS, Go, and Rust method names move together.',
+          'crates/protocol/src/static_index.rs',
+          'Rust protocol ABI for Static Index request, response, identity, plan, and telemetry structs.',
           'native-mirror',
         ),
         contractFile(
           'rust',
           'crates/static-compiler/src/shared_fixtures_tests.rs',
-          'Shared fixture decoder for native static protocol JSON and pipeline behavior.',
+          'Shared fixture decoder for Static Index protocol JSON and pipeline behavior.',
           'test',
         ),
       ],
     },
     fixtureGap:
-      'The current native static protocol fixture is decoded by TypeScript, Go, and Rust for every method; Phase 7 will rename it to Static Index while preserving explicit protocol-error and invalid-stream fixture gaps.',
+      'The Static Index protocol fixture is decoded by TypeScript, Go, and Rust for every method; remaining gaps are explicit protocol-error and invalid-stream fixtures.',
   },
   'semantic-evidence': {
     id: 'semantic-evidence',
@@ -389,17 +383,17 @@ const inventory = {
     fixtureGap:
       'Semantic backend parity compares normalized Project Index facts, but no shared semantic evidence fixture files cover definitions, relations, source refs, diagnostics, lint findings, and degraded/unsupported cases.',
   },
-} satisfies NativeRuntimeContractIndex
+} satisfies StaticIndexRuntimeContractIndex
 
 /** Returns current contract groups in migration order. */
-export function nativeRuntimeContractInventory(): readonly NativeRuntimeContractEntry[] {
-  return nativeRuntimeContractIds.map((id) => entryWithFiles(inventory[id]))
+export function staticIndexRuntimeContractInventory(): readonly StaticIndexRuntimeContractEntry[] {
+  return staticIndexRuntimeContractIds.map((id) => entryWithFiles(inventory[id]))
 }
 
-function entryWithFiles<TId extends NativeRuntimeContractId>(
-  entry: NativeRuntimeContractEntryBase<TId>,
-): NativeRuntimeContractEntry<TId> {
-  const files: NativeRuntimeContractFile[] = []
+function entryWithFiles<TId extends StaticIndexRuntimeContractId>(
+  entry: StaticIndexRuntimeContractEntryBase<TId>,
+): StaticIndexRuntimeContractEntry<TId> {
+  const files: StaticIndexRuntimeContractFile[] = []
   for (const owner of contractOwners) files.push(...entry.filesByOwner[owner])
   return {
     ...entry,
@@ -407,11 +401,11 @@ function entryWithFiles<TId extends NativeRuntimeContractId>(
   }
 }
 
-function contractFile<TOwner extends NativeRuntimeContractOwner>(
+function contractFile<TOwner extends StaticIndexRuntimeContractOwner>(
   owner: TOwner,
   path: string,
   role: string,
-  kind: NativeRuntimeContractFileKind,
-): NativeRuntimeContractFile<TOwner> {
+  kind: StaticIndexRuntimeContractFileKind,
+): StaticIndexRuntimeContractFile<TOwner> {
   return { owner, path, role, kind }
 }

@@ -144,7 +144,7 @@ export async function indexProjectAst(options: IndexProjectAstOptions): Promise<
 /**
  * Builds an AST/source-only index patch from caller-provided syntax records.
  *
- * This is the worker bridge used by native static indexing: Go can obtain
+ * This is the worker bridge used by Static Index indexing: Go can obtain
  * records from Rust/Oxc and Node can project them through the existing compiler
  * and trusted TypeScript extension runtime without reparsing source into a
  * TypeScript AST.

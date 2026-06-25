@@ -10,7 +10,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-// IndexProjectAstFromSyntaxRecordsPatch projects native static syntax records
+// IndexProjectAstFromSyntaxRecordsPatch projects Static Index syntax records
 // through the explicit TypeScript projection path.
 func (w *Worker) IndexProjectAstFromSyntaxRecordsPatch(ctx context.Context, root, configPath, projectName string, records []json.RawMessage, syntaxFrontend ...*projectindex.SyntaxFrontend) (projectindex.IndexPatch, error) {
 	var identity *projectindex.SyntaxFrontend

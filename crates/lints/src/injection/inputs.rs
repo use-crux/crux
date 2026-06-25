@@ -4,24 +4,24 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
-use crate::builder::{NativeStaticLintBuilder, NativeStaticLintFindingInput};
+use crate::builder::{StaticIndexLintBuilder, StaticIndexLintFindingInput};
 use crate::contracts::{
     contract_expanded_input_schema, contract_input_schema, contribution_source_requires_field,
     is_conditional_contribution, schema_conflict_reason, schema_required_fields,
 };
-use crate::facts::{NativeStaticDefinition, NativeStaticLintFinding};
+use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding};
 use crate::injection::evidence::{
     condition_evidence, conflict_evidence, contribution_evidence, contribution_source,
     injected_source_label, related_ids, related_ids_pair, source_id_or_index,
 };
-use crate::injection::model::NativeStaticInjectionModel;
+use crate::injection::model::StaticIndexInjectionModel;
 
 pub(crate) fn prompt_input_injection_findings(
-    builder: &NativeStaticLintBuilder,
-    prompt: &NativeStaticDefinition,
-    model: &NativeStaticInjectionModel,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-) -> Vec<NativeStaticLintFinding> {
+    builder: &StaticIndexLintBuilder,
+    prompt: &StaticIndexDefinition,
+    model: &StaticIndexInjectionModel,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+) -> Vec<StaticIndexLintFinding> {
     let mut findings = Vec::new();
     findings.extend(hidden_required_input_findings(
         builder, prompt, model, by_id,
@@ -37,11 +37,11 @@ pub(crate) fn prompt_input_injection_findings(
 }
 
 fn hidden_required_input_findings(
-    builder: &NativeStaticLintBuilder,
-    prompt: &NativeStaticDefinition,
-    model: &NativeStaticInjectionModel,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-) -> Vec<NativeStaticLintFinding> {
+    builder: &StaticIndexLintBuilder,
+    prompt: &StaticIndexDefinition,
+    model: &StaticIndexInjectionModel,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+) -> Vec<StaticIndexLintFinding> {
     let authored = schema_required_fields(contract_input_schema(prompt));
     let expanded = schema_required_fields(contract_expanded_input_schema(prompt));
     model
@@ -56,7 +56,7 @@ fn hidden_required_input_findings(
         })
         .filter_map(|contribution| {
             let source = contribution_source(contribution, by_id);
-            builder.finding(NativeStaticLintFindingInput {
+            builder.finding(StaticIndexLintFindingInput {
                 rule_id: "prompt.hidden_required_input",
                 key: &format!(
                     "{}:{}:{}",
@@ -99,11 +99,11 @@ fn hidden_required_input_findings(
 }
 
 fn conflicting_injected_input_findings(
-    builder: &NativeStaticLintBuilder,
-    prompt: &NativeStaticDefinition,
-    model: &NativeStaticInjectionModel,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-) -> Vec<NativeStaticLintFinding> {
+    builder: &StaticIndexLintBuilder,
+    prompt: &StaticIndexDefinition,
+    model: &StaticIndexInjectionModel,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+) -> Vec<StaticIndexLintFinding> {
     let mut by_field = BTreeMap::<&str, Vec<&Value>>::new();
     for contribution in &model.input_contributions {
         if let Some(field) = contribution.get("field").and_then(Value::as_str) {
@@ -125,7 +125,7 @@ fn conflicting_injected_input_findings(
                 };
                 let left_source = contribution_source(left, by_id);
                 let right_source = contribution_source(right, by_id);
-                if let Some(finding) = builder.finding(NativeStaticLintFindingInput {
+                if let Some(finding) = builder.finding(StaticIndexLintFindingInput {
                     rule_id: "prompt.conflicting_injected_input",
                     key: &format!(
                         "{}:{}:{}:{}",
@@ -156,11 +156,11 @@ fn conflicting_injected_input_findings(
 }
 
 fn conditional_required_input_findings(
-    builder: &NativeStaticLintBuilder,
-    prompt: &NativeStaticDefinition,
-    model: &NativeStaticInjectionModel,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-) -> Vec<NativeStaticLintFinding> {
+    builder: &StaticIndexLintBuilder,
+    prompt: &StaticIndexDefinition,
+    model: &StaticIndexInjectionModel,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+) -> Vec<StaticIndexLintFinding> {
     model
         .input_contributions
         .iter()
@@ -172,7 +172,7 @@ fn conditional_required_input_findings(
                 .get("field")
                 .and_then(Value::as_str)
                 .unwrap_or("input");
-            builder.finding(NativeStaticLintFindingInput {
+            builder.finding(StaticIndexLintFindingInput {
                 rule_id: "prompt.conditional_required_input",
                 key: &format!(
                     "{}:{}:{}:{}",
@@ -208,11 +208,11 @@ fn conditional_required_input_findings(
 }
 
 fn deep_schema_chain_findings(
-    builder: &NativeStaticLintBuilder,
-    prompt: &NativeStaticDefinition,
-    model: &NativeStaticInjectionModel,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-) -> Vec<NativeStaticLintFinding> {
+    builder: &StaticIndexLintBuilder,
+    prompt: &StaticIndexDefinition,
+    model: &StaticIndexInjectionModel,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+) -> Vec<StaticIndexLintFinding> {
     let mut seen = BTreeSet::<String>::new();
     model
         .input_contributions
@@ -230,7 +230,7 @@ fn deep_schema_chain_findings(
                 .get("field")
                 .and_then(Value::as_str)
                 .unwrap_or("input");
-            builder.finding(NativeStaticLintFindingInput {
+            builder.finding(StaticIndexLintFindingInput {
                 rule_id: "injection.deep_schema_chain",
                 key: &format!(
                     "{}:{}:{}",

@@ -11,18 +11,18 @@ import (
 )
 
 func (w *Worker) IndexProjectLintPatch(ctx context.Context, request projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
-	if w == nil || !request.ASTUsedNativeStatic {
+	if w == nil || !request.ASTUsedStaticIndex {
 		return projectindex.IndexPatch{}, nil
 	}
 	compiler, ok := w.syntaxParser.(StaticCompiler)
 	if !ok {
-		return projectindex.IndexPatch{}, fmt.Errorf("native static lint finalize requires a native static compiler")
+		return projectindex.IndexPatch{}, fmt.Errorf("Static Index lint finalize requires a Static Index compiler")
 	}
 	ruleFacts, err := w.staticLintRuleFacts(ctx, request)
 	if err != nil {
 		return projectindex.IndexPatch{}, err
 	}
-	patch, usedNativeStatic, err := lint.FinalizePatch(ctx, compiler, lint.FinalizeOptions{
+	patch, usedStaticIndex, err := lint.FinalizePatch(ctx, compiler, lint.FinalizeOptions{
 		Root:         request.Root,
 		ProjectName:  request.ProjectName,
 		Index:        request.PreviousIndex,
@@ -32,7 +32,7 @@ func (w *Worker) IndexProjectLintPatch(ctx context.Context, request projectindex
 	if err != nil {
 		return projectindex.IndexPatch{}, err
 	}
-	if !usedNativeStatic {
+	if !usedStaticIndex {
 		return projectindex.IndexPatch{}, nil
 	}
 	return patch, nil
@@ -42,7 +42,7 @@ func (w *Worker) PrefetchProjectLintFacts(
 	ctx context.Context,
 	request projectindex.ProjectLintIndexRequest,
 ) (projectindex.ProjectLintPrefetchResult, error) {
-	if w == nil || !request.ASTUsedNativeStatic {
+	if w == nil || !request.ASTUsedStaticIndex {
 		return projectindex.ProjectLintPrefetchResult{}, nil
 	}
 	ruleFacts, err := w.postMergeRuleFacts(ctx, request)

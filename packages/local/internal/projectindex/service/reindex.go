@@ -77,20 +77,20 @@ func (s *Service) ReindexProjectWithOptions(ctx context.Context, root, configPat
 	semanticRequest := projectSemanticIndexRequest(root, configPath, projectName, index, nil, patch.SemanticSourceProfile)
 	semanticRequest.IndexGeneration = s.indexState.CurrentGeneration()
 	semanticRequest.WatchRunID = options.Watch.RunID
-	semanticRequest.ASTUsedNativeStatic = astResult.UsedNativeStatic
-	lintPrefetch := s.startProjectLintPrefetch(ctx, projectLintIndexRequest(root, configPath, projectName, index, astResult.UsedNativeStatic))
+	semanticRequest.ASTUsedStaticIndex = astResult.UsedStaticIndex
+	lintPrefetch := s.startProjectLintPrefetch(ctx, projectLintIndexRequest(root, configPath, projectName, index, astResult.UsedStaticIndex))
 	defer lintPrefetch.stop()
 	switch semanticMode {
 	case ProjectSemanticDisabled:
 		s.watchStatus.SemanticDisabled(options.Watch.RunID)
-		lintRequest := projectLintIndexRequest(root, configPath, projectName, index, astResult.UsedNativeStatic)
+		lintRequest := projectLintIndexRequest(root, configPath, projectName, index, astResult.UsedStaticIndex)
 		if err := applyProjectLintPrefetch(&lintRequest, lintPrefetch); err != nil {
 			return store.IndexData{}, err
 		}
 		return s.applyProjectLintPatch(ctx, lintRequest, semanticRequest.IndexGeneration)
 	case ProjectSemanticBackground:
 		var err error
-		lintRequest := projectLintIndexRequest(root, configPath, projectName, index, astResult.UsedNativeStatic)
+		lintRequest := projectLintIndexRequest(root, configPath, projectName, index, astResult.UsedStaticIndex)
 		if err := applyProjectLintPrefetch(&lintRequest, lintPrefetch); err != nil {
 			return store.IndexData{}, err
 		}

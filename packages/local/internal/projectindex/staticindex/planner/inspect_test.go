@@ -11,7 +11,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
 )
 
-func TestLoadConfigBuildsNativeStaticConfigRequest(t *testing.T) {
+func TestLoadConfigBuildsStaticIndexConfigRequest(t *testing.T) {
 	reader := &recordingReader{
 		responses: []json.RawMessage{json.RawMessage(`{"root":"/repo","nativeAstEnabled":true,"extensions":[]}`)},
 	}
@@ -28,11 +28,11 @@ func TestLoadConfigBuildsNativeStaticConfigRequest(t *testing.T) {
 		t.Fatalf("requests = %d, want 1", len(reader.requests))
 	}
 	request := reader.requests[0]
-	if request.Method != "inspectProjectNativeStaticConfig" || request.Root != "/repo" || request.ConfigPath != "/repo/crux.config.ts" {
-		t.Fatalf("request = %+v, want native static config request", request)
+	if request.Method != "inspectProjectStaticIndexConfig" || request.Root != "/repo" || request.ConfigPath != "/repo/crux.config.ts" {
+		t.Fatalf("request = %+v, want Static Index config request", request)
 	}
-	if reader.artifacts[0] != projectindex.ProjectIndexArtifactNativeStaticConfig {
-		t.Fatalf("artifact = %q, want native static config", reader.artifacts[0])
+	if reader.artifacts[0] != projectindex.ProjectIndexArtifactStaticIndexConfig {
+		t.Fatalf("artifact = %q, want Static Index config", reader.artifacts[0])
 	}
 }
 
@@ -71,7 +71,7 @@ func TestInspectLoadsNodeConfigAndExtensionManifest(t *testing.T) {
 	if len(reader.requests) != 2 {
 		t.Fatalf("requests = %d, want config and manifest", len(reader.requests))
 	}
-	if reader.requests[0].Method != "inspectProjectNativeStaticConfig" || reader.requests[1].Method != "loadStaticExtensionHostManifest" {
+	if reader.requests[0].Method != "inspectProjectStaticIndexConfig" || reader.requests[1].Method != "loadStaticExtensionHostManifest" {
 		t.Fatalf("requests = %+v, want config then manifest", reader.requests)
 	}
 }

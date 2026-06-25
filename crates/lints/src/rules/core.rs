@@ -1,10 +1,10 @@
-//! Non-injection built-in lint rules for native static graph facts.
+//! Non-injection built-in lint rules for Static Index graph facts.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
 
-use crate::builder::{NativeStaticLintBuilder, definition_evidence};
+use crate::builder::{StaticIndexLintBuilder, definition_evidence};
 use crate::contracts::{
     context_requires_input_schema, flow_requires_args_schema, has_args_schema, has_input_schema,
     has_output_schema, has_suspension_points, schema_source_evidence, suspension_point_labels,
@@ -12,8 +12,7 @@ use crate::contracts::{
 };
 use crate::emit::push_definition_finding;
 use crate::facts::{
-    NativeStaticDefinition, NativeStaticIndexPatchFacts, NativeStaticLintFinding,
-    NativeStaticRelation,
+    StaticIndexDefinition, StaticIndexIndexPatchFacts, StaticIndexLintFinding, StaticIndexRelation,
 };
 use crate::helpers::{
     child_definitions_by_parent, covered_definition_ids, has_items, relation_sources,
@@ -23,10 +22,10 @@ use crate::rules::definition_tail::{DefinitionTailContext, definition_tail_findi
 use crate::rules::relation::relation_lint_findings;
 
 pub(crate) fn core_lint_findings(
-    builder: &NativeStaticLintBuilder,
-    facts: &NativeStaticIndexPatchFacts,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
-) -> Vec<NativeStaticLintFinding> {
+    builder: &StaticIndexLintBuilder,
+    facts: &StaticIndexIndexPatchFacts,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
+) -> Vec<StaticIndexLintFinding> {
     let covered = covered_definition_ids(&facts.definitions, &facts.relations);
     let guardrail_targets = targets_by_relation(&facts.relations, "guardrail.applies_to");
     let consensus_policies = relation_sources(
@@ -67,15 +66,15 @@ struct DefinitionRuleContext<'a> {
     covered: &'a BTreeSet<String>,
     guardrail_targets: &'a BTreeSet<String>,
     consensus_policies: &'a BTreeSet<String>,
-    outgoing: &'a [&'a NativeStaticRelation],
-    cascade_tiers: &'a BTreeMap<String, Vec<&'a NativeStaticDefinition>>,
+    outgoing: &'a [&'a StaticIndexRelation],
+    cascade_tiers: &'a BTreeMap<String, Vec<&'a StaticIndexDefinition>>,
 }
 
 fn append_definition_findings(
-    builder: &NativeStaticLintBuilder,
-    definition: &NativeStaticDefinition,
+    builder: &StaticIndexLintBuilder,
+    definition: &StaticIndexDefinition,
     context: DefinitionRuleContext<'_>,
-    findings: &mut Vec<NativeStaticLintFinding>,
+    findings: &mut Vec<StaticIndexLintFinding>,
 ) {
     if definition.kind == "prompt" && !has_input_schema(definition) {
         push_definition_finding(
@@ -257,14 +256,14 @@ fn append_definition_findings(
     ));
 }
 
-fn has_experiment_history_without_baseline(definition: &NativeStaticDefinition) -> bool {
+fn has_experiment_history_without_baseline(definition: &StaticIndexDefinition) -> bool {
     let Some(quality) = definition.quality.as_ref() else {
         return false;
     };
     has_items(quality.get("experimentIds")) && !has_items(quality.get("baselineIds"))
 }
 
-fn quality_baseline_evidence(definition: &NativeStaticDefinition) -> Value {
+fn quality_baseline_evidence(definition: &StaticIndexDefinition) -> Value {
     let quality = definition.quality.as_ref();
     let mut data = json!({
         "experimentIds": quality.and_then(|value| value.get("experimentIds")).cloned().unwrap_or(Value::Array(Vec::new())),

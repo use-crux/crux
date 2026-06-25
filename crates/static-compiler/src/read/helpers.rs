@@ -2,9 +2,9 @@
 
 use serde_json::{Map, Value};
 
-use crate::core::facts::{NativeStaticDefinition, NativeStaticFidelity};
+use crate::core::facts::{StaticIndexDefinition, StaticIndexFidelity};
 
-pub(crate) fn definition_metadata(definition: &NativeStaticDefinition) -> Map<String, Value> {
+pub(crate) fn definition_metadata(definition: &StaticIndexDefinition) -> Map<String, Value> {
     definition
         .metadata
         .as_ref()
@@ -28,7 +28,7 @@ pub(crate) fn object_entry<'a>(
         .expect("object entry should be an object")
 }
 
-pub(crate) fn definition_export_name(definition: &NativeStaticDefinition) -> Option<String> {
+pub(crate) fn definition_export_name(definition: &StaticIndexDefinition) -> Option<String> {
     definition
         .metadata
         .as_ref()
@@ -37,10 +37,10 @@ pub(crate) fn definition_export_name(definition: &NativeStaticDefinition) -> Opt
         .map(str::to_string)
 }
 
-pub(crate) fn fidelity_json_name(fidelity: NativeStaticFidelity) -> &'static str {
+pub(crate) fn fidelity_json_name(fidelity: StaticIndexFidelity) -> &'static str {
     match fidelity {
-        NativeStaticFidelity::Resolved => "resolved",
-        NativeStaticFidelity::Partial => "partial",
-        NativeStaticFidelity::Error => "error",
+        StaticIndexFidelity::Resolved => "resolved",
+        StaticIndexFidelity::Partial => "partial",
+        StaticIndexFidelity::Error => "error",
     }
 }

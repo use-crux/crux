@@ -17,7 +17,7 @@ type Result struct {
 func Build(
 	root string,
 	projectName string,
-	config projectindex.ProjectNativeStaticConfig,
+	config projectindex.ProjectStaticIndexConfig,
 ) (projectindex.ProjectStaticSyntaxPlan, error) {
 	result, err := BuildWithTimings(root, projectName, config)
 	if err != nil {
@@ -29,7 +29,7 @@ func Build(
 func BuildWithTimings(
 	root string,
 	projectName string,
-	config projectindex.ProjectNativeStaticConfig,
+	config projectindex.ProjectStaticIndexConfig,
 ) (Result, error) {
 	return BuildWithExtensionManifest(root, projectName, config, nil)
 }
@@ -37,7 +37,7 @@ func BuildWithTimings(
 func BuildWithExtensionManifest(
 	root string,
 	projectName string,
-	config projectindex.ProjectNativeStaticConfig,
+	config projectindex.ProjectStaticIndexConfig,
 	extensionManifest *projectindex.StaticExtensionHostManifestResult,
 ) (Result, error) {
 	timings := []projectindex.ProjectIndexPhaseTiming{}

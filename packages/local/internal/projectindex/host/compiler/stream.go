@@ -9,13 +9,13 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
-func (w *Worker) NativeStaticAnalyzeStream(
+func (w *Worker) StaticIndexAnalyzeStream(
 	ctx context.Context,
 	request protocol.AnalyzeRequest,
 	handle protocol.AnalyzeStreamHandler,
 ) (protocol.AnalyzeResponse, error) {
 	if w == nil || w.Process() == nil {
-		return protocol.AnalyzeResponse{}, fmt.Errorf("project native static compiler is not configured")
+		return protocol.AnalyzeResponse{}, fmt.Errorf("project Static Index compiler is not configured")
 	}
 	id := w.NextID()
 	request.ID = id
@@ -29,7 +29,7 @@ func (w *Worker) NativeStaticAnalyzeStream(
 			return false, err
 		}
 		if event.ID != id {
-			return false, fmt.Errorf("native static analyze stream response id %d, want %d", event.ID, id)
+			return false, fmt.Errorf("Static Index analyze stream response id %d, want %d", event.ID, id)
 		}
 		if !event.OK {
 			return false, protocol.AnalyzeStreamError(event.Error)
@@ -44,7 +44,7 @@ func (w *Worker) NativeStaticAnalyzeStream(
 			response.ExtensionEvidenceJobs = protocol.AppendRawMessages(response.ExtensionEvidenceJobs, event.ExtensionEvidenceJobs)
 		case "done":
 			if event.Response == nil {
-				return false, fmt.Errorf("native static analyze stream done event missing response")
+				return false, fmt.Errorf("Static Index analyze stream done event missing response")
 			}
 			stage := *event.Response
 			if err := protocol.ValidateResponse(stage.ProtocolVersion, stage.Method, protocol.AnalyzeMethod); err != nil {
@@ -55,7 +55,7 @@ func (w *Worker) NativeStaticAnalyzeStream(
 			response.Telemetry = stage.Telemetry
 			done = true
 		default:
-			return false, fmt.Errorf("native static analyze stream returned unknown event type %q", event.Type)
+			return false, fmt.Errorf("Static Index analyze stream returned unknown event type %q", event.Type)
 		}
 		if handle != nil {
 			if err := handle(event); err != nil {
@@ -68,12 +68,12 @@ func (w *Worker) NativeStaticAnalyzeStream(
 		return protocol.AnalyzeResponse{}, err
 	}
 	if !done {
-		return protocol.AnalyzeResponse{}, fmt.Errorf("native static analyze stream ended before done event")
+		return protocol.AnalyzeResponse{}, fmt.Errorf("Static Index analyze stream ended before done event")
 	}
 	return response, nil
 }
 
-func (p *Pool) NativeStaticAnalyzeStream(
+func (p *Pool) StaticIndexAnalyzeStream(
 	ctx context.Context,
 	request protocol.AnalyzeRequest,
 	handle protocol.AnalyzeStreamHandler,
@@ -82,16 +82,16 @@ func (p *Pool) NativeStaticAnalyzeStream(
 	if err != nil {
 		return protocol.AnalyzeResponse{}, err
 	}
-	return worker.NativeStaticAnalyzeStream(ctx, request, handle)
+	return worker.StaticIndexAnalyzeStream(ctx, request, handle)
 }
 
-func (w *Worker) NativeStaticFinalizeStream(
+func (w *Worker) StaticIndexFinalizeStream(
 	ctx context.Context,
 	request protocol.FinalizeRequest,
 	handle protocol.FinalizeStreamHandler,
 ) (protocol.FinalizeResponse, error) {
 	if w == nil || w.Process() == nil {
-		return protocol.FinalizeResponse{}, fmt.Errorf("project native static compiler is not configured")
+		return protocol.FinalizeResponse{}, fmt.Errorf("project Static Index compiler is not configured")
 	}
 	id := w.NextID()
 	request.ID = id
@@ -105,7 +105,7 @@ func (w *Worker) NativeStaticFinalizeStream(
 			return false, err
 		}
 		if event.ID != id {
-			return false, fmt.Errorf("native static finalize stream response id %d, want %d", event.ID, id)
+			return false, fmt.Errorf("Static Index finalize stream response id %d, want %d", event.ID, id)
 		}
 		if !event.OK {
 			return false, protocol.FinalizeStreamError(event.Error)
@@ -113,7 +113,7 @@ func (w *Worker) NativeStaticFinalizeStream(
 		switch event.Type {
 		case "event":
 			if len(event.Event) == 0 {
-				return false, fmt.Errorf("native static finalize stream event missing project index event")
+				return false, fmt.Errorf("Static Index finalize stream event missing project index event")
 			}
 			if handle != nil {
 				if err := handle(event); err != nil {
@@ -122,7 +122,7 @@ func (w *Worker) NativeStaticFinalizeStream(
 			}
 		case "done":
 			if event.Response == nil {
-				return false, fmt.Errorf("native static finalize stream done event missing response")
+				return false, fmt.Errorf("Static Index finalize stream done event missing response")
 			}
 			stage := *event.Response
 			if err := protocol.ValidateResponse(stage.ProtocolVersion, stage.Method, protocol.FinalizeMethod); err != nil {
@@ -132,7 +132,7 @@ func (w *Worker) NativeStaticFinalizeStream(
 			response.Events = nil
 			done = true
 		default:
-			return false, fmt.Errorf("native static finalize stream returned unknown event type %q", event.Type)
+			return false, fmt.Errorf("Static Index finalize stream returned unknown event type %q", event.Type)
 		}
 		return done, nil
 	})
@@ -140,12 +140,12 @@ func (w *Worker) NativeStaticFinalizeStream(
 		return protocol.FinalizeResponse{}, err
 	}
 	if !done {
-		return protocol.FinalizeResponse{}, fmt.Errorf("native static finalize stream ended before done event")
+		return protocol.FinalizeResponse{}, fmt.Errorf("Static Index finalize stream ended before done event")
 	}
 	return response, nil
 }
 
-func (p *Pool) NativeStaticFinalizeStream(
+func (p *Pool) StaticIndexFinalizeStream(
 	ctx context.Context,
 	request protocol.FinalizeRequest,
 	handle protocol.FinalizeStreamHandler,
@@ -154,16 +154,16 @@ func (p *Pool) NativeStaticFinalizeStream(
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return worker.NativeStaticFinalizeStream(ctx, request, handle)
+	return worker.StaticIndexFinalizeStream(ctx, request, handle)
 }
 
-func (w *Worker) NativeStaticCompileStream(
+func (w *Worker) StaticIndexCompileStream(
 	ctx context.Context,
 	request protocol.CompileRequest,
 	handle protocol.FinalizeStreamHandler,
 ) (protocol.FinalizeResponse, error) {
 	if w == nil || w.Process() == nil {
-		return protocol.FinalizeResponse{}, fmt.Errorf("project native static compiler is not configured")
+		return protocol.FinalizeResponse{}, fmt.Errorf("project Static Index compiler is not configured")
 	}
 	id := w.NextID()
 	request.ID = id
@@ -177,7 +177,7 @@ func (w *Worker) NativeStaticCompileStream(
 			return false, err
 		}
 		if event.ID != id {
-			return false, fmt.Errorf("native static compile stream response id %d, want %d", event.ID, id)
+			return false, fmt.Errorf("Static Index compile stream response id %d, want %d", event.ID, id)
 		}
 		if !event.OK {
 			return false, protocol.FinalizeStreamError(event.Error)
@@ -185,7 +185,7 @@ func (w *Worker) NativeStaticCompileStream(
 		switch event.Type {
 		case "event":
 			if len(event.Event) == 0 {
-				return false, fmt.Errorf("native static compile stream event missing project index event")
+				return false, fmt.Errorf("Static Index compile stream event missing project index event")
 			}
 			if handle != nil {
 				if err := handle(event); err != nil {
@@ -194,7 +194,7 @@ func (w *Worker) NativeStaticCompileStream(
 			}
 		case "done":
 			if event.Response == nil {
-				return false, fmt.Errorf("native static compile stream done event missing response")
+				return false, fmt.Errorf("Static Index compile stream done event missing response")
 			}
 			stage := *event.Response
 			if err := protocol.ValidateResponse(stage.ProtocolVersion, stage.Method, protocol.CompileMethod); err != nil {
@@ -204,7 +204,7 @@ func (w *Worker) NativeStaticCompileStream(
 			response.Events = nil
 			done = true
 		default:
-			return false, fmt.Errorf("native static compile stream returned unknown event type %q", event.Type)
+			return false, fmt.Errorf("Static Index compile stream returned unknown event type %q", event.Type)
 		}
 		return done, nil
 	})
@@ -212,12 +212,12 @@ func (w *Worker) NativeStaticCompileStream(
 		return protocol.FinalizeResponse{}, err
 	}
 	if !done {
-		return protocol.FinalizeResponse{}, fmt.Errorf("native static compile stream ended before done event")
+		return protocol.FinalizeResponse{}, fmt.Errorf("Static Index compile stream ended before done event")
 	}
 	return response, nil
 }
 
-func (p *Pool) NativeStaticCompileStream(
+func (p *Pool) StaticIndexCompileStream(
 	ctx context.Context,
 	request protocol.CompileRequest,
 	handle protocol.FinalizeStreamHandler,
@@ -226,5 +226,5 @@ func (p *Pool) NativeStaticCompileStream(
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return worker.NativeStaticCompileStream(ctx, request, handle)
+	return worker.StaticIndexCompileStream(ctx, request, handle)
 }

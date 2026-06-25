@@ -9,7 +9,7 @@ import type {
 import type { StaticFoundDefinition, StaticRelationRef } from '../types'
 
 /**
- * Parser-native static call context used by first-party compatibility helpers.
+ * Parser-Static Index call context used by first-party compatibility helpers.
  *
  * This is distinct from the stable extension `ExtractContext`: it still contains TypeScript nodes and
  * parser helper functions for internal extractors that have not been fully reduced to stable readers.
@@ -35,7 +35,7 @@ export interface ExtractContext {
 }
 
 /**
- * Parser helper functions carried by the native static call context.
+ * Parser helper functions carried by the Static Index call context.
  *
  * Helpers centralize id sanitization, schema projection, definition defaults, and relation-ref
  * construction so compatibility helpers do not each reimplement parser rules.

@@ -1,7 +1,7 @@
 //! Pure Oxc syntax frontend.
 //!
 //! This module turns TypeScript source text into static syntax evidence only.
-//! Native static primitive projection happens later in downstream compiler
+//! Static Index primitive projection happens later in downstream compiler
 //! and extractor code.
 
 use std::collections::HashMap;
@@ -25,7 +25,7 @@ use crate::{
 /// Parse source text into backend-neutral syntax evidence.
 ///
 /// The returned record intentionally contains no `native_facts`. Callers that
-/// need Project Index facts must invoke the native static projection pipeline
+/// need Project Index facts must invoke the Static Index projection pipeline
 /// explicitly after parsing.
 pub fn parse_source(input: ParseRequest) -> Result<StaticSyntaxFileRecord, String> {
     let allocator = Allocator::default();

@@ -9,7 +9,7 @@ import (
 )
 
 type Analyzer interface {
-	NativeStaticAnalyzeStream(context.Context, protocol.AnalyzeRequest, protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error)
+	StaticIndexAnalyzeStream(context.Context, protocol.AnalyzeRequest, protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error)
 }
 
 type FetchFunc func(context.Context, []json.RawMessage) ([]json.RawMessage, error)
@@ -45,7 +45,7 @@ func Analyze(ctx context.Context, analyzer Analyzer, request protocol.AnalyzeReq
 		return nil
 	}
 
-	analyze, err := analyzer.NativeStaticAnalyzeStream(ctx, request, func(event protocol.AnalyzeStreamEvent) error {
+	analyze, err := analyzer.StaticIndexAnalyzeStream(ctx, request, func(event protocol.AnalyzeStreamEvent) error {
 		if event.Type == "extensionEvidenceJobs" {
 			return startEvidence(event.ExtensionEvidenceJobs)
 		}

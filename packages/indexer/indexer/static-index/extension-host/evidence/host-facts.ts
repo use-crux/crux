@@ -8,7 +8,7 @@ import type { StaticExtractionResult } from '../../../extensions/runtime/engine'
 import type { ExtractedFacts, ExtractedSourceRef } from '../../../extensions/public-contract/types'
 import type { StaticRelationRef } from '../../../types'
 
-/** Grouped fact payload that native static finalization can merge directly. */
+/** Grouped fact payload that Static Index finalization can merge directly. */
 export interface StaticExtensionNativeFinalizeFacts {
   readonly definitions?: readonly ProjectDefinition[]
   readonly relationRefs?: readonly StaticExtensionNativeRelationRef[]
@@ -18,7 +18,7 @@ export interface StaticExtensionNativeFinalizeFacts {
   readonly ruleDescriptors?: readonly IndexRuleDescriptor[]
 }
 
-/** Relation-ref shape consumed by Rust native static finalization. */
+/** Relation-ref shape consumed by Rust Static Index finalization. */
 export interface StaticExtensionNativeRelationRef {
   readonly ownerDefinitionId: string
   readonly type: string

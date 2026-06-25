@@ -15,7 +15,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
-func TestProjectStaticPlanNativeStaticSchedulableRejectsCompatibilityEvidence(t *testing.T) {
+func TestProjectStaticPlanStaticIndexSchedulableRejectsCompatibilityEvidence(t *testing.T) {
 	plan := projectindex.ProjectStaticSyntaxPlan{
 		StaticHost: json.RawMessage(`{"nativeOnlyEligible":false,"requiresTypeScriptHostForExtensions":true,"requiresCompatibilityEvidence":true}`),
 	}
@@ -24,8 +24,8 @@ func TestProjectStaticPlanNativeStaticSchedulableRejectsCompatibilityEvidence(t 
 	}
 }
 
-func TestWorkerNativeStaticSchedulesExtensionEvidenceJobs(t *testing.T) {
-	patch, compiler, err := runNativeStaticGuardFallback(t, true)
+func TestWorkerStaticIndexSchedulesExtensionEvidenceJobs(t *testing.T) {
+	patch, compiler, err := runStaticIndexGuardFallback(t, true)
 	if err != nil {
 		t.Fatalf("IndexProjectAstPatch error = %v", err)
 	}
@@ -34,7 +34,7 @@ func TestWorkerNativeStaticSchedulesExtensionEvidenceJobs(t *testing.T) {
 		t.Fatalf("definitions = %+v, want extension host facts finalized natively", patch.Facts.Definitions)
 	}
 	if compiler.prepareCalls != 1 || compiler.analyzeCalls != 1 {
-		t.Fatalf("native static calls = prepare %d analyze %d, want prepare/analyze attempt", compiler.prepareCalls, compiler.analyzeCalls)
+		t.Fatalf("Static Index calls = prepare %d analyze %d, want prepare/analyze attempt", compiler.prepareCalls, compiler.analyzeCalls)
 	}
 	if compiler.finalizeCalls != 1 {
 		t.Fatalf("finalize calls = %d, want native finalize after extension facts are available", compiler.finalizeCalls)
@@ -47,7 +47,7 @@ func TestWorkerNativeStaticSchedulesExtensionEvidenceJobs(t *testing.T) {
 	}
 }
 
-func runNativeStaticGuardFallback(t *testing.T, extensionEvidenceJobs bool) (projectindex.IndexPatch, *nativeStaticGuardCompiler, error) {
+func runStaticIndexGuardFallback(t *testing.T, extensionEvidenceJobs bool) (projectindex.IndexPatch, *staticIndexGuardCompiler, error) {
 	t.Helper()
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
@@ -61,23 +61,23 @@ func runNativeStaticGuardFallback(t *testing.T, extensionEvidenceJobs bool) (pro
 	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'guard' })"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
-	writeNativeStaticEnabledConfig(t, root)
+	writeStaticIndexEnabledConfig(t, root)
 
-	script := filepath.Join(t.TempDir(), "native-static-guard-indexer.mjs")
-	if err := os.WriteFile(script, []byte(nativeStaticGuardIndexerScript()), 0o600); err != nil {
+	script := filepath.Join(t.TempDir(), "static-index-guard-indexer.mjs")
+	if err := os.WriteFile(script, []byte(staticIndexGuardIndexerScript()), 0o600); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
 
-	compiler := &nativeStaticGuardCompiler{root: root, sourceFile: sourceFile, extensionEvidenceJobs: extensionEvidenceJobs}
+	compiler := &staticIndexGuardCompiler{root: root, sourceFile: sourceFile, extensionEvidenceJobs: extensionEvidenceJobs}
 	worker := newTestWorkerWithProjectScript(t, script)
 	worker.WithSyntaxParser(compiler)
 	defer worker.Close()
 
-	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-guard")
+	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "static-index-guard")
 	return patch, compiler, err
 }
 
-type nativeStaticGuardCompiler struct {
+type staticIndexGuardCompiler struct {
 	root                   string
 	sourceFile             string
 	extensionEvidenceJobs  bool
@@ -88,7 +88,7 @@ type nativeStaticGuardCompiler struct {
 	finalizeExtensionFacts json.RawMessage
 }
 
-func (c *nativeStaticGuardCompiler) NativeStaticPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+func (c *staticIndexGuardCompiler) StaticIndexPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
 	c.prepareCalls++
 	return protocol.PrepareResponse{
 		ProtocolVersion: protocol.Version,
@@ -100,11 +100,11 @@ func (c *nativeStaticGuardCompiler) NativeStaticPrepare(_ context.Context, reque
 			CacheMisses: append([]protocol.SourceFile(nil), request.Files...),
 		},
 		Diagnostics: []json.RawMessage{},
-		Telemetry:   nativeStaticTestTelemetry(len(request.Files), 0, len(request.Files), 0),
+		Telemetry:   staticIndexTestTelemetry(len(request.Files), 0, len(request.Files), 0),
 	}, nil
 }
 
-func (c *nativeStaticGuardCompiler) NativeStaticAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+func (c *staticIndexGuardCompiler) StaticIndexAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
 	c.analyzeCalls++
 	if !request.Stream {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
@@ -113,17 +113,17 @@ func (c *nativeStaticGuardCompiler) NativeStaticAnalyzeStream(_ context.Context,
 	if c.extensionEvidenceJobs {
 		jobs = append(jobs, json.RawMessage(`{"id":"extension-job","extractor":{"extension":"third-party","name":"custom"}}`))
 	}
-	return nativeStaticTestAnalyzeStream(protocol.AnalyzeResponse{
+	return staticIndexTestAnalyzeStream(protocol.AnalyzeResponse{
 		ProtocolVersion:       protocol.Version,
 		Method:                protocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","fact":{"id":"prompt:native-with-extension-job"}}`)},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: jobs,
-		Telemetry:             nativeStaticTestTelemetry(len(request.Plan.Files), 0, len(request.Files), len(request.Files)),
+		Telemetry:             staticIndexTestTelemetry(len(request.Plan.Files), 0, len(request.Files), len(request.Files)),
 	}, handle)
 }
 
-func (c *nativeStaticGuardCompiler) NativeStaticFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+func (c *staticIndexGuardCompiler) StaticIndexFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
 	c.finalizeCalls++
 	for _, fact := range request.ExtensionFacts {
 		c.finalizeExtensionFacts = append(c.finalizeExtensionFacts, fact...)
@@ -131,7 +131,7 @@ func (c *nativeStaticGuardCompiler) NativeStaticFinalize(_ context.Context, requ
 	if c.extensionEvidenceJobs && !bytes.Contains(c.finalizeExtensionFacts, []byte("prompt:extension-host")) {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize missing extension host facts: %s", c.finalizeExtensionFacts)
 	}
-	events, err := nativeStaticGuardEvents(c.root)
+	events, err := staticIndexGuardEvents(c.root)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
@@ -139,26 +139,26 @@ func (c *nativeStaticGuardCompiler) NativeStaticFinalize(_ context.Context, requ
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Events:          events,
-		Telemetry:       nativeStaticTestTelemetry(1, 0, 1, 1),
+		Telemetry:       staticIndexTestTelemetry(1, 0, 1, 1),
 	}, nil
 }
 
-func (c *nativeStaticGuardCompiler) NativeStaticFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func (c *staticIndexGuardCompiler) StaticIndexFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	if !request.Stream {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
-	response, err := c.NativeStaticFinalize(ctx, request)
+	response, err := c.StaticIndexFinalize(ctx, request)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return nativeStaticTestFinalizeStream(response, handle)
+	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticGuardCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexGuardCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by guard fallback")
 }
 
-func (c *nativeStaticGuardCompiler) ParseFilesStream(_ context.Context, requests []syntax.Request, handle syntax.RecordHandler) error {
+func (c *staticIndexGuardCompiler) ParseFilesStream(_ context.Context, requests []syntax.Request, handle syntax.RecordHandler) error {
 	c.streamParseCalls++
 	if len(requests) != 1 || requests[0].File != c.sourceFile {
 		return fmt.Errorf("stream requests = %+v, want %s", requests, c.sourceFile)
@@ -167,10 +167,10 @@ func (c *nativeStaticGuardCompiler) ParseFilesStream(_ context.Context, requests
 	return handle(0, record)
 }
 
-func (c *nativeStaticGuardCompiler) Concurrency() int { return 1 }
+func (c *staticIndexGuardCompiler) Concurrency() int { return 1 }
 
-func (c *nativeStaticGuardCompiler) Close() error { return nil }
+func (c *staticIndexGuardCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*nativeStaticGuardCompiler)(nil)
-var _ syntax.StreamParser = (*nativeStaticGuardCompiler)(nil)
-var _ StaticCompiler = (*nativeStaticGuardCompiler)(nil)
+var _ syntax.Parser = (*staticIndexGuardCompiler)(nil)
+var _ syntax.StreamParser = (*staticIndexGuardCompiler)(nil)
+var _ StaticCompiler = (*staticIndexGuardCompiler)(nil)

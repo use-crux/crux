@@ -2,10 +2,10 @@
 
 use serde_json::{Map, Value, json};
 
-use crate::facts::NativeStaticDefinition;
+use crate::facts::StaticIndexDefinition;
 
 pub(crate) fn input_contribution_evidence(
-    owner: &NativeStaticDefinition,
+    owner: &StaticIndexDefinition,
     contribution: &Value,
     label: &str,
 ) -> Value {
@@ -29,7 +29,7 @@ pub(crate) fn input_contribution_evidence(
 }
 
 pub(crate) fn generic_contribution_evidence(
-    owner: &NativeStaticDefinition,
+    owner: &StaticIndexDefinition,
     contribution: &Value,
     label: &str,
     keys: &[&str],

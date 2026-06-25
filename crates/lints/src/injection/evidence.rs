@@ -5,12 +5,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Map, Value, json};
 
 use crate::builder::definition_evidence;
-use crate::facts::{NativeStaticDefinition, NativeStaticRelation};
+use crate::facts::{StaticIndexDefinition, StaticIndexRelation};
 use crate::injection::evidence_data::{generic_contribution_evidence, input_contribution_evidence};
 
 pub(crate) fn contribution_evidence(
-    owner: &NativeStaticDefinition,
-    source: Option<&NativeStaticDefinition>,
+    owner: &StaticIndexDefinition,
+    source: Option<&StaticIndexDefinition>,
     contribution: &Value,
     owner_label: &str,
     source_label: &str,
@@ -29,8 +29,8 @@ pub(crate) fn contribution_evidence(
 }
 
 pub(crate) fn condition_evidence(
-    prompt: &NativeStaticDefinition,
-    source: Option<&NativeStaticDefinition>,
+    prompt: &StaticIndexDefinition,
+    source: Option<&StaticIndexDefinition>,
     contribution: &Value,
 ) -> Vec<Value> {
     let mut evidence = contribution_evidence(
@@ -46,11 +46,11 @@ pub(crate) fn condition_evidence(
 }
 
 pub(crate) fn conflict_evidence(
-    prompt: &NativeStaticDefinition,
+    prompt: &StaticIndexDefinition,
     left: &Value,
     right: &Value,
-    left_source: Option<&NativeStaticDefinition>,
-    right_source: Option<&NativeStaticDefinition>,
+    left_source: Option<&StaticIndexDefinition>,
+    right_source: Option<&StaticIndexDefinition>,
 ) -> Vec<Value> {
     let mut evidence = vec![definition_evidence(
         prompt,
@@ -82,8 +82,8 @@ pub(crate) fn conflict_evidence(
 }
 
 pub(crate) fn tool_contribution_evidence(
-    owner: &NativeStaticDefinition,
-    source: Option<&NativeStaticDefinition>,
+    owner: &StaticIndexDefinition,
+    source: Option<&StaticIndexDefinition>,
     contribution: &Value,
     owner_label: &str,
     source_label: &str,
@@ -103,8 +103,8 @@ pub(crate) fn tool_contribution_evidence(
 }
 
 pub(crate) fn entry_evidence(
-    definition: &NativeStaticDefinition,
-    owner: Option<&NativeStaticDefinition>,
+    definition: &StaticIndexDefinition,
+    owner: Option<&StaticIndexDefinition>,
     entry: &Value,
     definition_label: &str,
     entry_label: &str,
@@ -131,7 +131,7 @@ pub(crate) fn entry_evidence(
 }
 
 pub(crate) fn condition_source_evidence(
-    owner: &NativeStaticDefinition,
+    owner: &StaticIndexDefinition,
     contribution: &Value,
 ) -> Vec<Value> {
     let expected = match contribution.get("conditionality").and_then(Value::as_str) {
@@ -187,7 +187,7 @@ pub(crate) fn condition_source_evidence(
 }
 
 pub(crate) fn injection_consumed_definition_ids(
-    relations: &[NativeStaticRelation],
+    relations: &[StaticIndexRelation],
 ) -> BTreeSet<String> {
     relations
         .iter()
@@ -207,8 +207,8 @@ pub(crate) fn injection_consumed_definition_ids(
 
 pub(crate) fn contribution_source<'a>(
     contribution: &Value,
-    by_id: &BTreeMap<&'a str, &'a NativeStaticDefinition>,
-) -> Option<&'a NativeStaticDefinition> {
+    by_id: &BTreeMap<&'a str, &'a StaticIndexDefinition>,
+) -> Option<&'a StaticIndexDefinition> {
     contribution
         .get("sourceDefinitionId")
         .and_then(Value::as_str)
@@ -216,8 +216,8 @@ pub(crate) fn contribution_source<'a>(
 }
 
 pub(crate) fn related_ids(
-    owner: &NativeStaticDefinition,
-    source: Option<&NativeStaticDefinition>,
+    owner: &StaticIndexDefinition,
+    source: Option<&StaticIndexDefinition>,
 ) -> Vec<String> {
     let mut ids = vec![owner.id.clone()];
     if let Some(source) = source {
@@ -229,9 +229,9 @@ pub(crate) fn related_ids(
 }
 
 pub(crate) fn related_ids_pair(
-    owner: &NativeStaticDefinition,
-    left: Option<&NativeStaticDefinition>,
-    right: Option<&NativeStaticDefinition>,
+    owner: &StaticIndexDefinition,
+    left: Option<&StaticIndexDefinition>,
+    right: Option<&StaticIndexDefinition>,
 ) -> Vec<String> {
     let mut ids = related_ids(owner, left);
     if let Some(right) = right {
@@ -242,7 +242,7 @@ pub(crate) fn related_ids_pair(
     ids
 }
 
-pub(crate) fn injected_source_label(source: Option<&NativeStaticDefinition>) -> String {
+pub(crate) fn injected_source_label(source: Option<&StaticIndexDefinition>) -> String {
     source
         .map(|source| format!("{} \"{}\"", source.kind, source.name))
         .unwrap_or_else(|| "input".to_string())
@@ -265,7 +265,7 @@ pub(crate) fn source_id_or_index(contribution: &Value, index: usize) -> String {
 }
 
 pub(crate) fn entry_message(
-    definition: &NativeStaticDefinition,
+    definition: &StaticIndexDefinition,
     rule_id: &str,
     variable: Option<&str>,
 ) -> String {

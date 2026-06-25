@@ -9,8 +9,8 @@ import (
 	"strings"
 )
 
-const syntaxWorkerEnv = "CRUX_INDEXER_WORKER"
-const syntaxWorkerPoolSizeEnv = "CRUX_INDEXER_WORKER_POOL_SIZE"
+const syntaxWorkerEnv = "CRUX_STATIC_INDEX_WORKER"
+const syntaxWorkerPoolSizeEnv = "CRUX_STATIC_INDEX_WORKER_POOL_SIZE"
 
 const WorkerEnv = syntaxWorkerEnv
 const PoolSizeEnv = syntaxWorkerPoolSizeEnv

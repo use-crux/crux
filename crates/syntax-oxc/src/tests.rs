@@ -20,6 +20,6 @@ fn parse_source_emits_pure_static_syntax_record() {
     assert_eq!(record.matches.len(), 1);
     assert!(
         record.native_facts.is_empty(),
-        "syntax crate must not project native static facts"
+        "syntax crate must not project Static Index facts"
     );
 }

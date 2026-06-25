@@ -11,7 +11,7 @@ type ProjectIndexArtifactKind = wire.ProjectIndexArtifactKind
 const (
 	ProjectIndexArtifactProjectModel                 = wire.ProjectIndexArtifactProjectModel
 	ProjectIndexArtifactProjectConfig                = wire.ProjectIndexArtifactProjectConfig
-	ProjectIndexArtifactNativeStaticConfig           = wire.ProjectIndexArtifactNativeStaticConfig
+	ProjectIndexArtifactStaticIndexConfig            = wire.ProjectIndexArtifactStaticIndexConfig
 	ProjectIndexArtifactStaticSyntaxPlan             = wire.ProjectIndexArtifactStaticSyntaxPlan
 	ProjectIndexArtifactStaticExtensionHostManifest  = wire.ProjectIndexArtifactStaticExtensionHostManifest
 	ProjectIndexArtifactStaticExtensionEvidenceBatch = wire.ProjectIndexArtifactStaticExtensionEvidenceBatch

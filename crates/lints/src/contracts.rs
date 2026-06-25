@@ -4,10 +4,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
 
-use crate::facts::{NativeStaticDefinition, NativeStaticProjectSourceRef, NativeStaticRelation};
+use crate::facts::{StaticIndexDefinition, StaticIndexProjectSourceRef, StaticIndexRelation};
 use crate::helpers::{has_items, is_record, metadata_path, metadata_value};
 
-pub(crate) fn has_input_schema(definition: &NativeStaticDefinition) -> bool {
+pub(crate) fn has_input_schema(definition: &StaticIndexDefinition) -> bool {
     is_record(metadata_value(definition, "inputSchema"))
         || is_record(metadata_value(definition, "parameters"))
         || is_record(metadata_value(definition, "schema"))
@@ -17,7 +17,7 @@ pub(crate) fn has_input_schema(definition: &NativeStaticDefinition) -> bool {
         ))
 }
 
-pub(crate) fn has_output_schema(definition: &NativeStaticDefinition) -> bool {
+pub(crate) fn has_output_schema(definition: &StaticIndexDefinition) -> bool {
     is_record(metadata_value(definition, "outputSchema"))
         || is_record(metadata_path(
             definition,
@@ -25,7 +25,7 @@ pub(crate) fn has_output_schema(definition: &NativeStaticDefinition) -> bool {
         ))
 }
 
-pub(crate) fn has_args_schema(definition: &NativeStaticDefinition) -> bool {
+pub(crate) fn has_args_schema(definition: &StaticIndexDefinition) -> bool {
     is_record(metadata_value(definition, "argsSchema"))
         || is_record(metadata_path(
             definition,
@@ -33,7 +33,7 @@ pub(crate) fn has_args_schema(definition: &NativeStaticDefinition) -> bool {
         ))
 }
 
-pub(crate) fn context_requires_input_schema(definition: &NativeStaticDefinition) -> bool {
+pub(crate) fn context_requires_input_schema(definition: &StaticIndexDefinition) -> bool {
     let Some(metadata) = definition.metadata.as_ref() else {
         return false;
     };
@@ -41,23 +41,23 @@ pub(crate) fn context_requires_input_schema(definition: &NativeStaticDefinition)
         || !schema_source_refs(definition, "input").is_empty()
 }
 
-pub(crate) fn flow_requires_args_schema(definition: &NativeStaticDefinition) -> bool {
+pub(crate) fn flow_requires_args_schema(definition: &StaticIndexDefinition) -> bool {
     metadata_value(definition, "hasArgs").and_then(Value::as_bool) == Some(true)
         || has_items(metadata_value(definition, "args"))
 }
 
-pub(crate) fn tool_output_needs_adapter(definition: &NativeStaticDefinition) -> bool {
+pub(crate) fn tool_output_needs_adapter(definition: &StaticIndexDefinition) -> bool {
     metadata_value(definition, "hasExecute").and_then(Value::as_bool) == Some(true)
         && metadata_value(definition, "hasToModelOutput").and_then(Value::as_bool) != Some(true)
 }
 
-pub(crate) fn has_suspension_points(definition: &NativeStaticDefinition) -> bool {
+pub(crate) fn has_suspension_points(definition: &StaticIndexDefinition) -> bool {
     metadata_path(definition, &["intelligence", "control", "suspensionPoints"])
         .and_then(Value::as_array)
         .is_some_and(|points| !points.is_empty())
 }
 
-pub(crate) fn suspension_point_labels(definition: &NativeStaticDefinition) -> Vec<String> {
+pub(crate) fn suspension_point_labels(definition: &StaticIndexDefinition) -> Vec<String> {
     metadata_path(definition, &["intelligence", "control", "suspensionPoints"])
         .and_then(Value::as_array)
         .into_iter()
@@ -68,7 +68,7 @@ pub(crate) fn suspension_point_labels(definition: &NativeStaticDefinition) -> Ve
 }
 
 pub(crate) fn schema_source_evidence(
-    definition: &NativeStaticDefinition,
+    definition: &StaticIndexDefinition,
     property: &str,
     label: &str,
 ) -> Vec<Value> {
@@ -94,9 +94,9 @@ pub(crate) fn schema_source_evidence(
 }
 
 pub(crate) fn schema_source_refs<'a>(
-    definition: &'a NativeStaticDefinition,
+    definition: &'a StaticIndexDefinition,
     property: &str,
-) -> Vec<&'a NativeStaticProjectSourceRef> {
+) -> Vec<&'a StaticIndexProjectSourceRef> {
     definition
         .source_refs
         .iter()
@@ -106,7 +106,7 @@ pub(crate) fn schema_source_refs<'a>(
         .collect()
 }
 
-pub(crate) fn contract_input_schema(definition: &NativeStaticDefinition) -> Option<&Value> {
+pub(crate) fn contract_input_schema(definition: &StaticIndexDefinition) -> Option<&Value> {
     metadata_path(definition, &["intelligence", "contract", "inputSchema"])
         .filter(|value| is_record(Some(*value)))
         .or_else(|| {
@@ -114,9 +114,7 @@ pub(crate) fn contract_input_schema(definition: &NativeStaticDefinition) -> Opti
         })
 }
 
-pub(crate) fn contract_expanded_input_schema(
-    definition: &NativeStaticDefinition,
-) -> Option<&Value> {
+pub(crate) fn contract_expanded_input_schema(definition: &StaticIndexDefinition) -> Option<&Value> {
     metadata_path(
         definition,
         &["intelligence", "contract", "expandedInputSchema"],
@@ -124,7 +122,7 @@ pub(crate) fn contract_expanded_input_schema(
     .filter(|value| is_record(Some(*value)))
 }
 
-pub(crate) fn contract_input_contributions(definition: &NativeStaticDefinition) -> Vec<Value> {
+pub(crate) fn contract_input_contributions(definition: &StaticIndexDefinition) -> Vec<Value> {
     metadata_path(
         definition,
         &["intelligence", "contract", "inputContributions"],
@@ -147,7 +145,7 @@ pub(crate) fn schema_required_fields(schema: Option<&Value>) -> BTreeSet<String>
 
 pub(crate) fn contribution_source_requires_field(
     contribution: &Value,
-    by_id: &BTreeMap<&str, &NativeStaticDefinition>,
+    by_id: &BTreeMap<&str, &StaticIndexDefinition>,
 ) -> bool {
     let Some(field) = contribution.get("field").and_then(Value::as_str) else {
         return false;
@@ -193,13 +191,13 @@ pub(crate) fn is_conditional_contribution(contribution: &Value) -> bool {
         .is_some_and(|value| value != "always" && value != "unknown")
 }
 
-pub(crate) fn is_state_resource_read_relation(relation: &NativeStaticRelation) -> bool {
+pub(crate) fn is_state_resource_read_relation(relation: &StaticIndexRelation) -> bool {
     relation.r#type.ends_with(".reads_memory")
         || relation.r#type.ends_with(".reads_blackboard")
         || relation.r#type.ends_with(".reads_workspace")
 }
 
-pub(crate) fn is_state_resource_write_relation(relation: &NativeStaticRelation) -> bool {
+pub(crate) fn is_state_resource_write_relation(relation: &StaticIndexRelation) -> bool {
     relation.r#type.ends_with(".writes_memory")
         || relation.r#type.ends_with(".writes_blackboard")
         || relation.r#type.ends_with(".writes_workspace")

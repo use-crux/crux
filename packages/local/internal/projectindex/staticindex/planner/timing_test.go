@@ -10,7 +10,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/cache"
 )
 
-func TestProjectNativeStaticPlanReportsSubphaseTimings(t *testing.T) {
+func TestProjectStaticIndexPlanReportsSubphaseTimings(t *testing.T) {
 	t.Setenv(cache.StatusEnv, "1")
 
 	root := t.TempDir()
@@ -22,7 +22,7 @@ func TestProjectNativeStaticPlanReportsSubphaseTimings(t *testing.T) {
 		t.Fatalf("write source: %v", err)
 	}
 
-	result, err := BuildWithTimings(root, "timed-plan", projectindex.ProjectNativeStaticConfig{
+	result, err := BuildWithTimings(root, "timed-plan", projectindex.ProjectStaticIndexConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})

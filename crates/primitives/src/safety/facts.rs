@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext, source_ref_for_callback_property},
-    definition::{NativeDefinitionInput, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, safe_id, static_index_definition},
     protocol::{LiteralValue, StaticSyntaxValue},
     record_values::{
         direct_identifier, direct_string_property, property_value, resolve_static_value,
@@ -69,7 +69,7 @@ fn constraint_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Op
     .map(|definition| {
         extracted_facts(
             parts.variable_name,
-            native_static_definition(NativeDefinitionInput {
+            static_index_definition(NativeDefinitionInput {
                 id: definition.id,
                 kind: definition.kind,
                 name: definition.name,
@@ -126,7 +126,7 @@ fn guardrail_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
     .map(|definition| {
         extracted_facts(
             parts.variable_name,
-            native_static_definition(NativeDefinitionInput {
+            static_index_definition(NativeDefinitionInput {
                 id: definition.id,
                 kind: definition.kind,
                 name: definition.name,

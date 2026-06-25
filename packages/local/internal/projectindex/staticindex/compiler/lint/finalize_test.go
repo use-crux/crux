@@ -16,7 +16,7 @@ import (
 func TestFinalizePatchBuildsQualityFinalizeRequest(t *testing.T) {
 	compiler := &recordingCompiler{root: "/repo"}
 
-	patch, usedNativeStatic, err := FinalizePatch(context.Background(), compiler, FinalizeOptions{
+	patch, usedStaticIndex, err := FinalizePatch(context.Background(), compiler, FinalizeOptions{
 		Root:        "/repo",
 		ProjectName: "project",
 		Index: store.IndexData{
@@ -28,8 +28,8 @@ func TestFinalizePatchBuildsQualityFinalizeRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FinalizePatch error = %v", err)
 	}
-	if !usedNativeStatic {
-		t.Fatal("usedNativeStatic = false, want complete native lint patch")
+	if !usedStaticIndex {
+		t.Fatal("usedStaticIndex = false, want complete native lint patch")
 	}
 	if compiler.calls != 1 {
 		t.Fatalf("finalize calls = %d, want 1", compiler.calls)
@@ -61,7 +61,7 @@ func TestFinalizePatchBuildsQualityFinalizeRequest(t *testing.T) {
 func TestFinalizePatchSkipsEmptyLintFacts(t *testing.T) {
 	compiler := &recordingCompiler{root: "/repo"}
 
-	patch, usedNativeStatic, err := FinalizePatch(context.Background(), compiler, FinalizeOptions{
+	patch, usedStaticIndex, err := FinalizePatch(context.Background(), compiler, FinalizeOptions{
 		Root:         "/repo",
 		ProjectName:  "project",
 		Index:        store.IndexData{},
@@ -71,8 +71,8 @@ func TestFinalizePatchSkipsEmptyLintFacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FinalizePatch error = %v", err)
 	}
-	if usedNativeStatic || patch.Phase != "" {
-		t.Fatalf("patch = %+v usedNativeStatic = %v, want skipped lint finalize", patch, usedNativeStatic)
+	if usedStaticIndex || patch.Phase != "" {
+		t.Fatalf("patch = %+v usedStaticIndex = %v, want skipped lint finalize", patch, usedStaticIndex)
 	}
 	if compiler.calls != 0 {
 		t.Fatalf("finalize calls = %d, want none", compiler.calls)
@@ -100,7 +100,7 @@ type recordingCompiler struct {
 	request protocol.FinalizeRequest
 }
 
-func (c *recordingCompiler) NativeStaticFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+func (c *recordingCompiler) StaticIndexFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
 	c.calls++
 	c.request = request
 	events, err := completeLintEvents(c.root)
@@ -140,7 +140,7 @@ func completeLintEvents(root string) ([]json.RawMessage, error) {
 			},
 			"summary": map[string]any{
 				"factCount": 0,
-				"decision":  map[string]any{"nativeStaticComplete": true},
+				"decision":  map[string]any{"staticIndexComplete": true},
 			},
 		},
 	}

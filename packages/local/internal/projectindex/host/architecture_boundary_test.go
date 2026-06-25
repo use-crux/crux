@@ -34,8 +34,8 @@ func TestProjectIndexHostOwnsWorkerHostingLayout(t *testing.T) {
 
 	oldNativeDir := filepath.Join(hostDir, "native")
 	if _, err := os.Stat(oldNativeDir); err == nil {
-		t.Fatalf("old native static host package still exists at %s", oldNativeDir)
+		t.Fatalf("old Static Index host package still exists at %s", oldNativeDir)
 	} else if !os.IsNotExist(err) {
-		t.Fatalf("stat old native static host package: %v", err)
+		t.Fatalf("stat old Static Index host package: %v", err)
 	}
 }

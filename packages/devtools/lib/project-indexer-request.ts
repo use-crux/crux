@@ -61,7 +61,7 @@ export interface ProjectIndexWorkerRequest {
   readonly nativeFactProjection?: NativeFactProjectionMode
   /** Native compiler protocol version supported by a manifest-loading caller. */
   readonly nativeCompilerProtocolVersion?: LoadStaticExtensionHostManifestInput['nativeCompilerProtocolVersion']
-  /** Native static evidence jobs forwarded to the TypeScript compatibility host. */
+  /** Static Index evidence jobs forwarded to the TypeScript compatibility host. */
   readonly jobs?: ExtractStaticEvidenceBatchInput['jobs']
   /** Native-finalized graph facts forwarded to TypeScript index rules. */
   readonly graph?: CheckStaticRulesInput['graph']

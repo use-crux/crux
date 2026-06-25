@@ -14,21 +14,21 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
-func TestWorkerNativeStaticReplaysWarmStaticCacheFacts(t *testing.T) {
+func TestWorkerStaticIndexReplaysWarmStaticCacheFacts(t *testing.T) {
 	t.Setenv(cache.StatusEnv, "1")
 
 	root := t.TempDir()
-	sourceFile := writeNativeStaticPlanCacheFixtureFile(
+	sourceFile := writeStaticIndexPlanCacheFixtureFile(
 		t,
 		root,
 		"src/writer.ts",
 		"import { support } from './support'\nexport const writer = prompt({ id: support })\n",
 	)
-	supportFile := writeNativeStaticPlanCacheFixtureFile(t, root, "src/support.ts", "export const support = 'cached-writer'\n")
-	configFile := writeNativeStaticEnabledConfig(t, root)
+	supportFile := writeStaticIndexPlanCacheFixtureFile(t, root, "src/support.ts", "export const support = 'cached-writer'\n")
+	configFile := writeStaticIndexEnabledConfig(t, root)
 
 	cacheKey := "static-cache-key:cached-writer"
-	writeNativeStaticReplayCacheFile(t, root, cacheKey, map[string]any{
+	writeStaticIndexReplayCacheFile(t, root, cacheKey, map[string]any{
 		"file": sourceFile,
 		"definitions": []map[string]any{{
 			"id":       "prompt:cached-writer",
@@ -43,43 +43,43 @@ func TestWorkerNativeStaticReplaysWarmStaticCacheFacts(t *testing.T) {
 		"diagnostics":  []map[string]any{},
 	})
 	configCacheKey := "static-cache-key:crux-config"
-	writeNativeStaticReplayCacheFile(t, root, configCacheKey, map[string]any{
+	writeStaticIndexReplayCacheFile(t, root, configCacheKey, map[string]any{
 		"file":         configFile,
 		"definitions":  []map[string]any{},
 		"relations":    []map[string]any{},
 		"dependencies": []string{},
 		"diagnostics":  []map[string]any{},
 	})
-	writeNativeStaticPlanCacheManifest(t, root, map[string]any{
+	writeStaticIndexPlanCacheManifest(t, root, map[string]any{
 		"version":    "static-parse-v38",
 		"root":       root,
 		"file":       "src/writer.ts",
-		"sourceHash": nativeStaticPlanCacheFixtureHash(t, sourceFile),
+		"sourceHash": staticIndexPlanCacheFixtureHash(t, sourceFile),
 		"dependencies": []map[string]string{{
 			"file":       "src/support.ts",
-			"sourceHash": nativeStaticPlanCacheFixtureHash(t, supportFile),
+			"sourceHash": staticIndexPlanCacheFixtureHash(t, supportFile),
 		}},
 		"configFiles":    []map[string]string{},
-		"compilerInputs": nativeStaticPlanCacheCompilerInputsFixture(t),
+		"compilerInputs": staticIndexPlanCacheCompilerInputsFixture(t),
 		"cacheKey":       cacheKey,
 	})
-	writeNativeStaticPlanCacheManifest(t, root, map[string]any{
+	writeStaticIndexPlanCacheManifest(t, root, map[string]any{
 		"version":        "static-parse-v38",
 		"root":           root,
 		"file":           "crux.config.ts",
-		"sourceHash":     nativeStaticPlanCacheFixtureHash(t, configFile),
+		"sourceHash":     staticIndexPlanCacheFixtureHash(t, configFile),
 		"dependencies":   []map[string]string{},
 		"configFiles":    []map[string]string{},
-		"compilerInputs": nativeStaticPlanCacheCompilerInputsFixture(t),
+		"compilerInputs": staticIndexPlanCacheCompilerInputsFixture(t),
 		"cacheKey":       configCacheKey,
 	})
 
-	compiler := &nativeStaticCacheReplayCompiler{root: root}
+	compiler := &staticIndexCacheReplayCompiler{root: root}
 	worker := newTestWorker(t)
 	worker.WithSyntaxParser(compiler)
 	defer worker.Close()
 
-	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-cache-replay")
+	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "static-index-cache-replay")
 	if err != nil {
 		t.Fatalf("IndexProjectAstPatch error = %v", err)
 	}
@@ -94,14 +94,14 @@ func TestWorkerNativeStaticReplaysWarmStaticCacheFacts(t *testing.T) {
 	}
 }
 
-type nativeStaticCacheReplayCompiler struct {
+type staticIndexCacheReplayCompiler struct {
 	root                    string
 	analyzeFiles            []protocol.AnalyzeFile
 	finalizeNativeFacts     []json.RawMessage
 	finalizeSawCachedWriter bool
 }
 
-func (c *nativeStaticCacheReplayCompiler) NativeStaticPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+func (c *staticIndexCacheReplayCompiler) StaticIndexPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
 	hits := []protocol.SourceFile{}
 	misses := []protocol.SourceFile{}
 	for _, file := range request.Files {
@@ -128,11 +128,11 @@ func (c *nativeStaticCacheReplayCompiler) NativeStaticPrepare(_ context.Context,
 			PruneNativeFactCallNames: append([]string(nil), request.PruneNativeFactCallNames...),
 		},
 		Diagnostics: []json.RawMessage{},
-		Telemetry:   nativeStaticTestTelemetry(len(request.Files), len(hits), len(misses), 0),
+		Telemetry:   staticIndexTestTelemetry(len(request.Files), len(hits), len(misses), 0),
 	}, nil
 }
 
-func (c *nativeStaticCacheReplayCompiler) NativeStaticAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+func (c *staticIndexCacheReplayCompiler) StaticIndexAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
 	c.analyzeFiles = append([]protocol.AnalyzeFile(nil), request.Files...)
 	if !request.Stream {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
@@ -140,17 +140,17 @@ func (c *nativeStaticCacheReplayCompiler) NativeStaticAnalyzeStream(_ context.Co
 	if len(request.Files) != 0 {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("full warm cache hit should not analyze files: %+v", request.Files)
 	}
-	return nativeStaticTestAnalyzeStream(protocol.AnalyzeResponse{
+	return staticIndexTestAnalyzeStream(protocol.AnalyzeResponse{
 		ProtocolVersion:       protocol.Version,
 		Method:                protocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
-		Telemetry:             nativeStaticTestTelemetry(len(request.Plan.Files), len(request.Plan.CacheHits), len(request.Plan.CacheMisses), len(request.Files)),
+		Telemetry:             staticIndexTestTelemetry(len(request.Plan.Files), len(request.Plan.CacheHits), len(request.Plan.CacheMisses), len(request.Files)),
 	}, handle)
 }
 
-func (c *nativeStaticCacheReplayCompiler) NativeStaticFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+func (c *staticIndexCacheReplayCompiler) StaticIndexFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
 	c.finalizeNativeFacts = append([]json.RawMessage(nil), request.NativeFacts...)
 	for _, fact := range request.NativeFacts {
 		if bytes.Contains(fact, []byte("prompt:cached-writer")) {
@@ -161,7 +161,7 @@ func (c *nativeStaticCacheReplayCompiler) NativeStaticFinalize(_ context.Context
 	if !c.finalizeSawCachedWriter {
 		return protocol.FinalizeResponse{}, fmt.Errorf("missing cached writer fact in native finalize input")
 	}
-	events, err := nativeStaticCacheReplayEvents(c.root, "native-static-cache-replay")
+	events, err := staticIndexCacheReplayEvents(c.root, "static-index-cache-replay")
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
@@ -169,30 +169,30 @@ func (c *nativeStaticCacheReplayCompiler) NativeStaticFinalize(_ context.Context
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Events:          events,
-		Telemetry:       nativeStaticTestTelemetry(len(request.NativeFacts), 1, 0, 0),
+		Telemetry:       staticIndexTestTelemetry(len(request.NativeFacts), 1, 0, 0),
 	}, nil
 }
 
-func (c *nativeStaticCacheReplayCompiler) NativeStaticFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func (c *staticIndexCacheReplayCompiler) StaticIndexFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	if !request.Stream {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
-	response, err := c.NativeStaticFinalize(ctx, request)
+	response, err := c.StaticIndexFinalize(ctx, request)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return nativeStaticTestFinalizeStream(response, handle)
+	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticCacheReplayCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
-	return nil, fmt.Errorf("ParseFile should not be called by native static cache replay")
+func (c *staticIndexCacheReplayCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+	return nil, fmt.Errorf("ParseFile should not be called by Static Index cache replay")
 }
 
-func (c *nativeStaticCacheReplayCompiler) Concurrency() int { return 1 }
+func (c *staticIndexCacheReplayCompiler) Concurrency() int { return 1 }
 
-func (c *nativeStaticCacheReplayCompiler) Close() error { return nil }
+func (c *staticIndexCacheReplayCompiler) Close() error { return nil }
 
-func writeNativeStaticReplayCacheFile(t testing.TB, root, cacheKey string, value any) {
+func writeStaticIndexReplayCacheFile(t testing.TB, root, cacheKey string, value any) {
 	t.Helper()
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -207,8 +207,8 @@ func writeNativeStaticReplayCacheFile(t testing.TB, root, cacheKey string, value
 	}
 }
 
-func nativeStaticCacheReplayEvents(root, projectName string) ([]json.RawMessage, error) {
-	tx := "tx-native-static-cache-replay"
+func staticIndexCacheReplayEvents(root, projectName string) ([]json.RawMessage, error) {
+	tx := "tx-static-index-cache-replay"
 	values := []any{
 		map[string]any{
 			"protocolVersion": 2,
@@ -232,7 +232,7 @@ func nativeStaticCacheReplayEvents(root, projectName string) ([]json.RawMessage,
 					"projectRoot":   root,
 					"producer":      map[string]any{"name": workerProducer, "version": "test"},
 					"fidelity":      "authoritative",
-					"provenance":    map[string]any{"kind": "runtime", "attribute": "test.nativeStaticCacheReplay"},
+					"provenance":    map[string]any{"kind": "runtime", "attribute": "test.staticIndexCacheReplay"},
 					"fact": map[string]any{
 						"id":       "prompt:cached-writer",
 						"kind":     "prompt",
@@ -259,7 +259,7 @@ func nativeStaticCacheReplayEvents(root, projectName string) ([]json.RawMessage,
 			},
 			"summary": map[string]any{
 				"factCount": 1,
-				"decision":  map[string]any{"nativeStaticComplete": true},
+				"decision":  map[string]any{"staticIndexComplete": true},
 			},
 		},
 	}
@@ -274,5 +274,5 @@ func nativeStaticCacheReplayEvents(root, projectName string) ([]json.RawMessage,
 	return events, nil
 }
 
-var _ syntax.Parser = (*nativeStaticCacheReplayCompiler)(nil)
-var _ StaticCompiler = (*nativeStaticCacheReplayCompiler)(nil)
+var _ syntax.Parser = (*staticIndexCacheReplayCompiler)(nil)
+var _ StaticCompiler = (*staticIndexCacheReplayCompiler)(nil)

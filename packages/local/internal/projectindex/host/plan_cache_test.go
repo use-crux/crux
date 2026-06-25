@@ -15,40 +15,40 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/sourceprofile"
 )
 
-func TestProjectNativeStaticSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
+func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 	t.Setenv(cache.StatusEnv, "1")
 
 	root := t.TempDir()
 	sourceText := "import { support } from './support'\nexport const writer = prompt({ id: support })\n"
 	supportText := "export const support = 'warm-cache'\n"
 	tsconfigText := "{\"compilerOptions\":{\"module\":\"ESNext\"}}\n"
-	sourceFile := writeNativeStaticPlanCacheFixtureFile(t, root, "src/writer.ts",
+	sourceFile := writeStaticIndexPlanCacheFixtureFile(t, root, "src/writer.ts",
 		sourceText)
-	supportFile := writeNativeStaticPlanCacheFixtureFile(t, root, "src/support.ts",
+	supportFile := writeStaticIndexPlanCacheFixtureFile(t, root, "src/support.ts",
 		supportText)
-	tsconfigFile := writeNativeStaticPlanCacheFixtureFile(t, root, "tsconfig.json",
+	tsconfigFile := writeStaticIndexPlanCacheFixtureFile(t, root, "tsconfig.json",
 		tsconfigText)
 
 	cacheKey := "static-cache-key:writer"
-	writeNativeStaticPlanCacheFile(t, root, cacheKey)
-	writeNativeStaticPlanCacheManifest(t, root, map[string]any{
+	writeStaticIndexPlanCacheFile(t, root, cacheKey)
+	writeStaticIndexPlanCacheManifest(t, root, map[string]any{
 		"version":    "static-parse-v38",
 		"root":       root,
 		"file":       "src/writer.ts",
-		"sourceHash": nativeStaticPlanCacheFixtureHash(t, sourceFile),
+		"sourceHash": staticIndexPlanCacheFixtureHash(t, sourceFile),
 		"dependencies": []map[string]string{{
 			"file":       "src/support.ts",
-			"sourceHash": nativeStaticPlanCacheFixtureHash(t, supportFile),
+			"sourceHash": staticIndexPlanCacheFixtureHash(t, supportFile),
 		}},
 		"configFiles": []map[string]string{{
 			"file":       "tsconfig.json",
-			"sourceHash": nativeStaticPlanCacheFixtureHash(t, tsconfigFile),
+			"sourceHash": staticIndexPlanCacheFixtureHash(t, tsconfigFile),
 		}},
-		"compilerInputs": nativeStaticPlanCacheCompilerInputsFixture(t),
+		"compilerInputs": staticIndexPlanCacheCompilerInputsFixture(t),
 		"cacheKey":       cacheKey,
 	})
 
-	plan, err := planner.Build(root, "warm-cache", projectindex.ProjectNativeStaticConfig{
+	plan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})
@@ -93,7 +93,7 @@ func TestProjectNativeStaticSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) 
 	if err := os.WriteFile(supportFile, []byte("export const support = 'changed-support'\n"), 0o600); err != nil {
 		t.Fatalf("change support: %v", err)
 	}
-	dependencyChangedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectNativeStaticConfig{
+	dependencyChangedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})
@@ -110,7 +110,7 @@ func TestProjectNativeStaticSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) 
 	if err := os.WriteFile(tsconfigFile, []byte("{\"compilerOptions\":{\"module\":\"NodeNext\"}}\n"), 0o600); err != nil {
 		t.Fatalf("change tsconfig: %v", err)
 	}
-	configChangedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectNativeStaticConfig{
+	configChangedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})
@@ -127,7 +127,7 @@ func TestProjectNativeStaticSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) 
 	if err := os.WriteFile(sourceFile, []byte("import { support } from './support'\nexport const writer = prompt({ id: `${support}:changed` })\n"), 0o600); err != nil {
 		t.Fatalf("change source: %v", err)
 	}
-	changedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectNativeStaticConfig{
+	changedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})
@@ -145,7 +145,7 @@ func TestProjectNativeStaticSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) 
 	}
 }
 
-func writeNativeStaticPlanCacheFixtureFile(t testing.TB, root, name, source string) string {
+func writeStaticIndexPlanCacheFixtureFile(t testing.TB, root, name, source string) string {
 	t.Helper()
 	file := filepath.Join(root, filepath.FromSlash(name))
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
@@ -157,7 +157,7 @@ func writeNativeStaticPlanCacheFixtureFile(t testing.TB, root, name, source stri
 	return file
 }
 
-func writeNativeStaticPlanCacheFile(t testing.TB, root, cacheKey string) {
+func writeStaticIndexPlanCacheFile(t testing.TB, root, cacheKey string) {
 	t.Helper()
 	cacheKeyJSON, err := json.Marshal(cacheKey)
 	if err != nil {
@@ -173,7 +173,7 @@ func writeNativeStaticPlanCacheFile(t testing.TB, root, cacheKey string) {
 	}
 }
 
-func writeNativeStaticPlanCacheManifest(t testing.TB, root string, entry map[string]any) {
+func writeStaticIndexPlanCacheManifest(t testing.TB, root string, entry map[string]any) {
 	t.Helper()
 	line, err := json.Marshal(entry)
 	if err != nil {
@@ -193,7 +193,7 @@ func writeNativeStaticPlanCacheManifest(t testing.TB, root string, entry map[str
 	}
 }
 
-func nativeStaticPlanCacheFixtureHash(t testing.TB, file string) string {
+func staticIndexPlanCacheFixtureHash(t testing.TB, file string) string {
 	t.Helper()
 	source, err := os.ReadFile(file)
 	if err != nil {
@@ -203,9 +203,9 @@ func nativeStaticPlanCacheFixtureHash(t testing.TB, file string) string {
 	return fmt.Sprintf("%x", sum)
 }
 
-func nativeStaticPlanCacheCompilerInputsFixture(t testing.TB) []json.RawMessage {
+func staticIndexPlanCacheCompilerInputsFixture(t testing.TB) []json.RawMessage {
 	t.Helper()
-	raw := `[{"kind":"compiler-profile","name":"@crux/indexer/crux-core-profile","version":"1"},{"kind":"compiler-projection","name":"prompt-context-tree-paths","version":"1","phase":"resolve"},{"kind":"compiler-projection","name":"runtime-prepare-use-entries","version":"1","phase":"parse"},{"kind":"compiler-projection","name":"source-ref-projection","version":"1","phase":"parse"},{"kind":"extension-manifest","name":"@crux/indexer/crux-core","version":"1","digest":"9c3b36a0826e4861a68247126a241017715048d9fef28b6649808f17ace3ba71"},{"kind":"extension","name":"@crux/indexer/crux-core","version":"1"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"agent"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"blackboard"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"composition"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"context"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"eval"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"flow"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"injectable"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"memory"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"prompt"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"rag.retriever"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"registry-skill"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"routing"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"safety"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"scorer"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"skill-registry"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"tool"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"workspace"},{"kind":"native-primitive-manifest","name":"crux-native-static-host","version":"1","digest":"ebb0991b34c19eef6a5a035a4124f266e2cc7c41d4526cfe4a8e0d018c5ec577"},{"kind":"relation-policy","name":"runtime-relation-specs","digest":"0aa11aad16e45c4064273c1e406633efed30801f98f1e2f609c4191ecf21f7ed"},{"kind":"static-evidence-manifest","name":"runtime-static-interests","digest":"56da88dcef8a7fd7805bacf329632f17cd43d46d792216fe5522e2550f60b2a2"},{"kind":"syntax-frontend","name":"oxc-rust","version":"oxc_parser@0.133.0+crux_native_group3.5"}]`
+	raw := `[{"kind":"compiler-profile","name":"@crux/indexer/crux-core-profile","version":"1"},{"kind":"compiler-projection","name":"prompt-context-tree-paths","version":"1","phase":"resolve"},{"kind":"compiler-projection","name":"runtime-prepare-use-entries","version":"1","phase":"parse"},{"kind":"compiler-projection","name":"source-ref-projection","version":"1","phase":"parse"},{"kind":"extension-manifest","name":"@crux/indexer/crux-core","version":"1","digest":"9c3b36a0826e4861a68247126a241017715048d9fef28b6649808f17ace3ba71"},{"kind":"extension","name":"@crux/indexer/crux-core","version":"1"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"agent"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"blackboard"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"composition"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"context"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"eval"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"flow"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"injectable"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"memory"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"prompt"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"rag.retriever"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"registry-skill"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"routing"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"safety"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"scorer"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"skill-registry"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"tool"},{"kind":"extractor","extension":"@crux/indexer/crux-core","name":"workspace"},{"kind":"native-primitive-manifest","name":"crux-static-index-host","version":"1","digest":"ebb0991b34c19eef6a5a035a4124f266e2cc7c41d4526cfe4a8e0d018c5ec577"},{"kind":"relation-policy","name":"runtime-relation-specs","digest":"0aa11aad16e45c4064273c1e406633efed30801f98f1e2f609c4191ecf21f7ed"},{"kind":"static-evidence-manifest","name":"runtime-static-interests","digest":"56da88dcef8a7fd7805bacf329632f17cd43d46d792216fe5522e2550f60b2a2"},{"kind":"syntax-frontend","name":"oxc-rust","version":"oxc_parser@0.133.0+crux_native_group3.5"}]`
 	var inputs []json.RawMessage
 	if err := json.Unmarshal([]byte(raw), &inputs); err != nil {
 		t.Fatalf("decode compiler inputs fixture: %v", err)
@@ -213,16 +213,16 @@ func nativeStaticPlanCacheCompilerInputsFixture(t testing.TB) []json.RawMessage 
 	return inputs
 }
 
-func nativeStaticPlanCacheCompilerInputsWithExtensionFixture(t testing.TB) []json.RawMessage {
+func staticIndexPlanCacheCompilerInputsWithExtensionFixture(t testing.TB) []json.RawMessage {
 	t.Helper()
-	inputs := nativeStaticPlanCacheCompilerInputsFixture(t)
+	inputs := staticIndexPlanCacheCompilerInputsFixture(t)
 	inputs = append(inputs, json.RawMessage(`{"kind":"extension","name":"@acme/workflows","version":"top-level"}`))
 	return inputs
 }
 
-func nativeStaticPlanCacheCompilerInputsWithExtensionFixtureJSON(t testing.TB) string {
+func staticIndexPlanCacheCompilerInputsWithExtensionFixtureJSON(t testing.TB) string {
 	t.Helper()
-	data, err := json.Marshal(nativeStaticPlanCacheCompilerInputsWithExtensionFixture(t))
+	data, err := json.Marshal(staticIndexPlanCacheCompilerInputsWithExtensionFixture(t))
 	if err != nil {
 		t.Fatalf("marshal extension compiler inputs fixture: %v", err)
 	}

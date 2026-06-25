@@ -10,7 +10,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-func TestProjectNativeStaticAnalyzeFilesUsePreparedSourceText(t *testing.T) {
+func TestProjectStaticIndexAnalyzeFilesUsePreparedSourceText(t *testing.T) {
 	root := t.TempDir()
 	sourceFile := filepath.Join(root, "src", "writer.ts")
 	if err := os.MkdirAll(filepath.Dir(sourceFile), 0o755); err != nil {
@@ -48,7 +48,7 @@ func TestProjectNativeStaticAnalyzeFilesUsePreparedSourceText(t *testing.T) {
 	}
 }
 
-func TestProjectNativeStaticSourceInputBuildsSemanticProfileFromPreparedSource(t *testing.T) {
+func TestProjectStaticIndexSourceInputBuildsSemanticProfileFromPreparedSource(t *testing.T) {
 	root := t.TempDir()
 	sourceFile := filepath.Join(root, "src", "writer.ts")
 	if err := os.MkdirAll(filepath.Dir(sourceFile), 0o755); err != nil {
@@ -105,11 +105,11 @@ func TestProjectNativeStaticSourceInputBuildsSemanticProfileFromPreparedSource(t
 	}
 }
 
-func TestProjectNativeStaticSourceInputUsesFilesToParse(t *testing.T) {
+func TestProjectStaticIndexSourceInputUsesFilesToParse(t *testing.T) {
 	root := t.TempDir()
 	files := []string{
-		fileWithNativeStaticSource(t, root, "src/primary.ts"),
-		fileWithNativeStaticSource(t, root, "src/support.ts"),
+		fileWithStaticIndexSource(t, root, "src/primary.ts"),
+		fileWithStaticIndexSource(t, root, "src/support.ts"),
 	}
 
 	input, err := FromPlan(projectindex.ProjectStaticSyntaxPlan{
@@ -135,11 +135,11 @@ func TestProjectNativeStaticSourceInputUsesFilesToParse(t *testing.T) {
 	}
 }
 
-func TestProjectNativeStaticSourceInputKeepsPrimaryFilesSeparateFromSupportFiles(t *testing.T) {
+func TestProjectStaticIndexSourceInputKeepsPrimaryFilesSeparateFromSupportFiles(t *testing.T) {
 	root := t.TempDir()
 	files := []string{
-		fileWithNativeStaticSource(t, root, "src/primary.ts"),
-		fileWithNativeStaticSource(t, root, "src/support.ts"),
+		fileWithStaticIndexSource(t, root, "src/primary.ts"),
+		fileWithStaticIndexSource(t, root, "src/support.ts"),
 	}
 
 	input, err := FromPlan(projectindex.ProjectStaticSyntaxPlan{
@@ -163,7 +163,7 @@ func TestProjectNativeStaticSourceInputKeepsPrimaryFilesSeparateFromSupportFiles
 	}
 }
 
-func fileWithNativeStaticSource(t testing.TB, root, name string) string {
+func fileWithStaticIndexSource(t testing.TB, root, name string) string {
 	t.Helper()
 	file := filepath.Join(root, name)
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {

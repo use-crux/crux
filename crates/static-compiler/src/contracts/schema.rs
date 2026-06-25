@@ -5,11 +5,11 @@ use std::collections::BTreeSet;
 use serde_json::{Map, Value};
 
 use crate::contracts::input::EdgeFacts;
-use crate::core::facts::NativeStaticDefinition;
+use crate::core::facts::StaticIndexDefinition;
 
 pub(crate) fn contributions_from_schema(
     schema: Option<&Value>,
-    source: &NativeStaticDefinition,
+    source: &StaticIndexDefinition,
     path: &[String],
     edge: &EdgeFacts,
 ) -> Vec<Value> {
@@ -114,11 +114,11 @@ pub(crate) fn merge_object_schema_contributions(
     Value::Object(expanded)
 }
 
-pub(crate) fn own_input_schema(definition: &NativeStaticDefinition) -> Option<Value> {
+pub(crate) fn own_input_schema(definition: &StaticIndexDefinition) -> Option<Value> {
     contract_input_schema(definition).or_else(|| metadata_input_schema(definition))
 }
 
-pub(crate) fn source_input_schema(definition: &NativeStaticDefinition) -> Option<Value> {
+pub(crate) fn source_input_schema(definition: &StaticIndexDefinition) -> Option<Value> {
     contract_input_schema(definition).or_else(|| metadata_input_schema(definition))
 }
 
@@ -153,7 +153,7 @@ pub(crate) fn contribution_key(contribution: &Value) -> String {
     format!("{field}:{source}:{path}")
 }
 
-fn contract_input_schema(definition: &NativeStaticDefinition) -> Option<Value> {
+fn contract_input_schema(definition: &StaticIndexDefinition) -> Option<Value> {
     definition
         .metadata
         .as_ref()
@@ -163,7 +163,7 @@ fn contract_input_schema(definition: &NativeStaticDefinition) -> Option<Value> {
         .cloned()
 }
 
-fn metadata_input_schema(definition: &NativeStaticDefinition) -> Option<Value> {
+fn metadata_input_schema(definition: &StaticIndexDefinition) -> Option<Value> {
     definition
         .metadata
         .as_ref()

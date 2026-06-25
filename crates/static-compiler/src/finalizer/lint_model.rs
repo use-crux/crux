@@ -1,24 +1,22 @@
-//! Post-merge lint model construction for native static finalization.
+//! Post-merge lint model construction for Static Index finalization.
 
 use std::collections::BTreeSet;
 
 use serde_json::Value;
 
 use crate::core::definition_merge::merge_definitions_by_id;
-use crate::core::facts::NativeStaticIndexPatchFacts;
+use crate::core::facts::StaticIndexIndexPatchFacts;
 use crate::finalizer::run::{append_missing_builtin_rule_descriptors, merge_fact_value};
-use crate::lints::filter::NativeStaticLintOptions;
+use crate::lints::filter::StaticIndexLintOptions;
 use crate::lints::findings::append_builtin_lint_findings;
-use crate::relation::model::{
-    NativeStaticRelationPolicyTable, resolve_native_static_relation_model,
-};
-use crate::source::model::with_native_static_source_model;
+use crate::relation::model::{StaticIndexRelationPolicyTable, resolve_static_index_relation_model};
+use crate::source::model::with_static_index_source_model;
 
-pub(crate) fn apply_native_static_lint_model(
-    facts: &mut NativeStaticIndexPatchFacts,
+pub(crate) fn apply_static_index_lint_model(
+    facts: &mut StaticIndexIndexPatchFacts,
     lint_facts: &[Value],
-    policies: &NativeStaticRelationPolicyTable,
-    lint_options: &NativeStaticLintOptions,
+    policies: &StaticIndexRelationPolicyTable,
+    lint_options: &StaticIndexLintOptions,
 ) {
     if lint_facts.is_empty() {
         append_builtin_lint_findings(facts, lint_options);
@@ -37,8 +35,8 @@ pub(crate) fn apply_native_static_lint_model(
         .iter()
         .map(|diagnostic| diagnostic.id.clone())
         .collect::<BTreeSet<_>>();
-    let relation_model = resolve_native_static_relation_model(lint_model, policies);
-    let mut lint_model = with_native_static_source_model(relation_model.facts);
+    let relation_model = resolve_static_index_relation_model(lint_model, policies);
+    let mut lint_model = with_static_index_source_model(relation_model.facts);
     append_builtin_lint_findings(&mut lint_model, lint_options);
     facts.lint_findings = lint_model.lint_findings;
     facts.rule_descriptors = lint_model.rule_descriptors;

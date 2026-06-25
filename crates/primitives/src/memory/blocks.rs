@@ -4,7 +4,7 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext},
-    definition::{NativeDefinitionInput, folded_index_child, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, folded_index_child, safe_id, static_index_definition},
     protocol::StaticSyntaxValue,
     record_values::{has_property, number_property, property_value, resolve_static_value},
     schema::syntax_value_to_json_schema,
@@ -155,7 +155,7 @@ fn block_definition(
         folded_index_child(memory_id, "memory.includes_block", "block", index),
     );
     metadata.insert("facts".to_string(), memory_block_facts(memory_id, block));
-    native_static_definition(NativeDefinitionInput {
+    static_index_definition(NativeDefinitionInput {
         id,
         kind: "memory.block",
         name: block_key.to_string(),

@@ -45,14 +45,14 @@ func projectLintIndexRequest(
 	configPath string,
 	projectName string,
 	index store.IndexData,
-	astUsedNativeStatic bool,
+	astUsedStaticIndex bool,
 ) projectindex.ProjectLintIndexRequest {
 	return projectindex.ProjectLintIndexRequest{
-		Root:                root,
-		ConfigPath:          configPath,
-		ProjectName:         projectName,
-		PreviousIndex:       index,
-		ASTUsedNativeStatic: astUsedNativeStatic,
+		Root:               root,
+		ConfigPath:         configPath,
+		ProjectName:        projectName,
+		PreviousIndex:      index,
+		ASTUsedStaticIndex: astUsedStaticIndex,
 	}
 }
 

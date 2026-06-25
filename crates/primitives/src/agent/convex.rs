@@ -3,7 +3,7 @@ use serde_json::{Map, Value, json};
 use crate::{
     context::{CallParts, PrimitiveContext},
     definition::{
-        NativeDefinitionInput, native_static_definition, safe_id, source_ref_with_metadata,
+        NativeDefinitionInput, safe_id, source_ref_with_metadata, static_index_definition,
     },
     protocol::StaticSyntaxValue,
     record_values::{
@@ -79,7 +79,7 @@ pub(crate) fn convex_agent_facts(
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id: id.clone(),
             kind: "agent",
             name: explicit_name.unwrap_or_else(|| parts.variable_name.to_string()),

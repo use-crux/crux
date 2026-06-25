@@ -8,14 +8,14 @@ use crate::contracts::schema::{
     clone_object_schema, contribution_key, contributions_from_schema,
     merge_object_schema_contributions, own_input_schema, source_input_schema,
 };
-use crate::core::facts::{NativeStaticDefinition, NativeStaticRelation};
+use crate::core::facts::{StaticIndexDefinition, StaticIndexRelation};
 use crate::read::helpers::{definition_export_name, definition_metadata, object_entry};
 
 /// Adds inherited input fields from statically resolved context/injectable edges.
 pub(crate) fn with_expanded_input_contracts(
-    definitions: Vec<NativeStaticDefinition>,
-    relations: &[NativeStaticRelation],
-) -> Vec<NativeStaticDefinition> {
+    definitions: Vec<StaticIndexDefinition>,
+    relations: &[StaticIndexRelation],
+) -> Vec<StaticIndexDefinition> {
     let by_id = definitions
         .iter()
         .map(|definition| (definition.id.clone(), definition.clone()))
@@ -56,9 +56,9 @@ pub(crate) fn with_expanded_input_contracts(
 }
 
 fn outgoing_relations(
-    relations: &[NativeStaticRelation],
-) -> BTreeMap<String, Vec<NativeStaticRelation>> {
-    let mut outgoing = BTreeMap::<String, Vec<NativeStaticRelation>>::new();
+    relations: &[StaticIndexRelation],
+) -> BTreeMap<String, Vec<StaticIndexRelation>> {
+    let mut outgoing = BTreeMap::<String, Vec<StaticIndexRelation>>::new();
     for relation in relations {
         outgoing
             .entry(relation.from.clone())
@@ -69,9 +69,9 @@ fn outgoing_relations(
 }
 
 fn collect_input_contributions(
-    owner: &NativeStaticDefinition,
-    by_id: &BTreeMap<String, NativeStaticDefinition>,
-    outgoing: &BTreeMap<String, Vec<NativeStaticRelation>>,
+    owner: &StaticIndexDefinition,
+    by_id: &BTreeMap<String, StaticIndexDefinition>,
+    outgoing: &BTreeMap<String, Vec<StaticIndexRelation>>,
 ) -> Vec<Value> {
     let mut state = ContributionState::default();
     visit_contributions(
@@ -104,9 +104,9 @@ pub(crate) struct EdgeFacts {
 }
 
 fn visit_contributions(
-    from: &NativeStaticDefinition,
-    by_id: &BTreeMap<String, NativeStaticDefinition>,
-    outgoing: &BTreeMap<String, Vec<NativeStaticRelation>>,
+    from: &StaticIndexDefinition,
+    by_id: &BTreeMap<String, StaticIndexDefinition>,
+    outgoing: &BTreeMap<String, Vec<StaticIndexRelation>>,
     path: Vec<String>,
     inherited: EdgeFacts,
     state: &mut ContributionState,
@@ -166,10 +166,10 @@ fn visit_contributions(
 }
 
 fn ordered_input_relations<'a>(
-    from: &NativeStaticDefinition,
-    by_id: &BTreeMap<String, NativeStaticDefinition>,
-    relations: &'a [NativeStaticRelation],
-) -> Vec<&'a NativeStaticRelation> {
+    from: &StaticIndexDefinition,
+    by_id: &BTreeMap<String, StaticIndexDefinition>,
+    relations: &'a [StaticIndexRelation],
+) -> Vec<&'a StaticIndexRelation> {
     let mut ordered = relations.iter().collect::<Vec<_>>();
     ordered.sort_by(|left, right| {
         let left_order = by_id
@@ -188,8 +188,8 @@ fn ordered_input_relations<'a>(
 }
 
 fn use_facts_for_target(
-    owner: &NativeStaticDefinition,
-    target: &NativeStaticDefinition,
+    owner: &StaticIndexDefinition,
+    target: &StaticIndexDefinition,
 ) -> Option<EdgeFacts> {
     use_entries(owner).into_iter().find_map(|entry| {
         let object = entry.as_object()?;
@@ -218,15 +218,15 @@ fn use_facts_for_target(
 }
 
 fn use_entry_index_for_target(
-    owner: &NativeStaticDefinition,
-    target: &NativeStaticDefinition,
+    owner: &StaticIndexDefinition,
+    target: &StaticIndexDefinition,
 ) -> Option<usize> {
     use_entries(owner)
         .into_iter()
         .position(|entry| use_entry_matches_target(&entry, target))
 }
 
-fn use_entry_matches_target(entry: &Value, target: &NativeStaticDefinition) -> bool {
+fn use_entry_matches_target(entry: &Value, target: &StaticIndexDefinition) -> bool {
     let Some(object) = entry.as_object() else {
         return false;
     };
@@ -238,7 +238,7 @@ fn use_entry_matches_target(entry: &Value, target: &NativeStaticDefinition) -> b
         || target.id.ends_with(&format!(":{variable}"))
 }
 
-fn use_entries(definition: &NativeStaticDefinition) -> Vec<Value> {
+fn use_entries(definition: &StaticIndexDefinition) -> Vec<Value> {
     definition
         .metadata
         .as_ref()

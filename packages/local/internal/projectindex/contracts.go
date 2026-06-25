@@ -16,13 +16,13 @@ type ProjectIndexer interface {
 // metadata here is carried into later phases instead of reading mutable worker
 // diagnostics such as "last timing" state.
 type ProjectAstIndexResult struct {
-	Patch            IndexPatch
-	UsedNativeStatic bool
+	Patch           IndexPatch
+	UsedStaticIndex bool
 }
 
 // ProjectAstResultIndexer optionally returns AST/source patch metadata together
 // with the patch. Indexers that do not implement it keep the legacy
-// ProjectIndexer behavior and report no native static run metadata.
+// ProjectIndexer behavior and report no Static Index run metadata.
 type ProjectAstResultIndexer interface {
 	IndexProjectAstPatchWithResult(ctx context.Context, root, configPath, projectName string) (ProjectAstIndexResult, error)
 }
@@ -30,17 +30,17 @@ type ProjectAstResultIndexer interface {
 // ProjectSemanticIndexRequest describes one semantic Project Index enrichment
 // request after AST/source indexing has selected the relevant project scope.
 type ProjectSemanticIndexRequest struct {
-	Root                string
-	ConfigPath          string
-	ProjectName         string
-	IndexGeneration     uint64
-	WatchRunID          uint64
-	Budget              IndexPatchBudget
-	PreviousIndex       *store.IndexData
-	ASTUsedNativeStatic bool
-	Files               []string
-	DependencyClosure   []string
-	SourceProfile       *SemanticSourceProfile
+	Root               string
+	ConfigPath         string
+	ProjectName        string
+	IndexGeneration    uint64
+	WatchRunID         uint64
+	Budget             IndexPatchBudget
+	PreviousIndex      *store.IndexData
+	ASTUsedStaticIndex bool
+	Files              []string
+	DependencyClosure  []string
+	SourceProfile      *SemanticSourceProfile
 }
 
 type ProjectSemanticIndexer interface {
@@ -73,13 +73,13 @@ type ProjectRuntimeIndexer interface {
 // ProjectLintIndexRequest asks an indexer to recompute backend-owned lint
 // findings over the already-applied Project Index snapshot.
 type ProjectLintIndexRequest struct {
-	Root                string
-	ConfigPath          string
-	ProjectName         string
-	Budget              IndexPatchBudget
-	PreviousIndex       store.IndexData
-	Prefetch            *ProjectLintPrefetchResult
-	ASTUsedNativeStatic bool
+	Root               string
+	ConfigPath         string
+	ProjectName        string
+	Budget             IndexPatchBudget
+	PreviousIndex      store.IndexData
+	Prefetch           *ProjectLintPrefetchResult
+	ASTUsedStaticIndex bool
 }
 
 // ProjectLintIndexer owns post-merge Project Index lint evaluation.

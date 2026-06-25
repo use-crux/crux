@@ -1,13 +1,13 @@
 use serde_json::json;
 
-use crate::analysis::run::analyze_native_static_facts;
+use crate::analysis::run::analyze_static_index_facts;
 use crate::analysis::tests::request_with_root_file_and_call_names;
-use crate::protocol::native_static::NativeStaticAnalyzeFile;
+use crate::protocol::static_index::StaticIndexAnalyzeFile;
 
 #[test]
 fn analyze_resolves_imported_helper_source_refs_from_selected_files() {
     let root = std::env::temp_dir().join(format!(
-        "crux-native-static-imported-helper-{}",
+        "crux-static-index-imported-helper-{}",
         std::process::id()
     ));
     let src_dir = root.join("src");
@@ -49,12 +49,12 @@ fn analyze_resolves_imported_helper_source_refs_from_selected_files() {
         vec!["context".to_string()],
         &context_source,
     );
-    request.files.push(NativeStaticAnalyzeFile {
+    request.files.push(StaticIndexAnalyzeFile {
         file: helper_file.to_string_lossy().to_string(),
         source_hash: "sha256:plans".to_string(),
         source_text: Some(helper_source),
     });
-    let facts = analyze_native_static_facts(&request);
+    let facts = analyze_static_index_facts(&request);
     let facts = facts.into_wire_values();
     std::fs::remove_dir_all(&root).ok();
 
@@ -103,7 +103,7 @@ fn analyze_keeps_local_helper_data_accesses() {
         "})",
     ]
     .join("\n");
-    let facts = analyze_native_static_facts(&request_with_root_file_and_call_names(
+    let facts = analyze_static_index_facts(&request_with_root_file_and_call_names(
         "/workspace/acme".to_string(),
         "src/contexts/plan.ts".to_string(),
         vec!["context".to_string()],

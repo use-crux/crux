@@ -33,7 +33,7 @@ export function runtimeManifestCacheInputs(manifest: ExtensionRuntimeManifest): 
     },
     {
       kind: 'native-primitive-manifest',
-      name: 'crux-native-static-host',
+      name: 'crux-static-index-host',
       version: '1',
       digest: manifestDigest(manifest.staticHost),
     },

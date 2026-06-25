@@ -12,7 +12,7 @@ import (
 )
 
 type Compiler interface {
-	NativeStaticFinalize(context.Context, protocol.FinalizeRequest) (protocol.FinalizeResponse, error)
+	StaticIndexFinalize(context.Context, protocol.FinalizeRequest) (protocol.FinalizeResponse, error)
 }
 
 type FinalizeOptions struct {
@@ -36,7 +36,7 @@ func FinalizePatch(ctx context.Context, compiler Compiler, options FinalizeOptio
 		return projectindex.IndexPatch{}, false, err
 	}
 	emitBuiltinLints := true
-	finalize, err := compiler.NativeStaticFinalize(ctx, protocol.FinalizeRequest{
+	finalize, err := compiler.StaticIndexFinalize(ctx, protocol.FinalizeRequest{
 		ProtocolVersion:  protocol.Version,
 		Method:           protocol.FinalizeMethod,
 		Identity:         protocol.SkeletonIdentity(),
@@ -49,13 +49,13 @@ func FinalizePatch(ctx context.Context, compiler Compiler, options FinalizeOptio
 		PatchPhase:       string(projectindex.PhaseQuality),
 	})
 	if err != nil {
-		return projectindex.IndexPatch{}, false, fmt.Errorf("native static lint finalize: %w", err)
+		return projectindex.IndexPatch{}, false, fmt.Errorf("Static Index lint finalize: %w", err)
 	}
-	patch, _, usedNativeStatic, err := patch.FromEvents(options.PatchOptions, finalize.Events)
+	patch, _, usedStaticIndex, err := patch.FromEvents(options.PatchOptions, finalize.Events)
 	if err != nil {
 		return projectindex.IndexPatch{}, false, err
 	}
-	if !usedNativeStatic {
+	if !usedStaticIndex {
 		return projectindex.IndexPatch{}, false, nil
 	}
 	return patch, true, nil

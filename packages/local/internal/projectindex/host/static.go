@@ -12,35 +12,35 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/sourceprofile"
 )
 
-type projectNativeStaticSkeletonResult struct {
+type projectStaticIndexSkeletonResult struct {
 	Prepare  protocol.PrepareResponse
 	Analyze  protocol.AnalyzeResponse
 	Finalize protocol.FinalizeResponse
 }
 
-// runNativeStaticCompilerSkeleton exercises the planned Go-owned native static
+// runStaticIndexCompilerSkeleton exercises the planned Go-owned Static Index
 // compiler lane without wiring it into production `nativeAst` indexing.
 //
 // The method deliberately requires StaticCompiler rather than the
 // syntax-record parser interfaces. Tests use that split to prove the skeleton
 // does not route through Node projection or StaticSyntaxFileRecord streaming.
-func (w *Worker) runNativeStaticCompilerSkeleton(
+func (w *Worker) runStaticIndexCompilerSkeleton(
 	ctx context.Context,
 	root string,
 	configPath string,
 	projectName string,
 	files []protocol.SourceFile,
-) (projectNativeStaticSkeletonResult, error) {
+) (projectStaticIndexSkeletonResult, error) {
 	if w == nil || w.syntaxParser == nil {
-		return projectNativeStaticSkeletonResult{}, fmt.Errorf("project native static compiler is not configured")
+		return projectStaticIndexSkeletonResult{}, fmt.Errorf("project Static Index compiler is not configured")
 	}
 	compiler, ok := w.syntaxParser.(StaticCompiler)
 	if !ok {
-		return projectNativeStaticSkeletonResult{}, fmt.Errorf("project syntax parser does not implement native static compiler")
+		return projectStaticIndexSkeletonResult{}, fmt.Errorf("project syntax parser does not implement Static Index compiler")
 	}
 
 	identity := protocol.SkeletonIdentity()
-	prepare, err := compiler.NativeStaticPrepare(ctx, protocol.PrepareRequest{
+	prepare, err := compiler.StaticIndexPrepare(ctx, protocol.PrepareRequest{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.PrepareMethod,
 		Root:            root,
@@ -50,10 +50,10 @@ func (w *Worker) runNativeStaticCompilerSkeleton(
 		Files:           files,
 	})
 	if err != nil {
-		return projectNativeStaticSkeletonResult{}, fmt.Errorf("native static prepare: %w", err)
+		return projectStaticIndexSkeletonResult{}, fmt.Errorf("Static Index prepare: %w", err)
 	}
 
-	analyze, err := compiler.NativeStaticAnalyzeStream(ctx, protocol.AnalyzeRequest{
+	analyze, err := compiler.StaticIndexAnalyzeStream(ctx, protocol.AnalyzeRequest{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.AnalyzeMethod,
 		Stream:          true,
@@ -62,10 +62,10 @@ func (w *Worker) runNativeStaticCompilerSkeleton(
 		Files:           sourceprofile.AnalyzeFiles(prepare.Plan.CacheMisses),
 	}, nil)
 	if err != nil {
-		return projectNativeStaticSkeletonResult{}, fmt.Errorf("native static analyze: %w", err)
+		return projectStaticIndexSkeletonResult{}, fmt.Errorf("Static Index analyze: %w", err)
 	}
 
-	finalize, err := compiler.NativeStaticFinalize(ctx, protocol.FinalizeRequest{
+	finalize, err := compiler.StaticIndexFinalize(ctx, protocol.FinalizeRequest{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Identity:        identity,
@@ -73,17 +73,17 @@ func (w *Worker) runNativeStaticCompilerSkeleton(
 		ExtensionFacts:  []json.RawMessage{},
 	})
 	if err != nil {
-		return projectNativeStaticSkeletonResult{}, fmt.Errorf("native static finalize: %w", err)
+		return projectStaticIndexSkeletonResult{}, fmt.Errorf("Static Index finalize: %w", err)
 	}
 
-	return projectNativeStaticSkeletonResult{
+	return projectStaticIndexSkeletonResult{
 		Prepare:  prepare,
 		Analyze:  analyze,
 		Finalize: finalize,
 	}, nil
 }
 
-func (w *Worker) indexProjectAstPatchFromNativeStaticCompiler(
+func (w *Worker) indexProjectAstPatchFromStaticIndexCompiler(
 	ctx context.Context,
 	root string,
 	configPath string,

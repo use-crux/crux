@@ -1,10 +1,10 @@
-//! Parse-stage helpers for native static analysis.
+//! Parse-stage helpers for Static Index analysis.
 
 use std::collections::HashSet;
 
 use crate::{
     primitives::static_syntax::parse_static_syntax_record,
-    protocol::native_static::{NativeStaticAnalyzeFile, NativeStaticAnalyzeRequest},
+    protocol::static_index::{StaticIndexAnalyzeFile, StaticIndexAnalyzeRequest},
     protocol::{ParseRequest, StaticSyntaxFileRecord},
 };
 
@@ -14,8 +14,8 @@ pub(crate) struct ParsedAnalyzeFile {
 }
 
 pub(crate) fn parsed_analyze_file(
-    request: &NativeStaticAnalyzeRequest,
-    file: &NativeStaticAnalyzeFile,
+    request: &StaticIndexAnalyzeRequest,
+    file: &StaticIndexAnalyzeFile,
 ) -> Result<ParsedAnalyzeFile, String> {
     let Some(source) = file.source_text.clone() else {
         return Err("missing source text".to_string());
@@ -36,7 +36,7 @@ pub(crate) fn parsed_analyze_file(
     })
 }
 
-pub(crate) fn primary_analyze_files(request: &NativeStaticAnalyzeRequest) -> HashSet<String> {
+pub(crate) fn primary_analyze_files(request: &StaticIndexAnalyzeRequest) -> HashSet<String> {
     let primary_files = request
         .plan
         .primary_files

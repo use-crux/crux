@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext, source_ref_for_property},
-    definition::{NativeDefinitionInput, folded_index_child, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, folded_index_child, safe_id, static_index_definition},
     record_values::{
         direct_string_property, has_property, object_map_identifier_entries, object_value,
         property_value,
@@ -94,7 +94,7 @@ pub(crate) fn router_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id: id.clone(),
             kind: "routing.router",
             name: routing_id,
@@ -160,7 +160,7 @@ fn route_child(
         "intelligence".to_string(),
         json!({"confidence": "static", "control": {"mode": "routing", "ordering": "conditional"}}),
     );
-    let definition = native_static_definition(NativeDefinitionInput {
+    let definition = static_index_definition(NativeDefinitionInput {
         id: definition_id.clone(),
         kind: "routing.router.route",
         name: route_key.to_string(),

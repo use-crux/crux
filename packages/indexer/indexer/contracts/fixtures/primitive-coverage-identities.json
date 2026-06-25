@@ -19,12 +19,12 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "native-static-protocol.json",
+        "sourceRefs": "static-index-protocol.json",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
-        "runtimeMetadata": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
+        "runtimeMetadata": "static-index-protocol.json",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
     },
@@ -36,12 +36,12 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "native-static-protocol.json",
+        "sourceRefs": "static-index-protocol.json",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
-        "runtimeMetadata": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
+        "runtimeMetadata": "static-index-protocol.json",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
     },
@@ -53,12 +53,12 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "native-static-protocol.json",
+        "sourceRefs": "static-index-protocol.json",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
-        "runtimeMetadata": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
+        "runtimeMetadata": "static-index-protocol.json",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
     },
@@ -70,12 +70,12 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "native-static-protocol.json",
+        "sourceRefs": "static-index-protocol.json",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
-        "runtimeMetadata": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
+        "runtimeMetadata": "static-index-protocol.json",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
     },
@@ -87,12 +87,12 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "native-static-protocol.json",
+        "sourceRefs": "static-index-protocol.json",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
-        "runtimeMetadata": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
+        "runtimeMetadata": "static-index-protocol.json",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
     },
@@ -104,12 +104,12 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "native-static-protocol.json",
+        "sourceRefs": "static-index-protocol.json",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
-        "runtimeMetadata": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
+        "runtimeMetadata": "static-index-protocol.json",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
     },
@@ -121,12 +121,12 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "native-static-protocol.json",
+        "sourceRefs": "static-index-protocol.json",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
-        "runtimeMetadata": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
+        "runtimeMetadata": "static-index-protocol.json",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
     },
@@ -140,9 +140,9 @@
         "relations": "first-party-phase6-native-fixtures.ts",
         "sourceRefs": "first-party-phase6-native-fixtures.ts",
         "diagnostics": "first-party-phase6-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
         "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
@@ -157,9 +157,9 @@
         "relations": "first-party-phase6-native-fixtures.ts",
         "sourceRefs": "first-party-phase6-native-fixtures.ts",
         "diagnostics": "first-party-phase6-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
         "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
@@ -174,9 +174,9 @@
         "relations": "first-party-phase6-native-fixtures.ts",
         "sourceRefs": "first-party-phase6-native-fixtures.ts",
         "diagnostics": "first-party-phase6-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
         "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
@@ -191,10 +191,10 @@
         "relations": "first-party-phase6-native-fixtures.ts",
         "sourceRefs": "first-party-phase6-native-fixtures.ts",
         "diagnostics": "first-party-phase6-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
-        "runtimeMetadata": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
+        "runtimeMetadata": "static-index-protocol.json",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
     },
@@ -208,9 +208,9 @@
         "relations": "first-party-phase6-agent-native-fixtures.ts",
         "sourceRefs": "first-party-phase6-agent-native-fixtures.ts",
         "diagnostics": "first-party-phase6-agent-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
         "runtimeMetadata": "first-party-phase6-agent-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
@@ -225,9 +225,9 @@
         "relations": "first-party-phase7-composition-native-fixtures.ts",
         "sourceRefs": "first-party-phase7-composition-native-fixtures.ts",
         "diagnostics": "first-party-phase7-composition-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
         "runtimeMetadata": "first-party-phase7-composition-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
@@ -242,9 +242,9 @@
         "relations": "first-party-phase7-native-fixtures.ts",
         "sourceRefs": "first-party-phase7-native-fixtures.ts",
         "diagnostics": "first-party-phase7-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
         "runtimeMetadata": "first-party-phase7-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
@@ -259,9 +259,9 @@
         "relations": "first-party-phase7-native-fixtures.ts",
         "sourceRefs": "first-party-phase7-native-fixtures.ts",
         "diagnostics": "first-party-phase7-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
         "runtimeMetadata": "first-party-phase7-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
@@ -276,9 +276,9 @@
         "relations": "first-party-phase7-native-fixtures.ts",
         "sourceRefs": "first-party-phase7-native-fixtures.ts",
         "diagnostics": "first-party-phase7-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
         "runtimeMetadata": "first-party-phase7-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }
@@ -293,9 +293,9 @@
         "relations": "first-party-phase7-flow-native-fixtures.ts",
         "sourceRefs": "first-party-phase7-flow-native-fixtures.ts",
         "diagnostics": "first-party-phase7-flow-native-fixtures.ts",
-        "lints": "native-static-protocol.json",
-        "sources": "native-static-protocol.json",
-        "sourceGraph": "native-static-protocol.json",
+        "lints": "static-index-protocol.json",
+        "sources": "static-index-protocol.json",
+        "sourceGraph": "static-index-protocol.json",
         "runtimeMetadata": "first-party-phase7-flow-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
       }

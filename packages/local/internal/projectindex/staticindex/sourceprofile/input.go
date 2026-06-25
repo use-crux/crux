@@ -43,7 +43,7 @@ func FromPlan(plan projectindex.ProjectStaticSyntaxPlan) (Input, error) {
 		cacheEntry := cacheEntries[file]
 		read, readOK := readByFile[file]
 		if readOK && read.err != nil {
-			return Input{}, fmt.Errorf("read source for native static prepare %s: %w", read.file, read.err)
+			return Input{}, fmt.Errorf("read source for Static Index prepare %s: %w", read.file, read.err)
 		}
 		sourceFile := protocol.SourceFile{
 			File:       file,
@@ -59,7 +59,7 @@ func FromPlan(plan projectindex.ProjectStaticSyntaxPlan) (Input, error) {
 			profileFiles = append(profileFiles, profile)
 		}
 		if sourceFile.SourceHash == "" {
-			return Input{}, fmt.Errorf("source hash for native static prepare %s was not prepared", file)
+			return Input{}, fmt.Errorf("source hash for Static Index prepare %s was not prepared", file)
 		}
 		input.Files = append(input.Files, sourceFile)
 		if primaryFileSet[file] {
@@ -160,7 +160,7 @@ func AnalyzeFilesWithSourceText(files []protocol.SourceFile, sourceTextByFile ma
 	for _, file := range files {
 		sourceText, ok := sourceTextByFile[file.File]
 		if !ok {
-			return nil, fmt.Errorf("source text for native static analyze %s was not prepared", file.File)
+			return nil, fmt.Errorf("source text for Static Index analyze %s was not prepared", file.File)
 		}
 		out = append(out, protocol.AnalyzeFile{
 			File:       file.File,

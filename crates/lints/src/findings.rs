@@ -1,18 +1,18 @@
-//! Built-in graph lint orchestration for native static finalization.
+//! Built-in graph lint orchestration for Static Index finalization.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::builder::NativeStaticLintBuilder;
-use crate::facts::{NativeStaticIndexPatchFacts, NativeStaticLintFinding};
-use crate::filter::{NativeStaticLintOptions, apply_lint_filters};
+use crate::builder::StaticIndexLintBuilder;
+use crate::facts::{StaticIndexIndexPatchFacts, StaticIndexLintFinding};
+use crate::filter::{StaticIndexLintOptions, apply_lint_filters};
 use crate::injection::rules::injection_lint_findings;
 use crate::propagation::propagate_findings;
 use crate::rules::core::core_lint_findings;
 
 /// Appends built-in first-party lint findings to finalized native facts.
 pub fn append_builtin_lint_findings(
-    facts: &mut NativeStaticIndexPatchFacts,
-    options: &NativeStaticLintOptions,
+    facts: &mut StaticIndexIndexPatchFacts,
+    options: &StaticIndexLintOptions,
 ) {
     let mut seen = facts
         .lint_findings
@@ -34,10 +34,8 @@ pub fn append_builtin_lint_findings(
     );
 }
 
-fn builtin_index_lint_findings(
-    facts: &NativeStaticIndexPatchFacts,
-) -> Vec<NativeStaticLintFinding> {
-    let builder = NativeStaticLintBuilder::new();
+fn builtin_index_lint_findings(facts: &StaticIndexIndexPatchFacts) -> Vec<StaticIndexLintFinding> {
+    let builder = StaticIndexLintBuilder::new();
     let by_id = facts
         .definitions
         .iter()

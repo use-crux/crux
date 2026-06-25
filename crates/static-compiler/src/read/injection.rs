@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
-use crate::core::facts::{NativeStaticDefinition, NativeStaticFidelity, NativeStaticRelation};
+use crate::core::facts::{StaticIndexDefinition, StaticIndexFidelity, StaticIndexRelation};
 use crate::read::helpers::{
     definition_export_name, definition_metadata, fidelity_json_name, object_entry,
 };
@@ -16,18 +16,18 @@ pub(crate) struct ResolvedInjectionUseEntryTarget {
     pub(crate) variable: String,
     pub(crate) target_definition_id: String,
     pub(crate) relation_type: String,
-    pub(crate) relation_fidelity: NativeStaticFidelity,
+    pub(crate) relation_fidelity: StaticIndexFidelity,
 }
 
 pub(crate) fn with_resolved_injection_use_entry_targets(
-    definitions: Vec<NativeStaticDefinition>,
-    relations: &[NativeStaticRelation],
-) -> Vec<NativeStaticDefinition> {
+    definitions: Vec<StaticIndexDefinition>,
+    relations: &[StaticIndexRelation],
+) -> Vec<StaticIndexDefinition> {
     let by_id = definitions
         .iter()
         .map(|definition| (definition.id.clone(), definition.clone()))
         .collect::<BTreeMap<_, _>>();
-    let mut outgoing = BTreeMap::<String, Vec<NativeStaticRelation>>::new();
+    let mut outgoing = BTreeMap::<String, Vec<StaticIndexRelation>>::new();
     for relation in relations {
         if is_injection_use_relation(&relation.r#type) {
             outgoing
@@ -61,9 +61,9 @@ pub(crate) fn with_resolved_injection_use_entry_targets(
 }
 
 pub(crate) fn with_resolved_injection_use_entry_ref_targets(
-    definitions: Vec<NativeStaticDefinition>,
+    definitions: Vec<StaticIndexDefinition>,
     targets: &[ResolvedInjectionUseEntryTarget],
-) -> Vec<NativeStaticDefinition> {
+) -> Vec<StaticIndexDefinition> {
     if targets.is_empty() {
         return definitions;
     }
@@ -105,8 +105,8 @@ pub(crate) fn with_resolved_injection_use_entry_ref_targets(
 
 fn enrich_use_entry(
     entry: Value,
-    candidates: &mut Vec<NativeStaticRelation>,
-    by_id: &BTreeMap<String, NativeStaticDefinition>,
+    candidates: &mut Vec<StaticIndexRelation>,
+    by_id: &BTreeMap<String, StaticIndexDefinition>,
 ) -> Value {
     let Some(object) = entry.as_object() else {
         return entry;
@@ -141,7 +141,7 @@ fn enrich_use_entry(
 fn enrich_use_entry_from_ref_target(
     entry: Value,
     targets: &[ResolvedInjectionUseEntryTarget],
-    by_id: &BTreeMap<String, NativeStaticDefinition>,
+    by_id: &BTreeMap<String, StaticIndexDefinition>,
     resolved_variables: &BTreeSet<String>,
 ) -> Value {
     let Some(object) = entry.as_object() else {
@@ -200,8 +200,8 @@ fn resolved_use_entry_variables(entries: &[Value]) -> BTreeSet<String> {
 
 fn matching_relation_index(
     variable: Option<&str>,
-    candidates: &[NativeStaticRelation],
-    by_id: &BTreeMap<String, NativeStaticDefinition>,
+    candidates: &[StaticIndexRelation],
+    by_id: &BTreeMap<String, StaticIndexDefinition>,
 ) -> Option<usize> {
     if let Some(variable) = variable {
         return candidates.iter().position(|relation| {
@@ -213,8 +213,8 @@ fn matching_relation_index(
 
 fn relation_matches_use_entry(
     variable: &str,
-    relation: &NativeStaticRelation,
-    target: Option<&NativeStaticDefinition>,
+    relation: &StaticIndexRelation,
+    target: Option<&StaticIndexDefinition>,
 ) -> bool {
     let safe = safe_use_entry_id(variable);
     target.map(|definition| definition.name.as_str()) == Some(variable)

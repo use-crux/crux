@@ -29,7 +29,7 @@ type shard struct {
 func Marshal(root string) (json.RawMessage, error) {
 	data, err := json.Marshal(build(root))
 	if err != nil {
-		return nil, fmt.Errorf("encode native static source graph: %w", err)
+		return nil, fmt.Errorf("encode Static Index source graph: %w", err)
 	}
 	return data, nil
 }

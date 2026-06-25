@@ -10,7 +10,7 @@ import (
 // one patch-shaped AST handoff for the existing service interface.
 //
 // It reuses the same invalidation, source-row, definition, relation, and
-// diagnostic merge logic used by ApplyIndexPatch, so native-static hosts can
+// diagnostic merge logic used by ApplyIndexPatch, so static-index hosts can
 // merge separately produced lanes without growing a second read-model merge
 // implementation in the server package.
 func MergeIndexPatches(patches []IndexPatch) (IndexPatch, error) {

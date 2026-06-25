@@ -10,7 +10,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func TestProjectNativeStaticSourceInputUsesCachedProfileWithoutRereadingWarmHits(t *testing.T) {
+func TestProjectStaticIndexSourceInputUsesCachedProfileWithoutRereadingWarmHits(t *testing.T) {
 	t.Setenv(cache.StatusEnv, "1")
 
 	root := t.TempDir()
@@ -54,7 +54,7 @@ func TestProjectNativeStaticSourceInputUsesCachedProfileWithoutRereadingWarmHits
 		"cacheKey":       cacheKey,
 	})
 
-	plan, err := planner.Build(root, "warm-cache", projectindex.ProjectNativeStaticConfig{
+	plan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
 		Root:             root,
 		NativeAstEnabled: true,
 	})

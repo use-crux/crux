@@ -16,7 +16,7 @@ type ProjectIndexAstTiming struct {
 	TotalMs                 float64
 	NodeTimings             []projectindex.ProjectIndexPhaseTiming
 	NodeStarted             bool
-	UsedNativeStatic        bool
+	UsedStaticIndex         bool
 	NodeReasons             []string
 	NativeOnlyEligible      bool
 	NativeOnlyReasons       []string
@@ -29,11 +29,11 @@ type ProjectIndexAstTiming struct {
 const (
 	projectIndexNodeReasonTypeScriptStaticCompiler = "typescript-static-compiler"
 	projectIndexNodeReasonStaticPlanInspection     = "static-plan-inspection"
-	projectIndexNodeReasonNativeStaticConfig       = planner.ReasonConfig
-	projectIndexNodeReasonNativeStaticExtensions   = planner.ReasonExtensions
+	projectIndexNodeReasonStaticIndexConfig        = planner.ReasonConfig
+	projectIndexNodeReasonStaticIndexExtensions    = planner.ReasonExtensions
 	projectIndexNodeReasonSyntaxRecordProjection   = "syntax-record-projection"
-	projectIndexNodeReasonNativeStaticEmpty        = compiler.ReasonEmpty
-	projectIndexNodeReasonNativeStaticEvidence     = compiler.ReasonEvidence
-	projectIndexNodeReasonNativeStaticRules        = "native-static-rules"
-	projectIndexNodeReasonNativeStaticIncomplete   = compiler.ReasonIncomplete
+	projectIndexNodeReasonStaticIndexEmpty         = compiler.ReasonEmpty
+	projectIndexNodeReasonStaticIndexEvidence      = compiler.ReasonEvidence
+	projectIndexNodeReasonStaticIndexRules         = "static-index-rules"
+	projectIndexNodeReasonStaticIndexIncomplete    = compiler.ReasonIncomplete
 )

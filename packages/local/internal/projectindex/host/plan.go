@@ -18,7 +18,7 @@ func (w *Worker) inspectProjectStaticSyntaxPlan(
 ) (projectStaticSyntaxPlanResult, error) {
 	absoluteRoot, err := filepath.Abs(root)
 	if err != nil {
-		return projectStaticSyntaxPlanResult{}, fmt.Errorf("resolve project root for native static plan: %w", err)
+		return projectStaticSyntaxPlanResult{}, fmt.Errorf("resolve project root for Static Index plan: %w", err)
 	}
 	key := projectStaticSyntaxPlanKey{root: absoluteRoot, configPath: configPath, projectName: projectName}
 	return w.sharedProjectStaticSyntaxPlan(ctx, key, func(ctx context.Context) (projectStaticSyntaxPlanResult, error) {

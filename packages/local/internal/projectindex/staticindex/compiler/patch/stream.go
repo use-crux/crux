@@ -8,11 +8,11 @@ import (
 )
 
 type FinalizeStreamer interface {
-	NativeStaticFinalizeStream(context.Context, protocol.FinalizeRequest, protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error)
+	StaticIndexFinalizeStream(context.Context, protocol.FinalizeRequest, protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error)
 }
 
 type CompileStreamer interface {
-	NativeStaticCompileStream(context.Context, protocol.CompileRequest, protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error)
+	StaticIndexCompileStream(context.Context, protocol.CompileRequest, protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error)
 }
 
 func FromFinalizeStream(
@@ -22,8 +22,8 @@ func FromFinalizeStream(
 	request protocol.FinalizeRequest,
 ) (projectindex.IndexPatch, []projectindex.ProjectIndexPhaseTiming, bool, protocol.FinalizeResponse, error) {
 	request.Stream = true
-	return fromStream(options, "native static finalize", func(handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
-		return streamer.NativeStaticFinalizeStream(ctx, request, handle)
+	return fromStream(options, "Static Index finalize", func(handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+		return streamer.StaticIndexFinalizeStream(ctx, request, handle)
 	})
 }
 
@@ -34,8 +34,8 @@ func FromCompileStream(
 	request protocol.CompileRequest,
 ) (projectindex.IndexPatch, []projectindex.ProjectIndexPhaseTiming, bool, protocol.FinalizeResponse, error) {
 	request.Stream = true
-	return fromStream(options, "native static compile", func(handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
-		return streamer.NativeStaticCompileStream(ctx, request, handle)
+	return fromStream(options, "Static Index compile", func(handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+		return streamer.StaticIndexCompileStream(ctx, request, handle)
 	})
 }
 

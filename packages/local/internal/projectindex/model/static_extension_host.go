@@ -3,18 +3,18 @@ package model
 import "encoding/json"
 
 // StaticExtensionHostManifestResult is the data-only extension runtime
-// fragment loaded by Node for native static planning.
+// fragment loaded by Node for Static Index planning.
 type StaticExtensionHostManifestResult struct {
-	Method                        string                                `json:"method"`
-	Root                          string                                `json:"root"`
-	NativeCompilerProtocolVersion int                                   `json:"nativeCompilerProtocolVersion"`
-	Manifest                      StaticExtensionRuntimeManifest        `json:"manifest"`
-	Diagnostics                   []ProjectNativeStaticConfigDiagnostic `json:"diagnostics,omitempty"`
-	Node                          StaticExtensionHostNodeReport         `json:"node"`
-	NativeOnlyEligible            bool                                  `json:"nativeOnlyEligible"`
-	NativeOnlyReasons             []string                              `json:"nativeOnlyReasons,omitempty"`
-	RuleDescriptors               json.RawMessage                       `json:"ruleDescriptors,omitempty"`
-	CacheInputs                   []json.RawMessage                     `json:"cacheInputs,omitempty"`
+	Method                        string                               `json:"method"`
+	Root                          string                               `json:"root"`
+	NativeCompilerProtocolVersion int                                  `json:"nativeCompilerProtocolVersion"`
+	Manifest                      StaticExtensionRuntimeManifest       `json:"manifest"`
+	Diagnostics                   []ProjectStaticIndexConfigDiagnostic `json:"diagnostics,omitempty"`
+	Node                          StaticExtensionHostNodeReport        `json:"node"`
+	NativeOnlyEligible            bool                                 `json:"nativeOnlyEligible"`
+	NativeOnlyReasons             []string                             `json:"nativeOnlyReasons,omitempty"`
+	RuleDescriptors               json.RawMessage                      `json:"ruleDescriptors,omitempty"`
+	CacheInputs                   []json.RawMessage                    `json:"cacheInputs,omitempty"`
 }
 
 // StaticExtensionRuntimeManifest is the serializable extension runtime manifest

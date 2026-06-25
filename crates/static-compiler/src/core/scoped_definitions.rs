@@ -1,4 +1,4 @@
-//! Source-scoped definition aliases for native static relation binding.
+//! Source-scoped definition aliases for Static Index relation binding.
 //!
 //! TypeScript binds static relation refs with a file-local map plus imported definitions. Native
 //! finalization receives project-wide grouped facts, so analyze enriches relation refs with scoped

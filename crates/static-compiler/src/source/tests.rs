@@ -1,13 +1,13 @@
 use serde_json::json;
 
 use crate::finalizer::events::{
-    NativeStaticFinalizeEventOptions, NativeStaticFinalizeProject, project_patch_events,
+    StaticIndexFinalizeEventOptions, StaticIndexFinalizeProject, project_patch_events,
 };
-use crate::finalizer::run::finalize_native_static_values;
+use crate::finalizer::run::finalize_static_index_values;
 
 #[test]
 fn finalization_folds_source_refs_into_definitions() {
-    let output = finalize_native_static_values(
+    let output = finalize_static_index_values(
         &[json!({
             "definitions": [{
                 "id": "prompt:writer",
@@ -46,7 +46,7 @@ fn finalization_folds_source_refs_into_definitions() {
 
 #[test]
 fn finalization_derives_source_rows_and_source_graph() {
-    let output = finalize_native_static_values(
+    let output = finalize_static_index_values(
         &[json!({
             "definitions": [{
                 "id": "prompt:writer",
@@ -117,7 +117,7 @@ fn finalization_derives_source_rows_and_source_graph() {
 
 #[test]
 fn finalization_adds_source_ref_cross_file_dependencies() {
-    let output = finalize_native_static_values(
+    let output = finalize_static_index_values(
         &[json!({
             "definitions": [{
                 "id": "prompt:writer",
@@ -159,7 +159,7 @@ fn finalization_adds_source_ref_cross_file_dependencies() {
 
 #[test]
 fn source_graph_event_uses_worker_fact_id_convention() {
-    let output = finalize_native_static_values(
+    let output = finalize_static_index_values(
         &[json!({
             "definitions": [{
                 "id": "prompt:writer",
@@ -174,12 +174,12 @@ fn source_graph_event_uses_worker_fact_id_convention() {
     );
     let events = project_patch_events(
         &output,
-        &NativeStaticFinalizeProject {
+        &StaticIndexFinalizeProject {
             root: "/repo".to_string(),
             project_name: None,
         },
         "test",
-        NativeStaticFinalizeEventOptions {
+        StaticIndexFinalizeEventOptions {
             phase: "ast",
             invalidates: Some(&json!({ "all": true })),
         },
@@ -196,7 +196,7 @@ fn source_graph_event_uses_worker_fact_id_convention() {
 
 #[test]
 fn source_rows_use_source_graph_shards() {
-    let output = finalize_native_static_values(
+    let output = finalize_static_index_values(
         &[json!({
             "definitions": [{
                 "id": "prompt:web",

@@ -8,7 +8,7 @@ use crate::{
         data_access_refs_for_config_object, data_access_refs_for_properties,
         data_access_relation_refs, primitive_data_intelligence, unique_data_accesses,
     },
-    definition::{NativeDefinitionInput, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, safe_id, static_index_definition},
     protocol::{
         SourceLocation, SourceSnippet, StaticImportRecord, StaticInitializerRecord,
         StaticNativeFactExtractorIdentity, StaticNativeFactProjection, StaticSourceMatch,
@@ -179,7 +179,7 @@ fn tool_facts(context: &PrimitiveContext<'_>, parts: &ToolParts<'_>) -> Option<V
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id: id.clone(),
             kind: "tool",
             name,

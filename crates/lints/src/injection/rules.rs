@@ -2,19 +2,19 @@
 
 use std::collections::BTreeMap;
 
-use crate::builder::{NativeStaticLintBuilder, definition_evidence};
+use crate::builder::{StaticIndexLintBuilder, definition_evidence};
 use crate::emit::push_definition_finding;
-use crate::facts::{NativeStaticDefinition, NativeStaticIndexPatchFacts, NativeStaticLintFinding};
+use crate::facts::{StaticIndexDefinition, StaticIndexIndexPatchFacts, StaticIndexLintFinding};
 use crate::injection::entries::{indirect_tool_surface_findings, injection_entry_findings};
 use crate::injection::evidence::injection_consumed_definition_ids;
 use crate::injection::inputs::prompt_input_injection_findings;
 use crate::injection::model::build_all_injection_models;
 
 pub(crate) fn injection_lint_findings<'a>(
-    builder: &NativeStaticLintBuilder,
-    facts: &'a NativeStaticIndexPatchFacts,
-    by_id: &BTreeMap<&'a str, &'a NativeStaticDefinition>,
-) -> Vec<NativeStaticLintFinding> {
+    builder: &StaticIndexLintBuilder,
+    facts: &'a StaticIndexIndexPatchFacts,
+    by_id: &BTreeMap<&'a str, &'a StaticIndexDefinition>,
+) -> Vec<StaticIndexLintFinding> {
     let models = build_all_injection_models(&facts.definitions, &facts.relations, by_id);
     let consumers = injection_consumed_definition_ids(&facts.relations);
     let mut findings = Vec::new();

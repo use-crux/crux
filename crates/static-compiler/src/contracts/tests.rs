@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use crate::core::facts::{NativeStaticDefinition, NativeStaticFidelity, NativeStaticRelation};
+use crate::core::facts::{StaticIndexDefinition, StaticIndexFidelity, StaticIndexRelation};
 use crate::read::model::with_resolved_relation_read_model;
 use crate::relation::model::relation_identity;
 
@@ -68,7 +68,7 @@ fn expanded_input_contracts_include_required_context_inputs() {
             "prompt.uses_context",
             "prompt:answer",
             "context:locale",
-            NativeStaticFidelity::Resolved,
+            StaticIndexFidelity::Resolved,
         )],
     );
 
@@ -93,8 +93,8 @@ fn definition(
     kind: &str,
     name: &str,
     metadata: Option<serde_json::Value>,
-) -> NativeStaticDefinition {
-    NativeStaticDefinition {
+) -> StaticIndexDefinition {
+    StaticIndexDefinition {
         id: id.to_string(),
         kind: kind.to_string(),
         name: name.to_string(),
@@ -104,7 +104,7 @@ fn definition(
         source: None,
         source_snippet: None,
         source_refs: Vec::new(),
-        fidelity: NativeStaticFidelity::Resolved,
+        fidelity: StaticIndexFidelity::Resolved,
         status: Some("active".to_string()),
         fingerprint: None,
         metadata,
@@ -116,9 +116,9 @@ fn relation(
     relation_type: &str,
     from: &str,
     to: &str,
-    fidelity: NativeStaticFidelity,
-) -> NativeStaticRelation {
-    NativeStaticRelation {
+    fidelity: StaticIndexFidelity,
+) -> StaticIndexRelation {
+    StaticIndexRelation {
         id: relation_identity(relation_type, from, to),
         r#type: relation_type.to_string(),
         from: from.to_string(),

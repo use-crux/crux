@@ -5,7 +5,7 @@ use crate::{
     data::access::{
         data_access_refs_for_properties, data_access_relation_refs, primitive_data_intelligence,
     },
-    definition::{NativeDefinitionInput, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, safe_id, static_index_definition},
     injection::model::{
         relation_refs_for_injection_use, use_entries_for_property, use_entry_values,
         use_entry_variables,
@@ -86,7 +86,7 @@ pub(crate) fn context_facts(
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id,
             kind: "context",
             name: explicit_id.unwrap_or_else(|| parts.variable_name.to_string()),

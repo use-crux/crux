@@ -3,15 +3,15 @@ use std::fs;
 use serde_json::json;
 
 use crate::finalizer::run::{
-    finalize_native_static_values_with_lint_facts, finalize_native_static_values_with_lint_options,
+    finalize_static_index_values_with_lint_facts, finalize_static_index_values_with_lint_options,
 };
-use crate::lints::filter::NativeStaticLintOptions;
+use crate::lints::filter::StaticIndexLintOptions;
 use crate::relation::model::built_in_relation_policy_table;
 
 #[test]
 fn finalize_filters_extension_lint_findings_with_rule_descriptors() {
     let policies = built_in_relation_policy_table();
-    let output = finalize_native_static_values_with_lint_options(
+    let output = finalize_static_index_values_with_lint_options(
         &[],
         &[json!({
             "ruleDescriptors": [{
@@ -30,13 +30,13 @@ fn finalize_filters_extension_lint_findings_with_rule_descriptors() {
             }]
         })],
         &policies,
-        &NativeStaticLintOptions {
+        &StaticIndexLintOptions {
             config: Some(json!({
                 "rules": {
                     "@acme/rules/require-owner": { "enabled": false }
                 }
             })),
-            ..NativeStaticLintOptions::default()
+            ..StaticIndexLintOptions::default()
         },
     );
 
@@ -54,18 +54,18 @@ fn finalize_filters_extension_lint_findings_with_rule_descriptors() {
 #[test]
 fn finalize_validates_lint_config_when_profile_is_off() {
     let policies = built_in_relation_policy_table();
-    let output = finalize_native_static_values_with_lint_options(
+    let output = finalize_static_index_values_with_lint_options(
         &[],
         &[],
         &policies,
-        &NativeStaticLintOptions {
+        &StaticIndexLintOptions {
             config: Some(json!({
                 "profile": "off",
                 "rules": {
                     "@acme/rules/unknown": { "enabled": false }
                 }
             })),
-            ..NativeStaticLintOptions::default()
+            ..StaticIndexLintOptions::default()
         },
     );
 
@@ -83,7 +83,7 @@ fn finalize_validates_lint_config_when_profile_is_off() {
 #[test]
 fn finalize_emits_quality_missing_baseline_from_quality_metadata() {
     let policies = built_in_relation_policy_table();
-    let output = finalize_native_static_values_with_lint_options(
+    let output = finalize_static_index_values_with_lint_options(
         &[],
         &[json!({
             "definitions": [{
@@ -100,7 +100,7 @@ fn finalize_emits_quality_missing_baseline_from_quality_metadata() {
             }]
         })],
         &policies,
-        &NativeStaticLintOptions::default(),
+        &StaticIndexLintOptions::default(),
     );
 
     assert!(
@@ -116,7 +116,7 @@ fn finalize_emits_quality_missing_baseline_from_quality_metadata() {
 #[test]
 fn finalize_skips_quality_missing_baseline_when_baseline_exists() {
     let policies = built_in_relation_policy_table();
-    let output = finalize_native_static_values_with_lint_options(
+    let output = finalize_static_index_values_with_lint_options(
         &[],
         &[json!({
             "definitions": [{
@@ -131,7 +131,7 @@ fn finalize_skips_quality_missing_baseline_when_baseline_exists() {
             }]
         })],
         &policies,
-        &NativeStaticLintOptions::default(),
+        &StaticIndexLintOptions::default(),
     );
 
     assert!(
@@ -147,7 +147,7 @@ fn finalize_skips_quality_missing_baseline_when_baseline_exists() {
 #[test]
 fn finalize_uses_lint_facts_without_materializing_lint_input_definitions() {
     let policies = built_in_relation_policy_table();
-    let output = finalize_native_static_values_with_lint_facts(
+    let output = finalize_static_index_values_with_lint_facts(
         &[],
         &[],
         &[json!({
@@ -163,7 +163,7 @@ fn finalize_uses_lint_facts_without_materializing_lint_input_definitions() {
             }]
         })],
         &policies,
-        &NativeStaticLintOptions::default(),
+        &StaticIndexLintOptions::default(),
     );
 
     assert_eq!(output.counts.definitions, 0);
@@ -181,7 +181,7 @@ fn finalize_uses_lint_facts_without_materializing_lint_input_definitions() {
 fn finalize_suppresses_extension_lint_findings_with_rule_descriptors() {
     let policies = built_in_relation_policy_table();
     let file = std::env::temp_dir().join(format!(
-        "crux-native-static-extension-suppression-{}-{}.ts",
+        "crux-static-index-extension-suppression-{}-{}.ts",
         std::process::id(),
         line!()
     ));
@@ -192,7 +192,7 @@ fn finalize_suppresses_extension_lint_findings_with_rule_descriptors() {
     .expect("write suppression fixture");
     let file = file.to_string_lossy().to_string();
 
-    let output = finalize_native_static_values_with_lint_options(
+    let output = finalize_static_index_values_with_lint_options(
         &[],
         &[json!({
             "ruleDescriptors": [{
@@ -212,9 +212,9 @@ fn finalize_suppresses_extension_lint_findings_with_rule_descriptors() {
             }]
         })],
         &policies,
-        &NativeStaticLintOptions {
+        &StaticIndexLintOptions {
             files: vec![file.clone()],
-            ..NativeStaticLintOptions::default()
+            ..StaticIndexLintOptions::default()
         },
     );
 

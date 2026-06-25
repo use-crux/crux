@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	ReasonConfig     = "native-static-config"
-	ReasonExtensions = "native-static-extensions"
+	ReasonConfig     = "static-index-config"
+	ReasonExtensions = "static-index-extensions"
 )
 
 type ArtifactReader interface {
@@ -40,7 +40,7 @@ func Inspect(
 	configPath string,
 	projectName string,
 ) (InspectResult, error) {
-	config := projectindex.ProjectNativeStaticConfig{Root: root}
+	config := projectindex.ProjectStaticIndexConfig{Root: root}
 	timings := []projectindex.ProjectIndexPhaseTiming{}
 	nodeReasons := []string{}
 	if ConfigMayRequireNode(root, configPath) {
@@ -90,22 +90,22 @@ func LoadConfig(
 	reader ArtifactReader,
 	root string,
 	configPath string,
-) (projectindex.ProjectNativeStaticConfig, error) {
+) (projectindex.ProjectStaticIndexConfig, error) {
 	if reader == nil {
-		return projectindex.ProjectNativeStaticConfig{}, fmt.Errorf("native static config reader is not configured")
+		return projectindex.ProjectStaticIndexConfig{}, fmt.Errorf("Static Index config reader is not configured")
 	}
 	req := indexwire.Request{
-		Method:     "inspectProjectNativeStaticConfig",
+		Method:     "inspectProjectStaticIndexConfig",
 		Root:       root,
 		ConfigPath: configPath,
 	}
-	resp, err := reader.ReadArtifact(ctx, req, projectindex.ProjectIndexArtifactNativeStaticConfig)
+	resp, err := reader.ReadArtifact(ctx, req, projectindex.ProjectIndexArtifactStaticIndexConfig)
 	if err != nil {
-		return projectindex.ProjectNativeStaticConfig{}, err
+		return projectindex.ProjectStaticIndexConfig{}, err
 	}
-	var config projectindex.ProjectNativeStaticConfig
+	var config projectindex.ProjectStaticIndexConfig
 	if err := json.Unmarshal(resp, &config); err != nil {
-		return projectindex.ProjectNativeStaticConfig{}, fmt.Errorf("decode project native static config: %w", err)
+		return projectindex.ProjectStaticIndexConfig{}, fmt.Errorf("decode project Static Index config: %w", err)
 	}
 	return config, nil
 }

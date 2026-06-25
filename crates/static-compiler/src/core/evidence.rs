@@ -3,7 +3,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::primitives::static_syntax::parse_static_syntax_record;
-use crate::protocol::native_static::NativeStaticAnalyzeRequest;
+use crate::protocol::static_index::StaticIndexAnalyzeRequest;
 use crate::protocol::{
     ParseRequest, StaticCalleeRecord, StaticSourceMatch, StaticSyntaxCallInterest,
     StaticSyntaxConstructorInterest,
@@ -34,7 +34,7 @@ struct ExtensionIdentity {
     version: String,
 }
 
-pub(crate) fn extension_evidence_jobs(request: &NativeStaticAnalyzeRequest) -> Vec<Value> {
+pub(crate) fn extension_evidence_jobs(request: &StaticIndexAnalyzeRequest) -> Vec<Value> {
     let Some(raw_interests) = request.extension_evidence_interests.as_ref() else {
         return Vec::new();
     };

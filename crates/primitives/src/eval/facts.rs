@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext},
-    definition::{NativeDefinitionInput, folded_index_child, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, folded_index_child, safe_id, static_index_definition},
     eval::assertions::assertion_sites_from_source,
     protocol::{LiteralValue, StaticSyntaxValue},
     record_values::{
@@ -68,7 +68,7 @@ pub(crate) fn eval_facts(
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id,
             kind: "evaluation",
             name,
@@ -130,7 +130,7 @@ fn evaluation_cases(
             );
             Some(EvaluationCase {
                 id: definition_id.clone(),
-                definition: native_static_definition(NativeDefinitionInput {
+                definition: static_index_definition(NativeDefinitionInput {
                     id: definition_id,
                     kind: "evaluation.case",
                     name: case_name,

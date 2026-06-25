@@ -119,7 +119,7 @@ export interface ProjectIndexArtifactMap {
   readonly projectStaticSyntaxPlan: ProjectStaticSyntaxPlan
   /** Data-only extension runtime manifest loaded by the TypeScript static host. */
   readonly staticExtensionHostManifest: LoadStaticExtensionHostManifestResult
-  /** TypeScript extractor facts produced from native static evidence jobs. */
+  /** TypeScript extractor facts produced from Static Index evidence jobs. */
   readonly staticExtensionEvidenceBatch: ExtractStaticEvidenceBatchResult
   /** TypeScript rule outputs produced from a native-finalized static graph. */
   readonly staticRuleCheck: CheckStaticRulesResult

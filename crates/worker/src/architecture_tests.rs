@@ -117,7 +117,7 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
     let expected_files = [
         (crates.join("protocol/src"), "worker.rs"),
         (crates.join("protocol/src"), "static_syntax.rs"),
-        (crates.join("protocol/src"), "native_static.rs"),
+        (crates.join("protocol/src"), "static_index.rs"),
         (crates.join("syntax-oxc/src"), "syntax/frontend.rs"),
         (crates.join("facts/src"), "lib.rs"),
         (crates.join("primitives/src"), "projection.rs"),
@@ -129,7 +129,7 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
         (crates.join("static-compiler/src"), "finalizer/run.rs"),
         (src.clone(), "worker/mod.rs"),
         (src.clone(), "worker/static_syntax.rs"),
-        (src.clone(), "worker/native_static.rs"),
+        (src.clone(), "worker/static_index.rs"),
     ];
     for (root, path) in expected_files {
         assert!(
@@ -143,7 +143,7 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
     for path in [
         "worker/mod.rs",
         "worker/static_syntax.rs",
-        "worker/native_static.rs",
+        "worker/static_index.rs",
     ] {
         assert!(
             src.join(path).is_file(),
@@ -157,7 +157,7 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
         src.join("index_compiler"),
         src.join("serve.rs"),
         src.join("server"),
-        src.join("native_static"),
+        src.join("static_index"),
         src.join("protocol"),
         src.join("syntax"),
         src.join("lints"),
@@ -179,10 +179,10 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
 #[test]
 fn rust_responsibility_modules_follow_dependency_direction() {
     assert_no_forbidden_crate_uses("worker", &["index_compiler"], &[]);
-    let native_static_transport = fs::read_to_string(crate_src().join("worker/native_static.rs"))
-        .expect("native static transport source should be readable");
+    let static_index_transport = fs::read_to_string(crate_src().join("worker/static_index.rs"))
+        .expect("Static Index transport source should be readable");
     assert!(
-        native_static_transport.contains("crux_indexer_static_compiler::pipeline"),
+        static_index_transport.contains("crux_indexer_static_compiler::pipeline"),
         "worker transport should call the extracted static compiler crate"
     );
 }

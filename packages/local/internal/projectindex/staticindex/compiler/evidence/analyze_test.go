@@ -86,7 +86,7 @@ type recordingAnalyzer struct {
 	response protocol.AnalyzeResponse
 }
 
-func (a *recordingAnalyzer) NativeStaticAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+func (a *recordingAnalyzer) StaticIndexAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
 	a.stream = request.Stream
 	for _, event := range a.events {
 		if err := handle(event); err != nil {

@@ -19,14 +19,14 @@ var (
 func InspectSimpleConfig(
 	root string,
 	configPath string,
-) (projectindex.ProjectNativeStaticConfig, bool, error) {
+) (projectindex.ProjectStaticIndexConfig, bool, error) {
 	configFile := resolveConfigFile(root, configPath)
 	if configFile == "" {
-		return projectindex.ProjectNativeStaticConfig{}, false, nil
+		return projectindex.ProjectStaticIndexConfig{}, false, nil
 	}
 	source, err := os.ReadFile(configFile)
 	if err != nil {
-		return projectindex.ProjectNativeStaticConfig{}, false, nil
+		return projectindex.ProjectStaticIndexConfig{}, false, nil
 	}
 	config, ok := ParseSimpleConfig(root, configFile, string(source))
 	return config, ok, nil
@@ -46,21 +46,21 @@ func ParseSimpleConfig(
 	root string,
 	configFile string,
 	source string,
-) (projectindex.ProjectNativeStaticConfig, bool) {
+) (projectindex.ProjectStaticIndexConfig, bool) {
 	if simpleExtensionPattern.MatchString(source) ||
 		simpleLintPattern.MatchString(source) {
-		return projectindex.ProjectNativeStaticConfig{}, false
+		return projectindex.ProjectStaticIndexConfig{}, false
 	}
 	match := simpleNativeAstPattern.FindStringSubmatch(source)
 	if len(match) != 2 {
-		return projectindex.ProjectNativeStaticConfig{}, false
+		return projectindex.ProjectStaticIndexConfig{}, false
 	}
 	value := strings.TrimSpace(match[1])
-	config := projectindex.ProjectNativeStaticConfig{
+	config := projectindex.ProjectStaticIndexConfig{
 		Root:        root,
 		ConfigFile:  configFile,
-		Extensions:  []projectindex.ProjectNativeStaticExtensionReference{},
-		Diagnostics: []projectindex.ProjectNativeStaticConfigDiagnostic{},
+		Extensions:  []projectindex.ProjectStaticIndexExtensionReference{},
+		Diagnostics: []projectindex.ProjectStaticIndexConfigDiagnostic{},
 	}
 	switch value {
 	case "true":
@@ -70,7 +70,7 @@ func ParseSimpleConfig(
 		return config, true
 	default:
 		if !strings.HasPrefix(value, "{") || !strings.HasSuffix(value, "}") {
-			return projectindex.ProjectNativeStaticConfig{}, false
+			return projectindex.ProjectStaticIndexConfig{}, false
 		}
 		config.NativeAstEnabled = true
 		if simpleFrontendPattern.MatchString(value) {

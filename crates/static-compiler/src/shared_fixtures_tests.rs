@@ -1,18 +1,18 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::core::facts::NativeStaticRuleDescriptor;
+use crate::core::facts::StaticIndexRuleDescriptor;
 use crate::pipeline;
 use crate::protocol::StaticSyntaxFileRecord;
-use crate::protocol::native_static::{
-    NativeStaticAnalyzeRequest, NativeStaticAnalyzeResponse, NativeStaticCompileRequest,
-    NativeStaticFinalizeRequest, NativeStaticFinalizeResponse, NativeStaticIdentityManifest,
-    NativeStaticMethod, NativeStaticPrepareRequest, NativeStaticPrepareResponse,
+use crate::protocol::static_index::{
+    StaticIndexAnalyzeRequest, StaticIndexAnalyzeResponse, StaticIndexCompileRequest,
+    StaticIndexFinalizeRequest, StaticIndexFinalizeResponse, StaticIndexIdentityManifest,
+    StaticIndexMethod, StaticIndexPrepareRequest, StaticIndexPrepareResponse,
 };
-use crate::relation::policy::{NativeStaticRelationPolicy, NativeStaticRelationPolicyTable};
+use crate::relation::policy::{StaticIndexRelationPolicy, StaticIndexRelationPolicyTable};
 
 #[derive(Deserialize)]
-struct NativeStaticProtocolFixture {
+struct StaticIndexProtocolFixture {
     requests: Vec<Value>,
     responses: Vec<Value>,
 }
@@ -24,12 +24,12 @@ struct StaticSyntaxRecordsFixture {
 
 #[derive(Deserialize)]
 struct RelationSpecsFixture {
-    policies: Vec<NativeStaticRelationPolicy>,
+    policies: Vec<StaticIndexRelationPolicy>,
 }
 
 #[derive(Deserialize)]
 struct RuleDescriptorsFixture {
-    descriptors: Vec<NativeStaticRuleDescriptor>,
+    descriptors: Vec<StaticIndexRuleDescriptor>,
 }
 
 #[derive(Deserialize)]
@@ -50,9 +50,9 @@ struct PrimitiveCoverageIdentity {
 }
 
 #[test]
-fn shared_native_static_protocol_fixture_decodes_and_finalizes() {
-    let fixture: NativeStaticProtocolFixture = fixture_json("native-static-protocol.json");
-    let manifest: NativeStaticIdentityManifest = fixture_json("static-index-identity.json");
+fn shared_static_index_protocol_fixture_decodes_and_finalizes() {
+    let fixture: StaticIndexProtocolFixture = fixture_json("static-index-protocol.json");
+    let manifest: StaticIndexIdentityManifest = fixture_json("static-index-identity.json");
     let methods = fixture
         .requests
         .iter()
@@ -68,7 +68,7 @@ fn shared_native_static_protocol_fixture_decodes_and_finalizes() {
         ]
     );
 
-    let prepare: NativeStaticPrepareRequest = serde_json::from_value(fixture.requests[0].clone())
+    let prepare: StaticIndexPrepareRequest = serde_json::from_value(fixture.requests[0].clone())
         .expect("shared prepare request should decode");
     assert_eq!(prepare.root, "/repo");
     assert_eq!(prepare.identity.oxc, manifest.oxc_frontend);
@@ -83,14 +83,14 @@ fn shared_native_static_protocol_fixture_decodes_and_finalizes() {
         manifest.compiler_projection
     );
 
-    let analyze: NativeStaticAnalyzeRequest = serde_json::from_value(fixture.requests[1].clone())
+    let analyze: StaticIndexAnalyzeRequest = serde_json::from_value(fixture.requests[1].clone())
         .expect("shared analyze request should decode");
     assert_eq!(analyze.files.len(), 1);
 
-    let finalize: NativeStaticFinalizeRequest = serde_json::from_value(fixture.requests[2].clone())
+    let finalize: StaticIndexFinalizeRequest = serde_json::from_value(fixture.requests[2].clone())
         .expect("shared finalize request should decode");
     let finalize_response = pipeline::finalize(finalize);
-    assert_eq!(finalize_response.method, NativeStaticMethod::Finalize);
+    assert_eq!(finalize_response.method, StaticIndexMethod::Finalize);
     assert_eq!(finalize_response.telemetry.facts.definitions, 1);
     assert_eq!(finalize_response.telemetry.facts.source_refs, 0);
     assert_eq!(finalize_response.telemetry.facts.diagnostics, 1);
@@ -106,13 +106,13 @@ fn shared_native_static_protocol_fixture_decodes_and_finalizes() {
         "finalize should stream Project Index fact batches"
     );
 
-    let compile: NativeStaticCompileRequest = serde_json::from_value(fixture.requests[3].clone())
+    let compile: StaticIndexCompileRequest = serde_json::from_value(fixture.requests[3].clone())
         .expect("shared compile request should decode");
     let compile_response = pipeline::compile(compile);
-    assert_eq!(compile_response.method, NativeStaticMethod::Compile);
+    assert_eq!(compile_response.method, StaticIndexMethod::Compile);
     assert!(
         compile_response.telemetry.facts.definitions >= 1,
-        "compile should emit at least one native static definition"
+        "compile should emit at least one Static Index definition"
     );
     assert!(
         compile_response
@@ -122,13 +122,13 @@ fn shared_native_static_protocol_fixture_decodes_and_finalizes() {
         "compile should stream Project Index fact batches"
     );
 
-    let _: NativeStaticPrepareResponse = serde_json::from_value(fixture.responses[0].clone())
+    let _: StaticIndexPrepareResponse = serde_json::from_value(fixture.responses[0].clone())
         .expect("shared prepare response should decode");
-    let _: NativeStaticAnalyzeResponse = serde_json::from_value(fixture.responses[1].clone())
+    let _: StaticIndexAnalyzeResponse = serde_json::from_value(fixture.responses[1].clone())
         .expect("shared analyze response should decode");
-    let _: NativeStaticFinalizeResponse = serde_json::from_value(fixture.responses[2].clone())
+    let _: StaticIndexFinalizeResponse = serde_json::from_value(fixture.responses[2].clone())
         .expect("shared finalize response should decode");
-    let _: NativeStaticFinalizeResponse = serde_json::from_value(fixture.responses[3].clone())
+    let _: StaticIndexFinalizeResponse = serde_json::from_value(fixture.responses[3].clone())
         .expect("shared compile response should decode");
 }
 
@@ -147,7 +147,7 @@ fn shared_static_syntax_record_fixture_decodes() {
 #[test]
 fn shared_relation_rule_and_coverage_fixtures_decode() {
     let relations: RelationSpecsFixture = fixture_json("relation-specs.json");
-    let table = NativeStaticRelationPolicyTable::new(vec![relations.policies]);
+    let table = StaticIndexRelationPolicyTable::new(vec![relations.policies]);
     assert!(table.policy_for("agent.uses_prompt").is_some());
     assert!(table.policy_for("router.route.uses_prompt").is_some());
 
@@ -192,8 +192,8 @@ where
 
 fn fixture_text(name: &str) -> &'static str {
     match name {
-        "native-static-protocol.json" => include_str!(
-            "../../../packages/indexer/indexer/contracts/fixtures/native-static-protocol.json"
+        "static-index-protocol.json" => include_str!(
+            "../../../packages/indexer/indexer/contracts/fixtures/static-index-protocol.json"
         ),
         "static-index-identity.json" => include_str!(
             "../../../packages/indexer/indexer/contracts/fixtures/static-index-identity.json"

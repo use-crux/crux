@@ -12,7 +12,7 @@ import {
   firstPartyPrimitiveFixtureInventory,
 } from './first-party-extractor-inventory'
 import { assertDeterministicExtraction, defineIndexerExtensionFixture, extractFixtureSource } from '../testing'
-import { readNativeRuntimeSharedFixture } from '../indexer/contracts/fixtures'
+import { readStaticIndexRuntimeSharedFixture } from '../indexer/contracts/fixtures'
 import { indexRelationPolicies } from '../indexer/relations'
 import { builtInIndexRuleDescriptors } from '../indexer/lints/rules'
 
@@ -75,7 +75,7 @@ describe('first-party extractor fixtures', () => {
   })
 
   it('validates shared static syntax, relation, and rule fixture files', () => {
-    const syntax = readNativeRuntimeSharedFixture('static-syntax-records')
+    const syntax = readStaticIndexRuntimeSharedFixture('static-syntax-records')
     expect(syntax.records).toHaveLength(1)
     expect(syntax.records[0]).toMatchObject({
       schemaVersion: 1,
@@ -90,13 +90,13 @@ describe('first-party extractor fixtures', () => {
       ],
     })
 
-    const relationSpecs = readNativeRuntimeSharedFixture('relation-specs')
+    const relationSpecs = readStaticIndexRuntimeSharedFixture('relation-specs')
     const relationPoliciesByType = new Map(indexRelationPolicies.map((policy) => [policy.type, policy]))
     for (const policy of relationSpecs.policies) {
       expect(relationPoliciesByType.get(policy.type)).toMatchObject(policy)
     }
 
-    const ruleDescriptors = readNativeRuntimeSharedFixture('rule-descriptors')
+    const ruleDescriptors = readStaticIndexRuntimeSharedFixture('rule-descriptors')
     const descriptorsById = new Map(builtInIndexRuleDescriptors().map((descriptor) => [descriptor.id, descriptor]))
     for (const descriptor of ruleDescriptors.descriptors) {
       expect(descriptorsById.get(descriptor.id)).toMatchObject(descriptor)
@@ -104,7 +104,7 @@ describe('first-party extractor fixtures', () => {
   })
 
   it('audits native coverage identities against required parity fixture classes', () => {
-    const coverage = readNativeRuntimeSharedFixture('primitive-coverage-identities')
+    const coverage = readStaticIndexRuntimeSharedFixture('primitive-coverage-identities')
     const inventory = firstPartyPrimitiveFixtureInventory()
     const coveredExtractors = inventory
       .filter((item) => item.staticIndexCoverage === 'covered')

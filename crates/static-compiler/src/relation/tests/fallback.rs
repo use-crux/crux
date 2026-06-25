@@ -1,11 +1,11 @@
 use serde_json::json;
 
-use crate::core::facts::NativeStaticFidelity;
-use crate::finalizer::run::finalize_native_static_values;
+use crate::core::facts::StaticIndexFidelity;
+use crate::finalizer::run::finalize_static_index_values;
 
 #[test]
 fn relation_refs_use_stable_fallback_target_ids() {
-    let output = finalize_native_static_values(
+    let output = finalize_static_index_values(
         &[json!({
             "definitions": [{
                 "id": "prompt:answer",
@@ -31,6 +31,6 @@ fn relation_refs_use_stable_fallback_target_ids() {
     );
     assert_eq!(
         output.model.facts.relations[0].fidelity,
-        NativeStaticFidelity::Partial
+        StaticIndexFidelity::Partial
     );
 }

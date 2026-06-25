@@ -87,7 +87,7 @@ export function createStaticRecordSyntaxHandle(input: InternalStaticRecordContex
 }
 
 /**
- * Reads the parser-native static call context from the first-party internal payload.
+ * Reads the parser-Static Index call context from the first-party internal payload.
  *
  * Centralizing this access keeps native parser payloads out of individual extractors/helpers and makes the
  * remaining TypeScript-native islands easy to audit.

@@ -160,7 +160,7 @@
               "fidelity": "resolved",
               "status": "active",
               "metadata": {
-                "runtime": "native-static",
+                "runtime": "static-index",
                 "facts": { "kind": "prompt", "hasPrompt": true }
               }
             }
@@ -182,7 +182,7 @@
               "id": "diagnostic:contract-fixture",
               "severity": "info",
               "code": "native.fixture",
-              "message": "Native static contract fixture finalized.",
+              "message": "Static Index contract fixture finalized.",
               "source": { "file": "/repo/src/contract.ts", "line": 1 }
             }
           ],

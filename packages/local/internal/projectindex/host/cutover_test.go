@@ -14,7 +14,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
-func TestWorkerNativeStaticCutoverUsesFinalizePatchEvents(t *testing.T) {
+func TestWorkerStaticIndexCutoverUsesFinalizePatchEvents(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -25,24 +25,24 @@ func TestWorkerNativeStaticCutoverUsesFinalizePatchEvents(t *testing.T) {
 		t.Fatalf("mkdir src: %v", err)
 	}
 	sourceFile := filepath.Join(srcDir, "writer.ts")
-	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'native-static-cutover' })"), 0o600); err != nil {
+	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'static-index-cutover' })"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
-	writeNativeStaticEnabledConfig(t, root)
+	writeStaticIndexEnabledConfig(t, root)
 
 	dir := t.TempDir()
-	script := filepath.Join(dir, "native-static-cutover-indexer.mjs")
+	script := filepath.Join(dir, "static-index-cutover-indexer.mjs")
 	if err := os.WriteFile(script, []byte(`
 		import readline from 'node:readline'
 		const rl = readline.createInterface({ input: process.stdin, terminal: false })
 		rl.on('line', (line) => {
 			const req = JSON.parse(line)
-			if (req.method === 'inspectProjectNativeStaticConfig') {
+			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
 					type: 'artifact:done',
-					transactionId: 'artifact-native-static-config',
-					artifact: 'projectNativeStaticConfig',
+					transactionId: 'artifact-static-index-config',
+					artifact: 'projectStaticIndexConfig',
 					root: req.root,
 					payload: {
 						root: req.root,
@@ -79,7 +79,7 @@ func TestWorkerNativeStaticCutoverUsesFinalizePatchEvents(t *testing.T) {
 					type: 'phase:error',
 					transactionId: 'tx-error',
 					phase: 'ast',
-					error: { message: 'native static cutover should not call ' + req.method }
+					error: { message: 'Static Index cutover should not call ' + req.method }
 				}) + '\n')
 				return
 			}
@@ -89,20 +89,20 @@ func TestWorkerNativeStaticCutoverUsesFinalizePatchEvents(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 
-	compiler := &nativeStaticCutoverCompiler{root: root, sourceFile: sourceFile}
+	compiler := &staticIndexCutoverCompiler{root: root, sourceFile: sourceFile}
 	worker := newTestWorkerWithProjectScript(t, script)
 	worker.WithSyntaxParser(compiler)
 	defer worker.Close()
 
-	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-cutover")
+	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "static-index-cutover")
 	if err != nil {
 		t.Fatalf("IndexProjectAstPatch error = %v", err)
 	}
-	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:native-static-cutover" {
-		t.Fatalf("definitions = %+v, want native static finalize result", patch.Facts.Definitions)
+	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:static-index-cutover" {
+		t.Fatalf("definitions = %+v, want Static Index finalize result", patch.Facts.Definitions)
 	}
 	if compiler.prepareCalls != 1 || compiler.analyzeCalls != 1 || compiler.finalizeCalls != 1 {
-		t.Fatalf("native static calls = prepare %d analyze %d finalize %d, want 1 each", compiler.prepareCalls, compiler.analyzeCalls, compiler.finalizeCalls)
+		t.Fatalf("Static Index calls = prepare %d analyze %d finalize %d, want 1 each", compiler.prepareCalls, compiler.analyzeCalls, compiler.finalizeCalls)
 	}
 	if compiler.finalizeStreams != 1 {
 		t.Fatalf("finalize stream calls = %d, want 1", compiler.finalizeStreams)
@@ -115,8 +115,8 @@ func TestWorkerNativeStaticCutoverUsesFinalizePatchEvents(t *testing.T) {
 	}
 
 	timing := worker.LastAstTiming()
-	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonNativeStaticConfig) {
-		t.Fatalf("timing.NodeReasons = %v, want no %q for simple native config", timing.NodeReasons, projectIndexNodeReasonNativeStaticConfig)
+	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig) {
+		t.Fatalf("timing.NodeReasons = %v, want no %q for simple native config", timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig)
 	}
 	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection) {
 		t.Fatalf("timing.NodeReasons = %v, want no %q", timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection)
@@ -132,7 +132,7 @@ func TestWorkerNativeStaticCutoverUsesFinalizePatchEvents(t *testing.T) {
 	}
 }
 
-type nativeStaticCutoverCompiler struct {
+type staticIndexCutoverCompiler struct {
 	root             string
 	sourceFile       string
 	prepareCalls     int
@@ -145,7 +145,7 @@ type nativeStaticCutoverCompiler struct {
 	analyzeFiles     []protocol.AnalyzeFile
 }
 
-func (c *nativeStaticCutoverCompiler) NativeStaticPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+func (c *staticIndexCutoverCompiler) StaticIndexPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
 	c.prepareCalls++
 	if request.Root != c.root {
 		return protocol.PrepareResponse{}, fmt.Errorf("prepare root = %q, want %q", request.Root, c.root)
@@ -178,11 +178,11 @@ func (c *nativeStaticCutoverCompiler) NativeStaticPrepare(_ context.Context, req
 			PruneNativeFactCallNames: append([]string(nil), request.PruneNativeFactCallNames...),
 		},
 		Diagnostics: []json.RawMessage{},
-		Telemetry:   nativeStaticTestTelemetry(1, 0, 1, 0),
+		Telemetry:   staticIndexTestTelemetry(1, 0, 1, 0),
 	}, nil
 }
 
-func (c *nativeStaticCutoverCompiler) NativeStaticAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+func (c *staticIndexCutoverCompiler) StaticIndexAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
 	c.analyzeCalls++
 	c.analyzeFiles = append([]protocol.AnalyzeFile(nil), request.Files...)
 	if !request.Stream {
@@ -197,17 +197,17 @@ func (c *nativeStaticCutoverCompiler) NativeStaticAnalyzeStream(_ context.Contex
 	if !staticIndexAnalyzeFilesContain(request.Files, c.sourceFile) {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("analyze files = %+v, want selected file", request.Files)
 	}
-	return nativeStaticTestAnalyzeStream(protocol.AnalyzeResponse{
+	return staticIndexTestAnalyzeStream(protocol.AnalyzeResponse{
 		ProtocolVersion:       protocol.Version,
 		Method:                protocol.AnalyzeMethod,
-		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","id":"prompt:native-static-cutover"}`)},
+		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","id":"prompt:static-index-cutover"}`)},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
-		Telemetry:             nativeStaticTestTelemetry(1, 0, 1, len(request.Files)),
+		Telemetry:             staticIndexTestTelemetry(1, 0, 1, len(request.Files)),
 	}, handle)
 }
 
-func (c *nativeStaticCutoverCompiler) NativeStaticFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+func (c *staticIndexCutoverCompiler) StaticIndexFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
 	c.finalizeCalls++
 	if request.Stream {
 		c.finalizeStreams++
@@ -222,7 +222,7 @@ func (c *nativeStaticCutoverCompiler) NativeStaticFinalize(_ context.Context, re
 		!bytes.Contains(request.ExtensionFacts[0], []byte("sourceGraph")) {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize extension facts = %s, want source graph", request.ExtensionFacts)
 	}
-	events, err := nativeStaticCutoverEvents(c.root)
+	events, err := staticIndexCutoverEvents(c.root)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
@@ -230,41 +230,41 @@ func (c *nativeStaticCutoverCompiler) NativeStaticFinalize(_ context.Context, re
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Events:          events,
-		Telemetry:       nativeStaticTestTelemetry(1, 0, 1, 1),
+		Telemetry:       staticIndexTestTelemetry(1, 0, 1, 1),
 	}, nil
 }
 
-func (c *nativeStaticCutoverCompiler) NativeStaticFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func (c *staticIndexCutoverCompiler) StaticIndexFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	if !request.Stream {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
-	response, err := c.NativeStaticFinalize(ctx, request)
+	response, err := c.StaticIndexFinalize(ctx, request)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return nativeStaticTestFinalizeStream(response, handle)
+	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticCutoverCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexCutoverCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
 	c.parseCalls++
-	return nil, fmt.Errorf("ParseFile should not be called by native static cutover")
+	return nil, fmt.Errorf("ParseFile should not be called by Static Index cutover")
 }
 
-func (c *nativeStaticCutoverCompiler) ParseFiles(context.Context, []syntax.Request) ([]json.RawMessage, error) {
+func (c *staticIndexCutoverCompiler) ParseFiles(context.Context, []syntax.Request) ([]json.RawMessage, error) {
 	c.batchParseCalls++
-	return nil, fmt.Errorf("ParseFiles should not be called by native static cutover")
+	return nil, fmt.Errorf("ParseFiles should not be called by Static Index cutover")
 }
 
-func (c *nativeStaticCutoverCompiler) ParseFilesStream(context.Context, []syntax.Request, syntax.RecordHandler) error {
+func (c *staticIndexCutoverCompiler) ParseFilesStream(context.Context, []syntax.Request, syntax.RecordHandler) error {
 	c.streamParseCalls++
-	return fmt.Errorf("ParseFilesStream should not be called by native static cutover")
+	return fmt.Errorf("ParseFilesStream should not be called by Static Index cutover")
 }
 
-func (c *nativeStaticCutoverCompiler) Concurrency() int { return 1 }
+func (c *staticIndexCutoverCompiler) Concurrency() int { return 1 }
 
-func (c *nativeStaticCutoverCompiler) Close() error { return nil }
+func (c *staticIndexCutoverCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*nativeStaticCutoverCompiler)(nil)
-var _ syntax.BatchParser = (*nativeStaticCutoverCompiler)(nil)
-var _ syntax.StreamParser = (*nativeStaticCutoverCompiler)(nil)
-var _ StaticCompiler = (*nativeStaticCutoverCompiler)(nil)
+var _ syntax.Parser = (*staticIndexCutoverCompiler)(nil)
+var _ syntax.BatchParser = (*staticIndexCutoverCompiler)(nil)
+var _ syntax.StreamParser = (*staticIndexCutoverCompiler)(nil)
+var _ StaticCompiler = (*staticIndexCutoverCompiler)(nil)

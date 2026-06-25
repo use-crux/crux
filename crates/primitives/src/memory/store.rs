@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext},
-    definition::{NativeDefinitionInput, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, safe_id, static_index_definition},
     protocol::StaticSyntaxValue,
     record_values::{
         direct_string_property, property_value, reference_property, resolve_static_value,
@@ -72,7 +72,7 @@ pub(crate) fn store_definition(
     insert_string(&mut metadata, "variableName", store.variable_name.clone());
     insert_string(&mut metadata, "component", store.component.clone());
     metadata.insert("facts".to_string(), store_fact_metadata(owner_key, store));
-    native_static_definition(NativeDefinitionInput {
+    static_index_definition(NativeDefinitionInput {
         id: format!(
             "memory.store:{}:{}",
             safe_id(owner_key),

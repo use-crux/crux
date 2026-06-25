@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext},
-    definition::{NativeDefinitionInput, folded_index_child, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, folded_index_child, safe_id, static_index_definition},
     protocol::StaticSyntaxValue,
     rag::metadata::{dependency_metadata, unique_defined},
     record_values::{
@@ -66,7 +66,7 @@ fn retriever_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id,
             kind: "rag.retriever",
             name: explicit_id.unwrap_or_else(|| parts.variable_name.to_string()),
@@ -135,7 +135,7 @@ fn pipeline_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opti
     let references = pipeline_references(retriever_ref.as_deref(), &stages);
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id,
             kind: "rag.pipeline",
             name: parts.variable_name.to_string(),
@@ -234,7 +234,7 @@ fn pipeline_stage(
 
     PipelineStage {
         id: definition_id.clone(),
-        definition: native_static_definition(NativeDefinitionInput {
+        definition: static_index_definition(NativeDefinitionInput {
             id: definition_id,
             kind: "rag.pipeline.stage",
             name: stage_id,

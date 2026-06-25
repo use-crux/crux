@@ -6,19 +6,19 @@ use std::fs;
 use serde_json::Value;
 
 use crate::facts::{
-    NativeStaticDiagnostic, NativeStaticDiagnosticSeverity, NativeStaticLintFinding,
-    NativeStaticRuleDescriptor, NativeStaticSourceLocation,
+    StaticIndexDiagnostic, StaticIndexDiagnosticSeverity, StaticIndexLintFinding,
+    StaticIndexRuleDescriptor, StaticIndexSourceLocation,
 };
 use crate::rules::filter::{finding_profiles, known_rule_ids};
 
 #[derive(Debug, Clone)]
-pub struct NativeStaticLintOptions {
+pub struct StaticIndexLintOptions {
     pub emit_builtin_lints: bool,
     pub config: Option<Value>,
     pub files: Vec<String>,
 }
 
-impl Default for NativeStaticLintOptions {
+impl Default for StaticIndexLintOptions {
     fn default() -> Self {
         Self {
             emit_builtin_lints: true,
@@ -29,22 +29,22 @@ impl Default for NativeStaticLintOptions {
 }
 
 pub(crate) fn apply_lint_filters(
-    findings: Vec<NativeStaticLintFinding>,
-    diagnostics: &mut Vec<NativeStaticDiagnostic>,
-    options: &NativeStaticLintOptions,
-    rule_descriptors: &[NativeStaticRuleDescriptor],
-) -> Vec<NativeStaticLintFinding> {
+    findings: Vec<StaticIndexLintFinding>,
+    diagnostics: &mut Vec<StaticIndexDiagnostic>,
+    options: &StaticIndexLintOptions,
+    rule_descriptors: &[StaticIndexRuleDescriptor],
+) -> Vec<StaticIndexLintFinding> {
     let known = known_rule_ids(rule_descriptors);
     let suppressed = apply_suppressions(findings, diagnostics, &options.files, &known);
     apply_config(suppressed, diagnostics, options.config.as_ref(), &known)
 }
 
 fn apply_config(
-    findings: Vec<NativeStaticLintFinding>,
-    diagnostics: &mut Vec<NativeStaticDiagnostic>,
+    findings: Vec<StaticIndexLintFinding>,
+    diagnostics: &mut Vec<StaticIndexDiagnostic>,
     config: Option<&Value>,
     known: &BTreeSet<String>,
-) -> Vec<NativeStaticLintFinding> {
+) -> Vec<StaticIndexLintFinding> {
     let profile = config
         .and_then(|config| config.get("profile"))
         .and_then(Value::as_str)
@@ -87,11 +87,11 @@ fn apply_config(
 }
 
 fn apply_suppressions(
-    findings: Vec<NativeStaticLintFinding>,
-    diagnostics: &mut Vec<NativeStaticDiagnostic>,
+    findings: Vec<StaticIndexLintFinding>,
+    diagnostics: &mut Vec<StaticIndexDiagnostic>,
     files: &[String],
     known: &BTreeSet<String>,
-) -> Vec<NativeStaticLintFinding> {
+) -> Vec<StaticIndexLintFinding> {
     let mut suppressions = parse_suppressions(files);
     for suppression in &suppressions {
         if !known.contains(&suppression.rule_id) {
@@ -171,7 +171,7 @@ fn parse_suppression_line(file: &str, line: usize, text: &str) -> Option<LintSup
     })
 }
 
-fn suppresses(suppression: &LintSuppression, finding: &NativeStaticLintFinding) -> bool {
+fn suppresses(suppression: &LintSuppression, finding: &StaticIndexLintFinding) -> bool {
     if finding.rule_id != suppression.rule_id {
         return false;
     }
@@ -189,23 +189,23 @@ fn suppresses(suppression: &LintSuppression, finding: &NativeStaticLintFinding) 
     }
 }
 
-fn finding_source(finding: &NativeStaticLintFinding) -> Option<NativeStaticSourceLocation> {
+fn finding_source(finding: &StaticIndexLintFinding) -> Option<StaticIndexSourceLocation> {
     serde_json::from_value(finding.extra.get("source")?.clone()).ok()
 }
 
-fn parse_severity(value: &str) -> Option<NativeStaticDiagnosticSeverity> {
+fn parse_severity(value: &str) -> Option<StaticIndexDiagnosticSeverity> {
     match value {
-        "info" => Some(NativeStaticDiagnosticSeverity::Info),
-        "warning" => Some(NativeStaticDiagnosticSeverity::Warning),
-        "error" => Some(NativeStaticDiagnosticSeverity::Error),
+        "info" => Some(StaticIndexDiagnosticSeverity::Info),
+        "warning" => Some(StaticIndexDiagnosticSeverity::Warning),
+        "error" => Some(StaticIndexDiagnosticSeverity::Error),
         _ => None,
     }
 }
 
-fn unknown_configured_rule_diagnostic(rule_id: &str) -> NativeStaticDiagnostic {
-    NativeStaticDiagnostic {
+fn unknown_configured_rule_diagnostic(rule_id: &str) -> StaticIndexDiagnostic {
+    StaticIndexDiagnostic {
         id: format!("index.lint_unknown_configured_rule:{rule_id}"),
-        severity: NativeStaticDiagnosticSeverity::Warning,
+        severity: StaticIndexDiagnosticSeverity::Warning,
         code: "index.lint_unknown_configured_rule".to_string(),
         message: format!("Crux lint config references unknown rule \"{rule_id}\"."),
         source: None,
@@ -216,7 +216,7 @@ fn unknown_configured_rule_diagnostic(rule_id: &str) -> NativeStaticDiagnostic {
     }
 }
 
-fn unknown_suppression_rule_diagnostic(suppression: &LintSuppression) -> NativeStaticDiagnostic {
+fn unknown_suppression_rule_diagnostic(suppression: &LintSuppression) -> StaticIndexDiagnostic {
     suppression_diagnostic(
         "index.lint_unknown_suppression_rule",
         &format!(
@@ -225,11 +225,11 @@ fn unknown_suppression_rule_diagnostic(suppression: &LintSuppression) -> NativeS
         ),
         "Use a known Crux lint rule id or remove the suppression comment.",
         suppression,
-        NativeStaticDiagnosticSeverity::Warning,
+        StaticIndexDiagnosticSeverity::Warning,
     )
 }
 
-fn unused_suppression_diagnostic(suppression: &LintSuppression) -> NativeStaticDiagnostic {
+fn unused_suppression_diagnostic(suppression: &LintSuppression) -> StaticIndexDiagnostic {
     suppression_diagnostic(
         "index.lint_unused_suppression",
         &format!(
@@ -238,7 +238,7 @@ fn unused_suppression_diagnostic(suppression: &LintSuppression) -> NativeStaticD
         ),
         "Remove the stale suppression or move it to the finding it is intended to suppress.",
         suppression,
-        NativeStaticDiagnosticSeverity::Info,
+        StaticIndexDiagnosticSeverity::Info,
     )
 }
 
@@ -247,14 +247,14 @@ fn suppression_diagnostic(
     message: &str,
     fix: &str,
     suppression: &LintSuppression,
-    severity: NativeStaticDiagnosticSeverity,
-) -> NativeStaticDiagnostic {
-    NativeStaticDiagnostic {
+    severity: StaticIndexDiagnosticSeverity,
+) -> StaticIndexDiagnostic {
+    StaticIndexDiagnostic {
         id: format!("{code}:{}", sanitize_key(&suppression.id)),
         severity,
         code: code.to_string(),
         message: message.to_string(),
-        source: Some(NativeStaticSourceLocation {
+        source: Some(StaticIndexSourceLocation {
             file: suppression.file.clone(),
             line: suppression.line,
             column: Some(suppression.column),

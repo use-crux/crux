@@ -60,7 +60,7 @@ interface ParsedBatchMiss {
  * Extracts many files through a frontend-owned batch parse.
  *
  * With caching enabled, the batch parse is restricted to cache misses. This is
- * the native-static production path: Rust/Go can deliver syntax records in one
+ * the static-index production path: Rust/Go can deliver syntax records in one
  * transport batch while Node still owns projection, extension execution, and
  * cache correctness.
  */

@@ -95,7 +95,7 @@ describe('provided static syntax record indexing', () => {
     expect(plan.staticSyntaxEnabled).toBe(true)
   })
 
-  it('reports native static cache hits so hosts can skip warm Rust/Oxc parsing', async () => {
+  it('reports Static Index cache hits so hosts can skip warm Rust/Oxc parsing', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
     const file = join(root, 'src/writer.ts')

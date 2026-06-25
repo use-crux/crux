@@ -1,4 +1,4 @@
-//! Grouped source facts emitted by native static analyze.
+//! Grouped source facts emitted by Static Index analyze.
 
 use std::collections::BTreeSet;
 

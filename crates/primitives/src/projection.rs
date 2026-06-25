@@ -1,8 +1,8 @@
-//! First-party native static primitive projection.
+//! First-party Static Index primitive projection.
 //!
 //! The syntax frontend produces backend-neutral evidence. This module owns the
 //! explicit step that turns matched calls and initializers into Crux primitive
-//! fact projections for native static compilation.
+//! fact projections for Static Index compilation.
 
 use std::collections::HashMap;
 
@@ -172,7 +172,7 @@ fn workspace_native_fact(
     })
 }
 
-/// Keeps legacy syntax-record replacement packets narrower than nativeStatic compilation.
+/// Keeps legacy syntax-record replacement packets narrower than staticIndex compilation.
 fn should_skip_legacy_native_fact_packet(
     extractor: &str,
     parts: &CallParts<'_>,

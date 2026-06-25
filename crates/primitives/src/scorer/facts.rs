@@ -4,7 +4,7 @@ use serde_json::{Map, Value};
 
 use crate::{
     context::{CallParts, PrimitiveContext, source_ref_for_callback_property},
-    definition::{NativeDefinitionInput, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, safe_id, static_index_definition},
     protocol::{LiteralValue, StaticSyntaxValue},
     record_values::{
         direct_identifier, direct_string_property, has_property, json_object_property,
@@ -109,7 +109,7 @@ pub(crate) fn scorer_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id,
             kind: "scorer",
             name: explicit_id.unwrap_or_else(|| parts.variable_name.to_string()),

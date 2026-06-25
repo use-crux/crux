@@ -1,9 +1,9 @@
 use serde_json::json;
 
 use crate::finalizer::events::{
-    NativeStaticFinalizeEventOptions, NativeStaticFinalizeProject, project_patch_events,
+    StaticIndexFinalizeEventOptions, StaticIndexFinalizeProject, project_patch_events,
 };
-use crate::finalizer::run::finalize_native_static_values_with_policies;
+use crate::finalizer::run::finalize_static_index_values_with_policies;
 use crate::relation::model::built_in_relation_policy_table;
 
 #[test]
@@ -22,19 +22,19 @@ fn project_patch_events_chunks_fact_batches() {
         })
         .collect::<Vec<_>>();
     let policies = built_in_relation_policy_table();
-    let output = finalize_native_static_values_with_policies(
+    let output = finalize_static_index_values_with_policies(
         &[json!({ "definitions": definitions })],
         &[],
         &policies,
     );
     let events = project_patch_events(
         &output,
-        &NativeStaticFinalizeProject {
+        &StaticIndexFinalizeProject {
             root: "/repo".to_string(),
             project_name: None,
         },
         "test",
-        NativeStaticFinalizeEventOptions {
+        StaticIndexFinalizeEventOptions {
             phase: "ast",
             invalidates: Some(&json!({ "all": true })),
         },
@@ -65,7 +65,7 @@ fn project_patch_events_chunks_fact_batches() {
         234
     );
     assert_eq!(
-        events.last().expect("phase done")["summary"]["decision"]["nativeStaticComplete"],
+        events.last().expect("phase done")["summary"]["decision"]["staticIndexComplete"],
         true
     );
 }
@@ -73,7 +73,7 @@ fn project_patch_events_chunks_fact_batches() {
 #[test]
 fn project_patch_events_can_materialize_quality_phase_without_invalidation() {
     let policies = built_in_relation_policy_table();
-    let output = finalize_native_static_values_with_policies(
+    let output = finalize_static_index_values_with_policies(
         &[json!({
             "definitions": [{
                 "id": "quality-target:writer",
@@ -88,12 +88,12 @@ fn project_patch_events_can_materialize_quality_phase_without_invalidation() {
     );
     let events = project_patch_events(
         &output,
-        &NativeStaticFinalizeProject {
+        &StaticIndexFinalizeProject {
             root: "/repo".to_string(),
             project_name: Some("fixture".to_string()),
         },
         "test",
-        NativeStaticFinalizeEventOptions {
+        StaticIndexFinalizeEventOptions {
             phase: "quality",
             invalidates: None,
         },

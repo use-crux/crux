@@ -8,12 +8,12 @@ mod analyze_stream;
 mod compile_stream;
 mod finalize_stream;
 mod io;
-mod native_static;
 mod parse;
+mod static_index;
 mod static_syntax;
 
 #[cfg(test)]
-pub(crate) mod native_static_tests;
+pub(crate) mod static_index_tests;
 
 #[cfg(test)]
 mod stream_tests;
@@ -43,13 +43,13 @@ fn serve() -> Result<(), String> {
 #[derive(Debug)]
 pub(crate) enum ServeRequest {
     Syntax(WorkerRequest),
-    NativeStatic(native_static::NativeStaticWorkerRequest),
+    StaticIndex(static_index::StaticIndexWorkerRequest),
 }
 
 pub(crate) fn parse_serve_request(line: &str) -> Result<ServeRequest, String> {
     let value: Value = serde_json::from_str(line).map_err(|error| error.to_string())?;
     if parse::has_worker_method(&value) {
-        return parse::parse_native_static_worker_request(value).map(ServeRequest::NativeStatic);
+        return parse::parse_static_index_worker_request(value).map(ServeRequest::StaticIndex);
     }
     serde_json::from_value::<WorkerRequest>(value)
         .map(ServeRequest::Syntax)
@@ -62,8 +62,8 @@ pub(crate) fn write_serve_response<W: Write>(
 ) -> Result<(), String> {
     match request {
         ServeRequest::Syntax(request) => static_syntax::write_response(stdout, request),
-        ServeRequest::NativeStatic(request) => {
-            native_static::write_native_static_worker_response(stdout, request)
+        ServeRequest::StaticIndex(request) => {
+            static_index::write_static_index_worker_response(stdout, request)
         }
     }
 }

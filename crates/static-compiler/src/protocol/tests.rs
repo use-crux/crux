@@ -2,11 +2,11 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
-use crate::protocol::native_static::{
-    NativeStaticAnalyzeRequest, NativeStaticAnalyzeResponse, NativeStaticFinalizeRequest,
-    NativeStaticFinalizeResponse, NativeStaticPrepareRequest, NativeStaticPrepareResponse,
+use crate::protocol::static_index::{
     STATIC_INDEX_ANALYZE_METHOD, STATIC_INDEX_FINALIZE_METHOD, STATIC_INDEX_PREPARE_METHOD,
-    STATIC_INDEX_PROTOCOL_VERSION,
+    STATIC_INDEX_PROTOCOL_VERSION, StaticIndexAnalyzeRequest, StaticIndexAnalyzeResponse,
+    StaticIndexFinalizeRequest, StaticIndexFinalizeResponse, StaticIndexPrepareRequest,
+    StaticIndexPrepareResponse,
 };
 
 #[test]
@@ -53,7 +53,7 @@ fn prepare_protocol_round_trips_realistic_json() {
         }
     });
 
-    assert_round_trip::<NativeStaticPrepareRequest>(&request);
+    assert_round_trip::<StaticIndexPrepareRequest>(&request);
 
     let response = json!({
         "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
@@ -61,7 +61,7 @@ fn prepare_protocol_round_trips_realistic_json() {
         "plan": prepared_plan_json(),
         "diagnostics": [
             {
-                "id": "native-static-config-warning",
+                "id": "static-index-config-warning",
                 "severity": "warning",
                 "message": "Extension host required for @acme/crux-extra."
             }
@@ -69,7 +69,7 @@ fn prepare_protocol_round_trips_realistic_json() {
         "telemetry": telemetry_json()
     });
 
-    assert_round_trip::<NativeStaticPrepareResponse>(&response);
+    assert_round_trip::<StaticIndexPrepareResponse>(&response);
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn analyze_protocol_round_trips_realistic_json() {
         }
     });
 
-    assert_round_trip::<NativeStaticAnalyzeRequest>(&request);
+    assert_round_trip::<StaticIndexAnalyzeRequest>(&request);
 
     let response = json!({
         "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
@@ -117,7 +117,7 @@ fn analyze_protocol_round_trips_realistic_json() {
         "telemetry": telemetry_json()
     });
 
-    assert_round_trip::<NativeStaticAnalyzeResponse>(&response);
+    assert_round_trip::<StaticIndexAnalyzeResponse>(&response);
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn finalize_protocol_round_trips_realistic_json() {
         }
     });
 
-    assert_round_trip::<NativeStaticFinalizeRequest>(&request);
+    assert_round_trip::<StaticIndexFinalizeRequest>(&request);
 
     let response = json!({
         "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
@@ -201,7 +201,7 @@ fn finalize_protocol_round_trips_realistic_json() {
         "telemetry": telemetry_json()
     });
 
-    assert_round_trip::<NativeStaticFinalizeResponse>(&response);
+    assert_round_trip::<StaticIndexFinalizeResponse>(&response);
 }
 
 fn assert_round_trip<T>(value: &Value)
@@ -216,7 +216,7 @@ where
 fn run_identity_json() -> Value {
     json!({
         "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
-        "compiler": version_identity_json("crux-native-static", "0.1.0"),
+        "compiler": version_identity_json("crux-static-index", "0.1.0"),
         "oxc": version_identity_json("oxc-rust", "oxc_parser@0.133.0+crux_native_group3.5"),
         "primitiveManifest": digest_identity_json(
             "crux-first-party-primitives",

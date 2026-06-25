@@ -32,7 +32,7 @@ export type StaticExtensionHostMethod =
   | 'extractStaticEvidenceBatch'
   | 'checkStaticRules'
 
-/** Machine-readable reason the native static run needs the Node compatibility host. */
+/** Machine-readable reason the Static Index run needs the Node compatibility host. */
 export type StaticExtensionHostNodeReason =
   | 'typescript-bundled-extractors'
   | 'typescript-extension-extractors'
@@ -46,7 +46,7 @@ export interface StaticExtensionHostNodeReport {
   readonly reasons: readonly StaticExtensionHostNodeReason[]
 }
 
-/** Input for loading the data-only manifest used by native static planning. */
+/** Input for loading the data-only manifest used by Static Index planning. */
 export interface LoadStaticExtensionHostManifestInput {
   /** Project root used as the package resolution base when `config` references packages. */
   readonly root: string
@@ -75,7 +75,7 @@ export interface LoadStaticExtensionHostManifestResult {
   readonly nativeCompilerProtocolVersion: number
   readonly manifest: ExtensionRuntimeManifest
   /**
-   * Complete static extraction cache identity for the native static compiler.
+   * Complete static extraction cache identity for the Static Index compiler.
    *
    * Project-scoped worker hosts replace this with the same merged identity used by the TypeScript
    * planner. Direct calls expose the extension-runtime fragment for tests and in-process adapters.
@@ -167,7 +167,7 @@ export interface CheckStaticRulesResult {
 }
 
 /**
- * Loads trusted TypeScript extension manifests for native static planning.
+ * Loads trusted TypeScript extension manifests for Static Index planning.
  *
  * The result is intentionally data-only: extension identities, extractor interests, relation specs,
  * rule descriptors, cache inputs, diagnostics, and host-start reasons. It does not parse project

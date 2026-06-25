@@ -15,24 +15,24 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
-func TestWorkerNativeStaticWritesWarmStaticCacheManifest(t *testing.T) {
+func TestWorkerStaticIndexWritesWarmStaticCacheManifest(t *testing.T) {
 	t.Setenv(cache.StatusEnv, "1")
 
 	root := t.TempDir()
-	sourceFile := writeNativeStaticPlanCacheFixtureFile(
+	sourceFile := writeStaticIndexPlanCacheFixtureFile(
 		t,
 		root,
 		"src/writer.ts",
 		"export const writer = prompt({ id: 'cache-write' })\n",
 	)
-	writeNativeStaticEnabledConfig(t, root)
+	writeStaticIndexEnabledConfig(t, root)
 
-	compiler := &nativeStaticCacheWriteCompiler{root: root, sourceFile: sourceFile}
+	compiler := &staticIndexCacheWriteCompiler{root: root, sourceFile: sourceFile}
 	worker := newTestWorker(t)
 	worker.WithSyntaxParser(compiler)
 	defer worker.Close()
 
-	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-cache-write")
+	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "static-index-cache-write")
 	if err != nil {
 		t.Fatalf("IndexProjectAstPatch error = %v", err)
 	}
@@ -70,13 +70,13 @@ func TestWorkerNativeStaticWritesWarmStaticCacheManifest(t *testing.T) {
 	}
 }
 
-type nativeStaticCacheWriteCompiler struct {
+type staticIndexCacheWriteCompiler struct {
 	root         string
 	sourceFile   string
 	analyzeFiles []string
 }
 
-func (c *nativeStaticCacheWriteCompiler) NativeStaticPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+func (c *staticIndexCacheWriteCompiler) StaticIndexPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
 	return protocol.PrepareResponse{
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.PrepareMethod,
@@ -94,11 +94,11 @@ func (c *nativeStaticCacheWriteCompiler) NativeStaticPrepare(_ context.Context, 
 			PruneNativeFactCallNames: append([]string(nil), request.PruneNativeFactCallNames...),
 		},
 		Diagnostics: []json.RawMessage{},
-		Telemetry:   nativeStaticTestTelemetry(len(request.Files), 0, len(request.Files), 0),
+		Telemetry:   staticIndexTestTelemetry(len(request.Files), 0, len(request.Files), 0),
 	}, nil
 }
 
-func (c *nativeStaticCacheWriteCompiler) NativeStaticAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+func (c *staticIndexCacheWriteCompiler) StaticIndexAnalyzeStream(_ context.Context, request protocol.AnalyzeRequest, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
 	c.analyzeFiles = c.analyzeFiles[:0]
 	if !request.Stream {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("analyze stream flag = false, want true")
@@ -109,18 +109,18 @@ func (c *nativeStaticCacheWriteCompiler) NativeStaticAnalyzeStream(_ context.Con
 	if !slices.Contains(c.analyzeFiles, c.sourceFile) {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("source %s was not analyzed", c.sourceFile)
 	}
-	return nativeStaticTestAnalyzeStream(protocol.AnalyzeResponse{
+	return staticIndexTestAnalyzeStream(protocol.AnalyzeResponse{
 		ProtocolVersion:       protocol.Version,
 		Method:                protocol.AnalyzeMethod,
 		Facts:                 []json.RawMessage{json.RawMessage(`{"kind":"definition","fact":{"id":"prompt:cache-write"}}`)},
 		Diagnostics:           []json.RawMessage{},
 		ExtensionEvidenceJobs: []json.RawMessage{},
-		Telemetry:             nativeStaticTestTelemetry(len(request.Plan.Files), 0, len(request.Files), len(request.Files)),
+		Telemetry:             staticIndexTestTelemetry(len(request.Plan.Files), 0, len(request.Files), len(request.Files)),
 	}, handle)
 }
 
-func (c *nativeStaticCacheWriteCompiler) NativeStaticFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
-	events, err := nativeStaticCacheWriteEvents(c.root, c.sourceFile)
+func (c *staticIndexCacheWriteCompiler) StaticIndexFinalize(_ context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
+	events, err := staticIndexCacheWriteEvents(c.root, c.sourceFile)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
@@ -128,31 +128,31 @@ func (c *nativeStaticCacheWriteCompiler) NativeStaticFinalize(_ context.Context,
 		ProtocolVersion: protocol.Version,
 		Method:          protocol.FinalizeMethod,
 		Events:          events,
-		Telemetry:       nativeStaticTestTelemetry(len(request.NativeFacts), 0, 0, 0),
+		Telemetry:       staticIndexTestTelemetry(len(request.NativeFacts), 0, 0, 0),
 	}, nil
 }
 
-func (c *nativeStaticCacheWriteCompiler) NativeStaticFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func (c *staticIndexCacheWriteCompiler) StaticIndexFinalizeStream(ctx context.Context, request protocol.FinalizeRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	if !request.Stream {
 		return protocol.FinalizeResponse{}, fmt.Errorf("finalize stream flag = false, want true")
 	}
-	response, err := c.NativeStaticFinalize(ctx, request)
+	response, err := c.StaticIndexFinalize(ctx, request)
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
-	return nativeStaticTestFinalizeStream(response, handle)
+	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *nativeStaticCacheWriteCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
-	return nil, fmt.Errorf("ParseFile should not be called by native static cache write")
+func (c *staticIndexCacheWriteCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+	return nil, fmt.Errorf("ParseFile should not be called by Static Index cache write")
 }
 
-func (c *nativeStaticCacheWriteCompiler) Concurrency() int { return 1 }
+func (c *staticIndexCacheWriteCompiler) Concurrency() int { return 1 }
 
-func (c *nativeStaticCacheWriteCompiler) Close() error { return nil }
+func (c *staticIndexCacheWriteCompiler) Close() error { return nil }
 
-func nativeStaticCacheWriteEvents(root, sourceFile string) ([]json.RawMessage, error) {
-	tx := "tx-native-static-cache-write"
+func staticIndexCacheWriteEvents(root, sourceFile string) ([]json.RawMessage, error) {
+	tx := "tx-static-index-cache-write"
 	values := []any{
 		map[string]any{
 			"protocolVersion": 2,
@@ -176,7 +176,7 @@ func nativeStaticCacheWriteEvents(root, sourceFile string) ([]json.RawMessage, e
 					"projectRoot":   root,
 					"producer":      map[string]any{"name": workerProducer, "version": "test"},
 					"fidelity":      "authoritative",
-					"provenance":    map[string]any{"kind": "runtime", "attribute": "test.nativeStaticCacheWrite"},
+					"provenance":    map[string]any{"kind": "runtime", "attribute": "test.staticIndexCacheWrite"},
 					"fact": map[string]any{
 						"id":       "prompt:cache-write",
 						"kind":     "prompt",
@@ -194,7 +194,7 @@ func nativeStaticCacheWriteEvents(root, sourceFile string) ([]json.RawMessage, e
 					"projectRoot":   root,
 					"producer":      map[string]any{"name": workerProducer, "version": "test"},
 					"fidelity":      "authoritative",
-					"provenance":    map[string]any{"kind": "runtime", "attribute": "test.nativeStaticCacheWrite"},
+					"provenance":    map[string]any{"kind": "runtime", "attribute": "test.staticIndexCacheWrite"},
 					"fact": map[string]any{
 						"file":          sourceFile,
 						"status":        "indexed",
@@ -212,7 +212,7 @@ func nativeStaticCacheWriteEvents(root, sourceFile string) ([]json.RawMessage, e
 			"patch": map[string]any{
 				"schemaVersion": 1,
 				"phase":         "ast",
-				"project":       map[string]any{"root": root, "name": "native-static-cache-write"},
+				"project":       map[string]any{"root": root, "name": "static-index-cache-write"},
 				"startedAt":     "1970-01-01T00:00:00.000Z",
 				"finishedAt":    "1970-01-01T00:00:00.000Z",
 				"status":        "ok",
@@ -220,7 +220,7 @@ func nativeStaticCacheWriteEvents(root, sourceFile string) ([]json.RawMessage, e
 			},
 			"summary": map[string]any{
 				"factCount": 2,
-				"decision":  map[string]any{"nativeStaticComplete": true},
+				"decision":  map[string]any{"staticIndexComplete": true},
 			},
 		},
 	}
@@ -235,5 +235,5 @@ func nativeStaticCacheWriteEvents(root, sourceFile string) ([]json.RawMessage, e
 	return events, nil
 }
 
-var _ syntax.Parser = (*nativeStaticCacheWriteCompiler)(nil)
-var _ StaticCompiler = (*nativeStaticCacheWriteCompiler)(nil)
+var _ syntax.Parser = (*staticIndexCacheWriteCompiler)(nil)
+var _ StaticCompiler = (*staticIndexCacheWriteCompiler)(nil)

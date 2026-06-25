@@ -70,7 +70,7 @@ func Config(index store.IndexData) (json.RawMessage, error) {
 	}
 	data, err := json.Marshal(index.Lint)
 	if err != nil {
-		return nil, fmt.Errorf("marshal native static lint config: %w", err)
+		return nil, fmt.Errorf("marshal Static Index lint config: %w", err)
 	}
 	return data, nil
 }
@@ -102,7 +102,7 @@ func Files(index store.IndexData) []string {
 func groupedJSONFact(key string, value any) (json.RawMessage, bool, error) {
 	raw, err := json.Marshal(value)
 	if err != nil {
-		return nil, false, fmt.Errorf("marshal native static lint %s facts: %w", key, err)
+		return nil, false, fmt.Errorf("marshal Static Index lint %s facts: %w", key, err)
 	}
 	return groupedFact(key, raw)
 }
@@ -110,7 +110,7 @@ func groupedJSONFact(key string, value any) (json.RawMessage, bool, error) {
 func groupedFact(key string, value json.RawMessage) (json.RawMessage, bool, error) {
 	data, err := json.Marshal(map[string]json.RawMessage{key: value})
 	if err != nil {
-		return nil, false, fmt.Errorf("native static grouped %s facts: %w", key, err)
+		return nil, false, fmt.Errorf("Static Index grouped %s facts: %w", key, err)
 	}
 	return data, true, nil
 }

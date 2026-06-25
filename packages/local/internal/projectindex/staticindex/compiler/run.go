@@ -17,15 +17,15 @@ import (
 )
 
 const (
-	ReasonEmpty      = "native-static-empty-finalize"
-	ReasonEvidence   = "native-static-extension-evidence"
-	ReasonIncomplete = "native-static-incomplete"
+	ReasonEmpty      = "static-index-empty-finalize"
+	ReasonEvidence   = "static-index-extension-evidence"
+	ReasonIncomplete = "static-index-incomplete"
 )
 
 type Compiler interface {
-	NativeStaticPrepare(context.Context, protocol.PrepareRequest) (protocol.PrepareResponse, error)
-	NativeStaticAnalyzeStream(context.Context, protocol.AnalyzeRequest, protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error)
-	NativeStaticFinalizeStream(context.Context, protocol.FinalizeRequest, protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error)
+	StaticIndexPrepare(context.Context, protocol.PrepareRequest) (protocol.PrepareResponse, error)
+	StaticIndexAnalyzeStream(context.Context, protocol.AnalyzeRequest, protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error)
+	StaticIndexFinalizeStream(context.Context, protocol.FinalizeRequest, protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error)
 }
 
 type EvidenceFunc func(context.Context, []json.RawMessage) ([]json.RawMessage, error)
@@ -60,9 +60,9 @@ func Run(ctx context.Context, request Request) (Result, error) {
 	}
 
 	identity := protocol.SkeletonIdentity()
-	prepare, err := request.Compiler.NativeStaticPrepare(ctx, prepareRequest(request, identity, sourceInput))
+	prepare, err := request.Compiler.StaticIndexPrepare(ctx, prepareRequest(request, identity, sourceInput))
 	if err != nil {
-		return Result{}, fmt.Errorf("native static prepare: %w", err)
+		return Result{}, fmt.Errorf("Static Index prepare: %w", err)
 	}
 
 	analyzeFiles, err := analyzeFiles(request.Plan, prepare.Plan, sourceInput)
@@ -92,7 +92,7 @@ func Run(ctx context.Context, request Request) (Result, error) {
 			timing.NodeReason = ReasonEvidence
 			return Result{Timing: timing}, nil
 		}
-		return Result{}, fmt.Errorf("native static analyze: %w", err)
+		return Result{}, fmt.Errorf("Static Index analyze: %w", err)
 	}
 
 	extensionFacts, err := compat.FinalizerFacts(request.Plan)
@@ -122,7 +122,7 @@ func Run(ctx context.Context, request Request) (Result, error) {
 		EmitBuiltinLints: &emitBuiltinLints,
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("native static finalize: %w", err)
+		return Result{}, fmt.Errorf("Static Index finalize: %w", err)
 	}
 	if !used {
 		timing.NodeReason = incompleteReason(timings)
@@ -168,7 +168,7 @@ func runCompile(
 	})
 	timing := Timing{NativeParseAndForwardMs: elapsedMs(started)}
 	if err != nil {
-		return Result{}, fmt.Errorf("native static compile: %w", err)
+		return Result{}, fmt.Errorf("Static Index compile: %w", err)
 	}
 	if !used {
 		timing.NodeReason = incompleteReason(timings)

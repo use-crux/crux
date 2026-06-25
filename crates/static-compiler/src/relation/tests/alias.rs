@@ -3,16 +3,13 @@ use std::collections::BTreeMap;
 use serde_json::json;
 
 use crate::core::facts::{
-    NativeStaticDefinition, NativeStaticFidelity, NativeStaticIndexPatchFacts,
-    NativeStaticRelationRef,
+    StaticIndexDefinition, StaticIndexFidelity, StaticIndexIndexPatchFacts, StaticIndexRelationRef,
 };
-use crate::relation::model::{
-    built_in_relation_policy_table, resolve_native_static_relation_model,
-};
+use crate::relation::model::{built_in_relation_policy_table, resolve_static_index_relation_model};
 
 #[test]
 fn relation_ref_aliases_enrich_duplicate_target_use_entries() {
-    let facts = NativeStaticIndexPatchFacts {
+    let facts = StaticIndexIndexPatchFacts {
         root: None,
         project_name: None,
         definitions: vec![
@@ -44,7 +41,7 @@ fn relation_ref_aliases_enrich_duplicate_target_use_entries() {
         ..Default::default()
     };
 
-    let model = resolve_native_static_relation_model(facts, &built_in_relation_policy_table());
+    let model = resolve_static_index_relation_model(facts, &built_in_relation_policy_table());
     let prompt = model
         .facts
         .definitions
@@ -64,7 +61,7 @@ fn relation_ref_aliases_enrich_duplicate_target_use_entries() {
 
 #[test]
 fn relation_ref_aliases_do_not_enrich_duplicate_resolved_variables() {
-    let facts = NativeStaticIndexPatchFacts {
+    let facts = StaticIndexIndexPatchFacts {
         root: None,
         project_name: None,
         definitions: vec![
@@ -103,7 +100,7 @@ fn relation_ref_aliases_do_not_enrich_duplicate_resolved_variables() {
         ..Default::default()
     };
 
-    let model = resolve_native_static_relation_model(facts, &built_in_relation_policy_table());
+    let model = resolve_static_index_relation_model(facts, &built_in_relation_policy_table());
     let prompt = model
         .facts
         .definitions
@@ -118,8 +115,8 @@ fn relation_ref_aliases_do_not_enrich_duplicate_resolved_variables() {
     assert!(entries[1].get("targetDefinitionId").is_none());
 }
 
-fn relation_ref(owner: &str, variable: &str, to_id: &str) -> NativeStaticRelationRef {
-    NativeStaticRelationRef {
+fn relation_ref(owner: &str, variable: &str, to_id: &str) -> StaticIndexRelationRef {
+    StaticIndexRelationRef {
         owner_definition_id: owner.to_string(),
         r#type: "prompt.uses_context".to_string(),
         type_by_target_kind: BTreeMap::new(),
@@ -138,8 +135,8 @@ fn definition(
     kind: &str,
     name: &str,
     metadata: Option<serde_json::Value>,
-) -> NativeStaticDefinition {
-    NativeStaticDefinition {
+) -> StaticIndexDefinition {
+    StaticIndexDefinition {
         id: id.to_string(),
         kind: kind.to_string(),
         name: name.to_string(),
@@ -149,7 +146,7 @@ fn definition(
         source: None,
         source_snippet: None,
         source_refs: Vec::new(),
-        fidelity: NativeStaticFidelity::Resolved,
+        fidelity: StaticIndexFidelity::Resolved,
         status: Some("active".to_string()),
         fingerprint: None,
         metadata,

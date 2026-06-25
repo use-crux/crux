@@ -1,5 +1,5 @@
 /**
- * Shared native-runtime fixture file loader.
+ * Shared Static Index runtime fixture file loader.
  *
  * The fixture files in this directory are plain JSON on purpose: TypeScript
  * validates them against the canonical schemas, while Go and Rust consume the
@@ -22,8 +22,8 @@ import type { ProjectIndexWorkerEvent } from '../worker-events/schema'
 import type { IndexRelationPolicy } from '../../relations/types'
 
 /** File-backed fixture names that are intended to be consumed across runtimes. */
-export type NativeRuntimeSharedFixtureName =
-  | 'native-static-protocol'
+export type StaticIndexRuntimeSharedFixtureName =
+  | 'static-index-protocol'
   | 'static-index-identity'
   | 'worker-events'
   | 'static-syntax-records'
@@ -101,8 +101,8 @@ export interface PrimitiveCoverageIdentitiesSharedFixture {
 }
 
 /** Payload type for each shared fixture file. */
-export interface NativeRuntimeSharedFixtureMap {
-  readonly 'native-static-protocol': StaticIndexProtocolSharedFixture
+export interface StaticIndexRuntimeSharedFixtureMap {
+  readonly 'static-index-protocol': StaticIndexProtocolSharedFixture
   readonly 'static-index-identity': StaticIndexIdentitySharedFixture
   readonly 'worker-events': WorkerEventsSharedFixture
   readonly 'static-syntax-records': StaticSyntaxRecordsSharedFixture
@@ -114,14 +114,14 @@ export interface NativeRuntimeSharedFixtureMap {
 const fixtureDirectory = dirname(fileURLToPath(import.meta.url))
 
 const fixtureFiles = {
-  'native-static-protocol': 'native-static-protocol.json',
+  'static-index-protocol': 'static-index-protocol.json',
   'static-index-identity': 'static-index-identity.json',
   'worker-events': 'worker-events.json',
   'static-syntax-records': 'static-syntax-records.json',
   'relation-specs': 'relation-specs.json',
   'rule-descriptors': 'rule-descriptors.json',
   'primitive-coverage-identities': 'primitive-coverage-identities.json',
-} as const satisfies Record<NativeRuntimeSharedFixtureName, string>
+} as const satisfies Record<StaticIndexRuntimeSharedFixtureName, string>
 
 /**
  * Reads one JSON fixture from the TypeScript-owned contract spine.
@@ -129,9 +129,9 @@ const fixtureFiles = {
  * @param name - Stable fixture id, also used by Go and Rust tests.
  * @returns The parsed fixture payload with a name-specific TypeScript type.
  */
-export function readNativeRuntimeSharedFixture<const TName extends NativeRuntimeSharedFixtureName>(
+export function readStaticIndexRuntimeSharedFixture<const TName extends StaticIndexRuntimeSharedFixtureName>(
   name: TName,
-): NativeRuntimeSharedFixtureMap[TName] {
+): StaticIndexRuntimeSharedFixtureMap[TName] {
   const path = join(fixtureDirectory, fixtureFiles[name])
-  return JSON.parse(readFileSync(path, 'utf8')) as NativeRuntimeSharedFixtureMap[TName]
+  return JSON.parse(readFileSync(path, 'utf8')) as StaticIndexRuntimeSharedFixtureMap[TName]
 }

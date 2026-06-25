@@ -11,7 +11,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func TestWorkerNativeStaticSchedulesTypeScriptRulesInLintPhase(t *testing.T) {
+func TestWorkerStaticIndexSchedulesTypeScriptRulesInLintPhase(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -24,19 +24,19 @@ func TestWorkerNativeStaticSchedulesTypeScriptRulesInLintPhase(t *testing.T) {
 	if err := os.WriteFile(sourceFile, []byte("export const writer = prompt({ id: 'rule-input' })"), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
-	writeNativeStaticEnabledConfig(t, root)
+	writeStaticIndexEnabledConfig(t, root)
 
-	script := filepath.Join(t.TempDir(), "native-static-rules-indexer.mjs")
-	if err := os.WriteFile(script, []byte(nativeStaticRulesIndexerScript()), 0o600); err != nil {
+	script := filepath.Join(t.TempDir(), "static-index-rules-indexer.mjs")
+	if err := os.WriteFile(script, []byte(staticIndexRulesIndexerScript()), 0o600); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
 
-	compiler := &nativeStaticRuleCompiler{root: root, sourceFile: sourceFile}
+	compiler := &staticIndexRuleCompiler{root: root, sourceFile: sourceFile}
 	worker := newTestWorkerWithProjectScript(t, script)
 	worker.WithSyntaxParser(compiler)
 	defer worker.Close()
 
-	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-static-rules")
+	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "static-index-rules")
 	if err != nil {
 		t.Fatalf("IndexProjectAstPatch error = %v", err)
 	}
@@ -48,10 +48,10 @@ func TestWorkerNativeStaticSchedulesTypeScriptRulesInLintPhase(t *testing.T) {
 	}
 
 	lintPatch, err := worker.IndexProjectLintPatch(context.Background(), projectindex.ProjectLintIndexRequest{
-		Root:                root,
-		ConfigPath:          "",
-		ProjectName:         "native-static-rules",
-		ASTUsedNativeStatic: true,
+		Root:               root,
+		ConfigPath:         "",
+		ProjectName:        "static-index-rules",
+		ASTUsedStaticIndex: true,
 		PreviousIndex: store.IndexData{
 			Definitions:     patch.Facts.Definitions,
 			Relations:       patch.Facts.Relations,

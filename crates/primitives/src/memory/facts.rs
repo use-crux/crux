@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext},
-    definition::{NativeDefinitionInput, native_static_definition, safe_id},
+    definition::{NativeDefinitionInput, safe_id, static_index_definition},
     memory::blocks::{
         MemoryBlockMetadata, default_memory_block_schema, memory_block_metadata_values,
         memory_blocks,
@@ -69,7 +69,7 @@ pub(crate) fn memory_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
 
     Some(extracted_facts(
         parts.variable_name,
-        native_static_definition(NativeDefinitionInput {
+        static_index_definition(NativeDefinitionInput {
             id,
             kind: "memory",
             name: id_info

@@ -97,7 +97,7 @@ func mergeInterests(
 	}
 	data, err := json.Marshal(merged)
 	if err != nil {
-		return nil, false, fmt.Errorf("encode native static merged interests: %w", err)
+		return nil, false, fmt.Errorf("encode Static Index merged interests: %w", err)
 	}
 	return data, true, nil
 }
@@ -108,7 +108,7 @@ func decodeInterests(raw json.RawMessage) (interestManifest, error) {
 	}
 	var interests interestManifest
 	if err := json.Unmarshal(raw, &interests); err != nil {
-		return interestManifest{}, fmt.Errorf("decode native static interests: %w", err)
+		return interestManifest{}, fmt.Errorf("decode Static Index interests: %w", err)
 	}
 	return interests, nil
 }
@@ -122,7 +122,7 @@ func mergeStaticHost(
 	}
 	var base hostPlan
 	if err := json.Unmarshal(baseRaw, &base); err != nil {
-		return nil, false, fmt.Errorf("decode native static host: %w", err)
+		return nil, false, fmt.Errorf("decode Static Index host: %w", err)
 	}
 	var extension hostPlan
 	if err := json.Unmarshal(extensionRaw, &extension); err != nil {
@@ -146,7 +146,7 @@ func mergeStaticHost(
 	}
 	data, err := json.Marshal(merged)
 	if err != nil {
-		return nil, false, fmt.Errorf("encode native static merged host: %w", err)
+		return nil, false, fmt.Errorf("encode Static Index merged host: %w", err)
 	}
 	return data, true, nil
 }
