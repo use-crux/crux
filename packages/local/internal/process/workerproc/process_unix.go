@@ -1,6 +1,6 @@
 //go:build !windows
 
-package node
+package workerproc
 
 import (
 	"os/exec"

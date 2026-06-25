@@ -1,4 +1,4 @@
-package node
+package workerproc
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 // request/response work.
 func (w *Worker) Prewarm(ctx context.Context) error {
 	if w == nil {
-		return fmt.Errorf("node process: nil worker")
+		return fmt.Errorf("worker process: nil worker")
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()

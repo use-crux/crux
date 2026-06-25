@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
@@ -23,7 +23,7 @@ func (w *Worker) StaticIndexAnalyzeStream(
 
 	var response protocol.AnalyzeResponse
 	done := false
-	err := nodeprocess.StreamCall(ctx, w.Process(), request, func(raw json.RawMessage) (bool, error) {
+	err := workerproc.StreamCall(ctx, w.Process(), request, func(raw json.RawMessage) (bool, error) {
 		event, err := protocol.DecodeAnalyzeStreamEvent(raw)
 		if err != nil {
 			return false, err
@@ -99,7 +99,7 @@ func (w *Worker) StaticIndexFinalizeStream(
 
 	var response protocol.FinalizeResponse
 	done := false
-	err := nodeprocess.StreamCall(ctx, w.Process(), request, func(raw json.RawMessage) (bool, error) {
+	err := workerproc.StreamCall(ctx, w.Process(), request, func(raw json.RawMessage) (bool, error) {
 		event, err := protocol.DecodeFinalizeStreamEvent(raw)
 		if err != nil {
 			return false, err
@@ -171,7 +171,7 @@ func (w *Worker) StaticIndexCompileStream(
 
 	var response protocol.FinalizeResponse
 	done := false
-	err := nodeprocess.StreamCall(ctx, w.Process(), request, func(raw json.RawMessage) (bool, error) {
+	err := workerproc.StreamCall(ctx, w.Process(), request, func(raw json.RawMessage) (bool, error) {
 		event, err := protocol.DecodeFinalizeStreamEvent(raw)
 		if err != nil {
 			return false, err

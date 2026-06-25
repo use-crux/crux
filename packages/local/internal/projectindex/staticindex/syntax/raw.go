@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"strconv"
 
-	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 )
 
-func RecordBatchRequestLine(method string, requestID string, records []json.RawMessage) nodeprocess.RawJSONLine {
+func RecordBatchRequestLine(method string, requestID string, records []json.RawMessage) workerproc.RawJSONLine {
 	var buffer bytes.Buffer
 	buffer.Grow(128 + totalRawMessageBytes(records))
 	buffer.WriteString(`{"protocolVersion":2,"method":`)
@@ -23,7 +23,7 @@ func RecordBatchRequestLine(method string, requestID string, records []json.RawM
 		buffer.Write(record)
 	}
 	buffer.WriteString(`]}`)
-	return nodeprocess.RawJSONLine(buffer.Bytes())
+	return workerproc.RawJSONLine(buffer.Bytes())
 }
 
 func totalRawMessageBytes(records []json.RawMessage) int {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
@@ -100,5 +100,5 @@ func call[Resp any](ctx context.Context, worker *Worker, request any) (Resp, err
 	if worker == nil || worker.Process() == nil {
 		return zero, fmt.Errorf("project Static Index compiler is not configured")
 	}
-	return nodeprocess.Call[Resp](ctx, worker.Process(), request)
+	return workerproc.Call[Resp](ctx, worker.Process(), request)
 }

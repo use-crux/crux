@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
@@ -57,7 +57,7 @@ func TestSendStreamsSyntaxRecordsAsStartChunksAndDone(t *testing.T) {
 	if start.RequestKind != "start" || start.RequestID != "request-1" || len(start.SyntaxRecords) != 0 {
 		t.Fatalf("start = %+v, want compact start request", start)
 	}
-	chunk, ok := sent[1].(nodeprocess.RawJSONLine)
+	chunk, ok := sent[1].(workerproc.RawJSONLine)
 	if !ok {
 		t.Fatalf("chunk type = %T, want raw JSON line", sent[1])
 	}

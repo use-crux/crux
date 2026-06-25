@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
@@ -23,7 +23,7 @@ type Timing struct {
 
 func Stream(
 	ctx context.Context,
-	worker *nodeprocess.Worker,
+	worker *workerproc.Worker,
 	req indexwire.Request,
 	plan projectindex.ProjectStaticSyntaxPlan,
 	parser syntax.StreamParser,
@@ -32,7 +32,7 @@ func Stream(
 ) (Timing, error) {
 	var timing Timing
 	var sendDoneAt time.Time
-	err := nodeprocess.StreamCallSession(ctx, worker, func(send nodeprocess.StreamSender) error {
+	err := workerproc.StreamCallSession(ctx, worker, func(send workerproc.StreamSender) error {
 		var err error
 		timing, err = Send(ctx, send, req, indexwire.NewID("index"), plan, parser)
 		sendDoneAt = time.Now()
@@ -51,7 +51,7 @@ func Stream(
 
 func Send(
 	ctx context.Context,
-	send nodeprocess.StreamSender,
+	send workerproc.StreamSender,
 	req indexwire.Request,
 	requestID string,
 	plan projectindex.ProjectStaticSyntaxPlan,

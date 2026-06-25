@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 )
 
 const syntaxWorkerMaxResponseBytes = 16 * 1024 * 1024
@@ -14,7 +14,7 @@ const syntaxWorkerMaxResponseBytes = 16 * 1024 * 1024
 // Worker supervises a command-backed Rust/Oxc indexer
 // worker through the worker JSON-lines protocol.
 type Worker struct {
-	worker *nodeprocess.Worker
+	worker *workerproc.Worker
 	nextID atomic.Uint64
 }
 
@@ -126,10 +126,10 @@ type syntaxWorkerSyntaxBatchEvent struct {
 // NewWorker creates a command-backed indexer worker.
 func New(commandPath string, commandArgs ...string) *Worker {
 	return &Worker{
-		worker: nodeprocess.New(
-			nodeprocess.Script{Name: "project-indexer-worker"},
-			nodeprocess.WithCommand(commandPath, commandArgs...),
-			nodeprocess.WithMaxResponseBytes(syntaxWorkerMaxResponseBytes),
+		worker: workerproc.New(
+			workerproc.Script{Name: "project-indexer-worker"},
+			workerproc.WithCommand(commandPath, commandArgs...),
+			workerproc.WithMaxResponseBytes(syntaxWorkerMaxResponseBytes),
 		),
 	}
 }
@@ -145,7 +145,7 @@ func (w *Worker) NextID() uint64 {
 
 // Process exposes the shared command worker for parent-owned protocols that
 // run on the same Rust/Oxc binary.
-func (w *Worker) Process() *nodeprocess.Worker {
+func (w *Worker) Process() *workerproc.Worker {
 	if w == nil {
 		return nil
 	}
@@ -158,7 +158,7 @@ func (w *Worker) ParseFile(ctx context.Context, request Request) (json.RawMessag
 		return nil, fmt.Errorf("project indexer worker is not configured")
 	}
 	id := w.nextID.Add(1)
-	response, err := nodeprocess.Call[syntaxWorkerSyntaxResponse](ctx, w.worker, syntaxWorkerSyntaxRequest{
+	response, err := workerproc.Call[syntaxWorkerSyntaxResponse](ctx, w.worker, syntaxWorkerSyntaxRequest{
 		ID:      id,
 		Request: request,
 	})
@@ -215,7 +215,7 @@ func (w *Worker) ParseFilesStream(ctx context.Context, requests []Request, handl
 	id := w.nextID.Add(1)
 	seen := make([]bool, len(requests))
 	received := 0
-	return nodeprocess.StreamCall(ctx, w.worker, syntaxWorkerSyntaxBatchRequest{
+	return workerproc.StreamCall(ctx, w.worker, syntaxWorkerSyntaxBatchRequest{
 		ID:                       id,
 		Files:                    syntaxWorkerSyntaxBatchFiles(requests),
 		CallNames:                requests[0].CallNames,

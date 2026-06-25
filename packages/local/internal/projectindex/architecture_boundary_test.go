@@ -48,7 +48,7 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 		{"projectindex/staticindex/syntax/record", "Static Syntax record model"},
 		{"projectindex/staticindex/syntax/stream", "Static Syntax stream decoder"},
 		{"projectindex/wire", "Project Index worker event stream"},
-		{"process/node", "Phase 3 transitional generic worker process package"},
+		{"process/workerproc", "generic JSON-lines worker process package"},
 		{"assets", "generated local runtime asset owner"},
 	}
 	for _, expected := range expectedPackages {
@@ -64,6 +64,7 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 		"indexservice",
 		"localassets",
 		"nodeworker",
+		filepath.Join("process", "node"),
 		filepath.Join("projectindex", "staticindex", "compiler"),
 		"projectindexstore",
 		"projectindexwire",
@@ -85,7 +86,6 @@ func TestProjectIndexPackageTransitionsRemainPhaseOwned(t *testing.T) {
 	internalDir := filepath.Dir(projectIndexDir)
 
 	futurePackages := []expectedInternalPackage{
-		{"process/workerproc", "Phase 3 renames the generic worker process package"},
 		{"projectindex/staticindex/session", "Phase 4 adds the high-level Static Index session boundary"},
 	}
 	for _, future := range futurePackages {

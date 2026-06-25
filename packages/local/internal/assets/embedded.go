@@ -3,14 +3,14 @@ package assets
 import (
 	"fmt"
 
-	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 )
 
 // ExtractEmbedded writes an embedded script to the local worker cache and
 // returns the absolute extracted path. The cache key includes a content hash, so
 // unchanged assets are reused across process starts.
 func ExtractEmbedded(name string, content []byte) (string, error) {
-	return nodeprocess.ExtractEmbedded(name, content)
+	return workerproc.ExtractEmbedded(name, content)
 }
 
 // ExtractQualityRunner extracts the embedded quality runner script.
@@ -41,7 +41,7 @@ func ExtractProjectRuntimeIndexer(content []byte) (string, error) {
 // FindNode locates a Node.js executable suitable for running local worker
 // scripts and returns an actionable setup hint when Node cannot be found.
 func FindNode() (string, error) {
-	return findNode(nodeprocess.FindNodePath)
+	return findNode(workerproc.FindNodePath)
 }
 
 func findNode(resolve func() (string, error)) (string, error) {

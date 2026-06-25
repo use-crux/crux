@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 )
 
 func newTestWorker(tb testing.TB) *Bundle {
@@ -35,7 +35,7 @@ func testEmbeddedScriptPath(name string) string {
 }
 
 func findNodePath() (string, error) {
-	return nodeprocess.FindNodePath()
+	return workerproc.FindNodePath()
 }
 
 func writeShellScript(tb testing.TB, name string, script string) string {

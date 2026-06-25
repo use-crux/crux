@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/host/client"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
@@ -37,7 +37,7 @@ func (w *Bundle) streamArtifact(ctx context.Context, req indexwire.Request, arti
 	return w.indexHost().Artifact(ctx, req, artifact)
 }
 
-func (w *Bundle) streamRequest(ctx context.Context, req indexwire.Request, handle func(json.RawMessage) error) (nodeprocess.StreamResult, error) {
+func (w *Bundle) streamRequest(ctx context.Context, req indexwire.Request, handle func(json.RawMessage) error) (workerproc.StreamResult, error) {
 	return w.indexHost().Stream(ctx, req, handle)
 }
 

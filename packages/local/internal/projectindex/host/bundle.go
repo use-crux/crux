@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/host/node"
 	runtimeworker "github.com/use-crux/crux/packages/local/internal/projectindex/host/runtime"
 	semanticworker "github.com/use-crux/crux/packages/local/internal/projectindex/host/semantic"
@@ -15,7 +15,7 @@ import (
 type Bundle struct {
 	scriptPath     string
 	scriptContent  []byte
-	worker         *nodeprocess.Worker
+	worker         *workerproc.Worker
 	semanticWorker *semanticworker.Worker
 	runtimeWorker  *runtimeworker.Worker
 	syntaxParser   syntax.Parser

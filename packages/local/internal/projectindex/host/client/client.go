@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
+	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/host/node"
@@ -23,7 +23,7 @@ type Client struct {
 	Name          string
 	ScriptContent []byte
 	ScriptPath    string
-	Worker        *nodeprocess.Worker
+	Worker        *workerproc.Worker
 	MaxBytes      int
 	Producer      string
 }
@@ -113,11 +113,11 @@ func (c Client) Artifact(ctx context.Context, req indexwire.Request, artifact pr
 }
 
 // Stream sends a single JSON-line request to a one-shot TypeScript worker.
-func (c Client) Stream(ctx context.Context, req indexwire.Request, handle func(json.RawMessage) error) (nodeprocess.StreamResult, error) {
+func (c Client) Stream(ctx context.Context, req indexwire.Request, handle func(json.RawMessage) error) (workerproc.StreamResult, error) {
 	req.ProtocolVersion = 2
 	data, err := json.Marshal(req)
 	if err != nil {
-		return nodeprocess.StreamResult{}, fmt.Errorf("marshal streamed project index request: %w", err)
+		return workerproc.StreamResult{}, fmt.Errorf("marshal streamed project index request: %w", err)
 	}
 	data = append(data, '\n')
 	return node.Stream(ctx, node.Script{

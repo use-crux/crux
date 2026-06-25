@@ -1,4 +1,4 @@
-package node
+package workerproc
 
 import (
 	"context"
@@ -24,13 +24,13 @@ func StreamCall(ctx context.Context, w *Worker, req any, onEvent func(json.RawMe
 // and reads NDJSON events until onEvent reports completion.
 func StreamCallBatch(ctx context.Context, w *Worker, requests []any, onEvent func(json.RawMessage) (bool, error)) error {
 	if w == nil {
-		return fmt.Errorf("node process: nil worker")
+		return fmt.Errorf("worker process: nil worker")
 	}
 	if onEvent == nil {
-		return fmt.Errorf("node process: nil stream event handler")
+		return fmt.Errorf("worker process: nil stream event handler")
 	}
 	if len(requests) == 0 {
-		return fmt.Errorf("node process: empty request batch")
+		return fmt.Errorf("worker process: empty request batch")
 	}
 
 	w.mu.Lock()
@@ -96,13 +96,13 @@ func StreamCallSession(
 	onEvent func(json.RawMessage) (bool, error),
 ) error {
 	if w == nil {
-		return fmt.Errorf("node process: nil worker")
+		return fmt.Errorf("worker process: nil worker")
 	}
 	if sendRequests == nil {
-		return fmt.Errorf("node process: nil stream request sender")
+		return fmt.Errorf("worker process: nil stream request sender")
 	}
 	if onEvent == nil {
-		return fmt.Errorf("node process: nil stream event handler")
+		return fmt.Errorf("worker process: nil stream event handler")
 	}
 
 	w.mu.Lock()
@@ -121,7 +121,7 @@ func StreamCallSession(
 		}
 		if raw, ok := req.(RawJSONLine); ok {
 			if len(raw) == 0 {
-				return fmt.Errorf("node process: empty raw JSON request")
+				return fmt.Errorf("worker process: empty raw JSON request")
 			}
 			if _, err := w.stdin.Write(raw); err != nil {
 				w.killLocked()

@@ -1,7 +1,7 @@
 package runtime
 
-import nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
+import "github.com/use-crux/crux/packages/local/internal/process/workerproc"
 
 func findNodePath() (string, error) {
-	return nodeprocess.FindNodePath()
+	return workerproc.FindNodePath()
 }
