@@ -1,11 +1,11 @@
 package projectindex
 
-import "github.com/use-crux/crux/packages/local/internal/projectindexstore"
+import "github.com/use-crux/crux/packages/local/internal/projectindex/cache"
 
-type Cache = projectindexstore.Cache
-type FactStore = projectindexstore.FactStore
-type SQLiteIndexFactStore = projectindexstore.SQLiteIndexFactStore
+type Cache = cache.Cache
+type FactStore = cache.FactStore
+type SQLiteIndexFactStore = cache.SQLiteIndexFactStore
 
-var NewCache = projectindexstore.NewCache
-var NewSQLiteIndexFactStore = projectindexstore.NewSQLiteIndexFactStore
-var HasPatchFacts = projectindexstore.HasPatchFacts
+var NewCache = cache.NewCache
+var NewSQLiteIndexFactStore = cache.NewSQLiteIndexFactStore
+var HasPatchFacts = cache.HasPatchFacts

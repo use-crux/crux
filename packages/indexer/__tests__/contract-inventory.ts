@@ -371,8 +371,8 @@ const inventory = {
         ),
         contractFile(
           'typescript',
-          'packages/indexer/indexer/semantic/native/types.ts',
-          'Native semantic backend host types behind the evidence contract.',
+          'packages/indexer/indexer/semantic/backends/tsgo/types.ts',
+          'TypeScript-Go semantic backend host types behind the evidence contract.',
           'canonical-types',
         ),
       ],

@@ -28,7 +28,7 @@ import {
   createTypeScriptSemanticFactInput,
   type SemanticIndexFactsOptions,
   type SemanticSourceFileFactInput,
-} from '../typescript/fact-input'
+} from '../backends/typescript/fact-input'
 import {
   callExpressionName,
   isResolvableSourceExpression,

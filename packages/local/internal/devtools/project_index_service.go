@@ -3,29 +3,29 @@ package devtools
 import (
 	"context"
 
-	"github.com/use-crux/crux/packages/local/internal/indexservice"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/service"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 // ProjectSemanticExecutionMode controls how a Project Index refresh runs
 // semantic enrichment after the AST/source patch is available.
-type ProjectSemanticExecutionMode = indexservice.ProjectSemanticExecutionMode
+type ProjectSemanticExecutionMode = service.ProjectSemanticExecutionMode
 
 const (
 	// ProjectSemanticInline applies semantic enrichment before ReindexProject returns.
-	ProjectSemanticInline = indexservice.ProjectSemanticInline
+	ProjectSemanticInline = service.ProjectSemanticInline
 	// ProjectSemanticBackground schedules semantic enrichment after publishing AST facts.
-	ProjectSemanticBackground = indexservice.ProjectSemanticBackground
+	ProjectSemanticBackground = service.ProjectSemanticBackground
 	// ProjectSemanticDisabled skips semantic enrichment for this refresh.
-	ProjectSemanticDisabled = indexservice.ProjectSemanticDisabled
+	ProjectSemanticDisabled = service.ProjectSemanticDisabled
 )
 
 // ProjectReindexOptions configures a Project Index refresh.
-type ProjectReindexOptions = indexservice.ProjectReindexOptions
+type ProjectReindexOptions = service.ProjectReindexOptions
 
 // ProjectWatchRunOptions carries watcher-owned run identity and queue
 // coalescing telemetry into a Project Index refresh.
-type ProjectWatchRunOptions = indexservice.ProjectWatchRunOptions
+type ProjectWatchRunOptions = service.ProjectWatchRunOptions
 
 func (s *Service) ReindexProject(ctx context.Context, root, configPath, projectName string) (store.IndexData, error) {
 	return s.indexService.ReindexProject(ctx, root, configPath, projectName)

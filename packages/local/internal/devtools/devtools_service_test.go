@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/use-crux/crux/packages/local/internal/indexservice"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/service"
 	"os"
 	"path/filepath"
 	"testing"
@@ -241,19 +241,19 @@ func (r *recordingProjectIndexer) IndexProjectAstPatch(ctx context.Context, root
 func TestServiceReindexProjectDefaultDeadlineAllowsAstDiscovery(t *testing.T) {
 	root := t.TempDir()
 	indexer := &recordingProjectIndexer{}
-	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
-	defer service.Shutdown()
+	svc := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
+	defer svc.Shutdown()
 
 	start := time.Now()
-	if _, err := service.ReindexProject(context.Background(), root, "", "project"); err != nil {
+	if _, err := svc.ReindexProject(context.Background(), root, "", "project"); err != nil {
 		t.Fatalf("ReindexProject error = %v", err)
 	}
 	if !indexer.hasDeadline {
 		t.Fatal("IndexProjectAstPatch context had no deadline")
 	}
 	remaining := time.Until(indexer.deadline)
-	if remaining < 55*time.Second || remaining > indexservice.DefaultProjectIndexReindexTimeout {
-		t.Fatalf("IndexProject deadline remaining = %s, want about %s", remaining, indexservice.DefaultProjectIndexReindexTimeout)
+	if remaining < 55*time.Second || remaining > service.DefaultProjectIndexReindexTimeout {
+		t.Fatalf("IndexProject deadline remaining = %s, want about %s", remaining, service.DefaultProjectIndexReindexTimeout)
 	}
 	if indexer.deadline.Before(start.Add(55 * time.Second)) {
 		t.Fatalf("IndexProject deadline = %s, want at least 55s from start", indexer.deadline)
@@ -1042,10 +1042,10 @@ func TestReindexProjectSemanticFailureDegradesSemanticOnly(t *testing.T) {
 }
 
 func TestReindexProjectSemanticTimeoutDegradesSemanticOnly(t *testing.T) {
-	oldTimeout := indexservice.ProjectIndexSemanticTimeout
-	indexservice.ProjectIndexSemanticTimeout = 10 * time.Millisecond
+	oldTimeout := service.ProjectIndexSemanticTimeout
+	service.ProjectIndexSemanticTimeout = 10 * time.Millisecond
 	t.Cleanup(func() {
-		indexservice.ProjectIndexSemanticTimeout = oldTimeout
+		service.ProjectIndexSemanticTimeout = oldTimeout
 	})
 
 	root := t.TempDir()
@@ -1081,10 +1081,10 @@ func TestReindexProjectSemanticTimeoutDegradesSemanticOnly(t *testing.T) {
 }
 
 func TestReindexProjectSemanticBudgetOverrunDegradesSemanticOnly(t *testing.T) {
-	oldBudget := indexservice.ProjectIndexSemanticBudget
-	indexservice.ProjectIndexSemanticBudget = projectindex.IndexPatchBudget{MaxDefinitions: 1}
+	oldBudget := service.ProjectIndexSemanticBudget
+	service.ProjectIndexSemanticBudget = projectindex.IndexPatchBudget{MaxDefinitions: 1}
 	t.Cleanup(func() {
-		indexservice.ProjectIndexSemanticBudget = oldBudget
+		service.ProjectIndexSemanticBudget = oldBudget
 	})
 
 	root := t.TempDir()

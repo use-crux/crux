@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks'
-import type { NativeSemanticCoverage } from './native/types'
+import type { NativeSemanticCoverage } from './backends/tsgo/types'
 
 export type SemanticIndexTimingName =
   | 'semantic.selection'

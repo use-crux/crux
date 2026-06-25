@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import ts from 'typescript'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createTypeScriptSemanticCompilerView } from '../indexer/semantic/typescript/compiler-view'
+import { createTypeScriptSemanticCompilerView } from '../indexer/semantic/backends/typescript/compiler-view'
 
 const roots: string[] = []
 

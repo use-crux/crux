@@ -1,25 +1,25 @@
 package projectindex
 
-import "github.com/use-crux/crux/packages/local/internal/projectindexwire"
+import "github.com/use-crux/crux/packages/local/internal/projectindex/wire"
 
-type ProjectIndexPatchStreamOptions = projectindexwire.ProjectIndexPatchStreamOptions
-type ProjectIndexPatchStreamCollector = projectindexwire.ProjectIndexPatchStreamCollector
-type ProjectIndexPhaseTiming = projectindexwire.ProjectIndexPhaseTiming
+type ProjectIndexPatchStreamOptions = wire.ProjectIndexPatchStreamOptions
+type ProjectIndexPatchStreamCollector = wire.ProjectIndexPatchStreamCollector
+type ProjectIndexPhaseTiming = wire.ProjectIndexPhaseTiming
 
-type ProjectIndexArtifactKind = projectindexwire.ProjectIndexArtifactKind
+type ProjectIndexArtifactKind = wire.ProjectIndexArtifactKind
 
 const (
-	ProjectIndexArtifactProjectModel                 = projectindexwire.ProjectIndexArtifactProjectModel
-	ProjectIndexArtifactProjectConfig                = projectindexwire.ProjectIndexArtifactProjectConfig
-	ProjectIndexArtifactNativeStaticConfig           = projectindexwire.ProjectIndexArtifactNativeStaticConfig
-	ProjectIndexArtifactStaticSyntaxPlan             = projectindexwire.ProjectIndexArtifactStaticSyntaxPlan
-	ProjectIndexArtifactStaticExtensionHostManifest  = projectindexwire.ProjectIndexArtifactStaticExtensionHostManifest
-	ProjectIndexArtifactStaticExtensionEvidenceBatch = projectindexwire.ProjectIndexArtifactStaticExtensionEvidenceBatch
-	ProjectIndexArtifactStaticRuleCheck              = projectindexwire.ProjectIndexArtifactStaticRuleCheck
+	ProjectIndexArtifactProjectModel                 = wire.ProjectIndexArtifactProjectModel
+	ProjectIndexArtifactProjectConfig                = wire.ProjectIndexArtifactProjectConfig
+	ProjectIndexArtifactNativeStaticConfig           = wire.ProjectIndexArtifactNativeStaticConfig
+	ProjectIndexArtifactStaticSyntaxPlan             = wire.ProjectIndexArtifactStaticSyntaxPlan
+	ProjectIndexArtifactStaticExtensionHostManifest  = wire.ProjectIndexArtifactStaticExtensionHostManifest
+	ProjectIndexArtifactStaticExtensionEvidenceBatch = wire.ProjectIndexArtifactStaticExtensionEvidenceBatch
+	ProjectIndexArtifactStaticRuleCheck              = wire.ProjectIndexArtifactStaticRuleCheck
 )
 
-type ProjectIndexArtifactStreamOptions = projectindexwire.ProjectIndexArtifactStreamOptions
-type ProjectIndexArtifactStreamCollector = projectindexwire.ProjectIndexArtifactStreamCollector
+type ProjectIndexArtifactStreamOptions = wire.ProjectIndexArtifactStreamOptions
+type ProjectIndexArtifactStreamCollector = wire.ProjectIndexArtifactStreamCollector
 
-var NewProjectIndexPatchStreamCollector = projectindexwire.NewProjectIndexPatchStreamCollector
-var NewProjectIndexArtifactStreamCollector = projectindexwire.NewProjectIndexArtifactStreamCollector
+var NewProjectIndexPatchStreamCollector = wire.NewProjectIndexPatchStreamCollector
+var NewProjectIndexArtifactStreamCollector = wire.NewProjectIndexArtifactStreamCollector

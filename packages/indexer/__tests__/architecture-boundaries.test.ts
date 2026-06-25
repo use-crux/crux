@@ -9,10 +9,10 @@ import { createIndexerExtensionRuntime } from '../indexer/extensions/runtime'
 import { createStaticRecordEvidenceReader } from '../indexer/static-index/extension-host/evidence'
 import { createStaticExtensionRegistry } from '../indexer/static-index/compatibility/syntax-record-bridge'
 import { collectProjectedSemanticEvidence } from '../indexer/semantic/evidence'
-import { createNativeSemanticBackend } from '../indexer/semantic/native/tsgo'
-import { nativeDirectPrimitiveManifest } from '../indexer/semantic/native/direct-projectors'
+import { createNativeSemanticBackend } from '../indexer/semantic/backends/tsgo'
+import { nativeDirectPrimitiveManifest } from '../indexer/semantic/backends/tsgo/direct-projectors'
 import { createSemanticIndexService } from '../indexer/semantic/service'
-import { createTypeScriptSemanticBackend } from '../indexer/semantic/typescript'
+import { createTypeScriptSemanticBackend } from '../indexer/semantic/backends/typescript'
 import { collectStaticIndexVocabularyObservations, staticIndexVocabularyGuards } from './static-index-naming-guards'
 
 const indexerDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'indexer')
@@ -59,7 +59,7 @@ describe('indexer architecture boundaries', () => {
     expect(redundantContextualNames(join(indexerDir, 'extensions'))).toEqual([])
   })
 
-  it('groups semantic internals behind evidence, TypeScript, and native backend barrels', () => {
+  it('groups semantic internals behind evidence, TypeScript, and tsgo backend barrels', () => {
     expect(collectProjectedSemanticEvidence).toBeTypeOf('function')
     expect(createSemanticIndexService({ backend: createTypeScriptSemanticBackend({ cache: 'disabled' }) })).toEqual(
       expect.objectContaining({ indexFiles: expect.any(Function), indexProject: expect.any(Function) }),
@@ -76,10 +76,22 @@ describe('indexer architecture boundaries', () => {
     ]) {
       expect(existsSync(join(indexerDir, 'semantic', file)), file).toBe(false)
     }
-    expect(existsSync(join(indexerDir, 'semantic/native/direct-projectors/tsgo-native-direct-manifest.ts'))).toBe(
-      false,
-    )
-    expect(existsSync(join(indexerDir, 'semantic/native/direct-projectors/manifest.ts'))).toBe(true)
+    for (const file of [
+      'semantic/backends/typescript/index.ts',
+      'semantic/backends/tsgo/index.ts',
+      'semantic/backends/tsgo/direct-projectors/index.ts',
+      'semantic/backends/tsgo/direct-projectors/manifest.ts',
+    ]) {
+      expect(existsSync(join(indexerDir, file)), file).toBe(true)
+    }
+
+    for (const file of [
+      'semantic/native',
+      'semantic/typescript',
+      'semantic/backends/tsgo/direct-projectors/tsgo-native-direct-manifest.ts',
+    ]) {
+      expect(existsSync(join(indexerDir, file)), file).toBe(false)
+    }
     expect(redundantContextualNames(join(indexerDir, 'semantic'))).toEqual([])
   })
 

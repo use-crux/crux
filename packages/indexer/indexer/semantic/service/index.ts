@@ -54,10 +54,10 @@ export {
   typescriptSemanticBackendCapabilities,
   typescriptSemanticBackendIdentity,
   type TypeScriptSemanticBackendOptions,
-} from '../typescript/backend'
+} from '../backends/typescript/backend'
 export {
   createNativeSemanticBackend,
   nativeSemanticBackendCapabilities,
   nativeSemanticBackendIdentity,
   type NativeSemanticBackendOptions,
-} from '../native/tsgo/backend'
+} from '../backends/tsgo/backend'

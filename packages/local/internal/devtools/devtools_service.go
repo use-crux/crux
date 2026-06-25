@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
-	"github.com/use-crux/crux/packages/local/internal/indexread"
-	"github.com/use-crux/crux/packages/local/internal/indexservice"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/readmodel"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/service"
 	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
@@ -25,8 +25,8 @@ type Service struct {
 	observability *observability.Service
 	resources     ResourceInspector
 	indexEvents   *IndexEventBus
-	indexService  *indexservice.Service
-	indexModel    *indexread.Model
+	indexService  *service.Service
+	indexModel    *readmodel.Model
 }
 
 func NewService(s *store.Store, qualitySvc *quality.Service) *Service {
@@ -34,25 +34,25 @@ func NewService(s *store.Store, qualitySvc *quality.Service) *Service {
 		qualitySvc = quality.NewService(s, quality.Dir(""))
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	service := &Service{
+	svc := &Service{
 		ctx:         ctx,
 		cancel:      cancel,
 		store:       s,
 		quality:     qualitySvc,
 		indexEvents: NewIndexEventBus(),
-		indexModel:  indexread.New(s, qualitySvc.Dir()),
+		indexModel:  readmodel.New(s, qualitySvc.Dir()),
 	}
-	service.indexService = indexservice.New(indexservice.Options{
+	svc.indexService = service.New(service.Options{
 		Context:   ctx,
 		Store:     s,
-		ReadModel: service.indexReadModel,
-		Publish:   service.indexEvents.Publish,
+		ReadModel: svc.indexReadModel,
+		Publish:   svc.indexEvents.Publish,
 	})
-	service.startIndexChangePublisher()
-	return service
+	svc.startIndexChangePublisher()
+	return svc
 }
 
-func (s *Service) WithIndexModel(model *indexread.Model) *Service {
+func (s *Service) WithIndexModel(model *readmodel.Model) *Service {
 	s.indexModel = model
 	return s
 }

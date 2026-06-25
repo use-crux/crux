@@ -66,7 +66,7 @@ a snapshot are visible on the next call when the filesystem fingerprint changes.
 
 ## Consumers
 
-`internal/indexread` consumes `qualityfs.Load` and owns only Project Index read-model enrichment. It
+`internal/projectindex/readmodel` consumes `qualityfs.Load` and owns only Project Index read-model enrichment. It
 does not parse `.crux/quality` files directly and should not redeclare persisted quality records.
 
 `internal/quality.Service` owns local workbench API orchestration: event publishing, HTTP/API mapping,
