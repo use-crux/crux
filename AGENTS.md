@@ -40,9 +40,9 @@ Avoid:
 Prefer root `make` targets for repository workflows:
 
 - `make build` builds devtools workers/UI, embeds them into the Go binary, builds the current-platform Rust/Oxc indexer worker, then builds Crux Local. It must not run the root Turbo build or build `docs`.
-- `make local` builds devtools workers/UI, embeds them into `packages/local/internal/server/{embed,ui-embed}`, builds the current-platform Rust/Oxc indexer worker, then builds the current-platform Go binary.
+- `make local` builds devtools workers/UI, embeds them into `packages/local/internal/assets/{embed,ui-embed}`, builds the current-platform Rust/Oxc indexer worker, then builds the current-platform Go binary.
 - `make local-go` rebuilds only the Go binary from already embedded assets.
-- `make local-all` builds embedded platform binaries under `packages/local/dist/`.
+- `make local-all` builds embedded platform Go binaries and Rust/Oxc indexer workers under `packages/local/dist/`.
 - `make cli`, `make cli-go`, and `make cli-all` are compatibility aliases for the local targets.
 - `make docs` runs the docs app.
 

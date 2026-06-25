@@ -10,6 +10,7 @@ This npm package resolves and launches the platform-specific Go binary that prov
 - the TUI
 - local SQLite-backed observability, quality, index, memory, workspace, and plan services
 - bounded Node workers for source indexing, source lookup, and eval execution
+- the Rust/Oxc Static Index worker used for native source parsing and Static Index acceleration
 
 The implementation lives in the monorepo under `packages/local` because it is a Go binary package. The public npm package name is `@crux/local`.
 
@@ -23,7 +24,7 @@ npx @crux/local --help
 npm i -g @crux/local
 ```
 
-This package is a thin Node wrapper. On install it resolves the matching prebuilt binary from a platform package (`@crux/local-<os>-<cpu>`) and execs it, passing all arguments straight through.
+This package is a thin Node wrapper. On install it resolves the matching prebuilt binary from a platform package (`@crux/local-<os>-<cpu>`) and execs it, passing all arguments straight through. Each platform package ships both `bin/crux` and the sibling `bin/crux-indexer-worker` binary that `crux` discovers at runtime.
 
 ## Usage
 
