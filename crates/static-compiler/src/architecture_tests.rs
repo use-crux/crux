@@ -7,6 +7,44 @@ use crate::protocol::static_index::{
 };
 
 #[test]
+fn rust_crates_keep_top_level_workspace_shape() {
+    let static_compiler_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let crates = static_compiler_dir
+        .parent()
+        .expect("static compiler crate should live under crates/");
+    let repo_root = crates
+        .parent()
+        .expect("crates directory should live at the repository root");
+
+    for name in [
+        "protocol",
+        "syntax-oxc",
+        "facts",
+        "primitives",
+        "lints",
+        "static-compiler",
+        "worker",
+    ] {
+        assert!(
+            crates.join(name).join("Cargo.toml").is_file(),
+            "expected root Rust crate crates/{name}"
+        );
+    }
+
+    for path in [
+        repo_root.join("packages/local/crates"),
+        repo_root.join("packages/indexer/crates"),
+        repo_root.join("packages/local/internal/projectindex/crates"),
+    ] {
+        assert!(
+            !path.exists(),
+            "Rust crates must stay top-level instead of moving under {}",
+            path.display()
+        );
+    }
+}
+
+#[test]
 fn primitives_crate_does_not_depend_on_syntax_frontend() {
     let static_compiler_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let primitives_manifest = static_compiler_dir

@@ -7,6 +7,11 @@ import (
 	"testing"
 )
 
+type expectedInternalPackage struct {
+	path string
+	note string
+}
+
 func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
@@ -16,26 +21,39 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 	projectIndexDir := filepath.Dir(filename)
 	internalDir := filepath.Dir(projectIndexDir)
 
-	expectedPackages := []string{
-		"projectindex/cache",
-		"projectindex/host",
-		"projectindex/model",
-		"projectindex/readmodel",
-		"projectindex/service",
-		"projectindex/staticindex/cache",
-		"projectindex/staticindex/compat",
-		"projectindex/staticindex/planner",
-		"projectindex/staticindex/protocol",
-		"projectindex/staticindex/run",
-		"projectindex/staticindex/sourceprofile",
-		"projectindex/staticindex/syntax",
-		"projectindex/wire",
-		"process/node",
-		"assets",
+	expectedPackages := []expectedInternalPackage{
+		{"projectindex/cache", "snapshot cache ownership moves here in Phase 2"},
+		{"projectindex/host", "Project Index host boundary"},
+		{"projectindex/host/client", "worker host client boundary"},
+		{"projectindex/host/indexwire", "host wire request boundary"},
+		{"projectindex/host/node", "Node-specific Project Index host wrapper"},
+		{"projectindex/host/runtime", "runtime indexing host boundary"},
+		{"projectindex/host/semantic", "semantic host boundary"},
+		{"projectindex/model", "shared Project Index data model"},
+		{"projectindex/readmodel", "derived Project Index read model"},
+		{"projectindex/service", "runtime-facing Project Index service"},
+		{"projectindex/staticindex/cache", "Static Index cache boundary"},
+		{"projectindex/staticindex/client", "Static Index worker client boundary"},
+		{"projectindex/staticindex/compat", "Static Index compatibility helpers"},
+		{"projectindex/staticindex/planner", "Static Index source planning boundary"},
+		{"projectindex/staticindex/planner/sourcegraph", "Static Index source graph planning"},
+		{"projectindex/staticindex/protocol", "Static Index JSON contract mirror"},
+		{"projectindex/staticindex/run", "Static Index execution result shaping"},
+		{"projectindex/staticindex/run/evidence", "Static Index evidence conversion"},
+		{"projectindex/staticindex/run/lint", "Static Index lint result shaping"},
+		{"projectindex/staticindex/run/parity", "Static Index parity normalization"},
+		{"projectindex/staticindex/run/patch", "Static Index patch projection"},
+		{"projectindex/staticindex/sourceprofile", "Static Index source profile boundary"},
+		{"projectindex/staticindex/syntax", "Static Syntax worker boundary"},
+		{"projectindex/staticindex/syntax/record", "Static Syntax record model"},
+		{"projectindex/staticindex/syntax/stream", "Static Syntax stream decoder"},
+		{"projectindex/wire", "Project Index worker event stream"},
+		{"process/node", "Phase 3 transitional generic worker process package"},
+		{"assets", "generated local runtime asset owner"},
 	}
-	for _, packagePath := range expectedPackages {
-		if info, err := os.Stat(filepath.Join(internalDir, packagePath)); err != nil || !info.IsDir() {
-			t.Fatalf("expected Project Index package %q to exist under internal/", packagePath)
+	for _, expected := range expectedPackages {
+		if info, err := os.Stat(filepath.Join(internalDir, expected.path)); err != nil || !info.IsDir() {
+			t.Fatalf("expected Project Index package %q to exist under internal/ (%s)", expected.path, expected.note)
 		}
 	}
 
@@ -53,6 +71,26 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 	for _, packagePath := range oldRoots {
 		if _, err := os.Stat(filepath.Join(internalDir, packagePath)); !os.IsNotExist(err) {
 			t.Fatalf("old Project Index package root %q must be moved under internal/projectindex/", packagePath)
+		}
+	}
+}
+
+func TestProjectIndexPackageTransitionsRemainPhaseOwned(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not determine test file location")
+	}
+
+	projectIndexDir := filepath.Dir(filename)
+	internalDir := filepath.Dir(projectIndexDir)
+
+	futurePackages := []expectedInternalPackage{
+		{"process/workerproc", "Phase 3 renames the generic worker process package"},
+		{"projectindex/staticindex/session", "Phase 4 adds the high-level Static Index session boundary"},
+	}
+	for _, future := range futurePackages {
+		if _, err := os.Stat(filepath.Join(internalDir, future.path)); !os.IsNotExist(err) {
+			t.Fatalf("future package %q appeared before its owning phase (%s)", future.path, future.note)
 		}
 	}
 }

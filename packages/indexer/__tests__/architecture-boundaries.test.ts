@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -19,7 +19,45 @@ const indexerDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'indexer'
 const indexerPackageDir = join(indexerDir, '..')
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 
+const committedArchitectureBaseline = join(indexerPackageDir, 'docs', 'static-index-runtime-architecture-baseline.md')
+
+/**
+ * Committed architecture doc tokens that must stay aligned with the executable
+ * ownership guards. The strings are intentionally path-shaped so stale
+ * responsibility names are caught by a cheap, behavior-level docs check.
+ */
+const architectureBaselineRequiredTokens = [
+  'packages/indexer/indexer/static-index/config',
+  'packages/indexer/indexer/static-index/plan',
+  'packages/indexer/indexer/static-index/protocol',
+  'packages/indexer/indexer/static-index/syntax',
+  'packages/indexer/indexer/static-index/extension-host',
+  'packages/indexer/indexer/static-index/compatibility/syntax-record-bridge',
+  'packages/local/internal/projectindex/staticindex/planner',
+  'packages/local/internal/projectindex/staticindex/sourceprofile',
+  'packages/local/internal/projectindex/staticindex/cache',
+  'packages/local/internal/projectindex/staticindex/syntax',
+  'packages/local/internal/projectindex/staticindex/client',
+  'packages/local/internal/projectindex/staticindex/protocol',
+  'packages/local/internal/projectindex/staticindex/run',
+  'crates/protocol',
+  'crates/syntax-oxc',
+  'crates/facts',
+  'crates/primitives',
+  'crates/lints',
+  'crates/static-compiler',
+  'crates/worker',
+] as const
+
 describe('indexer architecture boundaries', () => {
+  it('keeps the committed architecture baseline aligned with target ownership folders', () => {
+    const source = readFileSync(committedArchitectureBaseline, 'utf8')
+
+    for (const token of architectureBaselineRequiredTokens) {
+      expect(source, token).toContain(token)
+    }
+  })
+
   it('groups extension internals behind responsibility barrels', () => {
     const extension: IndexerExtension = {
       name: '@crux/test-extension',

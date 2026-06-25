@@ -28,13 +28,31 @@ records, and patch/event streams. Raw TypeScript AST nodes, Oxc AST nodes,
 checker objects, parser arenas, and process pointers stay inside their owning
 runtime.
 
+## Target Responsibility Paths
+
+The current implementation is already split across the target responsibility
+areas below. Later phases may finish renames or add facades, but these paths
+are the architecture names that new code should reinforce.
+
+| Runtime | Responsibility paths |
+| --- | --- |
+| TypeScript Static Index | `packages/indexer/indexer/static-index/config`, `packages/indexer/indexer/static-index/plan`, `packages/indexer/indexer/static-index/protocol`, `packages/indexer/indexer/static-index/syntax`, `packages/indexer/indexer/static-index/extension-host`, `packages/indexer/indexer/static-index/compatibility/syntax-record-bridge` |
+| Go Static Index | `packages/local/internal/projectindex/staticindex/planner`, `packages/local/internal/projectindex/staticindex/sourceprofile`, `packages/local/internal/projectindex/staticindex/cache`, `packages/local/internal/projectindex/staticindex/syntax`, `packages/local/internal/projectindex/staticindex/client`, `packages/local/internal/projectindex/staticindex/protocol`, `packages/local/internal/projectindex/staticindex/run` |
+| Rust Static Index | `crates/protocol`, `crates/syntax-oxc`, `crates/facts`, `crates/primitives`, `crates/lints`, `crates/static-compiler`, `crates/worker` |
+
+Transitional names remain where an implementation phase explicitly owns their
+removal: Go process supervision is still under `internal/process/node` until
+the `workerproc` rename phase, and legacy generated server embed directories
+are still ignored by source planning until the asset ownership phase proves
+they are unused.
+
 ## Contract Inventory
 
 | Contract group | Current canonical TypeScript area | Current Go mirror | Current Rust mirror | Mirror status |
 | --- | --- | --- | --- | --- |
 | `worker-events` | `contracts/worker-events/schema.ts` plus `indexer/worker-protocol/*` implementation files | `internal/projectindex/wire/worker_protocol*` and artifacts | `crates/protocol/src/worker.rs`; `crates/static-compiler/src/finalizer/events.rs` emits event JSON | Partial mirror |
-| `static-syntax-records` | `contracts/static-syntax/schema.ts` plus `indexer/static/syntax-record/*` implementation files | `internal/projectindex/staticindex/planner`, `internal/projectindex/staticindex/syntax/record`, and syntax stream decoder | `crates/protocol/src/static_syntax.rs`; `crates/syntax-oxc/src/syntax/frontend.rs` | Mirrored |
-| `static-index` | `contracts/static-index/schema.ts` plus `indexer/static-index/protocol/*` implementation files | `internal/projectindex/staticindex/protocol/*` | `crates/protocol/src/static_index.rs` | Mirrored |
+| `static-syntax-records` | `contracts/static-syntax/schema.ts`, `indexer/static-index/syntax/*`, and the current `indexer/static/syntax-record/*` record model | `internal/projectindex/staticindex/planner`, `internal/projectindex/staticindex/syntax/record`, and syntax stream decoder | `crates/protocol/src/static_syntax.rs`; `crates/syntax-oxc/src/syntax/frontend.rs` | Mirrored |
+| `static-index` | `contracts/static-index/schema.ts` plus `indexer/static-index/{config,plan,protocol,extension-host,compatibility}/*` implementation files | `internal/projectindex/staticindex/{cache,client,protocol,run,sourceprofile,syntax,planner}` | `crates/protocol/src/static_index.rs`; `crates/static-compiler/src/pipeline.rs` | Mirrored |
 | `semantic-evidence` | `contracts/semantic/schema.ts`, `indexer/semantic/evidence/projection.ts`, and service/native contracts | `internal/projectindex/host/semantic/worker.go` consumes patch events, not semantic evidence structs | None today | TypeScript-only |
 
 ## Parity Fixture Gaps
