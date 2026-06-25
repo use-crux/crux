@@ -108,7 +108,7 @@ func TestWorkerSharesConcurrentStaticSyntaxPlan(t *testing.T) {
 	}
 }
 
-func waitForStaticSyntaxPlanWaiter(t testing.TB, worker *Worker) {
+func waitForStaticSyntaxPlanWaiter(t testing.TB, worker *Bundle) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {

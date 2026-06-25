@@ -20,14 +20,14 @@ type ProjectIndexerOptions struct {
 }
 
 // NewProjectIndexer creates the Go-owned Project Index host from local runtime
-// asset bytes. The worker remains lazy; Node is not started until a phase needs
+// asset bytes. The bundle remains lazy; Node is not started until a phase needs
 // a TypeScript-backed worker.
-func NewProjectIndexer(options ProjectIndexerOptions) *host.Worker {
-	return host.New(host.WorkerOptions{
+func NewProjectIndexer(options ProjectIndexerOptions) *host.Bundle {
+	return host.New(host.BundleOptions{
 		ProjectIndexerScript:         options.ScriptPath,
 		ProjectSemanticIndexerScript: options.ProjectSemanticScriptPath,
 		ProjectRuntimeIndexerScript:  options.ProjectRuntimeScriptPath,
-		Assets: host.WorkerAssets{
+		Assets: host.BundleAssets{
 			ProjectIndexer:         options.Assets.ProjectIndexer,
 			ProjectSemanticIndexer: options.Assets.ProjectSemanticIndexer,
 			ProjectRuntimeIndexer:  options.Assets.ProjectRuntimeIndexer,

@@ -24,9 +24,9 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 		"projectindex/service",
 		"projectindex/staticindex/cache",
 		"projectindex/staticindex/compat",
-		"projectindex/staticindex/compiler",
 		"projectindex/staticindex/planner",
 		"projectindex/staticindex/protocol",
+		"projectindex/staticindex/run",
 		"projectindex/staticindex/sourceprofile",
 		"projectindex/staticindex/syntax",
 		"projectindex/wire",
@@ -46,6 +46,7 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 		"indexservice",
 		"localassets",
 		"nodeworker",
+		filepath.Join("projectindex", "staticindex", "compiler"),
 		"projectindexstore",
 		"projectindexwire",
 	}

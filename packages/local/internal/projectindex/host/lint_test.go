@@ -17,7 +17,7 @@ import (
 func TestWorkerIndexProjectLintPatchUsesNativeQualityFinalize(t *testing.T) {
 	root := "/repo"
 	compiler := &staticIndexLintCompiler{root: root}
-	worker := &Worker{syntaxParser: compiler}
+	worker := &Bundle{syntaxParser: compiler}
 	worker.recordLastAstTiming(ProjectIndexAstTiming{UsedStaticIndex: true})
 
 	patch, err := worker.IndexProjectLintPatch(context.Background(), projectindex.ProjectLintIndexRequest{
@@ -56,7 +56,7 @@ func TestWorkerIndexProjectLintPatchUsesNativeQualityFinalize(t *testing.T) {
 
 func TestWorkerIndexProjectLintPatchSkipsTypeScriptAstRuns(t *testing.T) {
 	compiler := &staticIndexLintCompiler{root: "/repo"}
-	worker := &Worker{syntaxParser: compiler}
+	worker := &Bundle{syntaxParser: compiler}
 
 	patch, err := worker.IndexProjectLintPatch(context.Background(), projectindex.ProjectLintIndexRequest{
 		Root: "/repo",
@@ -80,7 +80,7 @@ func TestWorkerIndexProjectLintPatchUsesPrefetchedRuleFacts(t *testing.T) {
 		root:              "/repo",
 		wantExtensionFact: []byte("rule:prefetched"),
 	}
-	worker := &Worker{syntaxParser: compiler}
+	worker := &Bundle{syntaxParser: compiler}
 	worker.recordLastAstTiming(ProjectIndexAstTiming{UsedStaticIndex: true})
 
 	_, err := worker.IndexProjectLintPatch(context.Background(), projectindex.ProjectLintIndexRequest{

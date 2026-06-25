@@ -2,8 +2,8 @@ package host
 
 import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
+	staticrun "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run"
 )
 
 // ProjectIndexAstTiming captures production AST pipeline timings for benchmark
@@ -26,14 +26,71 @@ type ProjectIndexAstTiming struct {
 	MaxChunkBytes           int
 }
 
+// LastAstTiming returns timing metadata from the most recent AST index run.
+func (w *Bundle) LastAstTiming() ProjectIndexAstTiming {
+	if w == nil {
+		return ProjectIndexAstTiming{}
+	}
+	w.timingsMu.Lock()
+	defer w.timingsMu.Unlock()
+	return w.lastAstTiming
+}
+
+// LastSemanticTimings returns diagnostic timing buckets from the latest semantic request.
+func (w *Bundle) LastSemanticTimings() []projectindex.ProjectIndexPhaseTiming {
+	if w == nil || w.semanticWorker == nil {
+		return nil
+	}
+	return w.semanticWorker.LastSemanticTimings()
+}
+
+func (w *Bundle) recordLastAstTiming(timing ProjectIndexAstTiming) {
+	if w == nil {
+		return
+	}
+	w.timingsMu.Lock()
+	defer w.timingsMu.Unlock()
+	w.lastAstTiming = timing
+}
+
 const (
 	projectIndexNodeReasonTypeScriptStaticCompiler = "typescript-static-compiler"
 	projectIndexNodeReasonStaticPlanInspection     = "static-plan-inspection"
 	projectIndexNodeReasonStaticIndexConfig        = planner.ReasonConfig
 	projectIndexNodeReasonStaticIndexExtensions    = planner.ReasonExtensions
 	projectIndexNodeReasonSyntaxRecordProjection   = "syntax-record-projection"
-	projectIndexNodeReasonStaticIndexEmpty         = compiler.ReasonEmpty
-	projectIndexNodeReasonStaticIndexEvidence      = compiler.ReasonEvidence
+	projectIndexNodeReasonStaticIndexEmpty         = staticrun.ReasonEmpty
+	projectIndexNodeReasonStaticIndexEvidence      = staticrun.ReasonEvidence
 	projectIndexNodeReasonStaticIndexRules         = "static-index-rules"
-	projectIndexNodeReasonStaticIndexIncomplete    = compiler.ReasonIncomplete
+	projectIndexNodeReasonStaticIndexIncomplete    = staticrun.ReasonIncomplete
 )
+
+func projectIndexAstTimingNodeRequired(timing ProjectIndexAstTiming, reasons ...string) ProjectIndexAstTiming {
+	if len(reasons) == 0 {
+		return timing
+	}
+	timing.NodeStarted = true
+	timing.NativeOnlyEligible = false
+	timing.NodeReasons = appendUniqueStrings(timing.NodeReasons, reasons...)
+	timing.NativeOnlyReasons = appendUniqueStrings(timing.NativeOnlyReasons, reasons...)
+	return timing
+}
+
+func appendUniqueStrings(values []string, next ...string) []string {
+	for _, value := range next {
+		if value == "" || stringSliceContains(values, value) {
+			continue
+		}
+		values = append(values, value)
+	}
+	return values
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}

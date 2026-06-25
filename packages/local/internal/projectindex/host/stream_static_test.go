@@ -12,12 +12,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/use-crux/crux/packages/local/internal/projectindex/host/compiler"
+	staticclient "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/client"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
 func TestSyntaxCompilerAnalyzeStreamAcceptsChunkedEvents(t *testing.T) {
-	worker := compiler.New(shellPath(t), fakeStaticIndexAnalyzeStreamWorker(t))
+	worker := staticclient.New(shellPath(t), fakeStaticIndexAnalyzeStreamWorker(t))
 	defer worker.Close()
 
 	identity := protocol.SkeletonIdentity()
@@ -56,7 +56,7 @@ func TestSyntaxCompilerAnalyzeStreamAcceptsChunkedEvents(t *testing.T) {
 }
 
 func TestSyntaxCompilerAnalyzeStreamRejectsUnlabeledEvents(t *testing.T) {
-	worker := compiler.New(shellPath(t), fakeStaticIndexAnalyzeUnlabeledEventWorker(t))
+	worker := staticclient.New(shellPath(t), fakeStaticIndexAnalyzeUnlabeledEventWorker(t))
 	defer worker.Close()
 
 	_, err := worker.StaticIndexAnalyzeStream(context.Background(), protocol.AnalyzeRequest{
@@ -77,7 +77,7 @@ func TestSyntaxCompilerAnalyzeStreamRejectsUnlabeledEvents(t *testing.T) {
 }
 
 func TestSyntaxCompilerAnalyzeStreamIgnoresDoneResponseFacts(t *testing.T) {
-	worker := compiler.New(shellPath(t), fakeStaticIndexAnalyzeDoneFactsWorker(t))
+	worker := staticclient.New(shellPath(t), fakeStaticIndexAnalyzeDoneFactsWorker(t))
 	defer worker.Close()
 
 	response, err := worker.StaticIndexAnalyzeStream(context.Background(), protocol.AnalyzeRequest{
@@ -101,7 +101,7 @@ func TestSyntaxCompilerAnalyzeStreamIgnoresDoneResponseFacts(t *testing.T) {
 }
 
 func TestSyntaxCompilerFinalizeStreamAcceptsPatchEvents(t *testing.T) {
-	worker := compiler.New(shellPath(t), fakeStaticIndexFinalizeStreamWorker(t))
+	worker := staticclient.New(shellPath(t), fakeStaticIndexFinalizeStreamWorker(t))
 	defer worker.Close()
 
 	events := []json.RawMessage{}
@@ -147,7 +147,7 @@ func TestWorkerStaticIndexCompilerUsesStreamingAnalyze(t *testing.T) {
 	compiler := &streamingStaticIndexCutoverCompiler{
 		staticIndexCutoverCompiler: staticIndexCutoverCompiler{root: root, sourceFile: sourceFile},
 	}
-	worker := &Worker{}
+	worker := &Bundle{}
 	plan := projectindex.ProjectStaticSyntaxPlan{
 		Root:             root,
 		ProjectName:      "static-index-cutover",
@@ -188,7 +188,7 @@ case "$line" in
     printf '{"id":%s,"ok":true,"type":"event","event":{"protocolVersion":2,"type":"phase:start","transactionId":"tx-static-index-finalize-stream","phase":"ast","root":"/repo","startedAt":"1970-01-01T00:00:00.000Z"}}\n' "$id"
     printf '{"id":%s,"ok":true,"type":"event","event":{"protocolVersion":2,"type":"fact:batch","transactionId":"tx-static-index-finalize-stream","sequence":0,"facts":[]}}\n' "$id"
     printf '{"id":%s,"ok":true,"type":"event","event":{"protocolVersion":2,"type":"phase:done","transactionId":"tx-static-index-finalize-stream","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":"/repo"},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok"},"summary":{"factCount":0,"decision":{"staticIndexComplete":true}}}}\n' "$id"
-    printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"staticIndexFinalize","events":[{"fixture":true}],$TELEMETRY}}\n' "$id"
+    printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":2,"method":"staticIndexFinalize","events":[{"fixture":true}],$TELEMETRY}}\n' "$id"
     ;;
   *) printf '{"error":"unexpected Static Index request"}\n' ;;
 esac
@@ -203,7 +203,7 @@ func fakeStaticIndexAnalyzeDoneFactsWorker(t *testing.T) string {
 	script := strings.ReplaceAll(`while IFS= read -r line; do
 id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
-  *staticIndexAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"staticIndexAnalyze","facts":[{"root":"/repo","projectName":"stream"}],"diagnostics":[{"id":"fixture"}],"extensionEvidenceJobs":[{"id":"fixture-job"}],$TELEMETRY}}\n' "$id" ;;
+  *staticIndexAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":2,"method":"staticIndexAnalyze","facts":[{"root":"/repo","projectName":"stream"}],"diagnostics":[{"id":"fixture"}],"extensionEvidenceJobs":[{"id":"fixture-job"}],$TELEMETRY}}\n' "$id" ;;
   *) printf '{"error":"unexpected Static Index request"}\n' ;;
 esac
 done
@@ -216,7 +216,7 @@ func fakeStaticIndexAnalyzeUnlabeledEventWorker(t *testing.T) string {
 	script := `while IFS= read -r line; do
 id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
-  *staticIndexAnalyze*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"staticIndexAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[]}}\n' "$id" ;;
+  *staticIndexAnalyze*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":2,"method":"staticIndexAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[]}}\n' "$id" ;;
   *) printf '{"error":"unexpected Static Index request"}\n' ;;
 esac
 done
@@ -233,7 +233,7 @@ case "$line" in
   *staticIndexAnalyze*)
     printf '{"id":%s,"ok":true,"type":"extensionEvidenceJobs","extensionEvidenceJobs":[{"id":"job:writer"}]}\n' "$id"
     printf '{"id":%s,"ok":true,"type":"fact","fact":{"root":"/repo","projectName":"stream","definitions":[{"id":"prompt:writer","kind":"prompt","name":"writer","fidelity":"resolved","status":"active"}]}}\n' "$id"
-    printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"staticIndexAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id"
+    printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":2,"method":"staticIndexAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id"
     ;;
   *) printf '{"error":"unexpected Static Index request"}\n' ;;
 esac

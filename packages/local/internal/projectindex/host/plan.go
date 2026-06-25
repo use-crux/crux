@@ -10,7 +10,7 @@ import (
 
 type projectStaticSyntaxPlanResult = planner.InspectResult
 
-func (w *Worker) inspectProjectStaticSyntaxPlan(
+func (w *Bundle) inspectProjectStaticSyntaxPlan(
 	ctx context.Context,
 	root string,
 	configPath string,

@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func TestProjectIndexerUsesInjectedWorkerAssets(t *testing.T) {
-	worker := NewProjectIndexer(ProjectIndexerOptions{
+func TestProjectIndexerUsesInjectedBundleAssets(t *testing.T) {
+	bundle := NewProjectIndexer(ProjectIndexerOptions{
 		ScriptPath: "custom-project-indexer.mjs",
 		Assets: ProjectIndexerAssets{
 			ProjectIndexer:         []byte("project worker"),
@@ -14,10 +14,10 @@ func TestProjectIndexerUsesInjectedWorkerAssets(t *testing.T) {
 			ProjectRuntimeIndexer:  []byte("runtime worker"),
 		},
 	})
-	if worker == nil {
+	if bundle == nil {
 		t.Fatal("NewProjectIndexer returned nil")
 	}
-	if err := worker.Close(); err != nil {
+	if err := bundle.Close(); err != nil {
 		t.Fatalf("Close returned error: %v", err)
 	}
 }

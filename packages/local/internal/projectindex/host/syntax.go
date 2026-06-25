@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/host/compiler"
+	staticclient "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/client"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compat"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
 // WithSyntaxParser overrides the parser used for static syntax records.
-func (w *Worker) WithSyntaxParser(worker syntax.Parser) *Worker {
+func (w *Bundle) WithSyntaxParser(worker syntax.Parser) *Bundle {
 	w.syntaxParser = worker
 	return w
 }
@@ -25,14 +25,14 @@ func syntaxWorkerFromEnv() syntax.Parser {
 		return nil
 	}
 	if syntax.UseAdaptivePoolFromEnv() {
-		return compiler.NewAdaptivePool(syntax.DefaultPoolSize(), commandPath, "serve")
+		return staticclient.NewAdaptivePool(syntax.DefaultPoolSize(), commandPath, "serve")
 	}
-	return compiler.NewPool(syntax.PoolSizeFromEnv(), commandPath, "serve")
+	return staticclient.NewPool(syntax.PoolSizeFromEnv(), commandPath, "serve")
 }
 
 // InspectProjectStaticSyntaxPlan returns the static parser plan used by the
 // Rust/Oxc indexer worker path.
-func (w *Worker) InspectProjectStaticSyntaxPlan(ctx context.Context, root, configPath, projectName string) (projectindex.ProjectStaticSyntaxPlan, error) {
+func (w *Bundle) InspectProjectStaticSyntaxPlan(ctx context.Context, root, configPath, projectName string) (projectindex.ProjectStaticSyntaxPlan, error) {
 	result, err := w.inspectProjectStaticSyntaxPlan(ctx, root, configPath, projectName)
 	if err != nil {
 		return projectindex.ProjectStaticSyntaxPlan{}, err
@@ -42,11 +42,11 @@ func (w *Worker) InspectProjectStaticSyntaxPlan(ctx context.Context, root, confi
 
 // InspectProjectStaticIndexConfig imports only executable config policy needed
 // by Go/Rust-owned Static Index planning.
-func (w *Worker) InspectProjectStaticIndexConfig(ctx context.Context, root, configPath string) (projectindex.ProjectStaticIndexConfig, error) {
+func (w *Bundle) InspectProjectStaticIndexConfig(ctx context.Context, root, configPath string) (projectindex.ProjectStaticIndexConfig, error) {
 	return planner.LoadConfig(ctx, planner.ArtifactReaderFunc(w.streamArtifact), root, configPath)
 }
 
-func (w *Worker) indexProjectAstPatchResultFromNativeSyntaxRecords(ctx context.Context, root, configPath, projectName string) (projectindex.ProjectAstIndexResult, error) {
+func (w *Bundle) indexProjectAstPatchResultFromNativeSyntaxRecords(ctx context.Context, root, configPath, projectName string) (projectindex.ProjectAstIndexResult, error) {
 	started := time.Now()
 	planStarted := time.Now()
 	planResult, err := w.inspectProjectStaticSyntaxPlan(ctx, root, configPath, projectName)

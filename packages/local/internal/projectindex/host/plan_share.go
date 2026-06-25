@@ -16,7 +16,7 @@ type projectStaticSyntaxPlanCall struct {
 	waiters int
 }
 
-func (w *Worker) sharedProjectStaticSyntaxPlan(
+func (w *Bundle) sharedProjectStaticSyntaxPlan(
 	ctx context.Context,
 	key projectStaticSyntaxPlanKey,
 	run func(context.Context) (projectStaticSyntaxPlanResult, error),

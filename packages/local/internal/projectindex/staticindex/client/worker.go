@@ -1,4 +1,4 @@
-package compiler
+package client
 
 import (
 	"context"
@@ -43,7 +43,7 @@ func NewAdaptivePool(maxSize int, commandPath string, commandArgs ...string) *Po
 	return &Pool{Pool: syntax.NewAdaptivePool(maxSize, commandPath, commandArgs...)}
 }
 
-func (p *Pool) compilerWorker() (*Worker, error) {
+func (p *Pool) staticIndexWorker() (*Worker, error) {
 	worker, err := p.CompilerWorker()
 	if err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func (w *Worker) StaticIndexFinalize(ctx context.Context, request protocol.Final
 }
 
 func (p *Pool) StaticIndexPrepare(ctx context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
-	worker, err := p.compilerWorker()
+	worker, err := p.staticIndexWorker()
 	if err != nil {
 		return protocol.PrepareResponse{}, err
 	}
@@ -88,7 +88,7 @@ func (p *Pool) StaticIndexPrepare(ctx context.Context, request protocol.PrepareR
 }
 
 func (p *Pool) StaticIndexFinalize(ctx context.Context, request protocol.FinalizeRequest) (protocol.FinalizeResponse, error) {
-	worker, err := p.compilerWorker()
+	worker, err := p.staticIndexWorker()
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}

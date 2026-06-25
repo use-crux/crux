@@ -17,10 +17,9 @@ func TestProjectIndexHostOwnsWorkerHostingLayout(t *testing.T) {
 	hostDir := filepath.Dir(file)
 
 	requiredPaths := []string{
-		"worker.go",
+		"bundle.go",
 		"stream.go",
 		"client",
-		"compiler",
 		"indexwire",
 		"node",
 		"runtime",
@@ -29,6 +28,18 @@ func TestProjectIndexHostOwnsWorkerHostingLayout(t *testing.T) {
 	for _, rel := range requiredPaths {
 		if _, err := os.Stat(filepath.Join(hostDir, rel)); err != nil {
 			t.Fatalf("Project Index host layout is missing %s: %v", rel, err)
+		}
+	}
+
+	forbiddenPaths := []string{
+		"worker.go",
+		"compiler",
+	}
+	for _, rel := range forbiddenPaths {
+		if _, err := os.Stat(filepath.Join(hostDir, rel)); err == nil {
+			t.Fatalf("Project Index host must not expose old all-in-one worker/compiler path %s", rel)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat forbidden Project Index host path %s: %v", rel, err)
 		}
 	}
 

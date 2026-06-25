@@ -7,8 +7,8 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compat"
-	staticcompiler "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
+	staticrun "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/sourceprofile"
 )
 
@@ -24,7 +24,7 @@ type projectStaticIndexSkeletonResult struct {
 // The method deliberately requires StaticCompiler rather than the
 // syntax-record parser interfaces. Tests use that split to prove the skeleton
 // does not route through Node projection or StaticSyntaxFileRecord streaming.
-func (w *Worker) runStaticIndexCompilerSkeleton(
+func (w *Bundle) runStaticIndexCompilerSkeleton(
 	ctx context.Context,
 	root string,
 	configPath string,
@@ -83,7 +83,7 @@ func (w *Worker) runStaticIndexCompilerSkeleton(
 	}, nil
 }
 
-func (w *Worker) indexProjectAstPatchFromStaticIndexCompiler(
+func (w *Bundle) indexProjectAstPatchFromStaticIndexCompiler(
 	ctx context.Context,
 	root string,
 	configPath string,
@@ -91,7 +91,7 @@ func (w *Worker) indexProjectAstPatchFromStaticIndexCompiler(
 	plan projectindex.ProjectStaticSyntaxPlan,
 	staticCompiler StaticCompiler,
 ) (projectindex.IndexPatch, ProjectIndexAstTiming, bool, error) {
-	result, err := staticcompiler.Run(ctx, staticcompiler.Request{
+	result, err := staticrun.Run(ctx, staticrun.Request{
 		Root:         root,
 		ConfigPath:   configPath,
 		ProjectName:  projectName,

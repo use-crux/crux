@@ -12,7 +12,7 @@ import (
 // PlanProjectSemanticRequest builds an evidence-first semantic request for the
 // Static Index path. The service may run it before AST finalization and will
 // join AST-owned source rows/sourceGraph before applying the semantic patch.
-func (w *Worker) PlanProjectSemanticRequest(
+func (w *Bundle) PlanProjectSemanticRequest(
 	ctx context.Context,
 	root string,
 	configPath string,

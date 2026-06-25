@@ -11,7 +11,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax/stream"
 )
 
-func (w *Worker) indexProjectAstPatchFromNativeSyntaxRecordStream(
+func (w *Bundle) indexProjectAstPatchFromNativeSyntaxRecordStream(
 	ctx context.Context,
 	root string,
 	configPath string,

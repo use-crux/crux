@@ -10,7 +10,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
 )
 
-func (w *Worker) indexHost() client.Client {
+func (w *Bundle) indexHost() client.Client {
 	return client.Client{
 		Name:          "project-indexer",
 		ScriptContent: w.scriptContent,
@@ -21,26 +21,26 @@ func (w *Worker) indexHost() client.Client {
 	}
 }
 
-func (w *Worker) sourceOnlyArtifactFallback(ctx context.Context, req indexwire.Request, artifact projectindex.ProjectIndexArtifactKind, cause error) (json.RawMessage, error) {
+func (w *Bundle) sourceOnlyArtifactFallback(ctx context.Context, req indexwire.Request, artifact projectindex.ProjectIndexArtifactKind, cause error) (json.RawMessage, error) {
 	return w.indexHost().SourceOnlyArtifactFallback(ctx, req, artifact, cause)
 }
 
-func (w *Worker) streamPatches(ctx context.Context, req indexwire.Request, budget projectindex.IndexPatchBudget) ([]projectindex.IndexPatch, error) {
+func (w *Bundle) streamPatches(ctx context.Context, req indexwire.Request, budget projectindex.IndexPatchBudget) ([]projectindex.IndexPatch, error) {
 	return w.indexHost().Patches(ctx, req, budget)
 }
 
-func (w *Worker) streamCollector(ctx context.Context, req indexwire.Request, budget projectindex.IndexPatchBudget) (*projectindex.ProjectIndexPatchStreamCollector, error) {
+func (w *Bundle) streamCollector(ctx context.Context, req indexwire.Request, budget projectindex.IndexPatchBudget) (*projectindex.ProjectIndexPatchStreamCollector, error) {
 	return w.indexHost().Collector(ctx, req, budget)
 }
 
-func (w *Worker) streamArtifact(ctx context.Context, req indexwire.Request, artifact projectindex.ProjectIndexArtifactKind) (json.RawMessage, error) {
+func (w *Bundle) streamArtifact(ctx context.Context, req indexwire.Request, artifact projectindex.ProjectIndexArtifactKind) (json.RawMessage, error) {
 	return w.indexHost().Artifact(ctx, req, artifact)
 }
 
-func (w *Worker) streamRequest(ctx context.Context, req indexwire.Request, handle func(json.RawMessage) error) (nodeprocess.StreamResult, error) {
+func (w *Bundle) streamRequest(ctx context.Context, req indexwire.Request, handle func(json.RawMessage) error) (nodeprocess.StreamResult, error) {
 	return w.indexHost().Stream(ctx, req, handle)
 }
 
-func (w *Worker) streamPatchRequest(ctx context.Context, req indexwire.Request, handle func(json.RawMessage) error, done func() bool) error {
+func (w *Bundle) streamPatchRequest(ctx context.Context, req indexwire.Request, handle func(json.RawMessage) error, done func() bool) error {
 	return w.indexHost().PatchRequest(ctx, req, handle, done)
 }

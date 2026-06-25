@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler/parity"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/parity"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax/record"
 )

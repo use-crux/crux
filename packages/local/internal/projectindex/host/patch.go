@@ -2,7 +2,7 @@ package host
 
 import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler/patch"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/patch"
 )
 
 func staticPatchOptions(root string) patch.Options {

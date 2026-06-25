@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/use-crux/crux/packages/local/internal/projectindex/host/compiler"
+	staticclient "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/client"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/sourceprofile"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
 func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
-	worker := compiler.New(shellPath(t), fakeStaticIndexCompilerWorker(t))
+	worker := staticclient.New(shellPath(t), fakeStaticIndexCompilerWorker(t))
 	defer worker.Close()
 
 	identity := protocol.SkeletonIdentity()
@@ -67,7 +67,7 @@ func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
 
 func TestWorkerRunStaticIndexCompilerSkeletonDoesNotUseSyntaxRecords(t *testing.T) {
 	compiler := &recordingStaticIndexCompiler{}
-	worker := &Worker{syntaxParser: compiler}
+	worker := &Bundle{syntaxParser: compiler}
 	files := []protocol.SourceFile{
 		{File: "/repo/src/cached.ts", SourceHash: "sha256:cached", CacheKey: "static:cached"},
 		{File: "/repo/src/miss.ts", SourceHash: "sha256:miss"},
@@ -249,9 +249,9 @@ func fakeStaticIndexCompilerWorker(t *testing.T) string {
 	script := strings.ReplaceAll(`while IFS= read -r line; do
 id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
-  *staticIndexPrepare*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"staticIndexPrepare","plan":{"root":"/repo","projectName":"static-index","files":[{"file":"/repo/src/cached.ts","sourceHash":"sha256:cached","cacheKey":"static:cached"},{"file":"/repo/src/miss.ts","sourceHash":"sha256:miss"}],"cacheHits":[{"file":"/repo/src/cached.ts","sourceHash":"sha256:cached","cacheKey":"static:cached"}],"cacheMisses":[{"file":"/repo/src/miss.ts","sourceHash":"sha256:miss"}]},"diagnostics":[],$TELEMETRY}}\n' "$id" ;;
-  *staticIndexAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"staticIndexAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id" ;;
-  *staticIndexFinalize*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"staticIndexFinalize","events":[],$TELEMETRY}}\n' "$id" ;;
+  *staticIndexPrepare*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":2,"method":"staticIndexPrepare","plan":{"root":"/repo","projectName":"static-index","files":[{"file":"/repo/src/cached.ts","sourceHash":"sha256:cached","cacheKey":"static:cached"},{"file":"/repo/src/miss.ts","sourceHash":"sha256:miss"}],"cacheHits":[{"file":"/repo/src/cached.ts","sourceHash":"sha256:cached","cacheKey":"static:cached"}],"cacheMisses":[{"file":"/repo/src/miss.ts","sourceHash":"sha256:miss"}]},"diagnostics":[],$TELEMETRY}}\n' "$id" ;;
+  *staticIndexAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":2,"method":"staticIndexAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id" ;;
+  *staticIndexFinalize*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":2,"method":"staticIndexFinalize","events":[],$TELEMETRY}}\n' "$id" ;;
   *) printf '{"error":"unexpected Static Index request"}\n' ;;
 esac
 done

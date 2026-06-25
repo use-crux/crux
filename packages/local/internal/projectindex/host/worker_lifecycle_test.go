@@ -12,7 +12,7 @@ import (
 
 func TestWorkerConstructionDoesNotStartNodePhaseWorkers(t *testing.T) {
 	root := t.TempDir()
-	worker := New(WorkerOptions{
+	worker := New(BundleOptions{
 		ProjectIndexerScript:         filepath.Join(root, "missing-project-indexer.mjs"),
 		ProjectSemanticIndexerScript: filepath.Join(root, "missing-project-semantic-indexer.mjs"),
 		ProjectRuntimeIndexerScript:  filepath.Join(root, "missing-project-runtime-indexer.mjs"),
@@ -25,7 +25,7 @@ func TestWorkerConstructionDoesNotStartNodePhaseWorkers(t *testing.T) {
 
 func TestWorkerCloseOwnsNativeSyntaxParserLifetime(t *testing.T) {
 	parser := &closingSyntaxParser{}
-	worker := (&Worker{}).WithSyntaxParser(parser)
+	worker := (&Bundle{}).WithSyntaxParser(parser)
 
 	if err := worker.Close(); err != nil {
 		t.Fatalf("Close error = %v", err)

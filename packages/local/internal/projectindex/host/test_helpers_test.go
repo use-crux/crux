@@ -9,21 +9,21 @@ import (
 	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
 )
 
-func newTestWorker(tb testing.TB) *Worker {
+func newTestWorker(tb testing.TB) *Bundle {
 	tb.Helper()
-	return New(testWorkerOptions(""))
+	return New(testBundleOptions(""))
 }
 
-func newTestWorkerWithProjectScript(tb testing.TB, scriptPath string) *Worker {
+func newTestWorkerWithProjectScript(tb testing.TB, scriptPath string) *Bundle {
 	tb.Helper()
-	return New(testWorkerOptions(scriptPath))
+	return New(testBundleOptions(scriptPath))
 }
 
-func testWorkerOptions(projectScriptPath string) WorkerOptions {
+func testBundleOptions(projectScriptPath string) BundleOptions {
 	if projectScriptPath == "" {
 		projectScriptPath = testEmbeddedScriptPath("project-indexer")
 	}
-	return WorkerOptions{
+	return BundleOptions{
 		ProjectIndexerScript:         projectScriptPath,
 		ProjectSemanticIndexerScript: testEmbeddedScriptPath("project-semantic-indexer"),
 		ProjectRuntimeIndexerScript:  testEmbeddedScriptPath("project-runtime-indexer"),
@@ -31,7 +31,7 @@ func testWorkerOptions(projectScriptPath string) WorkerOptions {
 }
 
 func testEmbeddedScriptPath(name string) string {
-	return filepath.Join("..", "server", "embed", name+".mjs")
+	return filepath.Join("..", "..", "server", "embed", name+".mjs")
 }
 
 func findNodePath() (string, error) {

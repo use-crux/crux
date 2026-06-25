@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler/patch"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/patch"
 )
 
 func TestWorkerStaticIndexCompilerUsesCompileStreamWhenNativeOnly(t *testing.T) {
@@ -28,7 +28,7 @@ func TestWorkerStaticIndexCompilerUsesCompileStreamWhenNativeOnly(t *testing.T) 
 	compiler := &staticIndexCompileCutoverCompiler{
 		staticIndexCutoverCompiler: staticIndexCutoverCompiler{root: root, sourceFile: sourceFile},
 	}
-	worker := &Worker{}
+	worker := &Bundle{}
 	plan := projectindex.ProjectStaticSyntaxPlan{
 		Root:             root,
 		ProjectName:      "static-index-cutover",

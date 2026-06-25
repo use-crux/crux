@@ -1,4 +1,4 @@
-package compiler
+package client
 
 import (
 	"context"
@@ -78,7 +78,7 @@ func (p *Pool) StaticIndexAnalyzeStream(
 	request protocol.AnalyzeRequest,
 	handle protocol.AnalyzeStreamHandler,
 ) (protocol.AnalyzeResponse, error) {
-	worker, err := p.compilerWorker()
+	worker, err := p.staticIndexWorker()
 	if err != nil {
 		return protocol.AnalyzeResponse{}, err
 	}
@@ -150,7 +150,7 @@ func (p *Pool) StaticIndexFinalizeStream(
 	request protocol.FinalizeRequest,
 	handle protocol.FinalizeStreamHandler,
 ) (protocol.FinalizeResponse, error) {
-	worker, err := p.compilerWorker()
+	worker, err := p.staticIndexWorker()
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}
@@ -222,7 +222,7 @@ func (p *Pool) StaticIndexCompileStream(
 	request protocol.CompileRequest,
 	handle protocol.FinalizeStreamHandler,
 ) (protocol.FinalizeResponse, error) {
-	worker, err := p.compilerWorker()
+	worker, err := p.staticIndexWorker()
 	if err != nil {
 		return protocol.FinalizeResponse{}, err
 	}

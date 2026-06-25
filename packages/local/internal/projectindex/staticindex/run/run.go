@@ -1,4 +1,4 @@
-package compiler
+package run
 
 import (
 	"context"
@@ -9,10 +9,10 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/cache"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compat"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler/evidence"
-	compilerlint "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler/lint"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler/patch"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/evidence"
+	runlint "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/lint"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/patch"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/sourceprofile"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax/record"
 )
@@ -119,7 +119,7 @@ func Run(ctx context.Context, request Request) (Result, error) {
 		ExtensionFacts:   extensionFacts,
 		RelationSpecs:    request.Plan.RelationSpecs,
 		LintConfig:       request.Plan.LintConfig,
-		LintSuppressions: compilerlint.SuppressionsFromSourceText(sourceInput.SourceTextByFile),
+		LintSuppressions: runlint.SuppressionsFromSourceText(sourceInput.SourceTextByFile),
 		EmitBuiltinLints: &emitBuiltinLints,
 	})
 	if err != nil {
@@ -164,7 +164,7 @@ func runCompile(
 		ExtensionFacts:   extensionFacts,
 		RelationSpecs:    request.Plan.RelationSpecs,
 		LintConfig:       request.Plan.LintConfig,
-		LintSuppressions: compilerlint.SuppressionsFromSourceText(sourceInput.SourceTextByFile),
+		LintSuppressions: runlint.SuppressionsFromSourceText(sourceInput.SourceTextByFile),
 		EmitBuiltinLints: &emitBuiltinLints,
 	})
 	timing := Timing{NativeParseAndForwardMs: elapsedMs(started)}

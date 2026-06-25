@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler/patch"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/patch"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 

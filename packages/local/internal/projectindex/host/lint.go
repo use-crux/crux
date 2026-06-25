@@ -7,10 +7,10 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compat"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler/lint"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/lint"
 )
 
-func (w *Worker) IndexProjectLintPatch(ctx context.Context, request projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
+func (w *Bundle) IndexProjectLintPatch(ctx context.Context, request projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
 	if w == nil || !request.ASTUsedStaticIndex {
 		return projectindex.IndexPatch{}, nil
 	}
@@ -38,7 +38,7 @@ func (w *Worker) IndexProjectLintPatch(ctx context.Context, request projectindex
 	return patch, nil
 }
 
-func (w *Worker) PrefetchProjectLintFacts(
+func (w *Bundle) PrefetchProjectLintFacts(
 	ctx context.Context,
 	request projectindex.ProjectLintIndexRequest,
 ) (projectindex.ProjectLintPrefetchResult, error) {
@@ -52,7 +52,7 @@ func (w *Worker) PrefetchProjectLintFacts(
 	return projectindex.ProjectLintPrefetchResult{RuleFacts: lint.NormalizeRuleFacts(ruleFacts)}, nil
 }
 
-func (w *Worker) staticLintRuleFacts(
+func (w *Bundle) staticLintRuleFacts(
 	ctx context.Context,
 	request projectindex.ProjectLintIndexRequest,
 ) ([]json.RawMessage, error) {
@@ -66,7 +66,7 @@ func (w *Worker) staticLintRuleFacts(
 	return lint.NormalizeRuleFacts(ruleFacts), nil
 }
 
-func (w *Worker) postMergeRuleFacts(
+func (w *Bundle) postMergeRuleFacts(
 	ctx context.Context,
 	request projectindex.ProjectLintIndexRequest,
 ) ([]json.RawMessage, error) {
