@@ -1,0 +1,17 @@
+[package]
+name = "crux-indexer-worker"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+crux-indexer-protocol.workspace = true
+crux-indexer-syntax-oxc.workspace = true
+crux-indexer-primitives.workspace = true
+crux-indexer-static-compiler.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true

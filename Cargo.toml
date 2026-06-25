@@ -3,9 +3,10 @@ members = [
     "crates/protocol",
     "crates/syntax-oxc",
     "crates/facts",
-    "crates/extractors",
+    "crates/primitives",
     "crates/lints",
-    "crates/crux-indexer-worker",
+    "crates/static-compiler",
+    "crates/worker",
 ]
 resolver = "3"
 
@@ -19,8 +20,9 @@ repository = "https://github.com/use-crux/crux.git"
 crux-indexer-protocol = { path = "crates/protocol" }
 crux-indexer-syntax-oxc = { path = "crates/syntax-oxc" }
 crux-indexer-facts = { path = "crates/facts" }
-crux-indexer-extractors = { path = "crates/extractors" }
+crux-indexer-primitives = { path = "crates/primitives" }
 crux-indexer-lints = { path = "crates/lints" }
+crux-indexer-static-compiler = { path = "crates/static-compiler" }
 oxc_allocator = "0.133.0"
 oxc_ast = "0.133.0"
 oxc_parser = "0.133.0"

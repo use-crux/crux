@@ -160,8 +160,8 @@ const inventory = {
         ),
         contractFile(
           'rust',
-          'crates/crux-indexer-worker/src/index_compiler/finalizer/events.rs',
-          'Rust index compiler finalizer emits Project Index worker protocol events as JSON values.',
+          'crates/static-compiler/src/finalizer/events.rs',
+          'Rust static compiler finalizer emits Project Index worker protocol events as JSON values.',
           'native-mirror',
         ),
       ],
@@ -249,7 +249,7 @@ const inventory = {
         ),
         contractFile(
           'rust',
-          'crates/crux-indexer-worker/src/shared_fixtures_tests.rs',
+          'crates/static-compiler/src/shared_fixtures_tests.rs',
           'Shared fixture decoder for static syntax record JSON.',
           'test',
         ),
@@ -334,7 +334,7 @@ const inventory = {
         ),
         contractFile(
           'rust',
-          'crates/crux-indexer-worker/src/shared_fixtures_tests.rs',
+          'crates/static-compiler/src/shared_fixtures_tests.rs',
           'Shared fixture decoder for native static protocol JSON and pipeline behavior.',
           'test',
         ),
