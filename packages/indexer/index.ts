@@ -27,14 +27,14 @@ export {
 } from './indexer'
 export type { ResolveProjectModelOptions } from './indexer/project-model'
 export { resolveProjectModel } from './indexer/project-model'
-export type { InspectProjectStaticSyntaxPlanOptions, ProjectStaticSyntaxPlan } from './indexer/static-plan'
-export { inspectProjectStaticSyntaxPlan } from './indexer/static-plan'
+export type { InspectProjectStaticSyntaxPlanOptions, ProjectStaticSyntaxPlan } from './indexer/static-index/plan'
+export { inspectProjectStaticSyntaxPlan } from './indexer/static-index/plan'
 export type {
-  InspectProjectNativeStaticConfigOptions,
-  ProjectNativeStaticConfig,
-  ProjectNativeStaticExtensionReference,
-} from './indexer/native-static-inspect'
-export { inspectProjectNativeStaticConfig } from './indexer/native-static-inspect'
+  InspectProjectStaticIndexConfigOptions,
+  ProjectStaticIndexConfig,
+  ProjectStaticIndexExtensionReference,
+} from './indexer/static-index/config/inspect'
+export { inspectProjectStaticIndexConfig } from './indexer/static-index/config/inspect'
 export type {
   InspectProjectConfigOptions,
   ProjectConfigFileOrigin,

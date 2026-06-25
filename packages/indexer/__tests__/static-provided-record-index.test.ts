@@ -10,9 +10,9 @@ import {
 } from '..'
 import {
   createTypeScriptStaticSyntaxFrontend,
-  RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
   type StaticSyntaxFileRecord,
 } from '../indexer/static/syntax-record'
+import { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static-index/syntax'
 import type { IndexPatch } from '../indexer/patches'
 
 const roots: string[] = []
@@ -65,10 +65,10 @@ describe('provided static syntax record indexing', () => {
         shards: expect.arrayContaining([expect.objectContaining({ id: '.', root })]),
       }),
     )
-    expect(plan.nativeAstEnabled).toBe(false)
+    expect(plan.staticSyntaxEnabled).toBe(false)
   })
 
-  it('reports nativeAstEnabled only when the native AST experiment is configured', async () => {
+  it('reports staticSyntaxEnabled only when the Static Index syntax experiment is configured', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
     const file = join(root, 'src/writer.ts')
@@ -92,7 +92,7 @@ describe('provided static syntax record indexing', () => {
     const plan = await inspectProjectStaticSyntaxPlan({ root, projectName: 'provided-records' })
 
     expect(plan.files).toContain(file)
-    expect(plan.nativeAstEnabled).toBe(true)
+    expect(plan.staticSyntaxEnabled).toBe(true)
   })
 
   it('reports native static cache hits so hosts can skip warm Rust/Oxc parsing', async () => {
@@ -121,7 +121,7 @@ describe('provided static syntax record indexing', () => {
       root,
       projectName: 'provided-records',
       records: [record],
-      frontendIdentity: RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
+      frontendIdentity: OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
     })
 
     const warmPlan = await inspectProjectStaticSyntaxPlan({
@@ -139,7 +139,7 @@ describe('provided static syntax record indexing', () => {
       root,
       projectName: 'provided-records',
       records: [],
-      frontendIdentity: RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
+      frontendIdentity: OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
     })
 
     expect((projectedFromCacheOnly.facts.definitions ?? []).map((definition) => definition.id)).toContain(
@@ -299,7 +299,7 @@ async function createRustIdentityRecord(input: {
   const record = await createTypeScriptStaticSyntaxFrontend({ callNames: ['prompt'] }).parseFile(input)
   return {
     ...record,
-    frontend: RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
+    frontend: OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
   }
 }
 

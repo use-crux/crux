@@ -1,6 +1,6 @@
 import type { ProjectDefinition } from '@crux/core/project-index'
 import type { IndexerExtensionRuntime } from '../../extensions'
-import { staticFoundDefinitionsFromExtractedFacts } from '../../extensions/static-record-adapter/normalizer'
+import { staticFoundDefinitionsFromExtractedFacts } from '../../static-index/compatibility/syntax-record-bridge/normalizer'
 import type { StaticFoundDefinition } from '../../types'
 import type { StaticRecordProjectionCache } from './projection-cache'
 import type { StaticSyntaxFileRecord } from './types'

@@ -18,7 +18,7 @@ import {
   sourceRefsForTemplateInterpolations,
 } from '../../ast/source-refs'
 import { createDefinitionBuilder, createReferenceBuilder } from '../public-contract/builders'
-import { createStaticArgumentReader, createStaticObjectReader } from '../static-evidence/object-reader'
+import { createStaticArgumentReader, createStaticObjectReader } from '../../static-index/extension-host/evidence/object-reader'
 import {
   createExtensionRegistry,
   extractorsForCall,
@@ -26,13 +26,13 @@ import {
   extractorsForObject,
   type ExtensionRegistry,
 } from './registry'
-import { createNativeSyntaxHandle } from '../static-record-adapter/native-context'
+import { createNativeSyntaxHandle } from '../../static-index/compatibility/syntax-record-bridge/native-context'
 import { extensionIdentity, runtimeResultFromExtractResult } from './results'
 import { indexRuleAvailability } from './rule-availability'
-import { staticFoundDefinitionFromExtractedFacts } from '../static-record-adapter/normalizer'
-import { extractStaticRecordWithRegistry, type StaticRecordExtractionInput } from '../static-record-adapter/runtime'
-import { staticInterestManifestFromExtensions } from '../static-evidence/interests'
-import { staticExtensionHostManifest, type StaticExtensionHostManifest } from '../native-coverage/host-manifest'
+import { staticFoundDefinitionFromExtractedFacts } from '../../static-index/compatibility/syntax-record-bridge/normalizer'
+import { extractStaticRecordWithRegistry, type StaticRecordExtractionInput } from '../../static-index/compatibility/syntax-record-bridge/runtime'
+import { staticInterestManifestFromExtensions } from '../../static-index/extension-host/evidence/interests'
+import { staticExtensionHostManifest, type StaticExtensionHostManifest } from '../../static-index/extension-host/coverage/host-manifest'
 import type {
   IndexExtractor,
   ExtractPattern,
@@ -44,7 +44,7 @@ import type {
   RelationSpec,
   IndexerExtension,
 } from '../public-contract/types'
-import type { StaticEvidenceInterestManifest } from '../static-evidence/types'
+import type { StaticEvidenceInterestManifest } from '../../static-index/extension-host/evidence/types'
 
 /**
  * Feature area implemented by an extension runtime instance.

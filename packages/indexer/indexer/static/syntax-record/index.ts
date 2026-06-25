@@ -47,7 +47,6 @@ export {
   type ProvidedStaticSyntaxRecordProvider,
 } from './provided-frontend'
 export { createStaticRecordProjectionCache, type StaticRecordProjectionCache } from './projection-cache'
-export { RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from './rust-oxc-identity'
 export { createStaticRecordArgumentReader, createStaticRecordObjectReader } from './readers'
 export { createStaticSyntaxInitializerMap, resolveStaticSyntaxValue } from './value'
 export { createTypeScriptStaticSyntaxFrontend } from './typescript-frontend'

@@ -2,7 +2,7 @@ import ts from 'typescript'
 import { hasProperty, stringProperty } from '../ast/literals'
 import { expressionToJsonSchema, schemaProperty } from '../ast/schemas'
 import type { ExtractedFacts } from '../extensions'
-import { internalFlowTraversal } from '../extensions/static-record-adapter/flow-traversal'
+import { internalFlowTraversal } from '../static-index/compatibility/syntax-record-bridge/flow-traversal'
 import type { StaticCallContext } from './types'
 import { flowFactsFromEvidence } from './flow-facts'
 

@@ -12,7 +12,7 @@ import {
   type IndexerExtension,
   type StaticExtractionInput,
 } from '../indexer/extensions'
-import { internalStaticCallContext, internalTypeScriptContext } from '../indexer/extensions/static-record-adapter/native-context'
+import { internalStaticCallContext, internalTypeScriptContext } from '../indexer/static-index/compatibility/syntax-record-bridge/native-context'
 import { createExtractContext } from '../indexer/extensions/runtime/engine'
 import { indexLintFinding } from '../indexer/lints/rules'
 

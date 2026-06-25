@@ -8,7 +8,7 @@ import type {
   StaticObjectReader,
 } from './authoring-types'
 import type { IndexDependency } from './cache-dependency-types'
-import type { NativeSyntaxHandle } from '../static-record-adapter/native-context'
+import type { NativeSyntaxHandle } from '../../static-index/compatibility/syntax-record-bridge/native-context'
 import type { ExtensionIdentity } from './manifest-types'
 
 /**

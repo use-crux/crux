@@ -3,7 +3,7 @@ import { facts, type IndexExtractor, type ExtractContext } from '../extensions'
 import {
   internalDataAccessRefsForConfigObject,
   internalDataAccessRefsForConfigProperties,
-} from '../extensions/static-record-adapter/data-access'
+} from '../static-index/compatibility/syntax-record-bridge/data-access'
 import { primitiveDataIntelligence, uniqueDataAccesses, type PrimitiveDataAccessRef } from './data-access'
 
 const callbackProperties = ['execute', 'run', 'handler'] as const

@@ -1,5 +1,5 @@
 import { createIndexerExtensionRuntime } from '../indexer/extensions'
-import { nativeStaticExtractorCoverage } from '../indexer/extensions/native-coverage/coverage'
+import { staticIndexExtractorCoverage } from '../indexer/static-index/extension-host/coverage/coverage'
 import { cruxCoreExtension } from '../indexer/extractors/crux-core-extension'
 
 /**
@@ -7,7 +7,7 @@ import { cruxCoreExtension } from '../indexer/extractors/crux-core-extension'
  *
  * The inventory is intentionally derived from `cruxCoreExtension.extractors`
  * so a new bundled primitive fails the Phase 1 audit until its fixture and
- * native-static status are recorded.
+ * Static Index coverage status are recorded.
  *
  * @module
  */
@@ -15,18 +15,18 @@ import { cruxCoreExtension } from '../indexer/extractors/crux-core-extension'
 /** Fixture coverage state for one bundled first-party extractor family. */
 export type FirstPartyFixtureCoverage = 'dedicated-fixture' | 'missing-fixture'
 
-/** Native static coverage state for one bundled first-party extractor family. */
-export type FirstPartyNativeStaticCoverage = 'covered' | 'typescript-host'
+/** Static Index coverage state for one bundled first-party extractor family. */
+export type FirstPartyStaticIndexCoverage = 'covered' | 'typescript-host'
 
 /** One row in the first-party primitive migration inventory. */
 export interface FirstPartyPrimitiveFixtureInventoryEntry {
   readonly extractor: string
   readonly fixtureCoverage: FirstPartyFixtureCoverage
-  readonly nativeStaticCoverage: FirstPartyNativeStaticCoverage
+  readonly staticIndexCoverage: FirstPartyStaticIndexCoverage
 }
 
-/** Current Node ownership reasons for native static first-party runs. */
-export interface FirstPartyNativeStaticNodeOwnershipAudit {
+/** Current Node ownership reasons for Static Index first-party runs. */
+export interface FirstPartyStaticIndexNodeOwnershipAudit {
   readonly nativeOnlyEligible: boolean
   readonly nodeStartsBecause: readonly string[]
   readonly bundledNativeExtractors: readonly string[]
@@ -67,27 +67,27 @@ export function firstPartyPrimitiveFixtureInventory(): readonly FirstPartyPrimit
     if (!fixtureCoverage) {
       throw new Error(`First-party fixture inventory is missing extractor coverage for ${extractor.name}.`)
     }
-    const nativeCoverage = nativeStaticExtractorCoverage({
+    const nativeCoverage = staticIndexExtractorCoverage({
       extension: { name: cruxCoreExtension.name, version: cruxCoreExtension.version },
       name: extractor.name,
     })
     return {
       extractor: extractor.name,
       fixtureCoverage,
-      nativeStaticCoverage: nativeCoverage.covered ? 'covered' : 'typescript-host',
+      staticIndexCoverage: nativeCoverage.covered ? 'covered' : 'typescript-host',
     }
   })
 }
 
 /**
- * Returns the current reasons native static first-party indexing still needs Node.
+ * Returns the current reasons Static Index first-party indexing still needs Node.
  *
  * This intentionally combines static ownership facts from the target
  * architecture with the data-only extension host manifest so changes in
  * bundled coverage, TypeScript rules, or compatibility evidence are visible in
  * a small snapshot-style test.
  */
-export function firstPartyNativeStaticNodeOwnershipAudit(): FirstPartyNativeStaticNodeOwnershipAudit {
+export function firstPartyStaticIndexNodeOwnershipAudit(): FirstPartyStaticIndexNodeOwnershipAudit {
   const runtime = createIndexerExtensionRuntime({ extensions: [cruxCoreExtension] })
   const staticHost = runtime.manifest.staticHost
   const inventory = firstPartyPrimitiveFixtureInventory()
@@ -106,10 +106,10 @@ export function firstPartyNativeStaticNodeOwnershipAudit(): FirstPartyNativeStat
     nativeOnlyEligible: staticHost.nativeOnlyEligible,
     nodeStartsBecause,
     bundledNativeExtractors: inventory
-      .filter((item) => item.nativeStaticCoverage === 'covered')
+      .filter((item) => item.staticIndexCoverage === 'covered')
       .map((item) => item.extractor),
     bundledTypeScriptExtractors: inventory
-      .filter((item) => item.nativeStaticCoverage === 'typescript-host')
+      .filter((item) => item.staticIndexCoverage === 'typescript-host')
       .map((item) => item.extractor),
     typeScriptRuleCount: staticHost.typeScriptRuleCount,
   }

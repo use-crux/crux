@@ -41,8 +41,8 @@ export type {
   StaticUnsupportedValue,
 } from '../../static/syntax-record'
 export {
-  RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
-} from '../../static/syntax-record'
+  OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
+} from '../../static-index/syntax'
 export {
   staticRecordSchemaProperty,
   staticSyntaxValueToJsonSchema,

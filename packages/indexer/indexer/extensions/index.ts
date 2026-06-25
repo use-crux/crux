@@ -20,8 +20,14 @@ export {
   type ExtensionRegistry,
   type RegisteredExtractor,
 } from './runtime/registry'
-export { staticFoundDefinitionFromExtractedFacts, staticFoundDefinitionsFromExtractedFacts } from './static-record-adapter/normalizer'
-export { createStaticRecordEvidenceReader, type StaticRecordEvidenceReaderInput } from './static-evidence/record-reader'
+export {
+  staticFoundDefinitionFromExtractedFacts,
+  staticFoundDefinitionsFromExtractedFacts,
+} from '../static-index/compatibility/syntax-record-bridge/normalizer'
+export {
+  createStaticRecordEvidenceReader,
+  type StaticRecordEvidenceReaderInput,
+} from '../static-index/extension-host/evidence/record-reader'
 export {
   checkStaticRules,
   extractStaticEvidenceBatch,
@@ -40,7 +46,7 @@ export {
   type StaticExtensionHostNodeReport,
   type StaticExtensionHostRuntimeInput,
   type StaticRuleGraphInput,
-} from './static-evidence/host'
+} from '../static-index/extension-host/evidence/host'
 export {
   checkStaticRulesForProject,
   extractStaticEvidenceBatchForProject,
@@ -49,13 +55,16 @@ export {
   type ExtractStaticEvidenceBatchForProjectInput,
   type LoadStaticExtensionHostManifestForProjectInput,
   type StaticExtensionWorkerProjectInput,
-} from './static-evidence/worker'
+} from '../static-index/extension-host/evidence/worker'
 export type {
   StaticExtensionNativeFinalizeFacts,
   StaticExtensionNativeRelationRef,
-} from './static-evidence/host-facts'
-export { staticInterestManifestFromExtensions } from './static-evidence/interests'
-export { createStaticExtensionRegistry, extractFactsWithExtensionRegistry } from './static-record-adapter/adapter'
+} from '../static-index/extension-host/evidence/host-facts'
+export { staticInterestManifestFromExtensions } from '../static-index/extension-host/evidence/interests'
+export {
+  createStaticExtensionRegistry,
+  extractFactsWithExtensionRegistry,
+} from '../static-index/compatibility/syntax-record-bridge/adapter'
 export {
   createIndexerExtensionRuntime,
   checkExtensionRules,
@@ -75,8 +84,8 @@ export type {
   StaticExtensionHostManifest,
   StaticExtractorHostMode,
   StaticExtractorHostPlan,
-} from './native-coverage/host-manifest'
-export type { StaticRecordExtractionInput } from './static-record-adapter/runtime'
+} from '../static-index/extension-host/coverage/host-manifest'
+export type { StaticRecordExtractionInput } from '../static-index/compatibility/syntax-record-bridge/runtime'
 export type {
   IndexEmitter,
   IndexExtractor,

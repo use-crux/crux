@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import type { ExtractedFacts, IndexerExtensionRuntime } from '../../extensions'
-import { staticFoundDefinitionFromExtractedFacts } from '../../extensions/static-record-adapter/normalizer'
+import { staticFoundDefinitionFromExtractedFacts } from '../../static-index/compatibility/syntax-record-bridge/normalizer'
 import type { StaticFoundDefinition } from '../../types'
 import type { ParseMemo } from '../extraction/source-io'
 import { withStaticExtractionTiming, type StaticExtractionInstrumentation } from '../instrumentation'

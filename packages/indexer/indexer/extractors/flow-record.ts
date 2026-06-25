@@ -1,11 +1,11 @@
 import type { ProjectSourceRef } from '@crux/core/project-index'
 import type { ExtractContext, ExtractedFacts } from '../extensions'
-import { internalStaticRecordContext, type InternalStaticRecordContext } from '../extensions/static-record-adapter/native-context'
+import { internalStaticRecordContext, type InternalStaticRecordContext } from '../static-index/compatibility/syntax-record-bridge/native-context'
 import {
   createStaticRecordSourceResolver,
   staticRecordProjectSourceRef,
   type ResolvedStaticRecordSource,
-} from '../extensions/static-record-adapter/source-resolver'
+} from '../static-index/compatibility/syntax-record-bridge/source-resolver'
 import type {
   StaticFunctionCallValue,
   StaticFunctionValue,

@@ -8,7 +8,7 @@ import './first-party-phase7-composition-native-fixtures'
 import './first-party-phase7-flow-native-fixtures'
 import './first-party-phase7-native-fixtures'
 import {
-  firstPartyNativeStaticNodeOwnershipAudit,
+  firstPartyStaticIndexNodeOwnershipAudit,
   firstPartyPrimitiveFixtureInventory,
 } from './first-party-extractor-inventory'
 import { assertDeterministicExtraction, defineIndexerExtensionFixture, extractFixtureSource } from '../testing'
@@ -23,23 +23,23 @@ describe('first-party extractor fixtures', () => {
     const inventory = firstPartyPrimitiveFixtureInventory()
 
     expect(inventory).toEqual([
-      { extractor: 'rag.retriever', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'safety', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'scorer', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'workspace', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'eval', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'skill-registry', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'registry-skill', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'tool', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'injectable', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'context', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'prompt', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'agent', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'composition', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'memory', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'blackboard', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'routing', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
-      { extractor: 'flow', fixtureCoverage: 'dedicated-fixture', nativeStaticCoverage: 'covered' },
+      { extractor: 'rag.retriever', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'safety', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'scorer', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'workspace', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'eval', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'skill-registry', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'registry-skill', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'tool', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'injectable', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'context', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'prompt', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'agent', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'composition', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'memory', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'blackboard', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'routing', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
+      { extractor: 'flow', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
     ])
     expect(
       inventory.filter((item) => item.fixtureCoverage === 'missing-fixture').map((item) => item.extractor),
@@ -47,7 +47,7 @@ describe('first-party extractor fixtures', () => {
   })
 
   it('records first-party host eligibility and remaining Go-owned Node reasons', () => {
-    expect(firstPartyNativeStaticNodeOwnershipAudit()).toEqual({
+    expect(firstPartyStaticIndexNodeOwnershipAudit()).toEqual({
       nativeOnlyEligible: true,
       nodeStartsBecause: ['Go asks Node to inspect the static syntax plan before Rust/Oxc parses files.'],
       bundledNativeExtractors: [
@@ -107,7 +107,7 @@ describe('first-party extractor fixtures', () => {
     const coverage = readNativeRuntimeSharedFixture('primitive-coverage-identities')
     const inventory = firstPartyPrimitiveFixtureInventory()
     const coveredExtractors = inventory
-      .filter((item) => item.nativeStaticCoverage === 'covered')
+      .filter((item) => item.staticIndexCoverage === 'covered')
       .map((item) => item.extractor)
 
     expect(coverage.identities.map((identity) => identity.extractor)).toEqual(coveredExtractors)

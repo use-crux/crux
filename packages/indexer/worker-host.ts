@@ -14,12 +14,12 @@ export {
   type CheckStaticRulesForProjectInput,
   type ExtractStaticEvidenceBatchForProjectInput,
   type StaticExtensionWorkerProjectInput,
-} from './indexer/extensions/static-evidence/worker'
+} from './indexer/static-index/extension-host/evidence/worker'
 export {
   loadStaticExtensionHostManifestForProject,
   type LoadStaticExtensionHostManifestForProjectInput,
-  type NativeStaticExtensionHostProjectInput,
-} from './indexer/native-static-extension-host'
+  type StaticIndexExtensionHostProjectInput,
+} from './indexer/static-index/extension-host'
 export type {
   CheckStaticRulesInput,
   CheckStaticRulesResult,
@@ -27,4 +27,4 @@ export type {
   ExtractStaticEvidenceBatchResult,
   LoadStaticExtensionHostManifestInput,
   LoadStaticExtensionHostManifestResult,
-} from './indexer/extensions/static-evidence/host'
+} from './indexer/static-index/extension-host/evidence/host'

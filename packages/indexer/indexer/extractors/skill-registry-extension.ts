@@ -11,7 +11,7 @@
 import ts from 'typescript'
 import { propertyName } from '../ast/literals'
 import { facts, none, type ExtractContext, type IndexExtractor } from '../extensions'
-import { internalStaticCallContext } from '../extensions/static-record-adapter/native-context'
+import { internalStaticCallContext } from '../static-index/compatibility/syntax-record-bridge/native-context'
 
 /** Extracts `registry({ name, baseUrl })` definitions from source. */
 export const registryIndexExtractor: IndexExtractor = {

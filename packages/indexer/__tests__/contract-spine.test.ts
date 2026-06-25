@@ -6,14 +6,14 @@ import {
   workerEventFixturePatch,
 } from '../indexer/contracts/worker-events/fixtures'
 import {
-  NativeStaticCompilerRequestSchema,
-  NativeStaticCompilerResponseSchema,
-  parseNativeStaticCompilerRequest,
-} from '../indexer/contracts/native-static/schema'
+  StaticIndexCompilerRequestSchema,
+  StaticIndexCompilerResponseSchema,
+  parseStaticIndexCompilerRequest,
+} from '../indexer/contracts/static-index/schema'
 import {
-  nativeStaticCompilerRequestFixtures,
-  nativeStaticCompilerResponseFixtures,
-} from '../indexer/contracts/native-static/fixtures'
+  staticIndexCompilerRequestFixtures,
+  staticIndexCompilerResponseFixtures,
+} from '../indexer/contracts/static-index/fixtures'
 import { nativeRuntimeContractFixtureGroups } from '../indexer/contracts/fixtures'
 import { projectSemanticEvidenceBatches, semanticEvidenceBatchKinds } from '../indexer/contracts/semantic/schema'
 
@@ -25,16 +25,16 @@ describe('native runtime contract spine', () => {
     expect(indexPatchFromWorkerEvents(json)).toEqual(workerEventFixturePatch)
   })
 
-  it('round-trips native static protocol fixtures through the contract path', () => {
-    for (const request of nativeStaticCompilerRequestFixtures) {
+  it('round-trips Static Index protocol fixtures through the contract path', () => {
+    for (const request of staticIndexCompilerRequestFixtures) {
       const json = JSON.parse(JSON.stringify(request))
-      expect(NativeStaticCompilerRequestSchema.parse(json)).toEqual(json)
-      expect(parseNativeStaticCompilerRequest(JSON.stringify(request))).toEqual({ ok: true, request: json })
+      expect(StaticIndexCompilerRequestSchema.parse(json)).toEqual(json)
+      expect(parseStaticIndexCompilerRequest(JSON.stringify(request))).toEqual({ ok: true, request: json })
     }
 
-    for (const response of nativeStaticCompilerResponseFixtures) {
+    for (const response of staticIndexCompilerResponseFixtures) {
       const json = JSON.parse(JSON.stringify(response))
-      expect(NativeStaticCompilerResponseSchema.parse(json)).toEqual(json)
+      expect(StaticIndexCompilerResponseSchema.parse(json)).toEqual(json)
     }
   })
 
@@ -51,6 +51,6 @@ describe('native runtime contract spine', () => {
   })
 
   it('indexes fixture groups from one contract fixtures path', () => {
-    expect(nativeRuntimeContractFixtureGroups).toEqual(['worker-events', 'native-static'])
+    expect(nativeRuntimeContractFixtureGroups).toEqual(['worker-events', 'static-index'])
   })
 })

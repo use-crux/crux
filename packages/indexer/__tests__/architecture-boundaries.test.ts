@@ -4,10 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { callPattern, facts, type IndexerExtension } from '../indexer/extensions/public-contract'
 import { loadIndexerExtensionReferences } from '../indexer/extensions/loading'
-import { nativeStaticExtractorCoverage } from '../indexer/extensions/native-coverage'
+import { staticIndexExtractorCoverage } from '../indexer/static-index/extension-host/coverage'
 import { createIndexerExtensionRuntime } from '../indexer/extensions/runtime'
-import { createStaticRecordEvidenceReader } from '../indexer/extensions/static-evidence'
-import { createStaticExtensionRegistry } from '../indexer/extensions/static-record-adapter'
+import { createStaticRecordEvidenceReader } from '../indexer/static-index/extension-host/evidence'
+import { createStaticExtensionRegistry } from '../indexer/static-index/compatibility/syntax-record-bridge'
 import { collectProjectedSemanticEvidence } from '../indexer/semantic/evidence'
 import { createNativeSemanticBackend } from '../indexer/semantic/native/tsgo'
 import { nativeDirectPrimitiveManifest } from '../indexer/semantic/native/direct-projectors'
@@ -39,7 +39,7 @@ describe('indexer architecture boundaries', () => {
     expect(createStaticExtensionRegistry([extension]).extractors).toHaveLength(1)
     expect(createStaticRecordEvidenceReader).toBeTypeOf('function')
     expect(loadIndexerExtensionReferences).toBeTypeOf('function')
-    expect(nativeStaticExtractorCoverage({ extension: { name: '@crux/test-extension', version: '0.0.0' }, name: 'x' })).toMatchObject({
+    expect(staticIndexExtractorCoverage({ extension: { name: '@crux/test-extension', version: '0.0.0' }, name: 'x' })).toMatchObject({
       covered: false,
     })
 
@@ -81,6 +81,44 @@ describe('indexer architecture boundaries', () => {
     )
     expect(existsSync(join(indexerDir, 'semantic/native/direct-projectors/manifest.ts'))).toBe(true)
     expect(redundantContextualNames(join(indexerDir, 'semantic'))).toEqual([])
+  })
+
+  it('homes TypeScript Static Index internals under static-index responsibility folders', () => {
+    for (const file of [
+      'static-index/index.ts',
+      'static-index/config/index.ts',
+      'static-index/config/inspect.ts',
+      'static-index/plan/index.ts',
+      'static-index/plan/files.ts',
+      'static-index/protocol/index.ts',
+      'static-index/protocol/request.ts',
+      'static-index/protocol/response.ts',
+      'static-index/protocol/identity.ts',
+      'static-index/protocol/telemetry.ts',
+      'static-index/syntax/index.ts',
+      'static-index/syntax/frontends/oxc.ts',
+      'static-index/extension-host/index.ts',
+      'static-index/extension-host/coverage/index.ts',
+      'static-index/extension-host/evidence/index.ts',
+      'static-index/compatibility/syntax-record-bridge/index.ts',
+    ]) {
+      expect(existsSync(join(indexerDir, file)), file).toBe(true)
+    }
+
+    for (const file of [
+      'native-static-config.ts',
+      'native-static-extension-host.ts',
+      'native-static-inspect.ts',
+      'static-plan.ts',
+      'static-plan-support-files.ts',
+      'worker-protocol/native-static.ts',
+      'worker-protocol/native-static-parse.ts',
+      'worker-protocol/native-static-parser-interests.ts',
+      'contracts/native-static/schema.ts',
+      'contracts/native-static/fixtures.ts',
+    ]) {
+      expect(existsSync(join(indexerDir, file)), file).toBe(false)
+    }
   })
 
   it('records the old static-index vocabulary that later phases must remove', () => {

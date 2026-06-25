@@ -20,7 +20,7 @@ import type { CruxConfig } from '@crux/core'
 import type { ProjectModelResolutionMode } from '@crux/core/project-index'
 import type { IndexDiagnostic } from '@crux/core/project-index'
 import { loadProjectConfig } from './config'
-import { nativeStaticAstSelectionFromConfig } from './native-static-config'
+import { staticIndexSyntaxSelectionFromConfig } from './static-index/config'
 import { resolveProjectModel } from './project-model'
 import type {
   InspectProjectConfigOptions,
@@ -223,7 +223,7 @@ function experimentalIndexerNativeSetting(experimental: CruxConfig['experimental
 
 function experimentalIndexerNativeAstSetting(experimental: CruxConfig['experimental']): ProjectConfigSetting {
   if (experimental?.indexer?.nativeAst === false) return explicit(false)
-  const selection = nativeStaticAstSelectionFromConfig(experimental)
+  const selection = staticIndexSyntaxSelectionFromConfig(experimental)
   return selection.enabled ? explicit(selection.frontend ?? 'oxc') : fromDefault(false)
 }
 

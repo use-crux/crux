@@ -28,40 +28,38 @@ export {
   indexPatchToWorkerEventStream,
 } from './patch-events'
 export type {
-  NativeStaticCompilerMethod,
-  NativeStaticCompilerRequest,
-  NativeStaticCompilerResponse,
-  NativeStaticFileInput,
-  NativeStaticPreparedPlan,
-  NativeStaticRunIdentity,
-  NativeStaticSourceFile,
-  NativeStaticTelemetry,
-} from './native-static'
-export type { ParsedNativeStaticCompilerRequest } from './native-static-parse'
+  ParsedStaticIndexCompilerRequest,
+  StaticIndexCompilerMethod,
+  StaticIndexCompilerRequest,
+  StaticIndexCompilerResponse,
+  StaticIndexFileInput,
+  StaticIndexPreparedPlan,
+  StaticIndexRunIdentity,
+  StaticIndexSourceFile,
+  StaticIndexTelemetry,
+} from '../static-index/protocol'
 export type {
-  NativeStaticParserCallInterest,
-  NativeStaticParserCallbackInterest,
-  NativeStaticParserConstructorInterest,
-} from './native-static-parser-interests'
+  StaticIndexParserCallInterest,
+  StaticIndexParserCallbackInterest,
+  StaticIndexParserConstructorInterest,
+} from '../static-index/protocol'
 export {
-  NATIVE_STATIC_COMPILER_PROTOCOL_VERSION,
-  NativeStaticAnalyzeRequestSchema,
-  NativeStaticAnalyzeResponseSchema,
-  NativeStaticCompilerRequestSchema,
-  NativeStaticCompilerResponseSchema,
-  NativeStaticFileInputSchema,
-  NativeStaticFinalizeRequestSchema,
-  NativeStaticFinalizeResponseSchema,
-  NativeStaticPrepareRequestSchema,
-  NativeStaticPrepareResponseSchema,
-  NativeStaticPreparedPlanSchema,
-  NativeStaticRunIdentitySchema,
-  NativeStaticSourceFileSchema,
-  NativeStaticTelemetrySchema,
-} from './native-static'
-export { parseNativeStaticCompilerRequest } from './native-static-parse'
-export {
-  NativeStaticParserCallInterestSchema,
-  NativeStaticParserCallbackInterestSchema,
-  NativeStaticParserConstructorInterestSchema,
-} from './native-static-parser-interests'
+  parseStaticIndexCompilerRequest,
+  STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
+  StaticIndexAnalyzeRequestSchema,
+  StaticIndexAnalyzeResponseSchema,
+  StaticIndexCompilerRequestSchema,
+  StaticIndexCompilerResponseSchema,
+  StaticIndexFileInputSchema,
+  StaticIndexFinalizeRequestSchema,
+  StaticIndexFinalizeResponseSchema,
+  StaticIndexParserCallInterestSchema,
+  StaticIndexParserCallbackInterestSchema,
+  StaticIndexParserConstructorInterestSchema,
+  StaticIndexPrepareRequestSchema,
+  StaticIndexPrepareResponseSchema,
+  StaticIndexPreparedPlanSchema,
+  StaticIndexRunIdentitySchema,
+  StaticIndexSourceFileSchema,
+  StaticIndexTelemetrySchema,
+} from '../static-index/protocol'

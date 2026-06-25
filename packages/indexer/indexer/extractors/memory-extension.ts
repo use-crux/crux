@@ -8,8 +8,8 @@ import {
   type ConfigReader,
   type ExtractContext,
 } from '../extensions'
-import { internalAuthoredMemoryId } from '../extensions/static-record-adapter/config'
-import { internalStaticCallContext } from '../extensions/static-record-adapter/native-context'
+import { internalAuthoredMemoryId } from '../static-index/compatibility/syntax-record-bridge/config'
+import { internalStaticCallContext } from '../static-index/compatibility/syntax-record-bridge/native-context'
 import type { StaticRelationRef } from '../types'
 
 /**

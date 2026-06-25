@@ -1,5 +1,5 @@
 import type { ProjectSourceRef } from '@crux/core/project-index'
-import type { StaticEvidenceCompatibility, StaticEvidenceInterestManifest } from '../static-evidence/types'
+import type { StaticEvidenceCompatibility, StaticEvidenceInterestManifest } from '../../static-index/extension-host/evidence/types'
 import type { IndexExtractor } from './extractor-types'
 import type { IndexEmitter, IndexQuery, IndexResolver, IndexRule, RelationSpec } from './resolver-rule-types'
 

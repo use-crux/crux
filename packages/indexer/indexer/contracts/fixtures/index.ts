@@ -9,13 +9,13 @@
  */
 
 /** Contract groups with shared TypeScript fixture payloads. */
-export const nativeRuntimeContractFixtureGroups = ['worker-events', 'native-static'] as const
+export const nativeRuntimeContractFixtureGroups = ['worker-events', 'static-index'] as const
 
 export {
   readNativeRuntimeSharedFixture,
   type NativeRuntimeSharedFixtureMap,
   type NativeRuntimeSharedFixtureName,
-  type NativeStaticProtocolSharedFixture,
+  type StaticIndexProtocolSharedFixture,
 } from './shared'
 
 export {
@@ -23,10 +23,10 @@ export {
   workerEventFixturePatch,
 } from '../worker-events/fixtures'
 export {
-  nativeStaticCompilerRequestFixtures,
-  nativeStaticCompilerResponseFixtures,
-  nativeStaticPreparedPlanFixture,
-  nativeStaticRunIdentityFixture,
-  nativeStaticSourceFileFixture,
-  nativeStaticTelemetryFixture,
-} from '../native-static/fixtures'
+  staticIndexCompilerRequestFixtures,
+  staticIndexCompilerResponseFixtures,
+  staticIndexPreparedPlanFixture,
+  staticIndexRunIdentityFixture,
+  staticIndexSourceFileFixture,
+  staticIndexTelemetryFixture,
+} from '../static-index/fixtures'

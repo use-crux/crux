@@ -2,7 +2,7 @@
  * Project Index worker protocol entry point.
  *
  * This host-facing barrel re-exports the TypeScript-owned worker-event and
- * native-static protocol schemas from the contract spine. Bundled Crux workers
+ * Static Index protocol schemas from the contract spine. Bundled Crux workers
  * and local runtime hosts should import this subpath instead of reaching into
  * compiler internals.
  *
@@ -39,36 +39,36 @@ export {
   projectIndexArtifactToWorkerEvent,
 } from './indexer/contracts/worker-events/schema'
 export type {
-  NativeStaticCompilerMethod,
-  NativeStaticCompilerRequest,
-  NativeStaticCompilerResponse,
-  NativeStaticFileInput,
-  NativeStaticParserCallInterest,
-  NativeStaticParserCallbackInterest,
-  NativeStaticParserConstructorInterest,
-  NativeStaticPreparedPlan,
-  NativeStaticRunIdentity,
-  NativeStaticSourceFile,
-  NativeStaticTelemetry,
-  ParsedNativeStaticCompilerRequest,
-} from './indexer/contracts/native-static/schema'
+  ParsedStaticIndexCompilerRequest,
+  StaticIndexCompilerMethod,
+  StaticIndexCompilerRequest,
+  StaticIndexCompilerResponse,
+  StaticIndexFileInput,
+  StaticIndexParserCallInterest,
+  StaticIndexParserCallbackInterest,
+  StaticIndexParserConstructorInterest,
+  StaticIndexPreparedPlan,
+  StaticIndexRunIdentity,
+  StaticIndexSourceFile,
+  StaticIndexTelemetry,
+} from './indexer/contracts/static-index/schema'
 export {
-  NATIVE_STATIC_COMPILER_PROTOCOL_VERSION,
-  NativeStaticAnalyzeRequestSchema,
-  NativeStaticAnalyzeResponseSchema,
-  NativeStaticCompilerRequestSchema,
-  NativeStaticCompilerResponseSchema,
-  NativeStaticFileInputSchema,
-  NativeStaticFinalizeRequestSchema,
-  NativeStaticFinalizeResponseSchema,
-  NativeStaticParserCallInterestSchema,
-  NativeStaticParserCallbackInterestSchema,
-  NativeStaticParserConstructorInterestSchema,
-  NativeStaticPrepareRequestSchema,
-  NativeStaticPrepareResponseSchema,
-  NativeStaticPreparedPlanSchema,
-  NativeStaticRunIdentitySchema,
-  NativeStaticSourceFileSchema,
-  NativeStaticTelemetrySchema,
-  parseNativeStaticCompilerRequest,
-} from './indexer/contracts/native-static/schema'
+  parseStaticIndexCompilerRequest,
+  STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
+  StaticIndexAnalyzeRequestSchema,
+  StaticIndexAnalyzeResponseSchema,
+  StaticIndexCompilerRequestSchema,
+  StaticIndexCompilerResponseSchema,
+  StaticIndexFileInputSchema,
+  StaticIndexFinalizeRequestSchema,
+  StaticIndexFinalizeResponseSchema,
+  StaticIndexParserCallInterestSchema,
+  StaticIndexParserCallbackInterestSchema,
+  StaticIndexParserConstructorInterestSchema,
+  StaticIndexPrepareRequestSchema,
+  StaticIndexPrepareResponseSchema,
+  StaticIndexPreparedPlanSchema,
+  StaticIndexRunIdentitySchema,
+  StaticIndexSourceFileSchema,
+  StaticIndexTelemetrySchema,
+} from './indexer/contracts/static-index/schema'

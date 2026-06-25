@@ -8,7 +8,7 @@ import type {
   StaticSyntaxFrontend,
   StaticSyntaxFrontendOptions,
 } from '../indexer/static/syntax-record'
-import { RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static/syntax-record'
+import { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static-index/syntax'
 
 const DEFAULT_CONSTRUCTOR_NAMES = ['Agent'] as const
 const MIN_RUSTC_VERSION = [1, 93, 0] as const
@@ -101,7 +101,7 @@ let rustOxcSyntaxFrontendTestStatusMemo: RustOxcSyntaxFrontendTestStatus | undef
 /**
  * Creates the Rust/Oxc syntax-record frontend for parity tests and devtools benchmarks.
  *
- * Production native AST indexing is supervised by Go and should not use this helper. The helper
+ * Production Static Index worker orchestration is supervised by Go and should not use this helper. The helper
  * exists so TypeScript tests can compare the same Rust worker output against the TypeScript
  * frontend through the compiler-owned syntax record ABI.
  */
@@ -115,7 +115,7 @@ export function createRustOxcStaticSyntaxFrontend(options: StaticSyntaxFrontendO
   const workers = createRustOxcWorkerPool(rustOxcWorkerPoolSize())
   const frontend = {
     name: 'oxc-rust' as const,
-    identity: RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
+    identity: OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
     parseFile: async (input: StaticSyntaxFileInput) =>
       workers.parseFile({
         ...workerFileRequest(input, readSourceFromDisk),

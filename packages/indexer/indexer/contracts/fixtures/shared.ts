@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { IndexRuleDescriptor } from '@crux/core/project-index'
-import type { NativeStaticCompilerRequest, NativeStaticCompilerResponse } from '../native-static/schema'
+import type { StaticIndexCompilerRequest, StaticIndexCompilerResponse } from '../static-index/schema'
 import type { StaticSyntaxFileRecord } from '../static-syntax/schema'
 import type { ProjectIndexWorkerEvent } from '../worker-events/schema'
 import type { IndexRelationPolicy } from '../../relations/types'
@@ -26,12 +26,12 @@ export type NativeRuntimeSharedFixtureName =
   | 'rule-descriptors'
   | 'primitive-coverage-identities'
 
-/** Typed payload for the shared native static protocol fixture. */
-export interface NativeStaticProtocolSharedFixture {
-  /** Requests for every supported native static compiler method. */
-  readonly requests: readonly NativeStaticCompilerRequest[]
-  /** Responses for every supported native static compiler method. */
-  readonly responses: readonly NativeStaticCompilerResponse[]
+/** Typed payload for the shared Static Index protocol fixture. */
+export interface StaticIndexProtocolSharedFixture {
+  /** Requests for every supported Static Index compiler method. */
+  readonly requests: readonly StaticIndexCompilerRequest[]
+  /** Responses for every supported Static Index compiler method. */
+  readonly responses: readonly StaticIndexCompilerResponse[]
 }
 
 /** Shared Project Index worker event stream fixture. */
@@ -94,7 +94,7 @@ export interface PrimitiveCoverageIdentitiesSharedFixture {
 
 /** Payload type for each shared fixture file. */
 export interface NativeRuntimeSharedFixtureMap {
-  readonly 'native-static-protocol': NativeStaticProtocolSharedFixture
+  readonly 'native-static-protocol': StaticIndexProtocolSharedFixture
   readonly 'worker-events': WorkerEventsSharedFixture
   readonly 'static-syntax-records': StaticSyntaxRecordsSharedFixture
   readonly 'relation-specs': RelationSpecsSharedFixture

@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { nativeStaticAstSelectionFromConfig } from '../indexer/native-static-config'
+import { staticIndexSyntaxSelectionFromConfig } from '../indexer/static-index/config'
 
-describe('native static AST config selection', () => {
-  it('keeps native static AST disabled by default and separate from semantic native', () => {
-    expect(nativeStaticAstSelectionFromConfig(undefined)).toEqual({ enabled: false })
-    expect(nativeStaticAstSelectionFromConfig({ indexer: { native: true } })).toEqual({ enabled: false })
-    expect(nativeStaticAstSelectionFromConfig({ indexer: { native: { engine: 'tsgo' } } })).toEqual({
+describe('Static Index syntax config selection', () => {
+  it('keeps Static Index syntax disabled by default and separate from semantic native', () => {
+    expect(staticIndexSyntaxSelectionFromConfig(undefined)).toEqual({ enabled: false })
+    expect(staticIndexSyntaxSelectionFromConfig({ indexer: { native: true } })).toEqual({ enabled: false })
+    expect(staticIndexSyntaxSelectionFromConfig({ indexer: { native: { engine: 'tsgo' } } })).toEqual({
       enabled: false,
     })
   })
 
   it('selects the Rust/Oxc frontend from the sibling nativeAst experiment', () => {
-    expect(nativeStaticAstSelectionFromConfig({ indexer: { nativeAst: true } })).toEqual({
+    expect(staticIndexSyntaxSelectionFromConfig({ indexer: { nativeAst: true } })).toEqual({
       enabled: true,
       frontend: 'oxc',
     })
-    expect(nativeStaticAstSelectionFromConfig({ indexer: { nativeAst: { frontend: 'oxc' } } })).toEqual({
+    expect(staticIndexSyntaxSelectionFromConfig({ indexer: { nativeAst: { frontend: 'oxc' } } })).toEqual({
       enabled: true,
       frontend: 'oxc',
     })

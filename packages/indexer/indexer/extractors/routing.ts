@@ -12,7 +12,7 @@ import {
   internalRoutingPropertyInitializer,
   internalRouterRouteDefinitions,
   type InternalRoutingChild,
-} from '../extensions/static-record-adapter/routing-traversal'
+} from '../static-index/compatibility/syntax-record-bridge/routing-traversal'
 import type { StaticRelationRef } from '../types'
 import type { StaticCallContext } from './types'
 

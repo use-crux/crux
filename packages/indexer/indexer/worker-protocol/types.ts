@@ -11,8 +11,8 @@
 import type { ProjectModelProvenance, ResolvedProjectModel } from '@crux/core/project-index'
 import type { IndexPatch, IndexPatchFacts, IndexPatchPhase } from '../patches'
 import type { ProjectConfigInspect } from '../project-config-inspect'
-import type { ProjectNativeStaticConfig } from '../native-static-inspect'
-import type { ProjectStaticSyntaxPlan } from '../static-plan'
+import type { ProjectStaticIndexConfig } from '../static-index/config/inspect'
+import type { ProjectStaticSyntaxPlan } from '../static-index/plan'
 import type { StaticExtractionTimingName } from '../static/instrumentation'
 import type { SemanticSourceProfileFile } from '../semantic/source-profile'
 import type {
@@ -113,8 +113,8 @@ export interface ProjectIndexArtifactMap {
   readonly projectModel: ResolvedProjectModel
   /** Effective configuration read model rendered by `crux config inspect`. */
   readonly projectConfig: ProjectConfigInspect
-  /** Executable-config fragment used before Go/Rust-owned native static planning. */
-  readonly projectNativeStaticConfig: ProjectNativeStaticConfig
+  /** Executable-config fragment used before Go/Rust-owned Static Index planning. */
+  readonly projectStaticIndexConfig: ProjectStaticIndexConfig
   /** Static syntax parsing plan consumed by native parser hosts. */
   readonly projectStaticSyntaxPlan: ProjectStaticSyntaxPlan
   /** Data-only extension runtime manifest loaded by the TypeScript static host. */

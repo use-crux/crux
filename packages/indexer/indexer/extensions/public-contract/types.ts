@@ -13,7 +13,7 @@ export type {
   StaticEvidenceMode,
   StaticEvidenceReader,
   StaticMatchEvidence,
-} from '../static-evidence/types'
+} from '../../static-index/extension-host/evidence/types'
 export type {
   AnalysisTier,
   ExtensionIdentity,

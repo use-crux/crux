@@ -1,30 +1,30 @@
 import { describe, expect, it } from 'vitest'
 import {
-  NativeStaticCompilerRequestSchema,
-  NativeStaticCompilerResponseSchema,
-  parseNativeStaticCompilerRequest,
-} from '../indexer/contracts/native-static/schema'
+  StaticIndexCompilerRequestSchema,
+  StaticIndexCompilerResponseSchema,
+  parseStaticIndexCompilerRequest,
+} from '../indexer/contracts/static-index/schema'
 import {
-  nativeStaticCompilerRequestFixtures,
-  nativeStaticCompilerResponseFixtures,
-  nativeStaticRunIdentityFixture,
-} from '../indexer/contracts/native-static/fixtures'
+  staticIndexCompilerRequestFixtures,
+  staticIndexCompilerResponseFixtures,
+  staticIndexRunIdentityFixture,
+} from '../indexer/contracts/static-index/fixtures'
 import { readNativeRuntimeSharedFixture } from '../indexer/contracts/fixtures'
 
-describe('native static compiler protocol', () => {
-  it('validates native static compiler requests and responses as JSON fixtures', () => {
-    for (const request of nativeStaticCompilerRequestFixtures) {
+describe('Static Index compiler protocol', () => {
+  it('validates Static Index compiler requests and responses as JSON fixtures', () => {
+    for (const request of staticIndexCompilerRequestFixtures) {
       const json = JSON.parse(JSON.stringify(request))
-      expect(NativeStaticCompilerRequestSchema.parse(json)).toEqual(json)
-      expect(parseNativeStaticCompilerRequest(JSON.stringify(request))).toEqual({ ok: true, request: json })
+      expect(StaticIndexCompilerRequestSchema.parse(json)).toEqual(json)
+      expect(parseStaticIndexCompilerRequest(JSON.stringify(request))).toEqual({ ok: true, request: json })
     }
-    for (const response of nativeStaticCompilerResponseFixtures) {
+    for (const response of staticIndexCompilerResponseFixtures) {
       const json = JSON.parse(JSON.stringify(response))
-      expect(NativeStaticCompilerResponseSchema.parse(json)).toEqual(json)
+      expect(StaticIndexCompilerResponseSchema.parse(json)).toEqual(json)
     }
   })
 
-  it('validates the shared native static protocol fixture file', () => {
+  it('validates the shared Static Index protocol fixture file', () => {
     const fixture = readNativeRuntimeSharedFixture('native-static-protocol')
 
     expect(fixture.requests.map((request) => request.method)).toEqual([
@@ -41,23 +41,23 @@ describe('native static compiler protocol', () => {
     ])
 
     for (const request of fixture.requests) {
-      expect(NativeStaticCompilerRequestSchema.parse(request)).toEqual(request)
-      expect(parseNativeStaticCompilerRequest(JSON.stringify(request))).toEqual({ ok: true, request })
+      expect(StaticIndexCompilerRequestSchema.parse(request)).toEqual(request)
+      expect(parseStaticIndexCompilerRequest(JSON.stringify(request))).toEqual({ ok: true, request })
     }
     for (const response of fixture.responses) {
-      expect(NativeStaticCompilerResponseSchema.parse(response)).toEqual(response)
+      expect(StaticIndexCompilerResponseSchema.parse(response)).toEqual(response)
     }
   })
 
-  it('rejects malformed native static compiler requests', () => {
-    expect(parseNativeStaticCompilerRequest('{')).toEqual({ ok: false, error: 'invalid JSON' })
+  it('rejects malformed Static Index compiler requests', () => {
+    expect(parseStaticIndexCompilerRequest('{')).toEqual({ ok: false, error: 'invalid JSON' })
     expect(
-      parseNativeStaticCompilerRequest(
+      parseStaticIndexCompilerRequest(
         JSON.stringify({
           protocolVersion: 2,
           method: 'nativeStaticPrepare',
           root: '/repo',
-          identity: nativeStaticRunIdentityFixture,
+          identity: staticIndexRunIdentityFixture,
           files: [],
         }),
       ),

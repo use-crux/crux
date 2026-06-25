@@ -1,11 +1,11 @@
 import { foldedIndexChild } from '../index-presentation'
 import { facts, type ExtractContext, type ExtractResult } from '../extensions'
 import type { StaticObjectReader } from '../extensions/public-contract/types'
-import { internalStaticRecordContext } from '../extensions/static-record-adapter/native-context'
+import { internalStaticRecordContext } from '../static-index/compatibility/syntax-record-bridge/native-context'
 import {
   createStaticRecordSourceResolver,
   staticRecordProjectSourceRef,
-} from '../extensions/static-record-adapter/source-resolver'
+} from '../static-index/compatibility/syntax-record-bridge/source-resolver'
 import type { ProjectSourceRef } from '@crux/core/project-index'
 import { staticObjectPropertyValue, staticObjectValue } from '../static/syntax-record/value'
 import { fallbackFactsFromRecordContext } from './routing-record-fallback'

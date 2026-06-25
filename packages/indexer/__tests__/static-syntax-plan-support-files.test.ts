@@ -5,9 +5,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { indexProjectAstFromSyntaxRecords, inspectProjectStaticSyntaxPlan } from '..'
 import {
   createTypeScriptStaticSyntaxFrontend,
-  RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
   type StaticSyntaxFileRecord,
 } from '../indexer/static/syntax-record'
+import { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static-index/syntax'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -58,7 +58,7 @@ describe('static syntax plan support files', () => {
       root,
       projectName: 'support-files',
       records: [contextRecord, helperRecord],
-      frontendIdentity: RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
+      frontendIdentity: OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
     })
 
     const warmPlan = await inspectProjectStaticSyntaxPlan({
@@ -81,6 +81,6 @@ async function createRustIdentityRecord(input: {
   const record = await createTypeScriptStaticSyntaxFrontend({ callNames: ['context'] }).parseFile(input)
   return {
     ...record,
-    frontend: RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
+    frontend: OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
   }
 }

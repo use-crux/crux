@@ -21,9 +21,8 @@ describe('native runtime contract inventory', () => {
         renamesFrom: 'native-static-protocol',
       }),
     )
-    expect(entry?.filesByOwner.typescript.some((file) => file.path.includes('/contracts/native-static/'))).toBe(
-      true,
-    )
+    expect(entry?.filesByOwner.typescript.some((file) => file.path.includes('/contracts/static-index/'))).toBe(true)
+    expect(entry?.filesByOwner.typescript.some((file) => file.path.includes('/contracts/native-static/'))).toBe(false)
   })
 
   it('points every listed TypeScript contract and Go/Rust mirror at a tracked file', async () => {

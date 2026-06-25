@@ -33,7 +33,7 @@ runtime.
 | --- | --- | --- | --- | --- |
 | `worker-events` | `contracts/worker-events/schema.ts` plus `indexer/worker-protocol/*` implementation files | `internal/projectindexwire/worker_protocol*` and artifacts | `crates/protocol/src/worker.rs`; `index_compiler/finalizer/events.rs` emits event JSON | Partial mirror |
 | `static-syntax-records` | `contracts/static-syntax/schema.ts` plus `indexer/static/syntax-record/*` implementation files | `internal/indexhost/native/staticplan`, `internal/indexhost/native/syntax/record`, and syntax stream decoder | `crates/protocol/src/static_syntax.rs`; `crates/syntax-oxc/src/syntax/frontend.rs` | Mirrored |
-| `static-index` | Target row replacing the current `contracts/native-static/schema.ts` plus `indexer/worker-protocol/native-static*` implementation files | `internal/indexhost/native/protocol/*` until the Go move | `crates/protocol/src/native_static.rs` until the protocol rename | Mirrored |
+| `static-index` | `contracts/static-index/schema.ts` plus `indexer/static-index/protocol/*` implementation files | `internal/indexhost/native/protocol/*` until the Go move | `crates/protocol/src/native_static.rs` until the protocol rename | Mirrored |
 | `semantic-evidence` | `contracts/semantic/schema.ts`, `indexer/semantic/evidence/projection.ts`, and service/native contracts | `internal/indexhost/semantic/worker.go` consumes patch events, not semantic evidence structs | None today | TypeScript-only |
 
 ## Parity Fixture Gaps
@@ -48,8 +48,8 @@ runtime.
 | Test or helper | Area | Comparison mode | Notes |
 | --- | --- | --- | --- |
 | `packages/indexer/__tests__/worker-protocol.test.ts` | Worker events | Behavior plus full patch equality | Round-trips in-memory patch facts through TypeScript events; no shared file fixture and no Go/Rust decode in the same test. |
-| `packages/indexer/__tests__/native-static-protocol.test.ts` | Native static protocol | Behavior/schema | Validates realistic request/response JSON through Zod and parser helpers. It does not compare Go or Rust mirrors. |
-| `crates/crux-indexer-worker/src/shared_fixtures_tests.rs` | Native static protocol, static syntax records, relation specs, rule descriptors, and native coverage identities | Behavior/schema plus native-static pipeline finalization | Rust decodes the same fixture JSON consumed by TypeScript and Go. |
+| `packages/indexer/__tests__/native-static-protocol.test.ts` | Static Index protocol | Behavior/schema | Validates realistic request/response JSON through Zod and parser helpers. It does not compare Go or Rust mirrors. |
+| `crates/crux-indexer-worker/src/shared_fixtures_tests.rs` | Static Index protocol, static syntax records, relation specs, rule descriptors, and native coverage identities | Behavior/schema plus native-static pipeline finalization | Rust decodes the same fixture JSON consumed by TypeScript and Go. |
 | `packages/indexer/__tests__/static-syntax-record.test.ts` | Static syntax records | Behavior/schema | Checks TypeScript frontend record shape, JSON safety, import interests, and pruned evidence. |
 | `packages/indexer/__tests__/rust-oxc-frontend-batch.test.ts` | Static syntax protocol | Behavior | Uses a fake Rust/Oxc process to prove batch and disk-source protocol behavior from TypeScript host code. |
 | `packages/indexer/__tests__/static-provided-record-index.test.ts` | Static syntax to AST patch | Full facts | Normalizes and compares AST patch facts from parser-backed indexing and provided syntax records. |

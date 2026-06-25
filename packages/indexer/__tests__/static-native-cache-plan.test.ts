@@ -7,9 +7,9 @@ import { compileProjectIndex } from '../indexer/compiler'
 import {
   createProvidedStaticSyntaxFrontend,
   createTypeScriptStaticSyntaxFrontend,
-  RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
   type StaticSyntaxFileRecord,
 } from '../indexer/static/syntax-record'
+import { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static-index/syntax'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -24,8 +24,8 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-describe('native static cache planning', () => {
-  it('misses native static cache entries written by a different Rust/Oxc frontend identity', async () => {
+describe('Static Index cache planning', () => {
+  it('misses Static Index cache entries written by a different Rust/Oxc frontend identity', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
     const file = join(root, 'src/writer.ts')
@@ -48,7 +48,7 @@ describe('native static cache planning', () => {
         }),
       ],
       frontendIdentity: {
-        ...RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
+        ...OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
         version: 'oxc_parser@0.133.0+stale-test',
       },
     })
@@ -64,7 +64,7 @@ describe('native static cache planning', () => {
     expect(plan.filesToParse).toEqual([file])
   })
 
-  it('misses native static cache entries when a loaded extension package identity changes', async () => {
+  it('misses Static Index cache entries when a loaded extension package identity changes', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
     const file = join(root, 'src/writer.ts')
@@ -99,7 +99,7 @@ describe('native static cache planning', () => {
       mode: 'config-policy',
       staticSyntaxFrontend: createProvidedStaticSyntaxFrontend({
         records,
-        identity: RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
+        identity: OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
       }),
     })
 
@@ -141,7 +141,7 @@ async function createRustIdentityRecord(input: {
   return {
     ...record,
     frontend: {
-      ...RUST_OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
+      ...OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
       ...(input.frontendVersion ? { version: input.frontendVersion } : {}),
     },
   }
