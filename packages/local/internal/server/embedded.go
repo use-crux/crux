@@ -3,7 +3,7 @@ package server
 import (
 	"embed"
 
-	"github.com/use-crux/crux/packages/local/internal/localassets"
+	"github.com/use-crux/crux/packages/local/internal/assets"
 )
 
 //go:embed embed/quality-runner.mjs
@@ -25,38 +25,38 @@ var embeddedProjectRuntimeIndexer []byte
 // The file is version-stamped by content hash — only re-extracted when the
 // binary changes. Returns the absolute path to the extracted file.
 func ExtractEmbedded(name string, content []byte) (string, error) {
-	return localassets.ExtractEmbedded(name, content)
+	return assets.ExtractEmbedded(name, content)
 }
 
 // ExtractQualityRunner extracts the embedded quality-runner.mjs to the cache directory.
 func ExtractQualityRunner() (string, error) {
-	return localassets.ExtractQualityRunner(embeddedQualityRunner)
+	return assets.ExtractQualityRunner(embeddedQualityRunner)
 }
 
 // ExtractSourceResolver extracts the embedded source-resolver.mjs to the cache directory.
 func ExtractSourceResolver() (string, error) {
-	return localassets.ExtractSourceResolver(embeddedSourceResolver)
+	return assets.ExtractSourceResolver(embeddedSourceResolver)
 }
 
 // ExtractProjectIndexer extracts the embedded project-indexer.mjs to the cache directory.
 func ExtractProjectIndexer() (string, error) {
-	return localassets.ExtractProjectIndexer(embeddedProjectIndexer)
+	return assets.ExtractProjectIndexer(embeddedProjectIndexer)
 }
 
 // ExtractProjectSemanticIndexer extracts the embedded semantic indexer worker to the cache directory.
 func ExtractProjectSemanticIndexer() (string, error) {
-	return localassets.ExtractProjectSemanticIndexer(embeddedProjectSemanticIndexer)
+	return assets.ExtractProjectSemanticIndexer(embeddedProjectSemanticIndexer)
 }
 
 // ExtractProjectRuntimeIndexer extracts the embedded runtime indexer worker to the cache directory.
 func ExtractProjectRuntimeIndexer() (string, error) {
-	return localassets.ExtractProjectRuntimeIndexer(embeddedProjectRuntimeIndexer)
+	return assets.ExtractProjectRuntimeIndexer(embeddedProjectRuntimeIndexer)
 }
 
 // FindNode locates the node binary, returning its path or an error with
 // a user-friendly message.
 func FindNode() (string, error) {
-	return localassets.FindNode()
+	return assets.FindNode()
 }
 
 // Unused import guard — embed package must be imported for //go:embed to work.

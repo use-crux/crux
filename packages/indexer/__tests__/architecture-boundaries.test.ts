@@ -143,7 +143,7 @@ describe('indexer architecture boundaries', () => {
     ).toEqual([
       { term: 'native-static', replacements: ['static-index'], targetedPhases: [2, 5, 6, 7] },
       { term: 'nativeAst', replacements: ['staticIndex', 'staticSyntax', 'oxcSyntax'], targetedPhases: [2, 5, 7] },
-      { term: 'projectindexer', replacements: ['projectindex'], targetedPhases: [4] },
+      { term: 'projectindexer', replacements: ['projectindex'], targetedPhases: [4, 5] },
       { term: 'native_static', replacements: ['static_index'], targetedPhases: [6, 7] },
     ])
   })
@@ -159,7 +159,7 @@ describe('indexer architecture boundaries', () => {
     ])
     expect(observationFor(observations, 'native-static').matches.length).toBeGreaterThan(0)
     expect(observationFor(observations, 'nativeAst').matches.length).toBeGreaterThan(0)
-    expect(observationFor(observations, 'projectindexer').matches.length).toBeGreaterThan(0)
+    expect(observationFor(observations, 'projectindexer').matches).toEqual([])
     expect(observationFor(observations, 'native_static').matches.some((match) => !match.protocolOnly)).toBe(true)
   })
 })

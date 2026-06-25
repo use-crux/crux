@@ -3,14 +3,14 @@ package source
 import (
 	"context"
 
-	"github.com/use-crux/crux/packages/local/internal/nodeworker"
+	nodeprocess "github.com/use-crux/crux/packages/local/internal/process/node"
 )
 
 const sourceWorkerMaxResponseBytes = 4 * 1024 * 1024
 
 // Worker manages source map resolution through a persistent Node worker.
 type Worker struct {
-	worker *nodeworker.Worker
+	worker *nodeprocess.Worker
 }
 
 // ResolveRequest is a request to resolve source locations.
@@ -88,12 +88,12 @@ type FrameLine struct {
 
 // New creates a source worker. When scriptPath is empty, embeddedScript is used.
 func New(scriptPath string, embeddedScript []byte) *Worker {
-	opts := []nodeworker.Option{nodeworker.WithMaxResponseBytes(sourceWorkerMaxResponseBytes)}
+	opts := []nodeprocess.Option{nodeprocess.WithMaxResponseBytes(sourceWorkerMaxResponseBytes)}
 	if scriptPath != "" {
-		opts = append(opts, nodeworker.WithScriptPath(scriptPath))
+		opts = append(opts, nodeprocess.WithScriptPath(scriptPath))
 	}
 	return &Worker{
-		worker: nodeworker.New(nodeworker.Script{
+		worker: nodeprocess.New(nodeprocess.Script{
 			Name:    "source-resolver",
 			Content: embeddedScript,
 		}, opts...),
@@ -102,7 +102,7 @@ func New(scriptPath string, embeddedScript []byte) *Worker {
 
 // ResolveLocations resolves multiple source locations.
 func (w *Worker) ResolveLocations(ctx context.Context, locations []Location) ([]ResolvedLocation, error) {
-	resp, err := nodeworker.Call[struct {
+	resp, err := nodeprocess.Call[struct {
 		Locations []ResolvedLocation `json:"locations"`
 	}](ctx, w.worker, ResolveRequest{
 		Method:    "resolveLocations",
@@ -116,7 +116,7 @@ func (w *Worker) ResolveLocations(ctx context.Context, locations []Location) ([]
 
 // ResolveFn resolves a function's source code.
 func (w *Worker) ResolveFn(ctx context.Context, file string, line int, column *int) (*ResolvedFn, error) {
-	resp, err := nodeworker.Call[ResolvedFn](ctx, w.worker, ResolveRequest{
+	resp, err := nodeprocess.Call[ResolvedFn](ctx, w.worker, ResolveRequest{
 		Method: "resolveFnSource",
 		File:   file,
 		Line:   line,
@@ -130,7 +130,7 @@ func (w *Worker) ResolveFn(ctx context.Context, file string, line int, column *i
 
 // ResolveFrame resolves a narrow authored source-frame snapshot.
 func (w *Worker) ResolveFrame(ctx context.Context, req FrameRequest) (*FrameResult, error) {
-	resp, err := nodeworker.Call[FrameResult](ctx, w.worker, ResolveRequest{
+	resp, err := nodeprocess.Call[FrameResult](ctx, w.worker, ResolveRequest{
 		Method:      "resolveSourceFrame",
 		File:        req.File,
 		Line:        req.Line,
@@ -155,5 +155,5 @@ func (w *Worker) Close() error {
 }
 
 func findNodePath() (string, error) {
-	return nodeworker.FindNodePath()
+	return nodeprocess.FindNodePath()
 }

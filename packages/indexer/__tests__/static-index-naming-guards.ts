@@ -2,7 +2,7 @@
  * Static Index naming guards for the pre-launch runtime reorg.
  *
  * The guards are test-owned on purpose: Phase 1 records the old vocabulary
- * that later phases must remove, while the current implementation still keeps
+ * that later phases must remove, while some implementation surfaces still keep
  * those names in live files. The source scanner gives future phases a narrow
  * place to tighten the rules from "identified" to "gone".
  *
@@ -103,7 +103,7 @@ export const staticIndexVocabularyGuards = defineStaticIndexVocabularyGuards([
   {
     term: 'projectindexer',
     replacements: ['projectindex'],
-    targetedPhases: [4],
+    targetedPhases: [4, 5],
     roots: ['packages/local/internal'],
   },
   {

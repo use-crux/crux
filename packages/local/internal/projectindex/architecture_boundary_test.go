@@ -18,10 +18,20 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 
 	expectedPackages := []string{
 		"projectindex/cache",
+		"projectindex/host",
 		"projectindex/model",
 		"projectindex/readmodel",
 		"projectindex/service",
+		"projectindex/staticindex/cache",
+		"projectindex/staticindex/compat",
+		"projectindex/staticindex/compiler",
+		"projectindex/staticindex/planner",
+		"projectindex/staticindex/protocol",
+		"projectindex/staticindex/sourceprofile",
+		"projectindex/staticindex/syntax",
 		"projectindex/wire",
+		"process/node",
+		"assets",
 	}
 	for _, packagePath := range expectedPackages {
 		if info, err := os.Stat(filepath.Join(internalDir, packagePath)); err != nil || !info.IsDir() {
@@ -30,8 +40,12 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 	}
 
 	oldRoots := []string{
+		"indexhost",
+		filepath.Join("indexhost", "native"),
 		"indexread",
 		"indexservice",
+		"localassets",
+		"nodeworker",
 		"projectindexstore",
 		"projectindexwire",
 	}

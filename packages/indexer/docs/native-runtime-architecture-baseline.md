@@ -31,10 +31,10 @@ runtime.
 
 | Contract group | Current canonical TypeScript area | Current Go mirror | Current Rust mirror | Mirror status |
 | --- | --- | --- | --- | --- |
-| `worker-events` | `contracts/worker-events/schema.ts` plus `indexer/worker-protocol/*` implementation files | `internal/projectindexwire/worker_protocol*` and artifacts | `crates/protocol/src/worker.rs`; `index_compiler/finalizer/events.rs` emits event JSON | Partial mirror |
-| `static-syntax-records` | `contracts/static-syntax/schema.ts` plus `indexer/static/syntax-record/*` implementation files | `internal/indexhost/native/staticplan`, `internal/indexhost/native/syntax/record`, and syntax stream decoder | `crates/protocol/src/static_syntax.rs`; `crates/syntax-oxc/src/syntax/frontend.rs` | Mirrored |
-| `static-index` | `contracts/static-index/schema.ts` plus `indexer/static-index/protocol/*` implementation files | `internal/indexhost/native/protocol/*` until the Go move | `crates/protocol/src/native_static.rs` until the protocol rename | Mirrored |
-| `semantic-evidence` | `contracts/semantic/schema.ts`, `indexer/semantic/evidence/projection.ts`, and service/native contracts | `internal/indexhost/semantic/worker.go` consumes patch events, not semantic evidence structs | None today | TypeScript-only |
+| `worker-events` | `contracts/worker-events/schema.ts` plus `indexer/worker-protocol/*` implementation files | `internal/projectindex/wire/worker_protocol*` and artifacts | `crates/protocol/src/worker.rs`; `index_compiler/finalizer/events.rs` emits event JSON | Partial mirror |
+| `static-syntax-records` | `contracts/static-syntax/schema.ts` plus `indexer/static/syntax-record/*` implementation files | `internal/projectindex/staticindex/planner`, `internal/projectindex/staticindex/syntax/record`, and syntax stream decoder | `crates/protocol/src/static_syntax.rs`; `crates/syntax-oxc/src/syntax/frontend.rs` | Mirrored |
+| `static-index` | `contracts/static-index/schema.ts` plus `indexer/static-index/protocol/*` implementation files | `internal/projectindex/staticindex/protocol/*` until the protocol rename | `crates/protocol/src/native_static.rs` until the protocol rename | Mirrored |
+| `semantic-evidence` | `contracts/semantic/schema.ts`, `indexer/semantic/evidence/projection.ts`, and service/native contracts | `internal/projectindex/host/semantic/worker.go` consumes patch events, not semantic evidence structs | None today | TypeScript-only |
 
 ## Parity Fixture Gaps
 
@@ -53,11 +53,11 @@ runtime.
 | `packages/indexer/__tests__/static-syntax-record.test.ts` | Static syntax records | Behavior/schema | Checks TypeScript frontend record shape, JSON safety, import interests, and pruned evidence. |
 | `packages/indexer/__tests__/rust-oxc-frontend-batch.test.ts` | Static syntax protocol | Behavior | Uses a fake Rust/Oxc process to prove batch and disk-source protocol behavior from TypeScript host code. |
 | `packages/indexer/__tests__/static-provided-record-index.test.ts` | Static syntax to AST patch | Full facts | Normalizes and compares AST patch facts from parser-backed indexing and provided syntax records. |
-| `packages/local/internal/indexhost/parity_test.go` | Native static production path | Full facts | Environment-gated Go test compares normalized TypeScript and native AST static graph facts. |
-| `packages/local/internal/indexhost/native/staticcompile/parity/normalize_test.go` | Static parity normalizer | Behavior | Proves fact ordering is ignored while semantic metadata changes still fail. |
-| `packages/local/internal/projectindexwire/shared_fixtures_test.go` | Worker events | Schema/behavior | Decodes the shared worker event stream fixture through the Go worker-event collector. |
-| `packages/local/internal/indexhost/native/protocol/shared_fixtures_test.go` | Native static protocol | Schema/behavior | Decodes the shared native static request/response fixture through Go protocol mirrors. |
-| `packages/local/internal/indexhost/native/syntax/shared_fixtures_test.go` | Static syntax records | Schema/behavior | Decodes the shared static syntax record fixture through Go syntax stream mirrors. |
+| `packages/local/internal/projectindex/host/parity_test.go` | Native static production path | Full facts | Environment-gated Go test compares normalized TypeScript and native AST static graph facts. |
+| `packages/local/internal/projectindex/staticindex/compiler/parity/normalize_test.go` | Static parity normalizer | Behavior | Proves fact ordering is ignored while semantic metadata changes still fail. |
+| `packages/local/internal/projectindex/wire/shared_fixtures_test.go` | Worker events | Schema/behavior | Decodes the shared worker event stream fixture through the Go worker-event collector. |
+| `packages/local/internal/projectindex/staticindex/protocol/shared_fixtures_test.go` | Native static protocol | Schema/behavior | Decodes the shared native static request/response fixture through Go protocol mirrors. |
+| `packages/local/internal/projectindex/staticindex/syntax/shared_fixtures_test.go` | Static syntax records | Schema/behavior | Decodes the shared static syntax record fixture through Go syntax stream mirrors. |
 | `packages/indexer/__tests__/semantic-backend-parity.test.ts` | Semantic backends | Full facts plus ID/type/role coverage | Compares normalized TypeScript and native semantic facts and checks fixture coverage ids, relation types, source-ref roles, and lint rule ids. |
 | `packages/indexer/__tests__/first-party-extractor-fixtures.test.ts` | First-party static extractors | Behavior plus coverage inventory | Asserts selected definitions/relations and records fixture/native coverage for bundled extractor families. |
 | `packages/indexer/__tests__/extension-parity.test.ts` | Static extraction projection | Behavior | Verifies public fixture extraction emits representative definitions, relations, dependencies, and contract metadata. |

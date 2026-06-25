@@ -122,31 +122,31 @@ const inventory = {
       go: [
         contractFile(
           'go',
-          'packages/local/internal/projectindexwire/worker_protocol.go',
+          'packages/local/internal/projectindex/wire/worker_protocol.go',
           'Host-side V2 worker event collector and transaction validation.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindexwire/worker_protocol_facts.go',
+          'packages/local/internal/projectindex/wire/worker_protocol_facts.go',
           'Fact envelope decoding into Go Project Index patch facts.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindexwire/worker_protocol_source_profile.go',
+          'packages/local/internal/projectindex/wire/worker_protocol_source_profile.go',
           'Source-profile batch decoding for semantic preflight handoff.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindexwire/worker_artifact.go',
+          'packages/local/internal/projectindex/wire/worker_artifact.go',
           'Artifact event decoding outside the durable patch fact stream.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/projectindexwire/shared_fixtures_test.go',
+          'packages/local/internal/projectindex/wire/shared_fixtures_test.go',
           'Shared fixture decoder for the TypeScript-owned worker event stream JSON.',
           'test',
         ),
@@ -205,31 +205,31 @@ const inventory = {
       go: [
         contractFile(
           'go',
-          'packages/local/internal/indexhost/native/staticplan/plan/build.go',
+          'packages/local/internal/projectindex/staticindex/planner/build.go',
           'Go-owned static syntax plan sent to native parser hosts.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/indexhost/native/syntax/record/request.go',
+          'packages/local/internal/projectindex/staticindex/syntax/record/request.go',
           'Static syntax plan to Rust/Oxc parser request conversion.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/indexhost/native/syntax/record/collect.go',
+          'packages/local/internal/projectindex/staticindex/syntax/record/collect.go',
           'Static syntax record collection from a configured parser host.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/indexhost/native/syntax/event.go',
+          'packages/local/internal/projectindex/staticindex/syntax/event.go',
           'Streaming static syntax event decoder.',
           'streaming',
         ),
         contractFile(
           'go',
-          'packages/local/internal/indexhost/native/syntax/shared_fixtures_test.go',
+          'packages/local/internal/projectindex/staticindex/syntax/shared_fixtures_test.go',
           'Shared fixture decoder for static syntax record JSON.',
           'test',
         ),
@@ -296,31 +296,31 @@ const inventory = {
       go: [
         contractFile(
           'go',
-          'packages/local/internal/indexhost/native/protocol/types.go',
+          'packages/local/internal/projectindex/staticindex/protocol/types.go',
           'Go mirror of source-only compiler request, response, identity, plan, and telemetry structs.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/indexhost/native/protocol/stream.go',
+          'packages/local/internal/projectindex/staticindex/protocol/stream.go',
           'Go streaming decoder for analyze/finalize/compile native static events.',
           'streaming',
         ),
         contractFile(
           'go',
-          'packages/local/internal/indexhost/native/protocol/validation.go',
+          'packages/local/internal/projectindex/staticindex/protocol/validation.go',
           'Go protocol version, method, and worker response validation.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/indexhost/native/protocol/identity.go',
+          'packages/local/internal/projectindex/staticindex/protocol/identity.go',
           'Go construction of native static cache-sensitive run identity.',
           'host-mirror',
         ),
         contractFile(
           'go',
-          'packages/local/internal/indexhost/native/protocol/shared_fixtures_test.go',
+          'packages/local/internal/projectindex/staticindex/protocol/shared_fixtures_test.go',
           'Shared fixture decoder for native static protocol JSON.',
           'test',
         ),
@@ -379,7 +379,7 @@ const inventory = {
       go: [
         contractFile(
           'go',
-          'packages/local/internal/indexhost/semantic/worker.go',
+          'packages/local/internal/projectindex/host/semantic/worker.go',
           'Go semantic worker host consumes Project Index patch events, not semantic evidence structs.',
           'host-mirror',
         ),
