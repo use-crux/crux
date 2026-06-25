@@ -49,8 +49,8 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 	})
 
 	plan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
-		Root:             root,
-		NativeAstEnabled: true,
+		Root:                root,
+		StaticSyntaxEnabled: true,
 	})
 	if err != nil {
 		t.Fatalf("planner.Build error = %v", err)
@@ -94,8 +94,8 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 		t.Fatalf("change support: %v", err)
 	}
 	dependencyChangedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
-		Root:             root,
-		NativeAstEnabled: true,
+		Root:                root,
+		StaticSyntaxEnabled: true,
 	})
 	if err != nil {
 		t.Fatalf("dependency changed planner.Build error = %v", err)
@@ -111,8 +111,8 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 		t.Fatalf("change tsconfig: %v", err)
 	}
 	configChangedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
-		Root:             root,
-		NativeAstEnabled: true,
+		Root:                root,
+		StaticSyntaxEnabled: true,
 	})
 	if err != nil {
 		t.Fatalf("config changed planner.Build error = %v", err)
@@ -128,8 +128,8 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 		t.Fatalf("change source: %v", err)
 	}
 	changedPlan, err := planner.Build(root, "warm-cache", projectindex.ProjectStaticIndexConfig{
-		Root:             root,
-		NativeAstEnabled: true,
+		Root:                root,
+		StaticSyntaxEnabled: true,
 	})
 	if err != nil {
 		t.Fatalf("changed planner.Build error = %v", err)

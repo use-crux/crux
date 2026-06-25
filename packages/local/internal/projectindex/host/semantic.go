@@ -26,7 +26,7 @@ func (w *Bundle) PlanProjectSemanticRequest(
 		return projectindex.ProjectSemanticIndexRequest{}, err
 	}
 	plan := planResult.Plan
-	if !plan.NativeAstEnabled || !compat.Schedulable(plan) {
+	if !plan.StaticSyntaxEnabled || !compat.Schedulable(plan) {
 		return projectindex.ProjectSemanticIndexRequest{}, fmt.Errorf("Static Index semantic planning is not schedulable")
 	}
 	sourceInput, err := sourceprofile.FromPlan(plan)

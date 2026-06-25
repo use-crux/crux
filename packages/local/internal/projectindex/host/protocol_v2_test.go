@@ -204,7 +204,7 @@ func TestWorker_indexProjectAstFromSyntaxRecordsUsesProvidedRecords(t *testing.T
 	}
 }
 
-func TestWorker_indexProjectAstPatchErrorsWhenNativeAstEnabledWithoutStaticIndexCompiler(t *testing.T) {
+func TestWorker_indexProjectAstPatchErrorsWhenStaticSyntaxEnabledWithoutStaticIndexCompiler(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}

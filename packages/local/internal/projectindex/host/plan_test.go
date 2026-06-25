@@ -75,12 +75,12 @@ func TestProjectStaticIndexSimpleConfigParser(t *testing.T) {
 	if !ok {
 		t.Fatal("simple nativeAst object config was not parsed")
 	}
-	if !config.NativeAstEnabled || config.NativeAstFrontend != "oxc" || config.ConfigFile != configFile {
-		t.Fatalf("config = %+v, want nativeAst oxc config", config)
+	if !config.StaticSyntaxEnabled || config.StaticSyntaxFrontend != "oxc" || config.ConfigFile != configFile {
+		t.Fatalf("config = %+v, want static syntax oxc config", config)
 	}
 
 	config, ok = planner.ParseSimpleConfig(root, configFile, "export default config({ experimental: { indexer: { nativeAst: false } } })")
-	if !ok || config.NativeAstEnabled {
+	if !ok || config.StaticSyntaxEnabled {
 		t.Fatalf("config = %+v ok=%v, want explicit nativeAst false", config, ok)
 	}
 

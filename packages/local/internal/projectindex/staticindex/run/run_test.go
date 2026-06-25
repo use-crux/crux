@@ -175,15 +175,15 @@ func writeSource(t *testing.T) (string, string) {
 
 func testPlan(root, sourceFile string) projectindex.ProjectStaticSyntaxPlan {
 	return projectindex.ProjectStaticSyntaxPlan{
-		Root:             root,
-		ProjectName:      "static-run",
-		Files:            []string{sourceFile},
-		PrimaryFiles:     []string{sourceFile},
-		FilesToParse:     []string{sourceFile},
-		CacheMisses:      []string{sourceFile},
-		NativeAstEnabled: true,
-		StaticInterests:  json.RawMessage(`{"extractors":[]}`),
-		SourceGraph:      json.RawMessage(`{"schemaVersion":1,"producedBy":"@crux/indexer","capabilities":[],"shards":[]}`),
+		Root:                root,
+		ProjectName:         "static-run",
+		Files:               []string{sourceFile},
+		PrimaryFiles:        []string{sourceFile},
+		FilesToParse:        []string{sourceFile},
+		CacheMisses:         []string{sourceFile},
+		StaticSyntaxEnabled: true,
+		StaticInterests:     json.RawMessage(`{"extractors":[]}`),
+		SourceGraph:         json.RawMessage(`{"schemaVersion":1,"producedBy":"@crux/indexer","capabilities":[],"shards":[]}`),
 	}
 }
 

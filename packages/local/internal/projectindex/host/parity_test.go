@@ -36,7 +36,7 @@ func TestWorkerStaticIndexMatchesTypeScriptProductionPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("inspect Static Index syntax plan: %v", err)
 	}
-	if !plan.NativeAstEnabled {
+	if !plan.StaticSyntaxEnabled {
 		t.Fatalf("Static Index syntax plan did not enable nativeAst for config %q", configPath)
 	}
 	if len(record.Files(plan)) == 0 {

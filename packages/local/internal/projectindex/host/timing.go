@@ -3,7 +3,7 @@ package host
 import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
-	staticrun "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/session"
 )
 
 // ProjectIndexAstTiming captures production AST pipeline timings for benchmark
@@ -59,10 +59,10 @@ const (
 	projectIndexNodeReasonStaticIndexConfig        = planner.ReasonConfig
 	projectIndexNodeReasonStaticIndexExtensions    = planner.ReasonExtensions
 	projectIndexNodeReasonSyntaxRecordProjection   = "syntax-record-projection"
-	projectIndexNodeReasonStaticIndexEmpty         = staticrun.ReasonEmpty
-	projectIndexNodeReasonStaticIndexEvidence      = staticrun.ReasonEvidence
+	projectIndexNodeReasonStaticIndexEmpty         = session.ReasonEmpty
+	projectIndexNodeReasonStaticIndexEvidence      = session.ReasonEvidence
 	projectIndexNodeReasonStaticIndexRules         = "static-index-rules"
-	projectIndexNodeReasonStaticIndexIncomplete    = staticrun.ReasonIncomplete
+	projectIndexNodeReasonStaticIndexIncomplete    = session.ReasonIncomplete
 )
 
 func projectIndexAstTimingNodeRequired(timing ProjectIndexAstTiming, reasons ...string) ProjectIndexAstTiming {

@@ -21,7 +21,7 @@ func TestLoadConfigBuildsStaticIndexConfigRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig error = %v", err)
 	}
-	if !config.NativeAstEnabled {
+	if !config.StaticSyntaxEnabled {
 		t.Fatalf("config = %+v, want decoded native AST config", config)
 	}
 	if len(reader.requests) != 1 {

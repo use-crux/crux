@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	simpleNativeAstPattern = regexp.MustCompile(`(?s)\bnativeAst\s*:\s*(true|false|\{[^{}]*\})`)
-	simpleFrontendPattern  = regexp.MustCompile(`\bfrontend\s*:\s*['"]oxc['"]`)
-	simpleExtensionPattern = regexp.MustCompile(`\bextensions\s*:`)
-	simpleLintPattern      = regexp.MustCompile(`\blint\s*:`)
+	simpleStaticSyntaxPattern = regexp.MustCompile(`(?s)\bnativeAst\s*:\s*(true|false|\{[^{}]*\})`)
+	simpleFrontendPattern     = regexp.MustCompile(`\bfrontend\s*:\s*['"]oxc['"]`)
+	simpleExtensionPattern    = regexp.MustCompile(`\bextensions\s*:`)
+	simpleLintPattern         = regexp.MustCompile(`\blint\s*:`)
 )
 
 func InspectSimpleConfig(
@@ -47,11 +47,14 @@ func ParseSimpleConfig(
 	configFile string,
 	source string,
 ) (projectindex.ProjectStaticIndexConfig, bool) {
+	// This intentionally small fast path recognizes only literal public
+	// experimental.indexer.nativeAst forms. Complex config falls through to the
+	// TypeScript-owned inspector.
 	if simpleExtensionPattern.MatchString(source) ||
 		simpleLintPattern.MatchString(source) {
 		return projectindex.ProjectStaticIndexConfig{}, false
 	}
-	match := simpleNativeAstPattern.FindStringSubmatch(source)
+	match := simpleStaticSyntaxPattern.FindStringSubmatch(source)
 	if len(match) != 2 {
 		return projectindex.ProjectStaticIndexConfig{}, false
 	}
@@ -64,7 +67,7 @@ func ParseSimpleConfig(
 	}
 	switch value {
 	case "true":
-		config.NativeAstEnabled = true
+		config.StaticSyntaxEnabled = true
 		return config, true
 	case "false":
 		return config, true
@@ -72,9 +75,9 @@ func ParseSimpleConfig(
 		if !strings.HasPrefix(value, "{") || !strings.HasSuffix(value, "}") {
 			return projectindex.ProjectStaticIndexConfig{}, false
 		}
-		config.NativeAstEnabled = true
+		config.StaticSyntaxEnabled = true
 		if simpleFrontendPattern.MatchString(value) {
-			config.NativeAstFrontend = "oxc"
+			config.StaticSyntaxFrontend = "oxc"
 		}
 		return config, true
 	}

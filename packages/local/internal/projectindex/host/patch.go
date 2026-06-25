@@ -2,11 +2,11 @@ package host
 
 import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/patch"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/session"
 )
 
-func staticPatchOptions(root string) patch.Options {
-	return patch.Options{
+func staticPatchOptions(root string) session.PatchOptions {
+	return session.PatchOptions{
 		Root:             root,
 		MaxBytes:         workerMaxResponseBytes,
 		MaxFactsPerBatch: indexwire.MaxFactsPerBatch("indexProjectAst"),

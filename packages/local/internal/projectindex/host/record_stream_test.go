@@ -150,14 +150,14 @@ func TestWorker_indexProjectAstPatchFromNativeSyntaxRecordStreamStreamsLegacyRec
 	defer worker.Close()
 
 	plan := projectindex.ProjectStaticSyntaxPlan{
-		Root:             root,
-		ProjectName:      "native-stream",
-		Files:            []string{filepath.Join(root, "src", "one.ts"), filepath.Join(root, "src", "two.ts")},
-		CallNames:        []string{"prompt"},
-		ConstructorNames: []string{"Agent"},
-		SyntaxFrontend:   projectindex.SyntaxFrontend{Name: "oxc-rust", Version: "test"},
-		NativeAstEnabled: true,
-		StaticInterests:  json.RawMessage(`{}`),
+		Root:                root,
+		ProjectName:         "native-stream",
+		Files:               []string{filepath.Join(root, "src", "one.ts"), filepath.Join(root, "src", "two.ts")},
+		CallNames:           []string{"prompt"},
+		ConstructorNames:    []string{"Agent"},
+		SyntaxFrontend:      projectindex.SyntaxFrontend{Name: "oxc-rust", Version: "test"},
+		StaticSyntaxEnabled: true,
+		StaticInterests:     json.RawMessage(`{}`),
 	}
 	patch, timing, err := worker.indexProjectAstPatchFromNativeSyntaxRecordStream(context.Background(), root, "", "native-stream", plan, parser)
 	if err != nil {

@@ -5,13 +5,17 @@ import "encoding/json"
 // ProjectStaticIndexConfig is the executable-config fragment used before
 // Go/Rust-owned Static Index planning.
 type ProjectStaticIndexConfig struct {
-	Root              string                                  `json:"root"`
-	ConfigFile        string                                  `json:"configFile,omitempty"`
-	NativeAstEnabled  bool                                    `json:"nativeAstEnabled"`
-	NativeAstFrontend string                                  `json:"nativeAstFrontend,omitempty"`
-	Extensions        []ProjectStaticIndexExtensionReference `json:"extensions"`
-	Lint              json.RawMessage                         `json:"lint,omitempty"`
-	Diagnostics       []ProjectStaticIndexConfigDiagnostic   `json:"diagnostics,omitempty"`
+	Root       string `json:"root"`
+	ConfigFile string `json:"configFile,omitempty"`
+	// StaticSyntaxEnabled preserves the historical nativeAstEnabled JSON field
+	// while normalizing Go code to Static Syntax vocabulary.
+	StaticSyntaxEnabled bool `json:"nativeAstEnabled"`
+	// StaticSyntaxFrontend preserves the historical nativeAstFrontend JSON field
+	// while normalizing Go code to Static Syntax vocabulary.
+	StaticSyntaxFrontend string                                 `json:"nativeAstFrontend,omitempty"`
+	Extensions           []ProjectStaticIndexExtensionReference `json:"extensions"`
+	Lint                 json.RawMessage                        `json:"lint,omitempty"`
+	Diagnostics          []ProjectStaticIndexConfigDiagnostic   `json:"diagnostics,omitempty"`
 }
 
 // ProjectStaticIndexExtensionReference identifies one configured extension.

@@ -23,8 +23,8 @@ func TestProjectStaticIndexPlanReportsSubphaseTimings(t *testing.T) {
 	}
 
 	result, err := BuildWithTimings(root, "timed-plan", projectindex.ProjectStaticIndexConfig{
-		Root:             root,
-		NativeAstEnabled: true,
+		Root:                root,
+		StaticSyntaxEnabled: true,
 	})
 	if err != nil {
 		t.Fatalf("BuildWithTimings error = %v", err)

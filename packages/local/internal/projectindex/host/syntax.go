@@ -8,8 +8,8 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	staticclient "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/client"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compat"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/session"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
@@ -49,25 +49,22 @@ func (w *Bundle) InspectProjectStaticIndexConfig(ctx context.Context, root, conf
 func (w *Bundle) indexProjectAstPatchResultFromNativeSyntaxRecords(ctx context.Context, root, configPath, projectName string) (projectindex.ProjectAstIndexResult, error) {
 	started := time.Now()
 	planStarted := time.Now()
-	planResult, err := w.inspectProjectStaticSyntaxPlan(ctx, root, configPath, projectName)
-	if err != nil {
+	var compiler StaticCompiler
+	if w != nil {
+		compiler, _ = w.syntaxParser.(StaticCompiler)
+	}
+	result, err := w.staticIndexSession(root, configPath, projectName, compiler).Run(ctx)
+	if err != nil && result.Status == "" {
 		return projectindex.ProjectAstIndexResult{}, err
 	}
-	plan := planResult.Plan
-	timing := ProjectIndexAstTiming{
-		PlanMs:             elapsedMs(planStarted),
-		NodeTimings:        append([]projectindex.ProjectIndexPhaseTiming(nil), planResult.Timings...),
-		NativeOnlyEligible: compat.NativeOnlyEligible(plan),
-	}
-	for _, reason := range planResult.NodeReasons {
-		timing = projectIndexAstTimingNodeRequired(timing, reason)
-	}
-	if !plan.NativeAstEnabled {
+	timing := projectIndexAstTimingFromStaticIndexSession(result)
+	timing.PlanMs = elapsedMs(planStarted)
+	if result.Status == session.StatusDisabled {
 		patch, err := w.indexProjectAstPatchFromTypeScript(ctx, root, configPath, projectName)
 		fallbackTiming := w.LastAstTiming()
 		fallbackTiming.PlanMs = timing.PlanMs
-		fallbackTiming.NodeTimings = append(planResult.Timings, fallbackTiming.NodeTimings...)
-		for _, reason := range planResult.NodeReasons {
+		fallbackTiming.NodeTimings = append(result.PlanTimings, fallbackTiming.NodeTimings...)
+		for _, reason := range result.NodeReasons {
 			fallbackTiming = projectIndexAstTimingNodeRequired(fallbackTiming, reason)
 		}
 		fallbackTiming.TotalMs = elapsedMs(started)
@@ -77,40 +74,30 @@ func (w *Bundle) indexProjectAstPatchResultFromNativeSyntaxRecords(ctx context.C
 		}
 		return projectindex.ProjectAstIndexResult{Patch: patch}, nil
 	}
-	compiler, ok := w.syntaxParser.(StaticCompiler)
-	if !ok {
+	if result.Status == session.StatusMissingCompiler {
 		timing.TotalMs = elapsedMs(started)
 		w.recordLastAstTiming(timing)
 		return projectindex.ProjectAstIndexResult{}, fmt.Errorf("nativeAst indexing requires a Static Index compiler; syntax-record projection fallback is disabled")
 	}
-
-	if !compat.Schedulable(plan) {
+	if result.Status == session.StatusUnschedulable {
 		timing.TotalMs = elapsedMs(started)
 		w.recordLastAstTiming(timing)
 		return projectindex.ProjectAstIndexResult{}, fmt.Errorf("Static Index AST indexing is not schedulable for this static plan; syntax-record projection fallback is disabled")
 	}
-
-	patch, nativeTiming, usedStaticIndex, err := w.indexProjectAstPatchFromStaticIndexCompiler(ctx, root, configPath, projectName, plan, compiler)
-	nativeTiming.PlanMs = timing.PlanMs
-	nativeTiming.NodeTimings = append(planResult.Timings, nativeTiming.NodeTimings...)
-	nativeTiming.NativeOnlyEligible = timing.NativeOnlyEligible
-	for _, reason := range planResult.NodeReasons {
-		nativeTiming = projectIndexAstTimingNodeRequired(nativeTiming, reason)
-	}
-	nativeTiming.TotalMs = elapsedMs(started)
+	timing.TotalMs = elapsedMs(started)
 	if err != nil {
-		w.recordLastAstTiming(nativeTiming)
+		w.recordLastAstTiming(timing)
 		return projectindex.ProjectAstIndexResult{}, err
 	}
-	if usedStaticIndex {
-		nativeTiming.UsedStaticIndex = true
-		w.recordLastAstTiming(nativeTiming)
-		return projectindex.ProjectAstIndexResult{Patch: patch, UsedStaticIndex: true}, nil
+	if result.UsedStaticIndex {
+		timing.UsedStaticIndex = true
+		w.recordLastAstTiming(timing)
+		return projectindex.ProjectAstIndexResult{Patch: result.Patch, UsedStaticIndex: true}, nil
 	}
-	w.recordLastAstTiming(nativeTiming)
+	w.recordLastAstTiming(timing)
 	return projectindex.ProjectAstIndexResult{}, fmt.Errorf(
 		"Static Index AST indexing did not produce a complete patch; syntax-record projection fallback is disabled (reasons: %s)",
-		strings.Join(nativeTiming.NodeReasons, ", "),
+		strings.Join(timing.NodeReasons, ", "),
 	)
 }
 

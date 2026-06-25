@@ -61,7 +61,7 @@ func Inspect(
 	}
 
 	var extensionManifest *projectindex.StaticExtensionHostManifestResult
-	if len(config.Extensions) > 0 && config.NativeAstEnabled {
+	if len(config.Extensions) > 0 && config.StaticSyntaxEnabled {
 		manifestStarted := time.Now()
 		manifest, err := compat.LoadManifest(ctx, compat.ArtifactReaderFunc(reader.ReadArtifact), root, configPath)
 		if err != nil {

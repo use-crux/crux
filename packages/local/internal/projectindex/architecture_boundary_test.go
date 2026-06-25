@@ -1,9 +1,14 @@
 package projectindex_test
 
 import (
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -43,6 +48,7 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 		{"projectindex/staticindex/run/lint", "Static Index lint result shaping"},
 		{"projectindex/staticindex/run/parity", "Static Index parity normalization"},
 		{"projectindex/staticindex/run/patch", "Static Index patch projection"},
+		{"projectindex/staticindex/session", "Static Index session orchestration boundary"},
 		{"projectindex/staticindex/sourceprofile", "Static Index source profile boundary"},
 		{"projectindex/staticindex/syntax", "Static Syntax worker boundary"},
 		{"projectindex/staticindex/syntax/record", "Static Syntax record model"},
@@ -76,7 +82,7 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 	}
 }
 
-func TestProjectIndexPackageTransitionsRemainPhaseOwned(t *testing.T) {
+func TestServerAndDevtoolsDoNotImportStaticIndexInternals(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("could not determine test file location")
@@ -85,12 +91,35 @@ func TestProjectIndexPackageTransitionsRemainPhaseOwned(t *testing.T) {
 	projectIndexDir := filepath.Dir(filename)
 	internalDir := filepath.Dir(projectIndexDir)
 
-	futurePackages := []expectedInternalPackage{
-		{"projectindex/staticindex/session", "Phase 4 adds the high-level Static Index session boundary"},
+	routeRoots := []string{
+		filepath.Join(internalDir, "devtools"),
+		filepath.Join(internalDir, "server"),
 	}
-	for _, future := range futurePackages {
-		if _, err := os.Stat(filepath.Join(internalDir, future.path)); !os.IsNotExist(err) {
-			t.Fatalf("future package %q appeared before its owning phase (%s)", future.path, future.note)
+	for _, routeRoot := range routeRoots {
+		if err := filepath.WalkDir(routeRoot, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() || !strings.HasSuffix(path, ".go") {
+				return nil
+			}
+			file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+			if err != nil {
+				return err
+			}
+			for _, spec := range file.Imports {
+				importPath, err := strconv.Unquote(spec.Path.Value)
+				if err != nil {
+					return err
+				}
+				if strings.HasPrefix(importPath, "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/") {
+					rel, _ := filepath.Rel(internalDir, path)
+					t.Fatalf("%s imports Static Index internals directly via %q; route/devtools code should use projectindex service/readmodel APIs", rel, importPath)
+				}
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("scan route imports under %s: %v", routeRoot, err)
 		}
 	}
 }

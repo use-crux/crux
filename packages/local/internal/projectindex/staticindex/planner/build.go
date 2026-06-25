@@ -42,7 +42,7 @@ func BuildWithExtensionManifest(
 ) (Result, error) {
 	timings := []projectindex.ProjectIndexPhaseTiming{}
 	var cacheInputs []json.RawMessage
-	if config.NativeAstEnabled {
+	if config.StaticSyntaxEnabled {
 		cacheInputs = DefaultCacheCompilerInputs()
 	}
 	plan := projectindex.ProjectStaticSyntaxPlan{
@@ -55,7 +55,7 @@ func BuildWithExtensionManifest(
 		ConstructorInterests:     defaultConstructorInterests(),
 		PruneNativeFactCallNames: []string{"cascade", "fallback", "router"},
 		SyntaxFrontend:           syntaxFrontend(),
-		NativeAstEnabled:         config.NativeAstEnabled,
+		StaticSyntaxEnabled:      config.StaticSyntaxEnabled,
 		StaticInterests:          defaultStaticInterests(),
 		RelationSpecs:            nil,
 		RuleDescriptors:          nil,
@@ -63,7 +63,7 @@ func BuildWithExtensionManifest(
 		CacheInputs:              cacheInputs,
 		StaticHost:               defaultHost(),
 	}
-	if config.NativeAstEnabled && extensionManifest != nil {
+	if config.StaticSyntaxEnabled && extensionManifest != nil {
 		if err := mergeExtensionHostManifest(&plan, *extensionManifest); err != nil {
 			return Result{}, err
 		}
@@ -96,7 +96,7 @@ func BuildWithExtensionManifest(
 	timings = AppendTiming(timings, TimingSourceGraph, sourceGraphStarted, 1)
 	plan.SourceGraph = sourceGraph
 
-	if config.NativeAstEnabled && cache.StatusEnabledFromEnv() {
+	if config.StaticSyntaxEnabled && cache.StatusEnabledFromEnv() {
 		cacheStarted := time.Now()
 		applyCacheManifestStatus(&plan)
 		timings = AppendTiming(timings, TimingCacheStatus, cacheStarted, len(plan.PrimaryFiles))

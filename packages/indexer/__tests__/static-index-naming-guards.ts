@@ -133,7 +133,6 @@ export const staticIndexVocabularyGuards = defineStaticIndexVocabularyGuards([
       'packages/indexer/indexer/project-config-inspect.ts',
       'packages/indexer/indexer/static-index/config/index.ts',
       'packages/local/internal/commands/config_inspect.go',
-      'packages/local/internal/projectindex/host/static.go',
       'packages/local/internal/projectindex/host/syntax.go',
       'packages/local/internal/projectindex/model/static_index_config.go',
       'packages/local/internal/projectindex/model/static_plan.go',
