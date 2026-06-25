@@ -86,13 +86,13 @@ const inventory = {
       typescript: [
         contractFile(
           'typescript',
-          'packages/indexer/indexer/contracts/worker-events/schema.ts',
+          'packages/indexer/contracts/worker-events/schema.ts',
           'Canonical contract-spine barrel for worker events, fact envelopes, artifacts, and stream helpers.',
           'canonical-types',
         ),
         contractFile(
           'typescript',
-          'packages/indexer/indexer/contracts/worker-events/fixtures.ts',
+          'packages/indexer/contracts/worker-events/fixtures.ts',
           'TypeScript-owned worker-event fixtures used by schema and stream round-trip tests.',
           'test',
         ),
@@ -175,7 +175,7 @@ const inventory = {
       typescript: [
         contractFile(
           'typescript',
-          'packages/indexer/indexer/contracts/static-syntax/schema.ts',
+          'packages/indexer/contracts/static-syntax/schema.ts',
           'Canonical contract-spine barrel for static syntax frontend and record ABI.',
           'canonical-types',
         ),
@@ -264,13 +264,13 @@ const inventory = {
       typescript: [
         contractFile(
           'typescript',
-          'packages/indexer/indexer/contracts/static-index/schema.ts',
+          'packages/indexer/contracts/static-index/schema.ts',
           'Canonical contract-spine barrel for Static Index protocol schemas.',
           'schema',
         ),
         contractFile(
           'typescript',
-          'packages/indexer/indexer/contracts/static-index/fixtures.ts',
+          'packages/indexer/contracts/static-index/fixtures.ts',
           'TypeScript-owned Static Index request/response fixtures.',
           'test',
         ),
@@ -347,7 +347,7 @@ const inventory = {
       typescript: [
         contractFile(
           'typescript',
-          'packages/indexer/indexer/contracts/semantic/schema.ts',
+          'packages/indexer/contracts/semantic/schema.ts',
           'Canonical contract-spine barrel for backend-neutral semantic evidence.',
           'canonical-types',
         ),

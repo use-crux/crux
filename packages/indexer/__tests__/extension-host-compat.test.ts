@@ -9,7 +9,7 @@ import {
 } from '../indexer/static-index/extension-host/evidence/host'
 import { indexLintFinding } from '../indexer/lints/rules'
 import { createTypeScriptStaticSyntaxFrontend } from '../indexer/static/syntax-record'
-import { checkStaticRulesForProject, loadStaticExtensionHostManifestForProject } from '../worker-host'
+import { checkStaticRulesForProject, loadStaticExtensionHostManifestForProject } from '../host/static-compat'
 
 describe('static extension host compatibility layer', () => {
   it('loads a data-only host manifest with machine-readable Node reasons', async () => {

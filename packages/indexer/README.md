@@ -125,8 +125,8 @@ import { defineIndexerExtensionFixture, extractFixtureSource } from '@crux/index
 Crux-owned worker hosts can use private host subpaths while the package remains private:
 
 ```ts
-import { compileProjectIndex, createStaticExtraction } from '@crux/indexer/internal-host'
-import { indexPatchFromWorkerEvents } from '@crux/indexer/worker-protocol'
+import { compileProjectIndex, createStaticExtraction } from '@crux/indexer/host/static-index'
+import { indexPatchFromWorkerEvents } from '@crux/indexer/contracts/worker-events'
 ```
 
-Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. `createStaticExtraction` is a Crux-owned static extraction boundary for bundled tools that need source-file facts, and `@crux/indexer/testing` is the supported source-text fixture surface for extension tests. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party extension support is stabilized. Internal `indexer/*` modules are not package exports; `internal-host` and `worker-*` subpaths are host bridges, not general SDK entry points.
+Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. `createStaticExtraction` is a Crux-owned static extraction boundary for bundled tools that need source-file facts, and `@crux/indexer/testing` is the supported source-text fixture surface for extension tests. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party extension support is stabilized. Internal `indexer/*` modules are not package exports; `host/*` subpaths are Crux-owned worker bridges, and `contracts/*` subpaths are JSON-safe cross-runtime contracts rather than general SDK entry points.

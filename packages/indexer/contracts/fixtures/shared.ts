@@ -19,7 +19,7 @@ import type {
 } from '../static-index/schema'
 import type { StaticSyntaxFileRecord } from '../static-syntax/schema'
 import type { ProjectIndexWorkerEvent } from '../worker-events/schema'
-import type { IndexRelationPolicy } from '../../relations/types'
+import type { IndexRelationPolicy } from '../../indexer/relations/types'
 
 /** File-backed fixture names that are intended to be consumed across runtimes. */
 export type StaticIndexRuntimeSharedFixtureName =

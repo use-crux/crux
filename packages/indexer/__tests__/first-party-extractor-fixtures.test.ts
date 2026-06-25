@@ -12,7 +12,7 @@ import {
   firstPartyPrimitiveFixtureInventory,
 } from './first-party-extractor-inventory'
 import { assertDeterministicExtraction, defineIndexerExtensionFixture, extractFixtureSource } from '../testing'
-import { readStaticIndexRuntimeSharedFixture } from '../indexer/contracts/fixtures'
+import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
 import { indexRelationPolicies } from '../indexer/relations'
 import { builtInIndexRuleDescriptors } from '../indexer/lints/rules'
 

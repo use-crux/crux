@@ -1,21 +1,21 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import type { StaticSyntaxFileRecord } from '../indexer/contracts/static-syntax/schema'
-import { indexPatchFromWorkerEvents, indexPatchToWorkerEvents } from '../indexer/contracts/worker-events/schema'
+import type { StaticSyntaxFileRecord } from '../contracts/static-syntax/schema'
+import { indexPatchFromWorkerEvents, indexPatchToWorkerEvents } from '../contracts/worker-events/schema'
 import {
   workerEventFixtureOptions,
   workerEventFixturePatch,
-} from '../indexer/contracts/worker-events/fixtures'
+} from '../contracts/worker-events/fixtures'
 import {
   StaticIndexCompilerRequestSchema,
   StaticIndexCompilerResponseSchema,
   parseStaticIndexCompilerRequest,
-} from '../indexer/contracts/static-index/schema'
+} from '../contracts/static-index/schema'
 import {
   staticIndexCompilerRequestFixtures,
   staticIndexCompilerResponseFixtures,
-} from '../indexer/contracts/static-index/fixtures'
-import { staticIndexRuntimeContractFixtureGroups } from '../indexer/contracts/fixtures'
-import { projectSemanticEvidenceBatches, semanticEvidenceBatchKinds } from '../indexer/contracts/semantic/schema'
+} from '../contracts/static-index/fixtures'
+import { staticIndexRuntimeContractFixtureGroups } from '../contracts/fixtures'
+import { projectSemanticEvidenceBatches, semanticEvidenceBatchKinds } from '../contracts/semantic/schema'
 
 describe('Static Index runtime contract spine', () => {
   it('round-trips worker event fixtures through the contract path', () => {

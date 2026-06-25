@@ -1,21 +1,21 @@
 /**
- * Canonical TypeScript contract for the Static Index compiler protocol.
+ * Static Index compiler protocol contract.
  *
- * Static Index is the source-only Project Index lane. TypeScript owns the
- * request, response, identity, telemetry, and validation schemas; Go and Rust
- * mirror these shapes and round-trip shared fixtures from this spine.
+ * This entry point owns the TypeScript-visible request, response, identity,
+ * parser-interest, and telemetry shapes mirrored by the Go host and Rust
+ * Static Index worker.
  *
  * @module
  */
 
 export type {
   ParsedStaticIndexCompilerRequest,
-  StaticIndexIdentityManifest,
   StaticIndexCompilerMethod,
   StaticIndexCompilerRequest,
   StaticIndexCompilerResponse,
   StaticIndexFileInput,
   StaticIndexIdentityComponent,
+  StaticIndexIdentityManifest,
   StaticIndexLintSuppression,
   StaticIndexParserCallInterest,
   StaticIndexParserCallbackInterest,
@@ -24,10 +24,8 @@ export type {
   StaticIndexRunIdentity,
   StaticIndexSourceFile,
   StaticIndexTelemetry,
-} from '../../static-index/protocol'
+} from './schema'
 export {
-  createStaticIndexRunIdentity,
-  parseStaticIndexCompilerRequest,
   STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
   StaticIndexAnalyzeRequestSchema,
   StaticIndexAnalyzeResponseSchema,
@@ -50,4 +48,15 @@ export {
   StaticIndexRunIdentitySchema,
   StaticIndexSourceFileSchema,
   StaticIndexTelemetrySchema,
-} from '../../static-index/protocol'
+  createStaticIndexRunIdentity,
+  parseStaticIndexCompilerRequest,
+} from './schema'
+export {
+  staticIndexCompilerRequestFixtures,
+  staticIndexCompilerResponseFixtures,
+  staticIndexIdentityManifestFixture,
+  staticIndexPreparedPlanFixture,
+  staticIndexRunIdentityFixture,
+  staticIndexSourceFileFixture,
+  staticIndexTelemetryFixture,
+} from './fixtures'

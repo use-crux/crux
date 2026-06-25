@@ -2,7 +2,7 @@ import {
   checkStaticRulesForProject,
   extractStaticEvidenceBatchForProject,
   loadStaticExtensionHostManifestForProject,
-} from '@crux/indexer/worker-host'
+} from '@crux/indexer/host/static-compat'
 import { isProjectModelResolutionMode } from '@crux/core/project-index'
 import type { ProjectIndexWorkerRequest } from '../lib/project-indexer-request'
 import { writeArtifactEvent, type ProjectIndexWorkerWriter } from './project-indexer-protocol'

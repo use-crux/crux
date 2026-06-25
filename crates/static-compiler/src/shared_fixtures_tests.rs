@@ -207,22 +207,22 @@ where
 fn fixture_text(name: &str) -> &'static str {
     match name {
         "static-index-protocol.json" => include_str!(
-            "../../../packages/indexer/indexer/contracts/fixtures/static-index-protocol.json"
+            "../../../packages/indexer/contracts/fixtures/static-index-protocol.json"
         ),
         "static-index-identity.json" => include_str!(
-            "../../../packages/indexer/indexer/contracts/fixtures/static-index-identity.json"
+            "../../../packages/indexer/contracts/fixtures/static-index-identity.json"
         ),
         "static-syntax-records.json" => include_str!(
-            "../../../packages/indexer/indexer/contracts/fixtures/static-syntax-records.json"
+            "../../../packages/indexer/contracts/fixtures/static-syntax-records.json"
         ),
         "relation-specs.json" => {
-            include_str!("../../../packages/indexer/indexer/contracts/fixtures/relation-specs.json")
+            include_str!("../../../packages/indexer/contracts/fixtures/relation-specs.json")
         }
         "rule-descriptors.json" => include_str!(
-            "../../../packages/indexer/indexer/contracts/fixtures/rule-descriptors.json"
+            "../../../packages/indexer/contracts/fixtures/rule-descriptors.json"
         ),
         "primitive-coverage-identities.json" => include_str!(
-            "../../../packages/indexer/indexer/contracts/fixtures/primitive-coverage-identities.json"
+            "../../../packages/indexer/contracts/fixtures/primitive-coverage-identities.json"
         ),
         _ => panic!("unknown shared fixture {name}"),
     }

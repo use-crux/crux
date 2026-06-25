@@ -254,6 +254,8 @@ function collectMatchesInFile(
 
 function shouldInspectDirectory(repoPath: string): boolean {
   return ![
+    'packages/local/internal/assets/embed',
+    'packages/local/internal/assets/ui-embed',
     'packages/local/internal/server/embed',
     'packages/local/internal/server/ui-embed',
     'target',

@@ -42,21 +42,26 @@ Accepted public package surfaces after the rename:
 
 Accepted host-only surfaces while the package remains private:
 
-- `@crux/indexer/worker-protocol`
-- `@crux/indexer/worker-host`
-- `@crux/indexer/internal-host`
+- `@crux/indexer/host`
+- `@crux/indexer/host/static-index`
+- `@crux/indexer/host/semantic`
+- `@crux/indexer/host/runtime`
+- `@crux/indexer/host/static-compat`
+- `@crux/indexer/contracts/worker-events`
+- `@crux/indexer/contracts/static-index`
+- `@crux/indexer/contracts/static-syntax`
+- `@crux/indexer/contracts/semantic`
 
 `@crux/indexer/testing` exposes source-text fixtures for extension authors. Fixtures use the same
 static extraction engine as production with an in-memory `SourceReader` and `cache: 'none'`, which
 keeps extension tests on the public source-text-to-facts path rather than hand-building parser-native
 contexts.
 
-`@crux/indexer/worker-protocol` is the TypeScript-owned contract spine for worker-event and
-static-index host protocols. `@crux/indexer/worker-host` exposes JSON-safe compatibility helpers for
-bundled worker binaries. `@crux/indexer/internal-host` is a private Crux-owned bridge for local
-runtime workers that still need compiler, static extraction, or semantic backend internals. Before
-public release, each host-only surface must be removed, made intentionally public, or kept
-package-private through build output.
+`@crux/indexer/contracts/*` is the TypeScript-owned contract spine for worker-event, Static Syntax,
+Static Index, and Semantic Evidence protocols. `@crux/indexer/host/*` exposes focused Crux-owned
+worker bridges for static indexing, semantic enrichment, runtime patch conversion, and Static Index
+compatibility-host calls. Before public release, each host-only surface must be removed, made
+intentionally public, or kept package-private through build output.
 
 Accepted non-public surfaces:
 
@@ -302,10 +307,10 @@ Node package is code execution, not a sandbox.
 
 The package export map intentionally separates public authoring surfaces from host/internal bridges:
 `@crux/indexer`, `@crux/indexer/extensions`, `@crux/indexer/testing`, and
-`@crux/indexer/source-resolver` are the public-facing surfaces; `@crux/indexer/worker-protocol`,
-`@crux/indexer/worker-host`, and `@crux/indexer/internal-host` are Crux-owned host surfaces while the
-package remains private. Other compiler and indexer modules are reached by relative imports inside
-the package so they do not accidentally become third-party API.
+`@crux/indexer/source-resolver` are the public-facing surfaces; `@crux/indexer/host/*` and
+`@crux/indexer/contracts/*` are Crux-owned host and cross-runtime contract surfaces while the package
+remains private. Other compiler and indexer modules are reached by relative imports inside the
+package so they do not accidentally become third-party API.
 
 ### Extension Runtime
 

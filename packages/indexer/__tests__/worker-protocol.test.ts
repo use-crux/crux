@@ -5,12 +5,12 @@ import {
   indexPatchFromWorkerEvents,
   indexPatchToWorkerEvents,
   projectIndexArtifactToWorkerEvent,
-} from '../indexer/worker-protocol'
+} from '../contracts/worker-events'
 import {
   workerEventFixtureOptions,
   workerEventFixturePatch,
-} from '../indexer/contracts/worker-events/fixtures'
-import { readStaticIndexRuntimeSharedFixture } from '../indexer/contracts/fixtures'
+} from '../contracts/worker-events/fixtures'
+import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
 
 describe('project index worker protocol', () => {
   it('streams contract fixture facts in ordered batches and reconstructs the same patch', () => {

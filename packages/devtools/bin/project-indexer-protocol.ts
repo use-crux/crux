@@ -8,9 +8,9 @@ import {
   type ProjectIndexFactProducer,
   type ProjectIndexPhaseTiming,
   type ProjectIndexWorkerEvent,
-} from '@crux/indexer/worker-protocol'
+} from '@crux/indexer/contracts/worker-events'
 
-export type { ProjectIndexFactProducer } from '@crux/indexer/worker-protocol'
+export type { ProjectIndexFactProducer } from '@crux/indexer/contracts/worker-events'
 
 const projectIndexFactProducer = {
   name: '@crux/indexer/project-indexer',

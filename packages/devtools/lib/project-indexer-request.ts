@@ -4,12 +4,12 @@ import type {
   IndexProjectAstFromSyntaxRecordsOptions,
   SemanticBackendSelection,
 } from '@crux/indexer'
-import type { ProvidedStaticSyntaxRecordProvider, StaticParseCacheHit } from '@crux/indexer/internal-host'
+import type { ProvidedStaticSyntaxRecordProvider, StaticParseCacheHit } from '@crux/indexer/host/static-index'
 import type {
   CheckStaticRulesInput,
   ExtractStaticEvidenceBatchInput,
   LoadStaticExtensionHostManifestInput,
-} from '@crux/indexer/worker-host'
+} from '@crux/indexer/host/static-compat'
 import {
   createProjectIndexSyntaxRecordSpool,
   type ProjectIndexSyntaxRecordSpool,

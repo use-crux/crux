@@ -3,14 +3,14 @@ import {
   StaticIndexCompilerRequestSchema,
   StaticIndexCompilerResponseSchema,
   parseStaticIndexCompilerRequest,
-} from '../indexer/contracts/static-index/schema'
+} from '../contracts/static-index/schema'
 import { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static-index/syntax'
 import {
   staticIndexCompilerRequestFixtures,
   staticIndexCompilerResponseFixtures,
   staticIndexRunIdentityFixture,
-} from '../indexer/contracts/static-index/fixtures'
-import { readStaticIndexRuntimeSharedFixture } from '../indexer/contracts/fixtures'
+} from '../contracts/static-index/fixtures'
+import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
 
 describe('Static Index compiler protocol', () => {
   it('validates Static Index compiler requests and responses as JSON fixtures', () => {

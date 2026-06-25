@@ -10,11 +10,17 @@ describe('public indexer extension surface', () => {
     for (const file of [
       'index.ts',
       'extensions.ts',
-      'internal-host.ts',
       'source-resolver.ts',
       'testing.ts',
-      'worker-host.ts',
-      'worker-protocol.ts',
+      'host/index.ts',
+      'host/runtime.ts',
+      'host/semantic.ts',
+      'host/static-compat.ts',
+      'host/static-index.ts',
+      'contracts/semantic/index.ts',
+      'contracts/static-index/index.ts',
+      'contracts/static-syntax/index.ts',
+      'contracts/worker-events/index.ts',
     ]) {
       const source = await readFile(join(testDir, '..', file), 'utf8')
       expect(source, file).toContain('@module')
@@ -27,12 +33,18 @@ describe('public indexer extension surface', () => {
 
     expect(Object.keys(parsed.exports ?? {}).sort()).toEqual([
       '.',
+      './contracts/semantic',
+      './contracts/static-index',
+      './contracts/static-syntax',
+      './contracts/worker-events',
       './extensions',
-      './internal-host',
+      './host',
+      './host/runtime',
+      './host/semantic',
+      './host/static-compat',
+      './host/static-index',
       './source-resolver',
       './testing',
-      './worker-host',
-      './worker-protocol',
     ])
   })
 
@@ -119,29 +131,24 @@ describe('public indexer extension surface', () => {
     expect(source).not.toContain("from 'typescript'")
   })
 
-  it('keeps the private host barrel explicit for Crux-owned workers', async () => {
-    const source = await readFile(join(testDir, '..', 'internal-host.ts'), 'utf8')
+  it('keeps Crux-owned host facades split by lane', async () => {
+    const staticIndex = await readFile(join(testDir, '..', 'host/static-index.ts'), 'utf8')
+    const semantic = await readFile(join(testDir, '..', 'host/semantic.ts'), 'utf8')
+    const runtime = await readFile(join(testDir, '..', 'host/runtime.ts'), 'utf8')
+    const staticCompat = await readFile(join(testDir, '..', 'host/static-compat.ts'), 'utf8')
 
-    expect(namedValueExports(source)).toEqual([
+    expect(namedValueExports(staticIndex)).toEqual([
       'astIndexPatchFromCompilerResult',
       'compileProjectIndex',
       'createProjectIndexCompiler',
       'projectIndexSnapshotFromCompilerResult',
-      'runtimeIndexPatchFromCompilerResult',
       'createStaticExtraction',
       'staticDefinitionFiles',
       'createTypeScriptStaticSyntaxFrontend',
-      'createSemanticIndexService',
-      'createTypeScriptSemanticBackend',
-      'typescriptSemanticBackendCapabilities',
-      'typescriptSemanticBackendIdentity',
-      'createNativeSemanticBackend',
-      'nativeSemanticBackendCapabilities',
-      'nativeSemanticBackendIdentity',
     ])
-    expect(namedTypeExports(source)).toEqual([
-      'ProjectIndexCompiler',
+    expect(namedTypeExports(staticIndex)).toEqual([
       'ProjectIndexCompileMode',
+      'ProjectIndexCompiler',
       'ProjectIndexCompilerInput',
       'ProjectIndexCompilerResult',
       'CompilerOwnedProjection',
@@ -155,6 +162,18 @@ describe('public indexer extension surface', () => {
       'StaticParseCacheStore',
       'ProvidedStaticSyntaxRecordProvider',
       'StaticSyntaxFrontendFactory',
+    ])
+    expect(namedValueExports(semantic)).toEqual([
+      'createNativeSemanticBackend',
+      'createSemanticIndexService',
+      'createTypeScriptSemanticBackend',
+      'nativeSemanticBackendCapabilities',
+      'nativeSemanticBackendIdentity',
+      'typescriptSemanticBackendCapabilities',
+      'typescriptSemanticBackendIdentity',
+    ])
+    expect(namedTypeExports(semantic)).toEqual([
+      'NativeSemanticBackendOptions',
       'SemanticAnalyzeInput',
       'SemanticAnalyzeResult',
       'SemanticBackend',
@@ -177,29 +196,62 @@ describe('public indexer extension surface', () => {
       'SemanticIndexServiceOptions',
       'SemanticProjectSessionIdentity',
       'TypeScriptSemanticBackendOptions',
-      'NativeSemanticBackendOptions',
     ])
-    expect(source).toContain('@module')
+    expect(namedValueExports(runtime)).toEqual(['runtimeIndexPatchFromCompilerResult'])
+    expect(namedTypeExports(runtime)).toEqual(['ProjectIndexCompilerResult'])
+    expect(namedValueExports(staticCompat)).toEqual([
+      'checkStaticRulesForProject',
+      'extractStaticEvidenceBatchForProject',
+      'loadStaticExtensionHostManifestForProject',
+    ])
+    expect(namedTypeExports(staticCompat)).toEqual([
+      'CheckStaticRulesForProjectInput',
+      'ExtractStaticEvidenceBatchForProjectInput',
+      'StaticExtensionWorkerProjectInput',
+      'LoadStaticExtensionHostManifestForProjectInput',
+      'StaticIndexExtensionHostProjectInput',
+      'CheckStaticRulesInput',
+      'CheckStaticRulesResult',
+      'ExtractStaticEvidenceBatchInput',
+      'ExtractStaticEvidenceBatchResult',
+      'LoadStaticExtensionHostManifestInput',
+      'LoadStaticExtensionHostManifestResult',
+    ])
+    for (const oldFile of ['internal-host.ts', 'worker-host.ts', 'worker-protocol.ts']) {
+      await expect(readFile(join(testDir, '..', oldFile), 'utf8'), oldFile).rejects.toMatchObject({
+        code: 'ENOENT',
+      })
+    }
   })
 
-  it('keeps the worker protocol barrel backed by the contract spine', async () => {
-    const source = await readFile(join(testDir, '..', 'worker-protocol.ts'), 'utf8')
+  it('keeps worker and Static Index protocols under contract barrels', async () => {
+    const workerEvents = await readFile(join(testDir, '..', 'contracts/worker-events/index.ts'), 'utf8')
+    const staticIndex = await readFile(join(testDir, '..', 'contracts/static-index/index.ts'), 'utf8')
 
-    expect(namedValueExports(source)).toEqual([
+    expect(namedValueExports(workerEvents)).toEqual([
       'PROJECT_INDEX_WORKER_PROTOCOL_VERSION',
       'factEnvelopesFromIndexPatch',
       'indexPatchFromWorkerEvents',
       'indexPatchToWorkerEventStream',
       'indexPatchToWorkerEvents',
       'projectIndexArtifactToWorkerEvent',
+      'workerEventFixtureOptions',
+      'workerEventFixturePatch',
+    ])
+    expect(namedValueExports(staticIndex)).toEqual([
       'STATIC_INDEX_COMPILER_PROTOCOL_VERSION',
       'StaticIndexAnalyzeRequestSchema',
       'StaticIndexAnalyzeResponseSchema',
+      'StaticIndexCompileRequestSchema',
+      'StaticIndexCompileResponseSchema',
       'StaticIndexCompilerRequestSchema',
       'StaticIndexCompilerResponseSchema',
       'StaticIndexFileInputSchema',
       'StaticIndexFinalizeRequestSchema',
       'StaticIndexFinalizeResponseSchema',
+      'StaticIndexIdentityComponentSchema',
+      'StaticIndexIdentityManifestSchema',
+      'StaticIndexLintSuppressionSchema',
       'StaticIndexParserCallInterestSchema',
       'StaticIndexParserCallbackInterestSchema',
       'StaticIndexParserConstructorInterestSchema',
@@ -209,11 +261,18 @@ describe('public indexer extension surface', () => {
       'StaticIndexRunIdentitySchema',
       'StaticIndexSourceFileSchema',
       'StaticIndexTelemetrySchema',
+      'createStaticIndexRunIdentity',
       'parseStaticIndexCompilerRequest',
+      'staticIndexCompilerRequestFixtures',
+      'staticIndexCompilerResponseFixtures',
+      'staticIndexIdentityManifestFixture',
+      'staticIndexPreparedPlanFixture',
+      'staticIndexRunIdentityFixture',
+      'staticIndexSourceFileFixture',
+      'staticIndexTelemetryFixture',
     ])
-    expect(source).toContain('./indexer/contracts/worker-events/schema')
-    expect(source).toContain('./indexer/contracts/static-index/schema')
-    expect(source).not.toContain("from './indexer/worker-protocol'")
+    expect(workerEvents).not.toContain('../indexer/worker-protocol')
+    expect(staticIndex).not.toContain('../indexer/static-index/protocol')
   })
 
   it('keeps the experimental authoring barrel intentionally small', async () => {

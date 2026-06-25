@@ -39,11 +39,11 @@ export type {
   StaticSyntaxValue,
   StaticTemplateValue,
   StaticUnsupportedValue,
-} from '../../static/syntax-record'
+} from '../../indexer/static/syntax-record'
 export {
   OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
-} from '../../static-index/syntax'
+} from '../../indexer/static-index/syntax'
 export {
   staticRecordSchemaProperty,
   staticSyntaxValueToJsonSchema,
-} from '../../static/syntax-record/schema'
+} from '../../indexer/static/syntax-record/schema'

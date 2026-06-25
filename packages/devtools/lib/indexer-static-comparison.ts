@@ -16,12 +16,12 @@ import type {
   StaticFileExtraction,
   StaticSyntaxFrontendFactory,
   SourceReader,
-} from '@crux/indexer/internal-host'
+} from '@crux/indexer/host/static-index'
 import {
   createStaticExtraction,
   createTypeScriptStaticSyntaxFrontend,
   staticDefinitionFiles,
-} from '@crux/indexer/internal-host'
+} from '@crux/indexer/host/static-index'
 import { createRustOxcStaticSyntaxFrontend } from '@crux/indexer/testing/rust-oxc-frontend'
 
 export type StaticFrontendName = 'typescript' | 'oxc-rust'

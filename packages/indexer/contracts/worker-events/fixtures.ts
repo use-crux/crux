@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { IndexPatch } from '../../patches'
+import type { IndexPatch } from '../../indexer/patches'
 import type { IndexPatchToWorkerEventsOptions } from './schema'
 
 /** Index patch fixture used to prove worker-event round trips. */

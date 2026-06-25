@@ -24,21 +24,45 @@
       "types": "./extensions.ts",
       "import": "./extensions.ts"
     },
-    "./internal-host": {
-      "types": "./internal-host.ts",
-      "import": "./internal-host.ts"
+    "./host": {
+      "types": "./host/index.ts",
+      "import": "./host/index.ts"
+    },
+    "./host/static-index": {
+      "types": "./host/static-index.ts",
+      "import": "./host/static-index.ts"
+    },
+    "./host/semantic": {
+      "types": "./host/semantic.ts",
+      "import": "./host/semantic.ts"
+    },
+    "./host/runtime": {
+      "types": "./host/runtime.ts",
+      "import": "./host/runtime.ts"
+    },
+    "./host/static-compat": {
+      "types": "./host/static-compat.ts",
+      "import": "./host/static-compat.ts"
     },
     "./testing": {
       "types": "./testing.ts",
       "import": "./testing.ts"
     },
-    "./worker-protocol": {
-      "types": "./worker-protocol.ts",
-      "import": "./worker-protocol.ts"
+    "./contracts/worker-events": {
+      "types": "./contracts/worker-events/index.ts",
+      "import": "./contracts/worker-events/index.ts"
     },
-    "./worker-host": {
-      "types": "./worker-host.ts",
-      "import": "./worker-host.ts"
+    "./contracts/static-index": {
+      "types": "./contracts/static-index/index.ts",
+      "import": "./contracts/static-index/index.ts"
+    },
+    "./contracts/static-syntax": {
+      "types": "./contracts/static-syntax/index.ts",
+      "import": "./contracts/static-syntax/index.ts"
+    },
+    "./contracts/semantic": {
+      "types": "./contracts/semantic/index.ts",
+      "import": "./contracts/semantic/index.ts"
     },
     "./source-resolver": {
       "types": "./source-resolver.ts",
