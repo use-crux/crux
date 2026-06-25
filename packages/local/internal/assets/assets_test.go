@@ -43,6 +43,18 @@ func TestEmbeddedAssetsAreOwnedByAssetsPackage(t *testing.T) {
 			t.Fatalf("stat server asset wrapper %s: %v", name, err)
 		}
 	}
+
+	forbiddenServerDirs := []string{
+		filepath.Join("server", "embed"),
+		filepath.Join("server", "ui-embed"),
+	}
+	for _, rel := range forbiddenServerDirs {
+		if _, err := os.Stat(filepath.Join(internalDir, rel)); err == nil {
+			t.Fatalf("server package must not own generated asset directory %s", rel)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat server asset directory %s: %v", rel, err)
+		}
+	}
 }
 
 func TestProjectIndexerUsesInjectedBundleAssets(t *testing.T) {

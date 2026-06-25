@@ -32,8 +32,8 @@ func TestProjectStaticIndexFileSelectionIgnoresEmbeddedBuildArtifacts(t *testing
 	authored := fileWithStaticIndexSource(t, root, "packages/core/src/writer.ts")
 	embedded := fileWithStaticIndexSource(t, root, "packages/local/internal/assets/embed/project-indexer.mjs")
 	uiEmbedded := fileWithStaticIndexSource(t, root, "packages/local/internal/assets/ui-embed/assets/app.js")
-	oldEmbedded := fileWithStaticIndexSource(t, root, "packages/local/internal/server/embed/project-indexer.mjs")
-	oldUIEmbedded := fileWithStaticIndexSource(t, root, "packages/local/internal/server/ui-embed/assets/app.js")
+	legacyServerEmbedded := fileWithStaticIndexSource(t, root, "packages/local/internal/server/embed/project-indexer.mjs")
+	legacyServerUIEmbedded := fileWithStaticIndexSource(t, root, "packages/local/internal/server/ui-embed/assets/app.js")
 
 	selection, err := fileSelection(root, "")
 	if err != nil {
@@ -48,17 +48,15 @@ func TestProjectStaticIndexFileSelectionIgnoresEmbeddedBuildArtifacts(t *testing
 	if slices.Contains(selection.PrimaryFiles, uiEmbedded) {
 		t.Fatalf("primary files included UI embedded build artifact %s", uiEmbedded)
 	}
-	if slices.Contains(selection.PrimaryFiles, oldEmbedded) {
-		t.Fatalf("primary files included old embedded build artifact %s", oldEmbedded)
+	if !slices.Contains(selection.PrimaryFiles, legacyServerEmbedded) {
+		t.Fatalf("primary files = %v, want legacy server embed path treated as ordinary source %s", selection.PrimaryFiles, legacyServerEmbedded)
 	}
-	if slices.Contains(selection.PrimaryFiles, oldUIEmbedded) {
-		t.Fatalf("primary files included old UI embedded build artifact %s", oldUIEmbedded)
+	if !slices.Contains(selection.PrimaryFiles, legacyServerUIEmbedded) {
+		t.Fatalf("primary files = %v, want legacy server UI embed path treated as ordinary source %s", selection.PrimaryFiles, legacyServerUIEmbedded)
 	}
 	for _, skipped := range selection.Skipped {
 		if bytes.Contains(skipped, []byte("assets/embed")) ||
-			bytes.Contains(skipped, []byte("assets/ui-embed")) ||
-			bytes.Contains(skipped, []byte("server/embed")) ||
-			bytes.Contains(skipped, []byte("server/ui-embed")) {
+			bytes.Contains(skipped, []byte("assets/ui-embed")) {
 			t.Fatalf("skipped files included embedded build artifact: %s", skipped)
 		}
 	}
