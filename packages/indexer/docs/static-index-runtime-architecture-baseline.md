@@ -59,7 +59,7 @@ they are unused.
 
 - `worker-events`: Shared worker-event fixtures are consumed by TypeScript, Go, and Rust for success, artifact, phase-error, and out-of-order stream cases.
 - `static-syntax-records`: Shared static syntax fixtures cover imports, call matches, object values, native fact packets, constructor matches, callback summaries, and parser diagnostics across TypeScript, Go, and Rust.
-- `static-index`: Shared Static Index protocol fixtures are decoded by TypeScript, Go, and Rust for every method plus worker-error and invalid-stream cases.
+- `static-index`: Shared Static Index protocol and identity fixtures are decoded by TypeScript, Go, and Rust for every method, cache-sensitive identity owner, worker-error, and invalid-stream case.
 - `semantic-evidence`: A TS-only semantic evidence fixture covers definitions, relations, source refs, diagnostics, lint findings, and degraded/unsupported cases; Go hosts consume Project Index patch events today and Rust has no semantic evidence mirror.
 
 ## Existing Parity Coverage

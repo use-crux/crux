@@ -25,6 +25,7 @@ export type StaticIndexRuntimeContractOwner = 'typescript' | 'go' | 'rust'
 /** Current file role inside a contract group. */
 export type StaticIndexRuntimeContractFileKind =
   | 'canonical-types'
+  | 'identity'
   | 'schema'
   | 'parser'
   | 'host-mirror'
@@ -294,6 +295,12 @@ const inventory = {
         ),
         contractFile(
           'typescript',
+          'packages/indexer/contracts/fixtures/static-index-identity.json',
+          'Shared cache-sensitive Static Index identity manifest used by TypeScript, Go, and Rust parity tests.',
+          'identity',
+        ),
+        contractFile(
+          'typescript',
           'packages/indexer/indexer/static-index/protocol/index.ts',
           'Static Index protocol barrel for request, response, identity, telemetry, and parser-interest contracts.',
           'schema',
@@ -353,7 +360,7 @@ const inventory = {
       ],
     },
     fixtureGap:
-      'Shared Static Index protocol fixtures are decoded by TypeScript, Go, and Rust for every method plus worker-error and invalid-stream cases.',
+      'Shared Static Index protocol and identity fixtures are decoded by TypeScript, Go, and Rust for every method, cache-sensitive identity owner, worker-error, and invalid-stream case.',
   },
   'semantic-evidence': {
     id: 'semantic-evidence',

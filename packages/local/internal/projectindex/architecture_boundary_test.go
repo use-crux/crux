@@ -94,3 +94,22 @@ func TestProjectIndexPackageTransitionsRemainPhaseOwned(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectIndexCacheIdentityLivesInCachePackage(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not determine test file location")
+	}
+
+	projectIndexDir := filepath.Dir(filename)
+	internalDir := filepath.Dir(projectIndexDir)
+	cacheIdentity := filepath.Join(projectIndexDir, "cache", "identity.go")
+	if info, err := os.Stat(cacheIdentity); err != nil || info.IsDir() {
+		t.Fatalf("expected Project Index cache identity owner %q to be a file", cacheIdentity)
+	}
+
+	devtoolsIdentity := filepath.Join(internalDir, "devtools", "index_cache_identity.go")
+	if _, err := os.Stat(devtoolsIdentity); !os.IsNotExist(err) {
+		t.Fatalf("devtools must not own Project Index cache identity at %q", devtoolsIdentity)
+	}
+}

@@ -24,6 +24,18 @@ describe('Static Index runtime contract inventory', () => {
     expect(entry?.filesByOwner.typescript.some((file) => file.path.includes('/contracts/native-static/'))).toBe(false)
   })
 
+  it('makes the Static Index cache-sensitive identity fixture explicit', () => {
+    const entry = staticIndexRuntimeContractInventory().find((candidate) => candidate.id === 'static-index')
+
+    expect(entry?.filesByOwner.typescript).toContainEqual(
+      expect.objectContaining({
+        path: 'packages/indexer/contracts/fixtures/static-index-identity.json',
+        kind: 'identity',
+      }),
+    )
+    expect(entry?.fixtureGap).toContain('identity')
+  })
+
   it('points every listed TypeScript contract and Go/Rust mirror at a tracked file', async () => {
     for (const entry of staticIndexRuntimeContractInventory()) {
       for (const file of entry.files) {
