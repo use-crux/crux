@@ -48,6 +48,30 @@ describe('project index worker protocol', () => {
     })
   })
 
+  it('loads shared worker event edge-case fixtures', () => {
+    const fixture = readStaticIndexRuntimeSharedFixture('worker-event-cases')
+
+    expect(fixture.artifactDone).toMatchObject({
+      protocolVersion: 2,
+      type: 'artifact:done',
+      artifact: 'projectStaticSyntaxPlan',
+      root: '/repo',
+    })
+    expect(fixture.artifactError).toMatchObject({
+      protocolVersion: 2,
+      type: 'artifact:error',
+      error: { message: 'static syntax plan failed' },
+    })
+    expect(fixture.phaseError).toMatchObject({
+      protocolVersion: 2,
+      type: 'phase:error',
+      phase: 'ast',
+      error: { code: 'E_STATIC_INDEX' },
+    })
+    expect(fixture.outOfOrderEvents.map((event) => event.type)).toEqual(['phase:start', 'fact:batch'])
+    expect(fixture.outOfOrderEvents[1]).toMatchObject({ type: 'fact:batch', sequence: 1 })
+  })
+
   it('streams semantic source profile rows outside phase metadata', () => {
     const patch: IndexPatch = {
       schemaVersion: 1,

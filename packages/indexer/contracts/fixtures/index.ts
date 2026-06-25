@@ -9,7 +9,12 @@
  */
 
 /** Contract groups with shared TypeScript fixture payloads. */
-export const staticIndexRuntimeContractFixtureGroups = ['worker-events', 'static-index'] as const
+export const staticIndexRuntimeContractFixtureGroups = [
+  'worker-events',
+  'static-syntax-records',
+  'static-index',
+  'semantic-evidence',
+] as const
 
 export {
   readStaticIndexRuntimeSharedFixture,
@@ -17,6 +22,12 @@ export {
   type StaticIndexRuntimeSharedFixtureName,
   type StaticIndexIdentitySharedFixture,
   type StaticIndexProtocolSharedFixture,
+  type StaticIndexProtocolCasesSharedFixture,
+  type StaticSyntaxRecordsSharedFixture,
+  type StaticSyntaxRecordCasesSharedFixture,
+  type SemanticEvidenceSharedFixture,
+  type WorkerEventCasesSharedFixture,
+  type WorkerEventsSharedFixture,
 } from './shared'
 
 export {

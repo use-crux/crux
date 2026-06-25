@@ -52,6 +52,70 @@ func TestSharedStaticSyntaxRecordFixtureDecodesFromStreamEvent(t *testing.T) {
 	}
 }
 
+func TestSharedStaticSyntaxRecordCaseFixturesDecode(t *testing.T) {
+	var fixture struct {
+		Records []json.RawMessage `json:"records"`
+	}
+	readSharedStaticSyntaxFixture(t, "static-syntax-record-cases.json", &fixture)
+	if len(fixture.Records) != 1 {
+		t.Fatalf("records len = %d, want 1", len(fixture.Records))
+	}
+
+	var record struct {
+		File    string `json:"file"`
+		Matches []struct {
+			Kind         string `json:"kind"`
+			VariableName string `json:"variableName"`
+			Callee       struct {
+				Name            string `json:"name"`
+				ModuleSpecifier string `json:"moduleSpecifier"`
+			} `json:"callee"`
+			ObjectArg struct {
+				Properties []struct {
+					Name  string `json:"name"`
+					Value struct {
+						Kind  string `json:"kind"`
+						Calls []struct {
+							Callee struct {
+								Name string `json:"name"`
+							} `json:"callee"`
+						} `json:"calls"`
+					} `json:"value"`
+				} `json:"properties"`
+			} `json:"objectArg"`
+		} `json:"matches"`
+		Diagnostics []struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"diagnostics"`
+	}
+	if err := json.Unmarshal(fixture.Records[0], &record); err != nil {
+		t.Fatalf("decode static syntax case record: %v", err)
+	}
+	if record.File != "/repo/src/agent.ts" || len(record.Matches) != 1 {
+		t.Fatalf("record = %+v, want agent constructor fixture", record)
+	}
+	match := record.Matches[0]
+	if match.Kind != "new" || match.VariableName != "agent" || match.Callee.Name != "Agent" || match.Callee.ModuleSpecifier != "@crux/core" {
+		t.Fatalf("match = %+v, want Agent constructor", match)
+	}
+	var callbackKind, callbackCallee string
+	for _, property := range match.ObjectArg.Properties {
+		if property.Name == "instructions" {
+			callbackKind = property.Value.Kind
+			if len(property.Value.Calls) > 0 {
+				callbackCallee = property.Value.Calls[0].Callee.Name
+			}
+		}
+	}
+	if callbackKind != "function" || callbackCallee != "writeFile" {
+		t.Fatalf("callback = %q/%q, want function/writeFile", callbackKind, callbackCallee)
+	}
+	if len(record.Diagnostics) != 1 || record.Diagnostics[0].Code != "syntax.recovered" {
+		t.Fatalf("diagnostics = %+v, want recovered diagnostic", record.Diagnostics)
+	}
+}
+
 func readSharedStaticSyntaxFixture(t *testing.T, name string, out any) {
 	t.Helper()
 	path := sharedStaticSyntaxFixturePath(t, name)
@@ -71,5 +135,5 @@ func sharedStaticSyntaxFixturePath(t *testing.T, name string) string {
 		t.Fatal("runtime.Caller failed")
 	}
 	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "..", ".."))
-	return filepath.Join(repoRoot, "packages", "indexer", "indexer", "contracts", "fixtures", name)
+	return filepath.Join(repoRoot, "packages", "indexer", "contracts", "fixtures", name)
 }

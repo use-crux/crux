@@ -1,0 +1,73 @@
+{
+  "batches": [
+    {
+      "kind": "definitions",
+      "facts": [
+        {
+          "id": "prompt:semantic-contract",
+          "kind": "prompt",
+          "name": "semanticContract",
+          "fidelity": "resolved",
+          "status": "active"
+        }
+      ]
+    },
+    {
+      "kind": "relations",
+      "facts": [
+        {
+          "type": "agent.uses_prompt",
+          "from": "agent:semantic-contract",
+          "to": "prompt:semantic-contract"
+        }
+      ]
+    },
+    {
+      "kind": "sourceRefs",
+      "facts": [
+        {
+          "id": "source-ref:semantic-contract",
+          "targetId": "prompt:semantic-contract",
+          "role": "definition",
+          "source": {
+            "file": "/repo/src/semantic.ts",
+            "line": 3,
+            "column": 14
+          }
+        }
+      ]
+    },
+    {
+      "kind": "diagnostics",
+      "facts": [
+        {
+          "id": "diagnostic:semantic:unsupported",
+          "severity": "warning",
+          "code": "semantic.unsupported",
+          "message": "Unsupported semantic shape degraded to diagnostic evidence",
+          "source": {
+            "file": "/repo/src/semantic.ts",
+            "line": 8,
+            "column": 1
+          }
+        }
+      ]
+    },
+    {
+      "kind": "lintFindings",
+      "facts": [
+        {
+          "id": "lint:semantic:degraded",
+          "ruleId": "semantic.degraded",
+          "severity": "warning",
+          "message": "Semantic backend degraded before full evidence projection",
+          "source": {
+            "file": "/repo/src/semantic.ts",
+            "line": 8,
+            "column": 1
+          }
+        }
+      ]
+    }
+  ]
+}

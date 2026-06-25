@@ -1,0 +1,64 @@
+{
+  "artifactDone": {
+    "protocolVersion": 2,
+    "type": "artifact:done",
+    "transactionId": "artifact-static-syntax-plan",
+    "artifact": "projectStaticSyntaxPlan",
+    "root": "/repo",
+    "payload": {
+      "root": "/repo",
+      "files": [
+        {
+          "root": "/repo",
+          "file": "/repo/src/contract.ts",
+          "sourceHash": "sha256:contract",
+          "source": "export {}"
+        }
+      ],
+      "callNames": [
+        "prompt"
+      ],
+      "constructorNames": [
+        "Agent"
+      ]
+    }
+  },
+  "artifactError": {
+    "protocolVersion": 2,
+    "type": "artifact:error",
+    "transactionId": "artifact-static-syntax-plan-error",
+    "artifact": "projectStaticSyntaxPlan",
+    "error": {
+      "message": "static syntax plan failed",
+      "code": "E_STATIC_SYNTAX_PLAN"
+    }
+  },
+  "phaseError": {
+    "protocolVersion": 2,
+    "type": "phase:error",
+    "transactionId": "tx-static-index-error",
+    "phase": "ast",
+    "error": {
+      "message": "static index failed",
+      "code": "E_STATIC_INDEX"
+    },
+    "degraded": false
+  },
+  "outOfOrderEvents": [
+    {
+      "protocolVersion": 2,
+      "type": "phase:start",
+      "transactionId": "tx-out-of-order",
+      "phase": "ast",
+      "root": "/repo",
+      "startedAt": "1970-01-01T00:00:00.000Z"
+    },
+    {
+      "protocolVersion": 2,
+      "type": "fact:batch",
+      "transactionId": "tx-out-of-order",
+      "sequence": 1,
+      "facts": []
+    }
+  ]
+}

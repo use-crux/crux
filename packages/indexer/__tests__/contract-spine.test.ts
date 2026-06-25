@@ -14,7 +14,10 @@ import {
   staticIndexCompilerRequestFixtures,
   staticIndexCompilerResponseFixtures,
 } from '../contracts/static-index/fixtures'
-import { staticIndexRuntimeContractFixtureGroups } from '../contracts/fixtures'
+import {
+  readStaticIndexRuntimeSharedFixture,
+  staticIndexRuntimeContractFixtureGroups,
+} from '../contracts/fixtures'
 import { projectSemanticEvidenceBatches, semanticEvidenceBatchKinds } from '../contracts/semantic/schema'
 
 describe('Static Index runtime contract spine', () => {
@@ -50,7 +53,29 @@ describe('Static Index runtime contract spine', () => {
     expect(projectSemanticEvidenceBatches([{ kind: 'diagnostics', facts: [] }])).toEqual({ diagnostics: [] })
   })
 
+  it('projects the shared semantic evidence fixture through the contract path', () => {
+    const fixture = readStaticIndexRuntimeSharedFixture('semantic-evidence')
+
+    expect(fixture.batches.map((batch) => batch.kind)).toEqual([
+      'definitions',
+      'relations',
+      'sourceRefs',
+      'diagnostics',
+      'lintFindings',
+    ])
+    expect(projectSemanticEvidenceBatches(fixture.batches)).toMatchObject({
+      definitions: [expect.objectContaining({ id: 'prompt:semantic-contract' })],
+      diagnostics: [expect.objectContaining({ code: 'semantic.unsupported' })],
+      lintFindings: [expect.objectContaining({ ruleId: 'semantic.degraded' })],
+    })
+  })
+
   it('indexes fixture groups from one contract fixtures path', () => {
-    expect(staticIndexRuntimeContractFixtureGroups).toEqual(['worker-events', 'static-index'])
+    expect(staticIndexRuntimeContractFixtureGroups).toEqual([
+      'worker-events',
+      'static-syntax-records',
+      'static-index',
+      'semantic-evidence',
+    ])
   })
 })

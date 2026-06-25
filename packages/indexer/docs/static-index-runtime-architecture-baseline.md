@@ -39,26 +39,27 @@ runtime.
 
 ## Parity Fixture Gaps
 
-- `worker-events`: Shared success-path worker-event fixtures are consumed by TypeScript, Go, and Rust; remaining gaps are artifact, phase-error, and out-of-order stream fixtures.
-- `static-syntax-records`: A shared static syntax record fixture covers imports, call matches, object values, and native fact packets; remaining gaps are constructor matches, callback summaries, and parser diagnostic cases.
-- `static-index`: The Static Index protocol fixture is decoded by TypeScript, Go, and Rust for every method; remaining gaps are explicit protocol-error and invalid-stream fixtures.
-- `semantic-evidence`: Semantic backend parity compares normalized Project Index facts, but no shared semantic evidence fixture files cover definitions, relations, source refs, diagnostics, lint findings, and degraded/unsupported cases.
+- `worker-events`: Shared worker-event fixtures are consumed by TypeScript, Go, and Rust for success, artifact, phase-error, and out-of-order stream cases.
+- `static-syntax-records`: Shared static syntax fixtures cover imports, call matches, object values, native fact packets, constructor matches, callback summaries, and parser diagnostics across TypeScript, Go, and Rust.
+- `static-index`: Shared Static Index protocol fixtures are decoded by TypeScript, Go, and Rust for every method plus worker-error and invalid-stream cases.
+- `semantic-evidence`: A TS-only semantic evidence fixture covers definitions, relations, source refs, diagnostics, lint findings, and degraded/unsupported cases; Go hosts consume Project Index patch events today and Rust has no semantic evidence mirror.
 
 ## Existing Parity Coverage
 
 | Test or helper | Area | Comparison mode | Notes |
 | --- | --- | --- | --- |
-| `packages/indexer/__tests__/worker-protocol.test.ts` | Worker events | Behavior plus full patch equality | Round-trips in-memory patch facts through TypeScript events; no shared file fixture and no Go/Rust decode in the same test. |
-| `packages/indexer/__tests__/static-index-protocol.test.ts` | Static Index protocol | Behavior/schema | Validates realistic request/response JSON through Zod and parser helpers. It does not compare Go or Rust mirrors. |
+| `packages/indexer/__tests__/worker-protocol.test.ts` | Worker events | Behavior plus full patch equality | Round-trips in-memory patch facts through TypeScript events and loads shared success/error/artifact stream fixtures. |
+| `packages/indexer/__tests__/static-index-protocol.test.ts` | Static Index protocol | Behavior/schema | Validates realistic request/response JSON and protocol edge-case fixtures through Zod and parser helpers. |
 | `crates/static-compiler/src/shared_fixtures_tests.rs` | Static Index protocol, static syntax records, relation specs, rule descriptors, and native coverage identities | Behavior/schema plus static-index pipeline finalization | Rust decodes the same fixture JSON consumed by TypeScript and Go. |
-| `packages/indexer/__tests__/static-syntax-record.test.ts` | Static syntax records | Behavior/schema | Checks TypeScript frontend record shape, JSON safety, import interests, and pruned evidence. |
+| `packages/indexer/__tests__/static-syntax-record.test.ts` | Static syntax records | Behavior/schema | Checks TypeScript frontend record shape, JSON safety, import interests, pruned evidence, and shared constructor/callback/diagnostic cases. |
 | `packages/indexer/__tests__/rust-oxc-frontend-batch.test.ts` | Static syntax protocol | Behavior | Uses a fake Rust/Oxc process to prove batch and disk-source protocol behavior from TypeScript host code. |
 | `packages/indexer/__tests__/static-provided-record-index.test.ts` | Static syntax to AST patch | Full facts | Normalizes and compares AST patch facts from parser-backed indexing and provided syntax records. |
 | `packages/local/internal/projectindex/host/parity_test.go` | Static Index production path | Full facts | Environment-gated Go test compares normalized TypeScript and native AST static graph facts. |
-| `packages/local/internal/projectindex/staticindex/compiler/parity/normalize_test.go` | Static parity normalizer | Behavior | Proves fact ordering is ignored while semantic metadata changes still fail. |
+| `packages/local/internal/projectindex/staticindex/run/parity/normalize_test.go` | Static parity normalizer | Behavior | Proves fact ordering is ignored while semantic metadata changes still fail. |
 | `packages/local/internal/projectindex/wire/shared_fixtures_test.go` | Worker events | Schema/behavior | Decodes the shared worker event stream fixture through the Go worker-event collector. |
 | `packages/local/internal/projectindex/staticindex/protocol/shared_fixtures_test.go` | Static Index protocol | Schema/behavior | Decodes the shared Static Index request/response fixture through Go protocol mirrors. |
 | `packages/local/internal/projectindex/staticindex/syntax/shared_fixtures_test.go` | Static syntax records | Schema/behavior | Decodes the shared static syntax record fixture through Go syntax stream mirrors. |
+| `packages/indexer/__tests__/contract-spine.test.ts` | Semantic evidence | Behavior/schema | Projects the TS-only shared semantic evidence fixture through the backend-neutral semantic evidence contract. |
 | `packages/indexer/__tests__/semantic-backend-parity.test.ts` | Semantic backends | Full facts plus ID/type/role coverage | Compares normalized TypeScript and native semantic facts and checks fixture coverage ids, relation types, source-ref roles, and lint rule ids. |
 | `packages/indexer/__tests__/first-party-extractor-fixtures.test.ts` | First-party static extractors | Behavior plus coverage inventory | Asserts selected definitions/relations and records fixture/native coverage for bundled extractor families. |
 | `packages/indexer/__tests__/extension-parity.test.ts` | Static extraction projection | Behavior | Verifies public fixture extraction emits representative definitions, relations, dependencies, and contract metadata. |

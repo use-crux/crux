@@ -19,14 +19,19 @@ import type {
 } from '../static-index/schema'
 import type { StaticSyntaxFileRecord } from '../static-syntax/schema'
 import type { ProjectIndexWorkerEvent } from '../worker-events/schema'
+import type { SemanticEvidenceBatch } from '../semantic/schema'
 import type { IndexRelationPolicy } from '../../indexer/relations/types'
 
 /** File-backed fixture names that are intended to be consumed across runtimes. */
 export type StaticIndexRuntimeSharedFixtureName =
   | 'static-index-protocol'
+  | 'static-index-protocol-cases'
   | 'static-index-identity'
   | 'worker-events'
+  | 'worker-event-cases'
   | 'static-syntax-records'
+  | 'static-syntax-record-cases'
+  | 'semantic-evidence'
   | 'relation-specs'
   | 'rule-descriptors'
   | 'primitive-coverage-identities'
@@ -39,6 +44,44 @@ export interface StaticIndexProtocolSharedFixture {
   readonly responses: readonly StaticIndexCompilerResponse[]
 }
 
+/** Worker response error envelope fixture for non-streaming Static Index calls. */
+export interface StaticIndexProtocolWorkerErrorFixture {
+  /** Worker request id echoed by the failed response. */
+  readonly id: number
+  /** Failed response marker. */
+  readonly ok: false
+  /** JSON-safe error message returned by the compiler worker. */
+  readonly error: string
+}
+
+/** Static Index stream error envelope fixture. */
+export interface StaticIndexProtocolStreamErrorFixture {
+  /** Worker request id echoed by the stream event. */
+  readonly id: number
+  /** Failed stream marker. */
+  readonly ok: false
+  /** Stream event discriminator. */
+  readonly type: 'error'
+  /** JSON-safe error message returned by the compiler worker. */
+  readonly error: string
+}
+
+/** Static Index protocol edge cases shared by schema and host validation tests. */
+export interface StaticIndexProtocolCasesSharedFixture {
+  /** Non-streaming worker error envelope. */
+  readonly workerError: StaticIndexProtocolWorkerErrorFixture
+  /** Requests that must be rejected by the canonical TypeScript request parser. */
+  readonly invalidRequests: readonly unknown[]
+  /** Stream error event emitted by analyze. */
+  readonly analyzeStreamError: StaticIndexProtocolStreamErrorFixture
+  /** Stream error event emitted by finalize or compile. */
+  readonly finalizeStreamError: StaticIndexProtocolStreamErrorFixture
+  /** Analyze stream event with an unsupported event discriminator. */
+  readonly invalidAnalyzeStreamEvent: unknown
+  /** Finalize stream event missing the required Project Index event payload. */
+  readonly invalidFinalizeStreamEvent: unknown
+}
+
 /** Shared Static Index compiler-owned identity manifest. */
 export type StaticIndexIdentitySharedFixture = StaticIndexIdentityManifest
 
@@ -48,10 +91,34 @@ export interface WorkerEventsSharedFixture {
   readonly events: readonly ProjectIndexWorkerEvent[]
 }
 
+/** Shared worker-event edge cases that should fail or route through non-patch collectors. */
+export interface WorkerEventCasesSharedFixture {
+  /** Successful artifact event consumed by artifact stream collectors. */
+  readonly artifactDone: Extract<ProjectIndexWorkerEvent, { readonly type: 'artifact:done' }>
+  /** Artifact error event consumed by artifact stream collectors. */
+  readonly artifactError: Extract<ProjectIndexWorkerEvent, { readonly type: 'artifact:error' }>
+  /** Phase error event consumed by patch stream collectors. */
+  readonly phaseError: Extract<ProjectIndexWorkerEvent, { readonly type: 'phase:error' }>
+  /** Invalid patch stream with a non-contiguous fact batch sequence. */
+  readonly outOfOrderEvents: readonly ProjectIndexWorkerEvent[]
+}
+
 /** Shared static syntax record fixture. */
 export interface StaticSyntaxRecordsSharedFixture {
   /** Parser evidence records emitted by the static syntax ABI. */
   readonly records: readonly StaticSyntaxFileRecord[]
+}
+
+/** Shared Static Syntax record edge cases for parser evidence mirrors. */
+export interface StaticSyntaxRecordCasesSharedFixture {
+  /** Records covering constructors, callback summaries, and diagnostics. */
+  readonly records: readonly StaticSyntaxFileRecord[]
+}
+
+/** Shared TS-only semantic evidence fixture for backend-neutral projection. */
+export interface SemanticEvidenceSharedFixture {
+  /** Evidence batches covering every semantic evidence kind. */
+  readonly batches: readonly SemanticEvidenceBatch[]
 }
 
 /** Shared built-in relation policy fixture. */
@@ -103,9 +170,13 @@ export interface PrimitiveCoverageIdentitiesSharedFixture {
 /** Payload type for each shared fixture file. */
 export interface StaticIndexRuntimeSharedFixtureMap {
   readonly 'static-index-protocol': StaticIndexProtocolSharedFixture
+  readonly 'static-index-protocol-cases': StaticIndexProtocolCasesSharedFixture
   readonly 'static-index-identity': StaticIndexIdentitySharedFixture
   readonly 'worker-events': WorkerEventsSharedFixture
+  readonly 'worker-event-cases': WorkerEventCasesSharedFixture
   readonly 'static-syntax-records': StaticSyntaxRecordsSharedFixture
+  readonly 'static-syntax-record-cases': StaticSyntaxRecordCasesSharedFixture
+  readonly 'semantic-evidence': SemanticEvidenceSharedFixture
   readonly 'relation-specs': RelationSpecsSharedFixture
   readonly 'rule-descriptors': RuleDescriptorsSharedFixture
   readonly 'primitive-coverage-identities': PrimitiveCoverageIdentitiesSharedFixture
@@ -115,9 +186,13 @@ const fixtureDirectory = dirname(fileURLToPath(import.meta.url))
 
 const fixtureFiles = {
   'static-index-protocol': 'static-index-protocol.json',
+  'static-index-protocol-cases': 'static-index-protocol-cases.json',
   'static-index-identity': 'static-index-identity.json',
   'worker-events': 'worker-events.json',
+  'worker-event-cases': 'worker-event-cases.json',
   'static-syntax-records': 'static-syntax-records.json',
+  'static-syntax-record-cases': 'static-syntax-record-cases.json',
+  'semantic-evidence': 'semantic-evidence.json',
   'relation-specs': 'relation-specs.json',
   'rule-descriptors': 'rule-descriptors.json',
   'primitive-coverage-identities': 'primitive-coverage-identities.json',

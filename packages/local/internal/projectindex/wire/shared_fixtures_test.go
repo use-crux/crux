@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -44,6 +45,59 @@ func TestSharedWorkerEventFixtureDecodes(t *testing.T) {
 	}
 }
 
+func TestSharedWorkerEventCaseFixturesDecode(t *testing.T) {
+	var fixture struct {
+		ArtifactDone     json.RawMessage   `json:"artifactDone"`
+		ArtifactError    json.RawMessage   `json:"artifactError"`
+		PhaseError       json.RawMessage   `json:"phaseError"`
+		OutOfOrderEvents []json.RawMessage `json:"outOfOrderEvents"`
+	}
+	readSharedWorkerEventFixture(t, "worker-event-cases.json", &fixture)
+
+	artifactCollector := NewProjectIndexArtifactStreamCollector(ProjectIndexArtifactStreamOptions{
+		Root:     "/repo",
+		Artifact: ProjectIndexArtifactStaticSyntaxPlan,
+	})
+	if err := artifactCollector.Handle(fixture.ArtifactDone); err != nil {
+		t.Fatalf("Handle artifactDone error = %v", err)
+	}
+	payload, err := artifactCollector.Payload()
+	if err != nil {
+		t.Fatalf("artifact payload error = %v", err)
+	}
+	if len(payload) == 0 {
+		t.Fatal("artifact payload is empty")
+	}
+
+	if err := NewProjectIndexArtifactStreamCollector(ProjectIndexArtifactStreamOptions{
+		Root:     "/repo",
+		Artifact: ProjectIndexArtifactStaticSyntaxPlan,
+	}).Handle(fixture.ArtifactError); err == nil || !strings.Contains(err.Error(), "static syntax plan failed") {
+		t.Fatalf("Handle artifactError error = %v, want fixture message", err)
+	}
+
+	if err := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{
+		Root:     "/repo",
+		Producer: "@crux/indexer",
+	}).Handle(fixture.PhaseError); err == nil || !strings.Contains(err.Error(), "static index failed") {
+		t.Fatalf("Handle phaseError error = %v, want fixture message", err)
+	}
+
+	outOfOrderCollector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{
+		Root:     "/repo",
+		Producer: "@crux/indexer",
+	})
+	for index, event := range fixture.OutOfOrderEvents {
+		err := outOfOrderCollector.Handle(event)
+		if index == 0 && err != nil {
+			t.Fatalf("Handle out-of-order start error = %v", err)
+		}
+		if index == 1 && (err == nil || !strings.Contains(err.Error(), "sequence")) {
+			t.Fatalf("Handle out-of-order batch error = %v, want sequence error", err)
+		}
+	}
+}
+
 func readSharedWorkerEventFixture(t *testing.T, name string, out any) {
 	t.Helper()
 	path := sharedWorkerEventFixturePath(t, name)
@@ -63,5 +117,5 @@ func sharedWorkerEventFixturePath(t *testing.T, name string) string {
 		t.Fatal("runtime.Caller failed")
 	}
 	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", ".."))
-	return filepath.Join(repoRoot, "packages", "indexer", "indexer", "contracts", "fixtures", name)
+	return filepath.Join(repoRoot, "packages", "indexer", "contracts", "fixtures", name)
 }

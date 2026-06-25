@@ -3,12 +3,12 @@ use serde_json::Value;
 
 use crate::core::facts::StaticIndexRuleDescriptor;
 use crate::pipeline;
-use crate::protocol::StaticSyntaxFileRecord;
 use crate::protocol::static_index::{
     StaticIndexAnalyzeRequest, StaticIndexAnalyzeResponse, StaticIndexCompileRequest,
     StaticIndexFinalizeRequest, StaticIndexFinalizeResponse, StaticIndexIdentityManifest,
     StaticIndexMethod, StaticIndexPrepareRequest, StaticIndexPrepareResponse,
 };
+use crate::protocol::{StaticSourceMatch, StaticSyntaxFileRecord, StaticSyntaxValue};
 use crate::relation::policy::{StaticIndexRelationPolicy, StaticIndexRelationPolicyTable};
 
 #[derive(Deserialize)]
@@ -18,8 +18,40 @@ struct StaticIndexProtocolFixture {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StaticIndexProtocolCasesFixture {
+    worker_error: StaticIndexWorkerErrorFixture,
+    invalid_requests: Vec<Value>,
+    analyze_stream_error: Value,
+    finalize_stream_error: Value,
+    invalid_analyze_stream_event: Value,
+    invalid_finalize_stream_event: Value,
+}
+
+#[derive(Deserialize)]
+struct StaticIndexWorkerErrorFixture {
+    id: u64,
+    ok: bool,
+    error: String,
+}
+
+#[derive(Deserialize)]
 struct StaticSyntaxRecordsFixture {
     records: Vec<StaticSyntaxFileRecord>,
+}
+
+#[derive(Deserialize)]
+struct WorkerEventsFixture {
+    events: Vec<Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkerEventCasesFixture {
+    artifact_done: Value,
+    artifact_error: Value,
+    phase_error: Value,
+    out_of_order_events: Vec<Value>,
 }
 
 #[derive(Deserialize)]
@@ -147,6 +179,36 @@ fn shared_static_index_identity_fixture_matches_rust_syntax_frontend() {
 }
 
 #[test]
+fn shared_static_index_protocol_case_fixture_decodes() {
+    let fixture: StaticIndexProtocolCasesFixture = fixture_json("static-index-protocol-cases.json");
+
+    assert_eq!(fixture.worker_error.id, 11);
+    assert!(!fixture.worker_error.ok);
+    assert_eq!(fixture.worker_error.error, "static compiler failed");
+    assert_eq!(fixture.invalid_requests.len(), 2);
+    for request in fixture.invalid_requests {
+        assert!(
+            serde_json::from_value::<StaticIndexPrepareRequest>(request).is_err(),
+            "invalid request fixture should not decode as a prepare request"
+        );
+    }
+
+    assert!(!fixture.analyze_stream_error["ok"].as_bool().unwrap_or(true));
+    assert_eq!(fixture.analyze_stream_error["type"], "error");
+    assert_eq!(fixture.analyze_stream_error["error"], "analyze failed");
+    assert!(
+        !fixture.finalize_stream_error["ok"]
+            .as_bool()
+            .unwrap_or(true)
+    );
+    assert_eq!(fixture.finalize_stream_error["type"], "error");
+    assert_eq!(fixture.finalize_stream_error["error"], "finalize failed");
+    assert_eq!(fixture.invalid_analyze_stream_event["type"], "unknown");
+    assert_eq!(fixture.invalid_finalize_stream_event["type"], "event");
+    assert!(fixture.invalid_finalize_stream_event.get("event").is_none());
+}
+
+#[test]
 fn shared_static_syntax_record_fixture_decodes() {
     let fixture: StaticSyntaxRecordsFixture = fixture_json("static-syntax-records.json");
     assert_eq!(fixture.records.len(), 1);
@@ -156,6 +218,65 @@ fn shared_static_syntax_record_fixture_decodes() {
     assert_eq!(record.file, "/repo/src/contract.ts");
     assert_eq!(record.matches.len(), 1);
     assert_eq!(record.native_facts.len(), 1);
+}
+
+#[test]
+fn shared_static_syntax_record_case_fixture_decodes() {
+    let fixture: StaticSyntaxRecordsFixture = fixture_json("static-syntax-record-cases.json");
+    assert_eq!(fixture.records.len(), 1);
+    let record = &fixture.records[0];
+    assert_eq!(record.file, "/repo/src/agent.ts");
+    assert_eq!(record.diagnostics.len(), 1);
+    assert_eq!(record.diagnostics[0].code, "syntax.recovered");
+
+    let StaticSourceMatch::New {
+        variable_name,
+        callee,
+        object_arg,
+        ..
+    } = &record.matches[0]
+    else {
+        panic!("expected constructor match fixture");
+    };
+    assert_eq!(variable_name, "agent");
+    assert_eq!(callee.name, "Agent");
+    assert_eq!(callee.module_specifier.as_deref(), Some("@crux/core"));
+
+    let Some(StaticSyntaxValue::Object { properties, .. }) = object_arg else {
+        panic!("expected constructor object argument");
+    };
+    let instructions = properties
+        .iter()
+        .find(|property| property.name == "instructions")
+        .expect("expected instructions callback property");
+    let StaticSyntaxValue::Function { calls, .. } = &instructions.value else {
+        panic!("expected function-valued callback property");
+    };
+    assert_eq!(calls[0].callee.name, "writeFile");
+}
+
+#[test]
+fn shared_worker_event_fixtures_cover_success_and_edge_cases() {
+    let success: WorkerEventsFixture = fixture_json("worker-events.json");
+    let event_types = success.events.iter().map(event_type).collect::<Vec<_>>();
+    assert_eq!(
+        event_types,
+        vec![
+            "phase:start",
+            "fact:batch",
+            "sourceProfile:batch",
+            "phase:done"
+        ]
+    );
+
+    let cases: WorkerEventCasesFixture = fixture_json("worker-event-cases.json");
+    assert_eq!(event_type(&cases.artifact_done), "artifact:done");
+    assert_eq!(event_type(&cases.artifact_error), "artifact:error");
+    assert_eq!(event_type(&cases.phase_error), "phase:error");
+    assert_eq!(cases.out_of_order_events.len(), 2);
+    assert_eq!(event_type(&cases.out_of_order_events[0]), "phase:start");
+    assert_eq!(event_type(&cases.out_of_order_events[1]), "fact:batch");
+    assert_eq!(cases.out_of_order_events[1]["sequence"], 1);
 }
 
 #[test]
@@ -206,21 +327,33 @@ where
 
 fn fixture_text(name: &str) -> &'static str {
     match name {
-        "static-index-protocol.json" => include_str!(
-            "../../../packages/indexer/contracts/fixtures/static-index-protocol.json"
+        "static-index-protocol.json" => {
+            include_str!("../../../packages/indexer/contracts/fixtures/static-index-protocol.json")
+        }
+        "static-index-protocol-cases.json" => include_str!(
+            "../../../packages/indexer/contracts/fixtures/static-index-protocol-cases.json"
         ),
-        "static-index-identity.json" => include_str!(
-            "../../../packages/indexer/contracts/fixtures/static-index-identity.json"
+        "static-index-identity.json" => {
+            include_str!("../../../packages/indexer/contracts/fixtures/static-index-identity.json")
+        }
+        "static-syntax-records.json" => {
+            include_str!("../../../packages/indexer/contracts/fixtures/static-syntax-records.json")
+        }
+        "static-syntax-record-cases.json" => include_str!(
+            "../../../packages/indexer/contracts/fixtures/static-syntax-record-cases.json"
         ),
-        "static-syntax-records.json" => include_str!(
-            "../../../packages/indexer/contracts/fixtures/static-syntax-records.json"
-        ),
+        "worker-events.json" => {
+            include_str!("../../../packages/indexer/contracts/fixtures/worker-events.json")
+        }
+        "worker-event-cases.json" => {
+            include_str!("../../../packages/indexer/contracts/fixtures/worker-event-cases.json")
+        }
         "relation-specs.json" => {
             include_str!("../../../packages/indexer/contracts/fixtures/relation-specs.json")
         }
-        "rule-descriptors.json" => include_str!(
-            "../../../packages/indexer/contracts/fixtures/rule-descriptors.json"
-        ),
+        "rule-descriptors.json" => {
+            include_str!("../../../packages/indexer/contracts/fixtures/rule-descriptors.json")
+        }
         "primitive-coverage-identities.json" => include_str!(
             "../../../packages/indexer/contracts/fixtures/primitive-coverage-identities.json"
         ),
@@ -233,6 +366,14 @@ fn fixture_method(value: &Value) -> String {
         .get("method")
         .and_then(Value::as_str)
         .expect("fixture payload should have method")
+        .to_string()
+}
+
+fn event_type(value: &Value) -> String {
+    value
+        .get("type")
+        .and_then(Value::as_str)
+        .expect("fixture payload should have type")
         .to_string()
 }
 

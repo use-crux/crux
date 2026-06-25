@@ -98,6 +98,12 @@ const inventory = {
         ),
         contractFile(
           'typescript',
+          'packages/indexer/contracts/fixtures/worker-event-cases.json',
+          'Shared artifact, phase-error, and out-of-order worker-event case fixtures.',
+          'test',
+        ),
+        contractFile(
+          'typescript',
           'packages/indexer/indexer/worker-protocol/patch-events.ts',
           'Patch-to-event projection and event-to-patch reconstruction.',
           'parser',
@@ -163,7 +169,7 @@ const inventory = {
       ],
     },
     fixtureGap:
-      'Shared success-path worker-event fixtures are consumed by TypeScript, Go, and Rust; remaining gaps are artifact, phase-error, and out-of-order stream fixtures.',
+      'Shared worker-event fixtures are consumed by TypeScript, Go, and Rust for success, artifact, phase-error, and out-of-order stream cases.',
   },
   'static-syntax-records': {
     id: 'static-syntax-records',
@@ -196,6 +202,12 @@ const inventory = {
           'packages/indexer/indexer/static/syntax-record/schema.ts',
           'Schema projection helpers over record-backed static values.',
           'schema',
+        ),
+        contractFile(
+          'typescript',
+          'packages/indexer/contracts/fixtures/static-syntax-record-cases.json',
+          'Shared constructor, callback-summary, and diagnostic static syntax record cases.',
+          'test',
         ),
       ],
       go: [
@@ -252,7 +264,7 @@ const inventory = {
       ],
     },
     fixtureGap:
-      'A shared static syntax record fixture covers imports, call matches, object values, and native fact packets; remaining gaps are constructor matches, callback summaries, and parser diagnostic cases.',
+      'Shared static syntax fixtures cover imports, call matches, object values, native fact packets, constructor matches, callback summaries, and parser diagnostics across TypeScript, Go, and Rust.',
   },
   'static-index': {
     id: 'static-index',
@@ -272,6 +284,12 @@ const inventory = {
           'typescript',
           'packages/indexer/contracts/static-index/fixtures.ts',
           'TypeScript-owned Static Index request/response fixtures.',
+          'test',
+        ),
+        contractFile(
+          'typescript',
+          'packages/indexer/contracts/fixtures/static-index-protocol-cases.json',
+          'Shared Static Index protocol worker-error and invalid stream case fixtures.',
           'test',
         ),
         contractFile(
@@ -335,7 +353,7 @@ const inventory = {
       ],
     },
     fixtureGap:
-      'The Static Index protocol fixture is decoded by TypeScript, Go, and Rust for every method; remaining gaps are explicit protocol-error and invalid-stream fixtures.',
+      'Shared Static Index protocol fixtures are decoded by TypeScript, Go, and Rust for every method plus worker-error and invalid-stream cases.',
   },
   'semantic-evidence': {
     id: 'semantic-evidence',
@@ -369,6 +387,12 @@ const inventory = {
           'TypeScript-Go semantic backend host types behind the evidence contract.',
           'canonical-types',
         ),
+        contractFile(
+          'typescript',
+          'packages/indexer/contracts/fixtures/semantic-evidence.json',
+          'TS-only semantic evidence fixture covering every evidence batch kind.',
+          'test',
+        ),
       ],
       go: [
         contractFile(
@@ -381,7 +405,7 @@ const inventory = {
       rust: [],
     },
     fixtureGap:
-      'Semantic backend parity compares normalized Project Index facts, but no shared semantic evidence fixture files cover definitions, relations, source refs, diagnostics, lint findings, and degraded/unsupported cases.',
+      'A TS-only semantic evidence fixture covers definitions, relations, source refs, diagnostics, lint findings, and degraded/unsupported cases; Go hosts consume Project Index patch events today and Rust has no semantic evidence mirror.',
   },
 } satisfies StaticIndexRuntimeContractIndex
 

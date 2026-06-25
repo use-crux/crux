@@ -16,6 +16,7 @@ import { createTypeScriptSemanticBackend } from '../indexer/semantic/backends/ty
 import { collectStaticIndexVocabularyObservations, staticIndexVocabularyGuards } from './static-index-naming-guards'
 
 const indexerDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'indexer')
+const indexerPackageDir = join(indexerDir, '..')
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 
 describe('indexer architecture boundaries', () => {
@@ -130,6 +131,20 @@ describe('indexer architecture boundaries', () => {
       'contracts/native-static/fixtures.ts',
     ]) {
       expect(existsSync(join(indexerDir, file)), file).toBe(false)
+    }
+  })
+
+  it('does not retain compatibility paths for moved host and contract surfaces', () => {
+    for (const path of [
+      'internal-host.ts',
+      'worker-host.ts',
+      'worker-protocol.ts',
+      'indexer/contracts',
+      'contracts/native-static',
+      'contracts/native-static/schema.ts',
+      'contracts/native-static/fixtures.ts',
+    ]) {
+      expect(existsSync(join(indexerPackageDir, path)), path).toBe(false)
     }
   })
 

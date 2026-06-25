@@ -74,6 +74,31 @@ describe('Static Index compiler protocol', () => {
     }
   })
 
+  it('loads shared Static Index protocol edge-case fixtures', () => {
+    const fixture = readStaticIndexRuntimeSharedFixture('static-index-protocol-cases')
+
+    expect(fixture.workerError).toMatchObject({
+      id: 11,
+      ok: false,
+      error: 'static compiler failed',
+    })
+    expect(fixture.analyzeStreamError).toMatchObject({
+      id: 21,
+      ok: false,
+      type: 'error',
+      error: 'analyze failed',
+    })
+    expect(fixture.finalizeStreamError).toMatchObject({
+      id: 22,
+      ok: false,
+      type: 'error',
+      error: 'finalize failed',
+    })
+    for (const request of fixture.invalidRequests) {
+      expect(parseStaticIndexCompilerRequest(JSON.stringify(request))).toMatchObject({ ok: false })
+    }
+  })
+
   it('keeps the shared Oxc frontend identity aligned with the exported frontend constant', () => {
     const manifest = readStaticIndexRuntimeSharedFixture('static-index-identity')
 

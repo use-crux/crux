@@ -4,6 +4,7 @@ import {
   createTypeScriptStaticSyntaxFrontend,
   type StaticSyntaxFileRecord,
 } from '../indexer/static/syntax-record'
+import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
 
 describe('static syntax records', () => {
   it('emits a JSON-safe record for an exported imported factory call', async () => {
@@ -164,6 +165,31 @@ describe('static syntax records', () => {
     const typescriptRecord = await createTypeScriptStaticSyntaxFrontend(options).parseFile(input)
 
     expect(objectPropertyNames(typescriptRecord)).toEqual(['id', 'check'])
+  })
+
+  it('loads shared Static Syntax constructor, callback, and diagnostic cases', () => {
+    const fixture = readStaticIndexRuntimeSharedFixture('static-syntax-record-cases')
+    const record = fixture.records[0]
+    const match = record?.matches[0]
+
+    expect(match).toMatchObject({
+      kind: 'new',
+      variableName: 'agent',
+      callee: { name: 'Agent', moduleSpecifier: '@crux/core' },
+    })
+    expect(record?.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'syntax.recovered',
+        message: 'Recovered parser diagnostic',
+      }),
+    ])
+    if (!match || match.kind === 'object') throw new Error('expected constructor match fixture')
+    const callback = match.objectArg?.properties.find((property) => property.name === 'instructions')?.value
+
+    expect(callback).toMatchObject({
+      kind: 'function',
+      calls: [expect.objectContaining({ callee: expect.objectContaining({ name: 'writeFile' }) })],
+    })
   })
 })
 

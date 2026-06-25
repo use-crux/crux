@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -105,6 +106,61 @@ func TestSharedStaticIndexProtocolFixtureDecodes(t *testing.T) {
 	}
 }
 
+func TestSharedStaticIndexProtocolCaseFixturesDecode(t *testing.T) {
+	var fixture struct {
+		WorkerError struct {
+			ID    uint64 `json:"id"`
+			OK    bool   `json:"ok"`
+			Error string `json:"error"`
+		} `json:"workerError"`
+		InvalidRequests            []json.RawMessage `json:"invalidRequests"`
+		AnalyzeStreamError         json.RawMessage   `json:"analyzeStreamError"`
+		FinalizeStreamError        json.RawMessage   `json:"finalizeStreamError"`
+		InvalidAnalyzeStreamEvent  json.RawMessage   `json:"invalidAnalyzeStreamEvent"`
+		InvalidFinalizeStreamEvent json.RawMessage   `json:"invalidFinalizeStreamEvent"`
+	}
+	readSharedStaticIndexRuntimeFixture(t, "static-index-protocol-cases.json", &fixture)
+
+	if err := ValidateWorkerResponse(fixture.WorkerError.ID, fixture.WorkerError.OK, fixture.WorkerError.Error, 11); err == nil || !strings.Contains(err.Error(), "static compiler failed") {
+		t.Fatalf("ValidateWorkerResponse error = %v, want fixture message", err)
+	}
+	if len(fixture.InvalidRequests) != 2 {
+		t.Fatalf("invalid requests len = %d, want 2", len(fixture.InvalidRequests))
+	}
+
+	analyzeError, err := DecodeAnalyzeStreamEvent(fixture.AnalyzeStreamError)
+	if err != nil {
+		t.Fatalf("DecodeAnalyzeStreamEvent error = %v", err)
+	}
+	if analyzeError.OK || AnalyzeStreamError(analyzeError.Error).Error() != "Static Index analyze stream failed: analyze failed" {
+		t.Fatalf("analyze stream error = %+v", analyzeError)
+	}
+
+	finalizeError, err := DecodeFinalizeStreamEvent(fixture.FinalizeStreamError)
+	if err != nil {
+		t.Fatalf("DecodeFinalizeStreamEvent error = %v", err)
+	}
+	if finalizeError.OK || FinalizeStreamError(finalizeError.Error).Error() != "Static Index finalize stream failed: finalize failed" {
+		t.Fatalf("finalize stream error = %+v", finalizeError)
+	}
+
+	invalidAnalyze, err := DecodeAnalyzeStreamEvent(fixture.InvalidAnalyzeStreamEvent)
+	if err != nil {
+		t.Fatalf("DecodeAnalyzeStreamEvent invalid fixture error = %v", err)
+	}
+	if invalidAnalyze.Type != "unknown" {
+		t.Fatalf("invalid analyze stream type = %q, want unknown", invalidAnalyze.Type)
+	}
+
+	invalidFinalize, err := DecodeFinalizeStreamEvent(fixture.InvalidFinalizeStreamEvent)
+	if err != nil {
+		t.Fatalf("DecodeFinalizeStreamEvent invalid fixture error = %v", err)
+	}
+	if invalidFinalize.Type != "event" || len(invalidFinalize.Event) != 0 {
+		t.Fatalf("invalid finalize stream event = %+v, want missing event payload", invalidFinalize)
+	}
+}
+
 func staticIndexFixtureMethod(t *testing.T, raw json.RawMessage) string {
 	t.Helper()
 	var header struct {
@@ -135,7 +191,7 @@ func sharedStaticIndexRuntimeFixturePath(t *testing.T, name string) string {
 		t.Fatal("runtime.Caller failed")
 	}
 	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "..", ".."))
-	return filepath.Join(repoRoot, "packages", "indexer", "indexer", "contracts", "fixtures", name)
+	return filepath.Join(repoRoot, "packages", "indexer", "contracts", "fixtures", name)
 }
 
 func sameStrings(left []string, right []string) bool {
