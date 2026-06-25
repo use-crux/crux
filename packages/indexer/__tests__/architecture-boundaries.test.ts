@@ -13,8 +13,10 @@ import { createNativeSemanticBackend } from '../indexer/semantic/native/tsgo'
 import { nativeDirectPrimitiveManifest } from '../indexer/semantic/native/direct-projectors'
 import { createSemanticIndexService } from '../indexer/semantic/service'
 import { createTypeScriptSemanticBackend } from '../indexer/semantic/typescript'
+import { collectStaticIndexVocabularyObservations, staticIndexVocabularyGuards } from './static-index-naming-guards'
 
 const indexerDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'indexer')
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 
 describe('indexer architecture boundaries', () => {
   it('groups extension internals behind responsibility barrels', () => {
@@ -80,7 +82,46 @@ describe('indexer architecture boundaries', () => {
     expect(existsSync(join(indexerDir, 'semantic/native/direct-projectors/manifest.ts'))).toBe(true)
     expect(redundantContextualNames(join(indexerDir, 'semantic'))).toEqual([])
   })
+
+  it('records the old static-index vocabulary that later phases must remove', () => {
+    expect(
+      staticIndexVocabularyGuards.map(({ term, replacements, targetedPhases }) => ({
+        term,
+        replacements,
+        targetedPhases,
+      })),
+    ).toEqual([
+      { term: 'native-static', replacements: ['static-index'], targetedPhases: [2, 5, 6, 7] },
+      { term: 'nativeAst', replacements: ['staticIndex', 'staticSyntax', 'oxcSyntax'], targetedPhases: [2, 5, 7] },
+      { term: 'projectindexer', replacements: ['projectindex'], targetedPhases: [4] },
+      { term: 'native_static', replacements: ['static_index'], targetedPhases: [6, 7] },
+    ])
+  })
+
+  it('keeps the static-index rename guard connected to current source roots', () => {
+    const observations = collectStaticIndexVocabularyObservations(repoRoot)
+
+    expect(observations.map(({ guard }) => guard.term)).toEqual([
+      'native-static',
+      'nativeAst',
+      'projectindexer',
+      'native_static',
+    ])
+    expect(observationFor(observations, 'native-static').matches.length).toBeGreaterThan(0)
+    expect(observationFor(observations, 'nativeAst').matches.length).toBeGreaterThan(0)
+    expect(observationFor(observations, 'projectindexer').matches.length).toBeGreaterThan(0)
+    expect(observationFor(observations, 'native_static').matches.some((match) => !match.protocolOnly)).toBe(true)
+  })
 })
+
+function observationFor(
+  observations: ReturnType<typeof collectStaticIndexVocabularyObservations>,
+  term: (typeof staticIndexVocabularyGuards)[number]['term'],
+) {
+  const observation = observations.find((candidate) => candidate.guard.term === term)
+  expect(observation, term).toBeDefined()
+  return observation!
+}
 
 function redundantContextualNames(root: string): readonly string[] {
   return relativeFiles(root).filter((file) =>

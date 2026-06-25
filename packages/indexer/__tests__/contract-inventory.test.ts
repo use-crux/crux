@@ -11,6 +11,21 @@ describe('native runtime contract inventory', () => {
     expect(nativeRuntimeContractInventory().map((entry) => entry.id)).toEqual(nativeRuntimeContractIds)
   })
 
+  it('tracks static-index as the target replacement for the native-static protocol row', () => {
+    const entry = nativeRuntimeContractInventory().find((candidate) => candidate.id === 'static-index')
+
+    expect(entry).toEqual(
+      expect.objectContaining({
+        id: 'static-index',
+        label: 'Static Index compiler protocol',
+        renamesFrom: 'native-static-protocol',
+      }),
+    )
+    expect(entry?.filesByOwner.typescript.some((file) => file.path.includes('/contracts/native-static/'))).toBe(
+      true,
+    )
+  })
+
   it('points every listed TypeScript contract and Go/Rust mirror at a tracked file', async () => {
     for (const entry of nativeRuntimeContractInventory()) {
       for (const file of entry.files) {

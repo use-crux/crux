@@ -33,14 +33,14 @@ runtime.
 | --- | --- | --- | --- | --- |
 | `worker-events` | `contracts/worker-events/schema.ts` plus `indexer/worker-protocol/*` implementation files | `internal/projectindexwire/worker_protocol*` and artifacts | `crates/protocol/src/worker.rs`; `index_compiler/finalizer/events.rs` emits event JSON | Partial mirror |
 | `static-syntax-records` | `contracts/static-syntax/schema.ts` plus `indexer/static/syntax-record/*` implementation files | `internal/indexhost/native/staticplan`, `internal/indexhost/native/syntax/record`, and syntax stream decoder | `crates/protocol/src/static_syntax.rs`; `crates/syntax-oxc/src/syntax/frontend.rs` | Mirrored |
-| `native-static-protocol` | `contracts/native-static/schema.ts` plus `indexer/worker-protocol/native-static*` implementation files | `internal/indexhost/native/protocol/*` | `crates/protocol/src/native_static.rs` | Mirrored |
+| `static-index` | Target row replacing the current `contracts/native-static/schema.ts` plus `indexer/worker-protocol/native-static*` implementation files | `internal/indexhost/native/protocol/*` until the Go move | `crates/protocol/src/native_static.rs` until the protocol rename | Mirrored |
 | `semantic-evidence` | `contracts/semantic/schema.ts`, `indexer/semantic/evidence/projection.ts`, and service/native contracts | `internal/indexhost/semantic/worker.go` consumes patch events, not semantic evidence structs | None today | TypeScript-only |
 
 ## Parity Fixture Gaps
 
 - `worker-events`: Shared success-path worker-event fixtures are consumed by TypeScript, Go, and Rust; remaining gaps are artifact, phase-error, and out-of-order stream fixtures.
 - `static-syntax-records`: A shared static syntax record fixture covers imports, call matches, object values, and native fact packets; remaining gaps are constructor matches, callback summaries, and parser diagnostic cases.
-- `native-static-protocol`: A shared native static protocol fixture is decoded by TypeScript, Go, and Rust for every method; remaining gaps are explicit protocol-error and invalid-stream fixtures.
+- `static-index`: The current native static protocol fixture is decoded by TypeScript, Go, and Rust for every method; Phase 7 will rename it to Static Index while preserving explicit protocol-error and invalid-stream fixture gaps.
 - `semantic-evidence`: Semantic backend parity compares normalized Project Index facts, but no shared semantic evidence fixture files cover definitions, relations, source refs, diagnostics, lint findings, and degraded/unsupported cases.
 
 ## Existing Parity Coverage

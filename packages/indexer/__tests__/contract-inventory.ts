@@ -12,12 +12,15 @@
 export const nativeRuntimeContractIds = [
   'worker-events',
   'static-syntax-records',
-  'native-static-protocol',
+  'static-index',
   'semantic-evidence',
 ] as const
 
 /** Stable identifier for one current contract group. */
 export type NativeRuntimeContractId = (typeof nativeRuntimeContractIds)[number]
+
+/** Legacy contract identifier kept only to make target replacement rows explicit. */
+export type NativeRuntimeLegacyContractId = 'native-static-protocol'
 
 /** Language/runtime that owns or mirrors a contract file today. */
 export type NativeRuntimeContractOwner = 'typescript' | 'go' | 'rust'
@@ -56,6 +59,7 @@ interface NativeRuntimeContractEntryBase<TId extends NativeRuntimeContractId> {
   readonly id: TId
   readonly label: string
   readonly boundary: string
+  readonly renamesFrom?: NativeRuntimeLegacyContractId
   readonly canonicalOwner: 'typescript'
   readonly mirrorStatus: NativeRuntimeContractMirrorStatus
   readonly filesByOwner: NativeRuntimeContractFilesByOwner
@@ -254,10 +258,12 @@ const inventory = {
     fixtureGap:
       'A shared static syntax record fixture covers imports, call matches, object values, and native fact packets; remaining gaps are constructor matches, callback summaries, and parser diagnostic cases.',
   },
-  'native-static-protocol': {
-    id: 'native-static-protocol',
-    label: 'Native static compiler protocol',
-    boundary: 'Go/Rust native static prepare, analyze, finalize, and compile handoff.',
+  'static-index': {
+    id: 'static-index',
+    label: 'Static Index compiler protocol',
+    boundary:
+      'Target Static Index prepare, analyze, finalize, and compile handoff that replaces current native-static protocol naming.',
+    renamesFrom: 'native-static-protocol',
     canonicalOwner: 'typescript',
     mirrorStatus: 'mirrored',
     filesByOwner: {
@@ -265,25 +271,25 @@ const inventory = {
         contractFile(
           'typescript',
           'packages/indexer/indexer/contracts/native-static/schema.ts',
-          'Canonical contract-spine barrel for native static requests, responses, identity, telemetry, and parser interests.',
+          'Current canonical contract-spine barrel to move under contracts/static-index.',
           'schema',
         ),
         contractFile(
           'typescript',
           'packages/indexer/indexer/contracts/native-static/fixtures.ts',
-          'TypeScript-owned native static request/response fixtures.',
+          'Current TypeScript-owned native static request/response fixtures to rename as Static Index fixtures.',
           'test',
         ),
         contractFile(
           'typescript',
           'packages/indexer/indexer/worker-protocol/native-static.ts',
-          'Implementation owner for Zod schemas and inferred TypeScript native static protocol types.',
+          'Current implementation owner for Zod schemas and inferred TypeScript protocol types.',
           'schema',
         ),
         contractFile(
           'typescript',
           'packages/indexer/indexer/worker-protocol/native-static-parse.ts',
-          'JSON parser and validation entry point for native static compiler requests.',
+          'Current JSON parser and validation entry point for source-only compiler requests.',
           'parser',
         ),
       ],
@@ -291,7 +297,7 @@ const inventory = {
         contractFile(
           'go',
           'packages/local/internal/indexhost/native/protocol/types.go',
-          'Go mirror of native static request, response, identity, plan, and telemetry structs.',
+          'Go mirror of source-only compiler request, response, identity, plan, and telemetry structs.',
           'host-mirror',
         ),
         contractFile(
@@ -323,7 +329,7 @@ const inventory = {
         contractFile(
           'rust',
           'crates/protocol/src/native_static.rs',
-          'Rust native static request, response, identity, plan, and telemetry ABI.',
+          'Rust protocol ABI to rename only when TS, Go, and Rust method names move together.',
           'native-mirror',
         ),
         contractFile(
@@ -335,7 +341,7 @@ const inventory = {
       ],
     },
     fixtureGap:
-      'A shared native static protocol fixture is decoded by TypeScript, Go, and Rust for every method; remaining gaps are explicit protocol-error and invalid-stream fixtures.',
+      'The current native static protocol fixture is decoded by TypeScript, Go, and Rust for every method; Phase 7 will rename it to Static Index while preserving explicit protocol-error and invalid-stream fixture gaps.',
   },
   'semantic-evidence': {
     id: 'semantic-evidence',
