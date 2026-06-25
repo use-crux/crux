@@ -44,7 +44,7 @@ func FinalizePatch(ctx context.Context, compiler Compiler, options FinalizeOptio
 		ExtensionFacts:   NormalizeRuleFacts(options.RuleFacts),
 		LintFacts:        lintFacts,
 		LintConfig:       lintConfig,
-		LintFiles:        Files(options.Index),
+		LintSuppressions: SuppressionsFromFiles(Files(options.Index)),
 		EmitBuiltinLints: &emitBuiltinLints,
 		PatchPhase:       string(projectindex.PhaseQuality),
 	})

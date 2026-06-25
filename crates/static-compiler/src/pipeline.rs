@@ -12,7 +12,9 @@ use crate::finalizer::events::{
     StaticIndexFinalizeEventOptions, project_from_fact_values, project_patch_events,
 };
 use crate::finalizer::run::finalize_static_index_values_with_lint_facts;
-use crate::lints::filter::StaticIndexLintOptions;
+use crate::lints::filter::{
+    StaticIndexLintOptions, StaticIndexLintSuppression as PreparedLintSuppression,
+};
 use crate::protocol::static_index::{
     STATIC_INDEX_PROTOCOL_VERSION, StaticIndexAnalyzeRequest, StaticIndexAnalyzeResponse,
     StaticIndexCompileRequest, StaticIndexFactTelemetry, StaticIndexFinalizeRequest,
@@ -123,7 +125,17 @@ pub fn finalize(request: StaticIndexFinalizeRequest) -> StaticIndexFinalizeRespo
     let lint_options = StaticIndexLintOptions {
         emit_builtin_lints: request.emit_builtin_lints.unwrap_or(true),
         config: request.lint_config.clone(),
-        files: request.lint_files.clone(),
+        suppressions: request
+            .lint_suppressions
+            .iter()
+            .map(|suppression| PreparedLintSuppression {
+                file: suppression.file.clone(),
+                line: suppression.line,
+                column: suppression.column,
+                scope: suppression.scope.clone(),
+                rule_id: suppression.rule_id.clone(),
+            })
+            .collect(),
     };
     let finalized = finalize_static_index_values_with_lint_facts(
         &request.native_facts,
@@ -219,7 +231,7 @@ pub fn compile(request: StaticIndexCompileRequest) -> StaticIndexFinalizeRespons
         relation_specs: request.relation_specs,
         rule_results: None,
         lint_config: request.lint_config,
-        lint_files: request.lint_files,
+        lint_suppressions: request.lint_suppressions,
         emit_builtin_lints: request.emit_builtin_lints,
         patch_phase: None,
         patch_invalidates: None,

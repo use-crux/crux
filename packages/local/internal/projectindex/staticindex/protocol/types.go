@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	Version        = 1
+	Version        = 2
 	PrepareMethod  = "staticIndexPrepare"
 	AnalyzeMethod  = "staticIndexAnalyze"
 	FinalizeMethod = "staticIndexFinalize"
@@ -123,6 +123,14 @@ type AnalyzeFile struct {
 	SourceText string `json:"sourceText,omitempty"`
 }
 
+type LintSuppression struct {
+	File   string `json:"file"`
+	Line   int    `json:"line"`
+	Column int    `json:"column"`
+	Scope  string `json:"scope"`
+	RuleID string `json:"ruleId"`
+}
+
 type PrepareRequest struct {
 	ID                       uint64                       `json:"id,omitempty"`
 	ProtocolVersion          int                          `json:"protocolVersion"`
@@ -182,7 +190,7 @@ type FinalizeRequest struct {
 	RelationSpecs    json.RawMessage   `json:"relationSpecs,omitempty"`
 	RuleResults      json.RawMessage   `json:"ruleResults,omitempty"`
 	LintConfig       json.RawMessage   `json:"lintConfig,omitempty"`
-	LintFiles        []string          `json:"lintFiles,omitempty"`
+	LintSuppressions []LintSuppression `json:"lintSuppressions,omitempty"`
 	EmitBuiltinLints *bool             `json:"emitBuiltinLints,omitempty"`
 	PatchPhase       string            `json:"patchPhase,omitempty"`
 	PatchInvalidates json.RawMessage   `json:"patchInvalidates,omitempty"`
@@ -201,7 +209,7 @@ type CompileRequest struct {
 	ExtensionFacts   []json.RawMessage `json:"extensionFacts"`
 	RelationSpecs    json.RawMessage   `json:"relationSpecs,omitempty"`
 	LintConfig       json.RawMessage   `json:"lintConfig,omitempty"`
-	LintFiles        []string          `json:"lintFiles,omitempty"`
+	LintSuppressions []LintSuppression `json:"lintSuppressions,omitempty"`
 	EmitBuiltinLints *bool             `json:"emitBuiltinLints,omitempty"`
 }
 

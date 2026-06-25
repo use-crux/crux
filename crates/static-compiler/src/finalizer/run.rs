@@ -1,6 +1,6 @@
 //! Static Index finalize adapter.
 
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::collections::BTreeSet;
 
 use crate::core::definition_merge::merge_definitions_by_id;
@@ -23,7 +23,6 @@ use crate::source::model::with_static_index_source_model;
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct StaticIndexFinalizeOutput {
     pub model: StaticIndexRelationModel,
-    pub events: Vec<Value>,
     pub counts: StaticIndexFinalizeFactCounts,
 }
 
@@ -121,12 +120,7 @@ pub(crate) fn finalize_static_index_values_with_lint_facts(
         report: relation_model.report,
     };
     let counts = fact_counts(&model.facts);
-    let events = fact_events(&model.facts);
-    StaticIndexFinalizeOutput {
-        model,
-        events,
-        counts,
-    }
+    StaticIndexFinalizeOutput { model, counts }
 }
 
 pub(crate) fn append_missing_builtin_rule_descriptors(facts: &mut StaticIndexIndexPatchFacts) {
@@ -221,30 +215,6 @@ where
     }
 }
 
-fn fact_events(facts: &StaticIndexIndexPatchFacts) -> Vec<Value> {
-    let mut envelopes = Vec::new();
-    append_array_facts(&mut envelopes, "definitions", &facts.definitions);
-    append_array_facts(&mut envelopes, "relations", &facts.relations);
-    append_array_facts(&mut envelopes, "sourceRefs", &facts.source_refs);
-    append_array_facts(&mut envelopes, "diagnostics", &facts.diagnostics);
-    append_array_facts(&mut envelopes, "lintFindings", &facts.lint_findings);
-    append_array_facts(&mut envelopes, "ruleDescriptors", &facts.rule_descriptors);
-    append_array_facts(&mut envelopes, "sources", &facts.sources);
-    if let Some(source_graph) = &facts.source_graph {
-        envelopes.push(fact_envelope("sourceGraph", "sourceGraph", source_graph));
-    }
-    if envelopes.is_empty() {
-        return Vec::new();
-    }
-    vec![json!({
-        "protocolVersion": 2,
-        "type": "fact:batch",
-        "transactionId": "static-index-finalize",
-        "sequence": 0,
-        "facts": envelopes,
-    })]
-}
-
 fn fact_counts(facts: &StaticIndexIndexPatchFacts) -> StaticIndexFinalizeFactCounts {
     StaticIndexFinalizeFactCounts {
         definitions: facts.definitions.len(),
@@ -256,41 +226,4 @@ fn fact_counts(facts: &StaticIndexIndexPatchFacts) -> StaticIndexFinalizeFactCou
         sources: facts.sources.len(),
         source_graph: if facts.source_graph.is_some() { 1 } else { 0 },
     }
-}
-
-fn append_array_facts<T>(events: &mut Vec<Value>, kind: &str, facts: &[T])
-where
-    T: serde::Serialize,
-{
-    for fact in facts {
-        let fact_id = serde_json::to_value(fact)
-            .ok()
-            .and_then(|value| {
-                value
-                    .get("id")
-                    .or_else(|| value.get("definitionId"))
-                    .or_else(|| value.get("file"))
-                    .and_then(Value::as_str)
-                    .map(str::to_string)
-            })
-            .unwrap_or_else(|| format!("{kind}:{}", events.len()));
-        events.push(fact_envelope(kind, &fact_id, fact));
-    }
-}
-
-fn fact_envelope<T>(kind: &str, fact_id: &str, fact: &T) -> Value
-where
-    T: serde::Serialize,
-{
-    json!({
-        "schemaVersion": 1,
-        "factId": fact_id,
-        "kind": kind,
-        "phase": "ast",
-        "projectRoot": "",
-        "producer": { "name": "crux-static-index", "version": "phase-4" },
-        "fidelity": "inferred",
-        "provenance": { "kind": "runtime", "attribute": "project-index.ast" },
-        "fact": fact,
-    })
 }

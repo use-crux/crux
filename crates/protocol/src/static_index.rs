@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::{StaticSyntaxCallInterest, StaticSyntaxConstructorInterest};
 
 /// Current Static Index compiler protocol version.
-pub const STATIC_INDEX_PROTOCOL_VERSION: u8 = 1;
+pub const STATIC_INDEX_PROTOCOL_VERSION: u8 = 2;
 
 /// Method string for Static Index planning.
 pub const STATIC_INDEX_PREPARE_METHOD: &str = "staticIndexPrepare";
@@ -195,6 +195,17 @@ pub struct StaticIndexAnalyzeFile {
     pub source_text: Option<String>,
 }
 
+/// Prepared Static Index lint suppression directive.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticIndexLintSuppression {
+    pub file: String,
+    pub line: usize,
+    pub column: usize,
+    pub scope: String,
+    pub rule_id: String,
+}
+
 /// `staticIndexPrepare` request.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -286,7 +297,7 @@ pub struct StaticIndexCompileRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lint_config: Option<Value>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub lint_files: Vec<String>,
+    pub lint_suppressions: Vec<StaticIndexLintSuppression>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub emit_builtin_lints: Option<bool>,
 }
@@ -311,7 +322,7 @@ pub struct StaticIndexFinalizeRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lint_config: Option<Value>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub lint_files: Vec<String>,
+    pub lint_suppressions: Vec<StaticIndexLintSuppression>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub emit_builtin_lints: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]

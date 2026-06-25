@@ -141,6 +141,15 @@ export const staticIndexCompilerRequestFixtures = [
     ],
     relationSpecs: { policies: [] },
     ruleResults: { findings: [] },
+    lintSuppressions: [
+      {
+        file: '/repo/src/contract.ts',
+        line: 1,
+        column: 1,
+        scope: 'next-line',
+        ruleId: 'prompt.missing_input_schema',
+      },
+    ],
     patchPhase: 'quality',
     patchInvalidates: {},
     cache: { writes: [] },

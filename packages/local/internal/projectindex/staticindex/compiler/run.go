@@ -10,6 +10,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/cache"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compat"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler/evidence"
+	compilerlint "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler/lint"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler/patch"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/sourceprofile"
@@ -118,7 +119,7 @@ func Run(ctx context.Context, request Request) (Result, error) {
 		ExtensionFacts:   extensionFacts,
 		RelationSpecs:    request.Plan.RelationSpecs,
 		LintConfig:       request.Plan.LintConfig,
-		LintFiles:        append([]string(nil), request.Plan.Files...),
+		LintSuppressions: compilerlint.SuppressionsFromSourceText(sourceInput.SourceTextByFile),
 		EmitBuiltinLints: &emitBuiltinLints,
 	})
 	if err != nil {
@@ -163,7 +164,7 @@ func runCompile(
 		ExtensionFacts:   extensionFacts,
 		RelationSpecs:    request.Plan.RelationSpecs,
 		LintConfig:       request.Plan.LintConfig,
-		LintFiles:        append([]string(nil), request.Plan.Files...),
+		LintSuppressions: compilerlint.SuppressionsFromSourceText(sourceInput.SourceTextByFile),
 		EmitBuiltinLints: &emitBuiltinLints,
 	})
 	timing := Timing{NativeParseAndForwardMs: elapsedMs(started)}

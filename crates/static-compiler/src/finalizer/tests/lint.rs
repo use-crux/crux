@@ -1,11 +1,9 @@
-use std::fs;
-
 use serde_json::json;
 
 use crate::finalizer::run::{
     finalize_static_index_values_with_lint_facts, finalize_static_index_values_with_lint_options,
 };
-use crate::lints::filter::StaticIndexLintOptions;
+use crate::lints::filter::{StaticIndexLintOptions, StaticIndexLintSuppression};
 use crate::relation::model::built_in_relation_policy_table;
 
 #[test]
@@ -180,17 +178,7 @@ fn finalize_uses_lint_facts_without_materializing_lint_input_definitions() {
 #[test]
 fn finalize_suppresses_extension_lint_findings_with_rule_descriptors() {
     let policies = built_in_relation_policy_table();
-    let file = std::env::temp_dir().join(format!(
-        "crux-static-index-extension-suppression-{}-{}.ts",
-        std::process::id(),
-        line!()
-    ));
-    fs::write(
-        &file,
-        "// crux-lint-disable-next-line @acme/rules/require-owner -- covered by owner registry\nworkflow();\n",
-    )
-    .expect("write suppression fixture");
-    let file = file.to_string_lossy().to_string();
+    let file = "/repo/src/workflow.ts";
 
     let output = finalize_static_index_values_with_lint_options(
         &[],
@@ -207,18 +195,22 @@ fn finalize_suppresses_extension_lint_findings_with_rule_descriptors() {
                 "severity": "warning",
                 "title": "Require owner",
                 "message": "Workflow is missing an owner.",
-                "source": { "file": file.clone(), "line": 2, "column": 1 },
+                "source": { "file": file, "line": 2, "column": 1 },
                 "evidence": []
             }]
         })],
         &policies,
         &StaticIndexLintOptions {
-            files: vec![file.clone()],
+            suppressions: vec![StaticIndexLintSuppression {
+                file: file.to_string(),
+                line: 1,
+                column: 4,
+                scope: "next-line".to_string(),
+                rule_id: "@acme/rules/require-owner".to_string(),
+            }],
             ..StaticIndexLintOptions::default()
         },
     );
-
-    let _ = fs::remove_file(file);
 
     assert_eq!(output.counts.lint_findings, 0);
     assert!(

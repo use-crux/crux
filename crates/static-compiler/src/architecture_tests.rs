@@ -24,6 +24,126 @@ fn primitives_crate_does_not_depend_on_syntax_frontend() {
 }
 
 #[test]
+fn lints_crate_consumes_prepared_inputs_without_file_io() {
+    let static_compiler_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let lints_src = static_compiler_dir
+        .parent()
+        .expect("static compiler crate should live under crates/")
+        .join("lints/src");
+
+    for path in rust_files_under(&lints_src) {
+        let source = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+        assert!(
+            !source.contains("std::fs")
+                && !source.contains("fs::read")
+                && !source.contains("File::open"),
+            "crux-indexer-lints must consume prepared lint inputs without reading files directly: {}",
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn rust_crate_manifests_follow_static_index_dependency_direction() {
+    let static_compiler_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let crates = static_compiler_dir
+        .parent()
+        .expect("static compiler crate should live under crates/");
+
+    assert_manifest_excludes(
+        &crates.join("primitives/Cargo.toml"),
+        &["crux-indexer-syntax-oxc", "crux-indexer-lints"],
+    );
+    assert_manifest_excludes(
+        &crates.join("lints/Cargo.toml"),
+        &[
+            "crux-indexer-protocol",
+            "crux-indexer-syntax-oxc",
+            "crux-indexer-primitives",
+            "crux-indexer-static-compiler",
+        ],
+    );
+    assert_manifest_includes(
+        &crates.join("static-compiler/Cargo.toml"),
+        &[
+            "crux-indexer-protocol",
+            "crux-indexer-facts",
+            "crux-indexer-syntax-oxc",
+            "crux-indexer-primitives",
+            "crux-indexer-lints",
+        ],
+    );
+    assert_manifest_excludes(
+        &crates.join("worker/Cargo.toml"),
+        &[
+            "crux-indexer-facts",
+            "crux-indexer-syntax-oxc",
+            "crux-indexer-primitives",
+            "crux-indexer-lints",
+        ],
+    );
+}
+
+#[test]
+fn finalizer_run_does_not_construct_patch_events() {
+    let static_compiler_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let finalizer_run = static_compiler_dir.join("src/finalizer/run.rs");
+    let source =
+        std::fs::read_to_string(&finalizer_run).expect("finalizer run source should be readable");
+
+    assert!(
+        !source.contains("\"fact:batch\"") && !source.contains("\"transactionId\""),
+        "crates/static-compiler/src/finalizer/events.rs must be the only Static Index patch-event \
+         construction boundary"
+    );
+}
+
+fn rust_files_under(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut pending = vec![root.to_path_buf()];
+    let mut files = Vec::new();
+    while let Some(path) = pending.pop() {
+        for entry in std::fs::read_dir(&path)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+        {
+            let entry = entry.expect("directory entry should be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
+fn assert_manifest_includes(path: &std::path::Path, packages: &[&str]) {
+    let manifest = std::fs::read_to_string(path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+    for package in packages {
+        assert!(
+            manifest.contains(package),
+            "{} should depend on {package}",
+            path.display()
+        );
+    }
+}
+
+fn assert_manifest_excludes(path: &std::path::Path, packages: &[&str]) {
+    let manifest = std::fs::read_to_string(path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+    for package in packages {
+        assert!(
+            !manifest.contains(package),
+            "{} should not depend on {package}",
+            path.display()
+        );
+    }
+}
+
+#[test]
 fn syntax_frontend_is_pure_and_static_compiler_projects_facts() {
     let root = "/workspace/acme".to_string();
     let file = "src/prompts/refund.ts".to_string();

@@ -13,6 +13,23 @@ import { staticIndexParserInterestFields } from './interests'
 
 const unknownArraySchema = z.array(z.unknown())
 
+/**
+ * Prepared lint suppression directive parsed from source before the Rust
+ * compiler runs lint filtering.
+ */
+export const StaticIndexLintSuppressionSchema = z
+  .object({
+    file: z.string().min(1),
+    line: z.number().int().positive(),
+    column: z.number().int().positive(),
+    scope: z.enum(['next-line', 'line', 'file']),
+    ruleId: z.string().min(1),
+  })
+  .strict()
+
+/** Prepared Static Index lint suppression directive. */
+export type StaticIndexLintSuppression = z.infer<typeof StaticIndexLintSuppressionSchema>
+
 /** Static Index compiler method names used on the JSON-lines boundary. */
 export type StaticIndexCompilerMethod =
   | 'staticIndexPrepare'
@@ -108,7 +125,7 @@ export const StaticIndexFinalizeRequestSchema = z
     relationSpecs: z.unknown().optional(),
     ruleResults: z.unknown().optional(),
     lintConfig: z.unknown().optional(),
-    lintFiles: z.array(z.string()).optional(),
+    lintSuppressions: z.array(StaticIndexLintSuppressionSchema).optional(),
     emitBuiltinLints: z.boolean().optional(),
     patchPhase: z.enum(['ast', 'semantic', 'runtime', 'quality']).optional(),
     patchInvalidates: z.unknown().optional(),
@@ -128,7 +145,7 @@ export const StaticIndexCompileRequestSchema = z
     extensionFacts: unknownArraySchema,
     relationSpecs: z.unknown().optional(),
     lintConfig: z.unknown().optional(),
-    lintFiles: z.array(z.string()).optional(),
+    lintSuppressions: z.array(StaticIndexLintSuppressionSchema).optional(),
     emitBuiltinLints: z.boolean().optional(),
   })
   .strict()

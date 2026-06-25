@@ -166,7 +166,15 @@ fn finalize_protocol_round_trips_realistic_json() {
         "lintConfig": {
             "profile": "recommended"
         },
-        "lintFiles": ["src/agents/support.ts"],
+        "lintSuppressions": [
+            {
+                "file": "src/agents/support.ts",
+                "line": 4,
+                "column": 7,
+                "scope": "next-line",
+                "ruleId": "prompt.missing_input_schema"
+            }
+        ],
         "emitBuiltinLints": false,
         "patchPhase": "quality",
         "patchInvalidates": {},

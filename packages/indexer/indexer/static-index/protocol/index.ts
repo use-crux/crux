@@ -27,6 +27,7 @@ export type {
   StaticIndexCompilerMethod,
   StaticIndexCompilerRequest,
   StaticIndexFileInput,
+  StaticIndexLintSuppression,
   StaticIndexPreparedPlan,
   StaticIndexSourceFile,
 } from './request'
@@ -37,6 +38,7 @@ export {
   StaticIndexCompilerRequestSchema,
   StaticIndexFileInputSchema,
   StaticIndexFinalizeRequestSchema,
+  StaticIndexLintSuppressionSchema,
   StaticIndexPrepareRequestSchema,
   StaticIndexPreparedPlanSchema,
   StaticIndexSourceFileSchema,

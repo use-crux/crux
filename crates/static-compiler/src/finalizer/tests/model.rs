@@ -6,7 +6,7 @@ use crate::finalizer::run::{
 use crate::relation::model::relation_policy_table_from_value;
 
 #[test]
-fn finalize_binds_grouped_relation_refs_and_emits_fact_batch() {
+fn finalize_binds_grouped_relation_refs_into_model_facts() {
     let output = finalize_static_index_values(
         &[json!({
             "definitions": [
@@ -44,19 +44,17 @@ fn finalize_binds_grouped_relation_refs_and_emits_fact_batch() {
     );
 
     assert_eq!(output.model.report.counts.resolved, 1);
-    assert_eq!(output.events.len(), 1);
-    assert_eq!(output.events[0]["type"], "fact:batch");
-    let facts = output.events[0]["facts"].as_array().expect("batch facts");
-    assert!(facts.iter().any(|fact| {
-        fact["kind"] == "relations"
-            && fact["fact"]["id"]
-                == "relation:prompt.uses_context:prompt:writer:context:brand-context"
+    assert!(output.model.facts.relations.iter().any(|relation| {
+        relation.id == "relation:prompt.uses_context:prompt:writer:context:brand-context"
     }));
-    assert!(facts.iter().any(|fact| {
-        fact["kind"] == "definitions"
-            && fact["fact"]["id"] == "prompt:writer"
-            && fact["fact"]["metadata"]["intelligence"]["dependencies"]["contexts"]
-                == json!(["context:brand-context"])
+    assert!(output.model.facts.definitions.iter().any(|definition| {
+        definition.id == "prompt:writer"
+            && definition.metadata.as_ref().and_then(|metadata| {
+                metadata
+                    .get("intelligence")
+                    .and_then(|intelligence| intelligence.get("dependencies"))
+                    .and_then(|dependencies| dependencies.get("contexts"))
+            }) == Some(&json!(["context:brand-context"]))
     }));
 }
 
@@ -70,7 +68,7 @@ fn finalize_keeps_placeholder_phase_three_facts_non_materialized() {
         &[],
     );
 
-    assert!(output.events.is_empty());
+    assert!(output.counts.is_empty());
     assert_eq!(output.model.report.counts.resolved, 0);
 }
 
@@ -143,11 +141,6 @@ fn finalize_materializes_grouped_rule_descriptors() {
     assert_eq!(
         output.model.facts.rule_descriptors[0].id,
         "prompt.missing_input_schema"
-    );
-    assert!(
-        output.events[0]["facts"]
-            .as_array()
-            .is_some_and(|facts| { facts.iter().any(|fact| fact["kind"] == "ruleDescriptors") })
     );
 }
 

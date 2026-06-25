@@ -11,7 +11,7 @@
 import { z } from 'zod'
 
 /** Current Static Index compiler protocol version. */
-export const STATIC_INDEX_COMPILER_PROTOCOL_VERSION = 1 as const
+export const STATIC_INDEX_COMPILER_PROTOCOL_VERSION = 2 as const
 
 /** Cache-sensitive identity for one compiler input component. */
 export const StaticIndexIdentityComponentSchema = z

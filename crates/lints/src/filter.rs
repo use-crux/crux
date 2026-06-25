@@ -1,7 +1,6 @@
 //! Native lint config and suppression filtering.
 
 use std::collections::BTreeSet;
-use std::fs;
 
 use serde_json::Value;
 
@@ -15,7 +14,17 @@ use crate::rules::filter::{finding_profiles, known_rule_ids};
 pub struct StaticIndexLintOptions {
     pub emit_builtin_lints: bool,
     pub config: Option<Value>,
-    pub files: Vec<String>,
+    pub suppressions: Vec<StaticIndexLintSuppression>,
+}
+
+/// Prepared lint suppression directive found by the compiler host.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StaticIndexLintSuppression {
+    pub file: String,
+    pub line: usize,
+    pub column: usize,
+    pub scope: String,
+    pub rule_id: String,
 }
 
 impl Default for StaticIndexLintOptions {
@@ -23,7 +32,7 @@ impl Default for StaticIndexLintOptions {
         Self {
             emit_builtin_lints: true,
             config: None,
-            files: Vec::new(),
+            suppressions: Vec::new(),
         }
     }
 }
@@ -35,7 +44,7 @@ pub(crate) fn apply_lint_filters(
     rule_descriptors: &[StaticIndexRuleDescriptor],
 ) -> Vec<StaticIndexLintFinding> {
     let known = known_rule_ids(rule_descriptors);
-    let suppressed = apply_suppressions(findings, diagnostics, &options.files, &known);
+    let suppressed = apply_suppressions(findings, diagnostics, &options.suppressions, &known);
     apply_config(suppressed, diagnostics, options.config.as_ref(), &known)
 }
 
@@ -89,10 +98,13 @@ fn apply_config(
 fn apply_suppressions(
     findings: Vec<StaticIndexLintFinding>,
     diagnostics: &mut Vec<StaticIndexDiagnostic>,
-    files: &[String],
+    suppressions: &[StaticIndexLintSuppression],
     known: &BTreeSet<String>,
 ) -> Vec<StaticIndexLintFinding> {
-    let mut suppressions = parse_suppressions(files);
+    let mut suppressions = suppressions
+        .iter()
+        .map(LintSuppression::from)
+        .collect::<Vec<_>>();
     for suppression in &suppressions {
         if !known.contains(&suppression.rule_id) {
             diagnostics.push(unknown_suppression_rule_diagnostic(suppression));
@@ -128,47 +140,21 @@ struct LintSuppression {
     used: bool,
 }
 
-fn parse_suppressions(files: &[String]) -> Vec<LintSuppression> {
-    let mut out = Vec::new();
-    for file in files {
-        let Ok(text) = fs::read_to_string(file) else {
-            continue;
-        };
-        for (index, line) in text.lines().enumerate() {
-            if let Some(suppression) = parse_suppression_line(file, index + 1, line) {
-                out.push(suppression);
-            }
+impl From<&StaticIndexLintSuppression> for LintSuppression {
+    fn from(input: &StaticIndexLintSuppression) -> Self {
+        Self {
+            id: format!(
+                "{}:{}:{}:{}",
+                input.file, input.line, input.scope, input.rule_id
+            ),
+            file: input.file.clone(),
+            line: input.line,
+            column: input.column,
+            scope: input.scope.clone(),
+            rule_id: input.rule_id.clone(),
+            used: false,
         }
     }
-    out
-}
-
-fn parse_suppression_line(file: &str, line: usize, text: &str) -> Option<LintSuppression> {
-    let column = text.find("crux-lint-disable-")? + 1;
-    let mut rest = &text[(column - 1 + "crux-lint-disable-".len())..];
-    let scope = ["next-line", "line", "file"]
-        .into_iter()
-        .find(|scope| rest.starts_with(scope))?;
-    rest = rest[scope.len()..].trim_start();
-    let rule_len = rest
-        .chars()
-        .take_while(|character| {
-            character.is_ascii_alphanumeric() || matches!(character, '@' | '_' | '.' | '/' | '-')
-        })
-        .count();
-    if rule_len == 0 {
-        return None;
-    }
-    let rule_id = rest[..rule_len].to_string();
-    Some(LintSuppression {
-        id: format!("{file}:{line}:{scope}:{rule_id}"),
-        file: file.to_string(),
-        line,
-        column,
-        scope: scope.to_string(),
-        rule_id,
-        used: false,
-    })
 }
 
 fn suppresses(suppression: &LintSuppression, finding: &StaticIndexLintFinding) -> bool {

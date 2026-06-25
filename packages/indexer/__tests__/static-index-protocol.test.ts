@@ -4,6 +4,7 @@ import {
   StaticIndexCompilerResponseSchema,
   parseStaticIndexCompilerRequest,
 } from '../indexer/contracts/static-index/schema'
+import { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static-index/syntax'
 import {
   staticIndexCompilerRequestFixtures,
   staticIndexCompilerResponseFixtures,
@@ -54,7 +55,7 @@ describe('Static Index compiler protocol', () => {
     const fixture = readStaticIndexRuntimeSharedFixture('static-index-protocol')
 
     expect(manifest).toMatchObject({
-      protocolVersion: 1,
+      protocolVersion: 2,
       oxcFrontend: { name: expect.any(String), version: expect.any(String) },
       primitiveManifest: { digest: expect.any(String) },
       relationPolicy: { digest: expect.any(String) },
@@ -73,12 +74,18 @@ describe('Static Index compiler protocol', () => {
     }
   })
 
+  it('keeps the shared Oxc frontend identity aligned with the exported frontend constant', () => {
+    const manifest = readStaticIndexRuntimeSharedFixture('static-index-identity')
+
+    expect(manifest.oxcFrontend).toEqual(OXC_STATIC_SYNTAX_FRONTEND_IDENTITY)
+  })
+
   it('rejects malformed Static Index compiler requests', () => {
     expect(parseStaticIndexCompilerRequest('{')).toEqual({ ok: false, error: 'invalid JSON' })
     expect(
       parseStaticIndexCompilerRequest(
         JSON.stringify({
-          protocolVersion: 2,
+          protocolVersion: 1,
           method: 'staticIndexPrepare',
           root: '/repo',
           identity: staticIndexRunIdentityFixture,

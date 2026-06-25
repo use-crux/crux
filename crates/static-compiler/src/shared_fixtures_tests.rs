@@ -133,6 +133,20 @@ fn shared_static_index_protocol_fixture_decodes_and_finalizes() {
 }
 
 #[test]
+fn shared_static_index_identity_fixture_matches_rust_syntax_frontend() {
+    let manifest: StaticIndexIdentityManifest = fixture_json("static-index-identity.json");
+
+    assert_eq!(
+        manifest.oxc_frontend.name,
+        crux_indexer_syntax_oxc::FRONTEND_NAME
+    );
+    assert_eq!(
+        manifest.oxc_frontend.version,
+        crux_indexer_syntax_oxc::FRONTEND_VERSION
+    );
+}
+
+#[test]
 fn shared_static_syntax_record_fixture_decodes() {
     let fixture: StaticSyntaxRecordsFixture = fixture_json("static-syntax-records.json");
     assert_eq!(fixture.records.len(), 1);

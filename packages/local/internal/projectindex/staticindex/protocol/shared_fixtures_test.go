@@ -58,6 +58,9 @@ func TestSharedStaticIndexProtocolFixtureDecodes(t *testing.T) {
 			if len(request.NativeFacts) != 1 || len(request.RelationSpecs) == 0 {
 				t.Fatalf("finalize request = %+v, want native facts and relation specs", request)
 			}
+			if len(request.LintSuppressions) != 1 || request.LintSuppressions[0].RuleID == "" {
+				t.Fatalf("finalize lint suppressions = %+v, want shared prepared suppression", request.LintSuppressions)
+			}
 		case CompileMethod:
 			var request CompileRequest
 			if err := json.Unmarshal(raw, &request); err != nil {
