@@ -8,22 +8,6 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
-func (s *Service) ReindexProjectRuntimeRich(ctx context.Context, root, configPath, projectName string) (store.IndexData, error) {
-	index, err := s.ReindexProjectWithOptions(ctx, root, configPath, projectName, ProjectReindexOptions{
-		Semantic: ProjectSemanticInline,
-	})
-	if err != nil {
-		return store.IndexData{}, err
-	}
-	return s.applyProjectRuntimePatch(ctx, projectindex.ProjectRuntimeIndexRequest{
-		Root:          root,
-		ConfigPath:    configPath,
-		ProjectName:   projectName,
-		Budget:        ProjectIndexRuntimeBudget,
-		PreviousIndex: index,
-	})
-}
-
 func (s *Service) applyProjectRuntimePatch(ctx context.Context, request projectindex.ProjectRuntimeIndexRequest) (store.IndexData, error) {
 	indexer, ok := s.indexer.(RuntimeClient)
 	runtimeStartedAt := time.Now()

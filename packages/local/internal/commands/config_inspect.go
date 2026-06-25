@@ -16,10 +16,10 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
+	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/commandui"
 	"github.com/use-crux/crux/packages/local/internal/output"
-	"github.com/use-crux/crux/packages/local/internal/server"
 )
 
 type configInspectOptions struct {
@@ -152,7 +152,7 @@ func inspectProjectConfigWithWorker(
 	configPath string,
 	projectName string,
 ) (json.RawMessage, error) {
-	worker := server.NewEmbeddedProjectIndexer("")
+	worker := assets.NewEmbeddedProjectIndexer("")
 	defer worker.Close()
 
 	if _, ok := ctx.Deadline(); !ok {

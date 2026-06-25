@@ -16,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/server"
@@ -307,8 +308,8 @@ func runTUI(devSrv *server.DevServer, serverURL string, port int, startup *start
 		WithObservability(devSrv.Observability).
 		WithQualityPromote(func(ctx context.Context, experimentID, variant, pinID string) (api.QualityPromoteResult, error) {
 			return qualityserver.RunPromote(ctx, "", "", qualityserver.RunnerDeps{
-				FindNode:      server.FindNode,
-				ExtractRunner: server.ExtractQualityRunner,
+				FindNode:      assets.FindNode,
+				ExtractRunner: assets.ExtractEmbeddedQualityRunner,
 			}, qualityserver.PromoteRequest{
 				ExperimentID: experimentID,
 				Variant:      variant,

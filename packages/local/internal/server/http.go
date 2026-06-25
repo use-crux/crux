@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/localserver"
 	"github.com/use-crux/crux/packages/local/internal/observability"
@@ -68,7 +69,7 @@ func NewHTTPServerWithServices(devSvc *devtools.Service, opt ServerOptions) http
 func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Service, opt ServerOptions) http.Handler {
 	qualitySvc := devSvc.Quality()
 	if !devSvc.HasProjectIndexer() {
-		projectIndexer := NewEmbeddedProjectIndexer(opt.ProjectIndexerScript)
+		projectIndexer := assets.NewEmbeddedProjectIndexer(opt.ProjectIndexerScript)
 		devSvc.WithProjectIndexer(projectIndexer)
 		go func() {
 			<-ctx.Done()
@@ -122,14 +123,14 @@ func NewHTTPServerWithServicesContext(ctx context.Context, devSvc *devtools.Serv
 		ProjectRoot:        opt.ProjectRoot,
 		ConfigPath:         opt.ConfigPath,
 		QualityRunner: qualityserver.RunnerDeps{
-			FindNode:      FindNode,
-			ExtractRunner: ExtractQualityRunner,
+			FindNode:      assets.FindNode,
+			ExtractRunner: assets.ExtractEmbeddedQualityRunner,
 		},
 		SourceResolver: localserver.SourceResolverOptions{
 			ScriptPath:     opt.SourceResolverScript,
-			EmbeddedScript: embeddedSourceResolver,
+			EmbeddedScript: assets.EmbeddedSourceResolverScript(),
 		},
-		UI:            UIHandler(),
+		UI:            assets.EmbeddedUIHandler(),
 		OriginAllowed: originAllowed,
 	})
 }

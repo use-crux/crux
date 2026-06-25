@@ -152,7 +152,9 @@ func ignoredSourcePath(root string, file string) bool {
 
 func generatedBuildOutputPath(relativeFile string) bool {
 	return strings.HasPrefix(relativeFile, "packages/local/internal/server/embed/") ||
-		strings.HasPrefix(relativeFile, "packages/local/internal/server/ui-embed/")
+		strings.HasPrefix(relativeFile, "packages/local/internal/server/ui-embed/") ||
+		strings.HasPrefix(relativeFile, "packages/local/internal/assets/embed/") ||
+		strings.HasPrefix(relativeFile, "packages/local/internal/assets/ui-embed/")
 }
 
 func candidateSourceFile(file string) bool {

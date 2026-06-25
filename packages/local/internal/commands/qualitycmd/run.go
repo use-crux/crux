@@ -19,11 +19,11 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
+	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/projectroot"
-	"github.com/use-crux/crux/packages/local/internal/server"
 )
 
 type qualityRunOpts struct {
@@ -487,11 +487,11 @@ func isRelevantWatchEvent(event fsnotify.Event) bool {
 // --- worker spawn ---
 
 func spawnQualityRunner(opts *qualityRunOpts, extraArgs []string, devtoolsURL string) (*exec.Cmd, io.Reader, io.Reader, error) {
-	nodePath, err := server.FindNode()
+	nodePath, err := assets.FindNode()
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	runnerPath, err := server.ExtractQualityRunner()
+	runnerPath, err := assets.ExtractEmbeddedQualityRunner()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to extract embedded quality runner: %w", err)
 	}

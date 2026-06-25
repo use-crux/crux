@@ -1,9 +1,49 @@
 package assets
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestEmbeddedAssetsAreOwnedByAssetsPackage(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	assetsDir := filepath.Dir(file)
+	internalDir := filepath.Dir(assetsDir)
+
+	requiredPaths := []string{
+		"embedded_assets.go",
+		filepath.Join("embed", "project-indexer.mjs"),
+		filepath.Join("embed", "project-semantic-indexer.mjs"),
+		filepath.Join("embed", "project-runtime-indexer.mjs"),
+		filepath.Join("embed", "quality-runner.mjs"),
+		filepath.Join("embed", "source-resolver.mjs"),
+		filepath.Join("ui-embed", "index.html"),
+	}
+	for _, rel := range requiredPaths {
+		if _, err := os.Stat(filepath.Join(assetsDir, rel)); err != nil {
+			t.Fatalf("assets package is missing %s: %v", rel, err)
+		}
+	}
+
+	forbiddenServerFiles := []string{
+		"embedded.go",
+		"project_index_host.go",
+		"ui.go",
+	}
+	for _, name := range forbiddenServerFiles {
+		if _, err := os.Stat(filepath.Join(internalDir, "server", name)); err == nil {
+			t.Fatalf("server package must not own embedded asset wrapper %s", name)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat server asset wrapper %s: %v", name, err)
+		}
+	}
+}
 
 func TestProjectIndexerUsesInjectedBundleAssets(t *testing.T) {
 	bundle := NewProjectIndexer(ProjectIndexerOptions{

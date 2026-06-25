@@ -7,8 +7,8 @@ CARGO ?= cargo
 
 DEVTOOLS_DIST := ../devtools/dist
 DEVTOOLS_UI := ../devtools/ui/dist
-EMBED_DIR := internal/server/embed
-UI_EMBED_DIR := internal/server/ui-embed
+EMBED_DIR := internal/assets/embed
+UI_EMBED_DIR := internal/assets/ui-embed
 INDEXER_WORKER_MANIFEST := ../../Cargo.toml
 INDEXER_WORKER_TARGET_DIR := ../../target
 HOST_EXE_EXT := $(if $(filter Windows_NT,$(OS)),.exe,)

@@ -2,11 +2,35 @@ package service
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
+
+func TestServicePackageKeepsFacadeAndPipelineSplit(t *testing.T) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	serviceDir := filepath.Dir(file)
+
+	requiredFiles := []string{
+		"service.go",
+		"pipeline.go",
+		"full_reindex.go",
+		"incremental_reindex.go",
+		"runtime_reindex.go",
+	}
+	for _, name := range requiredFiles {
+		if _, err := os.Stat(filepath.Join(serviceDir, name)); err != nil {
+			t.Fatalf("Project Index service layout is missing %s: %v", name, err)
+		}
+	}
+}
 
 func TestServiceReindexesWithFakePhaseClients(t *testing.T) {
 	indexer := &boundaryIndexer{}
