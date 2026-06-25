@@ -564,9 +564,9 @@ func fakeIndexerWorker(t *testing.T) string {
 	script := strings.ReplaceAll(`while IFS= read -r line; do
 id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
-  *nativeStaticPrepare*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"nativeStaticPrepare","plan":{"root":"/unused","files":[{"file":"/unused.ts","sourceHash":"indexer-worker-hash"}],"cacheHits":[],"cacheMisses":[{"file":"/unused.ts","sourceHash":"indexer-worker-hash"}]},"diagnostics":[],$TELEMETRY}}\n' "$id" ;;
-  *nativeStaticAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"nativeStaticAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id" ;;
-  *nativeStaticFinalize*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"nativeStaticFinalize","events":[],$TELEMETRY}}\n' "$id" ;;
+  *staticIndexPrepare*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"staticIndexPrepare","plan":{"root":"/unused","files":[{"file":"/unused.ts","sourceHash":"indexer-worker-hash"}],"cacheHits":[],"cacheMisses":[{"file":"/unused.ts","sourceHash":"indexer-worker-hash"}]},"diagnostics":[],$TELEMETRY}}\n' "$id" ;;
+  *staticIndexAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"staticIndexAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id" ;;
+  *staticIndexFinalize*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"staticIndexFinalize","events":[],$TELEMETRY}}\n' "$id" ;;
   *'"files"'*callNames*prompt*) printf '{"id":%s,"type":"record","index":0,"record":{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":"/unused.ts","sourceHash":"indexer-worker-hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}}\n{"id":%s,"type":"done","count":1}\n' "$id" "$id" ;;
   *callNames*prompt*) printf '{"id":%s,"ok":true,"record":{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":"/unused.ts","sourceHash":"indexer-worker-hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}}\n' "$id" ;;
   *) printf '{"id":1,"ok":false,"error":"unexpected indexer worker request"}\n' ;;

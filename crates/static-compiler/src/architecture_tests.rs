@@ -1,9 +1,9 @@
 use crate::pipeline;
 use crate::protocol::ParseRequest;
 use crate::protocol::native_static::{
-    NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeFile, NativeStaticAnalyzeRequest,
-    NativeStaticDigestIdentity, NativeStaticMethod, NativeStaticPlan, NativeStaticRunIdentity,
-    NativeStaticSourceFile, NativeStaticVersionIdentity,
+    NativeStaticAnalyzeFile, NativeStaticAnalyzeRequest, NativeStaticDigestIdentity,
+    NativeStaticMethod, NativeStaticPlan, NativeStaticRunIdentity, NativeStaticSourceFile,
+    NativeStaticVersionIdentity, STATIC_INDEX_PROTOCOL_VERSION,
 };
 
 #[test]
@@ -31,7 +31,7 @@ fn syntax_frontend_is_pure_and_static_compiler_projects_facts() {
     );
 
     let output = pipeline::analyze(&NativeStaticAnalyzeRequest {
-        protocol_version: NATIVE_STATIC_PROTOCOL_VERSION,
+        protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
         method: NativeStaticMethod::Analyze,
         stream: true,
         identity: native_static_identity(),
@@ -78,13 +78,13 @@ fn source_file(file: &str) -> NativeStaticSourceFile {
 
 fn native_static_identity() -> NativeStaticRunIdentity {
     NativeStaticRunIdentity {
-        protocol_version: NATIVE_STATIC_PROTOCOL_VERSION,
+        protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
         compiler: version_identity("crux-native-static", "0.1.0"),
         oxc: version_identity("oxc-rust", "oxc_parser@0.133.0+crux_native_group3.5"),
         primitive_manifest: digest_identity("crux-first-party-primitives"),
         relation_policy: digest_identity("crux-relation-policy"),
         extension_manifests: Vec::new(),
-        first_party_graph_rules: digest_identity("crux-first-party-graph-rules"),
+        rule_descriptors: digest_identity("crux-indexer-rule-descriptors"),
         compiler_projection: digest_identity("crux-static-projection"),
     }
 }

@@ -3,17 +3,17 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use crate::protocol::native_static::{
-    NATIVE_STATIC_ANALYZE_METHOD, NATIVE_STATIC_FINALIZE_METHOD, NATIVE_STATIC_PREPARE_METHOD,
-    NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeRequest, NativeStaticAnalyzeResponse,
-    NativeStaticFinalizeRequest, NativeStaticFinalizeResponse, NativeStaticPrepareRequest,
-    NativeStaticPrepareResponse,
+    NativeStaticAnalyzeRequest, NativeStaticAnalyzeResponse, NativeStaticFinalizeRequest,
+    NativeStaticFinalizeResponse, NativeStaticPrepareRequest, NativeStaticPrepareResponse,
+    STATIC_INDEX_ANALYZE_METHOD, STATIC_INDEX_FINALIZE_METHOD, STATIC_INDEX_PREPARE_METHOD,
+    STATIC_INDEX_PROTOCOL_VERSION,
 };
 
 #[test]
 fn prepare_protocol_round_trips_realistic_json() {
     let request = json!({
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_PREPARE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_PREPARE_METHOD,
         "root": "/workspace/acme",
         "projectName": "acme",
         "configPath": "/workspace/acme/crux.config.ts",
@@ -56,8 +56,8 @@ fn prepare_protocol_round_trips_realistic_json() {
     assert_round_trip::<NativeStaticPrepareRequest>(&request);
 
     let response = json!({
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_PREPARE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_PREPARE_METHOD,
         "plan": prepared_plan_json(),
         "diagnostics": [
             {
@@ -75,8 +75,8 @@ fn prepare_protocol_round_trips_realistic_json() {
 #[test]
 fn analyze_protocol_round_trips_realistic_json() {
     let request = json!({
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_ANALYZE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_ANALYZE_METHOD,
         "identity": run_identity_json(),
         "plan": prepared_plan_json(),
         "files": [
@@ -95,8 +95,8 @@ fn analyze_protocol_round_trips_realistic_json() {
     assert_round_trip::<NativeStaticAnalyzeRequest>(&request);
 
     let response = json!({
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_ANALYZE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_ANALYZE_METHOD,
         "facts": [
             {
                 "kind": "definition",
@@ -123,8 +123,8 @@ fn analyze_protocol_round_trips_realistic_json() {
 #[test]
 fn finalize_protocol_round_trips_realistic_json() {
     let request = json!({
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_FINALIZE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_FINALIZE_METHOD,
         "identity": run_identity_json(),
         "nativeFacts": [
             {
@@ -183,8 +183,8 @@ fn finalize_protocol_round_trips_realistic_json() {
     assert_round_trip::<NativeStaticFinalizeRequest>(&request);
 
     let response = json!({
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_FINALIZE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_FINALIZE_METHOD,
         "events": [
             {
                 "type": "fact",
@@ -215,7 +215,7 @@ where
 
 fn run_identity_json() -> Value {
     json!({
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
         "compiler": version_identity_json("crux-native-static", "0.1.0"),
         "oxc": version_identity_json("oxc-rust", "oxc_parser@0.133.0+crux_native_group3.5"),
         "primitiveManifest": digest_identity_json(
@@ -232,8 +232,8 @@ fn run_identity_json() -> Value {
             digest_identity_json("@acme/crux-extra", "1.4.2", "sha256:extension-manifest"),
             version_identity_json("@crux/core", "workspace")
         ],
-        "firstPartyGraphRules": digest_identity_json(
-            "crux-first-party-graph-rules",
+        "ruleDescriptors": digest_identity_json(
+            "crux-indexer-rule-descriptors",
             "v1",
             "sha256:first-party-rules"
         ),

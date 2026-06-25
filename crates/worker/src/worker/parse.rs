@@ -1,18 +1,18 @@
 use serde_json::Value;
 
 use crate::protocol::native_static::{
-    NATIVE_STATIC_ANALYZE_METHOD, NATIVE_STATIC_COMPILE_METHOD, NATIVE_STATIC_FINALIZE_METHOD,
-    NATIVE_STATIC_PREPARE_METHOD, NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeRequest,
-    NativeStaticCompileRequest, NativeStaticFinalizeRequest, NativeStaticPrepareRequest,
+    NativeStaticAnalyzeRequest, NativeStaticCompileRequest, NativeStaticFinalizeRequest,
+    NativeStaticPrepareRequest, STATIC_INDEX_ANALYZE_METHOD, STATIC_INDEX_COMPILE_METHOD,
+    STATIC_INDEX_FINALIZE_METHOD, STATIC_INDEX_PREPARE_METHOD, STATIC_INDEX_PROTOCOL_VERSION,
 };
 use crate::worker::native_static::NativeStaticWorkerRequest;
 
-/// Return whether a JSON value looks like an internal native static request.
+/// Return whether a JSON value looks like an internal Static Index request.
 pub(crate) fn has_worker_method(value: &Value) -> bool {
     value
         .get("method")
         .and_then(Value::as_str)
-        .is_some_and(|method| method.starts_with("nativeStatic"))
+        .is_some_and(|method| method.starts_with("staticIndex"))
 }
 
 /// Parse the method-based native static branch after syntax-record parsing fails.
@@ -27,45 +27,45 @@ pub(crate) fn parse_native_static_worker_request(
         format!("native static worker request for {method} is missing numeric id")
     })?;
     let request = match method {
-        NATIVE_STATIC_PREPARE_METHOD => {
+        STATIC_INDEX_PREPARE_METHOD => {
             let request: NativeStaticPrepareRequest = parse_stage_value(value)?;
             validate_protocol_versions(
-                "nativeStaticPrepare",
+                "staticIndexPrepare",
                 request.protocol_version,
                 request.identity.protocol_version,
             )?;
             NativeStaticWorkerRequest::Prepare(id, request)
         }
-        NATIVE_STATIC_ANALYZE_METHOD => {
+        STATIC_INDEX_ANALYZE_METHOD => {
             let request: NativeStaticAnalyzeRequest = parse_stage_value(value)?;
             validate_protocol_versions(
-                "nativeStaticAnalyze",
+                "staticIndexAnalyze",
                 request.protocol_version,
                 request.identity.protocol_version,
             )?;
             if !request.stream {
-                return Err("nativeStaticAnalyze requires stream: true".to_string());
+                return Err("staticIndexAnalyze requires stream: true".to_string());
             }
             NativeStaticWorkerRequest::Analyze(id, request)
         }
-        NATIVE_STATIC_FINALIZE_METHOD => {
+        STATIC_INDEX_FINALIZE_METHOD => {
             let request: NativeStaticFinalizeRequest = parse_stage_value(value)?;
             validate_protocol_versions(
-                "nativeStaticFinalize",
+                "staticIndexFinalize",
                 request.protocol_version,
                 request.identity.protocol_version,
             )?;
             NativeStaticWorkerRequest::Finalize(id, request)
         }
-        NATIVE_STATIC_COMPILE_METHOD => {
+        STATIC_INDEX_COMPILE_METHOD => {
             let request: NativeStaticCompileRequest = parse_stage_value(value)?;
             validate_protocol_versions(
-                "nativeStaticCompile",
+                "staticIndexCompile",
                 request.protocol_version,
                 request.identity.protocol_version,
             )?;
             if !request.stream {
-                return Err("nativeStaticCompile requires stream: true".to_string());
+                return Err("staticIndexCompile requires stream: true".to_string());
             }
             NativeStaticWorkerRequest::Compile(id, request)
         }
@@ -86,12 +86,12 @@ fn validate_protocol_versions(
     protocol_version: u8,
     identity_protocol_version: u8,
 ) -> Result<(), String> {
-    if protocol_version != NATIVE_STATIC_PROTOCOL_VERSION {
+    if protocol_version != STATIC_INDEX_PROTOCOL_VERSION {
         return Err(format!(
             "native static {stage} request uses unsupported protocol version {protocol_version}"
         ));
     }
-    if identity_protocol_version != NATIVE_STATIC_PROTOCOL_VERSION {
+    if identity_protocol_version != STATIC_INDEX_PROTOCOL_VERSION {
         return Err(format!(
             "native static {stage} identity uses unsupported protocol version {identity_protocol_version}"
         ));

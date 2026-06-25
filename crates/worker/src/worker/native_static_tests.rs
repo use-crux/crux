@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 
 use crate::protocol::native_static::{
-    NATIVE_STATIC_FINALIZE_METHOD, NATIVE_STATIC_PREPARE_METHOD, NATIVE_STATIC_PROTOCOL_VERSION,
-    NativeStaticFinalizeResponse, NativeStaticPrepareResponse,
+    NativeStaticFinalizeResponse, NativeStaticPrepareResponse, STATIC_INDEX_FINALIZE_METHOD,
+    STATIC_INDEX_PREPARE_METHOD, STATIC_INDEX_PROTOCOL_VERSION,
 };
 use crate::{parse_serve_request, write_serve_response};
 
@@ -10,8 +10,8 @@ use crate::{parse_serve_request, write_serve_response};
 fn prepare_request_is_accepted_through_worker_path() {
     let response = serve_response_json(json!({
         "id": 101,
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_PREPARE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_PREPARE_METHOD,
         "root": "/workspace/acme",
         "projectName": "acme",
         "identity": run_identity_json(),
@@ -25,7 +25,7 @@ fn prepare_request_is_accepted_through_worker_path() {
         serde_json::from_value(stage.clone()).expect("prepare response should deserialize");
 
     assert_eq!(parsed.plan.files.len(), 2);
-    assert_eq!(stage["method"], NATIVE_STATIC_PREPARE_METHOD);
+    assert_eq!(stage["method"], STATIC_INDEX_PREPARE_METHOD);
     assert_eq!(
         stage["plan"]["cacheHits"][0]["file"],
         "src/agents/support.ts"
@@ -45,8 +45,8 @@ fn prepare_request_is_accepted_through_worker_path() {
 fn finalize_request_is_accepted_through_worker_path() {
     let response = serve_response_json(json!({
         "id": 103,
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_FINALIZE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_FINALIZE_METHOD,
         "identity": run_identity_json(),
         "nativeFacts": [
             {
@@ -94,7 +94,7 @@ fn finalize_request_is_accepted_through_worker_path() {
         "/workspace/acme"
     );
     assert_eq!(parsed.events[2]["summary"]["factCount"], 30);
-    assert_eq!(stage["method"], NATIVE_STATIC_FINALIZE_METHOD);
+    assert_eq!(stage["method"], STATIC_INDEX_FINALIZE_METHOD);
     assert_eq!(stage["telemetry"]["facts"]["definitions"], 1);
     assert_eq!(stage["telemetry"]["facts"]["ruleDescriptors"], 29);
     assert_eq!(stage["telemetry"]["cache"]["writes"], 1);
@@ -104,11 +104,11 @@ fn finalize_request_is_accepted_through_worker_path() {
 fn malformed_and_unknown_requests_remain_strict_without_breaking_syntax_requests() {
     assert!(parse_serve_request("{").is_err());
 
-    let unknown = parse_serve_request(r#"{"id":404,"method":"nativeStaticUnknown"}"#);
+    let unknown = parse_serve_request(r#"{"id":404,"method":"staticIndexUnknown"}"#);
     assert!(
         unknown
             .expect_err("unknown method should be rejected")
-            .contains("unknown native static worker method nativeStaticUnknown")
+            .contains("unknown native static worker method staticIndexUnknown")
     );
 
     let response = serve_response_json(json!({
@@ -148,13 +148,13 @@ pub(crate) fn serve_response_lines_json(request: Value) -> Vec<Value> {
 
 pub(crate) fn run_identity_json() -> Value {
     json!({
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
         "compiler": version_identity_json("crux-native-static", "0.1.0"),
         "oxc": version_identity_json("oxc-rust", "oxc_parser@0.133.0+crux_native_group3.5"),
         "primitiveManifest": digest_identity_json("crux-first-party-primitives"),
         "relationPolicy": digest_identity_json("crux-relation-policy"),
         "extensionManifests": [digest_identity_json("@acme/crux-extra")],
-        "firstPartyGraphRules": digest_identity_json("crux-first-party-graph-rules"),
+        "ruleDescriptors": digest_identity_json("crux-indexer-rule-descriptors"),
         "compilerProjection": digest_identity_json("crux-static-projection")
     })
 }

@@ -2,33 +2,33 @@
   "requests": [
     {
       "protocolVersion": 1,
-      "method": "nativeStaticPrepare",
+      "method": "staticIndexPrepare",
       "root": "/repo",
       "projectName": "contract-spine",
       "configPath": "/repo/crux.config.ts",
       "identity": {
         "protocolVersion": 1,
-        "compiler": { "name": "crux-indexer-worker", "version": "contract-fixture" },
-        "oxc": { "name": "oxc_parser", "version": "0.133.0" },
+        "compiler": { "name": "crux-indexer-static-compiler", "version": "phase-3" },
+        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.133.0+crux_native_group3.5" },
         "primitiveManifest": {
-          "name": "@crux/indexer/primitives",
-          "version": "phase-10",
-          "digest": "sha256:primitives"
+          "name": "crux-first-party-primitives",
+          "version": "1",
+          "digest": "sha256:primitive-manifest"
         },
         "relationPolicy": {
-          "name": "@crux/indexer/relations",
-          "version": "phase-10",
-          "digest": "sha256:relations"
+          "name": "runtime-relation-specs",
+          "version": "1",
+          "digest": "sha256:relation-policy"
         },
         "extensionManifests": [
           { "name": "@crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }
         ],
-        "firstPartyGraphRules": {
-          "name": "@crux/indexer/rules",
-          "version": "phase-10",
-          "digest": "sha256:rules"
+        "ruleDescriptors": {
+          "name": "crux-indexer-rule-descriptors",
+          "version": "1",
+          "digest": "sha256:rule-descriptors"
         },
-        "compilerProjection": { "name": "@crux/indexer/compiler-projection", "version": "phase-10" }
+        "compilerProjection": { "name": "crux-static-projection", "version": "1", "digest": "sha256:compiler-projection" }
       },
       "files": [{ "file": "/repo/src/contract.ts", "sourceHash": "sha256:contract" }],
       "callNames": ["prompt"],
@@ -56,31 +56,31 @@
     },
     {
       "protocolVersion": 1,
-      "method": "nativeStaticAnalyze",
+      "method": "staticIndexAnalyze",
       "stream": true,
       "identity": {
         "protocolVersion": 1,
-        "compiler": { "name": "crux-indexer-worker", "version": "contract-fixture" },
-        "oxc": { "name": "oxc_parser", "version": "0.133.0" },
+        "compiler": { "name": "crux-indexer-static-compiler", "version": "phase-3" },
+        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.133.0+crux_native_group3.5" },
         "primitiveManifest": {
-          "name": "@crux/indexer/primitives",
-          "version": "phase-10",
-          "digest": "sha256:primitives"
+          "name": "crux-first-party-primitives",
+          "version": "1",
+          "digest": "sha256:primitive-manifest"
         },
         "relationPolicy": {
-          "name": "@crux/indexer/relations",
-          "version": "phase-10",
-          "digest": "sha256:relations"
+          "name": "runtime-relation-specs",
+          "version": "1",
+          "digest": "sha256:relation-policy"
         },
         "extensionManifests": [
           { "name": "@crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }
         ],
-        "firstPartyGraphRules": {
-          "name": "@crux/indexer/rules",
-          "version": "phase-10",
-          "digest": "sha256:rules"
+        "ruleDescriptors": {
+          "name": "crux-indexer-rule-descriptors",
+          "version": "1",
+          "digest": "sha256:rule-descriptors"
         },
-        "compilerProjection": { "name": "@crux/indexer/compiler-projection", "version": "phase-10" }
+        "compilerProjection": { "name": "crux-static-projection", "version": "1", "digest": "sha256:compiler-projection" }
       },
       "plan": {
         "root": "/repo",
@@ -121,31 +121,31 @@
     },
     {
       "protocolVersion": 1,
-      "method": "nativeStaticFinalize",
+      "method": "staticIndexFinalize",
       "stream": true,
       "identity": {
         "protocolVersion": 1,
-        "compiler": { "name": "crux-indexer-worker", "version": "contract-fixture" },
-        "oxc": { "name": "oxc_parser", "version": "0.133.0" },
+        "compiler": { "name": "crux-indexer-static-compiler", "version": "phase-3" },
+        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.133.0+crux_native_group3.5" },
         "primitiveManifest": {
-          "name": "@crux/indexer/primitives",
-          "version": "phase-10",
-          "digest": "sha256:primitives"
+          "name": "crux-first-party-primitives",
+          "version": "1",
+          "digest": "sha256:primitive-manifest"
         },
         "relationPolicy": {
-          "name": "@crux/indexer/relations",
-          "version": "phase-10",
-          "digest": "sha256:relations"
+          "name": "runtime-relation-specs",
+          "version": "1",
+          "digest": "sha256:relation-policy"
         },
         "extensionManifests": [
           { "name": "@crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }
         ],
-        "firstPartyGraphRules": {
-          "name": "@crux/indexer/rules",
-          "version": "phase-10",
-          "digest": "sha256:rules"
+        "ruleDescriptors": {
+          "name": "crux-indexer-rule-descriptors",
+          "version": "1",
+          "digest": "sha256:rule-descriptors"
         },
-        "compilerProjection": { "name": "@crux/indexer/compiler-projection", "version": "phase-10" }
+        "compilerProjection": { "name": "crux-static-projection", "version": "1", "digest": "sha256:compiler-projection" }
       },
       "nativeFacts": [
         {
@@ -234,31 +234,31 @@
     },
     {
       "protocolVersion": 1,
-      "method": "nativeStaticCompile",
+      "method": "staticIndexCompile",
       "stream": true,
       "identity": {
         "protocolVersion": 1,
-        "compiler": { "name": "crux-indexer-worker", "version": "contract-fixture" },
-        "oxc": { "name": "oxc_parser", "version": "0.133.0" },
+        "compiler": { "name": "crux-indexer-static-compiler", "version": "phase-3" },
+        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.133.0+crux_native_group3.5" },
         "primitiveManifest": {
-          "name": "@crux/indexer/primitives",
-          "version": "phase-10",
-          "digest": "sha256:primitives"
+          "name": "crux-first-party-primitives",
+          "version": "1",
+          "digest": "sha256:primitive-manifest"
         },
         "relationPolicy": {
-          "name": "@crux/indexer/relations",
-          "version": "phase-10",
-          "digest": "sha256:relations"
+          "name": "runtime-relation-specs",
+          "version": "1",
+          "digest": "sha256:relation-policy"
         },
         "extensionManifests": [
           { "name": "@crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }
         ],
-        "firstPartyGraphRules": {
-          "name": "@crux/indexer/rules",
-          "version": "phase-10",
-          "digest": "sha256:rules"
+        "ruleDescriptors": {
+          "name": "crux-indexer-rule-descriptors",
+          "version": "1",
+          "digest": "sha256:rule-descriptors"
         },
-        "compilerProjection": { "name": "@crux/indexer/compiler-projection", "version": "phase-10" }
+        "compilerProjection": { "name": "crux-static-projection", "version": "1", "digest": "sha256:compiler-projection" }
       },
       "plan": {
         "root": "/repo",
@@ -315,7 +315,7 @@
   "responses": [
     {
       "protocolVersion": 1,
-      "method": "nativeStaticPrepare",
+      "method": "staticIndexPrepare",
       "plan": {
         "root": "/repo",
         "projectName": "contract-spine",
@@ -365,7 +365,7 @@
     },
     {
       "protocolVersion": 1,
-      "method": "nativeStaticAnalyze",
+      "method": "staticIndexAnalyze",
       "facts": [],
       "diagnostics": [],
       "extensionEvidenceJobs": [],
@@ -389,7 +389,7 @@
     },
     {
       "protocolVersion": 1,
-      "method": "nativeStaticFinalize",
+      "method": "staticIndexFinalize",
       "events": [],
       "telemetry": {
         "node": { "started": false, "reasons": [] },
@@ -411,7 +411,7 @@
     },
     {
       "protocolVersion": 1,
-      "method": "nativeStaticCompile",
+      "method": "staticIndexCompile",
       "events": [],
       "telemetry": {
         "node": { "started": false, "reasons": [] },

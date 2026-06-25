@@ -18,7 +18,7 @@ func writeNativeStaticEnabledConfig(t testing.TB, root string) string {
 	return configFile
 }
 
-func nativeStaticAnalyzeFilesContain(files []protocol.AnalyzeFile, want string) bool {
+func staticIndexAnalyzeFilesContain(files []protocol.AnalyzeFile, want string) bool {
 	for _, file := range files {
 		if file.File == want {
 			return true
@@ -27,7 +27,7 @@ func nativeStaticAnalyzeFilesContain(files []protocol.AnalyzeFile, want string) 
 	return false
 }
 
-func nativeStaticPrepareFilesContain(files []protocol.SourceFile, want string) bool {
+func staticIndexPrepareFilesContain(files []protocol.SourceFile, want string) bool {
 	for _, file := range files {
 		if file.File == want && file.SourceHash != "" {
 			return true

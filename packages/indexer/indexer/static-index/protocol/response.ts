@@ -2,8 +2,8 @@
  * Static Index compiler response contracts.
  *
  * Responses are kept separate from requests so host transports can import only
- * the side of the protocol they validate. Method literals still use the current
- * cross-language wire names until the protocol rename phase.
+ * the side of the protocol they validate. Method literals use the final
+ * `staticIndex*` wire strings shared by every runtime mirror.
  *
  * @module
  */
@@ -25,7 +25,7 @@ const staticIndexResponseBase = {
 export const StaticIndexPrepareResponseSchema = z
   .object({
     ...staticIndexResponseBase,
-    method: z.literal('nativeStaticPrepare'),
+    method: z.literal('staticIndexPrepare'),
     plan: StaticIndexPreparedPlanSchema,
   })
   .strict()
@@ -34,7 +34,7 @@ export const StaticIndexPrepareResponseSchema = z
 export const StaticIndexAnalyzeResponseSchema = z
   .object({
     ...staticIndexResponseBase,
-    method: z.literal('nativeStaticAnalyze'),
+    method: z.literal('staticIndexAnalyze'),
     facts: unknownArraySchema,
     extensionEvidenceJobs: unknownArraySchema,
   })
@@ -44,7 +44,7 @@ export const StaticIndexAnalyzeResponseSchema = z
 export const StaticIndexFinalizeResponseSchema = z
   .object({
     protocolVersion: z.literal(STATIC_INDEX_COMPILER_PROTOCOL_VERSION),
-    method: z.literal('nativeStaticFinalize'),
+    method: z.literal('staticIndexFinalize'),
     events: unknownArraySchema,
     telemetry: StaticIndexTelemetrySchema,
   })
@@ -54,7 +54,7 @@ export const StaticIndexFinalizeResponseSchema = z
 export const StaticIndexCompileResponseSchema = z
   .object({
     protocolVersion: z.literal(STATIC_INDEX_COMPILER_PROTOCOL_VERSION),
-    method: z.literal('nativeStaticCompile'),
+    method: z.literal('staticIndexCompile'),
     events: unknownArraySchema,
     telemetry: StaticIndexTelemetrySchema,
   })

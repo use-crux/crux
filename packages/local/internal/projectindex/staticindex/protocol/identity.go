@@ -1,32 +1,49 @@
 package protocol
 
-func SkeletonIdentity() RunIdentity {
-	return RunIdentity{
+func StaticIndexIdentityManifest() IdentityManifest {
+	return IdentityManifest{
 		ProtocolVersion: Version,
 		Compiler: VersionIdentity{
-			Name:    "crux-native-static-skeleton",
+			Name:    "crux-indexer-static-compiler",
 			Version: "phase-3",
 		},
-		Oxc: VersionIdentity{
+		OxcFrontend: VersionIdentity{
 			Name:    "oxc-rust",
-			Version: "phase-3",
+			Version: "oxc_parser@0.133.0+crux_native_group3.5",
 		},
 		PrimitiveManifest: DigestIdentity{
 			Name:    "crux-first-party-primitives",
-			Version: "phase-3",
+			Version: "1",
+			Digest:  "sha256:primitive-manifest",
 		},
 		RelationPolicy: DigestIdentity{
-			Name:    "crux-relation-policy",
-			Version: "phase-3",
+			Name:    "runtime-relation-specs",
+			Version: "1",
+			Digest:  "sha256:relation-policy",
 		},
-		ExtensionManifests: []DigestIdentity{},
-		FirstPartyGraphRules: DigestIdentity{
-			Name:    "crux-first-party-graph-rules",
-			Version: "phase-3",
+		RuleDescriptors: DigestIdentity{
+			Name:    "crux-indexer-rule-descriptors",
+			Version: "1",
+			Digest:  "sha256:rule-descriptors",
 		},
 		CompilerProjection: DigestIdentity{
 			Name:    "crux-static-projection",
-			Version: "phase-3",
+			Version: "1",
+			Digest:  "sha256:compiler-projection",
 		},
+	}
+}
+
+func SkeletonIdentity() RunIdentity {
+	manifest := StaticIndexIdentityManifest()
+	return RunIdentity{
+		ProtocolVersion:    manifest.ProtocolVersion,
+		Compiler:           manifest.Compiler,
+		Oxc:                manifest.OxcFrontend,
+		PrimitiveManifest:  manifest.PrimitiveManifest,
+		RelationPolicy:     manifest.RelationPolicy,
+		ExtensionManifests: []DigestIdentity{},
+		RuleDescriptors:    manifest.RuleDescriptors,
+		CompilerProjection: manifest.CompilerProjection,
 	}
 }

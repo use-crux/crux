@@ -13,6 +13,15 @@ type nativeStaticProtocolSharedFixture struct {
 	Responses []json.RawMessage `json:"responses"`
 }
 
+func TestSharedStaticIndexIdentityFixtureMatchesManifest(t *testing.T) {
+	var fixture IdentityManifest
+	readSharedNativeRuntimeFixture(t, "static-index-identity.json", &fixture)
+
+	if got, want := fixture, StaticIndexIdentityManifest(); got != want {
+		t.Fatalf("identity manifest = %+v, want %+v", got, want)
+	}
+}
+
 func TestSharedNativeStaticProtocolFixtureDecodes(t *testing.T) {
 	var fixture nativeStaticProtocolSharedFixture
 	readSharedNativeRuntimeFixture(t, "native-static-protocol.json", &fixture)
@@ -29,6 +38,9 @@ func TestSharedNativeStaticProtocolFixtureDecodes(t *testing.T) {
 			}
 			if request.Root != "/repo" || len(request.CallInterests) != 1 {
 				t.Fatalf("prepare request = %+v, want shared fixture root and call interest", request)
+			}
+			if request.Identity.RuleDescriptors.Digest != "sha256:rule-descriptors" {
+				t.Fatalf("prepare identity ruleDescriptors = %+v, want shared manifest digest", request.Identity.RuleDescriptors)
 			}
 		case AnalyzeMethod:
 			var request AnalyzeRequest

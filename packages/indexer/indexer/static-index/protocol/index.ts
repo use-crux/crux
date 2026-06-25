@@ -8,8 +8,20 @@
  * @module
  */
 
-export type { StaticIndexIdentityComponent, StaticIndexRunIdentity } from './identity'
-export { STATIC_INDEX_COMPILER_PROTOCOL_VERSION, StaticIndexIdentityComponentSchema, StaticIndexRunIdentitySchema } from './identity'
+export type {
+  CreateStaticIndexRunIdentityOptions,
+  StaticIndexIdentityComponent,
+  StaticIndexIdentityManifest,
+  StaticIndexRunIdentity,
+  StaticIndexRunIdentityFromManifest,
+} from './identity'
+export {
+  createStaticIndexRunIdentity,
+  STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
+  StaticIndexIdentityComponentSchema,
+  StaticIndexIdentityManifestSchema,
+  StaticIndexRunIdentitySchema,
+} from './identity'
 export type {
   ParsedStaticIndexCompilerRequest,
   StaticIndexCompilerMethod,

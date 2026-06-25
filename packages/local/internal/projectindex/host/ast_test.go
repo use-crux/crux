@@ -249,9 +249,9 @@ func fakeNativeStaticCompilerWorker(t *testing.T) string {
 	script := strings.ReplaceAll(`while IFS= read -r line; do
 id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
-  *nativeStaticPrepare*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"nativeStaticPrepare","plan":{"root":"/repo","projectName":"native-static","files":[{"file":"/repo/src/cached.ts","sourceHash":"sha256:cached","cacheKey":"static:cached"},{"file":"/repo/src/miss.ts","sourceHash":"sha256:miss"}],"cacheHits":[{"file":"/repo/src/cached.ts","sourceHash":"sha256:cached","cacheKey":"static:cached"}],"cacheMisses":[{"file":"/repo/src/miss.ts","sourceHash":"sha256:miss"}]},"diagnostics":[],$TELEMETRY}}\n' "$id" ;;
-  *nativeStaticAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"nativeStaticAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id" ;;
-  *nativeStaticFinalize*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"nativeStaticFinalize","events":[],$TELEMETRY}}\n' "$id" ;;
+  *staticIndexPrepare*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"staticIndexPrepare","plan":{"root":"/repo","projectName":"native-static","files":[{"file":"/repo/src/cached.ts","sourceHash":"sha256:cached","cacheKey":"static:cached"},{"file":"/repo/src/miss.ts","sourceHash":"sha256:miss"}],"cacheHits":[{"file":"/repo/src/cached.ts","sourceHash":"sha256:cached","cacheKey":"static:cached"}],"cacheMisses":[{"file":"/repo/src/miss.ts","sourceHash":"sha256:miss"}]},"diagnostics":[],$TELEMETRY}}\n' "$id" ;;
+  *staticIndexAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"staticIndexAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id" ;;
+  *staticIndexFinalize*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"staticIndexFinalize","events":[],$TELEMETRY}}\n' "$id" ;;
   *) printf '{"error":"unexpected native static request"}\n' ;;
 esac
 done

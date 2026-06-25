@@ -14,10 +14,10 @@ use crate::finalizer::events::{
 use crate::finalizer::run::finalize_native_static_values_with_lint_facts;
 use crate::lints::filter::NativeStaticLintOptions;
 use crate::protocol::native_static::{
-    NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeRequest, NativeStaticAnalyzeResponse,
-    NativeStaticCompileRequest, NativeStaticFactTelemetry, NativeStaticFinalizeRequest,
-    NativeStaticFinalizeResponse, NativeStaticMethod, NativeStaticPlan, NativeStaticPrepareRequest,
-    NativeStaticPrepareResponse,
+    NativeStaticAnalyzeRequest, NativeStaticAnalyzeResponse, NativeStaticCompileRequest,
+    NativeStaticFactTelemetry, NativeStaticFinalizeRequest, NativeStaticFinalizeResponse,
+    NativeStaticMethod, NativeStaticPlan, NativeStaticPrepareRequest, NativeStaticPrepareResponse,
+    STATIC_INDEX_PROTOCOL_VERSION,
 };
 use crate::relation::model::relation_policy_table_from_value_with_builtins;
 use crate::telemetry::{
@@ -61,7 +61,7 @@ pub fn prepare(request: NativeStaticPrepareRequest) -> NativeStaticPrepareRespon
     let miss_count = cache_misses.len() as u64;
 
     NativeStaticPrepareResponse {
-        protocol_version: NATIVE_STATIC_PROTOCOL_VERSION,
+        protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
         method: NativeStaticMethod::Prepare,
         plan: NativeStaticPlan {
             root: request.root,
@@ -101,7 +101,7 @@ pub fn analyze(request: &NativeStaticAnalyzeRequest) -> NativeStaticAnalyzeOutpu
         extension_evidence_jobs,
         fact_groups: facts,
         response: NativeStaticAnalyzeResponse {
-            protocol_version: NATIVE_STATIC_PROTOCOL_VERSION,
+            protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
             method: NativeStaticMethod::Analyze,
             facts: Vec::new(),
             diagnostics: Vec::new(),
@@ -181,7 +181,7 @@ pub fn finalize(request: NativeStaticFinalizeRequest) -> NativeStaticFinalizeRes
         .unwrap_or_default();
 
     NativeStaticFinalizeResponse {
-        protocol_version: NATIVE_STATIC_PROTOCOL_VERSION,
+        protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
         method: NativeStaticMethod::Finalize,
         events,
         telemetry: telemetry(

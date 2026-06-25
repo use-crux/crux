@@ -5,30 +5,31 @@ use serde_json::Value;
 
 use crate::{StaticSyntaxCallInterest, StaticSyntaxConstructorInterest};
 
-/// Current native static compiler protocol version.
-pub const NATIVE_STATIC_PROTOCOL_VERSION: u8 = 1;
+/// Current Static Index compiler protocol version.
+pub const STATIC_INDEX_PROTOCOL_VERSION: u8 = 1;
 
-/// Method string for native static planning.
-pub const NATIVE_STATIC_PREPARE_METHOD: &str = "nativeStaticPrepare";
+/// Method string for Static Index planning.
+pub const STATIC_INDEX_PREPARE_METHOD: &str = "staticIndexPrepare";
 
-/// Method string for native static file analysis.
-pub const NATIVE_STATIC_ANALYZE_METHOD: &str = "nativeStaticAnalyze";
+/// Method string for Static Index file analysis.
+pub const STATIC_INDEX_ANALYZE_METHOD: &str = "staticIndexAnalyze";
 
-/// Method string for native static final patch/event materialization.
-pub const NATIVE_STATIC_FINALIZE_METHOD: &str = "nativeStaticFinalize";
+/// Method string for Static Index final patch/event materialization.
+pub const STATIC_INDEX_FINALIZE_METHOD: &str = "staticIndexFinalize";
 
-pub const NATIVE_STATIC_COMPILE_METHOD: &str = "nativeStaticCompile";
+/// Method string for streamed Static Index compile.
+pub const STATIC_INDEX_COMPILE_METHOD: &str = "staticIndexCompile";
 
 /// Native static compiler method discriminator.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NativeStaticMethod {
-    #[serde(rename = "nativeStaticPrepare")]
+    #[serde(rename = "staticIndexPrepare")]
     Prepare,
-    #[serde(rename = "nativeStaticAnalyze")]
+    #[serde(rename = "staticIndexAnalyze")]
     Analyze,
-    #[serde(rename = "nativeStaticFinalize")]
+    #[serde(rename = "staticIndexFinalize")]
     Finalize,
-    #[serde(rename = "nativeStaticCompile")]
+    #[serde(rename = "staticIndexCompile")]
     Compile,
 }
 
@@ -42,7 +43,7 @@ pub struct NativeStaticRunIdentity {
     pub primitive_manifest: NativeStaticDigestIdentity,
     pub relation_policy: NativeStaticDigestIdentity,
     pub extension_manifests: Vec<NativeStaticDigestIdentity>,
-    pub first_party_graph_rules: NativeStaticDigestIdentity,
+    pub rule_descriptors: NativeStaticDigestIdentity,
     pub compiler_projection: NativeStaticDigestIdentity,
 }
 
@@ -62,6 +63,19 @@ pub struct NativeStaticDigestIdentity {
     pub version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub digest: Option<String>,
+}
+
+/// Compiler-owned Static Index identity manifest before project extension input is added.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeStaticIdentityManifest {
+    pub protocol_version: u8,
+    pub compiler: NativeStaticVersionIdentity,
+    pub oxc_frontend: NativeStaticVersionIdentity,
+    pub primitive_manifest: NativeStaticDigestIdentity,
+    pub relation_policy: NativeStaticDigestIdentity,
+    pub rule_descriptors: NativeStaticDigestIdentity,
+    pub compiler_projection: NativeStaticDigestIdentity,
 }
 
 /// Cross-stage telemetry for one native static compiler run.
@@ -181,7 +195,7 @@ pub struct NativeStaticAnalyzeFile {
     pub source_text: Option<String>,
 }
 
-/// `nativeStaticPrepare` request.
+/// `staticIndexPrepare` request.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeStaticPrepareRequest {
@@ -212,7 +226,7 @@ pub struct NativeStaticPrepareRequest {
     pub extension_host: Option<Value>,
 }
 
-/// `nativeStaticPrepare` response.
+/// `staticIndexPrepare` response.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeStaticPrepareResponse {
@@ -223,7 +237,7 @@ pub struct NativeStaticPrepareResponse {
     pub telemetry: NativeStaticTelemetry,
 }
 
-/// `nativeStaticAnalyze` request.
+/// `staticIndexAnalyze` request.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeStaticAnalyzeRequest {
@@ -242,7 +256,7 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
-/// `nativeStaticAnalyze` response.
+/// `staticIndexAnalyze` response.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeStaticAnalyzeResponse {
@@ -254,7 +268,7 @@ pub struct NativeStaticAnalyzeResponse {
     pub telemetry: NativeStaticTelemetry,
 }
 
-/// `nativeStaticCompile` request for native-only AST indexing.
+/// `staticIndexCompile` request for native-only AST indexing.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeStaticCompileRequest {
@@ -277,7 +291,7 @@ pub struct NativeStaticCompileRequest {
     pub emit_builtin_lints: Option<bool>,
 }
 
-/// `nativeStaticFinalize` request.
+/// `staticIndexFinalize` request.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeStaticFinalizeRequest {
@@ -308,7 +322,7 @@ pub struct NativeStaticFinalizeRequest {
     pub cache: Option<Value>,
 }
 
-/// `nativeStaticFinalize` response.
+/// `staticIndexFinalize` response.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeStaticFinalizeResponse {

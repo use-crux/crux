@@ -34,13 +34,13 @@ fn handle_native_static_worker_request(
             WorkerResponseEnvelope::ok(id, pipeline::prepare(request))
         }
         NativeStaticWorkerRequest::Analyze(_, _) => {
-            unreachable!("nativeStaticAnalyze is stream-only")
+            unreachable!("staticIndexAnalyze is stream-only")
         }
         NativeStaticWorkerRequest::Finalize(id, request) => {
             WorkerResponseEnvelope::ok(id, pipeline::finalize(request))
         }
         NativeStaticWorkerRequest::Compile(_, _) => {
-            unreachable!("nativeStaticCompile is stream-only")
+            unreachable!("staticIndexCompile is stream-only")
         }
     }
 }

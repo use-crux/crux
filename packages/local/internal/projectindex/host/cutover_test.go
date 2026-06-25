@@ -110,7 +110,7 @@ func TestWorkerNativeStaticCutoverUsesFinalizePatchEvents(t *testing.T) {
 	if compiler.parseCalls != 0 || compiler.batchParseCalls != 0 || compiler.streamParseCalls != 0 {
 		t.Fatalf("syntax-record parsing was called: parse=%d batch=%d stream=%d", compiler.parseCalls, compiler.batchParseCalls, compiler.streamParseCalls)
 	}
-	if !nativeStaticAnalyzeFilesContain(compiler.analyzeFiles, sourceFile) {
+	if !staticIndexAnalyzeFilesContain(compiler.analyzeFiles, sourceFile) {
 		t.Fatalf("analyze files = %+v, want selected source %s", compiler.analyzeFiles, sourceFile)
 	}
 
@@ -156,7 +156,7 @@ func (c *nativeStaticCutoverCompiler) NativeStaticPrepare(_ context.Context, req
 	if !stringSliceContains(request.ConstructorNames, "Agent") {
 		return protocol.PrepareResponse{}, fmt.Errorf("prepare constructor names = %v, want Agent", request.ConstructorNames)
 	}
-	if !nativeStaticPrepareFilesContain(request.Files, c.sourceFile) {
+	if !staticIndexPrepareFilesContain(request.Files, c.sourceFile) {
 		return protocol.PrepareResponse{}, fmt.Errorf("prepare files = %+v, want hashed source file", request.Files)
 	}
 	if len(request.ExtensionHost) == 0 {
@@ -194,7 +194,7 @@ func (c *nativeStaticCutoverCompiler) NativeStaticAnalyzeStream(_ context.Contex
 	if !stringSliceContains(request.Plan.CallNames, "prompt") {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("analyze plan call names = %v, want prompt", request.Plan.CallNames)
 	}
-	if !nativeStaticAnalyzeFilesContain(request.Files, c.sourceFile) {
+	if !staticIndexAnalyzeFilesContain(request.Files, c.sourceFile) {
 		return protocol.AnalyzeResponse{}, fmt.Errorf("analyze files = %+v, want selected file", request.Files)
 	}
 	return nativeStaticTestAnalyzeStream(protocol.AnalyzeResponse{

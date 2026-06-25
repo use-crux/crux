@@ -3,9 +3,9 @@ use serde_json::json;
 use crate::analysis::run::analyze_native_static_facts;
 use crate::finalizer::run::finalize_native_static_values_with_policies;
 use crate::protocol::native_static::{
-    NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeFile, NativeStaticAnalyzeRequest,
-    NativeStaticDigestIdentity, NativeStaticMethod, NativeStaticPlan, NativeStaticRunIdentity,
-    NativeStaticSourceFile, NativeStaticVersionIdentity,
+    NativeStaticAnalyzeFile, NativeStaticAnalyzeRequest, NativeStaticDigestIdentity,
+    NativeStaticMethod, NativeStaticPlan, NativeStaticRunIdentity, NativeStaticSourceFile,
+    NativeStaticVersionIdentity, STATIC_INDEX_PROTOCOL_VERSION,
 };
 use crate::relation::model::relation_policy_table_from_value;
 
@@ -211,7 +211,7 @@ pub(crate) fn request_with_root_file_and_call_names(
     source: &str,
 ) -> NativeStaticAnalyzeRequest {
     NativeStaticAnalyzeRequest {
-        protocol_version: NATIVE_STATIC_PROTOCOL_VERSION,
+        protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
         method: NativeStaticMethod::Analyze,
         stream: true,
         identity: run_identity(),
@@ -243,13 +243,13 @@ pub(crate) fn request_with_root_file_and_call_names(
 
 fn run_identity() -> NativeStaticRunIdentity {
     NativeStaticRunIdentity {
-        protocol_version: NATIVE_STATIC_PROTOCOL_VERSION,
+        protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
         compiler: version_identity("crux-native-static"),
         oxc: version_identity("oxc-rust"),
         primitive_manifest: digest_identity("crux-first-party-primitives"),
         relation_policy: digest_identity("crux-relation-policy"),
         extension_manifests: Vec::new(),
-        first_party_graph_rules: digest_identity("crux-first-party-graph-rules"),
+        rule_descriptors: digest_identity("crux-indexer-rule-descriptors"),
         compiler_projection: digest_identity("crux-static-projection"),
     }
 }

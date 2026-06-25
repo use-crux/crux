@@ -10,25 +10,27 @@
 
 import {
   STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
+  StaticIndexIdentityManifestSchema,
+  createStaticIndexRunIdentity,
   type StaticIndexCompilerRequest,
   type StaticIndexCompilerResponse,
+  type StaticIndexIdentityManifest,
   type StaticIndexPreparedPlan,
   type StaticIndexRunIdentity,
   type StaticIndexSourceFile,
   type StaticIndexTelemetry,
 } from './schema'
+import { readNativeRuntimeSharedFixture } from '../fixtures/shared'
+
+/** Shared Static Index compiler-owned identity manifest fixture. */
+export const staticIndexIdentityManifestFixture = StaticIndexIdentityManifestSchema.parse(
+  readNativeRuntimeSharedFixture('static-index-identity'),
+) satisfies StaticIndexIdentityManifest
 
 /** Shared Static Index run identity fixture. */
-export const staticIndexRunIdentityFixture = {
-  protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-  compiler: { name: 'crux-indexer-worker', version: 'contract-spine' },
-  oxc: { name: 'oxc_parser', version: '0.133.0' },
-  primitiveManifest: { name: '@crux/indexer/primitives', version: 'phase-2', digest: 'sha256:primitives' },
-  relationPolicy: { name: '@crux/indexer/relations', version: 'phase-2', digest: 'sha256:relations' },
+export const staticIndexRunIdentityFixture = createStaticIndexRunIdentity(staticIndexIdentityManifestFixture, {
   extensionManifests: [{ name: '@crux/indexer/crux-core', version: '0.1.0', digest: 'sha256:core' }],
-  firstPartyGraphRules: { name: '@crux/indexer/rules', version: 'phase-2', digest: 'sha256:rules' },
-  compilerProjection: { name: '@crux/indexer/compiler-projection', version: 'phase-2' },
-} satisfies StaticIndexRunIdentity
+}) satisfies StaticIndexRunIdentity
 
 /** Shared Static Index source file fixture. */
 export const staticIndexSourceFileFixture = {
@@ -99,7 +101,7 @@ export const staticIndexTelemetryFixture = {
 export const staticIndexCompilerRequestFixtures = [
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'nativeStaticPrepare',
+    method: 'staticIndexPrepare',
     root: '/repo',
     projectName: 'contract-spine',
     configPath: '/repo/crux.config.ts',
@@ -110,7 +112,7 @@ export const staticIndexCompilerRequestFixtures = [
   },
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'nativeStaticAnalyze',
+    method: 'staticIndexAnalyze',
     stream: true,
     identity: staticIndexRunIdentityFixture,
     plan: staticIndexPreparedPlanFixture,
@@ -119,7 +121,7 @@ export const staticIndexCompilerRequestFixtures = [
   },
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'nativeStaticFinalize',
+    method: 'staticIndexFinalize',
     stream: true,
     identity: staticIndexRunIdentityFixture,
     nativeFacts: [{ kind: 'definitions', fact: { id: 'prompt:contract-spine' } }],
@@ -145,7 +147,7 @@ export const staticIndexCompilerRequestFixtures = [
   },
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'nativeStaticCompile',
+    method: 'staticIndexCompile',
     stream: true,
     identity: staticIndexRunIdentityFixture,
     plan: staticIndexPreparedPlanFixture,
@@ -161,14 +163,14 @@ export const staticIndexCompilerRequestFixtures = [
 export const staticIndexCompilerResponseFixtures = [
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'nativeStaticPrepare',
+    method: 'staticIndexPrepare',
     plan: staticIndexPreparedPlanFixture,
     diagnostics: [],
     telemetry: staticIndexTelemetryFixture,
   },
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'nativeStaticAnalyze',
+    method: 'staticIndexAnalyze',
     facts: [],
     diagnostics: [],
     extensionEvidenceJobs: [],
@@ -176,13 +178,13 @@ export const staticIndexCompilerResponseFixtures = [
   },
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'nativeStaticFinalize',
+    method: 'staticIndexFinalize',
     events: [],
     telemetry: staticIndexTelemetryFixture,
   },
   {
     protocolVersion: STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
-    method: 'nativeStaticCompile',
+    method: 'staticIndexCompile',
     events: [],
     telemetry: staticIndexTelemetryFixture,
   },

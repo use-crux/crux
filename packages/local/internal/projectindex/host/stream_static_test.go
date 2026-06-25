@@ -184,11 +184,11 @@ func fakeNativeStaticFinalizeStreamWorker(t *testing.T) string {
 	script := strings.ReplaceAll(`while IFS= read -r line; do
 id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
-  *nativeStaticFinalize*)
+  *staticIndexFinalize*)
     printf '{"id":%s,"ok":true,"type":"event","event":{"protocolVersion":2,"type":"phase:start","transactionId":"tx-native-static-finalize-stream","phase":"ast","root":"/repo","startedAt":"1970-01-01T00:00:00.000Z"}}\n' "$id"
     printf '{"id":%s,"ok":true,"type":"event","event":{"protocolVersion":2,"type":"fact:batch","transactionId":"tx-native-static-finalize-stream","sequence":0,"facts":[]}}\n' "$id"
     printf '{"id":%s,"ok":true,"type":"event","event":{"protocolVersion":2,"type":"phase:done","transactionId":"tx-native-static-finalize-stream","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":"/repo"},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok"},"summary":{"factCount":0,"decision":{"nativeStaticComplete":true}}}}\n' "$id"
-    printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"nativeStaticFinalize","events":[{"fixture":true}],$TELEMETRY}}\n' "$id"
+    printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"staticIndexFinalize","events":[{"fixture":true}],$TELEMETRY}}\n' "$id"
     ;;
   *) printf '{"error":"unexpected native static request"}\n' ;;
 esac
@@ -203,7 +203,7 @@ func fakeNativeStaticAnalyzeDoneFactsWorker(t *testing.T) string {
 	script := strings.ReplaceAll(`while IFS= read -r line; do
 id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
-  *nativeStaticAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"nativeStaticAnalyze","facts":[{"root":"/repo","projectName":"stream"}],"diagnostics":[{"id":"fixture"}],"extensionEvidenceJobs":[{"id":"fixture-job"}],$TELEMETRY}}\n' "$id" ;;
+  *staticIndexAnalyze*) printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"staticIndexAnalyze","facts":[{"root":"/repo","projectName":"stream"}],"diagnostics":[{"id":"fixture"}],"extensionEvidenceJobs":[{"id":"fixture-job"}],$TELEMETRY}}\n' "$id" ;;
   *) printf '{"error":"unexpected native static request"}\n' ;;
 esac
 done
@@ -216,7 +216,7 @@ func fakeNativeStaticAnalyzeUnlabeledEventWorker(t *testing.T) string {
 	script := `while IFS= read -r line; do
 id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
-  *nativeStaticAnalyze*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"nativeStaticAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[]}}\n' "$id" ;;
+  *staticIndexAnalyze*) printf '{"id":%s,"ok":true,"response":{"protocolVersion":1,"method":"staticIndexAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[]}}\n' "$id" ;;
   *) printf '{"error":"unexpected native static request"}\n' ;;
 esac
 done
@@ -230,10 +230,10 @@ func fakeNativeStaticAnalyzeStreamWorker(t *testing.T) string {
 	script := strings.ReplaceAll(`while IFS= read -r line; do
 id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
 case "$line" in
-  *nativeStaticAnalyze*)
+  *staticIndexAnalyze*)
     printf '{"id":%s,"ok":true,"type":"extensionEvidenceJobs","extensionEvidenceJobs":[{"id":"job:writer"}]}\n' "$id"
     printf '{"id":%s,"ok":true,"type":"fact","fact":{"root":"/repo","projectName":"stream","definitions":[{"id":"prompt:writer","kind":"prompt","name":"writer","fidelity":"resolved","status":"active"}]}}\n' "$id"
-    printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"nativeStaticAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id"
+    printf '{"id":%s,"ok":true,"type":"done","response":{"protocolVersion":1,"method":"staticIndexAnalyze","facts":[],"diagnostics":[],"extensionEvidenceJobs":[],$TELEMETRY}}\n' "$id"
     ;;
   *) printf '{"error":"unexpected native static request"}\n' ;;
 esac

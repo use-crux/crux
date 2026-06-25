@@ -25,7 +25,7 @@ func TestWorkerNativeStaticCompilerUsesCompileStreamWhenNativeOnly(t *testing.T)
 		t.Fatalf("write source: %v", err)
 	}
 
-	compiler := &nativeStaticCompileCutoverCompiler{
+	compiler := &staticIndexCompileCutoverCompiler{
 		nativeStaticCutoverCompiler: nativeStaticCutoverCompiler{root: root, sourceFile: sourceFile},
 	}
 	worker := &Worker{}
@@ -62,17 +62,17 @@ func TestWorkerNativeStaticCompilerUsesCompileStreamWhenNativeOnly(t *testing.T)
 	}
 }
 
-type nativeStaticCompileCutoverCompiler struct {
+type staticIndexCompileCutoverCompiler struct {
 	nativeStaticCutoverCompiler
 	compileCalls int
 }
 
-func (c *nativeStaticCompileCutoverCompiler) NativeStaticCompileStream(_ context.Context, request protocol.CompileRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+func (c *staticIndexCompileCutoverCompiler) NativeStaticCompileStream(_ context.Context, request protocol.CompileRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
 	c.compileCalls++
 	if !request.Stream {
 		return protocol.FinalizeResponse{}, fmt.Errorf("compile stream flag = false, want true")
 	}
-	if !nativeStaticAnalyzeFilesContain(request.Files, c.sourceFile) {
+	if !staticIndexAnalyzeFilesContain(request.Files, c.sourceFile) {
 		return protocol.FinalizeResponse{}, fmt.Errorf("compile files = %+v, want selected file", request.Files)
 	}
 	if len(request.ExtensionFacts) != 1 || !bytes.Contains(request.ExtensionFacts[0], []byte("sourceGraph")) {
@@ -90,4 +90,4 @@ func (c *nativeStaticCompileCutoverCompiler) NativeStaticCompileStream(_ context
 	}, handle)
 }
 
-var _ patch.CompileStreamer = (*nativeStaticCompileCutoverCompiler)(nil)
+var _ patch.CompileStreamer = (*staticIndexCompileCutoverCompiler)(nil)

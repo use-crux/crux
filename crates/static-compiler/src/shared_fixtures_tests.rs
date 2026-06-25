@@ -6,8 +6,8 @@ use crate::pipeline;
 use crate::protocol::StaticSyntaxFileRecord;
 use crate::protocol::native_static::{
     NativeStaticAnalyzeRequest, NativeStaticAnalyzeResponse, NativeStaticCompileRequest,
-    NativeStaticFinalizeRequest, NativeStaticFinalizeResponse, NativeStaticMethod,
-    NativeStaticPrepareRequest, NativeStaticPrepareResponse,
+    NativeStaticFinalizeRequest, NativeStaticFinalizeResponse, NativeStaticIdentityManifest,
+    NativeStaticMethod, NativeStaticPrepareRequest, NativeStaticPrepareResponse,
 };
 use crate::relation::policy::{NativeStaticRelationPolicy, NativeStaticRelationPolicyTable};
 
@@ -52,6 +52,7 @@ struct PrimitiveCoverageIdentity {
 #[test]
 fn shared_native_static_protocol_fixture_decodes_and_finalizes() {
     let fixture: NativeStaticProtocolFixture = fixture_json("native-static-protocol.json");
+    let manifest: NativeStaticIdentityManifest = fixture_json("static-index-identity.json");
     let methods = fixture
         .requests
         .iter()
@@ -60,16 +61,27 @@ fn shared_native_static_protocol_fixture_decodes_and_finalizes() {
     assert_eq!(
         methods,
         vec![
-            "nativeStaticPrepare",
-            "nativeStaticAnalyze",
-            "nativeStaticFinalize",
-            "nativeStaticCompile"
+            "staticIndexPrepare",
+            "staticIndexAnalyze",
+            "staticIndexFinalize",
+            "staticIndexCompile"
         ]
     );
 
     let prepare: NativeStaticPrepareRequest = serde_json::from_value(fixture.requests[0].clone())
         .expect("shared prepare request should decode");
     assert_eq!(prepare.root, "/repo");
+    assert_eq!(prepare.identity.oxc, manifest.oxc_frontend);
+    assert_eq!(
+        prepare.identity.primitive_manifest,
+        manifest.primitive_manifest
+    );
+    assert_eq!(prepare.identity.relation_policy, manifest.relation_policy);
+    assert_eq!(prepare.identity.rule_descriptors, manifest.rule_descriptors);
+    assert_eq!(
+        prepare.identity.compiler_projection,
+        manifest.compiler_projection
+    );
 
     let analyze: NativeStaticAnalyzeRequest = serde_json::from_value(fixture.requests[1].clone())
         .expect("shared analyze request should decode");
@@ -182,6 +194,9 @@ fn fixture_text(name: &str) -> &'static str {
     match name {
         "native-static-protocol.json" => include_str!(
             "../../../packages/indexer/indexer/contracts/fixtures/native-static-protocol.json"
+        ),
+        "static-index-identity.json" => include_str!(
+            "../../../packages/indexer/indexer/contracts/fixtures/static-index-identity.json"
         ),
         "static-syntax-records.json" => include_str!(
             "../../../packages/indexer/indexer/contracts/fixtures/static-syntax-records.json"

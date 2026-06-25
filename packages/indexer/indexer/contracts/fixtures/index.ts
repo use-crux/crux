@@ -15,6 +15,7 @@ export {
   readNativeRuntimeSharedFixture,
   type NativeRuntimeSharedFixtureMap,
   type NativeRuntimeSharedFixtureName,
+  type StaticIndexIdentitySharedFixture,
   type StaticIndexProtocolSharedFixture,
 } from './shared'
 
@@ -25,6 +26,7 @@ export {
 export {
   staticIndexCompilerRequestFixtures,
   staticIndexCompilerResponseFixtures,
+  staticIndexIdentityManifestFixture,
   staticIndexPreparedPlanFixture,
   staticIndexRunIdentityFixture,
   staticIndexSourceFileFixture,

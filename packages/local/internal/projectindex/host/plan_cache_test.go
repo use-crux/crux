@@ -74,13 +74,13 @@ func TestProjectNativeStaticSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) 
 	if err != nil {
 		t.Fatalf("source input from warm plan: %v", err)
 	}
-	if !nativeStaticPrepareFilesContain(sourceInput.Files, sourceFile) {
+	if !staticIndexPrepareFilesContain(sourceInput.Files, sourceFile) {
 		t.Fatalf("prepare files = %+v, want cached primary identity", sourceInput.Files)
 	}
-	if nativeStaticPrepareFilesContain(sourceInput.Files, supportFile) {
+	if staticIndexPrepareFilesContain(sourceInput.Files, supportFile) {
 		t.Fatalf("prepare files = %+v, want no non-parsed support file identity", sourceInput.Files)
 	}
-	if !nativeStaticPrepareFilesContain(sourceInput.PrimaryFiles, sourceFile) {
+	if !staticIndexPrepareFilesContain(sourceInput.PrimaryFiles, sourceFile) {
 		t.Fatalf("primary files = %+v, want cached source primary identity", sourceInput.PrimaryFiles)
 	}
 	if _, ok := sourceInput.SourceTextByFile[sourceFile]; ok {

@@ -1,9 +1,8 @@
 /**
  * Static Index compiler request contracts.
  *
- * The JSON `method` values are intentionally still the existing wire strings.
- * TypeScript owns the final Static Index type names in this phase; the method
- * literals move with Go and Rust mirrors during the protocol identity phase.
+ * The JSON `method` values use the final `staticIndex*` wire strings shared
+ * by TypeScript, Go, and Rust.
  *
  * @module
  */
@@ -16,10 +15,10 @@ const unknownArraySchema = z.array(z.unknown())
 
 /** Static Index compiler method names used on the JSON-lines boundary. */
 export type StaticIndexCompilerMethod =
-  | 'nativeStaticPrepare'
-  | 'nativeStaticAnalyze'
-  | 'nativeStaticFinalize'
-  | 'nativeStaticCompile'
+  | 'staticIndexPrepare'
+  | 'staticIndexAnalyze'
+  | 'staticIndexFinalize'
+  | 'staticIndexCompile'
 
 /** Source file identity selected for Static Index planning. */
 export const StaticIndexSourceFileSchema = z
@@ -71,7 +70,7 @@ const staticIndexRequestBase = {
 export const StaticIndexPrepareRequestSchema = z
   .object({
     ...staticIndexRequestBase,
-    method: z.literal('nativeStaticPrepare'),
+    method: z.literal('staticIndexPrepare'),
     root: z.string().min(1),
     projectName: z.string().min(1).optional(),
     configPath: z.string().min(1).optional(),
@@ -88,7 +87,7 @@ export const StaticIndexPrepareRequestSchema = z
 export const StaticIndexAnalyzeRequestSchema = z
   .object({
     ...staticIndexRequestBase,
-    method: z.literal('nativeStaticAnalyze'),
+    method: z.literal('staticIndexAnalyze'),
     stream: z.literal(true),
     plan: StaticIndexPreparedPlanSchema,
     files: z.array(StaticIndexFileInputSchema),
@@ -100,7 +99,7 @@ export const StaticIndexAnalyzeRequestSchema = z
 export const StaticIndexFinalizeRequestSchema = z
   .object({
     ...staticIndexRequestBase,
-    method: z.literal('nativeStaticFinalize'),
+    method: z.literal('staticIndexFinalize'),
     stream: z.literal(true).optional(),
     nativeFacts: unknownArraySchema,
     extensionFacts: unknownArraySchema,
@@ -121,7 +120,7 @@ export const StaticIndexFinalizeRequestSchema = z
 export const StaticIndexCompileRequestSchema = z
   .object({
     ...staticIndexRequestBase,
-    method: z.literal('nativeStaticCompile'),
+    method: z.literal('staticIndexCompile'),
     stream: z.literal(true),
     plan: StaticIndexPreparedPlanSchema,
     files: z.array(StaticIndexFileInputSchema),

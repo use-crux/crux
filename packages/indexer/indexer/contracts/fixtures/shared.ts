@@ -12,7 +12,11 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { IndexRuleDescriptor } from '@crux/core/project-index'
-import type { StaticIndexCompilerRequest, StaticIndexCompilerResponse } from '../static-index/schema'
+import type {
+  StaticIndexCompilerRequest,
+  StaticIndexCompilerResponse,
+  StaticIndexIdentityManifest,
+} from '../static-index/schema'
 import type { StaticSyntaxFileRecord } from '../static-syntax/schema'
 import type { ProjectIndexWorkerEvent } from '../worker-events/schema'
 import type { IndexRelationPolicy } from '../../relations/types'
@@ -20,6 +24,7 @@ import type { IndexRelationPolicy } from '../../relations/types'
 /** File-backed fixture names that are intended to be consumed across runtimes. */
 export type NativeRuntimeSharedFixtureName =
   | 'native-static-protocol'
+  | 'static-index-identity'
   | 'worker-events'
   | 'static-syntax-records'
   | 'relation-specs'
@@ -33,6 +38,9 @@ export interface StaticIndexProtocolSharedFixture {
   /** Responses for every supported Static Index compiler method. */
   readonly responses: readonly StaticIndexCompilerResponse[]
 }
+
+/** Shared Static Index compiler-owned identity manifest. */
+export type StaticIndexIdentitySharedFixture = StaticIndexIdentityManifest
 
 /** Shared Project Index worker event stream fixture. */
 export interface WorkerEventsSharedFixture {
@@ -95,6 +103,7 @@ export interface PrimitiveCoverageIdentitiesSharedFixture {
 /** Payload type for each shared fixture file. */
 export interface NativeRuntimeSharedFixtureMap {
   readonly 'native-static-protocol': StaticIndexProtocolSharedFixture
+  readonly 'static-index-identity': StaticIndexIdentitySharedFixture
   readonly 'worker-events': WorkerEventsSharedFixture
   readonly 'static-syntax-records': StaticSyntaxRecordsSharedFixture
   readonly 'relation-specs': RelationSpecsSharedFixture
@@ -106,6 +115,7 @@ const fixtureDirectory = dirname(fileURLToPath(import.meta.url))
 
 const fixtureFiles = {
   'native-static-protocol': 'native-static-protocol.json',
+  'static-index-identity': 'static-index-identity.json',
   'worker-events': 'worker-events.json',
   'static-syntax-records': 'static-syntax-records.json',
   'relation-specs': 'relation-specs.json',

@@ -8,10 +8,10 @@ import (
 
 const (
 	Version        = 1
-	PrepareMethod  = "nativeStaticPrepare"
-	AnalyzeMethod  = "nativeStaticAnalyze"
-	FinalizeMethod = "nativeStaticFinalize"
-	CompileMethod  = "nativeStaticCompile"
+	PrepareMethod  = "staticIndexPrepare"
+	AnalyzeMethod  = "staticIndexAnalyze"
+	FinalizeMethod = "staticIndexFinalize"
+	CompileMethod  = "staticIndexCompile"
 )
 
 type VersionIdentity struct {
@@ -25,15 +25,25 @@ type DigestIdentity struct {
 	Digest  string `json:"digest,omitempty"`
 }
 
+type IdentityManifest struct {
+	ProtocolVersion    int             `json:"protocolVersion"`
+	Compiler           VersionIdentity `json:"compiler"`
+	OxcFrontend        VersionIdentity `json:"oxcFrontend"`
+	PrimitiveManifest  DigestIdentity  `json:"primitiveManifest"`
+	RelationPolicy     DigestIdentity  `json:"relationPolicy"`
+	RuleDescriptors    DigestIdentity  `json:"ruleDescriptors"`
+	CompilerProjection DigestIdentity  `json:"compilerProjection"`
+}
+
 type RunIdentity struct {
-	ProtocolVersion      int              `json:"protocolVersion"`
-	Compiler             VersionIdentity  `json:"compiler"`
-	Oxc                  VersionIdentity  `json:"oxc"`
-	PrimitiveManifest    DigestIdentity   `json:"primitiveManifest"`
-	RelationPolicy       DigestIdentity   `json:"relationPolicy"`
-	ExtensionManifests   []DigestIdentity `json:"extensionManifests"`
-	FirstPartyGraphRules DigestIdentity   `json:"firstPartyGraphRules"`
-	CompilerProjection   DigestIdentity   `json:"compilerProjection"`
+	ProtocolVersion    int              `json:"protocolVersion"`
+	Compiler           VersionIdentity  `json:"compiler"`
+	Oxc                VersionIdentity  `json:"oxc"`
+	PrimitiveManifest  DigestIdentity   `json:"primitiveManifest"`
+	RelationPolicy     DigestIdentity   `json:"relationPolicy"`
+	ExtensionManifests []DigestIdentity `json:"extensionManifests"`
+	RuleDescriptors    DigestIdentity   `json:"ruleDescriptors"`
+	CompilerProjection DigestIdentity   `json:"compilerProjection"`
 }
 
 type Telemetry struct {

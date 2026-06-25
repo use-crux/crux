@@ -10,6 +10,7 @@
 
 export type {
   ParsedStaticIndexCompilerRequest,
+  StaticIndexIdentityManifest,
   StaticIndexCompilerMethod,
   StaticIndexCompilerRequest,
   StaticIndexCompilerResponse,
@@ -24,6 +25,7 @@ export type {
   StaticIndexTelemetry,
 } from '../../static-index/protocol'
 export {
+  createStaticIndexRunIdentity,
   parseStaticIndexCompilerRequest,
   STATIC_INDEX_COMPILER_PROTOCOL_VERSION,
   StaticIndexAnalyzeRequestSchema,
@@ -36,6 +38,7 @@ export {
   StaticIndexFinalizeRequestSchema,
   StaticIndexFinalizeResponseSchema,
   StaticIndexIdentityComponentSchema,
+  StaticIndexIdentityManifestSchema,
   StaticIndexParserCallInterestSchema,
   StaticIndexParserCallbackInterestSchema,
   StaticIndexParserConstructorInterestSchema,

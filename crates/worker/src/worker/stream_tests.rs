@@ -2,8 +2,8 @@ use serde_json::json;
 
 use crate::parse_serve_request;
 use crate::protocol::native_static::{
-    NATIVE_STATIC_ANALYZE_METHOD, NATIVE_STATIC_COMPILE_METHOD, NATIVE_STATIC_FINALIZE_METHOD,
-    NATIVE_STATIC_PROTOCOL_VERSION, NativeStaticAnalyzeResponse, NativeStaticFinalizeResponse,
+    NativeStaticAnalyzeResponse, NativeStaticFinalizeResponse, STATIC_INDEX_ANALYZE_METHOD,
+    STATIC_INDEX_COMPILE_METHOD, STATIC_INDEX_FINALIZE_METHOD, STATIC_INDEX_PROTOCOL_VERSION,
 };
 use crate::worker::native_static_tests::{
     run_identity_json, serve_response_lines_json, skeleton_plan_json,
@@ -13,8 +13,8 @@ use crate::worker::native_static_tests::{
 fn analyze_request_is_accepted_through_stream_worker_path() {
     let events = serve_response_lines_json(json!({
         "id": 102,
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_ANALYZE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_ANALYZE_METHOD,
         "stream": true,
         "identity": run_identity_json(),
         "plan": skeleton_plan_json(),
@@ -41,7 +41,7 @@ fn analyze_request_is_accepted_through_stream_worker_path() {
     assert!(parsed.facts.is_empty());
     assert!(parsed.diagnostics.is_empty());
     assert!(parsed.extension_evidence_jobs.is_empty());
-    assert_eq!(stage["method"], NATIVE_STATIC_ANALYZE_METHOD);
+    assert_eq!(stage["method"], STATIC_INDEX_ANALYZE_METHOD);
     assert_eq!(stage["telemetry"]["files"]["selected"], 2);
     assert_eq!(stage["telemetry"]["files"]["analyzed"], 1);
     assert_eq!(stage["telemetry"]["files"]["skipped"], 1);
@@ -51,8 +51,8 @@ fn analyze_request_is_accepted_through_stream_worker_path() {
 fn analyze_stream_request_emits_jobs_facts_and_done_events() {
     let events = serve_response_lines_json(json!({
         "id": 112,
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_ANALYZE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_ANALYZE_METHOD,
         "stream": true,
         "identity": run_identity_json(),
         "plan": skeleton_plan_json(),
@@ -84,7 +84,7 @@ fn analyze_stream_request_emits_jobs_facts_and_done_events() {
     assert_eq!(events[1]["fact"]["definitions"][0]["id"], "prompt:refund");
     let done = events.last().expect("done event");
     assert_eq!(done["type"], "done");
-    assert_eq!(done["response"]["method"], NATIVE_STATIC_ANALYZE_METHOD);
+    assert_eq!(done["response"]["method"], STATIC_INDEX_ANALYZE_METHOD);
     assert_eq!(done["response"]["facts"], json!([]));
     assert_eq!(done["response"]["extensionEvidenceJobs"], json!([]));
 }
@@ -93,8 +93,8 @@ fn analyze_stream_request_emits_jobs_facts_and_done_events() {
 fn analyze_request_emits_declared_extension_evidence_jobs_before_facts() {
     let events = serve_response_lines_json(json!({
         "id": 104,
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_ANALYZE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_ANALYZE_METHOD,
         "stream": true,
         "identity": run_identity_json(),
         "plan": skeleton_plan_json(),
@@ -146,8 +146,8 @@ fn analyze_request_emits_declared_extension_evidence_jobs_before_facts() {
 fn analyze_request_without_stream_is_rejected() {
     let line = serde_json::to_string(&json!({
         "id": 105,
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_ANALYZE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_ANALYZE_METHOD,
         "identity": run_identity_json(),
         "plan": skeleton_plan_json(),
         "files": []
@@ -155,15 +155,15 @@ fn analyze_request_without_stream_is_rejected() {
     .expect("request should serialize");
 
     let error = parse_serve_request(&line).expect_err("analyze without stream should fail");
-    assert!(error.contains("nativeStaticAnalyze requires stream: true"));
+    assert!(error.contains("staticIndexAnalyze requires stream: true"));
 }
 
 #[test]
 fn finalize_stream_emits_patch_events_and_done_response() {
     let events = serve_response_lines_json(json!({
         "id": 121,
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_FINALIZE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_FINALIZE_METHOD,
         "stream": true,
         "identity": run_identity_json(),
         "nativeFacts": [
@@ -196,7 +196,7 @@ fn finalize_stream_emits_patch_events_and_done_response() {
     let parsed: NativeStaticFinalizeResponse = serde_json::from_value(done["response"].clone())
         .expect("finalize response should deserialize");
     assert!(parsed.events.is_empty());
-    assert_eq!(done["response"]["method"], NATIVE_STATIC_FINALIZE_METHOD);
+    assert_eq!(done["response"]["method"], STATIC_INDEX_FINALIZE_METHOD);
     assert_eq!(done["response"]["telemetry"]["facts"]["definitions"], 1);
 }
 
@@ -204,8 +204,8 @@ fn finalize_stream_emits_patch_events_and_done_response() {
 fn compile_stream_analyzes_and_streams_patch_events() {
     let events = serve_response_lines_json(json!({
         "id": 122,
-        "protocolVersion": NATIVE_STATIC_PROTOCOL_VERSION,
-        "method": NATIVE_STATIC_COMPILE_METHOD,
+        "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
+        "method": STATIC_INDEX_COMPILE_METHOD,
         "stream": true,
         "identity": run_identity_json(),
         "plan": skeleton_plan_json(),
@@ -230,6 +230,6 @@ fn compile_stream_analyzes_and_streams_patch_events() {
     );
     let done = events.last().expect("done event");
     assert_eq!(done["type"], "done");
-    assert_eq!(done["response"]["method"], NATIVE_STATIC_COMPILE_METHOD);
+    assert_eq!(done["response"]["method"], STATIC_INDEX_COMPILE_METHOD);
     assert_eq!(done["response"]["events"], json!([]));
 }

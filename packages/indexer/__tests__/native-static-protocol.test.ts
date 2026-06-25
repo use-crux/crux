@@ -28,16 +28,16 @@ describe('Static Index compiler protocol', () => {
     const fixture = readNativeRuntimeSharedFixture('native-static-protocol')
 
     expect(fixture.requests.map((request) => request.method)).toEqual([
-      'nativeStaticPrepare',
-      'nativeStaticAnalyze',
-      'nativeStaticFinalize',
-      'nativeStaticCompile',
+      'staticIndexPrepare',
+      'staticIndexAnalyze',
+      'staticIndexFinalize',
+      'staticIndexCompile',
     ])
     expect(fixture.responses.map((response) => response.method)).toEqual([
-      'nativeStaticPrepare',
-      'nativeStaticAnalyze',
-      'nativeStaticFinalize',
-      'nativeStaticCompile',
+      'staticIndexPrepare',
+      'staticIndexAnalyze',
+      'staticIndexFinalize',
+      'staticIndexCompile',
     ])
 
     for (const request of fixture.requests) {
@@ -49,13 +49,37 @@ describe('Static Index compiler protocol', () => {
     }
   })
 
+  it('uses the shared Static Index identity manifest for every protocol request', () => {
+    const manifest = readNativeRuntimeSharedFixture('static-index-identity')
+    const fixture = readNativeRuntimeSharedFixture('native-static-protocol')
+
+    expect(manifest).toMatchObject({
+      protocolVersion: 1,
+      oxcFrontend: { name: expect.any(String), version: expect.any(String) },
+      primitiveManifest: { digest: expect.any(String) },
+      relationPolicy: { digest: expect.any(String) },
+      ruleDescriptors: { digest: expect.any(String) },
+      compilerProjection: { digest: expect.any(String) },
+    })
+    for (const request of fixture.requests) {
+      expect(request.identity).toMatchObject({
+        protocolVersion: manifest.protocolVersion,
+        oxc: manifest.oxcFrontend,
+        primitiveManifest: manifest.primitiveManifest,
+        relationPolicy: manifest.relationPolicy,
+        ruleDescriptors: manifest.ruleDescriptors,
+        compilerProjection: manifest.compilerProjection,
+      })
+    }
+  })
+
   it('rejects malformed Static Index compiler requests', () => {
     expect(parseStaticIndexCompilerRequest('{')).toEqual({ ok: false, error: 'invalid JSON' })
     expect(
       parseStaticIndexCompilerRequest(
         JSON.stringify({
           protocolVersion: 2,
-          method: 'nativeStaticPrepare',
+          method: 'staticIndexPrepare',
           root: '/repo',
           identity: staticIndexRunIdentityFixture,
           files: [],
