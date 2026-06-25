@@ -1,5 +1,5 @@
 import { createIndexerExtensionRuntime } from '../indexer/extensions'
-import { staticIndexExtractorCoverage } from '../indexer/static-index/extension-host/coverage/coverage'
+import { staticIndexExtractorCoverage } from '../indexer/static-index/extension-host/host-plan/coverage'
 import { cruxCoreExtension } from '../indexer/extractors/crux-core-extension'
 
 /**

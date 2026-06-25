@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { callPattern, facts, type IndexerExtension } from '../indexer/extensions/public-contract'
 import { loadIndexerExtensionReferences } from '../indexer/extensions/loading'
-import { staticIndexExtractorCoverage } from '../indexer/static-index/extension-host/coverage'
+import { staticIndexExtractorCoverage } from '../indexer/static-index/extension-host/host-plan'
 import { createIndexerExtensionRuntime } from '../indexer/extensions/runtime'
 import { createStaticRecordEvidenceReader } from '../indexer/static-index/extension-host/evidence'
 import { createStaticExtensionRegistry } from '../indexer/static-index/compatibility/syntax-record-bridge'
@@ -111,7 +111,7 @@ describe('indexer architecture boundaries', () => {
       'static-index/syntax/index.ts',
       'static-index/syntax/frontends/oxc.ts',
       'static-index/extension-host/index.ts',
-      'static-index/extension-host/coverage/index.ts',
+      'static-index/extension-host/host-plan/index.ts',
       'static-index/extension-host/evidence/index.ts',
       'static-index/compatibility/syntax-record-bridge/index.ts',
     ]) {
@@ -129,6 +129,7 @@ describe('indexer architecture boundaries', () => {
       'worker-protocol/native-static-parser-interests.ts',
       'contracts/native-static/schema.ts',
       'contracts/native-static/fixtures.ts',
+      'static-index/extension-host/coverage/index.ts',
     ]) {
       expect(existsSync(join(indexerDir, file)), file).toBe(false)
     }

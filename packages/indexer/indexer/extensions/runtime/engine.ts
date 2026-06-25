@@ -32,7 +32,7 @@ import { indexRuleAvailability } from './rule-availability'
 import { staticFoundDefinitionFromExtractedFacts } from '../../static-index/compatibility/syntax-record-bridge/normalizer'
 import { extractStaticRecordWithRegistry, type StaticRecordExtractionInput } from '../../static-index/compatibility/syntax-record-bridge/runtime'
 import { staticInterestManifestFromExtensions } from '../../static-index/extension-host/evidence/interests'
-import { staticExtensionHostManifest, type StaticExtensionHostManifest } from '../../static-index/extension-host/coverage/host-manifest'
+import { staticExtensionHostManifest, type StaticExtensionHostManifest } from '../../static-index/extension-host/host-plan/host-manifest'
 import type {
   IndexExtractor,
   ExtractPattern,

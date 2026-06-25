@@ -84,7 +84,7 @@ export type {
   StaticExtensionHostManifest,
   StaticExtractorHostMode,
   StaticExtractorHostPlan,
-} from '../static-index/extension-host/coverage/host-manifest'
+} from '../static-index/extension-host/host-plan/host-manifest'
 export type { StaticRecordExtractionInput } from '../static-index/compatibility/syntax-record-bridge/runtime'
 export type {
   IndexEmitter,
