@@ -578,4 +578,4 @@ export { aiSdkProviderRuntime } from './src/profile'
 //   construct them from `aiSdkProviderRuntime.create(liveSdkGateway())`
 //   or use `@use-crux/core/agent` — composition is core policy.
 // - `toMessages`/`fromMessages`/`createAIExecutor`: dead surface from the
-//   pre-ExecutorSpec adapter (RFC use-crux/crux#28).
+//   legacy AI adapter shape (RFC use-crux/crux#28).

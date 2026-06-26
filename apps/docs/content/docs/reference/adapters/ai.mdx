@@ -15,7 +15,7 @@ import { resolve } from '@use-crux/ai/agent'
 
 ## Architecture
 
-`@use-crux/ai` exports `aiSdkProviderRuntime`, a loop-owned provider runtime for the Vercel AI SDK. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, native `needsApproval`, `abortSignal`, `experimental_transform` for streaming guardrails). The bound runtime also exposes AI SDK embedding and reranking extensions through the same `SdkGateway` seam.
+`@use-crux/ai` exports `aiSdkProviderRuntime`, a normal Crux provider runtime with `ownership: 'loop-owned'` for the Vercel AI SDK. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, native `needsApproval`, `abortSignal`, `experimental_transform` for streaming guardrails). The bound runtime also exposes AI SDK embedding and reranking extensions through the same `SdkGateway` seam.
 
 The only module that calls AI SDK functions is the `SdkGateway` — inject a scripted one via [`createCruxAi`](#createcruxaioptions) to test without module mocks.
 

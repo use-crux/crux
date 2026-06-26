@@ -2,7 +2,7 @@
 
 Anthropic SDK adapter for Crux. Runs Crux prompts and agents directly against Claude models through the official `@anthropic-ai/sdk` client.
 
-Orchestration — prompt composition, context engineering, memory, tools, agents — lives in [`@use-crux/core`](../core). This package is the binding: `createAnthropic()` wraps an `Anthropic` client through `anthropicProviderRuntime` and owns no orchestration logic of its own. It is generation-only; pair it with `embedding()` from `@use-crux/ai` or another provider for retrieval/indexing.
+Orchestration — prompt composition, context engineering, memory, tools, agents — lives in [`@use-crux/core`](../core). This package is the binding: `createAnthropic()` wraps an `Anthropic` client through the `single-turn` `anthropicProviderRuntime` and owns no orchestration logic of its own. It is generation-only; pair it with `embedding()` from `@use-crux/ai` or another provider for retrieval/indexing.
 
 ## Install
 

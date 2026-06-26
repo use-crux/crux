@@ -54,7 +54,20 @@ export const acmeProviderRuntime = defineProviderRuntime({
 export const createAcme = acmeProviderRuntime.create
 ```
 
-This keeps tests small: bind `acmeProviderRuntime.create(scriptedClient)`, run prompts through the public adapter methods, and assert on the scripted client's captured request bodies. Add provider-specific transcript tests for unusual message conversion behavior.
+This keeps tests small: bind `acmeProviderRuntime.create(scriptedClient)`, run prompts through the public adapter methods, and assert on the scripted client's captured request bodies. For reusable adapter coverage, add the provider-runtime conformance suite; it exercises the same public runtime boundary used by the built-in adapters:
+
+```ts
+import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
+
+describeCruxAdapterConformance({
+  name: 'acme',
+  runtime: acmeProviderRuntime,
+  harness: acmeConformanceHarness(),
+  capabilities: { ownership: 'single-turn', structuredOutput: true, streaming: true },
+})
+```
+
+Keep provider-specific transcript tests for unusual message conversion behavior.
 
 ## Native transcript codec
 

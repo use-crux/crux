@@ -35,7 +35,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   />
   <Card
     title="Adapter Interface"
-    description="adapter, executorAdapter, AdapterSpec, ExecutorSpec, and conformance harnesses."
+    description="defineProviderRuntime, ownership models, adapter IR, and conformance harnesses."
     href="/docs/reference/adapters"
   />
   <Card
@@ -130,7 +130,8 @@ import { prompt, context, createPrompts, createContexts, config, when, match } f
 import { tool } from '@use-crux/core/tools'
 import { toolMiddleware, approvalMiddleware } from '@use-crux/core/tool-middleware'
 import { adapter, executorAdapter, defineProviderRuntime } from '@use-crux/core/adapter'
-import { transcriptCodecConformance } from '@use-crux/core/adapter/testing'
+import { providerRuntimeConformance, transcriptCodecConformance } from '@use-crux/core/adapter/testing'
+import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
 import { memory, workingState, episodes, facts, procedures } from '@use-crux/core/memory'
 import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@use-crux/core/compaction'
 import { agent, blackboard, handoff, delegate } from '@use-crux/core/agent'

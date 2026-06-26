@@ -1,5 +1,5 @@
 /**
- * `ExecutorSpec` — the adapter contract for SDKs that own their own tool loop.
+ * `ExecutorSpec` — the lower-level execution IR for SDKs that own their own tool loop.
  *
  * Crux has two adapter dialects:
  *
@@ -10,8 +10,10 @@
  *   Vercel AI SDK that run their own multi-step loop. The spec hands the
  *   loop to the SDK and core steers per step through a `StepObserver`.
  *
- * Implement whichever matches your SDK's shape — never both. In either
- * dialect, core owns the policy layer: prompt resolution, routing
+ * Provider packages should normally author
+ * `defineProviderRuntime({ ownership: 'loop-owned', loop })`; core compiles
+ * that public runtime contract into this IR. In either dialect, core owns the
+ * policy layer: prompt resolution, routing
  * (`fallback()`/`router()`/`cascade()`), validation retry, constraints,
  * guardrails, the approval protocol, tool instrumentation, timeouts, and
  * observability. A spec implements mechanics only.

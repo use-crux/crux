@@ -1,6 +1,6 @@
 # @use-crux/google
 
-Google GenAI (Gemini) adapter for Crux. Wraps a `GoogleGenAI` client so Crux prompts and agents run against Google models — prompt composition, context engineering, memory, and flows all live in [`@use-crux/core`](../core); this package is only the provider boundary.
+Google GenAI (Gemini) adapter for Crux. Wraps a `GoogleGenAI` client so Crux prompts and agents run against Google models — prompt composition, context engineering, memory, and flows all live in [`@use-crux/core`](../core); this package is a `single-turn` provider runtime and owns only the Google wire boundary.
 
 ## Install
 

@@ -1,6 +1,6 @@
 # @use-crux/openai
 
-OpenAI SDK adapter for Crux. Wraps an `OpenAI` client so Crux prompts and agents run against OpenAI models — prompt composition, context engineering, memory, and flows all live in [`@use-crux/core`](../core); this package is only the provider boundary.
+OpenAI SDK adapter for Crux. Wraps an `OpenAI` client so Crux prompts and agents run against OpenAI models — prompt composition, context engineering, memory, and flows all live in [`@use-crux/core`](../core); this package is a `single-turn` provider runtime and owns only the OpenAI wire boundary.
 
 ## Install
 

@@ -15,8 +15,9 @@
  * from `@use-crux/core/adapter/tool` (middleware, approvals, instrumentation,
  * skill loads, memory capture) and the `Safety` session from
  * `@use-crux/core/safety` — so policy semantics never diverge between dialects.
- * Test executors with {@link fakeExecutor} and prove contract fidelity with
- * {@link executorSpecConformance}.
+ * Test public provider runtimes with {@link providerRuntimeConformance}. Use
+ * {@link fakeExecutor}, {@link adapterSpecConformance}, and
+ * {@link executorSpecConformance} for lower-level execution IR tests.
  *
  * @module
  */
@@ -129,7 +130,7 @@ export type { ApprovalRequestInfo } from './tool/approval'
 export { setGenerationInterceptor, clearGenerationInterceptor } from './interception'
 export type { GenerationInterceptor, InterceptedGeneration } from './interception'
 
-// Testing utilities for the executor contract
+// Testing utilities for public provider runtimes and lower-level execution IR.
 export {
   adapterSpecConformance,
   fakeExecutor,

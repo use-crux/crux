@@ -13,7 +13,7 @@ The key distinction is where Crux sits. Many tools help you inspect or score wha
 
 ## vs. Vercel AI SDK (alone)
 
-The Vercel AI SDK is an excellent execution and UI toolkit. Crux uses it as a primary adapter via `@use-crux/ai`. The comparison is about what you add when you organize the prompt setup around that execution.
+The Vercel AI SDK is an excellent execution and UI toolkit. Crux integrates with it as a normal loop-owned adapter via `@use-crux/ai`: AI SDK owns the model/tool loop, while Crux organizes the prompt setup and policy around that execution.
 
 |                         | AI SDK alone                          | AI SDK + Crux                                                  |
 | ----------------------- | ------------------------------------- | -------------------------------------------------------------- |

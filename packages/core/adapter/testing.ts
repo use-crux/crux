@@ -1,13 +1,17 @@
 /**
- * Test utilities for the `ExecutorSpec` contract.
+ * Test utilities for Crux adapter contracts.
  *
+ * - {@link providerRuntimeConformance} — the public runtime-level suite for
+ *   adapters built with `defineProviderRuntime()`. It binds the runtime through
+ *   `.create()` and covers both `single-turn` and `loop-owned` ownership.
+ * - `describeCruxAdapterConformance` from
+ *   `@use-crux/core/adapter/testing/vitest` — the Vitest wrapper used by
+ *   provider packages.
+ * - {@link adapterSpecConformance} and {@link executorSpecConformance} —
+ *   lower-level IR suites for compiler and core execution work.
  * - {@link fakeExecutor} — a fully in-memory `ExecutorSpec` you script with
  *   model emissions. Use it to test `executorAdapter()` policy (routing,
  *   validation retry, approvals, steering) with zero SDK involvement.
- * - {@link executorSpecConformance} — the contract suite every
- *   `ExecutorSpec` implementation must pass, including `fakeExecutor`
- *   itself. Run it against a real executor to prove the subtle loop
- *   semantics (directive buffering, step refunds, suspension) hold.
  *
  * @module
  */
