@@ -3,22 +3,22 @@ import { z } from 'zod'
 import type { GenerationSettings } from '@crux/core'
 import type { CallArgs } from '@crux/core/adapter'
 import type { NativeChatRequestArgs } from '@crux/core/adapter'
-import { GoogleCacheManager } from './cache-manager'
 import { resolveGoogleSystemConfig } from './system-cache-planner'
+import type { GoogleSystemCacheResolver } from './system-cache-planner'
 import type { GoogleExtra, GoogleRequest } from './types'
 
 /** Build the native Google generation request from canonical Crux args. */
 export async function googleRequest(
   args: NativeChatRequestArgs<GoogleExtra, Content>,
-  cacheManager: GoogleCacheManager | undefined,
+  cacheResolver: GoogleSystemCacheResolver | undefined,
 ): Promise<GoogleRequest> {
   const config: Record<string, unknown> = { ...args.settings }
   const systemConfig = await resolveGoogleSystemConfig({
-    cacheResolver: cacheManager,
+    cacheResolver,
     model: args.model,
     system: args.system,
     systemBlocks: args.systemBlocks,
-    cache: args.extra?.cache,
+    cachedContent: args.extra?.cachedContent,
   })
   if (systemConfig.cachedContent) config.cachedContent = systemConfig.cachedContent
   if (systemConfig.systemInstruction) config.systemInstruction = systemConfig.systemInstruction

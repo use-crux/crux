@@ -618,11 +618,11 @@ const stream = await google.stream(greet, { model: 'gemini-2.5-flash', input: { 
 
 // Optional: custom cache config for Google's CachedContent API
 const google = createGoogle(new GoogleGenAI({ apiKey: '...' }), {
-  cache: { defaultTtlSeconds: 600, maxEntries: 100 },
+  cachedContent: { defaultTtlSeconds: 600, maxEntries: 100 },
 })
 ```
 
-Accepts Google-native options: `tools` (function declarations), `temperature`, `maxOutputTokens`, `topP`, `topK`. Cache management is automatic — when the leading system blocks have `providerCache: true`, the adapter creates/reuses a server-side `CachedContent` object for that prefix and keeps the uncached remainder inline. Disable cache lifecycle management with `createGoogle(client, { cache: false })`, skip a single call with `extra: { cache: { skip: true } }`, or override a new cache object's TTL with `extra: { cache: { ttlSeconds } }`.
+Accepts Google-native options: `tools` (function declarations), `temperature`, `maxOutputTokens`, `topP`, `topK`. Cache management is automatic — when the leading system blocks have `providerCache: true`, the adapter creates/reuses a server-side `CachedContent` object for that prefix and keeps the uncached remainder inline. Disable cache lifecycle management with `createGoogle(client, { cachedContent: false })`, skip a single call with `extra: { cachedContent: { skip: true } }`, override a new cache object's TTL with `extra: { cachedContent: { ttlSeconds } }`, or provide a custom `GoogleCachedContentPort`.
 
 ### Anthropic SDK
 
@@ -933,7 +933,7 @@ const rules = context({
 1. **Application-level:** Resolved text is cached by `contextId + inputHash` with TTL. Subsequent calls with the same inputs skip the `systemFn()` entirely.
 2. **Provider-level:** The resolution pipeline emits `systemBlocks` on `ResolvedPrompt` with per-block `providerCache` hints. Each adapter translates these to its native caching mechanism:
    - **`@crux/anthropic`**: Converts to `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` (up to 4 breakpoints).
-   - **`@crux/google`**: Creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. Handles lifecycle (creation, reuse, per-call TTL, concurrency dedup) automatically through provider-owned native-chat dependencies.
+   - **`@crux/google`**: Creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. Handles lifecycle (creation, reuse, per-call TTL, concurrency dedup, optional failure propagation, graceful fallback) automatically through provider-owned native-chat dependencies.
    - **OpenAI**: Prefix caching works automatically via stable context ordering.
 3. **Cache key:** Computed from `contextId` + sorted JSON of input fields declared in the context's `inputSchema`. Unrelated prompt-level fields don't affect the key.
 4. **Static contexts:** `cacheTtl` is silently set to 0 for static string `system` values (nothing to cache). `providerCache` still applies.

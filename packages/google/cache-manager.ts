@@ -127,9 +127,12 @@ export class GoogleCacheManager {
       this.entries.set(key, entry)
       this.evict()
       return entry
-    } catch {
-      console.warn('[crux-google] Cache creation failed, falling back to uncached.')
+    } catch (error) {
       this.entries.delete(key)
+      if (this.config.onError === 'throw') {
+        throw error
+      }
+      console.warn('[crux-google] Cache creation failed, falling back to uncached.')
       return undefined
     }
   }

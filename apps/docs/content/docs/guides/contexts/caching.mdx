@@ -82,7 +82,7 @@ When `providerCache: true`:
 
 1. The resolution pipeline includes `systemBlocks` on `ResolvedPrompt` — one block per context, each with a `providerCache` flag
 2. **`@crux/anthropic`** converts blocks to Anthropic `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` (up to 4 breakpoints)
-3. **`@crux/google`** creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. Handles creation, reuse, per-call TTL, concurrency dedup, and graceful error fallback automatically.
+3. **`@crux/google`** creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. Handles creation, reuse, per-call TTL, concurrency dedup, optional failure propagation, and graceful error fallback automatically.
 4. **`@crux/ai` (Vercel AI SDK)** converts blocks to `SystemModelMessage[]` with `providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } }` when the model is Anthropic
 5. **OpenAI** prefix caching works automatically — Crux's deterministic context ordering already provides stable prefixes
 

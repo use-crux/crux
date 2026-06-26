@@ -2,7 +2,7 @@ import type { Content, GenerateContentResponse, GoogleGenAI } from '@google/gena
 import { defineProviderRuntime } from '@crux/core/adapter'
 import type { NativeProviderPort, SingleTurnRuntimeContract } from '@crux/core/adapter'
 import { GoogleCacheManager } from './cache-manager'
-import type { GoogleCacheConfig } from './cache-types'
+import type { GoogleCachedContentCreateOptions, GoogleCachedContentPort } from './cache-types'
 import { resolveCacheConfig } from './cache-types'
 import { googleTranscript } from './message-codec'
 import {
@@ -14,27 +14,29 @@ import {
 } from './request'
 import { googleResponseMeta, googleResponseText } from './response'
 import { googleTextDelta } from './stream'
+import type { GoogleSystemCacheResolver } from './system-cache-planner'
 import type { GoogleExtra, GoogleRequest } from './types'
 
 interface GoogleNativeDeps extends Record<string, unknown> {
-  readonly cacheManager?: GoogleCacheManager
+  readonly cacheResolver?: GoogleSystemCacheResolver
 }
 
 /** Options for `createGoogle()`. */
 export interface CreateGoogleOptions {
   /**
-   * Cache configuration for Google's CachedContent API.
+   * Configure Google's CachedContent API integration.
    *
    * - `undefined` / omitted: caching enabled with defaults
-   * - `GoogleCacheConfig`: custom TTL, max entries, etc.
-   * - `false`: disable cache management entirely
+   * - `GoogleCachedContentOptions`: use the built-in in-memory cache manager
+   * - `GoogleCachedContentPort`: provide a custom cache resolver
+   * - `false`: disable CachedContent management entirely
    */
-  readonly cache?: GoogleCacheConfig | false
+  readonly cachedContent?: GoogleCachedContentCreateOptions
 }
 
 /** Google provider hooks shared by the public runtime and lightweight helpers. */
 const googleProviderHooks = {
-  request: (args, { deps }) => googleRequest(args, deps.cacheManager),
+  request: (args, { deps }) => googleRequest(args, deps.cacheResolver),
   response: {
     meta: googleResponseMeta,
     text: googleResponseText,
@@ -95,11 +97,35 @@ function bindGoogle(
 
 /** Create a Google GenAI adapter bound to a client instance. */
 export function createGoogle(client: GoogleGenAI, opts?: CreateGoogleOptions) {
-  const cacheManager =
-    opts?.cache !== false ? new GoogleCacheManager(client, resolveCacheConfig(opts?.cache)) : undefined
+  const cacheResolver = createGoogleCachedContentResolver(client, opts)
 
-  return googleProviderRuntime.create(client, { cacheManager })
+  return googleProviderRuntime.create(client, { cacheResolver })
 }
 
 /** Lightweight helper factory generated from the Google provider runtime. */
 export const googleHelpers = googleProviderRuntime.helpers({})
+
+function createGoogleCachedContentResolver(
+  client: GoogleGenAI,
+  opts: CreateGoogleOptions | undefined,
+): GoogleSystemCacheResolver | undefined {
+  const cachedContent = opts?.cachedContent
+  if (cachedContent === false) return undefined
+  if (isGoogleCachedContentPort(cachedContent)) {
+    return {
+      resolve: (model, blocks, options) =>
+        cachedContent.resolve({
+          model,
+          blocks,
+          ...(options?.ttlSeconds === undefined ? {} : { ttlSeconds: options.ttlSeconds }),
+        }),
+    }
+  }
+  return new GoogleCacheManager(client, resolveCacheConfig(cachedContent))
+}
+
+function isGoogleCachedContentPort(
+  value: GoogleCachedContentCreateOptions | undefined,
+): value is GoogleCachedContentPort {
+  return typeof value === 'object' && value !== null && 'resolve' in value && typeof value.resolve === 'function'
+}

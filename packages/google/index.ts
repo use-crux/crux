@@ -14,5 +14,12 @@ export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
 export { embedding } from './embedding'
 export { fromMessages, googleTranscript, toMessages } from './message-codec'
 export type { GoogleAssistantTurn } from './message-codec'
-export type { GoogleCacheConfig } from './cache-types'
+export type {
+  GoogleCachedContentCallOptions,
+  GoogleCachedContentCreateOptions,
+  GoogleCachedContentErrorMode,
+  GoogleCachedContentOptions,
+  GoogleCachedContentPort,
+  GoogleCacheName,
+} from './cache-types'
 export type { GoogleEmbeddingConfig, GoogleExtra, GoogleFunctionDeclaration, GoogleRequest } from './types'

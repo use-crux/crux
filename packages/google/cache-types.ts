@@ -7,6 +7,8 @@
  * @module
  */
 
+import type { SystemBlock } from '@crux/core'
+
 // ─────────────────────────────────────────────────────────────────
 // Branded Types
 // ─────────────────────────────────────────────────────────────────
@@ -89,19 +91,25 @@ export function isCreatingCacheEntry(entry: CacheEntry): entry is CreatingCacheE
 // Configuration
 // ─────────────────────────────────────────────────────────────────
 
+/** Error handling strategy for Google CachedContent creation failures. */
+export type GoogleCachedContentErrorMode = 'fallback' | 'throw'
+
 /**
- * User-facing cache configuration for the Google adapter.
+ * Configure Google's CachedContent integration for `createGoogle()`.
  *
- * Passed as optional second argument to `createGoogle()`.
+ * Pass this as `cachedContent` in `CreateGoogleOptions`. CachedContent remains
+ * a Google-provider feature: Crux core only supplies provider-neutral
+ * `SystemBlock.providerCache` hints, while this package owns cache creation,
+ * reuse, expiry, and fallback behavior.
  *
  * @example
  * ```ts
  * const google = createGoogle(client, {
- *   cache: { defaultTtlSeconds: 600, maxEntries: 100 },
+ *   cachedContent: { defaultTtlSeconds: 600, maxEntries: 100 },
  * })
  * ```
  */
-export interface GoogleCacheConfig {
+export interface GoogleCachedContentOptions {
   /**
    * Enable or disable cache management.
    * When `true`, caching activates automatically when `systemBlocks`
@@ -123,13 +131,57 @@ export interface GoogleCacheConfig {
    * @default 50
    */
   maxEntries?: number
+
+  /**
+   * How to handle Google CachedContent API failures.
+   *
+   * - `'fallback'`: send the full system prompt inline and continue.
+   * - `'throw'`: reject the generation/stream request with the original error.
+   *
+   * @default 'fallback'
+   */
+  onError?: GoogleCachedContentErrorMode
 }
+
+/** Per-call CachedContent controls accepted in `GoogleExtra.cachedContent`. */
+export interface GoogleCachedContentCallOptions {
+  /** Skip Google CachedContent for this request and send system text inline. */
+  readonly skip?: boolean
+  /** TTL in seconds for this request's Google CachedContent object. */
+  readonly ttlSeconds?: number
+}
+
+/**
+ * User-supplied CachedContent boundary for advanced adapter customization.
+ *
+ * A custom port can replace the built-in in-memory cache manager while keeping
+ * request planning inside `@crux/google`. Returning `undefined` tells the
+ * adapter to fall back to an inline `systemInstruction`.
+ */
+export interface GoogleCachedContentPort {
+  /** Resolve a Google CachedContent resource for a cacheable system prefix. */
+  resolve(args: {
+    /** Google model id for the current request. */
+    readonly model: string
+    /** Leading system blocks marked with `providerCache: true`. */
+    readonly blocks: readonly SystemBlock[]
+    /** Per-call TTL override, when provided by `extra.cachedContent`. */
+    readonly ttlSeconds?: number
+  }): Promise<GoogleCacheName | undefined>
+
+  /** Optional cleanup hook for custom cache resources. */
+  dispose?(): Promise<void>
+}
+
+/** Accepted values for `CreateGoogleOptions.cachedContent`. */
+export type GoogleCachedContentCreateOptions = false | GoogleCachedContentOptions | GoogleCachedContentPort
 
 /** Fully resolved cache config with all defaults applied. */
 export interface ResolvedCacheConfig {
   readonly enabled: boolean
   readonly defaultTtlSeconds: number
   readonly maxEntries: number
+  readonly onError: GoogleCachedContentErrorMode
 }
 
 /** Default cache configuration values. */
@@ -137,13 +189,15 @@ export const CACHE_DEFAULTS = {
   enabled: true,
   defaultTtlSeconds: 300,
   maxEntries: 50,
+  onError: 'fallback',
 } as const satisfies ResolvedCacheConfig
 
 /** Resolve user config with defaults. */
-export function resolveCacheConfig(config?: GoogleCacheConfig): ResolvedCacheConfig {
+export function resolveCacheConfig(config?: GoogleCachedContentOptions): ResolvedCacheConfig {
   return {
     enabled: config?.enabled ?? CACHE_DEFAULTS.enabled,
     defaultTtlSeconds: config?.defaultTtlSeconds ?? CACHE_DEFAULTS.defaultTtlSeconds,
     maxEntries: config?.maxEntries ?? CACHE_DEFAULTS.maxEntries,
+    onError: config?.onError ?? CACHE_DEFAULTS.onError,
   }
 }
