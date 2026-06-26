@@ -66,6 +66,7 @@ const openAIRuntimeHooks = {
  */
 export const openaiProviderRuntime = defineProviderRuntime({
   id: 'openai',
+  ownership: 'single-turn',
   turn: openAIRuntimeHooks,
 })
 

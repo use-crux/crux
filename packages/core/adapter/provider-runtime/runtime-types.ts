@@ -9,7 +9,10 @@ import type { CruxAdapter } from '../define-adapter'
 import type { CruxExecutor } from '../define-executor'
 
 /** Closed set of provider runtime ownership models understood by core. */
-export type ProviderRuntimeKind = 'single-turn' | 'loop-owned'
+export type ProviderOwnership = 'single-turn' | 'loop-owned'
+
+/** @deprecated Use {@link ProviderOwnership}. */
+export type ProviderRuntimeKind = ProviderOwnership
 
 /** Dependency argument shape: required only when the provider declares deps. */
 export type ProviderRuntimeDepsArg<TDeps extends Record<string, unknown>> =
@@ -52,9 +55,12 @@ export interface DefinedProviderRuntime<
   TDeps extends Record<string, unknown> = Record<string, never>,
   TRuntime = ProviderGenerationRuntime<TClient, TModel, TRawResponse, TRawStream, TExtra>,
   TExtensions extends object = Record<string, never>,
+  TOwnership extends ProviderOwnership = ProviderOwnership,
 > {
   /** Stable provider runtime id. */
   readonly id: string
+  /** Which side owns the model/tool loop for this provider runtime. */
+  readonly ownership: TOwnership
   /** Bind the runtime to a provider client and optional provider-owned dependencies. */
   create(client: TClient, ...depsArg: ProviderRuntimeDepsArg<TDeps>): TRuntime & TExtensions
 }
@@ -81,7 +87,8 @@ export interface DefinedSingleTurnProviderRuntime<
   TExtra,
   TDeps,
   SingleTurnProviderRuntime<TClient, TRawResponse, TRawStream, TExtra>,
-  TExtensions
+  TExtensions,
+  'single-turn'
 > {
   /** Create lightweight framework-agnostic generation helpers. */
   helpers(...depsArg: ProviderRuntimeDepsArg<TDeps>): NativeChatHelpers<TClient>

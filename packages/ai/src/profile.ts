@@ -24,6 +24,7 @@ type AiSdkStreamRequest = Parameters<typeof aiSdkExecutor.runStream>[1]
  */
 export const aiSdkProviderRuntime = defineProviderRuntime({
   id: 'ai-sdk',
+  ownership: 'loop-owned',
   loop: {
     describeModel: extractModelInfo,
     settings: aiSdkExecutor.mapSettings,

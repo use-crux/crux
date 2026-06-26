@@ -12,6 +12,7 @@ import type {
   DefinedSingleTurnProviderRuntime,
   LoopOwnedProviderRuntime,
   LoopOwnedProviderRuntimeSpec,
+  ProviderOwnership,
   ProviderRuntimeDepsArg,
   ProviderRuntimeSpec,
   SingleTurnProviderRuntime,
@@ -34,6 +35,7 @@ import type {
  * ```ts
  * const openai = defineProviderRuntime({
  *   id: 'openai',
+ *   ownership: 'single-turn',
  *   turn: {
  *     bind: bindOpenAI,
  *     request: openAIRequest,
@@ -78,7 +80,7 @@ export function defineProviderRuntime<
  * receives only structural hooks and compiles them into the existing
  * executor runtime.
  *
- * @param spec - Provider id plus `loop.bind()` SDK mechanics.
+ * @param spec - Provider id plus loop-owned SDK mechanics.
  * @returns A frozen provider runtime.
  */
 export function defineProviderRuntime<
@@ -97,7 +99,8 @@ export function defineProviderRuntime<
   Record<string, unknown>,
   Record<string, never>,
   LoopOwnedProviderRuntime<TClient, TModel, TRawResponse, TRawStream>,
-  TExtensions
+  TExtensions,
+  'loop-owned'
 >
 
 export function defineProviderRuntime(
@@ -113,16 +116,20 @@ export function defineProviderRuntime(
   object
 > {
   const runtimeId = spec.id
-  if (isSingleTurnRuntimeSpec(spec)) {
-    const { bind, ...turnContract } = spec.turn
+  const ownership = resolveProviderOwnership(spec)
+
+  if (ownership === 'single-turn') {
+    const singleTurnSpec = spec as AnySingleTurnRuntimeSpec
+    const { bind, ...turnContract } = singleTurnSpec.turn
     const provider = defineNativeChatProvider({ ...turnContract, providerId: runtimeId })
 
     return Object.freeze({
       ...createDefinedProviderRuntime(
         runtimeId,
+        'single-turn',
         (client: unknown, ...depsArg: ProviderRuntimeDepsArg<Record<string, unknown>>) =>
           provider.createFor(bind, ...depsArg)(client),
-        spec.extend,
+        singleTurnSpec.extend,
       ),
       helpers(...depsArg: ProviderRuntimeDepsArg<Record<string, unknown>>) {
         return provider.helpers(bind, ...depsArg)
@@ -130,8 +137,7 @@ export function defineProviderRuntime(
     })
   }
 
-  if (isLoopOwnedRuntimeSpec(spec)) return createLoopOwnedProviderRuntime(spec)
-  throw new Error(`Provider runtime "${runtimeId}" must define either turn or loop mechanics.`)
+  return createLoopOwnedProviderRuntime(spec as AnyLoopOwnedRuntimeSpec)
 }
 
 type AnySingleTurnRuntimeSpec = SingleTurnProviderRuntimeSpec<
@@ -147,10 +153,41 @@ type AnySingleTurnRuntimeSpec = SingleTurnProviderRuntimeSpec<
 
 type AnyLoopOwnedRuntimeSpec = LoopOwnedProviderRuntimeSpec<unknown, unknown, unknown, unknown, object>
 
-function isSingleTurnRuntimeSpec(spec: ProviderRuntimeSpec): spec is AnySingleTurnRuntimeSpec {
-  return 'turn' in spec && spec.turn !== undefined
+interface RuntimeSpecShape {
+  readonly id: string
+  readonly ownership?: unknown
+  readonly turn?: unknown
+  readonly loop?: unknown
 }
 
-function isLoopOwnedRuntimeSpec(spec: ProviderRuntimeSpec): spec is AnyLoopOwnedRuntimeSpec {
-  return 'loop' in spec && spec.loop !== undefined
+/**
+ * Resolve the ownership model once at the public boundary.
+ *
+ * Specs authored before the ownership field was added still infer cleanly from
+ * their mechanics. Explicit specs get a clear runtime error when loose
+ * JavaScript or casts provide a mismatched discriminant.
+ */
+function resolveProviderOwnership(spec: ProviderRuntimeSpec): ProviderOwnership {
+  const shape = spec as RuntimeSpecShape
+  const hasTurn = shape.turn !== undefined
+  const hasLoop = shape.loop !== undefined
+
+  if (hasTurn === hasLoop) {
+    throw new Error(`Provider runtime "${shape.id}" must define exactly one of turn or loop mechanics.`)
+  }
+
+  const inferred: ProviderOwnership = hasTurn ? 'single-turn' : 'loop-owned'
+  if (shape.ownership === undefined) return inferred
+
+  if (shape.ownership !== 'single-turn' && shape.ownership !== 'loop-owned') {
+    throw new Error(`Provider runtime "${shape.id}" declares unknown ownership "${String(shape.ownership)}".`)
+  }
+
+  if (shape.ownership !== inferred) {
+    throw new Error(
+      `Provider runtime "${shape.id}" declares ownership "${shape.ownership}" but defines ${inferred} mechanics.`,
+    )
+  }
+
+  return shape.ownership
 }

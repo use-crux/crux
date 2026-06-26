@@ -13,6 +13,7 @@ import type {
   ExecutorStreamHandle,
   NativeProviderPort,
   LoopOwnedRuntimeContract,
+  ProviderOwnership,
   SingleTurnRuntimeContract,
   StructuredAttempt,
 } from '@crux/core/adapter'
@@ -90,6 +91,7 @@ const turnContract = {
 
 const singleProvider = defineProviderRuntime({
   id: 'typed-single',
+  ownership: 'single-turn',
   turn: turnContract,
   extend: ({ client, runtime }) => ({
     embedding(input: string) {
@@ -97,6 +99,9 @@ const singleProvider = defineProviderRuntime({
     },
   }),
 })
+
+expectTypeOf(singleProvider.ownership).toEqualTypeOf<'single-turn'>()
+expectTypeOf(singleProvider.ownership).toMatchTypeOf<ProviderOwnership>()
 
 const singleRuntime = singleProvider.create(singleClient, { tenant: 'acme' })
 expectTypeOf(singleRuntime).toMatchTypeOf<
@@ -160,6 +165,40 @@ const loopContract = {
 
 const loopProvider = defineProviderRuntime({
   id: 'typed-loop',
+  ownership: 'loop-owned',
+  loop: loopContract,
+})
+
+expectTypeOf(loopProvider.ownership).toEqualTypeOf<'loop-owned'>()
+expectTypeOf(loopProvider.ownership).toMatchTypeOf<ProviderOwnership>()
+
+// @ts-expect-error - single-turn ownership requires turn mechanics, not loop mechanics.
+defineProviderRuntime({
+  id: 'typed-single-ownership-mismatch',
+  ownership: 'single-turn',
+  loop: loopContract,
+})
+
+// @ts-expect-error - loop-owned ownership requires loop mechanics, not turn mechanics.
+defineProviderRuntime({
+  id: 'typed-loop-ownership-mismatch',
+  ownership: 'loop-owned',
+  turn: turnContract,
+})
+
+defineProviderRuntime({
+  id: 'typed-single-mutual-exclusion',
+  ownership: 'single-turn',
+  turn: turnContract,
+  // @ts-expect-error - single-turn ownership still forbids loop mechanics.
+  loop: loopContract,
+})
+
+defineProviderRuntime({
+  id: 'typed-loop-mutual-exclusion',
+  ownership: 'loop-owned',
+  // @ts-expect-error - loop-owned ownership still forbids turn mechanics.
+  turn: turnContract,
   loop: loopContract,
 })
 

@@ -20,7 +20,7 @@ Crux adapters translate between the SDK-agnostic prompt system and a specific AI
 4. **Call** the SDK
 5. **Normalize** metadata for devtools, evals, and quality experiments
 
-Step 3 is identical across all adapters. Provider runtimes compile into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. If your SDK has ordinary chat text/structured/stream calls, start with `defineProviderRuntime({ turn })`; use the lower-level shared orchestration functions only when you are writing a bespoke runtime compiler.
+Step 3 is identical across all adapters. Provider runtimes compile into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. If your SDK has ordinary chat text/structured/stream calls, start with `defineProviderRuntime({ ownership: 'single-turn', turn })`; use the lower-level shared orchestration functions only when you are writing a bespoke runtime compiler.
 
 ## Fast path: native chat providers
 
@@ -36,6 +36,7 @@ const bindAcme = (client: AcmeClient) => ({
 
 export const acmeProviderRuntime = defineProviderRuntime({
   id: 'acme',
+  ownership: 'single-turn',
   turn: {
     bind: bindAcme,
     request: acmeRequest,
@@ -148,6 +149,7 @@ import { defineProviderRuntime } from '@crux/core/adapter'
 
 export const acmeSdkRuntime = defineProviderRuntime({
   id: 'acme-sdk',
+  ownership: 'loop-owned',
   loop: {
     describeModel: (model: AcmeModel) => ({ provider: model.provider, modelId: model.id }),
     settings: acmeSdkSettings,

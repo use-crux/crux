@@ -4,12 +4,12 @@
  * Shared infrastructure for building AI provider adapters. Public provider
  * authors should start with provider runtimes:
  *
- * - {@link defineProviderRuntime} with `turn` — for raw provider SDKs
- *   without a tool loop (Anthropic, OpenAI, Google). Core drives the loop one
- *   provider call at a time.
- * - {@link defineProviderRuntime} with `loop` — for orchestrating SDKs that
- *   own their own multi-step loop (the Vercel AI SDK). The SDK drives; core
- *   steers each step through a `StepObserver`.
+ * - {@link defineProviderRuntime} with `ownership: 'single-turn'` and `turn`
+ *   — for raw provider SDKs without a tool loop (Anthropic, OpenAI, Google).
+ *   Core drives the loop one provider call at a time.
+ * - {@link defineProviderRuntime} with `ownership: 'loop-owned'` and `loop`
+ *   — for orchestrating SDKs that own their own multi-step loop (the Vercel
+ *   AI SDK). The SDK drives; core steers each step through a `StepObserver`.
  *
  * Both dialects drive the same per-call sessions — the `ToolLifecycle` session
  * from `@crux/core/adapter/tool` (middleware, approvals, instrumentation,
@@ -51,6 +51,7 @@ export type {
   LoopOwnedProviderRuntimeSpec,
   LoopOwnedRuntimeBindContext,
   LoopOwnedRuntimeContract,
+  ProviderOwnership,
   ProviderRuntimeKind,
   ProviderRuntimeExtension,
   ProviderRuntimeExtensionCollisionKeys,

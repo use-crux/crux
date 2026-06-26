@@ -17,6 +17,7 @@ export type {
   DefinedSingleTurnProviderRuntime,
   LoopOwnedProviderRuntime,
   ProviderGenerationRuntime,
+  ProviderOwnership,
   ProviderRuntimeDepsArg,
   ProviderRuntimeKind,
   SingleTurnProviderRuntime,

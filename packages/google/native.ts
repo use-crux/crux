@@ -79,6 +79,7 @@ const googleRuntimeHooks = {
  */
 export const googleProviderRuntime = defineProviderRuntime({
   id: 'google',
+  ownership: 'single-turn',
   turn: googleRuntimeHooks,
 })
 

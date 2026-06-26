@@ -5,7 +5,7 @@
  * @module
  */
 
-import type { DefinedProviderRuntime, ProviderRuntimeDepsArg } from './types'
+import type { DefinedProviderRuntime, ProviderOwnership, ProviderRuntimeDepsArg } from './types'
 
 /**
  * Create the frozen public runtime wrapper around a concrete runtime factory.
@@ -23,15 +23,18 @@ export function createDefinedProviderRuntime<
   TDeps extends Record<string, unknown>,
   TRuntime extends object,
   TExtensions extends object,
+  TOwnership extends ProviderOwnership,
 >(
   id: string,
+  ownership: TOwnership,
   createRuntime: (client: TClient, ...depsArg: ProviderRuntimeDepsArg<TDeps>) => TRuntime,
   extend:
     | ((ctx: { readonly id: string; readonly client: TClient; readonly runtime: TRuntime }) => TExtensions)
     | undefined,
-): DefinedProviderRuntime<TClient, TModel, TRawResponse, TRawStream, TExtra, TDeps, TRuntime, TExtensions> {
+): DefinedProviderRuntime<TClient, TModel, TRawResponse, TRawStream, TExtra, TDeps, TRuntime, TExtensions, TOwnership> {
   return Object.freeze({
     id,
+    ownership,
     create(client: TClient, ...depsArg: ProviderRuntimeDepsArg<TDeps>) {
       const runtime = createRuntime(client, ...depsArg)
       if (!extend) return runtime as TRuntime & TExtensions

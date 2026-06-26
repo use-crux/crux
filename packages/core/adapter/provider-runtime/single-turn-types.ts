@@ -41,6 +41,14 @@ export interface SingleTurnProviderRuntimeSpec<
 > {
   /** Stable id used in metadata, observability, and provider matching. */
   readonly id: string
+  /**
+   * Declares that Crux owns the model/tool loop and the provider SDK handles
+   * one raw model turn at a time.
+   *
+   * Existing specs may omit this during migration; core infers
+   * `'single-turn'` from the `turn` contract.
+   */
+  readonly ownership?: 'single-turn'
   /** Single-turn provider SDK mechanics. */
   readonly turn: SingleTurnRuntimeContract<TClient, TRequest, TRawResponse, TRawStream, TExtra, TDeps, TProviderMessage>
   /** Provider-specific capabilities to expose next to generation. */

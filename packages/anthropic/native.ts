@@ -85,6 +85,7 @@ const anthropicRuntimeHooks = {
  */
 export const anthropicProviderRuntime = defineProviderRuntime({
   id: 'anthropic',
+  ownership: 'single-turn',
   turn: anthropicRuntimeHooks,
 })
 
