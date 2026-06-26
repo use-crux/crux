@@ -1,8 +1,15 @@
 {
   "name": "@use-crux/indexer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Project Index and source-intelligence workers for Crux — indexing, extensions, and source resolution.",
-  "keywords": ["ai", "rag", "indexing", "source-intelligence", "ast", "crux"],
+  "keywords": [
+    "ai",
+    "rag",
+    "indexing",
+    "source-intelligence",
+    "ast",
+    "crux"
+  ],
   "author": "Crux",
   "license": "Apache-2.0",
   "private": true,

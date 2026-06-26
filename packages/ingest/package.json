@@ -1,8 +1,16 @@
 {
   "name": "@use-crux/ingest",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Source loaders for Crux — turn text, files, and URLs into IngestDocument streams for indexing.",
-  "keywords": ["ai", "rag", "ingest", "loaders", "documents", "indexing", "crux"],
+  "keywords": [
+    "ai",
+    "rag",
+    "ingest",
+    "loaders",
+    "documents",
+    "indexing",
+    "crux"
+  ],
   "author": "Crux",
   "license": "Apache-2.0",
   "private": true,
