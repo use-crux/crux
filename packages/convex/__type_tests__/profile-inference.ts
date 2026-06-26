@@ -1,11 +1,12 @@
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
+import { Agent as ConvexAgentBase } from '@convex-dev/agent'
 import type { CruxStore } from '@crux/core/store'
 import type { ToolDef } from '@crux/core/tools'
 import * as convexRoot from '../index'
-import { createCruxConvex, prompt, type ConvexCtxPort } from '../index'
-import { convexAgent } from '../agent'
+import { createConvexRuntimeBridge, createCruxConvex, prompt, type ConvexCtxPort } from '../index'
+import { Agent, convexAgent } from '../agent'
 import { context } from '../context'
 import { memory, recentMessages, workingState } from '../memory'
 import { skill } from '../skill'
@@ -248,6 +249,33 @@ const tenantRunResult = tenantProfile.run(tenantCtx, { threadId: 'thread-1', att
 })
 
 expectTypeOf(tenantRunResult).toEqualTypeOf<Promise<{ ok: true }>>()
+
+const runtimeBridge = createConvexRuntimeBridge<TenantConvexCtx>({
+  component: { crux: true } as never,
+})
+
+const runtimeBridgeResult = runtimeBridge.run(tenantCtx, { threadId: 'thread-1', attempt: 1 }, (scope) => {
+  expectTypeOf(scope.ctx.tenantId).toEqualTypeOf<string>()
+  expectTypeOf(scope.target?.attempt).toEqualTypeOf<number | undefined>()
+  expectTypeOf(scope.store).toEqualTypeOf<CruxStore>()
+  return { runtime: true as const }
+})
+
+expectTypeOf(runtimeBridgeResult).toEqualTypeOf<Promise<{ runtime: true }>>()
+
+type CruxAgentGenerateTextArgs = Parameters<Agent<TenantConvexCtx>['generateText']>
+type ConvexAgentGenerateTextArgs = Parameters<ConvexAgentBase<TenantConvexCtx>['generateText']>
+type CruxAgentStreamTextArgs = Parameters<Agent<TenantConvexCtx>['streamText']>
+type ConvexAgentStreamTextArgs = Parameters<ConvexAgentBase<TenantConvexCtx>['streamText']>
+type CruxAgentGenerateObjectArgs = Parameters<Agent<TenantConvexCtx>['generateObject']>
+type ConvexAgentGenerateObjectArgs = Parameters<ConvexAgentBase<TenantConvexCtx>['generateObject']>
+type CruxAgentStreamObjectArgs = Parameters<Agent<TenantConvexCtx>['streamObject']>
+type ConvexAgentStreamObjectArgs = Parameters<ConvexAgentBase<TenantConvexCtx>['streamObject']>
+
+expectTypeOf<CruxAgentGenerateTextArgs>().toEqualTypeOf<ConvexAgentGenerateTextArgs>()
+expectTypeOf<CruxAgentStreamTextArgs>().toEqualTypeOf<ConvexAgentStreamTextArgs>()
+expectTypeOf<CruxAgentGenerateObjectArgs>().toEqualTypeOf<ConvexAgentGenerateObjectArgs>()
+expectTypeOf<CruxAgentStreamObjectArgs>().toEqualTypeOf<ConvexAgentStreamObjectArgs>()
 
 agent.generateText(
   {},

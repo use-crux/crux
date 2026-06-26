@@ -35,14 +35,15 @@ import { tool } from '@crux/convex/tools'
 
 The mirrored subpaths intentionally stay close to `@crux/core`:
 
-| Import                 | Classification       | Notes                                                                                                            |
-| ---------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `@crux/convex/context` | Identical re-export  | Re-exports core context helpers.                                                                                 |
-| `@crux/convex/skill`   | Identical re-export  | Re-exports core skill helpers.                                                                                   |
-| `@crux/convex/memory`  | Convex-bound drop-in | Same block API; `memory()` late-binds the active Convex Crux store and defaults to the current thread namespace. |
-| `@crux/convex/tools`   | Convex-bound drop-in | Same tool authoring shape; `execute()` receives Convex runtime metadata.                                         |
-| `convexAgent()`        | Convex-only API      | Wraps Convex Agent and resolves a Crux prompt per turn.                                                          |
-| `createCruxConvex()`   | Convex-only API      | Creates a reusable Convex runtime profile from `components.crux` and `components.agent`.                         |
+| Import                        | Classification       | Notes                                                                                                            |
+| ----------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `@crux/convex/context`        | Identical re-export  | Re-exports core context helpers.                                                                                 |
+| `@crux/convex/skill`          | Identical re-export  | Re-exports core skill helpers.                                                                                   |
+| `@crux/convex/memory`         | Convex-bound drop-in | Same block API; `memory()` late-binds the active Convex Crux store and defaults to the current thread namespace. |
+| `@crux/convex/tools`          | Convex-bound drop-in | Same tool authoring shape; `execute()` receives Convex runtime metadata.                                         |
+| `convexAgent()`               | Convex-only API      | Profile-backed helper that resolves a Crux prompt per Convex Agent turn.                                         |
+| `createCruxConvex()`          | Convex-only API      | Creates a reusable Convex runtime profile from `components.crux` and `components.agent`.                         |
+| `createConvexRuntimeBridge()` | Convex-only API      | Creates the Crux-in-Convex runtime bridge without the Convex Agent profile helper.                               |
 
 Avoid split imports inside Convex files when a Convex profile exists. For example, import memory blocks from `@crux/convex/memory`, not `memory` from `@crux/convex/memory` plus `recentMessages` from `@crux/core/memory`.
 
@@ -70,7 +71,7 @@ The profile exposes:
 
 - `store(ctx)` for a request-scoped `CruxStore`
 - `run(ctx, target, fn)` for lower-level work with the request-scoped store/runtime bound
-- `convexAgent(config)` for the high-level Convex Agent wrapper without repeating component wiring
+- `convexAgent(config)` for profile-backed Crux prompt lifecycle wiring without repeating component wiring
 - `bridge(http, cruxConfig, options?)` for devtools bridge setup through the same store path
 
 Use `run()` when app code needs lower-level Crux work inside a Convex action:
@@ -95,7 +96,26 @@ export const crux = createCruxConvex({
 })
 ```
 
-Normal agent calls through `convexAgent()` install the runtime automatically.
+Profile-backed agent calls through `convexAgent()` install the runtime automatically.
+
+### `createConvexRuntimeBridge(options)`
+
+Create only the Crux-in-Convex runtime bridge: request-scoped store creation, runtime binding, namespace defaults, and Runtime Bridge HTTP setup. Use this when you want normal Convex Agent APIs or custom Convex actions to share Crux runtime plumbing without using the profile-backed `convexAgent()` helper.
+
+```ts
+import { createConvexRuntimeBridge } from '@crux/convex'
+import { components } from './_generated/api'
+
+export const runtime = createConvexRuntimeBridge({
+  component: components.crux,
+})
+
+await runtime.run(ctx, { threadId }, async ({ store }) => {
+  await store.set(`blackboard:${threadId}`, { status: 'ready' })
+})
+```
+
+If you also want the profile-backed Crux prompt lifecycle, prefer `createCruxConvex()`. Its `store()`, `run()`, and `bridge()` methods delegate to this lower-level runtime bridge.
 
 ### `cruxConvexStore(config)`
 
@@ -258,7 +278,7 @@ The flow handle exposes `.action`, `.handler`, `.args`, and `.signal()`. Public 
 
 ### `createContextHandler(config)`
 
-Low-level context handler for manually assembled [Convex Agent SDK](https://github.com/get-convex/agent) instances. New Crux-native Convex agents should use `crux.convexAgent({ prompt, prepare })`; that path resolves the prompt, memory, skills, tools, and thread context together.
+Low-level context handler for manually assembled [Convex Agent SDK](https://github.com/get-convex/agent) instances. Profile-backed Crux prompt agents should use `crux.convexAgent({ prompt, prepare })`; that path resolves the prompt, memory, skills, tools, and thread context together. Normal Convex Agent-shaped code can use `Agent`, `convexTools()`, or this handler directly.
 
 Use `createContextHandler()` only when you intentionally bypass the high-level wrapper and need to adapt already-expanded Crux `Context` objects into a Convex Agent `contextHandler`.
 
@@ -332,9 +352,24 @@ Import Convex Agent integrations from `@crux/convex/agent`:
 import { Agent, convexAgent, createAgent, createTool, convexTools, wrapConvexTool } from '@crux/convex/agent'
 ```
 
-Use `convexAgent()` for new Crux-native Convex Agent code. It accepts a Crux prompt, resolves that prompt on every turn, registers resolved tools with Convex Agent, captures memory after completed turns, and persists activated skills internally through the active Convex Crux store.
+Use `Agent` when you want the normal `@convex-dev/agent` constructor and method shape with Crux tool/runtime propagation and observability. It subclasses Convex Agent, wraps tools passed through `tools`, and forwards `generateText()`, `streamText()`, `generateObject()`, and `streamObject()` arguments to the upstream Agent.
 
-`convexAgent()` is intentionally Convex-Agent-compatible public DX, not a second Crux agent dialect. The wrapper keeps calls shaped like Convex Agent (`generateText()`, `streamText()`, and `continueThread()`), while an internal Crux-owned lifecycle binds the request-scoped store, runs `prepare()`, resolves prompt `use[]`, adapts Crux and direct Convex Agent tools, persists skills, captures memory, and records observability around the turn.
+```ts
+import { Agent, convexTools } from '@crux/convex/agent'
+
+const resolved = await supportPrompt.resolve({ input })
+
+const support = new Agent(components.agent, {
+  name: 'Support',
+  languageModel: model,
+  instructions: resolved.system,
+  tools: convexTools(resolved.tools),
+})
+```
+
+Use `convexAgent()` or `crux.convexAgent()` when you want Crux to own the profile-backed prompt lifecycle. It accepts a Crux prompt, resolves that prompt on every turn, registers resolved tools with Convex Agent, captures memory after completed turns, and persists activated skills internally through the active Convex Crux store.
+
+`convexAgent()` keeps calls shaped like Convex Agent (`generateText()`, `streamText()`, and `continueThread()`), while an internal Crux-owned lifecycle binds the request-scoped store, runs `prepare()`, resolves prompt `use[]`, adapts Crux and direct Convex Agent tools, persists skills, captures memory, and records observability around the turn.
 
 Use `languageModel` for new code to match Convex Agent terminology. Existing `model` call sites remain supported as a legacy alias.
 The exported `ConvexAgentConfig` type encodes that requirement through `ConvexAgentModelConfig`, while `ConvexAgentBaseConfig` describes the non-model options for profile wrappers.

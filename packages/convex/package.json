@@ -2,7 +2,15 @@
   "name": "@crux/convex",
   "version": "0.1.0",
   "description": "Convex runtime profile for Crux — CruxStore adapter, agent integration, and React transport for Convex apps.",
-  "keywords": ["convex", "ai", "llm", "agents", "memory", "rag", "crux"],
+  "keywords": [
+    "convex",
+    "ai",
+    "llm",
+    "agents",
+    "memory",
+    "rag",
+    "crux"
+  ],
   "license": "Apache-2.0",
   "author": "Crux",
   "private": true,
@@ -48,6 +56,10 @@
     "./runtime": {
       "types": "./runtime.ts",
       "import": "./runtime.ts"
+    },
+    "./runtime-bridge": {
+      "types": "./runtime-bridge.ts",
+      "import": "./runtime-bridge.ts"
     },
     "./workspace": {
       "types": "./workspace.ts",

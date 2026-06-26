@@ -25,6 +25,13 @@ export { flushObservability, withObservabilityFlush } from './observability'
 export type { ConvexActionHandler, ConvexObservabilityFlushOptions } from './observability'
 export { setup } from './bridge'
 export type { CruxConvexBridgeHttpRouter, CruxConvexBridgeSetupOptions } from './bridge'
+export { createConvexRuntimeBridge } from './runtime-bridge'
+export type {
+  ConvexRunScope,
+  ConvexRuntimeBridge,
+  ConvexRuntimeBridgeSetupOptions,
+  CreateConvexRuntimeBridgeOptions,
+} from './runtime-bridge'
 export { createCruxConvex } from './profile'
 export type {
   CreateCruxConvexOptions,
