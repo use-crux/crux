@@ -35,6 +35,37 @@ Avoid:
 - Provider SDKs and host frameworks belong in `peerDependencies` when users should control the installed version.
 - Build outputs, generated docs artifacts, and local caches should not be committed.
 
+## Changesets
+
+Changesets are the release queue, not a per-commit log. Do not create a new
+changeset just because you are a new agent or because you made another commit.
+
+Add or update a changeset only when a change affects npm package users: public
+APIs, package exports, install behavior, CLI behavior, runtime behavior,
+published package docs, or npm release mechanics.
+
+Before creating a changeset:
+
+1. Inspect existing pending files with `ls .changeset/*.md` and read the ones
+   that are not `README.md`.
+2. If an existing changeset already describes the current PR or release theme,
+   update that file instead of adding another one. Add packages to its front
+   matter when needed, raise the bump level if the new change requires it, and
+   append a concise user-facing note.
+3. Create a new changeset only when there is no relevant pending changeset.
+4. If multiple agents are working on the same PR, one agent should own the
+   changeset. Other agents should report the package impact in their final
+   message instead of creating duplicate files.
+
+Use `patch` for compatible fixes, `minor` for new public behavior, and `major`
+for breaking changes. Because `@use-crux/*` packages are fixed together in
+Changesets config, select only the directly affected package names; the release
+PR will align the full package group.
+
+Do not add changesets for tests-only changes, internal docs-only edits, or
+refactors with no package-user impact. In final responses, state either the
+changeset file you added/updated or that no changeset was needed.
+
 ## Build Commands
 
 Prefer root `make` targets for repository workflows:
