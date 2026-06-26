@@ -6,12 +6,33 @@ import { describe, expect, it } from 'vitest'
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 
 /**
- * Reads a repository Markdown or MDX document for release-readiness contract
+ * Reads a repository text artifact for release-readiness contract
  * checks. These tests keep the beta docs aligned with the executable gate
  * instead of letting readiness notes drift from CI.
  */
-function readRepoDoc(path: string): Promise<string> {
-  return readFile(join(repoRoot, path), 'utf8')
+async function readRepoDoc(path: string): Promise<string> {
+  try {
+    return await readFile(join(repoRoot, path), 'utf8')
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      throw new Error(
+        `Missing required native AST readiness artifact: ${path}. If this passes locally but fails in CI, verify the file is tracked and included with the readiness test.`,
+      )
+    }
+    throw error
+  }
+}
+
+/**
+ * Reads a JSON artifact and preserves the expected shape for command contract
+ * assertions.
+ */
+async function readRepoJson<T>(path: string): Promise<T> {
+  return JSON.parse(await readRepoDoc(path)) as T
+}
+
+type RootPackageJson = {
+  readonly scripts?: Readonly<Record<string, string>>
 }
 
 describe('native AST beta readiness docs', () => {
@@ -44,5 +65,23 @@ describe('native AST beta readiness docs', () => {
     expect(indexerReference).toContain('Node can still start')
     expect(configReference).toContain('native AST beta gate')
     expect(projectIndexReference).toContain('fallback or Node-start diagnostics')
+  })
+
+  it('pins the CI parity gate and native AST benchmark entrypoint', async () => {
+    const [workflow, packageJson, benchmarkScript, readiness] = await Promise.all([
+      readRepoDoc('.github/workflows/ci.yml'),
+      readRepoJson<RootPackageJson>('package.json'),
+      readRepoDoc('scripts/native-ast-benchmark.mjs'),
+      readRepoDoc('docs/NATIVE_AST_BETA_READINESS.md'),
+    ])
+
+    expect(workflow).toMatch(/name: Native AST parity gate\s+run: pnpm test:native-ast-parity/)
+    expect(packageJson.scripts?.['test:native-ast-parity']).toBe('node ./scripts/native-ast-parity-gate.mjs')
+    expect(packageJson.scripts?.['benchmark:native-ast']).toBe('node ./scripts/native-ast-benchmark.mjs')
+    expect(benchmarkScript).toContain('CRUX_INDEXER_BENCH_ROOT')
+    expect(benchmarkScript).toContain('CRUX_INDEXER_BENCH_NATIVE_AST')
+    expect(benchmarkScript).toContain('CRUX_INDEXER_BENCH_CLEAR_CACHE')
+    expect(benchmarkScript).toContain('go test')
+    expect(readiness).toContain('pnpm benchmark:native-ast')
   })
 })
