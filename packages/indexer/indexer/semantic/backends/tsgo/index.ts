@@ -22,3 +22,5 @@ export { createTsgoSemanticCompilerHost, type TsgoSemanticCompilerHost } from '.
 export { createTsgoCompilerView, type TsgoSemanticCompilerView } from './compiler-view'
 export { createTsgoProjectConfig, type TsgoProjectConfig } from './project-config'
 export { createTsgoTypeScriptSourceCache, type TsgoTypeScriptSourceCache } from './source-cache'
+export { createTsgoNativeSourceLookup, type TsgoNativeSourceLookup } from './source-lookup'
+export { createTsgoSemanticSyntaxView, type TsgoSemanticSyntaxView } from './syntax-view'
