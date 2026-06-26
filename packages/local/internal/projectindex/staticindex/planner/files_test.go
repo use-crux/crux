@@ -69,7 +69,7 @@ func TestProjectStaticIndexFileSelectionOnlyClassifiesStaticSourceCandidates(t *
 	rootFixture := writeStaticIndexPlanCacheFixtureFile(t, root, "__fixtures__/fixture.ts", "export const fixture = prompt({ id: 'fixture' })\n")
 	rootTest := writeStaticIndexPlanCacheFixtureFile(t, root, "__tests__/fixture.ts", "export const fixture = prompt({ id: 'test' })\n")
 	nestedCache := writeStaticIndexPlanCacheFixtureFile(t, root, "packages/app/.crux/cache/index/static.ts", "export const cached = prompt({ id: 'cache' })\n")
-
+	tempBuild := writeStaticIndexPlanCacheFixtureFile(t, root, ".tmp/npm-build/ts/packages/core/writer.js", "export const writer = prompt({ id: 'tmp' })\n")
 	selection, err := fileSelection(root, "")
 	if err != nil {
 		t.Fatalf("fileSelection error = %v", err)
@@ -88,6 +88,9 @@ func TestProjectStaticIndexFileSelectionOnlyClassifiesStaticSourceCandidates(t *
 	}
 	if slices.Contains(selection.PrimaryFiles, nestedCache) {
 		t.Fatalf("primary files included nested cache file %s", nestedCache)
+	}
+	if slices.Contains(selection.PrimaryFiles, tempBuild) {
+		t.Fatalf("primary files included temporary build output %s", tempBuild)
 	}
 	for _, skipped := range selection.Skipped {
 		if bytes.Contains(skipped, []byte("README.md")) {

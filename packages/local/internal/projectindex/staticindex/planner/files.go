@@ -124,7 +124,7 @@ func readSample(file string, bytes int64) (string, error) {
 
 func ignoredDir(name string) bool {
 	switch name {
-	case "node_modules", ".git", ".next", ".turbo", "dist", "build", "coverage", "generated", ".venv", ".cache":
+	case "node_modules", ".git", ".next", ".turbo", ".tmp", "dist", "build", "coverage", "generated", ".venv", ".cache":
 		return true
 	default:
 		return false

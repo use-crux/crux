@@ -23,6 +23,7 @@ import {
   staticDefinitionFiles,
 } from '@crux/indexer/host/static-index'
 import { createRustOxcStaticSyntaxFrontend } from '@crux/indexer/testing/rust-oxc-frontend'
+import { canonicalStaticJson } from './indexer-static-canonical'
 
 export type StaticFrontendName = 'typescript' | 'oxc-rust'
 
@@ -53,7 +54,10 @@ export interface StaticFrontendRunResult {
 export interface StaticFileProjection {
   readonly file: string
   readonly facts: StaticExtractionProjection
-  readonly json: string
+  /** Raw JSON is retained only to make non-semantic serialization drift debuggable. */
+  readonly rawJson: string
+  /** Canonical JSON is the parity gate for static extraction facts. */
+  readonly canonicalJson: string
 }
 
 export interface StaticExtractionProjection {
@@ -96,6 +100,7 @@ export interface StaticParityResult {
   readonly files: number
   readonly matched: number
   readonly mismatchCount: number
+  readonly rawMismatchCount: number
   readonly mismatches: readonly StaticParityMismatch[]
   readonly errors: readonly StaticFileError[]
   readonly typescript: StaticExtractionTotals
@@ -152,7 +157,12 @@ export async function runStaticFrontendExtraction(options: StaticFrontendRunOpti
   try {
     for (const extracted of await extraction.extractFiles(files, { concurrency: options.concurrency ?? 8 })) {
       const facts = projectStaticExtraction(extracted)
-      projections.push({ file: extracted.file, facts, json: JSON.stringify(facts) })
+      projections.push({
+        file: extracted.file,
+        facts,
+        rawJson: JSON.stringify(facts),
+        canonicalJson: canonicalStaticJson(facts),
+      })
     }
   } catch (error) {
     errors.push({ file: '<static-extraction>', message: errorMessage(error) })
@@ -177,11 +187,15 @@ export async function compareStaticSyntaxFrontends(options: StaticParityOptions)
   const actualByFile = new Map(actual.files.map((file) => [file.file, file]))
   const mismatches: StaticParityMismatch[] = []
   let mismatchCount = 0
+  let rawMismatchCount = 0
   let matched = 0
 
   for (const expected of typescript.files) {
     const fileActual = actualByFile.get(expected.file)
-    if (fileActual && fileActual.json === expected.json) {
+    if (fileActual?.rawJson !== expected.rawJson) {
+      rawMismatchCount += 1
+    }
+    if (fileActual && fileActual.canonicalJson === expected.canonicalJson) {
       matched += 1
       continue
     }
@@ -202,6 +216,7 @@ export async function compareStaticSyntaxFrontends(options: StaticParityOptions)
     files: files.length,
     matched,
     mismatchCount,
+    rawMismatchCount,
     mismatches,
     errors: [...typescript.errors, ...actual.errors],
     typescript: typescript.totals,
@@ -229,7 +244,7 @@ function changedFields(
   actual: StaticExtractionProjection,
 ): readonly StaticProjectionField[] {
   return (['definitions', 'relations', 'diagnostics', 'dependencies'] as const).filter(
-    (field) => JSON.stringify(typescript[field]) !== JSON.stringify(actual[field]),
+    (field) => canonicalStaticJson(typescript[field]) !== canonicalStaticJson(actual[field]),
   )
 }
 

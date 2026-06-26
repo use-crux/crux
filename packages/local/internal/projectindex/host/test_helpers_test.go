@@ -31,7 +31,16 @@ func testBundleOptions(projectScriptPath string) BundleOptions {
 }
 
 func testEmbeddedScriptPath(name string) string {
-	return filepath.Join("..", "..", "server", "embed", name+".mjs")
+	return filepath.Join("..", "..", "assets", "embed", name+".mjs")
+}
+
+func TestEmbeddedScriptPathPointsToCurrentAssets(t *testing.T) {
+	for _, name := range []string{"project-indexer", "project-semantic-indexer", "project-runtime-indexer"} {
+		path := testEmbeddedScriptPath(name)
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("embedded script %s path %q is not readable: %v", name, path, err)
+		}
+	}
 }
 
 func findNodePath() (string, error) {

@@ -32,7 +32,8 @@ async function main(): Promise<void> {
     [
       `files=${result.files}`,
       `matched=${result.matched}`,
-      `mismatches=${result.mismatchCount}`,
+      `canonicalMismatches=${result.mismatchCount}`,
+      `rawMismatches=${result.rawMismatchCount}`,
       `errors=${result.errors.length}`,
     ].join(' '),
   )

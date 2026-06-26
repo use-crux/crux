@@ -8,4 +8,4 @@ package cache
 // that stale snapshot masking after restart could hide from crux dev.
 // TS-owned AST and semantic fact cache identity remain versioned in
 // @crux/indexer.
-const ProjectIndexSnapshotCacheEpoch = 17
+const ProjectIndexSnapshotCacheEpoch = 18
