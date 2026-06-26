@@ -46,6 +46,7 @@ const crux = config(launchConfig)
 const explicitObservabilityExport = {
   observability: {
     serverUrl: 'https://collector.example.com',
+    token: 'project-ingest-token',
     transport: observabilityTransport,
     delivery: {
       maxPendingDeliveries: 4,

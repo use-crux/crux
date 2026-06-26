@@ -12,13 +12,26 @@ Crux devtools are local by default. When Convex runs in the cloud, your Convex d
 Start devtools locally and expose it with a tunnel:
 
 ```bash
-crux dev
+crux dev --tunnel
 ```
 
-Then set the public URL in Convex:
+The CLI prints a remote-ingest token and stores it at `.crux/devtools/ingest-token`. Set the tunnel
+origin and token in Convex:
 
 ```bash
 npx convex env set DEVTOOLS_URL https://your-tunnel.example
+npx convex env set CRUX_DEVTOOLS_TOKEN ...
+```
+
+In `crux.config.ts`, configure observability with both values:
+
+```ts
+config({
+  observability: {
+    serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
+})
 ```
 
 ## Automatic Flush
@@ -90,15 +103,15 @@ Avoid labels like `runAction` or generated function IDs unless they are truly th
 
 ## Common Symptoms
 
-| Symptom                                | Likely cause                                      | Fix                                                                              |
-| -------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Child action appears as a separate run | Raw `ctx.runAction()` or unwrapped target action  | Use `ctx.crux.runAction()` and `@use-crux/convex/server` target                      |
-| Run stays incomplete in devtools       | Worker exited before delivery                     | Use `@use-crux/convex/server` wrappers or `flushObservability()`                     |
-| Plan flow shows incomplete generation  | Terminal child end was delayed past its deadline  | The backend folds completed child output under the suspended flow presentation   |
-| Generation stays running past timeout  | Provider/worker never delivered terminal span end | Set `timeoutMs`; core emits a terminal timeout span and backend reconciles gaps  |
-| Chat agent has tools but no generation | Raw Convex Agent import                           | Import `Agent` from `@use-crux/convex/agent`                                         |
-| Tool row shows only call ID            | Direct Convex Agent tool was not wrapped or named | Use `createTool()` from `@use-crux/convex/agent` or `wrapConvexTool(tool, { name })` |
-| Flow appears as chat root              | Flow used as generic tracing wrapper              | Keep public action/agent run as root; use flow only for actual flows             |
+| Symptom                                | Likely cause                                      | Fix                                                                                                     |
+| -------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Child action appears as a separate run | Raw `ctx.runAction()` or unwrapped target action  | Use `ctx.crux.runAction()` and `@use-crux/convex/server` target                                         |
+| Run stays incomplete in devtools       | Worker exited before delivery                     | Use `@use-crux/convex/server` wrappers or `flushObservability()`                                        |
+| Plan flow shows incomplete generation  | Terminal child end was delayed past its deadline  | The backend folds completed child output under the suspended flow presentation                          |
+| Generation stays running past timeout  | Provider/worker never delivered terminal span end | Set `timeoutMs`; core emits a terminal timeout span and backend reconciles gaps                         |
+| Chat agent has tools but no generation | Raw Convex Agent import                           | Import `Agent` from `@use-crux/convex/agent`                                                            |
+| Tool row shows only call ID            | Direct Convex Agent tool was not wrapped or named | Use `createTool()` from `@use-crux/convex/agent` or `wrapConvexTool(tool, { name })`                    |
+| Flow appears as chat root              | Flow used as generic tracing wrapper              | Keep public action/agent run as root; use flow only for actual flows                                    |
 | Bridge command has only a message      | Older peer or malformed command response          | Use current `@use-crux/convex` bridge setup so `command.error.details` carries normalized error details |
 
 ## Best Practices

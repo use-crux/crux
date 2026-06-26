@@ -112,13 +112,16 @@ Generate/stream spans follow the [OpenTelemetry GenAI semantic conventions](http
 
 ## Running alongside devtools
 
-Both local devtools and OTel can run simultaneously. Use `devtools.serverUrl` for a local server or
-tunnel, and keep production export explicit through `@use-crux/otel` or `observability` config. The
+Both local devtools and OTel can run simultaneously. Use `observability.serverUrl` for a local server
+or tunnel, and keep production export explicit through `@use-crux/otel` or observability config. The
 plugin system's fan-out semantics ensure every event reaches both configured destinations:
 
 ```ts title="crux.config.ts"
 config({
-  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // local server or tunnel only
+  observability: {
+    serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
   plugins: [withTelemetry({ serviceName: 'my-app' })],
 })
 ```
@@ -128,12 +131,12 @@ events, deliberately configured destinations.
 
 ## Options
 
-| Option          | Type                              | Default        | Description                                   |
-| --------------- | --------------------------------- | -------------- | --------------------------------------------- |
+| Option          | Type                              | Default            | Description                                   |
+| --------------- | --------------------------------- | ------------------ | --------------------------------------------- |
 | `serviceName`   | `string`                          | `'@use-crux/otel'` | Tracer name / service identifier              |
-| `recordContent` | `boolean`                         | `false`        | Include prompt content in span attributes     |
-| `attributes`    | `Record<string, string>`          | —              | Custom attributes on every span               |
-| `exporter`      | `UrlExporter \| CallbackExporter` | —              | Export strategy (omit for standard OTel path) |
+| `recordContent` | `boolean`                         | `false`            | Include prompt content in span attributes     |
+| `attributes`    | `Record<string, string>`          | —                  | Custom attributes on every span               |
+| `exporter`      | `UrlExporter \| CallbackExporter` | —                  | Export strategy (omit for standard OTel path) |
 
 ## Next steps
 

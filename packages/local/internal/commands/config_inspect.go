@@ -250,6 +250,7 @@ type configExperimentalIndexerInspect struct {
 type configObservabilityInspect struct {
 	Enabled   configSetting `json:"enabled"`
 	ServerURL configSetting `json:"serverUrl"`
+	Token     configSetting `json:"token"`
 	Transport configSetting `json:"transport"`
 }
 
@@ -360,6 +361,7 @@ func printConfigInspect(io *output.IO, raw json.RawMessage) error {
 	printConfigDomain(io, "observability:", []configRow{
 		settingRow(io, "enabled", model.Observability.Enabled),
 		settingRow(io, "serverUrl", model.Observability.ServerURL),
+		settingRow(io, "token", model.Observability.Token),
 		settingRow(io, "transport", model.Observability.Transport),
 	})
 

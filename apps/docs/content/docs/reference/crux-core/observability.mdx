@@ -53,17 +53,17 @@ Runtime bridge and eval-runner failures can happen outside a normal span. Those 
 
 ## Exports
 
-| Export                              | Purpose                           |
-| ----------------------------------- | --------------------------------- |
-| `CruxGraphRecordSchema`             | Zod schema for one graph record   |
-| `CruxGraphRecordBatchSchema`        | Zod schema for a batch of records |
-| `CRUX_OBSERVABILITY_SCHEMA_VERSION` | Current graph schema version      |
-| `createCruxRunId()`                 | Create a branded run id           |
-| `createCruxSpanId()`                | Create a branded span id          |
-| `createCruxArtifactId()`            | Create a branded artifact id      |
+| Export                              | Purpose                                                                |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| `CruxGraphRecordSchema`             | Zod schema for one graph record                                        |
+| `CruxGraphRecordBatchSchema`        | Zod schema for a batch of records                                      |
+| `CRUX_OBSERVABILITY_SCHEMA_VERSION` | Current graph schema version                                           |
+| `createCruxRunId()`                 | Create a branded run id                                                |
+| `createCruxSpanId()`                | Create a branded span id                                               |
+| `createCruxArtifactId()`            | Create a branded artifact id                                           |
 | `normalizeObservedError()`          | Normalize an unknown thrown value into safe inspectable error evidence |
-| `observedErrorSummary()`            | Produce the compact terminal span/run error summary |
-| `toSafeJsonValue()`                 | Convert unknown values into bounded, redacted JSON-safe previews |
+| `observedErrorSummary()`            | Produce the compact terminal span/run error summary                    |
+| `toSafeJsonValue()`                 | Convert unknown values into bounded, redacted JSON-safe previews       |
 
 Built-in primitives use canonical names such as `generation.call`, `generation.stream`, `prompt.resolve`, `prompt.budget`, `context.predicate`, `context.resolve`, `memory.read`, `memory.write`, `retrieval.pipeline`, `retrieval.query`, `retrieval.stage`, `indexing.pipeline`, `ingest.parse`, `corpus.sync`, `embedding.call`, `cache.lookup`, `cost.record`, `compaction.run`, `eval.run`, `eval.case`, `scoring.judge`, `citation.check`, `feedback.record`, `workspace.operation`, `plan.operation`, `task.operation`, `skill.load`, `security.warning`, `routing.router`, `routing.cascade`, `fallback.attempt`, `constraint.check`, `constraint.retry`, `guardrail.run`, `agent.run`, `flow.run`, `flow.step`, `flow.suspension`, `composition.parallel`, `composition.pipeline`, `composition.consensus`, `composition.swarm`, `handoff.prepare`, `delegate.invoke`, and `tool.call`.
 
@@ -71,20 +71,20 @@ Custom edge types and artifact kinds must use the `custom.*` namespace. Unknown 
 
 Common detail artifacts use stable kinds so `RunDetail.inspection` can route them without UI-specific parsing:
 
-| Artifact kind | Primary payload |
-| --- | --- |
-| `context.contribution` | Context inclusion state, source, primitive kind, priority, tokens, cache status, exclusion reason, segmented static/dynamic text, and contributed tool names in `injectedTools`. |
-| `prompt.budget` | Prompt token budget totals and dropped context contribution previews. |
-| `retrieval.hits` | Query, limit, returned hits, hit ranks, source/chunk ids, scores, and pipeline stage summaries. |
-| `citation.report` / `score.report` | Grounding markers, optional output anchors (`start`, `end`, `outputQuote`), score verdicts, judge rationales, and pass/fail detail. |
-| `composition.report` | Parallel branches, pipeline stages, consensus votes, or swarm handoff path. |
-| `handoff.payload` / `delegate.report` | Transfer contract data, hop metadata, input/output sizes, and delegate result preview. |
-| `constraint.report` / `guardrail.report` | Constraint attempts/retries and guardrail action reports with before/after previews when available. |
-| `routing.report` / `cache.report` | Router/cascade/fallback choices, full cascade tier ladders including skipped/not-reached tiers, evaluator notes/confidence/budgets, semantic cache hits/writes, and saved work. |
-| `compaction.report` | Before/after token counts and summary previews. |
-| `memory.snapshot` / `memory.recall` / `memory.diff` | Memory state snapshots, recalled block previews (`blockKind`, `key`, `preview`, `score`), and before/after write summaries with added/removed block summaries. |
-| `embedding.report` / `indexing.report` / `ingest.report` / `corpus.report` | Embedding shape/cache metrics, indexing totals/stage counts, loader status, and corpus source ledger summaries. |
-| `security.report` | Prompt-injection warning severity, pattern, field/location, action, and bounded preview. |
+| Artifact kind                                                              | Primary payload                                                                                                                                                                  |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `context.contribution`                                                     | Context inclusion state, source, primitive kind, priority, tokens, cache status, exclusion reason, segmented static/dynamic text, and contributed tool names in `injectedTools`. |
+| `prompt.budget`                                                            | Prompt token budget totals and dropped context contribution previews.                                                                                                            |
+| `retrieval.hits`                                                           | Query, limit, returned hits, hit ranks, source/chunk ids, scores, and pipeline stage summaries.                                                                                  |
+| `citation.report` / `score.report`                                         | Grounding markers, optional output anchors (`start`, `end`, `outputQuote`), score verdicts, judge rationales, and pass/fail detail.                                              |
+| `composition.report`                                                       | Parallel branches, pipeline stages, consensus votes, or swarm handoff path.                                                                                                      |
+| `handoff.payload` / `delegate.report`                                      | Transfer contract data, hop metadata, input/output sizes, and delegate result preview.                                                                                           |
+| `constraint.report` / `guardrail.report`                                   | Constraint attempts/retries and guardrail action reports with before/after previews when available.                                                                              |
+| `routing.report` / `cache.report`                                          | Router/cascade/fallback choices, full cascade tier ladders including skipped/not-reached tiers, evaluator notes/confidence/budgets, semantic cache hits/writes, and saved work.  |
+| `compaction.report`                                                        | Before/after token counts and summary previews.                                                                                                                                  |
+| `memory.snapshot` / `memory.recall` / `memory.diff`                        | Memory state snapshots, recalled block previews (`blockKind`, `key`, `preview`, `score`), and before/after write summaries with added/removed block summaries.                   |
+| `embedding.report` / `indexing.report` / `ingest.report` / `corpus.report` | Embedding shape/cache metrics, indexing totals/stage counts, loader status, and corpus source ledger summaries.                                                                  |
+| `security.report`                                                          | Prompt-injection warning severity, pattern, field/location, action, and bounded preview.                                                                                         |
 
 ## Runtime emitters
 
@@ -142,7 +142,7 @@ The default runtime path is non-blocking: transport failures are captured as dia
 await observe.flush({ timeoutMs: 5000 })
 ```
 
-Observability delivery is queued into batches. The first delivery starts immediately for live devtools, and later records coalesce per microtask before being sent as bounded concurrent batches. This avoids head-of-line blocking when a collector, tunnel, or Convex network hop is slow. HTTP delivery normalizes unknown preview values into JSON-safe shapes and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact does not prevent terminal lifecycle records from reaching the backend. The Go observability backend reconciles out-of-order lifecycle records by stable ids and timestamps. The runtime never blocks user code on normal emits, but `flush()` and `shutdown()` wait for pending deliveries so serverless and Convex actions can preserve span starts, ends, artifacts, and events before the worker exits.
+Observability delivery is queued into batches. The first delivery starts immediately for live devtools, and later records coalesce per microtask before being sent as bounded concurrent batches. This avoids head-of-line blocking when a collector, tunnel, or Convex network hop is slow. HTTP delivery normalizes unknown preview values into JSON-safe shapes, sends `observability.token` / `CRUX_DEVTOOLS_TOKEN` as bearer auth when configured, and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact does not prevent terminal lifecycle records from reaching the backend. The Go observability backend reconciles out-of-order lifecycle records by stable ids and timestamps. The runtime never blocks user code on normal emits, but `flush()` and `shutdown()` wait for pending deliveries so serverless and Convex actions can preserve span starts, ends, artifacts, and events before the worker exits.
 
 Convex actions can use the helpers from `@use-crux/convex`:
 

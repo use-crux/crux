@@ -106,7 +106,10 @@ export function config(config: CruxConfig): Crux {
     config.observability?.enabled !== false
       ? (config.observability?.transport ??
         (config.observability?.serverUrl
-          ? createHttpObservabilityTransport({ serverUrl: config.observability.serverUrl })
+          ? createHttpObservabilityTransport({
+              serverUrl: config.observability.serverUrl,
+              token: config.observability.token,
+            })
           : undefined))
       : undefined
   const observabilityDelivery = config.observability?.enabled !== false ? config.observability?.delivery : undefined

@@ -247,7 +247,8 @@ observability HTTP transport and flushes graph records before exit, so
 `ExperimentCell.traceIds` can resolve through `/api/observability/runs/{runId}`.
 Direct `evaluation.run()` uses the same HTTP transport when `CRUX_DEVTOOLS_URL`,
 `DEVTOOLS_URL`, or a reachable local `localhost:4400` devtools server is
-available. Offline runs may keep `traceIds` without a retained graph; clients
+available. When the URL points at a tunnel, set `CRUX_DEVTOOLS_TOKEN` as well
+so the worker can authenticate to the scoped ingest endpoint. Offline runs may keep `traceIds` without a retained graph; clients
 should render that as unavailable trace detail rather than a failed evaluation.
 A retained root trace can still have an empty compact waterfall for a
 callback-only cell that emitted no child spans; clients should expose the full

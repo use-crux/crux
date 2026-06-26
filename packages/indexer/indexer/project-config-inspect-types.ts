@@ -63,6 +63,7 @@ export interface ProjectConfigInspect {
   readonly observability: {
     readonly enabled: ProjectConfigSetting
     readonly serverUrl: ProjectConfigSetting
+    readonly token: ProjectConfigSetting
     readonly transport: ProjectConfigSetting
   }
   readonly devtools: {

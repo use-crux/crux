@@ -526,6 +526,69 @@ describe('observe runtime', () => {
     })
   })
 
+  it('preserves tokenized tunnel query params on HTTP transport endpoints', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
+    const transport = createHttpObservabilityTransport({
+      serverUrl: 'https://example.ngrok.app?t=session-token',
+      fetch: fetchImpl,
+      timeoutMs: 100,
+    })
+    setObservabilityTransport(transport)
+
+    await observe.run({ name: 'tunnel run', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.flush()
+
+    expect(fetchImpl).toHaveBeenCalled()
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://example.ngrok.app/api/observability/records?t=session-token')
+  })
+
+  it('sends bearer auth from an HTTP transport token option', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
+    const transport = createHttpObservabilityTransport({
+      serverUrl: 'https://example.ngrok.app',
+      token: 'project-ingest-token',
+      fetch: fetchImpl,
+      timeoutMs: 100,
+    })
+    setObservabilityTransport(transport)
+
+    await observe.run({ name: 'bearer run', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.flush()
+
+    expect(fetchImpl).toHaveBeenCalled()
+    expect(fetchImpl.mock.calls[0][1]?.headers).toMatchObject({
+      Authorization: 'Bearer project-ingest-token',
+    })
+  })
+
+  it('uses CRUX_DEVTOOLS_TOKEN as the default HTTP transport bearer token', async () => {
+    const previous = process.env.CRUX_DEVTOOLS_TOKEN
+    process.env.CRUX_DEVTOOLS_TOKEN = 'env-ingest-token'
+    try {
+      const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
+      const transport = createHttpObservabilityTransport({
+        serverUrl: 'https://example.ngrok.app',
+        fetch: fetchImpl,
+        timeoutMs: 100,
+      })
+      setObservabilityTransport(transport)
+
+      await observe.run({ name: 'env bearer run', rootPrimitive: 'custom.operation' }, async () => 'ok')
+      await observe.flush()
+
+      expect(fetchImpl).toHaveBeenCalled()
+      expect(fetchImpl.mock.calls[0][1]?.headers).toMatchObject({
+        Authorization: 'Bearer env-ingest-token',
+      })
+    } finally {
+      if (previous === undefined) {
+        delete process.env.CRUX_DEVTOOLS_TOKEN
+      } else {
+        process.env.CRUX_DEVTOOLS_TOKEN = previous
+      }
+    }
+  })
+
   it('retries transient HTTP ingest failures before dropping observability batches', async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()

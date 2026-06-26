@@ -12,11 +12,11 @@ Crux is split into focused packages. Everyone needs `@use-crux/core`. Pick an ad
 
 ## Quick reference
 
-| Package           | What it does                                                                                                                         | Install when                                           |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| Package               | What it does                                                                                                                         | Install when                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
 | `@use-crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, index contracts, lint contracts, runtime bridge, observability | Always — this is the base                              |
 | `@use-crux/react`     | React provider, hooks, transports, and SSE server helper                                                                             | You render Crux plans/tasks/memory in React            |
-| `@use-crux/ai`        | Vercel AI SDK adapter (`generate`, `stream`), `@use-crux/ai/agent`, and stream integration for plans/tasks                               | You use `ai` / `@ai-sdk/*`                             |
+| `@use-crux/ai`        | Vercel AI SDK adapter (`generate`, `stream`), `@use-crux/ai/agent`, and stream integration for plans/tasks                           | You use `ai` / `@ai-sdk/*`                             |
 | `@use-crux/openai`    | OpenAI SDK adapter (`createOpenAI`)                                                                                                  | You use the `openai` package directly                  |
 | `@use-crux/google`    | Google GenAI adapter (`createGoogle`)                                                                                                | You use `@google/genai`                                |
 | `@use-crux/anthropic` | Anthropic SDK adapter (`createAnthropic`)                                                                                            | You use `@anthropic-ai/sdk` directly                   |
@@ -24,14 +24,14 @@ Crux is split into focused packages. Everyone needs `@use-crux/core`. Pick an ad
 | `@use-crux/upstash`   | Upstash VectorStore, Redis DataStore adapter, compatibility stores                                                                   | You need managed vector search or Redis-backed storage |
 | `@use-crux/otel`      | OpenTelemetry spans for production observability                                                                                     | You need traces in Datadog, Honeycomb, Grafana, etc.   |
 | `@use-crux/local`     | Local Go runtime, dev server, web UI host, TUI, eval runner, index, lint, and trace services                                         | Development and debugging                              |
-| `@use-crux/devtools`  | React web devtools UI bundle                                                                                                         | Usually installed through `@use-crux/local`                |
+| `@use-crux/devtools`  | React web devtools UI bundle                                                                                                         | Usually installed through `@use-crux/local`            |
 
 ## `@use-crux/core`
 
 The base package. Contains all SDK-agnostic primitives, organized into subpath exports:
 
-| Subpath                     | Exports                                                                              |
-| --------------------------- | ------------------------------------------------------------------------------------ |
+| Subpath                         | Exports                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------ |
 | `@use-crux/core`                | `prompt`, `context`, `createPrompts`, `createContexts`, `config`, `when`, `match`    |
 | `@use-crux/core/memory`         | `memory`, `workingState`, `episodes`, `facts`, `procedures`                          |
 | `@use-crux/core/storage`        | `DataStore`, `VectorStore`, `BlobStore`, `storage`, `inMemoryStorage`                |
@@ -108,7 +108,12 @@ Supports two export paths: standard OTel TracerProvider (Node.js servers) and li
 
 ```ts
 // Only when app runtime code should send records to a known server/tunnel
-config({ devtools: { serverUrl: process.env.DEVTOOLS_URL } })
+config({
+  observability: {
+    serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
+})
 ```
 
 ```bash

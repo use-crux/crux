@@ -15,21 +15,24 @@ crux dev
 crux quality run
 ```
 
-Add `devtools` config only when application runtime code should send live records to a known local
-server, tunnel, or bridge endpoint:
+Add `observability` config only when application runtime code should send live records to a known
+local server, tunnel, or bridge endpoint:
 
 ```ts title="crux.config.ts"
 config({
-  devtools: {
+  observability: {
     serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
+  devtools: {
     bridge: true, // optional live-runtime command plane for local Node apps
   },
 })
 ```
 
 <Callout type="idea">
-  The `devtools` key is for local UI/control/tunnel/bridge behavior. Production telemetry and remote
-  collectors stay explicit through `observability` config or telemetry plugins.
+  The `devtools` key is for local UI/control/tunnel/bridge behavior. Production telemetry and remote collectors stay
+  explicit through `observability` config or telemetry plugins.
 </Callout>
 
 ## What gets instrumented
@@ -186,7 +189,7 @@ Detected injection attempts across your prompts. Pattern frequency cards (clicka
 
 ## Terminal dashboard (TUI)
 
-For a terminal-based alternative, use `crux dev --tui`. Split-pane: live traces on the left, aggregate stats on the right. Tunnel URL appears in the header bar when a tunnel is active.
+For a terminal-based alternative, use `crux dev --tui`. Split-pane: live traces on the left, aggregate stats on the right. Tunnel URL appears in the breadcrumb when a tunnel is active, and the scoped ingest token path appears as `ingest token .crux/devtools/ingest-token`.
 
 | Key       | Action                                    |
 | --------- | ----------------------------------------- |
@@ -220,7 +223,7 @@ The Go process owns the server and read models. Node.js is spawned only for boun
 
 ### The SDK
 
-Your application connects to the devtools server through `config()` or `enableDevtools()`. When `serverUrl` is set, the SDK installs the canonical observability transport, posts ordered graph record batches to `POST /api/observability/records`, and sends runtime prompt/context/tool snapshots through `POST /api/index/snapshot` to enrich the Project Index. Delivery is non-blocking, starts immediately for live span updates, can have multiple bounded HTTP deliveries in flight, and swallows failures so devtools never slow down or break application code. The Go server keeps list/dashboard/lifecycle reads on cheap run-summary paths and reserves exact graph projection for single-run inspection. Generation streams close their spans from the raw stream's completion or error signal, so stopped streams and failed streams do not stay visually running while later usage metadata is collected. In serverless runtimes, call `observe.flush()` or use the `@use-crux/convex` helpers before the action returns so queued records are not killed with the worker.
+Your application connects to the devtools server through `config()` or `enableDevtools()`. When `serverUrl` is set, the SDK installs the canonical observability transport, posts ordered graph record batches to `POST /api/observability/records`, and sends runtime prompt/context/tool snapshots through `POST /api/index/snapshot` to enrich the Project Index. Delivery is non-blocking, starts immediately for live span updates, can have multiple bounded HTTP deliveries in flight, and swallows failures so devtools never slow down or break application code. For tunneled/cloud runtimes, prefer `observability.token` or `CRUX_DEVTOOLS_TOKEN`; the Go server accepts that bearer token only on the observability ingest route. Tokenized tunnel URLs such as `https://example.ngrok.app?t=...` are still supported as `serverUrl` values for compatibility; the token is preserved on the final ingest endpoint. The Go server keeps list/dashboard/lifecycle reads on cheap run-summary paths and reserves exact graph projection for single-run inspection. Generation streams close their spans from the raw stream's completion or error signal, so stopped streams and failed streams do not stay visually running while later usage metadata is collected. In serverless runtimes, call `observe.flush()` or use the `@use-crux/convex` helpers before the action returns so queued records are not killed with the worker.
 
 The optional Runtime Bridge is the reverse command plane. With `devtools.bridge: true`, a long-lived Node runtime opens `/ws/runtime` so Go services can send typed local-dev commands such as `store.read` to the live app. Primitives register inspectable resources automatically, so devtools can ask for `memory:<id>` or `blackboard:<id>` and read the attached store instead of reconstructing state from traces. `eval.run` is also routed through the Go bridge service, using the embedded eval runner so quality persistence and observability stay on the normal eval path. Convex and serverless runtimes use framework-bound HTTP endpoints instead of long-lived sockets. Web devtools and the TUI still talk only to Go: they never call runtime peers directly.
 

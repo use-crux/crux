@@ -28,3 +28,35 @@ func TestWorkbenchBreadcrumbDevtoolsLinkIsHyperlink(t *testing.T) {
 		t.Errorf("View() does not contain OSC 8 close sequence")
 	}
 }
+
+func TestWorkbenchBreadcrumbTunnelLinkIsHyperlink(t *testing.T) {
+	const tunnelURL = "https://example.ngrok.app?t=session-token"
+	w := NewWorkbench(nil, nil, "http://localhost:4317")
+	w.SetTunnelURL(tunnelURL)
+	w.Resize(200, 30)
+
+	out := w.View()
+
+	const oscOpen = "\x1b]8;;https://example.ngrok.app?t=session-token\x07"
+	if !strings.Contains(out, oscOpen) {
+		t.Errorf("View() does not contain OSC 8 open sequence for the tunnel URL\nexpected to find %q in output", oscOpen)
+	}
+	if !strings.Contains(out, "tunnel example.ngrok.app") {
+		t.Errorf("View() does not surface compact tunnel URL label\noutput head:\n%s", head(out, 240))
+	}
+}
+
+func TestWorkbenchBreadcrumbSurfacesIngestTokenPath(t *testing.T) {
+	w := NewWorkbench(nil, nil, "http://localhost:4317")
+	w.SetIngestToken("secret-project-token", ".crux/devtools/ingest-token")
+	w.Resize(200, 30)
+
+	out := w.View()
+
+	if !strings.Contains(out, "ingest token .crux/devtools/ingest-token") {
+		t.Errorf("View() does not surface ingest token path\noutput head:\n%s", head(out, 240))
+	}
+	if strings.Contains(out, "secret-project-token") {
+		t.Errorf("View() leaks the ingest token secret\noutput head:\n%s", head(out, 240))
+	}
+}

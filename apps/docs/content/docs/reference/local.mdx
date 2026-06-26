@@ -39,6 +39,10 @@ The Go server owns HTTP, WebSocket/SSE, read models, and UI serving. If the port
 
 **Requires:** Node.js >= 24 for helper workers that import project TypeScript.
 
+On startup, `crux dev` generates or reuses a scoped observability ingest token at
+`.crux/devtools/ingest-token` and prints it as `CRUX_DEVTOOLS_TOKEN=...`. Use that token with a
+public tunnel origin when cloud runtimes need to post records back to your local server.
+
 The local HTTP API, in-process DirectClient, and WebSocket snapshot payloads share the same backend read-model registry. This keeps route parameters, query parsing, not-found handling, live invalidation messages, and initial snapshot payloads aligned between custom tooling and the embedded devtools UI.
 
 Observability and quality run lists are newest-first pages by default so live web/TUI refreshes stay responsive on large local histories. Single-run detail endpoints remain exact. Use explicit `limit`/`offset` query parameters on the HTTP list endpoints when building custom local tooling that needs a different page size.
@@ -119,12 +123,12 @@ crux config inspect --cwd packages/backend
 crux config inspect --config crux.config.ts
 ```
 
-| Flag       | Description                                                 |
-| ---------- | ----------------------------------------------------------- |
-| `--json`   | Output the full effective configuration as JSON             |
-| `--cwd`    | Project root to inspect (default: nearest config/package)   |
-| `--config` | Crux config path relative to the project root               |
-| `--name`   | Project name to include in worker resolution                |
+| Flag       | Description                                               |
+| ---------- | --------------------------------------------------------- |
+| `--json`   | Output the full effective configuration as JSON           |
+| `--cwd`    | Project root to inspect (default: nearest config/package) |
+| `--config` | Crux config path relative to the project root             |
+| `--name`   | Project name to include in worker resolution              |
 
 The view is organized by `config()` domain, in interface order:
 
@@ -134,7 +138,7 @@ The view is organized by `config()` domain, in interface order:
   `concurrency` / `timeoutMs` / `replay` (the full `QualityConfig` surface)
 - `generation:` — `autoEscape`, `securityWarnings`, and whether a `tokenizer` / `middleware` is bound
 - `indexer:` — extension `trust` mode and configured `extensions`
-- `observability:` — `enabled`, `serverUrl`, and whether a custom `transport` is bound
+- `observability:` — `enabled`, `serverUrl`, token presence, and whether a custom `transport` is bound
 - `devtools:` — `serverUrl` and whether a `bridge` is configured
 - `persistence:` — whether a global `store` is bound
 - `lint:` — selected `profile` and rule-override count
@@ -245,21 +249,21 @@ Quality is the supported evaluation CLI namespace.
 
 ### `crux quality run` flags
 
-| Flag                    | Meaning                                                                                                                                                                      |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `[id...]`               | Evaluation ids (explicit or path-derived). Unknown id → exit 2 with a nearest-match suggestion                                                                               |
-| `--case <pattern>`      | Filter cases by id/name; `*` glob; repeatable. **Demotes gates to informational**                                                                                            |
-| `--variant <name>`      | Run a variant subset; repeatable. Demotes gates unless the baseline variant is included                                                                                      |
-| `--trials <n>`          | Override trials for this run                                                                                                                                                 |
-| `--replay <mode>`       | `live` · `record-new` · `replay-strict` · `refresh` — overrides declaration/config                                                                                           |
-| `--rescore`             | Reuse cached outputs, re-run scorers/expects only (token-free judge iteration)                                                                                               |
-| `--experiment <label>`  | Grouping label stored on the record(s)                                                                                                                                       |
-| `--json`                | Write the Experiment record(s) (versioned schema) as a JSON array to stdout (bool, consistent with every other quality subcommand)                                           |
-| `--json-out <path>`     | Write the same JSON array to a file path instead of stdout                                                                                                                   |
-| `--junit <path>`        | Write JUnit XML (one testsuite per evaluation × variant; gate failures as a synthetic `gates` testcase; experimentId/configFingerprint/score means in properties)            |
-| `--ci`                  | Force plain, non-animated output and no color, even on a TTY. Pair with explicit `--replay replay-strict` for token-free CI posture                                           |
-| `--max-concurrency <n>` | Cap parallel cells across all evaluations                                                                                                                                    |
-| `--quiet` / `--verbose` | Reporter detail level                                                                                                                                                        |
+| Flag                    | Meaning                                                                                                                                                           |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `[id...]`               | Evaluation ids (explicit or path-derived). Unknown id → exit 2 with a nearest-match suggestion                                                                    |
+| `--case <pattern>`      | Filter cases by id/name; `*` glob; repeatable. **Demotes gates to informational**                                                                                 |
+| `--variant <name>`      | Run a variant subset; repeatable. Demotes gates unless the baseline variant is included                                                                           |
+| `--trials <n>`          | Override trials for this run                                                                                                                                      |
+| `--replay <mode>`       | `live` · `record-new` · `replay-strict` · `refresh` — overrides declaration/config                                                                                |
+| `--rescore`             | Reuse cached outputs, re-run scorers/expects only (token-free judge iteration)                                                                                    |
+| `--experiment <label>`  | Grouping label stored on the record(s)                                                                                                                            |
+| `--json`                | Write the Experiment record(s) (versioned schema) as a JSON array to stdout (bool, consistent with every other quality subcommand)                                |
+| `--json-out <path>`     | Write the same JSON array to a file path instead of stdout                                                                                                        |
+| `--junit <path>`        | Write JUnit XML (one testsuite per evaluation × variant; gate failures as a synthetic `gates` testcase; experimentId/configFingerprint/score means in properties) |
+| `--ci`                  | Force plain, non-animated output and no color, even on a TTY. Pair with explicit `--replay replay-strict` for token-free CI posture                               |
+| `--max-concurrency <n>` | Cap parallel cells across all evaluations                                                                                                                         |
+| `--quiet` / `--verbose` | Reporter detail level                                                                                                                                             |
 
 ### Exit codes
 

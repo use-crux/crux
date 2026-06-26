@@ -29,16 +29,25 @@ func generateSessionToken() string {
 }
 
 // requireSessionAuth gates non-loopback exposure of the dev server with a
-// session token. The token-to-cookie exchange happens transparently: any
-// request carrying a valid `?t=` token is issued an HttpOnly session cookie and
-// redirected to a clean URL, after which every REST and WebSocket call rides
-// the cookie automatically (browsers send cookies on same-host WS handshakes).
+// session token. A separate ingest token may authenticate only the canonical
+// observability records endpoint for server-to-server local dev delivery.
+// The token-to-cookie exchange happens transparently: any
+// browser request carrying a valid `?t=` token is issued an HttpOnly session
+// cookie and redirected to a clean URL, after which every REST and WebSocket
+// call rides the cookie automatically (browsers send cookies on same-host WS
+// handshakes). Protected API requests may also carry `?t=` directly, which lets
+// serverless runtimes post observability records through a tokenized tunnel URL.
 //
 // Only the data/action surfaces (`/api/`, `/ws/`) are protected. The static UI
 // shell loads without a cookie so it can bootstrap, but it cannot read any data
 // or trigger any action without a valid session.
-func requireSessionAuth(token string, next http.Handler) http.Handler {
+func requireSessionAuth(token string, ingestToken string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isObservabilityIngestRequest(r) && hasValidIngestBearer(r, ingestToken) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		if token == "" {
 			// Fail closed: a server that wanted auth but has no token must not
 			// serve protected surfaces.
@@ -55,6 +64,10 @@ func requireSessionAuth(token string, next http.Handler) http.Handler {
 		// HttpOnly cookie, then strips the token from the URL.
 		if provided := r.URL.Query().Get("t"); provided != "" {
 			if tokenMatches(token, provided) {
+				if isProtectedPath(r.URL.Path) {
+					next.ServeHTTP(w, r)
+					return
+				}
 				http.SetCookie(w, &http.Cookie{
 					Name:     sessionCookieName,
 					Value:    token,
@@ -79,8 +92,24 @@ func requireSessionAuth(token string, next http.Handler) http.Handler {
 	})
 }
 
+func isObservabilityIngestRequest(r *http.Request) bool {
+	return r.Method == http.MethodPost && r.URL.Path == "/api/observability/records"
+}
+
 func isProtectedPath(path string) bool {
 	return strings.HasPrefix(path, "/api/") || strings.HasPrefix(path, "/ws/")
+}
+
+func hasValidIngestBearer(r *http.Request, token string) bool {
+	if token == "" {
+		return false
+	}
+	header := strings.TrimSpace(r.Header.Get("Authorization"))
+	const prefix = "Bearer "
+	if !strings.HasPrefix(header, prefix) {
+		return false
+	}
+	return tokenMatches(token, strings.TrimSpace(strings.TrimPrefix(header, prefix)))
 }
 
 func hasValidSession(r *http.Request, token string) bool {

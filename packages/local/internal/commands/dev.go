@@ -233,6 +233,8 @@ func NewDevCmd() *cobra.Command {
 				return runTUI(devSrv, serverURL, port, startup, tunnelReady)
 			}
 
+			printIngestTokenHint(devSrv)
+
 			// Non-TUI: start tunnel synchronously (blocks until ready).
 			if tunnel {
 				fmt.Printf("%s Starting tunnel...\n", output.Dim.Render("*"))
@@ -282,6 +284,20 @@ func NewDevCmd() *cobra.Command {
 	return cmd
 }
 
+func printIngestTokenHint(devSrv *server.DevServer) {
+	if devSrv == nil || devSrv.IngestToken == "" {
+		return
+	}
+	suffix := ""
+	if devSrv.IngestTokenPath != "" {
+		suffix = fmt.Sprintf(" (saved at %s)", output.Fg.Render(devSrv.IngestTokenPath))
+	}
+	fmt.Printf("%s Remote observability ingest: %s%s\n",
+		output.Dim.Render("*"),
+		output.BoldCyan.Render("CRUX_DEVTOOLS_TOKEN="+devSrv.IngestToken),
+		suffix)
+}
+
 func runTUI(devSrv *server.DevServer, serverURL string, port int, startup *startupTracker, tunnelReady <-chan string) error {
 	// Server is already running (Go native) — no boot wait needed.
 	if devSrv == nil {
@@ -299,6 +315,7 @@ func runTUI(devSrv *server.DevServer, serverURL string, port int, startup *start
 		output.Accent.Render("?"),
 		output.BoldCyan.Render(serverURL),
 	)
+	printIngestTokenHint(devSrv)
 
 	// Phase 3: Launch Bubbletea TUI (server is ready, WS connected).
 	// Promotion spawns the embedded quality worker through the server-owned
@@ -317,6 +334,7 @@ func runTUI(devSrv *server.DevServer, serverURL string, port int, startup *start
 			})
 		})
 	app := tui.NewApp(serverURL, c, startup.Mode(), startup.Enabled())
+	app.SendIngestToken(devSrv.IngestToken, devSrv.IngestTokenPath)
 
 	// Mark boot as complete immediately — server is already up.
 	app.MarkBootComplete()

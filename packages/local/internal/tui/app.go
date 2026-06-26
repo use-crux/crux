@@ -56,7 +56,9 @@ type App struct {
 	bootError    string
 	bootComplete bool
 
-	tunnelURL string
+	tunnelURL       string
+	ingestToken     string
+	ingestTokenPath string
 
 	startupMode    string
 	startupDebug   bool
@@ -112,6 +114,9 @@ func (a *App) SendBootLog(stream, text string)  { a.sendMsg(bootLogMsg{stream: s
 func (a *App) SendLiveReady()                   { a.sendMsg(liveReadyMsg{}) }
 func (a *App) SetStartupSummary(summary string) { a.sendMsg(startupSummaryMsg{summary: summary}) }
 func (a *App) SendTunnelURL(url string)         { a.sendMsg(tunnelURLMsg{url: url}) }
+func (a *App) SendIngestToken(token, path string) {
+	a.sendMsg(ingestTokenMsg{token: token, path: path})
+}
 
 func (a *App) MarkBootComplete() {
 	a.bootComplete = true
@@ -225,6 +230,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tunnelURLMsg:
 		a.tunnelURL = m.url
+		a.workbench.SetTunnelURL(m.url)
+
+	case ingestTokenMsg:
+		a.ingestToken = m.token
+		a.ingestTokenPath = m.path
+		a.workbench.SetIngestToken(m.token, m.path)
 
 	case liveReadyMsg:
 		// Boot is already marked complete before runTUI hands off; this just

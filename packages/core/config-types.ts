@@ -162,6 +162,11 @@ export interface CruxObservabilityConfig {
    * never enabled by default.
    */
   readonly serverUrl?: string
+  /**
+   * Scoped bearer token for observability ingest when `serverUrl` points at an
+   * authenticated local devtools tunnel.
+   */
+  readonly token?: string
   /** Custom canonical observability graph transport. */
   readonly transport?: CruxObservabilityTransport
   /** Delivery bounds for batching, flushing, and shutdown. */

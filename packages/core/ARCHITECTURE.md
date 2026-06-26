@@ -632,7 +632,10 @@ Devtools tracing itself uses the canonical `@use-crux/core/observability` graph 
 The standalone Quality runner loads the project's own `@use-crux/core` instance. When the Go CLI has
 found a loopback devtools server, it passes `CRUX_DEVTOOLS_URL` into that worker; the worker installs
 `createHttpObservabilityTransport({ serverUrl })` only if the project has not already configured an
-observability transport, then calls `observe.flush()` before exit. Flush failures are swallowed at
+observability transport, then calls `observe.flush()` before exit. Tunneled/cloud runtimes should
+use the persistent per-project `CRUX_DEVTOOLS_TOKEN` bearer token, which the local server accepts
+only on `POST /api/observability/records`; legacy tokenized tunnel URLs still keep their query token
+on the final ingest endpoint. Flush failures are swallowed at
 this local auto-attach boundary so a dead devtools server or tunnel cannot change the Quality run's
 exit result. This keeps experiment `traceIds` and the canonical `/api/observability/runs/{runId}`
 graph in the same backend whenever quality runs are executed with devtools attached.
@@ -688,7 +691,7 @@ The result provides typed autocomplete at every nesting level while also exposin
 
 `withDevtools(options)` returns a `CruxPlugin` with name `'crux:devtools'`. Internally delegates to `buildDevtoolsRuntime()`:
 
-1. Create the canonical HTTP observability transport — `createHttpObservabilityTransport(serverUrl)`
+1. Create the canonical HTTP observability transport — `createHttpObservabilityTransport({ serverUrl, token })`
 2. Configure `@use-crux/core/observability` to deliver graph record batches to the Go backend
 3. Return `observabilityTransport` + `dispose()` that restores the previous observability runtime
 
@@ -697,7 +700,11 @@ The result provides typed autocomplete at every nesting level while also exposin
 When `config({ devtools: { serverUrl } })` is used without an explicit `observability` override,
 `configure()` auto-prepends `withDevtools()` so the local devtools transport is installed before
 custom plugins. `devtools` remains the local UI/control/tunnel/bridge domain; production export,
-remote collectors, and delivery policy belong under `observability` or telemetry plugins.
+remote collectors, and delivery policy belong under `observability` or telemetry plugins. When the
+server URL is a tokenized tunnel URL, the HTTP transport preserves the query token while appending
+the observability endpoint path. For cloud/serverless runtimes, `observability.token` or
+`CRUX_DEVTOOLS_TOKEN` is preferred because it grants only observability ingest instead of a full
+browser devtools session.
 
 ### Runtime Bridge (`runtime-bridge/index.ts`)
 
@@ -1344,9 +1351,9 @@ Five functions extracted from adapter duplication, exported as `@internal`. `Orc
 
 Each adapter also exports standalone `GenerateObjectFn` / `GenerateTextFn` implementations for use with primitives that need SDK-agnostic generation (compaction, scoring, extraction):
 
-| Adapter           | Object                                  | Text                                  | Embeddings             | Rerankers      |
-| ----------------- | --------------------------------------- | ------------------------------------- | ---------------------- | -------------- |
-| `@use-crux/ai`        | `generateObjectFn` (singleton)          | `generateTextFn` (singleton)          | `embedding()`          | `reranker()`   |
+| Adapter               | Object                                  | Text                                  | Embeddings             | Rerankers          |
+| --------------------- | --------------------------------------- | ------------------------------------- | ---------------------- | ------------------ |
+| `@use-crux/ai`        | `generateObjectFn` (singleton)          | `generateTextFn` (singleton)          | `embedding()`          | `reranker()`       |
 | `@use-crux/openai`    | `createGenerateObjectFn(client, model)` | `createGenerateTextFn(client, model)` | `embedding(client, …)` | via `@use-crux/ai` |
 | `@use-crux/google`    | `createGenerateObjectFn(client, model)` | `createGenerateTextFn(client, model)` | `embedding(client, …)` | via `@use-crux/ai` |
 | `@use-crux/anthropic` | `createGenerateObjectFn(client, model)` | `createGenerateTextFn(client, model)` | generation-only        | via `@use-crux/ai` |

@@ -50,6 +50,7 @@ func loadedConfigFixture(root string) json.RawMessage {
 	  "observability": {
 	    "enabled": { "value": "true", "origin": "default" },
 	    "serverUrl": { "value": "none", "origin": "none" },
+	    "token": { "value": "none", "origin": "none" },
 	    "transport": { "value": "none", "origin": "none" }
 	  },
 	  "devtools": {
@@ -142,7 +143,7 @@ func TestConfigInspectHumanRendersEveryConfigDomain(t *testing.T) {
 		"generation:", "autoEscape", "securityWarnings", "tokenizer", "middleware",
 		"indexer:", "trust", "first-party-only", "extensions",
 		"experimental:", "indexer.native", "true", "indexer.nativeAst", "false", "indexer.nativeEngine", "tsgo", "indexer.tsserverPath", "bin/tsgo",
-		"observability:", "enabled", "serverUrl", "transport",
+		"observability:", "enabled", "serverUrl", "token", "transport",
 		"devtools:", "bridge",
 		"persistence:", "store",
 		"lint:", "profile", "strict", "rules",
@@ -192,7 +193,7 @@ func TestConfigInspectHumanZeroConfigReadsAsDefaults(t *testing.T) {
 	  },
 	  "indexer": { "trust": { "value": "first-party-only", "origin": "default" }, "extensions": { "values": [], "origin": "default" } },
 	  "experimental": { "indexer": { "native": { "value": "false", "origin": "default" }, "nativeAst": { "value": "false", "origin": "default" }, "nativeEngine": { "value": "none", "origin": "none" }, "tsserverPath": { "value": "none", "origin": "none" } } },
-	  "observability": { "enabled": { "value": "true", "origin": "default" }, "serverUrl": { "value": "none", "origin": "none" }, "transport": { "value": "none", "origin": "none" } },
+	  "observability": { "enabled": { "value": "true", "origin": "default" }, "serverUrl": { "value": "none", "origin": "none" }, "token": { "value": "none", "origin": "none" }, "transport": { "value": "none", "origin": "none" } },
 	  "devtools": { "serverUrl": { "value": "none", "origin": "none" }, "bridge": { "value": "none", "origin": "none" } },
 	  "persistence": { "store": { "value": "none", "origin": "none" } },
 	  "lint": { "profile": { "value": "recommended", "origin": "default" }, "rules": { "value": "0", "origin": "default" } },

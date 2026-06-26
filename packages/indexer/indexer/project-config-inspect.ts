@@ -160,6 +160,7 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
       enabled: observability?.enabled != null ? explicit(observability.enabled) : fromDefault(true),
       serverUrl:
         observability?.serverUrl != null ? explicit(observability.serverUrl) : { value: 'none', origin: 'none' },
+      token: presence(observability?.token != null),
       transport: presence(observability?.transport != null),
     },
     devtools: {

@@ -75,7 +75,10 @@ import { withTelemetry } from '@use-crux/otel'
 import { withCostTracker } from './lib/ai/plugins/cost-tracker'
 
 export default config({
-  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // local server or tunnel only
+  observability: {
+    serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
   plugins: [
     // OTel spans for production
     withTelemetry({
@@ -122,7 +125,7 @@ export async function summarizeForTenant(tenantId: string, text: string) {
 ## How it works
 
 1. **`withDevtools()` + `withTelemetry()` + custom plugin compose.** Crux's plugin system fans out instrumentation hooks — every `onGenerateEnd` fires for _all_ installed plugins. None of them block each other.
-2. **Devtools is explicit local/tunnel visibility.** When `devtools.serverUrl` is set, Crux installs the devtools plugin first. Leave it unset outside deliberate local or staging tunnel sessions.
+2. **Devtools is explicit local/tunnel visibility.** When `observability.serverUrl` is set, Crux installs the HTTP observability transport. Leave it unset outside deliberate local or staging tunnel sessions.
 3. **`withTelemetry` emits OTel spans.** Every generate, memory op, compaction, judge, flow step, and tool call becomes a span with `crux.*` attributes. Your existing OTel collector ingests them.
 4. **Your custom plugin reads from the same hooks.** No need to instrument prompts manually — `onGenerateEnd` fires on every call with `usage`, `durationMs`, and `metadata` populated.
 5. **`metadata` flows from call site to plugin.** Pass `metadata: { tenantId, region, featureFlag }` to `generate()` and your plugin sees it in every event.
@@ -131,7 +134,7 @@ export async function summarizeForTenant(tenantId: string, text: string) {
 
 ### Devtools via tunnel
 
-For staging environments or controlled debugging sessions, run `crux dev --tunnel` on your local machine and point `DEVTOOLS_URL` at the public tunnel. Treat this as an explicit temporary visibility channel, not default production telemetry.
+For staging environments or controlled debugging sessions, run `crux dev --tunnel` on your local machine and point `DEVTOOLS_URL` at the public tunnel origin. Set `CRUX_DEVTOOLS_TOKEN` to the scoped ingest token printed by `crux dev`. Treat this as an explicit temporary visibility channel, not default production telemetry.
 
 ### Sampling
 
