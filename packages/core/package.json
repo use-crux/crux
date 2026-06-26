@@ -153,6 +153,11 @@
       "import": "./adapter/testing.ts",
       "require": "./adapter/testing.ts"
     },
+    "./adapter/testing/vitest": {
+      "types": "./adapter/testing/vitest.ts",
+      "import": "./adapter/testing/vitest.ts",
+      "require": "./adapter/testing/vitest.ts"
+    },
     "./adapter/tool": {
       "types": "./adapter/tool/index.ts",
       "import": "./adapter/tool/index.ts",
@@ -261,6 +266,9 @@
       ],
       "adapter/testing": [
         "adapter/testing.ts"
+      ],
+      "adapter/testing/vitest": [
+        "adapter/testing/vitest.ts"
       ],
       "adapter/tool": [
         "adapter/tool/index.ts"

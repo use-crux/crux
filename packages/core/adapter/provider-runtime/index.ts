@@ -20,6 +20,7 @@ export type {
   LoopOwnedRuntimeBindContext,
   LoopOwnedRuntimeContract,
   ProviderOwnership,
+  ProviderRuntimeDepsArg,
   ProviderRuntimeKind,
   ProviderRuntimeSpec,
   SingleTurnRuntimeContract,

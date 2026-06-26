@@ -30,6 +30,7 @@ import { validateStructuredOutput } from './policy/validation-retry'
 import { toJsonValue, renderToolModelOutput, createToolModelOutput, normalizeToolInput } from './tool/emission'
 
 export { adapterSpecConformance } from './testing/native'
+export { providerRuntimeConformance } from './testing/provider-runtime'
 export { transcriptCodecConformance } from './testing/transcript'
 export type {
   AdapterConformanceCapabilities,
@@ -39,6 +40,17 @@ export type {
   AdapterConformancePrepared,
   AdapterConformanceScript,
 } from './testing/native'
+export type {
+  ProviderConformanceEmission,
+  ProviderConformancePrepared,
+  ProviderConformanceScript,
+  ProviderRuntimeConformanceCapabilities,
+  ProviderRuntimeConformanceGenerateOptions,
+  ProviderRuntimeConformanceGenerateResult,
+  ProviderRuntimeConformanceHarness,
+  ProviderRuntimeConformanceRuntime,
+  ProviderRuntimeConformanceStreamHandle,
+} from './testing/provider-runtime'
 export type { TranscriptConformanceScenario, TranscriptWrapperExpectation } from './testing/transcript'
 
 // ─────────────────────────────────────────────────────────────────

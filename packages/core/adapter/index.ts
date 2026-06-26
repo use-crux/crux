@@ -52,6 +52,7 @@ export type {
   LoopOwnedRuntimeBindContext,
   LoopOwnedRuntimeContract,
   ProviderOwnership,
+  ProviderRuntimeDepsArg,
   ProviderRuntimeKind,
   ProviderRuntimeExtension,
   ProviderRuntimeExtensionCollisionKeys,
@@ -129,7 +130,13 @@ export { setGenerationInterceptor, clearGenerationInterceptor } from './intercep
 export type { GenerationInterceptor, InterceptedGeneration } from './interception'
 
 // Testing utilities for the executor contract
-export { adapterSpecConformance, fakeExecutor, executorSpecConformance, transcriptCodecConformance } from './testing'
+export {
+  adapterSpecConformance,
+  fakeExecutor,
+  executorSpecConformance,
+  providerRuntimeConformance,
+  transcriptCodecConformance,
+} from './testing'
 export type {
   AdapterConformanceCapabilities,
   AdapterConformanceEmission,
@@ -145,6 +152,15 @@ export type {
   FakeRawStream,
   ExecutorConformanceHarness,
   ConformanceViolation,
+  ProviderConformanceEmission,
+  ProviderConformancePrepared,
+  ProviderConformanceScript,
+  ProviderRuntimeConformanceCapabilities,
+  ProviderRuntimeConformanceGenerateOptions,
+  ProviderRuntimeConformanceGenerateResult,
+  ProviderRuntimeConformanceHarness,
+  ProviderRuntimeConformanceRuntime,
+  ProviderRuntimeConformanceStreamHandle,
   TranscriptConformanceScenario,
   TranscriptWrapperExpectation,
 } from './testing'

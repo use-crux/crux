@@ -4,8 +4,9 @@
 
 import { expectTypeOf } from 'vitest'
 import type { z } from 'zod'
-import { defineProviderRuntime } from '@crux/core/adapter'
+import { defineProviderRuntime, providerRuntimeConformance } from '@crux/core/adapter'
 import type {
+  ConformanceViolation,
   CruxAdapter,
   CruxExecutor,
   ExecutorOutcome,
@@ -13,6 +14,7 @@ import type {
   ExecutorStreamHandle,
   NativeProviderPort,
   LoopOwnedRuntimeContract,
+  ProviderRuntimeConformanceHarness,
   ProviderOwnership,
   SingleTurnRuntimeContract,
   StructuredAttempt,
@@ -116,6 +118,19 @@ void singleRuntime.generate(prompt, {
   extra: { feature: true },
 })
 
+const singleConformanceHarness = {
+  capabilities: { ownership: 'single-turn' },
+  prepare: () => ({
+    client: singleClient,
+    model: 'single-model',
+    deps: { tenant: 'acme' },
+  }),
+} satisfies ProviderRuntimeConformanceHarness<SingleClient, string, SingleDeps>
+
+expectTypeOf(providerRuntimeConformance(singleProvider, singleConformanceHarness)).toEqualTypeOf<
+  Promise<ConformanceViolation[]>
+>()
+
 // @ts-expect-error - single-turn provider dependencies are required when TDeps is not empty.
 singleProvider.create(singleClient)
 
@@ -171,6 +186,15 @@ const loopProvider = defineProviderRuntime({
 
 expectTypeOf(loopProvider.ownership).toEqualTypeOf<'loop-owned'>()
 expectTypeOf(loopProvider.ownership).toMatchTypeOf<ProviderOwnership>()
+
+const loopConformanceHarness = {
+  capabilities: { ownership: 'loop-owned' },
+  prepare: () => ({ client: loopClient, model: loopModel }),
+} satisfies ProviderRuntimeConformanceHarness<LoopClient, LoopModel>
+
+expectTypeOf(providerRuntimeConformance(loopProvider, loopConformanceHarness)).toEqualTypeOf<
+  Promise<ConformanceViolation[]>
+>()
 
 // @ts-expect-error - single-turn ownership requires turn mechanics, not loop mechanics.
 defineProviderRuntime({
