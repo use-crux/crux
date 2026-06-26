@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/cache"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -60,5 +61,5 @@ type SnapshotStore interface {
 
 // CacheStore persists phase transactions used for Project Index warm starts.
 type CacheStore interface {
-	projectindex.FactStore
+	cache.FactStore
 }

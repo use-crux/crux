@@ -4,7 +4,7 @@
 
 **QualityFS**:
 The internal Go package `internal/qualityfs` that owns the `.crux/quality` on-disk contract.
-_Avoid_: quality readers, indexread quality parsers, service file helpers
+_Avoid_: quality readers, Project Index read-model quality parsers, service file helpers
 
 **Quality Snapshot**:
 The immutable read model returned by `qualityfs.Snapshot`. It contains parsed records, overlay-folded

@@ -19,7 +19,7 @@ also called `GetIndex()` even though those paths need raw snapshot data.
 
 ## Decision
 
-`@crux/local/internal/indexread` is the only producer of derived Project Index read-model quality.
+`@crux/local/internal/projectindex/readmodel` is the only producer of derived Project Index read-model quality.
 The `.crux/quality` on-disk contract itself is owned by `@crux/local/internal/qualityfs`.
 
 `store.Store` stores raw Project Index snapshots and exposes:
@@ -27,14 +27,14 @@ The `.crux/quality` on-disk contract itself is owned by `@crux/local/internal/qu
 - `GetIndex()` for raw snapshot callers.
 - `Snapshot()` for one atomic raw index plus in-memory run snapshot.
 
-`indexread.Model.Index()` is the devtools/API read-model path. Its enrichment order is fixed:
+`readmodel.Model.Index()` is the devtools/API read-model path. Its enrichment order is fixed:
 
 1. Join in-memory eval, RAG eval, and flow runs.
 2. Load one `qualityfs.Snapshot` from `.crux/quality`, then join experiments, suites, cassettes,
    feedback, baselines, comparisons, drift, and lint policy.
 3. Add source mtime metadata and safety `appliesTo` metadata.
 
-`indexread.Model.Raw()` exists for callers that need the raw snapshot and should not observe derived
+`readmodel.Model.Raw()` exists for callers that need the raw snapshot and should not observe derived
 quality data.
 
 ## Consequences
@@ -50,7 +50,7 @@ quality data.
   enrichment.
 - Insight derivation is pure package-local logic: callers pass a `qualityfs.Snapshot`,
   observability-derived runs, and an explicit clock value into `deriveInsights`.
-- `indexread` consumes `qualityfs.Load` and must not redeclare persisted quality records or parse
+- `readmodel` consumes `qualityfs.Load` and must not redeclare persisted quality records or parse
   `.crux/quality` directly.
 - `@crux/indexer` remains responsible for authored source facts, not local runtime/file-backed joins.
 
@@ -58,7 +58,7 @@ quality data.
 
 The local runtime has boundary tests for:
 
-- in-memory eval/RAG/flow run fan-out through `indexread.Model.Index()`;
+- in-memory eval/RAG/flow run fan-out through `readmodel.Model.Index()`;
 - full pipeline ordering across run facts, experiments, baselines, source mtimes, and safety targets;
 - `qualityfs` boundary behavior for immutable snapshots, external-writer visibility, feedback
   overlays, and cassette issue overlays;

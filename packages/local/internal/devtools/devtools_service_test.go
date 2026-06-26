@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/service"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/cache"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/service"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -1555,7 +1556,7 @@ func readIndexEvent(t *testing.T, events <-chan store.IndexData) store.IndexData
 
 func writeTestFactCache(t *testing.T, root string, index store.IndexData) {
 	t.Helper()
-	facts := projectindex.NewSQLiteIndexFactStore()
+	facts := cache.NewSQLiteIndexFactStore()
 	patch := indexPatchFromSnapshot(index, projectindex.PhaseAST, "ok")
 	if err := facts.CommitPhase(context.Background(), indexFactTransactionFromPatch(patch)); err != nil {
 		t.Fatalf("write test fact cache: %v", err)
@@ -1567,7 +1568,7 @@ func writeTestFactCache(t *testing.T, root string, index store.IndexData) {
 
 func readTestFactCache(t *testing.T, root string, projectName string) (store.IndexData, bool) {
 	t.Helper()
-	index, ok, err := projectindex.NewSQLiteIndexFactStore().ProjectSnapshot(context.Background(), root, projectName)
+	index, ok, err := cache.NewSQLiteIndexFactStore().ProjectSnapshot(context.Background(), root, projectName)
 	if err != nil {
 		t.Fatalf("read test fact cache: %v", err)
 	}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/cache"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -39,7 +40,7 @@ type Service struct {
 	ctx         context.Context
 	store       SnapshotStore
 	indexer     ASTClient
-	indexCache  *projectindex.Cache
+	indexCache  *cache.Cache
 	indexMu     sync.Mutex
 	indexState  *projectindex.State
 	watchStatus projectIndexWatchStatusStore
@@ -59,13 +60,13 @@ func New(options Options) *Service {
 	}
 	facts := options.FactStore
 	if facts == nil {
-		facts = projectindex.NewSQLiteIndexFactStore()
+		facts = cache.NewSQLiteIndexFactStore()
 	}
 	return &Service{
 		ctx:        ctx,
 		store:      indexStore,
 		indexer:    options.Indexer,
-		indexCache: projectindex.NewCache(facts),
+		indexCache: cache.NewCache(facts),
 		indexState: projectindex.NewState(),
 		readModel:  options.ReadModel,
 		publish:    options.Publish,
@@ -81,7 +82,7 @@ func (s *Service) WithProjectIndexer(indexer ASTClient) *Service {
 // WithFactStore replaces the cache transaction store used for future runs.
 func (s *Service) WithFactStore(facts CacheStore) *Service {
 	if s.indexCache == nil {
-		s.indexCache = projectindex.NewCache(facts)
+		s.indexCache = cache.NewCache(facts)
 	} else {
 		s.indexCache.SetFactStore(facts)
 	}

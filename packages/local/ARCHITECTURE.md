@@ -43,8 +43,8 @@ internal/qualityfs
 ```
 
 `qualityfs` is a leaf package: it uses the Go standard library only and does not import `store`,
-`quality`, `indexread`, `observability`, or API packages. This keeps the persisted record contract
-separate from service orchestration and Project Index enrichment.
+`quality`, `projectindex/readmodel`, `observability`, or API packages. This keeps the persisted
+record contract separate from service orchestration and Project Index enrichment.
 
 `qualityfs` owns:
 

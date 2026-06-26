@@ -75,7 +75,7 @@ func (s *Service) WithProjectIndexer(indexer projectindex.ProjectIndexer) *Servi
 	return s
 }
 
-func (s *Service) WithFactStore(facts projectindex.FactStore) *Service {
+func (s *Service) WithFactStore(facts service.CacheStore) *Service {
 	s.indexService.WithFactStore(facts)
 	return s
 }

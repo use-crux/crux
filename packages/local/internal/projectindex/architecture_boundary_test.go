@@ -1,6 +1,7 @@
 package projectindex_test
 
 import (
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -82,7 +83,35 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 	}
 }
 
-func TestServerAndDevtoolsDoNotImportStaticIndexInternals(t *testing.T) {
+func TestProjectIndexRootDoesNotAliasCacheOwnership(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("could not determine test file location")
+	}
+
+	projectIndexDir := filepath.Dir(filename)
+	deprecatedAliasFile := filepath.Join(projectIndexDir, "store_aliases.go")
+	if _, err := os.Stat(deprecatedAliasFile); !os.IsNotExist(err) {
+		t.Fatalf("Project Index cache aliases must live under projectindex/cache, not root shim %q", deprecatedAliasFile)
+	}
+
+	forbidden := map[string]string{
+		"Cache":                   "cache.Cache",
+		"FactStore":               "cache.FactStore",
+		"SQLiteIndexFactStore":    "cache.SQLiteIndexFactStore",
+		"NewCache":                "cache.NewCache",
+		"NewSQLiteIndexFactStore": "cache.NewSQLiteIndexFactStore",
+		"HasPatchFacts":           "cache.HasPatchFacts",
+	}
+	forEachProjectIndexRootObject(t, projectIndexDir, func(path string, name string) {
+		if owner, ok := forbidden[name]; ok {
+			rel, _ := filepath.Rel(projectIndexDir, path)
+			t.Fatalf("root projectindex package re-exports %s in %s; import %s directly instead", name, rel, owner)
+		}
+	})
+}
+
+func TestServerAndDevtoolsDoNotImportProjectIndexInternals(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("could not determine test file location")
@@ -112,14 +141,71 @@ func TestServerAndDevtoolsDoNotImportStaticIndexInternals(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if strings.HasPrefix(importPath, "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/") {
+				if forbiddenRouteProjectIndexImport(importPath, strings.HasSuffix(path, "_test.go")) {
 					rel, _ := filepath.Rel(internalDir, path)
-					t.Fatalf("%s imports Static Index internals directly via %q; route/devtools code should use projectindex service/readmodel APIs", rel, importPath)
+					t.Fatalf("%s imports Project Index internals directly via %q; route/devtools code should use projectindex service/readmodel APIs", rel, importPath)
 				}
 			}
 			return nil
 		}); err != nil {
 			t.Fatalf("scan route imports under %s: %v", routeRoot, err)
+		}
+	}
+}
+
+func forbiddenRouteProjectIndexImport(importPath string, testFile bool) bool {
+	const projectIndex = "github.com/use-crux/crux/packages/local/internal/projectindex/"
+	if strings.HasPrefix(importPath, projectIndex+"staticindex/") {
+		return true
+	}
+	if testFile {
+		return false
+	}
+	switch {
+	case importPath == projectIndex+"cache":
+		return true
+	case importPath == projectIndex+"host" || strings.HasPrefix(importPath, projectIndex+"host/"):
+		return true
+	case importPath == projectIndex+"model":
+		return true
+	case importPath == projectIndex+"wire":
+		return true
+	default:
+		return false
+	}
+}
+
+func forEachProjectIndexRootObject(t *testing.T, projectIndexDir string, visit func(path string, name string)) {
+	t.Helper()
+	entries, err := os.ReadDir(projectIndexDir)
+	if err != nil {
+		t.Fatalf("read projectindex package: %v", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		path := filepath.Join(projectIndexDir, entry.Name())
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		for _, decl := range file.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				switch spec := spec.(type) {
+				case *ast.TypeSpec:
+					visit(path, spec.Name.Name)
+				case *ast.ValueSpec:
+					for _, name := range spec.Names {
+						visit(path, name.Name)
+					}
+				}
+			}
 		}
 	}
 }

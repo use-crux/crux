@@ -37,14 +37,14 @@ are the architecture names that new code should reinforce.
 | Runtime | Responsibility paths |
 | --- | --- |
 | TypeScript Static Index | `packages/indexer/indexer/static-index/config`, `packages/indexer/indexer/static-index/plan`, `packages/indexer/indexer/static-index/protocol`, `packages/indexer/indexer/static-index/syntax`, `packages/indexer/indexer/static-index/extension-host`, `packages/indexer/indexer/static-index/compatibility/syntax-record-bridge` |
-| Go Static Index | `packages/local/internal/projectindex/staticindex/planner`, `packages/local/internal/projectindex/staticindex/sourceprofile`, `packages/local/internal/projectindex/staticindex/cache`, `packages/local/internal/projectindex/staticindex/syntax`, `packages/local/internal/projectindex/staticindex/client`, `packages/local/internal/projectindex/staticindex/protocol`, `packages/local/internal/projectindex/staticindex/run` |
+| Go Static Index | `packages/local/internal/projectindex/staticindex/session`, `packages/local/internal/projectindex/staticindex/planner`, `packages/local/internal/projectindex/staticindex/sourceprofile`, `packages/local/internal/projectindex/staticindex/cache`, `packages/local/internal/projectindex/staticindex/syntax`, `packages/local/internal/projectindex/staticindex/client`, `packages/local/internal/projectindex/staticindex/protocol`, `packages/local/internal/projectindex/staticindex/run` |
 | Rust Static Index | `crates/protocol`, `crates/syntax-oxc`, `crates/facts`, `crates/primitives`, `crates/lints`, `crates/static-compiler`, `crates/worker` |
 
-Transitional names remain where an implementation phase explicitly owns their
-removal: Go process supervision is still under `internal/process/node` until
-the `workerproc` rename phase, and legacy generated server embed directories
-are still ignored by source planning until the asset ownership phase proves
-they are unused.
+Go process supervision now lives under `internal/process/workerproc`, and
+generated local runtime assets are owned by `packages/local/internal/assets`.
+Route and devtools packages should consume Project Index through
+`projectindex/service` and `projectindex/readmodel` rather than low-level cache,
+host, wire, or Static Index internals.
 
 ## Contract Inventory
 

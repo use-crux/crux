@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/cache"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -69,5 +70,5 @@ func (s *Service) applyLintPatchIfCurrent(ctx context.Context, patch projectinde
 }
 
 func isEmptyIndexPatch(patch projectindex.IndexPatch) bool {
-	return !projectindex.HasPatchFacts(patch.Facts) && len(patch.FactEnvelopes) == 0
+	return !cache.HasPatchFacts(patch.Facts) && len(patch.FactEnvelopes) == 0
 }
