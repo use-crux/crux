@@ -117,20 +117,20 @@ await runtime.run(ctx, { threadId }, async ({ store }) => {
 
 If you also want the profile-backed Crux prompt lifecycle, prefer `createCruxConvex()`. Its `store()`, `run()`, and `bridge()` methods delegate to this lower-level runtime bridge.
 
-### `cruxConvexStore(config)`
+### `defineConvexStoreContract(options)`
 
-Creates a `CruxStore` backed by the crux Convex component. No manual schema or function definitions needed.
+Defines the shared Convex store document contract for server stores and React transport. No manual schema or function definitions needed.
 
 ```ts
-import { cruxConvexStore } from '@crux/convex'
+import { defineConvexStoreContract } from '@crux/convex'
 import { memory, workingState } from '@crux/convex/memory'
 import { components } from './_generated/api'
 
-const store = cruxConvexStore({
+const cruxDocuments = defineConvexStoreContract({
   component: components.crux,
-  ctx,
 })
 
+const store = cruxDocuments.store(ctx)
 const state = workingState({ id: 'state', schema })
 const assistantMemory = memory({
   id: 'assistant',
@@ -140,7 +140,9 @@ const assistantMemory = memory({
 })
 ```
 
-`cruxConvexStore()` is dense-only for retrieval. It supports:
+The contract exposes `codec` for focused document-format tests and migration tooling, `store(ctx)` for server-side `CruxStore` reads and writes, and `transport({ useQuery })` for React reads through Convex queries.
+
+The server store is dense-only for retrieval. It supports:
 
 - `vectorSearch(embedding, options?)`
 - `searchVectors({ dense })`
@@ -149,7 +151,7 @@ and throws explicit errors for sparse-only or hybrid queries so retrievers fail 
 
 The component boundary is page-shaped. `components.crux.memory.list` accepts
 `prefix`, `limit`, and `cursor`, reads the `by_key` index, and returns
-`{ docs, cursor }`. `cruxConvexStore()` owns `_cruxDoc` decoding, TTL
+`{ docs, cursor }`. The contract owns `_cruxDoc` decoding, TTL
 suppression and lazy cleanup, top-level decoded-value filters, and dense vector
 hit shaping. When a filtered `list()` call has a `limit`, the store reads
 additional component pages until it can return up to that many matching entries.
@@ -157,15 +159,16 @@ additional component pages until it can return up to that many matching entries.
 For semantic response caching, use a dedicated Convex table/index or component instance and opt into the capability explicitly:
 
 ```ts
-const cacheStore = cruxConvexStore({
+const semanticCacheDocuments = defineConvexStoreContract({
   component: components.crux,
-  ctx,
   vectorIndexName: 'by_embedding',
   semanticCache: { isolatedVectorNamespace: true },
 })
+
+const cacheStore = semanticCacheDocuments.store(ctx)
 ```
 
-Only set `isolatedVectorNamespace: true` when the backing vector index is not shared with RAG chunks or memory entries. The flag is not enabled by default because a normal `cruxConvexStore()` is often shared by memory and retrieval. Semantic cache lookup needs a dedicated vector space so unrelated vectors cannot crowd out cache entries before filtering.
+Only set `isolatedVectorNamespace: true` when the backing vector index is not shared with RAG chunks or memory entries. The flag is not enabled by default because a normal contract store is often shared by memory and retrieval. Semantic cache lookup needs a dedicated vector space so unrelated vectors cannot crowd out cache entries before filtering.
 
 ### `convexWorkspaceBlobStore(config)`
 
@@ -174,13 +177,15 @@ Blob storage for `workspace()` binary and oversized files.
 ```ts
 import { workspace } from '@crux/core/workspace'
 import { storage } from '@crux/core/storage'
-import { cruxConvexStore, convexWorkspaceBlobStore } from '@crux/convex'
+import { defineConvexStoreContract, convexWorkspaceBlobStore } from '@crux/convex'
+
+const cruxDocuments = defineConvexStoreContract({ component: components.crux })
 
 const ws = workspace({
   id: 'thread-workspace',
   namespace: threadId,
   storage: storage({
-    data: cruxConvexStore({ component: components.crux, ctx }),
+    data: cruxDocuments.store(ctx),
     blobs: convexWorkspaceBlobStore({ ctx }),
   }),
 })
@@ -588,20 +593,18 @@ await swarm.resume(ctx, swarmRunId, {
 - `getState(ctx, swarmRunId)` — returns current swarm state
 - `listRuns(ctx, options?)` — lists runs with optional status filter
 
-### `createConvexTransport(config)` — from `@crux/convex/react`
+### React transport
 
-Convex transport for `@crux/react` hooks. Uses Convex's native `useQuery()` for automatic WebSocket-based reactivity — plans, task lists, and tasks stored via `cruxConvexStore()` are reactive with no polling or SSE needed.
+Use the same store document contract for `@crux/react` hooks. Convex's native `useQuery()` gives plans, task lists, and tasks automatic WebSocket-based reactivity with no polling or SSE needed.
 
 ```tsx
 import { CruxProvider } from '@crux/react'
-import { createConvexTransport } from '@crux/convex/react'
+import { defineConvexStoreContract } from '@crux/convex'
 import { useQuery } from 'convex/react'
 import { api } from '../convex/_generated/api'
 
-const transport = createConvexTransport({
-  api: api.crux,  // or components.crux
-  useQuery,
-})
+const cruxDocuments = defineConvexStoreContract({ component: api.crux })
+const transport = cruxDocuments.transport({ useQuery })
 
 <ConvexProvider client={convex}>
   <CruxProvider transport={transport}>
@@ -610,4 +613,4 @@ const transport = createConvexTransport({
 </ConvexProvider>
 ```
 
-The transport reads from the crux Convex component's `memory.get` and page-shaped `memory.list` queries, deserializing `CruxStore` documents back to `JsonObject` on read. CruxStore documents are serialized with a `{ _cruxDoc: true }` metadata marker. `useDocumentList()` consumes `{ docs, cursor }` and applies decoded-value filters locally instead of passing them into the Convex component query.
+The transport reads from the crux Convex component's `memory.get` and page-shaped `memory.list` queries, deserializing current Crux store documents back to `JsonObject` on read. `useDocumentList()` consumes `{ docs, cursor }` and applies decoded-value filters locally instead of passing them into the Convex component query.

@@ -98,19 +98,18 @@ export const respond = action({
 
 ## Persistent memory
 
-`cruxConvexStore()` creates a `CruxStore` backed by the crux component's `memories` table. Use it with any memory primitive:
+`defineConvexStoreContract()` creates the shared Convex document contract. Use `contract.store(ctx)` with any memory primitive:
 
 ```ts title="convex/memory/store.ts"
-import { cruxConvexStore } from '@crux/convex'
+import { defineConvexStoreContract } from '@crux/convex'
 import { episodes, memory, workingState } from '@crux/convex/memory'
 import { components } from '../_generated/api'
 import type { ActionCtx } from '../_generated/server'
 
+const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+
 export function createMemoryStore(ctx: ActionCtx) {
-  return cruxConvexStore({
-    component: components.crux,
-    ctx,
-  })
+  return cruxDocuments.store(ctx)
 }
 
 // Inside an action:

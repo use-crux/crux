@@ -50,7 +50,7 @@ const mem = memory({
 })
 ```
 
-For production, pass a durable `DataStore`. Convex apps use `cruxConvexStore()`; see the [Convex guide](/docs/guides/convex) for setup and boundary rules.
+For production, pass a durable `DataStore`. Convex apps use `defineConvexStoreContract().store(ctx)`; see the [Convex guide](/docs/guides/convex) for setup and boundary rules.
 
 ## Vector Recall
 
@@ -121,7 +121,7 @@ For memory, choose storage based on the behavior you need:
 | Need                                  | Use                                                                     |
 | ------------------------------------- | ----------------------------------------------------------------------- |
 | Tests and examples                    | `inMemoryDataStore()`                                                   |
-| Convex app state and reactivity       | `cruxConvexStore()` as a `DataStore`; see [Convex](/docs/guides/convex) |
+| Convex app state and reactivity       | `defineConvexStoreContract().store(ctx)` as a `DataStore`; see [Convex](/docs/guides/convex) |
 | Redis-backed key-value records        | `cruxRedisStore()` as a `DataStore`                                     |
 | Dense/sparse/hybrid vector recall     | Pair memory data with a `VectorStore` such as Upstash Vector            |
 | Workspace files and generated outputs | `BlobStore`, not memory storage                                         |

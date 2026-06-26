@@ -1,7 +1,7 @@
 /**
  * Memory persistence functions for the crux Convex component.
  *
- * These provide the backing store for `cruxConvexStore({ component })`.
+ * These provide the backing store for the Convex store document contract.
  * Accessible from the host app via `components.crux.memory.*`.
  *
  * @module

@@ -2,7 +2,7 @@
  * Memory storage types for `@crux/core/memory`.
  *
  * Defines the contract between memory primitives and their backing storage.
- * Implementations: `inMemoryStore()` (testing), `cruxConvexStore()` (production).
+ * Implementations: `inMemoryStore()` (testing), Convex contract stores (production).
  *
  * @module
  */
@@ -79,7 +79,7 @@ export interface ScoredEntry extends MemoryEntry {
  *
  * Implementations:
  * - `inMemoryStore()` — Map-backed, for testing. Cosine similarity for vector search.
- * - `cruxConvexStore()` — Convex-backed, for production. Native vector search index.
+ * - Convex contract store — Convex-backed, for production. Native vector search index.
  */
 export interface MemoryStore {
   // ── Plain data tier ──

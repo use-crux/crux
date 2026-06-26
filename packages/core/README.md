@@ -2311,15 +2311,16 @@ const results = await vectors.search({
 })
 ```
 
-**TTL support:** Pass `{ ttl }` to `DataStore.set()` for auto-expiring entries. Used by [context caching](#context-caching) to expire resolver results. Built-in data stores such as `inMemoryDataStore()`, `cruxConvexStore()`, and `cruxRedisStore()` support TTL. Check with `data.supportsTtl?.()`.
+**TTL support:** Pass `{ ttl }` to `DataStore.set()` for auto-expiring entries. Used by [context caching](#context-caching) to expire resolver results. Built-in data stores such as `inMemoryDataStore()`, Convex contract stores, and `cruxRedisStore()` support TTL. Check with `data.supportsTtl?.()`.
 
 For production, implement `DataStore` with your database and pair it with a `VectorStore` or `BlobStore` only when the feature needs those capabilities. A Convex adapter is included:
 
 ```ts
-import { cruxConvexStore } from '@crux/convex'
+import { defineConvexStoreContract } from '@crux/convex'
 import { components } from './_generated/api'
 
-const data = cruxConvexStore({ component: components.crux, ctx })
+const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+const data = cruxDocuments.store(ctx)
 
 const state = workingState({ id: 'agent-state', schema: mySchema })
 const agentMemory = memory({
@@ -2333,7 +2334,7 @@ const agentMemory = memory({
 The Convex component list boundary is page-shaped: `memory.list` accepts
 `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }` from the
 `by_key` index. Decoding, TTL suppression/cleanup, and top-level value filters
-stay inside `cruxConvexStore()`, so filtered `list()` calls fill additional
+stay inside the Convex store document contract, so filtered `list()` calls fill additional
 component pages until the requested number of matching entries is reached.
 
 Convex Agent apps can centralize request-scoped store/runtime binding with
@@ -2364,15 +2365,18 @@ Wrap your app with `<CruxProvider>` to inject a transport. All domain hooks read
 
 ```tsx
 import { CruxProvider } from '@crux/react'
-import { createConvexTransport } from '@crux/convex/react'
+import { defineConvexStoreContract } from '@crux/convex'
 import { useQuery } from 'convex/react'
-;<CruxProvider transport={createConvexTransport({ api: api.crux, useQuery })}>
+
+const cruxDocuments = defineConvexStoreContract({ component: api.crux })
+
+;<CruxProvider transport={cruxDocuments.transport({ useQuery })}>
   <App />
 </CruxProvider>
 ```
 
-The `CruxTransport` interface has two hook methods — `useDocument` and `useDocumentList` — that transports implement using their native reactive primitive. Return semantics: `undefined` = loading/skipped, `null` = not found, data = loaded. Convex transport reads use the same store-document policy as `cruxConvexStore()`: current `_cruxDoc` records are decoded strictly, expired records are hidden, and list filters use the same top-level exact-match semantics as the imperative store.
-`createConvexTransport()` consumes the component's `{ docs, cursor }` page shape
+The `CruxTransport` interface has two hook methods — `useDocument` and `useDocumentList` — that transports implement using their native reactive primitive. Return semantics: `undefined` = loading/skipped, `null` = not found, data = loaded. Convex transport reads use the same store-document policy as `defineConvexStoreContract().store(ctx)`: current `_cruxDoc` records are decoded strictly, expired records are hidden, and list filters use the same top-level exact-match semantics as the imperative store.
+The contract transport consumes the component's `{ docs, cursor }` page shape
 and applies decoded-value filters locally; it does not pass JSON-value filters
 into the Convex component query.
 
@@ -3269,14 +3273,16 @@ const writerPrompt = prompt({
 **Stored mode** — for distributed agents that run in separate processes or actions (e.g., Convex actions, serverless functions):
 
 ```ts
-import { cruxConvexStore } from '@crux/convex'
+import { defineConvexStoreContract } from '@crux/convex'
+
+const cruxDocuments = defineConvexStoreContract({ component: components.crux })
 
 const researchHandoff = handoff({
   id: `research:${threadId}`,
   inputSchema: ResearchResultSchema,
   outputSchema: WriterContextSchema,
   transform: (input) => ({ topic: input.query, keyPoints: input.findings }),
-  store: cruxConvexStore({ component: components.crux, ctx }),
+  store: cruxDocuments.store(ctx),
   fromAgent: 'research',
   toAgent: 'writer',
 })
@@ -3485,7 +3491,7 @@ When using Crux adapters directly (`@crux/anthropic`, `@crux/openai`, `@crux/goo
 
 ```ts
 import { createAgentSkillKit, type SkillActivationSnapshot } from '@crux/core/skill'
-import { cruxConvexStore } from '@crux/convex' // or any key-value store
+import { defineConvexStoreContract } from '@crux/convex' // or any key-value store
 
 // Helper: persist skill IDs per thread using CruxStore (or any DB/Redis/etc.)
 function skillStore(threadId: string, store: CruxStore) {
@@ -3513,7 +3519,8 @@ function skillStore(threadId: string, store: CruxStore) {
 
 // In your agent factory (called per conversation):
 async function createMyAgent(ctx, threadId, model) {
-  const store = cruxConvexStore({ component: components.crux, ctx })
+  const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+  const store = cruxDocuments.store(ctx)
   const skills = skillStore(threadId, store)
 
   // Create the kit — provide a session snapshot persistence port.

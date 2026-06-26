@@ -78,15 +78,17 @@ const files = workspace({
 For production, replace the in-memory stores with durable adapters.
 
 ```ts
-import { cruxConvexStore, convexWorkspaceBlobStore } from '@crux/convex'
+import { defineConvexStoreContract, convexWorkspaceBlobStore } from '@crux/convex'
 import { storage } from '@crux/core/storage'
 import { workspace } from '@crux/core/workspace'
+
+const cruxDocuments = defineConvexStoreContract({ component: components.crux })
 
 const files = workspace({
   id: 'thread-files',
   namespace: threadId,
   storage: storage({
-    data: cruxConvexStore({ component: components.crux, ctx }),
+    data: cruxDocuments.store(ctx),
     blobs: convexWorkspaceBlobStore({ ctx }),
   }),
 })

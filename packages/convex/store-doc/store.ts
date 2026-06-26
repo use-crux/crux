@@ -97,10 +97,10 @@ export function createStoreDocStore<TDoc extends StoreDocRecord>(config: StoreDo
       throw new Error('Convex searchVectors() requires a dense query vector.')
     }
     if (query.sparse !== undefined && query.dense !== undefined) {
-      throw new Error('Convex cruxConvexStore does not support hybrid dense+sparse retrieval.')
+      throw new Error('Convex store document contract does not support hybrid dense+sparse retrieval.')
     }
     if (query.sparse !== undefined) {
-      throw new Error('Convex cruxConvexStore does not support sparse retrieval.')
+      throw new Error('Convex store document contract does not support sparse retrieval.')
     }
     if (query.dense === undefined || !config.io.searchDense || !denseVectorSearch) {
       return []

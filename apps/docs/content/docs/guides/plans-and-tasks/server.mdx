@@ -8,7 +8,7 @@ description: SSE handlers and AI SDK stream writers for delivering plan and task
 Plan and task updates happen on the server — inside agent tool calls, pipeline steps, and background jobs. The client needs to receive these updates in real time for reactive UI. You need a transport layer between server-side `CruxStore` mutations and client-side hooks.
 
 <Callout type="info">
-See the [Quick Start](/docs/guides/plans-and-tasks) for `CruxStore` setup (`inMemoryCruxStore()` for dev, `cruxConvexStore()` for production).
+See the [Quick Start](/docs/guides/plans-and-tasks) for `CruxStore` setup (`inMemoryCruxStore()` for dev, `defineConvexStoreContract().store(ctx)` for Convex production).
 </Callout>
 
 ## SSE Handler

@@ -202,11 +202,11 @@ All store values are this shape -- a JSON-serializable object.
 
 ## Implementations
 
-| Store | Package | Use Case |
-|-------|---------|----------|
-| `inMemoryCruxStore()` | `@crux/core/store` | Testing, development, prototyping |
-| `cruxConvexStore()` | `@crux/convex` | Production with Convex backend |
-| `cruxUpstashStore()` | `@crux/upstash` | Serverless with Upstash Redis/Vector |
+| Store                                    | Package            | Use Case                            |
+| ---------------------------------------- | ------------------ | ----------------------------------- |
+| `inMemoryCruxStore()`                    | `@crux/core/store` | Testing, development, prototyping   |
+| `defineConvexStoreContract().store(ctx)` | `@crux/convex`     | Production with Convex backend      |
+| `cruxUpstashStore()`                     | `@crux/upstash`    | Serverless with Upstash Redis/Vector |
 
 ## Types
 

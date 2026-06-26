@@ -100,7 +100,7 @@ Bundled TTL behavior:
 | Store                 | TTL behavior                             |
 | --------------------- | ---------------------------------------- |
 | `inMemoryDataStore()` | Lazy expiry on `get()` and `list()`      |
-| `cruxConvexStore()`   | Stores `_expiresAt`, lazy expiry on read |
+| Convex contract store | Stores `_expiresAt`, lazy expiry on read |
 | `cruxRedisStore()`    | Native Redis `PX` key expiration         |
 
 TTL is used by [context caching](/docs/guides/contexts/caching) and can also be used for short-lived app data.
@@ -115,7 +115,7 @@ import { inMemoryDataStore } from '@crux/core/storage'
 const data = inMemoryDataStore()
 ```
 
-Use `cruxConvexStore()` when your app already runs on Convex. Its component list query returns `{ docs, cursor }` pages from the `by_key` index while the store adapter owns TTL suppression and decoded-value filters. See the [Convex guide](/docs/guides/convex) for setup and boundary rules.
+Use `defineConvexStoreContract().store(ctx)` when your app already runs on Convex. Its component list query returns `{ docs, cursor }` pages from the `by_key` index while the store contract owns TTL suppression and decoded-value filters. See the [Convex guide](/docs/guides/convex) for setup and boundary rules.
 
 Use Upstash Redis for a simple durable key-value store:
 
@@ -147,7 +147,7 @@ data.subscribe?.((event) => {
 
 Reactive UI can use:
 
-- `createConvexTransport()` when using Convex. It consumes the component's `{ docs, cursor }` page shape and filters decoded values locally.
+- `defineConvexStoreContract().transport({ useQuery })` when using Convex. It consumes the component's `{ docs, cursor }` page shape and filters decoded values locally.
 - `createSSETransport()` with `cruxSSEHandler()` when the store implements `subscribe()`.
 - `createPollingTransport()` with any `DataStore`.
 

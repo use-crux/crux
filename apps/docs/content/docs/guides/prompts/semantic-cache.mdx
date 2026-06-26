@@ -138,12 +138,15 @@ Use a dedicated namespace/table/index for cache entries. Do not point the cache 
 For Convex, the explicit flag is a safety declaration, not a generic Convex limitation:
 
 ```ts
-const cacheStore = cruxConvexStore({
+import { defineConvexStoreContract } from '@crux/convex'
+
+const semanticCacheDocuments = defineConvexStoreContract({
   component: components.crux,
-  ctx,
   vectorIndexName: 'by_embedding',
   semanticCache: { isolatedVectorNamespace: true },
 })
+
+const cacheStore = semanticCacheDocuments.store(ctx)
 ```
 
 Only use that configuration when the backing table/index is dedicated to semantic-cache entries. A shared memory/RAG index can create false misses because unrelated vectors may rank ahead of cache entries before filters are applied.

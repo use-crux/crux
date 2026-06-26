@@ -49,16 +49,16 @@ Small text and JSON can live inline in `DataStore`. Binary and oversized payload
 
 ## Bundled Storage
 
-| Package               | Capability                   | Use for                                             |
-| --------------------- | ---------------------------- | --------------------------------------------------- |
-| `@crux/core/storage`  | `inMemoryDataStore()`        | Tests, local demos, non-durable JSON records        |
-| `@crux/core/storage`  | `inMemoryVectorStore()`      | Tests and local vector search                       |
-| `@crux/core/storage`  | `inMemoryBlobStore()`        | Tests and demos that need blob behavior             |
-| `@crux/core/storage`  | `inMemoryStorage()`          | Complete in-memory bundle for examples              |
-| `@crux/convex`        | `cruxConvexStore()`          | Durable Convex-backed data records                  |
-| `@crux/convex`        | `convexWorkspaceBlobStore()` | Workspace binary/large files in Convex file storage |
-| `@crux/upstash/redis` | `cruxRedisStore()`           | Durable Redis-backed data records                   |
-| `@crux/upstash`       | `upstashVectorStore()`       | Upstash Vector dense, sparse, and hybrid search     |
+| Package               | Capability                    | Use for                                             |
+| --------------------- | ----------------------------- | --------------------------------------------------- |
+| `@crux/core/storage`  | `inMemoryDataStore()`         | Tests, local demos, non-durable JSON records        |
+| `@crux/core/storage`  | `inMemoryVectorStore()`       | Tests and local vector search                       |
+| `@crux/core/storage`  | `inMemoryBlobStore()`         | Tests and demos that need blob behavior             |
+| `@crux/core/storage`  | `inMemoryStorage()`           | Complete in-memory bundle for examples              |
+| `@crux/convex`        | `defineConvexStoreContract()` | Durable Convex-backed data records and React reads  |
+| `@crux/convex`        | `convexWorkspaceBlobStore()`  | Workspace binary/large files in Convex file storage |
+| `@crux/upstash/redis` | `cruxRedisStore()`            | Durable Redis-backed data records                   |
+| `@crux/upstash`       | `upstashVectorStore()`        | Upstash Vector dense, sparse, and hybrid search     |
 
 ## Where To Go Next
 

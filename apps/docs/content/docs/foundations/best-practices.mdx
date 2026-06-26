@@ -178,19 +178,22 @@ For user-facing input, rely on Crux's auto-escaping (enabled by default). Only u
 
 ## Start with `inMemoryDataStore()`, swap later
 
-Memory blocks can run on the in-memory store first, then move to `cruxConvexStore()` or a custom store for production. The block API does not change; only the store does.
+Memory blocks can run on the in-memory store first, then move to a Convex store contract or a custom store for production. The block API does not change; only the store does.
 
 ```ts
+import { defineConvexStoreContract } from '@crux/convex'
+
 // Development
 const data = inMemoryDataStore()
 const factsBlock = facts({ id: 'facts', embed })
 const mem = memory({ id: 'assistant', namespace: 'user:123', store: data, blocks: [factsBlock] })
 
 // Production -- same memory shape, persistent store
+const cruxDocuments = defineConvexStoreContract({ component: components.crux })
 const mem = memory({
   id: 'assistant',
   namespace: 'user:123',
-  store: cruxConvexStore({ component: components.crux, ctx }),
+  store: cruxDocuments.store(ctx),
   blocks: [factsBlock],
 })
 ```

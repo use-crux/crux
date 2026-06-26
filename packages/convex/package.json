@@ -83,11 +83,6 @@
     },
     "./_generated/component.js": {
       "types": "./src/component/_generated/component.ts"
-    },
-    "./react": {
-      "types": "./react.ts",
-      "import": "./react.ts",
-      "require": "./react.ts"
     }
   },
   "dependencies": {

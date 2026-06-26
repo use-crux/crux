@@ -1,19 +1,17 @@
 /**
  * `@crux/convex` — Convex storage adapter for Crux.
  *
- * Provides `cruxConvexStore()` that implements `CruxStore` backed by
- * Convex tables. Entries are persisted as Convex documents with full indexing.
+ * Provides `defineConvexStoreContract()` for creating server-side stores and
+ * React transports backed by the same Convex store document contract.
  *
  * **Setup:** Install the crux Convex component and use the component ref:
  *
  * ```ts
- * import { cruxConvexStore } from '@crux/convex'
+ * import { defineConvexStoreContract } from '@crux/convex'
  * import { components } from './_generated/api'
  *
- * const store = cruxConvexStore({
- *   component: components.crux,
- *   ctx,
- * })
+ * const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+ * const store = cruxDocuments.store(ctx)
  * ```
  *
  * @module
@@ -40,8 +38,19 @@ export type {
   CruxConvexProfileAgentConfig,
   CruxConvexRunScope,
 } from './profile'
-export { cruxConvexStore } from './store'
-export type { ConvexContext, ConvexCtxPort, ConvexMemoryStoreConfig } from './store'
+export { defineConvexStoreContract } from './store-contract'
+export type { ConvexContext, ConvexCtxPort } from './store'
+export type {
+  ConvexStoreContract,
+  ConvexStoreContractTransportOptions,
+  ConvexStoreSemanticCacheOptions,
+  DefineConvexStoreContractOptions,
+} from './store-contract'
+export type {
+  ConvexCruxStoreComponent,
+  ConvexCruxStoreMemoryComponent,
+  ConvexCruxStoreTransportComponent,
+} from './store-component'
 export {
   context,
   contributor,

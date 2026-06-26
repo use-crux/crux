@@ -1246,11 +1246,12 @@ The crux Convex component (`@crux/convex/convex.config`) provides persistence ta
 - State stored in component's `swarmRuns` table automatically
 - This helper is experimental. The stable launch model is that compositions execute immediately, while durable orchestration uses `flow()`.
 
-**`cruxConvexStore({ component, ctx })`** — memory backed by component's `memories` table:
+**`defineConvexStoreContract({ component })`** — store document contract backed by the component's `memories` table:
 
 - No manual schema or function references needed
 - Works with memory blocks, blackboards, plans, workspace metadata, and other `CruxStore` consumers
-- Vector search falls back to `ctx.vectorSearch()` (action context)
+- `store(ctx)` uses `ctx.vectorSearch()` for dense vector search when available
+- `transport({ useQuery })` uses the same document contract for React reads
 - Component `memory.list` owns only `by_key` prefix pagination and returns `{ docs, cursor }`
 - Store-document policy owns `_cruxDoc` decoding, TTL cleanup, top-level value filters, vector hit shaping, and filtered-page filling
 
@@ -1373,9 +1374,9 @@ result._meta = {
 
 ### Convex (`convex/`)
 
-`cruxConvexStore({ component, ctx })` — implements the data-store side of Crux storage and remains compatible with `CruxStore` consumers. It is backed by the crux Convex component's `memories` table. Accepts the component ref and a structural `ConvexCtxPort`. Dense vector search falls back to `ctx.vectorSearch()` where configured. The Convex component query boundary is intentionally small: `memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. The Convex package keeps `_cruxDoc` JSON decoding, legacy raw memory fallback, TTL suppression/lazy deletion, top-level filters, filtered-list page filling, vector scores, and strict React transport reads behind one internal store-document boundary so imperative stores and React transport cannot drift.
+`defineConvexStoreContract({ component })` — implements the Convex store document contract for Crux storage. It is backed by the crux Convex component's `memories` table. `store(ctx)` accepts a structural `ConvexCtxPort` and uses `ctx.vectorSearch()` where configured. `transport({ useQuery })` reads through the same contract for React hooks. The Convex component query boundary is intentionally small: `memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. The Convex package keeps current `_cruxDoc` JSON decoding, TTL suppression/lazy deletion, top-level filters, filtered-list page filling, vector scores, and strict React transport reads behind one store-document boundary so server stores and React transport cannot drift.
 
-`createCruxConvex({ components, store })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed store resolver, optional `store.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge store reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same store resolver. The profile-backed Convex Agent facade keeps a Convex-Agent-compatible public shape while routing turn preparation through an internal lifecycle and `ConvexAgentDriver` port; only the production SDK adapter imports `@convex-dev/agent`, and boundary tests use a fake driver for request-scoped store binding, prompt/use merging, tool adaptation, stream callbacks, persistence, and driver failures. Lower-level exports (`cruxConvexStore({ component, ctx })`, `convexAgent({ components, ... })`, `runWithConvexCruxRuntime()`, and bridge `setup({ component | store })`) remain available for package internals and manual integrations, but application integrations should start from the profile so component-store wiring has one owner. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, dense vector result shaping, legacy decode behavior, sparse/hybrid rejection, and capability reporting.
+`createCruxConvex({ components, store })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed store resolver, optional `store.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge store reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same store resolver. The profile-backed Convex Agent facade keeps a Convex-Agent-compatible public shape while routing turn preparation through an internal lifecycle and `ConvexAgentDriver` port; only the production SDK adapter imports `@convex-dev/agent`, and boundary tests use a fake driver for request-scoped store binding, prompt/use merging, tool adaptation, stream callbacks, persistence, and driver failures. Lower-level store and transport helpers remain package-internal implementation details; application integrations should start from the profile or `defineConvexStoreContract()`. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, dense vector result shaping, sparse/hybrid rejection, and capability reporting.
 
 Also exports Convex-specific helpers:
 
@@ -1387,7 +1388,7 @@ Also exports Convex-specific helpers:
 
 `cruxUpstashStore(config)` — compatibility combined storage: text/metadata persisted in Convex (reliable, transactional), vectors stored in Upstash Vector (fast similarity search). Uses Upstash Vector's namespace feature for data isolation (e.g., `memory-{projectId}`).
 
-Use `upstashVectorStore()` for new retrieval/indexing code. Key/value memory blocks can use `cruxConvexStore`; embedding-backed legacy blocks need a vector-capable compatibility store until they move to the explicit split.
+Use `upstashVectorStore()` for new retrieval/indexing code. Key/value memory blocks can use a Convex contract store; embedding-backed blocks should use an explicit vector-capable store path.
 
 ## Canonical Observability Runtime
 

@@ -62,7 +62,7 @@ The kit is intentionally agnostic about where activation snapshots live. A few p
 
 | Storage                           | Good for                                                            |
 | --------------------------------- | ------------------------------------------------------------------- |
-| `cruxConvexStore` keyed by thread | Convex backends — co-locates skill state with the thread            |
+| Convex contract store keyed by thread | Convex backends — co-locates skill state with the thread            |
 | A field on the thread document    | Simplest if you already store thread metadata                       |
 | Redis                             | Stateless function runtimes that need fast per-conversation lookups |
 | In-memory map                     | Local development, tests, or single-process agents                  |

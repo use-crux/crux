@@ -2,16 +2,19 @@
  * Convex transport for `@crux/react` hooks.
  *
  * Uses Convex's native `useQuery()` for automatic WebSocket-based reactivity.
- * Plans, task lists, and tasks stored via `cruxConvexStore()` are automatically
- * reactive — no polling or SSE needed.
+ * App code should usually create this through
+ * `defineConvexStoreContract().transport()` so server stores and React reads
+ * share one document contract.
  *
  * @example
  * ```tsx
  * import { CruxProvider } from '@crux/react'
- * import { createConvexTransport } from '@crux/convex/react'
+ * import { defineConvexStoreContract } from '@crux/convex'
+ * import { useQuery } from 'convex/react'
  * import { api } from '../convex/_generated/api'
  *
- * const transport = createConvexTransport({ api: api.crux, useQuery })
+ * const cruxDocuments = defineConvexStoreContract({ component: api.crux })
+ * const transport = cruxDocuments.transport({ useQuery })
  *
  * <ConvexProvider client={convex}>
  *   <CruxProvider transport={transport}>
@@ -30,25 +33,14 @@
  */
 type UseQueryArgs = Record<string, unknown> | 'skip'
 
-type UseQueryFn = (query: unknown, args: UseQueryArgs) => unknown
-
-/**
- * Minimal interface for the Convex component API.
- * Only requires the `memory` module with `get` and `list` query references.
- */
-interface CruxComponentApi {
-  memory: {
-    get: unknown
-    list: unknown
-  }
-}
+export type UseQueryFn = (query: unknown, args: UseQueryArgs) => unknown
 
 /**
  * Configuration for the Convex transport.
  */
-interface ConvexTransportConfig {
+export interface ConvexTransportConfig {
   /** The Convex component API (e.g., `api.crux` or `components.crux`). */
-  api: CruxComponentApi
+  api: ConvexCruxStoreTransportComponent
   /**
    * The Convex `useQuery` hook. Pass this to avoid requiring `convex/react`
    * as a direct dependency of `@crux/convex`.
@@ -56,7 +48,7 @@ interface ConvexTransportConfig {
    * @example
    * ```ts
    * import { useQuery } from 'convex/react'
-   * createConvexTransport({ api: api.crux, useQuery })
+   * cruxDocuments.transport({ useQuery })
    * ```
    */
   useQuery: UseQueryFn
@@ -66,6 +58,7 @@ interface ConvexTransportConfig {
 export type { CruxTransport } from '@crux/react'
 import type { CruxTransport } from '@crux/react'
 import type { JsonObject, StoreEntry, ListOptions } from '@crux/core/store'
+import type { ConvexCruxStoreTransportComponent } from './store-component'
 import { createStoreDocCodec, type StoreDocPage, type StoreDocPageQuery, type StoreDocRecord } from './store-doc'
 
 /**
@@ -84,12 +77,10 @@ import { createStoreDocCodec, type StoreDocPage, type StoreDocPageQuery, type St
  * @example
  * ```tsx
  * import { useQuery } from 'convex/react'
- * import { createConvexTransport } from '@crux/convex/react'
+ * import { defineConvexStoreContract } from '@crux/convex'
  *
- * const transport = createConvexTransport({
- *   api: api.crux,  // or components.crux
- *   useQuery,
- * })
+ * const cruxDocuments = defineConvexStoreContract({ component: api.crux })
+ * const transport = cruxDocuments.transport({ useQuery })
  *
  * <CruxProvider transport={transport}>
  *   <App />

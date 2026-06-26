@@ -10,7 +10,7 @@
  */
 
 import type { CruxStore } from '@crux/core/store'
-import type { ComponentApi } from './src/component/_generated/component'
+import type { ConvexCruxStoreComponent } from './store-component'
 import { createStoreDocStore, type StoreDocPage, type StoreDocPageQuery, type StoreDocRecord } from './store-doc'
 
 /**
@@ -36,13 +36,13 @@ export interface ConvexCtxPort {
   ): Promise<readonly StoreDocRecord[]>
 }
 
-/** Alias for Convex ctx values accepted by `cruxConvexStore()`. */
+/** Alias for Convex ctx values accepted by the Convex store contract. */
 export type ConvexContext = ConvexCtxPort
 
 /** Configuration for the Convex component-backed CruxStore. */
 export interface ConvexMemoryStoreConfig<TCtx extends ConvexCtxPort = ConvexCtxPort> {
   /** The Crux persistence component ref from `components.crux`. */
-  component: ComponentApi
+  component: ConvexCruxStoreComponent
   /** Convex action or mutation ctx with query/mutation runners. */
   ctx: TCtx
   /**
@@ -61,6 +61,8 @@ export interface ConvexMemoryStoreConfig<TCtx extends ConvexCtxPort = ConvexCtxP
   semanticCache?: {
     isolatedVectorNamespace?: boolean
   }
+  /** Clock used for writes and TTL checks. Defaults to `Date.now`. */
+  now?: () => number
 }
 
 /**
@@ -75,13 +77,11 @@ export interface ConvexMemoryStoreConfig<TCtx extends ConvexCtxPort = ConvexCtxP
  *
  * @example
  * ```ts
- * import { cruxConvexStore } from '@crux/convex'
+ * import { defineConvexStoreContract } from '@crux/convex'
  * import { components } from './_generated/api'
  *
- * const store = cruxConvexStore({
- *   component: components.crux,
- *   ctx,
- * })
+ * const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+ * const store = cruxDocuments.store(ctx)
  * ```
  */
 export function cruxConvexStore<TCtx extends ConvexCtxPort = ConvexCtxPort>(
@@ -92,6 +92,7 @@ export function cruxConvexStore<TCtx extends ConvexCtxPort = ConvexCtxPort>(
   const vectorSearch = ctx.vectorSearch
 
   return createStoreDocStore({
+    now: config.now,
     semanticCache: config.semanticCache,
     denseVectorSearch: true,
     io: {

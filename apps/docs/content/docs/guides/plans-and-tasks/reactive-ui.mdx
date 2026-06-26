@@ -125,19 +125,18 @@ function App() {
 
 ### Convex Transport
 
-If your backend is Convex, the store is natively reactive — no extra setup beyond the standard Convex provider:
+If your backend is Convex, create the transport from the same store document contract used by server functions:
 
 ```tsx
 import { CruxProvider } from '@crux/react'
-import { createConvexTransport } from '@crux/convex/react'
+import { defineConvexStoreContract } from '@crux/convex'
 import { useQuery } from 'convex/react'
 import { components } from '../convex/_generated/api'
 
+const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+
 function App() {
-  const transport = createConvexTransport({
-    api: components.crux,
-    useQuery,
-  })
+  const transport = cruxDocuments.transport({ useQuery })
 
   return (
     <CruxProvider transport={transport}>

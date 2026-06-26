@@ -41,8 +41,8 @@ export interface CruxConvexBridgeSetupOptions {
    * Optional ctx-aware store factory.
    *
    * Convex stores usually need the current function ctx, so real Convex apps
-   * should pass `store: (ctx) => cruxConvexStore({ component, ctx })` unless
-   * the Crux config already contains a readable `persistence.store`.
+   * should pass `store: (ctx) => cruxDocuments.store(ctx)` unless the Crux
+   * config already contains a readable `persistence.store`.
    */
   store?: (ctx: unknown) => CruxStore | Promise<CruxStore>
   /**

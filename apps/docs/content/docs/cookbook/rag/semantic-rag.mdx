@@ -54,14 +54,15 @@ export const sparse = embedding({
 ### `lib/rag/storage.ts`
 
 ```ts
-import { cruxConvexStore } from '@crux/convex'
+import { defineConvexStoreContract } from '@crux/convex'
 import { upstashVectorStore } from '@crux/upstash'
 import { Index } from '@upstash/vector'
 
-export const data = cruxConvexStore({
+const cruxDocuments = defineConvexStoreContract({
   component: components.crux,
-  ctx,
 })
+
+export const data = cruxDocuments.store(ctx)
 
 export const vectors = upstashVectorStore({
   index: new Index({

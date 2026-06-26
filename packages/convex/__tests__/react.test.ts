@@ -32,7 +32,7 @@ describe('createConvexTransport document boundary', () => {
       },
     })
 
-    expect(() => malformed.transport.useDocument('memory:bad')).toThrow(/expected a CruxStore document/i)
+    expect(() => malformed.transport.useDocument('memory:bad')).toThrow(/current Crux store format/i)
   })
 
   it('suppresses expired list documents and applies top-level filters', () => {

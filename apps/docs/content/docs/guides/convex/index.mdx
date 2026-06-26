@@ -19,7 +19,7 @@ Convex is a serverless runtime: actions can run in fresh workers, scheduled work
 convex/
   convex.config.ts        # installs @crux/convex component
   crux/
-    store.ts              # cruxConvexStore() helper
+    store.ts              # defineConvexStoreContract() helper
   prompts/
     index.ts              # prompt/context/agent definitions
   agent/
@@ -37,7 +37,7 @@ convex/
 | Use `action()` / `internalAction()` from `@crux/convex/server` for AI runtime boundaries | Restores trace context, provides `ctx.crux`, and flushes before workers exit                    |
 | Use `ctx.crux.runAction(label, ref, args)` for child AI work                             | Preserves parent/child relations across worker boundaries                                       |
 | Keep app-specific mutation helpers in your app                                           | Table names, tenancy, and auth are application policy                                           |
-| Use `cruxConvexStore()` for Crux data records                                            | One component-backed store for memory, blackboards, plans, prompt cache, and workspace metadata |
+| Use `defineConvexStoreContract()` for Crux data records                                  | One component-backed contract for memory, blackboards, plans, prompt cache, workspace metadata, and React reads |
 | Use `@crux/convex/agent` with Convex Agent                                               | Tool calls get readable names and nested work inherits the active span                          |
 | Use `flow()` for suspend/resume; treat `createComponentSwarm()` as experimental          | Compositions execute immediately; durable swarm semantics are still being explored               |
 
@@ -63,7 +63,7 @@ convex/
   />
   <Card
     title="Storage, memory, workspaces"
-    description="Use cruxConvexStore(), memory blocks, blackboards, and Convex file storage."
+    description="Use defineConvexStoreContract(), memory blocks, blackboards, and Convex file storage."
     href="/docs/guides/convex/storage-memory-workspaces"
   />
   <Card
