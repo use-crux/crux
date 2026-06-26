@@ -1,154 +1,178 @@
-import ts from 'typescript'
-import { propertyName, stringProperty } from '../../ast/literals'
-import type { SemanticAnalyzerView } from '../candidates'
+import type { SemanticAnalyzerNode, SemanticAnalyzerView } from '../candidates'
 import {
-  isResolvableSourceExpression,
-  propertyInitializer,
-  resolveSemanticExpression,
-  semanticResolvedKey,
-  unwrapExpression,
-} from './source-refs'
+  semanticIsResolvableSourceExpression,
+  semanticPropertyInitializer,
+  semanticPropertyName,
+  semanticStringLiteralProperty as semanticSyntaxStringLiteralProperty,
+} from '../syntax-readers'
+import { resolveSemanticExpression, semanticResolvedKey } from './source-refs'
 
 /**
  * Resolves an expression to an object literal, following source declarations
  * recursively.
- *
- * The `seen` set prevents cycles across declarations; each recursive branch
- * receives a new set so caller-owned state remains untouched.
  */
 export function semanticObjectExpression(
-  expression: ts.Expression,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
   view: SemanticAnalyzerView,
   seen: Set<string>,
-): ts.ObjectLiteralExpression | undefined {
-  const unwrapped = unwrapExpression(expression)
-  if (ts.isObjectLiteralExpression(unwrapped)) return unwrapped
-  if (!isResolvableSourceExpression(unwrapped)) return undefined
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  const unwrapped = view.syntax.unwrapExpression(expression)
+  if (view.syntax.isKind(unwrapped, 'objectLiteral')) return unwrapped
+  if (!semanticIsResolvableSourceExpression(unwrapped, view.syntax)) return undefined
   const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved?.expression) return undefined
   const key = semanticResolvedKey(resolved)
   if (seen.has(key)) return undefined
-  const nextSeen = new Set(seen)
-  nextSeen.add(key)
-  return semanticObjectExpression(resolved.expression, view, nextSeen)
+  return semanticObjectExpression(resolved.expression, view, new Set([...seen, key]))
 }
 
 /** Returns a direct object literal property initializer. */
-export function objectProperty(object: ts.ObjectLiteralExpression, name: string): ts.ObjectLiteralExpression | undefined {
-  const property = propertyInitializer(object, name)
-  return property && ts.isObjectLiteralExpression(toExpression(property))
-    ? (toExpression(property) as ts.ObjectLiteralExpression)
-    : undefined
+export function objectProperty(
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  name: string,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  const property = propertyInitializer(object, name, view)
+  const expression = property ? toExpression(property, view) : undefined
+  return expression && view.syntax.isKind(expression, 'objectLiteral') ? expression : undefined
 }
 
 /** Returns an object property after following resolvable source declarations. */
 export function semanticObjectProperty(
-  object: ts.ObjectLiteralExpression,
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
   name: string,
   view: SemanticAnalyzerView,
-): ts.ObjectLiteralExpression | undefined {
-  const property = propertyInitializer(object, name)
-  return property ? semanticObjectExpression(toExpression(property), view, new Set()) : undefined
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  const property = propertyInitializer(object, name, view)
+  return property ? semanticObjectExpression(toExpression(property, view), view, new Set()) : undefined
 }
 
 /** Returns a direct array literal property initializer. */
-export function arrayProperty(object: ts.ObjectLiteralExpression, name: string): ts.ArrayLiteralExpression | undefined {
-  const property = propertyInitializer(object, name)
-  return property && ts.isArrayLiteralExpression(toExpression(property))
-    ? (toExpression(property) as ts.ArrayLiteralExpression)
-    : undefined
+export function arrayProperty(
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  name: string,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  const property = propertyInitializer(object, name, view)
+  const expression = property ? toExpression(property, view) : undefined
+  return expression && view.syntax.isKind(expression, 'arrayLiteral') ? expression : undefined
 }
 
 /** Returns an array property after following resolvable source declarations. */
 export function semanticArrayProperty(
-  object: ts.ObjectLiteralExpression,
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
   name: string,
   view: SemanticAnalyzerView,
-): ts.ArrayLiteralExpression | undefined {
-  const property = propertyInitializer(object, name)
-  return property ? semanticArrayExpression(toExpression(property), view, new Set()) : undefined
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  const property = propertyInitializer(object, name, view)
+  return property ? semanticArrayExpression(toExpression(property, view), view, new Set()) : undefined
 }
 
-/**
- * Resolves an expression to an array literal, following source declarations
- * recursively with cycle protection.
- */
+/** Resolves an expression to an array literal with cycle protection. */
 export function semanticArrayExpression(
-  expression: ts.Expression,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
   view: SemanticAnalyzerView,
   seen: Set<string>,
-): ts.ArrayLiteralExpression | undefined {
-  const unwrapped = unwrapExpression(expression)
-  if (ts.isArrayLiteralExpression(unwrapped)) return unwrapped
-  if (!isResolvableSourceExpression(unwrapped)) return undefined
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  const unwrapped = view.syntax.unwrapExpression(expression)
+  if (view.syntax.isKind(unwrapped, 'arrayLiteral')) return unwrapped
+  if (!semanticIsResolvableSourceExpression(unwrapped, view.syntax)) return undefined
   const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved?.expression) return undefined
   const key = semanticResolvedKey(resolved)
   if (seen.has(key)) return undefined
-  const nextSeen = new Set(seen)
-  nextSeen.add(key)
-  return semanticArrayExpression(resolved.expression, view, nextSeen)
+  return semanticArrayExpression(resolved.expression, view, new Set([...seen, key]))
 }
 
-/** Reads a string-literal property after unwrapping harmless TypeScript wrappers. */
-export function semanticStringLiteralProperty(object: ts.ObjectLiteralExpression, name: string): string | undefined {
-  const initializer = propertyInitializer(object, name)
-  if (!initializer) return undefined
-  const expression = unwrapExpression(initializer)
-  return ts.isStringLiteralLike(expression) ? expression.text : undefined
+/** Reads a string-literal property after unwrapping harmless wrappers. */
+export function semanticStringLiteralProperty(
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  name: string,
+  view: SemanticAnalyzerView,
+): string | undefined {
+  return semanticStringLiteralPropertyFromSyntax(object, name, view)
 }
 
 /** Detects whether the final `fallback(...)` argument is an options object. */
-export function semanticFallbackOptions(call: ts.CallExpression): ts.ObjectLiteralExpression | undefined {
-  const last = call.arguments.at(-1)
-  if (!last || !ts.isObjectLiteralExpression(last)) return undefined
+export function semanticFallbackOptions(
+  call: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  const last = view.syntax.callArguments(call).at(-1)
+  if (!last || !view.syntax.isKind(last, 'objectLiteral')) return undefined
   const hasOptionsShape = Boolean(
-    stringProperty(last, 'id') ||
-      stringProperty(last, 'description') ||
-      propertyInitializer(last, 'timeout') ||
-      propertyInitializer(last, 'timeoutMs') ||
-      propertyInitializer(last, 'on') ||
-      propertyInitializer(last, 'shouldFallback') ||
-      propertyInitializer(last, 'onAttemptError'),
+    semanticStringLiteralPropertyFromSyntax(last, 'id', view) ||
+      semanticStringLiteralPropertyFromSyntax(last, 'description', view) ||
+      propertyInitializer(last, 'timeout', view) ||
+      propertyInitializer(last, 'timeoutMs', view) ||
+      propertyInitializer(last, 'on', view) ||
+      propertyInitializer(last, 'shouldFallback', view) ||
+      propertyInitializer(last, 'onAttemptError', view),
   )
   return hasOptionsShape ? last : undefined
 }
 
 /** Returns one or more expressions represented by a property value. */
-export function propertyExpressions(object: ts.ObjectLiteralExpression, name: string): ts.Expression[] {
-  const property = propertyInitializer(object, name)
+export function propertyExpressions(
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  name: string,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView>[] {
+  const property = propertyInitializer(object, name, view)
   if (!property) return []
-  const expression = toExpression(property)
-  return ts.isArrayLiteralExpression(expression)
-    ? expression.elements.filter((item): item is ts.Expression => ts.isExpression(item))
+  const expression = toExpression(property, view)
+  return view.syntax.isKind(expression, 'arrayLiteral')
+    ? view.syntax.arrayElements(expression).filter((element) => !view.syntax.spreadExpression(element))
     : [expression]
 }
 
 /** Returns expression elements from an array literal property. */
-export function arrayPropertyExpressions(object: ts.ObjectLiteralExpression, name: string): ts.Expression[] {
-  return arrayProperty(object, name)?.elements.filter((item): item is ts.Expression => ts.isExpression(item)) ?? []
+export function arrayPropertyExpressions(
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  name: string,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView>[] {
+  const array = arrayProperty(object, name, view)
+  return array ? view.syntax.arrayElements(array).filter((element) => !view.syntax.spreadExpression(element)) : []
 }
 
 /** Returns the value expression for object members that can carry values. */
-export function objectMemberExpression(property: ts.ObjectLiteralElementLike): ts.Expression | undefined {
-  if (ts.isShorthandPropertyAssignment(property)) return property.name
-  if (ts.isPropertyAssignment(property)) return property.initializer
-  return undefined
+export function objectMemberExpression(
+  property: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  return view.syntax.propertyInitializer(property)
 }
 
 /** Returns the static property name for object literal members. */
-export function semanticObjectPropertyName(property: ts.ObjectLiteralElementLike): string | undefined {
-  if (
-    ts.isPropertyAssignment(property) ||
-    ts.isShorthandPropertyAssignment(property) ||
-    ts.isMethodDeclaration(property)
-  ) {
-    return propertyName(property.name)
-  }
-  return undefined
+export function semanticObjectPropertyName(
+  property: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): string | undefined {
+  return semanticPropertyName(property, view.syntax)
+}
+
+/** Returns the value expression for a named object property. */
+export function propertyInitializer(
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  name: string,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  return semanticPropertyInitializer(object, name, view.syntax)
 }
 
 /** Normalizes shorthand assignments to the expression they represent. */
-export function toExpression(value: ts.Expression | ts.ShorthandPropertyAssignment): ts.Expression {
-  return ts.isShorthandPropertyAssignment(value) ? value.name : value
+export function toExpression(
+  value: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView> {
+  return view.syntax.propertyInitializer(value) ?? value
+}
+
+function semanticStringLiteralPropertyFromSyntax(
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  name: string,
+  view: SemanticAnalyzerView,
+): string | undefined {
+  return semanticSyntaxStringLiteralProperty(object, name, view.syntax)
 }

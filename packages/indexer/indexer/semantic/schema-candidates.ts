@@ -1,15 +1,14 @@
-import type * as ts from 'typescript'
 import type {
   SemanticDefinitionCandidate,
   SemanticSchemaCandidate,
   SemanticSchemaMetadataKey,
   SemanticSchemaProperty,
 } from './candidates'
-
-export interface SemanticSchemaCandidateDeps {
-  readonly isResolvableSourceExpression: (expression: ts.Expression) => boolean
-  readonly propertyInitializer: (object: ts.ObjectLiteralExpression, name: string) => ts.Expression | undefined
-}
+import {
+  semanticIsResolvableSourceExpression,
+  semanticPropertyInitializer,
+} from './syntax-readers'
+import type { SemanticSyntaxNode, SemanticSyntaxSourceFile, SemanticSyntaxView } from './syntax-view'
 
 /**
  * Selects schema-bearing properties from an authored definition candidate.
@@ -17,12 +16,16 @@ export interface SemanticSchemaCandidateDeps {
  * The returned candidates are analyzer inputs only; this function does not
  * resolve imported symbols or parse schemas.
  */
-export function semanticSchemaCandidates(
-  candidate: SemanticDefinitionCandidate,
-  deps: SemanticSchemaCandidateDeps,
-): SemanticSchemaCandidate[] {
+export function semanticSchemaCandidates<
+  TNode extends SemanticSyntaxNode,
+  TCall extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
+  candidate: SemanticDefinitionCandidate<TNode, TCall>,
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
+): SemanticSchemaCandidate<TNode, TCall, TNode>[] {
   return schemaCandidateSpecs.flatMap((spec) =>
-    semanticSchemaCandidate(candidate, spec.property, spec.metadataKey, deps),
+    semanticSchemaCandidate(candidate, spec.property, spec.metadataKey, syntax),
   )
 }
 
@@ -41,14 +44,18 @@ const schemaCandidateSpecs: readonly {
 /**
  * Converts a single property into a schema candidate when it is resolvable.
  */
-function semanticSchemaCandidate(
-  candidate: SemanticDefinitionCandidate,
+function semanticSchemaCandidate<
+  TNode extends SemanticSyntaxNode,
+  TCall extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
+  candidate: SemanticDefinitionCandidate<TNode, TCall>,
   property: SemanticSchemaProperty,
   metadataKey: SemanticSchemaMetadataKey,
-  deps: SemanticSchemaCandidateDeps,
-): SemanticSchemaCandidate[] {
-  const expression = deps.propertyInitializer(candidate.object, property)
-  return expression && deps.isResolvableSourceExpression(expression)
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
+): SemanticSchemaCandidate<TNode, TCall, TNode>[] {
+  const expression = semanticPropertyInitializer(candidate.object, property, syntax)
+  return expression && semanticIsResolvableSourceExpression(expression, syntax)
     ? [{ ...candidate, property, metadataKey, expression }]
     : []
 }

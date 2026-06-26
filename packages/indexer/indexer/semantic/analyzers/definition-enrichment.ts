@@ -1,4 +1,3 @@
-import type * as ts from 'typescript'
 import type {
   SemanticAnalyzerContext,
   SemanticAnalyzerView,

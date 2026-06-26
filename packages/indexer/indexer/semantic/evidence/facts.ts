@@ -1,11 +1,9 @@
-import ts from 'typescript'
 import type { IndexLintFinding, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@crux/core/project-index'
-import { stringProperty } from '../../ast/literals'
-import { safeId } from '../../definitions'
 import type { IndexPatchFacts } from '../../patches'
 import { semanticLintFactAnalyzer } from '../analyzers/lint-fact'
 import type {
   SemanticAnalyzerContext,
+  SemanticAnalyzerSourceFile,
   SemanticAnalyzerView,
   SemanticDefinitionCandidate,
   SemanticSourceRefCandidate,
@@ -30,21 +28,15 @@ import {
   type SemanticSourceFileFactInput,
 } from '../backends/typescript/fact-input'
 import {
-  callExpressionName,
-  isResolvableSourceExpression,
-  propertyInitializer,
   resolveSemanticExpression,
   semanticDefinitionPatchBase,
   semanticExpressionToJsonSchema,
-  semanticFallbackOptions,
   semanticNestedSchemaSourceRefs,
   semanticSchemaSourceRef,
   semanticInjectionConditionSourceRefs,
   semanticSourceRef,
   semanticTemplateInterpolationSourceRefs,
   semanticToolMapSourceRefs,
-  unwrapExpression,
-  variableNameForNode,
 } from '../model'
 
 interface SemanticSchemaIndexFacts {
@@ -76,16 +68,8 @@ interface SemanticLintIndexFacts {
 }
 
 const semanticAnalyzers = createSemanticAnalyzers({
-  schemaCandidates: (candidate) =>
-    semanticSchemaCandidates(candidate, {
-      propertyInitializer,
-      isResolvableSourceExpression,
-    }),
-  sourceRefCandidates: (candidate) =>
-    semanticSourceRefCandidates(candidate, {
-      propertyInitializer,
-      isResolvableSourceExpression,
-    }),
+  schemaCandidates: (candidate, view) => semanticSchemaCandidates(candidate, view.syntax),
+  sourceRefCandidates: (candidate, view) => semanticSourceRefCandidates(candidate, view.syntax),
   resolveExpression: resolveSemanticExpression,
   expressionToJsonSchema: semanticExpressionToJsonSchema,
   definitionPatchBase: semanticDefinitionPatchBase,
@@ -136,8 +120,8 @@ export function* semanticIndexEvidenceBatches(
 /**
  * Runs semantic analyzers for already prepared source files and compiler view.
  */
-export function* semanticIndexEvidenceBatchesForSourceFiles(
-  input: SemanticSourceFileFactInput,
+export function* semanticIndexEvidenceBatchesForSourceFiles<TView extends SemanticAnalyzerView>(
+  input: SemanticSourceFileFactInput<TView>,
   options: Pick<SemanticIndexFactsOptions, 'instrumentation'> = {},
 ): Iterable<SemanticEvidenceBatch> {
   if (input.sourceFiles.length === 0) {
@@ -242,9 +226,9 @@ function runSemanticAnalyzer(
 /**
  * Runs all definition analyzers against all candidate definitions.
  */
-function runSemanticAnalyzers(
-  sourceFiles: readonly ts.SourceFile[],
-  view: SemanticAnalyzerView,
+function runSemanticAnalyzers<TView extends SemanticAnalyzerView>(
+  sourceFiles: readonly SemanticAnalyzerSourceFile<TView>[],
+  view: TView,
   analyzers: readonly SemanticDefinitionAnalyzer[],
   options: Pick<SemanticIndexFactsOptions, 'instrumentation'> = {},
 ): Required<SemanticAnalyzerResult> {
@@ -253,15 +237,7 @@ function runSemanticAnalyzers(
     const analyzerResults: SemanticAnalyzerResult[] = []
 
     for (const sourceFile of sourceFiles) {
-      for (const candidate of semanticDefinitionCandidates(sourceFile, {
-        callExpressionName,
-        fallbackOptions: semanticFallbackOptions,
-        propertyInitializer,
-        safeId,
-        stringProperty,
-        unwrapExpression,
-        variableNameForNode,
-      })) {
+      for (const candidate of semanticDefinitionCandidates(sourceFile, view.syntax)) {
         for (const analyzer of analyzers) {
           analyzerResults.push(analyzer.analyze(candidate, context))
         }

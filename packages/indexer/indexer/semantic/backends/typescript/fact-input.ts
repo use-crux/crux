@@ -1,9 +1,8 @@
-import ts from 'typescript'
-import type { SemanticAnalyzerView } from '../../candidates'
+import type { SemanticAnalyzerSourceFile, SemanticAnalyzerView } from '../../candidates'
 import type { SemanticIndexInstrumentation } from '../../instrumentation'
 import { measureSemanticTiming } from '../../instrumentation'
-import { semanticProgram, semanticProgramSourceFiles, type SemanticProgramSession } from './program'
-import { createTypeScriptSemanticCompilerView } from './compiler-view'
+import { semanticProgram, type SemanticProgramSession } from './program'
+import { createTypeScriptSemanticCompilerView, type TypeScriptSemanticCompilerView } from './compiler-view'
 
 export interface SemanticIndexFactsOptions {
   /** Optional timing hook for semantic analyzer phases. */
@@ -14,11 +13,11 @@ export interface SemanticIndexFactsOptions {
   readonly programIdentity?: string
 }
 
-export interface SemanticSourceFileFactInput {
+export interface SemanticSourceFileFactInput<TView extends SemanticAnalyzerView = TypeScriptSemanticCompilerView> {
   /** Source files selected for candidate discovery. */
-  readonly sourceFiles: readonly ts.SourceFile[]
+  readonly sourceFiles: readonly SemanticAnalyzerSourceFile<TView>[]
   /** Backend-owned compiler view used for semantic resolution. */
-  readonly view: SemanticAnalyzerView
+  readonly view: TView
 }
 
 /** Creates source files and a compiler view for the JavaScript TypeScript backend. */
@@ -41,7 +40,7 @@ export function createTypeScriptSemanticFactInput(
     checker,
   })
   return {
-    sourceFiles: semanticProgramSourceFiles(program, files),
+    sourceFiles: view.sourceFiles(files),
     view,
   }
 }

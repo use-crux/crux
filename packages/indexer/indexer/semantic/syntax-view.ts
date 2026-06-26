@@ -110,12 +110,16 @@ export interface SemanticSyntaxView<
   isKind<TKind extends SemanticSyntaxKind>(node: TNode, kind: TKind): node is SemanticSyntaxNodeOf<TNode, TKind>
   /** Return call arguments for a call expression, or an empty list. */
   callArguments(node: TNode): readonly TNode[]
+  /** Return the callee expression for a call expression. */
+  callExpressionTarget(node: TNode): TNode | undefined
   /** Return constructor arguments for a `new` expression, or an empty list. */
   newArguments(node: TNode): readonly TNode[]
   /** Return the simple helper name for a call or constructor expression. */
   callExpressionName(node: TNode): string | undefined
   /** Return the property name for a property access expression. */
   propertyAccessName(node: TNode): string | undefined
+  /** Return the property name node for a property access expression. */
+  propertyAccessNameNode(node: TNode): TNode | undefined
   /** Return the receiver expression for a property access expression. */
   propertyAccessExpression(node: TNode): TNode | undefined
   /** Return object literal members that can carry semantic values. */
@@ -126,12 +130,24 @@ export interface SemanticSyntaxView<
   propertyInitializer(node: TNode): TNode | undefined
   /** Return array literal elements. */
   arrayElements(node: TNode): readonly TNode[]
+  /** Return the expression carried by a spread element or spread assignment. */
+  spreadExpression(node: TNode): TNode | undefined
+  /** Return the left/right operands for `&&` expressions. */
+  logicalAndOperands(node: TNode): { readonly left: TNode; readonly right: TNode } | undefined
+  /** Return expressions interpolated in a template expression. */
+  templateExpressions(node: TNode): readonly TNode[]
+  /** Return expressions returned from a function-like node. */
+  functionReturnExpressions(node: TNode): readonly TNode[]
+  /** Return a primitive literal value when the backend can read one exactly. */
+  literalValue(node: TNode): string | number | boolean | null | undefined
   /** Return identifier text. */
   identifierText(node: TNode): string | undefined
   /** Return string literal text without quotes. */
   stringLiteralText(node: TNode): string | undefined
   /** Return numeric literal text exactly as authored. */
   numericLiteralText(node: TNode): string | undefined
+  /** Remove syntax wrappers that do not affect semantic identity. */
+  unwrapExpression(node: TNode): TNode
   /** Return the binding name for a variable declaration. */
   variableDeclarationName(node: TNode): TNode | undefined
   /** Return the initializer for a variable declaration. */
@@ -142,6 +158,8 @@ export interface SemanticSyntaxView<
   importModuleSpecifier(node: TNode): string | undefined
   /** Return named import specifiers from an import declaration. */
   namedImportSpecifiers(node: TNode): readonly TNode[]
+  /** Return the namespace import binding name from an import declaration. */
+  namespaceImportName(node: TNode): string | undefined
   /** Return named export specifiers from an export declaration. */
   exportSpecifiers(node: TNode): readonly TNode[]
   /** Return the declared name node for named declarations. */

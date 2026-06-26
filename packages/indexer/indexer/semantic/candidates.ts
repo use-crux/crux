@@ -6,9 +6,9 @@ import type {
   ProjectSourceRef,
   ProjectSourceRefRole,
 } from '@crux/core/project-index'
-import type * as ts from 'typescript'
 import type {
   SemanticCompilerDeclaration,
+  SemanticCompilerNode,
   SemanticCompilerSourceFile,
   SemanticCompilerSymbol,
   SemanticCompilerType,
@@ -16,17 +16,33 @@ import type {
 } from './compiler-view'
 import type { SemanticSyntaxNode, SemanticSyntaxSourceFile } from './syntax-view'
 
-type SemanticDefaultCallNode<TNode extends SemanticSyntaxNode> = TNode extends ts.ObjectLiteralExpression
-  ? ts.CallExpression
-  : TNode
+export type SemanticAnalyzerView<
+  TNode extends SemanticCompilerNode = SemanticCompilerNode,
+  TSourceFile extends TNode & SemanticCompilerSourceFile & SemanticSyntaxSourceFile<TNode> = TNode &
+    SemanticCompilerSourceFile &
+    SemanticSyntaxSourceFile<TNode>,
+  TDeclaration extends TNode & SemanticCompilerDeclaration = TNode & SemanticCompilerDeclaration,
+  TSymbol extends SemanticCompilerSymbol = SemanticCompilerSymbol,
+  TType extends SemanticCompilerType = SemanticCompilerType,
+> = SemanticCompilerView<TNode, TSourceFile, TDeclaration, TSymbol, TType>
 
-export type SemanticAnalyzerView = SemanticCompilerView<
-  ts.Node,
-  ts.SourceFile & SemanticCompilerSourceFile,
-  ts.Declaration & SemanticCompilerDeclaration,
-  SemanticCompilerSymbol,
-  SemanticCompilerType
->
+/** Extracts the backend-owned syntax node type from a semantic analyzer view. */
+export type SemanticAnalyzerNode<TView extends SemanticAnalyzerView> =
+  TView extends SemanticCompilerView<infer TNode, infer _TSourceFile, infer _TDeclaration, infer _TSymbol, infer _TType>
+    ? TNode
+    : never
+
+/** Extracts the backend-owned source-file type from a semantic analyzer view. */
+export type SemanticAnalyzerSourceFile<TView extends SemanticAnalyzerView> =
+  TView extends SemanticCompilerView<infer _TNode, infer TSourceFile, infer _TDeclaration, infer _TSymbol, infer _TType>
+    ? TSourceFile
+    : never
+
+/** Extracts the backend-owned declaration node type from a semantic analyzer view. */
+export type SemanticAnalyzerDeclaration<TView extends SemanticAnalyzerView> =
+  TView extends SemanticCompilerView<infer _TNode, infer _TSourceFile, infer TDeclaration, infer _TSymbol, infer _TType>
+    ? TDeclaration
+    : never
 
 export type SemanticDefinitionKind = Extract<
   ProjectDefinition['kind'],
@@ -58,8 +74,8 @@ export type SemanticSchemaMetadataKey = 'inputSchema' | 'outputSchema' | 'argsSc
  * Syntax-level Crux definition found before TypeScript symbol resolution.
  */
 export interface SemanticDefinitionCandidate<
-  TNode extends SemanticSyntaxNode = ts.ObjectLiteralExpression,
-  TCall extends SemanticSyntaxNode = SemanticDefaultCallNode<TNode>,
+  TNode extends SemanticSyntaxNode = SemanticCompilerNode,
+  TCall extends SemanticSyntaxNode = TNode,
 > {
   readonly definitionId: string
   readonly kind: SemanticDefinitionKind
@@ -72,9 +88,9 @@ export interface SemanticDefinitionCandidate<
  * Analyzer input for a definition property that may resolve to a schema.
  */
 export interface SemanticSchemaCandidate<
-  TNode extends SemanticSyntaxNode = ts.ObjectLiteralExpression,
-  TCall extends SemanticSyntaxNode = SemanticDefaultCallNode<TNode>,
-  TExpression extends SemanticSyntaxNode = ts.Expression,
+  TNode extends SemanticSyntaxNode = SemanticCompilerNode,
+  TCall extends SemanticSyntaxNode = TNode,
+  TExpression extends SemanticSyntaxNode = TNode,
 > extends SemanticDefinitionCandidate<TNode, TCall> {
   readonly property: SemanticSchemaProperty
   readonly metadataKey: SemanticSchemaMetadataKey
@@ -85,9 +101,9 @@ export interface SemanticSchemaCandidate<
  * Analyzer input for a definition property that may resolve to source code.
  */
 export interface SemanticSourceRefCandidate<
-  TNode extends SemanticSyntaxNode = ts.ObjectLiteralExpression,
-  TCall extends SemanticSyntaxNode = SemanticDefaultCallNode<TNode>,
-  TExpression extends SemanticSyntaxNode = ts.Expression,
+  TNode extends SemanticSyntaxNode = SemanticCompilerNode,
+  TCall extends SemanticSyntaxNode = TNode,
+  TExpression extends SemanticSyntaxNode = TNode,
 > extends SemanticDefinitionCandidate<TNode, TCall> {
   readonly property: string
   readonly role: ProjectSourceRefRole
@@ -99,9 +115,9 @@ export interface SemanticSourceRefCandidate<
  * TypeScript symbol resolution result with enough source data to emit refs.
  */
 export interface SemanticResolvedSource<
-  TExpression extends SemanticSyntaxNode = ts.Expression,
-  TSourceFile extends SemanticSyntaxSourceFile = ts.SourceFile & SemanticCompilerSourceFile,
-  TDeclaration extends SemanticSyntaxNode = ts.Declaration,
+  TExpression extends SemanticSyntaxNode = SemanticCompilerNode,
+  TSourceFile extends SemanticSyntaxSourceFile = SemanticCompilerSourceFile,
+  TDeclaration extends SemanticSyntaxNode = SemanticCompilerDeclaration,
 > {
   readonly symbol: string
   readonly sourceFile: TSourceFile
@@ -139,8 +155,8 @@ export interface SemanticAnalyzerContext {
  * Resolved memory block metadata used to enrich authored memory definitions.
  */
 export interface SemanticMemoryBlock<
-  TObject extends SemanticSyntaxNode = ts.ObjectLiteralExpression,
-  TExpression extends SemanticSyntaxNode = ts.Expression,
+  TObject extends SemanticSyntaxNode = SemanticCompilerNode,
+  TExpression extends SemanticSyntaxNode = SemanticCompilerNode,
 > {
   readonly id?: string
   readonly kind?: string

@@ -47,12 +47,18 @@ export function createTypeScriptSemanticSyntaxView(input: TypeScriptSemanticSynt
     callArguments(node) {
       return ts.isCallExpression(node) ? [...node.arguments] : []
     },
+    callExpressionTarget(node) {
+      return ts.isCallExpression(node) ? node.expression : undefined
+    },
     newArguments(node) {
       return ts.isNewExpression(node) ? [...(node.arguments ?? [])] : []
     },
     callExpressionName,
     propertyAccessName(node) {
       return ts.isPropertyAccessExpression(node) ? node.name.text : undefined
+    },
+    propertyAccessNameNode(node) {
+      return ts.isPropertyAccessExpression(node) ? node.name : undefined
     },
     propertyAccessExpression(node) {
       return ts.isPropertyAccessExpression(node) ? node.expression : undefined
@@ -69,6 +75,20 @@ export function createTypeScriptSemanticSyntaxView(input: TypeScriptSemanticSynt
     arrayElements(node) {
       return ts.isArrayLiteralExpression(node) ? [...node.elements] : []
     },
+    spreadExpression(node) {
+      if (ts.isSpreadElement(node) || ts.isSpreadAssignment(node)) return node.expression
+      return undefined
+    },
+    logicalAndOperands(node) {
+      return ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+        ? { left: node.left, right: node.right }
+        : undefined
+    },
+    templateExpressions(node) {
+      return ts.isTemplateExpression(node) ? node.templateSpans.map((span) => span.expression) : []
+    },
+    functionReturnExpressions: returnExpressions,
+    literalValue,
     identifierText(node) {
       return ts.isIdentifier(node) ? node.text : undefined
     },
@@ -78,6 +98,7 @@ export function createTypeScriptSemanticSyntaxView(input: TypeScriptSemanticSynt
     numericLiteralText(node) {
       return ts.isNumericLiteral(node) ? node.text : undefined
     },
+    unwrapExpression,
     variableDeclarationName(node) {
       return ts.isVariableDeclaration(node) ? node.name : undefined
     },
@@ -95,6 +116,11 @@ export function createTypeScriptSemanticSyntaxView(input: TypeScriptSemanticSynt
       if (!ts.isImportDeclaration(node)) return []
       const bindings = node.importClause?.namedBindings
       return bindings && ts.isNamedImports(bindings) ? [...bindings.elements] : []
+    },
+    namespaceImportName(node) {
+      if (!ts.isImportDeclaration(node)) return undefined
+      const bindings = node.importClause?.namedBindings
+      return bindings && ts.isNamespaceImport(bindings) ? bindings.name.text : undefined
     },
     exportSpecifiers(node) {
       if (!ts.isExportDeclaration(node) || !node.exportClause || !ts.isNamedExports(node.exportClause)) return []
@@ -116,6 +142,46 @@ export function createTypeScriptSemanticSyntaxView(input: TypeScriptSemanticSynt
       )
     },
   }
+}
+
+function returnExpressions(node: ts.Node): readonly ts.Node[] {
+  if (ts.isArrowFunction(node) && !ts.isBlock(node.body)) return [node.body]
+  const body =
+    (ts.isArrowFunction(node) ||
+      ts.isFunctionExpression(node) ||
+      ts.isFunctionDeclaration(node) ||
+      ts.isMethodDeclaration(node)) &&
+    node.body &&
+    ts.isBlock(node.body)
+      ? node.body
+      : undefined
+  if (!body) return []
+  return body.statements.flatMap((statement) =>
+    ts.isReturnStatement(statement) && statement.expression ? [statement.expression] : [],
+  )
+}
+
+function literalValue(node: ts.Node): string | number | boolean | null | undefined {
+  if (ts.isStringLiteralLike(node)) return node.text
+  if (ts.isNumericLiteral(node)) return Number(node.text)
+  if (node.kind === ts.SyntaxKind.TrueKeyword) return true
+  if (node.kind === ts.SyntaxKind.FalseKeyword) return false
+  if (node.kind === ts.SyntaxKind.NullKeyword) return null
+  return undefined
+}
+
+function unwrapExpression(node: ts.Node): ts.Node {
+  let current = node
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isNonNullExpression(current)
+  ) {
+    current = current.expression
+  }
+  return current
 }
 
 function childNodes(node: ts.Node): readonly ts.Node[] {

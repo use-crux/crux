@@ -1,91 +1,114 @@
-import ts from 'typescript'
-import { propertyName } from '../../ast/literals'
+import type { SemanticAnalyzerNode, SemanticAnalyzerView } from '../candidates'
+import {
+  semanticIsResolvableSourceExpression,
+  semanticNodeName,
+  semanticPropertyInitializer,
+  semanticPropertyName,
+  semanticVariableNameForNode,
+} from '../syntax-readers'
 
-/**
- * Returns the initializer expression for an object property, accepting both
- * explicit and shorthand property syntax.
- */
-export function propertyInitializer(object: ts.ObjectLiteralExpression, name: string): ts.Expression | undefined {
-  const property = object.properties.find(
-    (item): item is ts.PropertyAssignment | ts.ShorthandPropertyAssignment =>
-      (ts.isPropertyAssignment(item) || ts.isShorthandPropertyAssignment(item)) && propertyName(item.name) === name,
-  )
-  if (!property) return undefined
-  return ts.isShorthandPropertyAssignment(property) ? property.name : property.initializer
+/** Returns the initializer expression for an object property. */
+export function propertyInitializer(
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  name: string,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  return semanticPropertyInitializer(object, name, view.syntax)
 }
 
 /** Returns the simple callee name for call and constructor expressions. */
-export function callExpressionName(node: ts.CallExpression | ts.NewExpression): string | undefined {
-  if (ts.isIdentifier(node.expression)) return node.expression.text
-  if (ts.isPropertyAccessExpression(node.expression)) return node.expression.name.text
-  return undefined
+export function callExpressionName(
+  node: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): string | undefined {
+  return view.syntax.callExpressionName(node)
 }
 
-/** Infers the authored variable/property name associated with an AST node. */
-export function variableNameForNode(node: ts.Node): string | undefined {
-  const parent = node.parent
-  if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) return parent.name.text
-  if (ts.isPropertyAssignment(parent)) return propertyName(parent.name)
-  return undefined
+/** Infers the authored variable/property name associated with a syntax node. */
+export function variableNameForNode(
+  node: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): string | undefined {
+  return semanticVariableNameForNode(node, view.syntax)
 }
 
-/** Removes TypeScript expression wrappers that do not affect semantic identity. */
-export function unwrapExpression(expression: ts.Expression): ts.Expression {
-  let current = expression
-  while (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isSatisfiesExpression(current)) {
-    current = current.expression
-  }
-  return current
+/** Removes expression wrappers that do not affect semantic identity. */
+export function unwrapExpression(
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView> {
+  return view.syntax.unwrapExpression(expression)
 }
 
 /** Checks whether an expression can be resolved to a source declaration. */
-export function isResolvableSourceExpression(expression: ts.Expression): boolean {
-  const unwrapped = unwrapExpression(expression)
-  return ts.isIdentifier(unwrapped) || ts.isPropertyAccessExpression(unwrapped)
+export function isResolvableSourceExpression(
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): boolean {
+  return semanticIsResolvableSourceExpression(expression, view.syntax)
 }
 
-/** Returns the display/source symbol name for supported source-ref declarations. */
-export function symbolNameForDeclaration(node: ts.Declaration): string | undefined {
-  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) return node.name.text
-  if (ts.isFunctionDeclaration(node) && node.name) return node.name.text
-  if (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node) || ts.isMethodDeclaration(node)) {
-    return propertyName(node.name)
-  }
-  return undefined
+/** Returns the display/source symbol name for supported declarations. */
+export function symbolNameForDeclaration(
+  node: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): string | undefined {
+  const name = view.syntax.declarationName(node) ?? view.syntax.propertyName(node)
+  return name ? semanticNodeName(name, view.syntax) : undefined
 }
 
 /** Returns whether a declaration kind can be represented as source-ref evidence. */
-export function isSourceRefDeclaration(node: ts.Declaration): boolean {
+export function isSourceRefDeclaration(
+  node: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): boolean {
+  const kind = view.syntax.kind(node)
   return (
-    ts.isVariableDeclaration(node) ||
-    ts.isFunctionDeclaration(node) ||
-    ts.isPropertyAssignment(node) ||
-    ts.isShorthandPropertyAssignment(node) ||
-    ts.isMethodDeclaration(node)
+    kind === 'variableDeclaration' ||
+    kind === 'functionDeclaration' ||
+    kind === 'propertyAssignment' ||
+    kind === 'shorthandPropertyAssignment' ||
+    kind === 'methodDeclaration'
   )
 }
 
-/** Returns the expression carried by declaration forms that have inline values. */
-export function expressionFromDeclaration(node: ts.Declaration): ts.Expression | undefined {
-  if (ts.isVariableDeclaration(node)) return node.initializer
-  if (ts.isPropertyAssignment(node)) return node.initializer
-  if (ts.isShorthandPropertyAssignment(node)) return node.name
+/** Returns the expression carried by declaration forms with inline values. */
+export function expressionFromDeclaration(
+  node: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  if (view.syntax.isKind(node, 'variableDeclaration')) return view.syntax.variableDeclarationInitializer(node)
+  if (view.syntax.isKind(node, 'propertyAssignment') || view.syntax.isKind(node, 'shorthandPropertyAssignment')) {
+    return view.syntax.propertyInitializer(node)
+  }
   return undefined
 }
 
 /** Returns the function name represented by function-like source declarations. */
-export function functionNameForDeclaration(node: ts.Declaration): string | undefined {
-  if (ts.isFunctionDeclaration(node) && node.name) return node.name.text
-  if (ts.isMethodDeclaration(node)) return propertyName(node.name)
-  if (ts.isVariableDeclaration(node) && node.initializer) {
-    const initializer = unwrapExpression(node.initializer)
-    if ((ts.isFunctionExpression(initializer) || ts.isArrowFunction(initializer)) && ts.isIdentifier(node.name)) {
-      return node.name.text
-    }
+export function functionNameForDeclaration(
+  node: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): string | undefined {
+  if (view.syntax.isKind(node, 'functionDeclaration')) {
+    const name = view.syntax.declarationName(node)
+    return name ? semanticNodeName(name, view.syntax) : undefined
   }
-  if (ts.isPropertyAssignment(node)) {
-    const initializer = unwrapExpression(node.initializer)
-    if (ts.isFunctionExpression(initializer) || ts.isArrowFunction(initializer)) return propertyName(node.name)
+  if (view.syntax.isKind(node, 'methodDeclaration')) {
+    const name = view.syntax.propertyName(node)
+    return name ? semanticNodeName(name, view.syntax) : undefined
+  }
+  if (view.syntax.isKind(node, 'variableDeclaration')) {
+    const initializer = view.syntax.variableDeclarationInitializer(node)
+    const name = view.syntax.variableDeclarationName(node)
+    return initializer && name && view.syntax.isFunctionLike(view.syntax.unwrapExpression(initializer))
+      ? semanticNodeName(name, view.syntax)
+      : undefined
+  }
+  if (view.syntax.isKind(node, 'propertyAssignment')) {
+    const initializer = view.syntax.propertyInitializer(node)
+    return initializer && view.syntax.isFunctionLike(view.syntax.unwrapExpression(initializer))
+      ? semanticPropertyName(node, view.syntax)
+      : undefined
   }
   return undefined
 }

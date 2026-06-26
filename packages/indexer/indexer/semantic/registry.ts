@@ -1,5 +1,4 @@
 import type { JsonSchema, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@crux/core/project-index'
-import type * as ts from 'typescript'
 import { createSemanticDefinitionEnrichmentAnalyzer } from './analyzers/definition-enrichment'
 import { createSemanticRelationAnalyzer } from './analyzers/relation'
 import { createSemanticSchemaAnalyzer } from './analyzers/schema'
@@ -13,6 +12,7 @@ import type {
   SemanticSchemaCandidate,
   SemanticSourceRefCandidate,
 } from './candidates'
+import type { SemanticSyntaxNode } from './syntax-view'
 import type { SemanticAnalyzer } from './types'
 
 export type SemanticDefinitionAnalyzer = SemanticAnalyzer<SemanticDefinitionCandidate, SemanticAnalyzerContext>
@@ -47,15 +47,29 @@ export interface SemanticAnalyzerRegistryDeps {
     candidate: SemanticDefinitionCandidate,
     view: SemanticAnalyzerView,
   ) => readonly ProjectRelation[]
-  readonly resolveExpression: (expression: ts.Expression, view: SemanticAnalyzerView) => SemanticResolvedSource | undefined
-  readonly schemaCandidates: (candidate: SemanticDefinitionCandidate) => readonly SemanticSchemaCandidate[]
+  readonly resolveExpression: (
+    expression: SemanticSyntaxNode,
+    view: SemanticAnalyzerView,
+  ) => SemanticResolvedSource | undefined
+  readonly schemaCandidates: (
+    candidate: SemanticDefinitionCandidate,
+    view: SemanticAnalyzerView,
+  ) => readonly SemanticSchemaCandidate[]
   readonly schemaSourceRef: (
     candidate: SemanticSchemaCandidate,
     resolved: SemanticResolvedSource,
     parsedSchema: boolean,
+    view: SemanticAnalyzerView,
   ) => ProjectSourceRef
-  readonly sourceRef: (candidate: SemanticSourceRefCandidate, resolved: SemanticResolvedSource) => ProjectSourceRef
-  readonly sourceRefCandidates: (candidate: SemanticDefinitionCandidate) => readonly SemanticSourceRefCandidate[]
+  readonly sourceRef: (
+    candidate: SemanticSourceRefCandidate,
+    resolved: SemanticResolvedSource,
+    view: SemanticAnalyzerView,
+  ) => ProjectSourceRef
+  readonly sourceRefCandidates: (
+    candidate: SemanticDefinitionCandidate,
+    view: SemanticAnalyzerView,
+  ) => readonly SemanticSourceRefCandidate[]
   readonly templateInterpolationSourceRefs: (
     candidate: SemanticDefinitionCandidate,
     view: SemanticAnalyzerView,
