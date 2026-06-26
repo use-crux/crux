@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -36,6 +37,21 @@ func TestLoadConfigBuildsStaticIndexConfigRequest(t *testing.T) {
 	}
 }
 
+func TestLoadConfigAcceptsStaticSyntaxConfigWireNames(t *testing.T) {
+	reader := &recordingReader{
+		responses: []json.RawMessage{json.RawMessage(`{"root":"/repo","staticSyntaxEnabled":true,"staticSyntaxFrontend":"oxc","extensions":[]}`)},
+	}
+
+	config, err := LoadConfig(context.Background(), reader, "/repo", "/repo/crux.config.ts")
+
+	if err != nil {
+		t.Fatalf("LoadConfig error = %v", err)
+	}
+	if !config.StaticSyntaxEnabled || config.StaticSyntaxFrontend != "oxc" {
+		t.Fatalf("config = %+v, want decoded static syntax config", config)
+	}
+}
+
 func TestInspectLoadsNodeConfigAndExtensionManifest(t *testing.T) {
 	root := t.TempDir()
 	srcDir := filepath.Join(root, "src")
@@ -50,7 +66,7 @@ func TestInspectLoadsNodeConfigAndExtensionManifest(t *testing.T) {
 	reader := &recordingReader{
 		responses: []json.RawMessage{
 			json.RawMessage(`{"root":` + quote(root) + `,"configFile":` + quote(configFile) + `,"nativeAstEnabled":true,"extensions":[{"package":"@acme/indexer"}]}`),
-			json.RawMessage(`{"method":"loadStaticExtensionHostManifest","root":` + quote(root) + `,"nativeCompilerProtocolVersion":1,"manifest":{"callNames":["workflow"],"staticHost":{"nativeOnlyEligible":false,"requiresTypeScriptHostForExtensions":true}},"node":{"started":true},"nativeOnlyEligible":false}`),
+			json.RawMessage(`{"method":"loadStaticExtensionHostManifest","root":` + quote(root) + `,"nativeCompilerProtocolVersion":1,"manifest":{"callNames":["workflow"],"staticInterests":{"extractors":[{"extension":{"name":"@acme/indexer","version":"1"},"name":"workflow.define","calls":[{"name":"workflow"}]}]},"staticHost":{"nativeOnlyEligible":false,"requiresTypeScriptHostForExtensions":true}},"node":{"started":true},"nativeOnlyEligible":false}`),
 		},
 	}
 
@@ -64,6 +80,9 @@ func TestInspectLoadsNodeConfigAndExtensionManifest(t *testing.T) {
 	}
 	if !hasString(result.Plan.CallNames, "workflow") {
 		t.Fatalf("call names = %v, want extension call", result.Plan.CallNames)
+	}
+	if !bytes.Contains(result.Plan.StaticInterests, []byte(`"extractors"`)) || !bytes.Contains(result.Plan.StaticInterests, []byte(`"workflow.define"`)) {
+		t.Fatalf("static interests = %s, want extension extractor interests", result.Plan.StaticInterests)
 	}
 	if !hasString(result.Plan.Files, sourceFile) {
 		t.Fatalf("files = %v, want project source file", result.Plan.Files)

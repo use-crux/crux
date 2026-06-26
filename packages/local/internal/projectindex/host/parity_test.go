@@ -2,24 +2,18 @@ package host
 
 import (
 	"context"
-	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/parity"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax/record"
 )
 
 func TestWorkerStaticIndexMatchesTypeScriptProductionPath(t *testing.T) {
-	root := os.Getenv("CRUX_INDEXER_PARITY_ROOT")
-	if root == "" {
-		t.Skip("set CRUX_INDEXER_PARITY_ROOT to run production static parity")
-	}
-	if os.Getenv(syntax.WorkerEnv) == "" {
-		t.Skipf("set %s to run production Static Index parity", syntax.WorkerEnv)
-	}
+	root := requireProductionStaticParityEnv(t)
 	if err := os.RemoveAll(filepath.Join(root, ".crux", "cache", "index")); err != nil {
 		t.Fatalf("clear index cache: %v", err)
 	}
@@ -42,28 +36,58 @@ func TestWorkerStaticIndexMatchesTypeScriptProductionPath(t *testing.T) {
 	if len(record.Files(plan)) == 0 {
 		t.Fatalf("Static Index syntax plan selected no files to parse")
 	}
-	jsPatch, err := jsWorker.IndexProjectAstPatch(ctx, root, configPath, "parity-js")
+	jsFacts, err := productionStaticIndexFinalFacts(ctx, jsWorker, root, configPath, "parity-js")
 	if err != nil {
-		t.Fatalf("TypeScript IndexProjectAstPatch error = %v", err)
+		t.Fatalf("TypeScript production static index error = %v", err)
 	}
 	if err := os.RemoveAll(filepath.Join(root, ".crux", "cache", "index")); err != nil {
 		t.Fatalf("clear index cache before native: %v", err)
 	}
-	nativePatch, err := nativeWorker.IndexProjectAstPatch(ctx, root, configPath, "parity-native")
+	nativeFacts, err := productionStaticIndexFinalFacts(ctx, nativeWorker, root, configPath, "parity-native")
 	if err != nil {
-		t.Fatalf("native IndexProjectAstPatch error = %v", err)
+		t.Fatalf("native production static index error = %v", err)
 	}
 	assertNativeSyntaxPathRan(t, nativeWorker.LastAstTiming())
-
-	if len(nativePatch.Facts.LintFindings) != 0 {
-		t.Fatalf("native AST lint findings = %d, want post-merge quality lint phase", len(nativePatch.Facts.LintFindings))
+	if len(jsFacts.LintFindings) == 0 {
+		t.Fatalf("TypeScript production static index emitted no lint findings; parity gate would not prove final lint patch parity")
 	}
 	assertProjectIndexFactsEqual(
 		t,
-		"project index static graph",
-		parity.StaticGraphFacts(jsPatch.Facts),
-		parity.StaticGraphFacts(nativePatch.Facts),
+		"production project index",
+		parity.ProductionFinalFacts(jsFacts),
+		parity.ProductionFinalFacts(nativeFacts),
 	)
+}
+
+func TestProductionStaticParityEnvRequiredFlag(t *testing.T) {
+	t.Setenv("CI", "")
+	t.Setenv("CRUX_INDEXER_PARITY_REQUIRED", "")
+	if parityEnvRequired() {
+		t.Fatal("parityEnvRequired() = true, want false without CI or explicit requirement")
+	}
+	t.Setenv("CRUX_INDEXER_PARITY_REQUIRED", "1")
+	if !parityEnvRequired() {
+		t.Fatal("parityEnvRequired() = false, want true for explicit requirement")
+	}
+}
+
+func requireProductionStaticParityEnv(t testing.TB) string {
+	t.Helper()
+	root := os.Getenv("CRUX_INDEXER_PARITY_ROOT")
+	worker := os.Getenv(syntax.WorkerEnv)
+	if root != "" && worker != "" {
+		return root
+	}
+	message := "set CRUX_INDEXER_PARITY_ROOT and " + syntax.WorkerEnv + " to run production Static Index parity"
+	if parityEnvRequired() {
+		t.Fatal(message)
+	}
+	t.Skip(message)
+	return ""
+}
+
+func parityEnvRequired() bool {
+	return os.Getenv("CI") != "" || os.Getenv("CRUX_INDEXER_PARITY_REQUIRED") == "1"
 }
 
 func writeStaticIndexParityConfig(t testing.TB, root string) string {
@@ -98,6 +122,49 @@ func assertNativeSyntaxPathRan(t testing.TB, timing ProjectIndexAstTiming) {
 		timing.NodeReasons,
 		timing.TotalMs,
 	)
+}
+
+func productionStaticIndexFinalFacts(
+	ctx context.Context,
+	worker *Bundle,
+	root string,
+	configPath string,
+	projectName string,
+) (projectindex.IndexPatchFacts, error) {
+	astResult, err := worker.IndexProjectAstPatchWithResult(ctx, root, configPath, projectName)
+	if err != nil {
+		return projectindex.IndexPatchFacts{}, err
+	}
+	state := projectindex.ApplyPatch(projectindex.EmptyPatchState(), astResult.Patch)
+	lintPatch, err := worker.IndexProjectLintPatch(ctx, projectindex.ProjectLintIndexRequest{
+		Root:               root,
+		ConfigPath:         configPath,
+		ProjectName:        projectName,
+		PreviousIndex:      state.Index,
+		ASTUsedStaticIndex: astResult.UsedStaticIndex,
+	})
+	if err != nil {
+		return projectindex.IndexPatchFacts{}, err
+	}
+	if hasIndexPatchFacts(lintPatch.Facts) {
+		state = projectindex.ApplyPatch(state, lintPatch)
+	}
+	return projectindex.PatchFromSnapshot(state.Index, projectindex.PhaseQuality, "ok").Facts, nil
+}
+
+func hasIndexPatchFacts(facts projectindex.IndexPatchFacts) bool {
+	return len(facts.Prompts) > 0 ||
+		len(facts.Contexts) > 0 ||
+		len(facts.Tools) > 0 ||
+		facts.Lint != nil ||
+		len(facts.Definitions) > 0 ||
+		len(facts.Relations) > 0 ||
+		len(facts.SourceRefs) > 0 ||
+		len(facts.Diagnostics) > 0 ||
+		len(facts.LintFindings) > 0 ||
+		len(facts.RuleDescriptors) > 0 ||
+		len(facts.Sources) > 0 ||
+		facts.SourceGraph != nil
 }
 
 func assertProjectIndexFactsEqual(t testing.TB, label string, want, got projectindex.IndexPatchFacts) {

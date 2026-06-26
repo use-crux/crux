@@ -10,6 +10,7 @@ import (
 )
 
 type interestManifest struct {
+	Extractors    []json.RawMessage                        `json:"extractors,omitempty"`
 	Calls         []projectindex.StaticCallInterest        `json:"calls,omitempty"`
 	Constructors  []projectindex.StaticConstructorInterest `json:"constructors,omitempty"`
 	Definitions   []string                                 `json:"definitions,omitempty"`
@@ -86,6 +87,7 @@ func mergeInterests(
 		return nil, false, err
 	}
 	merged := interestManifest{
+		Extractors:    append(append([]json.RawMessage{}, base.Extractors...), extension.Extractors...),
 		Calls:         uniqueCallInterests(append(base.Calls, extension.Calls...)),
 		Constructors:  uniqueConstructorInterests(append(base.Constructors, extension.Constructors...)),
 		Definitions:   sortedUniqueStrings(append(base.Definitions, extension.Definitions...)),

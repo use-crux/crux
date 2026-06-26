@@ -63,13 +63,13 @@ export interface CheckStaticRulesForProjectInput extends StaticExtensionWorkerPr
  * Loads the project-scoped static extension host manifest for Static Index planning.
  *
  * This worker boundary imports no project source and performs no syntax/file/cache planning. It
- * only asks config loading for source-only inert indexer settings, loads configured trusted
+ * only asks config loading for inert indexer settings, loads configured trusted
  * extensions through the static host runtime, and returns JSON-safe manifest data.
  */
 export async function loadStaticExtensionHostManifestForProject(
   input: LoadStaticExtensionHostManifestForProjectInput,
 ): Promise<LoadStaticExtensionHostManifestResult> {
-  const loaded = await loadProjectConfig(input.root, input.configPath, 'source-only')
+  const loaded = await loadProjectConfig(input.root, input.configPath, 'config-policy')
   const result = await loadStaticExtensionHostManifest({
     root: input.root,
     config: loaded.loaded.indexer,
@@ -161,7 +161,7 @@ async function staticExtensionRuntimeInputForProject(input: StaticExtensionWorke
     readonly lint: Awaited<ReturnType<typeof loadProjectConfig>>['loaded']['lint']
   }
 > {
-  const loaded = await loadProjectConfig(input.root, input.configPath, input.resolutionMode ?? 'source-only')
+  const loaded = await loadProjectConfig(input.root, input.configPath, input.resolutionMode ?? 'config-policy')
   return {
     root: input.root,
     config: loaded.loaded.indexer,

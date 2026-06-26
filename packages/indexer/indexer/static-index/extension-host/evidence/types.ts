@@ -61,6 +61,21 @@ export interface StaticConstructorInterest {
   readonly source?: StaticEvidenceInterestSource
 }
 
+/** Per-extractor evidence selection used when native syntax calls back into TypeScript. */
+export interface StaticEvidenceExtractorInterest {
+  /** Extension identity that owns the TypeScript extractor. */
+  readonly extension: {
+    readonly name: string
+    readonly version: string
+  }
+  /** Extractor name inside the extension. */
+  readonly name: string
+  /** Call matches that should produce evidence jobs for this extractor. */
+  readonly calls?: readonly StaticCallInterest[]
+  /** Constructor matches that should produce evidence jobs for this extractor. */
+  readonly constructors?: readonly StaticConstructorInterest[]
+}
+
 /**
  * AST-free source evidence interests declared by TypeScript indexer extensions.
  *
@@ -69,6 +84,7 @@ export interface StaticConstructorInterest {
  * loading extension code.
  */
 export interface StaticEvidenceInterestManifest {
+  readonly extractors?: readonly StaticEvidenceExtractorInterest[]
   readonly calls?: readonly StaticCallInterest[]
   readonly constructors?: readonly StaticConstructorInterest[]
   readonly definitions?: readonly string[]

@@ -2,6 +2,7 @@ import type {
   StaticEvidenceCompatibility,
   StaticCallInterest,
   StaticConstructorInterest,
+  StaticEvidenceExtractorInterest,
   StaticEvidenceInterestManifest,
 } from './types'
 import type { ExtractPattern } from '../../../extensions/public-contract/extractor-types'
@@ -16,6 +17,7 @@ export function staticInterestManifestFromExtensions(
   const definitions = new Set<string>()
   const relations = new Set<string>()
   const compatibilityReasons = new Set<string>()
+  const extractors: StaticEvidenceExtractorInterest[] = []
 
   for (const extension of extensions) {
     const evidence = extension.static?.evidence
@@ -37,13 +39,28 @@ export function staticInterestManifestFromExtensions(
       })
     }
     for (const extractor of extension.extractors ?? []) {
+      const extractorCalls = new Map<string, StaticCallInterest>()
+      const extractorConstructors = new Map<string, StaticConstructorInterest>()
       for (const pattern of extractor.patterns) {
         addPatternInterest(pattern, calls, constructors)
+        addPatternInterest(pattern, extractorCalls, extractorConstructors, {
+          calls: extension.static?.interests?.calls ?? [],
+          constructors: extension.static?.interests?.constructors ?? [],
+        })
       }
+      extractors.push(
+        stripEmptyExtractorInterest({
+          extension: { name: extension.name, version: extension.version },
+          name: extractor.name,
+          calls: [...extractorCalls.values()].sort(compareCalls),
+          constructors: [...extractorConstructors.values()].sort(compareConstructors),
+        }),
+      )
     }
   }
 
   return stripEmptyInterests({
+    extractors: extractors.sort(compareExtractors),
     calls: [...calls.values()].sort(compareCalls),
     constructors: [...constructors.values()].sort(compareConstructors),
     definitions: [...definitions].sort(),
@@ -63,24 +80,30 @@ function addPatternInterest(
   pattern: ExtractPattern,
   calls: Map<string, StaticCallInterest>,
   constructors: Map<string, StaticConstructorInterest>,
+  declarations?: {
+    readonly calls: readonly StaticCallInterest[]
+    readonly constructors: readonly StaticConstructorInterest[]
+  },
 ): void {
   if (pattern.kind === 'object') return
   if (pattern.kind === 'call') {
-    const interest = {
+    const base = {
       name: pattern.name,
       ...(pattern.importFrom ? { importFrom: [...pattern.importFrom] } : {}),
       ...(pattern.configArg !== undefined ? { configArg: pattern.configArg } : {}),
       source: 'extractor-pattern' as const,
     }
+    const interest = { ...base, ...matchingCallDeclaration(base, declarations?.calls) }
     calls.set(callInterestKey(interest), interest)
     return
   }
-  const interest = {
+  const base = {
     name: pattern.name,
     ...(pattern.importFrom ? { importFrom: [...pattern.importFrom] } : {}),
     ...(pattern.configArg !== undefined ? { configArg: pattern.configArg } : {}),
     source: 'extractor-pattern' as const,
   }
+  const interest = { ...base, ...matchingConstructorDeclaration(base, declarations?.constructors) }
   constructors.set(constructorInterestKey(interest), interest)
 }
 
@@ -90,12 +113,62 @@ function stripEmptyInterests(
   },
 ): StaticEvidenceInterestManifest {
   return {
+    ...(input.extractors.length > 0 ? { extractors: input.extractors } : {}),
     ...(input.calls.length > 0 ? { calls: input.calls } : {}),
     ...(input.constructors.length > 0 ? { constructors: input.constructors } : {}),
     ...(input.definitions.length > 0 ? { definitions: input.definitions } : {}),
     ...(input.relations.length > 0 ? { relations: input.relations } : {}),
     compatibility: input.compatibility,
   }
+}
+
+function stripEmptyExtractorInterest(
+  input: StaticEvidenceExtractorInterest & {
+    readonly calls: readonly StaticCallInterest[]
+    readonly constructors: readonly StaticConstructorInterest[]
+  },
+): StaticEvidenceExtractorInterest {
+  return {
+    extension: input.extension,
+    name: input.name,
+    ...(input.calls.length > 0 ? { calls: input.calls } : {}),
+    ...(input.constructors.length > 0 ? { constructors: input.constructors } : {}),
+  }
+}
+
+function matchingCallDeclaration(
+  pattern: StaticCallInterest,
+  declarations: readonly StaticCallInterest[] = [],
+): Partial<StaticCallInterest> {
+  return declarations.find((declaration) => callDeclarationMatches(pattern, declaration)) ?? {}
+}
+
+function matchingConstructorDeclaration(
+  pattern: StaticConstructorInterest,
+  declarations: readonly StaticConstructorInterest[] = [],
+): Partial<StaticConstructorInterest> {
+  return declarations.find((declaration) => constructorDeclarationMatches(pattern, declaration)) ?? {}
+}
+
+function callDeclarationMatches(pattern: StaticCallInterest, declaration: StaticCallInterest): boolean {
+  return pattern.name === declaration.name && importFromMatches(pattern.importFrom, declaration.importFrom)
+}
+
+function constructorDeclarationMatches(
+  pattern: StaticConstructorInterest,
+  declaration: StaticConstructorInterest,
+): boolean {
+  return pattern.name === declaration.name && importFromMatches(pattern.importFrom, declaration.importFrom)
+}
+
+function importFromMatches(pattern: readonly string[] | undefined, declaration: readonly string[] | undefined): boolean {
+  if (!pattern?.length) return true
+  if (!declaration?.length) return false
+  return pattern.every((specifier) => declaration.includes(specifier))
+}
+
+function compareExtractors(a: StaticEvidenceExtractorInterest, b: StaticEvidenceExtractorInterest): number {
+  return `${a.extension.name}:${a.name}`.localeCompare(`${b.extension.name}:${b.name}`)
 }
 
 function compareCalls(a: StaticCallInterest, b: StaticCallInterest): number {

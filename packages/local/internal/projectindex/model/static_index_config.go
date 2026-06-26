@@ -18,6 +18,28 @@ type ProjectStaticIndexConfig struct {
 	Diagnostics          []ProjectStaticIndexConfigDiagnostic   `json:"diagnostics,omitempty"`
 }
 
+// UnmarshalJSON accepts both the historical nativeAst* wire fields consumed by
+// Go and the staticSyntax* fields emitted by newer TypeScript config artifacts.
+func (c *ProjectStaticIndexConfig) UnmarshalJSON(data []byte) error {
+	type projectStaticIndexConfigAlias ProjectStaticIndexConfig
+	var decoded struct {
+		projectStaticIndexConfigAlias
+		StaticSyntaxEnabledAlias  *bool   `json:"staticSyntaxEnabled,omitempty"`
+		StaticSyntaxFrontendAlias *string `json:"staticSyntaxFrontend,omitempty"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*c = ProjectStaticIndexConfig(decoded.projectStaticIndexConfigAlias)
+	if decoded.StaticSyntaxEnabledAlias != nil {
+		c.StaticSyntaxEnabled = *decoded.StaticSyntaxEnabledAlias
+	}
+	if decoded.StaticSyntaxFrontendAlias != nil {
+		c.StaticSyntaxFrontend = *decoded.StaticSyntaxFrontendAlias
+	}
+	return nil
+}
+
 // ProjectStaticIndexExtensionReference identifies one configured extension.
 type ProjectStaticIndexExtensionReference struct {
 	Package string `json:"package"`

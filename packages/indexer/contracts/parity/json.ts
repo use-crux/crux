@@ -136,7 +136,7 @@ function normalizeParityValue(value: JsonValue, context: NormalizeContext): Json
     const normalized = value.map((item) =>
       normalizeParityValue(item, { ...context, path: normalizeArrayItemPath(context.path) }),
     )
-    if (!unorderedArrayPaths.has(context.path)) return normalized
+    if (!isUnorderedArrayPath(context.path)) return normalized
     return [...normalized].sort((left, right) => sortKey(left).localeCompare(sortKey(right)))
   }
   if (!isJsonObject(value)) return normalizePrimitive(value, context.path)
@@ -180,6 +180,22 @@ function childPath(parent: string, key: string): string {
 
 function normalizeArrayItemPath(path: string): string {
   return path
+}
+
+/**
+ * Returns true for arrays whose order is not part of Project Index semantics.
+ *
+ * The exact paths cover first-class fact lists. The suffix rules cover
+ * schema-derived metadata where order is a serialization artifact: JSON Schema
+ * `required` names are a set, and input contributions are keyed by their
+ * source/field contract rather than by emission order.
+ */
+function isUnorderedArrayPath(path: string): boolean {
+  return (
+    unorderedArrayPaths.has(path) ||
+    path.endsWith('.required') ||
+    path.endsWith('.inputContributions')
+  )
 }
 
 function hasDynamicJsonAncestor(path: string): boolean {

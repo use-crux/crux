@@ -41,7 +41,7 @@ export interface LoadStaticExtensionHostManifestForProjectInput
 export async function loadStaticExtensionHostManifestForProject(
   input: LoadStaticExtensionHostManifestForProjectInput,
 ): Promise<LoadStaticExtensionHostManifestResult> {
-  const loaded = await loadProjectConfig(input.root, input.configPath, 'source-only')
+  const loaded = await loadProjectConfig(input.root, input.configPath, 'config-policy')
   const extensions = await loadIndexerExtensionReferences({
     root: input.root,
     config: loaded.loaded.indexer,

@@ -32,7 +32,9 @@ import { indexRuleAvailability } from './rule-availability'
 import { staticFoundDefinitionFromExtractedFacts } from '../../static-index/compatibility/syntax-record-bridge/normalizer'
 import { extractStaticRecordWithRegistry, type StaticRecordExtractionInput } from '../../static-index/compatibility/syntax-record-bridge/runtime'
 import { staticInterestManifestFromExtensions } from '../../static-index/extension-host/evidence/interests'
+import type { StaticEvidenceInterestManifest } from '../../static-index/extension-host/evidence/types'
 import { staticExtensionHostManifest, type StaticExtensionHostManifest } from '../../static-index/extension-host/host-plan/host-manifest'
+import { typeScriptHostStaticInterests } from './static-interests'
 import type {
   IndexExtractor,
   ExtractPattern,
@@ -44,7 +46,6 @@ import type {
   RelationSpec,
   IndexerExtension,
 } from '../public-contract/types'
-import type { StaticEvidenceInterestManifest } from '../../static-index/extension-host/evidence/types'
 
 /**
  * Feature area implemented by an extension runtime instance.
@@ -351,17 +352,19 @@ function manifestFromRegistry(registry: ExtensionRegistry): ExtensionRuntimeMani
     name: extractor.name,
     patterns: [...extractor.patterns],
   }))
-  const staticInterests = staticInterestManifestFromExtensions(registry.extensions)
+  const allStaticInterests = staticInterestManifestFromExtensions(registry.extensions)
+  const staticHost = staticExtensionHostManifest({
+    extractors,
+    staticInterests: allStaticInterests,
+    typeScriptRuleCount: registry.extensions.reduce((count, extension) => count + (extension.rules?.length ?? 0), 0),
+  })
+  const staticInterests = typeScriptHostStaticInterests(allStaticInterests, staticHost.extractors)
   return {
     extensions,
     extractors,
     callNames: [...registry.callNames],
     staticInterests,
-    staticHost: staticExtensionHostManifest({
-      extractors,
-      staticInterests,
-      typeScriptRuleCount: registry.extensions.reduce((count, extension) => count + (extension.rules?.length ?? 0), 0),
-    }),
+    staticHost,
     relationSpecs: registry.extensions
       .flatMap((extension) => extension.relations ?? [])
       .sort((a, b) => a.type.localeCompare(b.type)),

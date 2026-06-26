@@ -22,7 +22,19 @@ describe('Project Index parity normalizer', () => {
               fidelity: 'partial',
             },
           ],
-          metadata: { facts: { kind: 'prompt', schema: { type: 'object' } } },
+          metadata: {
+            facts: {
+              kind: 'prompt',
+              schema: {
+                type: 'object',
+                required: ['topic', 'locale'],
+              },
+              inputContributions: [
+                { field: 'locale', sourceDefinitionId: 'context:locale', via: 'direct' },
+                { field: 'brand', sourceDefinitionId: 'context:brand', via: 'when' },
+              ],
+            },
+          },
         },
         { id: 'context:brand', kind: 'context', name: 'context', fidelity: 'partial' },
       ],
@@ -174,7 +186,19 @@ describe('Project Index parity normalizer', () => {
       definitions: [
         { fidelity: 'partial', name: 'context', kind: 'context', id: 'context:brand' },
         {
-          metadata: { facts: { schema: { type: 'object' }, kind: 'prompt' } },
+          metadata: {
+            facts: {
+              inputContributions: [
+                { via: 'when', sourceDefinitionId: 'context:brand', field: 'brand' },
+                { via: 'direct', sourceDefinitionId: 'context:locale', field: 'locale' },
+              ],
+              schema: {
+                required: ['locale', 'topic'],
+                type: 'object',
+              },
+              kind: 'prompt',
+            },
+          },
           sourceRefs: [
             {
               fidelity: 'partial',
@@ -215,4 +239,3 @@ describe('Project Index parity normalizer', () => {
     ])
   })
 })
-

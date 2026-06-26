@@ -55,7 +55,7 @@ func ExtractEvidenceFacts(
 		Root:           root,
 		ConfigPath:     configPath,
 		ProjectName:    projectName,
-		ResolutionMode: "source-only",
+		ResolutionMode: "config-policy",
 		Jobs:           jobs,
 	}
 	resp, err := reader.ReadArtifact(ctx, req, projectindex.ProjectIndexArtifactStaticExtensionEvidenceBatch)
@@ -86,7 +86,7 @@ func CheckRuleFacts(
 		Root:               root,
 		ConfigPath:         configPath,
 		ProjectName:        projectName,
-		ResolutionMode:     "source-only",
+		ResolutionMode:     "config-policy",
 		Graph:              graph,
 		Files:              append([]string(nil), files...),
 		NativeLintFinalize: true,

@@ -48,7 +48,20 @@ func FactsEqual(left, right projectindex.IndexPatchFacts) bool {
 }
 
 func StaticGraphFacts(facts projectindex.IndexPatchFacts) projectindex.IndexPatchFacts {
+	facts = ProductionFinalFacts(facts)
 	facts.LintFindings = nil
+	return facts
+}
+
+// ProductionFinalFacts returns the final read-model fact surface used by the
+// native AST production parity gate.
+//
+// It keeps every beta parity fact field, including final lint findings, while
+// removing the legacy TypeScript source-only mode diagnostic emitted by the
+// AST worker path. That diagnostic describes how the baseline worker was run;
+// it is not Static Index semantic output and has already been excluded from
+// earlier graph parity gates.
+func ProductionFinalFacts(facts projectindex.IndexPatchFacts) projectindex.IndexPatchFacts {
 	facts.Diagnostics = staticGraphDiagnostics(facts.Diagnostics)
 	facts.Sources = staticGraphSources(facts.Sources)
 	return facts
@@ -157,7 +170,8 @@ func unorderedArrayPath(path string) bool {
 		"sources[].diagnostics":
 		return true
 	default:
-		return false
+		return strings.HasSuffix(path, ".required") ||
+			strings.HasSuffix(path, ".inputContributions")
 	}
 }
 

@@ -112,6 +112,82 @@ func TestNormalizeProjectIndexFactsForParityKeepsMetadataArrayOrdering(t *testin
 	}
 }
 
+func TestNormalizeProjectIndexFactsForParitySortsJsonSchemaRequiredKeys(t *testing.T) {
+	left := projectindex.IndexPatchFacts{
+		Definitions: []store.ProjectDefinition{
+			{
+				ID:       "prompt:writer",
+				Kind:     "prompt",
+				Name:     "writer",
+				Fidelity: "static",
+				Metadata: json.RawMessage(`{"facts":{"inputSchema":{"type":"object","required":["topic","locale"]}}}`),
+			},
+		},
+	}
+	right := projectindex.IndexPatchFacts{
+		Definitions: []store.ProjectDefinition{
+			{
+				ID:       "prompt:writer",
+				Kind:     "prompt",
+				Name:     "writer",
+				Fidelity: "static",
+				Metadata: json.RawMessage(`{"facts":{"inputSchema":{"type":"object","required":["locale","topic"]}}}`),
+			},
+		},
+	}
+
+	if !FactsEqual(left, right) {
+		t.Fatalf("normalized facts differed for equivalent JSON schema required order:\nleft=%s\nright=%s", mustNormalizeFacts(t, left), mustNormalizeFacts(t, right))
+	}
+}
+
+func TestNormalizeProjectIndexFactsForParitySortsInputContributions(t *testing.T) {
+	left := projectindex.IndexPatchFacts{
+		Definitions: []store.ProjectDefinition{inputContributionDefinition(`[
+			{"field":"locale","sourceDefinitionId":"context:locale","via":"direct"},
+			{"field":"brand","sourceDefinitionId":"context:brand","via":"when"}
+		]`)},
+	}
+	right := projectindex.IndexPatchFacts{
+		Definitions: []store.ProjectDefinition{inputContributionDefinition(`[
+			{"field":"brand","sourceDefinitionId":"context:brand","via":"when"},
+			{"field":"locale","sourceDefinitionId":"context:locale","via":"direct"}
+		]`)},
+	}
+
+	if !FactsEqual(left, right) {
+		t.Fatalf("normalized facts differed for equivalent input contribution order:\nleft=%s\nright=%s", mustNormalizeFacts(t, left), mustNormalizeFacts(t, right))
+	}
+}
+
+func TestProductionFinalFactsForParityKeepsLintFindingsAndOmitsSourceOnlyArtifacts(t *testing.T) {
+	facts := projectindex.IndexPatchFacts{
+		Diagnostics: []store.IndexDiagnostic{
+			{ID: "diagnostic:index:source-only", Code: "index.source_only", Severity: "warning"},
+			{ID: "diagnostic:real", Code: "real", Severity: "warning"},
+		},
+		LintFindings: []store.IndexLintFinding{
+			{ID: "lint:real", RuleID: "prompt.missing_input_schema", Severity: "warning"},
+		},
+		Sources: []store.IndexSourceFile{
+			{File: "crux.config.ts", Status: "partial", Diagnostics: []string{"diagnostic:index:source-only"}},
+			{File: "src/prompt.ts", Status: "indexed"},
+		},
+	}
+
+	normalized := ProductionFinalFacts(facts)
+
+	if len(normalized.LintFindings) != 1 {
+		t.Fatalf("lint findings = %+v, want final production lint findings preserved", normalized.LintFindings)
+	}
+	if len(normalized.Diagnostics) != 1 || normalized.Diagnostics[0].ID != "diagnostic:real" {
+		t.Fatalf("diagnostics = %+v, want only source-only artifact removed", normalized.Diagnostics)
+	}
+	if len(normalized.Sources) != 1 || normalized.Sources[0].File != "src/prompt.ts" {
+		t.Fatalf("sources = %+v, want source-only artifact source removed", normalized.Sources)
+	}
+}
+
 func TestNormalizedFactFieldsCoverBetaParitySurfaces(t *testing.T) {
 	want := []string{
 		"prompts",
@@ -129,6 +205,16 @@ func TestNormalizedFactFieldsCoverBetaParitySurfaces(t *testing.T) {
 	}
 	if !reflect.DeepEqual(NormalizedFactFields, want) {
 		t.Fatalf("normalized fact fields = %#v, want %#v", NormalizedFactFields, want)
+	}
+}
+
+func inputContributionDefinition(contributions string) store.ProjectDefinition {
+	return store.ProjectDefinition{
+		ID:       "prompt:writer",
+		Kind:     "prompt",
+		Name:     "writer",
+		Fidelity: "static",
+		Metadata: json.RawMessage(`{"facts":{"inputContributions":` + contributions + `}}`),
 	}
 }
 

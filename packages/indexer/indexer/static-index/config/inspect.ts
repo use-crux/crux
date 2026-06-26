@@ -33,6 +33,16 @@ export interface ProjectStaticIndexConfig {
   readonly root: string
   /** Config file imported for policy, if one was discovered. */
   readonly configFile?: string
+  /**
+   * Historical Go wire field for Static Index syntax enablement.
+   *
+   * Go normalized the internal vocabulary from `nativeAst` to Static Syntax
+   * before this TypeScript artifact did. Keep emitting the old key until every
+   * embedded local runtime can consume `staticSyntaxEnabled`.
+   */
+  readonly nativeAstEnabled: boolean
+  /** Historical Go wire field for the selected Static Index syntax frontend. */
+  readonly nativeAstFrontend?: 'oxc'
   /** Whether config opted into the experimental Static Index syntax path. */
   readonly staticSyntaxEnabled: boolean
   /** Optional Static Index syntax frontend selected by config. */
@@ -62,6 +72,8 @@ export async function inspectProjectStaticIndexConfig(
   return {
     root,
     ...(result.loaded.configFile ? { configFile: result.loaded.configFile } : {}),
+    nativeAstEnabled: selection.enabled,
+    ...(selection.frontend ? { nativeAstFrontend: selection.frontend } : {}),
     staticSyntaxEnabled: selection.enabled,
     ...(selection.frontend ? { staticSyntaxFrontend: selection.frontend } : {}),
     extensions: (result.loaded.indexer?.extensions ?? []).map((extension) => ({
