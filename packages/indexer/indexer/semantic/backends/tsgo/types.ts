@@ -16,6 +16,8 @@ export interface NativeSemanticEngineIdentity<TName extends NativeSemanticEngine
 export type NativeSemanticCoverage = {
   readonly kind: 'complete-native'
   readonly engine: NativeSemanticEngineIdentity
+  /** Structural traversal frontend used for shared semantic analyzer evidence. */
+  readonly syntaxTraversal: NativeSemanticEngineCapabilities['syntaxTraversal']
   readonly extractors: readonly string[]
 }
 
@@ -24,7 +26,7 @@ export interface NativeSemanticEngineCapabilities {
   /** Whether the native engine can produce complete Project Index semantic evidence. */
   readonly nativeEvidence: 'complete'
   /** Structural traversal frontend used by the native engine while lowering evidence. */
-  readonly syntaxTraversal: 'typescript-ast-facade' | 'native-ast'
+  readonly syntaxTraversal: 'native-ast'
 }
 
 /** Result of one native semantic engine analysis. */

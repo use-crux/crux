@@ -45,6 +45,7 @@ describe('native semantic shared analyzer', () => {
     expect(result.timingNames).toContain('semantic.native.analyzer.shared')
     expect(result.timingNames).not.toContain('semantic.native.fallback.api')
     expect(result.coverageKinds).toEqual(['complete-native'])
+    expect(result.syntaxTraversals).toEqual(['native-ast'])
     expect(result.extractorNames).toEqual([['crux.shared-analyzer']])
   })
 
@@ -71,6 +72,7 @@ describe('native semantic shared analyzer', () => {
     expect(result.timingNames).toContain('semantic.native.analyzer.shared')
     expect(result.timingNames).not.toContain('semantic.native.fallback.api')
     expect(result.coverageKinds).toEqual(['complete-native'])
+    expect(result.syntaxTraversals).toEqual(['native-ast'])
     expect(result.extractorNames).toEqual([['crux.shared-analyzer']])
   }, 20_000)
 
@@ -103,6 +105,7 @@ describe('native semantic shared analyzer', () => {
     expect(result.timingNames).toContain('semantic.native.analyzer.shared')
     expect(result.timingNames).not.toContain('semantic.native.fallback.api')
     expect(result.coverageKinds).toEqual(['complete-native'])
+    expect(result.syntaxTraversals).toEqual(['native-ast'])
     expect(result.extractorNames).toEqual([['crux.shared-analyzer']])
   }, 20_000)
 })
@@ -113,10 +116,12 @@ async function compareNativeToTypeScript(
 ): Promise<{
   readonly timingNames: readonly string[]
   readonly coverageKinds: readonly string[]
+  readonly syntaxTraversals: readonly ('native-ast' | undefined)[]
   readonly extractorNames: readonly (readonly string[])[]
 }> {
   const timingNames: string[] = []
   const coverageKinds: string[] = []
+  const syntaxTraversals: ('native-ast' | undefined)[] = []
   const extractorNames: (readonly string[])[] = []
   const typescriptPatch = await createSemanticIndexService({
     backend: createTypeScriptSemanticBackend({ cache: 'disabled' }),
@@ -130,6 +135,7 @@ async function compareNativeToTypeScript(
       onTiming: (timing) => timingNames.push(timing.name),
       onNativeCoverage: (coverage) => {
         coverageKinds.push(coverage.kind)
+        syntaxTraversals.push('syntaxTraversal' in coverage ? coverage.syntaxTraversal : undefined)
         if ('extractors' in coverage) extractorNames.push(coverage.extractors)
       },
     },
@@ -138,7 +144,7 @@ async function compareNativeToTypeScript(
   expect(typescriptPatch.status).toBe('ok')
   expect(nativePatch.status).toBe('ok')
   expect(normalizedFacts(nativePatch.facts)).toEqual(normalizedFacts(typescriptPatch.facts))
-  return { timingNames, coverageKinds, extractorNames }
+  return { timingNames, coverageKinds, syntaxTraversals, extractorNames }
 }
 
 async function writeTsconfig(root: string): Promise<void> {

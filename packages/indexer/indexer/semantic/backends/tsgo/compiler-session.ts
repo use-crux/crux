@@ -1,8 +1,6 @@
 import { resolve } from 'node:path'
 import { API, type Project, type Snapshot } from '@typescript/native-preview/unstable/sync'
-import ts from 'typescript'
 import type { IndexPatchFacts } from '../../../patches'
-import type { SemanticCompilerSourceFile } from '../../compiler-view'
 import type { SemanticBackendIdentity, SemanticProjectSessionIdentity } from '../../service/types'
 import type { SemanticSourceProfile } from '../../source-profile'
 import { resolveTsgoExecutablePath } from './executable'
@@ -13,11 +11,12 @@ import {
   type NativeDirectEvidenceResult,
 } from './direct-projectors/evidence'
 import { createTsgoProjectConfig, type TsgoProjectConfig } from './project-config'
-import { createTsgoTypeScriptSourceCache } from './source-cache'
+import { createTsgoNativeSourceLookup } from './source-lookup'
+import type { TsgoSemanticSyntaxSourceFile } from './syntax-view'
 
 export interface TsgoSemanticCompilerSession {
   /** Source files selected for analyzer candidate discovery. */
-  readonly sourceFiles: readonly ts.SourceFile[]
+  readonly sourceFiles: readonly TsgoSemanticSyntaxSourceFile[]
   /** Compiler view backed by the TypeScript-Go API. */
   readonly view: TsgoSemanticCompilerView
   /** Disposes the native snapshot and temporary config for this analysis. */
@@ -143,11 +142,11 @@ export function createTsgoSemanticCompilerHost(input: TsgoSemanticCompilerHostIn
       const project = projectForInput(snapshot.getProjects(), projectConfig.tsconfigFiles, analyzeInput.files)
       if (!project) throw new Error('TypeScript-Go semantic backend could not create a project for selected files.')
 
-      const sourceCache = createTsgoTypeScriptSourceCache([...analyzeInput.dependencyClosure, ...analyzeInput.files])
-      const view = createTsgoCompilerView(input.identity, project, sourceCache)
+      const sourceLookup = createTsgoNativeSourceLookup(project)
+      const view = createTsgoCompilerView(input.identity, project, sourceLookup)
 
       return {
-        sourceFiles: sourceCache.sourceFiles(analyzeInput.files),
+        sourceFiles: sourceLookup.sourceFiles(analyzeInput.files),
         view,
         close() {
           closeTsgoAnalysisResources(snapshot)

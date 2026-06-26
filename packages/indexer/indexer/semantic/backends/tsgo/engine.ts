@@ -3,7 +3,12 @@ import { semanticIndexEvidenceBatchesForSourceFiles } from '../../evidence/facts
 import { measureSemanticTiming } from '../../instrumentation'
 import { createTsgoSemanticCompilerHost, type TsgoSemanticCompilerHost } from './compiler-session'
 import { tsgoNativeSemanticRuntimeVersion } from './runtime-identity'
-import type { NativeSemanticAnalyzeResult, NativeSemanticEngine, NativeSemanticEngineIdentity } from './types'
+import type {
+  NativeSemanticAnalyzeResult,
+  NativeSemanticEngine,
+  NativeSemanticEngineCapabilities,
+  NativeSemanticEngineIdentity,
+} from './types'
 import type { SemanticBackendIdentity, SemanticProjectSessionIdentity } from '../../service/types'
 import type { SemanticAnalyzeInput } from '../../service/types'
 
@@ -14,6 +19,11 @@ export const tsgoNativeSemanticEngineIdentity = {
   name: 'tsgo',
   version: tsgoNativeSemanticRuntimeVersion,
 } as const satisfies NativeSemanticEngineIdentity<'tsgo'>
+
+const tsgoNativeSemanticEngineCapabilities = {
+  nativeEvidence: 'complete',
+  syntaxTraversal: 'native-ast',
+} as const satisfies NativeSemanticEngineCapabilities
 
 export interface TsgoNativeSemanticEngineInput {
   /** Absolute Project Index root. */
@@ -38,10 +48,7 @@ export function createTsgoNativeSemanticEngine(input: TsgoNativeSemanticEngineIn
   return {
     identity: tsgoNativeSemanticEngineIdentity,
     backendIdentity: input.backendIdentity,
-    capabilities: {
-      nativeEvidence: 'complete',
-      syntaxTraversal: 'typescript-ast-facade',
-    },
+    capabilities: tsgoNativeSemanticEngineCapabilities,
     analyze(analyzeInput) {
       return analyzeWithTsgoNativeEngine(host, analyzeInput)
     },
@@ -71,6 +78,7 @@ function analyzeWithTsgoNativeEngine(
       coverage: {
         kind: 'complete-native',
         engine: tsgoNativeSemanticEngineIdentity,
+        syntaxTraversal: tsgoNativeSemanticEngineCapabilities.syntaxTraversal,
         extractors,
       },
       evidence:
@@ -84,6 +92,7 @@ function analyzeWithTsgoNativeEngine(
     coverage: {
       kind: 'complete-native',
       engine: tsgoNativeSemanticEngineIdentity,
+      syntaxTraversal: tsgoNativeSemanticEngineCapabilities.syntaxTraversal,
       extractors: [sharedAnalyzerExtractor],
     },
     evidence: sharedAnalyzerEvidence(host, analyzeInput),
