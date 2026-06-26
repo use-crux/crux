@@ -85,9 +85,8 @@ interface NodeWithModifierFlags extends Node {
 /**
  * Creates a semantic syntax view backed by native-preview AST nodes.
  *
- * The old TypeScript AST facade remains wired until Phase 5. This factory is
- * intentionally independent so tests can prove the native adapter before the
- * shared analyzer switches to it.
+ * This is the native backend's shared analyzer view; it keeps raw
+ * native-preview nodes behind the backend-neutral semantic syntax contract.
  */
 export function createTsgoSemanticSyntaxView(input: TsgoSemanticSyntaxViewInput): TsgoSemanticSyntaxView {
   return {

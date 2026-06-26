@@ -60,8 +60,8 @@ export interface TsgoNativeSourceLookup {
 /**
  * Creates native source lookup helpers for one TypeScript-Go project.
  *
- * Phase 4 keeps this helper independent from the active compiler view so Phase
- * 5 can switch declaration mapping without carrying the TypeScript AST facade.
+ * Declaration and import lookups stay inside native-preview so native semantic
+ * enrichment does not parse source through the JavaScript TypeScript AST.
  */
 export function createTsgoNativeSourceLookup(project: Project): TsgoNativeSourceLookup {
   const indexCache = new Map<string, NodeRangeIndex<Node>>()

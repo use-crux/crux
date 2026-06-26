@@ -9,7 +9,11 @@ It is an internal package, not a user-facing SDK surface. The public contract fo
 
 ## TypeScript compiler runtime
 
-`@crux/indexer` is the Crux package that executes the TypeScript compiler at runtime. It is verified with the stable JavaScript `typescript` package across the Crux support range (`>=5.5 <7`), and its static and semantic cache identities include the TypeScript compiler version.
+`@crux/indexer` is the Crux package that executes TypeScript-family compiler runtimes for Project
+Index source intelligence. The default semantic backend is verified with the stable JavaScript
+`typescript` package across the Crux support range (`>=5.5 <7`). Semantic cache identity records the
+selected compiler runtime identity, so native TypeScript-Go and JavaScript TypeScript runs do not
+share stale semantic fact caches.
 
 TypeScript 7 native-preview support is intentionally separate from the public package type-surface
 preview lane. Crux exposes native-preview semantic indexing only as an explicit experimental
@@ -61,6 +65,11 @@ upstream `@typescript/native-preview` API, which is unstable. Crux does not inte
 smaller semantic fact set for the native backend. Semantic backend changes must keep the parity
 matrix green for schema facts, source refs, relations, imported and conditional injection surfaces,
 tool maps, data-access intelligence, and semantic lint output.
+
+When native semantic indexing is selected, TypeScript-Go owns semantic project setup, checker calls,
+declaration lookup, and AST traversal. Unsupported direct-projector shapes continue through the
+tsgo-backed shared analyzer path; they do not fall back to the JavaScript TypeScript semantic
+backend.
 
 Internally, the native backend may use TypeScript-Go fast paths for source shapes it can prove exactly.
 Those fast paths are driven by internal primitive projection manifests where the shape is expressible
@@ -185,10 +194,10 @@ Known fact fields are typed in `@crux/core/project-index`. Future integrations m
 
 ## Cache Versioning
 
-Project Index caches are local implementation details, but their identities are part of Crux's migration discipline. Static cache keys include source hashes, direct import dependency hashes, config boundary hashes, extension/extractor/rule identity, compiler profile/intrinsic identity, and the TypeScript syntax frontend version. Semantic cache keys include the analyzed source closure, config boundary hashes, TypeScript version, and the semantic compiler-options identity. If indexer code would produce different facts for unchanged user source and those structured inputs do not already change, the matching cache epoch must change in the same patch.
+Project Index caches are local implementation details, but their identities are part of Crux's migration discipline. Static cache keys include source hashes, direct import dependency hashes, config boundary hashes, extension/extractor/rule identity, compiler profile/intrinsic identity, and the TypeScript syntax frontend version. Semantic cache keys include the analyzed source closure, config boundary hashes, selected compiler runtime identity, and the semantic compiler-options identity. If indexer code would produce different facts for unchanged user source and those structured inputs do not already change, the matching cache epoch must change in the same patch.
 
 - Bump `packages/indexer/indexer/cache-identity.ts` `STATIC_PARSE_CACHE_EPOCH` when static AST extraction changes definition, relation, metadata, schema, source-ref, diagnostic, path/source, file-classification, or presentation-hint output.
-- Bump `packages/indexer/indexer/cache-identity.ts` `SEMANTIC_FACTS_CACHE_EPOCH` when TypeScript semantic enrichment changes schema/callback/source-ref resolution, runtime joins, intelligence metadata, relations, lint facts, or compiler-option meaning.
+- Bump `packages/indexer/indexer/cache-identity.ts` `SEMANTIC_FACTS_CACHE_EPOCH` when semantic enrichment changes schema/callback/source-ref resolution, runtime joins, intelligence metadata, relations, lint facts, compiler runtime identity, or compiler-option meaning.
 - Bump `packages/local/internal/devtools/index_cache_identity.go` `projectIndexSnapshotCacheEpoch` when an existing `.crux/cache/index/index.json` snapshot could hide a new `IndexData` / `ProjectDefinition` read-model field or changed cache semantics after restart.
 
 Moving semantic logic between analyzers without changing emitted facts does not require a semantic cache version bump.

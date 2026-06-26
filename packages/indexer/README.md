@@ -63,6 +63,9 @@ When `experimental.indexer.native` selects the TypeScript-Go backend, the worker
 constructing native-preview. This keeps embedded workers extracted under `~/.cache/crux` compatible
 with pnpm workspaces and monorepos. Set `experimental.indexer.native.tsserverPath` or
 `CRUX_INDEX_NATIVE_TSSERVER_PATH` only when the workspace package resolution path should be bypassed.
+In that mode TypeScript-Go owns semantic project setup, checker calls, declaration lookup, and AST
+traversal. Unsupported direct-projector shapes continue through the tsgo-backed shared analyzer path;
+they do not fall back to the JavaScript TypeScript semantic backend.
 
 First-party compatibility extraction such as Convex agent declarations, `new Agent(...)`, and bare
 object-literal tool schemas now runs through internal extension slots. Compiler-owned projections such
@@ -81,7 +84,7 @@ is preserved so clients can explain the current fidelity honestly.
 
 Use `pnpm --filter @crux/devtools perf:indexer:watch -- --fixture=monorepo` for an opt-in watch-path benchmark covering leaf source edits, imported helper edits, unrelated helper fallbacks, config fallbacks, and deleted files. Use `go test ./internal/devtools -run '^$' -bench BenchmarkReindexProjectIncrementalWatchCommit` from `packages/local` to isolate the Go-side patch commit, status, and read-model projection cost.
 
-Semantic enrichment is composed from focused analyzers behind a shared result contract. The top-level `semanticIndexFacts(root, files)` behavior remains the public entry point, while analyzers own narrower responsibilities such as schema metadata/source refs, direct source refs, relation discovery, and definition enrichment. Shared semantic plumbing lives under `indexer/semantic/`: `program.ts` owns TypeScript program setup, `discovery.ts` owns candidate discovery, `schema-candidates.ts` and `source-ref-candidates.ts` select analyzer inputs, `registry.ts` wires analyzers, and `runner.ts` merges analyzer outputs. This keeps new semantic capabilities testable at their boundary without changing the patch shape consumed by caches and the Go read model.
+Semantic enrichment is composed from focused analyzers behind a shared result contract. The top-level `semanticIndexFacts(root, files)` behavior remains the public entry point, while analyzers own narrower responsibilities such as schema metadata/source refs, direct source refs, relation discovery, and definition enrichment. Shared semantic plumbing lives under `indexer/semantic/`: compiler/backend services own project setup, `discovery.ts` owns candidate discovery, `schema-candidates.ts` and `source-ref-candidates.ts` select analyzer inputs, `registry.ts` wires analyzers, and `runner.ts` merges analyzer outputs. This keeps new semantic capabilities testable at their boundary without changing the patch shape consumed by caches and the Go read model.
 
 Source resolver logic is organized under `source-resolver/` with a stable root re-export at `source-resolver.ts`. The facade keeps the compatibility API, while the internals are split into focused functional modules:
 
@@ -96,12 +99,12 @@ New source resolver modules should keep exported functions documented with JSDoc
 
 ## Cache Versioning
 
-Index caches are keyed by structured cache identity because indexer code changes can alter the index for unchanged project source. Static cache identity includes source hashes, direct import dependency hashes, config boundary hashes, extension/extractor/rule identity, and compiler profile/intrinsic identity. Semantic cache identity includes the analyzed source closure, config boundary hashes, TypeScript version, and the semantic compiler-options identity.
+Index caches are keyed by structured cache identity because indexer code changes can alter the index for unchanged project source. Static cache identity includes source hashes, direct import dependency hashes, config boundary hashes, extension/extractor/rule identity, and compiler profile/intrinsic identity. Semantic cache identity includes the analyzed source closure, config boundary hashes, selected compiler runtime identity, and the semantic compiler-options identity.
 
 The epoch constants live in one place:
 
 - `indexer/cache-identity.ts` (`STATIC_PARSE_CACHE_EPOCH`) for static AST parser/extractor output changes: definitions, relations, metadata, schemas, source refs, diagnostics, source/path ids, file classification, or presentation hints.
-- `indexer/cache-identity.ts` (`SEMANTIC_FACTS_CACHE_EPOCH`) for semantic TypeScript enrichment changes: compiler-resolved aliases, nested schemas, callbacks, source refs, runtime joins, intelligence metadata, relations, lint facts, or compiler option meaning.
+- `indexer/cache-identity.ts` (`SEMANTIC_FACTS_CACHE_EPOCH`) for semantic enrichment changes: compiler-resolved aliases, nested schemas, callbacks, source refs, runtime joins, intelligence metadata, relations, lint facts, compiler runtime identity, or compiler option meaning.
 - `@crux/local`'s `packages/local/internal/devtools/index_cache_identity.go` (`projectIndexSnapshotCacheEpoch`) when a stale `.crux/cache/index/index.json` snapshot could hide a new read-model field or changed cache semantics after restart.
 
 Refactors that only move semantic logic between analyzers without changing emitted facts do not require a cache version bump.
