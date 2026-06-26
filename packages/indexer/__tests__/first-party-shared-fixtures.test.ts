@@ -16,7 +16,7 @@ describe('first-party shared static index fixtures', () => {
       nativeFacts: [
         expect.objectContaining({
           matchIndex: 0,
-          replaces: [{ extension: '@crux/indexer/crux-core', extractor: 'prompt' }],
+          replaces: [{ extension: '@use-crux/indexer/crux-core', extractor: 'prompt' }],
         }),
       ],
     })
@@ -57,7 +57,7 @@ describe('first-party shared static index fixtures', () => {
     ])
     expect(coverage.identities.map((identity) => identity.extractor)).toEqual(coveredExtractors)
     for (const identity of coverage.identities) {
-      expect(identity.extension).toBe('@crux/indexer/crux-core')
+      expect(identity.extension).toBe('@use-crux/indexer/crux-core')
       expect(identity.family).toBe(identity.extractor)
       expect(identity.nativeCovered).toBe(true)
       expect(identity.parityFixtures.positive, `${identity.extractor} positive parity fixture`).toBe(

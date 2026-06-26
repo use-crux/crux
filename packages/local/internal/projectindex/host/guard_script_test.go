@@ -120,7 +120,7 @@ func staticIndexGuardIndexerScript() string {
 					kind: 'definitions',
 					phase: 'ast',
 					projectRoot: req.root,
-					producer: { name: '@crux/indexer/project-indexer', version: 'test' },
+					producer: { name: '@use-crux/indexer/project-indexer', version: 'test' },
 					fidelity: 'authoritative',
 					provenance: { kind: 'runtime', attribute: 'test.guardFallback' },
 					fact: { id: 'prompt:guard-fallback', kind: 'prompt', name: 'guard-fallback', fidelity: 'resolved', status: 'active' }

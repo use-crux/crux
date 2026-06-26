@@ -1,4 +1,4 @@
-import type { SourceLocation, SourceSnippet } from '@crux/core/project-index'
+import type { SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
 import type { StaticCalleeRecord, StaticInitializerRecord } from './types'
 
 /** Source match emitted for a Project Index extractor candidate. */

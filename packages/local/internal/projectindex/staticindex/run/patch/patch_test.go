@@ -54,6 +54,6 @@ func testOptions() Options {
 		Root:             "/repo",
 		MaxBytes:         16 * 1024 * 1024,
 		MaxFactsPerBatch: 200,
-		Producer:         "@crux/indexer/project-indexer",
+		Producer:         "@use-crux/indexer/project-indexer",
 	}
 }

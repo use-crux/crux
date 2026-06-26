@@ -17,7 +17,7 @@ func TestSharedWorkerEventFixtureDecodes(t *testing.T) {
 
 	collector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{
 		Root:             "/repo",
-		Producer:         "@crux/indexer",
+		Producer:         "@use-crux/indexer",
 		MaxFactsPerBatch: 2,
 	})
 	for _, event := range fixture.Events {
@@ -78,14 +78,14 @@ func TestSharedWorkerEventCaseFixturesDecode(t *testing.T) {
 
 	if err := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{
 		Root:     "/repo",
-		Producer: "@crux/indexer",
+		Producer: "@use-crux/indexer",
 	}).Handle(fixture.PhaseError); err == nil || !strings.Contains(err.Error(), "static index failed") {
 		t.Fatalf("Handle phaseError error = %v, want fixture message", err)
 	}
 
 	outOfOrderCollector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{
 		Root:     "/repo",
-		Producer: "@crux/indexer",
+		Producer: "@use-crux/indexer",
 	})
 	for index, event := range fixture.OutOfOrderEvents {
 		err := outOfOrderCollector.Handle(event)

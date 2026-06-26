@@ -39,7 +39,7 @@ func TestSQLiteIndexFactStoreProjectsCommittedPhaseFacts(t *testing.T) {
 			},
 			SourceGraph: &store.ProjectIndexSourceGraph{
 				SchemaVersion: 1,
-				ProducedBy:    "@crux/indexer",
+				ProducedBy:    "@use-crux/indexer",
 				Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
 				Shards:        []store.ProjectIndexShard{{ID: ".", Root: root, PackageFile: root + "/package.json"}},
 			},
@@ -160,7 +160,7 @@ func TestSQLiteIndexFactStoreClearsFactsWithoutEnvelopeMetadata(t *testing.T) {
 	}
 	if _, err := db.ExecContext(ctx, `
 		INSERT INTO index_facts (root, phase, fact_id, kind, producer_name, producer_version, sequence, fact_json)
-		VALUES (?, 'ast', 'definitions:prompt:old-cache', 'definitions', '@crux/indexer/project-indexer', 'test', 0, ?)
+		VALUES (?, 'ast', 'definitions:prompt:old-cache', 'definitions', '@use-crux/indexer/project-indexer', 'test', 0, ?)
 	`, root, string(definitionJSON)); err != nil {
 		t.Fatalf("insert old fact row: %v", err)
 	}
@@ -270,7 +270,7 @@ func testIndexFactEnvelope(t *testing.T, patch IndexPatch, id string, kind strin
 		Kind:          kind,
 		Phase:         patch.Phase,
 		ProjectRoot:   patch.Project.Root,
-		Producer:      IndexFactProducer{Name: "@crux/indexer/project-indexer", Version: "test"},
+		Producer:      IndexFactProducer{Name: "@use-crux/indexer/project-indexer", Version: "test"},
 		Fidelity:      "inferred",
 		Provenance:    IndexFactProvenance{Kind: "runtime", Attribute: "project-index.ast"},
 		Fact:          payload,

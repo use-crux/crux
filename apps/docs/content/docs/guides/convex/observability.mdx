@@ -23,14 +23,14 @@ npx convex env set DEVTOOLS_URL https://your-tunnel.example
 
 ## Automatic Flush
 
-`@crux/convex/server` actions and internal actions flush automatically before returning. This matters because Convex can freeze or tear down the worker after the handler completes.
+`@use-crux/convex/server` actions and internal actions flush automatically before returning. This matters because Convex can freeze or tear down the worker after the handler completes.
 
 The HTTP observability transport also protects Convex action lifecycles from late detail payload failures. It normalizes artifact previews to JSON-safe values, chunks records, and isolates rejected records in a failed batch. That means a large generated plan, cyclic metadata object, or invalid detail record should not prevent `span:end` / `run:end` records from arriving at the Go backend.
 
 Thrown errors use the same evidence contract as core Crux: terminal spans keep a compact error summary, failing spans emit an `exception` event, and stack/raw details attach as `error.stack` and `error.raw` artifacts. Convex action wrappers flush those records in `finally`, so tool failures, child action failures, and generation failures reach devtools before the worker can be frozen.
 
 ```ts
-import { action } from '@crux/convex/server'
+import { action } from '@use-crux/convex/server'
 
 export const run = action({
   args: {},
@@ -43,7 +43,7 @@ export const run = action({
 For unusual shutdown paths, use the explicit helpers:
 
 ```ts
-import { flushObservability, withObservabilityFlush } from '@crux/convex/observability'
+import { flushObservability, withObservabilityFlush } from '@use-crux/convex/observability'
 
 await flushObservability()
 ```
@@ -60,7 +60,7 @@ Use `ctx.crux.runAction()` instead of raw `ctx.runAction()` for child work:
 await ctx.crux.runAction('research', internal.research.run, { question })
 ```
 
-The helper captures the current Crux context and sends it through the hidden `__crux` envelope. The receiving `@crux/convex/server` action restores that context before running user code.
+The helper captures the current Crux context and sends it through the hidden `__crux` envelope. The receiving `@use-crux/convex/server` action restores that context before running user code.
 
 `ctx.crux.runAction()` also sends a stable boundary id. The parent action opens and flushes a `runtime.convex.action` span before crossing the worker boundary, emits `runtime.convex.boundary.requested` with a short lease, and passes that lease in the hidden `__crux` envelope. The child action acknowledges that same boundary with `runtime.convex.boundary.received` and `runtime.convex.boundary.completed` / `runtime.convex.boundary.failed` events.
 
@@ -68,7 +68,7 @@ If Convex drops the caller-side final `span:end` after the child already complet
 
 ## Convex Agent
 
-Use `Agent`, `createTool()`, and `wrapConvexTool()` from `@crux/convex/agent` when integrating with the Convex Agent SDK. The Crux-aware `Agent` keeps the Convex Agent API shape while making `thread.generateText()`, `thread.streamText()`, `generateObject()`, and `streamObject()` emit canonical generation spans. Those aggregate and streamed step spans carry the configured Agent `languageModel` as model/provider attributes, while nested tool-call or flow generations report their own model independently. Each wrapped call emits a consumed `messages` artifact with `source: "convex.agent"` and `phase: "call-args"` for the direct call arguments. When Convex Agent invokes a `contextHandler`, Crux also emits `phase: "thread-context"` with the handler payload fields that Convex provides, such as `allMessages`, `recent`, `inputMessages`, `inputPrompt`, `existingResponses`, and `search`. Run Detail can use those artifacts to show accumulated thread context and prior turns; if Convex Agent does not pass a field through the handler payload, Crux cannot reconstruct that external thread state.
+Use `Agent`, `createTool()`, and `wrapConvexTool()` from `@use-crux/convex/agent` when integrating with the Convex Agent SDK. The Crux-aware `Agent` keeps the Convex Agent API shape while making `thread.generateText()`, `thread.streamText()`, `generateObject()`, and `streamObject()` emit canonical generation spans. Those aggregate and streamed step spans carry the configured Agent `languageModel` as model/provider attributes, while nested tool-call or flow generations report their own model independently. Each wrapped call emits a consumed `messages` artifact with `source: "convex.agent"` and `phase: "call-args"` for the direct call arguments. When Convex Agent invokes a `contextHandler`, Crux also emits `phase: "thread-context"` with the handler payload fields that Convex provides, such as `allMessages`, `recent`, `inputMessages`, `inputPrompt`, `existingResponses`, and `search`. Run Detail can use those artifacts to show accumulated thread context and prior turns; if Convex Agent does not pass a field through the handler payload, Crux cannot reconstruct that external thread state.
 
 Crux-aware Convex Agents also expose post-turn persistence as memory-shaped spans. The best-effort `persist skills` span emits a `memory.diff` artifact with active skill ids before and after persistence. The best-effort `capture memory` span emits an aggregate `memory.diff` artifact summarizing captured messages and tool events; concrete block-level writes underneath it still emit their own `memory.snapshot` / `memory.diff` artifacts from core memory blocks.
 
@@ -92,14 +92,14 @@ Avoid labels like `runAction` or generated function IDs unless they are truly th
 
 | Symptom                                | Likely cause                                      | Fix                                                                              |
 | -------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Child action appears as a separate run | Raw `ctx.runAction()` or unwrapped target action  | Use `ctx.crux.runAction()` and `@crux/convex/server` target                      |
-| Run stays incomplete in devtools       | Worker exited before delivery                     | Use `@crux/convex/server` wrappers or `flushObservability()`                     |
+| Child action appears as a separate run | Raw `ctx.runAction()` or unwrapped target action  | Use `ctx.crux.runAction()` and `@use-crux/convex/server` target                      |
+| Run stays incomplete in devtools       | Worker exited before delivery                     | Use `@use-crux/convex/server` wrappers or `flushObservability()`                     |
 | Plan flow shows incomplete generation  | Terminal child end was delayed past its deadline  | The backend folds completed child output under the suspended flow presentation   |
 | Generation stays running past timeout  | Provider/worker never delivered terminal span end | Set `timeoutMs`; core emits a terminal timeout span and backend reconciles gaps  |
-| Chat agent has tools but no generation | Raw Convex Agent import                           | Import `Agent` from `@crux/convex/agent`                                         |
-| Tool row shows only call ID            | Direct Convex Agent tool was not wrapped or named | Use `createTool()` from `@crux/convex/agent` or `wrapConvexTool(tool, { name })` |
+| Chat agent has tools but no generation | Raw Convex Agent import                           | Import `Agent` from `@use-crux/convex/agent`                                         |
+| Tool row shows only call ID            | Direct Convex Agent tool was not wrapped or named | Use `createTool()` from `@use-crux/convex/agent` or `wrapConvexTool(tool, { name })` |
 | Flow appears as chat root              | Flow used as generic tracing wrapper              | Keep public action/agent run as root; use flow only for actual flows             |
-| Bridge command has only a message      | Older peer or malformed command response          | Use current `@crux/convex` bridge setup so `command.error.details` carries normalized error details |
+| Bridge command has only a message      | Older peer or malformed command response          | Use current `@use-crux/convex` bridge setup so `command.error.details` carries normalized error details |
 
 ## Best Practices
 

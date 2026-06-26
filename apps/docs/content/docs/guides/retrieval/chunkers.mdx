@@ -5,7 +5,7 @@ description: Choose how documents are split before embedding — structured, pla
 
 A chunker decides where to cut a document before each piece is embedded. The choice shapes recall quality more than almost any other indexing knob: cut too small and chunks lose context, cut too large and the embedding signal gets diluted.
 
-The default is `chunker.structured()`. It works for text and preserves provenance from `@crux/ingest` parts such as pages, tables, sheets, and JSON paths.
+The default is `chunker.structured()`. It works for text and preserves provenance from `@use-crux/ingest` parts such as pages, tables, sheets, and JSON paths.
 
 ## Quick rule
 
@@ -54,7 +54,7 @@ indexingPipeline({
 })
 ```
 
-`chunker.structured()` is the best default for `@crux/ingest` output. PDF pages keep page provenance, tables are chunked by row windows with headers repeated, spreadsheets preserve sheet names, and JSON parts preserve paths.
+`chunker.structured()` is the best default for `@use-crux/ingest` output. PDF pages keep page provenance, tables are chunked by row windows with headers repeated, spreadsheets preserve sheet names, and JSON parts preserve paths.
 
 ## Parent / child
 
@@ -73,7 +73,7 @@ indexingPipeline({
 The retriever searches child chunks. Each child stores `parent.parentId` and `parent.key`; `parentExpand({ store: data })` can follow that key at query time and add parent content while keeping the child chunk as the citation.
 
 ```ts
-import { parentExpand, retrievalPipeline } from '@crux/core/retrieval'
+import { parentExpand, retrievalPipeline } from '@use-crux/core/retrieval'
 
 const expandedDocs = retrievalPipeline(docs, [
   parentExpand({ store: data, maxParentChars: 4000 }),

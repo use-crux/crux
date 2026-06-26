@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectRelation } from '@use-crux/core/project-index'
 import {
   builtInRelationPolicies,
   createRelationPolicyTable,

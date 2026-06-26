@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { CruxStore } from '@crux/core/store'
+import type { CruxStore } from '@use-crux/core/store'
 import type { ConvexCruxStoreComponent } from './store-component'
 import { createStoreDocStore, type StoreDocPage, type StoreDocPageQuery, type StoreDocRecord } from './store-doc'
 
@@ -77,7 +77,7 @@ export interface ConvexMemoryStoreConfig<TCtx extends ConvexCtxPort = ConvexCtxP
  *
  * @example
  * ```ts
- * import { defineConvexStoreContract } from '@crux/convex'
+ * import { defineConvexStoreContract } from '@use-crux/convex'
  * import { components } from './_generated/api'
  *
  * const cruxDocuments = defineConvexStoreContract({ component: components.crux })

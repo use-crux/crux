@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type Anthropic from '@anthropic-ai/sdk'
-import type { Message, ToolModelOutput } from '@crux/core'
-import { transcriptCodecConformance } from '@crux/core/adapter/testing'
-import type { ToolResultEntry } from '@crux/core/adapter'
+import type { Message, ToolModelOutput } from '@use-crux/core'
+import { transcriptCodecConformance } from '@use-crux/core/adapter/testing'
+import type { ToolResultEntry } from '@use-crux/core/adapter'
 import { anthropicMessageToolRoundCodec, anthropicTranscript, fromMessages, toMessages } from '../message-codec'
 
 describe('anthropicMessageToolRoundCodec', () => {

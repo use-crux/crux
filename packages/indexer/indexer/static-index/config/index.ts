@@ -1,4 +1,4 @@
-import type { CruxExperimentalConfig } from '@crux/core'
+import type { CruxExperimentalConfig } from '@use-crux/core'
 
 /** Static syntax frontend selected by experimental project config. */
 export type StaticIndexSyntaxFrontend = 'oxc'

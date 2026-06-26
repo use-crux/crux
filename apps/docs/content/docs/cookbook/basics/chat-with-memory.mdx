@@ -6,9 +6,9 @@ description: Compose recent messages, working state, episodes, and proposed fact
 This recipe shows the default memory shape for a useful assistant. It keeps a short recent window, tracks typed task state, records notable events, and proposes long-term facts instead of silently changing the user's profile.
 
 ```ts
-import { prompt } from '@crux/core'
-import { generate } from '@crux/ai'
-import { memory, recentMessages, workingState, episodes, facts } from '@crux/core/memory'
+import { prompt } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
+import { memory, recentMessages, workingState, episodes, facts } from '@use-crux/core/memory'
 import { z } from 'zod'
 
 const assistantMemory = memory({

@@ -5,7 +5,7 @@ import type {
   ProjectDefinition,
   ProjectRelation,
   ProjectSourceRef,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import {
   type InjectionReadModel,
   type InjectionToolContribution,

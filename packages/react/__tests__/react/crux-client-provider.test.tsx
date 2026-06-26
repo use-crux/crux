@@ -15,8 +15,8 @@ import { renderHook } from '@testing-library/react'
 import { CruxProvider, useCruxTransport } from '../../src/provider'
 import { usePlan, useTaskList, useTasks } from '../../src/hooks'
 import { createConvexContractTransport, createMockConvexBackend } from './convex-contract-harness'
-import type { Plan, TaskList, Task } from '@crux/core/plan'
-import type { JsonObject } from '@crux/core/store'
+import type { Plan, TaskList, Task } from '@use-crux/core/plan'
+import type { JsonObject } from '@use-crux/core/store'
 
 // ── Memoized Provider (mirrors CruxClientProvider from apps/web) ──
 

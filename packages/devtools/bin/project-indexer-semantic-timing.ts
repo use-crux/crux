@@ -1,4 +1,4 @@
-import type { SemanticIndexTiming } from '@crux/indexer'
+import type { SemanticIndexTiming } from '@use-crux/indexer'
 
 /** Aggregates semantic indexing timing and counter events into worker protocol buckets. */
 export function createSemanticTimingCollector(): {

@@ -28,7 +28,7 @@ Contexts let you define a fragment once and compose it into any prompt via `use:
 ## Quick example
 
 ```ts twoslash title="contexts.ts"
-import { context, prompt } from '@crux/core'
+import { context, prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 // Static — always contributes the same text
@@ -79,7 +79,7 @@ Crux supports three conditional patterns. Use the one that matches where the dec
 If a context only makes sense when one of its own input fields is present, put `when` on the context definition.
 
 ```ts twoslash title="context-level-when.ts"
-import { context, prompt } from '@crux/core'
+import { context, prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const brandVoice = context({
@@ -107,7 +107,7 @@ const writer = prompt({
 Sometimes the same context is reusable, but one prompt only wants it in a specific mode. Keep the context unconditional, then wrap it at the call site.
 
 ```ts twoslash title="when-wrapper.ts"
-import { context, prompt, when } from '@crux/core'
+import { context, prompt, when } from '@use-crux/core'
 import { z } from 'zod'
 
 const seoGuidance = context({
@@ -137,7 +137,7 @@ Use this when the same context should be always-on in one prompt, optional in an
 If exactly one branch should be active, use `match()` instead of a list of `when()` wrappers.
 
 ```ts twoslash title="match-contexts.ts"
-import { context, match, prompt } from '@crux/core'
+import { context, match, prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const draftMode = context({
@@ -208,9 +208,9 @@ Excluded contexts are not resolved, do not call async `system()` functions, and 
 `context()` also accepts `use`, just like `prompt()`. Nested entries resolve before the context's own system text. This lets you package a reusable policy with the [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), [skills](/docs/guides/skills), [blackboard](/docs/guides/agents/blackboard), or tools that make that policy work.
 
 ```ts title="context-with-memory.ts"
-import { context, prompt } from '@crux/core'
-import { memory, recentMessages, facts } from '@crux/core/memory'
-import { skill } from '@crux/core/skill'
+import { context, prompt } from '@use-crux/core'
+import { memory, recentMessages, facts } from '@use-crux/core/memory'
+import { skill } from '@use-crux/core/skill'
 import { z } from 'zod'
 
 const userMemory = memory({

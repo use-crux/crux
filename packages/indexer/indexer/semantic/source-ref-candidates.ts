@@ -1,4 +1,4 @@
-import type { ProjectSourceRef, ProjectSourceRefRole } from '@crux/core/project-index'
+import type { ProjectSourceRef, ProjectSourceRefRole } from '@use-crux/core/project-index'
 import type { SemanticDefinitionCandidate, SemanticDefinitionKind, SemanticSourceRefCandidate } from './candidates'
 import {
   semanticIsResolvableSourceExpression,

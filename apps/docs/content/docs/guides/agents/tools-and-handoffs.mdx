@@ -12,9 +12,9 @@ For in-process handoffs where both agents run in the same execution context:
 ```ts twoslash
 // @noErrors
 import { z } from 'zod'
-import { prompt } from '@crux/core'
-import { handoff } from '@crux/core/agent'
-import { generateTextFn } from '@crux/ai'
+import { prompt } from '@use-crux/core'
+import { handoff } from '@use-crux/core/agent'
+import { generateTextFn } from '@use-crux/ai'
 
 const researchHandoff = handoff({
   id: 'research-to-writer',

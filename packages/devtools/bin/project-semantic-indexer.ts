@@ -8,9 +8,9 @@
 
 import { createInterface } from 'node:readline'
 import { resolve } from 'node:path'
-import { type IndexPatchBudget, type SemanticBackendSelection, type SemanticSourceProfile } from '@crux/indexer'
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
-import { createSemanticIndexService } from '@crux/indexer/host/semantic'
+import { type IndexPatchBudget, type SemanticBackendSelection, type SemanticSourceProfile } from '@use-crux/indexer'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
+import { createSemanticIndexService } from '@use-crux/indexer/host/semantic'
 import {
   assertProjectIndexWorkerProtocolV2,
   writePatchEvents,

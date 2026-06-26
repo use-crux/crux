@@ -25,7 +25,7 @@ import { workspaceIndexExtractor } from './workspace-extension'
  * all first-party static extractor patterns.
  */
 export const cruxCoreExtension: IndexerExtension = {
-  name: '@crux/indexer/crux-core',
+  name: '@use-crux/indexer/crux-core',
   version: '1',
   crux: {
     indexer: '^0.1.0',

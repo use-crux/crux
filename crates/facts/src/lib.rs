@@ -2,7 +2,7 @@
 
 //! Data-only Project Index fact shapes for Static Index finalization.
 //!
-//! These structs mirror the JSON names owned by `@crux/core/project-index`.
+//! These structs mirror the JSON names owned by `@use-crux/core/project-index`.
 //! Metadata-heavy regions stay as `serde_json::Value` until Rust owns those read models.
 
 use std::collections::BTreeMap;

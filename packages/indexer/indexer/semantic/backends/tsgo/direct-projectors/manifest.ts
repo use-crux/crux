@@ -4,7 +4,7 @@ import type {
   ProjectSourceRef,
   ProjectRelation,
   ProjectSourceRefRole,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import { semanticPrimitiveCallNames } from '../../../semantic-call-names'
 import { nativeDirectAgentPrimitiveManifest } from './agent-manifest'
 import { nativeDirectRoutingPrimitiveManifest } from './routing-manifest'

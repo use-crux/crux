@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import type { IndexDiagnostic, IndexLintFinding, IndexRuleDescriptor, SourceLocation } from '@crux/core/project-index'
+import type { IndexDiagnostic, IndexLintFinding, IndexRuleDescriptor, SourceLocation } from '@use-crux/core/project-index'
 import { createKnownIndexLintRuleIds } from './rule-ids'
 
 type SuppressionScope = 'next-line' | 'line' | 'file'

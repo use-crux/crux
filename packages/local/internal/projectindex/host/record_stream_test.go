@@ -118,7 +118,7 @@ func TestWorker_indexProjectAstPatchFromNativeSyntaxRecordStreamStreamsLegacyRec
 					kind: 'definitions',
 					phase: 'ast',
 					projectRoot: req.root,
-					producer: { name: '@crux/indexer/project-indexer', version: 'test' },
+					producer: { name: '@use-crux/indexer/project-indexer', version: 'test' },
 					fidelity: 'authoritative',
 					provenance: { kind: 'runtime', attribute: 'test.nativeStream' },
 					fact: { id: 'prompt:native-stream', kind: 'prompt', name: 'native-stream', fidelity: 'resolved', status: 'active' }

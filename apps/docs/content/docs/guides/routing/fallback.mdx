@@ -8,8 +8,8 @@ description: Automatically try backup models when the primary model fails.
 Use fallback when a provider is down, rate-limited, timing out, or returning another retryable error. Fallback is not a quality gate: if the first model succeeds with a weak answer, fallback is done. Use [`cascade()`](/docs/guides/routing/cascade) for quality escalation.
 
 ```ts
-import { fallback } from '@crux/core/routing'
-import { generate } from '@crux/ai'
+import { fallback } from '@use-crux/core/routing'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { anthropic } from '@ai-sdk/anthropic'
 
@@ -152,7 +152,7 @@ const model = fallback(gpt4o, claudeSonnet, {
 `fallback()` works with `stream()` too. Fallback only triggers on start or connection failures. Once chunks start flowing, the stream is committed to that model.
 
 ```ts
-import { stream } from '@crux/ai'
+import { stream } from '@use-crux/ai'
 
 const result = await stream(myPrompt, {
   model: fallback(gpt4o, claudeSonnet),

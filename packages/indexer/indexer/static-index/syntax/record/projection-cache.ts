@@ -1,4 +1,4 @@
-import type { ProjectDefinition } from '@crux/core/project-index'
+import type { ProjectDefinition } from '@use-crux/core/project-index'
 
 type ImportedDefinitionLoader = () => Promise<ProjectDefinition | undefined>
 

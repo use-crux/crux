@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { Crux, ContextEntry, Prompt } from '@crux/core'
+import type { Crux, ContextEntry, Prompt } from '@use-crux/core'
 import type { z } from 'zod'
 import type { CruxConvexBridgeHttpRouter } from './bridge'
 import { convexAgent as createConvexAgent } from './agent'
@@ -22,7 +22,7 @@ import type { ConvexCtxPort } from './store'
 
 /** Convex components required by the Crux profile. */
 export interface CruxConvexComponents {
-  /** Crux persistence component installed from `@crux/convex/convex.config`. */
+  /** Crux persistence component installed from `@use-crux/convex/convex.config`. */
   crux: ComponentApi
   /** Convex Agent component installed from `@convex-dev/agent/convex.config`. */
   agent: ConvexAgentComponent

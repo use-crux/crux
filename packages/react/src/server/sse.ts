@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { CruxStore, StoreEvent } from '@crux/core/store'
+import type { CruxStore, StoreEvent } from '@use-crux/core/store'
 
 /**
  * Options for `cruxSSEHandler`.
@@ -39,7 +39,7 @@ export interface CruxSSEHandlerOptions {
  * @example
  * ```ts
  * // app/api/crux/events/route.ts (Next.js App Router)
- * import { cruxSSEHandler } from '@crux/react/server'
+ * import { cruxSSEHandler } from '@use-crux/react/server'
  *
  * export const GET = cruxSSEHandler({
  *   store,

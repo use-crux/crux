@@ -1,4 +1,4 @@
-import type { InjectionUseFacts, ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
+import type { InjectionUseFacts, ProjectDefinition, ProjectDefinitionKind } from '@use-crux/core/project-index'
 
 /** Converts an authored use-entry variable into the safe id fragment used by index definitions. */
 export function safeUseEntryId(value: string): string {

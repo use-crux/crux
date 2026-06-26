@@ -1,5 +1,5 @@
 /**
- * Skill types for @crux/core/skill
+ * Skill types for @use-crux/core/skill
  *
  * A Skill is a Markdown-based instruction set that an LLM can load on-demand.
  * Skills are compatible with the skills.sh community format (SKILL.md with YAML frontmatter).

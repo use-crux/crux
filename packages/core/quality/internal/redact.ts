@@ -7,7 +7,7 @@
  * keys; output snapshots are truncated at 32 KiB — full outputs live in the
  * trace store, reachable via `traceIds`.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 

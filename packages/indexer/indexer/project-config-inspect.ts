@@ -16,9 +16,9 @@
  * @module
  */
 
-import type { CruxConfig } from '@crux/core'
-import type { ProjectModelResolutionMode } from '@crux/core/project-index'
-import type { IndexDiagnostic } from '@crux/core/project-index'
+import type { CruxConfig } from '@use-crux/core'
+import type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
+import type { IndexDiagnostic } from '@use-crux/core/project-index'
 import { loadProjectConfig } from './config'
 import { staticIndexSyntaxSelectionFromConfig } from './static-index/config'
 import { resolveProjectModel } from './project-model'

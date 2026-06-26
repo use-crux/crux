@@ -36,7 +36,7 @@ describe('loadQualityProject', () => {
     writeFileSync(
       join(srcRoot, 'prompts.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const greeter = prompt({
           id: 'source.greeter',

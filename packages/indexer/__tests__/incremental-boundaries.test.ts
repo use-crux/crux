@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import { planIndexFiles } from '../indexer/incremental'
 
 const root = '/project'
@@ -39,7 +39,7 @@ function previousIndex(): ProjectIndexSnapshot {
     ruleDescriptors: [],
     sourceGraph: {
       schemaVersion: 1,
-      producedBy: '@crux/indexer',
+      producedBy: '@use-crux/indexer',
       capabilities: [
         'source-dependencies',
         'source-dependents',

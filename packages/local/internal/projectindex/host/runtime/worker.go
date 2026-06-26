@@ -12,7 +12,7 @@ import (
 
 const (
 	maxResponseBytes = 16 * 1024 * 1024
-	producer         = "@crux/indexer/project-runtime-indexer"
+	producer         = "@use-crux/indexer/project-runtime-indexer"
 )
 
 // Options configures the runtime worker process.

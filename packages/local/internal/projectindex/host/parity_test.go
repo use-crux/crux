@@ -73,7 +73,7 @@ func writeStaticIndexParityConfig(t testing.TB, root string) string {
 	if err := os.MkdirAll(filepath.Dir(absoluteConfigPath), 0o755); err != nil {
 		t.Fatalf("create Static Index parity config dir: %v", err)
 	}
-	source := []byte("import { config } from '@crux/core'\n\nexport default config({\n  experimental: { indexer: { nativeAst: { frontend: 'oxc' } } },\n})\n")
+	source := []byte("import { config } from '@use-crux/core'\n\nexport default config({\n  experimental: { indexer: { nativeAst: { frontend: 'oxc' } } },\n})\n")
 	if err := os.WriteFile(absoluteConfigPath, source, 0o600); err != nil {
 		t.Fatalf("write Static Index parity config: %v", err)
 	}

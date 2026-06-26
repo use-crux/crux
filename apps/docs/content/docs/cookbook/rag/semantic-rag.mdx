@@ -7,11 +7,11 @@ This recipe sets up a complete production-style RAG pipeline: ingest a directory
 
 ## Primitives used
 
-- `@crux/ingest` for document loading
-- `@crux/core/indexing` — `indexer()` for chunk + embed + write, `corpus()` for incremental sync
-- `@crux/core/retrieval` — `retriever()` for query + asContext
-- `@crux/ai` — `reranker()` for model-based reranking
-- `@crux/upstash` — `upstashVectorStore()` for managed vector search
+- `@use-crux/ingest` for document loading
+- `@use-crux/core/indexing` — `indexer()` for chunk + embed + write, `corpus()` for incremental sync
+- `@use-crux/core/retrieval` — `retriever()` for query + asContext
+- `@use-crux/ai` — `reranker()` for model-based reranking
+- `@use-crux/upstash` — `upstashVectorStore()` for managed vector search
 - `embedding()` — one dense + one sparse embedding
 
 ## When to reach for this pattern
@@ -25,7 +25,7 @@ This recipe sets up a complete production-style RAG pipeline: ingest a directory
 ### `lib/rag/embedding.ts`
 
 ```ts
-import { embedding } from '@crux/core/embedding'
+import { embedding } from '@use-crux/core/embedding'
 import { openai } from '@ai-sdk/openai'
 
 export const dense = embedding({
@@ -54,8 +54,8 @@ export const sparse = embedding({
 ### `lib/rag/storage.ts`
 
 ```ts
-import { defineConvexStoreContract } from '@crux/convex'
-import { upstashVectorStore } from '@crux/upstash'
+import { defineConvexStoreContract } from '@use-crux/convex'
+import { upstashVectorStore } from '@use-crux/upstash'
 import { Index } from '@upstash/vector'
 
 const cruxDocuments = defineConvexStoreContract({
@@ -76,8 +76,8 @@ export const vectors = upstashVectorStore({
 ### `lib/rag/index-docs.ts`
 
 ```ts
-import { chunker, corpus, indexer, indexingPipeline, transform } from '@crux/core/indexing'
-import { filesSource } from '@crux/ingest/files'
+import { chunker, corpus, indexer, indexingPipeline, transform } from '@use-crux/core/indexing'
+import { filesSource } from '@use-crux/ingest/files'
 
 import { dense, sparse } from './embedding'
 import { data, vectors } from './storage'
@@ -131,8 +131,8 @@ Run `pnpm tsx lib/rag/index-docs.ts` (or invoke `syncDocs()`) when content chang
 ### `lib/rag/retriever.ts`
 
 ```ts
-import { retriever } from '@crux/core/retrieval'
-import { reranker } from '@crux/ai'
+import { retriever } from '@use-crux/core/retrieval'
+import { reranker } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 import { dense, sparse } from './embedding'
@@ -168,8 +168,8 @@ import {
   multiQuery,
   parentExpand,
   retrievalPipeline,
-} from '@crux/core/retrieval'
-import { generateObjectFn, generateTextFn } from '@crux/ai'
+} from '@use-crux/core/retrieval'
+import { generateObjectFn, generateTextFn } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 export const advancedDocs = retrievalPipeline(docs, [
@@ -205,9 +205,9 @@ Use the plain `docs` retriever when hybrid retrieval plus reranking is enough. U
 ### `lib/rag/answer.ts`
 
 ```ts
-import { prompt } from '@crux/core'
-import { generate } from '@crux/ai'
-import { grounding, citationSchema } from '@crux/core/citations'
+import { prompt } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
+import { grounding, citationSchema } from '@use-crux/core/citations'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
@@ -298,5 +298,5 @@ const urlGrounding = grounding({
   <Card title="Local files RAG" description="The same retrieval stack with an in-memory local corpus." href="/docs/cookbook/rag/local-files-rag" />
   <Card title="Retrieval guide" description="The full RAG architecture — embeddings, ingestion, indexing, retrieval." href="/docs/guides/retrieval" />
   <Card title="Episodic recall" description="Auto-recall past chat turns instead of indexed docs." href="/docs/cookbook/rag/episodic-recall" />
-  <Card title="@crux/upstash reference" description="Upstash VectorStore and Redis DataStore APIs." href="/docs/reference/storage/upstash" />
+  <Card title="@use-crux/upstash reference" description="Upstash VectorStore and Redis DataStore APIs." href="/docs/reference/storage/upstash" />
 </Cards>

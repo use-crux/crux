@@ -13,7 +13,7 @@ import (
 
 const (
 	maxResponseBytes = 16 * 1024 * 1024
-	producer         = "@crux/indexer/project-indexer"
+	producer         = "@use-crux/indexer/project-indexer"
 )
 
 // Options configures the semantic worker process.

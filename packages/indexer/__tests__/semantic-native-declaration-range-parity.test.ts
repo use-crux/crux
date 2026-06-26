@@ -30,8 +30,8 @@ describe('native semantic declaration range parity', () => {
     await writeFile(
       file,
       `
-        import { blackboard } from '@crux/core/agent'
-        import { facts, memory, memoryBlock, workingState, type MemoryRuntimeOptions } from '@crux/convex/memory'
+        import { blackboard } from '@use-crux/core/agent'
+        import { facts, memory, memoryBlock, workingState, type MemoryRuntimeOptions } from '@use-crux/convex/memory'
         import { z } from 'zod'
 
         function createMemoryId(kind: string, id: string): string {
@@ -94,7 +94,7 @@ describe('native semantic declaration range parity', () => {
     await writeFile(
       contextsFile,
       `
-        import { context } from '@crux/core'
+        import { context } from '@use-crux/core'
 
         export const currentDate = context({ id: 'current-date' })
       `,
@@ -102,7 +102,7 @@ describe('native semantic declaration range parity', () => {
     await writeFile(
       promptFile,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         import { currentDate } from './contexts'
 
         // Native-preview identifier offsets must also work for imported use targets: —

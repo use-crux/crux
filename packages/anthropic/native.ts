@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream'
-import { defineProviderRuntime } from '@crux/core/adapter'
-import type { NativeProviderPort, SingleTurnRuntimeContract } from '@crux/core/adapter'
+import { defineProviderRuntime } from '@use-crux/core/adapter'
+import type { NativeProviderPort, SingleTurnRuntimeContract } from '@use-crux/core/adapter'
 import { anthropicTranscript } from './message-codec'
 import {
   anthropicOutputSchema,

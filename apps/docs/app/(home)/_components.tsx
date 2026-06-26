@@ -166,7 +166,7 @@ export function DevWindow({
       <div>{children}</div>
       {/* Status bar */}
       <div className="flex items-center justify-between border-t border-fd-border bg-fd-muted/30 px-4 py-2">
-        <span className="font-mono text-[10px] text-fd-muted-foreground">@crux/devtools · {status}</span>
+        <span className="font-mono text-[10px] text-fd-muted-foreground">@use-crux/devtools · {status}</span>
         <span className="font-mono text-[10px] text-fd-muted-foreground">
           traces · memory · evals · security · index
         </span>
@@ -317,7 +317,7 @@ export function CruxFooter() {
             Bring your SDK; see what the model saw, why it saw it, and whether it worked.
           </p>
           <p className="mt-6 font-mono text-[11px] tracking-[0.1em] text-fd-muted-foreground/60">
-            Apache-2.0 · @crux/core
+            Apache-2.0 · @use-crux/core
           </p>
         </div>
         {columns.map((col) => (

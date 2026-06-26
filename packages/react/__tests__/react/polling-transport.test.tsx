@@ -5,8 +5,8 @@ import { renderHook, act } from '@testing-library/react'
 import { createPollingTransport } from '../../src/polling'
 import { usePlan, useTasks } from '../../src/hooks'
 import { CruxProvider } from '../../src/provider'
-import type { CruxStore, JsonObject } from '@crux/core/store'
-import { inMemoryCruxStore } from '@crux/core/store'
+import type { CruxStore, JsonObject } from '@use-crux/core/store'
+import { inMemoryCruxStore } from '@use-crux/core/store'
 
 function createWrapper(transport: ReturnType<typeof createPollingTransport>) {
   return function Wrapper({ children }: { children: React.ReactNode }) {

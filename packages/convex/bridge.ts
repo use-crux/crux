@@ -10,9 +10,9 @@
 
 import { httpActionGeneric } from 'convex/server'
 import type { PublicHttpAction } from 'convex/server'
-import type { Crux } from '@crux/core'
-import { normalizeObservedError } from '@crux/core/observability'
-import type { CruxStore } from '@crux/core/store'
+import type { Crux } from '@use-crux/core'
+import { normalizeObservedError } from '@use-crux/core/observability'
+import type { CruxStore } from '@use-crux/core/store'
 import type { ComponentApi } from './src/component/_generated/component'
 import { assertConvexCtxPort, createDefaultConvexCruxStore } from './profile-store'
 import {
@@ -24,7 +24,7 @@ import {
   getRuntimeBridgeManifest,
   type BridgeCommandError,
   type RuntimeBridgeManifest,
-} from '@crux/core/runtime-bridge'
+} from '@use-crux/core/runtime-bridge'
 
 export interface CruxConvexBridgeHttpRouter {
   route(definition: { path: string; method: 'GET' | 'POST' | 'OPTIONS'; handler: PublicHttpAction }): void

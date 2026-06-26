@@ -65,7 +65,7 @@ const docs = retriever({
 ## Dense: semantic similarity
 
 ```ts
-import { embedding } from '@crux/core/embedding'
+import { embedding } from '@use-crux/core/embedding'
 
 declare const provider: {
   embedMany(texts: string[]): Promise<number[][]>
@@ -94,8 +94,8 @@ Use dense embeddings when meaning matters more than exact wording. They are the 
 ## Sparse: exact terms and keywords
 
 ```ts
-import { embedding } from '@crux/core/embedding'
-import type { SparseVector } from '@crux/core/storage'
+import { embedding } from '@use-crux/core/embedding'
+import type { SparseVector } from '@use-crux/core/storage'
 
 declare function toSparseVector(text: string): SparseVector
 
@@ -143,8 +143,8 @@ Crux embeds the query with both embeddings and asks the store to search with bot
 The same primitive owns the policies that affect how vectors are generated. Put preprocessing, truncation, caching, retries, and provider rate limits on `embedding()` once, then reuse that embedding in memory, indexing, retrieval, and semantic cache code.
 
 ```ts
-import { embedding, embeddingCache, normalizeText } from '@crux/core/embedding'
-import { inMemoryDataStore } from '@crux/core/storage'
+import { embedding, embeddingCache, normalizeText } from '@use-crux/core/embedding'
+import { inMemoryDataStore } from '@use-crux/core/storage'
 
 const store = inMemoryDataStore()
 
@@ -182,7 +182,7 @@ Preprocessing runs before cache lookup and before the provider call. That means 
 For custom normalization, give the policy a stable fingerprint so cache keys change when the behavior changes:
 
 ```ts
-import { embeddingPreprocessor } from '@crux/core/embedding'
+import { embeddingPreprocessor } from '@use-crux/core/embedding'
 
 const stripMarkdown = embeddingPreprocessor({
   id: 'strip-markdown',
@@ -234,7 +234,7 @@ Memory blocks that perform semantic recall are dense-oriented today. `episodes()
 The recommended path is the embedding object:
 
 ```ts
-import { episodes, facts } from '@crux/core/memory'
+import { episodes, facts } from '@use-crux/core/memory'
 
 const history = episodes({
   id: 'conversation-log',
@@ -313,7 +313,7 @@ Upstash is the reference hybrid-capable adapter in Crux. Users define one dense 
 
 ```ts
 import { Index } from '@upstash/vector'
-import { upstashVectorStore } from '@crux/upstash'
+import { upstashVectorStore } from '@use-crux/upstash'
 
 const vectors = upstashVectorStore({
   index: new Index({ url: '...', token: '...' }),
@@ -338,14 +338,14 @@ This keeps the user story clean:
 If you are using first-party adapter packages, you do not always have to wrap the provider SDK manually:
 
 ```ts
-import { embedding as aiEmbedding } from '@crux/ai'
-import { embedding as openAIEmbedding } from '@crux/openai'
-import { embedding as googleEmbedding } from '@crux/google'
+import { embedding as aiEmbedding } from '@use-crux/ai'
+import { embedding as openAIEmbedding } from '@use-crux/openai'
+import { embedding as googleEmbedding } from '@use-crux/google'
 ```
 
 Provider packages export the same noun, `embedding()`, from their own package. Alias at import sites when a file uses multiple providers.
 
-`@crux/anthropic` stays generation-only on the direct SDK path, so pair Anthropic generation with one of the embedding helpers above when you need indexing or retrieval.
+`@use-crux/anthropic` stays generation-only on the direct SDK path, so pair Anthropic generation with one of the embedding helpers above when you need indexing or retrieval.
 
 ## Why Crux does not support `kind: 'hybrid'`
 
@@ -375,7 +375,7 @@ Embedding operations emit `embed:start` and `embed:end` events and show up acros
 
 - devtools timeline and dashboard
 - CLI dashboard and TUI detail views
-- `@crux/otel` as `crux.embedding` spans
+- `@use-crux/otel` as `crux.embedding` spans
 
 If your embedding provider returns usage or cost metadata, Crux aggregates that across batches automatically.
 

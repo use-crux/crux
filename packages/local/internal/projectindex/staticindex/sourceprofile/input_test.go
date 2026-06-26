@@ -16,7 +16,7 @@ func TestProjectStaticIndexAnalyzeFilesUsePreparedSourceText(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(sourceFile), 0o755); err != nil {
 		t.Fatalf("mkdir src: %v", err)
 	}
-	originalSource := "import { prompt } from '@crux/core'\nexport const writer = prompt({ id: 'original' })"
+	originalSource := "import { prompt } from '@use-crux/core'\nexport const writer = prompt({ id: 'original' })"
 	if err := os.WriteFile(sourceFile, []byte(originalSource), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestProjectStaticIndexSourceInputBuildsSemanticProfileFromPreparedSource(t 
 	if err := os.MkdirAll(filepath.Dir(sourceFile), 0o755); err != nil {
 		t.Fatalf("mkdir src: %v", err)
 	}
-	originalSource := "import { prompt } from '@crux/core'\nexport const writer = prompt({ id: 'original' })"
+	originalSource := "import { prompt } from '@use-crux/core'\nexport const writer = prompt({ id: 'original' })"
 	if err := os.WriteFile(sourceFile, []byte(originalSource), 0o600); err != nil {
 		t.Fatalf("write source: %v", err)
 	}

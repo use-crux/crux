@@ -60,7 +60,7 @@ describe('indexer architecture boundaries', () => {
 
   it('groups extension internals behind responsibility barrels', () => {
     const extension: IndexerExtension = {
-      name: '@crux/test-extension',
+      name: '@use-crux/test-extension',
       version: '0.0.0',
       crux: { indexer: '^0.1.0' },
       extractors: [
@@ -78,7 +78,7 @@ describe('indexer architecture boundaries', () => {
     expect(createStaticExtensionRegistry([extension]).extractors).toHaveLength(1)
     expect(createStaticRecordEvidenceReader).toBeTypeOf('function')
     expect(loadIndexerExtensionReferences).toBeTypeOf('function')
-    expect(staticIndexExtractorCoverage({ extension: { name: '@crux/test-extension', version: '0.0.0' }, name: 'x' })).toMatchObject({
+    expect(staticIndexExtractorCoverage({ extension: { name: '@use-crux/test-extension', version: '0.0.0' }, name: 'x' })).toMatchObject({
       covered: false,
     })
 

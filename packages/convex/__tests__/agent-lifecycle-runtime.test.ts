@@ -1,11 +1,11 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
-import { prompt } from '@crux/core'
+import { prompt } from '@use-crux/core'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '@crux/core/observability'
+} from '@use-crux/core/observability'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createProfileBackedAgentLifecycle } from '../agent/lifecycle'

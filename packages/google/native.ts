@@ -1,6 +1,6 @@
 import type { Content, GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import { defineProviderRuntime } from '@crux/core/adapter'
-import type { NativeProviderPort, SingleTurnRuntimeContract } from '@crux/core/adapter'
+import { defineProviderRuntime } from '@use-crux/core/adapter'
+import type { NativeProviderPort, SingleTurnRuntimeContract } from '@use-crux/core/adapter'
 import { GoogleCacheManager } from './cache-manager'
 import type { GoogleCachedContentCreateOptions, GoogleCachedContentPort } from './cache-types'
 import { resolveCacheConfig } from './cache-types'

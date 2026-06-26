@@ -6,7 +6,7 @@ description: Bundle a prompt with optional model and tools into a reusable agent
 An agent wraps a [prompt](/docs/foundations/mental-model) with optional execution config — a default model, tools, and handoff targets. Agents are the building blocks for all composition patterns: [parallel](/docs/guides/compositions/parallel), [pipeline](/docs/guides/compositions/pipeline), [consensus](/docs/guides/compositions/consensus), and [swarm](/docs/guides/compositions/swarm).
 
 ```ts title="agents.ts"
-import { agent } from '@crux/core/agent'
+import { agent } from '@use-crux/core/agent'
 
 const reviewer = agent({
   id: 'content-reviewer',
@@ -36,7 +36,7 @@ Composition patterns need to know _what_ to execute (prompt), _how_ to execute i
 Without `agent()`, you'd pass these separately to every composition call. With it, you define once and reuse across compositions:
 
 ```ts title="composition.ts"
-import { parallel } from '@crux/ai'
+import { parallel } from '@use-crux/ai'
 
 const { results } = await parallel({
   agents: { reviewer, factChecker, seoAnalyzer },
@@ -105,7 +105,7 @@ Plain functions skip devtools agent tracing but still appear as flow steps.
 Use `isAgent()` to distinguish agents from plain functions at runtime:
 
 ```ts
-import { isAgent } from '@crux/core/agent'
+import { isAgent } from '@use-crux/core/agent'
 
 if (isAgent(entry)) {
   // entry is Agent — has .id, .prompt, .model, .tools, .handoffs

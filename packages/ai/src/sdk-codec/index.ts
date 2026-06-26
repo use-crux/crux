@@ -1,4 +1,4 @@
-import type { GenerationSettings, ModelInfo } from '@crux/core'
+import type { GenerationSettings, ModelInfo } from '@use-crux/core'
 import { extractModelInfo } from '../provider-profile'
 import { createLoopCallPlan } from './loop'
 import { replayStream } from './replay'

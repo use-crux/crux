@@ -1,14 +1,14 @@
-# @crux/core
+# @use-crux/core
 
 **It was never the prompt.**
 
 The TypeScript toolkit for memory, retrieval, tools, guardrails, constraints, routing, evaluation, multi-agent coordination, and observability — everything around your LLM call. Your SDK still makes the call; Crux is everything around it. Compose once, run with Vercel AI SDK, OpenAI, Google GenAI, or Anthropic.
 
-`@crux/core/project-index` owns the public Project Index snapshot contract used by local devtools. Snapshots include concrete `lintFindings` plus `ruleDescriptors`, the available-rule metadata for built-in and extension-provided index lint rules, so clients can explain rule docs, fixes, and suppression affordances without hard-coding rule knowledge. Prompt/context/injectable definitions may also expose effective input contracts through `metadata.intelligence.contract.expandedInputSchema` and `inputContributions`, letting devtools and lints explain fields contributed through nested injection. The same subpath exports the `ResolvedProjectModel` read-model contract for config inspection: each inferred or explicit field carries provenance from source, runtime evidence, filesystem conventions, config, or CLI flags, with branded ids and stable diagnostic codes for JSON-safe CLI/Go/devtools boundaries. Source-discovered prompt/context bundles expose first-class definition `path` fields, and source-proven `use` bindings appear as Project Model relations such as `prompt.uses_context`, so local inspection does not require repeating those primitives in config. `@crux/indexer` fills that contract with `resolveProjectModel(...)`, and `@crux/local` renders it through `crux config inspect`.
+`@use-crux/core/project-index` owns the public Project Index snapshot contract used by local devtools. Snapshots include concrete `lintFindings` plus `ruleDescriptors`, the available-rule metadata for built-in and extension-provided index lint rules, so clients can explain rule docs, fixes, and suppression affordances without hard-coding rule knowledge. Prompt/context/injectable definitions may also expose effective input contracts through `metadata.intelligence.contract.expandedInputSchema` and `inputContributions`, letting devtools and lints explain fields contributed through nested injection. The same subpath exports the `ResolvedProjectModel` read-model contract for config inspection: each inferred or explicit field carries provenance from source, runtime evidence, filesystem conventions, config, or CLI flags, with branded ids and stable diagnostic codes for JSON-safe CLI/Go/devtools boundaries. Source-discovered prompt/context bundles expose first-class definition `path` fields, and source-proven `use` bindings appear as Project Model relations such as `prompt.uses_context`, so local inspection does not require repeating those primitives in config. `@use-crux/indexer` fills that contract with `resolveProjectModel(...)`, and `@use-crux/local` renders it through `crux config inspect`.
 
 ## TypeScript Compatibility
 
-`@crux/core` is verified against TypeScript `>=5.5 <7`. The lower-bound check protects the public inference surfaces for prompts, contexts, raw fields, routing, testing, flows, and related primitives, while the TypeScript 6 check protects newer compiler behavior such as explicit ambient `types` resolution.
+`@use-crux/core` is verified against TypeScript `>=5.5 <7`. The lower-bound check protects the public inference surfaces for prompts, contexts, raw fields, routing, testing, flows, and related primitives, while the TypeScript 6 check protects newer compiler behavior such as explicit ambient `types` resolution.
 
 TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview lane. Core should avoid public type syntax that would raise the stable minimum above TypeScript 5.5 unless the compatibility contract is intentionally changed.
 
@@ -54,7 +54,7 @@ TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview 
   - [Embeddings](#embeddings)
   - [Retrieval & Indexing](#retrieval--indexing)
   - [Memory Store](#memory-store)
-- [Reactive Hooks (`@crux/react`)](#reactive-hooks-cruxcorereact)
+- [Reactive Hooks (`@use-crux/react`)](#reactive-hooks-cruxcorereact)
   - [CruxProvider & CruxTransport](#cruxprovider--cruxtransport)
   - [Domain Hooks](#domain-hooks)
   - [Testing](#testing-1)
@@ -91,7 +91,7 @@ TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview 
 - [Plugins](#plugins)
   - [`withCostTracking()`](#withcosttracking)
   - [`withDevtools()`](#withdevtools)
-  - [`withTelemetry()` (`@crux/otel`)](#withtelemetry-cruxotel)
+  - [`withTelemetry()` (`@use-crux/otel`)](#withtelemetry-cruxotel)
   - [Writing Custom Plugins](#writing-custom-plugins)
 - [Devtools](#devtools)
 - [Security](#security)
@@ -110,7 +110,7 @@ TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview 
 
 Bad LLM output is rarely a model problem. When LLM features fail in production, the fix usually isn't the prompt and isn't the model — it's a missing memory write, a stale retrieval, a guardrail that should've blocked the input, a router that picked the wrong model, an eval that should've caught it before ship. That layer — everything around the model call — is the harness every production LLM app already needs.
 
-Most projects cobble it together with ad-hoc strings, custom memory wrappers, hand-rolled tool routing, and manual token counting, all tightly coupled to one SDK. `@crux/core` provides a single coherent toolkit of typed, composable building blocks:
+Most projects cobble it together with ad-hoc strings, custom memory wrappers, hand-rolled tool routing, and manual token counting, all tightly coupled to one SDK. `@use-crux/core` provides a single coherent toolkit of typed, composable building blocks:
 
 **Compose** — Typed prompts and composable contexts with Zod schemas. SDK-agnostic from day one — switch from OpenAI to Gemini without touching your prompts.
 
@@ -130,13 +130,13 @@ Most projects cobble it together with ad-hoc strings, custom memory wrappers, ha
 
 **Coordinate** — Multi-agent composition (pipeline, parallel, consensus, swarm) and primitives (blackboard, handoff, delegate) for shared state and structured transfer.
 
-**Observe** — Devtools trace every generation, memory operation, compaction, judge score, eval result, artifact, and semantic relation through the canonical `@crux/core/observability` graph. OpenTelemetry to your production stack. Zero overhead when disabled.
+**Observe** — Devtools trace every generation, memory operation, compaction, judge score, eval result, artifact, and semantic relation through the canonical `@use-crux/core/observability` graph. OpenTelemetry to your production stack. Zero overhead when disabled.
 
 ## Quick Start
 
 ```ts
-import { context, prompt } from '@crux/core'
-import { generate } from '@crux/ai'
+import { context, prompt } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
 import { z } from 'zod'
 
 // Reusable context — contributes system text based on input
@@ -181,7 +181,7 @@ result.object.edits // { blockId: string; text: string }[]
 A context is a reusable fragment that can contribute system message text, input fields, and tools to any prompt that uses it.
 
 ```ts
-import { context } from '@crux/core'
+import { context } from '@use-crux/core'
 import { z } from 'zod'
 
 // Static — always contributes the same text
@@ -254,7 +254,7 @@ The resolved system string is the concatenation of segment text. `.inspect()` an
 A prompt composes contexts, declares its own input/output schemas, and defines the system message and user prompt.
 
 ```ts
-import { prompt } from '@crux/core'
+import { prompt } from '@use-crux/core'
 
 const editDraft = prompt({
   id: 'draft-edit',
@@ -313,7 +313,7 @@ When `when` returns `false`, the context is **excluded entirely** — no `system
 #### 2. `when()` wrapper — condition in the `use` array
 
 ```ts
-import { when } from '@crux/core'
+import { when } from '@use-crux/core'
 
 prompt({
   use: [
@@ -328,7 +328,7 @@ The wrapped context's input keys become `Partial<>` in the merged prompt input t
 #### 3. `match()` — multi-way switching
 
 ```ts
-import { match } from '@crux/core'
+import { match } from '@use-crux/core'
 
 prompt({
   use: [
@@ -368,15 +368,15 @@ The library ships with adapters and agent integration helpers:
 
 | Import            | SDK                                                            |
 | ----------------- | -------------------------------------------------------------- |
-| `@crux/ai`        | Vercel AI SDK (also `@crux/ai/stream` for plan/task streaming) |
-| `@crux/ai/agent`  | Vercel AI SDK model wrapping for external agent frameworks     |
-| `@crux/openai`    | OpenAI SDK                                                     |
-| `@crux/google`    | Google GenAI SDK                                               |
-| `@crux/anthropic` | Anthropic SDK                                                  |
+| `@use-crux/ai`        | Vercel AI SDK (also `@use-crux/ai/stream` for plan/task streaming) |
+| `@use-crux/ai/agent`  | Vercel AI SDK model wrapping for external agent frameworks     |
+| `@use-crux/openai`    | OpenAI SDK                                                     |
+| `@use-crux/google`    | Google GenAI SDK                                               |
+| `@use-crux/anthropic` | Anthropic SDK                                                  |
 
-Custom adapters are built from `defineProviderRuntime()` in `@crux/core/adapter`. Use `defineProviderRuntime({ ownership: 'single-turn', turn })` when your SDK exposes single-turn text/structured/stream chat calls and leaves tool execution to Crux. Use `defineProviderRuntime({ ownership: 'loop-owned', loop: { bind } })` when your SDK runs its own multi-step tool loop (the `@crux/ai` shape) and Crux steers each step through a `StepObserver`. Either way, core owns routing (`fallback()`/`router()`/`cascade()`), validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, and timeouts; the provider runtime implements provider or SDK mechanics only. Native packages own a `NativeTranscriptCodec` for provider message conversion, assistant text/tool-call extraction, and provider-specific tool-round appends; core injects `providerMessages` into request builders and composes `transcript.readAssistant()` with response-level metadata. Core still owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and tiny tool-output metadata/rendering helpers those codecs share. Internally, provider runtimes compile into `AdapterSpec` / `ExecutorSpec` execution IR so prompt resolution, `ToolLifecycle`, `Safety`, stream safety, metadata stamping, and memory capture stay in one choreography. Test provider runtimes through their public `providerRuntime.create(scriptedClient)` boundary and test transcript codecs with `transcriptCodecConformance()` from `@crux/core/adapter/testing`.
+Custom adapters are built from `defineProviderRuntime()` in `@use-crux/core/adapter`. Use `defineProviderRuntime({ ownership: 'single-turn', turn })` when your SDK exposes single-turn text/structured/stream chat calls and leaves tool execution to Crux. Use `defineProviderRuntime({ ownership: 'loop-owned', loop: { bind } })` when your SDK runs its own multi-step tool loop (the `@use-crux/ai` shape) and Crux steers each step through a `StepObserver`. Either way, core owns routing (`fallback()`/`router()`/`cascade()`), validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, and timeouts; the provider runtime implements provider or SDK mechanics only. Native packages own a `NativeTranscriptCodec` for provider message conversion, assistant text/tool-call extraction, and provider-specific tool-round appends; core injects `providerMessages` into request builders and composes `transcript.readAssistant()` with response-level metadata. Core still owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and tiny tool-output metadata/rendering helpers those codecs share. Internally, provider runtimes compile into `AdapterSpec` / `ExecutorSpec` execution IR so prompt resolution, `ToolLifecycle`, `Safety`, stream safety, metadata stamping, and memory capture stay in one choreography. Test provider runtimes through their public `providerRuntime.create(scriptedClient)` boundary and test transcript codecs with `transcriptCodecConformance()` from `@use-crux/core/adapter/testing`.
 
-`@crux/ai` keeps its AI SDK request/response translation behind a private call-plan codec: the codec plans `generateText`, `generateObject`, `streamText`, `streamObject`, and cached replay calls, while `SdkGateway` remains the only seam that invokes AI SDK runtime functions. That keeps `ExecutorSpec` boring and preserves the scripted-gateway test seam.
+`@use-crux/ai` keeps its AI SDK request/response translation behind a private call-plan codec: the codec plans `generateText`, `generateObject`, `streamText`, `streamObject`, and cached replay calls, while `SdkGateway` remains the only seam that invokes AI SDK runtime functions. That keeps `ExecutorSpec` boring and preserves the scripted-gateway test seam.
 
 ## Organizing Prompts
 
@@ -387,7 +387,7 @@ As a project grows, keeping prompts and contexts organized becomes important. `c
 Groups prompts into a deeply frozen tree with IDE autocomplete at every level.
 
 ```ts
-import { createPrompts } from '@crux/core'
+import { createPrompts } from '@use-crux/core'
 
 export const prompts = createPrompts({
   editor: {
@@ -421,7 +421,7 @@ Every leaf must be a `Prompt` instance. Throws if any value is not a prompt or n
 Same pattern for contexts.
 
 ```ts
-import { createContexts } from '@crux/core'
+import { createContexts } from '@use-crux/core'
 
 export const contexts = createContexts({
   editor: {
@@ -467,7 +467,7 @@ child/target facts. Native remains experimental while the TypeScript-Go API and 
 mature.
 
 ```ts
-import { config } from '@crux/core'
+import { config } from '@use-crux/core'
 
 const crux = config({
   quality: {
@@ -534,14 +534,14 @@ In environments like Convex where `'use node'` is required for Node.js APIs, kee
 
 ```ts
 // prompts/index.ts — pure JS, no 'use node' needed
-import { createPrompts, createContexts } from '@crux/core'
+import { createPrompts, createContexts } from '@use-crux/core'
 export const prompts = createPrompts({ ... })
 export const contexts = createContexts({ ... })
 export { draftEdit } from './draft_edit'
 
 // prompts/config.ts — has 'use node' for process.env access
 'use node'
-import { config } from '@crux/core'
+import { config } from '@use-crux/core'
 export const crux = config({ devtools: { ... } })
 
 // In action files, import config as a side-effect
@@ -554,7 +554,7 @@ import { draftEdit } from '../prompts'
 ### Vercel AI SDK
 
 ```ts
-import { generate, stream, tool } from '@crux/ai'
+import { generate, stream, tool } from '@use-crux/ai'
 
 // Structured output
 const result = await generate(editDraft, { model, input: { ... } })
@@ -573,13 +573,13 @@ for await (const partial of result.partialObjectStream) { ... }
 ```
 
 Also re-exports `tool`, `stepCountIs`, `hasToolCall`, and types like `LanguageModel`, `ToolSet`, `ToolChoice`.
-`timeoutMs` is specific to `@crux/ai` direct provider calls: Crux passes an `AbortSignal` to the AI SDK and closes the generation span with `AbortError` if the provider does not settle before the deadline.
-Live `@crux/ai` tool calls emit the same canonical tool telemetry as native adapters: a `tool.call` span, consumed `tool.args`, raw and model-facing `tool.result` artifacts, and the same `onToolStart` / `onToolEnd` hook payloads.
+`timeoutMs` is specific to `@use-crux/ai` direct provider calls: Crux passes an `AbortSignal` to the AI SDK and closes the generation span with `AbortError` if the provider does not settle before the deadline.
+Live `@use-crux/ai` tool calls emit the same canonical tool telemetry as native adapters: a `tool.call` span, consumed `tool.args`, raw and model-facing `tool.result` artifacts, and the same `onToolStart` / `onToolEnd` hook payloads.
 
 ### OpenAI SDK
 
 ```ts
-import { createOpenAI } from '@crux/openai'
+import { createOpenAI } from '@use-crux/openai'
 import OpenAI from 'openai'
 
 const openai = createOpenAI(new OpenAI({ apiKey: '...' }))
@@ -596,12 +596,12 @@ const stream = await openai.stream(greet, { model: 'gpt-4o', input: { name: 'Hen
 ```
 
 Accepts OpenAI-native options: `tools`, `tool_choice`, `parallel_tool_calls`, and all `OpenAISettings`.
-The adapter is implemented with `openaiProviderRuntime` from `@crux/openai`, so request assembly, response normalization, streaming, and lightweight `GenerateTextFn` / `GenerateObjectFn` helpers share one OpenAI provider runtime while the public `createOpenAI()` API stays unchanged.
+The adapter is implemented with `openaiProviderRuntime` from `@use-crux/openai`, so request assembly, response normalization, streaming, and lightweight `GenerateTextFn` / `GenerateObjectFn` helpers share one OpenAI provider runtime while the public `createOpenAI()` API stays unchanged.
 
 ### Google GenAI SDK
 
 ```ts
-import { createGoogle } from '@crux/google'
+import { createGoogle } from '@use-crux/google'
 import { GoogleGenAI } from '@google/genai'
 
 const google = createGoogle(new GoogleGenAI({ apiKey: '...' }))
@@ -627,7 +627,7 @@ Accepts Google-native options: `tools` (function declarations), `temperature`, `
 ### Anthropic SDK
 
 ```ts
-import { createAnthropic } from '@crux/anthropic'
+import { createAnthropic } from '@use-crux/anthropic'
 import Anthropic from '@anthropic-ai/sdk'
 
 const adapter = createAnthropic(new Anthropic({ apiKey: '...' }))
@@ -649,11 +649,11 @@ Anthropic's adapter is implemented with `anthropicProviderRuntime` while still o
 
 ### Agent Frameworks
 
-For agent frameworks that wrap the AI SDK and handle model calls internally (e.g. Convex Agent, Mastra), use `@crux/ai/agent`. It returns composed instructions and a wrapped AI SDK model instead of executing directly. In Convex, prefer the Crux-aware wrapper from `@crux/convex/agent` so tool calls, thread turns, nested Convex boundaries, and consecutive multi-step generations remain observable. The public `convexAgent()` surface stays Convex-Agent-shaped (`languageModel`, `generateText()`, `streamText()`, `continueThread()`), while Crux owns the request-scoped lifecycle for prompt resolution, tool adaptation, skill/memory persistence, and observability internally. Convex Agent aggregate and step generation spans carry the configured `languageModel` as `model` / `provider` attributes; nested tool-call or flow generations still report their own model independently.
+For agent frameworks that wrap the AI SDK and handle model calls internally (e.g. Convex Agent, Mastra), use `@use-crux/ai/agent`. It returns composed instructions and a wrapped AI SDK model instead of executing directly. In Convex, prefer the Crux-aware wrapper from `@use-crux/convex/agent` so tool calls, thread turns, nested Convex boundaries, and consecutive multi-step generations remain observable. The public `convexAgent()` surface stays Convex-Agent-shaped (`languageModel`, `generateText()`, `streamText()`, `continueThread()`), while Crux owns the request-scoped lifecycle for prompt resolution, tool adaptation, skill/memory persistence, and observability internally. Convex Agent aggregate and step generation spans carry the configured `languageModel` as `model` / `provider` attributes; nested tool-call or flow generations still report their own model independently.
 
 ```ts
-import { resolve } from '@crux/ai/agent'
-import { Agent } from '@crux/convex/agent'
+import { resolve } from '@use-crux/ai/agent'
+import { Agent } from '@use-crux/convex/agent'
 
 const { instructions, model } = await resolve(karylaAgent, {
   model: languageModel,
@@ -706,7 +706,7 @@ await anthropicAdapter.generate(sentiment, {
 
 Contexts and prompts can declare tools that adapters merge and pass to the underlying SDK. Tools are available in **text mode** prompts (no `output` schema).
 
-`tool()` from `@crux/core/tools` is the SDK-agnostic authoring helper. It returns a normal `ToolDef`, preserves input/output inference, and gives runtime profiles such as `@crux/convex/tools` a stable API to mirror. Adapter packages can still expose provider-specific tool helpers where needed.
+`tool()` from `@use-crux/core/tools` is the SDK-agnostic authoring helper. It returns a normal `ToolDef`, preserves input/output inference, and gives runtime profiles such as `@use-crux/convex/tools` a stable API to mirror. Adapter packages can still expose provider-specific tool helpers where needed.
 
 Tools from three sources are merged with last-write-wins precedence:
 
@@ -715,9 +715,9 @@ Tools from three sources are merged with last-write-wins precedence:
 3. **Call-site tools** — from `generate(prompt, { tools })`
 
 ```ts
-import { prompt, context } from '@crux/core'
-import { tool } from '@crux/core/tools'
-import { generate, stepCountIs } from '@crux/ai'
+import { prompt, context } from '@use-crux/core'
+import { tool } from '@use-crux/core/tools'
+import { generate, stepCountIs } from '@use-crux/ai'
 
 const search = context({
   id: 'search',
@@ -778,14 +778,14 @@ const searchDocs = tool({
 })
 ```
 
-`execute()` is for your application, tracing, and evals. `toModelOutput()` is for the model. If it is omitted, Crux follows the standard default: strings become text output and other values become JSON output. Content outputs can include text, images, files, and provider-specific parts: `@crux/ai` passes the shape through to the AI SDK, Google and Anthropic use native tool-result media where supported, and OpenAI Chat Completions receives deterministic text references for non-text parts because that API only accepts text tool results. Devtools, CLI/TUI, and OTel record privacy-safe shaping metadata such as output size, model-output size, and estimated savings.
+`execute()` is for your application, tracing, and evals. `toModelOutput()` is for the model. If it is omitted, Crux follows the standard default: strings become text output and other values become JSON output. Content outputs can include text, images, files, and provider-specific parts: `@use-crux/ai` passes the shape through to the AI SDK, Google and Anthropic use native tool-result media where supported, and OpenAI Chat Completions receives deterministic text references for non-text parts because that API only accepts text tool results. Devtools, CLI/TUI, and OTel record privacy-safe shaping metadata such as output size, model-output size, and estimated savings.
 
 ### Tool Middleware and Approvals
 
 Tool middleware wraps tool execution across a prompt or a single call. Use it for audit logging, timing, policy checks, argument normalization, early returns, or human approval without copying wrappers into every tool.
 
 ```ts
-import { approvalMiddleware, toolMiddleware, toolApprovalResponse } from '@crux/core/adapter/tool'
+import { approvalMiddleware, toolMiddleware, toolApprovalResponse } from '@use-crux/core/adapter/tool'
 
 const auditTools = toolMiddleware({
   id: 'audit-tools',
@@ -836,9 +836,9 @@ const final = await generate(assistant, {
 })
 ```
 
-`@crux/ai` maps this to the AI SDK approval protocol. The shared native adapter layer used by `@crux/openai`, `@crux/google`, and `@crux/anthropic` exposes the same Crux approval protocol through `result.messages`; use the message-shape helpers `findToolApprovalRequests()` and `appendToolApprovalResponse()` from `@crux/core/adapter/tool` (also on the `@crux/core` root) to resume. Native approval responses should echo the request's `approvalToken`, and server code should resume from server-issued message history rather than arbitrary client-fabricated messages.
+`@use-crux/ai` maps this to the AI SDK approval protocol. The shared native adapter layer used by `@use-crux/openai`, `@use-crux/google`, and `@use-crux/anthropic` exposes the same Crux approval protocol through `result.messages`; use the message-shape helpers `findToolApprovalRequests()` and `appendToolApprovalResponse()` from `@use-crux/core/adapter/tool` (also on the `@use-crux/core` root) to resume. Native approval responses should echo the request's `approvalToken`, and server code should resume from server-issued message history rather than arbitrary client-fabricated messages.
 
-Execution is owned by the per-call `ToolLifecycle` session (`createToolLifecycle()` from `@crux/core/adapter/tool`). Both adapter dialects construct one per `generate()`/`stream()` call; it owns tool merging, middleware chaining, the approval suspend/resume protocol, instrumentation emission, `LoadSkill` re-resolution, and memory capture — apps never touch it, and custom adapters built outside the factories drive the same session instead of re-implementing the protocol.
+Execution is owned by the per-call `ToolLifecycle` session (`createToolLifecycle()` from `@use-crux/core/adapter/tool`). Both adapter dialects construct one per `generate()`/`stream()` call; it owns tool merging, middleware chaining, the approval suspend/resume protocol, instrumentation emission, `LoadSkill` re-resolution, and memory capture — apps never touch it, and custom adapters built outside the factories drive the same session instead of re-implementing the protocol.
 
 ## Token-Aware Rendering
 
@@ -932,8 +932,8 @@ const rules = context({
 
 1. **Application-level:** Resolved text is cached by `contextId + inputHash` with TTL. Subsequent calls with the same inputs skip the `systemFn()` entirely.
 2. **Provider-level:** The resolution pipeline emits `systemBlocks` on `ResolvedPrompt` with per-block `providerCache` hints. Each adapter translates these to its native caching mechanism:
-   - **`@crux/anthropic`**: Converts to `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` (up to 4 breakpoints).
-   - **`@crux/google`**: Creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. Handles lifecycle (creation, reuse, per-call TTL, concurrency dedup, optional failure propagation, graceful fallback) automatically through provider-owned native-chat dependencies.
+   - **`@use-crux/anthropic`**: Converts to `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` (up to 4 breakpoints).
+   - **`@use-crux/google`**: Creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. Handles lifecycle (creation, reuse, per-call TTL, concurrency dedup, optional failure propagation, graceful fallback) automatically through provider-owned native-chat dependencies.
    - **OpenAI**: Prefix caching works automatically via stable context ordering.
 3. **Cache key:** Computed from `contextId` + sorted JSON of input fields declared in the context's `inputSchema`. Unrelated prompt-level fields don't affect the key.
 4. **Static contexts:** `cacheTtl` is silently set to 0 for static string `system` values (nothing to cache). `providerCache` still applies.
@@ -941,7 +941,7 @@ const rules = context({
 
 **Observability:**
 
-Prompt resolution emits canonical observability graph records when `@crux/core/observability` is configured. `prompt.resolve` is the root operation, `context.predicate` spans record `when()` / `match()` inclusion decisions with reasons for excluded contexts, and `context.resolve` spans record resolved context text as inspectable `context.contribution` artifacts. Generation spans link to the included context artifacts and prompt-budget artifacts with `consumed` edges, and their consumed `messages` artifact includes request tool names. The Go RunDetail read model projects those records into `node.request`, an exact per-generation request/context view or an aggregate final-generation representative for run/stream/agent/flow/composition wrappers. Framework-owned Convex Agent stream and step spans emit the Agent's configured model/provider, while nested child generations can still surface different models. Cache hits and misses still emit the existing instrumentation hooks, and the canonical context spans include cache status metadata for backend filtering.
+Prompt resolution emits canonical observability graph records when `@use-crux/core/observability` is configured. `prompt.resolve` is the root operation, `context.predicate` spans record `when()` / `match()` inclusion decisions with reasons for excluded contexts, and `context.resolve` spans record resolved context text as inspectable `context.contribution` artifacts. Generation spans link to the included context artifacts and prompt-budget artifacts with `consumed` edges, and their consumed `messages` artifact includes request tool names. The Go RunDetail read model projects those records into `node.request`, an exact per-generation request/context view or an aggregate final-generation representative for run/stream/agent/flow/composition wrappers. Framework-owned Convex Agent stream and step spans emit the Agent's configured model/provider, while nested child generations can still surface different models. Cache hits and misses still emit the existing instrumentation hooks, and the canonical context spans include cache status metadata for backend filtering.
 
 The Go backend owns the presentation read model for devtools and the TUI. It keeps canonical records append-only, then reconciles delivery gaps such as a suspended flow whose child generation missed its own terminal record: completed children with output/usage evidence render as `ok`, the enclosing flow renders as `suspended`, and true missing terminal records still surface as incomplete diagnostics after their operation deadline. Generation timeouts are also enforced in core orchestration, so a provider call that never settles emits a terminal error span instead of leaving the trace visually running forever.
 
@@ -954,10 +954,10 @@ Local devtools persistence keeps runtime history in SQLite and portable quality 
 Semantic response caching skips a model call when a new request is close enough to a previous request for the same prompt, scope, output shape, and version. It is opt-in at the prompt and installed once as a runtime plugin:
 
 ```ts
-import { config, prompt } from '@crux/core'
-import { createSemanticCache } from '@crux/core/cache'
-import { embedding } from '@crux/core/embedding'
-import { inMemoryCruxStore } from '@crux/core/store'
+import { config, prompt } from '@use-crux/core'
+import { createSemanticCache } from '@use-crux/core/cache'
+import { embedding } from '@use-crux/core/embedding'
+import { inMemoryCruxStore } from '@use-crux/core/store'
 import { z } from 'zod'
 
 const intent = prompt({
@@ -1075,22 +1075,22 @@ Middleware receives `{ promptId, preparedArgs }` and a `next` function. It can i
 Standalone setup (when not using `config()`):
 
 ```ts
-import { updateRuntime } from '@crux/core'
+import { updateRuntime } from '@use-crux/core'
 updateRuntime({ middleware: async (args, next) => { ... } })
 ```
 
-## Guardrails (`@crux/core/safety`)
+## Guardrails (`@use-crux/core/safety`)
 
 Composable safety for I/O validation — PII detection, prompt injection defense, content safety, and real-time streaming transforms. No AI SDK offers guardrails natively; this is a Crux-only feature across all adapters.
 
-`@crux/core/safety` is one deep module: you **author** policies with `guardrail()` / `constraint()`, **register** them with `createSafetyPlugin()` (or attach them per-prompt / per-call), and every adapter **executes** them through a per-call `Safety` session — scope merging, phase ordering, retries, suspension policy, audits, and observability are owned by the session, never by adapter code.
+`@use-crux/core/safety` is one deep module: you **author** policies with `guardrail()` / `constraint()`, **register** them with `createSafetyPlugin()` (or attach them per-prompt / per-call), and every adapter **executes** them through a per-call `Safety` session — scope merging, phase ordering, retries, suspension policy, audits, and observability are owned by the session, never by adapter code.
 
 ### `guardrail()`
 
 Create a frozen guardrail object. Guards filter content but never re-call the model. For retry-with-feedback on output quality, use `constraint()`. The optional `category` (e.g. `'pii'`, `'jailbreak'`, `'toxicity'`) is carried through audits and observability artifacts so reporting can aggregate by risk type.
 
 ```ts
-import { guardrail } from '@crux/core/safety'
+import { guardrail } from '@use-crux/core/safety'
 
 const piiGuard = guardrail({
   name: 'pii-detection',
@@ -1117,7 +1117,7 @@ const piiGuard = guardrail({
 Register global guardrails and constraints. Every `generate()` / `stream()` call on every adapter enforces them automatically.
 
 ```ts
-import { createSafetyPlugin } from '@crux/core/safety'
+import { createSafetyPlugin } from '@use-crux/core/safety'
 
 config({
   plugins: [createSafetyPlugin({ guardrails: [injectionGuard, piiGuard], constraints: [citeSources] })],
@@ -1150,7 +1150,7 @@ Guardrail audit attaches to `result._meta.guardrails`.
 Adapters — and any custom dialect you build — consume safety through one per-call session. It owns the three-scope merge (reading runtime globals itself), guarded-content selection with redaction write-back, the constraint retry state machine, suspension policy (output safety is skipped when a run suspends for tool approval), audit accumulation, and all hook/observability emission. The only dialect-specific concern is the `regenerate` closure: how to re-call the model.
 
 ```ts
-import { createSafety } from '@crux/core/safety'
+import { createSafety } from '@use-crux/core/safety'
 
 const safety = createSafety({
   call: opts, // per-call overrides (highest precedence)
@@ -1208,7 +1208,7 @@ Constraints run report-only at end-of-stream (a live stream cannot regenerate); 
 Test guardrails against a matrix of cases.
 
 ```ts
-import { evaluateGuardrail } from '@crux/core/safety'
+import { evaluateGuardrail } from '@use-crux/core/safety'
 
 const report = await evaluateGuardrail(piiGuard, [
   { input: 'SSN is 123-45-6789', expect: 'redact' },
@@ -1222,7 +1222,7 @@ const report = await evaluateGuardrail(piiGuard, [
 Thrown when a guard blocks content.
 
 ```ts
-import { GuardrailBlockedError } from '@crux/core/safety'
+import { GuardrailBlockedError } from '@use-crux/core/safety'
 
 try {
   await adapter.generate(prompt, { model, input, guardrails: [injectionGuard] })
@@ -1233,7 +1233,7 @@ try {
 }
 ```
 
-## Constraints (`@crux/core/safety`)
+## Constraints (`@use-crux/core/safety`)
 
 Semantic output validation with retry-with-feedback. While guardrails _filter_ content (block, redact, transform), constraints _ensure quality_ by validating output semantics and retrying until requirements are met. Inspired by DSPy's `dspy.Assert`/`dspy.Suggest`.
 
@@ -1245,7 +1245,7 @@ Semantic output validation with retry-with-feedback. While guardrails _filter_ c
 Create a frozen constraint object. Generic over a Zod schema for typed `output.parsed`.
 
 ```ts
-import { constraint } from '@crux/core/safety'
+import { constraint } from '@use-crux/core/safety'
 
 const citeSources = constraint<typeof BlogPost>({
   name: 'cite-sources',
@@ -1332,7 +1332,7 @@ const targetLanguage = constraint({
 Test constraints against a matrix of cases.
 
 ```ts
-import { evaluateConstraint } from '@crux/core/safety'
+import { evaluateConstraint } from '@use-crux/core/safety'
 
 const report = await evaluateConstraint(citeSources, [
   { input: { text: 'See [1] for details' }, expect: true },
@@ -1341,14 +1341,14 @@ const report = await evaluateConstraint(citeSources, [
 // report.summary: { total: 2, passed: 2, failed: 0 }
 ```
 
-Constraints also bridge into the predicate surfaces without new concepts: `judgeConstraint()` (`@crux/core/scoring`) turns an LLM judge into a normal constraint for online enforcement of scored quality — see [`judgeConstraint()`](#judgeconstraint) and [Using Scores In Quality](#using-scores-in-quality).
+Constraints also bridge into the predicate surfaces without new concepts: `judgeConstraint()` (`@use-crux/core/scoring`) turns an LLM judge into a normal constraint for online enforcement of scored quality — see [`judgeConstraint()`](#judgeconstraint) and [Using Scores In Quality](#using-scores-in-quality).
 
 ### `ConstraintViolationError`
 
 Thrown when any `assert`-severity constraint fails after all retries. Carries all failing constraints (parallel execution means multiple can fail simultaneously).
 
 ```ts
-import { ConstraintViolationError } from '@crux/core/safety'
+import { ConstraintViolationError } from '@use-crux/core/safety'
 
 try {
   await adapter.generate(prompt, { constraints: [citeSources] })
@@ -1391,7 +1391,7 @@ const result = await adapter.generate(prompt, {
 When all retries are exhausted, throws `ValidationExhaustedError` with rich context:
 
 ```ts
-import { ValidationExhaustedError } from '@crux/core'
+import { ValidationExhaustedError } from '@use-crux/core'
 
 try {
   await adapter.generate(prompt, { validationRetry: { maxRetries: 3 } })
@@ -1437,7 +1437,7 @@ await flow.step('extract', () => adapter.generate(prompt, { model, input, valida
 `repairJsonText()` is exported for standalone use:
 
 ````ts
-import { repairJsonText } from '@crux/core'
+import { repairJsonText } from '@use-crux/core'
 
 const fixed = repairJsonText('```json\n{"name": "Alice"}\n```')
 // → '{"name": "Alice"}'
@@ -1445,14 +1445,14 @@ const fixed = repairJsonText('```json\n{"name": "Alice"}\n```')
 
 ## Model Routing
 
-Cost-aware model routing primitives. Import from `@crux/core/routing`.
+Cost-aware model routing primitives. Import from `@use-crux/core/routing`.
 
 ### `router(config)`
 
 Classifier-based model selection. A user-provided `classify` function categorizes the input, and routes map categories to models.
 
 ```ts
-import { router } from '@crux/core/routing'
+import { router } from '@use-crux/core/routing'
 
 const smartRouter = router({
   id: 'smart-router',
@@ -1497,7 +1497,7 @@ Add `id` to routers that are part of your application architecture. It is option
 Sequential quality escalation — tries cheap models first, escalates when evaluation fails.
 
 ```ts
-import { cascade } from '@crux/core/routing'
+import { cascade } from '@use-crux/core/routing'
 
 const smartCascade = cascade({
   id: 'quality-cascade',
@@ -1533,7 +1533,7 @@ Add `id` to cascades that should appear as stable authored architecture in the i
 
 Model fallback emits one `fallback.attempt` span per attempted model. Failed attempts close as errored spans with bounded error category metadata, successful attempts close with cost/duration metadata, and fallback transitions connect attempts with `fallback.attempt` edges.
 
-Fallback is also re-exported from `@crux/core/routing`. Pass `fallback(modelA, modelB, { id: 'resilient-model' })` when the fallback policy is part of your authored architecture; the index indexes it as `routing.fallback` with ordered `routing.fallback.option` children and the runtime emits `routingId` on `fallback.attempt` spans.
+Fallback is also re-exported from `@use-crux/core/routing`. Pass `fallback(modelA, modelB, { id: 'resilient-model' })` when the fallback policy is part of your authored architecture; the index indexes it as `routing.fallback` with ordered `routing.fallback.option` children and the runtime emits `routingId` on `fallback.attempt` spans.
 
 ### Composition
 
@@ -1590,10 +1590,10 @@ prompt({
 
 ## Testing & Evaluation
 
-Quality is Crux's one evaluation system: author an **Evaluation** with `evaluate()` from `@crux/core/quality`, point its `task` at any Crux primitive (prompt, flow, agent, retriever) or plain function, give it `data` (cases), and optionally an evaluation-level `expect` callback and `scorers`. Running it — `evaluation.run()` programmatically or `crux quality run` from the CLI — produces an **Experiment** (variants × cases × trials, with mean ± SEM aggregates) whose **gates** drive exit codes.
+Quality is Crux's one evaluation system: author an **Evaluation** with `evaluate()` from `@use-crux/core/quality`, point its `task` at any Crux primitive (prompt, flow, agent, retriever) or plain function, give it `data` (cases), and optionally an evaluation-level `expect` callback and `scorers`. Running it — `evaluation.run()` programmatically or `crux quality run` from the CLI — produces an **Experiment** (variants × cases × trials, with mean ± SEM aggregates) whose **gates** drive exit codes.
 
 ```ts
-import { evaluate, scorers } from '@crux/core/quality'
+import { evaluate, scorers } from '@use-crux/core/quality'
 
 export default evaluate('support.refunds', {
   task: supportPrompt,
@@ -1747,10 +1747,10 @@ observability graph for full trace inspection. See the [Quality reference](https
 
 Real applications chain multiple `generate()` calls into pipelines — research then synthesize, plan then execute, draft then validate. `flow` makes these pipelines a first-class primitive with named steps, automatic retries, suspend/resume for human-in-the-loop, and full observability.
 
-Import from `@crux/core` or `@crux/core/flow`:
+Import from `@use-crux/core` or `@use-crux/core/flow`:
 
 ```ts
-import { flow, cancelFlow, listFlows, createFlowId } from '@crux/core'
+import { flow, cancelFlow, listFlows, createFlowId } from '@use-crux/core'
 // signalFlow is also exported but is a low-level primitive — prefer handle.signal()
 ```
 
@@ -1759,8 +1759,8 @@ import { flow, cancelFlow, listFlows, createFlowId } from '@crux/core'
 Define a named flow and return a frozen `FlowHandle`. Separates definition from execution: the handler is captured once, then `.run()` can be called repeatedly with different inputs and options.
 
 ```ts
-import { flow } from '@crux/core'
-import { generate } from '@crux/ai'
+import { flow } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
 
 const researchFlow = flow('research', async (flow) => {
   const plan = await flow.step('plan', () => generate(planner, { model, input: { query: flow.input.query } }))
@@ -1804,7 +1804,7 @@ Options passed to `handle.run()`.
 ### Suspend / resume example
 
 ```ts
-import { flow } from '@crux/core'
+import { flow } from '@use-crux/core'
 
 const reviewFlow = flow('content-review', async (flow) => {
   const draft = await flow.step('draft', () => generate(writer, { model, input: { topic } }))
@@ -1831,7 +1831,7 @@ const final = await reviewFlow.run({ resume: result.flowId })
 // final.status === 'completed'
 ```
 
-> **`handle.signal()` vs `signalFlow()`:** Always prefer `handle.signal()`. The standalone `signalFlow()` is a low-level primitive that only writes to the store — it does NOT trigger resume. In Convex, use the `flow()` handle from `@crux/convex/server` or an app-local signal helper that both writes the signal and schedules the resume action.
+> **`handle.signal()` vs `signalFlow()`:** Always prefer `handle.signal()`. The standalone `signalFlow()` is a low-level primitive that only writes to the store — it does NOT trigger resume. In Convex, use the `flow()` handle from `@use-crux/convex/server` or an app-local signal helper that both writes the signal and schedules the resume action.
 
 > **Migration from `withFlow`:** `flow` replaces the previous `withFlow(name, fn, options)` API. Convert `await withFlow('name', fn, opts)` to `await flow('name', fn).run(opts)`. For flows called repeatedly, define the flow once at module level and call `.run()` at each call site.
 
@@ -1841,10 +1841,10 @@ For detailed guides on retry/fallback, nested flows, cross-action patterns, and 
 
 ### Convex Server Boundaries and Flows
 
-Use `@crux/convex/server` for Crux-aware Convex function boundaries. These wrappers use Convex's native function builders, add a hidden `__crux` propagation envelope, pass `ctx.crux` to handlers, restore incoming observability context, and flush before serverless actions return. Queries and mutations propagate active context but do not create standalone Runs by default.
+Use `@use-crux/convex/server` for Crux-aware Convex function boundaries. These wrappers use Convex's native function builders, add a hidden `__crux` propagation envelope, pass `ctx.crux` to handlers, restore incoming observability context, and flush before serverless actions return. Queries and mutations propagate active context but do not create standalone Runs by default.
 
 ```ts
-import { action, flow } from '@crux/convex/server'
+import { action, flow } from '@use-crux/convex/server'
 import { v } from 'convex/values'
 
 const researchFlow = flow({
@@ -1884,7 +1884,7 @@ For the full Convex integration guide including setup, memory persistence, and c
 Point a Quality evaluation's `task` at a flow handle and step labels become trace-backed `steps` signals; flow quality cases use the same `evaluate()` syntax as prompt, retrieval, and RAG checks.
 
 ```ts
-import { evaluate } from '@crux/core/quality'
+import { evaluate } from '@use-crux/core/quality'
 
 export default evaluate('writer.flow', {
   task: writerFlow,
@@ -1904,7 +1904,7 @@ For app-specific orchestration, use a plain function task (`task: (input) => run
 Agents need more than one kind of memory. They need a small working state for the current task, a transcript of what happened, a place to store learned facts, and sometimes durable procedures that shape future behavior. Crux models those as memory blocks and composes them with `memory()`.
 
 ```ts
-import { memory, recentMessages, workingState, facts, procedures } from '@crux/core/memory'
+import { memory, recentMessages, workingState, facts, procedures } from '@use-crux/core/memory'
 import { z } from 'zod'
 
 const assistantMemory = memory({
@@ -1992,7 +1992,7 @@ Blocks are reusable. The same `facts()` block can be used in multiple `memory()`
 Use `embedding()` when you want a reusable embedding object instead of wiring a raw callback through each consumer.
 
 ```ts
-import { embedding } from '@crux/core/embedding'
+import { embedding } from '@use-crux/core/embedding'
 
 const dense = embedding({
   kind: 'dense',
@@ -2015,7 +2015,7 @@ const sparse = embedding({
 Add governance where production systems need it. The provider still only sees the final texts that should be embedded:
 
 ```ts
-import { embedding, embeddingCache, normalizeText } from '@crux/core/embedding'
+import { embedding, embeddingCache, normalizeText } from '@use-crux/core/embedding'
 
 const dense = embedding({
   kind: 'dense',
@@ -2044,11 +2044,11 @@ Every `embed()` / `embedMany()` call emits a canonical `embedding.call` span. Wh
 
 If you do not want to hand-wrap provider SDKs, the adapter packages now expose embedding helpers where the provider actually supports them:
 
-- `@crux/ai` → `embedding()` for AI SDK embedding models
-- `@crux/openai` → `embedding()` for direct OpenAI SDK usage
-- `@crux/google` → `embedding()` for direct Google GenAI SDK usage
+- `@use-crux/ai` → `embedding()` for AI SDK embedding models
+- `@use-crux/openai` → `embedding()` for direct OpenAI SDK usage
+- `@use-crux/google` → `embedding()` for direct Google GenAI SDK usage
 
-`@crux/anthropic` remains generation-only on the direct SDK path. Pair `createAnthropic()` with `embedding()` or another embedding provider when you need retrieval or indexing.
+`@use-crux/anthropic` remains generation-only on the direct SDK path. Pair `createAnthropic()` with `embedding()` or another embedding provider when you need retrieval or indexing.
 
 `embedding()` is intentionally limited to vector generation primitives:
 
@@ -2062,11 +2062,11 @@ Dense memory blocks such as `episodes()` and `facts()` accept either a legacy `E
 
 Crux splits document retrieval into five layers:
 
-- `@crux/core/embedding` for dense and sparse vector generation
-- `@crux/ingest` for text, file, and URL loading
-- `@crux/core/indexing` for chunking and write-time embedding
+- `@use-crux/core/embedding` for dense and sparse vector generation
+- `@use-crux/ingest` for text, file, and URL loading
+- `@use-crux/core/indexing` for chunking and write-time embedding
 - `corpus()` for repeated sync jobs, change detection, stale-source cleanup, and dry runs
-- `@crux/core/retrieval` for text query -> scored hits, context, and tools
+- `@use-crux/core/retrieval` for text query -> scored hits, context, and tools
 
 That keeps the public DX clear:
 
@@ -2081,11 +2081,11 @@ That keeps the public DX clear:
 Minimal flow:
 
 ```ts
-import { embedding } from '@crux/core/embedding'
-import { chunker, corpus, indexer, indexingPipeline, transform } from '@crux/core/indexing'
-import { retriever, reranker } from '@crux/core/retrieval'
-import { inMemoryDataStore, inMemoryVectorStore } from '@crux/core/storage'
-import { filesSource } from '@crux/ingest'
+import { embedding } from '@use-crux/core/embedding'
+import { chunker, corpus, indexer, indexingPipeline, transform } from '@use-crux/core/indexing'
+import { retriever, reranker } from '@use-crux/core/retrieval'
+import { inMemoryDataStore, inMemoryVectorStore } from '@use-crux/core/storage'
+import { filesSource } from '@use-crux/ingest'
 
 const dense = embedding({ kind: 'dense', ... })
 const sparse = embedding({ kind: 'sparse', ... })
@@ -2146,7 +2146,7 @@ const hits = await docsRetriever.retrieve('latest roadmap')
 For advanced query-time RAG, wrap the retriever instead of replacing it:
 
 ```ts
-import { compress, decay, diversify, multiQuery, parentExpand, retrievalPipeline } from '@crux/core/retrieval'
+import { compress, decay, diversify, multiQuery, parentExpand, retrievalPipeline } from '@use-crux/core/retrieval'
 
 const advancedDocs = retrievalPipeline(docsRetriever, [
   multiQuery({ generate: generateTextFn, model: queryModel, count: 4 }),
@@ -2167,7 +2167,7 @@ const hits = await advancedDocs.retrieve('latest roadmap')
 const debug = await advancedDocs.retrieveWithTrace('latest roadmap')
 ```
 
-`retrievalPipeline()` is still a retriever. Put `advancedDocs` directly in `use`, configure `inject: 'context' | 'tool' | 'both'`, or call `retrieve()` directly. Manual `asContext()` and `asTools()` helpers remain available for advanced wiring, but the normal prompt path is `use: [advancedDocs]`. Query stages such as `multiQuery()` and `queryPlanner()` run before retrieval fanout. Hit stages such as `parentExpand()`, `compress()`, `diversify()`, and `decay()` run after the base retriever returns candidates. Structured stages accept any `GenerateObjectFn`. Provider-native helpers hide SDK-specific schema preparation and parsing behind the shared core type; they do not imply prompt resolution, validation retry, safety, cassettes, tool handling, memory capture, or instrumentation. When a helper call needs the full adapter runtime, create one with `createGenerateObjectFnFromGenerate(generate, { promptId })` from `@crux/core/compaction`; it runs a synthetic structured prompt through the supplied adapter `generate()`. `retrieveWithTrace()` adds stage counts, warnings, and bounded previews for devtools/CLI/TUI debugging; OTel receives only privacy-safe stage counts and identifiers.
+`retrievalPipeline()` is still a retriever. Put `advancedDocs` directly in `use`, configure `inject: 'context' | 'tool' | 'both'`, or call `retrieve()` directly. Manual `asContext()` and `asTools()` helpers remain available for advanced wiring, but the normal prompt path is `use: [advancedDocs]`. Query stages such as `multiQuery()` and `queryPlanner()` run before retrieval fanout. Hit stages such as `parentExpand()`, `compress()`, `diversify()`, and `decay()` run after the base retriever returns candidates. Structured stages accept any `GenerateObjectFn`. Provider-native helpers hide SDK-specific schema preparation and parsing behind the shared core type; they do not imply prompt resolution, validation retry, safety, cassettes, tool handling, memory capture, or instrumentation. When a helper call needs the full adapter runtime, create one with `createGenerateObjectFnFromGenerate(generate, { promptId })` from `@use-crux/core/compaction`; it runs a synthetic structured prompt through the supplied adapter `generate()`. `retrieveWithTrace()` adds stage counts, warnings, and bounded previews for devtools/CLI/TUI debugging; OTel receives only privacy-safe stage counts and identifiers.
 
 Retrieval and indexing primitives emit canonical observability records automatically. Direct `retriever().retrieve()` calls open `retrieval.query` spans with `retrieval.hits` artifacts and `retrieval.returned` edges. `retrievalPipeline()` opens a parent `retrieval.pipeline` span and records each fanout/query/hit stage as a child `retrieval.stage` span with bounded output previews. `indexer().chunk()`, `indexer().indexDocuments()`, and `indexer().indexChunks()` open `indexing.pipeline` spans; document transforms, chunkers, and chunk transforms are visible as child stage spans plus `indexing.report` artifacts with totals and stage counts. `corpus().sync()` opens `corpus.sync`, records loader results as `ingest.parse` with `ingest.report`, nests indexing work underneath the corpus trace, and emits `corpus.report` source-ledger summaries.
 
@@ -2200,7 +2200,7 @@ const assistant = prompt({
 Use `grounding()` when the output must cite and stay bound to retrieved evidence:
 
 ```ts
-import { grounding, citationSchema } from '@crux/core/citations'
+import { grounding, citationSchema } from '@use-crux/core/citations'
 
 const groundedDocs = grounding({
   id: 'product-docs',
@@ -2228,7 +2228,7 @@ Citation validation emits canonical `citation.check` spans. Reports include allo
 
 This is the normal product path: loaders produce documents, `corpus.sync()` keeps the indexed source set current, and retrievers query it. A corpus keeps a source ledger so repeated syncs can skip unchanged sources, detect changed content or metadata, delete stale sources when the caller supplies a complete source set, and preview work with `dryRun`.
 
-Ingestion documents are structured. `@crux/ingest` parses text, Markdown, HTML, PDF, CSV, JSON, DOCX, and XLSX into `parts` such as text blocks, pages, tables, sheets, and JSON paths. `content` is still derived for today’s chunking and retrieval path, so simple users can keep thinking in text while advanced users retain page/table/sheet provenance for custom chunkers, UI citations, and future multimodal or document-intelligence work.
+Ingestion documents are structured. `@use-crux/ingest` parses text, Markdown, HTML, PDF, CSV, JSON, DOCX, and XLSX into `parts` such as text blocks, pages, tables, sheets, and JSON paths. `content` is still derived for today’s chunking and retrieval path, so simple users can keep thinking in text while advanced users retain page/table/sheet provenance for custom chunkers, UI citations, and future multimodal or document-intelligence work.
 
 `indexingPipeline()` is where source material becomes retrieval-ready. Document transforms run before chunking, chunkers decide searchable boundaries, and chunk transforms can annotate or filter chunks before writes. Built-in chunkers cover text, structured documents, parent/child indexing, and semantic segmentation. When `cache: true` is enabled, expensive pipeline stages are cached by source hash and stage fingerprint; corpus source records also store the stage ledger so devtools, CLI, TUI, and OTel can explain what happened during a sync.
 
@@ -2243,9 +2243,9 @@ Use `use: [retriever]` or `use: [retrievalPipeline]` for normal composition. Use
 `workspace()` gives agents durable scratch space and generated output files without custom file-tool glue.
 
 ```ts
-import { prompt } from '@crux/core'
-import { inMemoryStorage } from '@crux/core/storage'
-import { workspace } from '@crux/core/workspace'
+import { prompt } from '@use-crux/core'
+import { inMemoryStorage } from '@use-crux/core/storage'
+import { workspace } from '@use-crux/core/workspace'
 
 const ws = workspace({
   id: 'research',
@@ -2266,7 +2266,7 @@ Storage is deterministic: `DataStore` holds metadata and small inline text/JSON,
 
 Workspace operations emit canonical `workspace.operation` spans. The spans record workspace id, operation, path, namespace hash, result kind, size, and bounded output artifacts for listings/files without putting raw namespace values or full file contents in span attributes. Devtools workspace views read the backend resource projection for workspace activity.
 
-Bundled stores include `inMemoryStorage()` for tests and `convexWorkspaceBlobStore()` from `@crux/convex` for Convex file storage. Implement `BlobStore` for S3, R2, GCS, local disk, or app-owned file services.
+Bundled stores include `inMemoryStorage()` for tests and `convexWorkspaceBlobStore()` from `@use-crux/convex` for Convex file storage. Implement `BlobStore` for S3, R2, GCS, local disk, or app-owned file services.
 
 ### Storage
 
@@ -2316,7 +2316,7 @@ const results = await vectors.search({
 For production, implement `DataStore` with your database and pair it with a `VectorStore` or `BlobStore` only when the feature needs those capabilities. A Convex adapter is included:
 
 ```ts
-import { defineConvexStoreContract } from '@crux/convex'
+import { defineConvexStoreContract } from '@use-crux/convex'
 import { components } from './_generated/api'
 
 const cruxDocuments = defineConvexStoreContract({ component: components.crux })
@@ -2338,13 +2338,13 @@ stay inside the Convex store document contract, so filtered `list()` calls fill 
 component pages until the requested number of matching entries is reached.
 
 Convex Agent apps can centralize request-scoped store/runtime binding with
-`createCruxConvex()` from `@crux/convex`. The profile owns `components.crux` /
+`createCruxConvex()` from `@use-crux/convex`. The profile owns `components.crux` /
 `components.agent`, creates the default store once per request, and reuses that
 same path for `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and the
 HTTP Runtime Bridge:
 
 ```ts
-import { createCruxConvex } from '@crux/convex'
+import { createCruxConvex } from '@use-crux/convex'
 
 const crux = createCruxConvex({
   components: { crux: components.crux, agent: components.agent },
@@ -2355,7 +2355,7 @@ await crux.run(ctx, { threadId }, async ({ store }) => {
 })
 ```
 
-## Reactive Hooks (`@crux/react`)
+## Reactive Hooks (`@use-crux/react`)
 
 Transport-agnostic React hooks for plans and task lists. Works with Convex, SSE, polling, or any custom transport.
 
@@ -2364,8 +2364,8 @@ Transport-agnostic React hooks for plans and task lists. Works with Convex, SSE,
 Wrap your app with `<CruxProvider>` to inject a transport. All domain hooks read from this transport.
 
 ```tsx
-import { CruxProvider } from '@crux/react'
-import { defineConvexStoreContract } from '@crux/convex'
+import { CruxProvider } from '@use-crux/react'
+import { defineConvexStoreContract } from '@use-crux/convex'
 import { useQuery } from 'convex/react'
 
 const cruxDocuments = defineConvexStoreContract({ component: api.crux })
@@ -2410,7 +2410,7 @@ function PlanView({ planId }: { planId: string }) {
 Use `createMockTransport()` for testing without a backend:
 
 ```tsx
-import { createMockTransport, CruxProvider } from '@crux/react'
+import { createMockTransport, CruxProvider } from '@use-crux/react'
 
 const transport = createMockTransport()
 transport.set('plan:abc', { id: 'abc', title: 'Test Plan', version: 1 })
@@ -2425,10 +2425,10 @@ The mock transport extends `CruxTransport` with `set()`, `delete()`, and `getDat
 
 ### AI SDK Stream Transport
 
-When using the Vercel AI SDK, `@crux/ai/stream` provides a transport that pipes plan/task updates through `UIMessageStream` data parts instead of polling.
+When using the Vercel AI SDK, `@use-crux/ai/stream` provides a transport that pipes plan/task updates through `UIMessageStream` data parts instead of polling.
 
 ```tsx
-import { createStreamTransport } from '@crux/ai/stream'
+import { createStreamTransport } from '@use-crux/ai/stream'
 
 const transport = createStreamTransport()
 // Feed from useChat's onData callback:
@@ -2439,14 +2439,14 @@ const transport = createStreamTransport()
 </CruxProvider>
 ```
 
-Server-side, use `createCruxStreamWriter(writer, store)` to subscribe to CruxStore changes and inject `data-crux` parts into the stream. See the `@crux/ai/stream` module docs for full setup.
+Server-side, use `createCruxStreamWriter(writer, store)` to subscribe to CruxStore changes and inject `data-crux` parts into the stream. See the `@use-crux/ai/stream` module docs for full setup.
 
 ### SSE Transport
 
 For real-time push updates without Convex or the AI SDK, use `createSSETransport` to connect to an SSE endpoint.
 
 ```tsx
-import { createSSETransport, CruxProvider } from '@crux/react'
+import { createSSETransport, CruxProvider } from '@use-crux/react'
 
 const transport = createSSETransport('/api/crux/events', {
   reconnect: true,       // default
@@ -2463,11 +2463,11 @@ useEffect(() => () => transport.close(), [])
 
 The returned `SSETransport` adds `close()` and `readyState` (`'connecting' | 'open' | 'closed'`) to `CruxTransport`.
 
-The server-side SSE endpoint is created with `cruxSSEHandler` from `@crux/react/server`:
+The server-side SSE endpoint is created with `cruxSSEHandler` from `@use-crux/react/server`:
 
 ```ts
 // app/api/crux/events/route.ts
-import { cruxSSEHandler } from '@crux/react/server'
+import { cruxSSEHandler } from '@use-crux/react/server'
 
 export const GET = cruxSSEHandler({ store, prefix: 'plan:' })
 ```
@@ -2479,7 +2479,7 @@ Works with Next.js App Router or any `(Request) => Response` framework. The stor
 Universal fallback that works with any `CruxStore` — no `subscribe()` required.
 
 ```tsx
-import { createPollingTransport, CruxProvider } from '@crux/react'
+import { createPollingTransport, CruxProvider } from '@use-crux/react'
 
 const transport = createPollingTransport(store, { intervalMs: 2000 })
 
@@ -2495,13 +2495,13 @@ The returned `PollingTransport` adds `poll()` (manual trigger) and `stop()` to `
 
 ### Plans & Task Lists End-to-End
 
-Combine `@crux/core/plan` and `@crux/core/tasks` with reactive hooks for real-time agent work tracking. See the [Plans & Task Lists guide](https://crux.karyla.com/docs/guides/plans-and-tasks) for detailed patterns.
+Combine `@use-crux/core/plan` and `@use-crux/core/tasks` with reactive hooks for real-time agent work tracking. See the [Plans & Task Lists guide](https://crux.karyla.com/docs/guides/plans-and-tasks) for detailed patterns.
 
 Plan creation and updates emit `plan.operation` spans with a JSON artifact containing the plan id, title, version, content, preview, and metadata. The local devtools backend uses those artifacts to populate the Plans & Tasks read model even when the underlying `CruxStore` lives behind a runtime boundary such as Convex.
 
 ```ts title="server.ts"
-import { createPlanTool, planAgent } from '@crux/core/plan'
-import { tasklist, taskListAgent, taskWorker } from '@crux/core/tasks'
+import { createPlanTool, planAgent } from '@use-crux/core/plan'
+import { tasklist, taskListAgent, taskWorker } from '@use-crux/core/tasks'
 
 // Phase 1: LLM creates a plan via tool
 const plannerPrompt = prompt({
@@ -2550,7 +2550,7 @@ for (const task of tasks) {
 ```
 
 ```tsx title="client.tsx"
-import { CruxProvider, usePlan, useTaskList, useTasks } from '@crux/react'
+import { CruxProvider, usePlan, useTaskList, useTasks } from '@use-crux/react'
 
 function AgentProgress({ planId }: { planId: string }) {
   const plan = usePlan(planId)
@@ -2580,7 +2580,7 @@ function AgentProgress({ planId }: { planId: string }) {
 Plans have no built-in status. Status, approval, and lifecycle are application-level concerns modeled through `plan.metadata`. This keeps the crux `Plan` type simple and generic while giving applications full control.
 
 ```ts title="status-via-metadata.ts"
-import { plan, updatePlan, getPlan } from '@crux/core/plan'
+import { plan, updatePlan, getPlan } from '@use-crux/core/plan'
 
 // Create a plan with application-specific status
 const p = await plan({
@@ -2606,10 +2606,10 @@ if (current.version > approvedVersion) {
 }
 ```
 
-This pattern works with the Convex-native `flow()` handle from `@crux/convex/server` for human-in-the-loop approval gates:
+This pattern works with the Convex-native `flow()` handle from `@use-crux/convex/server` for human-in-the-loop approval gates:
 
 ```ts title="convex-approval-gate.ts"
-import { flow } from '@crux/convex/server'
+import { flow } from '@use-crux/convex/server'
 import { v } from 'convex/values'
 
 const writerFlow = flow({
@@ -2647,10 +2647,10 @@ Long conversations exceed token limits. Compaction tools solve this at different
 | **`createBudgetManager()`** | You need to track token pressure and decide when to compact   | No        |
 | **`extractKeyFacts()`**     | You want to pull structured data out of a conversation        | No        |
 
-Import from `@crux/core/compaction`:
+Import from `@use-crux/core/compaction`:
 
 ```ts
-import { summarizeMessages, createSlidingWindow, createBudgetManager, extractKeyFacts } from '@crux/core/compaction'
+import { summarizeMessages, createSlidingWindow, createBudgetManager, extractKeyFacts } from '@use-crux/core/compaction'
 ```
 
 ### `summarizeMessages()`
@@ -2746,14 +2746,14 @@ How do you know if your prompts are good? Automated assertions catch structured 
 
 Use scoring for:
 
-- **Quality evaluations** — `scorers.judge()` in `@crux/core/quality` scores every case on relevance, faithfulness, or custom rubrics (see [Using Scores In Quality](#using-scores-in-quality))
+- **Quality evaluations** — `scorers.judge()` in `@use-crux/core/quality` scores every case on relevance, faithfulness, or custom rubrics (see [Using Scores In Quality](#using-scores-in-quality))
 - **Online enforcement** — `judgeConstraint()` gates production output with the same judge definition
 - **Runtime filtering** — Score outputs before showing them to users
 
-Import from `@crux/core/scoring`:
+Import from `@use-crux/core/scoring`:
 
 ```ts
-import { llmJudge, metrics } from '@crux/core/scoring'
+import { llmJudge, metrics } from '@use-crux/core/scoring'
 ```
 
 ### `llmJudge()`
@@ -2820,7 +2820,7 @@ Plan and task mutations emit canonical `plan.operation` and `task.operation` spa
 Bridge a judge into a normal `Constraint` for online enforcement of scored quality. The same brand-voice or groundedness definition that scores eval datasets in CI can gate production output — one source of truth, no drift between the CI copy and the production copy.
 
 ```ts
-import { llmJudge, judgeConstraint } from '@crux/core/scoring'
+import { llmJudge, judgeConstraint } from '@use-crux/core/scoring'
 
 const brandVoice = llmJudge({
   id: 'brand-voice',
@@ -2847,10 +2847,10 @@ Like `constraint()` and `citationConstraint()`, the factory is generic over the 
 
 ### Using Scores In Quality
 
-`scorers.judge()` in `@crux/core/quality` reuses this judge machinery for Quality runs — rubric or choice-score modes, chain-of-thought reasoning persisted to `metadata.rationale`, with `generate` and `model` bound from the eval or an eval-local helper. Plain scorer functions work too:
+`scorers.judge()` in `@use-crux/core/quality` reuses this judge machinery for Quality runs — rubric or choice-score modes, chain-of-thought reasoning persisted to `metadata.rationale`, with `generate` and `model` bound from the eval or an eval-local helper. Plain scorer functions work too:
 
 ```ts
-import { evaluate } from '@crux/core/quality'
+import { evaluate } from '@use-crux/core/quality'
 
 export default evaluate('support.relevance', {
   task: supportPrompt,
@@ -2872,14 +2872,14 @@ Crux provides two levels of multi-agent support: **composition utilities** for c
 
 ### Composition Utilities
 
-High-level patterns that replace 10–20 lines of boilerplate with a single function call. Each adapter (`@crux/ai`, `@crux/openai`, `@crux/anthropic`, `@crux/google`) re-exports pre-bound versions.
+High-level patterns that replace 10–20 lines of boilerplate with a single function call. Each adapter (`@use-crux/ai`, `@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google`) re-exports pre-bound versions.
 
 #### `agent()`
 
 Bundle a prompt with optional model, tools, and handoff targets into a reusable agent instance:
 
 ```ts
-import { agent } from '@crux/core/agent'
+import { agent } from '@use-crux/core/agent'
 
 const reviewer = agent({
   id: 'content-reviewer',
@@ -2898,7 +2898,7 @@ Agents are frozen data objects — no execution logic. Execution happens via the
 Run multiple agents concurrently and collect named results:
 
 ```ts
-import { parallel } from '@crux/ai'
+import { parallel } from '@use-crux/ai'
 
 const { results, durationMs } = await parallel({
   context: { content: articleDraft },
@@ -2924,7 +2924,7 @@ Results are returned as a named record typed via `InferAgentOutput` — no `merg
 Chain agents (and plain functions) sequentially with accumulated, typed context:
 
 ```ts
-import { pipeline } from '@crux/ai'
+import { pipeline } from '@use-crux/ai'
 
 const result = await pipeline({
   context: { userId, projectId },
@@ -2967,7 +2967,7 @@ Execution retry is for transient failures. Crux policy-terminal errors (`Guardra
 Multiple agents vote on a decision:
 
 ```ts
-import { consensus } from '@crux/ai'
+import { consensus } from '@use-crux/ai'
 
 const decision = await consensus({
   agents: [classifier, classifier, classifier],
@@ -2987,7 +2987,7 @@ Built on `parallel()` internally. Throws `ConsensusError` (with `.votes` and `.q
 Peer-to-peer agent routing where the LLM decides which agent handles the next turn:
 
 ```ts
-import { swarm, agent } from '@crux/ai'
+import { swarm, agent } from '@use-crux/ai'
 
 const triage = agent({
   id: 'triage',
@@ -3114,11 +3114,11 @@ All compositions (`parallel`, `pipeline`, `consensus`, `swarm`) support `session
 
 #### Testing compositions
 
-The real `AgentExecutor` lives in the adapters — core only declares the contract. To test how a composition _drives_ an executor (what input/model/tools it passes, how errors bubble, how the execution context threads) without an SDK, use the in-memory `createFakeAgentExecutor()` (the agent-layer analogue of the [resolver fakes](#testable-resolution)). It is exported from `@crux/core/agent` and the package root.
+The real `AgentExecutor` lives in the adapters — core only declares the contract. To test how a composition _drives_ an executor (what input/model/tools it passes, how errors bubble, how the execution context threads) without an SDK, use the in-memory `createFakeAgentExecutor()` (the agent-layer analogue of the [resolver fakes](#testable-resolution)). It is exported from `@use-crux/core/agent` and the package root.
 
 ```ts
-import { createFakeAgentExecutor } from '@crux/core/agent'
-import { createPipeline } from '@crux/core/agent'
+import { createFakeAgentExecutor } from '@use-crux/core/agent'
+import { createPipeline } from '@use-crux/core/agent'
 
 const executor = createFakeAgentExecutor({
   agents: {
@@ -3151,10 +3151,10 @@ Low-level primitives for custom agent coordination:
 | **Handoff**    | One-way transfer | One agent's output becomes another's input (researcher → writer)        |
 | **Delegate**   | Tool + handoff   | Expose a subagent as a tool with automatic validation and transform     |
 
-Import from `@crux/core/agent`:
+Import from `@use-crux/core/agent`:
 
 ```ts
-import { blackboard, handoff, delegate } from '@crux/core/agent'
+import { blackboard, handoff, delegate } from '@use-crux/core/agent'
 ```
 
 ### `blackboard()`
@@ -3273,7 +3273,7 @@ const writerPrompt = prompt({
 **Stored mode** — for distributed agents that run in separate processes or actions (e.g., Convex actions, serverless functions):
 
 ```ts
-import { defineConvexStoreContract } from '@crux/convex'
+import { defineConvexStoreContract } from '@use-crux/convex'
 
 const cruxDocuments = defineConvexStoreContract({ component: components.crux })
 
@@ -3306,7 +3306,7 @@ Orchestration wrapper combining handoff + subagent execution. When the main agen
 The `TCtx` type parameter provides type-safe context threading for framework-specific data (action context, user IDs, project IDs, etc.):
 
 ```ts
-import { delegate } from '@crux/core/agent'
+import { delegate } from '@use-crux/core/agent'
 
 // Define context type for your framework
 type DelegateCtx = {
@@ -3381,8 +3381,8 @@ carry activation through the explicit session and its snapshots.
 Skill loading emits canonical `skill.load` spans. File and registry skills record loader, source id or registry identifier, parsed skill id, cache source, instruction size, references, tags, version, and bounded output artifacts.
 
 ```ts
-import { skill } from '@crux/core/skill'
-import { prompt, agent } from '@crux/core'
+import { skill } from '@use-crux/core/skill'
+import { prompt, agent } from '@use-crux/core'
 
 const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
 const tone = skill.inline({
@@ -3447,7 +3447,7 @@ Instructions here...
 Load a skill from a registry. Content is fetched lazily on first `prompt.resolve()`, then cached in-memory with TTL.
 
 ```ts
-import { registry, skill, skillsSh } from '@crux/core/skill'
+import { registry, skill, skillsSh } from '@use-crux/core/skill'
 
 // From skills.sh (built-in registry value)
 const research = skill.fromRegistry(skillsSh, 'mattpocock/skills/seo-analysis')
@@ -3470,7 +3470,7 @@ const rawText = seo.dump() // Returns instruction body (no frontmatter)
 Define custom registries using the `.well-known/agent-skills/` protocol:
 
 ```ts
-import { skill, registry } from '@crux/core/skill'
+import { skill, registry } from '@use-crux/core/skill'
 
 const acme = registry({
   name: 'acme',
@@ -3487,11 +3487,11 @@ to `skill.fromRegistry(registry, path)`.
 
 ### Agent Framework Integration
 
-When using Crux adapters directly (`@crux/anthropic`, `@crux/openai`, `@crux/google`, `@crux/ai`), skills work automatically — just add them to `use`. For external agent frameworks that manage their own tool loop (Convex Agent, Mastra, etc.), use `createAgentSkillKit()` with a `SkillActivationPersistence` snapshot port.
+When using Crux adapters directly (`@use-crux/anthropic`, `@use-crux/openai`, `@use-crux/google`, `@use-crux/ai`), skills work automatically — just add them to `use`. For external agent frameworks that manage their own tool loop (Convex Agent, Mastra, etc.), use `createAgentSkillKit()` with a `SkillActivationPersistence` snapshot port.
 
 ```ts
-import { createAgentSkillKit, type SkillActivationSnapshot } from '@crux/core/skill'
-import { defineConvexStoreContract } from '@crux/convex' // or any key-value store
+import { createAgentSkillKit, type SkillActivationSnapshot } from '@use-crux/core/skill'
+import { defineConvexStoreContract } from '@use-crux/convex' // or any key-value store
 
 // Helper: persist skill IDs per thread using CruxStore (or any DB/Redis/etc.)
 function skillStore(threadId: string, store: CruxStore) {
@@ -3555,8 +3555,8 @@ See the [Skills Guide](https://crux.karyla.com/docs/guides/skills#agent-framewor
 Crux has a generic plugin system for extending the runtime with custom instrumentation, telemetry, or any cross-cutting concern. Plugins are installed via `config({ plugins: [...] })` and compose automatically — multiple plugins can coexist without interfering with each other.
 
 ```ts
-import { config } from '@crux/core'
-import { withTelemetry } from '@crux/otel'
+import { config } from '@use-crux/core'
+import { withTelemetry } from '@use-crux/otel'
 
 config({
   devtools: { serverUrl: process.env.DEVTOOLS_URL }, // local server or tunnel only
@@ -3571,8 +3571,8 @@ Plugins are processed in order. Each plugin's `install()` receives the cumulativ
 `withCostTracking()` attributes model spend to prompts, models, sessions, flows, and steps. Provider-reported cost wins when an adapter exposes it in `_meta.cost` (for example OpenRouter). If the provider only returns token usage, Crux estimates cost from `modelPricing()`.
 
 ```ts
-import { config } from '@crux/core'
-import { modelPricing, withCostTracking } from '@crux/core/cost'
+import { config } from '@use-crux/core'
+import { modelPricing, withCostTracking } from '@use-crux/core/cost'
 
 const costs = withCostTracking({
   pricing: modelPricing({
@@ -3592,7 +3592,7 @@ config({
 console.log(costs.getReport().byModel)
 ```
 
-Budgets are hard limits: `warn` emits `cost:warn`; `limit` emits `cost:limit` and throws `CostLimitError` after recording the call. Devtools, `crux cost`, `crux dev --tui`, the web dashboard, and `@crux/otel` consume the same cost events.
+Budgets are hard limits: `warn` emits `cost:warn`; `limit` emits `cost:limit` and throws `CostLimitError` after recording the call. Devtools, `crux cost`, `crux dev --tui`, the web dashboard, and `@use-crux/otel` consume the same cost events.
 
 Cost tracking also emits canonical `cost.record` spans. Each span records the call attribution, tokens, cost, running totals, and `cost.warn` / `cost.limit` events when thresholds are crossed. `createBudgetManager().check()` emits `prompt.budget` spans with source breakdown and pressure level, so token-pressure decisions are inspectable even when no compaction happens yet. Conversation summarizers emit `compaction.report` artifacts with before/after tokens, compression ratio, and bounded summary previews.
 
@@ -3601,7 +3601,7 @@ Cost tracking also emits canonical `cost.record` spans. Each span records the ca
 The built-in devtools plugin. When `devtools.serverUrl` is explicitly set in `config()` and no explicit `observability` transport is configured, Crux installs the local devtools transport before custom plugins. Ordinary local Quality runs do not require that boilerplate; the CLI auto-attaches only to loopback `crux dev` origins.
 Plugin installation is synchronous. It installs the canonical observability transport for `/api/observability/records` and sends runtime prompt/context/tool metadata through `/api/index/snapshot` as Project Index enrichment when used through the lower-level registry helpers. The Go backend remains the owner of the index read model exposed through `/api/project/index` and `/api/index`.
 
-`withDevtools()` does not run bridge command execution itself. The Runtime Bridge is configured through `config({ devtools: { bridge } })` and uses `@crux/core/runtime-bridge` for the shared message contract.
+`withDevtools()` does not run bridge command execution itself. The Runtime Bridge is configured through `config({ devtools: { bridge } })` and uses `@use-crux/core/runtime-bridge` for the shared message contract.
 
 ```ts
 config({
@@ -3609,9 +3609,9 @@ config({
 })
 ```
 
-### `withTelemetry()` (`@crux/otel`)
+### `withTelemetry()` (`@use-crux/otel`)
 
-OpenTelemetry integration for production observability. See [`@crux/otel` README](../crux-otel/README.md) for full documentation.
+OpenTelemetry integration for production observability. See [`@use-crux/otel` README](../crux-otel/README.md) for full documentation.
 
 Supports two export paths:
 
@@ -3653,7 +3653,7 @@ Spans created for every instrumented event:
 Implement the `CruxPlugin` interface to create your own plugins:
 
 ```ts
-import type { CruxPlugin } from '@crux/core'
+import type { CruxPlugin } from '@use-crux/core'
 
 const myPlugin: CruxPlugin = {
   name: 'my-tracer',
@@ -3679,28 +3679,28 @@ The `install()` method receives a frozen snapshot of the current runtime and ret
 
 The devtools integration traces every generation call and displays prompts, contexts, traces, evals, quality experiments, memory events, retrieval events, tool calls, artifacts, and semantic relations in a visual UI.
 
-`crux dev` also builds the Project Index at server startup. The index is the design-plane read model for what exists in the project: prompts, contexts, tools, agents, flows, flow steps, compositions, RAG resources, memory, memory blocks, blackboards, workspaces, safety definitions, scorers, suites, evals, source locations, supporting source references, snippets, diagnostics, and relations. Source files and `.crux/quality` JSON are authoritative; runtime snapshots only enrich discovered definitions. The Quality workbench merges that authored index plane with local `.crux/quality` state, so code suites and committed `*.cassette.json` fixtures can appear in suite/cassette/overview screens before the first run. The shared TypeScript contract lives in `@crux/core/project-index`, and serializers for runtime snapshots live in `@crux/core/project-index/serializers`.
+`crux dev` also builds the Project Index at server startup. The index is the design-plane read model for what exists in the project: prompts, contexts, tools, agents, flows, flow steps, compositions, RAG resources, memory, memory blocks, blackboards, workspaces, safety definitions, scorers, suites, evals, source locations, supporting source references, snippets, diagnostics, and relations. Source files and `.crux/quality` JSON are authoritative; runtime snapshots only enrich discovered definitions. The Quality workbench merges that authored index plane with local `.crux/quality` state, so code suites and committed `*.cassette.json` fixtures can appear in suite/cassette/overview screens before the first run. The shared TypeScript contract lives in `@use-crux/core/project-index`, and serializers for runtime snapshots live in `@use-crux/core/project-index/serializers`.
 
-`ResolvedProjectModel` is the public config-inspection read model exported from `@crux/core/project-index`. It is not a runtime setup API. It records the selected root, package name, config files, source roots, ignored paths, source-visible definitions, source-visible relations, Quality discovery settings, and user-facing diagnostics with explicit provenance on inferred or overridden fields. Prompt and context namespace trees authored with `createPrompts()` and `createContexts()` surface as definition `path` fields such as `["support", "answer"]`, and source-proven prompt/context bindings surface as relations such as `prompt.uses_context`. Diagnostic codes are a stable union, and definition/relation/diagnostic ids are branded strings so workers and clients can exchange plain JSON without losing TypeScript safety at construction boundaries. Source-only discovery is informational, and selected source-shape facts such as missing stable ids, runtime-dependent tool maps, or tested prompts with only partially proven context dependencies are projected into Project Model diagnostics with source provenance. `@crux/indexer` produces the model with `resolveProjectModel(...)`, and `crux config inspect` renders the same shape for human or JSON output through the static/source-only path so inspection remains responsive in large projects. Import-enriched and runtime-backed evidence belongs to the staged `crux dev` indexing path.
+`ResolvedProjectModel` is the public config-inspection read model exported from `@use-crux/core/project-index`. It is not a runtime setup API. It records the selected root, package name, config files, source roots, ignored paths, source-visible definitions, source-visible relations, Quality discovery settings, and user-facing diagnostics with explicit provenance on inferred or overridden fields. Prompt and context namespace trees authored with `createPrompts()` and `createContexts()` surface as definition `path` fields such as `["support", "answer"]`, and source-proven prompt/context bindings surface as relations such as `prompt.uses_context`. Diagnostic codes are a stable union, and definition/relation/diagnostic ids are branded strings so workers and clients can exchange plain JSON without losing TypeScript safety at construction boundaries. Source-only discovery is informational, and selected source-shape facts such as missing stable ids, runtime-dependent tool maps, or tested prompts with only partially proven context dependencies are projected into Project Model diagnostics with source provenance. `@use-crux/indexer` produces the model with `resolveProjectModel(...)`, and `crux config inspect` renders the same shape for human or JSON output through the static/source-only path so inspection remains responsive in large projects. Import-enriched and runtime-backed evidence belongs to the staged `crux dev` indexing path.
 
 Index indexing is designed as fast source truth plus background enrichment. The fast AST pass publishes a useful index first; bounded TypeScript semantic analysis then enriches proven aliases, barrels, imported symbols, schema refs, callbacks, primitive graph relations, and data-access edges without blocking the first snapshot. Static discovery now enters through the Crux Indexer's fact-backed Project Index compiler seam before projecting to the index read model, so first-party extractors and incremental AST partial indexing share the same extension boundary. The Go devtools backend owns the final read-model state, realtime publication, and explicit `indexing` status so web devtools and the TUI do not infer index readiness from missing fields. Semantic fact snapshots are cached under `.crux/cache/index/semantic-facts-*` using source, import-dependency, tsconfig, compiler-option, and TypeScript-version fingerprints. Static parse facts and Go-owned index snapshots are also versioned under `.crux/cache/index`. When indexer or local-runtime code changes index output for unchanged user source, bump the matching static, semantic, or Go snapshot cache version so rebuild/restart/reindex produces the new read model without manual cache deletion. The cache currently refreshes complete semantic fact sets; true partial semantic reuse remains gated until dependency ownership is materialized.
 
-The index indexer runs user modules in safe index mode with `CRUX_INDEX=1`. In this mode `config()` disables devtools transports and runtime observability side effects, and live Quality model helpers are not executed. `crux dev` bounds the embedded Node indexer and turns actionable import failures or true fallback-only static discovery into index diagnostics instead of blocking the server. Static source discovery first classifies candidate files with content signals: ordinary authored source with Crux primitives is indexed, generated bundles/base64 artifacts are skipped before AST parsing, and oversized authored-looking files emit `index.source_too_large` diagnostics instead of silently disappearing. Static discovery scans ordinary source files under the ignored-directory guard and can surface best-effort definitions and relations for common primitives such as `agent()`, `new Agent(...)` from `@crux/convex/agent`, `convexAgent({...})`/`crux.convexAgent({...})`, `flow()`/`flow.step()`, Convex `flow({ name, args, handler })`, compositions, `retriever()`, `retrievalPipeline()`, `memory()`, `blackboard()`, `workspace()`, `constraint()`, `guardrail()`, and `llmJudge()`. It inspects exported declarations and factory-local primitive call sites, so Convex/serverless factories that construct agents, flows, memory, blackboards, or workspaces can still appear in the index without emitting a warning merely because the module is not import-safe. When rich import fails but static source discovery recovered definitions for that file, the index keeps the definitions and suppresses the import warning. For memory and blackboard definitions, static source discovery also projects literal store bindings and Zod schemas where they are authored directly or through local identifiers, including first-class `memory.store` definitions for backing stores and first-class `memory.block` definitions for visible `workingState()`, `episodes()`, `facts()`, `procedures()`, and `reflections()` blocks nested in `memory({ blocks })`. Tools can resolve `parameters` schemas through same-file variables or direct project imports, attach `schema` source refs, and attach nested schema refs for referenced schema identifiers. Prompt `use` arrays can resolve imported contexts and local context-array constants, so source-only fallback still emits `prompt.uses_context` edges for shared context lists. Prompt/context `system` constants, direct identifiers injected into static system template strings, and simple object-property paths such as `${formatting.SUPPORTED_ELEMENTS}` attach `system` source refs with fragment metadata. Convex Agent `prompt`, `tools`, `contextHandler`, `usageHandler`, and `prepare` bindings attach `config`/`callback` source refs; visible tool-map spreads/properties and handler/prepare-factory identifier arguments attach additional supporting refs. Agent, prompt, context, safety, scorer, tool, and flow-step callbacks passed by identifier attach role-specific source refs. Agent, prompt, context, tool, Convex Agent callback bindings, and flow-step callbacks are scanned through one statically visible helper level for memory/blackboard/workspace access and supporting source locations, so helper-owned writes can still contribute `metadata.intelligence.data` and normalized graph relations such as `tool.writes_blackboard`, `prompt.reads_memory`, `context.reads_blackboard`, and `flow.step.reads_workspace`. The static resolver supports relative imports plus conservative `tsconfig` `baseUrl`/`paths` aliases; source refs contribute source dependency/dependent file edges. The bounded semantic pass handles proven compiler-resolved aliases, barrels, imported schemas, callbacks, source refs, and access facts; full language-service-grade partial incremental reuse remains future work.
+The index indexer runs user modules in safe index mode with `CRUX_INDEX=1`. In this mode `config()` disables devtools transports and runtime observability side effects, and live Quality model helpers are not executed. `crux dev` bounds the embedded Node indexer and turns actionable import failures or true fallback-only static discovery into index diagnostics instead of blocking the server. Static source discovery first classifies candidate files with content signals: ordinary authored source with Crux primitives is indexed, generated bundles/base64 artifacts are skipped before AST parsing, and oversized authored-looking files emit `index.source_too_large` diagnostics instead of silently disappearing. Static discovery scans ordinary source files under the ignored-directory guard and can surface best-effort definitions and relations for common primitives such as `agent()`, `new Agent(...)` from `@use-crux/convex/agent`, `convexAgent({...})`/`crux.convexAgent({...})`, `flow()`/`flow.step()`, Convex `flow({ name, args, handler })`, compositions, `retriever()`, `retrievalPipeline()`, `memory()`, `blackboard()`, `workspace()`, `constraint()`, `guardrail()`, and `llmJudge()`. It inspects exported declarations and factory-local primitive call sites, so Convex/serverless factories that construct agents, flows, memory, blackboards, or workspaces can still appear in the index without emitting a warning merely because the module is not import-safe. When rich import fails but static source discovery recovered definitions for that file, the index keeps the definitions and suppresses the import warning. For memory and blackboard definitions, static source discovery also projects literal store bindings and Zod schemas where they are authored directly or through local identifiers, including first-class `memory.store` definitions for backing stores and first-class `memory.block` definitions for visible `workingState()`, `episodes()`, `facts()`, `procedures()`, and `reflections()` blocks nested in `memory({ blocks })`. Tools can resolve `parameters` schemas through same-file variables or direct project imports, attach `schema` source refs, and attach nested schema refs for referenced schema identifiers. Prompt `use` arrays can resolve imported contexts and local context-array constants, so source-only fallback still emits `prompt.uses_context` edges for shared context lists. Prompt/context `system` constants, direct identifiers injected into static system template strings, and simple object-property paths such as `${formatting.SUPPORTED_ELEMENTS}` attach `system` source refs with fragment metadata. Convex Agent `prompt`, `tools`, `contextHandler`, `usageHandler`, and `prepare` bindings attach `config`/`callback` source refs; visible tool-map spreads/properties and handler/prepare-factory identifier arguments attach additional supporting refs. Agent, prompt, context, safety, scorer, tool, and flow-step callbacks passed by identifier attach role-specific source refs. Agent, prompt, context, tool, Convex Agent callback bindings, and flow-step callbacks are scanned through one statically visible helper level for memory/blackboard/workspace access and supporting source locations, so helper-owned writes can still contribute `metadata.intelligence.data` and normalized graph relations such as `tool.writes_blackboard`, `prompt.reads_memory`, `context.reads_blackboard`, and `flow.step.reads_workspace`. The static resolver supports relative imports plus conservative `tsconfig` `baseUrl`/`paths` aliases; source refs contribute source dependency/dependent file edges. The bounded semantic pass handles proven compiler-resolved aliases, barrels, imported schemas, callbacks, source refs, and access facts; full language-service-grade partial incremental reuse remains future work.
 
 Index definitions may include `metadata.indexPresentation` for first-class supporting records that should be folded under authored parents in index navigation, such as `flow.step`, routing routes/tiers/options, composition branches/stages, RAG stages, memory blocks, and memory stores. These child records remain searchable, inspectable, lintable, and relation targets; the hint only prevents clients from treating them as standalone top-level authored things. Index definitions may also include a derived `quality` summary from the Go service. That field links definitions to eval/suite/experiment/baseline/comparison/feedback/run IDs, cassette paths, trace IDs, run counts, case counts, last status/time, pass rate, and changed-since-baseline fingerprint signals and affected eval/suite suggestions when prompt, RAG, flow eval, experiment, baseline, comparison, cassette, or feedback records are known. It is a read-model join for web devtools and the TUI, not source/indexer-owned index data. Index snapshots also expose `lintFindings`, which are not indexer diagnostics: diagnostics explain index health/fidelity, while lint findings are graph-level design suggestions derived from the index read model. Lint findings include rule category, maturity, confidence, default profile membership, concrete messages, per-rule rationale for "why it matters", optional impact, structured evidence, fix options, rule docs URLs, exact suppression-comment affordances, direct related definitions, affected definitions, and backend-computed propagation metadata for definitions affected through approved dependency relations. Current high-trust rules cover eval coverage, quality targets with experiment history but no promoted baseline, prompt/context/tool/flow contract schemas, strict-mode prompt output schemas, strict-mode tool model-output adapters, agent handoffs to non-visible targets, suspending flows without coverage, writable workspaces without guardrails, state resources written without visible read paths, long-lived memory without visible retention policies, consensus compositions without visible judges or scorers, and shared blackboards without conflict policies. Source suppressions are rule-specific comments such as `// crux-lint-disable-next-line tool.missing_input_schema -- generated adapter`; unknown or unused suppressions become index diagnostics.
 
-`metadata.runtimeJoin` is an authored-to-runtime hint for backend read models. It is typed as `ProjectRuntimeJoin` from `@crux/core/project-index` and must not confuse stable authored ids with runtime execution ids: flow definitions join generated `flow.run` spans by primitive and span name, while `flowId` is only an execution correlation id; flow-step definitions join `flow.step` spans by primitive plus `stepLabel`/span name, while `stepId` is only execution correlation. Memory blocks join memory spans through `sourceDefinitionId`, `blockDefinitionId`, runtime `memoryId`, and `blockId`. Blackboards are represented by memory-shaped spans with `memoryType: "blackboard"` rather than a separate `blackboardId` span attribute.
+`metadata.runtimeJoin` is an authored-to-runtime hint for backend read models. It is typed as `ProjectRuntimeJoin` from `@use-crux/core/project-index` and must not confuse stable authored ids with runtime execution ids: flow definitions join generated `flow.run` spans by primitive and span name, while `flowId` is only an execution correlation id; flow-step definitions join `flow.step` spans by primitive plus `stepLabel`/span name, while `stepId` is only execution correlation. Memory blocks join memory spans through `sourceDefinitionId`, `blockDefinitionId`, runtime `memoryId`, and `blockId`. Blackboards are represented by memory-shaped spans with `memoryType: "blackboard"` rather than a separate `blackboardId` span attribute.
 
 The TypeScript indexer is the only place that imports user `crux.config.ts`. It serializes the project lint policy onto the index as `lint`, and Go read-model enrichers consume that serialized policy when they append runtime/quality-backed findings. This keeps source intelligence in the Node worker, read-model joins in Go services, and still gives TS-produced and Go-produced findings the same profile, rule override, and source-suppression behavior before clients see them.
 
 `config({ indexer })` stores inert Project Indexer tooling configuration alongside the rest of the
 Crux config. Today that includes extension references, extension trust policy, and rule option data
-for `@crux/indexer` to validate. Core does not import, load, or execute indexer extensions; the
+for `@use-crux/indexer` to validate. Core does not import, load, or execute indexer extensions; the
 indexer/compiler owns trust enforcement, compatibility checks, loading, and execution.
 
 Use `crux lint` to print the same backend-owned lint findings outside the interactive devtools. It is non-blocking by default, supports `--profile=recommended|strict|experimental|off`, `--include-suppressed`, and `--json`, and only exits nonzero when an explicit gate is requested with `--fail-on=error|warning|info`. The command reads the Go Project Index service instead of reimplementing rule logic in the CLI.
 
-The canonical runtime API lives at `@crux/core/observability`. It emits lifecycle graph records (`run:start`, `span:start`, `span:event`, `artifact`, `edge`, `span:end`, `run:end`) through a transport. Delivery is non-blocking by default and starts immediately for live devtools updates. Later records coalesce per microtask and are delivered FIFO, so terminal records cannot overtake their own starts across HTTP delivery attempts. HTTP delivery normalizes unknown preview values into JSON-safe shapes and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact cannot strand terminal `span:end` / `run:end` records. The Go backend still reconciles out-of-order lifecycle records defensively by id and timestamp. Streaming generation spans close on raw-stream completion or raw-stream error, even when usage metadata is read later. Prompt resolution emits a redacted `prompt.input` preview under the canonical `input` artifact kind with top-level provided/schema/required/missing/unexpected keys and validation status, never field values. Generation and stream spans consume a `messages` artifact with the prepared SDK input preview (`messages`, `system`, `systemBlocks`, and prompt text) so run-detail views can inspect the actual request payload. Transport failures are captured as diagnostics rather than throwing into user code. Serverless and Convex request handlers should await a bounded `observe.flush()` or `observe.shutdown()` before returning so queued records are not killed with the request; bounded flushes cancel their timeout timer when delivery wins first, so the flush itself does not leave an avoidable timer behind. Devtools keeps terminal run-detail pages warm for a short grace window so late Convex/serverless flushes appear without waiting for another run or a manual refresh. Convex Agent container streams fold into details in the Go read model; step-level streamed generation turns, tools, handoffs, and delegated flows render as chronological agent children. When a tool call is visually promoted out of the generation that requested it, the read model still orders it after that generation by canonical parent relation instead of trusting noisy cross-action timestamps alone.
+The canonical runtime API lives at `@use-crux/core/observability`. It emits lifecycle graph records (`run:start`, `span:start`, `span:event`, `artifact`, `edge`, `span:end`, `run:end`) through a transport. Delivery is non-blocking by default and starts immediately for live devtools updates. Later records coalesce per microtask and are delivered FIFO, so terminal records cannot overtake their own starts across HTTP delivery attempts. HTTP delivery normalizes unknown preview values into JSON-safe shapes and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact cannot strand terminal `span:end` / `run:end` records. The Go backend still reconciles out-of-order lifecycle records defensively by id and timestamp. Streaming generation spans close on raw-stream completion or raw-stream error, even when usage metadata is read later. Prompt resolution emits a redacted `prompt.input` preview under the canonical `input` artifact kind with top-level provided/schema/required/missing/unexpected keys and validation status, never field values. Generation and stream spans consume a `messages` artifact with the prepared SDK input preview (`messages`, `system`, `systemBlocks`, and prompt text) so run-detail views can inspect the actual request payload. Transport failures are captured as diagnostics rather than throwing into user code. Serverless and Convex request handlers should await a bounded `observe.flush()` or `observe.shutdown()` before returning so queued records are not killed with the request; bounded flushes cancel their timeout timer when delivery wins first, so the flush itself does not leave an avoidable timer behind. Devtools keeps terminal run-detail pages warm for a short grace window so late Convex/serverless flushes appear without waiting for another run or a manual refresh. Convex Agent container streams fold into details in the Go read model; step-level streamed generation turns, tools, handoffs, and delegated flows render as chronological agent children. When a tool call is visually promoted out of the generation that requested it, the read model still orders it after that generation by canonical parent relation instead of trusting noisy cross-action timestamps alone.
 
 The local Go backend keeps list and detail reads separate. Run-list endpoints page the newest history by default and only perform cheap count/identity enrichment for that page, so the web UI and TUI do not scan every stored span's metric JSON on each live refresh. Dashboard read models and lifecycle reconciliation use the same cheap run-summary path rather than the exact historical rollup path. Single-run detail reads build the `RunDetail` projection from graph tables without first running summary count subqueries or loading raw record payloads; raw graph/record access remains available through the debug graph endpoint.
 
@@ -3720,7 +3720,7 @@ config({
 ```
 
 ```ts
-import { observe } from '@crux/core/observability'
+import { observe } from '@use-crux/core/observability'
 
 await observe.run({ name: 'support reply', rootPrimitive: 'agent.run' }, async () => {
   await observe.span({ name: 'retrieve docs', family: 'retrieval', primitive: 'retrieval.query' }, async () => {
@@ -3738,7 +3738,7 @@ For serverless resumes or scheduled workflows that span multiple workers, use
 `flow.suspend()` is a first-class lifecycle state: Crux emits canonical
 `span:end` records with `status: "suspended"` and persists the parent
 observability context in the flow snapshot. A later resume should restore that
-context and append to the same run id; Convex `@crux/convex/server` flows do
+context and append to the same run id; Convex `@use-crux/convex/server` flows do
 this automatically when `.signal()` schedules the resume action.
 
 When prompts and contexts are organized into trees (via `createPrompts` / `createContexts`), the devtools UI groups them by namespace path for easier navigation.
@@ -3747,7 +3747,7 @@ When prompts and contexts are organized into trees (via `createPrompts` / `creat
 
 - Every `generate()` / `stream()` call — timing, tokens, results, errors
 - Every `.resolve()` call — system message assembly details
-- Agent model calls via `@crux/ai/agent`
+- Agent model calls via `@use-crux/ai/agent`
 - Quality runs — per-case results, variants, scores, comparisons, trace links, and local history
 - Flow-shaped quality runs — step detail, cost breakdowns, model/tokens/cost, input/output/tool-call inspection, multiturn conversation view, and model map tables
 - Memory operations — every read/write across block memory and blackboards
@@ -3760,9 +3760,9 @@ When prompts and contexts are organized into trees (via `createPrompts` / `creat
 - Tool execution — every `tool.call` span with args artifacts, raw/model result artifacts, duration, size/savings metadata, relation edges, and errors
 - Tool approvals — every `tool.approval` request, approval, denial, and token mismatch
 
-**Trace tree (parent-span propagation):** Every boundary primitive (`delegate`, `flow`, `handoff`, …) emits canonical `span:start` / `span:end` records and pushes the span id onto an AsyncLocalStorage span stack. Nested runs and spans capture the deepest-open span as `parentSpanId`, so the Go backend can nest delegated subagents directly under the specific delegate / flow / handoff that triggered them — no time-window or name-match heuristics. For runtimes where async context doesn't survive call boundaries (Convex `runAction`, edge workers, HTTP), transport helpers must pack and restore the captured context. In Convex, use `@crux/convex/server` wrappers and `ctx.crux.runAction()` for awaited child work so the hidden `__crux` envelope crosses the boundary automatically. `ctx.crux.scheduler.runAfter()` records the enqueue span but detaches by default because scheduled work can execute after the parent action has ended; pass `{ observability }` explicitly only for durable continuations such as flow resumes. Convex action helpers flush boundary starts before child workers run and await bounded observability flushes before returning so serverless workers do not drop queued records. Action hops are two-sided: child actions acknowledge the received boundary and completion/failure with `runtime.convex.boundary.*` span events, and the Go read model can reconcile a missing parent-side boundary end from those acknowledgements.
+**Trace tree (parent-span propagation):** Every boundary primitive (`delegate`, `flow`, `handoff`, …) emits canonical `span:start` / `span:end` records and pushes the span id onto an AsyncLocalStorage span stack. Nested runs and spans capture the deepest-open span as `parentSpanId`, so the Go backend can nest delegated subagents directly under the specific delegate / flow / handoff that triggered them — no time-window or name-match heuristics. For runtimes where async context doesn't survive call boundaries (Convex `runAction`, edge workers, HTTP), transport helpers must pack and restore the captured context. In Convex, use `@use-crux/convex/server` wrappers and `ctx.crux.runAction()` for awaited child work so the hidden `__crux` envelope crosses the boundary automatically. `ctx.crux.scheduler.runAfter()` records the enqueue span but detaches by default because scheduled work can execute after the parent action has ended; pass `{ observability }` explicitly only for durable continuations such as flow resumes. Convex action helpers flush boundary starts before child workers run and await bounded observability flushes before returning so serverless workers do not drop queued records. Action hops are two-sided: child actions acknowledge the received boundary and completion/failure with `runtime.convex.boundary.*` span events, and the Go read model can reconcile a missing parent-side boundary end from those acknowledgements.
 
-Use `flow()` only for actual user/workflow flows. Framework agent turns such as a Convex Agent chat response should open an `agent.run` via `observe.run()` / `observe.span()` and flush before the serverless action returns. Convex Agent integrations should import `Agent`, `createTool`, or `wrapConvexTool()` from `@crux/convex/agent`; this makes prompt/use[] resolution, memory, retrieval, thread model calls, and tools children of the agent turn, augments tool handlers with `ctx.crux`, normalizes token and cost metadata from Convex Agent result/step shapes, and preserves the readable tool name in devtools instead of displaying provider call ids or long model-facing descriptions.
+Use `flow()` only for actual user/workflow flows. Framework agent turns such as a Convex Agent chat response should open an `agent.run` via `observe.run()` / `observe.span()` and flush before the serverless action returns. Convex Agent integrations should import `Agent`, `createTool`, or `wrapConvexTool()` from `@use-crux/convex/agent`; this makes prompt/use[] resolution, memory, retrieval, thread model calls, and tools children of the agent turn, augments tool handlers with `ctx.crux`, normalizes token and cost metadata from Convex Agent result/step shapes, and preserves the readable tool name in devtools instead of displaying provider call ids or long model-facing descriptions.
 
 - Judge scores — every `llmJudge` result with reasoning and eval correlation
 
@@ -3776,22 +3776,22 @@ The backend exposes a lossless canonical graph internally and a `RunDetail` read
 
 ### Protocol validation
 
-Canonical graph records have Zod schemas in `@crux/core/observability`. The Go backend validates every incoming batch at `POST /api/observability/records` — malformed records return 400 instead of silently corrupting the store.
+Canonical graph records have Zod schemas in `@use-crux/core/observability`. The Go backend validates every incoming batch at `POST /api/observability/records` — malformed records return 400 instead of silently corrupting the store.
 
 ```ts
-import { CruxGraphRecordBatchSchema } from '@crux/core/observability'
+import { CruxGraphRecordBatchSchema } from '@use-crux/core/observability'
 
 const result = CruxGraphRecordBatchSchema.safeParse({ records })
 ```
 
-The legacy collector HTTP path has been removed from the Go backend, and the collector protocol export/schemas have been removed from `@crux/core`. New tracing code must use the canonical graph contract.
+The legacy collector HTTP path has been removed from the Go backend, and the collector protocol export/schemas have been removed from `@use-crux/core`. New tracing code must use the canonical graph contract.
 
 ### Canonical observability graph
 
-`@crux/core/observability` defines the new canonical graph contract shared by the TypeScript runtime and Go devtools backend. It exports branded IDs, graph record types, runtime schemas, canonical primitive names, edge types, artifact kinds, presentation read-model types, and shared fixtures.
+`@use-crux/core/observability` defines the new canonical graph contract shared by the TypeScript runtime and Go devtools backend. It exports branded IDs, graph record types, runtime schemas, canonical primitive names, edge types, artifact kinds, presentation read-model types, and shared fixtures.
 
 ```ts
-import { CruxGraphRecordBatchSchema } from '@crux/core/observability'
+import { CruxGraphRecordBatchSchema } from '@use-crux/core/observability'
 
 const batch = CruxGraphRecordBatchSchema.parse(payload)
 ```
@@ -3805,7 +3805,7 @@ Custom edge types and artifact kinds must use the `custom.*` namespace. Built-in
 When your application has a real multi-step workflow, use `flow()` to structure it into named steps. Flow and step events are automatically emitted to all installed plugins (including devtools) via `InstrumentationHooks`.
 
 ```ts
-import { config, flow } from '@crux/core'
+import { config, flow } from '@use-crux/core'
 
 config({
   devtools: { serverUrl: process.env.DEVTOOLS_URL },
@@ -3831,7 +3831,7 @@ const result = await contentPipeline.run()
 Flows can suspend for external input and resume later — even in a different process:
 
 ```ts
-import { flow } from '@crux/core'
+import { flow } from '@use-crux/core'
 
 const reviewPipeline = flow('review-pipeline', async (flow) => {
   const draft = await flow.step('draft', () => generate(writer, { model, input }))
@@ -3854,7 +3854,7 @@ await reviewPipeline.signal(result.flowId, 'human-review', { approved: true })
 const final = await reviewPipeline.run({ resume: result.flowId })
 ```
 
-For cases where you need manual control outside of `flow()`, use `observe.run()` and `observe.span()` from `@crux/core/observability` so the Go backend receives the same canonical graph records as built-in flows. Detail-only spans that should enrich an existing run but must not become a visible run boundary can pass `implicitRun: false`; Crux uses this for router/cascade resolution so a direct generation run is not mislabeled as `router.resolve`. Long-running primitives with a known timeout should record `timeoutMs`/`deadlineAt` and emit `operation.deadline`; built-in `@crux/ai` generation and streaming orchestration does this automatically when `timeoutMs` is set.
+For cases where you need manual control outside of `flow()`, use `observe.run()` and `observe.span()` from `@use-crux/core/observability` so the Go backend receives the same canonical graph records as built-in flows. Detail-only spans that should enrich an existing run but must not become a visible run boundary can pass `implicitRun: false`; Crux uses this for router/cascade resolution so a direct generation run is not mislabeled as `router.resolve`. Long-running primitives with a known timeout should record `timeoutMs`/`deadlineAt` and emit `operation.deadline`; built-in `@use-crux/ai` generation and streaming orchestration does this automatically when `timeoutMs` is set.
 
 ### Flow step composition
 
@@ -3875,7 +3875,7 @@ const result = await researchFlow.run({ input: { query: 'cloud migration' } })
 
 `flow.results` (`Record<string, unknown>`) is auto-populated after each step completes, keyed by step label. Prefer return-value assignment (`const plan = await flow.step(...)`) for typed access; use `flow.results` as an escape hatch in external step functions.
 
-The local dev server, Go services, TUI, eval runner, index, and lint command are shipped by `@crux/local`. The React web UI bundle is `@crux/devtools` and is hosted by the local runtime:
+The local dev server, Go services, TUI, eval runner, index, and lint command are shipped by `@use-crux/local`. The React web UI bundle is `@use-crux/devtools` and is hosted by the local runtime:
 
 ```bash
 crux dev                             # start devtools server on :4400
@@ -3923,7 +3923,7 @@ prompt({
 For per-value control with composable helpers:
 
 ```ts
-import { safe, raw, limit, wrap } from '@crux/core'
+import { safe, raw, limit, wrap } from '@use-crux/core'
 
 safe`
   Doc: ${raw(trustedHtml)}
@@ -3967,7 +3967,7 @@ const resolved = editDraft.resolve({
 // → { system, prompt, schema, tools, settings }
 ```
 
-This is what adapters call internally. Use it directly when integrating with an SDK that doesn't have an adapter. For raw chat SDKs that look like OpenAI/Anthropic/Google, prefer `defineProviderRuntime({ ownership: 'single-turn', turn })` from `@crux/core/adapter`; it compiles provider request/response/stream hooks into a `createX()` adapter factory.
+This is what adapters call internally. Use it directly when integrating with an SDK that doesn't have an adapter. For raw chat SDKs that look like OpenAI/Anthropic/Google, prefer `defineProviderRuntime({ ownership: 'single-turn', turn })` from `@use-crux/core/adapter`; it compiles provider request/response/stream hooks into a `createX()` adapter factory.
 
 **`.inspect()`** — shows how the system message was assembled with per-part token breakdowns:
 
@@ -4001,7 +4001,7 @@ editDraft.config // raw config object
 `contributor()` creates a first-class `use:` entry for your own composable primitives. Where `injectable()` covers "compute contexts and tools at resolve time", `contributor()` adds the rest of the entry contract: a `when` gate with exclusion reporting (visible in `.inspect()` and devtools), nested `use` entries resolved before its own contribution, and pipeline re-entry with any entry kind — skills, memory, blackboards, other contributors.
 
 ```ts
-import { contributor, context, prompt } from '@crux/core'
+import { contributor, context, prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const supportTools = contributor({
@@ -4030,7 +4030,7 @@ For adapter and primitive authors, the lowered contract types every entry resolv
 
 `compilePrompt(config, { ports })` is the single prompt-resolution boundary. It validates the config, merges the prompt and context input schemas once, binds resolver ports, then gives each call one pipeline pass as a `PromptResolution`: SDK-ready `args` and an inspection view of that same pass.
 
-Pair it with the in-memory fakes exported from `@crux/core` to test prompt resolution with zero global setup and a clock you control:
+Pair it with the in-memory fakes exported from `@use-crux/core` to test prompt resolution with zero global setup and a clock you control:
 
 ```ts
 import {
@@ -4040,7 +4040,7 @@ import {
   inMemoryContextCache,
   fixedClock,
   collectingDiagnostics,
-} from '@crux/core'
+} from '@use-crux/core'
 
 const observability = recordingObservability()
 const clock = fixedClock(1_000)
@@ -4066,7 +4066,7 @@ const inspection = pass.inspect()
 
 ## Type System
 
-Crux treats TypeScript inference as part of the public API. `@crux/core` has a package-local `typecheck` script that runs strict `tsc` against shipped source plus dedicated type tests, and an AST-based explicit-`any` guard. Existing legacy `any` usage is tracked in `scripts/explicit-any-baseline.json`; new production `any` usage fails typecheck and removed entries must update the baseline.
+Crux treats TypeScript inference as part of the public API. `@use-crux/core` has a package-local `typecheck` script that runs strict `tsc` against shipped source plus dedicated type tests, and an AST-based explicit-`any` guard. Existing legacy `any` usage is tracked in `scripts/explicit-any-baseline.json`; new production `any` usage fails typecheck and removed entries must update the baseline.
 
 **Input merging** — when a prompt uses contexts with input schemas, all fields are merged into a single type:
 
@@ -4115,10 +4115,10 @@ result.text // string
 The most common pattern — a chatbot that remembers conversation history without blowing up the context window:
 
 ```ts
-import { prompt, context } from '@crux/core'
-import { generate } from '@crux/ai'
-import { createSlidingWindow } from '@crux/core/compaction'
-import { memory, workingState } from '@crux/core/memory'
+import { prompt, context } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
+import { createSlidingWindow } from '@use-crux/core/compaction'
+import { memory, workingState } from '@use-crux/core/memory'
 
 // Rolling conversation history
 const window = createSlidingWindow({
@@ -4168,7 +4168,7 @@ async function handleMessage(userMessage: string) {
 An agent that remembers facts across sessions and can search its own memory:
 
 ```ts
-import { facts, memory } from '@crux/core/memory'
+import { facts, memory } from '@use-crux/core/memory'
 
 const knowledge = facts({
   id: 'user-knowledge',
@@ -4208,7 +4208,7 @@ When you learn something new about the user, save it to memory.`,
 A research agent gathers information, then hands off to a writer agent:
 
 ```ts
-import { blackboard, handoff } from '@crux/core/agent'
+import { blackboard, handoff } from '@use-crux/core/agent'
 
 // Shared progress board
 const board = blackboard({
@@ -4264,7 +4264,7 @@ const writerPrompt = prompt({
 Test prompts with automated quality scoring across variants:
 
 ```ts
-import { evaluate, scorers } from '@crux/core/quality'
+import { evaluate, scorers } from '@use-crux/core/quality'
 
 export default evaluate('editor.tone', {
   task: editDraft,
@@ -4288,7 +4288,7 @@ export default evaluate('editor.tone', {
 ## Package Structure
 
 ```
-@crux/core
+@use-crux/core
 ├── index.ts           # prompt, context, createPrompts, createContexts, config
 ├── types.ts           # SDK-agnostic type definitions
 ├── context.ts         # context() and createContexts()
@@ -4342,7 +4342,7 @@ export default evaluate('editor.tone', {
 │   ├── agent.ts       # planAgent(), taskListAgent(), taskWorker(), createPlanTool(), createTaskListTool()
 │   └── helpers.ts     # deriveTaskListStatus(), key conventions
 ├── tasks/
-│   └── index.ts       # Barrel: canonical @crux/core/tasks import path (re-exports from plan/)
+│   └── index.ts       # Barrel: canonical @use-crux/core/tasks import path (re-exports from plan/)
 ├── react/
 │   ├── index.ts       # Barrel: CruxProvider, usePlan, useTaskList, useTasks, transports
 │   ├── types.ts       # CruxTransport interface

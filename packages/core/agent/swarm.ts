@@ -352,7 +352,7 @@ function validateSwarmConfig(options: SwarmOptions): void {
  *
  * @example
  * ```ts
- * import { createSwarm } from '@crux/core/agent'
+ * import { createSwarm } from '@use-crux/core/agent'
  *
  * const swarm = createSwarm(executor)
  * const result = await swarm({

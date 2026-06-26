@@ -1,5 +1,5 @@
 {
-  "name": "@crux/example-node-basic",
+  "name": "@use-crux/example-node-basic",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,8 +8,8 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.64",
-    "@crux/ai": "workspace:*",
-    "@crux/core": "workspace:*",
+    "@use-crux/ai": "workspace:*",
+    "@use-crux/core": "workspace:*",
     "ai": "^6.0.0",
     "zod": "^4.4.3"
   },

@@ -200,7 +200,7 @@ func (i *earlySemanticProjectIndexer) IndexProjectAstPatch(context.Context, stri
 			}},
 			SourceGraph: &store.ProjectIndexSourceGraph{
 				SchemaVersion: 1,
-				ProducedBy:    "@crux/indexer",
+				ProducedBy:    "@use-crux/indexer",
 				Capabilities:  []string{"source-dependencies"},
 			},
 		},
@@ -297,7 +297,7 @@ func (i *mismatchedFullPlannedSemanticProjectIndexer) IndexProjectAstPatch(conte
 			}},
 			SourceGraph: &store.ProjectIndexSourceGraph{
 				SchemaVersion: 1,
-				ProducedBy:    "@crux/indexer",
+				ProducedBy:    "@use-crux/indexer",
 				Capabilities:  []string{"source-dependencies"},
 			},
 		},

@@ -25,7 +25,7 @@ export type { CruxLintConfig, CruxLintRuleConfig, CruxLintSelectedProfile } from
  *
  * Indexer extensions are JavaScript modules. Loading one is code execution, so
  * Crux treats the trust mode as an explicit tooling policy rather than a
- * convenience flag. Core stores this value; `@crux/indexer` enforces it before
+ * convenience flag. Core stores this value; `@use-crux/indexer` enforces it before
  * extension packages can contribute to compilation.
  */
 export type CruxIndexerExtensionTrustMode = 'first-party-only' | 'allowlisted' | 'unsafe-local-dev'
@@ -145,7 +145,7 @@ export interface CruxDevtoolsConfig {
    * Enable the Runtime Bridge command plane.
    *
    * `true` uses the core default WS peer for long-lived local Node runtimes.
-   * Framework integrations such as `@crux/convex` can register HTTP bridge
+   * Framework integrations such as `@use-crux/convex` can register HTTP bridge
    * endpoints from their setup helpers. Explicit bridge config wins.
    */
   readonly bridge?: RuntimeBridgeOptions

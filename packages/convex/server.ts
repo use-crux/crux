@@ -7,8 +7,8 @@ import {
   type CruxAttributes,
   type CruxPrimitiveName,
   type ObserveSpanOptions,
-} from '@crux/core/observability'
-import { flow as coreFlow, getFlowSnapshot, signalFlow, type FlowResult, type FlowScope } from '@crux/core/flow'
+} from '@use-crux/core/observability'
+import { flow as coreFlow, getFlowSnapshot, signalFlow, type FlowResult, type FlowScope } from '@use-crux/core/flow'
 import { flushObservability } from './observability'
 
 const CRUX_ARG = '__crux'

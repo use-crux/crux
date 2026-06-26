@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { JsonObject, ListOptions, SetOptions, StoreEntry } from '@crux/core/store'
+import type { JsonObject, ListOptions, SetOptions, StoreEntry } from '@use-crux/core/store'
 
 /** Structural Convex document record accepted at the store boundary. */
 export type StoreDocRecord = Readonly<Record<string, unknown>>

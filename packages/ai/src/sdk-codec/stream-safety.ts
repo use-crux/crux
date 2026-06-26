@@ -1,4 +1,4 @@
-import type { SafetyStream } from '@crux/core/safety'
+import type { SafetyStream } from '@use-crux/core/safety'
 
 /** Structural shape of the AI SDK `TextStreamPart`s the safety transform touches. */
 interface SafetyTransformPart {

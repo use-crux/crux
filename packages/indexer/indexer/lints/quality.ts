@@ -1,4 +1,4 @@
-import type { IndexLintFinding, ProjectDefinition } from '@crux/core/project-index'
+import type { IndexLintFinding, ProjectDefinition } from '@use-crux/core/project-index'
 import { hasItems } from './finding-helpers'
 import { indexLintFinding } from './rules'
 

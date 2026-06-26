@@ -1,4 +1,4 @@
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 
 /**
  * Absolute source file path normalized against one project root.

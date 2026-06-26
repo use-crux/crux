@@ -4,7 +4,7 @@
  * with. `instrumentToolSet` is a session internal (not exported from any
  * public barrel); these tests pin the deferred-`onToolEnd` bookkeeping the
  * session hides: hook ordering, toModelOutput chaining, and pending-state
- * cleanup (the historical `@crux/ai` leak).
+ * cleanup (the historical `@use-crux/ai` leak).
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'

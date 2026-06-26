@@ -5,7 +5,7 @@ import type {
   ProjectIdentity,
   ProjectRelation,
   PromptMeta,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import type { LoadedProjectConfig } from './config'
 import { discoverRuntimeEvalDefinitions } from './eval-discovery'
 import { evalGlobs } from './files'

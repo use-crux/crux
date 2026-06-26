@@ -2,7 +2,7 @@
  * Quality promote phase — the worker behind `crux quality promote
  * <experimentId>` (spec 03 §1, spec 02 §3). Reads the persisted experiment
  * record, validates the promotion rules, and writes the committed
- * BaselineRecord through the project's own `@crux/core` instance.
+ * BaselineRecord through the project's own `@use-crux/core` instance.
  *
  * Promotion rules (binding):
  * - Filtered runs are refused — paired statistics need the full case
@@ -19,13 +19,13 @@
  */
 
 import { readFile } from 'node:fs/promises'
-import type { BaselineRecord, ExperimentCell } from '@crux/core/quality/internal/runner'
+import type { BaselineRecord, ExperimentCell } from '@use-crux/core/quality/internal/runner'
 import type { RunnerCore } from './quality-core-bridge'
 import type { CollectedEvaluation } from './quality-collect'
 import type { QualityRunEvent } from './quality-execute'
 
 export interface PromoteOptions {
-  /** The project's own `@crux/core` runner contract (quality-core-bridge). */
+  /** The project's own `@use-crux/core` runner contract (quality-core-bridge). */
   core: RunnerCore
   collected: readonly CollectedEvaluation[]
   /** Quality persistence root (`settings.dir`). */

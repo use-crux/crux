@@ -1,4 +1,4 @@
-import type { ProjectModelResolutionMode } from '@crux/core/project-index'
+import type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
 
 /** How a config value was resolved, shown as an origin tag in the CLI. */
 export type ProjectConfigOrigin = 'default' | 'config' | 'package.json' | 'set' | 'none'

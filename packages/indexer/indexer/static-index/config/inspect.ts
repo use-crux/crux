@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
-import type { CruxLintConfig } from '@crux/core'
-import type { IndexDiagnostic } from '@crux/core/project-index'
+import type { CruxLintConfig } from '@use-crux/core'
+import type { IndexDiagnostic } from '@use-crux/core/project-index'
 import { loadConfigPolicyProjectConfig } from '../../config'
 import { staticIndexSyntaxSelectionFromConfig } from './index'
 

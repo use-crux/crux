@@ -6,7 +6,7 @@
  * and applies honest degradation when a resolver cannot produce authored
  * source.
  *
- * @internal Not exported from `@crux/core/quality` - engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` - engine plumbing only.
  * @module
  */
 

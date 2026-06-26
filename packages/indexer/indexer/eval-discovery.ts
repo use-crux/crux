@@ -1,4 +1,4 @@
-import type { IndexDiagnostic, IndexSourceFile, ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
+import type { IndexDiagnostic, IndexSourceFile, ProjectDefinition, ProjectRelation } from '@use-crux/core/project-index'
 import { relation } from './definitions'
 import { moduleImportFailedDiagnostic } from './diagnostics'
 import { definitionsFromEvaluation, evaluationPromptId, isEvaluation } from './evaluations'

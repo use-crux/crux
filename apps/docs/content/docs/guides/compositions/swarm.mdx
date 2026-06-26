@@ -6,7 +6,7 @@ description: Dynamic peer-to-peer agent routing where the LLM decides which agen
 `swarm()` runs a network of agents where each agent can hand off control to another by calling a `transfer_to_<id>` tool. The LLM decides when and where to route — no routing logic in your code. Use it for dynamic multi-specialist workflows like customer support triage, sales qualification, or content production pipelines where the path isn't fixed.
 
 ```ts title="support-routing.ts"
-import { swarm, agent } from '@crux/ai'
+import { swarm, agent } from '@use-crux/ai'
 
 const triage = agent({
   id: 'triage',
@@ -155,7 +155,7 @@ await swarm({
 Full control over what each agent receives. The function receives a `SwarmHandoffContext` with all available data and returns the input for the next agent.
 
 ```ts
-import type { SwarmHandoffContext } from '@crux/ai'
+import type { SwarmHandoffContext } from '@use-crux/ai'
 
 await swarm({
   // ...
@@ -172,7 +172,7 @@ await swarm({
 In `'accumulate'` mode, context grows with each handoff. Prevent token bloat by summarizing after N handoffs:
 
 ```ts title="summarize.ts"
-import { generateTextFn } from '@crux/ai'
+import { generateTextFn } from '@use-crux/ai'
 
 await swarm({
   history: 'accumulate',
@@ -222,7 +222,7 @@ const estimate = await swarm({
 Prevents infinite loops. Default is `10`. When exceeded, `swarm()` throws a `SwarmError` with the full handoff path for debugging:
 
 ```ts
-import { SwarmError } from '@crux/ai'
+import { SwarmError } from '@use-crux/ai'
 
 try {
   await swarm({

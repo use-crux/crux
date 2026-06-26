@@ -1,4 +1,4 @@
-import { config } from '@crux/core'
+import { config } from '@use-crux/core'
 
 export default config({
   quality: {

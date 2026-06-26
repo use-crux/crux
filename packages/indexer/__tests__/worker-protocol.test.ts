@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ResolvedProjectModel } from '@crux/core/project-index'
+import type { ResolvedProjectModel } from '@use-crux/core/project-index'
 import type { IndexPatch } from '../indexer/patches'
 import {
   indexPatchFromWorkerEvents,
@@ -98,7 +98,7 @@ describe('project index worker protocol', () => {
 
     const events = indexPatchToWorkerEvents(patch, {
       transactionId: 'tx-ast',
-      producer: { name: '@crux/indexer', version: 'test' },
+      producer: { name: '@use-crux/indexer', version: 'test' },
       maxFactsPerBatch: 2,
     })
 
@@ -175,7 +175,7 @@ describe('project index worker protocol', () => {
 
     const events = indexPatchToWorkerEvents(patch, {
       transactionId: 'tx-runtime',
-      producer: { name: '@crux/indexer/project-runtime-indexer', version: 'test' },
+      producer: { name: '@use-crux/indexer/project-runtime-indexer', version: 'test' },
     })
     const batch = events.find((event) => event.type === 'fact:batch')
 

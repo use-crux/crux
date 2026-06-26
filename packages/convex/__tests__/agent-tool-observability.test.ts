@@ -6,7 +6,7 @@ import {
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '@crux/core/observability'
+} from '@use-crux/core/observability'
 import { Agent, createTool as createCruxTool, wrapConvexTool } from '../agent'
 import type { CruxConvexContext } from '../server'
 

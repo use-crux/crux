@@ -1,6 +1,6 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
-import { prompt } from '@crux/core'
-import { resetObservabilityRuntime } from '@crux/core/observability'
+import { prompt } from '@use-crux/core'
+import { resetObservabilityRuntime } from '@use-crux/core/observability'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { context } from '../context'

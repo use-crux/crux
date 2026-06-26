@@ -1,4 +1,4 @@
-# @crux/local
+# @use-crux/local
 
 Local Crux runtime wrapper.
 
@@ -12,19 +12,19 @@ This npm package resolves and launches the platform-specific Go binary that prov
 - bounded Node workers for source indexing, source lookup, and eval execution
 - the Rust/Oxc Static Index worker used for native source parsing and Static Index acceleration
 
-The implementation lives in the monorepo under `packages/local` because it is a Go binary package. The public npm package name is `@crux/local`.
+The implementation lives in the monorepo under `packages/local` because it is a Go binary package. The public npm package name is `@use-crux/local`.
 
 ## Install
 
 ```bash
 # one-off, no install
-npx @crux/local --help
+npx @use-crux/local --help
 
 # or install globally
-npm i -g @crux/local
+npm i -g @use-crux/local
 ```
 
-This package is a thin Node wrapper. On install it resolves the matching prebuilt binary from a platform package (`@crux/local-<os>-<cpu>`) and execs it, passing all arguments straight through. Each platform package ships both `bin/crux` and the sibling `bin/crux-indexer-worker` binary that `crux` discovers at runtime.
+This package is a thin Node wrapper. On install it resolves the matching prebuilt binary from a platform package (`@use-crux/local-<os>-<cpu>`) and execs it, passing all arguments straight through. Each platform package ships both `bin/crux` and the sibling `bin/crux-indexer-worker` binary that `crux` discovers at runtime.
 
 ## Usage
 

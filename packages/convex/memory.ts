@@ -1,5 +1,5 @@
 /**
- * Convex runtime profile for `@crux/core/memory`.
+ * Convex runtime profile for `@use-crux/core/memory`.
  *
  * This subpath mirrors the core memory API. The only behavioral difference is
  * that `memory()` can late-bind the Convex Crux store and default namespace
@@ -8,8 +8,8 @@
  * @module
  */
 
-import { memory as coreMemory } from '@crux/core/memory'
-import type { Memory, MemoryConfig, MemoryNamespace } from '@crux/core/memory'
+import { memory as coreMemory } from '@use-crux/core/memory'
+import type { Memory, MemoryConfig, MemoryNamespace } from '@use-crux/core/memory'
 import { convexRuntimeStore, resolveConvexMemoryNamespace } from './runtime'
 
 export {
@@ -23,7 +23,7 @@ export {
   reflections,
   toMemoryEntry,
   toStoreValue,
-} from '@crux/core/memory'
+} from '@use-crux/core/memory'
 
 export type {
   CruxStore,
@@ -54,7 +54,7 @@ export type {
   ToolConfig,
   VectorSearchOptions,
   VectorSearchQuery,
-} from '@crux/core/memory'
+} from '@use-crux/core/memory'
 
 export type ConvexMemoryConfig = Omit<MemoryConfig, 'namespace'> & {
   namespace?: MemoryNamespace

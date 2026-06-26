@@ -1,4 +1,4 @@
-import { evaluate } from '@crux/core/quality'
+import { evaluate } from '@use-crux/core/quality'
 
 const quality = Object.assign(
   ({ output }: { input: unknown; output: unknown; expected: unknown }) => ({

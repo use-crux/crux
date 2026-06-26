@@ -1,4 +1,4 @@
-import { evaluate } from '@crux/core/quality'
+import { evaluate } from '@use-crux/core/quality'
 
 export const focused = evaluate.only({
   task: (input: { q: string }) => input.q,

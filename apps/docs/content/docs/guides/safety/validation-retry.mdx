@@ -64,7 +64,7 @@ If `maxSteps` is exhausted before `maxRetries`, the retry stops early.
 When all retries are exhausted, `ValidationExhaustedError` is thrown with context for debugging:
 
 ```ts
-import { ValidationExhaustedError } from '@crux/core'
+import { ValidationExhaustedError } from '@use-crux/core'
 
 try {
   await adapter.generate(prompt, opts)
@@ -84,7 +84,7 @@ try {
 `ValidationExhaustedError` automatically triggers model fallback when using `fallback()`:
 
 ```ts
-import { fallback } from '@crux/core'
+import { fallback } from '@use-crux/core'
 
 const model = fallback(weakModel, strongModel)
 
@@ -167,14 +167,14 @@ validationRetry: {
 
 Retry events are also emitted to:
 - **Devtools** — visible in the trace timeline as retry attempt/exhaustion events
-- **OpenTelemetry** — spans with `crux.validation.*` attributes via `@crux/otel`
+- **OpenTelemetry** — spans with `crux.validation.*` attributes via `@use-crux/otel`
 
 ## Text repair utility
 
 `repairJsonText()` is exported for standalone use in your own pipelines:
 
 ```ts
-import { repairJsonText } from '@crux/core'
+import { repairJsonText } from '@use-crux/core'
 
 const fixed = repairJsonText('```json\n{"name": "Alice"}\n```')
 // returns: '{"name": "Alice"}'

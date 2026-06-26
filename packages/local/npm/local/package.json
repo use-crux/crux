@@ -1,5 +1,5 @@
 {
-  "name": "@crux/local",
+  "name": "@use-crux/local",
   "version": "0.1.0",
   "description": "Crux local runtime — CLI, dev server, TUI, and local services",
   "author": "Crux",

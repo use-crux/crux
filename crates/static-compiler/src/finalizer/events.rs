@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::{core::facts::StaticIndexIndexPatchFacts, finalizer::run::StaticIndexFinalizeOutput};
 
-const PROJECT_INDEX_PRODUCER_NAME: &str = "@crux/indexer/project-indexer";
+const PROJECT_INDEX_PRODUCER_NAME: &str = "@use-crux/indexer/project-indexer";
 const AST_PHASE: &str = "ast";
 const TRANSACTION_ID: &str = "static-index-finalize";
 const EPOCH: &str = "1970-01-01T00:00:00.000Z";

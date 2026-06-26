@@ -1,6 +1,6 @@
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import type { ProviderConformanceEmission, ProviderRuntimeConformanceHarness } from '@crux/core/adapter'
-import { describeCruxAdapterConformance } from '@crux/core/adapter/testing/vitest'
+import type { ProviderConformanceEmission, ProviderRuntimeConformanceHarness } from '@use-crux/core/adapter'
+import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
 import type { GoogleSystemCacheResolver } from '../system-cache-planner'
 import { googleProviderRuntime } from '../native'
 

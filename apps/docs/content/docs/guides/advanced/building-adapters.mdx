@@ -6,8 +6,8 @@ description: Use Crux's shared orchestration layer to build adapters for any AI 
 import { Callout } from 'fumadocs-ui/components/callout'
 
 <Callout type="info">
-  This guide is for developers building adapters for SDKs not covered by the built-in `@crux/ai`, `@crux/openai`,
-  `@crux/google`, and `@crux/anthropic` packages. Most users don't need this.
+  This guide is for developers building adapters for SDKs not covered by the built-in `@use-crux/ai`, `@use-crux/openai`,
+  `@use-crux/google`, and `@use-crux/anthropic` packages. Most users don't need this.
 </Callout>
 
 ## Overview
@@ -24,10 +24,10 @@ Step 3 is identical across all adapters. Provider runtimes compile into a privat
 
 ## Fast path: native chat providers
 
-Use `defineProviderRuntime()` from `@crux/core/adapter` when your SDK boundary looks like OpenAI Chat Completions, Anthropic Messages, or Google GenAI content generation: Crux should own the loop, and your package should own provider wire facts.
+Use `defineProviderRuntime()` from `@use-crux/core/adapter` when your SDK boundary looks like OpenAI Chat Completions, Anthropic Messages, or Google GenAI content generation: Crux should own the loop, and your package should own provider wire facts.
 
 ```ts
-import { defineProviderRuntime } from '@crux/core/adapter'
+import { defineProviderRuntime } from '@use-crux/core/adapter'
 
 const bindAcme = (client: AcmeClient) => ({
   call: (request, mode) => (mode === 'structured' ? client.parse(request) : client.create(request)),
@@ -61,8 +61,8 @@ This keeps tests small: bind `acmeProviderRuntime.create(scriptedClient)`, run p
 Convert between Crux's canonical `Message` format and your SDK's format with a `NativeTranscriptCodec`:
 
 ```ts
-import type { Message } from '@crux/core'
-import type { NativeTranscriptCodec } from '@crux/core/adapter'
+import type { Message } from '@use-crux/core'
+import type { NativeTranscriptCodec } from '@use-crux/core/adapter'
 
 export function toMessages(sdkMessages: readonly unknown[]): Message[] {
   return sdkMessages.map((msg) => ({
@@ -95,8 +95,8 @@ Keep tool-call ids, provider-specific roles, rich tool results, and assistant ex
 Runtime hooks should be narrow and typed. Request hooks build SDK-native input; response hooks normalize metadata only; transcript hooks own assistant text/tool calls.
 
 ```ts
-import type { GenerationSettings } from '@crux/core'
-import type { NativeChatRequestArgs, NativeResponseMetadata } from '@crux/core/adapter'
+import type { GenerationSettings } from '@use-crux/core'
+import type { NativeChatRequestArgs, NativeResponseMetadata } from '@use-crux/core/adapter'
 
 interface AcmeExtra extends Record<string, unknown> {
   readonly toolChoice?: 'auto' | 'none'
@@ -145,7 +145,7 @@ function acmeResponseMeta(result: AcmeResponse): NativeResponseMetadata {
 Use the `loop` branch when the SDK owns the tool loop. Implement typed hooks for the SDK boundary and let Crux steer the policy layer through the executor request:
 
 ```ts
-import { defineProviderRuntime } from '@crux/core/adapter'
+import { defineProviderRuntime } from '@use-crux/core/adapter'
 
 export const acmeSdkRuntime = defineProviderRuntime({
   id: 'acme-sdk',
@@ -175,7 +175,7 @@ Thanks to the shared orchestration, your adapter **does not** need to implement:
 - Stream progress interception boilerplate
 - Tool approval suspend/resume, `LoadSkill` re-resolution, safety guardrails/constraints, validation retry, or memory capture
 
-These are handled once in `@crux/core` and shared across all adapters.
+These are handled once in `@use-crux/core` and shared across all adapters.
 
 ## Reference
 

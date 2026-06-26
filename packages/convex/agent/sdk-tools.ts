@@ -1,5 +1,5 @@
 import { createTool as convexCreateTool } from '@convex-dev/agent'
-import type { AnyToolSet } from '@crux/core'
+import type { AnyToolSet } from '@use-crux/core'
 import type { z } from 'zod'
 import {
   getConvexCruxRuntime,
@@ -11,8 +11,8 @@ import { augmentCruxContext } from '../server'
 import { isRecord, stringValue } from './lifecycle-utils'
 import { markObservedToolCall, observeConvexToolExecution } from './sdk-tool-observability'
 
-const CRUX_WRAPPED_TOOL = Symbol.for('@crux/convex.wrappedTool')
-const CRUX_TOOL_NAME = Symbol.for('@crux/convex.toolName')
+const CRUX_WRAPPED_TOOL = Symbol.for('@use-crux/convex.wrappedTool')
+const CRUX_TOOL_NAME = Symbol.for('@use-crux/convex.toolName')
 
 interface CruxToolDef {
   description?: string

@@ -30,7 +30,7 @@ import type { ReplayMode } from './replay'
  * @example
  * ```ts
  * // crux.config.ts
- * import { config } from '@crux/core'
+ * import { config } from '@use-crux/core'
  *
  * export default config({
  *   quality: {

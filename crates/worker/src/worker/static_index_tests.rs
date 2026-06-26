@@ -86,7 +86,7 @@ fn finalize_request_is_accepted_through_worker_path() {
     );
     assert_eq!(
         parsed.events[1]["facts"][0]["producer"]["name"],
-        "@crux/indexer/project-indexer"
+        "@use-crux/indexer/project-indexer"
     );
     assert_eq!(parsed.events[2]["type"], "phase:done");
     assert_eq!(

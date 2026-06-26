@@ -27,7 +27,7 @@ describe('provided static syntax record instrumentation', () => {
     await mkdir(join(root, 'src'), { recursive: true })
     const file = join(root, 'src/writer.ts')
     const source = [
-      "import { prompt } from '@crux/core'",
+      "import { prompt } from '@use-crux/core'",
       '',
       "export const writerPrompt = prompt({ id: 'writer.serialized-provider' })",
     ].join('\n')

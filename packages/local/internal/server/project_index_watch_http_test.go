@@ -46,7 +46,7 @@ func TestHTTPServer_project_index_watch_endpoint_returns_last_run_status(t *test
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
 			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
 		},

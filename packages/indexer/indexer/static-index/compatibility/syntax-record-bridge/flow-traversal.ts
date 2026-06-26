@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { ProjectSourceRef } from '@crux/core/project-index'
+import type { ProjectSourceRef } from '@use-crux/core/project-index'
 import { helperSourceRefsForNode, projectSourceRef, resolveIdentifierSourceNode } from '../../../ast/source-refs'
 import type { StaticCallContext } from '../../../extractors/types'
 import {

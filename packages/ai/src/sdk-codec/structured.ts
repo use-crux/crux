@@ -1,6 +1,6 @@
 import type { LanguageModel } from 'ai'
-import { repairJsonText } from '@crux/core'
-import type { StructuredRequest } from '@crux/core/adapter'
+import { repairJsonText } from '@use-crux/core'
+import type { StructuredRequest } from '@use-crux/core/adapter'
 import type { SdkGateway } from '../gateway'
 import { extractRawTextFromError, extractZodError, isObjectGenerationError } from '../meta'
 import { sanitizeSchemaForProvider } from '../provider-profile'

@@ -1,4 +1,4 @@
-import type { ProjectSourceRef } from '@crux/core/project-index'
+import type { ProjectSourceRef } from '@use-crux/core/project-index'
 import type {
   SemanticAnalyzerContext,
   SemanticAnalyzerView,

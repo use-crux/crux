@@ -9,7 +9,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
 import { stepCountIs } from 'ai'
-import { prompt as makePrompt } from '@crux/core'
+import { prompt as makePrompt } from '@use-crux/core'
 import { createCruxAi } from '../index'
 import { emissionModel as mockModel, capturingEmissionModel } from './mock-model'
 
@@ -44,7 +44,7 @@ describe('loop fidelity — real generateText', () => {
     })
 
     // Cross-adapter parity: the default budget (maxSteps 10) lets the loop
-    // continue past the tool round, exactly like @crux/openai et al.
+    // continue past the tool round, exactly like @use-crux/openai et al.
     expect(execute).toHaveBeenCalledTimes(1)
     expect(result.text).toBe('answer after the tool round')
     expect((result as unknown as { _meta: { finishReason: string } })._meta.finishReason).toBe('stop')

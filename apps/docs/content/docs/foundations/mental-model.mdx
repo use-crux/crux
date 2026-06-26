@@ -42,7 +42,7 @@ Crux's portability claim - "define once, run anywhere" - is only true because th
 Definitions are pure data structures. They carry no SDK reference and no runtime state.
 
 ```ts
-import { prompt, context } from '@crux/core'
+import { prompt, context } from '@use-crux/core'
 import { z } from 'zod'
 
 const brand = context({
@@ -98,13 +98,13 @@ The result is the same regardless of which adapter you call next. **This is the 
 Adapters take a `ResolvedPrompt` and translate it to the SDK's native API call.
 
 ```ts
-// @crux/ai (Vercel AI SDK)
-import { generate } from '@crux/ai'
+// @use-crux/ai (Vercel AI SDK)
+import { generate } from '@use-crux/ai'
 await generate(prompt, { model: openai('gpt-4o'), input })
 // Internally: prompt.resolve(...) → generateObject({ model, system, prompt, schema, tools, ...settings })
 
-// @crux/anthropic
-import { createAnthropic } from '@crux/anthropic'
+// @use-crux/anthropic
+import { createAnthropic } from '@use-crux/anthropic'
 const anthropic = createAnthropic(client)
 await anthropic.generate(prompt, { model: 'claude-haiku-4-5', input })
 // Internally: prompt.resolve(...) → client.messages.create({ system, messages, tools, ...settings })
@@ -144,11 +144,11 @@ Every interesting moment in the pipeline can emit an event:
 - `onBlackboardUpdate`, `onHandoffPrepare`, `onDelegateStart`, `onDelegateComplete`
 - `onFlowStep`, `onFlowSuspend`, `onFlowResume`
 
-Plugins install themselves into these hooks via `mergeRuntime()`. The same event fans out to all installed plugins — OTel spans, custom telemetry, policy hooks — without primitives ever knowing they're being watched. Devtools tracing uses the canonical `@crux/core/observability` graph transport so the Go backend owns tree and relation assembly for both the web UI and TUI.
+Plugins install themselves into these hooks via `mergeRuntime()`. The same event fans out to all installed plugins — OTel spans, custom telemetry, policy hooks — without primitives ever knowing they're being watched. Devtools tracing uses the canonical `@use-crux/core/observability` graph transport so the Go backend owns tree and relation assembly for both the web UI and TUI.
 
 ```ts
-import { config } from '@crux/core'
-import { withTelemetry } from '@crux/otel'
+import { config } from '@use-crux/core'
+import { withTelemetry } from '@use-crux/otel'
 
 config({
   plugins: [withTelemetry({ serviceName: 'my-app' })],

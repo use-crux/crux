@@ -29,7 +29,7 @@ describe('static syntax plan support files', () => {
     const contextFile = join(root, 'src/context.ts')
     const helperFile = join(root, 'src/plans.ts')
     const contextSource = [
-      "import { context } from '@crux/core'",
+      "import { context } from '@use-crux/core'",
       "import { getPlan } from './plans'",
       '',
       'export const planContext = context({',

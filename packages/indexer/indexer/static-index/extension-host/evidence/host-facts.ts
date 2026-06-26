@@ -3,7 +3,7 @@ import type {
   IndexLintFinding,
   IndexRuleDescriptor,
   ProjectDefinition,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import type { StaticExtractionResult } from '../../../extensions/runtime/engine'
 import type { ExtractedFacts, ExtractedSourceRef } from '../../../extensions/public-contract/types'
 import type { StaticRelationRef } from '../../../types'

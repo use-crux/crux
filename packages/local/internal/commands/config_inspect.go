@@ -176,7 +176,7 @@ func writePrettyJSON(out io.Writer, raw json.RawMessage) error {
 	return err
 }
 
-// ── Decoded effective-config shape (mirrors @crux/indexer ProjectConfigInspect) ──
+// ── Decoded effective-config shape (mirrors @use-crux/indexer ProjectConfigInspect) ──
 
 type configInspect struct {
 	Root          string                     `json:"root"`

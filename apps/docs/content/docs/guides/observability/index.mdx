@@ -9,7 +9,7 @@ Crux gives you four layers, all built on the same instrumentation hooks:
 
 - **[Devtools](/docs/guides/observability/devtools)** — visual UI for development. Live trace timeline, prompt index, memory operations.
 - **[Cost tracking](/docs/guides/observability/cost-tracking)** — per-call spend attribution, reports, and warn/limit budgets.
-- **[Telemetry](/docs/guides/observability/telemetry)** — `@crux/otel` emits OpenTelemetry spans for production (Datadog, Honeycomb, Grafana).
+- **[Telemetry](/docs/guides/observability/telemetry)** — `@use-crux/otel` emits OpenTelemetry spans for production (Datadog, Honeycomb, Grafana).
 - **[Plugins](/docs/guides/observability/plugins)** — composable runtime extensions via the `CruxPlugin` interface. Devtools and OTel are themselves plugins.
 - **[Middleware](/docs/guides/observability/middleware)** — global wrapper around every `generate()` / `stream()` call.
 
@@ -28,7 +28,7 @@ With observability, every interesting moment in the pipeline emits an event. Plu
 ## When should I use which?
 
 - **Always:** install devtools in dev. It's zero-cost when disabled.
-- **Production:** install `@crux/otel` if you have an existing OTel-compatible APM (Datadog, Honeycomb, Grafana, New Relic). Otherwise the lightweight HTTP/callback exporter works.
+- **Production:** install `@use-crux/otel` if you have an existing OTel-compatible APM (Datadog, Honeycomb, Grafana, New Relic). Otherwise the lightweight HTTP/callback exporter works.
 - **Custom logic:** use a `CruxPlugin` if you want to tap specific events (e.g. push memory operations to your audit log).
 - **Per-call wrapping:** use middleware for things that wrap *every* generation — request logging, timing, multi-tenant scoping.
 

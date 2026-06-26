@@ -29,7 +29,7 @@ export const staticIndexIdentityManifestFixture = StaticIndexIdentityManifestSch
 
 /** Shared Static Index run identity fixture. */
 export const staticIndexRunIdentityFixture = createStaticIndexRunIdentity(staticIndexIdentityManifestFixture, {
-  extensionManifests: [{ name: '@crux/indexer/crux-core', version: '0.1.0', digest: 'sha256:core' }],
+  extensionManifests: [{ name: '@use-crux/indexer/crux-core', version: '0.1.0', digest: 'sha256:core' }],
 }) satisfies StaticIndexRunIdentity
 
 /** Shared Static Index source file fixture. */
@@ -49,7 +49,7 @@ const staticIndexParserInterestsFixture = {
   callInterests: [
     {
       name: 'tool',
-      importFrom: ['@crux/core'],
+      importFrom: ['@use-crux/core'],
       configArg: 0,
       properties: ['id', 'handler'],
       callbacks: [{ property: 'handler', maxDepth: 2 }],
@@ -60,7 +60,7 @@ const staticIndexParserInterestsFixture = {
   constructorInterests: [
     {
       name: 'Agent',
-      importFrom: ['@crux/core'],
+      importFrom: ['@use-crux/core'],
       configArg: 0,
       properties: ['name', 'instructions'],
     },

@@ -43,7 +43,7 @@ describe('native semantic index service', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer' })
       `,
     )
@@ -73,7 +73,7 @@ describe('native semantic index service', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const cached = prompt({ id: 'cached' })
       `,
     )
@@ -118,7 +118,7 @@ describe('native semantic index service', () => {
     await writeFile(
       file,
       `
-        import { context, prompt, tool } from '@crux/core'
+        import { context, prompt, tool } from '@use-crux/core'
         import { z } from 'zod'
 
         const Input0 = z.object({
@@ -164,7 +164,7 @@ describe('native semantic index service', () => {
     await writeFile(
       file,
       `
-        import { context, prompt, tool } from '@crux/core'
+        import { context, prompt, tool } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const searchTool = tool({ name: 'search', execute: async () => ({}) })
@@ -208,7 +208,7 @@ describe('native semantic index service', () => {
     await writeFile(
       directFile,
       `
-        import { context, prompt } from '@crux/core'
+        import { context, prompt } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const writerPrompt = prompt({
@@ -220,7 +220,7 @@ describe('native semantic index service', () => {
     await writeFile(
       sharedFile,
       `
-        import { memory } from '@crux/core/agent'
+        import { memory } from '@use-crux/core/agent'
 
         export const sessionMemory = memory({ id: 'session' })
       `,
@@ -253,7 +253,7 @@ describe('native semantic index service', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
 
         export default config({
           experimental: {
@@ -268,7 +268,7 @@ describe('native semantic index service', () => {
     await writeFile(
       join(root, 'src/writer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer' })
       `,
     )

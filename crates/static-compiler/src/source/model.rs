@@ -205,7 +205,7 @@ fn merge_source_status(left: &str, right: &str) -> String {
 fn static_index_source_graph() -> StaticIndexSourceGraph {
     StaticIndexSourceGraph {
         schema_version: 1,
-        produced_by: "@crux/indexer".to_string(),
+        produced_by: "@use-crux/indexer".to_string(),
         capabilities: vec![
             "source-dependencies".to_string(),
             "source-dependents".to_string(),

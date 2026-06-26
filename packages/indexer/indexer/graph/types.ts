@@ -3,7 +3,7 @@ import type {
   IndexSourceFile,
   ProjectDefinition,
   ProjectRelation,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 
 export type DefinitionId = string & { readonly __brand: 'DefinitionId' }
 export type RelationId = string & { readonly __brand: 'RelationId' }

@@ -4,7 +4,7 @@ import type {
   IndexRuleDescriptor,
   ProjectDefinition,
   ProjectRelation,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import type {
   StaticImportRecord,
   StaticInitializerRecord,

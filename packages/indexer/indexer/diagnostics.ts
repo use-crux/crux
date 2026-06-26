@@ -1,5 +1,5 @@
 import { relative } from 'node:path'
-import type { IndexDiagnostic } from '@crux/core/project-index'
+import type { IndexDiagnostic } from '@use-crux/core/project-index'
 import { fingerprint } from './definitions'
 import { sourceForFile } from './ast/snippets'
 

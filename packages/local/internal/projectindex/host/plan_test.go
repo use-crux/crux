@@ -28,7 +28,7 @@ func TestWorkerStaticIndexBuildsPlanWithoutNodeStaticPlan(t *testing.T) {
 		t.Fatalf("write source: %v", err)
 	}
 	configFile := filepath.Join(root, "crux.config.ts")
-	if err := os.WriteFile(configFile, []byte("import { config } from '@crux/core'\nexport default config({ experimental: { indexer: { nativeAst: true } } })\n"), 0o600); err != nil {
+	if err := os.WriteFile(configFile, []byte("import { config } from '@use-crux/core'\nexport default config({ experimental: { indexer: { nativeAst: true } } })\n"), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 

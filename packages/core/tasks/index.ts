@@ -1,8 +1,8 @@
 /**
- * `@crux/core/tasks` — Task list primitives for AI agent work tracking.
+ * `@use-crux/core/tasks` — Task list primitives for AI agent work tracking.
  *
  * Re-exports task-specific APIs from the plan module.
- * This provides the canonical `@crux/core/tasks` import path.
+ * This provides the canonical `@use-crux/core/tasks` import path.
  *
  * @module
  */

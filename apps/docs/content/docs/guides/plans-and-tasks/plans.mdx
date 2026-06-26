@@ -20,7 +20,7 @@ The `version` field increments automatically whenever title or content changes, 
 For cases where you create plans in application code (not through an LLM):
 
 ```ts title="create-plan.ts"
-import { plan } from '@crux/core/plan'
+import { plan } from '@use-crux/core/plan'
 
 const p = await plan({
   title: 'Rewrite Landing Page',
@@ -46,8 +46,8 @@ p.title // 'Rewrite Landing Page'
 The recommended approach: give the LLM a plan creation tool and let it decide what the plan should contain.
 
 ```ts title="llm-creates-plan.ts"
-import { createPlanTool, planAgent } from '@crux/core/plan'
-import { prompt, generate } from '@crux/ai'
+import { createPlanTool, planAgent } from '@use-crux/core/plan'
+import { prompt, generate } from '@use-crux/ai'
 
 const planTool = createPlanTool({
   template: `## Goal\n[What we want to achieve]\n\n## Audience\n[Target reader]\n\n## Sections\n1. [Section]\n2. [Section]`,
@@ -104,7 +104,7 @@ p.asTools() // { getPlan, updatePlan }
 For existing plans, `planAgent()` creates a handle without creating a new entity:
 
 ```ts title="plan-agent.ts"
-import { planAgent } from '@crux/core/plan'
+import { planAgent } from '@use-crux/core/plan'
 
 const planAgent = planAgent(planId)
 
@@ -208,7 +208,7 @@ if (current && current.version > approvedVersion) {
 Plans have no built-in status. Implement approval using `metadata`:
 
 ```ts title="approval-workflow.ts"
-import { plan, updatePlan, getPlan } from '@crux/core/plan'
+import { plan, updatePlan, getPlan } from '@use-crux/core/plan'
 
 // Agent creates a plan
 const p = await plan({
@@ -234,7 +234,7 @@ This keeps the Plan type simple while giving full control — add `approvedBy`, 
 Combine with `usePlan()` for a reactive approval UI:
 
 ```tsx title="plan-approval.tsx"
-import { usePlan } from '@crux/react'
+import { usePlan } from '@use-crux/react'
 
 function PlanApproval({ planId }: { planId: string }) {
   const plan = usePlan(planId)

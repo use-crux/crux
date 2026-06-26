@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { ProjectDefinitionKind } from '@crux/core/project-index'
+import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
 import {
   astIndexPatchFromCompilerResult,
   compileProjectIndex,
@@ -39,7 +39,7 @@ describe('project index compiler', () => {
     expect(compilerProfileCacheInputs(cruxCoreCompilerProfile)).toEqual([
       {
         kind: 'compiler-profile',
-        name: '@crux/indexer/crux-core-profile',
+        name: '@use-crux/indexer/crux-core-profile',
         version: '1',
       },
       {
@@ -73,7 +73,7 @@ describe('project index compiler', () => {
     await writeFile(
       join(root, 'src/workflows.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const marker = prompt({ id: 'marker' })
         const alpha = defineAlpha({ id: 'alpha' })
@@ -119,7 +119,7 @@ describe('project index compiler', () => {
     await writeFile(
       join(root, 'src/workflows.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         import { support } from './support'
 
         export const marker = prompt({ id: 'marker' })
@@ -314,7 +314,7 @@ describe('project index compiler', () => {
     await writeFile(
       join(root, 'src/writer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const writer = prompt({
           id: 'writer',
@@ -326,7 +326,7 @@ describe('project index compiler', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
 
         throw new Error('source-only compiler must not import config modules')
 
@@ -369,7 +369,7 @@ describe('project index compiler', () => {
     await writeFile(
       join(root, 'src/writer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const writer = prompt({
           id: 'writer',

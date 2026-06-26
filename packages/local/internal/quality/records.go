@@ -124,7 +124,7 @@ type qualityTraceRecord struct {
 
 // qualityRunSpan mirrors api.QualityRunSpan; see that type for field
 // semantics. Primitive is the closed-enum classification of the
-// @crux/core primitive this span represents; CompositionType is only set
+// @use-crux/core primitive this span represents; CompositionType is only set
 // when Primitive == "composition" (pipeline | parallel | consensus | swarm).
 type qualityRunSpan struct {
 	ID                string                    `json:"id"`

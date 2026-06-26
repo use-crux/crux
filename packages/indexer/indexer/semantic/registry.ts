@@ -1,4 +1,4 @@
-import type { JsonSchema, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@crux/core/project-index'
+import type { JsonSchema, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@use-crux/core/project-index'
 import { createSemanticDefinitionEnrichmentAnalyzer } from './analyzers/definition-enrichment'
 import { createSemanticRelationAnalyzer } from './analyzers/relation'
 import { createSemanticSchemaAnalyzer } from './analyzers/schema'

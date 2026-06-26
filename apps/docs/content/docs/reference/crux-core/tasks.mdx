@@ -9,13 +9,13 @@ import {
   deriveTaskListStatus,
   taskListAgent, taskWorker,
   createTaskListTool,
-} from '@crux/core/tasks'
+} from '@use-crux/core/tasks'
 import type {
   TaskList, TaskListStatus, TaskListHandle, CreateTaskListInput,
   Task, TaskStatus, TaskUpdate, CreateTaskInput,
   TaskListAgent, TaskListAgentOptions,
   TaskWorker, TaskWorkerOptions,
-} from '@crux/core/tasks'
+} from '@use-crux/core/tasks'
 ```
 
 ## Overview
@@ -511,7 +511,7 @@ Full task list workflow — create a list, add tasks, use agent primitives for e
 import {
   tasklist,
   taskListAgent, taskWorker,
-} from '@crux/core/tasks'
+} from '@use-crux/core/tasks'
 
 // 1. Create a task list (standalone or linked to a plan)
 const handle = await tasklist({

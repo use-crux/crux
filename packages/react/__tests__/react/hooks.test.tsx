@@ -5,8 +5,8 @@ import { renderHook, act } from '@testing-library/react'
 import { usePlan, useTaskList, useTasks } from '../../src/hooks'
 import { CruxProvider, useCruxTransport } from '../../src/provider'
 import { createMockTransport } from '../../src/testing'
-import type { Plan, TaskList, Task } from '@crux/core/plan'
-import type { JsonObject } from '@crux/core/store'
+import type { Plan, TaskList, Task } from '@use-crux/core/plan'
+import type { JsonObject } from '@use-crux/core/store'
 
 // ── Test Helpers ──
 

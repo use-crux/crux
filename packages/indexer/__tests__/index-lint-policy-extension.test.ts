@@ -1,7 +1,7 @@
 import { writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { IndexDiagnostic, IndexLintFinding, IndexRuleDescriptor, SourceLocation } from '@crux/core/project-index'
+import type { IndexDiagnostic, IndexLintFinding, IndexRuleDescriptor, SourceLocation } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
 import { applyIndexLintConfig } from '../indexer/lints/config'
 import { applyIndexLintSuppressions } from '../indexer/lints/suppressions'

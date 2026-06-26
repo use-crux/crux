@@ -1,6 +1,6 @@
 import { expectTypeOf } from 'vitest'
-import type { CruxStore } from '@crux/core/store'
-import type { CruxTransport } from '@crux/react'
+import type { CruxStore } from '@use-crux/core/store'
+import type { CruxTransport } from '@use-crux/react'
 import {
   defineConvexStoreContract,
   type ConvexCruxStoreComponent,

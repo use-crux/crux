@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import { prompt as makePrompt } from '@crux/core'
+import { prompt as makePrompt } from '@use-crux/core'
 import { googleProviderRuntime } from '../index'
 
 interface GoogleRuntimeRequest {

@@ -23,7 +23,7 @@ fn prepare_protocol_round_trips_realistic_json() {
         "callInterests": [
             {
                 "name": "tool",
-                "importFrom": ["@crux/core"],
+                "importFrom": ["@use-crux/core"],
                 "configArg": 0,
                 "properties": ["id", "handler"],
                 "callbacks": [{ "property": "handler", "maxDepth": 2 }],
@@ -34,7 +34,7 @@ fn prepare_protocol_round_trips_realistic_json() {
         "constructorInterests": [
             {
                 "name": "Agent",
-                "importFrom": ["@crux/core"],
+                "importFrom": ["@use-crux/core"],
                 "configArg": 0,
                 "properties": ["name", "instructions"]
             }
@@ -88,7 +88,7 @@ fn analyze_protocol_round_trips_realistic_json() {
         ],
         "extensionEvidenceInterests": {
             "mode": "declared",
-            "calls": [{ "name": "tool", "importFrom": ["@crux/core"] }]
+            "calls": [{ "name": "tool", "importFrom": ["@use-crux/core"] }]
         }
     });
 
@@ -238,7 +238,7 @@ fn run_identity_json() -> Value {
         ),
         "extensionManifests": [
             digest_identity_json("@acme/crux-extra", "1.4.2", "sha256:extension-manifest"),
-            version_identity_json("@crux/core", "workspace")
+            version_identity_json("@use-crux/core", "workspace")
         ],
         "ruleDescriptors": digest_identity_json(
             "crux-indexer-rule-descriptors",
@@ -264,7 +264,7 @@ fn prepared_plan_json() -> Value {
         "callInterests": [
             {
                 "name": "tool",
-                "importFrom": ["@crux/core"],
+                "importFrom": ["@use-crux/core"],
                 "configArg": 0,
                 "properties": ["id", "handler"],
                 "callbacks": [{ "property": "handler", "maxDepth": 2 }],
@@ -275,7 +275,7 @@ fn prepared_plan_json() -> Value {
         "constructorInterests": [
             {
                 "name": "Agent",
-                "importFrom": ["@crux/core"],
+                "importFrom": ["@use-crux/core"],
                 "configArg": 0,
                 "properties": ["name", "instructions"]
             }

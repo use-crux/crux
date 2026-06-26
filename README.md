@@ -34,7 +34,7 @@
   |
   <a href="https://cruxjs.dev/observability">Observability</a>
   |
-  <a href="https://cruxjs.dev/docs/reference/crux-core">@crux/core</a>
+  <a href="https://cruxjs.dev/docs/reference/crux-core">@use-crux/core</a>
 </p>
 
 ## What is Crux?
@@ -52,8 +52,8 @@ The mission line is "Same Prompt. Same Output. Every Time." In practice, that me
 ## Start With One Prompt
 
 ```ts
-import { prompt } from '@crux/core'
-import { generate } from '@crux/ai'
+import { prompt } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
@@ -82,11 +82,11 @@ That is a complete Crux program: typed input, typed output, and your SDK still m
 The `use` array is the bus. Memory, retrieval, guardrails, skills, blackboards, and custom blocks all plug into the same prompt without forcing a framework or runtime around your app.
 
 ```ts
-import { prompt } from '@crux/core'
-import { memory, facts, recentMessages } from '@crux/core/memory'
-import { retriever } from '@crux/core/retrieval'
-import { constraint, guardrail } from '@crux/core/safety'
-import { generate } from '@crux/ai'
+import { prompt } from '@use-crux/core'
+import { memory, facts, recentMessages } from '@use-crux/core/memory'
+import { retriever } from '@use-crux/core/retrieval'
+import { constraint, guardrail } from '@use-crux/core/safety'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
@@ -146,7 +146,7 @@ Now the call has memory, retrieval, input screening, structured output, retryabl
 Install the core package and an adapter after the first public alpha package release:
 
 ```bash
-pnpm add @crux/core @crux/ai ai @ai-sdk/openai zod
+pnpm add @use-crux/core @use-crux/ai ai @ai-sdk/openai zod
 ```
 
 Until then, use this repository as a workspace, or start from the examples and docs while the npm package pipeline is being finalized.
@@ -213,7 +213,7 @@ Under the hood, Crux has three layers:
 ## What Crux Is Not
 
 - **Not another model SDK.** Crux delegates execution to Vercel AI SDK, OpenAI, Anthropic, Google GenAI, or your own adapter.
-- **Not a required runtime.** `@crux/local` is the local devtools/runtime for development; production calls run in your application.
+- **Not a required runtime.** `@use-crux/local` is the local devtools/runtime for development; production calls run in your application.
 - **Not an application framework.** Crux does not own routing, deployment, data fetching, or project structure.
 - **Not a prompt-management SaaS.** Prompts live in code, versioned in git, reviewed in pull requests.
 - **Not all-in orchestration.** Adopt the pieces you need and replace them independently.
@@ -222,18 +222,18 @@ Under the hood, Crux has three layers:
 
 | Package           | Purpose                                                                                                                                                      |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@crux/core`      | SDK-agnostic primitives for prompts, contexts, memory, storage, retrieval, safety, routing, quality, agents, flows, plans, tasks, skills, and observability. |
-| `@crux/ai`        | Vercel AI SDK adapter for `generate`, `stream`, structured output, and Crux-aware stream integration.                                                        |
-| `@crux/openai`    | OpenAI SDK adapter.                                                                                                                                          |
-| `@crux/anthropic` | Anthropic SDK adapter.                                                                                                                                       |
-| `@crux/google`    | Google GenAI SDK adapter.                                                                                                                                    |
-| `@crux/convex`    | Convex storage, server boundaries, agent bridge, compaction, and swarm integration.                                                                          |
-| `@crux/upstash`   | Upstash Vector and Redis-backed storage adapters.                                                                                                            |
-| `@crux/otel`      | OpenTelemetry integration for production traces.                                                                                                             |
-| `@crux/ingest`    | Source loaders for text, files, folders, globs, and URLs.                                                                                                    |
-| `@crux/react`     | React provider, hooks, transports, and SSE helpers for live Crux state.                                                                                      |
-| `@crux/devtools`  | React devtools UI bundle for traces, evals, source catalog, memory, plans, and runtime inspection.                                                           |
-| `@crux/local`     | Native local runtime, CLI, TUI, HTTP/WS server, embedded devtools, eval runner, catalog, lint, and bounded helper workers.                                   |
+| `@use-crux/core`      | SDK-agnostic primitives for prompts, contexts, memory, storage, retrieval, safety, routing, quality, agents, flows, plans, tasks, skills, and observability. |
+| `@use-crux/ai`        | Vercel AI SDK adapter for `generate`, `stream`, structured output, and Crux-aware stream integration.                                                        |
+| `@use-crux/openai`    | OpenAI SDK adapter.                                                                                                                                          |
+| `@use-crux/anthropic` | Anthropic SDK adapter.                                                                                                                                       |
+| `@use-crux/google`    | Google GenAI SDK adapter.                                                                                                                                    |
+| `@use-crux/convex`    | Convex storage, server boundaries, agent bridge, compaction, and swarm integration.                                                                          |
+| `@use-crux/upstash`   | Upstash Vector and Redis-backed storage adapters.                                                                                                            |
+| `@use-crux/otel`      | OpenTelemetry integration for production traces.                                                                                                             |
+| `@use-crux/ingest`    | Source loaders for text, files, folders, globs, and URLs.                                                                                                    |
+| `@use-crux/react`     | React provider, hooks, transports, and SSE helpers for live Crux state.                                                                                      |
+| `@use-crux/devtools`  | React devtools UI bundle for traces, evals, source catalog, memory, plans, and runtime inspection.                                                           |
+| `@use-crux/local`     | Native local runtime, CLI, TUI, HTTP/WS server, embedded devtools, eval runner, catalog, lint, and bounded helper workers.                                   |
 
 ## Project status
 
@@ -249,7 +249,7 @@ Crux public TypeScript packages are verified against TypeScript `>=5.5 <7`. The 
 
 TypeScript 7 is tracked through `@typescript/native-preview` / `tsgo` as a preview lane. That lane validates the public package type surfaces where the native preview can run today, but it is not a stable support promise until the TypeScript 7 compiler and programmatic APIs settle.
 
-`@crux/indexer` is different from the other packages: it uses the TypeScript compiler as a runtime dependency for source intelligence and includes the compiler version in cache identity. Its stable compatibility is tested with the JavaScript `typescript` package; TypeScript 7 native-preview support is intentionally treated as a separate indexer-runtime project.
+`@use-crux/indexer` is different from the other packages: it uses the TypeScript compiler as a runtime dependency for source intelligence and includes the compiler version in cache identity. Its stable compatibility is tested with the JavaScript `typescript` package; TypeScript 7 native-preview support is intentionally treated as a separate indexer-runtime project.
 
 ## Learn more
 

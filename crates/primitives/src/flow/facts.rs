@@ -227,7 +227,7 @@ fn flow_runtime(parts: &CallParts<'_>) -> &'static str {
     if parts.callee_local_name == Some("cruxFlow")
         || parts
             .callee_module_specifier
-            .is_some_and(|module| module.starts_with("@crux/convex"))
+            .is_some_and(|module| module.starts_with("@use-crux/convex"))
     {
         "convex"
     } else {

@@ -1,4 +1,4 @@
-import type { IndexRuleDescriptor } from '@crux/core/project-index'
+import type { IndexRuleDescriptor } from '@use-crux/core/project-index'
 import { indexLintRuleIds } from './rules'
 
 /** Minimal rule declaration shape needed by lint policy filters. */

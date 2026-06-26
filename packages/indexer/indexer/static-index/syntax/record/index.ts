@@ -1,7 +1,7 @@
 /**
  * Backend-neutral static syntax record boundary.
  *
- * This module is internal to `@crux/indexer`. It defines the Phase 10 logical ABI between parser
+ * This module is internal to `@use-crux/indexer`. It defines the Phase 10 logical ABI between parser
  * frontends and the static extraction runtime without exposing parser-native AST objects.
  *
  * @module

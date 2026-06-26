@@ -12,7 +12,7 @@ import {
   errorMessage,
   parseSourceResolverWorkerRequest,
   serializeSourceResolverWorkerResponse,
-} from '@crux/indexer/source-resolver'
+} from '@use-crux/indexer/source-resolver'
 
 const resolver = new SourceResolver()
 

@@ -26,7 +26,7 @@ type Bundle struct {
 }
 
 const workerMaxResponseBytes = 16 * 1024 * 1024
-const workerProducer = "@crux/indexer/project-indexer"
+const workerProducer = "@use-crux/indexer/project-indexer"
 
 // New creates a Project Index host bundle backed by the configured workers.
 func New(options BundleOptions) *Bundle {

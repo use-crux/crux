@@ -381,7 +381,7 @@ func TestReindexProjectIncrementalAppliesWorkerPatches(t *testing.T) {
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
 			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
 		},
@@ -457,7 +457,7 @@ func TestReindexProjectIncrementalBackgroundSemanticRequestsAstOnly(t *testing.T
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
 			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
 		},
@@ -528,7 +528,7 @@ func TestReindexProjectIncrementalRecordsWatchStatus(t *testing.T) {
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
 			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
 		},
@@ -646,7 +646,7 @@ func TestReindexProjectIncrementalFallsBackWithoutShardEvidence(t *testing.T) {
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership"},
 		},
 		Sources: []store.IndexSourceFile{{File: "src/a.ts", Status: "indexed", DefinitionIDs: []string{"prompt:old"}}},
@@ -713,7 +713,7 @@ func TestReindexProjectPassesAstScopeToSemanticIndexer(t *testing.T) {
 			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
 			SourceGraph: &store.ProjectIndexSourceGraph{
 				SchemaVersion: 1,
-				ProducedBy:    "@crux/indexer",
+				ProducedBy:    "@use-crux/indexer",
 				Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
 				Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
 			},

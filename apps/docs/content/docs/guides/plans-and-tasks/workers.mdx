@@ -32,7 +32,7 @@ Fewer parameters, clearer names, enforced scope. The LLM cannot accidentally upd
 Two ways to create a worker:
 
 ```ts
-import { taskWorker } from '@crux/core/tasks'
+import { taskWorker } from '@use-crux/core/tasks'
 
 // From a standalone function
 const worker = taskWorker(taskListId, 'research')
@@ -62,8 +62,8 @@ Both are equivalent — `.worker()` is a convenience method on `TaskListHandle`.
 Combine with plan context for full visibility:
 
 ```ts
-import { planAgent } from '@crux/core/plan'
-import { taskWorker } from '@crux/core/tasks'
+import { planAgent } from '@use-crux/core/plan'
+import { taskWorker } from '@use-crux/core/tasks'
 
 const planAgent = planAgent(planId)
 const worker = taskWorker(handle.id, 'research')
@@ -102,9 +102,9 @@ When a worker calls `completeTask` or `failTask`, auto-completion re-evaluates t
 ## Full Lifecycle Example
 
 ```ts title="worker-lifecycle.ts"
-import { planAgent } from '@crux/core/plan'
-import { taskWorker } from '@crux/core/tasks'
-import { prompt, generate } from '@crux/ai'
+import { planAgent } from '@use-crux/core/plan'
+import { taskWorker } from '@use-crux/core/tasks'
+import { prompt, generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 const model = openai('gpt-4o') // or any AI SDK model

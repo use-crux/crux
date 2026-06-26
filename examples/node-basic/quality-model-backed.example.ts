@@ -8,8 +8,8 @@
  * @module
  */
 
-import { prompt } from '@crux/core'
-import { evaluate, target } from '@crux/core/quality'
+import { prompt } from '@use-crux/core'
+import { evaluate, target } from '@use-crux/core/quality'
 import { z } from 'zod'
 import { createQualityModelRuntime } from './quality-models'
 

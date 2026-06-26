@@ -3,7 +3,7 @@ import type {
   IndexSourceFile,
   ProjectDefinition,
   ProjectRelation,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import { mergeDefinitionsById } from '../merge'
 import type {
   AddDefinitionInput,

@@ -1,4 +1,4 @@
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import type { IndexPatch } from '../patches'
 import { createSemanticIndexService } from '../semantic/service'
 import type { SemanticIndexInstrumentation } from '../semantic/instrumentation'

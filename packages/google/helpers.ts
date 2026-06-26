@@ -1,5 +1,5 @@
 import type { GoogleGenAI } from '@google/genai'
-import type { GenerateObjectFn, GenerateTextFn } from '@crux/core/compaction'
+import type { GenerateObjectFn, GenerateTextFn } from '@use-crux/core/compaction'
 import { googleHelpers } from './native'
 
 /**

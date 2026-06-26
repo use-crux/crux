@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { ProjectDefinition, ProjectSourceRef } from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectSourceRef } from '@use-crux/core/project-index'
 import { literalValue, numericLiteralValue, propertyName, stringProperty } from '../../../ast/literals'
 import { callbackSourceRefForProperty, projectSourceRef, resolveIdentifierSourceNode } from '../../../ast/source-refs'
 import { foldedIndexChild } from '../../../index-presentation'

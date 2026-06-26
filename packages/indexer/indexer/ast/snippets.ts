@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { extname, resolve } from 'node:path'
 import ts from 'typescript'
-import type { SourceLocation, SourceSnippet } from '@crux/core/project-index'
+import type { SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
 
 const MAX_SNIPPET_LENGTH = 12_000
 

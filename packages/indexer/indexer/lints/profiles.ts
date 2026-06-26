@@ -1,4 +1,4 @@
-import type { IndexLintFinding, CruxLintConfidence, CruxLintMaturity, CruxLintProfile } from '@crux/core/project-index'
+import type { IndexLintFinding, CruxLintConfidence, CruxLintMaturity, CruxLintProfile } from '@use-crux/core/project-index'
 
 export type IndexLintSelectedProfile = 'off' | CruxLintProfile
 

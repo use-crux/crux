@@ -1,0 +1,117 @@
+#!/usr/bin/env node
+
+import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const stageRoot = resolve(repoRoot, process.argv[2] ?? '.tmp/npm-stage')
+const indexPath = join(stageRoot, 'packages.json')
+const index = JSON.parse(await readFile(indexPath, 'utf8'))
+const deprecatedScope = `${'@'}crux`
+
+const failures = []
+
+for (const staged of index.packages) {
+  const packageDir = join(stageRoot, staged.path)
+  const manifest = JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8'))
+  if (manifest.private) failures.push(`${staged.name}: staged package.json must not be private`)
+  for (const field of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
+    const localScopeDeps = Object.keys(manifest[field] ?? {}).filter((name) => name.startsWith(`${deprecatedScope}/`))
+    if (localScopeDeps.length > 0) {
+      failures.push(`${staged.name}: ${field} contains deprecated package names ${localScopeDeps.join(', ')}`)
+    }
+  }
+  for (const target of exportTargets(manifest.exports)) {
+    if (target.includes('*')) continue
+    if (!target.startsWith('./')) continue
+    if (!existsSync(join(packageDir, target))) {
+      failures.push(`${staged.name}: package export points at missing file ${target}`)
+    }
+  }
+
+  const pack = spawnSync('npm', ['pack', '--dry-run', '--json'], {
+    cwd: packageDir,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
+  if (pack.status !== 0) {
+    failures.push(`${staged.name}: npm pack --dry-run failed\n${pack.stderr || pack.stdout}`)
+    continue
+  }
+
+  const [result] = JSON.parse(pack.stdout)
+  const paths = result.files.map((file) => file.path)
+  for (const path of paths) {
+    if (path.includes('__tests__/') || path.includes('__type_tests__/')) {
+      failures.push(`${staged.name}: tarball includes test-only file ${path}`)
+    }
+    if ((path.endsWith('.ts') || path.endsWith('.tsx')) && !path.endsWith('.d.ts')) {
+      failures.push(`${staged.name}: tarball includes raw TypeScript source ${path}`)
+    }
+    if (path === 'tsconfig.json' || path.endsWith('/tsconfig.json') || path.endsWith('vitest.config.ts')) {
+      failures.push(`${staged.name}: tarball includes development config ${path}`)
+    }
+    if (path.endsWith('.js') || path.endsWith('.d.ts')) {
+      const content = await readFile(join(packageDir, path), 'utf8')
+      if (hasLocalScopePackageImport(content)) {
+        failures.push(`${staged.name}: tarball includes deprecated package import in ${path}`)
+      }
+    }
+  }
+
+  if (staged.name === '@use-crux/local') {
+    const optional = manifest.optionalDependencies ?? {}
+    const missing = [
+      '@use-crux/local-linux-x64',
+      '@use-crux/local-linux-arm64',
+      '@use-crux/local-darwin-x64',
+      '@use-crux/local-darwin-arm64',
+      '@use-crux/local-win32-x64',
+      '@use-crux/local-win32-arm64',
+    ].filter((name) => optional[name] !== manifest.version)
+    if (missing.length > 0) {
+      failures.push(
+        `${staged.name}: optionalDependencies missing exact platform package versions for ${missing.join(', ')}`,
+      )
+    }
+  }
+
+  console.log(`${staged.name}@${staged.version}: ${result.entryCount} files, ${result.unpackedSize} bytes unpacked`)
+}
+
+if (failures.length > 0) {
+  console.error('\nStaged package validation failed:')
+  for (const failure of failures) console.error(`- ${failure}`)
+  process.exit(1)
+}
+
+console.log(`Validated ${index.packages.length} staged package(s).`)
+
+function exportTargets(exportsField) {
+  if (!exportsField) return []
+  if (typeof exportsField === 'string') return [exportsField]
+  if (Array.isArray(exportsField) || typeof exportsField !== 'object') return []
+
+  const targets = []
+  for (const [key, value] of Object.entries(exportsField)) {
+    if (key.startsWith('.')) {
+      targets.push(...exportTargets(value))
+    } else if (key === 'types' || key === 'import' || key === 'default') {
+      targets.push(...exportTargets(value))
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      targets.push(...exportTargets(value))
+    }
+  }
+  return targets
+}
+
+function hasLocalScopePackageImport(content) {
+  return (
+    new RegExp(String.raw`(?:from|import)\s+['"]${deprecatedScope}/`).test(content) ||
+    new RegExp(String.raw`import\s*\(\s*['"]${deprecatedScope}/`).test(content) ||
+    new RegExp(String.raw`require\s*\(\s*['"]${deprecatedScope}/`).test(content)
+  )
+}

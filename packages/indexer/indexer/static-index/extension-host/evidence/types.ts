@@ -1,4 +1,4 @@
-import type { SourceLocation, SourceSnippet } from '@crux/core/project-index'
+import type { SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
 import type { StaticObjectReader } from '../../../extensions/public-contract/authoring-types'
 import type {
   StaticCalleeRecord,

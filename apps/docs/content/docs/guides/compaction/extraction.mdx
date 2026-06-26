@@ -27,8 +27,8 @@ Extraction produces typed objects that survive compaction: structured decisions,
 
 ```ts
 import { z } from 'zod'
-import { generateObjectFn } from '@crux/ai'
-import { extractKeyFacts } from '@crux/core/compaction'
+import { generateObjectFn } from '@use-crux/ai'
+import { extractKeyFacts } from '@use-crux/core/compaction'
 
 const facts = await extractKeyFacts({
   messages: conversation,

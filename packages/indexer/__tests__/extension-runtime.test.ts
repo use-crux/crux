@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { IndexDiagnostic, IndexLintFinding, ProjectDefinitionKind } from '@crux/core/project-index'
+import type { IndexDiagnostic, IndexLintFinding, ProjectDefinitionKind } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
 import {
   createIndexerExtensionRuntime,
@@ -692,7 +692,7 @@ describe('indexer extension runtime', () => {
   })
 
   it('applies explicit extension trust policy before public loading', () => {
-    expect(isIndexerExtensionAllowed({ name: '@crux/indexer/crux-core' })).toBe(true)
+    expect(isIndexerExtensionAllowed({ name: '@use-crux/indexer/crux-core' })).toBe(true)
     expect(isIndexerExtensionAllowed({ name: '@acme/indexer' })).toBe(false)
     expect(
       isIndexerExtensionAllowed({ name: '@acme/indexer' }, { mode: 'allowlisted', allow: ['@acme/indexer'] }),

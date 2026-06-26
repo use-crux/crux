@@ -53,7 +53,7 @@ type IndexFactTransaction struct {
 }
 
 var fallbackIndexFactProducer = IndexFactProducer{
-	Name:    "@crux/local/project-index",
+	Name:    "@use-crux/local/project-index",
 	Version: "v2",
 }
 

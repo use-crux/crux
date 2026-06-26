@@ -33,7 +33,7 @@ build: local
 
 .PHONY: build-js
 build-js:
-	$(PNPM) --filter @crux/devtools build
+	$(PNPM) --filter @use-crux/devtools build
 
 .PHONY: local
 local:

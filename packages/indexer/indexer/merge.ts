@@ -1,4 +1,4 @@
-import type { ProjectDefinition } from '@crux/core/project-index'
+import type { ProjectDefinition } from '@use-crux/core/project-index'
 
 export function dedupeById<T extends { id: string }>(items: T[]): T[] {
   const map = new Map<string, T>()

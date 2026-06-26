@@ -1,5 +1,5 @@
 /**
- * Memory storage types for `@crux/core/memory`.
+ * Memory storage types for `@use-crux/core/memory`.
  *
  * Defines the contract between memory primitives and their backing storage.
  * Implementations: `inMemoryStore()` (testing), Convex contract stores (production).

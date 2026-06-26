@@ -35,7 +35,7 @@ describe('provided static syntax record indexing', () => {
     const file = join(root, 'src/writer.ts')
     await writeFile(
       file,
-      ["import { prompt } from '@crux/core'", '', "export const writerPrompt = prompt({ id: 'writer.plan' })"].join(
+      ["import { prompt } from '@use-crux/core'", '', "export const writerPrompt = prompt({ id: 'writer.plan' })"].join(
         '\n',
       ),
     )
@@ -60,7 +60,7 @@ describe('provided static syntax record indexing', () => {
     expect(plan.sourceGraph).toEqual(
       expect.objectContaining({
         schemaVersion: 1,
-        producedBy: '@crux/indexer',
+        producedBy: '@use-crux/indexer',
         capabilities: expect.arrayContaining(['project-shards', 'source-dependencies']),
         shards: expect.arrayContaining([expect.objectContaining({ id: '.', root })]),
       }),
@@ -74,14 +74,14 @@ describe('provided static syntax record indexing', () => {
     const file = join(root, 'src/writer.ts')
     await writeFile(
       file,
-      ["import { prompt } from '@crux/core'", '', "export const writerPrompt = prompt({ id: 'writer.plan' })"].join(
+      ["import { prompt } from '@use-crux/core'", '', "export const writerPrompt = prompt({ id: 'writer.plan' })"].join(
         '\n',
       ),
     )
     await writeFile(
       join(root, 'crux.config.ts'),
       [
-        "import { config } from '@crux/core'",
+        "import { config } from '@use-crux/core'",
         '',
         'export default config({',
         "  experimental: { indexer: { nativeAst: { frontend: 'oxc' } } },",
@@ -100,7 +100,7 @@ describe('provided static syntax record indexing', () => {
     await mkdir(join(root, 'src'), { recursive: true })
     const file = join(root, 'src/writer.ts')
     const source = [
-      "import { prompt } from '@crux/core'",
+      "import { prompt } from '@use-crux/core'",
       '',
       "export const writerPrompt = prompt({ id: 'writer.cached' })",
     ].join('\n')
@@ -165,7 +165,7 @@ describe('provided static syntax record indexing', () => {
     await writeFile(
       configFile,
       [
-        "import { config, prompt } from '@crux/core'",
+        "import { config, prompt } from '@use-crux/core'",
         '',
         "export const greeter = prompt({ id: 'fixture.greeter' })",
         'export default config({})',
@@ -183,7 +183,7 @@ describe('provided static syntax record indexing', () => {
     await mkdir(join(root, 'src'), { recursive: true })
     const file = join(root, 'src/writer.ts')
     const source = [
-      "import { prompt } from '@crux/core'",
+      "import { prompt } from '@use-crux/core'",
       '',
       'export const writerPrompt = prompt({',
       "  id: 'writer.provided',",
@@ -214,7 +214,7 @@ describe('provided static syntax record indexing', () => {
     const file = join(root, 'src/writer.ts')
     const secondFile = join(root, 'src/editor.ts')
     const source = [
-      "import { prompt } from '@crux/core'",
+      "import { prompt } from '@use-crux/core'",
       '',
       'export const writerPrompt = prompt({',
       "  id: 'writer.provider',",
@@ -222,7 +222,7 @@ describe('provided static syntax record indexing', () => {
       '})',
     ].join('\n')
     const secondSource = [
-      "import { prompt } from '@crux/core'",
+      "import { prompt } from '@use-crux/core'",
       '',
       "export const editorPrompt = prompt({ id: 'editor.provider' })",
     ].join('\n')

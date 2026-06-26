@@ -10,7 +10,7 @@
  * ---
  *
  * Does NOT handle nested YAML, arrays, or complex structures.
- * This avoids adding a YAML dependency to @crux/core.
+ * This avoids adding a YAML dependency to @use-crux/core.
  */
 
 import type { SkillMeta } from './types'

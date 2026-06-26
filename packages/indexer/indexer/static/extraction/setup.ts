@@ -4,7 +4,7 @@ import type { ProjectIndexCompilerProfile } from '../../compiler/profile'
 import type { StaticSyntaxCallInterest, StaticSyntaxConstructorInterest } from '../../static-index/syntax/record'
 
 const nativeRoutingPruneCalls = new Set(['router', 'cascade', 'fallback'])
-const cruxCoreExtensionName = '@crux/indexer/crux-core'
+const cruxCoreExtensionName = '@use-crux/indexer/crux-core'
 const cruxCoreRoutingExtractor = 'routing'
 
 /** Appends caller-provided extensions to a compiler profile without mutating the base profile. */

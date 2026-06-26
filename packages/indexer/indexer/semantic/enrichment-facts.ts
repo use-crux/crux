@@ -7,7 +7,7 @@ import type {
   ProjectDefinitionKind,
   ProjectRelation,
   ProjectSourceRef,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import { foldedIndexChild } from '../index-presentation'
 import { safeId } from '../definitions'
 import type {

@@ -46,7 +46,7 @@ help:
 
 .PHONY: build-devtools
 build-devtools:
-	cd ../.. && $(PNPM) --filter @crux/devtools build
+	cd ../.. && $(PNPM) --filter @use-crux/devtools build
 
 .PHONY: embed
 embed: embed-workers embed-ui

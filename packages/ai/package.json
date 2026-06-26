@@ -1,5 +1,5 @@
 {
-  "name": "@crux/ai",
+  "name": "@use-crux/ai",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "description": "Vercel AI SDK adapter for Crux — run Crux prompts, agents, and flows against any AI SDK model (generate & stream).",
@@ -45,8 +45,8 @@
   },
   "dependencies": {
     "@ai-sdk/provider": "^3.0.10",
-    "@crux/core": "workspace:*",
-    "@crux/react": "workspace:*",
+    "@use-crux/core": "workspace:*",
+    "@use-crux/react": "workspace:*",
     "zod": "^4.4.3"
   },
   "peerDependencies": {

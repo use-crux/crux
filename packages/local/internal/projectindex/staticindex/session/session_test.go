@@ -201,7 +201,7 @@ func sessionPlan(root, sourceFile string) projectindex.ProjectStaticSyntaxPlan {
 		StaticSyntaxEnabled: true,
 		StaticHost:          json.RawMessage(`{"nativeOnlyEligible":false}`),
 		StaticInterests:     json.RawMessage(`{"extractors":[]}`),
-		SourceGraph:         json.RawMessage(`{"schemaVersion":1,"producedBy":"@crux/indexer","capabilities":[],"shards":[]}`),
+		SourceGraph:         json.RawMessage(`{"schemaVersion":1,"producedBy":"@use-crux/indexer","capabilities":[],"shards":[]}`),
 	}
 }
 

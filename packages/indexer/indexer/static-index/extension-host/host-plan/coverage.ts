@@ -1,6 +1,6 @@
 import type { ExtractorIdentity } from '../../../extensions/runtime/engine'
 
-const CRUX_CORE_EXTENSION = '@crux/indexer/crux-core'
+const CRUX_CORE_EXTENSION = '@use-crux/indexer/crux-core'
 
 const staticIndexExtractorIds = new Set([
   extractorKey({

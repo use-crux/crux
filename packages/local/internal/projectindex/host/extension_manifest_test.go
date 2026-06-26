@@ -29,7 +29,7 @@ func TestWorkerStaticIndexLoadsConfiguredExtensionManifestWithoutNodeStaticPlan(
 		t.Fatalf("write source: %v", err)
 	}
 	configFile := filepath.Join(root, "crux.config.ts")
-	if err := os.WriteFile(configFile, []byte("import { config } from '@crux/core'\nexport default config({ experimental: { indexer: { nativeAst: true } }, indexer: { extensions: [{ package: '@acme/crux-indexer-extension' }] } })\n"), 0o600); err != nil {
+	if err := os.WriteFile(configFile, []byte("import { config } from '@use-crux/core'\nexport default config({ experimental: { indexer: { nativeAst: true } }, indexer: { extensions: [{ package: '@acme/crux-indexer-extension' }] } })\n"), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	cacheKey := "static-cache-key:workflow-extension"

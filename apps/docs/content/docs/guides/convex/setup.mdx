@@ -1,6 +1,6 @@
 ---
 title: Setup
-description: Install @crux/convex, register the component, and create a shared Crux store helper.
+description: Install @use-crux/convex, register the component, and create a shared Crux store helper.
 ---
 
 # Convex Setup
@@ -8,7 +8,7 @@ description: Install @crux/convex, register the component, and create a shared C
 Install the runtime packages you need on the server:
 
 ```bash
-pnpm add @crux/core @crux/ai @crux/convex @ai-sdk/openai zod
+pnpm add @use-crux/core @use-crux/ai @use-crux/convex @ai-sdk/openai zod
 ```
 
 If you use the Convex Agent component, also install it:
@@ -19,11 +19,11 @@ pnpm add @convex-dev/agent
 
 ## Install The Component
 
-`@crux/convex` ships a Convex component for Crux-owned persistence such as memory records and experimental cross-action swarm state.
+`@use-crux/convex` ships a Convex component for Crux-owned persistence such as memory records and experimental cross-action swarm state.
 
 ```ts title="convex/convex.config.ts"
 import { defineApp } from 'convex/server'
-import crux from '@crux/convex/convex.config'
+import crux from '@use-crux/convex/convex.config'
 
 const app = defineApp()
 app.use(crux)
@@ -44,7 +44,7 @@ Create one small helper and reuse it everywhere you need a Crux store.
 ```ts title="convex/crux/store.ts"
 import type { ActionCtx, MutationCtx } from '../_generated/server'
 import { components } from '../_generated/api'
-import { defineConvexStoreContract } from '@crux/convex'
+import { defineConvexStoreContract } from '@use-crux/convex'
 
 const cruxDocuments = defineConvexStoreContract({ component: components.crux })
 
@@ -60,7 +60,7 @@ Use this store for memory blocks, blackboards, plans, prompt cache data, and wor
 If you use the Convex Agent component, create one profile that owns both component references. This is the preferred boundary when Crux should own the profile-backed prompt, memory, skills, tools, and post-turn persistence lifecycle.
 
 ```ts title="convex/crux/profile.ts"
-import { createCruxConvex } from '@crux/convex'
+import { createCruxConvex } from '@use-crux/convex'
 import { components } from '../_generated/api'
 
 export const crux = createCruxConvex({
@@ -91,7 +91,7 @@ export const crux = createCruxConvex({
 Use `createConvexRuntimeBridge()` when custom Convex actions or normal Convex Agent-shaped code need Crux runtime plumbing without the profile-backed `convexAgent()` helper:
 
 ```ts title="convex/crux/runtime.ts"
-import { createConvexRuntimeBridge } from '@crux/convex'
+import { createConvexRuntimeBridge } from '@use-crux/convex'
 import { components } from '../_generated/api'
 
 export const runtime = createConvexRuntimeBridge({
@@ -114,11 +114,11 @@ convex/
     profile.ts          # createCruxConvex({ components }) for profile-backed Convex Agent code
     runtime.ts          # createConvexRuntimeBridge({ component }) for bridge-only/runtime-only code
   chat/
-    actions.ts          # @crux/convex/server action() entrypoints
+    actions.ts          # @use-crux/convex/server action() entrypoints
   agent/
-    tools.ts            # @crux/convex/agent tools
+    tools.ts            # @use-crux/convex/agent tools
   workflows/
-    writerFlow.ts       # @crux/convex/server flow()
+    writerFlow.ts       # @use-crux/convex/server flow()
 ```
 
 ## Node Runtime
@@ -128,8 +128,8 @@ Actions that import AI SDK providers, OpenAI clients, or other Node-only package
 ```ts title="convex/chat/actions.ts"
 'use node'
 
-import { action } from '@crux/convex/server'
-import { generate } from '@crux/ai'
+import { action } from '@use-crux/convex/server'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 ```
 
@@ -139,7 +139,7 @@ Queries and mutations that only read/write Convex data can stay in the default C
 
 - Install the component once and access it through `components.crux`.
 - Put prompt/context/agent definitions in regular modules so they remain testable outside Convex.
-- Put AI execution entrypoints behind `@crux/convex/server` boundaries.
+- Put AI execution entrypoints behind `@use-crux/convex/server` boundaries.
 - Keep tenant checks, auth, and app table writes in your app, not in reusable Crux helpers.
 
 ## Devtools Runtime Bridge

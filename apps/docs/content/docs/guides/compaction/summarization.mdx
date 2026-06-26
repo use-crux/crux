@@ -24,8 +24,8 @@ Sometimes you don't want a stateful, automatic compaction pipeline. You have a f
 ## Quick start
 
 ```ts title="summarize.ts"
-import { summarizeMessages } from '@crux/core/compaction'
-import { generateTextFn } from '@crux/ai'
+import { summarizeMessages } from '@use-crux/core/compaction'
+import { generateTextFn } from '@use-crux/ai'
 
 const result = await summarizeMessages({
   messages: conversationHistory,

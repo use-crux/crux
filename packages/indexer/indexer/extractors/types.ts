@@ -5,7 +5,7 @@ import type {
   ProjectDefinitionKind,
   SourceLocation,
   SourceSnippet,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import type { StaticFoundDefinition, StaticRelationRef } from '../types'
 
 /**

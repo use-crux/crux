@@ -4,19 +4,19 @@ description: Low-level store utilities, keyspace helpers, and compatibility expo
 ---
 
 ```ts
-import { inMemoryCruxStore, keySpace, matchesFilter } from '@crux/core/store'
+import { inMemoryCruxStore, keySpace, matchesFilter } from '@use-crux/core/store'
 import type {
   CruxStore, JsonObject, StoreEntry, ListOptions, ListResult,
   ScoredEntry, SparseVector, VectorSearchOptions, VectorSearchQuery, StoreEvent, StoreSetEvent, StoreDeleteEvent,
   EmbedFn, ToolConfig,
-} from '@crux/core/store'
+} from '@use-crux/core/store'
 ```
 
 ## Overview
 
-Use [`@crux/core/storage`](/docs/reference/crux-core/storage) for new application code. It exposes the canonical `DataStore`, `VectorStore`, and `BlobStore` interfaces.
+Use [`@use-crux/core/storage`](/docs/reference/crux-core/storage) for new application code. It exposes the canonical `DataStore`, `VectorStore`, and `BlobStore` interfaces.
 
-`@crux/core/store` remains the low-level module for store utilities such as `keySpace`, filtering helpers, and existing adapter compatibility exports.
+`@use-crux/core/store` remains the low-level module for store utilities such as `keySpace`, filtering helpers, and existing adapter compatibility exports.
 
 ## `CruxStore` Interface
 
@@ -85,7 +85,7 @@ Create an in-memory `CruxStore` backed by a `Map`. All data lives in process mem
 Use for: test suites, local development, rapid prototyping. Not for production.
 
 ```ts
-import { inMemoryCruxStore } from '@crux/core/store'
+import { inMemoryCruxStore } from '@use-crux/core/store'
 
 const store = inMemoryCruxStore()
 await store.set('plan:abc', { title: 'My Plan', version: 1, updatedAt: Date.now() })
@@ -101,7 +101,7 @@ Each namespace provides:
 - `prefix` -- the constant prefix for list/scan operations
 
 ```ts
-import { keySpace } from '@crux/core/store'
+import { keySpace } from '@use-crux/core/store'
 
 // Build a key
 const key = keySpace.plan.key('abc')         // 'plan:abc'
@@ -204,9 +204,9 @@ All store values are this shape -- a JSON-serializable object.
 
 | Store                                    | Package            | Use Case                            |
 | ---------------------------------------- | ------------------ | ----------------------------------- |
-| `inMemoryCruxStore()`                    | `@crux/core/store` | Testing, development, prototyping   |
-| `defineConvexStoreContract().store(ctx)` | `@crux/convex`     | Production with Convex backend      |
-| `cruxUpstashStore()`                     | `@crux/upstash`    | Serverless with Upstash Redis/Vector |
+| `inMemoryCruxStore()`                    | `@use-crux/core/store` | Testing, development, prototyping   |
+| `defineConvexStoreContract().store(ctx)` | `@use-crux/convex`     | Production with Convex backend      |
+| `cruxUpstashStore()`                     | `@use-crux/upstash`    | Serverless with Upstash Redis/Vector |
 
 ## Types
 
@@ -217,7 +217,7 @@ import type {
   ScoredEntry, VectorSearchOptions,
   StoreEvent, StoreSetEvent, StoreDeleteEvent,
   EmbedFn, ToolConfig,
-} from '@crux/core/store'
+} from '@use-crux/core/store'
 ```
 
 ## Related

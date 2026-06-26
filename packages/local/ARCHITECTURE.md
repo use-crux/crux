@@ -1,6 +1,6 @@
-# @crux/local Architecture
+# @use-crux/local Architecture
 
-`@crux/local` is the Go runtime for local Crux development. It owns the HTTP server, WebSocket/SSE
+`@use-crux/local` is the Go runtime for local Crux development. It owns the HTTP server, WebSocket/SSE
 subscriptions, TUI, embedded devtools UI, observability read models, Project Index read models, and
 the local Quality Workbench filesystem boundary.
 
@@ -14,7 +14,7 @@ The product rule is:
 
 > Explicit construction decides behavior; Crux discovery provides visibility.
 
-For `@crux/local`, this means:
+For `@use-crux/local`, this means:
 
 - `crux dev`, Devtools, lint, and Quality should be able to start from conventions and the Project
   Index whenever possible.

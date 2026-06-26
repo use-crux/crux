@@ -1,4 +1,4 @@
-# Security — `@crux/core`
+# Security — `@use-crux/core`
 
 Input sanitization and prompt injection defense for the prompt library.
 
@@ -25,7 +25,7 @@ Input sanitization and prompt injection defense for the prompt library.
 ### What it can't protect against
 
 - **Semantic prompt injection** — LLMs interpret meaning, not syntax. A user writing "ignore the above and do X" in plain English will always be partially effective regardless of escaping
-- **Output safety** — The sanitization layer handles input only. Validating what the LLM produces is the job of `@crux/core/safety` guardrails and constraints (opt-in), or application code
+- **Output safety** — The sanitization layer handles input only. Validating what the LLM produces is the job of `@use-crux/core/safety` guardrails and constraints (opt-in), or application code
 - **Multi-turn context poisoning** — Conversation history management is outside the prompt library
 - **Rate limiting / abuse prevention** — Infrastructure-level concern
 
@@ -68,7 +68,7 @@ configure({ prompts, autoEscape: false })
 Tagged template literal with composable helpers for per-value control:
 
 ```ts
-import { safe, raw, limit, wrap } from '@crux/core'
+import { safe, raw, limit, wrap } from '@use-crux/core'
 
 // Auto-escapes all interpolated values
 safe`<brand-voice>${input.brandVoice}</brand-voice>`
@@ -263,7 +263,7 @@ These are real threats that require application-level solutions:
 | Threat               | Why we can't solve it                     | Mitigation                                             |
 | -------------------- | ----------------------------------------- | ------------------------------------------------------ |
 | Semantic injection   | LLMs understand meaning, not just syntax  | Structured outputs, output validation, human review    |
-| Output safety        | Sanitization handles input, not output    | `@crux/core/safety` output guardrails/constraints, or application-level validation |
+| Output safety        | Sanitization handles input, not output    | `@use-crux/core/safety` output guardrails/constraints, or application-level validation |
 | Multi-turn poisoning | Conversation history is outside our scope | Conversation management, summarization, context limits |
 | Rate limiting        | Infrastructure concern                    | API rate limits, abuse detection                       |
 
@@ -291,7 +291,7 @@ These are real threats that require application-level solutions:
 
 ## Migration Guide
 
-### Step 1: Update to the latest `@crux/core`
+### Step 1: Update to the latest `@use-crux/core`
 
 Auto-escape is **enabled by default**. Existing prompts with pure string interpolation are automatically protected.
 
@@ -311,7 +311,7 @@ prompt({
 For extra clarity to the LLM about user-controlled content:
 
 ```ts
-import { wrap } from '@crux/core'
+import { wrap } from '@use-crux/core'
 
 prompt: ({ input }) => safe`
   ## User's Instruction
@@ -338,7 +338,7 @@ config({ generation: { securityWarnings: true } })
 For code that constructs strings outside the prompt pipeline (e.g., `builder.ts`):
 
 ```ts
-import { safe, limit } from '@crux/core'
+import { safe, limit } from '@use-crux/core'
 
 parts.push(safe`User: ${name}`)
 parts.push(safe`Audience: ${limit(audience, 100)}`)

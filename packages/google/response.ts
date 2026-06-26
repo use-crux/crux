@@ -1,6 +1,6 @@
 import type { GenerateContentResponse } from '@google/genai'
-import type { AdapterResponse } from '@crux/core/adapter'
-import type { NativeAssistantTurn, NativeResponseMetadata } from '@crux/core/adapter'
+import type { AdapterResponse } from '@use-crux/core/adapter'
+import type { NativeAssistantTurn, NativeResponseMetadata } from '@use-crux/core/adapter'
 import { googleTranscript } from './message-codec'
 
 /** Normalize a Google GenAI response into Crux's canonical adapter response. */

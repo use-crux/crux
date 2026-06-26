@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join, resolve } from 'node:path'
-import type { IndexSourceFile, ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { IndexSourceFile, ProjectIndexSnapshot } from '@use-crux/core/project-index'
 
 export type WatchScenarioName =
   | 'leaf-prompt-edit'

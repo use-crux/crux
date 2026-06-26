@@ -16,7 +16,7 @@ export type {
   IndexProjectOptions,
   IndexProjectRuntimeOptions,
 } from './indexer'
-export type { ProjectModelResolutionMode } from '@crux/core/project-index'
+export type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
 export {
   indexProject,
   indexProjectAst,

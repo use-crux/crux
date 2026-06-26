@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createConvexTransport } from '../react'
-import type { JsonObject } from '@crux/core/store'
+import type { JsonObject } from '@use-crux/core/store'
 
 const api = {
   memory: {

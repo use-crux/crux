@@ -7,7 +7,7 @@
  * `promote()` method is not data. Records are gitignored by default;
  * baselines (Phase 4) are the committed artifact.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 

@@ -12,7 +12,7 @@ Agents work in the background. The UI needs to show what's happening — which t
 Crux provides domain hooks that work with any transport. The hooks subscribe to store changes and re-render automatically:
 
 ```tsx title="task-progress.tsx"
-import { useTaskList, useTasks } from '@crux/react'
+import { useTaskList, useTasks } from '@use-crux/react'
 
 function TaskProgress({ taskListId }: { taskListId: string }) {
   const taskList = useTaskList(taskListId)
@@ -42,7 +42,7 @@ function TaskProgress({ taskListId }: { taskListId: string }) {
 Reactive plan data. Re-renders when the plan is created, updated, or deleted.
 
 ```tsx
-import { usePlan } from '@crux/react'
+import { usePlan } from '@use-crux/react'
 
 function PlanView({ planId }: { planId: string }) {
   const plan = usePlan(planId)
@@ -64,7 +64,7 @@ function PlanView({ planId }: { planId: string }) {
 Reactive task list metadata. Query by ID or by plan association:
 
 ```tsx
-import { useTaskList } from '@crux/react'
+import { useTaskList } from '@use-crux/react'
 
 // By task list ID
 const taskList = useTaskList(taskListId)
@@ -78,7 +78,7 @@ const taskList = useTaskList({ planId })
 Reactive task array. Excludes removed tasks and auto-updates on any task mutation:
 
 ```tsx
-import { useTasks } from '@crux/react'
+import { useTasks } from '@use-crux/react'
 
 const tasks = useTasks(taskListId)
 ```
@@ -102,7 +102,7 @@ function TaskView({ taskListId }: { taskListId: string | undefined }) {
 Hooks need a transport to know how to subscribe to changes. Wrap your app with `<CruxProvider>`:
 
 ```tsx
-import { CruxProvider } from '@crux/react'
+import { CruxProvider } from '@use-crux/react'
 
 function App() {
   return (
@@ -128,8 +128,8 @@ function App() {
 If your backend is Convex, create the transport from the same store document contract used by server functions:
 
 ```tsx
-import { CruxProvider } from '@crux/react'
-import { defineConvexStoreContract } from '@crux/convex'
+import { CruxProvider } from '@use-crux/react'
+import { defineConvexStoreContract } from '@use-crux/convex'
 import { useQuery } from 'convex/react'
 import { components } from '../convex/_generated/api'
 
@@ -151,7 +151,7 @@ function App() {
 Connect to a server-sent events endpoint:
 
 ```tsx
-import { CruxProvider, createSSETransport } from '@crux/react'
+import { CruxProvider, createSSETransport } from '@use-crux/react'
 
 function App() {
   const transport = createSSETransport('/api/crux/sse')
@@ -171,7 +171,7 @@ See [Server-Side Integration](/docs/guides/plans-and-tasks/server) for setting u
 For backends without real-time support:
 
 ```tsx
-import { CruxProvider, createPollingTransport } from '@crux/react'
+import { CruxProvider, createPollingTransport } from '@use-crux/react'
 
 function App() {
   const transport = createPollingTransport('/api/crux', { intervalMs: 2000 })
@@ -189,8 +189,8 @@ function App() {
 For streaming plan/task updates through an active AI SDK chat stream:
 
 ```tsx
-import { CruxProvider } from '@crux/react'
-import { createStreamTransport } from '@crux/ai/stream'
+import { CruxProvider } from '@use-crux/react'
+import { createStreamTransport } from '@use-crux/ai/stream'
 import { useChat } from 'ai/react'
 
 function ChatWithTasks() {
@@ -218,7 +218,7 @@ See [Server-Side Integration](/docs/guides/plans-and-tasks/server) for the serve
 For tests and Storybook:
 
 ```tsx
-import { CruxProvider, createMockTransport } from '@crux/react'
+import { CruxProvider, createMockTransport } from '@use-crux/react'
 
 const transport = createMockTransport({
   plans: { 'plan-1': { id: 'plan-1', title: 'Test Plan', content: '...', version: 1 } },
@@ -236,7 +236,7 @@ function TestWrapper({ children }: { children: React.ReactNode }) {
 A complete progress view combining plan content with task tracking:
 
 ```tsx title="progress-view.tsx"
-import { usePlan, useTaskList, useTasks } from '@crux/react'
+import { usePlan, useTaskList, useTasks } from '@use-crux/react'
 
 function AgentProgress({ planId }: { planId: string }) {
   const plan = usePlan(planId)

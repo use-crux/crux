@@ -1,5 +1,5 @@
 /**
- * `@crux/core/adapter` — Provider adapter abstraction.
+ * `@use-crux/core/adapter` — Provider adapter abstraction.
  *
  * Shared infrastructure for building AI provider adapters. Public provider
  * authors should start with provider runtimes:
@@ -12,9 +12,9 @@
  *   AI SDK). The SDK drives; core steers each step through a `StepObserver`.
  *
  * Both dialects drive the same per-call sessions — the `ToolLifecycle` session
- * from `@crux/core/adapter/tool` (middleware, approvals, instrumentation,
+ * from `@use-crux/core/adapter/tool` (middleware, approvals, instrumentation,
  * skill loads, memory capture) and the `Safety` session from
- * `@crux/core/safety` — so policy semantics never diverge between dialects.
+ * `@use-crux/core/safety` — so policy semantics never diverge between dialects.
  * Test executors with {@link fakeExecutor} and prove contract fidelity with
  * {@link executorSpecConformance}.
  *

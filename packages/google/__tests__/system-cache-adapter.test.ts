@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import { context, prompt as makePrompt } from '@crux/core'
+import { context, prompt as makePrompt } from '@use-crux/core'
 import { createGoogle } from '../index'
 import type { GoogleCachedContentPort, GoogleCacheName } from '../index'
 

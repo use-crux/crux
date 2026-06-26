@@ -7,10 +7,10 @@ This recipe builds a workflow that proposes a plan, suspends for human review, a
 
 ## Primitives used
 
-- `plan()` from `@crux/core/plan` for the persistent plan document
-- `flow()` from `@crux/core/flow` with `flow.suspend()` for the approval pause
+- `plan()` from `@use-crux/core/plan` for the persistent plan document
+- `flow()` from `@use-crux/core/flow` with `flow.suspend()` for the approval pause
 - `signalFlow()` (or `handle.signal()`) to resume once the user clicks Approve
-- `usePlan()` from `@crux/react` for live UI subscription
+- `usePlan()` from `@use-crux/react` for live UI subscription
 
 ## When to reach for this pattern
 
@@ -23,9 +23,9 @@ This recipe builds a workflow that proposes a plan, suspends for human review, a
 ### Backend
 
 ```ts
-import { plan, updatePlan } from '@crux/core/plan'
-import { flow } from '@crux/core/flow'
-import { generate } from '@crux/ai'
+import { plan, updatePlan } from '@use-crux/core/plan'
+import { flow } from '@use-crux/core/flow'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
@@ -72,8 +72,8 @@ const writerFlow = flow('writer-flow', async (flow) => {
 ### Approval mutation
 
 ```ts
-import { signalFlow } from '@crux/core/flow'
-import { updatePlan } from '@crux/core/plan'
+import { signalFlow } from '@use-crux/core/flow'
+import { updatePlan } from '@use-crux/core/plan'
 
 export async function approvePlan(planId: string, flowId: string, revisions?: string) {
   await updatePlan(planId, { metadata: { status: 'approved' } })
@@ -90,7 +90,7 @@ export async function rejectPlan(planId: string, flowId: string) {
 
 ```tsx
 'use client'
-import { usePlan } from '@crux/react'
+import { usePlan } from '@use-crux/react'
 
 export function PlanReview({ planId, flowId }: { planId: string; flowId: string }) {
   const plan = usePlan(planId)
@@ -127,7 +127,7 @@ Use a different signal name per role (`'await-finance'`, `'await-legal'`) and ch
 
 ### Plans on Convex
 
-Use `flow()` from `@crux/convex/server` so the flow handle exposes `.action`, `.handler`, `.args`, and `.signal()` for Convex-aware start/resume.
+Use `flow()` from `@use-crux/convex/server` so the flow handle exposes `.action`, `.handler`, `.args`, and `.signal()` for Convex-aware start/resume.
 
 ## Where to next
 

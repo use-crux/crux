@@ -1,15 +1,15 @@
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import type {
   IncrementalExecutionMode,
   IndexProjectAstFromSyntaxRecordsOptions,
   SemanticBackendSelection,
-} from '@crux/indexer'
-import type { ProvidedStaticSyntaxRecordProvider, StaticParseCacheHit } from '@crux/indexer/host/static-index'
+} from '@use-crux/indexer'
+import type { ProvidedStaticSyntaxRecordProvider, StaticParseCacheHit } from '@use-crux/indexer/host/static-index'
 import type {
   CheckStaticRulesInput,
   ExtractStaticEvidenceBatchInput,
   LoadStaticExtensionHostManifestInput,
-} from '@crux/indexer/host/static-compat'
+} from '@use-crux/indexer/host/static-compat'
 import {
   createProjectIndexSyntaxRecordSpool,
   type ProjectIndexSyntaxRecordSpool,

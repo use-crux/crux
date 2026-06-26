@@ -1,8 +1,8 @@
 import { appendFile, mkdtemp, open, rm, type FileHandle } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { IndexProjectAstFromSyntaxRecordsOptions } from '@crux/indexer'
-import type { ProvidedStaticSyntaxRecordProvider } from '@crux/indexer/host/static-index'
+import type { IndexProjectAstFromSyntaxRecordsOptions } from '@use-crux/indexer'
+import type { ProvidedStaticSyntaxRecordProvider } from '@use-crux/indexer/host/static-index'
 
 type StaticSyntaxFileRecord = IndexProjectAstFromSyntaxRecordsOptions['records'][number]
 type StaticSyntaxFrontendIdentity = NonNullable<IndexProjectAstFromSyntaxRecordsOptions['frontendIdentity']>
@@ -13,7 +13,7 @@ interface SyntaxRecordSpoolEntry {
 }
 
 export interface ProjectIndexSyntaxRecordSpool {
-  /** Lazy provider consumed by `@crux/indexer` during AST projection. */
+  /** Lazy provider consumed by `@use-crux/indexer` during AST projection. */
   readonly provider: ProvidedStaticSyntaxRecordProvider
   /** Number of records currently spooled. */
   readonly recordCount: number

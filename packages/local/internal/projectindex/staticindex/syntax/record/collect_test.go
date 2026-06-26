@@ -74,7 +74,7 @@ func TestCollectBatchUsesDiskSourceHandoff(t *testing.T) {
 		CallNames:                []string{"prompt"},
 		CallInterests:            []projectindex.StaticCallInterest{{Name: "defineWorkflow", ImportFrom: []string{"@acme/workflows"}}},
 		ConstructorNames:         []string{"Agent"},
-		ConstructorInterests:     []projectindex.StaticConstructorInterest{{Name: "Agent", ImportFrom: []string{"@crux/core"}}},
+		ConstructorInterests:     []projectindex.StaticConstructorInterest{{Name: "Agent", ImportFrom: []string{"@use-crux/core"}}},
 		PruneNativeFactCallNames: []string{"router", "cascade"},
 	})
 	if err != nil {
@@ -102,8 +102,8 @@ func TestCollectBatchUsesDiskSourceHandoff(t *testing.T) {
 		if len(request.CallInterests) != 1 || request.CallInterests[0].Name != "defineWorkflow" || fmt.Sprint(request.CallInterests[0].ImportFrom) != "[@acme/workflows]" {
 			t.Fatalf("request[%d].CallInterests = %+v, want defineWorkflow from @acme/workflows", index, request.CallInterests)
 		}
-		if len(request.ConstructorInterests) != 1 || request.ConstructorInterests[0].Name != "Agent" || fmt.Sprint(request.ConstructorInterests[0].ImportFrom) != "[@crux/core]" {
-			t.Fatalf("request[%d].ConstructorInterests = %+v, want Agent from @crux/core", index, request.ConstructorInterests)
+		if len(request.ConstructorInterests) != 1 || request.ConstructorInterests[0].Name != "Agent" || fmt.Sprint(request.ConstructorInterests[0].ImportFrom) != "[@use-crux/core]" {
+			t.Fatalf("request[%d].ConstructorInterests = %+v, want Agent from @use-crux/core", index, request.ConstructorInterests)
 		}
 	}
 }

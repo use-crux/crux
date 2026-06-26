@@ -3,7 +3,7 @@ import type {
   ProjectDefinition,
   ProjectRelation,
   IndexRuleDescriptor,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import { applyIndexLintConfig } from '../lints/config'
 import { indexLintFindings } from '../lints/findings'
 import { applyIndexLintSuppressions } from '../lints/suppressions'

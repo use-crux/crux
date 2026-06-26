@@ -23,7 +23,7 @@ export interface GoogleExtra extends Record<string, unknown> {
    * CachedContent resolution and send a plain `systemInstruction`, or
    * `ttlSeconds` to override the adapter default for any new cache created by
    * this request. Provider-neutral cache hints still come from
-   * `SystemBlock.providerCache` in `@crux/core`.
+   * `SystemBlock.providerCache` in `@use-crux/core`.
    */
   readonly cachedContent?: GoogleCachedContentCallOptions
 }

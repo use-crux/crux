@@ -6,7 +6,7 @@ import type {
   ProjectRelation,
   ProjectRelationFidelity,
   SourceLocation,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import { indexRelationPolicies } from './policies'
 import type { IndexRelationPolicy } from './types'
 import { withExpandedInputContracts } from '../static/input-contracts'

@@ -108,7 +108,7 @@ export interface CascadeMeta {
  *
  * @example
  * ```ts
- * import { cascade } from '@crux/core/routing'
+ * import { cascade } from '@use-crux/core/routing'
  *
  * const smartCascade = cascade({
  *   tiers: [

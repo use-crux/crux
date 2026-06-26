@@ -1,5 +1,5 @@
 ---
-title: '@crux/react'
+title: '@use-crux/react'
 description: Reactive hooks and transports for plans, task lists, blackboards, and working memory.
 ---
 
@@ -15,7 +15,7 @@ import {
   createPollingTransport,
   createSSETransport,
   createMockTransport,
-} from '@crux/react'
+} from '@use-crux/react'
 ```
 
 ## Overview
@@ -39,8 +39,8 @@ component query only receives `prefix`, `limit`, and `cursor`.
 Provide a `CruxTransport` to all child components.
 
 ```tsx
-import { CruxProvider } from '@crux/react'
-import { defineConvexStoreContract } from '@crux/convex'
+import { CruxProvider } from '@use-crux/react'
+import { defineConvexStoreContract } from '@use-crux/convex'
 import { useQuery } from 'convex/react'
 import { components } from '../convex/_generated/api'
 
@@ -146,7 +146,7 @@ Create a transport that polls a `CruxStore` at a regular interval. Universal fal
 | `stop()` | Stop the polling interval                 |
 
 ```tsx
-import { createPollingTransport, CruxProvider } from '@crux/react'
+import { createPollingTransport, CruxProvider } from '@use-crux/react'
 
 const transport = createPollingTransport(store, { intervalMs: 2000 })
 
@@ -173,7 +173,7 @@ Create a transport backed by Server-Sent Events. Connects to a `cruxSSEHandler` 
 | `readyState`      | `'connecting' \| 'open' \| 'closed'` |
 
 ```tsx
-import { createSSETransport, CruxProvider } from '@crux/react'
+import { createSSETransport, CruxProvider } from '@use-crux/react'
 
 const transport = createSSETransport('/api/crux/events')
 
@@ -198,7 +198,7 @@ Create a mock transport for testing. Backed by an in-memory Map with `useSyncExt
 | `getData()`       | Get the raw data Map (for assertions).     |
 
 ```tsx
-import { createMockTransport, CruxProvider, usePlan } from '@crux/react'
+import { createMockTransport, CruxProvider, usePlan } from '@use-crux/react'
 
 const transport = createMockTransport()
 transport.set('plan:abc', {
@@ -243,7 +243,7 @@ import type {
   SSETransport,
   SSETransportOptions,
   MockTransport,
-} from '@crux/react'
+} from '@use-crux/react'
 ```
 
 ## Related

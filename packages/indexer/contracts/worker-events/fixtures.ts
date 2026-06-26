@@ -52,7 +52,7 @@ export const workerEventFixturePatch = {
     ],
     sourceGraph: {
       schemaVersion: 1,
-      producedBy: '@crux/indexer',
+      producedBy: '@use-crux/indexer',
       capabilities: ['definition-ownership', 'diagnostic-ownership', 'project-shards'],
       shards: [{ id: '.', root: '/repo', packageFile: '/repo/package.json' }],
     },
@@ -75,6 +75,6 @@ export const workerEventFixturePatch = {
 /** Worker event conversion options for `workerEventFixturePatch`. */
 export const workerEventFixtureOptions = {
   transactionId: 'tx-contract-spine-ast',
-  producer: { name: '@crux/indexer', version: 'contract-spine' },
+  producer: { name: '@use-crux/indexer', version: 'contract-spine' },
   maxFactsPerBatch: 2,
 } as const satisfies IndexPatchToWorkerEventsOptions

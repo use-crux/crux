@@ -2,7 +2,7 @@ import ts from 'typescript'
 import type {
   ProjectDefinition,
   ProjectDefinitionKind,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import { collectTopLevelInitializers } from '../../ast/initializers'
 import { propertyName } from '../../ast/literals'
 import { collectImportBindings, type ImportBinding } from '../../ast/imports'

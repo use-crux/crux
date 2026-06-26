@@ -10,7 +10,7 @@
  * always) but never truncated — truncation is a record-display concern and
  * would corrupt re-scoring.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 

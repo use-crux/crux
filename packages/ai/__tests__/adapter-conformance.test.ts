@@ -1,6 +1,6 @@
 import type { LanguageModel } from 'ai'
-import type { ProviderRuntimeConformanceHarness } from '@crux/core/adapter'
-import { describeCruxAdapterConformance } from '@crux/core/adapter/testing/vitest'
+import type { ProviderRuntimeConformanceHarness } from '@use-crux/core/adapter'
+import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
 import { aiSdkProviderRuntime } from '../index'
 import { liveSdkGateway, type SdkGateway } from '../src/gateway'
 import { emissionModel, streamingModel, structuredModel } from './mock-model'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ProjectDefinition } from '@crux/core/project-index'
+import type { ProjectDefinition } from '@use-crux/core/project-index'
 import { mergeDefinitionsById } from '../indexer/merge'
 
 describe('mergeDefinitionsById', () => {

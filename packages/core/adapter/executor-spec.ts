@@ -63,7 +63,7 @@ import type {
  *
  * @example
  * ```ts
- * import { executorAdapter } from '@crux/core/adapter'
+ * import { executorAdapter } from '@use-crux/core/adapter'
  *
  * const createMyExecutor = executorAdapter({
  *   executorId: 'my-sdk',

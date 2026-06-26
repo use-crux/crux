@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { ProjectDefinition } from '@crux/core/project-index'
+import type { ProjectDefinition } from '@use-crux/core/project-index'
 import { foldedIndexChild } from '../index-presentation'
 import {
   facts,

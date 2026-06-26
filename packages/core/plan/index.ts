@@ -1,5 +1,5 @@
 /**
- * `@crux/core/plan` — Plan and TaskList primitives for AI agent work tracking.
+ * `@use-crux/core/plan` — Plan and TaskList primitives for AI agent work tracking.
  *
  * Plans are freeform documents describing what an agent intends to do.
  * Task lists are structured work tracking with live status updates.

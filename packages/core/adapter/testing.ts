@@ -158,7 +158,7 @@ interface FakeToolLike {
  *
  * @example
  * ```ts
- * import { executorAdapter, fakeExecutor } from '@crux/core/adapter'
+ * import { executorAdapter, fakeExecutor } from '@use-crux/core/adapter'
  *
  * const fake = fakeExecutor({
  *   structured: ['not json', '{"title":"ok","count":1}'],
@@ -465,7 +465,7 @@ function baseRequest<TClient, TModel>(
 /**
  * Run the executor contract suite against an `ExecutorSpec` implementation.
  *
- * Both `fakeExecutor()` and every real executor (e.g. `@crux/ai`'s
+ * Both `fakeExecutor()` and every real executor (e.g. `@use-crux/ai`'s
  * `AiSdkExecutor`) must pass — that shared bar is what lets policy tests
  * written against the fake transfer to production. Checks cover the
  * contract's subtle seams:

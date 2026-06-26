@@ -1,4 +1,4 @@
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import { applyIndexPatch, indexPatchFromSnapshot, emptyIndexPatchState } from '../../indexer/patches'
 
 /**

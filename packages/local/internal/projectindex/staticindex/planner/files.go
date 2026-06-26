@@ -171,7 +171,7 @@ func candidateSourceFile(file string) bool {
 }
 
 var cruxSignalPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`@crux/`),
+	regexp.MustCompile(`@use-crux/`),
 	regexp.MustCompile(`\bprompt\s*\(`),
 	regexp.MustCompile(`\bcontext\s*\(`),
 	regexp.MustCompile(`\btool\s*\(`),

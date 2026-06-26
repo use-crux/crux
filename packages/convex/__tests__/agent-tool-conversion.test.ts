@@ -6,7 +6,7 @@ import {
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '@crux/core/observability'
+} from '@use-crux/core/observability'
 import { Agent, convexTools } from '../agent'
 import { tool as convexRuntimeTool } from '../tools'
 import { inMemoryCruxStore } from '../memory'

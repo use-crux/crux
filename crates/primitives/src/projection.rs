@@ -193,7 +193,7 @@ fn workspace_native_fact(
     Some(StaticNativeFactProjection {
         match_index,
         replaces: vec![crate::protocol::StaticNativeFactExtractorIdentity {
-            extension: "@crux/indexer/crux-core".to_string(),
+            extension: "@use-crux/indexer/crux-core".to_string(),
             extractor: "workspace".to_string(),
         }],
         facts,
@@ -230,7 +230,7 @@ fn eval_native_fact(
     Some(StaticNativeFactProjection {
         match_index,
         replaces: vec![crate::protocol::StaticNativeFactExtractorIdentity {
-            extension: "@crux/indexer/crux-core".to_string(),
+            extension: "@use-crux/indexer/crux-core".to_string(),
             extractor: "eval".to_string(),
         }],
         facts,
@@ -287,7 +287,7 @@ fn first_party_native_fact(
     Some(StaticNativeFactProjection {
         match_index,
         replaces: vec![crate::protocol::StaticNativeFactExtractorIdentity {
-            extension: "@crux/indexer/crux-core".to_string(),
+            extension: "@use-crux/indexer/crux-core".to_string(),
             extractor: extractor.to_string(),
         }],
         facts,

@@ -5,7 +5,7 @@ import type {
   IndexRuleDescriptor,
   ProjectDefinition,
   ProjectRelation,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import ts from 'typescript'
 import type { StaticCallContext } from '../../extractors/types'
 import type { StaticFoundDefinition } from '../../types'
@@ -237,7 +237,7 @@ export function extensionRuleDescriptors(extensions: readonly IndexerExtension[]
  * Hides the built-in lint adapter from public extension rule descriptors.
  */
 function isInternalIndexLintAdapter(extension: IndexerExtension, ruleName: string): boolean {
-  return extension.name === '@crux/indexer/crux-core' && ruleName === 'crux.index-lints'
+  return extension.name === '@use-crux/indexer/crux-core' && ruleName === 'crux.index-lints'
 }
 
 /**

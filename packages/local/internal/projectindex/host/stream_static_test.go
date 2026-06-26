@@ -160,7 +160,7 @@ func TestWorkerStaticIndexCompilerUsesStreamingAnalyze(t *testing.T) {
 		StaticSyntaxEnabled: true,
 		StaticHost:          json.RawMessage(`{}`),
 		StaticInterests:     json.RawMessage(`{"extractors":[]}`),
-		SourceGraph:         json.RawMessage(`{"schemaVersion":1,"producedBy":"@crux/indexer","capabilities":[],"shards":[]}`),
+		SourceGraph:         json.RawMessage(`{"schemaVersion":1,"producedBy":"@use-crux/indexer","capabilities":[],"shards":[]}`),
 	}
 
 	patch, _, usedStaticIndex, err := worker.indexProjectAstPatchFromStaticIndexCompiler(context.Background(), root, "", "static-index-cutover", plan, compiler)

@@ -204,7 +204,7 @@ Crux's answer: the composition contract.
 
 - Every native primitive already participates through the same composition and evidence model. That model — how a block contributes to a turn and what evidence it must emit — is the adapter contract in waiting.
 - Native primitives define the reference behavior and reporting shape; they are defaults, not lock-in.
-- Runtime profiles already exist conceptually through packages such as `@crux/convex`.
+- Runtime profiles already exist conceptually through packages such as `@use-crux/convex`.
 
 What to improve (v2 scope):
 

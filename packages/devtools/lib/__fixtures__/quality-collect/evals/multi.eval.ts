@@ -1,4 +1,4 @@
-import { evaluate } from '@crux/core/quality'
+import { evaluate } from '@use-crux/core/quality'
 
 /** Named export without an explicit id — derived id appends `#alpha`. */
 export const alpha = evaluate({

@@ -1,4 +1,4 @@
-import type { ProjectDefinitionKind } from '@crux/core/project-index'
+import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
 import { createIndexerExtensionRuntime, facts, type IndexerExtension } from '../indexer/extensions'
 import { cruxCoreExtension } from '../indexer/extractors/crux-core-extension'

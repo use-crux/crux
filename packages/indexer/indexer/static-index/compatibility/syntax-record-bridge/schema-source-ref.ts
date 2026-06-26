@@ -1,4 +1,4 @@
-import type { JsonSchema } from '@crux/core/project-index'
+import type { JsonSchema } from '@use-crux/core/project-index'
 import type { ExtractedSourceRef } from '../../../extensions/public-contract/types'
 import type { StaticSyntaxValue } from '../../syntax/record/types'
 import { staticRecordSchemaProperty, staticSyntaxValueToJsonSchema } from '../../syntax/record/schema'

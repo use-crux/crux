@@ -187,7 +187,7 @@ function canonical(value: unknown): string {
 }
 
 const fixtureCompilerProfile = {
-  name: '@crux/indexer/fixture-profile',
+  name: '@use-crux/indexer/fixture-profile',
   version: '1',
   extensions: [],
 } as const satisfies ProjectIndexCompilerProfile

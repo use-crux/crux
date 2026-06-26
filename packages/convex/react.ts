@@ -1,5 +1,5 @@
 /**
- * Convex transport for `@crux/react` hooks.
+ * Convex transport for `@use-crux/react` hooks.
  *
  * Uses Convex's native `useQuery()` for automatic WebSocket-based reactivity.
  * App code should usually create this through
@@ -8,8 +8,8 @@
  *
  * @example
  * ```tsx
- * import { CruxProvider } from '@crux/react'
- * import { defineConvexStoreContract } from '@crux/convex'
+ * import { CruxProvider } from '@use-crux/react'
+ * import { defineConvexStoreContract } from '@use-crux/convex'
  * import { useQuery } from 'convex/react'
  * import { api } from '../convex/_generated/api'
  *
@@ -43,7 +43,7 @@ export interface ConvexTransportConfig {
   api: ConvexCruxStoreTransportComponent
   /**
    * The Convex `useQuery` hook. Pass this to avoid requiring `convex/react`
-   * as a direct dependency of `@crux/convex`.
+   * as a direct dependency of `@use-crux/convex`.
    *
    * @example
    * ```ts
@@ -55,9 +55,9 @@ export interface ConvexTransportConfig {
 }
 
 // Re-export the transport type for convenience
-export type { CruxTransport } from '@crux/react'
-import type { CruxTransport } from '@crux/react'
-import type { JsonObject, StoreEntry, ListOptions } from '@crux/core/store'
+export type { CruxTransport } from '@use-crux/react'
+import type { CruxTransport } from '@use-crux/react'
+import type { JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
 import type { ConvexCruxStoreTransportComponent } from './store-component'
 import { createStoreDocCodec, type StoreDocPage, type StoreDocPageQuery, type StoreDocRecord } from './store-doc'
 
@@ -77,7 +77,7 @@ import { createStoreDocCodec, type StoreDocPage, type StoreDocPageQuery, type St
  * @example
  * ```tsx
  * import { useQuery } from 'convex/react'
- * import { defineConvexStoreContract } from '@crux/convex'
+ * import { defineConvexStoreContract } from '@use-crux/convex'
  *
  * const cruxDocuments = defineConvexStoreContract({ component: api.crux })
  * const transport = cruxDocuments.transport({ useQuery })

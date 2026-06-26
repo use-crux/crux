@@ -14,7 +14,7 @@ Pass the prompt as the task; case inputs come from its merged input schema,
 execution defaults:
 
 ```ts
-import { evaluate, target } from '@crux/core/quality'
+import { evaluate, target } from '@use-crux/core/quality'
 
 export default evaluate('support.refunds', {
   task: target.prompt(supportPrompt, { model: 'gpt-5' }),
@@ -158,7 +158,7 @@ Cases are plain data — export arrays and reuse them across evaluations. The
 one-annotation escape hatch for extracted arrays is `satisfies CaseOf<…>`:
 
 ```ts
-import type { CaseOf } from '@crux/core/quality'
+import type { CaseOf } from '@use-crux/core/quality'
 
 export const sharedCases = [
   { input: { question: 'How do refunds work?', locale: 'en' }, expected: { answer: 'Within 14 days.' } },

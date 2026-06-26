@@ -1,4 +1,4 @@
-import type { ProjectDefinitionKind } from '@crux/core/project-index'
+import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
 import { createIndexerExtensionRuntime, facts, type IndexerExtension } from '../indexer/extensions'
 import { createStaticRecordEvidenceReader } from '../indexer/static-index/extension-host/evidence/record-reader'
@@ -98,7 +98,7 @@ describe('indexer extension evidence contract', () => {
     const runtime = createIndexerExtensionRuntime({
       extensions: [
         extension({
-          name: '@crux/indexer/crux-core',
+          name: '@use-crux/indexer/crux-core',
           version: '1',
           static: { evidence: { mode: 'declared' } },
           extractors: [

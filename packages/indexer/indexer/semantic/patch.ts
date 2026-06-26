@@ -1,4 +1,4 @@
-import type { IndexDiagnostic } from '@crux/core/project-index'
+import type { IndexDiagnostic } from '@use-crux/core/project-index'
 import type { IndexPatch } from '../patches'
 
 export class SemanticDiagnosticError extends Error {

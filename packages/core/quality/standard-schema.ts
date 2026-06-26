@@ -19,7 +19,7 @@
  * @example
  * ```ts
  * import { z } from 'zod'
- * import { dataset } from '@crux/core/quality'
+ * import { dataset } from '@use-crux/core/quality'
  *
  * // z.object(...) is a StandardSchemaV1 — no adapter needed.
  * const rows = dataset('golden/support.jsonl', {

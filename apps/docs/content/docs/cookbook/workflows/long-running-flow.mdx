@@ -20,8 +20,8 @@ This recipe shows a flow that performs an LLM step, suspends to wait for an exte
 ## Full code
 
 ```ts
-import { flow, signalFlow } from '@crux/core/flow'
-import { generate } from '@crux/ai'
+import { flow, signalFlow } from '@use-crux/core/flow'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
@@ -96,7 +96,7 @@ Use `flow.waitUntil('name', conditionFn)` to suspend until a condition function 
 
 ### Convex specifics
 
-Use `flow()` from `@crux/convex/server` for Convex-aware resume scheduling. From mutation-only modules, create an app-local helper that calls `signalFlow()` and then `ctx.scheduler.runAfter()`.
+Use `flow()` from `@use-crux/convex/server` for Convex-aware resume scheduling. From mutation-only modules, create an app-local helper that calls `signalFlow()` and then `ctx.scheduler.runAfter()`.
 
 ## Where to next
 

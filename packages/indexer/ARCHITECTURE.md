@@ -1,7 +1,7 @@
-# @crux/indexer Architecture
+# @use-crux/indexer Architecture
 
-`@crux/indexer` turns authored project source into the Project Index facts served by
-`@crux/local`. It owns static source discovery, semantic enrichment, source references, index
+`@use-crux/indexer` turns authored project source into the Project Index facts served by
+`@use-crux/local`. It owns static source discovery, semantic enrichment, source references, index
 relations, index lint facts, and the source graph read model used to explain authored Crux systems.
 
 The package should stay correctness-first: when source graph evidence is incomplete, stale, or
@@ -12,11 +12,11 @@ that might omit affected facts.
 
 The accepted pre-launch direction is to rename this package and its public model from **Source
 Indexer / Project Index** to **Crux Indexer / Project Index**. The current code still uses
-`@crux/indexer` and `ProjectIndex*` names until the rename implementation lands, but new
+`@use-crux/indexer` and `ProjectIndex*` names until the rename implementation lands, but new
 architecture decisions should use the target language:
 
 - Public system name: **Crux Indexer**.
-- Target package name: `@crux/indexer`.
+- Target package name: `@use-crux/indexer`.
 - Output/read model: **Project Index**.
 - Internal engine: **Project Index Compiler**.
 - Extension ecosystem: **Indexer Extensions**.
@@ -35,30 +35,30 @@ invalidate static extraction structurally instead of relying only on manual epoc
 
 Accepted public package surfaces after the rename:
 
-- `@crux/indexer`
-- `@crux/indexer/extensions`
-- `@crux/indexer/testing`
-- `@crux/indexer/source-resolver`
+- `@use-crux/indexer`
+- `@use-crux/indexer/extensions`
+- `@use-crux/indexer/testing`
+- `@use-crux/indexer/source-resolver`
 
 Accepted host-only surfaces while the package remains private:
 
-- `@crux/indexer/host`
-- `@crux/indexer/host/static-index`
-- `@crux/indexer/host/semantic`
-- `@crux/indexer/host/runtime`
-- `@crux/indexer/host/static-compat`
-- `@crux/indexer/contracts/worker-events`
-- `@crux/indexer/contracts/static-index`
-- `@crux/indexer/contracts/static-syntax`
-- `@crux/indexer/contracts/semantic`
+- `@use-crux/indexer/host`
+- `@use-crux/indexer/host/static-index`
+- `@use-crux/indexer/host/semantic`
+- `@use-crux/indexer/host/runtime`
+- `@use-crux/indexer/host/static-compat`
+- `@use-crux/indexer/contracts/worker-events`
+- `@use-crux/indexer/contracts/static-index`
+- `@use-crux/indexer/contracts/static-syntax`
+- `@use-crux/indexer/contracts/semantic`
 
-`@crux/indexer/testing` exposes source-text fixtures for extension authors. Fixtures use the same
+`@use-crux/indexer/testing` exposes source-text fixtures for extension authors. Fixtures use the same
 static extraction engine as production with an in-memory `SourceReader` and `cache: 'none'`, which
 keeps extension tests on the public source-text-to-facts path rather than hand-building parser-native
 contexts.
 
-`@crux/indexer/contracts/*` is the TypeScript-owned contract spine for worker-event, Static Syntax,
-Static Index, and Semantic Evidence protocols. `@crux/indexer/host/*` exposes focused Crux-owned
+`@use-crux/indexer/contracts/*` is the TypeScript-owned contract spine for worker-event, Static Syntax,
+Static Index, and Semantic Evidence protocols. `@use-crux/indexer/host/*` exposes focused Crux-owned
 worker bridges for static indexing, semantic enrichment, runtime patch conversion, and Static Index
 compatibility-host calls. Before public release, each host-only surface must be removed, made
 intentionally public, or kept package-private through build output.
@@ -171,13 +171,13 @@ policy, or source-ref helpers once a file starts owning more than one compiler r
 ## Local Read-Model Boundary
 
 The Project Index Compiler emits raw Project Index snapshots and patches. It does not own devtools
-quality annotations. `@crux/local` stores those raw snapshots in `store.Store`; `Store.GetIndex()`
+quality annotations. `@use-crux/local` stores those raw snapshots in `store.Store`; `Store.GetIndex()`
 returns the raw value for cache writes, runtime snapshot merging, suite discovery, and other callers
 that must not observe derived fields.
 
-The devtools-facing read model is produced by `@crux/local/internal/indexread`. Its `Model.Index()`
+The devtools-facing read model is produced by `@use-crux/local/internal/indexread`. Its `Model.Index()`
 is the single owner of derived `definition.quality` data and local metadata enrichment. The
-`.crux/quality` filesystem contract is owned separately by `@crux/local/internal/qualityfs`; indexread
+`.crux/quality` filesystem contract is owned separately by `@use-crux/local/internal/qualityfs`; indexread
 loads a `qualityfs.Snapshot` instead of parsing those files itself. The pipeline order is fixed:
 
 1. Join in-memory eval, RAG eval, and flow runs from an atomic `Store.Snapshot()`.
@@ -185,7 +185,7 @@ loads a `qualityfs.Snapshot` instead of parsing those files itself. The pipeline
    policy from a `qualityfs.Snapshot`.
 3. Add source mtime metadata and safety `appliesTo` metadata for local UI consumption.
 
-This split keeps `@crux/indexer` responsible for authored source facts while `@crux/local` owns the
+This split keeps `@use-crux/indexer` responsible for authored source facts while `@use-crux/local` owns the
 runtime/file-system read model consumed by HTTP, websocket snapshots, and the React devtools UI. New
 `.crux/quality` parsing, overlay, or normalization rules belong in `internal/qualityfs`; new
 `IndexQuality` aggregation rules belong in `internal/indexread`, not in `store`, `quality.Service`,
@@ -193,7 +193,7 @@ or devtools call sites.
 
 Quality workbench insights are another local boundary: `quality.Service` loads a `qualityfs.Snapshot`
 and observability-derived runs, then calls pure `deriveInsights` logic with an explicit clock. That
-derivation must not move into `@crux/indexer` or `qualityfs`, because it combines runtime telemetry
+derivation must not move into `@use-crux/indexer` or `qualityfs`, because it combines runtime telemetry
 with local quality snapshot state.
 
 ## Project Model And Configuration Boundary
@@ -287,12 +287,12 @@ workspace, and scorer discovery are registered through `cruxCoreExtension`. Trav
 use internal unstable helpers that complement the extension boundary without becoming a public visitor
 API.
 
-The `@crux/indexer/extensions` subpath is experimental. It is documented so first-party
+The `@use-crux/indexer/extensions` subpath is experimental. It is documented so first-party
 internals and tests can use the same shape that future external extension loading may adopt, but it
 does not yet promise stable third-party plugin support.
 
-Third-party loading is config-driven and allowlisted. `@crux/core` stores inert
-`config({ indexer: { extensions, trust, rules } })` data for local tooling, and `@crux/indexer`
+Third-party loading is config-driven and allowlisted. `@use-crux/core` stores inert
+`config({ indexer: { extensions, trust, rules } })` data for local tooling, and `@use-crux/indexer`
 enforces that data when constructing a compiler runtime. The effectful loader preflights trust by
 configured package name before import, resolves packages from the project root, reads the installed
 package version from package metadata, imports the selected package export, and then delegates to the
@@ -306,9 +306,9 @@ that performs package resolution/import, and it should stay explicit about trust
 Node package is code execution, not a sandbox.
 
 The package export map intentionally separates public authoring surfaces from host/internal bridges:
-`@crux/indexer`, `@crux/indexer/extensions`, `@crux/indexer/testing`, and
-`@crux/indexer/source-resolver` are the public-facing surfaces; `@crux/indexer/host/*` and
-`@crux/indexer/contracts/*` are Crux-owned host and cross-runtime contract surfaces while the package
+`@use-crux/indexer`, `@use-crux/indexer/extensions`, `@use-crux/indexer/testing`, and
+`@use-crux/indexer/source-resolver` are the public-facing surfaces; `@use-crux/indexer/host/*` and
+`@use-crux/indexer/contracts/*` are Crux-owned host and cross-runtime contract surfaces while the package
 remains private. Other compiler and indexer modules are reached by relative imports inside the
 package so they do not accidentally become third-party API.
 
@@ -330,7 +330,7 @@ The runtime is functional and value-oriented:
 - Semantic cache keys combine the analyzed source closure, config boundary hashes, TypeScript
   version, and semantic compiler-options identity. Semantic fact-format changes use
   `SEMANTIC_FACTS_CACHE_EPOCH`; Go-owned persisted snapshots use `projectIndexSnapshotCacheEpoch`
-  in `@crux/local`.
+  in `@use-crux/local`.
 - No extension code receives graph builders, cache handles, mutable diagnostics arrays, or stable raw
   TypeScript AST APIs.
 - Existing compatibility helpers delegate to the runtime during migration, but the runtime is the
@@ -387,7 +387,7 @@ This boundary should stay distinct from `project-indexer.mjs`:
 - Index source refs can enrich project intelligence, but they do not replace source-map lookup for
   bundled runtime frames.
 
-The stable import remains `@crux/indexer/source-resolver`. Internally, the implementation is
+The stable import remains `@use-crux/indexer/source-resolver`. Internally, the implementation is
 organized as a small stateful facade over pure functional modules:
 
 - `source-resolver/filesystem.ts`: injected filesystem effects.
@@ -568,7 +568,7 @@ The incremental planner is not the incremental executor. Planner modules stay pu
 executor modules own analyzer calls, patch construction, fallback routing, and execution reports.
 
 The Go runtime remains the read-model owner. The `project-indexer.mjs` worker exposes
-`indexProjectIncremental`; `@crux/local` can call it with a previous index plus changed/deleted
+`indexProjectIncremental`; `@use-crux/local` can call it with a previous index plus changed/deleted
 files, then apply the returned ordered patches through the same index patch state used by AST and
 semantic refreshes.
 
@@ -672,7 +672,7 @@ Known v1 boundary:
   watcher recursively registers project directories, ignores generated/cache directories, debounces
   event bursts, coalesces changed/deleted file sets, and feeds a single-flight incremental reindex
   runner so index refreshes never overlap.
-- Opt-in watch benchmarks live in `@crux/devtools` (`perf:indexer:watch`) for planner/AST/semantic
+- Opt-in watch benchmarks live in `@use-crux/devtools` (`perf:indexer:watch`) for planner/AST/semantic
   worker timing and in `packages/local/internal/devtools` for Go-side patch commit and projection
   timing. They are not part of deterministic default CI.
 

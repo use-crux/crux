@@ -232,5 +232,5 @@ function isCruxCallName(name: string): boolean {
 }
 
 function isNativeDirectCruxSource(source: string, cruxCallNames: readonly string[]): boolean {
-  return /from\s+['"]@crux\/core['"]/.test(source) && isNativeDirectCandidateCallSet(cruxCallNames)
+  return /from\s+['"]@use-crux\/core['"]/.test(source) && isNativeDirectCandidateCallSet(cruxCallNames)
 }

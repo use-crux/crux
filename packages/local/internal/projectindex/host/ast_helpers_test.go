@@ -11,7 +11,7 @@ import (
 func writeStaticIndexEnabledConfig(t testing.TB, root string) string {
 	t.Helper()
 	configFile := filepath.Join(root, "crux.config.ts")
-	source := []byte("import { config } from '@crux/core'\nexport default config({ experimental: { indexer: { nativeAst: true } } })\n")
+	source := []byte("import { config } from '@use-crux/core'\nexport default config({ experimental: { indexer: { nativeAst: true } } })\n")
 	if err := os.WriteFile(configFile, source, 0o600); err != nil {
 		t.Fatalf("write Static Index config: %v", err)
 	}

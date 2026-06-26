@@ -1,6 +1,6 @@
 ---
 title: Runtime Bridge
-description: API reference for @crux/core/runtime-bridge schemas and command-plane helpers.
+description: API reference for @use-crux/core/runtime-bridge schemas and command-plane helpers.
 ---
 
 ```ts
@@ -12,10 +12,10 @@ import {
   connectRuntimeBridge,
   executeRuntimeBridgeCommand,
   getRuntimeBridgeManifest,
-} from '@crux/core/runtime-bridge'
+} from '@use-crux/core/runtime-bridge'
 ```
 
-The Runtime Bridge is the local-dev command plane between the `@crux/local` Go service and a live application runtime. It is used for inspectable resources and framework-specific local commands. It is not the execution trace transport; runtime traces use `@crux/core/observability`.
+The Runtime Bridge is the local-dev command plane between the `@use-crux/local` Go service and a live application runtime. It is used for inspectable resources and framework-specific local commands. It is not the execution trace transport; runtime traces use `@use-crux/core/observability`.
 
 ## Command errors
 
@@ -45,5 +45,5 @@ The local Go bridge preserves those details for WebSocket, HTTP, and embedded ev
 ## Related
 
 - Reference: [Devtools Plugin](/docs/reference/crux-core/devtools)
-- Reference: [@crux/local](/docs/reference/local)
+- Reference: [@use-crux/local](/docs/reference/local)
 - Guide: [Devtools](/docs/guides/observability/devtools)

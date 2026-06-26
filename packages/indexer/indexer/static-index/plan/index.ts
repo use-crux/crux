@@ -4,7 +4,7 @@ import type {
   ProjectIndexShard,
   ProjectIndexSnapshot,
   ProjectModelResolutionMode,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import { loadConfigPolicyProjectConfig, loadProjectConfig } from '../../config'
 import {
   compilerProfileWithResolvedExtensions,
@@ -191,7 +191,7 @@ export async function inspectProjectStaticSyntaxPlan(
 function projectStaticSyntaxPlanSourceGraph(shards: readonly ProjectIndexShard[]): ProjectIndexSnapshot['sourceGraph'] {
   return {
     schemaVersion: 1,
-    producedBy: '@crux/indexer',
+    producedBy: '@use-crux/indexer',
     capabilities: [
       'source-dependencies',
       'source-dependents',

@@ -1,6 +1,6 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
-import type { ContextEntry, MergedInput, Prompt, PromptConfig, ResolvedPrompt } from '@crux/core'
-import type { CruxStore } from '@crux/core/store'
+import type { ContextEntry, MergedInput, Prompt, PromptConfig, ResolvedPrompt } from '@use-crux/core'
+import type { CruxStore } from '@use-crux/core/store'
 import type { z } from 'zod'
 import type { ComponentApi } from '../src/component/_generated/component'
 import type { ConvexRuntimeTarget } from '../runtime'

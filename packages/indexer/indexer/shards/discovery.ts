@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
-import type { ProjectIndexShard } from '@crux/core/project-index'
+import type { ProjectIndexShard } from '@use-crux/core/project-index'
 import { globSync } from 'tinyglobby'
 import type { ProjectShardFileBatch, ProjectShardGraph } from './types'
 

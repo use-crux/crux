@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '@use-crux/core/project-index'
 import { sourceForFile, sourceSnippet } from './ast/snippets'
 import { projectRelation } from './relations'
 

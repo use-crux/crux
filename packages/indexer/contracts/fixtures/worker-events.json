@@ -20,7 +20,7 @@
           "kind": "definitions",
           "phase": "ast",
           "projectRoot": "/repo",
-          "producer": { "name": "@crux/indexer", "version": "contract-spine" },
+          "producer": { "name": "@use-crux/indexer", "version": "contract-spine" },
           "fidelity": "inferred",
           "provenance": { "kind": "source", "file": "/repo/src/contract.ts" },
           "fact": {
@@ -38,7 +38,7 @@
           "kind": "diagnostics",
           "phase": "ast",
           "projectRoot": "/repo",
-          "producer": { "name": "@crux/indexer", "version": "contract-spine" },
+          "producer": { "name": "@use-crux/indexer", "version": "contract-spine" },
           "fidelity": "inferred",
           "provenance": { "kind": "source", "file": "/repo/src/contract.ts" },
           "fact": {

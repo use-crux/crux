@@ -59,7 +59,7 @@ export interface ConfigureOptions {
      * Enable the Runtime Bridge command plane.
      *
      * `true` uses the core default WS peer for long-lived local Node runtimes.
-     * Framework integrations such as `@crux/convex` can register HTTP bridge
+     * Framework integrations such as `@use-crux/convex` can register HTTP bridge
      * endpoints from their setup helpers. Explicit bridge config wins.
      */
     bridge?: RuntimeBridgeOptions
@@ -278,7 +278,7 @@ function buildTagIndex(prompts: AnyPrompt[]): Map<string, AnyPrompt[]> {
  *
  * @example
  * ```ts
- * import { configure, createPrompts, createContexts } from '@crux/core'
+ * import { configure, createPrompts, createContexts } from '@use-crux/core'
  *
  * const prompts = createPrompts({
  *   editor: { edit: draftEdit, seo: seoEdit },

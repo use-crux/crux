@@ -1,4 +1,4 @@
-import { config } from '@crux/core'
+import { config } from '@use-crux/core'
 import { describe, expect, it, vi } from 'vitest'
 import { convexRuntimeStore, createConvexRuntimeBridge, getConvexCruxRuntime, type ConvexCtxPort } from '../index'
 import { inMemoryCruxStore, memory, memoryBlock } from '../memory'

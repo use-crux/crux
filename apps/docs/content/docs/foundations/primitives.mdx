@@ -16,7 +16,7 @@ Each section is a one-paragraph hook plus an example so you can recognize the pr
 A prompt is a typed data structure: input schema, output schema (or absent for text generation), system message, user prompt, contexts to compose, settings. Define once, run with any adapter.
 
 ```ts
-import { prompt } from '@crux/core'
+import { prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const summarize = prompt({
@@ -35,7 +35,7 @@ const summarize = prompt({
 A context is a reusable fragment that contributes system text, input fields, and tools to any prompt that uses it. Contexts have priority (drop order under token pressure), `when` predicates (conditional inclusion), and optional caching.
 
 ```ts
-import { context } from '@crux/core'
+import { context } from '@use-crux/core'
 
 const brand = context({
   id: 'brand',
@@ -71,7 +71,7 @@ const search = context({
 Crux memory is block based. Compose the blocks you need and pass the composed `memory()` object into a prompt:
 
 ```ts
-import { memory, workingState, episodes } from '@crux/core/memory'
+import { memory, workingState, episodes } from '@use-crux/core/memory'
 
 const session = workingState({
   id: 'session',
@@ -93,8 +93,8 @@ const assistantMemory = memory({
 A retrieval corpus is the product-facing RAG path: load documents, sync them incrementally, and query them through a retriever. `indexer()` defines how documents become chunks; `corpus()` remembers source state across sync runs; `retriever()` is the read surface for prompts and tools.
 
 ```ts
-import { corpus, indexer } from '@crux/core/indexing'
-import { retriever } from '@crux/core/retrieval'
+import { corpus, indexer } from '@use-crux/core/indexing'
+import { retriever } from '@use-crux/core/retrieval'
 
 const docsIndexer = indexer({ id: 'docs', namespace: 'docs', store, dense })
 const docsCorpus = corpus({ id: 'docs', namespace: 'docs', store, indexer: docsIndexer })
@@ -124,7 +124,7 @@ When conversations get long, you need to compress. Crux gives you four primitive
 An agent is a prompt with a defined identity, optional default model, allowed tools, and allowed handoffs to other agents.
 
 ```ts
-import { agent } from '@crux/core/agent'
+import { agent } from '@use-crux/core/agent'
 
 const researcher = agent({
   id: 'researcher',
@@ -152,7 +152,7 @@ Combine multiple agents into structured workflows:
 A flow is a suspendable, resumable orchestration. Each step is named and cached — when you resume, only steps after the suspension point re-run.
 
 ```ts
-import { flow } from '@crux/core/flow'
+import { flow } from '@use-crux/core/flow'
 
 const research = flow('research', async (flow) => {
   const plan = await flow.step('plan', () => generate(planner, { model, input: flow.input }))
@@ -168,8 +168,8 @@ const research = flow('research', async (flow) => {
 Plans are freeform documents describing intent. Task lists are structured work tracking with live status. Both persist via `CruxStore` and have React hooks for live UI subscriptions.
 
 ```ts
-import { plan } from '@crux/core/plan'
-import { tasklist } from '@crux/core/tasks'
+import { plan } from '@use-crux/core/plan'
+import { tasklist } from '@use-crux/core/tasks'
 
 const p = await plan({ title: 'Q1 roadmap', content: '...' })
 const tl = await tasklist({ planId: p.id, title: 'Roadmap tasks', tasks: [...] })
@@ -182,7 +182,7 @@ const tl = await tasklist({ planId: p.id, title: 'Roadmap tasks', tasks: [...] }
 Skills are Markdown-based instruction sets that agents can load on demand. Compatible with the [skills.sh](https://skills.sh) format.
 
 ```ts
-import { skill, skillsSh } from '@crux/core/skill'
+import { skill, skillsSh } from '@use-crux/core/skill'
 
 const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
 const research = skill.fromRegistry(skillsSh, 'user/skills/research')
@@ -213,7 +213,7 @@ Two distinct primitives for two distinct problems:
 ## Observability
 
 - **Devtools** — visual tracing UI in dev (`crux dev`)
-- **`@crux/otel`** — OpenTelemetry spans for prod (Datadog, Honeycomb, Grafana)
+- **`@use-crux/otel`** — OpenTelemetry spans for prod (Datadog, Honeycomb, Grafana)
 - **Plugins** — composable runtime extensions via `CruxPlugin` interface
 - **Middleware** — global wrapper around every `generate()` / `stream()` call
 

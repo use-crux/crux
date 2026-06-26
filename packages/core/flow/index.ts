@@ -1,17 +1,17 @@
 /**
- * `@crux/core/flow` — runtime flow scoping.
+ * `@use-crux/core/flow` — runtime flow scoping.
  *
  * Use `flow()` to create named flow handles with `.run()` and `.signal()`,
  * grouping `generate()` calls into structured pipelines with named steps,
  * automatic devtools tracing, suspend/resume, and retry/fallback.
  *
  * Flows are evaluated with the Quality system: wrap a handle in
- * `evaluate({ task: myFlow, ... })` from `@crux/core/quality`.
+ * `evaluate({ task: myFlow, ... })` from `@use-crux/core/quality`.
  *
  * @example
  * ```ts
- * import { flow } from '@crux/core'
- * import { generate } from '@crux/ai'
+ * import { flow } from '@use-crux/core'
+ * import { generate } from '@use-crux/ai'
  *
  * const researchFlow = flow('research', async (flow) => {
  *   const plan = await flow.step('plan', () => generate(planner, { model, input }))

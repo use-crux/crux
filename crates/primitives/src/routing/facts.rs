@@ -31,7 +31,7 @@ pub(crate) fn project_routing_native_fact(
     Some(StaticNativeFactProjection {
         match_index,
         replaces: vec![StaticNativeFactExtractorIdentity {
-            extension: "@crux/indexer/crux-core".to_string(),
+            extension: "@use-crux/indexer/crux-core".to_string(),
             extractor: "routing".to_string(),
         }],
         facts,

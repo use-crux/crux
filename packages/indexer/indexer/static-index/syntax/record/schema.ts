@@ -1,4 +1,4 @@
-import type { JsonSchema } from '@crux/core/project-index'
+import type { JsonSchema } from '@use-crux/core/project-index'
 import type { StaticObjectValue, StaticSyntaxValue } from './types'
 import { resolveStaticSyntaxValue, staticObjectPropertyValue, type StaticSyntaxInitializerMap } from './value'
 

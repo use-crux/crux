@@ -7,8 +7,8 @@ Plans are freeform documents that capture agent intent — what to do and how to
 
 <Callout type="info">
 **Prerequisites:**
-- `@crux/core` — plans, tasks, and reactive hooks
-- An AI SDK adapter (`@crux/ai` for Vercel AI SDK, or `@crux/openai`/`@crux/google`/`@crux/anthropic`)
+- `@use-crux/core` — plans, tasks, and reactive hooks
+- An AI SDK adapter (`@use-crux/ai` for Vercel AI SDK, or `@use-crux/openai`/`@use-crux/google`/`@use-crux/anthropic`)
 - A `CruxStore` adapter for persistence (`inMemoryCruxStore()` for dev, `defineConvexStoreContract().store(ctx)` for Convex, `cruxRedisStore()` for Redis)
 </Callout>
 
@@ -26,10 +26,10 @@ Plans and task lists solve this:
 ## Quick Start
 
 ```ts title="plan-execute.ts"
-import { createPlanTool, planAgent } from '@crux/core/plan'
-import { tasklist, taskWorker } from '@crux/core/tasks'
-import { prompt, generate } from '@crux/ai'
-import { openai } from '@ai-sdk/openai' // Use any AI SDK model — see @crux/ai docs
+import { createPlanTool, planAgent } from '@use-crux/core/plan'
+import { tasklist, taskWorker } from '@use-crux/core/tasks'
+import { prompt, generate } from '@use-crux/ai'
+import { openai } from '@ai-sdk/openai' // Use any AI SDK model — see @use-crux/ai docs
 
 const model = openai('gpt-4o')
 

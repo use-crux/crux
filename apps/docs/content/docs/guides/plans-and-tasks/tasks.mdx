@@ -14,7 +14,7 @@ A task list is a set of structured work items with status tracking, progress upd
 ## Creating Task Lists
 
 ```ts title="create-tasklist.ts"
-import { tasklist } from '@crux/core/tasks'
+import { tasklist } from '@use-crux/core/tasks'
 
 // Standalone — no plan association
 const handle = await tasklist({
@@ -183,7 +183,7 @@ Once discarded, the status is permanent. Auto-completion will not override it.
 For existing task lists, `taskListAgent()` creates a handle without creating a new entity:
 
 ```ts title="tasklist-agent.ts"
-import { taskListAgent } from '@crux/core/tasks'
+import { taskListAgent } from '@use-crux/core/tasks'
 
 const taskAgent = taskListAgent(handle.id)
 
@@ -248,7 +248,7 @@ const tools = taskAgent.asTools()
 When no task list exists yet, give the LLM a creation tool:
 
 ```ts title="creation-tool.ts"
-import { createTaskListTool } from '@crux/core/tasks'
+import { createTaskListTool } from '@use-crux/core/tasks'
 
 const taskListTool = createTaskListTool({
   template: 'Tasks should be granular: research, draft, review, publish',

@@ -1,4 +1,4 @@
-import type { ProjectSourceRef, ProjectSourceRefRole, SourceLocation, SourceSnippet } from '@crux/core/project-index'
+import type { ProjectSourceRef, ProjectSourceRefRole, SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
 import type {
   StaticInitializerRecord,
   StaticObjectProperty,

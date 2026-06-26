@@ -27,7 +27,7 @@ describe('native semantic direct Crux projectors syntax view', () => {
     await writeFile(
       file,
       `
-        import { prompt as definePrompt } from '@crux/core'
+        import { prompt as definePrompt } from '@use-crux/core'
         import * as catalog from './catalog'
 
         export const supportPrompt = definePrompt({
@@ -75,7 +75,7 @@ describe('native semantic direct Crux projectors syntax view', () => {
       expect(toolNamespace && syntax.identifierText(toolNamespace)).toBe('catalog')
 
       const imports = nodes.filter((node) => syntax.isKind(node, 'importDeclaration'))
-      expect(imports.map((node) => syntax.importModuleSpecifier(node))).toEqual(['@crux/core', './catalog'])
+      expect(imports.map((node) => syntax.importModuleSpecifier(node))).toEqual(['@use-crux/core', './catalog'])
       expect(syntax.namedImportSpecifiers(imports[0]!).map((node) => syntax.text(node))).toEqual([
         'prompt as definePrompt',
       ])

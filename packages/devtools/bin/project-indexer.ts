@@ -16,8 +16,8 @@ import {
   inspectProjectStaticSyntaxPlan,
   inspectProjectConfig,
   resolveProjectModel,
-} from '@crux/indexer'
-import { isProjectModelResolutionMode, type ProjectModelResolutionMode } from '@crux/core/project-index'
+} from '@use-crux/indexer'
+import { isProjectModelResolutionMode, type ProjectModelResolutionMode } from '@use-crux/core/project-index'
 import {
   createProjectIndexWorkerRequestAssembler,
   type ProjectIndexWorkerRequest,

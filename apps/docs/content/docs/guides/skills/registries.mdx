@@ -10,7 +10,7 @@ Skills can come from three places: inline in your code, a file on disk, or a rem
 [skills.sh](https://skills.sh) is the community registry for SKILL.md files. Crux exports it as the `skillsSh` registry value:
 
 ```ts
-import { skill, skillsSh } from '@crux/core/skill'
+import { skill, skillsSh } from '@use-crux/core/skill'
 
 const seo = skill.fromRegistry(skillsSh, 'mattpocock/skills/seo-analysis')
 const research = skill.fromRegistry(skillsSh, 'owner/repo/skill-name')
@@ -25,7 +25,7 @@ Content is fetched lazily on the first `prompt.resolve()` and cached in process 
 Host your own skills on any HTTPS server that implements the `.well-known/agent-skills/` protocol. Useful for shared internal skills — brand voice, legal review, compliance checks — that you don't want to publish publicly.
 
 ```ts
-import { skill, registry } from '@crux/core/skill'
+import { skill, registry } from '@use-crux/core/skill'
 
 const internal = registry({
   name: 'internal',
@@ -74,7 +74,7 @@ All three loaders throw `SkillLoadError` (a tagged error) when something goes wr
 For `fromFile` and `inline`, errors surface at import time. For `fromRegistry`, remote fetch errors surface at the first `prompt.resolve()` because registry content is loaded lazily.
 
 ```ts
-import { SkillLoadError } from '@crux/core/skill'
+import { SkillLoadError } from '@use-crux/core/skill'
 
 try {
   await myPrompt.resolve({ input })

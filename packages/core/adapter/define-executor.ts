@@ -176,7 +176,7 @@ export interface CruxExecutor<TClient, TModel, TRawResponse = unknown, TRawStrea
  *
  * @example
  * ```ts
- * import { executorAdapter, fakeExecutor } from '@crux/core/adapter'
+ * import { executorAdapter, fakeExecutor } from '@use-crux/core/adapter'
  *
  * const fake = fakeExecutor({ loops: [[{ text: 'hello' }]] })
  * const executor = executorAdapter(fake.spec)(fake.client)

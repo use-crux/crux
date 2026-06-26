@@ -1,6 +1,6 @@
 import { relative } from 'node:path'
 import ts from 'typescript'
-import type { ProjectDefinitionKind, SourceLocation, SourceSnippet } from '@crux/core/project-index'
+import type { ProjectDefinitionKind, SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
 import { schemaProperty } from '../../ast/schemas'
 import { sourceForNode, sourceSnippetForNode } from '../../ast/snippets'
 import type { ImportBinding } from '../../ast/imports'

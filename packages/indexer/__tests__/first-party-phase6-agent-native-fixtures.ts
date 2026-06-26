@@ -32,7 +32,7 @@ describe('first-party Phase 6 native agent fixtures', () => {
       })
 
       expect(record.nativeFacts?.flatMap((fact) => fact.replaces ?? [])).toEqual(
-        expect.arrayContaining([{ extension: '@crux/indexer/crux-core', extractor: 'agent' }]),
+        expect.arrayContaining([{ extension: '@use-crux/indexer/crux-core', extractor: 'agent' }]),
       )
       expectNativeExtractionParity(nativeOut, fallbackOut)
     },
@@ -80,14 +80,14 @@ describe('first-party Phase 6 native agent fixtures', () => {
 
       const agentPackets = (record.nativeFacts ?? []).filter((fact) =>
         fact.replaces?.some(
-          (replacement) => replacement.extension === '@crux/indexer/crux-core' && replacement.extractor === 'agent',
+          (replacement) => replacement.extension === '@use-crux/indexer/crux-core' && replacement.extractor === 'agent',
         ),
       )
       expect(record.matches.some((match) => match.kind === 'new' && match.callee.name === 'Agent')).toBe(true)
       expect(agentPackets).toHaveLength(2)
       expect(agentPackets.map((fact) => fact.replaces)).toEqual([
-        [{ extension: '@crux/indexer/crux-core', extractor: 'agent' }],
-        [{ extension: '@crux/indexer/crux-core', extractor: 'agent' }],
+        [{ extension: '@use-crux/indexer/crux-core', extractor: 'agent' }],
+        [{ extension: '@use-crux/indexer/crux-core', extractor: 'agent' }],
       ])
       expectNativeExtractionParity(nativeOut, fallbackOut)
 
@@ -146,7 +146,7 @@ describe('first-party Phase 6 native agent fixtures', () => {
 
       const agentPackets = (record.nativeFacts ?? []).filter((fact) =>
         fact.replaces?.some(
-          (replacement) => replacement.extension === '@crux/indexer/crux-core' && replacement.extractor === 'agent',
+          (replacement) => replacement.extension === '@use-crux/indexer/crux-core' && replacement.extractor === 'agent',
         ),
       )
       expect(agentPackets).toHaveLength(1)

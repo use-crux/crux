@@ -8,8 +8,8 @@
  */
 
 import type { EmbeddingModel, RerankingModel } from 'ai'
-import { embedding as coreEmbedding, type DenseEmbedding } from '@crux/core/embedding'
-import { reranker as coreReranker, type RetrieverHit, type RetrieverReranker } from '@crux/core/retrieval'
+import { embedding as coreEmbedding, type DenseEmbedding } from '@use-crux/core/embedding'
+import { reranker as coreReranker, type RetrieverHit, type RetrieverReranker } from '@use-crux/core/retrieval'
 import type { SdkGateway } from './gateway'
 
 export interface AIRerankerConfig {

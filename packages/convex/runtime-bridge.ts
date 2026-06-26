@@ -1,7 +1,7 @@
 /**
  * Convex runtime bridge for Crux.
  *
- * The bridge owns the host/runtime side of `@crux/convex`: request-scoped
+ * The bridge owns the host/runtime side of `@use-crux/convex`: request-scoped
  * store creation, ambient runtime binding, namespace defaults, and the
  * devtools HTTP bridge. Convex Agent integration layers on top of this module
  * instead of being part of the runtime boundary itself.
@@ -9,8 +9,8 @@
  * @module
  */
 
-import type { Crux } from '@crux/core'
-import type { CruxStore } from '@crux/core/store'
+import type { Crux } from '@use-crux/core'
+import type { CruxStore } from '@use-crux/core/store'
 import { setup as setupBridge } from './bridge'
 import type { CruxConvexBridgeHttpRouter, CruxConvexBridgeSetupOptions } from './bridge'
 import { assertConvexCtxPort, createCruxConvexStoreResolver, type CruxConvexProfileStoreOptions } from './profile-store'
@@ -34,7 +34,7 @@ export interface ConvexRunScope<TCtx extends ConvexCtxPort, TTarget extends Conv
   readonly target?: TTarget
   /** Request-scoped Crux store created by the bridge. */
   readonly store: CruxStore
-  /** Active runtime object bound for mirrored `@crux/convex/*` helpers. */
+  /** Active runtime object bound for mirrored `@use-crux/convex/*` helpers. */
   readonly runtime: ConvexCruxRuntime<TCtx, TTarget>
 }
 
@@ -63,7 +63,7 @@ export interface ConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtxPort>
 
 /** Options for `createConvexRuntimeBridge()`. */
 export interface CreateConvexRuntimeBridgeOptions<TCtx extends ConvexCtxPort = ConvexCtxPort> {
-  /** Crux persistence component installed from `@crux/convex/convex.config`. */
+  /** Crux persistence component installed from `@use-crux/convex/convex.config`. */
   readonly component: ComponentApi
   /**
    * Default namespace for memory and skill persistence.

@@ -98,7 +98,7 @@ describe('indexer extension loading', () => {
 
   it('lets allowlisted package extensions contribute extractor facts to project indexing', async () => {
     const root = await fixtureRoot()
-    await linkWorkspacePackage(root, '@crux/core', 'packages/core')
+    await linkWorkspacePackage(root, '@use-crux/core', 'packages/core')
     await writePackage(root, '@acme/crux-indexer', {
       packageVersion: '1.0.0',
       source: `
@@ -135,7 +135,7 @@ describe('indexer extension loading', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
 
         export default config({
           indexer: {

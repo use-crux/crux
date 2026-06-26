@@ -1,5 +1,5 @@
 /**
- * Plan and TaskList types for `@crux/core/plan`.
+ * Plan and TaskList types for `@use-crux/core/plan`.
  *
  * Plans are freeform documents describing agent intent.
  * Task lists are structured work tracking with live status updates.

@@ -1,4 +1,4 @@
-import type { JsonSchema, ProjectDefinition, ProjectSourceRef } from '@crux/core/project-index'
+import type { JsonSchema, ProjectDefinition, ProjectSourceRef } from '@use-crux/core/project-index'
 import type {
   SemanticAnalyzerContext,
   SemanticAnalyzerView,

@@ -20,7 +20,7 @@
           "version": "1",
           "digest": "sha256:relation-policy"
         },
-        "extensionManifests": [{ "name": "@crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }],
+        "extensionManifests": [{ "name": "@use-crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }],
         "ruleDescriptors": {
           "name": "crux-indexer-rule-descriptors",
           "version": "1",
@@ -37,7 +37,7 @@
       "callInterests": [
         {
           "name": "prompt",
-          "importFrom": ["@crux/core"],
+          "importFrom": ["@use-crux/core"],
           "configArg": 0,
           "properties": ["id", "prompt"],
           "callbacks": [{ "property": "prompt", "maxDepth": 2 }],
@@ -48,7 +48,7 @@
       "constructorInterests": [
         {
           "name": "Agent",
-          "importFrom": ["@crux/core"],
+          "importFrom": ["@use-crux/core"],
           "configArg": 0,
           "properties": ["name", "prompt"]
         }
@@ -74,7 +74,7 @@
           "version": "1",
           "digest": "sha256:relation-policy"
         },
-        "extensionManifests": [{ "name": "@crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }],
+        "extensionManifests": [{ "name": "@use-crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }],
         "ruleDescriptors": {
           "name": "crux-indexer-rule-descriptors",
           "version": "1",
@@ -96,7 +96,7 @@
         "callInterests": [
           {
             "name": "prompt",
-            "importFrom": ["@crux/core"],
+            "importFrom": ["@use-crux/core"],
             "configArg": 0,
             "properties": ["id", "prompt"],
             "callbacks": [{ "property": "prompt", "maxDepth": 2 }],
@@ -107,7 +107,7 @@
         "constructorInterests": [
           {
             "name": "Agent",
-            "importFrom": ["@crux/core"],
+            "importFrom": ["@use-crux/core"],
             "configArg": 0,
             "properties": ["name", "prompt"]
           }
@@ -118,7 +118,7 @@
         {
           "file": "/repo/src/contract.ts",
           "sourceHash": "sha256:contract",
-          "sourceText": "import { prompt } from '@crux/core'\nexport const contractPrompt = prompt({ id: 'contract', prompt: 'Write the contract fixture.' })"
+          "sourceText": "import { prompt } from '@use-crux/core'\nexport const contractPrompt = prompt({ id: 'contract', prompt: 'Write the contract fixture.' })"
         }
       ],
       "extensionEvidenceInterests": { "calls": ["prompt"] }
@@ -141,7 +141,7 @@
           "version": "1",
           "digest": "sha256:relation-policy"
         },
-        "extensionManifests": [{ "name": "@crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }],
+        "extensionManifests": [{ "name": "@use-crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }],
         "ruleDescriptors": {
           "name": "crux-indexer-rule-descriptors",
           "version": "1",
@@ -220,7 +220,7 @@
           ],
           "sourceGraph": {
             "schemaVersion": 1,
-            "producedBy": "@crux/indexer",
+            "producedBy": "@use-crux/indexer",
             "capabilities": ["definition-ownership", "diagnostic-ownership", "project-shards"],
             "shards": [{ "id": ".", "root": "/repo", "packageFile": "/repo/package.json" }]
           }
@@ -273,7 +273,7 @@
           "version": "1",
           "digest": "sha256:relation-policy"
         },
-        "extensionManifests": [{ "name": "@crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }],
+        "extensionManifests": [{ "name": "@use-crux/indexer/crux-core", "version": "0.1.0", "digest": "sha256:core" }],
         "ruleDescriptors": {
           "name": "crux-indexer-rule-descriptors",
           "version": "1",
@@ -295,7 +295,7 @@
         "callInterests": [
           {
             "name": "prompt",
-            "importFrom": ["@crux/core"],
+            "importFrom": ["@use-crux/core"],
             "configArg": 0,
             "properties": ["id", "prompt"],
             "callbacks": [{ "property": "prompt", "maxDepth": 2 }],
@@ -306,7 +306,7 @@
         "constructorInterests": [
           {
             "name": "Agent",
-            "importFrom": ["@crux/core"],
+            "importFrom": ["@use-crux/core"],
             "configArg": 0,
             "properties": ["name", "prompt"]
           }
@@ -317,7 +317,7 @@
         {
           "file": "/repo/src/contract.ts",
           "sourceHash": "sha256:contract",
-          "sourceText": "import { prompt } from '@crux/core'\nexport const contractPrompt = prompt({ id: 'contract', prompt: 'Write the contract fixture.' })"
+          "sourceText": "import { prompt } from '@use-crux/core'\nexport const contractPrompt = prompt({ id: 'contract', prompt: 'Write the contract fixture.' })"
         }
       ],
       "nativeFacts": [],
@@ -351,7 +351,7 @@
         "callInterests": [
           {
             "name": "prompt",
-            "importFrom": ["@crux/core"],
+            "importFrom": ["@use-crux/core"],
             "configArg": 0,
             "properties": ["id", "prompt"],
             "callbacks": [{ "property": "prompt", "maxDepth": 2 }],
@@ -362,7 +362,7 @@
         "constructorInterests": [
           {
             "name": "Agent",
-            "importFrom": ["@crux/core"],
+            "importFrom": ["@use-crux/core"],
             "configArg": 0,
             "properties": ["name", "prompt"]
           }

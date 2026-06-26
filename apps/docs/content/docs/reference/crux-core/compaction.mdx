@@ -4,7 +4,7 @@ description: Sliding window, budget tracking, summarization, and key facts extra
 ---
 
 ```ts
-import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@crux/core/compaction'
+import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@use-crux/core/compaction'
 ```
 
 <Callout type="info">
@@ -98,7 +98,7 @@ import type {
   BudgetManager,
   BudgetConfig,
   BudgetState,
-} from '@crux/core/compaction'
+} from '@use-crux/core/compaction'
 
 type GenerateTextFn = (opts: { model: unknown; system?: string; prompt: string }) => Promise<{ text: string }>
 type GenerateObjectFn = <T>(opts: {
@@ -116,8 +116,8 @@ Create a `GenerateObjectFn` backed by a full adapter `generate()` function. The 
 Use this when a compaction, scoring, retrieval, or quality API needs the `GenerateObjectFn` shape and the call should still run through adapter runtime behavior such as prompt hooks, validation retry, safety, cassettes, memory, or instrumentation.
 
 ```ts
-import { createGenerateObjectFnFromGenerate } from '@crux/core/compaction'
-import { generate } from '@crux/ai'
+import { createGenerateObjectFnFromGenerate } from '@use-crux/core/compaction'
+import { generate } from '@use-crux/ai'
 
 const generateObject = createGenerateObjectFnFromGenerate(generate, {
   promptId: 'scoring.judge',

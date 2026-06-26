@@ -1,4 +1,4 @@
-import type { IndexDiagnostic, ProjectDefinition } from '@crux/core/project-index'
+import type { IndexDiagnostic, ProjectDefinition } from '@use-crux/core/project-index'
 
 /**
  * Drops noisy rich-import failures for files where static indexing produced definitions.

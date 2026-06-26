@@ -88,7 +88,7 @@ export const remove = mutation({
  *
  * The component owns only Convex-native I/O concerns here: key-indexed range
  * selection, pagination, and page shaping. Decoded JSON filtering is handled by
- * the store-document policy module in `@crux/convex`.
+ * the store-document policy module in `@use-crux/convex`.
  */
 export const list = query({
   args: {

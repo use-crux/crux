@@ -96,7 +96,7 @@ func TestSharedStaticSyntaxRecordCaseFixturesDecode(t *testing.T) {
 		t.Fatalf("record = %+v, want agent constructor fixture", record)
 	}
 	match := record.Matches[0]
-	if match.Kind != "new" || match.VariableName != "agent" || match.Callee.Name != "Agent" || match.Callee.ModuleSpecifier != "@crux/core" {
+	if match.Kind != "new" || match.VariableName != "agent" || match.Callee.Name != "Agent" || match.Callee.ModuleSpecifier != "@use-crux/core" {
 		t.Fatalf("match = %+v, want Agent constructor", match)
 	}
 	var callbackKind, callbackCallee string

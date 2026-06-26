@@ -1,4 +1,4 @@
-# @crux/core/observability
+# @use-crux/core/observability
 
 Canonical Crux observability graph contract.
 

@@ -8,7 +8,7 @@ description: Store Crux JSON records for memory, cache, flows, evals, and worksp
 Use it when Crux needs to read, write, list, or subscribe to structured state:
 
 ```ts
-import { inMemoryDataStore } from '@crux/core/storage'
+import { inMemoryDataStore } from '@use-crux/core/storage'
 
 const data = inMemoryDataStore()
 
@@ -21,7 +21,7 @@ It is not a vector index and it is not a blob store. If a feature needs similari
 ## Interface
 
 ```ts
-import type { DataStore, JsonObject } from '@crux/core/storage'
+import type { DataStore, JsonObject } from '@use-crux/core/storage'
 
 const data: DataStore = {
   async get(key) {
@@ -110,7 +110,7 @@ TTL is used by [context caching](/docs/guides/contexts/caching) and can also be 
 Use `inMemoryDataStore()` for tests and examples:
 
 ```ts
-import { inMemoryDataStore } from '@crux/core/storage'
+import { inMemoryDataStore } from '@use-crux/core/storage'
 
 const data = inMemoryDataStore()
 ```
@@ -121,7 +121,7 @@ Use Upstash Redis for a simple durable key-value store:
 
 ```ts
 import { Redis } from '@upstash/redis'
-import { cruxRedisStore } from '@crux/upstash/redis'
+import { cruxRedisStore } from '@use-crux/upstash/redis'
 
 const data = cruxRedisStore({
   redis: new Redis({
@@ -158,7 +158,7 @@ See [React reference](/docs/reference/react) and [Server reference](/docs/refere
 A custom data store is straightforward if your database can read/write JSON records and list by key prefix.
 
 ```ts
-import type { DataStore, JsonObject } from '@crux/core/storage'
+import type { DataStore, JsonObject } from '@use-crux/core/storage'
 
 export function myDataStore(): DataStore {
   return {

@@ -286,7 +286,7 @@ describe('instrumentation fan-out', () => {
 // ── Export surface ─────────────────────────────────────────────────
 
 describe('shared fake export surface', () => {
-  it('is exported from both @crux/core/agent and the package root', () => {
+  it('is exported from both @use-crux/core/agent and the package root', () => {
     expect(typeof fromAgentBarrel).toBe('function')
     expect(typeof fromPackageRoot).toBe('function')
     expect(fromAgentBarrel).toBe(createFakeAgentExecutor)

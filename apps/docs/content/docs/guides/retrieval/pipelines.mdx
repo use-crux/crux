@@ -14,7 +14,7 @@ import {
   parentExpand,
   queryPlanner,
   retrievalPipeline,
-} from '@crux/core/retrieval'
+} from '@use-crux/core/retrieval'
 
 const advancedDocs = retrievalPipeline(docs, [
   queryPlanner({
@@ -163,7 +163,7 @@ const recent = decay({
 Use `retrievalStage()` for product-specific logic.
 
 ```ts
-import { retrievalStage } from '@crux/core/retrieval'
+import { retrievalStage } from '@use-crux/core/retrieval'
 
 const onlyPublicDocs = retrievalStage({
   name: 'only-public-docs',

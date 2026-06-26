@@ -9,8 +9,8 @@
  * @example
  * ```ts
  * // crux.config.ts
- * import { config } from '@crux/core'
- * import { inMemoryCruxStore } from '@crux/core/store'
+ * import { config } from '@use-crux/core'
+ * import { inMemoryCruxStore } from '@use-crux/core/store'
  *
  * export default config({
  *   quality: {
@@ -87,7 +87,7 @@ export interface Crux extends PromptRegistry {
  * @example
  * ```ts
  * // crux.config.ts
- * import { config } from '@crux/core'
+ * import { config } from '@use-crux/core'
  *
  * export default config({
  *   quality: { defaults: { replay: 'record-new' } },

@@ -132,7 +132,7 @@ func incrementalOverlapBenchmarkPreviousIndex(root string, changedFile string) s
 		Project:       &store.ProjectIdentity{Root: root, Name: "benchmark", ConfigFile: "crux.config.ts"},
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities: []string{
 				"source-dependencies",
 				"source-dependents",

@@ -13,8 +13,8 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '@crux/core'
-import { clearGenerationInterceptor, setGenerationInterceptor } from '@crux/core/adapter'
+import { prompt as makePrompt } from '@use-crux/core'
+import { clearGenerationInterceptor, setGenerationInterceptor } from '@use-crux/core/adapter'
 import type { LanguageModel } from 'ai'
 import { createCruxAi } from '../index'
 import { scriptedGateway } from './scripted-gateway'

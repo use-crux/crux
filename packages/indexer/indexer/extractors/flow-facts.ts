@@ -1,4 +1,4 @@
-import type { ProjectDefinition, ProjectDefinitionKind, ProjectSourceRef } from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectDefinitionKind, ProjectSourceRef } from '@use-crux/core/project-index'
 import { foldedIndexChild } from '../index-presentation'
 import type { ExtractedFacts } from '../extensions'
 import type { StaticRelationRef } from '../types'

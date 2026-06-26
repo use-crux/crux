@@ -101,7 +101,7 @@ fn finalization_derives_source_rows_and_source_graph() {
         .source_graph
         .expect("source graph should be materialized");
     assert_eq!(source_graph.schema_version, 1);
-    assert_eq!(source_graph.produced_by, "@crux/indexer");
+    assert_eq!(source_graph.produced_by, "@use-crux/indexer");
     assert_eq!(
         source_graph.capabilities,
         vec![
@@ -208,7 +208,7 @@ fn source_rows_use_source_graph_shards() {
             }],
             "sourceGraph": {
                 "schemaVersion": 1,
-                "producedBy": "@crux/indexer",
+                "producedBy": "@use-crux/indexer",
                 "capabilities": [
                     "source-dependencies",
                     "source-dependents",

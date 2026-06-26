@@ -6,7 +6,7 @@ description: Type the flow's input, share it with steps via flow.input, extract 
 `flow` accepts two type parameters — `T` for the return type and `TInput` for typed flow input. This lets you pass structured data into a flow at call time and access it from any step via `flow.input`, without threading it through every closure.
 
 ```ts
-import { flow } from '@crux/core'
+import { flow } from '@use-crux/core'
 
 interface PipelineInput {
   query: string
@@ -78,8 +78,8 @@ const result = await researchFlow.run({
 Flows can nest inside other flows. Running `flow().run()` inside another flow creates a parent-child relationship in the observability graph automatically.
 
 ```ts
-import { flow } from '@crux/core'
-import { generate } from '@crux/ai'
+import { flow } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 const model = openai('gpt-4o')

@@ -97,8 +97,8 @@ const memoryMessages = [
 // OTel config code.
 
 const otelCode: CodeLine[] = [
-  { text: `import { config } from '@crux/core'`, type: 'import' },
-  { text: `import { withTelemetry } from '@crux/otel'`, type: 'import' },
+  { text: `import { config } from '@use-crux/core'`, type: 'import' },
+  { text: `import { withTelemetry } from '@use-crux/otel'`, type: 'import' },
   { text: ``, type: 'blank' },
   { text: `export default config({`, type: 'code' },
   { text: `  plugins: [`, type: 'code' },
@@ -135,7 +135,7 @@ const otelStacks = [
 // Plugin code.
 
 const pluginCode: CodeLine[] = [
-  { text: `import type { CruxPlugin } from '@crux/core'`, type: 'import' },
+  { text: `import type { CruxPlugin } from '@use-crux/core'`, type: 'import' },
   { text: ``, type: 'blank' },
   { text: `export function slackAlerts(opts: {`, type: 'code' },
   { text: `  channel: string,`, type: 'code' },
@@ -875,7 +875,7 @@ export default function ObservabilityPage() {
               <>
                 Devtools and{' '}
                 <code className="rounded border border-fd-border bg-fd-card/80 px-1 font-mono text-[0.85em]">
-                  @crux/otel
+                  @use-crux/otel
                 </code>{' '}
                 are themselves{' '}
                 <code className="rounded border border-fd-border bg-fd-card/80 px-1 font-mono text-[0.85em]">
@@ -902,7 +902,7 @@ export default function ObservabilityPage() {
                 Hooks fan out: multiple plugins can subscribe to the same event. Middleware layers. The later plugin
                 wraps the earlier one. Devtools and{' '}
                 <code className="rounded border border-fd-border bg-fd-card/70 px-1 font-mono text-[0.9em]">
-                  @crux/otel
+                  @use-crux/otel
                 </code>{' '}
                 are just two plugins reading the same stream.
               </p>
@@ -942,7 +942,7 @@ export default function ObservabilityPage() {
           </div>
           <div className="mt-10 inline-flex items-center gap-3 rounded-lg border border-fd-border bg-fd-card/50 px-5 py-2.5 font-mono text-[13px]">
             <span className="select-none text-crux/50">$</span>
-            <span className="text-fd-foreground/80">npm install @crux/core @crux/otel</span>
+            <span className="text-fd-foreground/80">npm install @use-crux/core @use-crux/otel</span>
           </div>
         </div>
       </section>

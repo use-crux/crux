@@ -1,4 +1,4 @@
-import type { ProjectDefinitionKind } from '@crux/core/project-index'
+import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
 
 /**
  * Returns the relation type used by a routing child for its resolved target.

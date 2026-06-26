@@ -13,9 +13,9 @@ import type {
   ProjectRelation,
   PromptMeta,
   ToolMeta,
-} from '@crux/core/project-index'
-import type { ProjectModelResolutionMode } from '@crux/core/project-index'
-import { indexDefinitionsFromSnapshot, serializeIndex } from '@crux/core/project-index/serializers'
+} from '@use-crux/core/project-index'
+import type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
+import { indexDefinitionsFromSnapshot, serializeIndex } from '@use-crux/core/project-index/serializers'
 import { applyIndexLintConfig } from '../lints/config'
 import { indexLintFindings } from '../lints/findings'
 import { applyIndexLintSuppressions } from '../lints/suppressions'
@@ -667,7 +667,7 @@ function applyCompilerLintPolicy(input: {
 function projectCompilerSourceGraph(shards: readonly ProjectIndexShard[]): ProjectIndexSnapshot['sourceGraph'] {
   return {
     schemaVersion: 1,
-    producedBy: '@crux/indexer',
+    producedBy: '@use-crux/indexer',
     capabilities: [
       'source-dependencies',
       'source-dependents',

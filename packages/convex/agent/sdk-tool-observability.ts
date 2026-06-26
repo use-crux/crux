@@ -1,4 +1,4 @@
-import { observe } from '@crux/core/observability'
+import { observe } from '@use-crux/core/observability'
 import { flushObservability } from '../observability'
 import { isRecord, stringValue } from './lifecycle-utils'
 import { linkActiveSpanToArtifact } from './sdk-observability-artifacts'

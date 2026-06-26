@@ -4,7 +4,7 @@ description: Provider adapter abstraction for building AI provider integrations.
 ---
 
 ```ts
-import { defineProviderRuntime } from '@crux/core/adapter'
+import { defineProviderRuntime } from '@use-crux/core/adapter'
 import type {
   CruxAdapter,
   AdapterGenerateOptions,
@@ -18,22 +18,22 @@ import type {
   LoopOwnedRuntimeContract,
   ProviderOwnership,
   NativeTranscriptCodec,
-} from '@crux/core/adapter'
-import { transcriptCodecConformance } from '@crux/core/adapter/testing'
+} from '@use-crux/core/adapter'
+import { transcriptCodecConformance } from '@use-crux/core/adapter/testing'
 ```
 
 ## Overview
 
 The adapter package provides the public authoring surface for AI provider adapters. `defineProviderRuntime()` binds a stable runtime id to an explicit `ProviderOwnership`: `ownership: 'single-turn'` with `turn`, where Crux owns the provider step loop, or `ownership: 'loop-owned'` with `loop`, where the SDK owns the loop and Crux steers policy around it. Both branches compile into the same execution engine and share the same policy modules (validation retry, tool instrumentation, approvals) plus the same per-call [`Safety` session](/docs/reference/crux-core/safety), so behavior does not diverge between runtimes.
 
-Built-in adapters are built on this abstraction: `@crux/openai`, `@crux/anthropic`, and `@crux/google` export single-turn provider runtimes, while `@crux/ai` exports a loop-owned provider runtime for the Vercel AI SDK. Native provider packages own a `NativeTranscriptCodec` for provider message conversion, assistant text/tool-call extraction, and provider-specific tool-round appends. Core injects transcript-produced `providerMessages` into request builders and composes `transcript.readAssistant(raw)` with response-level metadata. Core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and small tool-output helpers those codecs share.
+Built-in adapters are built on this abstraction: `@use-crux/openai`, `@use-crux/anthropic`, and `@use-crux/google` export single-turn provider runtimes, while `@use-crux/ai` exports a loop-owned provider runtime for the Vercel AI SDK. Native provider packages own a `NativeTranscriptCodec` for provider message conversion, assistant text/tool-call extraction, and provider-specific tool-round appends. Core injects transcript-produced `providerMessages` into request builders and composes `transcript.readAssistant(raw)` with response-level metadata. Core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and small tool-output helpers those codecs share.
 
 ## Which contract do I implement?
 
 | Your SDK…                                                                                 | Ownership     | Mechanics | Example                                           |
 | ----------------------------------------------------------------------------------------- | ------------- | --------- | ------------------------------------------------- |
-| Exposes text/structured/stream chat calls and leaves tool execution to Crux               | `single-turn` | `turn`    | `@crux/openai`, `@crux/anthropic`, `@crux/google` |
-| Runs its own multi-step tool loop (`generateText` with `stopWhen`, native tool execution) | `loop-owned`  | `loop`    | `@crux/ai`                                        |
+| Exposes text/structured/stream chat calls and leaves tool execution to Crux               | `single-turn` | `turn`    | `@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google` |
+| Runs its own multi-step tool loop (`generateText` with `stopWhen`, native tool execution) | `loop-owned`  | `loop`    | `@use-crux/ai`                                        |
 | Needs a bespoke non-chat boundary                                                         | n/a           | core IR   | custom provider                                   |
 
 Never implement more than one generation runtime for one SDK. In either branch, core owns the policy layer — prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, timeouts, and observability. A provider runtime implements mechanics only, and should delegate to SDK-native capabilities wherever one exists.
@@ -58,7 +58,7 @@ expect(scriptedClient.calls[0].messages).toEqual(expectedProviderMessages)
 Test executors with `fakeExecutor()` (a scripted in-memory reference implementation) and prove contract fidelity with `executorSpecConformance()`:
 
 ```ts
-import { executorAdapter, fakeExecutor, executorSpecConformance } from '@crux/core/adapter'
+import { executorAdapter, fakeExecutor, executorSpecConformance } from '@use-crux/core/adapter'
 
 // Policy tests, zero SDK:
 const fake = fakeExecutor({ structured: ['not json', '{"ok":true}'] })
@@ -74,7 +74,7 @@ expect(violations).toEqual([])
 Compile a raw chat SDK provider spec into a Crux adapter runtime.
 
 ```ts
-import { defineProviderRuntime } from '@crux/core/adapter'
+import { defineProviderRuntime } from '@use-crux/core/adapter'
 
 export const myProviderRuntime = defineProviderRuntime({
   id: 'my-provider',
@@ -109,7 +109,7 @@ The provider runtime owns provider wire facts: request bodies, SDK method bindin
 Test transcript codecs directly with `transcriptCodecConformance()`:
 
 ```ts
-import { transcriptCodecConformance } from '@crux/core/adapter/testing'
+import { transcriptCodecConformance } from '@use-crux/core/adapter/testing'
 
 const violations = transcriptCodecConformance({
   name: 'my-provider transcript',
@@ -137,7 +137,7 @@ Create a core-driven adapter from a compiled `AdapterSpec`. Provider packages sh
 **Returns:** `(client: TClient) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra>`
 
 ```ts
-import { adapter } from '@crux/core/adapter'
+import { adapter } from '@use-crux/core/adapter'
 
 const createMyAdapter = adapter({
   providerId: 'my-provider',
@@ -365,7 +365,7 @@ import type {
   StreamHandle,
   ToolResultEntry,
   StatusDelta,
-} from '@crux/core/adapter'
+} from '@use-crux/core/adapter'
 ```
 
 ## Related

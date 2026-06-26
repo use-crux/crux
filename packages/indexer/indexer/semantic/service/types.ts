@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import type { IndexPatch, IndexPatchBudget } from '../../patches'
 import type { SemanticEvidenceBatchSource } from '../evidence/projection'
 import type { SemanticIndexInstrumentation } from '../instrumentation'

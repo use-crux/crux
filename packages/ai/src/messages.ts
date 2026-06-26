@@ -12,7 +12,7 @@
  * @module
  */
 
-import type { Message } from '@crux/core'
+import type { Message } from '@use-crux/core'
 
 // ─────────────────────────────────────────────────────────────────
 // Canonical → ModelMessage

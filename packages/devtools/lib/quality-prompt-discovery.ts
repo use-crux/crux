@@ -11,9 +11,9 @@
  */
 
 import { pathToFileURL } from 'node:url'
-import type { AnyPrompt } from '@crux/core'
-import type { ProjectModelDiagnostic, ResolvedProjectModel } from '@crux/core/project-index'
-import { resolveProjectModel } from '@crux/indexer'
+import type { AnyPrompt } from '@use-crux/core'
+import type { ProjectModelDiagnostic, ResolvedProjectModel } from '@use-crux/core/project-index'
+import { resolveProjectModel } from '@use-crux/indexer'
 
 /** Prompts and prompt-test diagnostics discovered from project source. */
 export interface DiscoveredQualityPrompts {

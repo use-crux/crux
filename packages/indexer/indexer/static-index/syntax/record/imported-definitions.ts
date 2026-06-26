@@ -1,4 +1,4 @@
-import type { ProjectDefinition } from '@crux/core/project-index'
+import type { ProjectDefinition } from '@use-crux/core/project-index'
 import type { IndexerExtensionRuntime } from '../../../extensions'
 import { staticFoundDefinitionsFromExtractedFacts } from '../../compatibility/syntax-record-bridge/normalizer'
 import type { StaticFoundDefinition } from '../../../types'

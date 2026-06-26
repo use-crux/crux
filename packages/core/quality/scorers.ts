@@ -382,7 +382,7 @@ function judgeScorer(opts: JudgeOptionsBase<string> & { select?: (output: never)
  *
  * @example
  * ```ts
- * import { evaluate, scorers } from '@crux/core/quality'
+ * import { evaluate, scorers } from '@use-crux/core/quality'
  *
  * evaluate({
  *   task: summaryPrompt,

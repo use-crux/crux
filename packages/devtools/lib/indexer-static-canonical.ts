@@ -1,13 +1,13 @@
 /**
  * Devtools adapter for the shared Static Index parity normalizer.
  *
- * The canonicalization contract lives in `@crux/indexer/contracts/parity` so
+ * The canonicalization contract lives in `@use-crux/indexer/contracts/parity` so
  * devtools scripts and host parity tests compare the same semantic surfaces.
  *
  * @module
  */
 
-import { canonicalStaticExtractionJson } from '@crux/indexer/contracts/parity'
+import { canonicalStaticExtractionJson } from '@use-crux/indexer/contracts/parity'
 
 /**
  * Serializes static extraction parity payloads with the shared fail-closed

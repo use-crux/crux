@@ -4,7 +4,7 @@ description: LLM-as-a-judge scoring and pre-built quality metrics.
 ---
 
 ```ts
-import { llmJudge, metrics, judgeConstraint } from '@crux/core/scoring'
+import { llmJudge, metrics, judgeConstraint } from '@use-crux/core/scoring'
 ```
 
 ### `llmJudge(config)`
@@ -93,7 +93,7 @@ const brandVoiceGate = judgeConstraint(brandVoice, { min: 7 })
 
 Check `metadata.judge` on audit entries carries a `JudgeConstraintVerdict`: `{ metricId, score, min, reasoning, detail? }` — `detail` is present (and typed by the judge's `TDetail`) when the judge has a `detailSchema`.
 
-For quality runs, `scorers.judge()` in [`@crux/core/quality`](/docs/reference/crux-core/quality) reuses this judge machinery with rubric and choice-score modes.
+For quality runs, `scorers.judge()` in [`@use-crux/core/quality`](/docs/reference/crux-core/quality) reuses this judge machinery with rubric and choice-score modes.
 
 ### Types
 
@@ -101,7 +101,7 @@ For quality runs, `scorers.judge()` in [`@crux/core/quality`](/docs/reference/cr
 import type {
   JudgeConfig, JudgeInstance, JudgeResult, JudgeInput,
   JudgeScoreOptions, JudgeFewShot, JudgeConstraintOptions, JudgeConstraintVerdict,
-} from '@crux/core/scoring'
+} from '@use-crux/core/scoring'
 ```
 
 ## Related

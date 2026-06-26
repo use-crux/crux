@@ -28,7 +28,7 @@ import type {
   CruxScoreReportPreview,
   CruxSecurityReportPreview,
   CruxSourceStageCountsPreview,
-} from '@crux/core/observability'
+} from '@use-crux/core/observability'
 import type { ObservabilityRunDetailNode } from '@/types'
 import { CardShell, EmptyHint, KeyValue } from './SpanDetailPanelAtoms'
 import { KindTag } from './atoms'

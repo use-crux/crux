@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { ProjectDefinition } from '@crux/core/project-index'
+import type { ProjectDefinition } from '@use-crux/core/project-index'
 
 /** Builds JSON-safe metadata for one Project Model definition. */
 export function projectModelDefinitionMetadata(definition: ProjectDefinition): Record<string, unknown> {

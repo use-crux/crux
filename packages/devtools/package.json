@@ -1,5 +1,5 @@
 {
-  "name": "@crux/devtools",
+  "name": "@use-crux/devtools",
   "version": "0.1.0",
   "private": true,
   "license": "Apache-2.0",
@@ -24,8 +24,8 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
-    "@crux/core": "workspace:*",
-    "@crux/indexer": "workspace:*",
+    "@use-crux/core": "workspace:*",
+    "@use-crux/indexer": "workspace:*",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@streamdown/cjk": "^1.0.3",
     "@streamdown/code": "^1.1.1",

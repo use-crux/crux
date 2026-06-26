@@ -1,4 +1,4 @@
-import type { IndexDiagnostic, IndexSourceFile, ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
+import type { IndexDiagnostic, IndexSourceFile, ProjectDefinition, ProjectRelation } from '@use-crux/core/project-index'
 import type { LoadedProjectConfig } from '../config'
 import { richImportFailedDiagnostic, staticParseFailedDiagnostic } from '../diagnostics'
 import { resolvedDefinitionFromExport } from '../enrichment'

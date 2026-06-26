@@ -76,7 +76,7 @@ export function defineProviderRuntime<
  * Define a Crux provider runtime from loop-owned SDK mechanics.
  *
  * Use this branch for SDKs, such as the Vercel AI SDK, that own the
- * multi-step model/tool loop. The SDK remains outside `@crux/core`; core
+ * multi-step model/tool loop. The SDK remains outside `@use-crux/core`; core
  * receives only structural hooks and compiles them into the existing
  * executor runtime.
  *

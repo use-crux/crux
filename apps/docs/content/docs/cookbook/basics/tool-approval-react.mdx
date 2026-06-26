@@ -3,13 +3,13 @@ title: React tool approvals
 description: Add human approval to a Next.js chat route without holding a server request open.
 ---
 
-This recipe uses `@crux/ai`, `approvalMiddleware()`, and the AI SDK approval message flow. The server returns when the model asks for approval. The browser renders buttons. The next request includes the approval response and Crux continues the tool loop.
+This recipe uses `@use-crux/ai`, `approvalMiddleware()`, and the AI SDK approval message flow. The server returns when the model asks for approval. The browser renders buttons. The next request includes the approval response and Crux continues the tool loop.
 
 ## Prompt and policy
 
 ```ts title="lib/assistant.ts"
-import { approvalMiddleware, prompt } from '@crux/core'
-import { tool } from '@crux/ai'
+import { approvalMiddleware, prompt } from '@use-crux/core'
+import { tool } from '@use-crux/ai'
 import { z } from 'zod'
 
 export const sendEmail = tool({
@@ -49,7 +49,7 @@ export const assistant = prompt({
 ## Route
 
 ```ts title="app/api/chat/route.ts"
-import { stream } from '@crux/ai'
+import { stream } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { assistant } from '@/lib/assistant'
 

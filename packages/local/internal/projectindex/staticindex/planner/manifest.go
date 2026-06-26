@@ -124,7 +124,7 @@ func defaultHost() json.RawMessage {
 	for _, family := range families {
 		extractors = append(extractors, map[string]any{
 			"extension": map[string]string{
-				"name":    "@crux/indexer/crux-core",
+				"name":    "@use-crux/indexer/crux-core",
 				"version": "1",
 			},
 			"name": family,

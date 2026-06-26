@@ -1,5 +1,5 @@
 /**
- * `@crux/convex` — Convex storage adapter for Crux.
+ * `@use-crux/convex` — Convex storage adapter for Crux.
  *
  * Provides `defineConvexStoreContract()` for creating server-side stores and
  * React transports backed by the same Convex store document contract.
@@ -7,7 +7,7 @@
  * **Setup:** Install the crux Convex component and use the component ref:
  *
  * ```ts
- * import { defineConvexStoreContract } from '@crux/convex'
+ * import { defineConvexStoreContract } from '@use-crux/convex'
  * import { components } from './_generated/api'
  *
  * const cruxDocuments = defineConvexStoreContract({ component: components.crux })
@@ -67,7 +67,7 @@ export {
   userContent,
   when,
   wrap,
-} from '@crux/core'
+} from '@use-crux/core'
 export type {
   AnyPrompt,
   ConditionalContext,
@@ -87,7 +87,7 @@ export type {
   PromptTreeResult,
   ResolveOptions,
   ResolvedPrompt,
-} from '@crux/core'
+} from '@use-crux/core'
 export {
   convexRuntimeStore,
   getConvexCruxRuntime,
@@ -103,10 +103,10 @@ export type {
 export { convexAgent } from './agent'
 
 import type { z } from 'zod'
-import type { CompactionResult, Message, Context, ContextEntry, Prompt } from '@crux/core'
-import type { GenerateTextFn } from '@crux/core/compaction'
-import { summarizeMessages } from '@crux/core/compaction'
-import { getRuntime, countTokens } from '@crux/core'
+import type { CompactionResult, Message, Context, ContextEntry, Prompt } from '@use-crux/core'
+import type { GenerateTextFn } from '@use-crux/core/compaction'
+import { summarizeMessages } from '@use-crux/core/compaction'
+import { getRuntime, countTokens } from '@use-crux/core'
 import type { ConvexContext } from './store'
 
 // ─────────────────────────────────────────────────────────────────

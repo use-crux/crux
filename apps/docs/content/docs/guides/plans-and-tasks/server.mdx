@@ -16,7 +16,7 @@ See the [Quick Start](/docs/guides/plans-and-tasks) for `CruxStore` setup (`inMe
 `cruxSSEHandler()` creates a Server-Sent Events endpoint that subscribes to `CruxStore` changes and streams them to connected clients. Works with any framework that handles `(request: Request) => Response`.
 
 ```ts title="app/api/crux/sse/route.ts"
-import { cruxSSEHandler } from '@crux/react/server'
+import { cruxSSEHandler } from '@use-crux/react/server'
 
 const handler = cruxSSEHandler({
   store,
@@ -49,7 +49,7 @@ cruxSSEHandler({ store, prefix: `session:${sessionId}:` })
 Connect with `createSSETransport`:
 
 ```tsx
-import { CruxProvider, createSSETransport } from '@crux/react'
+import { CruxProvider, createSSETransport } from '@use-crux/react'
 
 const transport = createSSETransport('/api/crux/sse')
 
@@ -67,7 +67,7 @@ function App() {
 `createCruxStreamWriter()` injects plan and task updates into an active AI SDK `UIMessageStream`. Updates are sent as `data-crux` data parts alongside the LLM's text output.
 
 ```ts title="app/api/chat/route.ts"
-import { createCruxStreamWriter } from '@crux/ai/stream'
+import { createCruxStreamWriter } from '@use-crux/ai/stream'
 
 export async function POST(request: Request) {
   return createUIMessageStreamResponse({
@@ -89,8 +89,8 @@ export async function POST(request: Request) {
 On the client, use `createStreamTransport()` to consume `data-crux` parts from the stream:
 
 ```tsx title="chat-with-tasks.tsx"
-import { CruxProvider } from '@crux/react'
-import { createStreamTransport } from '@crux/ai/stream'
+import { CruxProvider } from '@use-crux/react'
+import { createStreamTransport } from '@use-crux/ai/stream'
 import { useChat } from 'ai/react'
 
 function ChatWithTasks() {
@@ -136,9 +136,9 @@ When using the AI SDK stream transport, `data-crux` parts are only available dur
 Server and client wired together for a content writing pipeline:
 
 ```ts title="app/api/write/route.ts"
-import { createCruxStreamWriter } from '@crux/ai/stream'
-import { createPlanTool, planAgent } from '@crux/core/plan'
-import { tasklist, taskWorker } from '@crux/core/tasks'
+import { createCruxStreamWriter } from '@use-crux/ai/stream'
+import { createPlanTool, planAgent } from '@use-crux/core/plan'
+import { tasklist, taskWorker } from '@use-crux/core/tasks'
 
 export async function POST(request: Request) {
   const { topic } = await request.json()
@@ -179,9 +179,9 @@ export async function POST(request: Request) {
 ```
 
 ```tsx title="write-page.tsx"
-import { CruxProvider } from '@crux/react'
-import { createStreamTransport } from '@crux/ai/stream'
-import { usePlan, useTaskList, useTasks } from '@crux/react'
+import { CruxProvider } from '@use-crux/react'
+import { createStreamTransport } from '@use-crux/ai/stream'
+import { usePlan, useTaskList, useTasks } from '@use-crux/react'
 
 function WritePage() {
   const transport = createStreamTransport()

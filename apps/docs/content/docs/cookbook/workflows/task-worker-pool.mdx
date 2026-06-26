@@ -7,9 +7,9 @@ This recipe builds a worker pool: a task list holds the work, you spawn an agent
 
 ## Primitives used
 
-- `tasklist()` from `@crux/core/tasks` for the persistent task list (supports `addTask` / `updateTask` / `getTasks`)
+- `tasklist()` from `@use-crux/core/tasks` for the persistent task list (supports `addTask` / `updateTask` / `getTasks`)
 - `taskWorker(taskListId, taskId)` — binds an agent's prompt to a single assigned task, exposing `asContext()` + `asTools()`
-- `useTaskList()` / `useTasks()` from `@crux/react` for the live UI
+- `useTaskList()` / `useTasks()` from `@use-crux/react` for the live UI
 
 ## When to reach for this pattern
 
@@ -23,11 +23,11 @@ This recipe builds a worker pool: a task list holds the work, you spawn an agent
 ### Backend — define the work and a per-task agent
 
 ```ts
-import { tasklist } from '@crux/core/tasks'
-import { taskWorker } from '@crux/core/tasks'
-import { prompt } from '@crux/core'
-import { agent } from '@crux/core/agent'
-import { generate } from '@crux/ai'
+import { tasklist } from '@use-crux/core/tasks'
+import { taskWorker } from '@use-crux/core/tasks'
+import { prompt } from '@use-crux/core'
+import { agent } from '@use-crux/core/agent'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
@@ -93,13 +93,13 @@ async function runOneTask(taskListId: string, taskId: string, text: string) {
 }
 ```
 
-`createHandle(taskListId)` is the rehydrate helper from `@crux/core/tasks`. The worker's `asTools()` exposes `startTask` / `reportProgress` / `completeTask` / `failTask` bound to this specific `taskId` — the agent doesn't need to pass IDs around.
+`createHandle(taskListId)` is the rehydrate helper from `@use-crux/core/tasks`. The worker's `asTools()` exposes `startTask` / `reportProgress` / `completeTask` / `failTask` bound to this specific `taskId` — the agent doesn't need to pass IDs around.
 
 ### Live UI
 
 ```tsx
 'use client'
-import { useTaskList, useTasks } from '@crux/react'
+import { useTaskList, useTasks } from '@use-crux/react'
 
 export function BatchProgress({ taskListId }: { taskListId: string }) {
   const list = useTaskList(taskListId)

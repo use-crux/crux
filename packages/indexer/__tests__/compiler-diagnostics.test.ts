@@ -1,4 +1,4 @@
-import type { IndexDiagnostic, ProjectDefinition } from '@crux/core/project-index'
+import type { IndexDiagnostic, ProjectDefinition } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
 import { suppressRichImportDiagnosticsForStaticDefinitions } from '../indexer/compiler/diagnostics'
 

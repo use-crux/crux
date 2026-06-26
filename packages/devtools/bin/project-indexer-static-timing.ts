@@ -1,4 +1,4 @@
-import type { StaticExtractionTiming } from '@crux/indexer'
+import type { StaticExtractionTiming } from '@use-crux/indexer'
 
 /** Aggregates static extraction timing events into worker protocol buckets. */
 export function createStaticTimingCollector(): {

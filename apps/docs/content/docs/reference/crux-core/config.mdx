@@ -10,7 +10,7 @@ Do not repeat prompts, contexts, tools, agents, flows, registries, or skills in 
 those values in normal TypeScript modules and export them. Local tooling discovers them from source.
 
 ```ts title="crux.config.ts"
-import { config } from '@crux/core'
+import { config } from '@use-crux/core'
 
 export default config({
   quality: {
@@ -28,7 +28,7 @@ export default config({
 An empty config is valid:
 
 ```ts title="crux.config.ts"
-import { config } from '@crux/core'
+import { config } from '@use-crux/core'
 
 export default config({})
 ```
@@ -62,8 +62,8 @@ interface CruxConfig {
 | --- | --- | --- | --- |
 | `quality` | `QualityConfig` | zero-config Quality defaults | `crux quality`, `crux dev`, Quality views |
 | `lint` | `CruxLintConfig` | `{ profile: 'recommended' }` | Project Index lint, `crux lint`, devtools |
-| `indexer` | `CruxIndexerConfig` | no third-party extensions | `@crux/indexer` |
-| `experimental` | `CruxExperimentalConfig` | no experimental flags | `@crux/indexer`, `@crux/local` |
+| `indexer` | `CruxIndexerConfig` | no third-party extensions | `@use-crux/indexer` |
+| `experimental` | `CruxExperimentalConfig` | no experimental flags | `@use-crux/indexer`, `@use-crux/local` |
 | `persistence` | `CruxPersistenceConfig` | no global store | flows, plans, tasks, Runtime Bridge reads |
 | `generation` | `CruxGenerationConfig` | `autoEscape: true`; `securityWarnings` in development | prompt resolution and generation |
 | `devtools` | `CruxDevtoolsConfig` | no runtime devtools transport unless installed elsewhere | local devtools plugin and Runtime Bridge |
@@ -133,7 +133,7 @@ See [Index Lint](/docs/reference/crux-core/lint).
 
 ## `indexer`
 
-Indexer config is inert data stored by `@crux/core` and enforced by `@crux/indexer`. Loading an
+Indexer config is inert data stored by `@use-crux/core` and enforced by `@use-crux/indexer`. Loading an
 allowlisted extension imports JavaScript from `node_modules`; treat it like trusted build tooling.
 
 | Option | Type | Default | Notes |
@@ -241,7 +241,7 @@ locality from source discovery.
 | `persistence.store` | `CruxStore` | `undefined` | Required for durable flows, plans, tasks, and Runtime Bridge store reads. |
 
 ```ts title="crux.config.ts"
-import { inMemoryCruxStore } from '@crux/core/store'
+import { inMemoryCruxStore } from '@use-crux/core/store'
 
 export default config({
   persistence: {

@@ -1,4 +1,4 @@
-import { observe } from '@crux/core/observability'
+import { observe } from '@use-crux/core/observability'
 import { isRecord } from './lifecycle-utils'
 
 export type StreamTimingTracker = {

@@ -10,7 +10,7 @@ describe('first-party Phase 6 native fixtures', () => {
     'emits exact native tool facts from Rust/Oxc records',
     async () => {
       const source = [
-        "import { createTool as defineTool, tool } from '@crux/core'",
+        "import { createTool as defineTool, tool } from '@use-crux/core'",
         '',
         'const queryInput = z.object({',
         "  query: z.string().describe('Search query'),",
@@ -79,11 +79,11 @@ describe('first-party Phase 6 native fixtures', () => {
 
       expect(record.nativeFacts ?? []).toHaveLength(5)
       expect(record.nativeFacts?.map((fact) => fact.replaces)).toEqual([
-        [{ extension: '@crux/indexer/crux-core', extractor: 'tool' }],
-        [{ extension: '@crux/indexer/crux-core', extractor: 'tool' }],
-        [{ extension: '@crux/indexer/crux-core', extractor: 'tool' }],
-        [{ extension: '@crux/indexer/crux-core', extractor: 'tool' }],
-        [{ extension: '@crux/indexer/crux-core', extractor: 'tool' }],
+        [{ extension: '@use-crux/indexer/crux-core', extractor: 'tool' }],
+        [{ extension: '@use-crux/indexer/crux-core', extractor: 'tool' }],
+        [{ extension: '@use-crux/indexer/crux-core', extractor: 'tool' }],
+        [{ extension: '@use-crux/indexer/crux-core', extractor: 'tool' }],
+        [{ extension: '@use-crux/indexer/crux-core', extractor: 'tool' }],
       ])
       expectNativeExtractionParity(nativeOut, fallbackOut)
     },
@@ -133,8 +133,8 @@ describe('first-party Phase 6 native fixtures', () => {
 
       expect(record.nativeFacts?.flatMap((fact) => fact.replaces ?? [])).toEqual(
         expect.arrayContaining([
-          { extension: '@crux/indexer/crux-core', extractor: 'context' },
-          { extension: '@crux/indexer/crux-core', extractor: 'prompt' },
+          { extension: '@use-crux/indexer/crux-core', extractor: 'context' },
+          { extension: '@use-crux/indexer/crux-core', extractor: 'prompt' },
         ]),
       )
       expectNativeExtractionParity(nativeOut, fallbackOut)
@@ -146,7 +146,7 @@ describe('first-party Phase 6 native fixtures', () => {
     'emits exact native prompt and tool facts from member calls',
     async () => {
       const source = [
-        "import { prompt } from '@crux/core'",
+        "import { prompt } from '@use-crux/core'",
         '',
         "const supportAnswer = prompt({ id: 'support', system: 'Support answer.' })",
         'const target = { prompt: (...args: unknown[]) => args }',
@@ -173,8 +173,8 @@ describe('first-party Phase 6 native fixtures', () => {
 
       expect(record.nativeFacts?.flatMap((fact) => fact.replaces ?? [])).toEqual(
         expect.arrayContaining([
-          { extension: '@crux/indexer/crux-core', extractor: 'prompt' },
-          { extension: '@crux/indexer/crux-core', extractor: 'tool' },
+          { extension: '@use-crux/indexer/crux-core', extractor: 'prompt' },
+          { extension: '@use-crux/indexer/crux-core', extractor: 'tool' },
         ]),
       )
       expectNativeExtractionParity(nativeOut, fallbackOut)
@@ -221,7 +221,7 @@ describe('first-party Phase 6 native fixtures', () => {
       })
 
       expect(record.nativeFacts?.flatMap((fact) => fact.replaces ?? [])).toEqual(
-        expect.arrayContaining([{ extension: '@crux/indexer/crux-core', extractor: 'injectable' }]),
+        expect.arrayContaining([{ extension: '@use-crux/indexer/crux-core', extractor: 'injectable' }]),
       )
       expectNativeExtractionParity(nativeOut, fallbackOut)
     },

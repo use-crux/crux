@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { ToolContentPart, ToolModelOutput } from '@crux/core'
-import { renderToolContentPartAsText } from '@crux/core/adapter'
+import type { ToolContentPart, ToolModelOutput } from '@use-crux/core'
+import { renderToolContentPartAsText } from '@use-crux/core/adapter'
 
 export type AnthropicToolResultContent =
   | string

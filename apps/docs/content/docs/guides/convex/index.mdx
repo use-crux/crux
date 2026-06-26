@@ -5,40 +5,40 @@ description: Recommended architecture for running Crux inside Convex actions, Ag
 
 # Crux on Convex
 
-Convex is a serverless runtime: actions can run in fresh workers, scheduled work resumes later, and `AsyncLocalStorage` does not survive `ctx.runAction()` or scheduler boundaries. Crux therefore treats Convex as infrastructure, not as an adapter. Core primitives stay in `@crux/core`; Convex-specific runtime boundaries live in `@crux/convex`.
+Convex is a serverless runtime: actions can run in fresh workers, scheduled work resumes later, and `AsyncLocalStorage` does not survive `ctx.runAction()` or scheduler boundaries. Crux therefore treats Convex as infrastructure, not as an adapter. Core primitives stay in `@use-crux/core`; Convex-specific runtime boundaries live in `@use-crux/convex`.
 
 <Callout type="info">
   Recommended rule: define prompts, contexts, memory, workspaces, skills, blackboards, and immediate compositions with
-  `@crux/core`; run Convex actions, Convex Agent tools, durable flows, experimental cross-action swarms, and observability flushing
-  through `@crux/convex`.
+  `@use-crux/core`; run Convex actions, Convex Agent tools, durable flows, experimental cross-action swarms, and observability flushing
+  through `@use-crux/convex`.
 </Callout>
 
 ## Recommended Architecture
 
 ```txt
 convex/
-  convex.config.ts        # installs @crux/convex component
+  convex.config.ts        # installs @use-crux/convex component
   crux/
     store.ts              # defineConvexStoreContract() helper
   prompts/
     index.ts              # prompt/context/agent definitions
   agent/
-    chat.ts               # @crux/convex/server action entrypoints
-    tools.ts              # @crux/convex/agent createTool()/wrapConvexTool()
+    chat.ts               # @use-crux/convex/server action entrypoints
+    tools.ts              # @use-crux/convex/agent createTool()/wrapConvexTool()
   workflows/
-    writerFlow.ts         # @crux/convex/server flow() handles
-    swarm.ts              # @crux/convex/swarm experimental cross-action swarms
+    writerFlow.ts         # @use-crux/convex/server flow() handles
+    swarm.ts              # @use-crux/convex/swarm experimental cross-action swarms
 ```
 
 ## Best Practices
 
 | Do                                                                                       | Why                                                                                             |
 | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Use `action()` / `internalAction()` from `@crux/convex/server` for AI runtime boundaries | Restores trace context, provides `ctx.crux`, and flushes before workers exit                    |
+| Use `action()` / `internalAction()` from `@use-crux/convex/server` for AI runtime boundaries | Restores trace context, provides `ctx.crux`, and flushes before workers exit                    |
 | Use `ctx.crux.runAction(label, ref, args)` for child AI work                             | Preserves parent/child relations across worker boundaries                                       |
 | Keep app-specific mutation helpers in your app                                           | Table names, tenancy, and auth are application policy                                           |
 | Use `defineConvexStoreContract()` for Crux data records                                  | One component-backed contract for memory, blackboards, plans, prompt cache, workspace metadata, and React reads |
-| Use `@crux/convex/agent` with Convex Agent                                               | Tool calls get readable names and nested work inherits the active span                          |
+| Use `@use-crux/convex/agent` with Convex Agent                                               | Tool calls get readable names and nested work inherits the active span                          |
 | Use `flow()` for suspend/resume; treat `createComponentSwarm()` as experimental          | Compositions execute immediately; durable swarm semantics are still being explored               |
 
 | Avoid                                                      | Why                                                                  |
@@ -95,6 +95,6 @@ convex/
 
 ## Reference
 
-- [`@crux/convex` API reference](/docs/reference/storage/convex)
+- [`@use-crux/convex` API reference](/docs/reference/storage/convex)
 - [Observability context](/docs/guides/observability/observability-context)
 - [Devtools cloud backends](/docs/guides/observability/devtools-cloud)

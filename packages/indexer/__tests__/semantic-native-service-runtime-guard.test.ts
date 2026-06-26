@@ -40,7 +40,7 @@ describe('native semantic runtime guardrails', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         import { system } from './helper'
 
         export const writer = prompt({

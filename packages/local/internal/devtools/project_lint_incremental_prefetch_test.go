@@ -60,7 +60,7 @@ func incrementalLintPreviousIndex() store.IndexData {
 		Project:       &store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities: []string{
 				"source-dependencies",
 				"source-dependents",

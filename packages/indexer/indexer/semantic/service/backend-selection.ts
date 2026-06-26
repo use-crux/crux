@@ -1,4 +1,4 @@
-import type { CruxExperimentalConfig } from '@crux/core'
+import type { CruxExperimentalConfig } from '@use-crux/core'
 import { loadSemanticProjectConfig } from '../../config'
 import { createNativeSemanticBackend } from '../backends/tsgo/backend'
 import { createTypeScriptSemanticBackend } from '../backends/typescript/backend'

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import type { ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
-import type { EvaluationManifest } from '@crux/core/quality'
+import type { ProjectDefinition, ProjectRelation } from '@use-crux/core/project-index'
+import type { EvaluationManifest } from '@use-crux/core/quality'
 import { foldedIndexChild } from './index-presentation'
 import { definition, relation, safeId } from './definitions'
 import { assertionSitesFromSource } from './evaluation-assertion-sites'

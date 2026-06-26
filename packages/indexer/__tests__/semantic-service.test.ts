@@ -29,7 +29,7 @@ describe('semantic index service', () => {
     await writeFile(
       join(root, 'src/writer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer' })
       `,
     )
@@ -178,7 +178,7 @@ describe('semantic index service', () => {
     await writeFile(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: {} }))
     const file = join(root, 'src/writer.ts')
     const source = `
-      import { prompt } from '@crux/core'
+      import { prompt } from '@use-crux/core'
       export const writer = prompt({ id: 'writer' })
     `
     await writeFile(file, source)
@@ -224,7 +224,7 @@ describe('semantic index service', () => {
     await mkdir(join(root, 'src'), { recursive: true })
     const writer = join(root, 'src/writer.ts')
     const helper = join(root, 'src/helper.ts')
-    const writerSource = `import { prompt } from '@crux/core'\nexport const writer = prompt({ id: 'writer' })`
+    const writerSource = `import { prompt } from '@use-crux/core'\nexport const writer = prompt({ id: 'writer' })`
     const helperSource = `export const helper = true`
     await writeFile(writer, writerSource)
     await writeFile(helper, helperSource)
@@ -280,11 +280,11 @@ describe('semantic index service', () => {
     const writer = join(root, 'src/writer.ts')
     const helper = join(root, 'src/helper.ts')
     const writerSource = `
-      import { prompt } from '@crux/core'
+      import { prompt } from '@use-crux/core'
       export const writer = prompt({ id: 'writer' })
     `
     const helperSource = `
-      import type { PromptMeta } from '@crux/core/project-index'
+      import type { PromptMeta } from '@use-crux/core/project-index'
       export const helper = {} satisfies Partial<PromptMeta>
     `
     await writeFile(writer, writerSource)
@@ -376,7 +376,7 @@ describe('semantic index service', () => {
         ],
         sourceGraph: {
           schemaVersion: 1,
-          producedBy: '@crux/indexer',
+          producedBy: '@use-crux/indexer',
           capabilities: ['source-dependencies'],
         },
       },

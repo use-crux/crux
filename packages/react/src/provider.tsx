@@ -17,8 +17,8 @@ const CruxContext = createContext<CruxTransport | null>(null)
  *
  * @example
  * ```tsx
- * import { CruxProvider } from '@crux/react'
- * import { defineConvexStoreContract } from '@crux/convex'
+ * import { CruxProvider } from '@use-crux/react'
+ * import { defineConvexStoreContract } from '@use-crux/convex'
  * import { useQuery } from 'convex/react'
  * import { components } from '../convex/_generated/api'
  *

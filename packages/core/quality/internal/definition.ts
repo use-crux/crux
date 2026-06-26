@@ -3,7 +3,7 @@
  * internally and what the manifest builder and (later) the execution engine
  * consume.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 

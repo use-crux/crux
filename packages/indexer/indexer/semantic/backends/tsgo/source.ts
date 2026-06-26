@@ -1,5 +1,5 @@
 import type { Node, SourceFile } from '@typescript/native-preview/unstable/ast'
-import type { SourceLocation, SourceSnippet } from '@crux/core/project-index'
+import type { SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
 
 const MAX_SNIPPET_LENGTH = 12_000
 

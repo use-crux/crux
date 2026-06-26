@@ -1,4 +1,4 @@
-import type { IndexDiagnostic, ProjectDefinition, ProjectSourceRef } from '@crux/core/project-index'
+import type { IndexDiagnostic, ProjectDefinition, ProjectSourceRef } from '@use-crux/core/project-index'
 import type { StaticRelationRef } from '../../types'
 import type {
   DefinitionBuilder,
@@ -249,14 +249,14 @@ export interface ExtractedFacts {
 /**
  * Definition contribution emitted by an extractor.
  *
- * `definition` must already use `@crux/core/project-index` kinds and metadata contracts. Extra definitions
+ * `definition` must already use `@use-crux/core/project-index` kinds and metadata contracts. Extra definitions
  * are for folded children that belong to the same extracted unit, such as suite cases or routing
  * children, and remain tied to the primary variable for projection.
  */
 export interface ExtractedDefinition {
   /** Source binding associated with this definition contribution. */
   readonly variableName: string
-  /** Index definition using the stable `@crux/core/project-index` contract. */
+  /** Index definition using the stable `@use-crux/core/project-index` contract. */
   readonly definition: ProjectDefinition
   /**
    * Folded child definitions that should travel with the primary extracted definition.

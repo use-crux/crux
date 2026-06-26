@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { ProjectModelProvenance, ResolvedProjectModel } from '@crux/core/project-index'
+import type { ProjectModelProvenance, ResolvedProjectModel } from '@use-crux/core/project-index'
 import type { IndexPatch, IndexPatchFacts, IndexPatchPhase } from '../patches'
 import type { ProjectConfigInspect } from '../project-config-inspect'
 import type { ProjectStaticIndexConfig } from '../static-index/config/inspect'

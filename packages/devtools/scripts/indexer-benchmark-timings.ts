@@ -1,4 +1,4 @@
-import type { StaticExtractionTimingName } from '@crux/indexer'
+import type { StaticExtractionTimingName } from '@use-crux/indexer'
 
 /** Static extraction phase order used by benchmark output. */
 export const STATIC_TIMING_ORDER = [

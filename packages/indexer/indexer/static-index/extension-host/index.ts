@@ -1,4 +1,4 @@
-import type { ProjectModelResolutionMode } from '@crux/core/project-index'
+import type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
 import { loadProjectConfig } from '../../config'
 import {
   compilerProfileWithResolvedExtensions,

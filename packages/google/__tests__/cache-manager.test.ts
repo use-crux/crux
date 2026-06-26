@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { GoogleCacheManager } from '../cache-manager'
 import { CACHE_DEFAULTS } from '../cache-types'
-import type { SystemBlock } from '@crux/core'
+import type { SystemBlock } from '@use-crux/core'
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers

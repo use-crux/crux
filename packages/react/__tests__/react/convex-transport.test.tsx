@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Tests for Convex store contract transport from @crux/convex.
+ * Tests for Convex store contract transport from @use-crux/convex.
  *
  * Verifies that the Convex transport correctly deserializes documents
  * stored in the _cruxDoc format (JSON-stringified content with marker metadata)
@@ -10,8 +10,8 @@ import { describe, it, expect } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { usePlan, useTaskList, useTasks } from '../../src/hooks'
 import { createConvexWrapper, createMockConvexBackend } from './convex-contract-harness'
-import type { Plan, TaskList, Task } from '@crux/core/plan'
-import type { JsonObject } from '@crux/core/store'
+import type { Plan, TaskList, Task } from '@use-crux/core/plan'
+import type { JsonObject } from '@use-crux/core/store'
 
 // ── plan:* key resolution ──
 

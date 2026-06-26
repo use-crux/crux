@@ -1,4 +1,4 @@
-import type { ProjectSourceRef } from '@crux/core/project-index'
+import type { ProjectSourceRef } from '@use-crux/core/project-index'
 import type { StaticEvidenceCompatibility, StaticEvidenceInterestManifest } from '../../static-index/extension-host/evidence/types'
 import type { IndexExtractor } from './extractor-types'
 import type { IndexEmitter, IndexQuery, IndexResolver, IndexRule, RelationSpec } from './resolver-rule-types'
@@ -85,7 +85,7 @@ export interface IndexerExtension {
   /**
    * Stable extension identifier.
    *
-   * Use a package-style name such as `@crux/core` or `@acme/index`. The registry sorts by this value,
+   * Use a package-style name such as `@use-crux/core` or `@acme/index`. The registry sorts by this value,
    * diagnostics report it, and cache keys include it once extension loading becomes external.
    */
   readonly name: string

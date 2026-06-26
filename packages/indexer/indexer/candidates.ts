@@ -6,7 +6,7 @@ const MAX_AUTHORED_SOURCE_BYTES = 1_000_000
 const SAMPLE_BYTES = 128 * 1024
 
 const CRUX_SIGNAL_PATTERNS = [
-  /@crux\//,
+  /@use-crux\//,
   /\bprompt\s*\(/,
   /\bcontext\s*\(/,
   /\btool\s*\(/,

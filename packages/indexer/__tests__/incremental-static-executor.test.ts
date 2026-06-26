@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { IndexRuleDescriptor, ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { IndexRuleDescriptor, ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
 import { indexProjectAstPartial } from '../indexer/incremental/static-executor'
 
@@ -71,7 +71,7 @@ function previousIndex(root: string, file: string): ProjectIndexSnapshot {
     ruleDescriptors: [extensionRuleDescriptor],
     sourceGraph: {
       schemaVersion: 1,
-      producedBy: '@crux/indexer',
+      producedBy: '@use-crux/indexer',
       capabilities: [
         'source-dependencies',
         'source-dependents',

@@ -9,7 +9,7 @@
  * `expected` is reported, never matched implicitly. The Phase 3 collector
  * calls this for every cataloged prompt that declares `tests`.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 

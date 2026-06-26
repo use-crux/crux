@@ -1,4 +1,4 @@
-import type { JsonSchema, ProjectDefinitionKind, ProjectSourceRefRole } from '@crux/core/project-index'
+import type { JsonSchema, ProjectDefinitionKind, ProjectSourceRefRole } from '@use-crux/core/project-index'
 import type { ExtractedDefinition, ExtractedSourceRef, UnresolvedReference } from './types'
 export interface StaticObjectReader {
   /** Returns whether a property exists in the object, including shorthand properties. */
@@ -220,7 +220,7 @@ export interface DefinitionBuilderInput {
   readonly variableName: string
   /** Stable index definition id. */
   readonly id: string
-  /** Stable index definition kind from `@crux/core/project-index`. */
+  /** Stable index definition kind from `@use-crux/core/project-index`. */
   readonly kind: ProjectDefinitionKind
   /** Display name for index consumers. */
   readonly name: string

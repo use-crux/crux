@@ -87,7 +87,7 @@ export type {
   IndexRuleFidelity,
   IndexRuleManifest,
   IndexRulePhase,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 
 /**
  * Stable extractor context exposed by the experimental public authoring barrel.

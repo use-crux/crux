@@ -1,6 +1,6 @@
 import type { LanguageModel } from 'ai'
-import type { Message } from '@crux/core'
-import type { ExecutorRequest } from '@crux/core/adapter'
+import type { Message } from '@use-crux/core'
+import type { ExecutorRequest } from '@use-crux/core/adapter'
 import { buildSystemArg } from '../provider-profile'
 import { toModelMessages } from '../messages'
 

@@ -1,7 +1,7 @@
 import React, { type ReactNode } from 'react'
 import { defineConvexStoreContract } from '../../../convex'
 import { CruxProvider } from '../../src/provider'
-import type { JsonObject } from '@crux/core/store'
+import type { JsonObject } from '@use-crux/core/store'
 
 /**
  * In-memory Convex component/query harness for React transport tests.

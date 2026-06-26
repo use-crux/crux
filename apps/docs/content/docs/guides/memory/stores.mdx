@@ -8,8 +8,8 @@ Memory does not define its own storage system. Every memory block persists throu
 That means the same data store adapter can back memory records, indexing metadata, plans, flows, blackboards, and workspace metadata.
 
 ```ts
-import { memory, workingState } from '@crux/core/memory'
-import { inMemoryDataStore } from '@crux/core/storage'
+import { memory, workingState } from '@use-crux/core/memory'
+import { inMemoryDataStore } from '@use-crux/core/storage'
 
 const store = inMemoryDataStore()
 
@@ -98,7 +98,7 @@ Use:
 - Polling transport for universal fallback.
 
 ```tsx
-import { CruxProvider, createPollingTransport, useWorkingMemory } from '@crux/react'
+import { CruxProvider, createPollingTransport, useWorkingMemory } from '@use-crux/react'
 
 const transport = createPollingTransport(store)
 

@@ -1,4 +1,4 @@
-import { evaluate, scorers } from '@crux/core/quality'
+import { evaluate, scorers } from '@use-crux/core/quality'
 
 export default evaluate('evals.judge-missing-binding', {
   task: () => 'This answer would need an LLM judge.',

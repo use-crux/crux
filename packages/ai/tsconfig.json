@@ -15,7 +15,7 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "vitest"],
     "paths": {
-      "@crux/react": ["../crux-react/src/index.ts"]
+      "@use-crux/react": ["../crux-react/src/index.ts"]
     }
   },
   "include": [

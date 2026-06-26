@@ -6,19 +6,19 @@ Crux is not ready for public npm publishing until the package build contract bel
 
 The first public alpha should publish the packages users can install directly:
 
-- `@crux/core`
-- `@crux/ai`
-- `@crux/openai`
-- `@crux/anthropic`
-- `@crux/google`
-- `@crux/convex`
-- `@crux/upstash`
-- `@crux/otel`
-- `@crux/ingest`
-- `@crux/react`
-- `@crux/local`
+- `@use-crux/core`
+- `@use-crux/ai`
+- `@use-crux/openai`
+- `@use-crux/anthropic`
+- `@use-crux/google`
+- `@use-crux/convex`
+- `@use-crux/upstash`
+- `@use-crux/otel`
+- `@use-crux/ingest`
+- `@use-crux/react`
+- `@use-crux/local`
 
-Internal packages such as `@crux/devtools` and `@crux/indexer` can stay private until they have a stable external contract.
+Internal packages such as `@use-crux/devtools` and `@use-crux/indexer` can stay private until they have a stable external contract.
 
 ## Package contract
 
@@ -30,7 +30,7 @@ Every published package must have:
 - `license`, `repository`, `bugs`, `homepage`, and useful `description`.
 - `publishConfig.access: "public"` and `publishConfig.provenance: true`.
 - Provider SDKs, React, Convex, and host frameworks in `peerDependencies` when users should own the version.
-- Workspace `@crux/*` dependencies using a version range that Changesets can update.
+- Workspace `@use-crux/*` dependencies using a version range that Changesets can update.
 
 ## Pre-publish checks
 
@@ -47,17 +47,17 @@ pnpm changeset status
 Then run a tarball check for every publishable package:
 
 ```bash
-pnpm --filter @crux/core pack --pack-destination /tmp/crux-pack
-pnpm --filter @crux/ai pack --pack-destination /tmp/crux-pack
-pnpm --filter @crux/openai pack --pack-destination /tmp/crux-pack
-pnpm --filter @crux/anthropic pack --pack-destination /tmp/crux-pack
-pnpm --filter @crux/google pack --pack-destination /tmp/crux-pack
-pnpm --filter @crux/convex pack --pack-destination /tmp/crux-pack
-pnpm --filter @crux/upstash pack --pack-destination /tmp/crux-pack
-pnpm --filter @crux/otel pack --pack-destination /tmp/crux-pack
-pnpm --filter @crux/ingest pack --pack-destination /tmp/crux-pack
-pnpm --filter @crux/react pack --pack-destination /tmp/crux-pack
-pnpm --filter @crux/local pack --pack-destination /tmp/crux-pack
+pnpm --filter @use-crux/core pack --pack-destination /tmp/crux-pack
+pnpm --filter @use-crux/ai pack --pack-destination /tmp/crux-pack
+pnpm --filter @use-crux/openai pack --pack-destination /tmp/crux-pack
+pnpm --filter @use-crux/anthropic pack --pack-destination /tmp/crux-pack
+pnpm --filter @use-crux/google pack --pack-destination /tmp/crux-pack
+pnpm --filter @use-crux/convex pack --pack-destination /tmp/crux-pack
+pnpm --filter @use-crux/upstash pack --pack-destination /tmp/crux-pack
+pnpm --filter @use-crux/otel pack --pack-destination /tmp/crux-pack
+pnpm --filter @use-crux/ingest pack --pack-destination /tmp/crux-pack
+pnpm --filter @use-crux/react pack --pack-destination /tmp/crux-pack
+pnpm --filter @use-crux/local pack --pack-destination /tmp/crux-pack
 ```
 
 For each tarball, inspect:
@@ -81,5 +81,5 @@ For each tarball, inspect:
 mkdir crux-smoke
 cd crux-smoke
 pnpm init
-pnpm add @crux/core @crux/ai ai @ai-sdk/openai zod
+pnpm add @use-crux/core @use-crux/ai ai @ai-sdk/openai zod
 ```

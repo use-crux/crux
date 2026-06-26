@@ -77,7 +77,7 @@ When traces arrive from a cloud backend, they can be grouped into logical sessio
 `withSession` groups all `generate()` calls inside it under a single session ID, visible as a collapsible group in the Timeline.
 
 ```ts
-import { withSession, createSessionId } from '@crux/core'
+import { withSession, createSessionId } from '@use-crux/core'
 
 const sessionId = createSessionId()
 await withSession(sessionId, async () => {
@@ -91,7 +91,7 @@ await withSession(sessionId, async () => {
 `flow` adds structured pipeline grouping within a session. Named steps via `flow.step()` tag every nested `generate()` call with a `stepId` and `stepLabel`.
 
 ```ts
-import { withSession, flow, createSessionId } from '@crux/core'
+import { withSession, flow, createSessionId } from '@use-crux/core'
 
 const researchFlow = flow('research', async (flow) => {
   const plan = await flow.step('plan', () => generate(planner, { model, input }))
@@ -105,7 +105,7 @@ In the Timeline, the session appears as a collapsible group with each flow shown
 
 ### Cross-action flows (Convex)
 
-For Convex, use `@crux/convex/server` action boundaries and `ctx.crux.runAction()` so the hidden `__crux` envelope carries run/span context across workers. See the [Convex observability guide](/docs/guides/convex/observability) for cross-action flows and devtools setup.
+For Convex, use `@use-crux/convex/server` action boundaries and `ctx.crux.runAction()` so the hidden `__crux` envelope carries run/span context across workers. See the [Convex observability guide](/docs/guides/convex/observability) for cross-action flows and devtools setup.
 
 ### Hierarchy in Timeline
 

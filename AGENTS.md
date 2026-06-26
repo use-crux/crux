@@ -8,30 +8,30 @@ Crux is a TypeScript context engineering SDK with adapters, devtools, docs, and 
 - Runtime packages live in `packages/*`.
 - Documentation lives in `apps/docs`.
 - Crux Local lives in `packages/local` and provides the `crux` binary, local dev server, TUI, embedded devtools, and bounded helper workers.
-- `@crux/core` must remain provider-agnostic. Provider packages depend on core, not the other way around.
+- `@use-crux/core` must remain provider-agnostic. Provider packages depend on core, not the other way around.
 
 ## Dependency Direction
 
 Allowed:
 
-- `@crux/ai` -> `@crux/core`
-- `@crux/openai` -> `@crux/core`
-- `@crux/anthropic` -> `@crux/core`
-- `@crux/google` -> `@crux/core`
-- `@crux/convex` -> `@crux/core`
-- `@crux/upstash` -> `@crux/core`
-- `@crux/otel` -> `@crux/core`
-- `@crux/ingest` -> `@crux/core`
-- `@crux/react` -> `@crux/core`
+- `@use-crux/ai` -> `@use-crux/core`
+- `@use-crux/openai` -> `@use-crux/core`
+- `@use-crux/anthropic` -> `@use-crux/core`
+- `@use-crux/google` -> `@use-crux/core`
+- `@use-crux/convex` -> `@use-crux/core`
+- `@use-crux/upstash` -> `@use-crux/core`
+- `@use-crux/otel` -> `@use-crux/core`
+- `@use-crux/ingest` -> `@use-crux/core`
+- `@use-crux/react` -> `@use-crux/core`
 
 Avoid:
 
-- `@crux/core` depending on provider SDKs, Convex, React, or app-specific packages.
+- `@use-crux/core` depending on provider SDKs, Convex, React, or app-specific packages.
 - Cross-package relative imports. Use workspace package imports.
 
 ## Package Rules
 
-- Use `workspace:*` or `workspace:^` for internal `@crux/*` dependencies.
+- Use `workspace:*` or `workspace:^` for internal `@use-crux/*` dependencies.
 - Provider SDKs and host frameworks belong in `peerDependencies` when users should control the installed version.
 - Build outputs, generated docs artifacts, and local caches should not be committed.
 
@@ -61,13 +61,13 @@ For features that span AST output, semantic enrichment, and the Go snapshot, upd
 
 ## Indexer Extensions
 
-`@crux/indexer` is a compiler-style Project Index engine, not a mutable plugin registry. First-party
+`@use-crux/indexer` is a compiler-style Project Index engine, not a mutable plugin registry. First-party
 and third-party Indexer Extensions must contribute through explicit manifests, compiler-owned
 extension runtimes, and immutable fact/rule/relation declarations. Do not add global registration,
 implicit package discovery, raw TypeScript AST public APIs, or side-effect loader hooks.
 
-Dynamic third-party loading is config-driven. `@crux/core` stores inert `indexer` config data, while
-`@crux/indexer` enforces package trust, package/export resolution, installed package-version checks,
+Dynamic third-party loading is config-driven. `@use-crux/core` stores inert `indexer` config data, while
+`@use-crux/indexer` enforces package trust, package/export resolution, installed package-version checks,
 manifest validation, and compatibility diagnostics before compiler runtime construction. Importing an
 allowlisted package is trusted code execution, not sandboxing.
 
@@ -142,6 +142,6 @@ For Crux changes made from inside Karyla:
 
 1. Commit and push changes in this repository first.
 2. Then commit the updated `crux` submodule pointer in the parent Karyla repository.
-3. Keep package names published as `@crux/*`; local folder names intentionally omit the old `crux-` prefix.
+3. Keep package names published as `@use-crux/*`; local folder names intentionally omit the old `crux-` prefix.
 
 Publishing to npm is not required for Karyla or Vercel while Karyla consumes this submodule through pnpm workspaces. npm publishing is the later external-consumer release path.

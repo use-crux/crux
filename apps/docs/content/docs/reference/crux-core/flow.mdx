@@ -14,7 +14,7 @@ import {
   FlowSuspendedError,
   FlowCancelledError,
   FlowExpiredError,
-} from '@crux/core/flow'
+} from '@use-crux/core/flow'
 ```
 
 ## Overview
@@ -35,8 +35,8 @@ Define a named flow and return a frozen `FlowHandle`. Separates definition from 
 **Returns:** `FlowHandle<T, TInput>` -- frozen handle with `.run()`, `.signal()`, and `.name`
 
 ```ts
-import { flow } from '@crux/core/flow'
-import { generate } from '@crux/ai'
+import { flow } from '@use-crux/core/flow'
+import { generate } from '@use-crux/ai'
 
 const researchFlow = flow('research', async (flow) => {
   const plan = await flow.step('plan', () => generate(planner, { model, input: { topic: flow.input.topic } }))
@@ -210,7 +210,7 @@ These errors are used internally for control flow -- they are caught by `withFlo
 ## Suspend/Resume Example
 
 ```ts
-import { flow, signalFlow } from '@crux/core/flow'
+import { flow, signalFlow } from '@use-crux/core/flow'
 import { z } from 'zod'
 
 const approvalFlow = flow('content-approval', async (flow) => {
@@ -259,9 +259,9 @@ import type {
   SuspendOptions,
   StepOptions,
   WithFlowOptions,
-} from '@crux/core/flow'
+} from '@use-crux/core/flow'
 
-import { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from '@crux/core/flow'
+import { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from '@use-crux/core/flow'
 ```
 
 ## Related

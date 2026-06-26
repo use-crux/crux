@@ -1,4 +1,4 @@
-import { config, prompt } from '@crux/core'
+import { config, prompt } from '@use-crux/core'
 
 /** Rung-0 colocated tests — lowered to `prompt:fixture.greeter` at collect. */
 export const greeter = prompt({

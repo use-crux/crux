@@ -23,7 +23,7 @@ describe('incremental source profile handoff', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer', prompt: 'Draft.' })
       `,
     )
@@ -32,7 +32,7 @@ describe('incremental source profile handoff', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer.next', prompt: 'Draft.' })
       `,
     )

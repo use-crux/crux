@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { SystemBlock } from '@crux/core'
+import type { SystemBlock } from '@use-crux/core'
 import type { GoogleCachedContentCallOptions, GoogleCacheName, GoogleCacheResolveOptions } from './cache-types'
 
 /** Minimal cache lifecycle boundary required by the planner. */

@@ -22,7 +22,7 @@ describe('native semantic direct tool aliases', () => {
     await writeFile(
       file,
       `
-        import { createTool } from '@crux/core'
+        import { createTool } from '@use-crux/core'
         import { z } from 'zod'
 
         const SearchInput = z.object({ query: z.string() })

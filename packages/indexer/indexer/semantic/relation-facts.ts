@@ -1,4 +1,4 @@
-import type { ProjectRelation } from '@crux/core/project-index'
+import type { ProjectRelation } from '@use-crux/core/project-index'
 import { safeId } from '../definitions'
 import { semanticCallbackAccessRelations, semanticFlowAccessRelations } from './access-relations'
 import { semanticAgentHandoffRelations } from './agent-handoff-relations'

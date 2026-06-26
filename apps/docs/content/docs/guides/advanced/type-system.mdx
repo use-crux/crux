@@ -8,7 +8,7 @@ description: Input merging, conditional return types, and generation settings.
 When a prompt uses contexts with input schemas, all fields are merged into a single type:
 
 ```ts twoslash
-import { context, prompt } from '@crux/core'
+import { context, prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const brand = context({
@@ -36,7 +36,7 @@ If two contexts legitimately need the same field, extract it into a shared conte
 Conditional contexts — those wrapped with `when()`, placed inside `match()`, or using context-level `when` — have their input keys automatically wrapped as `Partial<>` in the merged type:
 
 ```ts
-import { context, prompt, when } from '@crux/core'
+import { context, prompt, when } from '@use-crux/core'
 import { z } from 'zod'
 
 const brand = context({

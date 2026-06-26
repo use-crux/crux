@@ -24,7 +24,7 @@ func TestProjectSemanticIndexRequestFiltersRootsWithSourceProfileHints(t *testin
 		},
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities:  []string{"source-dependencies"},
 		},
 	}, nil, &projectindex.SemanticSourceProfile{
@@ -82,7 +82,7 @@ func TestProjectSemanticIndexRequestUsesCompleteSourceProfileClosure(t *testing.
 		},
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities:  []string{"source-dependencies"},
 		},
 	}, nil, &projectindex.SemanticSourceProfile{
@@ -141,7 +141,7 @@ func TestProjectSemanticIndexRequestPrunesPreviousIndexToSemanticClosure(t *test
 		},
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities:  []string{"source-dependencies"},
 		},
 	}, []string{writer}, nil)

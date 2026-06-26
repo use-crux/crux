@@ -1,5 +1,5 @@
 import { extname } from 'node:path'
-import type { SourceLocation, SourceSnippet } from '@crux/core/project-index'
+import type { SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
 import type { SemanticSyntaxNode, SemanticSyntaxSourceFile, SemanticSyntaxView } from './syntax-view'
 
 const MAX_SNIPPET_LENGTH = 12_000

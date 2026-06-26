@@ -1,4 +1,4 @@
-import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectDefinitionKind } from '@use-crux/core/project-index'
 import type { SemanticSourceProfileFile } from './semantic/source-profile'
 
 /**

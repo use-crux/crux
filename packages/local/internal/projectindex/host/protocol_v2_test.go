@@ -308,7 +308,7 @@ func TestWorker_indexProjectAstPatchErrorsWhenStaticSyntaxEnabledWithoutStaticIn
 						kind: 'definitions',
 						phase: 'ast',
 						projectRoot: req.root,
-						producer: { name: '@crux/indexer/project-indexer', version: 'test' },
+						producer: { name: '@use-crux/indexer/project-indexer', version: 'test' },
 						fidelity: 'authoritative',
 						provenance: { kind: 'runtime', attribute: 'test.native' },
 						fact: { id: 'prompt:native', kind: 'prompt', name: 'native', fidelity: 'resolved', status: 'active' }
@@ -419,7 +419,7 @@ func TestWorker_indexProjectAstPatchFallsBackWhenNativeAstConfigDisabled(t *test
 					kind: 'definitions',
 					phase: 'ast',
 					projectRoot: req.root,
-					producer: { name: '@crux/indexer/project-indexer', version: 'test' },
+					producer: { name: '@use-crux/indexer/project-indexer', version: 'test' },
 					fidelity: 'authoritative',
 					provenance: { kind: 'runtime', attribute: 'test.typescript' },
 					fact: { id: 'prompt:ts', kind: 'prompt', name: 'ts', fidelity: 'resolved', status: 'active' }
@@ -504,7 +504,7 @@ func TestWorker_corruptAstStreamDoesNotUpdateServiceStore(t *testing.T) {
 						kind: 'definitions',
 						phase: 'ast',
 						projectRoot: req.root,
-						producer: { name: '@crux/indexer/project-indexer', version: 'test' },
+						producer: { name: '@use-crux/indexer/project-indexer', version: 'test' },
 						fact: { id: 'prompt:corrupt', kind: 'prompt', name: 'corrupt', fidelity: 'partial', status: 'active' }
 					}]
 				},

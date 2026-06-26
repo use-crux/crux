@@ -4,13 +4,13 @@ import {
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '@crux/core/observability'
-import { inMemoryCruxStore } from '@crux/core/store'
-import { resetRuntime, updateRuntime } from '@crux/core'
+} from '@use-crux/core/observability'
+import { inMemoryCruxStore } from '@use-crux/core/store'
+import { resetRuntime, updateRuntime } from '@use-crux/core'
 import { action, flow, query } from '../server'
 import { DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS } from '../observability'
 
-describe('@crux/convex/server', () => {
+describe('@use-crux/convex/server', () => {
   afterEach(() => {
     resetObservabilityRuntime()
     resetRuntime()

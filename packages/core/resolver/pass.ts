@@ -119,7 +119,7 @@ export async function runPromptPass(
       if (typeof value === 'string') {
         const warnings = detectSuspiciousPatterns(value, key)
         for (const warning of warnings) {
-          ports.diagnostics.warn(`[@crux/core] ${warning.message}`)
+          ports.diagnostics.warn(`[@use-crux/core] ${warning.message}`)
           emitSecurityWarningSpan({
             promptId: config.id ?? 'unknown',
             field: key,

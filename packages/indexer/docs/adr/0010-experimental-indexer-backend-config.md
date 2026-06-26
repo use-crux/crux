@@ -24,7 +24,7 @@ Unstable indexer implementation choices live under top-level `experimental.index
 same graduation pattern used by tools such as Next.js:
 
 ```ts
-import { config } from '@crux/core'
+import { config } from '@use-crux/core'
 
 export default config({
   experimental: {
@@ -54,8 +54,8 @@ hard migration; no legacy compatibility layer is required.
 
 ## Consequences
 
-- `@crux/core` remains provider-agnostic and stores only inert config data.
-- `@crux/indexer` owns backend selection and maps `experimental.indexer.native` to the internal
+- `@use-crux/core` remains provider-agnostic and stores only inert config data.
+- `@use-crux/indexer` owns backend selection and maps `experimental.indexer.native` to the internal
   native backend and engine selection.
 - `crux config inspect` shows the experimental selection as effective config so users can verify the
   active backend without reading worker logs.

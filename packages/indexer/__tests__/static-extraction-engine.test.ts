@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import ts from 'typescript'
-import type { IndexDiagnostic, ProjectDefinitionKind } from '@crux/core/project-index'
+import type { IndexDiagnostic, ProjectDefinitionKind } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
 import { facts, type ExtractedFacts, type IndexerExtension } from '../indexer/extensions'
 import { createStaticExtraction, type SourceReader } from '../indexer/static/extraction/engine'
@@ -25,7 +25,7 @@ describe('static extraction engine', () => {
 
     expect(extraction.identity.cacheInputs).toEqual(
       expect.arrayContaining([
-        { kind: 'compiler-profile', name: '@crux/indexer/crux-core-profile', version: '1' },
+        { kind: 'compiler-profile', name: '@use-crux/indexer/crux-core-profile', version: '1' },
         { kind: 'syntax-frontend', name: 'typescript', version: ts.version },
       ]),
     )
@@ -200,7 +200,7 @@ describe('static extraction engine', () => {
     const root = '/fixture'
     const file = '/fixture/src/prompts.ts'
     const source = [
-      "import { prompt } from '@crux/core'",
+      "import { prompt } from '@use-crux/core'",
       '',
       "export const writer = prompt({ id: 'writer', system: 'You write.' })",
     ].join('\n')
@@ -212,7 +212,7 @@ describe('static extraction engine', () => {
       nativeFacts: [
         {
           matchIndex: 0,
-          replaces: [{ extension: '@crux/indexer/crux-core', extractor: 'prompt' }],
+          replaces: [{ extension: '@use-crux/indexer/crux-core', extractor: 'prompt' }],
           facts: nativePromptFactsForTest(match, file),
         },
       ],
@@ -240,7 +240,7 @@ describe('static extraction engine', () => {
     const root = '/fixture'
     const file = '/fixture/src/prompts.ts'
     const source = [
-      "import { prompt } from '@crux/core'",
+      "import { prompt } from '@use-crux/core'",
       '',
       "export const writer = prompt({ id: 'writer', system: 'You write.' })",
     ].join('\n')
@@ -252,7 +252,7 @@ describe('static extraction engine', () => {
       nativeFacts: [
         {
           matchIndex: 0,
-          replaces: [{ extension: '@crux/indexer/crux-core', extractor: 'prompt' }],
+          replaces: [{ extension: '@use-crux/indexer/crux-core', extractor: 'prompt' }],
           facts: nativePromptFactsForTest(match, file),
         },
       ],
@@ -281,7 +281,7 @@ describe('static extraction engine', () => {
     const root = '/fixture'
     const file = '/fixture/src/prompts.ts'
     const source = [
-      "import { prompt } from '@crux/core'",
+      "import { prompt } from '@use-crux/core'",
       '',
       "export const writer = prompt({ id: 'writer', system: 'You write.' })",
     ].join('\n')
@@ -293,7 +293,7 @@ describe('static extraction engine', () => {
       nativeFacts: [
         {
           matchIndex: 0,
-          replaces: [{ extension: '@crux/indexer/crux-core', extractor: 'prompt' }],
+          replaces: [{ extension: '@use-crux/indexer/crux-core', extractor: 'prompt' }],
           facts: nativePromptFactsForTest(match, file),
         },
       ],
@@ -317,7 +317,7 @@ describe('static extraction engine', () => {
     const root = '/fixture'
     const file = '/fixture/src/prompts.ts'
     const source = [
-      "import { prompt } from '@crux/core'",
+      "import { prompt } from '@use-crux/core'",
       '',
       "export const writer = prompt({ id: 'writer', system: 'You write.' })",
     ].join('\n')
@@ -327,7 +327,7 @@ describe('static extraction engine', () => {
     expect(record.nativeFacts ?? []).toMatchObject([
       {
         matchIndex: 0,
-        replaces: [{ extension: '@crux/indexer/crux-core', extractor: 'prompt' }],
+        replaces: [{ extension: '@use-crux/indexer/crux-core', extractor: 'prompt' }],
       },
     ])
 
@@ -358,7 +358,7 @@ describe('static extraction engine', () => {
     const root = '/fixture'
     const file = '/fixture/src/eval.ts'
     const source = [
-      "import { target } from '@crux/core/quality'",
+      "import { target } from '@use-crux/core/quality'",
       '',
       "export const task = target.prompt(writer, { model: runtime.model })",
     ].join('\n')
@@ -384,7 +384,7 @@ describe('static extraction engine', () => {
     })
     expect(rustRecord.nativeFacts ?? []).toHaveLength(3)
     expect(rustRecord.nativeFacts?.map((item) => item.replaces)).toEqual(
-      rustRecord.nativeFacts?.map(() => [{ extension: '@crux/indexer/crux-core', extractor: 'routing' }]),
+      rustRecord.nativeFacts?.map(() => [{ extension: '@use-crux/indexer/crux-core', extractor: 'routing' }]),
     )
 
     const nativeExtraction = createStaticExtraction({
@@ -631,7 +631,7 @@ function nativePromptFactsForTest(match: StaticSourceMatch, file: string): Extra
 
 function routingFixtureSource(): string {
   return [
-    "import { cascade, fallback, router } from '@crux/core/routing'",
+    "import { cascade, fallback, router } from '@use-crux/core/routing'",
     '',
     'const classify = () => "draft"',
     'const evaluate = () => ({ accept: true })',

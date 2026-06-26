@@ -74,7 +74,7 @@ func plannedIncrementalPreviousIndex(root string) store.IndexData {
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities: []string{
 				"source-dependencies",
 				"source-dependents",

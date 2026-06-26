@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectDefinitionKind } from '@use-crux/core/project-index'
 import { foldedIndexChild } from '../index-presentation'
 import { facts, type IndexExtractor, type ExtractContext, type StaticObjectReader } from '../extensions'
 import { assertionSitesFromSource } from '../evaluation-assertion-sites'

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import type { ProjectIndexSnapshot, ProjectModelResolutionMode } from '@crux/core/project-index'
+import type { ProjectIndexSnapshot, ProjectModelResolutionMode } from '@use-crux/core/project-index'
 import {
   astIndexPatchFromCompilerResult,
   compileProjectIndex,

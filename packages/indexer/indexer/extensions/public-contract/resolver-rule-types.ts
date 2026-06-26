@@ -4,7 +4,7 @@ import type {
   IndexRuleManifest,
   ProjectDefinition,
   ProjectRelation,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import type { SemanticReadModel } from './manifest-types'
 import type { ExtractedSourceRef, IndexDependency, UnresolvedReference } from './extractor-types'
 

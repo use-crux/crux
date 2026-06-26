@@ -1,8 +1,8 @@
 import type OpenAI from 'openai'
 import type { ChatCompletion, ChatCompletionChunk } from 'openai/resources/chat/completions'
 import type { Stream } from 'openai/streaming'
-import type { ProviderConformanceEmission, ProviderRuntimeConformanceHarness } from '@crux/core/adapter'
-import { describeCruxAdapterConformance } from '@crux/core/adapter/testing/vitest'
+import type { ProviderConformanceEmission, ProviderRuntimeConformanceHarness } from '@use-crux/core/adapter'
+import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
 import { openaiProviderRuntime } from '../index'
 
 interface CapturedOpenAIClient {

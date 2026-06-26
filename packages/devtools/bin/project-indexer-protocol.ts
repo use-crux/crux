@@ -1,4 +1,4 @@
-import type { IndexPatch } from '@crux/indexer'
+import type { IndexPatch } from '@use-crux/indexer'
 import {
   indexPatchToWorkerEventStream,
   projectIndexArtifactToWorkerEvent,
@@ -8,12 +8,12 @@ import {
   type ProjectIndexFactProducer,
   type ProjectIndexPhaseTiming,
   type ProjectIndexWorkerEvent,
-} from '@crux/indexer/contracts/worker-events'
+} from '@use-crux/indexer/contracts/worker-events'
 
-export type { ProjectIndexFactProducer } from '@crux/indexer/contracts/worker-events'
+export type { ProjectIndexFactProducer } from '@use-crux/indexer/contracts/worker-events'
 
 const projectIndexFactProducer = {
-  name: '@crux/indexer/project-indexer',
+  name: '@use-crux/indexer/project-indexer',
   version: 'v2',
 } as const satisfies ProjectIndexFactProducer
 

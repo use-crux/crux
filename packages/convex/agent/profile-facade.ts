@@ -1,5 +1,5 @@
-import type { AnyToolSet, ContextEntry, Prompt } from '@crux/core'
-import { resolve as resolveAiAgent } from '@crux/ai/agent'
+import type { AnyToolSet, ContextEntry, Prompt } from '@use-crux/core'
+import { resolve as resolveAiAgent } from '@use-crux/ai/agent'
 import type { z } from 'zod'
 import { createProfileBackedAgentLifecycle } from './lifecycle'
 import { createDefaultConvexAgentDriver } from './default-driver'

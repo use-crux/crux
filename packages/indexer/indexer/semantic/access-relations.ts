@@ -1,4 +1,4 @@
-import type { ProjectDefinitionKind, ProjectRelation } from '@crux/core/project-index'
+import type { ProjectDefinitionKind, ProjectRelation } from '@use-crux/core/project-index'
 import { safeId } from '../definitions'
 import { projectRelation } from '../relations'
 import type {

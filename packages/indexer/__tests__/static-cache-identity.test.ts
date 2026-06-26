@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { ProjectDefinitionKind } from '@crux/core/project-index'
+import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
 import { afterEach, describe, expect, it } from 'vitest'
 import { facts, type IndexerExtension } from '../indexer/extensions'
 import { staticParseCacheManifestStatus } from '../indexer/static/extraction/cache'

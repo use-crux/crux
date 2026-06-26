@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
-import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectDefinitionKind } from '@use-crux/core/project-index'
 import { collectImportBindings, type ImportBinding } from './ast/imports'
 import { createSourceFile } from './ast/parse'
 import { propertyName } from './ast/literals'

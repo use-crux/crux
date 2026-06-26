@@ -4,7 +4,7 @@ description: Markdown-based skill loading for Crux agents. Compatible with skill
 ---
 
 ```ts
-import { registry, skill, skillsSh } from '@crux/core/skill'
+import { registry, skill, skillsSh } from '@use-crux/core/skill'
 ```
 
 Skills are Markdown instruction sets that an LLM loads on-demand. When placed in a prompt's `use` array, the resolution pipeline generates a skill index in the system prompt and injects `LoadSkill`/`LoadReference` tools. Loaded skills are injected at the **system prompt level** via executor re-resolution.
@@ -133,7 +133,7 @@ export const brand = skill.fromRegistry(acme, 'brand-guidelines')
 3. `LoadSkill` and `LoadReference` tools are injected into the resolved tool set
 4. When the LLM calls `LoadSkill(name)`:
    - **adapter path** (Anthropic/OpenAI/Google): Executor intercepts the tool call, re-resolves the prompt, injects skill content into the system prompt, continues the tool loop. Does not count against `maxSteps`.
-   - **@crux/ai path** (Vercel AI SDK): `wrapGenerate` middleware detects newly activated skills and injects content into the system prompt on the next model step.
+   - **@use-crux/ai path** (Vercel AI SDK): `wrapGenerate` middleware detects newly activated skills and injects content into the system prompt on the next model step.
    - **Convex Agent path**: `convexAgent()` stores a skill activation snapshot and re-resolves on later turns, picking up activated skills automatically.
 5. `LoadReference(skillName, refName)` returns reference content as a normal tool result.
 
@@ -144,7 +144,7 @@ does not need to call it directly, but external framework adapters can use it
 to share the same semantics as Crux adapters.
 
 ```ts
-import { createSkillActivationSession } from '@crux/core/skill'
+import { createSkillActivationSession } from '@use-crux/core/skill'
 
 const session = createSkillActivationSession({
   skills,
@@ -170,7 +170,7 @@ before creating the session.
 Thrown when skill loading fails. Extends `Error` with `_tag: 'SkillLoadError'`.
 
 ```ts
-import { SkillLoadError } from '@crux/core/skill'
+import { SkillLoadError } from '@use-crux/core/skill'
 ```
 
 | Property  | Type     | Description                   |
@@ -195,12 +195,12 @@ Helper for agent frameworks that manage their own tool loop (Convex Agent, Mastr
 | `resolveInput(baseInput)` | `(input) => Promise<input>`    | Enhances input with `_crux_activeSkills`     |
 | `getActiveIds()`          | `() => Promise<string[]>`      | Current active skill IDs                     |
 
-Only needed for external agent frameworks (Convex Agent, Mastra, etc.) that control their own tool loop. Not needed for `@crux/anthropic`, `@crux/openai`, `@crux/google`, or `@crux/ai` — those handle re-resolution automatically.
+Only needed for external agent frameworks (Convex Agent, Mastra, etc.) that control their own tool loop. Not needed for `@use-crux/anthropic`, `@use-crux/openai`, `@use-crux/google`, or `@use-crux/ai` — those handle re-resolution automatically.
 
 See the [Agent framework integration guide](/docs/guides/skills/agent-frameworks) for a complete end-to-end example with Convex Agent.
 
 ```ts
-import { createAgentSkillKit } from '@crux/core/skill'
+import { createAgentSkillKit } from '@use-crux/core/skill'
 
 // In your agent factory function (called per conversation/thread):
 const kit = await createAgentSkillKit(myPrompt, {

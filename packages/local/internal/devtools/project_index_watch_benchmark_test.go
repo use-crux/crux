@@ -135,7 +135,7 @@ func benchmarkWatchIndex(root string, count int) store.IndexData {
 		Sources:       sources,
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
 			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
 		},

@@ -8,7 +8,7 @@ description: Try cheaper models first and escalate when quality checks reject th
 Use a cascade when the same task can often be handled by a cheaper model, but some inputs need a stronger model.
 
 ```ts title="answer-cascade.ts"
-import { cascade } from '@crux/core/routing'
+import { cascade } from '@use-crux/core/routing'
 import { openai } from '@ai-sdk/openai'
 import { anthropic } from '@ai-sdk/anthropic'
 
@@ -127,7 +127,7 @@ const productionCascade = cascade({
 If all tiers reject, Crux throws `CascadeExhaustedError` with the last result and tier details attached.
 
 ```ts
-import { CascadeExhaustedError } from '@crux/core/routing'
+import { CascadeExhaustedError } from '@use-crux/core/routing'
 
 try {
   await generate(prompt, { model: strictCascade, input })

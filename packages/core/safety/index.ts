@@ -1,5 +1,5 @@
 /**
- * `@crux/core/safety` — one deep module for guardrails and constraints.
+ * `@use-crux/core/safety` — one deep module for guardrails and constraints.
  *
  * Authoring: `guardrail()`, `constraint()`, evaluated standalone via
  * `evaluateGuardrail()` / `evaluateConstraint()`.

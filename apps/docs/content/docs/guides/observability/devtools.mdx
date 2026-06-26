@@ -36,7 +36,7 @@ config({
 
 - Every `generate()` / `stream()` call — timing, tokens, results, finish reasons, and rich error evidence when execution throws
 - Every `.resolve()` call — system message assembly details
-- Agent model calls via `@crux/ai/agent`
+- Agent model calls via `@use-crux/ai/agent`
 - Quality experiments — every evaluation cell opens an observed run with full trace links
 - Memory operations — every read/write across all memory types
 - Compaction events — sliding window evictions with compression stats
@@ -136,7 +136,7 @@ Click a trace in the timeline to see its full execution:
 - **Timing** — total duration; time-to-first-token (TTFT) for streaming calls
 - **Model & provider** — which model handled the call
 - **Input & output** — the resolved prompt messages and the model's response
-- **Tool calls** — each native-adapter or `@crux/ai` live invocation with arguments, raw result preview, model-facing `toModelOutput()` preview, duration, and output-size savings
+- **Tool calls** — each native-adapter or `@use-crux/ai` live invocation with arguments, raw result preview, model-facing `toModelOutput()` preview, duration, and output-size savings
 - **Source location** — file, line number, and function name where `generate()` was called
 - **Streaming metrics** — throughput (tokens/sec), chunk count, stream duration
 - **Errors** — compact message, error type, stack trace, and raw safe details when a call, tool, stage, step, or runtime command throws
@@ -220,7 +220,7 @@ The Go process owns the server and read models. Node.js is spawned only for boun
 
 ### The SDK
 
-Your application connects to the devtools server through `config()` or `enableDevtools()`. When `serverUrl` is set, the SDK installs the canonical observability transport, posts ordered graph record batches to `POST /api/observability/records`, and sends runtime prompt/context/tool snapshots through `POST /api/index/snapshot` to enrich the Project Index. Delivery is non-blocking, starts immediately for live span updates, can have multiple bounded HTTP deliveries in flight, and swallows failures so devtools never slow down or break application code. The Go server keeps list/dashboard/lifecycle reads on cheap run-summary paths and reserves exact graph projection for single-run inspection. Generation streams close their spans from the raw stream's completion or error signal, so stopped streams and failed streams do not stay visually running while later usage metadata is collected. In serverless runtimes, call `observe.flush()` or use the `@crux/convex` helpers before the action returns so queued records are not killed with the worker.
+Your application connects to the devtools server through `config()` or `enableDevtools()`. When `serverUrl` is set, the SDK installs the canonical observability transport, posts ordered graph record batches to `POST /api/observability/records`, and sends runtime prompt/context/tool snapshots through `POST /api/index/snapshot` to enrich the Project Index. Delivery is non-blocking, starts immediately for live span updates, can have multiple bounded HTTP deliveries in flight, and swallows failures so devtools never slow down or break application code. The Go server keeps list/dashboard/lifecycle reads on cheap run-summary paths and reserves exact graph projection for single-run inspection. Generation streams close their spans from the raw stream's completion or error signal, so stopped streams and failed streams do not stay visually running while later usage metadata is collected. In serverless runtimes, call `observe.flush()` or use the `@use-crux/convex` helpers before the action returns so queued records are not killed with the worker.
 
 The optional Runtime Bridge is the reverse command plane. With `devtools.bridge: true`, a long-lived Node runtime opens `/ws/runtime` so Go services can send typed local-dev commands such as `store.read` to the live app. Primitives register inspectable resources automatically, so devtools can ask for `memory:<id>` or `blackboard:<id>` and read the attached store instead of reconstructing state from traces. `eval.run` is also routed through the Go bridge service, using the embedded eval runner so quality persistence and observability stay on the normal eval path. Convex and serverless runtimes use framework-bound HTTP endpoints instead of long-lived sockets. Web devtools and the TUI still talk only to Go: they never call runtime peers directly.
 
@@ -229,7 +229,7 @@ Failed spans expose an `errors` inspection section built by the Go backend from 
 For Convex, bind the bridge once from `convex/http.ts`:
 
 ```ts
-import { setup } from '@crux/convex'
+import { setup } from '@use-crux/convex'
 import crux from '../crux.config'
 import { components } from './_generated/api'
 
@@ -252,7 +252,7 @@ Run lists and run details are intentionally different read paths. The web UI and
 
 ### Requirements
 
-- **`@crux/local`** — npm package that ships the `crux` local runtime wrapper
+- **`@use-crux/local`** — npm package that ships the `crux` local runtime wrapper
 
 ## Where to next
 

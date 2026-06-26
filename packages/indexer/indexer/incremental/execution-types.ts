@@ -35,7 +35,7 @@ export interface IndexProjectIncrementalOptions {
   /** Deleted files reported separately so invalidation can distinguish missing source from edits. */
   readonly deletedFiles?: readonly string[]
   /** Previous Project Index snapshot that supplies trusted source graph evidence. */
-  readonly previousIndex: import('@crux/core/project-index').ProjectIndexSnapshot
+  readonly previousIndex: import('@use-crux/core/project-index').ProjectIndexSnapshot
   /** Optional project name supplied by an embedding CLI or local runtime. */
   readonly projectName?: string
   /** Optional Crux config path, relative to `root` unless already absolute. */

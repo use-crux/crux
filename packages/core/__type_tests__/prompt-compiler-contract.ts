@@ -4,8 +4,8 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { compilePrompt, prompt } from '@crux/core'
-import type { CompiledPrompt, PromptResolution, ResolveCallOptions, ResolvedPrompt, InspectResult } from '@crux/core'
+import { compilePrompt, prompt } from '@use-crux/core'
+import type { CompiledPrompt, PromptResolution, ResolveCallOptions, ResolvedPrompt, InspectResult } from '@use-crux/core'
 
 const answer = prompt({
   id: 'typed-compiler-boundary',

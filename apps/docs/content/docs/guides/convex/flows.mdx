@@ -5,10 +5,10 @@ description: Build durable Convex-aware flows with start, suspend, signal, and r
 
 # Convex Flows
 
-Use `flow()` from `@crux/convex/server` when a Crux flow needs to cross Convex action boundaries, suspend, signal, or resume.
+Use `flow()` from `@use-crux/convex/server` when a Crux flow needs to cross Convex action boundaries, suspend, signal, or resume.
 
 ```ts
-import { action, flow } from '@crux/convex/server'
+import { action, flow } from '@use-crux/convex/server'
 ```
 
 The returned handle exposes:
@@ -25,7 +25,7 @@ The returned handle exposes:
 ```ts title="convex/workflows/writerFlow.ts"
 'use node'
 
-import { action, flow } from '@crux/convex/server'
+import { action, flow } from '@use-crux/convex/server'
 import { internal } from '../_generated/api'
 import { v } from 'convex/values'
 

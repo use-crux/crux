@@ -1,5 +1,5 @@
 /**
- * `@crux/otel` — OpenTelemetry integration for Crux.
+ * `@use-crux/otel` — OpenTelemetry integration for Crux.
  *
  * Emits OTel spans for all instrumented Crux events (generate, stream,
  * tools, flows, compositions, memory, etc.).
@@ -10,8 +10,8 @@
  *
  * @example
  * ```ts
- * import { config } from '@crux/core'
- * import { withTelemetry } from '@crux/otel'
+ * import { config } from '@use-crux/core'
+ * import { withTelemetry } from '@use-crux/otel'
  *
  * config({
  *   prompts,

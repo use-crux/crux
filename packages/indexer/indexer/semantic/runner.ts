@@ -1,4 +1,4 @@
-import type { IndexLintFinding, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@crux/core/project-index'
+import type { IndexLintFinding, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@use-crux/core/project-index'
 import { mergeRelationsByIdentity } from '../relations'
 import type { SemanticAnalyzerResult, SemanticIndexAnalyzer, SemanticIndexAnalyzerContext, SemanticIndexAnalyzerResult } from './types'
 

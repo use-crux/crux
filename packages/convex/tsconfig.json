@@ -15,10 +15,10 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "vitest"],
     "paths": {
-      "@crux/core": ["../core/index.ts"],
-      "@crux/core/*": ["../core/*"],
-      "@crux/react": ["../react/src/index.ts"],
-      "@crux/react/*": ["../react/src/*"]
+      "@use-crux/core": ["../core/index.ts"],
+      "@use-crux/core/*": ["../core/*"],
+      "@use-crux/react": ["../react/src/index.ts"],
+      "@use-crux/react/*": ["../react/src/*"]
     }
   },
   "include": ["*.ts", "src/**/*.ts", "__tests__/**/*.ts", "__tests__/**/*.tsx", "__type_tests__/**/*.ts"],

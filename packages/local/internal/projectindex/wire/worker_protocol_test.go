@@ -33,7 +33,7 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 					"kind":          "definitions",
 					"phase":         "ast",
 					"projectRoot":   "/repo",
-					"producer":      map[string]any{"name": "@crux/indexer", "version": "test"},
+					"producer":      map[string]any{"name": "@use-crux/indexer", "version": "test"},
 					"fidelity":      "inferred",
 					"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.ast"},
 					"fact": map[string]any{
@@ -50,7 +50,7 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 					"kind":          "diagnostics",
 					"phase":         "ast",
 					"projectRoot":   "/repo",
-					"producer":      map[string]any{"name": "@crux/indexer", "version": "test"},
+					"producer":      map[string]any{"name": "@use-crux/indexer", "version": "test"},
 					"fidelity":      "inferred",
 					"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.ast"},
 					"fact": map[string]any{
@@ -74,7 +74,7 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 					"kind":          "sources",
 					"phase":         "ast",
 					"projectRoot":   "/repo",
-					"producer":      map[string]any{"name": "@crux/indexer", "version": "test"},
+					"producer":      map[string]any{"name": "@use-crux/indexer", "version": "test"},
 					"fidelity":      "inferred",
 					"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.ast"},
 					"fact": map[string]any{
@@ -91,12 +91,12 @@ func TestProjectIndexPatchStreamCollectorBuildsPatchFromOrderedBatches(t *testin
 					"kind":          "sourceGraph",
 					"phase":         "ast",
 					"projectRoot":   "/repo",
-					"producer":      map[string]any{"name": "@crux/indexer", "version": "test"},
+					"producer":      map[string]any{"name": "@use-crux/indexer", "version": "test"},
 					"fidelity":      "inferred",
 					"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.ast"},
 					"fact": map[string]any{
 						"schemaVersion": 1,
-						"producedBy":    "@crux/indexer",
+						"producedBy":    "@use-crux/indexer",
 						"capabilities":  []string{"project-shards"},
 						"shards": []map[string]any{
 							{"id": ".", "root": "/repo", "packageFile": "/repo/package.json"},
@@ -333,7 +333,7 @@ func TestProjectIndexPatchStreamCollectorRejectsPatchBudgetViolations(t *testing
 func TestProjectIndexPatchStreamCollectorRejectsProducerMismatch(t *testing.T) {
 	collector := NewProjectIndexPatchStreamCollector(ProjectIndexPatchStreamOptions{
 		Root:     "/repo",
-		Producer: "@crux/indexer/project-indexer",
+		Producer: "@use-crux/indexer/project-indexer",
 	})
 
 	if err := collector.Handle(mustMarshalWorkerEvent(t, map[string]any{
@@ -383,7 +383,7 @@ func TestProjectIndexPatchStreamCollectorPreservesRuntimeObservedEnvelopeMetadat
 			"kind":          "definitions",
 			"phase":         "runtime",
 			"projectRoot":   "/repo",
-			"producer":      map[string]any{"name": "@crux/indexer/project-runtime-indexer", "version": "test"},
+			"producer":      map[string]any{"name": "@use-crux/indexer/project-runtime-indexer", "version": "test"},
 			"fidelity":      "runtime-observed",
 			"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.runtime"},
 			"fact": map[string]any{
@@ -435,7 +435,7 @@ func testDefinitionFact(id string) map[string]any {
 		"kind":          "definitions",
 		"phase":         "ast",
 		"projectRoot":   "/repo",
-		"producer":      map[string]any{"name": "@crux/indexer", "version": "test"},
+		"producer":      map[string]any{"name": "@use-crux/indexer", "version": "test"},
 		"fidelity":      "inferred",
 		"provenance":    map[string]any{"kind": "runtime", "attribute": "project-index.ast"},
 		"fact": map[string]any{

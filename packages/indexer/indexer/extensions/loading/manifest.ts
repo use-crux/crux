@@ -37,5 +37,5 @@ export function isIndexerExtensionAllowed(
   if (policy.deny?.includes(extension.name)) return false
   if (policy.mode === 'unsafe-local-dev') return true
   if (policy.mode === 'allowlisted') return policy.allow?.includes(extension.name) ?? false
-  return extension.name === '@crux/indexer' || extension.name.startsWith('@crux/')
+  return extension.name === '@use-crux/indexer' || extension.name.startsWith('@use-crux/')
 }

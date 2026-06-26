@@ -1,5 +1,5 @@
 import { projectRelation } from '../../../../relations'
-import type { InjectionToolFacts, InjectionUseFacts } from '@crux/core/project-index'
+import type { InjectionToolFacts, InjectionUseFacts } from '@use-crux/core/project-index'
 import {
   isArrayLiteralExpression,
   isIdentifier,

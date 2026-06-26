@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ProjectDefinition } from '@crux/core/project-index'
+import type { ProjectDefinition } from '@use-crux/core/project-index'
 import { cruxCoreExtension } from '../indexer/extractors/crux-core-extension'
 import './first-party-phase5-native-fixtures'
 import './first-party-phase6-agent-native-fixtures'

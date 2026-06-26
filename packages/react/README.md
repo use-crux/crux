@@ -1,4 +1,4 @@
-# @crux/react
+# @use-crux/react
 
 React bindings for Crux plans, tasks, blackboards, working memory, and live transports.
 
@@ -7,20 +7,20 @@ This package owns browser/runtime UI integration only:
 - `CruxProvider`
 - plan/task/memory hooks
 - polling, SSE, Convex, and mock transports
-- `@crux/react/server` for the SSE handler
+- `@use-crux/react/server` for the SSE handler
 
-It intentionally does not define orchestration primitives. Those live in `@crux/core`.
+It intentionally does not define orchestration primitives. Those live in `@use-crux/core`.
 
 ## Install
 
 ```bash
-pnpm add @crux/react @crux/core
+pnpm add @use-crux/react @use-crux/core
 ```
 
 ## Usage
 
 ```tsx
-import { CruxProvider, createSSETransport, usePlan } from '@crux/react'
+import { CruxProvider, createSSETransport, usePlan } from '@use-crux/react'
 
 const transport = createSSETransport('/api/crux/events')
 
@@ -38,5 +38,5 @@ function PlanPanel() {
 }
 ```
 
-Server-side SSE helpers are exported from `@crux/react/server`.
+Server-side SSE helpers are exported from `@use-crux/react/server`.
 

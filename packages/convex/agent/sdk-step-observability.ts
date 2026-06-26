@@ -1,4 +1,4 @@
-import { observe, type OpenObservedSpan } from '@crux/core/observability'
+import { observe, type OpenObservedSpan } from '@use-crux/core/observability'
 import { stringValue } from './lifecycle-utils'
 import { emitStepOutputArtifacts } from './sdk-observability-artifacts'
 import { modelSpanAttributes, normalizeUsageWithCost, numericValue } from './sdk-observability-values'

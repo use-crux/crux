@@ -58,8 +58,8 @@ func (m signalMatcher) HasCruxInterest(sample string) bool {
 }
 
 func signalPatternHint(pattern string) string {
-	if strings.Contains(pattern, "@crux/") {
-		return "@crux/"
+	if strings.Contains(pattern, "@use-crux/") {
+		return "@use-crux/"
 	}
 	names := append([]string(nil), defaultCallNames...)
 	names = append(names, "workingState", "evaluation", "suite")

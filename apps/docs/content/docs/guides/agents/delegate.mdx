@@ -6,7 +6,7 @@ description: Orchestration wrapper combining handoff validation with subagent ex
 A delegate wraps a [handoff](/docs/guides/agents/tools-and-handoffs) contract with an execution function. The orchestrating agent calls it as a tool, the subagent runs, and the result is validated and transformed through the handoff — all in one step.
 
 ```ts title="delegate.ts"
-import { delegate } from '@crux/core/agent'
+import { delegate } from '@use-crux/core/agent'
 import { z } from 'zod'
 
 const researchDelegate = delegate({
@@ -30,7 +30,7 @@ Each delegation validates data at three points:
 The `TCtx` type parameter provides type-safe context threading for framework-specific data (action context, user IDs, project IDs, etc.):
 
 ```ts title="typed-delegate.ts"
-import { delegate } from '@crux/core/agent'
+import { delegate } from '@use-crux/core/agent'
 import { z } from 'zod'
 
 type DelegateCtx = {
@@ -57,10 +57,10 @@ const researchDelegate = delegate({
 
 ## Using with framework-specific tool factories
 
-For frameworks that have their own tool format, use `.run()` directly instead of `.asTools()`. In Convex Agent, prefer `createTool()` from `@crux/convex/agent` so nested delegate work stays observable:
+For frameworks that have their own tool format, use `.run()` directly instead of `.asTools()`. In Convex Agent, prefer `createTool()` from `@use-crux/convex/agent` so nested delegate work stays observable:
 
 ```ts title="convex-tool.ts"
-import { createTool } from '@crux/convex/agent'
+import { createTool } from '@use-crux/convex/agent'
 
 const research = createTool({
   description: 'Delegate research to a specialist',
@@ -102,7 +102,7 @@ Use `.run()` to execute a delegate programmatically:
 
 ```ts twoslash
 // @noErrors
-import { delegate } from '@crux/core/agent'
+import { delegate } from '@use-crux/core/agent'
 import { z } from 'zod'
 declare const researchToWriter: any
 declare const runResearchSubagent: any

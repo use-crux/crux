@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { InjectionReturnContributionFacts, InjectionToolFacts, InjectionUseFacts } from '@crux/core/project-index'
+import type { InjectionReturnContributionFacts, InjectionToolFacts, InjectionUseFacts } from '@use-crux/core/project-index'
 import type { StaticRelationRef } from '../types'
 import type { ExtractContext } from '../extensions'
 import { propertyName } from '../ast/literals'

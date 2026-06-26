@@ -3,7 +3,7 @@
  *
  * Public barrel for the Convex-Agent-compatible Crux integration. The concrete
  * `@convex-dev/agent` adapter lives under `./agent/sdk` so this facade stays
- * small while preserving the existing `@crux/convex/agent` import path.
+ * small while preserving the existing `@use-crux/convex/agent` import path.
  *
  * @module
  */

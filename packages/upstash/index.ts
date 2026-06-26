@@ -1,5 +1,5 @@
 /**
- * `@crux/upstash` - Upstash Vector store adapter for Crux.
+ * `@use-crux/upstash` - Upstash Vector store adapter for Crux.
  *
  * Hybrid storage: text/metadata persisted in Convex (reliable, transactional),
  * vectors stored in Upstash Vector (fast similarity search).
@@ -18,10 +18,10 @@ import type {
   StoreEntry,
   VectorSearchOptions,
   VectorSearchQuery,
-} from '@crux/core/store'
-import type { VectorHit, VectorRecord, VectorStore } from '@crux/core/storage'
-import { toStoreValue } from '@crux/core/memory'
-import type { RawMemoryDocument } from '@crux/core/memory'
+} from '@use-crux/core/store'
+import type { VectorHit, VectorRecord, VectorStore } from '@use-crux/core/storage'
+import { toStoreValue } from '@use-crux/core/memory'
+import type { RawMemoryDocument } from '@use-crux/core/memory'
 
 interface UpstashUpsertData {
   id: string

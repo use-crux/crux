@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { IndexDiagnostic } from '@crux/core/project-index'
+import type { IndexDiagnostic } from '@use-crux/core/project-index'
 import { isIndexerExtensionAllowed, validateIndexerExtensionManifest } from './manifest'
 import type { ExtensionReference, ExtensionTrustPolicy, IndexerExtension, IndexerExtensionConfig } from '../public-contract/types'
 
@@ -54,7 +54,7 @@ export interface ResolvedIndexerExtension {
 }
 
 export interface ResolveIndexerExtensionReferencesInput {
-  /** Inert `config({ indexer })` data read from `@crux/core`. */
+  /** Inert `config({ indexer })` data read from `@use-crux/core`. */
   readonly config?: IndexerExtensionConfig
   /**
    * Candidate manifests supplied by the caller.
@@ -75,7 +75,7 @@ export interface ResolveIndexerExtensionReferencesResult {
 export interface LoadIndexerExtensionReferencesInput {
   /** Project root used as the package-resolution base for configured extension packages. */
   readonly root: string
-  /** Inert `config({ indexer })` data read from `@crux/core`. */
+  /** Inert `config({ indexer })` data read from `@use-crux/core`. */
   readonly config?: IndexerExtensionConfig
 }
 
@@ -278,7 +278,7 @@ function isPackageReferenceAllowed(packageName: string, policy: ExtensionTrustPo
   if (effective.deny?.includes(packageName)) return false
   if (effective.mode === 'unsafe-local-dev') return true
   if (effective.mode === 'allowlisted') return effective.allow?.includes(packageName) ?? false
-  return packageName === '@crux/indexer' || packageName.startsWith('@crux/')
+  return packageName === '@use-crux/indexer' || packageName.startsWith('@use-crux/')
 }
 
 /**

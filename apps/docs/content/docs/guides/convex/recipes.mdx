@@ -7,7 +7,7 @@ description: Recommended Convex patterns and anti-patterns for Crux applications
 
 ## Mutation Writes App-Specific Memory
 
-Do not add app-table-specific helpers to `@crux/convex`. Keep them local:
+Do not add app-table-specific helpers to `@use-crux/convex`. Keep them local:
 
 ```ts title="convex/agent/memory/episodes.ts"
 interface DatabaseWriter {
@@ -66,12 +66,12 @@ const result = await ctx.crux.runAction('research', internal.agent.research.run,
 })
 ```
 
-Both the caller and target should use `@crux/convex/server` wrappers.
+Both the caller and target should use `@use-crux/convex/server` wrappers.
 
 ## Convex Agent Tool Calls Child Action
 
 ```ts
-import { createTool } from '@crux/convex/agent'
+import { createTool } from '@use-crux/convex/agent'
 import { z } from 'zod'
 
 export const researchTool = createTool({
@@ -91,7 +91,7 @@ export const researchTool = createTool({
 | ------------------------------- | ----------------------------------------------------------------------------------- |
 | One request, one model call     | `action()` + adapter `generate()`                                                   |
 | Parallel work inside one action | Adapter composition inside `action()`                                               |
-| Approval or external resume     | `flow()` from `@crux/convex/server`                                                 |
+| Approval or external resume     | `flow()` from `@use-crux/convex/server`                                                 |
 | Experimental cross-action swarm | `createComponentSwarm()`                                                            |
 | App read/write only             | Raw Convex query/mutation or Crux-aware wrapper only if context propagation matters |
 
@@ -101,4 +101,4 @@ export const researchTool = createTool({
 - Exporting flow `.action` publicly when auth is needed.
 - Building strings by hand in Convex Agent context handlers when Crux contexts can resolve them.
 - Storing large workspace files in `CruxStore` instead of `convexWorkspaceBlobStore()`.
-- Adding generic helpers to `@crux/convex` that assume host app table names.
+- Adding generic helpers to `@use-crux/convex` that assume host app table names.

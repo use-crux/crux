@@ -27,7 +27,7 @@ describe('config-policy Project Model resolution', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
 
         export default config({
           lint: { profile: 'strict' },
@@ -39,7 +39,7 @@ describe('config-policy Project Model resolution', () => {
     await writeFile(
       join(root, 'src/answer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         ;(globalThis as unknown as Record<string, unknown>).${marker} = true
 
@@ -78,7 +78,7 @@ describe('config-policy Project Model resolution', () => {
     await writeFile(
       join(root, 'src/answer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const answer = prompt({
           id: 'answer',

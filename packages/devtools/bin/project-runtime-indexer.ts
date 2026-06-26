@@ -9,8 +9,8 @@
  */
 
 import { createInterface } from 'node:readline'
-import { indexProjectRuntime } from '@crux/indexer'
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import { indexProjectRuntime } from '@use-crux/indexer'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import {
   assertProjectIndexWorkerProtocolV2,
   writePatchEvents,
@@ -20,7 +20,7 @@ import {
 } from './project-indexer-protocol'
 
 const projectRuntimeIndexFactProducer = {
-  name: '@crux/indexer/project-runtime-indexer',
+  name: '@use-crux/indexer/project-runtime-indexer',
   version: 'v2',
 } as const satisfies ProjectIndexFactProducer
 

@@ -1,11 +1,11 @@
 ---
-title: '@crux/react/server'
+title: '@use-crux/react/server'
 description: Server-side SSE handler for streaming CruxStore changes to the browser.
 ---
 
 ```ts
-import { cruxSSEHandler } from '@crux/react/server'
-import type { CruxSSEHandlerOptions } from '@crux/react/server'
+import { cruxSSEHandler } from '@use-crux/react/server'
+import type { CruxSSEHandlerOptions } from '@use-crux/react/server'
 ```
 
 ## Overview
@@ -56,7 +56,7 @@ Keys that don't match any known prefix are silently skipped.
 ## Usage with Next.js App Router
 
 ```ts title="app/api/crux/events/route.ts"
-import { cruxSSEHandler } from '@crux/react/server'
+import { cruxSSEHandler } from '@use-crux/react/server'
 import { store } from '@/lib/store'
 
 // Stream all store changes
@@ -64,7 +64,7 @@ export const GET = cruxSSEHandler({ store })
 ```
 
 ```ts title="app/api/crux/plans/route.ts"
-import { cruxSSEHandler } from '@crux/react/server'
+import { cruxSSEHandler } from '@use-crux/react/server'
 import { store } from '@/lib/store'
 
 // Stream only plan events
@@ -73,10 +73,10 @@ export const GET = cruxSSEHandler({ store, prefix: 'plan:' })
 
 ## Client Integration
 
-Pair with `createSSETransport()` from `@crux/react`:
+Pair with `createSSETransport()` from `@use-crux/react`:
 
 ```tsx
-import { createSSETransport, CruxProvider } from '@crux/react'
+import { createSSETransport, CruxProvider } from '@use-crux/react'
 
 const transport = createSSETransport('/api/crux/events')
 
@@ -92,7 +92,7 @@ function App() {
 ## Types
 
 ```ts
-import type { CruxSSEHandlerOptions } from '@crux/react/server'
+import type { CruxSSEHandlerOptions } from '@use-crux/react/server'
 ```
 
 ### `CruxSSEHandlerOptions`

@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { DataAccessFact, SourceLocation } from '@crux/core/project-index'
+import type { DataAccessFact, SourceLocation } from '@use-crux/core/project-index'
 import { sourceForNode } from '../ast/snippets'
 import { resolveIdentifierSourceNode } from '../ast/source-refs'
 

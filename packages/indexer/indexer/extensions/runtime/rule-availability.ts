@@ -1,4 +1,4 @@
-import type { IndexDiagnostic, IndexFactKind } from '@crux/core/project-index'
+import type { IndexDiagnostic, IndexFactKind } from '@use-crux/core/project-index'
 import type { ExtensionRuleInput } from './engine'
 import type { IndexRule } from '../public-contract/types'
 

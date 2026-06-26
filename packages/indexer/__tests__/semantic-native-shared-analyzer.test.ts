@@ -30,7 +30,7 @@ describe('native semantic shared analyzer', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         import { writerSystem } from './helper'
 
         export const writer = prompt({
@@ -56,7 +56,7 @@ describe('native semantic shared analyzer', () => {
     await writeFile(
       file,
       `
-        import { guardrail, prompt } from '@crux/core'
+        import { guardrail, prompt } from '@use-crux/core'
 
         export const writerPrompt = prompt({ id: 'writer-direct' })
         export const outputGuard = guardrail({
@@ -92,7 +92,7 @@ describe('native semantic shared analyzer', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         import { customPrimitive } from './extension'
 
         export const writerPrompt = prompt({ id: 'writer-direct' })

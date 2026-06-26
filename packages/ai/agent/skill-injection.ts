@@ -1,6 +1,6 @@
 import type { LanguageModelV3CallOptions } from '@ai-sdk/provider'
-import type { CruxRuntime } from '@crux/core'
-import type { SkillActivationSession } from '@crux/core/skill'
+import type { CruxRuntime } from '@use-crux/core'
+import type { SkillActivationSession } from '@use-crux/core/skill'
 import type { PromptMessage } from './message-shapes'
 
 function appendText(content: string | import('./message-shapes').MessagePart[], text: string): void {

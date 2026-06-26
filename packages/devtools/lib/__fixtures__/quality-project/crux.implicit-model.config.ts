@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs'
-import { config } from '@crux/core'
-import type { GenerateFn } from '@crux/core/quality'
+import { config } from '@use-crux/core'
+import type { GenerateFn } from '@use-crux/core/quality'
 
 const implicitGenerate = (async () => ({ text: 'implicit setup response' })) as unknown as GenerateFn
 

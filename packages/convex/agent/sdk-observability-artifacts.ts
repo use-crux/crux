@@ -1,4 +1,4 @@
-import { observe } from '@crux/core/observability'
+import { observe } from '@use-crux/core/observability'
 import { stringValue } from './lifecycle-utils'
 import { numericValue } from './sdk-observability-values'
 

@@ -10,7 +10,7 @@
 
 import { createHash } from 'node:crypto'
 import type { GoogleGenAI } from '@google/genai'
-import type { SystemBlock } from '@crux/core'
+import type { SystemBlock } from '@use-crux/core'
 import type {
   GoogleCacheName,
   CacheKey,

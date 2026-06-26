@@ -1,4 +1,4 @@
-import { IndexRuleManifestSchema } from '@crux/core/project-index'
+import { IndexRuleManifestSchema } from '@use-crux/core/project-index'
 import { patternCallNames } from '../public-contract/patterns'
 import { validateRelationSpecs } from '../public-contract/relation-specs'
 import {
@@ -97,7 +97,7 @@ function validateRuleNamespaces(extensions: readonly IndexerExtension[]): readon
  * namespaces.
  */
 function isCruxOwnedExtension(name: string): boolean {
-  return name === '@crux/indexer' || name.startsWith('@crux/')
+  return name === '@use-crux/indexer' || name.startsWith('@use-crux/')
 }
 
 /**

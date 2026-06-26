@@ -175,7 +175,7 @@ describe('static syntax records', () => {
     expect(match).toMatchObject({
       kind: 'new',
       variableName: 'agent',
-      callee: { name: 'Agent', moduleSpecifier: '@crux/core' },
+      callee: { name: 'Agent', moduleSpecifier: '@use-crux/core' },
     })
     expect(record?.diagnostics).toEqual([
       expect.objectContaining({

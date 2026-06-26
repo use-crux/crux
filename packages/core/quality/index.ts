@@ -1,11 +1,11 @@
 /**
- * `@crux/core/quality` — the Quality public surface, curated exports only.
+ * `@use-crux/core/quality` — the Quality public surface, curated exports only.
  *
  * Five values: `evaluate`, `target`, `scorers`, `dataset`, `cassette`.
  * Everything else is types. The internal engine (normalization, matrix
  * execution, statistics, persistence) lives under `quality/internal/` and is
  * never exported, except the `@internal` tooling contract at
- * `@crux/core/quality/internal/runner` (no stability guarantees).
+ * `@use-crux/core/quality/internal/runner` (no stability guarantees).
  *
  * @module
  */

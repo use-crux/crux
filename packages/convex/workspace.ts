@@ -1,13 +1,13 @@
 /**
  * Convex workspace storage helpers.
  *
- * Bridges `@crux/core/storage` blob payloads to Convex file storage while
+ * Bridges `@use-crux/core/storage` blob payloads to Convex file storage while
  * leaving workspace metadata in a normal `DataStore`.
  *
  * @module
  */
 
-import type { BlobReadResult, BlobRef, BlobStore } from '@crux/core/storage'
+import type { BlobReadResult, BlobRef, BlobStore } from '@use-crux/core/storage'
 
 interface ConvexStorageLike {
   store(content: Blob): Promise<string>

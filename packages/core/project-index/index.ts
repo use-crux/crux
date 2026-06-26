@@ -960,7 +960,7 @@ export interface ProjectIndexSnapshot extends IndexSnapshot {
 
 export interface ProjectIndexSourceGraph {
   schemaVersion: 1
-  producedBy: '@crux/indexer'
+  producedBy: '@use-crux/indexer'
   capabilities: ProjectIndexSourceGraphCapability[]
   /** Package/workspace shards discovered for shard-local planning and invalidation. */
   shards?: ProjectIndexShard[]
@@ -1636,7 +1636,7 @@ export const ProjectIndexSnapshotSchema = IndexSnapshotSchema.extend({
   sourceGraph: z
     .object({
       schemaVersion: z.literal(1),
-      producedBy: z.literal('@crux/indexer'),
+      producedBy: z.literal('@use-crux/indexer'),
       capabilities: z.array(
         z.enum([
           'source-dependencies',

@@ -1,4 +1,4 @@
-import type { ProjectSourceRef, ProjectSourceRefRole } from '@crux/core/project-index'
+import type { ProjectSourceRef, ProjectSourceRefRole } from '@use-crux/core/project-index'
 import type { ExtractedSourceRef, SourceRefBuilder } from '../../../extensions/public-contract/types'
 import type {
   StaticFunctionCallValue,

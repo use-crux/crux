@@ -1,5 +1,5 @@
 {
-  "name": "@crux/convex",
+  "name": "@use-crux/convex",
   "version": "0.1.0",
   "description": "Convex runtime profile for Crux — CruxStore adapter, agent integration, and React transport for Convex apps.",
   "keywords": [
@@ -87,9 +87,9 @@
   },
   "dependencies": {
     "@ai-sdk/provider": "^3.0.10",
-    "@crux/ai": "workspace:*",
-    "@crux/core": "workspace:*",
-    "@crux/react": "workspace:*",
+    "@use-crux/ai": "workspace:*",
+    "@use-crux/core": "workspace:*",
+    "@use-crux/react": "workspace:*",
     "zod": "^4.4.3"
   },
   "scripts": {

@@ -4,7 +4,7 @@ description: prompt(), createPrompts(), Prompt, and prompt resolution.
 ---
 
 ```ts
-import { prompt, createPrompts } from '@crux/core'
+import { prompt, createPrompts } from '@use-crux/core'
 ```
 
 `prompt()` creates a frozen, SDK-agnostic prompt definition. It is the contract adapters execute and the object Crux inspects, tests, caches, and instruments.
@@ -101,7 +101,7 @@ type ToolModelOutput =
   | { type: 'content'; value: readonly ToolContentPart[] }
 ```
 
-The shape is provider-neutral and compatible with the AI SDK's model-message format. `@crux/ai` passes it through directly. Native adapters use the same metadata: Google maps supported media to function-response parts, Anthropic maps text/images/PDFs to native `tool_result` content blocks, and OpenAI Chat Completions receives deterministic text references for non-text parts because that API only accepts text tool results.
+The shape is provider-neutral and compatible with the AI SDK's model-message format. `@use-crux/ai` passes it through directly. Native adapters use the same metadata: Google maps supported media to function-response parts, Anthropic maps text/images/PDFs to native `tool_result` content blocks, and OpenAI Chat Completions receives deterministic text references for non-text parts because that API only accepts text tool results.
 
 ## Composition With `use`
 
@@ -151,7 +151,7 @@ Manual `.asContext()` and `.asTools()` helpers remain useful when integrating wi
 Use `injectable()` when you are building your own primitive that should compose through `use`.
 
 ```ts
-import { context, injectable, prompt } from '@crux/core'
+import { context, injectable, prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const accountPlan = injectable({
@@ -193,7 +193,7 @@ Reach for dedicated primitives first: [skills](/docs/reference/crux-core/skill),
 `contributor()` is the next step up from `injectable()`: a first-class `use` entry that can gate itself, bundle nested entries, and contribute to every prompt channel.
 
 ```ts
-import { contributor, prompt } from '@crux/core'
+import { contributor, prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const supportTools = contributor({
@@ -233,7 +233,7 @@ Prompt input = prompt.input & all active context input schemas
 Plain contexts contribute required fields. Conditional contexts contribute optional fields because Crux cannot know at compile time which runtime branch will be active.
 
 ```ts twoslash title="merged-input.ts"
-import { context, prompt, when } from '@crux/core'
+import { context, prompt, when } from '@use-crux/core'
 import { z } from 'zod'
 
 const locale = context({
@@ -406,7 +406,7 @@ Use this when a prompt has many `use` entries and you need to understand what wa
 Compile a prompt config once: config validation, input-schema merge/conflict detection, and resolver port binding. Each `resolve()` call runs one pipeline pass and returns a `PromptResolution` with SDK-ready `args` plus an inspection view derived from the same pass.
 
 ```ts
-import { compilePrompt, recordingObservability, fixedClock, inMemoryContextCache } from '@crux/core'
+import { compilePrompt, recordingObservability, fixedClock, inMemoryContextCache } from '@use-crux/core'
 
 const observability = recordingObservability()
 const clock = fixedClock(1_000)
@@ -424,11 +424,11 @@ const inspection = pass.inspect()
 observability.contributionPreviews('checked-not-included') // exclusions, no transport needed
 ```
 
-Ports: `observability`, `skills`, `cache`, `clock`, `policy`, `diagnostics`, `instrumentation`. Omitted ports use the production runtime adapters, so `compilePrompt(config)` uses the same ambient pipeline as `prompt(config)`. In-memory fakes for every port (`recordingObservability`, `inMemorySkillSource`, `inMemoryContextCache`, `fixedClock`, `collectingDiagnostics`, `staticPolicy`, `recordingInstrumentation`) ship from `@crux/core`.
+Ports: `observability`, `skills`, `cache`, `clock`, `policy`, `diagnostics`, `instrumentation`. Omitted ports use the production runtime adapters, so `compilePrompt(config)` uses the same ambient pipeline as `prompt(config)`. In-memory fakes for every port (`recordingObservability`, `inMemorySkillSource`, `inMemoryContextCache`, `fixedClock`, `collectingDiagnostics`, `staticPolicy`, `recordingInstrumentation`) ship from `@use-crux/core`.
 
 `compiled.inspect()` runs the same pipeline in quiet inspection mode. `pass.inspect()` is free and never re-runs the pipeline, which means lifecycle hooks and debuggers observe facts from the exact resolution sent to the adapter.
 
-`PromptResolution` is exported from `@crux/core`. The older `Resolution` type name remains as a deprecated compatibility alias.
+`PromptResolution` is exported from `@use-crux/core`. The older `Resolution` type name remains as a deprecated compatibility alias.
 
 For adapter and primitive authors, the lowered contributor contract types behind the pipeline are also exported: `LoweredContributor`, `Contribution`, `GateResult`, `MergedResolution`, and related types. The lowering, driver, and schema-collection functions are internal to the compiled prompt boundary. Application code never needs these.
 

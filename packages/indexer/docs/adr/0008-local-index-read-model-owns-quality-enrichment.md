@@ -8,10 +8,10 @@ Date: 2026-06-10
 
 Project Index quality annotations used to be assembled by three separate producers:
 
-- `@crux/local/internal/store`, which joined in-memory eval, RAG eval, and flow runs while returning
+- `@use-crux/local/internal/store`, which joined in-memory eval, RAG eval, and flow runs while returning
   `Store.GetIndex()`.
-- `@crux/local/internal/quality`, which parsed and joined file-backed `.crux/quality` records.
-- `@crux/local/internal/devtools`, which added local filesystem metadata and safety target metadata.
+- `@use-crux/local/internal/quality`, which parsed and joined file-backed `.crux/quality` records.
+- `@use-crux/local/internal/devtools`, which added local filesystem metadata and safety target metadata.
 
 The order mattered, but it was only implied by call sites. File-backed baseline and drift logic
 depended on run-derived fields already being present, while cache writes and runtime snapshot merges
@@ -19,8 +19,8 @@ also called `GetIndex()` even though those paths need raw snapshot data.
 
 ## Decision
 
-`@crux/local/internal/projectindex/readmodel` is the only producer of derived Project Index read-model quality.
-The `.crux/quality` on-disk contract itself is owned by `@crux/local/internal/qualityfs`.
+`@use-crux/local/internal/projectindex/readmodel` is the only producer of derived Project Index read-model quality.
+The `.crux/quality` on-disk contract itself is owned by `@use-crux/local/internal/qualityfs`.
 
 `store.Store` stores raw Project Index snapshots and exposes:
 
@@ -52,7 +52,7 @@ quality data.
   observability-derived runs, and an explicit clock value into `deriveInsights`.
 - `readmodel` consumes `qualityfs.Load` and must not redeclare persisted quality records or parse
   `.crux/quality` directly.
-- `@crux/indexer` remains responsible for authored source facts, not local runtime/file-backed joins.
+- `@use-crux/indexer` remains responsible for authored source facts, not local runtime/file-backed joins.
 
 ## Validation
 

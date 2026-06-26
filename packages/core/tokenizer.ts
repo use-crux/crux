@@ -44,7 +44,7 @@ let _tokenizer: TokenizerFn = defaultTokenizer
  *
  * @example
  * ```ts
- * import { setTokenizer } from '@crux/core'
+ * import { setTokenizer } from '@use-crux/core'
  * import { getEncoding } from 'js-tiktoken'
  *
  * const enc = getEncoding('cl100k_base')

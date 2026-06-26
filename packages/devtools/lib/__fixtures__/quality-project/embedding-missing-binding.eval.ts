@@ -1,4 +1,4 @@
-import { evaluate, scorers } from '@crux/core/quality'
+import { evaluate, scorers } from '@use-crux/core/quality'
 
 export default evaluate('evals.embedding-missing-binding', {
   task: () => 'Refunds are available for eligible orders.',

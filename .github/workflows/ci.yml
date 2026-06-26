@@ -41,6 +41,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Validate npm package staging
+        run: pnpm release:stage:ts && pnpm release:validate
+
   typescript-compat:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     env:

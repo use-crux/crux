@@ -30,7 +30,7 @@ describe('Static Index cache planning', () => {
     await mkdir(join(root, 'src'), { recursive: true })
     const file = join(root, 'src/writer.ts')
     const source = [
-      "import { prompt } from '@crux/core'",
+      "import { prompt } from '@use-crux/core'",
       '',
       "export const writerPrompt = prompt({ id: 'writer.frontend-cache' })",
     ].join('\n')
@@ -69,7 +69,7 @@ describe('Static Index cache planning', () => {
     await mkdir(join(root, 'src'), { recursive: true })
     const file = join(root, 'src/writer.ts')
     const source = [
-      "import { prompt } from '@crux/core'",
+      "import { prompt } from '@use-crux/core'",
       '',
       "export const writerPrompt = prompt({ id: 'writer.extension-package-cache' })",
     ].join('\n')
@@ -197,7 +197,7 @@ async function writeExtensionConfig(file: string, packageName: string): Promise<
   await writeFile(
     file,
     `
-      import { config } from '@crux/core'
+      import { config } from '@use-crux/core'
 
       export default config({
         indexer: {

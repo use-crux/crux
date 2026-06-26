@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { SystemBlock } from '@crux/core'
+import type { SystemBlock } from '@use-crux/core'
 
 // ─────────────────────────────────────────────────────────────────
 // Branded Types
@@ -155,7 +155,7 @@ export interface GoogleCachedContentCallOptions {
  * User-supplied CachedContent boundary for advanced adapter customization.
  *
  * A custom port can replace the built-in in-memory cache manager while keeping
- * request planning inside `@crux/google`. Returning `undefined` tells the
+ * request planning inside `@use-crux/google`. Returning `undefined` tells the
  * adapter to fall back to an inline `systemInstruction`.
  */
 export interface GoogleCachedContentPort {

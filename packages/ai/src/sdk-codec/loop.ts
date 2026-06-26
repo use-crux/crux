@@ -1,6 +1,6 @@
 import type { LanguageModel, StopCondition, ToolSet } from 'ai'
-import type { ExecutorOutcome, ExecutorRequest } from '@crux/core/adapter'
-import { toJsonValue } from '@crux/core/adapter'
+import type { ExecutorOutcome, ExecutorRequest } from '@use-crux/core/adapter'
+import { toJsonValue } from '@use-crux/core/adapter'
 import type { SdkGateway } from '../gateway'
 import type { SdkUsageLike } from '../meta'
 import { extractCost, normalizeUsage } from '../meta'

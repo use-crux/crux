@@ -222,7 +222,7 @@ The OpenAI SDK's structured output parsing returned `null`. This typically means
 
 ### SDK errors (all adapters)
 
-All three adapters (`@crux/ai`, `@crux/openai`, `@crux/google`) catch errors from the underlying SDK, fire the `onError` hook if configured, then re-throw the original error unchanged. This means you'll see native error types:
+All three adapters (`@use-crux/ai`, `@use-crux/openai`, `@use-crux/google`) catch errors from the underlying SDK, fire the `onError` hook if configured, then re-throw the original error unchanged. This means you'll see native error types:
 
 - **Vercel AI SDK:** `AI_APICallError`, `AI_InvalidResponseDataError`, etc.
 - **OpenAI SDK:** `APIError`, `AuthenticationError`, `RateLimitError`, etc.
@@ -235,7 +235,7 @@ Check the respective SDK documentation for these error types. The `onError` hook
 These are `console.warn` messages, not thrown errors. They appear when `generation.securityWarnings: true` is set in `config()`.
 
 ```
-[@crux/core] Suspicious pattern detected in input field "{field}": {description}
+[@use-crux/core] Suspicious pattern detected in input field "{field}": {description}
 ```
 
 Triggered when user input contains patterns that look like prompt injection attempts — XML closing tags, instruction overrides, or prompt extraction attempts. See [Security](/docs/guides/safety/security) for details on input sanitization.

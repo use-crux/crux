@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type Anthropic from '@anthropic-ai/sdk'
-import { prompt as makePrompt } from '@crux/core'
+import { prompt as makePrompt } from '@use-crux/core'
 import { anthropicProviderRuntime } from '../index'
 
 interface AnthropicRuntimeRequest {

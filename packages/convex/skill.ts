@@ -1,5 +1,5 @@
 /**
- * Convex runtime profile for `@crux/core/skill`.
+ * Convex runtime profile for `@use-crux/core/skill`.
  *
  * Skill authoring is currently identical to core Crux. Convex-specific skill
  * session persistence is owned by `convexAgent()`.
@@ -16,7 +16,7 @@ export {
   skill,
   skillsSh,
   SkillLoadError,
-} from '@crux/core/skill'
+} from '@use-crux/core/skill'
 
 export { convexSkillActivationPersistence } from './agent/skill-activation-persistence'
 export type { ConvexSkillActivationTarget } from './agent/skill-activation-persistence'
@@ -37,4 +37,4 @@ export type {
   SkillReferenceResult,
   SkillReference,
   SkillToolDef,
-} from '@crux/core/skill'
+} from '@use-crux/core/skill'

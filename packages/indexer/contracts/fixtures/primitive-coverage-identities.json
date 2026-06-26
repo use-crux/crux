@@ -13,7 +13,7 @@
   ],
   "identities": [
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "rag.retriever",
       "family": "rag.retriever",
       "nativeCovered": true,
@@ -35,7 +35,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "safety",
       "family": "safety",
       "nativeCovered": true,
@@ -57,7 +57,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "scorer",
       "family": "scorer",
       "nativeCovered": true,
@@ -79,7 +79,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "workspace",
       "family": "workspace",
       "nativeCovered": true,
@@ -101,7 +101,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "eval",
       "family": "eval",
       "nativeCovered": true,
@@ -123,7 +123,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "skill-registry",
       "family": "skill-registry",
       "nativeCovered": true,
@@ -145,7 +145,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "registry-skill",
       "family": "registry-skill",
       "nativeCovered": true,
@@ -167,7 +167,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "tool",
       "family": "tool",
       "nativeCovered": true,
@@ -189,7 +189,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "injectable",
       "family": "injectable",
       "nativeCovered": true,
@@ -211,7 +211,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "context",
       "family": "context",
       "nativeCovered": true,
@@ -233,7 +233,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "prompt",
       "family": "prompt",
       "nativeCovered": true,
@@ -255,7 +255,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "agent",
       "family": "agent",
       "nativeCovered": true,
@@ -277,7 +277,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "composition",
       "family": "composition",
       "nativeCovered": true,
@@ -299,7 +299,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "memory",
       "family": "memory",
       "nativeCovered": true,
@@ -321,7 +321,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "blackboard",
       "family": "blackboard",
       "nativeCovered": true,
@@ -343,7 +343,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "routing",
       "family": "routing",
       "nativeCovered": true,
@@ -365,7 +365,7 @@
       }
     },
     {
-      "extension": "@crux/indexer/crux-core",
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "flow",
       "family": "flow",
       "nativeCovered": true,

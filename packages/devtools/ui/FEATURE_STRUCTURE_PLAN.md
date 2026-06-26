@@ -45,8 +45,8 @@ Follow vertical slices:
 Preferred commands:
 
 ```bash
-turbo typecheck --filter=@crux/devtools
-pnpm --filter @crux/devtools test -- --run
+turbo typecheck --filter=@use-crux/devtools
+pnpm --filter @use-crux/devtools test -- --run
 ```
 
 If a command cannot run locally, record the blocker here before continuing.
@@ -284,7 +284,7 @@ the larger replay event-card extraction: playback state remains in
 `ReplayPlayer.tsx`, while reusable canonical kind/color/icon/status/time/json
 helpers are out of the component.
 
-Verification note: `turbo typecheck --filter=@crux/devtools` cannot run in
+Verification note: `turbo typecheck --filter=@use-crux/devtools` cannot run in
 the current shell because WSL has no Linux `node`, and Windows `pnpm` cannot
 execute this Linux workspace cleanly from the UNC path. As a fallback, host
 TypeScript was run directly with `node node_modules/typescript/bin/tsc -p

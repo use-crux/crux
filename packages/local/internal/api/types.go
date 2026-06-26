@@ -512,7 +512,7 @@ type QualityDeleteRunsRecord struct {
 }
 
 // QualityRunSpan is one node in a Run's execution tree. The Primitive
-// field is a closed taxonomy mapping to a @crux/core primitive so the UI
+// field is a closed taxonomy mapping to a @use-crux/core primitive so the UI
 // can pick a color/glyph/attributes-layout without reverse-engineering
 // the EventType string. CompositionType is set only when Primitive is
 // "composition" (the kind: pipeline | parallel | consensus | swarm).

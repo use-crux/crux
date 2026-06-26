@@ -33,7 +33,7 @@ export function createMonorepoFixture(args: BenchmarkFixtureArgs): { readonly ro
 
 function promptSource(packageIndex: number, fileIndex: number): string {
   return [
-    "import { context, prompt, tool } from '@crux/core'",
+    "import { context, prompt, tool } from '@use-crux/core'",
     "import { packageSchemaLabel } from './schema'",
     '',
     'void packageSchemaLabel',

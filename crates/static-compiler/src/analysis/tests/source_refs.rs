@@ -28,7 +28,7 @@ fn analyze_resolves_imported_helper_source_refs_from_selected_files() {
     std::fs::write(&helper_file, &helper_source).expect("helper source");
     let context_file = src_dir.join("agent.ts");
     let context_source = [
-        "import { context } from '@crux/core'",
+        "import { context } from '@use-crux/core'",
         "import { getPlan } from './plans'",
         "export function planAgent(planId: string) {",
         "  return context({",
@@ -94,7 +94,7 @@ fn analyze_resolves_imported_helper_source_refs_from_selected_files() {
 #[test]
 fn analyze_keeps_local_helper_data_accesses() {
     let source = [
-        "import { context } from '@crux/core'",
+        "import { context } from '@use-crux/core'",
         "const store = { get: (key: string) => key }",
         "const loadPlan = () => store.get('plan:1')",
         "export const planContext = context({",

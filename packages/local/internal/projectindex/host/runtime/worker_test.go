@@ -74,7 +74,7 @@ func TestWorker_runtimePatchUsesDedicatedStreamProtocol(t *testing.T) {
 								kind: 'definitions',
 								phase: 'runtime',
 								projectRoot: header.root,
-								producer: { name: '@crux/indexer/project-runtime-indexer', version: 'test' },
+								producer: { name: '@use-crux/indexer/project-runtime-indexer', version: 'test' },
 								fidelity: 'runtime-observed',
 								provenance: { kind: 'runtime', attribute: 'project-index.runtime' },
 								fact: { id: 'prompt:runtime', kind: 'prompt', name: 'runtime', fidelity: 'resolved', status: 'active' }
@@ -132,7 +132,7 @@ func TestWorker_runtimePatchUsesDedicatedStreamProtocol(t *testing.T) {
 	if len(patch.FactEnvelopes) != 1 {
 		t.Fatalf("fact envelopes = %+v, want one runtime envelope", patch.FactEnvelopes)
 	}
-	if patch.FactEnvelopes[0].Producer.Name != "@crux/indexer/project-runtime-indexer" {
+	if patch.FactEnvelopes[0].Producer.Name != "@use-crux/indexer/project-runtime-indexer" {
 		t.Fatalf("producer = %+v, want runtime worker producer", patch.FactEnvelopes[0].Producer)
 	}
 	if patch.FactEnvelopes[0].Fidelity != "runtime-observed" {

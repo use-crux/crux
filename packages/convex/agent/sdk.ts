@@ -1,7 +1,7 @@
 /**
  * Convex Agent bridge helpers.
  *
- * This compatibility barrel keeps the existing `@crux/convex/agent` export
+ * This compatibility barrel keeps the existing `@use-crux/convex/agent` export
  * surface while the implementation lives in focused modules:
  *
  * - `facade.ts` preserves Convex Agent constructor and method shapes.

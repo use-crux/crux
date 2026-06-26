@@ -40,7 +40,7 @@ import { storage } from './types'
  *
  * @example
  * ```ts
- * import { inMemoryCruxStore } from '@crux/core/store'
+ * import { inMemoryCruxStore } from '@use-crux/core/store'
  *
  * const store = inMemoryCruxStore()
  * await store.set('plan:abc', { title: 'My Plan', version: 1 })

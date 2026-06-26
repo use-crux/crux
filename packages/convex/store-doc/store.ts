@@ -18,7 +18,7 @@ import type {
   StoreEntry,
   VectorSearchOptions,
   VectorSearchQuery,
-} from '@crux/core/store'
+} from '@use-crux/core/store'
 import { createStoreDocCodec } from './codec'
 import type { DecodedStoreDoc, StoreDocPage, StoreDocPageQuery, StoreDocRecord, StoreDocStoreConfig } from './types'
 

@@ -1,4 +1,4 @@
-import type { ProjectIndexShard } from '@crux/core/project-index'
+import type { ProjectIndexShard } from '@use-crux/core/project-index'
 
 /**
  * Project shard graph discovered from package and TypeScript workspace files.

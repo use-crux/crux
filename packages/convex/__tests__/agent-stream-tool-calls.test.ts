@@ -5,7 +5,7 @@ import {
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '@crux/core/observability'
+} from '@use-crux/core/observability'
 import { Agent } from '../agent'
 
 describe('agent stream tool calls', () => {

@@ -11,9 +11,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { AnyPrompt, Crux } from '@crux/core'
-import type { ProjectModelDiagnostic } from '@crux/core/project-index'
-import type { QualityConfig, ReplayMode } from '@crux/core/quality'
+import type { AnyPrompt, Crux } from '@use-crux/core'
+import type { ProjectModelDiagnostic } from '@use-crux/core/project-index'
+import type { QualityConfig, ReplayMode } from '@use-crux/core/quality'
 import { discoverQualityPromptTests } from './quality-prompt-discovery'
 
 const CONFIG_NAMES = ['crux.config.ts', 'crux.config.js', 'crux.config.mjs']

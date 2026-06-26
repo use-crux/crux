@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { resetRuntime, getRuntime, setRuntime } from '@crux/core'
-import type { CruxRuntime } from '@crux/core'
+import { resetRuntime, getRuntime, setRuntime } from '@use-crux/core'
+import type { CruxRuntime } from '@use-crux/core'
 import { withTelemetry } from '../index'
 import type { TraceSpan } from '../types'
 

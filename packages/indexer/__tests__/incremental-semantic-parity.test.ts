@@ -92,7 +92,7 @@ async function writeFixture(root: string, revision: 'first' | 'second'): Promise
   await writeFile(
     join(root, 'src/tool.ts'),
     `
-      import { tool } from '@crux/core'
+      import { tool } from '@use-crux/core'
       import { input } from './index'
 
       export const writerTool = tool({

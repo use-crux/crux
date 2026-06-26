@@ -9,10 +9,10 @@ It is a good starting point when your source material already lives on disk and 
 
 ## Primitives used
 
-- `@crux/ingest/files` for loading local documents
-- `@crux/core/indexing` for corpus sync, chunking, and write-time embedding
-- `@crux/core/retrieval` for query-time search and context injection
-- `@crux/ai` for execution and AI SDK reranking
+- `@use-crux/ingest/files` for loading local documents
+- `@use-crux/core/indexing` for corpus sync, chunking, and write-time embedding
+- `@use-crux/core/retrieval` for query-time search and context injection
+- `@use-crux/ai` for execution and AI SDK reranking
 - `inMemoryDataStore()` and `inMemoryVectorStore()` for a lightweight local corpus
 
 ## Full code
@@ -20,7 +20,7 @@ It is a good starting point when your source material already lives on disk and 
 ### `lib/rag/embedding.ts`
 
 ```ts
-import { embedding } from '@crux/core/embedding'
+import { embedding } from '@use-crux/core/embedding'
 import { embedMany } from 'ai'
 import { openai } from '@ai-sdk/openai'
 
@@ -43,7 +43,7 @@ export const dense = embedding({
 ### `lib/rag/store.ts`
 
 ```ts
-import { inMemoryDataStore, inMemoryVectorStore } from '@crux/core/storage'
+import { inMemoryDataStore, inMemoryVectorStore } from '@use-crux/core/storage'
 
 export const data = inMemoryDataStore()
 export const vectors = inMemoryVectorStore()
@@ -52,8 +52,8 @@ export const vectors = inMemoryVectorStore()
 ### `lib/rag/index.ts`
 
 ```ts
-import { corpus, indexer } from '@crux/core/indexing'
-import { filesSource } from '@crux/ingest/files'
+import { corpus, indexer } from '@use-crux/core/indexing'
+import { filesSource } from '@use-crux/ingest/files'
 
 import { dense } from './embedding'
 import { data, vectors } from './store'
@@ -89,8 +89,8 @@ export async function syncDocs() {
 ### `lib/rag/retriever.ts`
 
 ```ts
-import { retriever } from '@crux/core/retrieval'
-import { reranker } from '@crux/ai'
+import { retriever } from '@use-crux/core/retrieval'
+import { reranker } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 import { dense } from './embedding'
@@ -116,8 +116,8 @@ export const docs = retriever({
 If the local corpus starts returning near-duplicate chunks, wrap the retriever with a lightweight pipeline:
 
 ```ts
-import { diversify, multiQuery, retrievalPipeline } from '@crux/core/retrieval'
-import { generateTextFn } from '@crux/ai'
+import { diversify, multiQuery, retrievalPipeline } from '@use-crux/core/retrieval'
+import { generateTextFn } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 export const advancedDocs = retrievalPipeline(docs, [
@@ -137,9 +137,9 @@ Start with `docs`. Switch prompts to `advancedDocs` when you need query expansio
 ### `lib/rag/answer.ts`
 
 ```ts
-import { prompt } from '@crux/core'
-import { generate } from '@crux/ai'
-import { grounding, citationSchema } from '@crux/core/citations'
+import { prompt } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
+import { grounding, citationSchema } from '@use-crux/core/citations'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 

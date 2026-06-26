@@ -37,7 +37,7 @@ func Marshal(root string) (json.RawMessage, error) {
 func build(root string) graph {
 	return graph{
 		SchemaVersion: 1,
-		ProducedBy:    "@crux/indexer",
+		ProducedBy:    "@use-crux/indexer",
 		Capabilities: []string{
 			"source-dependencies",
 			"source-dependents",

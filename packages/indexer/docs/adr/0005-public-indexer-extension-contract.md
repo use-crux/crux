@@ -28,12 +28,12 @@ host-only or internal.
 
 The public package surface after the rename is:
 
-- `@crux/indexer`
-- `@crux/indexer/extensions`
-- `@crux/indexer/testing`
-- `@crux/indexer/source-resolver`
+- `@use-crux/indexer`
+- `@use-crux/indexer/extensions`
+- `@use-crux/indexer/testing`
+- `@use-crux/indexer/source-resolver`
 
-Do not expose `@crux/indexer/compiler`, `@crux/indexer/indexer/*`, or `@crux/indexer/ast`.
+Do not expose `@use-crux/indexer/compiler`, `@use-crux/indexer/indexer/*`, or `@use-crux/indexer/ast`.
 
 **Extractor Contract**
 
@@ -78,9 +78,9 @@ emitters, parser hooks, custom source providers, and query engines remain reserv
 Index graph model has proven stable.
 
 Third-party names for rules, relations, named diagnostic categories, and future derived views must be
-package-prefixed, such as `@acme/crux-indexer/no-missing-description`. Crux owns `@crux/*` and any
+package-prefixed, such as `@acme/crux-indexer/no-missing-description`. Crux owns `@use-crux/*` and any
 explicitly reserved core namespace.
 
-The testing harness is part of the public contract. `@crux/indexer/testing` should provide extractor
+The testing harness is part of the public contract. `@use-crux/indexer/testing` should provide extractor
 fixtures, rule tests, manifest validation, namespace conflict tests, degraded extraction fixtures,
 and cache invalidation fixtures.

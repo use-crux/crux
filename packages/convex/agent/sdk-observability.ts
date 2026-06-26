@@ -1,4 +1,4 @@
-import { observe } from '@crux/core/observability'
+import { observe } from '@use-crux/core/observability'
 import { DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS, flushObservability } from '../observability'
 import { emitConvexAgentMessagesArtifact } from './sdk-observability-artifacts'
 import { createStreamTimingTracker, emitUsageEvent, modelSpanAttributes } from './sdk-observability-values'

@@ -1,8 +1,8 @@
 import type OpenAI from 'openai'
 import type { ChatCompletion, ChatCompletionChunk } from 'openai/resources/chat/completions'
 import type { Stream } from 'openai/streaming'
-import { defineProviderRuntime } from '@crux/core/adapter'
-import type { NativeProviderPort, SingleTurnRuntimeContract } from '@crux/core/adapter'
+import { defineProviderRuntime } from '@use-crux/core/adapter'
+import type { NativeProviderPort, SingleTurnRuntimeContract } from '@use-crux/core/adapter'
 import { openAITranscript } from './message-codec'
 import {
   asOpenAINonStreamingParams,

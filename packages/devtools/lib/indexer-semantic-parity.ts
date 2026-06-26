@@ -12,7 +12,7 @@
 
 import { existsSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import {
   indexProjectAst,
   indexProjectSemantic,
@@ -20,7 +20,7 @@ import {
   type IndexPatchFacts,
   type SemanticBackendName,
   type SemanticBackendSelection,
-} from '@crux/indexer'
+} from '@use-crux/indexer'
 
 interface SemanticParityArgs {
   /** Project root to analyze. */

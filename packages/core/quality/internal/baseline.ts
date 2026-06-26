@@ -4,7 +4,7 @@
  * The committed file is how CI knows the reference: every run auto-compares
  * against it, and `minDeltaVsBaseline` gates become evaluable.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 

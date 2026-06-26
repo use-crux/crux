@@ -18,7 +18,7 @@ Use this before changing `use-crux/crux` from private to public.
 - [ ] Convert all publishable packages from raw `.ts` entrypoints to compiled `dist` entrypoints.
 - [ ] Remove `"private": true` from packages intended for npm.
 - [ ] Add `files`, `publishConfig.access`, and `publishConfig.provenance` to publishable package manifests.
-- [ ] Ensure internal `@crux/*` dependencies use `workspace:^` or a deliberate equivalent.
+- [ ] Ensure internal `@use-crux/*` dependencies use `workspace:^` or a deliberate equivalent.
 - [ ] Keep provider SDKs and host frameworks in `peerDependencies` where users should control versions.
 - [ ] Run package tarball checks with `pnpm pack` before publishing.
 - [x] Document the npm publishing contract in `docs/PUBLISHING.md`.

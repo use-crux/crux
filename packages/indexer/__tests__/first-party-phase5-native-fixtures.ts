@@ -27,7 +27,7 @@ describe('first-party Phase 5 native fixtures', () => {
 
       expect(record.nativeFacts ?? []).toHaveLength(1)
       expect(record.nativeFacts?.[0]?.replaces).toEqual([
-        { extension: '@crux/indexer/crux-core', extractor: 'workspace' },
+        { extension: '@use-crux/indexer/crux-core', extractor: 'workspace' },
       ])
       expectNativeExtractionParity(nativeOut, fallbackOut)
     },

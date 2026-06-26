@@ -1,5 +1,5 @@
 /**
- * Storage primitives for `@crux/core`.
+ * Storage primitives for `@use-crux/core`.
  *
  * Data, vector, and blob capabilities are separate interfaces. Adapters can
  * implement one capability or bundle several through `storage()`.

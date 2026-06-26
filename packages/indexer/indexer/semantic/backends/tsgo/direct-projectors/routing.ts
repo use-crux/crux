@@ -5,7 +5,7 @@ import type {
   ProjectDefinitionIndexPresentationRole,
   ProjectDefinitionKind,
   ProjectRelation,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import {
   isCallExpression,
   isObjectLiteralExpression,

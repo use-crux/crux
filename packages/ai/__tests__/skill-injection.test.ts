@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { LanguageModelV3CallOptions } from '@ai-sdk/provider'
-import { createSkillActivationSession, skill } from '@crux/core/skill'
+import { createSkillActivationSession, skill } from '@use-crux/core/skill'
 import { injectNewlyActivatedSkills } from '../agent/skill-injection'
 
 describe('injectNewlyActivatedSkills', () => {

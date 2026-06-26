@@ -1,5 +1,5 @@
 {
-  "name": "@crux/indexer",
+  "name": "@use-crux/indexer",
   "version": "0.1.0",
   "description": "Project Index and source-intelligence workers for Crux — indexing, extensions, and source resolution.",
   "keywords": ["ai", "rag", "indexing", "source-intelligence", "ast", "crux"],
@@ -78,7 +78,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@crux/core": "workspace:*",
+    "@use-crux/core": "workspace:*",
     "@typescript/native-preview": "7.0.0-dev.20260527.2",
     "@jridgewell/trace-mapping": "^0.3.31",
     "tinyglobby": "^0.2.16",

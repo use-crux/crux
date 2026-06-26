@@ -45,7 +45,7 @@ export const cruxCoreCompilerProjections = [
 ] as const satisfies readonly CompilerOwnedProjection[]
 
 export const cruxCoreCompilerProfile = {
-  name: '@crux/indexer/crux-core-profile',
+  name: '@use-crux/indexer/crux-core-profile',
   version: '1',
   extensions: [cruxCoreExtension],
   projections: cruxCoreCompilerProjections,

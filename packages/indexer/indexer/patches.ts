@@ -13,7 +13,7 @@ import type {
   ProjectSourceRef,
   PromptMeta,
   ToolMeta,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import type { SemanticSourceProfile } from './semantic/source-profile'
 import { relationIdentity, withResolvedRelationReadModel } from './relations'
 

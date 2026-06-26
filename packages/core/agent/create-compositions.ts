@@ -1,7 +1,7 @@
 /**
  * Factory for creating adapter-bound composition utilities.
  *
- * Each SDK adapter (`@crux/ai`, `@crux/openai`) calls this with their
+ * Each SDK adapter (`@use-crux/ai`, `@use-crux/openai`) calls this with their
  * `AgentExecutor` to produce pre-bound `parallel`, `pipeline`, and
  * `consensus` functions that users import directly.
  *
@@ -24,8 +24,8 @@ import { createSwarm } from './swarm'
  *
  * @example
  * ```ts
- * // In @crux/ai adapter:
- * import { createCompositions } from '@crux/core/agent'
+ * // In @use-crux/ai adapter:
+ * import { createCompositions } from '@use-crux/core/agent'
  * const { parallel, pipeline, consensus } = createCompositions(myExecutor)
  * export { parallel, pipeline, consensus }
  * ```

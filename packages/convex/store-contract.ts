@@ -9,8 +9,8 @@
  * @module
  */
 
-import type { CruxStore } from '@crux/core/store'
-import type { CruxTransport } from '@crux/react'
+import type { CruxStore } from '@use-crux/core/store'
+import type { CruxTransport } from '@use-crux/react'
 import { createConvexTransport, type UseQueryFn } from './react'
 import { cruxConvexStore, type ConvexCtxPort } from './store'
 import type { ConvexCruxStoreComponent } from './store-component'
@@ -88,7 +88,7 @@ export interface ConvexStoreContract<TCtx extends ConvexCtxPort = ConvexCtxPort>
  *
  * @example
  * ```ts
- * import { defineConvexStoreContract } from '@crux/convex'
+ * import { defineConvexStoreContract } from '@use-crux/convex'
  * import { components } from './_generated/api'
  *
  * const cruxStore = defineConvexStoreContract({

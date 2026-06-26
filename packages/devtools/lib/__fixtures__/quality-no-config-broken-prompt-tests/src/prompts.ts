@@ -1,5 +1,5 @@
-import { createPrompts, prompt } from '@crux/core'
-import type { Context } from '@crux/core'
+import { createPrompts, prompt } from '@use-crux/core'
+import type { Context } from '@use-crux/core'
 
 declare const missingContext: Context
 

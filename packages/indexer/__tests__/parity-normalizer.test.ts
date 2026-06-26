@@ -94,7 +94,7 @@ describe('Project Index parity normalizer', () => {
       ],
       sourceGraph: {
         schemaVersion: 1,
-        producedBy: '@crux/indexer',
+        producedBy: '@use-crux/indexer',
         capabilities: ['source-dependencies', 'project-shards'],
         shards: [
           {
@@ -107,7 +107,7 @@ describe('Project Index parity normalizer', () => {
     } satisfies IndexPatchFacts
     const second = {
       sourceGraph: {
-        producedBy: '@crux/indexer',
+        producedBy: '@use-crux/indexer',
         schemaVersion: 1,
         shards: [{ references: ['packages/core'], root: 'packages/app', id: 'root' }],
         capabilities: ['project-shards', 'source-dependencies'],

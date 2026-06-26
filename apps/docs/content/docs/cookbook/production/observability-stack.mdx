@@ -7,8 +7,8 @@ This recipe layers Crux's three observability mechanisms into one stack: devtool
 
 ## Primitives used
 
-- `withDevtools()` from `@crux/core/observability`
-- `withTelemetry()` from `@crux/otel`
+- `withDevtools()` from `@use-crux/core/observability`
+- `withTelemetry()` from `@use-crux/otel`
 - A custom `CruxPlugin` implementing `install(runtime)` with hooks
 - `config({ plugins: [...] })` to compose them
 
@@ -23,7 +23,7 @@ This recipe layers Crux's three observability mechanisms into one stack: devtool
 ### `lib/ai/plugins/cost-tracker.ts`
 
 ```ts
-import type { CruxPlugin, CruxRuntime } from '@crux/core'
+import type { CruxPlugin, CruxRuntime } from '@use-crux/core'
 
 interface CostTrackerOptions {
   onCost: (event: {
@@ -69,8 +69,8 @@ export function withCostTracker(options: CostTrackerOptions): CruxPlugin {
 ### `crux.config.ts`
 
 ```ts
-import { config } from '@crux/core'
-import { withTelemetry } from '@crux/otel'
+import { config } from '@use-crux/core'
+import { withTelemetry } from '@use-crux/otel'
 
 import { withCostTracker } from './lib/ai/plugins/cost-tracker'
 
@@ -102,9 +102,9 @@ export default config({
 ### Pass tenant context per request
 
 ```ts
-import { withSession, createSessionId } from '@crux/core'
+import { withSession, createSessionId } from '@use-crux/core'
 
-import { generate } from '@crux/ai'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { summarize } from './prompts'
 
@@ -148,7 +148,7 @@ withCostTracker({
 
 ### Trace context propagation across services
 
-Use `@crux/convex/server` boundaries and `ctx.crux.runAction()` so spans across Convex actions stay correlated through the hidden `__crux` context envelope.
+Use `@use-crux/convex/server` boundaries and `ctx.crux.runAction()` so spans across Convex actions stay correlated through the hidden `__crux` context envelope.
 
 ## Where to next
 
@@ -165,7 +165,7 @@ Use `@crux/convex/server` boundaries and `ctx.crux.runAction()` so spans across 
   />
   <Card
     title="Telemetry guide"
-    description="@crux/otel setup, attributes, span hierarchy."
+    description="@use-crux/otel setup, attributes, span hierarchy."
     href="/docs/guides/observability/telemetry"
   />
 </Cards>

@@ -1,5 +1,5 @@
-import type { IndexDiagnostic, IndexLintFinding, IndexRuleDescriptor, SourceLocation } from '@crux/core/project-index'
-import type { CruxLintConfig } from '@crux/core'
+import type { IndexDiagnostic, IndexLintFinding, IndexRuleDescriptor, SourceLocation } from '@use-crux/core/project-index'
+import type { CruxLintConfig } from '@use-crux/core'
 import { selectIndexLintFindings } from './profiles'
 import { createKnownIndexLintRuleIds } from './rule-ids'
 

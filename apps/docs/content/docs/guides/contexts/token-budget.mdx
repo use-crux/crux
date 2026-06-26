@@ -6,8 +6,8 @@ description: Token-aware rendering and automatic context dropping under budget p
 When the assembled system message exceeds a token budget, the lowest-priority contexts are dropped first. Provider-specific adaptations let you tweak prompts per model without breaking portability.
 
 ```ts title="generate.ts"
-import { prompt, context } from '@crux/core'
-import { generate } from '@crux/ai'
+import { prompt, context } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
 
 const critical = context({ priority: 100, system: '## Critical Rules' })  // never dropped
 const guidelines = context({ priority: 50, system: '## Guidelines\n...' })

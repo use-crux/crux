@@ -9,7 +9,7 @@
  *
  * **Usage:**
  * ```ts
- * import { config } from '@crux/core'
+ * import { config } from '@use-crux/core'
  *
  * // Only when application runtime code should send records to a known local
  * // devtools server or tunnel. Quality CLI runs auto-attach locally.
@@ -50,7 +50,7 @@ export interface EnableDevtoolsOptions {
    * Enable the Runtime Bridge command plane.
    *
    * `true` uses the core default WS peer for long-lived local Node runtimes.
-   * Framework integrations such as `@crux/convex` can register HTTP bridge
+   * Framework integrations such as `@use-crux/convex` can register HTTP bridge
    * endpoints from their setup helpers. Explicit bridge config wins.
    */
   bridge?: RuntimeBridgeOptions
@@ -79,7 +79,7 @@ export interface EnableDevtoolsOptions {
  *
  * @example
  * ```ts
- * import { config } from '@crux/core'
+ * import { config } from '@use-crux/core'
  *
  * config({
  *   devtools: { serverUrl: process.env.DEVTOOLS_URL },

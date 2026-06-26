@@ -1,6 +1,6 @@
 # Compiler Profiles Before Public Extension Loading
 
-`@crux/indexer` will use compiler profiles to assemble first-party Crux Indexer Extensions,
+`@use-crux/indexer` will use compiler profiles to assemble first-party Crux Indexer Extensions,
 compiler-owned projections, and Extension Runtime instances before adding public third-party extension
 loading.
 
@@ -28,9 +28,9 @@ Index rules now require metadata before they can run. Rule metadata includes doc
 messages, and default options. Registry construction validates rule declarations so malformed rules
 fail before source discovery begins.
 
-The package export map is intentionally narrow. `@crux/indexer` exports the stable indexing
-entry points, `@crux/indexer/extensions` exports the experimental extractor authoring surface,
-and `@crux/indexer/source-resolver` exports the source resolver facade. Internal `indexer/*`
+The package export map is intentionally narrow. `@use-crux/indexer` exports the stable indexing
+entry points, `@use-crux/indexer/extensions` exports the experimental extractor authoring surface,
+and `@use-crux/indexer/source-resolver` exports the source resolver facade. Internal `indexer/*`
 modules are not package exports.
 
 **Consequences**

@@ -5,7 +5,7 @@ import type {
   ProjectRelation,
   ProjectSourceRef,
   ProjectSourceRefRole,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import type {
   SemanticCompilerDeclaration,
   SemanticCompilerNode,

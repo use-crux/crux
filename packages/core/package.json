@@ -1,5 +1,5 @@
 {
-  "name": "@crux/core",
+  "name": "@use-crux/core",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "description": "SDK-agnostic AI orchestration toolkit for TypeScript — prompts, context engineering, memory, retrieval, agents, flows, and evals.",

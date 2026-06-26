@@ -9,7 +9,7 @@
         {
           "localName": "prompt",
           "importedName": "prompt",
-          "moduleSpecifier": "@crux/core",
+          "moduleSpecifier": "@use-crux/core",
           "source": { "file": "/repo/src/contract.ts", "line": 1, "column": 10 }
         }
       ],
@@ -24,7 +24,7 @@
             "direct": true,
             "localName": "prompt",
             "importedName": "prompt",
-            "moduleSpecifier": "@crux/core"
+            "moduleSpecifier": "@use-crux/core"
           },
           "args": [
             {
@@ -70,7 +70,7 @@
       "nativeFacts": [
         {
           "matchIndex": 0,
-          "replaces": [{ "extension": "@crux/indexer/crux-core", "extractor": "prompt" }],
+          "replaces": [{ "extension": "@use-crux/indexer/crux-core", "extractor": "prompt" }],
           "facts": {
             "definitions": [
               {

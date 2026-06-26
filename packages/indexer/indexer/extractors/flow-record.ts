@@ -1,4 +1,4 @@
-import type { ProjectSourceRef } from '@crux/core/project-index'
+import type { ProjectSourceRef } from '@use-crux/core/project-index'
 import type { ExtractContext, ExtractedFacts } from '../extensions'
 import { internalStaticRecordContext, type InternalStaticRecordContext } from '../static-index/compatibility/syntax-record-bridge/native-context'
 import {
@@ -52,7 +52,7 @@ export function flowFactsFromStaticRecordContext(ctx: ExtractContext): Extracted
 function recordFlowRuntime(ctx: InternalStaticRecordContext): 'convex' | 'node' {
   if (ctx.match.kind !== 'call') return 'node'
   const callee = ctx.match.callee
-  return callee.localName === 'cruxFlow' || callee.moduleSpecifier?.startsWith('@crux/convex') ? 'convex' : 'node'
+  return callee.localName === 'cruxFlow' || callee.moduleSpecifier?.startsWith('@use-crux/convex') ? 'convex' : 'node'
 }
 
 function recordFlowTraversal(

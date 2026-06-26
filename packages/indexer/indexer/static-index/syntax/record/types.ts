@@ -1,4 +1,4 @@
-import type { IndexDiagnostic, SourceLocation, SourceSnippet } from '@crux/core/project-index'
+import type { IndexDiagnostic, SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
 import type { StaticSourceMatch, StaticSyntaxValue } from './value-types'
 
 export type {

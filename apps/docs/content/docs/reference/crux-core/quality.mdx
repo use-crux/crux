@@ -1,15 +1,15 @@
 ---
 title: Quality
-description: '@crux/core/quality — evaluate(), target, scorers, dataset(), cassette(), and the Experiment/Manifest/Baseline records.'
+description: '@use-crux/core/quality — evaluate(), target, scorers, dataset(), cassette(), and the Experiment/Manifest/Baseline records.'
 ---
 
-`@crux/core/quality` is the Quality system's public surface: **five values**
+`@use-crux/core/quality` is the Quality system's public surface: **five values**
 plus types. Authoring lives in `*.eval.ts` files (or colocated
 `prompt({ tests })`), execution in `evaluation.run()` and the
 [`crux quality` CLI](/docs/reference/local#crux-quality).
 
 ```ts
-import { evaluate, target, scorers, dataset, cassette } from '@crux/core/quality'
+import { evaluate, target, scorers, dataset, cassette } from '@use-crux/core/quality'
 ```
 
 Type exports: `Evaluation`, `EvaluateOptions`, `Case`, `CaseContext`,

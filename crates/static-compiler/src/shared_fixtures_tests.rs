@@ -248,7 +248,7 @@ fn shared_static_syntax_record_case_fixture_decodes() {
     };
     assert_eq!(variable_name, "agent");
     assert_eq!(callee.name, "Agent");
-    assert_eq!(callee.module_specifier.as_deref(), Some("@crux/core"));
+    assert_eq!(callee.module_specifier.as_deref(), Some("@use-crux/core"));
 
     let Some(StaticSyntaxValue::Object { properties, .. }) = object_arg else {
         panic!("expected constructor object argument");
@@ -346,7 +346,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
     );
     assert_eq!(coverage.identities.len(), 17);
     for identity in coverage.identities {
-        assert_eq!(identity.extension, "@crux/indexer/crux-core");
+        assert_eq!(identity.extension, "@use-crux/indexer/crux-core");
         assert_eq!(identity.family, identity.extractor);
         assert!(identity.native_covered);
         assert_eq!(

@@ -1,4 +1,4 @@
-import type { ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectRelation } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
 import { collectProjectedSemanticEvidence, projectSemanticEvidenceBatches } from '../indexer/semantic/evidence/projection'
 

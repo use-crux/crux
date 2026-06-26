@@ -4,7 +4,7 @@
 
 import { expectTypeOf } from 'vitest'
 import type { z } from 'zod'
-import { defineProviderRuntime, providerRuntimeConformance } from '@crux/core/adapter'
+import { defineProviderRuntime, providerRuntimeConformance } from '@use-crux/core/adapter'
 import type {
   ConformanceViolation,
   CruxAdapter,
@@ -18,7 +18,7 @@ import type {
   ProviderOwnership,
   SingleTurnRuntimeContract,
   StructuredAttempt,
-} from '@crux/core/adapter'
+} from '@use-crux/core/adapter'
 import type { Message } from '../messages'
 import type { AnyPrompt, ModelInfo } from '../types'
 
