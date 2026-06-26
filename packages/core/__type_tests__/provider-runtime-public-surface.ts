@@ -196,35 +196,44 @@ expectTypeOf(providerRuntimeConformance(loopProvider, loopConformanceHarness)).t
   Promise<ConformanceViolation[]>
 >()
 
-// @ts-expect-error - single-turn ownership requires turn mechanics, not loop mechanics.
-defineProviderRuntime({
+// Negative cases pass the invalid spec as a pre-built identifier so the
+// "no overload matches" diagnostic lands on the single call-argument line that
+// `@ts-expect-error` covers. Inline object literals attach the overload error to
+// nested property lines (and report against the last overload), which differs
+// between tsc and tsgo and leaves the directive on the wrong line.
+const singleOwnershipMismatch = {
   id: 'typed-single-ownership-mismatch',
-  ownership: 'single-turn',
+  ownership: 'single-turn' as const,
   loop: loopContract,
-})
+}
+// @ts-expect-error - single-turn ownership requires turn mechanics, not loop mechanics.
+defineProviderRuntime(singleOwnershipMismatch)
 
-// @ts-expect-error - loop-owned ownership requires loop mechanics, not turn mechanics.
-defineProviderRuntime({
+const loopOwnershipMismatch = {
   id: 'typed-loop-ownership-mismatch',
-  ownership: 'loop-owned',
+  ownership: 'loop-owned' as const,
   turn: turnContract,
-})
+}
+// @ts-expect-error - loop-owned ownership requires loop mechanics, not turn mechanics.
+defineProviderRuntime(loopOwnershipMismatch)
 
-defineProviderRuntime({
+const singleMutualExclusion = {
   id: 'typed-single-mutual-exclusion',
-  ownership: 'single-turn',
+  ownership: 'single-turn' as const,
   turn: turnContract,
-  // @ts-expect-error - single-turn ownership still forbids loop mechanics.
   loop: loopContract,
-})
+}
+// @ts-expect-error - single-turn ownership still forbids loop mechanics.
+defineProviderRuntime(singleMutualExclusion)
 
-defineProviderRuntime({
+const loopMutualExclusion = {
   id: 'typed-loop-mutual-exclusion',
-  ownership: 'loop-owned',
-  // @ts-expect-error - loop-owned ownership still forbids turn mechanics.
+  ownership: 'loop-owned' as const,
   turn: turnContract,
   loop: loopContract,
-})
+}
+// @ts-expect-error - loop-owned ownership still forbids turn mechanics.
+defineProviderRuntime(loopMutualExclusion)
 
 defineProviderRuntime({
   id: 'typed-loop-collision',
