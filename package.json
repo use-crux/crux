@@ -23,12 +23,13 @@
     "test:indexer:compiler-runtime": "node ./scripts/test-indexer-compiler-runtime.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,mdx}\" --ignore-path .gitignore",
     "changeset": "changeset",
-    "version-packages": "changeset version",
+    "version-packages": "changeset version && node ./scripts/update-root-changelog.mjs",
     "release:stage": "node ./scripts/stage-npm-packages.mjs",
     "release:stage:ts": "node ./scripts/stage-npm-packages.mjs --skip-local",
     "release:stage:local": "node ./scripts/stage-npm-packages.mjs --skip-ts",
     "release:validate": "node ./scripts/validate-staged-npm-packages.mjs",
     "release:publish-staged": "node ./scripts/publish-staged-npm-packages.mjs",
+    "release:notes": "node ./scripts/write-github-release-notes.mjs",
     "release": "pnpm release:stage && pnpm release:validate && pnpm release:publish-staged"
   },
   "devDependencies": {
