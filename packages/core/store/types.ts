@@ -1,5 +1,5 @@
 /**
- * Storage types for `@crux/core`.
+ * Storage types for `@use-crux/core`.
  *
  * Crux intentionally separates durable document data, vector search, and blob
  * payloads. Adapters may implement one or more capabilities, but user-facing

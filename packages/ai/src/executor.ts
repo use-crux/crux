@@ -17,7 +17,7 @@ import type {
   ExecutorStreamHandle,
   StructuredAttempt,
   StructuredRequest,
-} from '@crux/core/adapter'
+} from '@use-crux/core/adapter'
 import type { SdkGateway } from './gateway'
 import { createAiSdkCodec } from './sdk-codec'
 import type { SdkLoopResultLike, SdkStreamResultLike } from './sdk-codec'

@@ -3,6 +3,7 @@ import { config } from '../config'
 import {
   configureObservability,
   currentObservabilityTransport,
+  observe,
   resetObservabilityRuntime,
   type CruxObservabilityTransport,
 } from '../observability'
@@ -120,6 +121,30 @@ describe('config — runtime domain mapping', () => {
 
     crux.dispose()
     expect(currentObservabilityTransport()).toBeUndefined()
+  })
+
+  it('passes observability token into the generated HTTP transport', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
+    vi.stubGlobal('fetch', fetchImpl)
+    const crux = config({
+      observability: {
+        serverUrl: 'https://collector.example.com',
+        token: 'config-ingest-token',
+      },
+    })
+
+    try {
+      await observe.run({ name: 'config bearer run', rootPrimitive: 'custom.operation' }, async () => 'ok')
+      await observe.flush()
+
+      expect(fetchImpl).toHaveBeenCalled()
+      expect(fetchImpl.mock.calls[0][1]?.headers).toMatchObject({
+        Authorization: 'Bearer config-ingest-token',
+      })
+    } finally {
+      crux.dispose()
+      vi.unstubAllGlobals()
+    }
   })
 
   it('lets explicit observability override devtools before plugins run', () => {

@@ -8,10 +8,10 @@ description: End-to-end recipes for plans and task lists — full pipelines, thr
 The most common pattern: a planner agent creates a plan, an orchestrator breaks it into tasks, and worker agents execute each task in parallel — all wired together with `pipeline()` and `parallel()`.
 
 ```ts title="plan-task-pipeline.ts"
-import { createPlanTool } from '@crux/core/plan'
-import { tasklist } from '@crux/core/tasks'
-import { prompt, agent } from '@crux/core'
-import { generate, pipeline, parallel } from '@crux/ai'
+import { createPlanTool } from '@use-crux/core/plan'
+import { tasklist } from '@use-crux/core/tasks'
+import { prompt, agent } from '@use-crux/core'
+import { generate, pipeline, parallel } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 const model = openai('gpt-4o')
@@ -213,8 +213,8 @@ No manual ID extraction from tool calls. No shared state object. Just closures o
 The same pattern works with `flow()` — the difference is that you call `generate()` directly instead of defining agents:
 
 ```ts title="plan-task-flow.ts"
-import { generate } from '@crux/ai'
-import { flow } from '@crux/core'
+import { generate } from '@use-crux/ai'
+import { flow } from '@use-crux/core'
 
 const contentPipeline = flow('content-pipeline', async (flow) => {
   // Step 1: Plan
@@ -263,7 +263,7 @@ await contentPipeline.run()
 Track work for a conversation thread without any plan association:
 
 ```ts title="thread-tasks.ts"
-import { tasklist, taskListAgent } from '@crux/core/tasks'
+import { tasklist, taskListAgent } from '@use-crux/core/tasks'
 
 const handle = await tasklist({
   metadata: { threadId: 'thread-abc', userRequest: 'Set up my new project' },
@@ -292,8 +292,8 @@ await generate(
 Use plan metadata to implement human-in-the-loop approval before execution:
 
 ```ts title="approval-flow.ts"
-import { plan, updatePlan, getPlan } from '@crux/core/plan'
-import { tasklist, taskWorker } from '@crux/core/tasks'
+import { plan, updatePlan, getPlan } from '@use-crux/core/plan'
+import { tasklist, taskWorker } from '@use-crux/core/tasks'
 
 // Agent creates a plan
 const p = await plan({

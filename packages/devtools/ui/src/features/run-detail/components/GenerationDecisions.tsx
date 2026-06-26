@@ -31,7 +31,7 @@ import type {
   CruxRoutingTierPreview,
   CruxRunDetailDetail,
   CruxSecurityReportPreview,
-} from '@crux/core/observability'
+} from '@use-crux/core/observability'
 import { Chip, Eyebrow } from '@/qw/shell/primitives'
 import type { ObservabilityRunDetailNode } from '@/types'
 import { OperationReportFor } from './PrimitiveCards'

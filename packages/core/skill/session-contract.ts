@@ -3,7 +3,7 @@
  *
  * These types are split from the runtime implementation so the session
  * module stays focused on behavior while callers still import everything
- * from `@crux/core/skill`.
+ * from `@use-crux/core/skill`.
  *
  * @module
  */

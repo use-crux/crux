@@ -1,7 +1,7 @@
 /**
  * Cross-dialect parity suite — the contract that switching a prompt between
- * an `AdapterSpec` adapter (core-driven loop, e.g. @crux/openai) and an
- * `ExecutorSpec` adapter (SDK-driven loop, e.g. @crux/ai) changes NOTHING
+ * an `AdapterSpec` adapter (core-driven loop, e.g. @use-crux/openai) and an
+ * `ExecutorSpec` adapter (SDK-driven loop, e.g. @use-crux/ai) changes NOTHING
  * observable except model behavior itself.
  *
  * Each scenario runs the same script through both factories and asserts the

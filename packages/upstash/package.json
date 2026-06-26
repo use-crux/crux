@@ -1,5 +1,5 @@
 {
-  "name": "@crux/upstash",
+  "name": "@use-crux/upstash",
   "version": "0.1.0",
   "description": "Upstash Vector and Redis CruxStore adapters for Crux — vector retrieval and semantic caching.",
   "license": "Apache-2.0",
@@ -36,7 +36,7 @@
     }
   },
   "dependencies": {
-    "@crux/core": "workspace:*"
+    "@use-crux/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.12.4",

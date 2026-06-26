@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProject, indexProjectIncremental } from '../index'
+import { indexProject, indexProjectIncremental } from '..'
 
 const roots: string[] = []
 
@@ -23,7 +23,7 @@ describe('incremental source profile handoff', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer', prompt: 'Draft.' })
       `,
     )
@@ -32,7 +32,7 @@ describe('incremental source profile handoff', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer.next', prompt: 'Draft.' })
       `,
     )

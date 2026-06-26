@@ -1,11 +1,11 @@
 ---
-title: '@crux/otel'
+title: '@use-crux/otel'
 description: OpenTelemetry integration — spans for every instrumented Crux event.
 ---
 
 ```ts
-import { withTelemetry } from '@crux/otel'
-import { createUrlExporter, createCallbackExporter } from '@crux/otel'
+import { withTelemetry } from '@use-crux/otel'
+import { createUrlExporter, createCallbackExporter } from '@use-crux/otel'
 ```
 
 <Callout type="info">
@@ -26,7 +26,7 @@ config({
 
 | Field           | Type                              | Default        | Description                                                 |
 | --------------- | --------------------------------- | -------------- | ----------------------------------------------------------- |
-| `serviceName`   | `string`                          | `'@crux/otel'` | Tracer name for span identification                         |
+| `serviceName`   | `string`                          | `'@use-crux/otel'` | Tracer name for span identification                         |
 | `recordContent` | `boolean`                         | `false`        | Include prompt/input content as span attributes             |
 | `attributes`    | `Record<string, string>`          | —              | Custom attributes added to every span                       |
 | `exporter`      | `UrlExporter \| CallbackExporter` | —              | Export strategy. Omit for standard OTel TracerProvider path |
@@ -109,7 +109,7 @@ Interface for span export backends.
 
 ### Span attribute constants
 
-GenAI semantic convention constants are exported from `@crux/otel`:
+GenAI semantic convention constants are exported from `@use-crux/otel`:
 
 | Constant                                  | Value                                     | Convention |
 | ----------------------------------------- | ----------------------------------------- | ---------- |

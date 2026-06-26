@@ -7,10 +7,10 @@
  *
  * The feedback pillar is deferred post-launch (capability register §16.6:
  * Later, not lost). This module keeps the machinery alive WITHOUT a public
- * `@crux/core/quality` export; the devtools backend and future feedback APIs
+ * `@use-crux/core/quality` export; the devtools backend and future feedback APIs
  * consume it through internal plumbing only.
  *
- * @internal Not exported from `@crux/core/quality` — kept for the deferred
+ * @internal Not exported from `@use-crux/core/quality` — kept for the deferred
  * feedback pillar and the devtools data feed.
  * @module
  */

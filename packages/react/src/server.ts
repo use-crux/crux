@@ -1,5 +1,5 @@
 /**
- * Server-side utilities for `@crux/react`.
+ * Server-side utilities for `@use-crux/react`.
  *
  * @module
  */

@@ -6,8 +6,8 @@ description: Inject retrieved evidence into prompts and validate that answers ci
 Use plain retrieval when a prompt needs helpful background. Use `grounding()` when the answer must cite retrieved evidence and Crux should validate that citation contract.
 
 ```ts
-import { prompt } from '@crux/core'
-import { citationSchema, grounding } from '@crux/core/citations'
+import { prompt } from '@use-crux/core'
+import { citationSchema, grounding } from '@use-crux/core/citations'
 import { z } from 'zod'
 
 const groundedDocs = grounding({

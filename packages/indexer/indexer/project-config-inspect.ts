@@ -16,10 +16,11 @@
  * @module
  */
 
-import type { CruxConfig } from '@crux/core'
-import type { ProjectModelResolutionMode } from '@crux/core/project-index'
-import type { IndexDiagnostic } from '@crux/core/project-index'
+import type { CruxConfig } from '@use-crux/core'
+import type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
+import type { IndexDiagnostic } from '@use-crux/core/project-index'
 import { loadProjectConfig } from './config'
+import { staticIndexSyntaxSelectionFromConfig } from './static-index/config'
 import { resolveProjectModel } from './project-model'
 import type {
   InspectProjectConfigOptions,
@@ -150,6 +151,7 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
     experimental: {
       indexer: {
         native: experimentalIndexerNativeSetting(experimental),
+        nativeAst: experimentalIndexerNativeAstSetting(experimental),
         nativeEngine: experimentalIndexerNativeEngineSetting(experimental),
         tsserverPath: experimentalIndexerNativePathSetting(experimental),
       },
@@ -158,6 +160,7 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
       enabled: observability?.enabled != null ? explicit(observability.enabled) : fromDefault(true),
       serverUrl:
         observability?.serverUrl != null ? explicit(observability.serverUrl) : { value: 'none', origin: 'none' },
+      token: presence(observability?.token != null),
       transport: presence(observability?.transport != null),
     },
     devtools: {
@@ -217,6 +220,12 @@ function lintRulesSetting(rules: Record<string, unknown> | undefined): ProjectCo
 function experimentalIndexerNativeSetting(experimental: CruxConfig['experimental']): ProjectConfigSetting {
   const native = experimental?.indexer?.native
   return native == null ? fromDefault(false) : explicit(native !== false)
+}
+
+function experimentalIndexerNativeAstSetting(experimental: CruxConfig['experimental']): ProjectConfigSetting {
+  if (experimental?.indexer?.nativeAst === false) return explicit(false)
+  const selection = staticIndexSyntaxSelectionFromConfig(experimental)
+  return selection.enabled ? explicit(selection.frontend ?? 'oxc') : fromDefault(false)
 }
 
 function experimentalIndexerNativeEngineSetting(experimental: CruxConfig['experimental']): ProjectConfigSetting {

@@ -656,7 +656,7 @@ function makeEvaluateFunction(flags: { only: boolean; skip: boolean }): Evaluate
  * @example Rung 1 — a smoke evaluation
  * ```ts
  * // support.eval.ts
- * import { evaluate } from '@crux/core/quality'
+ * import { evaluate } from '@use-crux/core/quality'
  * import { supportPrompt } from '../prompts'
  *
  * export default evaluate({

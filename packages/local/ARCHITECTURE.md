@@ -1,6 +1,6 @@
-# @crux/local Architecture
+# @use-crux/local Architecture
 
-`@crux/local` is the Go runtime for local Crux development. It owns the HTTP server, WebSocket/SSE
+`@use-crux/local` is the Go runtime for local Crux development. It owns the HTTP server, WebSocket/SSE
 subscriptions, TUI, embedded devtools UI, observability read models, Project Index read models, and
 the local Quality Workbench filesystem boundary.
 
@@ -14,7 +14,7 @@ The product rule is:
 
 > Explicit construction decides behavior; Crux discovery provides visibility.
 
-For `@crux/local`, this means:
+For `@use-crux/local`, this means:
 
 - `crux dev`, Devtools, lint, and Quality should be able to start from conventions and the Project
   Index whenever possible.
@@ -43,8 +43,8 @@ internal/qualityfs
 ```
 
 `qualityfs` is a leaf package: it uses the Go standard library only and does not import `store`,
-`quality`, `indexread`, `observability`, or API packages. This keeps the persisted record contract
-separate from service orchestration and Project Index enrichment.
+`quality`, `projectindex/readmodel`, `observability`, or API packages. This keeps the persisted
+record contract separate from service orchestration and Project Index enrichment.
 
 `qualityfs` owns:
 
@@ -66,7 +66,7 @@ a snapshot are visible on the next call when the filesystem fingerprint changes.
 
 ## Consumers
 
-`internal/indexread` consumes `qualityfs.Load` and owns only Project Index read-model enrichment. It
+`internal/projectindex/readmodel` consumes `qualityfs.Load` and owns only Project Index read-model enrichment. It
 does not parse `.crux/quality` files directly and should not redeclare persisted quality records.
 
 `internal/quality.Service` owns local workbench API orchestration: event publishing, HTTP/API mapping,

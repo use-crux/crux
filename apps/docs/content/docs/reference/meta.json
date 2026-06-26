@@ -1,6 +1,6 @@
 {
   "title": "API Reference",
-  "description": "Hand-written API reference organized by package - @crux/core, @crux/react, @crux/indexer, adapters, storage, plugins, ingest, and the local runtime.",
+  "description": "Hand-written API reference organized by package - @use-crux/core, @use-crux/react, @use-crux/indexer, adapters, storage, plugins, ingest, and the local runtime.",
   "pages": [
     "index",
     "crux-core",

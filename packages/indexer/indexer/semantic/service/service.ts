@@ -10,7 +10,7 @@ import {
 } from '../preflight'
 import { semanticSupportSources } from '../../semantic-support'
 import { measureSemanticTiming, measureSemanticTimingAsync } from '../instrumentation'
-import { collectProjectedSemanticEvidence } from '../evidence'
+import { collectProjectedSemanticEvidence } from '../evidence/projection'
 import { semanticProjectSessionIdentity } from './session'
 import {
   createSemanticBackendFromSelection,
@@ -21,6 +21,7 @@ import type {
   SemanticBackend,
   SemanticBackendOption,
   SemanticBackendSelection,
+  SemanticCompilerRuntimeIdentity,
   SemanticIndexFilesInput,
   SemanticIndexProjectInput,
   SemanticIndexService,
@@ -82,9 +83,10 @@ export function createSemanticIndexService(options: SemanticIndexServiceOptions 
     }
 
     try {
+      const compilerRuntime = await semanticCompilerRuntimeIdentity(backend, root)
       const session = await backend.createSession({
         root,
-        identity: semanticProjectSessionIdentity(root, { backend: backend.identity }),
+        identity: semanticProjectSessionIdentity(root, { backend: backend.identity, compilerRuntime }),
         instrumentation: input.semanticInstrumentation,
       })
       const facts = await collectProjectedSemanticEvidence(
@@ -134,6 +136,18 @@ export function createSemanticIndexService(options: SemanticIndexServiceOptions 
 
     indexFiles,
   }
+}
+
+async function semanticCompilerRuntimeIdentity(
+  backend: SemanticBackend,
+  root: string,
+): Promise<SemanticCompilerRuntimeIdentity> {
+  return (
+    (await backend.compilerRuntimeIdentity?.({ root, backend: backend.identity })) ?? {
+      name: backend.identity.name,
+      version: backend.identity.version,
+    }
+  )
 }
 
 function sourceProfileWithClosure(

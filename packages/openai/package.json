@@ -1,5 +1,5 @@
 {
-  "name": "@crux/openai",
+  "name": "@use-crux/openai",
   "version": "0.1.0",
   "description": "OpenAI SDK adapter for Crux — run Crux prompts and agents against OpenAI models.",
   "keywords": ["ai", "llm", "openai", "gpt", "adapter", "crux"],
@@ -27,7 +27,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@crux/core": "workspace:*",
+    "@use-crux/core": "workspace:*",
     "zod": "^4.4.3"
   },
   "peerDependencies": {

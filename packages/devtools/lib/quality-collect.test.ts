@@ -1,8 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { prompt } from '@crux/core'
-import * as runnerCore from '@crux/core/quality/internal/runner'
+import { prompt } from '@use-crux/core'
+import * as runnerCore from '@use-crux/core/quality/internal/runner'
 import { loadQualityProject, resolveQualityRunnerSettings } from './quality-config'
 import {
   collectEvaluationFiles,
@@ -40,7 +40,7 @@ describe('collectEvaluationFiles', () => {
     writeFileSync(
       join(evalRoot, 'no-config.eval.ts'),
       `
-import { evaluate } from '@crux/core/quality'
+import { evaluate } from '@use-crux/core/quality'
 
 export default evaluate({
   task: (input: { value: string }) => input.value,
@@ -79,7 +79,7 @@ export default evaluate({
     writeFileSync(
       join(evalRoot, 'overlap.eval.ts'),
       `
-import { evaluate } from '@crux/core/quality'
+import { evaluate } from '@use-crux/core/quality'
 
 export default evaluate({
   task: (input: { value: string }) => input.value,

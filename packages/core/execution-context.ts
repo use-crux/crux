@@ -2,7 +2,7 @@
  * Internal execution metadata context.
  *
  * This is deliberately not an observability/span-parenting API. Canonical
- * run/span parenting belongs to `@crux/core/observability` via `observe`.
+ * run/span parenting belongs to `@use-crux/core/observability` via `observe`.
  * The execution context only carries SDK metadata that flows and helpers need
  * while code is running: session id, flow id, parent flow id, and step labels.
  */

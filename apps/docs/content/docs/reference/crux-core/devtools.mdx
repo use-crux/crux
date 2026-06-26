@@ -1,17 +1,17 @@
 ---
 title: Devtools Plugin
-description: API reference for connecting @crux/core observability to the local devtools runtime.
+description: API reference for connecting @use-crux/core observability to the local devtools runtime.
 ---
 
 ```ts
-import { enableDevtools, withDevtools } from '@crux/core/observability'
-import type { RuntimeBridgeOptions } from '@crux/core/runtime-bridge'
+import { enableDevtools, withDevtools } from '@use-crux/core/observability'
+import type { RuntimeBridgeOptions } from '@use-crux/core/runtime-bridge'
 ```
 
-This page documents the SDK APIs that connect a Crux application to a running `@crux/local`
+This page documents the SDK APIs that connect a Crux application to a running `@use-crux/local`
 devtools server. The devtools surface is for local UI/control/tunnel/bridge behavior; production
 telemetry and remote collectors are configured through explicit `observability` config or telemetry
-plugins. CLI commands, web UI workflows, and TUI navigation live in the [@crux/local
+plugins. CLI commands, web UI workflows, and TUI navigation live in the [@use-crux/local
 reference](/docs/reference/local) and [Devtools guide](/docs/guides/observability/devtools).
 
 ## `withDevtools(options)`
@@ -19,8 +19,8 @@ reference](/docs/reference/local) and [Devtools guide](/docs/guides/observabilit
 Creates a `CruxPlugin` that installs the canonical local observability transport.
 
 ```ts
-import { config } from '@crux/core'
-import { withDevtools } from '@crux/core/observability'
+import { config } from '@use-crux/core'
+import { withDevtools } from '@use-crux/core/observability'
 
 config({
   plugins: [
@@ -46,7 +46,7 @@ function withDevtools(options: DevtoolsOptions): CruxPlugin
 | `contexts`  | `Context[]`                       | `[]`    | Context definitions to include in runtime index snapshots.                   |
 | `tools`     | `FlowToolDef[]`                   | `[]`    | Tool definitions to include in runtime index snapshots.                      |
 | `paths`     | `Map<string, string[]>`           | —       | Authored namespace paths from `createPrompts()` / `createContexts()`.        |
-| `serverUrl` | `string`                          | —       | URL of the running `@crux/local` server.                                     |
+| `serverUrl` | `string`                          | —       | URL of the running `@use-crux/local` server.                                 |
 | `sessionId` | `string`                          | —       | Optional session id used to group emitted runtime records.                   |
 | `bridge`    | `boolean \| RuntimeBridgeOptions` | `false` | Enables the local Runtime Bridge command plane for long-lived Node runtimes. |
 
@@ -68,12 +68,12 @@ function enableDevtools(options: EnableDevtoolsOptions): () => void
 
 ### Parameters
 
-| Field       | Type            | Default | Description                              |
-| ----------- | --------------- | ------- | ---------------------------------------- |
-| `serverUrl` | `string`        | —       | URL of the running `@crux/local` server. |
-| `prompts`   | `Prompt[]`      | `[]`    | Prompt definitions to snapshot.          |
-| `contexts`  | `Context[]`     | `[]`    | Context definitions to snapshot.         |
-| `tools`     | `FlowToolDef[]` | `[]`    | Tool definitions to snapshot.            |
+| Field       | Type            | Default | Description                                  |
+| ----------- | --------------- | ------- | -------------------------------------------- |
+| `serverUrl` | `string`        | —       | URL of the running `@use-crux/local` server. |
+| `prompts`   | `Prompt[]`      | `[]`    | Prompt definitions to snapshot.              |
+| `contexts`  | `Context[]`     | `[]`    | Context definitions to snapshot.             |
+| `tools`     | `FlowToolDef[]` | `[]`    | Tool definitions to snapshot.                |
 
 ### Returns
 
@@ -84,23 +84,28 @@ Cleanup function that restores the previous observability transport.
 When `devtools.serverUrl` is explicitly set and no `observability` transport is configured,
 `config()` installs the local devtools transport. Ordinary local Quality runs do not require this
 boilerplate; the CLI auto-attaches to loopback `crux dev` origins.
+For tunneled serverless runtimes, prefer `observability.serverUrl` plus `observability.token` so the
+remote worker receives only scoped ingest access.
 
 ```ts
-import { config } from '@crux/core'
+import { config } from '@use-crux/core'
 
 config({
+  observability: {
+    serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
   devtools: {
-    serverUrl: process.env.CRUX_DEVTOOLS_URL,
     bridge: true,
   },
 })
 ```
 
-Neither `withDevtools()` nor `enableDevtools()` starts the server. Start it with `crux dev` from `@crux/local`.
+Neither `withDevtools()` nor `enableDevtools()` starts the server. Start it with `crux dev` from `@use-crux/local`.
 
 ## Runtime Bridge Types
 
-Runtime Bridge schemas and helper types are exported from `@crux/core/runtime-bridge`.
+Runtime Bridge schemas and helper types are exported from `@use-crux/core/runtime-bridge`.
 
 ```ts
 import {
@@ -111,14 +116,14 @@ import {
   connectRuntimeBridge,
   executeRuntimeBridgeCommand,
   getRuntimeBridgeManifest,
-} from '@crux/core/runtime-bridge'
+} from '@use-crux/core/runtime-bridge'
 ```
 
-The bridge is a local-dev command plane. Long-lived Node runtimes can open a `/ws/runtime` peer; framework integrations such as `@crux/convex` use the same contract over HTTP.
+The bridge is a local-dev command plane. Long-lived Node runtimes can open a `/ws/runtime` peer; framework integrations such as `@use-crux/convex` use the same contract over HTTP.
 
 ## Related
 
 - Guide: [Devtools](/docs/guides/observability/devtools)
-- Reference: [@crux/local](/docs/reference/local)
+- Reference: [@use-crux/local](/docs/reference/local)
 - Reference: [Observability](/docs/reference/crux-core/observability)
-- Reference: [Project Index](/docs/reference/crux-core/index)
+- Reference: [Project Index](/docs/reference/crux-core/project-index)

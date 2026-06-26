@@ -9,7 +9,7 @@
  * and the dispatcher is inert (pass-through) outside any session scope.
  *
  * The dual-package caveat applies: this state lives in the project's core
- * instance — tooling that drives the engine must resolve `@crux/core` from
+ * instance — tooling that drives the engine must resolve `@use-crux/core` from
  * the project, never bundle its own copy.
  *
  * @internal

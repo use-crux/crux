@@ -4,7 +4,7 @@
  * The core runner owns when source frames are requested, but it does not know
  * how to map generated stack locations back to authored files. First-party
  * tooling supplies a {@link QualitySourceFrameResolver} at the internal runner
- * boundary so `@crux/core` stays independent of `@crux/indexer` and the local
+ * boundary so `@use-crux/core` stays independent of `@use-crux/indexer` and the local
  * Go server.
  *
  * @module

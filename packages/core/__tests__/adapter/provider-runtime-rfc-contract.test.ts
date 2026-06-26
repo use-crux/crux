@@ -134,6 +134,7 @@ describe('provider runtime RFC contract', () => {
     })
 
     expect(provider.id).toBe('runtime-turn')
+    expect(provider.ownership).toBe('single-turn')
     expect(result.text).toBe('turn text')
     expect(result._meta.actualModelId).toBe('runtime-turn-actual')
     expect(client.calls).toEqual([
@@ -200,6 +201,7 @@ describe('provider runtime RFC contract', () => {
     })
 
     expect(provider.id).toBe('runtime-bound-loop')
+    expect(provider.ownership).toBe('loop-owned')
     expect(result.text).toBe('bound loop text')
     expect(client.requests[0]?.modelInfo).toEqual({ provider: 'bound', modelId: 'runtime-model' })
     expect(client.requests[0]?.settings).toEqual({ temperature: 0.7 })

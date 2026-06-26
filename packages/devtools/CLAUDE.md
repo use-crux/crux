@@ -199,16 +199,16 @@ delete:
 - The slice from `flattenState()` in `qw/shell/viewState.ts`
 - The dispatch in `useDevtools.ts`
 
-`pnpm --filter @crux/devtools test` should still pass — `devtoolsReducer.test.ts` covers the remaining slices.
+`pnpm --filter @use-crux/devtools test` should still pass — `devtoolsReducer.test.ts` covers the remaining slices.
 
 ### Step 7 — verify
 
 ```bash
 # Typecheck (this package only, OOM-safe per AGENTS.md)
-turbo typecheck --filter=@crux/devtools
+turbo typecheck --filter=@use-crux/devtools
 
 # Tests
-pnpm --filter @crux/devtools test -- --run
+pnpm --filter @use-crux/devtools test -- --run
 
 # Live browser smoke test (preview mcp tool with WSL launch config)
 # - Confirm the screen renders
@@ -385,9 +385,9 @@ This package ships as part of the Go binary. The build order is
 you should run before declaring a UI change done:
 
 ```bash
-turbo typecheck --filter=@crux/devtools
-pnpm --filter @crux/devtools test -- --run
-pnpm --filter @crux/devtools build           # both server bundle + UI bundle
+turbo typecheck --filter=@use-crux/devtools
+pnpm --filter @use-crux/devtools test -- --run
+pnpm --filter @use-crux/devtools build           # both server bundle + UI bundle
 ```
 
 Verifying the production bundle didn't regress is more important here

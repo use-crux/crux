@@ -1,5 +1,5 @@
 {
-  "name": "@crux/otel",
+  "name": "@use-crux/otel",
   "version": "0.1.0",
   "description": "OpenTelemetry observability plugin for Crux — emit spans and attributes for prompts, agents, and flows.",
   "keywords": ["opentelemetry", "otel", "observability", "tracing", "ai", "llm", "crux"],
@@ -23,7 +23,7 @@
     }
   },
   "dependencies": {
-    "@crux/core": "workspace:*"
+    "@use-crux/core": "workspace:*"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.0.0"

@@ -8,21 +8,21 @@
  * @module
  */
 
-import type { Crux, ContextEntry, Prompt } from '@crux/core'
-import type { CruxStore } from '@crux/core/store'
+import type { Crux, ContextEntry, Prompt } from '@use-crux/core'
 import type { z } from 'zod'
-import { setup as setupBridge } from './bridge'
-import type { CruxConvexBridgeHttpRouter, CruxConvexBridgeSetupOptions } from './bridge'
+import type { CruxConvexBridgeHttpRouter } from './bridge'
 import { convexAgent as createConvexAgent } from './agent'
 import type { ConvexAgentBaseConfig, ConvexAgentComponent, ConvexAgentModelConfig, CruxConvexAgent } from './agent'
-import { assertConvexCtxPort, createCruxConvexStoreResolver, type CruxConvexProfileStoreOptions } from './profile-store'
-import { runWithConvexCruxRuntime, type ConvexCruxRuntime, type ConvexRuntimeTarget } from './runtime'
+import { assertConvexCtxPort, type CruxConvexProfileStoreOptions } from './profile-store'
+import { createConvexRuntimeBridge } from './runtime-bridge'
+import type { ConvexRunScope, ConvexRuntimeBridge, ConvexRuntimeBridgeSetupOptions } from './runtime-bridge'
+import type { ConvexMemoryNamespace, ConvexRuntimeTarget } from './runtime'
 import type { ComponentApi } from './src/component/_generated/component'
 import type { ConvexCtxPort } from './store'
 
 /** Convex components required by the Crux profile. */
 export interface CruxConvexComponents {
-  /** Crux persistence component installed from `@crux/convex/convex.config`. */
+  /** Crux persistence component installed from `@use-crux/convex/convex.config`. */
   crux: ComponentApi
   /** Convex Agent component installed from `@convex-dev/agent/convex.config`. */
   agent: ConvexAgentComponent
@@ -34,48 +34,21 @@ export type CruxConvexProfileAgentConfig<
 > = Omit<ConvexAgentBaseConfig<TPrompt>, 'components' | 'store'> & ConvexAgentModelConfig
 
 /** Scope passed to `CruxConvexProfile.run()`. */
-export interface CruxConvexRunScope<TCtx extends ConvexCtxPort, TTarget extends ConvexRuntimeTarget> {
-  /** Convex ctx for the current request. */
-  readonly ctx: TCtx
-  /** Optional runtime target for namespace and tool-call metadata. */
-  readonly target?: TTarget
-  /** Request-scoped Crux store created by the profile. */
-  readonly store: CruxStore
-  /** Active runtime object bound for mirrored `@crux/convex/*` helpers. */
-  readonly runtime: ConvexCruxRuntime<TCtx, TTarget>
-}
+export type CruxConvexRunScope<TCtx extends ConvexCtxPort, TTarget extends ConvexRuntimeTarget> = ConvexRunScope<
+  TCtx,
+  TTarget
+>
 
 /** Reusable Convex runtime profile created by `createCruxConvex()`. */
-export interface CruxConvexProfile<TCtx extends ConvexCtxPort = ConvexCtxPort> {
+export interface CruxConvexProfile<TCtx extends ConvexCtxPort = ConvexCtxPort> extends ConvexRuntimeBridge<TCtx> {
   /** Component refs captured by the profile. */
   readonly components: CruxConvexComponents
-  /**
-   * Create the request-scoped Crux store using the profile defaults.
-   *
-   * Returns a promise only when a custom `store.create` override is async.
-   */
-  store(ctx: TCtx): CruxStore | Promise<CruxStore>
-  /**
-   * Run lower-level Crux work with the Convex runtime bound.
-   *
-   * Memory, tools, namespace resolution, and `convexRuntimeStore` all read the
-   * active profile runtime while `fn` is executing.
-   */
-  run<TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget, TResult = unknown>(
-    ctx: TCtx,
-    target: TTarget | undefined,
-    fn: (scope: CruxConvexRunScope<TCtx, TTarget>) => TResult | Promise<TResult>,
-  ): Promise<Awaited<TResult>>
   /** Create a Convex Agent wrapper using this profile's components and store. */
   convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
     config: CruxConvexProfileAgentConfig<TPrompt>,
   ): CruxConvexAgent<TPrompt>
   /** Register the HTTP devtools bridge using this profile's store path. */
-  bridge(
-    http: CruxConvexBridgeHttpRouter,
-    crux: Crux,
-    options?: Omit<CruxConvexBridgeSetupOptions, 'component' | 'store'>,
-  ): void
+  bridge(http: CruxConvexBridgeHttpRouter, crux: Crux, options?: ConvexRuntimeBridgeSetupOptions): void
 }
 
 /** Options for `createCruxConvex()`. */
@@ -93,7 +66,7 @@ export interface CreateCruxConvexOptions<TCtx extends ConvexCtxPort = ConvexCtxP
    * If omitted, the runtime falls back to `thread:${threadId}`,
    * `user:${userId}`, then `default`.
    */
-  readonly namespace?: ConvexCruxRuntime<TCtx>['namespace']
+  readonly namespace?: ConvexMemoryNamespace
   /**
    * Store options for the profile's request-scoped default store.
    *
@@ -127,57 +100,15 @@ export interface CreateCruxConvexOptions<TCtx extends ConvexCtxPort = ConvexCtxP
 export function createCruxConvex<TCtx extends ConvexCtxPort = ConvexCtxPort>(
   options: CreateCruxConvexOptions<TCtx>,
 ): CruxConvexProfile<TCtx> {
-  const storeForCtx = createCruxConvexStoreResolver<TCtx>({
+  const runtime = createConvexRuntimeBridge<TCtx>({
     component: options.components.crux,
-    vectorIndexName: options.store?.vectorIndexName,
-    semanticCache: options.store?.semanticCache,
-    create: options.store?.create,
+    namespace: options.namespace,
+    store: options.store,
   })
 
-  function runtimeFor<TTarget extends ConvexRuntimeTarget>(
-    ctx: TCtx,
-    target: TTarget | undefined,
-    store: CruxStore,
-  ): ConvexCruxRuntime<TCtx, TTarget> {
-    return {
-      ctx,
-      component: options.components.crux,
-      store,
-      target,
-      namespace: options.namespace,
-    }
-  }
-
-  function runWithStore<R, TTarget extends ConvexRuntimeTarget>(
-    ctx: TCtx,
-    target: TTarget | undefined,
-    store: CruxStore,
-    fn: (runtime: ConvexCruxRuntime<TCtx, TTarget>) => R,
-  ): R {
-    const runtime = runtimeFor(ctx, target, store)
-    return runWithConvexCruxRuntime(runtime, () => fn(runtime))
-  }
-
   const profile: CruxConvexProfile<TCtx> = {
+    ...runtime,
     components: options.components,
-    store(ctx: TCtx): CruxStore | Promise<CruxStore> {
-      return storeForCtx(ctx)
-    },
-    async run<TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget, TResult = unknown>(
-      ctx: TCtx,
-      target: TTarget | undefined,
-      fn: (scope: CruxConvexRunScope<TCtx, TTarget>) => TResult | Promise<TResult>,
-    ): Promise<Awaited<TResult>> {
-      const store = await storeForCtx(ctx)
-      return await runWithStore(ctx, target, store, (runtime) =>
-        fn({
-          ctx,
-          target,
-          store,
-          runtime,
-        }),
-      )
-    },
     convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
       config: CruxConvexProfileAgentConfig<TPrompt>,
     ): CruxConvexAgent<TPrompt> {
@@ -187,20 +118,7 @@ export function createCruxConvex<TCtx extends ConvexCtxPort = ConvexCtxPort>(
         namespace: config.namespace ?? options.namespace,
         store: (ctx) => {
           assertConvexCtxPort(ctx)
-          return storeForCtx(ctx as TCtx)
-        },
-      })
-    },
-    bridge(
-      http: CruxConvexBridgeHttpRouter,
-      crux: Crux,
-      bridgeOptions?: Omit<CruxConvexBridgeSetupOptions, 'component' | 'store'>,
-    ): void {
-      setupBridge(http, crux, {
-        ...bridgeOptions,
-        store: (ctx) => {
-          assertConvexCtxPort(ctx)
-          return storeForCtx(ctx as TCtx)
+          return runtime.store(ctx as TCtx)
         },
       })
     },

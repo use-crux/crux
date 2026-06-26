@@ -1,13 +1,13 @@
 ---
-title: '@crux/openai'
+title: '@use-crux/openai'
 description: OpenAI SDK adapter — factory pattern with native generation options plus dense embedding helpers.
 ---
 
 Peer dependency: `openai`
 
 ```ts
-import { createOpenAI, embedding, openaiProviderRuntime, openAITranscript, toMessages, fromMessages } from '@crux/openai'
-import { createGenerateObjectFn, createGenerateTextFn } from '@crux/openai'
+import { createOpenAI, embedding, openaiProviderRuntime, openAITranscript, toMessages, fromMessages } from '@use-crux/openai'
+import { createGenerateObjectFn, createGenerateTextFn } from '@use-crux/openai'
 ```
 
 <Callout type="info">
@@ -32,7 +32,7 @@ Create an adapter bound to an OpenAI client.
 | `.stream(prompt, options)`   | Stream a prompt execution                                                      |
 
 ```ts
-import { createOpenAI } from '@crux/openai'
+import { createOpenAI } from '@use-crux/openai'
 import OpenAI from 'openai'
 
 const adapter = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }))
@@ -118,7 +118,7 @@ Create a `GenerateObjectFn` bound to a client and model.
 
 **Returns:** `GenerateObjectFn`
 
-This is a provider-native helper generated from the same native chat profile as `createOpenAI()`. It uses OpenAI's structured parse surface and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
+This is a provider-native helper generated from the same native chat profile as `createOpenAI()`. It uses OpenAI's structured parse surface and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
 
 ### `createGenerateTextFn(client, model)`
 
@@ -139,7 +139,7 @@ Create a dense Crux embedding backed by `client.embeddings.create()`.
 
 ```ts
 import OpenAI from 'openai'
-import { embedding } from '@crux/openai'
+import { embedding } from '@use-crux/openai'
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -165,7 +165,7 @@ Known OpenAI embedding models infer their default dimensions automatically. For 
 ### Types
 
 ```ts
-import type { OpenAIChatRequest, OpenAIEmbeddingConfig, OpenAIExtra } from '@crux/openai'
+import type { OpenAIChatRequest, OpenAIEmbeddingConfig, OpenAIExtra } from '@use-crux/openai'
 ```
 
 ## Related
@@ -173,4 +173,4 @@ import type { OpenAIChatRequest, OpenAIEmbeddingConfig, OpenAIExtra } from '@cru
 - Guide: [Execution](/docs/guides/prompts/execution)
 - Guide: [Embeddings](/docs/guides/retrieval/embeddings)
 - Reference: [Prompts](/docs/reference/crux-core/prompts)
-- Reference: [@crux/ai (Vercel AI SDK)](/docs/reference/adapters/ai)
+- Reference: [@use-crux/ai (Vercel AI SDK)](/docs/reference/adapters/ai)

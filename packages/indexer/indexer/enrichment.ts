@@ -1,4 +1,4 @@
-import type { ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectDefinitionKind, ProjectRelation } from '@use-crux/core/project-index'
 import { definition, fingerprint, relation, safeId } from './definitions'
 import { sourceForFile, sourceSnippet } from './ast/snippets'
 

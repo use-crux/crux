@@ -137,7 +137,7 @@ export type ModelSettings = GenerationSettings
 /**
  * The abstract adapter `generate` bridge for model-backed tasks.
  *
- * Each adapter (e.g. `generate` from `@crux/ai`) narrows the prompt and
+ * Each adapter (e.g. `generate` from `@use-crux/ai`) narrows the prompt and
  * options to its own SDK types; quality runners accept any adapter through
  * this signature. Both parameters are typed `never` because no single
  * concrete type can satisfy every adapter contravariantly (adapters constrain
@@ -148,7 +148,7 @@ export type ModelSettings = GenerationSettings
  *
  * @example
  * ```ts
- * import { generate } from '@crux/ai'
+ * import { generate } from '@use-crux/ai'
  * import { openrouter } from '@openrouter/ai-sdk-provider'
  *
  * export const qualityRuntime = {
@@ -710,7 +710,7 @@ function retrieverTarget(r: AnyRetriever, opts?: RetrieverTargetOptions<AnyRetri
  *
  * @example
  * ```ts
- * import { evaluate, target } from '@crux/core/quality'
+ * import { evaluate, target } from '@use-crux/core/quality'
  *
  * evaluate({
  *   task: target.prompt(supportPrompt, { model: 'gpt-5' }),

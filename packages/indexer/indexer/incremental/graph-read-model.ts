@@ -1,4 +1,4 @@
-import type { IndexDiagnostic, IndexSourceFile, ProjectIndexShard, ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { IndexDiagnostic, IndexSourceFile, ProjectIndexShard, ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import { absoluteSourceFilePath } from './paths'
 import type { AbsoluteSourceFilePath } from './types'
 
@@ -24,7 +24,7 @@ export function hasTrustedSourceGraph(index: ProjectIndexSnapshot): boolean {
   const capabilities = new Set(index.sourceGraph?.capabilities ?? [])
   return (
     index.sourceGraph?.schemaVersion === 1 &&
-    index.sourceGraph.producedBy === '@crux/indexer' &&
+    index.sourceGraph.producedBy === '@use-crux/indexer' &&
     capabilities.has('source-dependencies') &&
     capabilities.has('source-dependents') &&
     capabilities.has('definition-ownership') &&

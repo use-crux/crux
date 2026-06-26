@@ -1,22 +1,23 @@
 /**
- * `@crux/core/adapter` — Provider adapter abstraction.
+ * `@use-crux/core/adapter` — Provider adapter abstraction.
  *
  * Shared infrastructure for building AI provider adapters. Public provider
  * authors should start with provider runtimes:
  *
- * - {@link defineProviderRuntime} with `turn` — for raw provider SDKs
- *   without a tool loop (Anthropic, OpenAI, Google). Core drives the loop one
- *   provider call at a time.
- * - {@link defineProviderRuntime} with `loop` — for orchestrating SDKs that
- *   own their own multi-step loop (the Vercel AI SDK). The SDK drives; core
- *   steers each step through a `StepObserver`.
+ * - {@link defineProviderRuntime} with `ownership: 'single-turn'` and `turn`
+ *   — for raw provider SDKs without a tool loop (Anthropic, OpenAI, Google).
+ *   Core drives the loop one provider call at a time.
+ * - {@link defineProviderRuntime} with `ownership: 'loop-owned'` and `loop`
+ *   — for orchestrating SDKs that own their own multi-step loop (the Vercel
+ *   AI SDK). The SDK drives; core steers each step through a `StepObserver`.
  *
  * Both dialects drive the same per-call sessions — the `ToolLifecycle` session
- * from `@crux/core/adapter/tool` (middleware, approvals, instrumentation,
+ * from `@use-crux/core/adapter/tool` (middleware, approvals, instrumentation,
  * skill loads, memory capture) and the `Safety` session from
- * `@crux/core/safety` — so policy semantics never diverge between dialects.
- * Test executors with {@link fakeExecutor} and prove contract fidelity with
- * {@link executorSpecConformance}.
+ * `@use-crux/core/safety` — so policy semantics never diverge between dialects.
+ * Test public provider runtimes with {@link providerRuntimeConformance}. Use
+ * {@link fakeExecutor}, {@link adapterSpecConformance}, and
+ * {@link executorSpecConformance} for lower-level execution IR tests.
  *
  * @module
  */
@@ -51,6 +52,8 @@ export type {
   LoopOwnedProviderRuntimeSpec,
   LoopOwnedRuntimeBindContext,
   LoopOwnedRuntimeContract,
+  ProviderOwnership,
+  ProviderRuntimeDepsArg,
   ProviderRuntimeKind,
   ProviderRuntimeExtension,
   ProviderRuntimeExtensionCollisionKeys,
@@ -127,8 +130,14 @@ export type { ApprovalRequestInfo } from './tool/approval'
 export { setGenerationInterceptor, clearGenerationInterceptor } from './interception'
 export type { GenerationInterceptor, InterceptedGeneration } from './interception'
 
-// Testing utilities for the executor contract
-export { adapterSpecConformance, fakeExecutor, executorSpecConformance, transcriptCodecConformance } from './testing'
+// Testing utilities for public provider runtimes and lower-level execution IR.
+export {
+  adapterSpecConformance,
+  fakeExecutor,
+  executorSpecConformance,
+  providerRuntimeConformance,
+  transcriptCodecConformance,
+} from './testing'
 export type {
   AdapterConformanceCapabilities,
   AdapterConformanceEmission,
@@ -144,6 +153,15 @@ export type {
   FakeRawStream,
   ExecutorConformanceHarness,
   ConformanceViolation,
+  ProviderConformanceEmission,
+  ProviderConformancePrepared,
+  ProviderConformanceScript,
+  ProviderRuntimeConformanceCapabilities,
+  ProviderRuntimeConformanceGenerateOptions,
+  ProviderRuntimeConformanceGenerateResult,
+  ProviderRuntimeConformanceHarness,
+  ProviderRuntimeConformanceRuntime,
+  ProviderRuntimeConformanceStreamHandle,
   TranscriptConformanceScenario,
   TranscriptWrapperExpectation,
 } from './testing'

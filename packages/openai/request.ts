@@ -1,9 +1,9 @@
 import type OpenAI from 'openai'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import type { z } from 'zod'
-import type { CallArgs } from '@crux/core/adapter'
-import type { NativeChatRequestArgs } from '@crux/core/adapter'
-import type { GenerationSettings } from '@crux/core'
+import type { CallArgs } from '@use-crux/core/adapter'
+import type { NativeChatRequestArgs } from '@use-crux/core/adapter'
+import type { GenerationSettings } from '@use-crux/core'
 import type { OpenAIChatRequest, OpenAIExtra } from './types'
 
 /** Build the OpenAI chat-completion request body from canonical Crux args. */

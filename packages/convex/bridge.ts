@@ -10,9 +10,9 @@
 
 import { httpActionGeneric } from 'convex/server'
 import type { PublicHttpAction } from 'convex/server'
-import type { Crux } from '@crux/core'
-import { normalizeObservedError } from '@crux/core/observability'
-import type { CruxStore } from '@crux/core/store'
+import type { Crux } from '@use-crux/core'
+import { normalizeObservedError } from '@use-crux/core/observability'
+import type { CruxStore } from '@use-crux/core/store'
 import type { ComponentApi } from './src/component/_generated/component'
 import { assertConvexCtxPort, createDefaultConvexCruxStore } from './profile-store'
 import {
@@ -24,7 +24,7 @@ import {
   getRuntimeBridgeManifest,
   type BridgeCommandError,
   type RuntimeBridgeManifest,
-} from '@crux/core/runtime-bridge'
+} from '@use-crux/core/runtime-bridge'
 
 export interface CruxConvexBridgeHttpRouter {
   route(definition: { path: string; method: 'GET' | 'POST' | 'OPTIONS'; handler: PublicHttpAction }): void
@@ -41,8 +41,8 @@ export interface CruxConvexBridgeSetupOptions {
    * Optional ctx-aware store factory.
    *
    * Convex stores usually need the current function ctx, so real Convex apps
-   * should pass `store: (ctx) => cruxConvexStore({ component, ctx })` unless
-   * the Crux config already contains a readable `persistence.store`.
+   * should pass `store: (ctx) => cruxDocuments.store(ctx)` unless the Crux
+   * config already contains a readable `persistence.store`.
    */
   store?: (ctx: unknown) => CruxStore | Promise<CruxStore>
   /**

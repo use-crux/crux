@@ -8,7 +8,7 @@ This recipe shows how to stream model output to the client *and* let the model c
 ## Primitives used
 
 - `prompt()` with `tools`
-- `@crux/ai` `stream()` returning a `toUIMessageStreamResponse()`
+- `@use-crux/ai` `stream()` returning a `toUIMessageStreamResponse()`
 - AI SDK `useChat` on the client
 - Optional: `context()` to share tools across multiple prompts
 
@@ -23,7 +23,7 @@ This recipe shows how to stream model output to the client *and* let the model c
 ### `lib/ai/tools.ts`
 
 ```ts
-import { tool } from '@crux/ai'
+import { tool } from '@use-crux/ai'
 import { z } from 'zod'
 
 export const searchDocs = tool({
@@ -57,7 +57,7 @@ export const fetchPage = tool({
 ### `lib/ai/prompts.ts`
 
 ```ts
-import { prompt, context } from '@crux/core'
+import { prompt, context } from '@use-crux/core'
 import { z } from 'zod'
 
 import { searchDocs, fetchPage } from './tools'
@@ -84,7 +84,7 @@ export const docsAssistant = prompt({
 ### `app/api/chat/route.ts` (Next.js)
 
 ```ts
-import { stream } from '@crux/ai'
+import { stream } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 import { docsAssistant } from '@/lib/ai/prompts'

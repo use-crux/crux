@@ -8,7 +8,7 @@ This recipe builds a research pipeline: a planner produces a list of search quer
 ## Primitives used
 
 - `agent()` for the three agents
-- `createPipeline()` from `@crux/core/agent` for sequential composition
+- `createPipeline()` from `@use-crux/core/agent` for sequential composition
 - `prompt()` with structured output for typed handoffs
 
 ## When to reach for this pattern
@@ -22,8 +22,8 @@ This recipe builds a research pipeline: a planner produces a list of search quer
 ### `lib/research/agents.ts`
 
 ```ts
-import { agent } from '@crux/core/agent'
-import { prompt } from '@crux/core'
+import { agent } from '@use-crux/core/agent'
+import { prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const PlanSchema = z.object({
@@ -85,8 +85,8 @@ export { planner, searcher, writer }
 ### Run the pipeline
 
 ```ts
-import { createPipeline } from '@crux/core/agent'
-import { generate } from '@crux/ai'
+import { createPipeline } from '@use-crux/core/agent'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 import { planner, searcher, writer } from './agents'

@@ -9,7 +9,7 @@ Strict replay runs with **zero live calls** and fails closed on anything
 unrecorded.
 
 ```ts
-import { evaluate, cassette } from '@crux/core/quality'
+import { evaluate, cassette } from '@use-crux/core/quality'
 
 export default evaluate('support.agent-loop', {
   task: target.agent(supportAgent, { tools: { lookupOrder: { status: 'shipped' } } }),

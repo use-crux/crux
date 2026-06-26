@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { resolveProjectModel } from '../index'
+import { resolveProjectModel } from '..'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -25,7 +25,7 @@ describe('Project Model prompt and context bundles', () => {
     await writeFile(
       join(root, 'src/contexts.ts'),
       `
-        import { context } from '@crux/core'
+        import { context } from '@use-crux/core'
 
         export const brand = context({ id: 'brand', system: 'Use the brand voice.' })
         export const locale = context({ id: 'locale', system: 'Use the requested locale.' })
@@ -34,7 +34,7 @@ describe('Project Model prompt and context bundles', () => {
     await writeFile(
       join(root, 'src/prompts.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         import { brand } from './contexts'
 
         export const answer = prompt({
@@ -52,7 +52,7 @@ describe('Project Model prompt and context bundles', () => {
     await writeFile(
       join(root, 'src/index.ts'),
       `
-        import { createContexts, createPrompts } from '@crux/core'
+        import { createContexts, createPrompts } from '@use-crux/core'
         import { brand, locale } from './contexts'
         import { answer, summarize } from './prompts'
 
@@ -113,7 +113,7 @@ describe('Project Model prompt and context bundles', () => {
     await writeFile(
       join(root, 'src/contexts.ts'),
       `
-        import { context } from '@crux/core'
+        import { context } from '@use-crux/core'
 
         export const brand = context({ id: 'brand', system: 'Use the brand voice.' })
         export const locale = context({ id: 'locale', system: 'Use the requested locale.' })
@@ -122,7 +122,7 @@ describe('Project Model prompt and context bundles', () => {
     await writeFile(
       join(root, 'src/prompts.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         import { brand, locale } from './contexts'
 
         const supportContexts = [brand, locale]
@@ -137,7 +137,7 @@ describe('Project Model prompt and context bundles', () => {
     await writeFile(
       join(root, 'src/index.ts'),
       `
-        import { createContexts, createPrompts } from '@crux/core'
+        import { createContexts, createPrompts } from '@use-crux/core'
         import { brand, locale } from './contexts'
         import { answer } from './prompts'
 
@@ -185,7 +185,7 @@ describe('Project Model prompt and context bundles', () => {
     await writeFile(
       join(root, 'src/prompts.ts'),
       `
-        import { createPrompts, prompt } from '@crux/core'
+        import { createPrompts, prompt } from '@use-crux/core'
 
         export const answer = prompt({
           id: 'answer',

@@ -1,8 +1,8 @@
 import type { z } from 'zod'
-import type { ContextEntry, Prompt } from '@crux/core'
-import type { SkillActivationSession } from '@crux/core/skill'
-import { getRuntime } from '@crux/core'
-import { captureSource } from '@crux/core/project-index'
+import type { ContextEntry, Prompt } from '@use-crux/core'
+import type { SkillActivationSession } from '@use-crux/core/skill'
+import { getRuntime } from '@use-crux/core'
+import { captureSource } from '@use-crux/core/project-index'
 import type { AgentResolveOptions, AgentResolveResult } from './types'
 
 function readTraceId(result: unknown): string | undefined {

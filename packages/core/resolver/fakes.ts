@@ -4,7 +4,7 @@
  * Pass these through `compilePrompt(config, { ports })` and prompt resolution
  * becomes fully observable and deterministic in tests: no `setRuntime()`
  * setup, no observability transport, no global cleanup between tests, and a
- * clock you control. Exported from `@crux/core` so SDK consumers get the same
+ * clock you control. Exported from `@use-crux/core` so SDK consumers get the same
  * seams the core test suite uses.
  *
  * @example
@@ -16,7 +16,7 @@
  *   inMemoryContextCache,
  *   fixedClock,
  *   collectingDiagnostics,
- * } from '@crux/core'
+ * } from '@use-crux/core'
  *
  * const observability = recordingObservability()
  * const diagnostics = collectingDiagnostics()

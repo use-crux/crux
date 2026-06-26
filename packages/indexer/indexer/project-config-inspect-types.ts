@@ -1,4 +1,4 @@
-import type { ProjectModelResolutionMode } from '@crux/core/project-index'
+import type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
 
 /** How a config value was resolved, shown as an origin tag in the CLI. */
 export type ProjectConfigOrigin = 'default' | 'config' | 'package.json' | 'set' | 'none'
@@ -55,6 +55,7 @@ export interface ProjectConfigInspect {
   readonly experimental: {
     readonly indexer: {
       readonly native: ProjectConfigSetting
+      readonly nativeAst: ProjectConfigSetting
       readonly nativeEngine: ProjectConfigSetting
       readonly tsserverPath: ProjectConfigSetting
     }
@@ -62,6 +63,7 @@ export interface ProjectConfigInspect {
   readonly observability: {
     readonly enabled: ProjectConfigSetting
     readonly serverUrl: ProjectConfigSetting
+    readonly token: ProjectConfigSetting
     readonly transport: ProjectConfigSetting
   }
   readonly devtools: {

@@ -2,13 +2,13 @@
  * Convex persistence adapter for Crux skill activation sessions.
  *
  * This is the one Convex-specific skill API: normal skill authoring and
- * session primitives are identical re-exports from `@crux/core/skill`, while
+ * session primitives are identical re-exports from `@use-crux/core/skill`, while
  * this adapter binds snapshots to the active Convex Crux store.
  *
  * @module
  */
 
-import type { SkillActivationPersistence, SkillActivationSnapshot, SkillActivationTarget } from '@crux/core/skill'
+import type { SkillActivationPersistence, SkillActivationSnapshot, SkillActivationTarget } from '@use-crux/core/skill'
 import { getConvexCruxRuntime, type ConvexRuntimeTarget } from '../runtime'
 
 export type ConvexSkillActivationTarget = SkillActivationTarget & {

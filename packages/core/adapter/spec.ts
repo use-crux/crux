@@ -1,9 +1,10 @@
 /**
- * `AdapterSpec` — the provider-specific contract for AI adapters.
+ * `AdapterSpec` — the lower-level execution IR for single-turn adapters.
  *
- * Implement this interface to create a new AI provider adapter.
- * The base `adapter()` handles all shared orchestration:
- * tool loops, fallback, devtools, compositions.
+ * Provider packages should normally author
+ * `defineProviderRuntime({ ownership: 'single-turn', turn })`. Core compiles
+ * that public runtime contract into this IR for execution tests and internal
+ * adapter plumbing.
  *
  * @module
  */
@@ -18,11 +19,11 @@ import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '.
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Provider-specific adapter specification.
+ * Provider-specific single-turn execution specification.
  *
- * Implement this interface to create a new AI provider adapter.
- * The base `adapter()` handles all shared orchestration:
- * tool loops, fallback, devtools, compositions.
+ * Prefer `defineProviderRuntime()` for public adapter authoring. The base
+ * `adapter()` handles all shared orchestration: tool loops, fallback,
+ * devtools, compositions.
  *
  * @typeParam TClient - The provider's SDK client type
  * @typeParam TRawResponse - The provider's raw API response type

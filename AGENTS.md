@@ -8,41 +8,72 @@ Crux is a TypeScript context engineering SDK with adapters, devtools, docs, and 
 - Runtime packages live in `packages/*`.
 - Documentation lives in `apps/docs`.
 - Crux Local lives in `packages/local` and provides the `crux` binary, local dev server, TUI, embedded devtools, and bounded helper workers.
-- `@crux/core` must remain provider-agnostic. Provider packages depend on core, not the other way around.
+- `@use-crux/core` must remain provider-agnostic. Provider packages depend on core, not the other way around.
 
 ## Dependency Direction
 
 Allowed:
 
-- `@crux/ai` -> `@crux/core`
-- `@crux/openai` -> `@crux/core`
-- `@crux/anthropic` -> `@crux/core`
-- `@crux/google` -> `@crux/core`
-- `@crux/convex` -> `@crux/core`
-- `@crux/upstash` -> `@crux/core`
-- `@crux/otel` -> `@crux/core`
-- `@crux/ingest` -> `@crux/core`
-- `@crux/react` -> `@crux/core`
+- `@use-crux/ai` -> `@use-crux/core`
+- `@use-crux/openai` -> `@use-crux/core`
+- `@use-crux/anthropic` -> `@use-crux/core`
+- `@use-crux/google` -> `@use-crux/core`
+- `@use-crux/convex` -> `@use-crux/core`
+- `@use-crux/upstash` -> `@use-crux/core`
+- `@use-crux/otel` -> `@use-crux/core`
+- `@use-crux/ingest` -> `@use-crux/core`
+- `@use-crux/react` -> `@use-crux/core`
 
 Avoid:
 
-- `@crux/core` depending on provider SDKs, Convex, React, or app-specific packages.
+- `@use-crux/core` depending on provider SDKs, Convex, React, or app-specific packages.
 - Cross-package relative imports. Use workspace package imports.
 
 ## Package Rules
 
-- Use `workspace:*` or `workspace:^` for internal `@crux/*` dependencies.
+- Use `workspace:*` or `workspace:^` for internal `@use-crux/*` dependencies.
 - Provider SDKs and host frameworks belong in `peerDependencies` when users should control the installed version.
 - Build outputs, generated docs artifacts, and local caches should not be committed.
+
+## Changesets
+
+Changesets are the release queue, not a per-commit log. Do not create a new
+changeset just because you are a new agent or because you made another commit.
+
+Add or update a changeset only when a change affects npm package users: public
+APIs, package exports, install behavior, CLI behavior, runtime behavior,
+published package docs, or npm release mechanics.
+
+Before creating a changeset:
+
+1. Inspect existing pending files with `ls .changeset/*.md` and read the ones
+   that are not `README.md`.
+2. If an existing changeset already describes the current PR or release theme,
+   update that file instead of adding another one. Add packages to its front
+   matter when needed, raise the bump level if the new change requires it, and
+   append a concise user-facing note.
+3. Create a new changeset only when there is no relevant pending changeset.
+4. If multiple agents are working on the same PR, one agent should own the
+   changeset. Other agents should report the package impact in their final
+   message instead of creating duplicate files.
+
+Use `patch` for compatible fixes, `minor` for new public behavior, and `major`
+for breaking changes. Because `@use-crux/*` packages are fixed together in
+Changesets config, select only the directly affected package names; the release
+PR will align the full package group.
+
+Do not add changesets for tests-only changes, internal docs-only edits, or
+refactors with no package-user impact. In final responses, state either the
+changeset file you added/updated or that no changeset was needed.
 
 ## Build Commands
 
 Prefer root `make` targets for repository workflows:
 
-- `make build` builds devtools workers/UI, embeds them into the Go binary, then builds Crux Local. It must not run the root Turbo build or build `docs`.
-- `make local` builds devtools workers/UI, embeds them into `packages/local/internal/server/{embed,ui-embed}`, then builds the current-platform Go binary.
+- `make build` builds devtools workers/UI, embeds them into the Go binary, builds the current-platform Rust/Oxc indexer worker, then builds Crux Local. It must not run the root Turbo build or build `docs`.
+- `make local` builds devtools workers/UI, embeds them into `packages/local/internal/assets/{embed,ui-embed}`, builds the current-platform Rust/Oxc indexer worker, then builds the current-platform Go binary.
 - `make local-go` rebuilds only the Go binary from already embedded assets.
-- `make local-all` builds embedded platform binaries under `packages/local/dist/`.
+- `make local-all` builds embedded platform Go binaries and Rust/Oxc indexer workers under `packages/local/dist/`.
 - `make cli`, `make cli-go`, and `make cli-all` are compatibility aliases for the local targets.
 - `make docs` runs the docs app.
 
@@ -61,21 +92,23 @@ For features that span AST output, semantic enrichment, and the Go snapshot, upd
 
 ## Indexer Extensions
 
-`@crux/indexer` is a compiler-style Project Index engine, not a mutable plugin registry. First-party
+`@use-crux/indexer` is a compiler-style Project Index engine, not a mutable plugin registry. First-party
 and third-party Indexer Extensions must contribute through explicit manifests, compiler-owned
 extension runtimes, and immutable fact/rule/relation declarations. Do not add global registration,
 implicit package discovery, raw TypeScript AST public APIs, or side-effect loader hooks.
 
-Dynamic third-party loading is config-driven. `@crux/core` stores inert `indexer` config data, while
-`@crux/indexer` enforces package trust, package/export resolution, installed package-version checks,
+Dynamic third-party loading is config-driven. `@use-crux/core` stores inert `indexer` config data, while
+`@use-crux/indexer` enforces package trust, package/export resolution, installed package-version checks,
 manifest validation, and compatibility diagnostics before compiler runtime construction. Importing an
 allowlisted package is trusted code execution, not sandboxing.
 
 ## Experimental Config
 
 Unstable user-facing options belong under the top-level `experimental` object, following a
-Next.js-style graduation path. For Project Indexer native experiments, use
-`experimental.indexer.native: true | { engine?: 'tsgo'; tsserverPath?: string }`.
+Next.js-style graduation path. For Project Indexer native semantic experiments, use
+`experimental.indexer.native: true | { engine?: 'tsgo'; tsserverPath?: string }`. For Project
+Indexer native static AST experiments, use
+`experimental.indexer.nativeAst: true | { frontend?: 'oxc' }`.
 Do not add stable-looking `indexer.semantic` backend switches, public `unstableApi` config fields,
 or TypeScript-Go-specific public backend flags; `tsgo` is an internal native engine option.
 
@@ -140,6 +173,6 @@ For Crux changes made from inside Karyla:
 
 1. Commit and push changes in this repository first.
 2. Then commit the updated `crux` submodule pointer in the parent Karyla repository.
-3. Keep package names published as `@crux/*`; local folder names intentionally omit the old `crux-` prefix.
+3. Keep package names published as `@use-crux/*`; local folder names intentionally omit the old `crux-` prefix.
 
 Publishing to npm is not required for Karyla or Vercel while Karyla consumes this submodule through pnpm workspaces. npm publishing is the later external-consumer release path.

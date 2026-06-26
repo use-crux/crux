@@ -16,9 +16,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/server"
+	qualityserver "github.com/use-crux/crux/packages/local/internal/server/quality"
 	"github.com/use-crux/crux/packages/local/internal/tui"
 )
 
@@ -231,6 +233,8 @@ func NewDevCmd() *cobra.Command {
 				return runTUI(devSrv, serverURL, port, startup, tunnelReady)
 			}
 
+			printIngestTokenHint(devSrv)
+
 			// Non-TUI: start tunnel synchronously (blocks until ready).
 			if tunnel {
 				fmt.Printf("%s Starting tunnel...\n", output.Dim.Render("*"))
@@ -280,6 +284,20 @@ func NewDevCmd() *cobra.Command {
 	return cmd
 }
 
+func printIngestTokenHint(devSrv *server.DevServer) {
+	if devSrv == nil || devSrv.IngestToken == "" {
+		return
+	}
+	suffix := ""
+	if devSrv.IngestTokenPath != "" {
+		suffix = fmt.Sprintf(" (saved at %s)", output.Fg.Render(devSrv.IngestTokenPath))
+	}
+	fmt.Printf("%s Remote observability ingest: %s%s\n",
+		output.Dim.Render("*"),
+		output.BoldCyan.Render("CRUX_DEVTOOLS_TOKEN="+devSrv.IngestToken),
+		suffix)
+}
+
 func runTUI(devSrv *server.DevServer, serverURL string, port int, startup *startupTracker, tunnelReady <-chan string) error {
 	// Server is already running (Go native) — no boot wait needed.
 	if devSrv == nil {
@@ -297,21 +315,26 @@ func runTUI(devSrv *server.DevServer, serverURL string, port int, startup *start
 		output.Accent.Render("?"),
 		output.BoldCyan.Render(serverURL),
 	)
+	printIngestTokenHint(devSrv)
 
 	// Phase 3: Launch Bubbletea TUI (server is ready, WS connected).
-	// Promotion spawns the embedded quality worker (lives in internal/server,
-	// which devtools can't import) — inject it here. Empty root/config let the
-	// worker run in the process cwd and auto-discover crux.config.ts.
+	// Promotion spawns the embedded quality worker through the server-owned
+	// Quality bridge. Empty root/config let the worker run in the process cwd
+	// and auto-discover crux.config.ts.
 	c := devtools.NewDirectClientFromService(devSrv.Devtools).
 		WithObservability(devSrv.Observability).
 		WithQualityPromote(func(ctx context.Context, experimentID, variant, pinID string) (api.QualityPromoteResult, error) {
-			return server.RunQualityPromote(ctx, "", "", server.QualityPromoteRequest{
+			return qualityserver.RunPromote(ctx, "", "", qualityserver.RunnerDeps{
+				FindNode:      assets.FindNode,
+				ExtractRunner: assets.ExtractEmbeddedQualityRunner,
+			}, qualityserver.PromoteRequest{
 				ExperimentID: experimentID,
 				Variant:      variant,
 				PinID:        pinID,
 			})
 		})
 	app := tui.NewApp(serverURL, c, startup.Mode(), startup.Enabled())
+	app.SendIngestToken(devSrv.IngestToken, devSrv.IngestTokenPath)
 
 	// Mark boot as complete immediately — server is already up.
 	app.MarkBootComplete()

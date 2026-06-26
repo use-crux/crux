@@ -1,5 +1,4 @@
-import type { JsonSchema, ProjectDefinition, ProjectSourceRef } from '@crux/core/project-index'
-import type * as ts from 'typescript'
+import type { JsonSchema, ProjectDefinition, ProjectSourceRef } from '@use-crux/core/project-index'
 import type {
   SemanticAnalyzerContext,
   SemanticAnalyzerView,
@@ -7,17 +6,25 @@ import type {
   SemanticResolvedSource,
   SemanticSchemaCandidate,
 } from '../candidates'
+import type { SemanticSyntaxNode } from '../syntax-view'
 import type { SemanticAnalyzer } from '../types'
 
 export interface SemanticSchemaAnalyzerDeps {
-  readonly schemaCandidates: (candidate: SemanticDefinitionCandidate) => readonly SemanticSchemaCandidate[]
-  readonly resolveExpression: (expression: ts.Expression, view: SemanticAnalyzerView) => SemanticResolvedSource | undefined
+  readonly schemaCandidates: (
+    candidate: SemanticDefinitionCandidate,
+    view: SemanticAnalyzerView,
+  ) => readonly SemanticSchemaCandidate[]
+  readonly resolveExpression: (
+    expression: SemanticSyntaxNode,
+    view: SemanticAnalyzerView,
+  ) => SemanticResolvedSource | undefined
   readonly expressionToJsonSchema: (resolved: SemanticResolvedSource, view: SemanticAnalyzerView) => JsonSchema | undefined
   readonly definitionPatchBase: (candidate: SemanticDefinitionCandidate) => ProjectDefinition
   readonly schemaSourceRef: (
     candidate: SemanticSchemaCandidate,
     resolved: SemanticResolvedSource,
     parsedSchema: boolean,
+    view: SemanticAnalyzerView,
   ) => ProjectSourceRef
   readonly nestedSchemaSourceRefs: (
     candidate: SemanticSchemaCandidate,
@@ -35,7 +42,7 @@ export function createSemanticSchemaAnalyzer(
   return {
     name: 'schema',
     analyze(candidate, context) {
-      const facts = deps.schemaCandidates(candidate).flatMap((schemaCandidate) =>
+      const facts = deps.schemaCandidates(candidate, context.view).flatMap((schemaCandidate) =>
         semanticSchemaFacts(schemaCandidate, context.view, deps),
       )
       return {
@@ -70,7 +77,7 @@ function semanticSchemaFacts(
     sourceRefs: [
       {
         definitionId: schemaCandidate.definitionId,
-        ref: deps.schemaSourceRef(schemaCandidate, resolved, Boolean(schema)),
+        ref: deps.schemaSourceRef(schemaCandidate, resolved, Boolean(schema), view),
       },
       ...deps.nestedSchemaSourceRefs(schemaCandidate, resolved, view).map((ref) => ({
         definitionId: schemaCandidate.definitionId,

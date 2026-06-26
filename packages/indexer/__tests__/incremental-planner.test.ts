@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { IndexSourceFile, ProjectIndexSnapshot, ProjectDefinition } from '@crux/core/project-index'
+import type { IndexSourceFile, ProjectIndexSnapshot, ProjectDefinition } from '@use-crux/core/project-index'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProject } from '../index'
+import { indexProject } from '..'
 import {
   indexInvalidationFromDecision,
   explainIncrementalDecision,
@@ -85,7 +85,7 @@ describe('incremental index planner', () => {
       previousIndex: index({
         sourceGraph: {
           schemaVersion: 1,
-          producedBy: '@crux/indexer',
+          producedBy: '@use-crux/indexer',
           capabilities: ['source-dependencies', 'source-dependents', 'definition-ownership', 'diagnostic-ownership'],
         },
         sources: [{ file, status: 'indexed', dependencies: [], dependents: [] }],
@@ -476,14 +476,14 @@ describe('incremental index planner', () => {
     await writeFile(
       join(fixture, 'src/prompt.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer', prompt: 'Write' })
       `,
     )
     await writeFile(
       join(fixture, 'src/index.ts'),
       `
-        import { createPrompts } from '@crux/core'
+        import { createPrompts } from '@use-crux/core'
         import { writer } from './prompt'
         export const prompts = createPrompts({ writer })
       `,
@@ -499,7 +499,7 @@ describe('incremental index planner', () => {
     expect(snapshot.sourceGraph).toEqual(
       expect.objectContaining({
         schemaVersion: 1,
-        producedBy: '@crux/indexer',
+        producedBy: '@use-crux/indexer',
         capabilities: expect.arrayContaining(['source-dependencies', 'source-dependents']),
       }),
     )
@@ -566,7 +566,7 @@ function index(input: {
         : {
             sourceGraph: {
               schemaVersion: 1,
-              producedBy: '@crux/indexer',
+              producedBy: '@use-crux/indexer',
               capabilities: [
                 'source-dependencies',
                 'source-dependents',
@@ -591,7 +591,7 @@ function sourceGraphWithShards(
 ): NonNullable<ProjectIndexSnapshot['sourceGraph']> {
   return {
     schemaVersion: 1,
-    producedBy: '@crux/indexer',
+    producedBy: '@use-crux/indexer',
     capabilities: [
       'source-dependencies',
       'source-dependents',

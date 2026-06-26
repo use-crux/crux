@@ -21,7 +21,7 @@ An extension is an ESM package that exports an `IndexerExtension` manifest:
 
 ```ts
 // packages/acme-crux-indexer/src/index.ts
-import { facts, type IndexerExtension } from '@crux/indexer/extensions'
+import { facts, type IndexerExtension } from '@use-crux/indexer/extensions'
 
 export default {
   name: '@acme/crux-indexer',
@@ -84,7 +84,7 @@ Use an ordinary ESM package. The package name is what projects allowlist.
     ".": "./dist/index.js"
   },
   "peerDependencies": {
-    "@crux/indexer": "^0.1.0"
+    "@use-crux/indexer": "^0.1.0"
   }
 }
 ```
@@ -97,7 +97,7 @@ Projects must opt in explicitly:
 
 ```ts
 // crux.config.ts
-import { config } from '@crux/core'
+import { config } from '@use-crux/core'
 
 export default config({
   indexer: {
@@ -148,7 +148,7 @@ Return `{ kind: 'none' }` when a match is not actually an authored definition. R
 Relation specs give namespaced relation types a stable meaning:
 
 ```ts
-import type { IndexerExtension } from '@crux/indexer/extensions'
+import type { IndexerExtension } from '@use-crux/indexer/extensions'
 
 export default {
   name: '@acme/crux-indexer',
@@ -176,7 +176,7 @@ When rule execution opens, third-party rules will read immutable Project Index f
 
 ## Test With Source Fixtures
 
-Use `@crux/indexer/testing` for extractor behavior. It runs the production static extraction engine
+Use `@use-crux/indexer/testing` for extractor behavior. It runs the production static extraction engine
 against in-memory source text with cache disabled, so tests cover parser dispatch, import-aware
 pattern matching, readers, builders, relation projection, diagnostics, and cache identity without
 constructing parser-native contexts.
@@ -187,7 +187,7 @@ import {
   assertDeterministicExtraction,
   defineIndexerExtensionFixture,
   extractFixtureSource,
-} from '@crux/indexer/testing'
+} from '@use-crux/indexer/testing'
 import extension from '../src/index'
 
 describe('@acme/crux-indexer', () => {
@@ -262,4 +262,4 @@ Do not:
 - Guide: [Project Health](/docs/guides/project-health)
 - Guide: [Index Lint](/docs/guides/project-health/lint)
 - Reference: [Indexer Extensions](/docs/reference/indexer-extensions)
-- Reference: [@crux/indexer](/docs/reference/indexer)
+- Reference: [@use-crux/indexer](/docs/reference/indexer)

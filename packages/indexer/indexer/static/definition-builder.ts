@@ -5,7 +5,7 @@ import type {
   ProjectRuntimeJoin,
   SourceLocation,
   SourceSnippet,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import { stringArrayProperty, stringProperty } from '../ast/literals'
 import { fingerprint } from '../definitions'
 

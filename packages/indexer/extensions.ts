@@ -11,6 +11,8 @@
  *
  * Treat this subpath as experimental until the third-party loading, trust, versioning, and fixture
  * package contract is finalized.
+ *
+ * @module
  */
 export {
   callPattern,
@@ -32,7 +34,7 @@ export type {
   ResolveIndexerExtensionReferencesInput,
   ResolveIndexerExtensionReferencesResult,
 } from './indexer/extensions'
-export type { IndexerExtensionManifestValidation } from './indexer/extensions/manifest'
+export type { IndexerExtensionManifestValidation } from './indexer/extensions/loading/manifest'
 import type {
   IndexExtractor as InternalIndexExtractor,
   DefinitionBuilder,
@@ -85,7 +87,7 @@ export type {
   IndexRuleFidelity,
   IndexRuleManifest,
   IndexRulePhase,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 
 /**
  * Stable extractor context exposed by the experimental public authoring barrel.

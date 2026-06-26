@@ -14,10 +14,10 @@
     "noEmit": true,
     "paths": {
       "@/*": ["./ui/src/*"],
-      "@crux/core": ["../core/index.ts"],
-      "@crux/core/*": ["../core/*"],
-      "@crux/indexer": ["../indexer/index.ts"],
-      "@crux/indexer/*": ["../indexer/*"]
+      "@use-crux/core": ["../core/index.ts"],
+      "@use-crux/core/*": ["../core/*"],
+      "@use-crux/indexer": ["../indexer/index.ts"],
+      "@use-crux/indexer/*": ["../indexer/*"]
     }
   },
   "include": [

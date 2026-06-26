@@ -1,13 +1,20 @@
 ---
-title: '@crux/google'
+title: '@use-crux/google'
 description: Google GenAI SDK adapter — factory pattern with provider caching plus dense embedding helpers.
 ---
 
 Peer dependency: `@google/genai`
 
 ```ts
-import { createGoogle, embedding, googleProviderRuntime, googleTranscript, toMessages, fromMessages } from '@crux/google'
-import { createGenerateObjectFn, createGenerateTextFn } from '@crux/google'
+import {
+  createGoogle,
+  embedding,
+  googleProviderRuntime,
+  googleTranscript,
+  toMessages,
+  fromMessages,
+} from '@use-crux/google'
+import { createGenerateObjectFn, createGenerateTextFn } from '@use-crux/google'
 ```
 
 <Callout type="info">
@@ -16,22 +23,36 @@ import { createGenerateObjectFn, createGenerateTextFn } from '@crux/google'
 
 ### `createGoogle(client, opts?)`
 
-Create an adapter bound to a Google GenAI client with optional cache configuration.
+Create an adapter bound to a Google GenAI client with optional CachedContent configuration.
 
-`createGoogle()` binds `googleProviderRuntime.create(client, { cacheManager })` after resolving cache options. The package-owned `googleTranscript` owns `Content[]` conversion plus assistant text/function-call extraction. The Google package still owns the SDK request shape, function-call normalization, response metadata normalization, and CachedContent manager; the provider runtime supplies the adapter shell and default tool-round formatting.
+`createGoogle()` binds `googleProviderRuntime.create(client, { cacheResolver })` after resolving CachedContent options. The package-owned `googleTranscript` owns `Content[]` conversion plus assistant text/function-call extraction. The Google package still owns the SDK request shape, function-call normalization, response metadata normalization, and CachedContent lifecycle; the provider runtime supplies the adapter shell and default tool-round formatting.
 
-| Field        | Type                         | Description                                                            |
-| ------------ | ---------------------------- | ---------------------------------------------------------------------- |
-| `client`     | `GoogleGenAI`                | The Google GenAI client instance                                       |
-| `opts.cache` | `GoogleCacheConfig \| false` | Cache configuration (optional). Omit for defaults, `false` to disable. |
+| Field                | Type                                                             | Description                                                                                                                     |
+| -------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `client`             | `GoogleGenAI`                                                    | The Google GenAI client instance                                                                                                |
+| `opts.cachedContent` | `false \| GoogleCachedContentOptions \| GoogleCachedContentPort` | CachedContent configuration. Omit for defaults, pass `false` to disable, or pass a custom port to resolve cache names yourself. |
 
-**`GoogleCacheConfig`:**
+**`GoogleCachedContentOptions`:**
 
-| Field               | Type      | Default | Description                            |
-| ------------------- | --------- | ------- | -------------------------------------- |
-| `enabled`           | `boolean` | `true`  | Enable/disable cache management        |
-| `defaultTtlSeconds` | `number`  | `300`   | TTL for server-side cache objects      |
-| `maxEntries`        | `number`  | `50`    | Max concurrent cache entries in memory |
+| Field               | Type                    | Default      | Description                                         |
+| ------------------- | ----------------------- | ------------ | --------------------------------------------------- |
+| `enabled`           | `boolean`               | `true`       | Enable/disable the built-in cache manager           |
+| `defaultTtlSeconds` | `number`                | `300`        | TTL for server-side cache objects                   |
+| `maxEntries`        | `number`                | `50`         | Max concurrent cache entries in memory              |
+| `onError`           | `'fallback' \| 'throw'` | `'fallback'` | Whether cache creation failures fall back or reject |
+
+**`GoogleCachedContentPort`:**
+
+```ts
+interface GoogleCachedContentPort {
+  resolve(args: {
+    model: string
+    blocks: readonly SystemBlock[]
+    ttlSeconds?: number
+  }): Promise<GoogleCacheName | undefined>
+  dispose?(): Promise<void>
+}
+```
 
 **Returns:**
 
@@ -41,7 +62,7 @@ Create an adapter bound to a Google GenAI client with optional cache configurati
 | `.stream(prompt, options)`   | Stream a prompt execution                                                             |
 
 ```ts
-import { createGoogle } from '@crux/google'
+import { createGoogle } from '@use-crux/google'
 import { GoogleGenAI } from '@google/genai'
 
 const adapter = createGoogle(new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY }))
@@ -57,42 +78,42 @@ result._meta.usage
 <Callout type="info">
   When the leading resolved system blocks have `providerCache: true`, the adapter automatically creates and reuses a
   Google `CachedContent` object for that prefix, then sends any uncached remainder as `systemInstruction`. The cache
-  manager is passed to the native chat profile as provider-owned dependencies, so the same planner is used for
+  resolver is passed to the native chat profile as provider-owned dependencies, so the same planner is used for
   `generate()` and `stream()` without moving cache lifecycle into core.
 </Callout>
 
 ```ts
-// Custom cache configuration
+// Custom CachedContent configuration
 const adapter = createGoogle(client, {
-  cache: { defaultTtlSeconds: 600, maxEntries: 100 },
+  cachedContent: { defaultTtlSeconds: 600, maxEntries: 100 },
 })
 
 // Disable caching entirely
-const adapter = createGoogle(client, { cache: false })
+const adapter = createGoogle(client, { cachedContent: false })
 
 // Skip or tune cache lifecycle for one request
 await adapter.generate(prompt, {
   model: 'gemini-2.5-flash',
-  extra: { cache: { ttlSeconds: 600 } },
+  extra: { cachedContent: { ttlSeconds: 600 } },
 })
 ```
 
 ### `adapter.generate(prompt, options)`
 
-| Field                            | Type                                           | Description                                                                         |
-| -------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `prompt`                         | `Prompt`                                       | The prompt to execute                                                               |
-| `options.model`                  | `string \| FallbackModel<string>`              | Model name or [`fallback()`](/docs/guides/routing/fallback) wrapper                 |
-| `options.input`                  | `object`                                       | Input values                                                                        |
-| `options.tools`                  | `Record<string, unknown>?`                     | Additional Crux tools to merge at call time                                         |
-| `options.toolMiddleware`         | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
-| `options.extra.tools`            | `GoogleFunctionDeclaration[]?`                 | Google-native function declarations that bypass Crux tool conversion                |
-| `options.temperature`            | `number?`                                      | Temperature                                                                         |
-| `options.maxOutputTokens`        | `number?`                                      | Max output tokens                                                                   |
-| `options.topP`                   | `number?`                                      | Top-p sampling                                                                      |
-| `options.topK`                   | `number?`                                      | Top-k sampling                                                                      |
-| `options.extra.cache.skip`       | `boolean?`                                     | Skip caching for this call                                                          |
-| `options.extra.cache.ttlSeconds` | `number?`                                      | TTL in seconds for a newly-created cache on this call                               |
+| Field                                    | Type                                           | Description                                                                         |
+| ---------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `prompt`                                 | `Prompt`                                       | The prompt to execute                                                               |
+| `options.model`                          | `string \| FallbackModel<string>`              | Model name or [`fallback()`](/docs/guides/routing/fallback) wrapper                 |
+| `options.input`                          | `object`                                       | Input values                                                                        |
+| `options.tools`                          | `Record<string, unknown>?`                     | Additional Crux tools to merge at call time                                         |
+| `options.toolMiddleware`                 | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
+| `options.extra.tools`                    | `GoogleFunctionDeclaration[]?`                 | Google-native function declarations that bypass Crux tool conversion                |
+| `options.temperature`                    | `number?`                                      | Temperature                                                                         |
+| `options.maxOutputTokens`                | `number?`                                      | Max output tokens                                                                   |
+| `options.topP`                           | `number?`                                      | Top-p sampling                                                                      |
+| `options.topK`                           | `number?`                                      | Top-k sampling                                                                      |
+| `options.extra.cachedContent.skip`       | `boolean?`                                     | Skip caching for this call                                                          |
+| `options.extra.cachedContent.ttlSeconds` | `number?`                                      | TTL in seconds for a newly-created cache on this call                               |
 
 **Returns:** normalized Crux generate result with:
 
@@ -110,20 +131,20 @@ await adapter.generate(prompt, {
 
 Stream a prompt execution.
 
-| Field                            | Type                                           | Description                                                                         |
-| -------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `prompt`                         | `Prompt`                                       | The prompt to execute                                                               |
-| `options.model`                  | `string \| FallbackModel<string>`              | Model name or [`fallback()`](/docs/guides/routing/fallback) wrapper                 |
-| `options.input`                  | `object`                                       | Input values                                                                        |
-| `options.tools`                  | `Record<string, unknown>?`                     | Additional Crux tools to merge at call time                                         |
-| `options.toolMiddleware`         | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
-| `options.extra.tools`            | `GoogleFunctionDeclaration[]?`                 | Google-native function declarations that bypass Crux tool conversion                |
-| `options.temperature`            | `number?`                                      | Temperature                                                                         |
-| `options.maxOutputTokens`        | `number?`                                      | Max output tokens                                                                   |
-| `options.topP`                   | `number?`                                      | Top-p sampling                                                                      |
-| `options.topK`                   | `number?`                                      | Top-k sampling                                                                      |
-| `options.extra.cache.skip`       | `boolean?`                                     | Skip caching for this call                                                          |
-| `options.extra.cache.ttlSeconds` | `number?`                                      | TTL in seconds for a newly-created cache on this call                               |
+| Field                                    | Type                                           | Description                                                                         |
+| ---------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `prompt`                                 | `Prompt`                                       | The prompt to execute                                                               |
+| `options.model`                          | `string \| FallbackModel<string>`              | Model name or [`fallback()`](/docs/guides/routing/fallback) wrapper                 |
+| `options.input`                          | `object`                                       | Input values                                                                        |
+| `options.tools`                          | `Record<string, unknown>?`                     | Additional Crux tools to merge at call time                                         |
+| `options.toolMiddleware`                 | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
+| `options.extra.tools`                    | `GoogleFunctionDeclaration[]?`                 | Google-native function declarations that bypass Crux tool conversion                |
+| `options.temperature`                    | `number?`                                      | Temperature                                                                         |
+| `options.maxOutputTokens`                | `number?`                                      | Max output tokens                                                                   |
+| `options.topP`                           | `number?`                                      | Top-p sampling                                                                      |
+| `options.topK`                           | `number?`                                      | Top-k sampling                                                                      |
+| `options.extra.cachedContent.skip`       | `boolean?`                                     | Skip caching for this call                                                          |
+| `options.extra.cachedContent.ttlSeconds` | `number?`                                      | TTL in seconds for a newly-created cache on this call                               |
 
 **Returns:** Google GenAI stream.
 
@@ -162,7 +183,7 @@ Create a `GenerateObjectFn` bound to a client and model.
 
 **Returns:** `GenerateObjectFn`
 
-This is a provider-native helper. It uses Google GenAI structured JSON output and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
+This is a provider-native helper. It uses Google GenAI structured JSON output and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
 
 ### `createGenerateTextFn(client, model)`
 
@@ -181,7 +202,7 @@ Create a dense Crux embedding backed by `client.models.embedContent()`.
 
 ```ts
 import { GoogleGenAI } from '@google/genai'
-import { embedding } from '@crux/google'
+import { embedding } from '@use-crux/google'
 
 const client = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY })
 
@@ -215,12 +236,14 @@ This helper is dense-only. Google's SDK returns token counts per embedded input 
 ```ts
 import type {
   CreateGoogleOptions,
-  GoogleCacheConfig,
+  GoogleCachedContentCallOptions,
+  GoogleCachedContentOptions,
+  GoogleCachedContentPort,
   GoogleEmbeddingConfig,
   GoogleExtra,
   GoogleFunctionDeclaration,
   GoogleRequest,
-} from '@crux/google'
+} from '@use-crux/google'
 ```
 
 ## Related
@@ -228,4 +251,4 @@ import type {
 - Guide: [Execution](/docs/guides/prompts/execution)
 - Guide: [Embeddings](/docs/guides/retrieval/embeddings)
 - Reference: [Prompts](/docs/reference/crux-core/prompts)
-- Reference: [@crux/ai (Vercel AI SDK)](/docs/reference/adapters/ai)
+- Reference: [@use-crux/ai (Vercel AI SDK)](/docs/reference/adapters/ai)

@@ -22,8 +22,8 @@ The result: a 10-skill agent costs ~10 lines of index upfront, and only pays for
 ## Quick Start
 
 ```ts
-import { skill, skillsSh } from '@crux/core/skill'
-import { prompt, agent, context } from '@crux/core'
+import { skill, skillsSh } from '@use-crux/core/skill'
+import { prompt, agent, context } from '@use-crux/core'
 
 // Inline — useful for short, app-specific instructions
 const tone = skill.inline({
@@ -48,7 +48,7 @@ const reviewer = agent({
 })
 ```
 
-That is the entire integration for adapter-based agents (`@crux/anthropic`, `@crux/openai`, `@crux/google`, `@crux/ai`). The index, the `LoadSkill`/`LoadReference` tools, and the re-resolution loop are all wired up by the resolver.
+That is the entire integration for adapter-based agents (`@use-crux/anthropic`, `@use-crux/openai`, `@use-crux/google`, `@use-crux/ai`). The index, the `LoadSkill`/`LoadReference` tools, and the re-resolution loop are all wired up by the resolver.
 
 ## How It Works Under the Hood
 
@@ -85,8 +85,8 @@ The skill content arrives as authoritative system context, not as a tool result 
 
 | Adapter                                           | How it works                                                                                                                    | Setup                                |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `@crux/anthropic`, `@crux/openai`, `@crux/google` | Executor intercepts `LoadSkill` mid-loop and re-resolves the system prompt                                                      | Add skills to `use`                  |
-| `@crux/ai` (Vercel AI SDK)                        | `wrapGenerate` middleware injects newly activated skills between steps                                                          | Add skills to `use`                  |
+| `@use-crux/anthropic`, `@use-crux/openai`, `@use-crux/google` | Executor intercepts `LoadSkill` mid-loop and re-resolves the system prompt                                                      | Add skills to `use`                  |
+| `@use-crux/ai` (Vercel AI SDK)                        | `wrapGenerate` middleware injects newly activated skills between steps                                                          | Add skills to `use`                  |
 | Convex Agent, Mastra, custom loops                | `createAgentSkillKit()` with a skill activation persistence port — see [Agent Frameworks](/docs/guides/skills/agent-frameworks) | Store/load `SkillActivationSnapshot` |
 
 ## The Escape Hatch
@@ -122,7 +122,7 @@ This exits the skill system entirely — no index entry, no `LoadSkill` tool, no
   />
   <Card
     title="API reference"
-    description="@crux/core/skill — full type signatures and instrumentation hooks."
+    description="@use-crux/core/skill — full type signatures and instrumentation hooks."
     href="/docs/reference/crux-core/skill"
   />
 </Cards>

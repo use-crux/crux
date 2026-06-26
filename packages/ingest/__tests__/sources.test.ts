@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resetRuntime, setRuntime } from '@crux/core'
+import { resetRuntime, setRuntime } from '@use-crux/core'
 import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow } from 'docx'
 import ExcelJS from 'exceljs'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -19,7 +19,7 @@ afterEach(async () => {
   }
 })
 
-describe('@crux/ingest structured sources', () => {
+describe('@use-crux/ingest structured sources', () => {
   it('textSource load yields result objects and documents yields plain documents', async () => {
     const source = textSource({
       namespace: 'kb',

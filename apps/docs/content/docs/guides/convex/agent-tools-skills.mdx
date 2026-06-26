@@ -8,14 +8,14 @@ description: Integrate Crux prompts, tools, blackboards, and skills with the Con
 Use the Convex profile imports when Crux runs through the Convex Agent component.
 
 ```ts
-import { createCruxConvex, prompt } from '@crux/convex'
-import { context } from '@crux/convex/context'
-import { memory, recentMessages, workingState } from '@crux/convex/memory'
-import { skill } from '@crux/convex/skill'
-import { tool } from '@crux/convex/tools'
+import { createCruxConvex, prompt } from '@use-crux/convex'
+import { context } from '@use-crux/convex/context'
+import { memory, recentMessages, workingState } from '@use-crux/convex/memory'
+import { skill } from '@use-crux/convex/skill'
+import { tool } from '@use-crux/convex/tools'
 ```
 
-`convexAgent()` is the high-level path. It keeps the Convex Agent call shape, but lets the Crux prompt define dynamic context, memory, skills, and tools.
+Use `convexAgent()` or `crux.convexAgent()` when Crux should own the profile-backed prompt lifecycle. It keeps the Convex Agent call shape, but lets the Crux prompt define dynamic context, memory, skills, and tools. Use the lower-level `Agent` facade when you want the normal `@convex-dev/agent` constructor and method shape with Crux tool/runtime propagation and observability.
 
 ## Complete Agent
 
@@ -24,11 +24,11 @@ Define normal Crux primitives from the Convex profile subpaths:
 ```ts title="convex/agent/support.ts"
 'use node'
 
-import { createCruxConvex, prompt } from '@crux/convex'
-import { context } from '@crux/convex/context'
-import { memory, recentMessages, workingState } from '@crux/convex/memory'
-import { skill } from '@crux/convex/skill'
-import { tool } from '@crux/convex/tools'
+import { createCruxConvex, prompt } from '@use-crux/convex'
+import { context } from '@use-crux/convex/context'
+import { memory, recentMessages, workingState } from '@use-crux/convex/memory'
+import { skill } from '@use-crux/convex/skill'
+import { tool } from '@use-crux/convex/tools'
 import { z } from 'zod'
 import { components } from '../_generated/api'
 
@@ -95,7 +95,7 @@ export const crux = createCruxConvex({
 export const supportAgent = crux.convexAgent({
   name: 'Support',
   prompt: supportPrompt,
-  model: languageModel,
+  languageModel,
 })
 ```
 
@@ -146,7 +146,7 @@ Use `prepare` when prompt input or runtime `use[]` entries must be derived from 
 export const supportAgent = crux.convexAgent({
   name: 'Support',
   prompt: supportPrompt,
-  model: languageModel,
+  languageModel,
   prepare: async ({ ctx, target, input, messages }) => {
     const account = await loadAccount(ctx, {
       userId: String(target.userId ?? ''),
@@ -197,7 +197,7 @@ Skills stay normal Crux `use[]` entries. Their blackboard/session bookkeeping is
 
 ## Tool Execution
 
-Use `tool()` from `@crux/convex/tools` for tools that need Convex runtime metadata:
+Use `tool()` from `@use-crux/convex/tools` for tools that need Convex runtime metadata:
 
 ```ts
 const searchProject = tool({
@@ -213,15 +213,15 @@ const searchProject = tool({
 })
 ```
 
-The public authoring shape follows `@crux/core/tools`. The only Convex-specific difference is the `execute()` argument: `{ input, ctx, target, runtime }`.
+The public authoring shape follows `@use-crux/core/tools`. The only Convex-specific difference is the `execute()` argument: `{ input, ctx, target, runtime }`.
 
 ## Manual Agent Setup
 
 Use `resolve()` when you need to assemble Convex Agent options manually.
 
 ```ts
-import { resolve } from '@crux/ai/agent'
-import { Agent, convexTools } from '@crux/convex/agent'
+import { resolve } from '@use-crux/ai/agent'
+import { Agent, convexTools } from '@use-crux/convex/agent'
 
 const resolved = await resolve(supportPrompt, {
   model: languageModel,
@@ -239,16 +239,16 @@ const agent = new Agent(components.agent, {
 })
 ```
 
-Manual setup is the escape hatch. Prefer `convexAgent()` when the Crux prompt owns memory, skills, and tools.
+Manual setup is the escape hatch for normal Convex Agent-shaped code. Prefer profile-backed `convexAgent()` when the Crux prompt owns memory, skills, and tools for every turn.
 
 `convexTools()` returns Convex Agent tools that are already Crux-observed. Pass them directly to `Agent`; do not pass them through `wrapConvexTool()` again. If a converted Crux tool throws, the original error is rethrown and the `tool.call` span receives normalized error evidence with `phase: "tool.execute"` and `errorKind: "execute_error"`.
 
 ## Direct Tools
 
-Create tools with `createTool()` from `@crux/convex/agent` or wrap existing Convex Agent tools with `wrapConvexTool()`. When a tool is passed through `Agent`, the object key is used as the devtools label; direct standalone tools can set `title`. Keep `description` model-facing and descriptive.
+Create tools with `createTool()` from `@use-crux/convex/agent` or wrap existing Convex Agent tools with `wrapConvexTool()`. When a tool is passed through `Agent`, the object key is used as the devtools label; direct standalone tools can set `title`. Keep `description` model-facing and descriptive.
 
 ```ts
-import { createTool } from '@crux/convex/agent'
+import { createTool } from '@use-crux/convex/agent'
 import { z } from 'zod'
 
 export const researchTool = createTool({
@@ -269,8 +269,8 @@ Readable tool names matter. If you wrap a tool, pass `{ name: 'research' }` so d
 Blackboards contribute Crux tools when resolved through prompts. With `convexAgent()`, those tools are discovered during prompt resolution and registered automatically. Convert them with `convexTools()` only when using manual setup:
 
 ```ts
-import { prompt } from '@crux/convex'
-import { convexTools } from '@crux/convex/agent'
+import { prompt } from '@use-crux/convex'
+import { convexTools } from '@use-crux/convex/agent'
 
 const board = createResearchBoard(ctx, threadId)
 const promptWithBoard = prompt({
@@ -308,8 +308,8 @@ const assistant = prompt({
 External agent frameworks still need a skill activation persistence port because they own the tool loop:
 
 ```ts
-import { createAgentSkillKit, convexSkillActivationPersistence } from '@crux/convex/skill'
-import { convexTools } from '@crux/convex/agent'
+import { createAgentSkillKit, convexSkillActivationPersistence } from '@use-crux/convex/skill'
+import { convexTools } from '@use-crux/convex/agent'
 
 const kit = await createAgentSkillKit(promptWithSkills, {
   target: { threadId },
@@ -323,8 +323,9 @@ On the turn where `LoadSkill` runs, the skill content is available as the tool r
 
 ## Best Practices
 
-- Prefer `convexAgent()` for Crux-native Convex Agent code.
-- Import mirrored primitives from `@crux/convex/*` in Convex files.
+- Prefer profile-backed `convexAgent()` when Crux should own prompt, memory, skills, and tools for the turn.
+- Use `Agent` when you want the normal Convex Agent constructor and generation method shape.
+- Import mirrored primitives from `@use-crux/convex/*` in Convex files.
 - Give direct tools explicit readable names.
 - Use `ctx.crux.runAction()` inside tools for child actions.
 - Let `convexAgent()` persist active skill ids unless you are using manual setup.

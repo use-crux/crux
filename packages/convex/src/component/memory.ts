@@ -1,7 +1,7 @@
 /**
  * Memory persistence functions for the crux Convex component.
  *
- * These provide the backing store for `cruxConvexStore({ component })`.
+ * These provide the backing store for the Convex store document contract.
  * Accessible from the host app via `components.crux.memory.*`.
  *
  * @module
@@ -88,7 +88,7 @@ export const remove = mutation({
  *
  * The component owns only Convex-native I/O concerns here: key-indexed range
  * selection, pagination, and page shaping. Decoded JSON filtering is handled by
- * the store-document policy module in `@crux/convex`.
+ * the store-document policy module in `@use-crux/convex`.
  */
 export const list = query({
   args: {
@@ -106,28 +106,29 @@ export const list = query({
       return { docs: [] }
     }
 
+    const lowerBound = cursor ?? prefix
     const query = ctx.db
       .query('memories')
       .withIndex(
         'by_key',
-        prefix
+        lowerBound || prefix
           ? (q) => {
               const upper = prefixUpperBound(prefix)
-              const lower = q.gte('key', prefix)
+              const lower = cursor ? q.gt('key', cursor) : q.gte('key', prefix)
               return upper === undefined ? lower : lower.lt('key', upper)
             }
           : undefined,
       )
       .order('asc')
 
-    const page = await query.paginate({
-      numItems,
-      cursor: cursor ?? null,
-    })
+    const docs = await query.take(numItems + 1)
+    const page = docs.slice(0, numItems)
+    const hasMore = docs.length > numItems
+    const last = page.at(-1)
 
     return {
-      docs: page.page,
-      ...(page.isDone ? {} : { cursor: page.continueCursor }),
+      docs: page,
+      ...(hasMore && last ? { cursor: last.key } : {}),
     }
   },
 })

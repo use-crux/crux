@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
  * Patterns are built by concatenation so this guard does not flag itself.
  */
 const STALE_NAMES: readonly string[] = [
-  '@crux/core/' + 'testing',
+  '@use-crux/core/' + 'testing',
   'evaluate' + 'Prompt',
   'flow' + 'Evaluation',
   'rag' + 'Evaluation',

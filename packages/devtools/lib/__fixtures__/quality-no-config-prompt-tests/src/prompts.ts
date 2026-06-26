@@ -1,4 +1,4 @@
-import { createPrompts, prompt } from '@crux/core'
+import { createPrompts, prompt } from '@use-crux/core'
 import { supportPolicy } from './contexts'
 
 export const answer = prompt({

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { resetRuntime } from '@crux/core'
+import { resetRuntime } from '@use-crux/core'
 import { withTelemetry } from '../index'
 import type { TraceSpan } from '../types'
 

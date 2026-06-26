@@ -1,5 +1,5 @@
 /**
- * Compile-time checks for the `@crux/ai` provider runtime export.
+ * Compile-time checks for the `@use-crux/ai` provider runtime export.
  */
 
 import { expectTypeOf } from 'vitest'
@@ -9,7 +9,7 @@ import type {
   ExecutorGenerateResult,
   ExecutorModelArg,
   ExecutorStreamHandle,
-} from '@crux/core/adapter'
+} from '@use-crux/core/adapter'
 import { aiSdkProviderRuntime } from '../index'
 import type { SdkLoopResultLike, SdkStreamResultLike } from '../src/executor'
 import type { AiSdkRuntimeExtensions } from '../src/extensions'

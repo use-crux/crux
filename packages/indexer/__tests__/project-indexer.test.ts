@@ -2,8 +2,8 @@ import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { ProjectDefinitionKind } from '@crux/core/project-index'
-import { indexProject, indexProjectAst, indexProjectRuntime, indexProjectSemantic, resolveProjectModel } from '../index'
+import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
+import { indexProject, indexProjectAst, indexProjectRuntime, indexProjectSemantic, resolveProjectModel } from '..'
 import { applyIndexPatch, emptyIndexPatchState } from '../indexer/patches'
 import { planIndexFiles } from '../indexer/incremental'
 import { staticDefinitionFiles } from '../indexer/files'
@@ -33,7 +33,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/writer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const writerPrompt = prompt({
           id: 'writer.prompt',
@@ -45,7 +45,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'evals/writer.eval.ts'),
       `
-        import { evaluate } from '@crux/core/quality'
+        import { evaluate } from '@use-crux/core/quality'
 
         export const writerEval = evaluate('writer-eval', {
           task: (input: { topic: string }) => input.topic,
@@ -100,7 +100,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/writer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const writerPrompt = prompt({
           id: 'writer.prompt',
@@ -136,7 +136,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'packages/app/src/prompt.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const appPrompt = prompt({
           id: 'app.prompt',
@@ -148,7 +148,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'packages/lib/src/prompt.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const libPrompt = prompt({
           id: 'lib.prompt',
@@ -188,7 +188,7 @@ describe('project indexer', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const writerPrompt = prompt({
           id: 'writer.profile',
@@ -226,7 +226,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'apps/web/src/prompt.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const webPrompt = prompt({
           id: 'web.prompt',
@@ -262,7 +262,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/prompts.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const draftEdit = prompt({
           id: 'draft-edit',
@@ -274,7 +274,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'evals/draft-edit.eval.ts'),
       `
-        import { evaluate } from '@crux/core/quality'
+        import { evaluate } from '@use-crux/core/quality'
 
         function deterministicDraftEdit(input: { instruction: string }) {
           return { summary: input.instruction }
@@ -315,7 +315,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/flows.ts'),
       `
-        import { flow } from '@crux/core'
+        import { flow } from '@use-crux/core'
 
         export const writerFlow = flow({
           name: 'writer',
@@ -326,7 +326,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'evals/writer.eval.ts'),
       `
-        import { evaluate } from '@crux/core/quality'
+        import { evaluate } from '@use-crux/core/quality'
 
         function deterministicWriterPipeline(input: { topic: string }) {
           return { draft: input.topic }
@@ -367,7 +367,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'routing.ts'),
       `
-        import { router } from '@crux/core/routing'
+        import { router } from '@use-crux/core/routing'
 
         export const badRouter = router({
           classify: () => 'cheap',
@@ -401,7 +401,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'dynamic-tools.ts'),
       `
-        import { context, prompt, tool } from '@crux/core'
+        import { context, prompt, tool } from '@use-crux/core'
         import { z } from 'zod'
 
         const searchDocs = tool({
@@ -460,7 +460,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/writer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const writer = prompt({
           id: 'writer',
@@ -472,7 +472,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
         export default config({})
       `,
     )
@@ -501,7 +501,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/huge-authored.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const huge = prompt({
           id: 'huge-authored',
@@ -530,7 +530,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config, prompt } from '@crux/core'
+        import { config, prompt } from '@use-crux/core'
 
         export const writerPrompt = prompt({
           id: 'writer.prompt',
@@ -563,7 +563,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config, prompt } from '@crux/core'
+        import { config, prompt } from '@use-crux/core'
 
         throw new Error('this config must not execute during AST indexing')
 
@@ -593,7 +593,7 @@ describe('project indexer', () => {
       join(root, 'runtime-source.ts'),
       `
         import { writeFileSync } from 'node:fs'
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         writeFileSync(${JSON.stringify(markerFile)}, 'imported')
 
@@ -621,7 +621,7 @@ describe('project indexer', () => {
       join(root, 'runtime-source.ts'),
       `
         import { writeFileSync } from 'node:fs'
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         writeFileSync(${JSON.stringify(markerFile)}, 'runtime')
 
@@ -658,7 +658,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config, prompt } from '@crux/core'
+        import { config, prompt } from '@use-crux/core'
 
         export const writerPrompt = prompt({
           id: 'writer.prompt',
@@ -710,11 +710,11 @@ describe('project indexer', () => {
     await mkdir(join(root, 'src'), { recursive: true })
     await writeFile(
       join(root, 'src/one.ts'),
-      `import { prompt } from '@crux/core'; export const one = prompt({ id: 'one' })`,
+      `import { prompt } from '@use-crux/core'; export const one = prompt({ id: 'one' })`,
     )
     await writeFile(
       join(root, 'src/two.ts'),
-      `import { prompt } from '@crux/core'; export const two = prompt({ id: 'two' })`,
+      `import { prompt } from '@use-crux/core'; export const two = prompt({ id: 'two' })`,
     )
 
     const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture', semanticBudget: { maxFiles: 1 } })
@@ -745,7 +745,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tool.ts'),
       `
-        import { createTool, tool } from '@crux/core'
+        import { createTool, tool } from '@use-crux/core'
         import { schema } from './index'
 
         export const writerTool = tool({
@@ -810,7 +810,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tool.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { recallEpisodesInputSchema } from './schema'
 
         export const recallEpisodes = tool({
@@ -906,7 +906,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/shared.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { z } from 'zod'
         import { NestedSchema } from './schema-fragments'
 
@@ -956,7 +956,7 @@ describe('project indexer', () => {
       join(root, 'src/app.ts'),
       `
         import { Agent } from '@convex-dev/agent'
-        import { context, prompt } from '@crux/core'
+        import { context, prompt } from '@use-crux/core'
         import { FORMAT_GUIDE, SYSTEM, promptBody, schema, tools, usage } from './barrel'
 
         export const writer = prompt({
@@ -1115,7 +1115,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/targets.ts'),
       `
-        import { agent, prompt, tool } from '@crux/core'
+        import { agent, prompt, tool } from '@use-crux/core'
         import { z } from 'zod'
 
         export const writerPrompt = prompt({
@@ -1151,7 +1151,7 @@ describe('project indexer', () => {
       join(root, 'src/app.ts'),
       `
         import { Agent } from '@convex-dev/agent'
-        import { flow, guardrail, parallel, pipeline } from '@crux/core'
+        import { flow, guardrail, parallel, pipeline } from '@use-crux/core'
         import { agentPrompt, importedAgent, searchTool } from './barrel'
 
         const component = {} as never
@@ -1379,8 +1379,8 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/app.ts'),
       `
-        import { flow, tool, workspace } from '@crux/core'
-        import { memory, workingState } from '@crux/core/memory'
+        import { flow, tool, workspace } from '@use-crux/core'
+        import { memory, workingState } from '@use-crux/core/memory'
         import { args, mounts, params, result, stateSchema } from './barrel'
 
         export const writerTool = tool({
@@ -1496,12 +1496,12 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/resources.ts'),
       `
-        import { workspace } from '@crux/core'
-        import { blackboard } from '@crux/core/agent'
-        import { evaluate } from '@crux/core/quality'
-        import { memory, workingState } from '@crux/core/memory'
-        import { retriever } from '@crux/core/retrieval'
-        import { llmJudge } from '@crux/core/scoring'
+        import { workspace } from '@use-crux/core'
+        import { blackboard } from '@use-crux/core/agent'
+        import { evaluate } from '@use-crux/core/quality'
+        import { memory, workingState } from '@use-crux/core/memory'
+        import { retriever } from '@use-crux/core/retrieval'
+        import { llmJudge } from '@use-crux/core/scoring'
         import { z } from 'zod'
 
         const state = workingState({ id: 'state', schema: z.object({ status: z.string().optional() }) })
@@ -1532,7 +1532,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/app.ts'),
       `
-        import { flow, tool } from '@crux/core'
+        import { flow, tool } from '@use-crux/core'
         import { runDraftAccess } from './barrel'
 
         export const writerTool = tool({
@@ -1650,9 +1650,9 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/resources.ts'),
       `
-        import { workspace } from '@crux/core'
-        import { blackboard } from '@crux/core/agent'
-        import { memory, workingState } from '@crux/core/memory'
+        import { workspace } from '@use-crux/core'
+        import { blackboard } from '@use-crux/core/agent'
+        import { memory, workingState } from '@use-crux/core/memory'
         import { z } from 'zod'
 
         const writeOnlyState = workingState({ id: 'state', schema: z.object({ draft: z.string().optional() }) })
@@ -1685,7 +1685,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tools.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { z } from 'zod'
         import { persistAndReadBack, persistWithoutRead } from './barrel'
 
@@ -1779,7 +1779,7 @@ describe('project indexer', () => {
       await writeFile(
         join(root, 'crux.config.ts'),
         `
-        import { config, context, prompt, tool } from '@crux/core'
+        import { config, context, prompt, tool } from '@use-crux/core'
         import { z } from 'zod'
 
         export const brandVoice = context({
@@ -1816,7 +1816,7 @@ describe('project indexer', () => {
       await writeFile(
         join(root, 'evals/writer.eval.ts'),
         `
-        import { evaluate } from '@crux/core/quality'
+        import { evaluate } from '@use-crux/core/quality'
         import { writerPrompt } from '../crux.config'
 
         export const writerEval = evaluate('writer-eval', {
@@ -1944,7 +1944,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'broken.prompt.ts'),
       `
-        import { context, prompt } from '@crux/core'
+        import { context, prompt } from '@use-crux/core'
         import { z } from 'zod'
 
         throw new Error('top-level side effect')
@@ -1976,7 +1976,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'broken.eval.ts'),
       `
-        import { evaluate } from '@crux/core/quality'
+        import { evaluate } from '@use-crux/core/quality'
 
         throw new Error('eval import side effect')
 
@@ -2069,7 +2069,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'prompts/draft.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const draftEdit = prompt({ id: 'draft-edit', prompt: 'Edit draft' })
         export const seoEdit = prompt({ id: 'seo-edit', prompt: 'SEO edit' })
@@ -2078,7 +2078,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'prompts/agent.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const karylaAgent = prompt({ id: 'karyla-agent', prompt: 'Agent system' })
       `,
@@ -2086,7 +2086,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'prompts/contexts/base.ts'),
       `
-        import { context } from '@crux/core'
+        import { context } from '@use-crux/core'
 
         export const currentDate = context({ id: 'current-date', system: 'Today' })
         export const proseMirrorSchema = context({ id: 'prosemirror-schema', system: 'Schema' })
@@ -2096,7 +2096,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'prompts/index.ts'),
       `
-        import { createPrompts, createContexts } from '@crux/core'
+        import { createPrompts, createContexts } from '@use-crux/core'
         import { draftEdit, seoEdit } from './draft'
         import { karylaAgent as systemPrompt } from './agent'
         import { currentDate, proseMirrorSchema, brand } from './contexts/base'
@@ -2133,7 +2133,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/contexts.ts'),
       `
-        import { context } from '@crux/core'
+        import { context } from '@use-crux/core'
 
         export const currentDate = context({
           id: 'current-date',
@@ -2149,7 +2149,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/prompts.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         import { currentDate, proseMirrorSchema } from './contexts'
 
         const sharedContexts = [currentDate, proseMirrorSchema]
@@ -2188,7 +2188,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'index.ts'),
       `
-        import { createContexts, createPrompts, context, prompt } from '@crux/core'
+        import { createContexts, createPrompts, context, prompt } from '@use-crux/core'
         import { z } from 'zod'
 
         const unknownKey = 'dynamic'
@@ -2271,7 +2271,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tools.ts'),
       `
-        import { createTool } from '@crux/core/tool'
+        import { createTool } from '@use-crux/core/tool'
         import { z } from 'zod'
         import { importedExecute, importedWriterSchema } from './shared'
 
@@ -2406,12 +2406,12 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/feature.ts'),
       `
-        import { context, prompt } from '@crux/core'
-        import { flow } from '@crux/core/flow'
-        import { blackboard } from '@crux/core/agent/blackboard'
-        import { guardrail } from '@crux/core/safety/guardrail'
-        import { llmJudge } from '@crux/core/scoring'
-        import { createTool } from '@crux/core/tool'
+        import { context, prompt } from '@use-crux/core'
+        import { flow } from '@use-crux/core/flow'
+        import { blackboard } from '@use-crux/core/agent/blackboard'
+        import { guardrail } from '@use-crux/core/safety/guardrail'
+        import { llmJudge } from '@use-crux/core/scoring'
+        import { createTool } from '@use-crux/core/tool'
         import { z } from 'zod'
 
         const notes = blackboard({ id: 'notes' })
@@ -2585,21 +2585,21 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/feature.ts'),
       `
-        import { context, prompt } from '@crux/core'
-        import { agent } from '@crux/core/agent'
-        import { blackboard } from '@crux/core/agent/blackboard'
-        import { flow } from '@crux/core/flow'
-        import { fallback } from '@crux/core/routing'
-        import { flow as cruxFlow } from '@crux/convex/server'
-        import { Agent } from '@crux/convex/agent'
-        import { memory, workingState } from '@crux/core/memory'
-        import { retriever, retrievalPipeline } from '@crux/core/retrieval'
-        import { constraint } from '@crux/core/safety/constraint'
-        import { guardrail } from '@crux/core/safety/guardrail'
-        import { llmJudge } from '@crux/core/scoring'
-        import { evaluate } from '@crux/core/quality'
-        import { createTool } from '@crux/core/tool'
-        import type { FlowToolDef } from '@crux/core'
+        import { context, prompt } from '@use-crux/core'
+        import { agent } from '@use-crux/core/agent'
+        import { blackboard } from '@use-crux/core/agent/blackboard'
+        import { flow } from '@use-crux/core/flow'
+        import { fallback } from '@use-crux/core/routing'
+        import { flow as cruxFlow } from '@use-crux/convex/server'
+        import { Agent } from '@use-crux/convex/agent'
+        import { memory, workingState } from '@use-crux/core/memory'
+        import { retriever, retrievalPipeline } from '@use-crux/core/retrieval'
+        import { constraint } from '@use-crux/core/safety/constraint'
+        import { guardrail } from '@use-crux/core/safety/guardrail'
+        import { llmJudge } from '@use-crux/core/scoring'
+        import { evaluate } from '@use-crux/core/quality'
+        import { createTool } from '@use-crux/core/tool'
+        import type { FlowToolDef } from '@use-crux/core'
         import { z } from 'zod'
 
         export const brand = context({ id: 'brand', system: 'Brand voice' })
@@ -3472,8 +3472,8 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/convex-agent.ts'),
       `
-        import { convexAgent, createCruxConvex, prompt } from '@crux/convex'
-        import { tool } from '@crux/convex/tools'
+        import { convexAgent, createCruxConvex, prompt } from '@use-crux/convex'
+        import { tool } from '@use-crux/convex/tools'
         import { z } from 'zod'
         import { components } from './_generated/api'
 
@@ -3619,11 +3619,11 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/runtime-tools.ts'),
       `
-        import { context, prompt } from '@crux/convex'
-        import type { ConvexAgentPrepareArgs, ConvexAgentPrepareResult } from '@crux/convex/agent'
-        import { memory } from '@crux/convex/memory'
-        import { tool } from '@crux/convex/tools'
-        import { blackboard, retriever } from '@crux/core'
+        import { context, prompt } from '@use-crux/convex'
+        import type { ConvexAgentPrepareArgs, ConvexAgentPrepareResult } from '@use-crux/convex/agent'
+        import { memory } from '@use-crux/convex/memory'
+        import { tool } from '@use-crux/convex/tools'
+        import { blackboard, retriever } from '@use-crux/core'
         import { z } from 'zod'
 
         export const karylaAgent = prompt({ id: 'karyla-agent', prompt: 'Help.' })
@@ -3752,7 +3752,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config, tool } from '@crux/core'
+        import { config, tool } from '@use-crux/core'
 
         export const searchDocs = tool({
           name: 'searchDocs',
@@ -3810,7 +3810,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
 
         export default config({
           lint: { profile: 'strict' },
@@ -3820,7 +3820,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'static-contracts.ts'),
       `
-        import { context, createTool, flow, prompt } from '@crux/core'
+        import { context, createTool, flow, prompt } from '@use-crux/core'
         import { z } from 'zod'
 
         function makeSchema() {
@@ -3928,7 +3928,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'agents.ts'),
       `
-        import { agent, prompt } from '@crux/core'
+        import { agent, prompt } from '@use-crux/core'
 
         export const triagePrompt = prompt({
           id: 'triage-prompt',
@@ -3970,8 +3970,8 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { agent } from '@crux/core/agent'
-        import { consensus } from '@crux/core/compositions'
+        import { agent } from '@use-crux/core/agent'
+        import { consensus } from '@use-crux/core/compositions'
 
         const writer = agent({ id: 'writer', instructions: 'Write.' })
         const reviewer = agent({ id: 'reviewer', instructions: 'Review.' })
@@ -4008,7 +4008,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'routing.ts'),
       `
-        import { router } from '@crux/core/routing'
+        import { router } from '@use-crux/core/routing'
 
         const cheapModel = { modelId: 'cheap' }
         const preciseModel = { modelId: 'precise' }
@@ -4101,7 +4101,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'inline-routing.ts'),
       `
-        import { cascade, router } from '@crux/core/routing'
+        import { cascade, router } from '@use-crux/core/routing'
 
         const fastModel = { modelId: 'fast' }
         const creativeModel = { modelId: 'creative' }
@@ -4210,7 +4210,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'routing.ts'),
       `
-        import { cascade, fallback } from '@crux/core/routing'
+        import { cascade, fallback } from '@use-crux/core/routing'
 
         const cheapModel = { modelId: 'cheap' }
         const strongModel = { modelId: 'strong' }
@@ -4329,8 +4329,8 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'models.ts'),
       `
-        import { agent, prompt } from '@crux/core'
-        import { cascade, fallback, router } from '@crux/core/routing'
+        import { agent, prompt } from '@use-crux/core'
+        import { cascade, fallback, router } from '@use-crux/core/routing'
 
         export const writerPrompt = prompt({ id: 'writer-prompt', input: {}, prompt: () => 'write' })
         export const writerAgent = agent({ id: 'writer-agent', prompt: writerPrompt })
@@ -4370,7 +4370,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'app.ts'),
       `
-        import { agent, flow, parallel } from '@crux/core'
+        import { agent, flow, parallel } from '@use-crux/core'
         import { semanticRouter } from './models'
 
         export const orchestrator = agent({
@@ -4485,7 +4485,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'routing.ts'),
       `
-        import { cascade, fallback, router } from '@crux/core/routing'
+        import { cascade, fallback, router } from '@use-crux/core/routing'
 
         export const badRouter = router({
           classify: () => 'cheap',
@@ -4538,7 +4538,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
 
         export default config({
           lint: { profile: 'off' },
@@ -4563,9 +4563,9 @@ describe('project indexer', () => {
       join(root, 'src/memory.ts'),
       `
         import { z } from 'zod'
-        import { blackboard } from '@crux/core/agent'
-        import { episodes, facts, memory, workingState } from '@crux/core/memory'
-        import { cruxConvexStore } from '@crux/convex'
+        import { blackboard } from '@use-crux/core/agent'
+        import { episodes, facts, memory, workingState } from '@use-crux/core/memory'
+        import { cruxConvexStore } from '@use-crux/convex'
 
         const threadBlackboardSchema = z.object({
           decisions: z.array(z.string()).default([]),
@@ -4696,7 +4696,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tools.ts'),
       `
-        import { createTool } from '@crux/core/tool'
+        import { createTool } from '@use-crux/core/tool'
 
         // crux-lint-disable-next-line tool.missing_input_schema -- generated external adapter
         export const ignoredTool = createTool({ name: 'ignoredTool', description: 'No schema' })
@@ -4735,7 +4735,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/__tests__/agentContexts.test.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         const testPrompt = prompt({ id: 'test-only', prompt: 'Only for a unit test' })
       `,
     )
@@ -4752,11 +4752,11 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/factory.ts'),
       `
-        import { prompt, workspace } from '@crux/core'
-        import { agent } from '@crux/core/agent'
-        import { flow } from '@crux/core/flow'
-        import { parallel, pipeline, swarm, consensus } from '@crux/core/agent'
-        import { createTool } from '@crux/core/tool'
+        import { prompt, workspace } from '@use-crux/core'
+        import { agent } from '@use-crux/core/agent'
+        import { flow } from '@use-crux/core/flow'
+        import { parallel, pipeline, swarm, consensus } from '@use-crux/core/agent'
+        import { createTool } from '@use-crux/core/tool'
 
         export const writerPrompt = prompt({ id: 'writer', prompt: 'Write' })
         export const searchDocs = createTool({ name: 'searchDocs', description: 'Search docs' })
@@ -4849,14 +4849,14 @@ describe('project indexer', () => {
       join(root, 'src/import-safe.agent.ts'),
       `
         import { z } from 'zod'
-        import { context, prompt } from '@crux/core'
-        import { agent, blackboard } from '@crux/core/agent'
-        import { flow } from '@crux/core/flow'
-        import { memory } from '@crux/core/memory'
-        import { retriever, retrievalPipeline, retrievalStage } from '@crux/core/retrieval'
-        import { constraint } from '@crux/core/safety'
-        import { guardrail } from '@crux/core/safety'
-        import { llmJudge } from '@crux/core/scoring'
+        import { context, prompt } from '@use-crux/core'
+        import { agent, blackboard } from '@use-crux/core/agent'
+        import { flow } from '@use-crux/core/flow'
+        import { memory } from '@use-crux/core/memory'
+        import { retriever, retrievalPipeline, retrievalStage } from '@use-crux/core/retrieval'
+        import { constraint } from '@use-crux/core/safety'
+        import { guardrail } from '@use-crux/core/safety'
+        import { llmJudge } from '@use-crux/core/scoring'
 
         export const brand = context({ id: 'brand', system: 'Brand voice' })
         export const safeTone = constraint({ name: 'safe-tone', severity: 'assert', check: () => ({ pass: true }) })
@@ -5019,7 +5019,7 @@ describe('project indexer', () => {
       await writeFile(
         join(root, 'crux.config.ts'),
         `
-          import { config, prompt } from '@crux/core'
+          import { config, prompt } from '@use-crux/core'
           export const writer = prompt({ id: 'writer', prompt: 'Write' })
           export default config({})
         `,
@@ -5075,14 +5075,14 @@ describe('project indexer', () => {
     await writeFile(
       dependencyFile,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer', prompt: 'Write' })
       `,
     )
     await writeFile(
       indexFile,
       `
-        import { createPrompts } from '@crux/core'
+        import { createPrompts } from '@use-crux/core'
         import { writer } from './prompt'
         import { z } from 'zod'
         export const prompts = createPrompts({ writer })
@@ -5118,14 +5118,14 @@ describe('project indexer', () => {
     await writeFile(
       dependencyFile,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer', prompt: 'Write' })
       `,
     )
     await writeFile(
       indexFile,
       `
-        import { createPrompts } from '@crux/core'
+        import { createPrompts } from '@use-crux/core'
         import { writer } from '@/prompts/writer'
         export const prompts = createPrompts({ agent: { writer } })
       `,
@@ -5149,14 +5149,14 @@ describe('project indexer', () => {
     await writeFile(
       dependencyFile,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer', prompt: 'Write' })
       `,
     )
     await writeFile(
       indexFile,
       `
-        import { createPrompts } from '@crux/core'
+        import { createPrompts } from '@use-crux/core'
         import { writer } from './prompt'
         export const prompts = createPrompts({ writer })
       `,
@@ -5186,14 +5186,14 @@ describe('project indexer', () => {
     await writeFile(
       dependencyFile,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer-v1', prompt: 'Write' })
       `,
     )
     await writeFile(
       indexFile,
       `
-        import { createPrompts } from '@crux/core'
+        import { createPrompts } from '@use-crux/core'
         import { writer } from './prompt'
         export const prompts = createPrompts({ writer })
       `,
@@ -5203,7 +5203,7 @@ describe('project indexer', () => {
     await writeFile(
       dependencyFile,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer-v2', prompt: 'Write' })
       `,
     )
@@ -5251,7 +5251,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tool.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { ToolParams } from './contracts'
         export const searchDocs = tool({ name: 'searchDocs', parameters: ToolParams })
       `,

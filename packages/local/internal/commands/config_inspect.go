@@ -16,9 +16,10 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
+	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/cli"
+	"github.com/use-crux/crux/packages/local/internal/commandui"
 	"github.com/use-crux/crux/packages/local/internal/output"
-	"github.com/use-crux/crux/packages/local/internal/server"
 )
 
 type configInspectOptions struct {
@@ -120,7 +121,7 @@ func resolveProjectConfigWithProgress(
 		return resolveProjectConfigForInspect(ctx, root, configPath, projectName)
 	}
 
-	frames := []rune(spinnerFrames)
+	frames := []rune(commandui.SpinnerFrames)
 	done := make(chan struct{})
 	stopped := make(chan struct{})
 	go func() {
@@ -151,7 +152,7 @@ func inspectProjectConfigWithWorker(
 	configPath string,
 	projectName string,
 ) (json.RawMessage, error) {
-	worker := server.NewProjectIndexWorker("")
+	worker := assets.NewEmbeddedProjectIndexer("")
 	defer worker.Close()
 
 	if _, ok := ctx.Deadline(); !ok {
@@ -175,7 +176,7 @@ func writePrettyJSON(out io.Writer, raw json.RawMessage) error {
 	return err
 }
 
-// ── Decoded effective-config shape (mirrors @crux/indexer ProjectConfigInspect) ──
+// ── Decoded effective-config shape (mirrors @use-crux/indexer ProjectConfigInspect) ──
 
 type configInspect struct {
 	Root          string                     `json:"root"`
@@ -241,6 +242,7 @@ type configExperimentalInspect struct {
 
 type configExperimentalIndexerInspect struct {
 	Native       configSetting `json:"native"`
+	NativeAst    configSetting `json:"nativeAst"`
 	NativeEngine configSetting `json:"nativeEngine"`
 	TSServerPath configSetting `json:"tsserverPath"`
 }
@@ -248,6 +250,7 @@ type configExperimentalIndexerInspect struct {
 type configObservabilityInspect struct {
 	Enabled   configSetting `json:"enabled"`
 	ServerURL configSetting `json:"serverUrl"`
+	Token     configSetting `json:"token"`
 	Transport configSetting `json:"transport"`
 }
 
@@ -348,6 +351,7 @@ func printConfigInspect(io *output.IO, raw json.RawMessage) error {
 	fmt.Fprintln(out)
 	printConfigDomain(io, "experimental:", []configRow{
 		settingRow(io, "indexer.native", model.Experimental.Indexer.Native),
+		settingRow(io, "indexer.nativeAst", model.Experimental.Indexer.NativeAst),
 		settingRow(io, "indexer.nativeEngine", model.Experimental.Indexer.NativeEngine),
 		pathSettingRow(io, "indexer.tsserverPath", model.Experimental.Indexer.TSServerPath, root),
 	})
@@ -357,6 +361,7 @@ func printConfigInspect(io *output.IO, raw json.RawMessage) error {
 	printConfigDomain(io, "observability:", []configRow{
 		settingRow(io, "enabled", model.Observability.Enabled),
 		settingRow(io, "serverUrl", model.Observability.ServerURL),
+		settingRow(io, "token", model.Observability.Token),
 		settingRow(io, "transport", model.Observability.Transport),
 	})
 

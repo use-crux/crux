@@ -135,7 +135,7 @@ function approxSize(value: unknown): number {
  *   inputSchema: ResearchResultSchema,
  *   outputSchema: WriterContextSchema,
  *   transform: (input) => ({ ... }),
- *   store: cruxConvexStore({ ctx, fns: { ... } }),
+ *   store: cruxDocuments.store(ctx),
  * })
  * // Producer:
  * await handoff.send(rawResults)

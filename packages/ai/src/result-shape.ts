@@ -10,7 +10,7 @@
  * @module
  */
 
-import type { AdapterResponse } from '@crux/core/adapter'
+import type { AdapterResponse } from '@use-crux/core/adapter'
 import { normalizeUsage, type SdkUsageLike } from './meta'
 
 /** Structural shape of an AI SDK result that can be projected for core. */

@@ -20,7 +20,7 @@ import {
   type SourceRefBuilder,
   type IndexDependency,
 } from '../extensions'
-import type { ProjectDefinitionKind } from '@crux/core/project-index'
+import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
 
 // @ts-expect-error Registry construction is compiler-internal, not part of the public extension authoring barrel.
 import { createExtensionRegistry } from '../extensions'
@@ -120,7 +120,7 @@ type CopiedDefinition = Expect<Equal<typeof copiedDefinition, ExtractedDefinitio
 const pattern = callPattern({ name: 'defineTool', importFrom: ['@acme/tools'], configArg: 1 })
 type CallPattern = Expect<Equal<typeof pattern.kind, 'call'>>
 
-const constructorPattern = newPattern({ name: 'Agent', importFrom: ['@crux/core'] })
+const constructorPattern = newPattern({ name: 'Agent', importFrom: ['@use-crux/core'] })
 type ConstructorPattern = Expect<Equal<typeof constructorPattern.kind, 'new'>>
 
 const extension = {

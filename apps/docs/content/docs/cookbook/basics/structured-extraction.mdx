@@ -10,7 +10,7 @@ This recipe shows the canonical structured-output pattern: define a Zod schema, 
 - `prompt()` with `output: z.object({...})`
 - `validationRetry` — text-repair + auto-retry on Zod-parse failure
 - Optional: `constraint()` for business-rule validation
-- `@crux/ai` `generate()` — the Vercel AI SDK adapter
+- `@use-crux/ai` `generate()` — the Vercel AI SDK adapter
 
 ## When to reach for this pattern
 
@@ -23,8 +23,8 @@ This recipe shows the canonical structured-output pattern: define a Zod schema, 
 ### `lib/ai/extract.ts`
 
 ```ts
-import { prompt } from '@crux/core'
-import { generate } from '@crux/ai'
+import { prompt } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
@@ -101,7 +101,7 @@ const ticket = await classify(`
 `validationRetry` recovers from schema failures. To enforce *semantic* rules — "summary must mention the affected area" — layer in a constraint:
 
 ```ts
-import { constraint } from '@crux/core/safety'
+import { constraint } from '@use-crux/core/safety'
 
 const summaryMentionsArea = constraint<typeof TicketSchema>({
   name: 'summary-mentions-area',
@@ -146,7 +146,7 @@ for await (const partial of partialObjectStream) {
 For high-volume extraction, start with a cheap model and `fallback()` to a stronger one when validation exhausts:
 
 ```ts
-import { fallback } from '@crux/core'
+import { fallback } from '@use-crux/core'
 
 const model = fallback(
   openai('gpt-4o-mini'),

@@ -1,7 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { deserialize, serialize } from 'node:v8'
-import ts from 'typescript'
 import {
   cacheFileForIdentity,
   SEMANTIC_COMPILER_OPTIONS_ID,
@@ -15,11 +14,15 @@ import {
   semanticEvidenceBatchesFromFacts,
   type SemanticEvidenceBatch,
   type SemanticEvidenceBatchSource,
-} from './semantic/evidence'
-import { semanticIndexEvidenceBatches } from './semantic/facts'
-import { measureSemanticTimingAsync, type SemanticIndexInstrumentation } from './semantic/instrumentation'
+} from './semantic/evidence/projection'
+import { semanticIndexEvidenceBatches } from './semantic/evidence/facts'
+import {
+  measureSemanticTimingAsync,
+  type SemanticIndexInstrumentation,
+  type SemanticIndexTimingName,
+} from './semantic/instrumentation'
 import { DEFAULT_SEMANTIC_PREFLIGHT_BUDGET } from './semantic/preflight'
-import type { SemanticBackendIdentity } from './semantic/service'
+import type { SemanticBackendIdentity, SemanticCompilerRuntimeIdentity } from './semantic/service'
 import { semanticSourceProfile, type SemanticSourceProfile } from './semantic/source-profile'
 
 type ConfigFileHash = { readonly file: string; readonly sourceHash: string }
@@ -40,6 +43,8 @@ export interface SemanticIndexFactsCacheOptions {
   readonly sourceProfile?: SemanticSourceProfile
   /** Backend identity that owns the semantic facts. */
   readonly backendIdentity?: SemanticBackendIdentity
+  /** Compiler runtime identity that owns semantic project state. */
+  readonly compilerRuntime?: SemanticCompilerRuntimeIdentity
   /** Optional timing hook for semantic cache and analyzer work. */
   readonly instrumentation?: SemanticIndexInstrumentation
   /** Durable fact-cache behavior. Defaults to `read-write`. */
@@ -68,27 +73,34 @@ export async function* semanticIndexEvidenceBatchesCached(
       dependencyClosure: options.dependencyClosure,
       maxFiles: DEFAULT_SEMANTIC_PREFLIGHT_BUDGET.maxDependencyClosureFiles,
     }))
-  const cacheInput = await semanticCacheKeyInput(root, sourceProfile, options.backendIdentity)
+  const cacheInput = await semanticCacheKeyInput(root, sourceProfile, options.backendIdentity, options.compilerRuntime)
   const cacheIdentity = cacheInput ? sha256(JSON.stringify(cacheInput)) : undefined
   const produceEvidence =
     options.produceEvidence ??
     (() => semanticIndexEvidenceBatches(root, files, { instrumentation: options.instrumentation }))
 
+  if (cacheMode === 'disabled') {
+    emitSemanticCacheOutcome(options.instrumentation, 'semantic.cache.disabled')
+    yield* produceEvidence({ cacheIdentity })
+    return
+  }
+
   if (!cacheInput) {
+    emitSemanticCacheOutcome(options.instrumentation, 'semantic.cache.unkeyed')
     yield* produceEvidence({})
     return
   }
 
   const cacheFile = cacheFileForIdentity(root, SEMANTIC_FACTS_CACHE_EPOCH, cacheInput, 'bin')
-  if (cacheMode === 'read-write') {
-    const cached = await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.read', () =>
-      readCache(cacheFile),
-    )
-    if (cached) {
-      yield* semanticEvidenceBatchesFromFacts(cached)
-      return
-    }
+  const cached = await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.read', () =>
+    readCache(cacheFile),
+  )
+  if (cached) {
+    emitSemanticCacheOutcome(options.instrumentation, 'semantic.cache.hit')
+    yield* semanticEvidenceBatchesFromFacts(cached)
+    return
   }
+  emitSemanticCacheOutcome(options.instrumentation, 'semantic.cache.miss')
 
   const emitted: SemanticEvidenceBatch[] = []
   for await (const batch of produceEvidence({ cacheIdentity })) {
@@ -96,22 +108,19 @@ export async function* semanticIndexEvidenceBatchesCached(
     yield batch
   }
   const facts = await collectProjectedSemanticEvidence(emitted)
-  if (cacheMode === 'read-write') {
-    await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.write', () =>
-      writeCache(cacheFile, facts),
-    )
-  }
+  await measureSemanticTimingAsync(options.instrumentation, 'semantic.cache.write', () => writeCache(cacheFile, facts))
 }
 
 async function semanticCacheKeyInput(
   root: string,
   sourceProfile: SemanticSourceProfile,
   backendIdentity: SemanticBackendIdentity | undefined,
+  compilerRuntime: SemanticCompilerRuntimeIdentity | undefined,
 ): Promise<
   | {
       version: string
       backend: SemanticBackendIdentity
-      typescriptVersion: string
+      compilerRuntime: SemanticCompilerRuntimeIdentity
       compilerOptionsVersion: string
       root: string
       files: Array<{ file: string; sourceHash: string }>
@@ -120,11 +129,14 @@ async function semanticCacheKeyInput(
   | undefined
 > {
   try {
-    if (!sourceProfile.complete || sourceProfile.files.length !== sourceProfile.dependencyClosure.length) return undefined
-    const fileInputs = sourceProfile.files.map((file) => ({
-      file: relative(root, file.file).replace(/\\/g, '/'),
-      sourceHash: file.sourceHash,
-    }))
+    if (!sourceProfile.complete || sourceProfile.files.length !== sourceProfile.dependencyClosure.length)
+      return undefined
+    const fileInputs = sourceProfile.files
+      .map((file) => ({
+        file: relative(root, resolve(root, file.file)).replace(/\\/g, '/'),
+        sourceHash: file.sourceHash,
+      }))
+      .sort(compareCacheFileInputs)
 
     const configFiles: ConfigFileHash[] = (
       await Promise.all(
@@ -141,11 +153,12 @@ async function semanticCacheKeyInput(
         }),
       )
     ).filter((file): file is ConfigFileHash => Boolean(file))
+    configFiles.sort(compareCacheFileInputs)
 
     return {
       version: SEMANTIC_FACTS_CACHE_EPOCH,
       backend: backendIdentity ?? { name: 'typescript', version: 'v1' },
-      typescriptVersion: ts.version,
+      compilerRuntime: compilerRuntime ?? defaultSemanticCompilerRuntimeIdentity(backendIdentity),
       compilerOptionsVersion: SEMANTIC_COMPILER_OPTIONS_ID,
       root,
       files: fileInputs,
@@ -154,6 +167,18 @@ async function semanticCacheKeyInput(
   } catch {
     return undefined
   }
+}
+
+function defaultSemanticCompilerRuntimeIdentity(
+  backendIdentity: SemanticBackendIdentity | undefined,
+): SemanticCompilerRuntimeIdentity {
+  return backendIdentity
+    ? { name: backendIdentity.name, version: backendIdentity.version }
+    : { name: 'typescript', version: 'v1' }
+}
+
+function compareCacheFileInputs(left: ConfigFileHash, right: ConfigFileHash): number {
+  return left.file.localeCompare(right.file)
 }
 
 async function readCache(file: string): Promise<IndexPatchFacts | undefined> {
@@ -194,4 +219,15 @@ function isIndexPatchFacts(value: unknown): value is IndexPatchFacts {
 
 function arrayOrMissing(value: unknown): boolean {
   return value === undefined || Array.isArray(value)
+}
+
+function emitSemanticCacheOutcome(
+  instrumentation: SemanticIndexInstrumentation | undefined,
+  name: SemanticIndexTimingName,
+): void {
+  try {
+    instrumentation?.onTiming?.({ name, durationMs: 0 })
+  } catch {
+    // Cache outcome counters are diagnostic-only and must not affect indexing.
+  }
 }

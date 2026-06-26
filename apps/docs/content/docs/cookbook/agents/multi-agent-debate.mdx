@@ -9,7 +9,7 @@ This recipe runs N agents in parallel on the same question, each taking a differ
 
 - `agent()` per stance
 - `blackboard()` for shared typed state across agents
-- `createConsensus()` from `@crux/core/agent` for parallel voting + quorum
+- `createConsensus()` from `@use-crux/core/agent` for parallel voting + quorum
 
 ## When to reach for this pattern
 
@@ -20,9 +20,9 @@ This recipe runs N agents in parallel on the same question, each taking a differ
 ## Full code
 
 ```ts
-import { agent, blackboard, createConsensus } from '@crux/core/agent'
-import { prompt } from '@crux/core'
-import { generate } from '@crux/ai'
+import { agent, blackboard, createConsensus } from '@use-crux/core/agent'
+import { prompt } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
@@ -108,7 +108,7 @@ decision.details     // AgentResult[] — every agent's full result with reasoni
 Loop the consensus call N times, letting agents see prior rounds via the blackboard. Catch `ConsensusError` to detect missed quorums and append risks before retrying:
 
 ```ts
-import { ConsensusError } from '@crux/core/agent'
+import { ConsensusError } from '@use-crux/core/agent'
 
 for (let round = 0; round < 3; round++) {
   try {

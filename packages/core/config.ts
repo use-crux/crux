@@ -9,8 +9,8 @@
  * @example
  * ```ts
  * // crux.config.ts
- * import { config } from '@crux/core'
- * import { inMemoryCruxStore } from '@crux/core/store'
+ * import { config } from '@use-crux/core'
+ * import { inMemoryCruxStore } from '@use-crux/core/store'
  *
  * export default config({
  *   quality: {
@@ -45,6 +45,7 @@ export type {
   CruxDevtoolsConfig,
   CruxExperimentalConfig,
   CruxExperimentalIndexerConfig,
+  CruxExperimentalIndexerNativeAstConfig,
   CruxExperimentalIndexerNativeConfig,
   CruxExperimentalIndexerNativeEngine,
   CruxGenerationConfig,
@@ -86,7 +87,7 @@ export interface Crux extends PromptRegistry {
  * @example
  * ```ts
  * // crux.config.ts
- * import { config } from '@crux/core'
+ * import { config } from '@use-crux/core'
  *
  * export default config({
  *   quality: { defaults: { replay: 'record-new' } },
@@ -105,7 +106,10 @@ export function config(config: CruxConfig): Crux {
     config.observability?.enabled !== false
       ? (config.observability?.transport ??
         (config.observability?.serverUrl
-          ? createHttpObservabilityTransport({ serverUrl: config.observability.serverUrl })
+          ? createHttpObservabilityTransport({
+              serverUrl: config.observability.serverUrl,
+              token: config.observability.token,
+            })
           : undefined))
       : undefined
   const observabilityDelivery = config.observability?.enabled !== false ? config.observability?.delivery : undefined

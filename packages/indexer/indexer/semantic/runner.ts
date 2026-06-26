@@ -1,13 +1,14 @@
-import type { IndexLintFinding, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@crux/core/project-index'
-import { mergeRelationsByIdentity } from '../relations/index'
+import type { IndexLintFinding, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@use-crux/core/project-index'
+import { mergeRelationsByIdentity } from '../relations'
 import type { SemanticAnalyzerResult, SemanticIndexAnalyzer, SemanticIndexAnalyzerContext, SemanticIndexAnalyzerResult } from './types'
 
 /**
  * Merges analyzer outputs into the single semantic patch shape consumed by the index indexer.
  *
- * Definitions merge by id, source refs dedupe by definition/ref id, and
- * relations merge by semantic identity so resolved analyzer facts can replace
- * lower-fidelity facts even when a producer supplied a stale or provisional id.
+ * Definitions merge by id, source refs dedupe by definition/ref id/source
+ * location, and relations merge by semantic identity so resolved analyzer facts
+ * can replace lower-fidelity facts even when a producer supplied a stale or
+ * provisional id.
  */
 export function mergeSemanticAnalyzerResults(results: Iterable<SemanticAnalyzerResult>): Required<SemanticAnalyzerResult> {
   const resultList = [...results]
@@ -16,10 +17,22 @@ export function mergeSemanticAnalyzerResults(results: Iterable<SemanticAnalyzerR
     definitions: mergeDefinitionPatches(resultList.flatMap((result) => result.definitions ?? [])),
     sourceRefs: uniqueBy(
       resultList.flatMap((result) => result.sourceRefs ?? []),
-      (sourceRef) => `${sourceRef.definitionId}:${sourceRef.ref.id}`,
+      sourceRefMergeKey,
     ),
     relations: mergeRelationsByIdentity(resultList.flatMap((result) => result.relations ?? [])),
   }
+}
+
+function sourceRefMergeKey(sourceRef: { readonly definitionId: string; readonly ref: ProjectSourceRef }): string {
+  const source = sourceRef.ref.source
+  return [
+    sourceRef.definitionId,
+    sourceRef.ref.id,
+    source.file,
+    source.line ?? '',
+    source.column ?? '',
+    source.function ?? '',
+  ].join(':')
 }
 
 /**

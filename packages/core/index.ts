@@ -1,5 +1,5 @@
 /**
- * `@crux/core` — SDK-agnostic prompt composition and context engineering.
+ * `@use-crux/core` — SDK-agnostic prompt composition and context engineering.
  *
  * Provides composable, portable prompt abstractions that work with any AI SDK.
  * Compose prompts once, execute with any adapter.
@@ -16,17 +16,17 @@
  * - `.inspect()` — See per-part token breakdown and what was dropped
  *
  * **Adapter packages (execution):**
- * - `@crux/ai` — Vercel AI SDK adapter (`generate()`, `stream()`)
- * - `@crux/openai` — OpenAI SDK adapter (`createOpenAI()`)
- * - `@crux/google` — Google GenAI adapter (`createGoogle()`)
+ * - `@use-crux/ai` — Vercel AI SDK adapter (`generate()`, `stream()`)
+ * - `@use-crux/openai` — OpenAI SDK adapter (`createOpenAI()`)
+ * - `@use-crux/google` — Google GenAI adapter (`createGoogle()`)
  *
  * **Other subpaths:**
- * - `@crux/core/quality` — `quality()`, `suite()`, and `target()` for local quality loops
- * - `@crux/core/observability` — `enableDevtools()` for local canonical observability delivery
+ * - `@use-crux/core/quality` — `quality()`, `suite()`, and `target()` for local quality loops
+ * - `@use-crux/core/observability` — `enableDevtools()` for local canonical observability delivery
  * @example
  * ```ts
  * // crux.config.ts
- * import { config, prompt, context, createPrompts } from '@crux/core'
+ * import { config, prompt, context, createPrompts } from '@use-crux/core'
  * import { z } from 'zod'
  *
  * const brand = context({
@@ -61,7 +61,7 @@ export { contributor, isContributorEntry } from './contributor'
 export type { ContributorConfig } from './contributor'
 export type { ContributorContribution, ContributorEntry } from './types'
 export { compilePrompt } from './resolve'
-export type { CompiledPrompt, CompilePromptOptions, Resolution, ResolveCallOptions } from './resolve'
+export type { CompiledPrompt, CompilePromptOptions, PromptResolution, Resolution, ResolveCallOptions } from './resolve'
 // In-memory fakes for every resolver port — the same deterministic seams the
 // core test suite uses, for SDK consumers testing resolution without global
 // runtime/observability setup.
@@ -164,6 +164,7 @@ export type {
   CruxDevtoolsConfig,
   CruxExperimentalConfig,
   CruxExperimentalIndexerConfig,
+  CruxExperimentalIndexerNativeAstConfig,
   CruxExperimentalIndexerNativeConfig,
   CruxExperimentalIndexerNativeEngine,
   CruxGenerationConfig,
@@ -510,7 +511,7 @@ export type {
   CancellableTaskStatus,
 } from './plan/types'
 
-// Adapter internals — used by @crux/ai, @crux/openai, @crux/google, @crux/convex
+// Adapter internals — used by @use-crux/ai, @use-crux/openai, @use-crux/google, @use-crux/convex
 /** @internal */ export { sanitizeJsonSchema } from './schema-compat'
 /** @internal */ export {
   orchestrateGenerate,
@@ -521,7 +522,7 @@ export type {
 } from './orchestrate'
 /** @internal */ export type { OrchestrationSpec, TextDeltaExtractor } from './orchestrate'
 
-// Provider adapter abstraction (also available as @crux/core/adapter subpath)
+// Provider adapter abstraction (also available as @use-crux/core/adapter subpath)
 export { adapter } from './adapter/define-adapter'
 export type {
   AdapterSpec,
@@ -536,7 +537,7 @@ export type {
   AdapterGenerateResult,
 } from './adapter/index'
 
-// Loop-owning adapter abstraction (also available as @crux/core/adapter subpath)
+// Loop-owning adapter abstraction (also available as @use-crux/core/adapter subpath)
 export { executorAdapter } from './adapter/define-executor'
 export type {
   ExecutorSpec,

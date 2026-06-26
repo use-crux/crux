@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GoogleGenAI } from '@google/genai'
-import type { SystemBlock } from '@crux/core'
+import type { SystemBlock } from '@use-crux/core'
 import { GoogleCacheManager } from '../cache-manager'
 import { CACHE_DEFAULTS } from '../cache-types'
 

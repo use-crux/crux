@@ -31,9 +31,11 @@ func osc8Link(url, text string) string {
 // tab strip was dropped in S2 — the workbench IS the Quality workbench;
 // there is no second-level navigation above the nav rail.
 type Workbench struct {
-	client    screens.DataClient
-	rawClient DataClient // legacy/shared helpers
-	serverURL string
+	client          screens.DataClient
+	rawClient       DataClient // legacy/shared helpers
+	serverURL       string
+	tunnelURL       string
+	ingestTokenPath string
 
 	width  int
 	height int
@@ -78,6 +80,17 @@ func NewWorkbench(client screens.DataClient, rawClient DataClient, serverURL str
 		"index":       screens.NewIndex(),
 	}
 	return w
+}
+
+// SetTunnelURL updates the public devtools URL once the async tunnel is ready.
+func (w *Workbench) SetTunnelURL(url string) {
+	w.tunnelURL = url
+}
+
+// SetIngestToken records where users can find the scoped remote-ingest token.
+// The token secret itself is intentionally kept out of the persistent chrome.
+func (w *Workbench) SetIngestToken(_ string, path string) {
+	w.ingestTokenPath = path
 }
 
 // Init is called once to fire initial fetches for the active screen and the
@@ -288,19 +301,17 @@ func spliceLine(under, overlay string, at, width int) string {
 func (w *Workbench) contextMeta() string {
 	parts := make([]string, 0, 5)
 
-	// Server URL — render as a compact `● host:port` chip wrapped in an
-	// OSC 8 hyperlink so modern terminals (iTerm2, Windows Terminal,
-	// kitty, GNOME Terminal, etc.) make it clickable to open the
-	// devtools web UI. The chip strips the scheme for display while the
-	// hyperlink target keeps it; the OSC 8 escape is BEL-terminated which
-	// every supporting terminal accepts.
+	// Server URLs — render compact chips wrapped in OSC 8 hyperlinks so
+	// modern terminals make them clickable. Display strips scheme/query,
+	// while the link target keeps the full authenticated URL.
 	if w.serverURL != "" {
-		label := w.serverURL
-		if i := strings.Index(label, "://"); i >= 0 {
-			label = label[i+3:]
-		}
-		chip := "● " + label
-		parts = append(parts, osc8Link(w.serverURL, chip))
+		parts = append(parts, osc8Link(w.serverURL, "local "+compactURLLabel(w.serverURL)))
+	}
+	if w.tunnelURL != "" {
+		parts = append(parts, osc8Link(w.tunnelURL, "tunnel "+compactURLLabel(w.tunnelURL)))
+	}
+	if w.ingestTokenPath != "" {
+		parts = append(parts, "ingest token "+w.ingestTokenPath)
 	}
 
 	if w.devContext.Version != "" {
@@ -328,6 +339,17 @@ func (w *Workbench) contextMeta() string {
 		return ""
 	}
 	return strings.Join(parts, "  ·  ")
+}
+
+func compactURLLabel(raw string) string {
+	label := raw
+	if i := strings.Index(label, "://"); i >= 0 {
+		label = label[i+3:]
+	}
+	if i := strings.IndexAny(label, "?#"); i >= 0 {
+		label = label[:i]
+	}
+	return label
 }
 
 // --- key handling ------------------------------------------------------------

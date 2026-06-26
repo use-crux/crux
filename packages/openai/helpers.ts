@@ -1,5 +1,5 @@
 import type OpenAI from 'openai'
-import type { GenerateObjectFn, GenerateTextFn } from '@crux/core/compaction'
+import type { GenerateObjectFn, GenerateTextFn } from '@use-crux/core/compaction'
 import { openAIHelpers } from './native'
 
 /**

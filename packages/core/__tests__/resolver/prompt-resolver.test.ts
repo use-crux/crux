@@ -274,7 +274,7 @@ describe('skill surface through the skill source port', () => {
     expect(result.system).toContain('missing/skill')
     expect(f.diagnostics.warnings).toEqual([
       {
-        message: '[@crux/core] Failed to fetch skill "missing/skill":',
+        message: '[@use-crux/core] Failed to fetch skill "missing/skill":',
         detail: 'Skill "missing/skill" not found in in-memory registry',
       },
     ])

@@ -16,6 +16,13 @@ export interface HttpObservabilityTransportOptions {
    * @default '/api/observability/records'
    */
   endpoint?: string
+  /**
+   * Bearer token for scoped observability ingest auth.
+   *
+   * This authenticates writes to a local devtools ingest endpoint without
+   * granting access to the full devtools session.
+   */
+  token?: string
   /** Extra headers for auth or deployment-specific routing. */
   headers?: Record<string, string>
   /**
@@ -69,7 +76,25 @@ function normalizeServerUrl(serverUrl: string): string {
 
 function joinUrl(serverUrl: string, endpoint: string): string {
   if (/^https?:\/\//u.test(endpoint)) return endpoint
-  return `${normalizeServerUrl(serverUrl).replace(/\/+$/u, '')}/${endpoint.replace(/^\/+/u, '')}`
+  const base = new URL(normalizeServerUrl(serverUrl))
+  const basePath = base.pathname.replace(/\/+$/u, '')
+  const endpointUrl = new URL(`${basePath}/${endpoint.replace(/^\/+/u, '')}`, base.origin)
+  if (!endpointUrl.search) endpointUrl.search = base.search
+  return endpointUrl.toString()
+}
+
+function normalizeToken(token: string | undefined): string | undefined {
+  const trimmed = token?.trim()
+  return trimmed ? trimmed : undefined
+}
+
+type ProcessEnvLike = Readonly<Record<string, string | undefined>>
+
+function defaultDevtoolsToken(): string | undefined {
+  const runtime = globalThis as typeof globalThis & {
+    process?: { env?: ProcessEnvLike }
+  }
+  return normalizeToken(runtime.process?.env?.CRUX_DEVTOOLS_TOKEN)
 }
 
 const MAX_PREVIEW_STRING_LENGTH = 64_000
@@ -145,6 +170,8 @@ export function createHttpObservabilityTransport(
   const retryAttempts = Math.max(0, options.retryAttempts ?? 2)
   const retryDelayMs = Math.max(0, options.retryDelayMs ?? 100)
   const maxRecordsPerRequest = Math.max(1, options.maxRecordsPerRequest ?? 50)
+  const token = normalizeToken(options.token) ?? defaultDevtoolsToken()
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined
 
   return {
     async send(records) {
@@ -175,6 +202,7 @@ export function createHttpObservabilityTransport(
               headers: {
                 'Content-Type': 'application/json',
                 'Bypass-Tunnel-Reminder': 'true',
+                ...authHeaders,
                 ...options.headers,
               },
               body: payload,

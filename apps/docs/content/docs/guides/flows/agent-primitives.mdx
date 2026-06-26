@@ -11,9 +11,9 @@ A handoff validates and transforms data between agents. Use it to connect the ou
 
 ```ts
 import { z } from 'zod'
-import { withSession, flow, createSessionId } from '@crux/core'
-import { handoff } from '@crux/core/agent'
-import { generate, generateTextFn } from '@crux/ai'
+import { withSession, flow, createSessionId } from '@use-crux/core'
+import { handoff } from '@use-crux/core/agent'
+import { generate, generateTextFn } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 // Schemas for the research agent's output
@@ -88,9 +88,9 @@ A delegate wraps a subagent with handoff validation. Use `.run()` inside a step 
 
 ```ts
 import { z } from 'zod'
-import { flow } from '@crux/core'
-import { handoff, delegate } from '@crux/core/agent'
-import { generate } from '@crux/ai'
+import { flow } from '@use-crux/core'
+import { handoff, delegate } from '@use-crux/core/agent'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 const model = openai('gpt-4o')
@@ -157,9 +157,9 @@ A blackboard is shared typed state that multiple steps can read and write. Use i
 
 ```ts
 import { z } from 'zod'
-import { flow } from '@crux/core'
-import { blackboard } from '@crux/core/agent'
-import { generate } from '@crux/ai'
+import { flow } from '@use-crux/core'
+import { blackboard } from '@use-crux/core/agent'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 const model = openai('gpt-4o-mini')

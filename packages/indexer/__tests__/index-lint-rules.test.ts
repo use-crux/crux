@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { indexLintFindings } from '../indexer/lints/findings'
 import {
   builtInIndexRuleDescriptors,
   indexLintRuleIds,
   indexLintRules,
   validateBuiltInIndexRuleManifests,
 } from '../indexer/lints/rules'
+import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
 
 describe('index lint rule registry', () => {
   it('owns product metadata needed by all lint surfaces', () => {
@@ -59,6 +61,88 @@ describe('index lint rule registry', () => {
 
   it('validates every built-in rule manifest', () => {
     expect(validateBuiltInIndexRuleManifests()).toEqual([])
+  })
+
+  it('pins native lint coverage claims to rule-specific parity evidence', () => {
+    const coverage = readStaticIndexRuntimeSharedFixture('lint-rule-parity-coverage')
+    const primitiveCoverage = readStaticIndexRuntimeSharedFixture('primitive-coverage-identities')
+
+    expect(coverage.requiredEvidence).toEqual(['positive', 'negative'])
+    expect(coverage.policyFixture).toBe('index-lint-native-policy-parity.test.ts')
+    expect(coverage.rules.map((rule) => rule.ruleId)).toEqual(indexLintRuleIds)
+
+    for (const rule of coverage.rules) {
+      expect(rule.positiveFixture, `${rule.ruleId} positive fixture`).toMatch(
+        /^index-lint-native-(parity|injection-parity)\.test\.ts$/,
+      )
+      expect(rule.negativeFixture, `${rule.ruleId} negative fixture`).toBe(rule.positiveFixture)
+    }
+
+    for (const identity of primitiveCoverage.identities) {
+      expect(identity.fixtureClasses.lints, `${identity.extractor} lint coverage anchor`).toBe(
+        'lint-rule-parity-coverage.json',
+      )
+    }
+  })
+
+  it('emits quality baseline findings from the TypeScript static lint baseline', () => {
+    expect(
+      indexLintFindings({
+        definitions: [
+          {
+            id: 'unknown:writer',
+            kind: 'unknown',
+            name: 'writer',
+            fidelity: 'resolved',
+            source: { file: '/workspace/acme/src/quality.ts', line: 1, column: 1 },
+            quality: {
+              experimentIds: ['experiment:writer'],
+              experimentCount: 1,
+              passRate: 0.8,
+              lastRunId: 'experiment:writer',
+            },
+          },
+        ],
+        relations: [],
+      }).find((finding) => finding.ruleId === 'quality.missing_baseline'),
+    ).toMatchObject({
+      id: 'lint:quality.missing_baseline:unknown:writer',
+      ruleId: 'quality.missing_baseline',
+      message: 'writer has experiment history but no promoted baseline.',
+      primaryDefinitionId: 'unknown:writer',
+      relatedDefinitionIds: ['unknown:writer'],
+      evidence: [
+        {
+          kind: 'quality',
+          label: 'Experiment history without baseline',
+          definitionId: 'unknown:writer',
+          data: {
+            experimentIds: ['experiment:writer'],
+            experimentCount: 1,
+            passRate: 0.8,
+            lastRunId: 'experiment:writer',
+          },
+        },
+      ],
+    })
+
+    expect(
+      indexLintFindings({
+        definitions: [
+          {
+            id: 'unknown:writer',
+            kind: 'unknown',
+            name: 'writer',
+            fidelity: 'resolved',
+            quality: {
+              experimentIds: ['experiment:writer'],
+              baselineIds: ['baseline:writer'],
+            },
+          },
+        ],
+        relations: [],
+      }).some((finding) => finding.ruleId === 'quality.missing_baseline'),
+    ).toBe(false)
   })
 
   it('points every rule at a docs page with the required product sections', () => {

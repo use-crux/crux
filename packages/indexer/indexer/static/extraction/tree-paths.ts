@@ -2,13 +2,13 @@ import ts from 'typescript'
 import type {
   ProjectDefinition,
   ProjectDefinitionKind,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import { collectTopLevelInitializers } from '../../ast/initializers'
 import { propertyName } from '../../ast/literals'
 import { collectImportBindings, type ImportBinding } from '../../ast/imports'
 import { readSourceFile } from '../../ast/parse'
 import type { IndexerExtensionRuntime } from '../../extensions'
-import { staticFoundDefinitionFromExtractedFacts } from '../../extensions/static-normalizer'
+import { staticFoundDefinitionFromExtractedFacts } from '../../static-index/compatibility/syntax-record-bridge/normalizer'
 import type { StaticFoundDefinition } from '../../types'
 import type { ParseMemo } from './source-io'
 import { expressionName, hasExportModifier, staticFactsFromInitializer } from './match'

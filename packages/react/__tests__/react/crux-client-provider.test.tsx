@@ -3,7 +3,7 @@
  * Tests for the CruxClientProvider pattern used in apps/web.
  *
  * Verifies that wrapping components in CruxProvider with a memoized
- * Convex transport provides stable, reactive access to plans, task lists,
+ * Convex store contract transport provides stable, reactive access to plans, task lists,
  * and tasks through the domain hooks.
  *
  * These tests mirror the exact pattern used in
@@ -12,62 +12,17 @@
 import { describe, it, expect } from 'vitest'
 import React, { useMemo, type ReactNode } from 'react'
 import { renderHook } from '@testing-library/react'
-import { createConvexTransport } from '../../../convex/react'
 import { CruxProvider, useCruxTransport } from '../../src/provider'
 import { usePlan, useTaskList, useTasks } from '../../src/hooks'
-import type { Plan, TaskList, Task } from '@crux/core/plan'
-import type { JsonObject } from '@crux/core/store'
-
-// ── Mock Convex Backend (same pattern as convex-transport.test.tsx) ──
-
-function createMockConvexBackend() {
-  const data = new Map<string, Record<string, unknown>>()
-
-  const api = {
-    memory: {
-      get: Symbol('memory.get'),
-      list: Symbol('memory.list'),
-    },
-  }
-
-  function setDoc(key: string, value: JsonObject) {
-    data.set(key, {
-      _id: `id_${key}`,
-      key,
-      content: JSON.stringify(value),
-      metadata: { _cruxDoc: true },
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-  }
-
-  function useQuery(query: unknown, args: unknown): unknown {
-    if (args === 'skip') return undefined
-    const typedArgs = args as Record<string, unknown>
-    if (query === api.memory.get) {
-      return data.get(typedArgs.key as string) ?? null
-    }
-    if (query === api.memory.list) {
-      const prefix = typedArgs.prefix as string
-      const entries: Array<Record<string, unknown>> = []
-      for (const [key, value] of data) {
-        if (key.startsWith(prefix)) {
-          entries.push({ ...value, key })
-        }
-      }
-      return { docs: entries }
-    }
-    return undefined
-  }
-
-  return { api, useQuery, setDoc, data }
-}
+import { createConvexContractTransport, createMockConvexBackend } from './convex-contract-harness'
+import type { Plan, TaskList, Task } from '@use-crux/core/plan'
+import type { JsonObject } from '@use-crux/core/store'
 
 // ── Memoized Provider (mirrors CruxClientProvider from apps/web) ──
 
 /**
  * Simulates the CruxClientProvider from apps/web by creating a
- * memoized Convex transport and wrapping in CruxProvider.
+ * memoized Convex store contract transport and wrapping in CruxProvider.
  */
 function MemoizedCruxClientProvider({
   backend,
@@ -76,13 +31,13 @@ function MemoizedCruxClientProvider({
   backend: ReturnType<typeof createMockConvexBackend>
   children: ReactNode
 }) {
-  const transport = useMemo(() => createConvexTransport({ api: backend.api, useQuery: backend.useQuery }), [backend])
+  const transport = useMemo(() => createConvexContractTransport(backend), [backend])
   return <CruxProvider transport={transport}>{children}</CruxProvider>
 }
 
 // ── Tests ──
 
-describe('CruxClientProvider pattern — memoized Convex transport', () => {
+describe('CruxClientProvider pattern — memoized Convex store contract transport', () => {
   it('provides transport context to children via useCruxTransport', () => {
     const backend = createMockConvexBackend()
 

@@ -6,7 +6,7 @@ description: Compose generate() calls into structured pipelines with named steps
 A single `generate()` call handles one prompt. Real applications chain multiple calls into pipelines — research then synthesize, plan then execute, draft then validate. `flow` makes those pipelines a first-class primitive: every step has a name, every retry is declarative, and every trace is grouped automatically.
 
 ```ts
-import { flow } from '@crux/core'
+import { flow } from '@use-crux/core'
 
 const researchFlow = flow('research', async (flow) => {
   const plan = await flow.step('plan', () => generate(planner, { model, input: { query } }))
@@ -55,8 +55,8 @@ If you're making a single `generate()` call, you don't need a flow — just call
 ## Basic Usage
 
 ```ts
-import { flow } from '@crux/core'
-import { generate } from '@crux/ai'
+import { flow } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
 
 const editPipeline = flow('edit-pipeline', async (flow) => {
   const analysis = await flow.step('analyze', () => generate(analyzer, { model, input: { document } }))
@@ -73,7 +73,7 @@ const result = await editPipeline.run()
 `withSession` groups traces by user interaction. `flow` structures them into pipelines within that session.
 
 ```ts
-import { withSession, flow, createSessionId } from '@crux/core'
+import { withSession, flow, createSessionId } from '@use-crux/core'
 
 const researchFlow = flow('research', async (flow) => {
   await flow.step('plan', () => generate(planner, { model, input }))
@@ -147,7 +147,7 @@ Point a Quality evaluation's `task` at the flow handle; step labels become
 trace-backed `steps` signals you can assert on:
 
 ```ts
-import { evaluate } from '@crux/core/quality'
+import { evaluate } from '@use-crux/core/quality'
 
 const researchFlow = flow('research', async (flow) => {
   await flow.step('plan', () => generate(planner, { model, input }))
@@ -172,7 +172,7 @@ See the [Quality guide](/docs/guides/quality) for variants, gates, and replay.
 
 ```ts
 // Before
-import { withFlow } from '@crux/core'
+import { withFlow } from '@use-crux/core'
 const result = await withFlow(
   'pipeline',
   async (flow) => {
@@ -182,7 +182,7 @@ const result = await withFlow(
 )
 
 // After
-import { flow } from '@crux/core'
+import { flow } from '@use-crux/core'
 const pipeline = flow('pipeline', async (flow) => {
   /* steps */
 })

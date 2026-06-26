@@ -9,9 +9,9 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '@crux/core'
-import { fallback } from '@crux/core'
-import { ValidationExhaustedError } from '@crux/core'
+import { prompt as makePrompt } from '@use-crux/core'
+import { fallback } from '@use-crux/core'
+import { ValidationExhaustedError } from '@use-crux/core'
 import type { LanguageModel } from 'ai'
 import { createCruxAi } from '../index'
 import { scriptedGateway, objectGenerationError } from './scripted-gateway'
@@ -231,7 +231,7 @@ describe('stream — metrics and completion', () => {
   })
 
   it('rejects cascade models with a clear error', async () => {
-    const { cascade } = await import('@crux/core/routing')
+    const { cascade } = await import('@use-crux/core/routing')
     const ai = createCruxAi({ gateway: scriptedGateway().gateway })
     const tiers = cascade({
       tiers: [{ model: model() as never, maxAttempts: 1 }],

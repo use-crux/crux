@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { prompt as makePrompt } from '@crux/core'
-import { agent as makeAgent } from '@crux/core/agent'
+import { prompt as makePrompt } from '@use-crux/core'
+import { agent as makeAgent } from '@use-crux/core/agent'
 import { z } from 'zod'
 import { createOpenAI, embedding as makeEmbedding, fromMessages } from '../index'
 

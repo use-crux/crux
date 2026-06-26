@@ -1,5 +1,5 @@
 {
-  "description": "Existing explicit any usages in @crux/core production source. New usages fail typecheck; shrink this file as legacy surfaces are hardened.",
+  "description": "Existing explicit any usages in @use-crux/core production source. New usages fail typecheck; shrink this file as legacy surfaces are hardened.",
   "entries": [
     "agent/agent.ts:153:32"
   ]

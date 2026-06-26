@@ -64,6 +64,7 @@ describe('provider runtime', () => {
   it('creates a single-turn provider runtime through one public compiler', async () => {
     const provider = defineProviderRuntime({
       id: 'runtime-single-turn',
+      ownership: 'single-turn',
       turn: {
         bind: (client: RuntimeClient) => ({
           async call(request, mode) {
@@ -130,6 +131,7 @@ describe('provider runtime', () => {
     })
 
     expect(provider.id).toBe('runtime-single-turn')
+    expect(provider.ownership).toBe('single-turn')
     expect(result.text).toBe('single-turn text')
     expect(result._meta.actualModelId).toBe('runtime-actual')
     expect(client.calls).toEqual([
@@ -146,6 +148,7 @@ describe('provider runtime', () => {
     const fake = fakeExecutor({ loops: [[{ text: 'loop-owned text' }]] })
     const provider = defineProviderRuntime({
       id: 'runtime-loop-owned',
+      ownership: 'loop-owned',
       loop: {
         describeModel: fake.spec.describeModel,
         settings: fake.spec.mapSettings,
@@ -166,6 +169,7 @@ describe('provider runtime', () => {
     })
 
     expect(provider.id).toBe('runtime-loop-owned')
+    expect(provider.ownership).toBe('loop-owned')
     expect(runtime.executorId).toBe('runtime-loop-owned')
     expect(result.text).toBe('loop-owned text')
     expect(fake.calls.runLoop[0]?.modelInfo).toEqual({ provider: 'fake', modelId: 'runtime-model' })
@@ -195,6 +199,28 @@ describe('provider runtime', () => {
 
     expect(() => provider.create(fake.client)).toThrowError(
       'Provider runtime "runtime-collision" extension cannot replace generated runtime key "generate".',
+    )
+  })
+
+  it('rejects explicit ownership that disagrees with the provided mechanics', () => {
+    const fake = fakeExecutor({ loops: [[{ text: 'loop-owned text' }]] })
+
+    expect(() =>
+      defineProviderRuntime({
+        id: 'runtime-ownership-mismatch',
+        ownership: 'single-turn',
+        loop: {
+          describeModel: fake.spec.describeModel,
+          settings: fake.spec.mapSettings,
+          bind: (client) => ({
+            run: (request) => fake.spec.runLoop(client, request),
+            attemptStructured: (request) => fake.spec.attemptStructured(client, request),
+            stream: (request) => fake.spec.runStream(client, request),
+          }),
+        },
+      } as never),
+    ).toThrowError(
+      'Provider runtime "runtime-ownership-mismatch" declares ownership "single-turn" but defines loop-owned mechanics.',
     )
   })
 })

@@ -6,8 +6,8 @@ description: Run multiple agents concurrently and get typed results as a named r
 `parallel()` runs a named map of agents concurrently and returns all results as a typed record. Use it when agents are independent — reviewing content, analyzing from different angles, or gathering data from multiple sources.
 
 ```ts title="parallel-review.ts"
-import { parallel } from '@crux/ai'
-import { agent } from '@crux/core/agent'
+import { parallel } from '@use-crux/ai'
+import { agent } from '@use-crux/core/agent'
 
 const result = await parallel({
   agents: {
@@ -87,7 +87,7 @@ In `continue` mode, `result.settled` contains a discriminated union for each age
 Per-agent model fallbacks work naturally. Each agent's `model` can be wrapped with `fallback()`:
 
 ```ts
-import { fallback } from '@crux/core'
+import { fallback } from '@use-crux/core'
 
 const reviewer = agent({
   id: 'reviewer',

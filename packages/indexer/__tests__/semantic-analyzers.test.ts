@@ -51,7 +51,7 @@ describe('semantic schema analyzer', () => {
     await writeFile(
       join(root, 'src/tool.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { input } from './index'
 
         export const writerTool = tool({
@@ -130,7 +130,7 @@ describe('semantic schema analyzer', () => {
     await writeFile(
       join(root, 'src/injectable.ts'),
       `
-        import { injectable } from '@crux/core'
+        import { injectable } from '@use-crux/core'
         import { BrandInput } from './schema'
 
         export const brandInjection = injectable({
@@ -178,7 +178,7 @@ describe('semantic relation analyzer', () => {
     await writeFile(
       join(root, 'src/primitives.ts'),
       `
-        import { prompt, tool } from '@crux/core'
+        import { prompt, tool } from '@use-crux/core'
 
         export const writerPrompt = prompt({
           id: 'writer',
@@ -199,7 +199,7 @@ describe('semantic relation analyzer', () => {
     await writeFile(
       join(root, 'src/agent.ts'),
       `
-        import { agent } from '@crux/core'
+        import { agent } from '@use-crux/core'
         import { promptForAgent, toolForAgent } from './index'
 
         export const writerAgent = agent({
@@ -257,7 +257,7 @@ describe('semantic relation analyzer', () => {
     await writeFile(
       join(root, 'src/primitives.ts'),
       `
-        import { context, injectable, memory } from '@crux/core'
+        import { context, injectable, memory } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const localeContext = context({ id: 'locale' })
@@ -271,7 +271,7 @@ describe('semantic relation analyzer', () => {
     await writeFile(
       join(root, 'src/authoring.ts'),
       `
-        import { context, injectable, prompt } from '@crux/core'
+        import { context, injectable, prompt } from '@use-crux/core'
         import { brandContext, guardInjection, localeContext, nestedInjection, sessionMemory, sharedUse } from './primitives'
 
         export const writerPrompt = prompt({
@@ -365,7 +365,7 @@ describe('semantic relation analyzer', () => {
     await writeFile(
       join(root, 'src/tools.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
 
         export const searchTool = tool({ name: 'search', execute: async () => ({}) })
         export const citeTool = tool({ name: 'cite', execute: async () => ({}) })
@@ -382,7 +382,7 @@ describe('semantic relation analyzer', () => {
     await writeFile(
       join(root, 'src/authoring.ts'),
       `
-        import { context, injectable, prompt } from '@crux/core'
+        import { context, injectable, prompt } from '@use-crux/core'
         import { baseTools, editorialTools, injectEditorialTools, summarizeTool } from './tools'
 
         export const writerPrompt = prompt({
@@ -439,7 +439,7 @@ describe('semantic source-ref analyzer', () => {
     await writeFile(
       join(root, 'src/tools.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
 
         export const outlineTool = tool({
           name: 'outline',
@@ -457,7 +457,7 @@ describe('semantic source-ref analyzer', () => {
     await writeFile(
       join(root, 'src/index.ts'),
       `
-        import { agent, prompt } from '@crux/core'
+        import { agent, prompt } from '@use-crux/core'
         import { USER_PROMPT, WRITER_SYSTEM, writerTools } from './barrel'
 
         export const writerPrompt = prompt({
@@ -523,7 +523,7 @@ describe('semantic source-ref analyzer', () => {
     await writeFile(
       join(root, 'src/primitives.ts'),
       `
-        import { context, tool } from '@crux/core'
+        import { context, tool } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const sharedUse = [brandContext] as const
@@ -537,7 +537,7 @@ describe('semantic source-ref analyzer', () => {
     await writeFile(
       join(root, 'src/authoring.ts'),
       `
-        import { context, injectable, prompt } from '@crux/core'
+        import { context, injectable, prompt } from '@use-crux/core'
         import { baseTools, editorialTools, sharedUse, summarizeTool } from './primitives'
 
         export const writerPrompt = prompt({
@@ -626,7 +626,7 @@ describe('semantic source-ref analyzer', () => {
     await writeFile(
       join(root, 'src/injectable.ts'),
       `
-        import { injectable } from '@crux/core'
+        import { injectable } from '@use-crux/core'
         import { injectBrand } from './callbacks'
 
         export const brandInjection = injectable({
@@ -657,7 +657,7 @@ describe('semantic source-ref analyzer', () => {
     await writeFile(
       join(root, 'src/primitives.ts'),
       `
-        import { blackboard, context, injectable, memory } from '@crux/core'
+        import { blackboard, context, injectable, memory } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const policyContext = context({ id: 'policy' })
@@ -679,7 +679,7 @@ describe('semantic source-ref analyzer', () => {
     await writeFile(
       join(root, 'src/authoring.ts'),
       `
-        import { match, prompt, when } from '@crux/core'
+        import { match, prompt, when } from '@use-crux/core'
         import { includeDraftBoard, hasBrand } from './conditions'
         import { brandContext, draftBoard, guardInjection, policyContext, sessionMemory } from './primitives'
 
@@ -788,7 +788,7 @@ describe('semantic definition-enrichment analyzer', () => {
     await writeFile(
       join(root, 'src/primitives.ts'),
       `
-        import { blackboard, context, injectable, memory } from '@crux/core'
+        import { blackboard, context, injectable, memory } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const guardInjection = injectable({ id: 'guard', inject: async () => ({}) })
@@ -801,7 +801,7 @@ describe('semantic definition-enrichment analyzer', () => {
     await writeFile(
       join(root, 'src/authoring.ts'),
       `
-        import { context, injectable, prompt } from '@crux/core'
+        import { context, injectable, prompt } from '@use-crux/core'
         import { baseUse, sharedUse } from './primitives'
 
         export const writerPrompt = prompt({
@@ -924,7 +924,7 @@ describe('semantic definition-enrichment analyzer', () => {
     await writeFile(
       join(root, 'src/primitives.ts'),
       `
-        import { blackboard, context, injectable, memory } from '@crux/core'
+        import { blackboard, context, injectable, memory } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const policyContext = context({ id: 'policy' })
@@ -936,7 +936,7 @@ describe('semantic definition-enrichment analyzer', () => {
     await writeFile(
       join(root, 'src/authoring.ts'),
       `
-        import { match, prompt, when } from '@crux/core'
+        import { match, prompt, when } from '@use-crux/core'
         import { brandContext, draftBoard, guardInjection, policyContext, sessionMemory } from './primitives'
 
         const includeDraftBoard = true
@@ -1020,7 +1020,7 @@ describe('semantic definition-enrichment analyzer', () => {
     await writeFile(
       join(root, 'src/primitives.ts'),
       `
-        import { context, tool } from '@crux/core'
+        import { context, tool } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const searchTool = tool({ name: 'search', description: 'Search', execute: async () => null })
@@ -1047,7 +1047,7 @@ describe('semantic definition-enrichment analyzer', () => {
     await writeFile(
       join(root, 'src/authoring.ts'),
       `
-        import { context, injectable, prompt } from '@crux/core'
+        import { context, injectable, prompt } from '@use-crux/core'
         import { dynamicUse, partialTools } from './primitives'
 
         export const writerPrompt = prompt({
@@ -1134,7 +1134,7 @@ describe('semantic definition-enrichment analyzer', () => {
     await writeFile(
       join(root, 'src/safety.ts'),
       `
-        import { constraint, guardrail } from '@crux/core'
+        import { constraint, guardrail } from '@use-crux/core'
 
         export const safeTone = constraint({ name: 'safe-tone', check: () => ({ ok: true }) })
         export const factuality = constraint({ name: 'factuality', check: () => ({ ok: true }) })
@@ -1150,7 +1150,7 @@ describe('semantic definition-enrichment analyzer', () => {
     await writeFile(
       join(root, 'src/authoring.ts'),
       `
-        import { injectable } from '@crux/core'
+        import { injectable } from '@use-crux/core'
         import { baseConstraints, extraConstraints, guardrails, sharedMetadata } from './safety'
 
         export const safetyInjection = injectable({
@@ -1198,7 +1198,7 @@ describe('semantic definition-enrichment analyzer', () => {
     await writeFile(
       join(root, 'src/agent.ts'),
       `
-        import { agent } from '@crux/core'
+        import { agent } from '@use-crux/core'
 
         export const writerAgent = agent({
           name: 'Writer',
@@ -1212,7 +1212,7 @@ describe('semantic definition-enrichment analyzer', () => {
     await writeFile(
       join(root, 'src/router.ts'),
       `
-        import { router } from '@crux/core'
+        import { router } from '@use-crux/core'
         import { routes } from './routes'
 
         export const writerRouter = router({

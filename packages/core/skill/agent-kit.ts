@@ -9,7 +9,7 @@
  *
  * @example
  * ```ts
- * import { createAgentSkillKit } from '@crux/core/skill'
+ * import { createAgentSkillKit } from '@use-crux/core/skill'
  *
  * const kit = await createAgentSkillKit(myPrompt, {
  *   target: { threadId: 'thread-1' },

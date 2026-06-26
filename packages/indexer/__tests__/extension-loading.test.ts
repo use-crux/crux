@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProject } from '../index'
+import { indexProject } from '..'
 import { loadIndexerExtensionReferences } from '../indexer/extensions'
 
 const testDir = dirname(fileURLToPath(import.meta.url))
@@ -98,7 +98,7 @@ describe('indexer extension loading', () => {
 
   it('lets allowlisted package extensions contribute extractor facts to project indexing', async () => {
     const root = await fixtureRoot()
-    await linkWorkspacePackage(root, '@crux/core', 'packages/core')
+    await linkWorkspacePackage(root, '@use-crux/core', 'packages/core')
     await writePackage(root, '@acme/crux-indexer', {
       packageVersion: '1.0.0',
       source: `
@@ -135,7 +135,7 @@ describe('indexer extension loading', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
 
         export default config({
           indexer: {

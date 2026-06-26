@@ -1,5 +1,5 @@
 {
-  "name": "@crux/local-${PLATFORM}-${ARCH}",
+  "name": "@use-crux/local-${PLATFORM}-${ARCH}",
   "version": "0.1.0",
   "description": "Crux local runtime binary for ${PLATFORM}-${ARCH}",
   "os": ["${PLATFORM}"],

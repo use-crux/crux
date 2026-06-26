@@ -13,9 +13,9 @@ import type {
   ProjectSourceRef,
   PromptMeta,
   ToolMeta,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import type { SemanticSourceProfile } from './semantic/source-profile'
-import { relationIdentity, withResolvedRelationReadModel } from './relations/index'
+import { relationIdentity, withResolvedRelationReadModel } from './relations'
 
 export type IndexPatchPhase = 'cache' | 'ast' | 'semantic' | 'runtime' | 'quality'
 export type IndexPatchStatus = 'ok' | 'partial' | 'degraded'

@@ -7,7 +7,7 @@
  * per-cell signals from the records that carry the cell's `runId`. This is
  * also what links every Experiment cell to its devtools trace run.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 

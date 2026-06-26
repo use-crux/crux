@@ -27,12 +27,14 @@ export function createLoopOwnedProviderRuntime(
   Record<string, unknown>,
   Record<string, never>,
   object,
-  object
+  object,
+  'loop-owned'
 > {
   const { loop } = spec
 
   return createDefinedProviderRuntime(
     spec.id,
+    'loop-owned',
     (client: unknown) => {
       const bound = loop.bind(client, { id: spec.id })
       return executorAdapter(executorSpecForBoundLoop(spec.id, loop, bound))(client)

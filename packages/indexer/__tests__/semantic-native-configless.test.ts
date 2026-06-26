@@ -26,7 +26,7 @@ describe('configless native semantic backend', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         import { writerSystem } from './helper'
 
         export const writer = prompt({

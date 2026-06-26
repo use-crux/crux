@@ -1,13 +1,17 @@
 /**
- * Test utilities for the `ExecutorSpec` contract.
+ * Test utilities for Crux adapter contracts.
  *
+ * - {@link providerRuntimeConformance} — the public runtime-level suite for
+ *   adapters built with `defineProviderRuntime()`. It binds the runtime through
+ *   `.create()` and covers both `single-turn` and `loop-owned` ownership.
+ * - `describeCruxAdapterConformance` from
+ *   `@use-crux/core/adapter/testing/vitest` — the Vitest wrapper used by
+ *   provider packages.
+ * - {@link adapterSpecConformance} and {@link executorSpecConformance} —
+ *   lower-level IR suites for compiler and core execution work.
  * - {@link fakeExecutor} — a fully in-memory `ExecutorSpec` you script with
  *   model emissions. Use it to test `executorAdapter()` policy (routing,
  *   validation retry, approvals, steering) with zero SDK involvement.
- * - {@link executorSpecConformance} — the contract suite every
- *   `ExecutorSpec` implementation must pass, including `fakeExecutor`
- *   itself. Run it against a real executor to prove the subtle loop
- *   semantics (directive buffering, step refunds, suspension) hold.
  *
  * @module
  */
@@ -30,6 +34,7 @@ import { validateStructuredOutput } from './policy/validation-retry'
 import { toJsonValue, renderToolModelOutput, createToolModelOutput, normalizeToolInput } from './tool/emission'
 
 export { adapterSpecConformance } from './testing/native'
+export { providerRuntimeConformance } from './testing/provider-runtime'
 export { transcriptCodecConformance } from './testing/transcript'
 export type {
   AdapterConformanceCapabilities,
@@ -39,6 +44,17 @@ export type {
   AdapterConformancePrepared,
   AdapterConformanceScript,
 } from './testing/native'
+export type {
+  ProviderConformanceEmission,
+  ProviderConformancePrepared,
+  ProviderConformanceScript,
+  ProviderRuntimeConformanceCapabilities,
+  ProviderRuntimeConformanceGenerateOptions,
+  ProviderRuntimeConformanceGenerateResult,
+  ProviderRuntimeConformanceHarness,
+  ProviderRuntimeConformanceRuntime,
+  ProviderRuntimeConformanceStreamHandle,
+} from './testing/provider-runtime'
 export type { TranscriptConformanceScenario, TranscriptWrapperExpectation } from './testing/transcript'
 
 // ─────────────────────────────────────────────────────────────────
@@ -146,7 +162,7 @@ interface FakeToolLike {
  *
  * @example
  * ```ts
- * import { executorAdapter, fakeExecutor } from '@crux/core/adapter'
+ * import { executorAdapter, fakeExecutor } from '@use-crux/core/adapter'
  *
  * const fake = fakeExecutor({
  *   structured: ['not json', '{"title":"ok","count":1}'],
@@ -453,7 +469,7 @@ function baseRequest<TClient, TModel>(
 /**
  * Run the executor contract suite against an `ExecutorSpec` implementation.
  *
- * Both `fakeExecutor()` and every real executor (e.g. `@crux/ai`'s
+ * Both `fakeExecutor()` and every real executor (e.g. `@use-crux/ai`'s
  * `AiSdkExecutor`) must pass — that shared bar is what lets policy tests
  * written against the fake transfer to production. Checks cover the
  * contract's subtle seams:

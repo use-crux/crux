@@ -1,7 +1,7 @@
 import type { Content, FunctionResponsePart, GenerateContentResponse } from '@google/genai'
-import type { Message, ToolContentPart, ToolModelOutput } from '@crux/core'
-import type { NativeAssistantTurn, NativeTranscriptCodec } from '@crux/core/adapter'
-import { renderToolContentPartAsText, toolModelOutputFromMetadata } from '@crux/core/adapter'
+import type { Message, ToolContentPart, ToolModelOutput } from '@use-crux/core'
+import type { NativeAssistantTurn, NativeTranscriptCodec } from '@use-crux/core/adapter'
+import { renderToolContentPartAsText, toolModelOutputFromMetadata } from '@use-crux/core/adapter'
 
 /** Google assistant turn data owned by the transcript codec. */
 export type GoogleAssistantTurn = NativeAssistantTurn

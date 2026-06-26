@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { ProjectDefinitionKind } from '@crux/core/project-index'
-import { indexProjectAst } from '../index'
+import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
+import { indexProjectAst } from '..'
 import { createStaticExtensionRegistry, facts, type IndexerExtension } from '../indexer/extensions'
 import { indexerExtensionRegistry, staticIndexerCallNames } from '../indexer/extractors/registry'
 import type { ProjectIndexCompilerProfile } from '../indexer/compiler/profile'
@@ -27,7 +27,7 @@ describe('indexer extension boundary', () => {
     await writeFile(
       join(root, 'src/retrieval.ts'),
       `
-        import { retriever } from '@crux/core'
+        import { retriever } from '@use-crux/core'
 
         export const docs = retriever({
           id: 'docs',
@@ -39,7 +39,7 @@ describe('indexer extension boundary', () => {
     const patch = await indexProjectAst({ root })
 
     expect(indexerExtensionRegistry.extensions.map((extension) => extension.name)).toContain(
-      '@crux/indexer/crux-core',
+      '@use-crux/indexer/crux-core',
     )
     expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('rag.retriever')
     expect(indexerExtensionRegistry.extractors.map((item) => item.extractor.name)).toContain('safety')
@@ -403,7 +403,7 @@ async function extractFileWithExtension(
 }
 
 const fixtureCompilerProfile = {
-  name: '@crux/indexer/test-profile',
+  name: '@use-crux/indexer/test-profile',
   version: '1',
   extensions: [],
 } as const satisfies ProjectIndexCompilerProfile

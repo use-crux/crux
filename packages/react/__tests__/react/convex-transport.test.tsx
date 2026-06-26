@@ -1,107 +1,21 @@
 // @vitest-environment jsdom
 /**
- * Tests for createConvexTransport from @crux/convex/react.
+ * Tests for Convex store contract transport from @use-crux/convex.
  *
  * Verifies that the Convex transport correctly deserializes documents
  * stored in the _cruxDoc format (JSON-stringified content with marker metadata)
  * and resolves plan:*, tasklist:*, task:* key patterns to typed objects.
  */
 import { describe, it, expect } from 'vitest'
-import React from 'react'
-import { renderHook, act } from '@testing-library/react'
-import { createConvexTransport } from '../../../convex/react'
-import { CruxProvider } from '../../src/provider'
+import { renderHook } from '@testing-library/react'
 import { usePlan, useTaskList, useTasks } from '../../src/hooks'
-import type { Plan, TaskList, Task } from '@crux/core/plan'
-import type { JsonObject } from '@crux/core/store'
-
-// ── Mock Convex API ──
-
-/**
- * Simulates Convex's useQuery hook + memory component API.
- *
- * Documents are stored in the same format that cruxConvexStore.set() writes:
- * - content: JSON-stringified JsonObject
- * - metadata: { _cruxDoc: true }
- */
-function createMockConvexBackend() {
-  const data = new Map<string, Record<string, unknown>>()
-  let version = 0
-  const listeners = new Set<() => void>()
-
-  const api = {
-    memory: {
-      get: Symbol('memory.get'),
-      list: Symbol('memory.list'),
-    },
-  }
-
-  function notify() {
-    version++
-    for (const listener of listeners) listener()
-  }
-
-  /** Store a document in the _cruxDoc serialization format. */
-  function setDoc(key: string, value: JsonObject) {
-    data.set(key, {
-      _id: `id_${key}`,
-      key,
-      content: JSON.stringify(value),
-      metadata: { _cruxDoc: true },
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-    notify()
-  }
-
-  function deleteDoc(key: string) {
-    data.delete(key)
-    notify()
-  }
-
-  /**
-   * Mock useQuery that simulates Convex's behavior.
-   * Returns data synchronously (like Convex's reactive queries after hydration).
-   */
-  function useQuery(query: unknown, args: unknown): unknown {
-    if (args === 'skip') return undefined
-
-    const typedArgs = args as Record<string, unknown>
-
-    if (query === api.memory.get) {
-      return data.get(typedArgs.key as string) ?? null
-    }
-
-    if (query === api.memory.list) {
-      const prefix = typedArgs.prefix as string
-      const entries: Array<Record<string, unknown>> = []
-      for (const [key, value] of data) {
-        if (key.startsWith(prefix)) {
-          entries.push({ ...value, key })
-        }
-      }
-      return { docs: entries }
-    }
-
-    return undefined
-  }
-
-  return { api, useQuery, setDoc, deleteDoc, data }
-}
-
-function createConvexWrapper(backend: ReturnType<typeof createMockConvexBackend>) {
-  const transport = createConvexTransport({
-    api: backend.api,
-    useQuery: backend.useQuery,
-  })
-  return function Wrapper({ children }: { children: React.ReactNode }) {
-    return <CruxProvider transport={transport}>{children}</CruxProvider>
-  }
-}
+import { createConvexWrapper, createMockConvexBackend } from './convex-contract-harness'
+import type { Plan, TaskList, Task } from '@use-crux/core/plan'
+import type { JsonObject } from '@use-crux/core/store'
 
 // ── plan:* key resolution ──
 
-describe('createConvexTransport — plan:* keys', () => {
+describe('Convex store contract transport — plan:* keys', () => {
   it('resolves plan:* key to a deserialized Plan object', () => {
     const backend = createMockConvexBackend()
     const plan: Plan = {
@@ -162,7 +76,7 @@ describe('createConvexTransport — plan:* keys', () => {
 
 // ── tasklist:* key resolution ──
 
-describe('createConvexTransport — tasklist:* keys', () => {
+describe('Convex store contract transport — tasklist:* keys', () => {
   it('resolves tasklist:* key to a deserialized TaskList object', () => {
     const backend = createMockConvexBackend()
     const list: TaskList = {
@@ -207,7 +121,7 @@ describe('createConvexTransport — tasklist:* keys', () => {
 
 // ── task:* prefix resolution ──
 
-describe('createConvexTransport — task:* prefix queries', () => {
+describe('Convex store contract transport — task:* prefix queries', () => {
   it('resolves task:* prefix to deserialized Task[] array', () => {
     const backend = createMockConvexBackend()
     const t1: Task = {
@@ -296,7 +210,7 @@ describe('createConvexTransport — task:* prefix queries', () => {
 
 // ── metadata reactivity through Convex transport ──
 
-describe('createConvexTransport — metadata reactivity', () => {
+describe('Convex store contract transport — metadata reactivity', () => {
   it('reflects plan metadata.status changes reactively', () => {
     const backend = createMockConvexBackend()
     const plan: Plan = {
@@ -310,17 +224,8 @@ describe('createConvexTransport — metadata reactivity', () => {
     }
     backend.setDoc('plan:plan-1', plan as unknown as JsonObject)
 
-    // Need to recreate wrapper on each render to pick up updated mock data
-    const transport = createConvexTransport({
-      api: backend.api,
-      useQuery: backend.useQuery,
-    })
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <CruxProvider transport={transport}>{children}</CruxProvider>
-    )
-
     const { result, rerender } = renderHook(() => usePlan('plan-1'), {
-      wrapper,
+      wrapper: createConvexWrapper(backend),
     })
 
     expect(result.current!.metadata!.status).toBe('draft')
@@ -349,16 +254,8 @@ describe('createConvexTransport — metadata reactivity', () => {
     }
     backend.setDoc('task:tl-1:write-intro', task as unknown as JsonObject)
 
-    const transport = createConvexTransport({
-      api: backend.api,
-      useQuery: backend.useQuery,
-    })
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <CruxProvider transport={transport}>{children}</CruxProvider>
-    )
-
     const { result, rerender } = renderHook(() => useTasks('tl-1'), {
-      wrapper,
+      wrapper: createConvexWrapper(backend),
     })
 
     expect(result.current![0].status).toBe('pending')

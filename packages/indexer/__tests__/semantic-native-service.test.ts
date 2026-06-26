@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProjectSemantic } from '../index'
+import { indexProjectSemantic } from '..'
 import type { IndexPatchFacts } from '../indexer/patches'
 import {
   createNativeSemanticBackend,
@@ -22,6 +22,20 @@ afterEach(async () => {
 })
 
 describe('native semantic index service', () => {
+  it('reports tsgo and the configured executable as its compiler runtime identity', async () => {
+    const root = await fixtureRoot()
+    const backend = createNativeSemanticBackend({ tsserverPath: '/opt/bin/tsgo' })
+
+    expect(backend.compilerRuntimeIdentity).toBeTypeOf('function')
+    await expect(
+      Promise.resolve(backend.compilerRuntimeIdentity?.({ root, backend: backend.identity })),
+    ).resolves.toEqual({
+      name: 'tsgo',
+      version: 'native-preview-v1',
+      executable: '/opt/bin/tsgo',
+    })
+  })
+
   it('reuses the experimental native engine host for the same semantic project identity', async () => {
     const root = await fixtureRoot()
     await writeTsconfig(root)
@@ -29,7 +43,7 @@ describe('native semantic index service', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer' })
       `,
     )
@@ -59,7 +73,7 @@ describe('native semantic index service', () => {
     await writeFile(
       file,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const cached = prompt({ id: 'cached' })
       `,
     )
@@ -104,7 +118,7 @@ describe('native semantic index service', () => {
     await writeFile(
       file,
       `
-        import { context, prompt, tool } from '@crux/core'
+        import { context, prompt, tool } from '@use-crux/core'
         import { z } from 'zod'
 
         const Input0 = z.object({
@@ -150,7 +164,7 @@ describe('native semantic index service', () => {
     await writeFile(
       file,
       `
-        import { context, prompt, tool } from '@crux/core'
+        import { context, prompt, tool } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const searchTool = tool({ name: 'search', execute: async () => ({}) })
@@ -194,7 +208,7 @@ describe('native semantic index service', () => {
     await writeFile(
       directFile,
       `
-        import { context, prompt } from '@crux/core'
+        import { context, prompt } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const writerPrompt = prompt({
@@ -206,7 +220,7 @@ describe('native semantic index service', () => {
     await writeFile(
       sharedFile,
       `
-        import { memory } from '@crux/core/agent'
+        import { memory } from '@use-crux/core/agent'
 
         export const sessionMemory = memory({ id: 'session' })
       `,
@@ -239,7 +253,7 @@ describe('native semantic index service', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
 
         export default config({
           experimental: {
@@ -254,7 +268,7 @@ describe('native semantic index service', () => {
     await writeFile(
       join(root, 'src/writer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer' })
       `,
     )

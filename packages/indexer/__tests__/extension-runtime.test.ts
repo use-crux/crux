@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { IndexDiagnostic, IndexLintFinding, ProjectDefinitionKind } from '@crux/core/project-index'
+import type { IndexDiagnostic, IndexLintFinding, ProjectDefinitionKind } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
 import {
   createIndexerExtensionRuntime,
@@ -12,8 +12,8 @@ import {
   type IndexerExtension,
   type StaticExtractionInput,
 } from '../indexer/extensions'
-import { internalStaticCallContext, internalTypeScriptContext } from '../indexer/extensions/internal-native'
-import { createExtractContext } from '../indexer/extensions/runtime'
+import { internalStaticCallContext, internalTypeScriptContext } from '../indexer/static-index/compatibility/syntax-record-bridge/native-context'
+import { createExtractContext } from '../indexer/extensions/runtime/engine'
 import { indexLintFinding } from '../indexer/lints/rules'
 
 describe('indexer extension runtime', () => {
@@ -52,9 +52,21 @@ describe('indexer extension runtime', () => {
       { name: '@acme/zeta', version: '2' },
     ])
     expect(runtime.manifest.extractors).toEqual([
-      { extension: { name: '@acme/alpha', version: '1' }, name: 'alpha.define' },
-      { extension: { name: '@acme/zeta', version: '2' }, name: 'z.first' },
-      { extension: { name: '@acme/zeta', version: '2' }, name: 'z.second' },
+      {
+        extension: { name: '@acme/alpha', version: '1' },
+        name: 'alpha.define',
+        patterns: [{ kind: 'call', name: 'defineAlpha' }],
+      },
+      {
+        extension: { name: '@acme/zeta', version: '2' },
+        name: 'z.first',
+        patterns: [{ kind: 'call', name: 'zFirst' }],
+      },
+      {
+        extension: { name: '@acme/zeta', version: '2' },
+        name: 'z.second',
+        patterns: [{ kind: 'call', name: 'zSecond' }],
+      },
     ])
     expect(runtime.manifest.callNames).toEqual(['defineAlpha', 'zFirst', 'zSecond'])
     expect(runtime.manifest.relationSpecs.map((spec) => spec.type)).toEqual(['@acme/alpha/uses_tool'])
@@ -680,7 +692,7 @@ describe('indexer extension runtime', () => {
   })
 
   it('applies explicit extension trust policy before public loading', () => {
-    expect(isIndexerExtensionAllowed({ name: '@crux/indexer/crux-core' })).toBe(true)
+    expect(isIndexerExtensionAllowed({ name: '@use-crux/indexer/crux-core' })).toBe(true)
     expect(isIndexerExtensionAllowed({ name: '@acme/indexer' })).toBe(false)
     expect(
       isIndexerExtensionAllowed({ name: '@acme/indexer' }, { mode: 'allowlisted', allow: ['@acme/indexer'] }),

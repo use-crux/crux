@@ -7,8 +7,8 @@
  * @module
  */
 
-import type { Plan, TaskList, Task } from '@crux/core/plan'
-import type { StoreEntry } from '@crux/core/store'
+import type { Plan, TaskList, Task } from '@use-crux/core/plan'
+import type { StoreEntry } from '@use-crux/core/store'
 import { useCruxTransport } from './provider'
 
 /** Key prefix helpers (must match plan/helpers.ts conventions) */

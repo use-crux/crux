@@ -18,8 +18,8 @@ import type {
   ProjectModelProvenance,
   ProjectRelation,
   SourceLocation,
-} from '@crux/core/project-index'
-import { createProjectModelDiagnosticId } from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
+import { createProjectModelDiagnosticId } from '@use-crux/core/project-index'
 
 /**
  * Build Project Model diagnostics from the resolved config state, index

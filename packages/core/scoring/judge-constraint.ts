@@ -9,9 +9,9 @@
  * which is exactly what a corrective message wants to be.
  *
  * This is a factory, not a new primitive — the same composition pattern as
- * `citationConstraint()` in `@crux/core/citations`. For the reverse bridge
+ * `citationConstraint()` in `@use-crux/core/citations`. For the reverse bridge
  * (regression-testing a production constraint in the eval suite), see
- * `constraintScorer()` in `@crux/core/quality`.
+ * `constraintScorer()` in `@use-crux/core/quality`.
  *
  * @module
  */
@@ -111,7 +111,7 @@ export interface JudgeConstraintOptions<TDetail = unknown, TSchema extends z.Zod
  *
  * @example
  * ```ts
- * import { llmJudge, judgeConstraint } from '@crux/core/scoring'
+ * import { llmJudge, judgeConstraint } from '@use-crux/core/scoring'
  *
  * const brandVoice = llmJudge({
  *   id: 'brand-voice',

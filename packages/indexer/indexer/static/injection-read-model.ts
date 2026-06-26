@@ -6,7 +6,7 @@ import type {
   ProjectDefinition,
   ProjectDefinitionKind,
   ProjectRelation,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import { factsUseEntries } from './use-entry-helpers'
 
 export interface InjectionUsePath {

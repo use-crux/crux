@@ -336,7 +336,7 @@ describe('serializeProjectIndex', () => {
       indexedAt: '2026-05-25T00:00:00.000Z',
       sourceGraph: {
         schemaVersion: 1,
-        producedBy: '@crux/indexer',
+        producedBy: '@use-crux/indexer',
         capabilities: [
           'source-dependencies',
           'source-dependents',

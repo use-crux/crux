@@ -34,8 +34,8 @@ export function getPromptDefinitionSource(prompt: object): { file: string; line:
  *
  * @example
  * ```ts
- * import { prompt, context } from '@crux/core'
- * import { generate } from '@crux/ai'
+ * import { prompt, context } from '@use-crux/core'
+ * import { generate } from '@use-crux/ai'
  *
  * const editDraft = prompt({
  *   id: 'draft-edit',

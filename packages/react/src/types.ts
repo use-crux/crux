@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { JsonObject, StoreEntry, ListOptions } from '@crux/core/store'
+import type { JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
 
 /**
  * Transport interface for reactive CruxStore access.

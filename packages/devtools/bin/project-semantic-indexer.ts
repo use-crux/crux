@@ -8,15 +8,16 @@
 
 import { createInterface } from 'node:readline'
 import { resolve } from 'node:path'
-import { type IndexPatchBudget, type SemanticBackendSelection, type SemanticSourceProfile } from '@crux/indexer'
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
-import { createSemanticIndexService } from '@crux/indexer/indexer/semantic/service'
+import { type IndexPatchBudget, type SemanticBackendSelection, type SemanticSourceProfile } from '@use-crux/indexer'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
+import { createSemanticIndexService } from '@use-crux/indexer/host/semantic'
 import {
   assertProjectIndexWorkerProtocolV2,
   writePatchEvents,
   writeProjectIndexPhaseError,
   type ProjectIndexWorkerErrorContext,
 } from './project-indexer-protocol'
+import { createSemanticTimingCollector } from './project-indexer-semantic-timing'
 
 const rl = createInterface({
   input: process.stdin,
@@ -87,6 +88,7 @@ async function handleLine(line: string): Promise<void> {
     if (!req.root) throw new Error('indexProjectSemantic requires root')
     assertProjectIndexWorkerProtocolV2(req.protocolVersion)
 
+    const semanticTimings = createSemanticTimingCollector()
     const patch =
       req.files && req.files.length > 0
         ? await semanticService.indexFiles({
@@ -101,6 +103,7 @@ async function handleLine(line: string): Promise<void> {
               ? normalizeProjectFiles(req.root, req.dependencyClosure)
               : undefined,
             sourceProfile: req.sourceProfile ? normalizeSourceProfile(req.root, req.sourceProfile) : undefined,
+            semanticInstrumentation: semanticTimings.instrumentation,
           })
         : await semanticService.indexProject({
             root: req.root,
@@ -109,8 +112,9 @@ async function handleLine(line: string): Promise<void> {
             semanticBudget: req.semanticBudget,
             semanticBackend: req.semanticBackend,
             previousIndex: req.previousIndex,
+            semanticInstrumentation: semanticTimings.instrumentation,
           })
-    await writePatchEvents(writeResponse, 'indexProjectSemantic', patch)
+    await writePatchEvents(writeResponse, 'indexProjectSemantic', patch, { timings: semanticTimings.summary() })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     process.stderr.write(`[project-semantic-indexer] error: ${message}\n`)

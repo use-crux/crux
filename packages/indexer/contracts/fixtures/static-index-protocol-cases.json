@@ -1,0 +1,46 @@
+{
+  "workerError": {
+    "id": 11,
+    "ok": false,
+    "error": "static compiler failed"
+  },
+  "invalidRequests": [
+    {
+      "protocolVersion": 1,
+      "method": "staticIndexPrepare",
+      "root": "/repo",
+      "files": []
+    },
+    {
+      "protocolVersion": 2,
+      "method": "staticIndexPrepare",
+      "root": "",
+      "identity": {
+        "protocolVersion": 2
+      },
+      "files": []
+    }
+  ],
+  "analyzeStreamError": {
+    "id": 21,
+    "ok": false,
+    "type": "error",
+    "error": "analyze failed"
+  },
+  "finalizeStreamError": {
+    "id": 22,
+    "ok": false,
+    "type": "error",
+    "error": "finalize failed"
+  },
+  "invalidAnalyzeStreamEvent": {
+    "id": 23,
+    "ok": true,
+    "type": "unknown"
+  },
+  "invalidFinalizeStreamEvent": {
+    "id": 24,
+    "ok": true,
+    "type": "event"
+  }
+}

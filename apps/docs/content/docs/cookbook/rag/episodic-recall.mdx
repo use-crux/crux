@@ -6,9 +6,9 @@ description: Recall relevant past chat events with the episodes memory block.
 Use `episodes()` when the agent needs to answer questions about what happened before. It is append-only, scoped by namespace, and can use dense vector search when the backing store supports it.
 
 ```ts
-import { prompt } from '@crux/core'
-import { generate } from '@crux/ai'
-import { memory, episodes } from '@crux/core/memory'
+import { prompt } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
+import { memory, episodes } from '@use-crux/core/memory'
 import { z } from 'zod'
 
 const chatEpisodes = episodes({

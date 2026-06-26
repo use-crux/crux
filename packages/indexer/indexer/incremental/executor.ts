@@ -4,7 +4,7 @@ import {
   compileProjectIndex,
   projectIndexSnapshotFromCompilerResult,
 } from '../compiler'
-import { indexProjectSemantic } from '../index'
+import { indexProjectSemantic } from '..'
 import { incrementalExecutionReport } from './execution-report'
 import type { IncrementalIndexExecutionResult, IndexProjectIncrementalOptions } from './execution-types'
 import { indexInvalidationFromDecision } from './invalidation'
@@ -40,7 +40,7 @@ export async function indexProjectIncremental(
       root: options.root,
       configPath: options.configPath,
       projectName: options.projectName,
-      mode: 'source-only',
+      mode: options.resolutionMode ?? 'source-only',
     })
     durationMsByPhase.ast = durationMsSince(astStarted)
     const snapshot = projectIndexSnapshotFromCompilerResult(compilerResult)

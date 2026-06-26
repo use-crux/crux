@@ -2,7 +2,7 @@ import { mkdtempSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import * as runnerCore from '@crux/core/quality/internal/runner'
+import * as runnerCore from '@use-crux/core/quality/internal/runner'
 import { collectEvaluationFiles } from './quality-collect'
 import { executeEvaluations, type QualityRunEvent } from './quality-execute'
 

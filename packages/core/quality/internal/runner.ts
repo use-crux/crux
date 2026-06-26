@@ -2,11 +2,11 @@
  * The runner tooling contract — the single entry point the first-party
  * `crux quality` worker (packages/devtools) uses to drive the engine.
  *
- * This is NOT a public API. It is exported as the `@crux/core/quality/internal/runner`
+ * This is NOT a public API. It is exported as the `@use-crux/core/quality/internal/runner`
  * subpath solely so the devtools worker can import the engine across the
  * package boundary; it carries no stability guarantees, is excluded from the
  * docs, and may change in any release. Application code must import
- * `@crux/core/quality` instead.
+ * `@use-crux/core/quality` instead.
  *
  * @internal
  * @module

@@ -8,7 +8,7 @@ Guardrails validate content before and after LLM generation. No AI SDK offers th
 ## Quick Start
 
 ```ts title="guardrails.ts"
-import { guardrail, createSafetyPlugin } from '@crux/core/safety'
+import { guardrail, createSafetyPlugin } from '@use-crux/core/safety'
 
 // Block prompt injections on input
 const injectionGuard = guardrail({
@@ -56,7 +56,7 @@ Guardrails are Layer 1 of Crux's safety architecture:
 Creates a frozen guardrail object. Each guard declares a single **phase** and a `validate` function.
 
 ```ts
-import { guardrail } from '@crux/core/safety'
+import { guardrail } from '@use-crux/core/safety'
 
 const guard = guardrail({
   name: 'my-guard',
@@ -161,7 +161,7 @@ Guardrails support four scoping levels, merged via union. When names collide, pe
 ### Global (all generate calls)
 
 ```ts
-import { createSafetyPlugin } from '@crux/core/safety'
+import { createSafetyPlugin } from '@use-crux/core/safety'
 
 config({
   plugins: [createSafetyPlugin({ guardrails: [injectionGuard, piiGuard] })],
@@ -214,7 +214,7 @@ result._meta.guardrails           // { applied: [...], blocked: false }
 Thrown when a guard blocks content:
 
 ```ts
-import { GuardrailBlockedError } from '@crux/core/safety'
+import { GuardrailBlockedError } from '@use-crux/core/safety'
 
 try {
   await adapter.generate(prompt, opts)
@@ -254,13 +254,13 @@ Mixed strategies work together. Each guard runs independently — `buffer: 'none
 For custom dialects or non-Crux streams, the session exposes the same protocol directly — `safety.openStream().transform()` returns a standard Web Streams API `TransformStream<string, string>`:
 
 ```ts
-import { createSafety } from '@crux/core/safety'
+import { createSafety } from '@use-crux/core/safety'
 
 const safety = createSafety({ call: { guardrails: [iconFixer, piiGuard] }, promptId, model })
 const guarded = anyTextStream.pipeThrough(safety.openStream().transform())
 ```
 
-The guards themselves are also standalone — `guardrail()` has no adapter dependencies. You can use `@crux/core/safety` purely for the safety primitives without the rest of Crux.
+The guards themselves are also standalone — `guardrail()` has no adapter dependencies. You can use `@use-crux/core/safety` purely for the safety primitives without the rest of Crux.
 
 ### `onChunk` handler
 
@@ -358,7 +358,7 @@ onChunk: async (chunk) => {
 Test guards against a matrix of cases:
 
 ```ts
-import { evaluateGuardrail } from '@crux/core/safety'
+import { evaluateGuardrail } from '@use-crux/core/safety'
 
 const report = await evaluateGuardrail(piiGuard, [
   { input: 'Email me at john@example.com', expect: 'redact' },
@@ -377,7 +377,7 @@ Errors in the guard are caught gracefully — the case reports `action: 'error'`
 Runtime type guard:
 
 ```ts
-import { isGuardrail } from '@crux/core/safety'
+import { isGuardrail } from '@use-crux/core/safety'
 
 isGuardrail(piiGuard)              // true
 isGuardrail({ _tag: 'Prompt' })    // false
@@ -395,7 +395,7 @@ Guardrails emit two event types to the devtools protocol:
 
 These events:
 - Appear in the devtools timeline alongside traces, tool calls, and memory events
-- Are emitted as OTel spans when `@crux/otel` is active
+- Are emitted as OTel spans when `@use-crux/otel` is active
 - Are wired through `InstrumentationHooks` (`onGuardrailRun`)
 
 Use `InstrumentationHooks.onGuardrailRun` plus the audit on `result._meta.guardrails` for application-level logging and EU AI Act audit trails. The optional `category` field on each policy lets reporting aggregate by risk type (`pii`, `jailbreak`, `toxicity`, ...) instead of by policy name.

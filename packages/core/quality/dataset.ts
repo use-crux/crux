@@ -65,7 +65,7 @@ export interface Dataset<TInput, TExpected = never> {
  * @example
  * ```ts
  * import { z } from 'zod'
- * import { evaluate, dataset } from '@crux/core/quality'
+ * import { evaluate, dataset } from '@use-crux/core/quality'
  *
  * const goldenSet = dataset('golden/support.jsonl', {
  *   input: z.object({ question: z.string(), locale: z.enum(['en', 'nl']) }),

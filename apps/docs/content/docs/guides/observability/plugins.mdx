@@ -10,8 +10,8 @@ Crux has a generic plugin system for extending the runtime. Plugins can install 
 Pass plugins to `config()`:
 
 ```ts title="crux.config.ts"
-import { config } from '@crux/core'
-import { withTelemetry } from '@crux/otel'
+import { config } from '@use-crux/core'
+import { withTelemetry } from '@use-crux/otel'
 
 export default config({
   plugins: [withTelemetry({ serviceName: 'my-app' })],
@@ -21,10 +21,13 @@ export default config({
 Multiple plugins compose automatically:
 
 ```ts title="crux.config.ts"
-import { withTelemetry } from '@crux/otel'
+import { withTelemetry } from '@use-crux/otel'
 
 config({
-  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // local server or tunnel only
+  observability: {
+    serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
   plugins: [withTelemetry({ serviceName: 'my-app' }), myCustomPlugin],
 })
 ```
@@ -32,24 +35,24 @@ config({
 Plugins are processed in order. Each plugin's `install()` receives the cumulative runtime from all prior plugins.
 
 <Callout type="info">
-  When you explicitly set `devtools.serverUrl` and no `observability` transport is configured, Crux installs the
-  local devtools transport before your custom plugins. Remote collectors and production export belong under
-  `observability` or an explicit telemetry plugin.
+  When you explicitly set `devtools.serverUrl` and no `observability` transport is configured, Crux installs the local
+  devtools transport before your custom plugins. Tunnel/serverless ingest, remote collectors, and production export
+  belong under `observability` or an explicit telemetry plugin.
 </Callout>
 
 ## Built-in plugins
 
-| Plugin            | Package                    | Purpose                                          |
-| ----------------- | -------------------------- | ------------------------------------------------ |
-| `withDevtools()`  | `@crux/core/observability` | Visual tracing UI for development                |
-| `withTelemetry()` | `@crux/otel`               | OpenTelemetry spans for production observability |
+| Plugin            | Package                        | Purpose                                          |
+| ----------------- | ------------------------------ | ------------------------------------------------ |
+| `withDevtools()`  | `@use-crux/core/observability` | Visual tracing UI for development                |
+| `withTelemetry()` | `@use-crux/otel`               | OpenTelemetry spans for production observability |
 
 ## Writing a custom plugin
 
 Implement the `CruxPlugin` interface:
 
 ```ts title="my-plugin.ts"
-import type { CruxPlugin } from '@crux/core'
+import type { CruxPlugin } from '@use-crux/core'
 
 export function createMyPlugin(options: { endpoint: string }): CruxPlugin {
   return {
@@ -131,7 +134,7 @@ Plugin `dispose()` functions are called in **reverse** order during `registry.di
 <Cards>
   <Card
     title="Production Telemetry"
-    description="Send traces to Datadog, Honeycomb, or Grafana via @crux/otel."
+    description="Send traces to Datadog, Honeycomb, or Grafana via @use-crux/otel."
     href="/docs/guides/observability/telemetry"
   />
   <Card

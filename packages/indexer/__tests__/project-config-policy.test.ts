@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProject, inspectProjectConfig, resolveProjectModel } from '../index'
+import { indexProject, inspectProjectConfig, resolveProjectModel } from '..'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -27,18 +27,19 @@ describe('config-policy Project Model resolution', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
 
         export default config({
           lint: { profile: 'strict' },
           quality: { id: 'policy-quality' },
+          experimental: { indexer: { nativeAst: true } },
         })
       `,
     )
     await writeFile(
       join(root, 'src/answer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         ;(globalThis as unknown as Record<string, unknown>).${marker} = true
 
@@ -58,6 +59,8 @@ describe('config-policy Project Model resolution', () => {
     expect(model.definitions.map((definition) => definition.id)).toContain('prompt:answer')
     expect(config.configFile.status).toBe('loaded')
     expect(config.quality.id).toEqual({ value: 'policy-quality', origin: 'config' })
+    expect(config.experimental.indexer.nativeAst).toEqual({ value: 'oxc', origin: 'config' })
+    expect(config.experimental.indexer.native).toEqual({ value: 'false', origin: 'default' })
     expect(snapshot.lint?.profile).toBe('strict')
     expect(snapshot.definitions.map((definition) => definition.id)).toContain('prompt:answer')
     expect((globalThis as unknown as Record<string, unknown>)[marker]).toBeUndefined()
@@ -75,7 +78,7 @@ describe('config-policy Project Model resolution', () => {
     await writeFile(
       join(root, 'src/answer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const answer = prompt({
           id: 'answer',

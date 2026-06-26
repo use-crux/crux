@@ -1,5 +1,5 @@
 /**
- * `@crux/core/agent` — Inter-agent coordination primitives.
+ * `@use-crux/core/agent` — Inter-agent coordination primitives.
  *
  * Provides a shared blackboard for multi-agent state, structured
  * handoffs for context transfer between agents, and delegates for

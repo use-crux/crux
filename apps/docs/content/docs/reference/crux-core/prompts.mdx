@@ -4,7 +4,7 @@ description: prompt(), createPrompts(), Prompt, and prompt resolution.
 ---
 
 ```ts
-import { prompt, createPrompts } from '@crux/core'
+import { prompt, createPrompts } from '@use-crux/core'
 ```
 
 `prompt()` creates a frozen, SDK-agnostic prompt definition. It is the contract adapters execute and the object Crux inspects, tests, caches, and instruments.
@@ -23,47 +23,47 @@ const summarize = prompt({
 
 ### Config
 
-| Field | Type | Description |
-|---|---|---|
-| `id` | `string?` | Stable identifier for registry lookup, logs, devtools, evals, and cache keys. |
-| `description` | `string?` | Human-readable description. |
-| `tags` | `readonly string[]?` | Tags for filtering, discovery, and eval grouping. |
-| `use` | `readonly ContextEntry[]?` | Composition entries. Accepts [`context()`](/docs/reference/crux-core/contexts), [`when()`](/docs/reference/crux-core/contexts), [`match()`](/docs/reference/crux-core/contexts), [skills](/docs/reference/crux-core/skill), [memory](/docs/reference/crux-core/memory), [blackboards](/docs/reference/crux-core/agent), [retrievers, retrieval pipelines, grounding](/docs/reference/crux-core/retrieval), [custom `injectable()` entries](#custom-injectable-entries), and falsy values. |
-| `input` | `ZodType?` | Prompt-owned input schema. Merged with context/injectable input schemas. |
-| `output` | `ZodType?` | Structured output schema. Omit for text generation. |
-| `system` | `string \| ({ input }) => string \| Promise<string>` | Role, policy, and high-level instructions. Rendered first and never dropped by token budgeting. |
-| `prompt` | `string \| ({ input }) => string` | Single-turn user/task message. |
-| `messages` | `({ input }) => Message[]` | Message-list mode for chat transcripts, few-shot examples, and multi-turn prompts. |
-| `settings` | `GenerationSettings?` | SDK-agnostic defaults such as `temperature`, `maxTokens`, `topP`, `topK`, and provider pass-through settings. |
-| `adapt` | `AdapterMap?` | Provider/model-specific system, prompt, and settings overrides. |
-| `hooks` | `PromptHooks?` | Per-prompt lifecycle hooks. |
-| `tools` | `ToolSet?` | Prompt-local tools. Injected tools and context tools are merged with these at resolution time. |
-| `toolMiddleware` | `ToolMiddleware \| readonly ToolMiddleware[]?` | Server-side wrappers for prompt tools, including audit hooks and [human approval](/docs/reference/crux-core/tool-middleware). |
-| `toolChoice` | `ToolChoice?` | Tool selection strategy for adapters that support it. |
-| `stopWhen` | `StopCondition?` | Stop condition for multi-step tool use. |
-| `tests` | `EvalCase[]?` | Inline eval cases discovered by the eval runner. |
-| `constraints` | `ConstraintDef[]?` | Semantic constraints evaluated around generation. |
-| `guardrails` | `GuardrailDef[]?` | Pre/post generation guardrails. |
-| `cache` | `PromptCacheOptions?` | Prompt cache hints consumed by plugins such as semantic response caching. |
+| Field            | Type                                                 | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | `string?`                                            | Stable identifier for registry lookup, logs, devtools, evals, and cache keys.                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `description`    | `string?`                                            | Human-readable description.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `tags`           | `readonly string[]?`                                 | Tags for filtering, discovery, and eval grouping.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `use`            | `readonly ContextEntry[]?`                           | Composition entries. Accepts [`context()`](/docs/reference/crux-core/contexts), [`when()`](/docs/reference/crux-core/contexts), [`match()`](/docs/reference/crux-core/contexts), [skills](/docs/reference/crux-core/skill), [memory](/docs/reference/crux-core/memory), [blackboards](/docs/reference/crux-core/agent), [retrievers, retrieval pipelines, grounding](/docs/reference/crux-core/retrieval), [custom `injectable()` entries](#custom-injectable-entries), and falsy values. |
+| `input`          | `ZodType?`                                           | Prompt-owned input schema. Merged with context/injectable input schemas.                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `output`         | `ZodType?`                                           | Structured output schema. Omit for text generation.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `system`         | `string \| ({ input }) => string \| Promise<string>` | Role, policy, and high-level instructions. Rendered first and never dropped by token budgeting.                                                                                                                                                                                                                                                                                                                                                                                           |
+| `prompt`         | `string \| ({ input }) => string`                    | Single-turn user/task message.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `messages`       | `({ input }) => Message[]`                           | Message-list mode for chat transcripts, few-shot examples, and multi-turn prompts.                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `settings`       | `GenerationSettings?`                                | SDK-agnostic defaults such as `temperature`, `maxTokens`, `topP`, `topK`, and provider pass-through settings.                                                                                                                                                                                                                                                                                                                                                                             |
+| `adapt`          | `AdapterMap?`                                        | Provider/model-specific system, prompt, and settings overrides.                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `hooks`          | `PromptHooks?`                                       | Per-prompt lifecycle hooks.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `tools`          | `ToolSet?`                                           | Prompt-local tools. Injected tools and context tools are merged with these at resolution time.                                                                                                                                                                                                                                                                                                                                                                                            |
+| `toolMiddleware` | `ToolMiddleware \| readonly ToolMiddleware[]?`       | Server-side wrappers for prompt tools, including audit hooks and [human approval](/docs/reference/crux-core/tool-middleware).                                                                                                                                                                                                                                                                                                                                                             |
+| `toolChoice`     | `ToolChoice?`                                        | Tool selection strategy for adapters that support it.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `stopWhen`       | `StopCondition?`                                     | Stop condition for multi-step tool use.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `tests`          | `EvalCase[]?`                                        | Inline eval cases discovered by the eval runner.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `constraints`    | `ConstraintDef[]?`                                   | Semantic constraints evaluated around generation.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `guardrails`     | `GuardrailDef[]?`                                    | Pre/post generation guardrails.                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `cache`          | `PromptCacheOptions?`                                | Prompt cache hints consumed by plugins such as semantic response caching.                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ### Return Value
 
 `prompt()` returns a frozen `Prompt`.
 
-| Property | Description |
-|---|---|
-| `_tag` | Runtime discriminant: `'Prompt'`. |
-| `id` | Prompt identifier. |
-| `description` | Description string. |
-| `tags` | Tag array. |
-| `contexts` | The original `use` tuple. |
-| `inputSchema` | Runtime merged input schema, if any. |
-| `outputSchema` | Output schema, if configured. |
-| `hasOutput` | Whether structured output is configured. |
-| `config` | Readonly original config. |
+| Property       | Description                              |
+| -------------- | ---------------------------------------- |
+| `_tag`         | Runtime discriminant: `'Prompt'`.        |
+| `id`           | Prompt identifier.                       |
+| `description`  | Description string.                      |
+| `tags`         | Tag array.                               |
+| `contexts`     | The original `use` tuple.                |
+| `inputSchema`  | Runtime merged input schema, if any.     |
+| `outputSchema` | Output schema, if configured.            |
+| `hasOutput`    | Whether structured output is configured. |
+| `config`       | Readonly original config.                |
 
-| Method | Description |
-|---|---|
+| Method              | Description                                                                        |
+| ------------------- | ---------------------------------------------------------------------------------- |
 | `.resolve(options)` | Validates input and returns the composed `ResolvedPrompt` without calling a model. |
 | `.inspect(options)` | Returns token/count/source breakdowns for debugging composition and token budgets. |
 
@@ -101,7 +101,7 @@ type ToolModelOutput =
   | { type: 'content'; value: readonly ToolContentPart[] }
 ```
 
-The shape is provider-neutral and compatible with the AI SDK's model-message format. `@crux/ai` passes it through directly. Native adapters use the same metadata: Google maps supported media to function-response parts, Anthropic maps text/images/PDFs to native `tool_result` content blocks, and OpenAI Chat Completions receives deterministic text references for non-text parts because that API only accepts text tool results.
+The shape is provider-neutral and compatible with the AI SDK's model-message format. `@use-crux/ai` passes it through directly. Native adapters use the same metadata: Google maps supported media to function-response parts, Anthropic maps text/images/PDFs to native `tool_result` content blocks, and OpenAI Chat Completions receives deterministic text references for non-text parts because that API only accepts text tool results.
 
 ## Composition With `use`
 
@@ -130,19 +130,19 @@ Every entry below is injectable during prompt resolution. Dedicated primitives h
 
 Common entry behavior:
 
-| Entry | What it contributes |
-|---|---|
-| [`context()`](/docs/reference/crux-core/contexts) | System text, input fields, tools, constraints, and guardrails. |
-| [`when()`](/docs/reference/crux-core/contexts) | Includes a context only when its predicate passes. |
-| [`match()`](/docs/reference/crux-core/contexts) | Selects one branch of contexts by runtime discriminator. |
-| [`memory()`](/docs/reference/crux-core/memory) | Memory context, memory tools, capture/flush lifecycle. |
-| [`blackboard()`](/docs/reference/crux-core/agent) | Shared state context plus focused read/write tools. |
-| [`retriever()` / `retrievalPipeline()`](/docs/reference/crux-core/retrieval) | Retrieval context, search/source tools, and trace metadata according to injection options. |
-| [`grounding()`](/docs/reference/crux-core/retrieval) | Evidence injection, citation metadata, constraints, and optional tools. |
-| [`skill()`](/docs/reference/crux-core/skill) | A skill index plus `LoadSkill` and `LoadReference` tools. Loaded skill instructions are re-injected at system-prompt level. |
-| [`injectable()`](#custom-injectable-entries) | Custom context, tools, constraints, guardrails, and metadata. |
-| [`contributor()`](#custom-contributor-entries) | Everything `injectable()` does, plus a `when` gate with exclusion reporting, nested `use` entries, and pipeline re-entry with any entry kind. |
-| `false`, `null`, `undefined` | Ignored. Useful for static flags. |
+| Entry                                                                        | What it contributes                                                                                                                           |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`context()`](/docs/reference/crux-core/contexts)                            | System text, input fields, tools, constraints, and guardrails.                                                                                |
+| [`when()`](/docs/reference/crux-core/contexts)                               | Includes a context only when its predicate passes.                                                                                            |
+| [`match()`](/docs/reference/crux-core/contexts)                              | Selects one branch of contexts by runtime discriminator.                                                                                      |
+| [`memory()`](/docs/reference/crux-core/memory)                               | Memory context, memory tools, capture/flush lifecycle.                                                                                        |
+| [`blackboard()`](/docs/reference/crux-core/agent)                            | Shared state context plus focused read/write tools.                                                                                           |
+| [`retriever()` / `retrievalPipeline()`](/docs/reference/crux-core/retrieval) | Retrieval context, search/source tools, and trace metadata according to injection options.                                                    |
+| [`grounding()`](/docs/reference/crux-core/retrieval)                         | Evidence injection, citation metadata, constraints, and optional tools.                                                                       |
+| [`skill()`](/docs/reference/crux-core/skill)                                 | A skill index plus `LoadSkill` and `LoadReference` tools. Loaded skill instructions are re-injected at system-prompt level.                   |
+| [`injectable()`](#custom-injectable-entries)                                 | Custom context, tools, constraints, guardrails, and metadata.                                                                                 |
+| [`contributor()`](#custom-contributor-entries)                               | Everything `injectable()` does, plus a `when` gate with exclusion reporting, nested `use` entries, and pipeline re-entry with any entry kind. |
+| `false`, `null`, `undefined`                                                 | Ignored. Useful for static flags.                                                                                                             |
 
 Manual `.asContext()` and `.asTools()` helpers remain useful when integrating with a framework that does not run Crux prompt resolution directly. For normal prompts, prefer putting the primitive in `use`.
 
@@ -151,7 +151,7 @@ Manual `.asContext()` and `.asTools()` helpers remain useful when integrating wi
 Use `injectable()` when you are building your own primitive that should compose through `use`.
 
 ```ts
-import { context, injectable, prompt } from '@crux/core'
+import { context, injectable, prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const accountPlan = injectable({
@@ -193,7 +193,7 @@ Reach for dedicated primitives first: [skills](/docs/reference/crux-core/skill),
 `contributor()` is the next step up from `injectable()`: a first-class `use` entry that can gate itself, bundle nested entries, and contribute to every prompt channel.
 
 ```ts
-import { contributor, prompt } from '@crux/core'
+import { contributor, prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const supportTools = contributor({
@@ -211,13 +211,13 @@ const supportTools = contributor({
 })
 ```
 
-| Option | Type | Description |
-| ------ | ---- | ----------- |
-| `id` | `string` | Required. Appears in observability artifacts (`contributor:<id>`), exclusion records, and tool-collision errors. |
-| `family` | `string?` | Observability grouping label. Defaults to `injectable`. |
-| `input` | `ZodObject?` | Fields merged into the prompt's input schema as required keys; typed in `contribute()`. |
-| `when` | `(input) => boolean` | Synchronous gate. Excluded entries record `{ source: 'contributor:<id>', reason: 'when() predicate returned false' }`. |
-| `use` | `readonly ContextEntry[]?` | Nested entries resolved before the contribution — any entry kind, including other contributors. |
+| Option       | Type                                | Description                                                                                                                                                                      |
+| ------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`         | `string`                            | Required. Appears in observability artifacts (`contributor:<id>`), exclusion records, and tool-collision errors.                                                                 |
+| `family`     | `string?`                           | Observability grouping label. Defaults to `injectable`.                                                                                                                          |
+| `input`      | `ZodObject?`                        | Fields merged into the prompt's input schema as required keys; typed in `contribute()`.                                                                                          |
+| `when`       | `(input) => boolean`                | Synchronous gate. Excluded entries record `{ source: 'contributor:<id>', reason: 'when() predicate returned false' }`.                                                           |
+| `use`        | `readonly ContextEntry[]?`          | Nested entries resolved before the contribution — any entry kind, including other contributors.                                                                                  |
 | `contribute` | `(args) => ContributorContribution` | Async-capable. Returned `contexts`/`use` re-enter the pipeline; `tools` merge with collision detection; `constraints`, `guardrails`, and `metadata` land on the resolved prompt. |
 
 Entries created by `contributor()` resolve through the same compiled prompt pass as contexts, memory, skills, and blackboards.
@@ -233,7 +233,7 @@ Prompt input = prompt.input & all active context input schemas
 Plain contexts contribute required fields. Conditional contexts contribute optional fields because Crux cannot know at compile time which runtime branch will be active.
 
 ```ts twoslash title="merged-input.ts"
-import { context, prompt, when } from '@crux/core'
+import { context, prompt, when } from '@use-crux/core'
 import { z } from 'zod'
 
 const locale = context({
@@ -250,10 +250,7 @@ const brand = context({
 
 const reply = prompt({
   id: 'reply',
-  use: [
-    locale,
-    when(({ brandVoice }) => Boolean(brandVoice), brand),
-  ],
+  use: [locale, when(({ brandVoice }) => Boolean(brandVoice), brand)],
   input: z.object({ question: z.string() }),
   system: 'Reply to the user.',
   prompt: ({ input }) => input.question,
@@ -332,9 +329,9 @@ const objectPrompt = prompt({
 })
 ```
 
-| Prompt shape | Adapter behavior |
-|---|---|
-| No `output` | Text generation. Results expose `text` in adapter-specific shape. |
+| Prompt shape  | Adapter behavior                                                                       |
+| ------------- | -------------------------------------------------------------------------------------- |
+| No `output`   | Text generation. Results expose `text` in adapter-specific shape.                      |
 | With `output` | Structured generation. Results expose validated object data in adapter-specific shape. |
 
 ## Provider Adaptation
@@ -406,10 +403,10 @@ Use this when a prompt has many `use` entries and you need to understand what wa
 
 ## `compilePrompt(config, { ports? })`
 
-Compile a prompt config once: config validation, input-schema merge/conflict detection, and resolver port binding. Each `resolve()` call runs one pipeline pass and returns a `Resolution` with SDK-ready `args` plus an inspection view derived from the same pass.
+Compile a prompt config once: config validation, input-schema merge/conflict detection, and resolver port binding. Each `resolve()` call runs one pipeline pass and returns a `PromptResolution` with SDK-ready `args` plus an inspection view derived from the same pass.
 
 ```ts
-import { compilePrompt, recordingObservability, fixedClock, inMemoryContextCache } from '@crux/core'
+import { compilePrompt, recordingObservability, fixedClock, inMemoryContextCache } from '@use-crux/core'
 
 const observability = recordingObservability()
 const clock = fixedClock(1_000)
@@ -427,9 +424,11 @@ const inspection = pass.inspect()
 observability.contributionPreviews('checked-not-included') // exclusions, no transport needed
 ```
 
-Ports: `observability`, `skills`, `cache`, `clock`, `policy`, `diagnostics`, `instrumentation`. Omitted ports use the production runtime adapters, so `compilePrompt(config)` uses the same ambient pipeline as `prompt(config)`. In-memory fakes for every port (`recordingObservability`, `inMemorySkillSource`, `inMemoryContextCache`, `fixedClock`, `collectingDiagnostics`, `staticPolicy`, `recordingInstrumentation`) ship from `@crux/core`.
+Ports: `observability`, `skills`, `cache`, `clock`, `policy`, `diagnostics`, `instrumentation`. Omitted ports use the production runtime adapters, so `compilePrompt(config)` uses the same ambient pipeline as `prompt(config)`. In-memory fakes for every port (`recordingObservability`, `inMemorySkillSource`, `inMemoryContextCache`, `fixedClock`, `collectingDiagnostics`, `staticPolicy`, `recordingInstrumentation`) ship from `@use-crux/core`.
 
 `compiled.inspect()` runs the same pipeline in quiet inspection mode. `pass.inspect()` is free and never re-runs the pipeline, which means lifecycle hooks and debuggers observe facts from the exact resolution sent to the adapter.
+
+`PromptResolution` is exported from `@use-crux/core`. The older `Resolution` type name remains as a deprecated compatibility alias.
 
 For adapter and primitive authors, the lowered contributor contract types behind the pipeline are also exported: `LoweredContributor`, `Contribution`, `GateResult`, `MergedResolution`, and related types. The lowering, driver, and schema-collection functions are internal to the compiled prompt boundary. Application code never needs these.
 

@@ -8,16 +8,8 @@
  * @module
  */
 
-import type { SystemBlock } from '@crux/core'
-import type { GoogleCacheName, GoogleCacheResolveOptions } from './cache-types'
-
-/** Per-call cache controls accepted by the Google adapter. */
-export interface GoogleSystemCacheCallOptions {
-  /** Skip provider-level system prompt caching for this request. */
-  readonly skip?: boolean
-  /** TTL in seconds for a newly-created CachedContent object. */
-  readonly ttlSeconds?: number
-}
+import type { SystemBlock } from '@use-crux/core'
+import type { GoogleCachedContentCallOptions, GoogleCacheName, GoogleCacheResolveOptions } from './cache-types'
 
 /** Minimal cache lifecycle boundary required by the planner. */
 export interface GoogleSystemCacheResolver {
@@ -44,8 +36,8 @@ export interface ResolveGoogleSystemConfigOptions {
   readonly system?: string
   /** Structured system blocks carrying provider-neutral cache hints. */
   readonly systemBlocks?: readonly SystemBlock[]
-  /** Per-call provider cache controls. */
-  readonly cache?: GoogleSystemCacheCallOptions
+  /** Per-call Google CachedContent controls. */
+  readonly cachedContent?: GoogleCachedContentCallOptions
 }
 
 /** Google request system config emitted by the planner. */
@@ -66,7 +58,9 @@ export interface GoogleSystemConfig {
 export async function resolveGoogleSystemConfig(
   options: ResolveGoogleSystemConfigOptions,
 ): Promise<GoogleSystemConfig> {
-  if (!options.cacheResolver || options.cache?.skip) {
+  const cachedContent = options.cachedContent
+
+  if (!options.cacheResolver || cachedContent?.skip) {
     return { systemInstruction: options.system }
   }
 
@@ -78,7 +72,7 @@ export async function resolveGoogleSystemConfig(
   const cacheName = await options.cacheResolver.resolve(
     options.model,
     cacheablePrefix,
-    options.cache?.ttlSeconds === undefined ? undefined : { ttlSeconds: options.cache.ttlSeconds },
+    cachedContent?.ttlSeconds === undefined ? undefined : { ttlSeconds: cachedContent.ttlSeconds },
   )
   if (!cacheName) {
     return { systemInstruction: options.system }

@@ -7,8 +7,8 @@
 
 import { describe, it, expect } from 'vitest'
 import type { LanguageModel } from 'ai'
-import { executorSpecConformance } from '@crux/core/adapter'
-import type { ExecutorConformanceHarness } from '@crux/core/adapter'
+import { executorSpecConformance } from '@use-crux/core/adapter'
+import type { ExecutorConformanceHarness } from '@use-crux/core/adapter'
 import { aiSdkExecutor } from '../src/executor'
 import { liveSdkGateway } from '../src/gateway'
 import type { SdkGateway } from '../src/gateway'

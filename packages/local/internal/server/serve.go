@@ -19,17 +19,19 @@ import (
 
 // DevServer wraps the Go HTTP server for the "crux dev" command.
 type DevServer struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	Store         *store.Store
-	Quality       *quality.Service
-	Devtools      *devtools.Service
-	Observability *observability.Service
-	Port          int
-	TunnelURL     string
-	tunnel        bool
-	handler       http.Handler
-	httpServer    *http.Server
+	ctx             context.Context
+	cancel          context.CancelFunc
+	Store           *store.Store
+	Quality         *quality.Service
+	Devtools        *devtools.Service
+	Observability   *observability.Service
+	Port            int
+	TunnelURL       string
+	IngestToken     string
+	IngestTokenPath string
+	tunnel          bool
+	handler         http.Handler
+	httpServer      *http.Server
 	// token gates the server whenever it is reachable beyond loopback (tunnel
 	// or CRUX_HOST). Empty on a plain loopback server, where no auth is needed.
 	token string
@@ -46,6 +48,7 @@ type DevServerOptions struct {
 	ProjectIndexerScript string
 	QualityDir           string
 	ObservabilityDBPath  string
+	IngestTokenPath      string
 	// Quiet suppresses slog output (for TUI mode where stdout/stderr is owned by Bubbletea).
 	Quiet bool
 }
@@ -103,23 +106,34 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	host := listenHost()
 	mainGated := !hostIsLoopback(host)
 	token := generateSessionToken()
+	ingestToken, ingestTokenPath, err := loadOrCreateIngestToken(opts.IngestTokenPath)
+	if err != nil {
+		slog.Warn("persistent observability ingest token unavailable; using process-local token", "error", err)
+		ingestToken = generateSessionToken()
+		ingestTokenPath = opts.IngestTokenPath
+		if ingestTokenPath == "" {
+			ingestTokenPath = defaultIngestTokenPath
+		}
+	}
 	mainHandler := handler
 	if mainGated {
-		mainHandler = requireSessionAuth(token, handler)
+		mainHandler = requireSessionAuth(token, ingestToken, handler)
 	}
 
 	return &DevServer{
-		ctx:           ctx,
-		cancel:        cancel,
-		Store:         s,
-		Quality:       qualitySvc,
-		Devtools:      devtoolsSvc,
-		Observability: observabilitySvc,
-		Port:          opts.Port,
-		tunnel:        opts.Tunnel,
-		handler:       handler,
-		token:         token,
-		mainGated:     mainGated,
+		ctx:             ctx,
+		cancel:          cancel,
+		Store:           s,
+		Quality:         qualitySvc,
+		Devtools:        devtoolsSvc,
+		Observability:   observabilitySvc,
+		Port:            opts.Port,
+		IngestToken:     ingestToken,
+		IngestTokenPath: ingestTokenPath,
+		tunnel:          opts.Tunnel,
+		handler:         handler,
+		token:           token,
+		mainGated:       mainGated,
 		httpServer: &http.Server{
 			Addr:    fmt.Sprintf("%s:%d", host, opts.Port),
 			Handler: mainHandler,
@@ -230,7 +244,7 @@ func (d *DevServer) StartTunnel(ctx context.Context, onReady func(url string)) {
 		// Serve the same HTTP handler on the tunnel listener via a separate http.Server,
 		// wrapped with session auth. Tunnel requests are handled by the exact
 		// same Go handler — no TCP proxy, no forwarding, no ERR_NGROK_3004.
-		tunnelServer := &http.Server{Handler: requireSessionAuth(d.token, d.handler)}
+		tunnelServer := &http.Server{Handler: requireSessionAuth(d.token, d.IngestToken, d.handler)}
 		go func() {
 			slog.Info("serving tunnel traffic", "url", result.URL)
 			if err := tunnelServer.Serve(result.Listener); err != nil && err != http.ErrServerClosed {

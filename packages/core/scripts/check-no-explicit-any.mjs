@@ -32,7 +32,7 @@ if (updateBaseline) {
     `${JSON.stringify(
       {
         description:
-          'Existing explicit any usages in @crux/core production source. New usages fail typecheck; shrink this file as legacy surfaces are hardened.',
+          'Existing explicit any usages in @use-crux/core production source. New usages fail typecheck; shrink this file as legacy surfaces are hardened.',
         entries: current,
       },
       null,
@@ -50,7 +50,7 @@ const staleBaselineEntries = baseline.entries.filter((entry) => !current.include
 
 if (newViolations.length > 0 || staleBaselineEntries.length > 0) {
   if (newViolations.length > 0) {
-    console.error(`Found ${newViolations.length} new explicit any usage(s) in @crux/core:`)
+    console.error(`Found ${newViolations.length} new explicit any usage(s) in @use-crux/core:`)
     for (const violation of newViolations) {
       console.error(`- ${violation}`)
     }
@@ -59,7 +59,7 @@ if (newViolations.length > 0 || staleBaselineEntries.length > 0) {
     console.error(
       `Found ${staleBaselineEntries.length} stale explicit any baseline entr${
         staleBaselineEntries.length === 1 ? 'y' : 'ies'
-      }. Run pnpm --filter @crux/core typecheck:any:update after removing explicit any usage.`,
+      }. Run pnpm --filter @use-crux/core typecheck:any:update after removing explicit any usage.`,
     )
     for (const entry of staleBaselineEntries) {
       console.error(`- ${entry}`)

@@ -945,7 +945,7 @@ export type {
   CruxRunDetailDetail as ObservabilityRunDetailDetail,
   CruxRunDetailNode as ObservabilityRunDetailNode,
   CruxRunDetailRow as ObservabilityRunDetailRow,
-} from '@crux/core/observability'
+} from '@use-crux/core/observability'
 
 export type QualityJsonValue =
   | string

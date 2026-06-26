@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { ProjectDefinition } from '@crux/core/project-index'
+import type { ProjectDefinition } from '@use-crux/core/project-index'
 import { foldedIndexChild } from '../index-presentation'
 import {
   facts,
@@ -8,8 +8,8 @@ import {
   type ConfigReader,
   type ExtractContext,
 } from '../extensions'
-import { internalAuthoredMemoryId } from '../extensions/internal-config'
-import { internalStaticCallContext } from '../extensions/internal-native'
+import { internalAuthoredMemoryId } from '../static-index/compatibility/syntax-record-bridge/config'
+import { internalStaticCallContext } from '../static-index/compatibility/syntax-record-bridge/native-context'
 import type { StaticRelationRef } from '../types'
 
 /**
@@ -24,7 +24,7 @@ export const memoryIndexExtractor: IndexExtractor = {
   patterns: [{ kind: 'call', name: 'memory' }],
   extract: (ctx) => {
     const staticCtx = internalStaticCallContext(ctx)
-    if (!ctx.config || !staticCtx?.objectArg) return { kind: 'none' }
+    if (!ctx.config) return { kind: 'none' }
     const idInfo = internalAuthoredMemoryId(ctx)
     const definitionKey = idInfo.definitionKey ?? ctx.source.localName
     const id = `memory:${ctx.source.safeId(definitionKey)}`
@@ -35,8 +35,8 @@ export const memoryIndexExtractor: IndexExtractor = {
       id,
       'memory.uses_store',
       ctx.config,
-      staticCtx.objectArg,
-      staticCtx.localInitializers,
+      staticCtx?.objectArg,
+      staticCtx?.localInitializers,
     )
     const blockDefinitions = blocks.map((block, index) =>
       projectDefinitionFromContext(ctx, {
@@ -112,7 +112,7 @@ export const blackboardIndexExtractor: IndexExtractor = {
   patterns: [{ kind: 'call', name: 'blackboard' }],
   extract: (ctx) => {
     const staticCtx = internalStaticCallContext(ctx)
-    if (!ctx.config || !staticCtx?.objectArg) return { kind: 'none' }
+    if (!ctx.config) return { kind: 'none' }
     const idInfo = internalAuthoredMemoryId(ctx)
     const definitionKey = idInfo.definitionKey ?? ctx.source.localName
     const id = `blackboard:${ctx.source.safeId(definitionKey)}`
@@ -122,8 +122,8 @@ export const blackboardIndexExtractor: IndexExtractor = {
       id,
       'blackboard.uses_store',
       ctx.config,
-      staticCtx.objectArg,
-      staticCtx.localInitializers,
+      staticCtx?.objectArg,
+      staticCtx?.localInitializers,
     )
     const schema = ctx.config.schema('schema')
     return facts({
@@ -329,8 +329,8 @@ function authoredStoreDefinition(
   parentDefinitionId: string,
   parentRelationType: 'memory.uses_store' | 'blackboard.uses_store',
   config: ConfigReader,
-  object: ts.ObjectLiteralExpression,
-  localInitializers: ReadonlyMap<string, ts.Expression>,
+  object: ts.ObjectLiteralExpression | undefined,
+  localInitializers: ReadonlyMap<string, ts.Expression> | undefined,
 ): { readonly definition: ProjectDefinition } | undefined {
   const store = authoredStoreMetadata(config, object, localInitializers)
   if (!store) return undefined

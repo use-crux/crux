@@ -31,7 +31,7 @@ export interface RawMemoryDocument {
  *
  * @example
  * ```ts
- * import { toStoreValue } from '@crux/core/memory'
+ * import { toStoreValue } from '@use-crux/core/memory'
  *
  * const values = rawDocs.map(toStoreValue)
  * ```

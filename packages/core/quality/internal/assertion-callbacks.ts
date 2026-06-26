@@ -6,7 +6,7 @@
  * pass that counts not-evaluated matchers after a hard assertion failure, so
  * the large engine only wires phase-specific contexts.
  *
- * @internal Not exported from `@crux/core/quality` - engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` - engine plumbing only.
  * @module
  */
 

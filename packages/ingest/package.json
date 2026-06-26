@@ -1,5 +1,5 @@
 {
-  "name": "@crux/ingest",
+  "name": "@use-crux/ingest",
   "version": "0.1.0",
   "description": "Source loaders for Crux — turn text, files, and URLs into IngestDocument streams for indexing.",
   "keywords": ["ai", "rag", "ingest", "loaders", "documents", "indexing", "crux"],
@@ -33,7 +33,7 @@
     }
   },
   "dependencies": {
-    "@crux/core": "workspace:*",
+    "@use-crux/core": "workspace:*",
     "cheerio": "^1.2.0",
     "csv-parse": "^6.2.1",
     "exceljs": "^4.4.0",

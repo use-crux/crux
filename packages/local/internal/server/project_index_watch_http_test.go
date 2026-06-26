@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -45,15 +46,15 @@ func TestHTTPServer_project_index_watch_endpoint_returns_last_run_status(t *test
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
 			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
 		},
 		Sources: []store.IndexSourceFile{{File: "src/a.ts", Status: "indexed", ShardID: "."}},
 	}
 	indexer := &fakeIncrementalProjectIndexer{
-		result: devtools.ProjectIndexIncrementalResult{
-			Report: devtools.ProjectIndexIncrementalReport{
+		result: projectindex.ProjectIndexIncrementalResult{
+			Report: projectindex.ProjectIndexIncrementalReport{
 				PlanKind:              "source-file-reindex",
 				GraphConfidence:       "complete-enough-for-source-closure",
 				ChangedFiles:          []string{"src/a.ts"},
@@ -62,25 +63,25 @@ func TestHTTPServer_project_index_watch_endpoint_returns_last_run_status(t *test
 				AffectedDefinitionIDs: []string{"prompt:a"},
 				DurationMsByPhase:     map[string]float64{"planning": 1.25, "ast": 2.5},
 			},
-			Patches: []devtools.IndexPatch{{
+			Patches: []projectindex.IndexPatch{{
 				SchemaVersion: 1,
 				Phase:         "ast",
 				Project:       store.ProjectIdentity{Root: root, Name: "project"},
 				Status:        "ok",
-				Invalidates:   &devtools.IndexPatchInvalidation{Files: []string{"src/a.ts"}},
-				Facts:         devtools.IndexPatchFacts{},
+				Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{"src/a.ts"}},
+				Facts:         projectindex.IndexPatchFacts{},
 			}},
 		},
 	}
 	s := store.NewStore()
 	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(t.TempDir()))).WithProjectIndexer(indexer)
-	devSvc.ApplyIndexPatch(context.Background(), devtools.IndexPatch{
+	devSvc.ApplyIndexPatch(context.Background(), projectindex.IndexPatch{
 		SchemaVersion: 1,
 		Phase:         "ast",
 		Project:       *previous.Project,
 		Status:        "ok",
-		Invalidates:   &devtools.IndexPatchInvalidation{All: true},
-		Facts: devtools.IndexPatchFacts{
+		Invalidates:   &projectindex.IndexPatchInvalidation{All: true},
+		Facts: projectindex.IndexPatchFacts{
 			Sources:     previous.Sources,
 			SourceGraph: previous.SourceGraph,
 		},

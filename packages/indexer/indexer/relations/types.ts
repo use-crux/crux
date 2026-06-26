@@ -1,4 +1,4 @@
-import type { ProjectDefinitionKind } from '@crux/core/project-index'
+import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
 
 export type IndexRelationPresentation = 'edge' | 'detail' | 'both'
 

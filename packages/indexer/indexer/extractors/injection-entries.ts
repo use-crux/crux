@@ -1,10 +1,17 @@
 import ts from 'typescript'
-import type { InjectionReturnContributionFacts, InjectionToolFacts, InjectionUseFacts } from '@crux/core/project-index'
+import type { InjectionReturnContributionFacts, InjectionToolFacts, InjectionUseFacts } from '@use-crux/core/project-index'
 import type { StaticRelationRef } from '../types'
 import type { ExtractContext } from '../extensions'
 import { propertyName } from '../ast/literals'
 import { resolveIdentifierSourceNode } from '../ast/source-refs'
-import { internalStaticCallContext } from '../extensions/internal-native'
+import { internalStaticCallContext, internalStaticRecordContext, type InternalStaticRecordContext } from '../static-index/compatibility/syntax-record-bridge/native-context'
+import type { StaticObjectValue, StaticSyntaxValue } from '../static-index/syntax/record/types'
+import {
+  createStaticSyntaxInitializerMap,
+  resolveStaticSyntaxValue,
+  type StaticSyntaxInitializerMap,
+  staticObjectPropertyValue,
+} from '../static-index/syntax/record/value'
 
 type InjectionOwner = 'prompt' | 'context' | 'injectable'
 
@@ -46,7 +53,12 @@ export function injectionUseEntriesForConfigProperty(
   property: string,
 ): readonly UseEntryWithSource[] {
   const expression = propertyExpression(ctx, property)
-  return expression ? injectionUseEntriesFromExpression(ctx, expression) : []
+  if (expression) return injectionUseEntriesFromExpression(ctx, expression)
+  const recordCtx = internalStaticRecordContext(ctx)
+  const recordValue = recordCtx?.objectArg ? staticObjectPropertyValue(recordCtx.objectArg, property) : undefined
+  return recordCtx && recordValue
+    ? injectionUseEntriesFromRecordValue(recordValue, recordCtx.initializers)
+    : injectionUseEntriesFromConfigProperty(ctx, property)
 }
 
 /**
@@ -97,7 +109,12 @@ export function relationRefsForInjectionUse(
  */
 export function toolContributionsForConfigProperty(ctx: ExtractContext, property: string): ToolExtraction {
   const expression = propertyExpression(ctx, property)
-  return toolContributionsFromExpression(expression, ctx)
+  if (expression) return toolContributionsFromExpression(expression, ctx)
+  const recordCtx = internalStaticRecordContext(ctx)
+  const recordValue = recordCtx?.objectArg ? staticObjectPropertyValue(recordCtx.objectArg, property) : undefined
+  return recordCtx && recordValue
+    ? toolContributionsFromRecordValue(recordValue, recordCtx)
+    : toolContributionsFromConfigProperty(ctx, property)
 }
 
 /**
@@ -126,6 +143,13 @@ export function injectableStaticContributions(
 ): InjectableStaticContributions {
   const returnObject = injectableReturnObject(ctx)
   if (!returnObject) {
+    const recordReturnObject = injectableRecordReturnObject(ctx)
+    const recordCtx = internalStaticRecordContext(ctx)
+    if (recordReturnObject && recordCtx) {
+      return injectableStaticContributionsFromRecordObject(recordReturnObject, properties, recordCtx.initializers)
+    }
+  }
+  if (!returnObject) {
     return { useEntries: [], tools: { references: [] }, constraintReferences: [], guardrailReferences: [], mayInject: [] }
   }
   const constraints = referenceContributionsFromObjectProperty(returnObject, 'constraints')
@@ -140,6 +164,171 @@ export function injectableStaticContributions(
     guardrailReferences: guardrails.variables,
     mayInject: properties.filter((property) => hasObjectProperty(returnObject, property)),
   }
+}
+
+function injectableStaticContributionsFromRecordObject(
+  object: StaticObjectValue,
+  properties: readonly string[],
+  initializers: StaticSyntaxInitializerMap,
+): InjectableStaticContributions {
+  const constraints = referenceContributionsFromRecordProperty(object, 'constraints')
+  const guardrails = referenceContributionsFromRecordProperty(object, 'guardrails')
+  const metadata = metadataContributionsFromRecordProperty(object, 'metadata')
+  const contributionFacts = injectionReturnContributionFacts(constraints, guardrails, metadata)
+  const toolsValue = staticObjectPropertyValue(object, 'tools')
+  return {
+    useEntries: injectionUseEntriesFromRecordProperty(object, 'contexts', initializers),
+    tools: toolsValue ? toolContributionsFromRecordObjectValue(toolsValue) : { references: [] },
+    ...(contributionFacts ? { contributionFacts } : {}),
+    constraintReferences: constraints.variables,
+    guardrailReferences: guardrails.variables,
+    mayInject: properties.filter((property) => Boolean(staticObjectPropertyValue(object, property))),
+  }
+}
+
+function injectableRecordReturnObject(ctx: ExtractContext): StaticObjectValue | undefined {
+  const recordCtx = internalStaticRecordContext(ctx)
+  if (!recordCtx?.objectArg) return undefined
+  const value = staticObjectPropertyValue(recordCtx.objectArg, 'inject')
+  const resolved = resolveStaticSyntaxValue(value, recordCtx.initializers)
+  return firstReturnedRecordObject(resolved)
+}
+
+function firstReturnedRecordObject(value: StaticSyntaxValue | undefined): StaticObjectValue | undefined {
+  if (value?.kind !== 'function') return undefined
+  for (const returned of value.returns) {
+    if (returned.kind === 'object') return returned
+    const nested = firstReturnedRecordObject(returned)
+    if (nested) return nested
+  }
+  return undefined
+}
+
+function injectionUseEntriesFromRecordProperty(
+  object: StaticObjectValue,
+  property: string,
+  initializers: StaticSyntaxInitializerMap,
+): readonly UseEntryWithSource[] {
+  const value = staticObjectPropertyValue(object, property)
+  return value ? injectionUseEntriesFromRecordValue(value, initializers) : []
+}
+
+function injectionUseEntriesFromRecordValue(
+  value: StaticSyntaxValue,
+  initializers: StaticSyntaxInitializerMap,
+  inherited: Partial<Pick<UseEntryWithSource, 'conditionality' | 'via' | 'branch'>> = {},
+  seen: ReadonlySet<string> = new Set(),
+): readonly UseEntryWithSource[] {
+  if (value.kind === 'array') {
+    return value.elements.flatMap((element) => injectionUseEntriesFromRecordValue(element, initializers, inherited, seen))
+  }
+
+  if (value.kind === 'identifier') {
+    const local = initializers.get(value.name)
+    if (local && !seen.has(value.name) && local.kind === 'array') {
+      return injectionUseEntriesFromRecordValue(
+        local,
+        initializers,
+        {
+          conditionality: inherited.conditionality ?? 'always',
+          via: inherited.via ?? 'array-ref',
+          branch: inherited.branch,
+        },
+        new Set([...seen, value.name]),
+      )
+    }
+    return [
+      {
+        variable: value.name,
+        relationHint: 'unknown',
+        conditionality: inherited.conditionality ?? 'always',
+        via: inherited.via ?? 'direct',
+        ...(inherited.branch ? { branch: inherited.branch } : {}),
+      },
+    ]
+  }
+
+  if (value.kind === 'call') {
+    const callName = value.callee.localName ?? value.callee.name
+    if (callName === 'when' && value.args[1]) {
+      return injectionUseEntriesFromRecordValue(value.args[1], initializers, {
+        conditionality: 'when',
+        via: 'when',
+        branch: inherited.branch,
+      })
+    }
+    if (callName === 'match' && value.args[0]?.kind === 'object') {
+      return matchRecordUseEntries(value.args[0], initializers)
+    }
+    return [{ relationHint: 'unknown', conditionality: 'dynamic', via: inherited.via ?? 'direct' }]
+  }
+
+  return [{ relationHint: 'unknown', conditionality: 'unknown', via: inherited.via ?? 'direct' }]
+}
+
+function matchRecordUseEntries(
+  object: StaticObjectValue,
+  initializers: StaticSyntaxInitializerMap,
+): readonly UseEntryWithSource[] {
+  const cases = staticRecordObjectAlias(staticObjectPropertyValue(object, 'cases'), initializers)
+  const defaults = staticObjectPropertyValue(object, 'default')
+  const caseEntries =
+    cases?.kind === 'object'
+      ? cases.properties.flatMap((property) =>
+          injectionUseEntriesFromRecordValue(property.value, initializers, {
+            conditionality: 'match-case',
+            via: 'match',
+            branch: property.name,
+          }),
+        )
+      : []
+  const defaultEntries = defaults
+    ? injectionUseEntriesFromRecordValue(defaults, initializers, {
+        conditionality: 'match-default',
+        via: 'match',
+        branch: 'default',
+      })
+    : []
+  return [...caseEntries, ...defaultEntries]
+}
+
+function staticRecordObjectAlias(
+  value: StaticSyntaxValue | undefined,
+  initializers: StaticSyntaxInitializerMap,
+): StaticObjectValue | undefined {
+  const resolved = resolveStaticSyntaxValue(value, initializers)
+  return resolved?.kind === 'object' ? resolved : undefined
+}
+
+function toolContributionsFromRecordObjectValue(value: StaticSyntaxValue): ToolExtraction {
+  return value.kind === 'object' ? toolContributionsFromRecordObject(value) : { facts: { hasTools: true, dynamic: true }, references: [] }
+}
+
+function referenceContributionsFromRecordProperty(
+  object: StaticObjectValue,
+  property: string,
+): ReferenceContributionExtraction {
+  const value = staticObjectPropertyValue(object, property)
+  if (!value) return { variables: [], dynamic: false }
+  if (value.kind === 'identifier') return { variables: [value.name], dynamic: false }
+  if (value.kind === 'array') {
+    const variables = value.elements.flatMap((item) => (item.kind === 'identifier' ? [item.name] : []))
+    return { variables, dynamic: variables.length !== value.elements.length }
+  }
+  return { variables: [], dynamic: true }
+}
+
+function metadataContributionsFromRecordProperty(
+  object: StaticObjectValue,
+  property: string,
+): { readonly keys: readonly string[]; readonly dynamic: boolean } {
+  const value = staticObjectPropertyValue(object, property)
+  return value?.kind === 'object'
+    ? {
+        keys: value.properties.flatMap((item) => (item.spread ? [] : [item.name])),
+        dynamic: value.properties.some((item) => item.spread),
+      }
+    : { keys: [], dynamic: Boolean(value) }
 }
 
 /**
@@ -236,6 +425,26 @@ function injectionUseEntriesFromExpression(
   return [{ conditionality: 'unknown', via: inherited.via ?? 'direct' }]
 }
 
+function injectionUseEntriesFromConfigProperty(
+  ctx: ExtractContext,
+  property: string,
+): readonly UseEntryWithSource[] {
+  const config = ctx.config
+  if (!config) return []
+  const arrayIdentifiers = config.identifierArray(property)
+  const identifier = arrayIdentifiers.length > 0 ? undefined : config.identifier(property)
+  const identifiers = uniqueStrings([...arrayIdentifiers, ...(identifier ? [identifier] : [])])
+  if (identifiers.length > 0) {
+    return identifiers.map((variable) => ({
+      variable,
+      relationHint: 'unknown',
+      conditionality: 'always',
+      via: 'direct',
+    }))
+  }
+  return config.has(property) ? [{ relationHint: 'unknown', conditionality: 'unknown', via: 'direct' }] : []
+}
+
 /**
  * Extracts branch-aware dependency entries from the Crux `match(...)` helper shape.
  *
@@ -286,6 +495,96 @@ function toolContributionsFromExpression(
     return toolContributionsFromFactoryCall(ctx, expression, seen)
   }
   return { facts: { hasTools: true, dynamic: true }, references: [] }
+}
+
+function toolContributionsFromConfigProperty(ctx: ExtractContext, property: string): ToolExtraction {
+  const config = ctx.config
+  if (!config) return { references: [] }
+  const entries = config.objectMapIdentifierEntries(property)
+  if (entries.length > 0) {
+    const references = entries.map((entry) => entry.value)
+    return {
+      facts: {
+        hasTools: true,
+        names: entries.map((entry) => entry.key),
+        variables: references,
+      },
+      references,
+    }
+  }
+  const identifiers = config.identifierArray(property)
+  if (identifiers.length > 0) {
+    return {
+      facts: {
+        hasTools: true,
+        names: [...identifiers],
+        variables: [...identifiers],
+      },
+      references: [...identifiers],
+    }
+  }
+  const reference = config.reference(property)
+  if (reference) {
+    return {
+      facts: {
+        hasTools: true,
+        variables: [reference],
+      },
+      references: [reference],
+    }
+  }
+  return config.has(property) ? { facts: { hasTools: true, dynamic: true }, references: [] } : { references: [] }
+}
+
+function toolContributionsFromRecordValue(
+  value: StaticSyntaxValue,
+  ctx: InternalStaticRecordContext,
+  seen: ReadonlySet<string> = new Set(),
+): ToolExtraction {
+  const resolved = resolveStaticSyntaxValue(value, ctx.initializers)
+  if (resolved?.kind === 'object') return toolContributionsFromRecordObject(resolved)
+  if (resolved?.kind === 'call') return toolContributionsFromRecordFactoryCall(resolved, ctx, seen)
+  if (resolved?.kind === 'identifier') return { facts: { hasTools: true, variables: [resolved.name] }, references: [resolved.name] }
+  return { facts: { hasTools: true, dynamic: true }, references: [] }
+}
+
+function toolContributionsFromRecordObject(object: StaticObjectValue, dynamic = false): ToolExtraction {
+  const hasSpread = object.properties.some((property) => property.spread)
+  const contributions = object.properties.flatMap((property): readonly { readonly name: string; readonly reference: string }[] => {
+    if (property.spread) return []
+    if (property.value.kind === 'identifier') return [{ name: property.name, reference: property.value.name }]
+    return []
+  })
+  const names = contributions.map((item) => item.name)
+  const references = contributions.map((item) => item.reference)
+  return {
+    facts: {
+      hasTools: true,
+      ...(dynamic || hasSpread ? { dynamic: true } : {}),
+      ...(names.length > 0 ? { names } : {}),
+      ...(references.length > 0 ? { variables: references } : {}),
+    },
+    references,
+  }
+}
+
+function toolContributionsFromRecordFactoryCall(
+  call: Extract<StaticSyntaxValue, { readonly kind: 'call' }>,
+  ctx: InternalStaticRecordContext,
+  seen: ReadonlySet<string>,
+): ToolExtraction {
+  const callName = call.callee.localName ?? call.callee.name
+  const key = `${ctx.record.file}:${callName}`
+  if (seen.has(key)) return { facts: { hasTools: true, dynamic: true }, references: [] }
+  const helper = resolveStaticSyntaxValue({ kind: 'identifier', name: callName }, ctx.initializers)
+  if (helper?.kind !== 'function') return { facts: { hasTools: true, dynamic: true }, references: [] }
+  const helperInitializers = createStaticSyntaxInitializerMap(helper.localInitializers)
+  const objects = helper.returns.flatMap((value): readonly StaticObjectValue[] => {
+    const resolved = resolveStaticSyntaxValue(value, helperInitializers)
+    return resolved?.kind === 'object' ? [resolved] : []
+  })
+  const object = objects.sort((a, b) => b.properties.length - a.properties.length)[0]
+  return object ? toolContributionsFromRecordObject(object, true) : { facts: { hasTools: true, dynamic: true }, references: [] }
 }
 
 function referenceContributionsFromObjectProperty(
@@ -572,7 +871,7 @@ function resolveLocalExpression(ctx: ExtractContext, expression: ts.Expression):
   return ts.isIdentifier(expression) ? (localInitializers(ctx).get(expression.text) ?? expression) : expression
 }
 
-/** Returns source-local initializers from the compiler-owned native static context. */
+/** Returns source-local initializers from the compiler-owned Static Index context. */
 function localInitializers(ctx: ExtractContext): ReadonlyMap<string, ts.Expression> {
   return internalStaticCallContext(ctx)?.localInitializers ?? new Map()
 }
@@ -582,4 +881,8 @@ function expressionName(expression: ts.Expression): string | undefined {
   if (ts.isIdentifier(expression)) return expression.text
   if (ts.isPropertyAccessExpression(expression)) return expression.name.text
   return undefined
+}
+
+function uniqueStrings(values: readonly string[]): readonly string[] {
+  return [...new Set(values)]
 }

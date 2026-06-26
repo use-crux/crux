@@ -1,39 +1,38 @@
 ---
 title: Storage, Memory, Workspaces
-description: Use cruxConvexStore(), memory blocks, blackboards, and Convex file storage from Convex functions.
+description: Use defineConvexStoreContract(), memory blocks, blackboards, and Convex file storage from Convex functions.
 ---
 
 # Storage, Memory, Workspaces
 
-`cruxConvexStore()` is the Convex-backed `CruxStore`. Use it for Crux data records: memory, blackboards, plans, prompt cache entries, flow state, task state, and workspace metadata.
+`defineConvexStoreContract()` defines the Convex-backed Crux document contract. Use `contract.store(ctx)` for Crux data records: memory, blackboards, plans, prompt cache entries, flow state, task state, and workspace metadata.
 
 ## Shared Store
 
 ```ts title="convex/crux/store.ts"
 import type { ActionCtx, MutationCtx } from '../_generated/server'
 import { components } from '../_generated/api'
-import { cruxConvexStore } from '@crux/convex'
+import { defineConvexStoreContract } from '@use-crux/convex'
+
+const cruxDocuments = defineConvexStoreContract({ component: components.crux })
 
 export function cruxStore(ctx: ActionCtx | MutationCtx) {
-  return cruxConvexStore({
-    component: components.crux,
-    ctx,
-  })
+  return cruxDocuments.store(ctx)
 }
 ```
 
-`cruxConvexStore()` writes current Crux records as `_cruxDoc` documents in the component `memories` table. TTL is stored in the JSON payload as `_expiresAt`; imperative reads hide expired records and clean them up lazily.
+The contract writes current Crux records as `_cruxDoc` documents in the component `memories` table. TTL is stored in the JSON payload as `_expiresAt`; imperative reads hide expired records and clean them up lazily.
 
 The component query boundary stays Convex-native: `components.crux.memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. Decoding, TTL suppression, dense vector score shaping, and top-level decoded-value filters stay in the shared store-document policy. Filtered `list()` calls with a `limit` read additional component pages until they can return up to that many matching entries.
 
-The same document boundary powers the HTTP devtools bridge and `createConvexTransport()`, so list filters, dense vector scores, expired-record behavior, and strict React decoding stay consistent across server actions and reactive UI reads.
+The same document boundary powers the HTTP devtools bridge and contract React transport, so list filters, dense vector scores, expired-record behavior, and strict decoding stay consistent across server actions and reactive UI reads.
 
 ## Memory Blocks
 
 Memory blocks do not need Convex-specific definitions. They need a durable store and a namespace.
 
 ```ts title="convex/agent/memory.ts"
-import { episodes, facts, memory, workingState } from '@crux/convex/memory'
+import { episodes, facts, memory, workingState } from '@use-crux/convex/memory'
 import { z } from 'zod'
 import { cruxStore } from '../crux/store'
 import type { ActionCtx } from '../_generated/server'
@@ -64,7 +63,7 @@ Prefer `episodes().record(..., { store, namespace })` from action/runtime code. 
 Blackboards are core primitives. Use the Convex store and namespace them by thread, workflow, or task.
 
 ```ts title="convex/agent/blackboard.ts"
-import { blackboard } from '@crux/core/agent'
+import { blackboard } from '@use-crux/core/agent'
 import { z } from 'zod'
 import { cruxStore } from '../crux/store'
 import type { ActionCtx } from '../_generated/server'
@@ -82,25 +81,27 @@ export function createResearchBoard(ctx: ActionCtx, threadId: string) {
 }
 ```
 
-When a prompt resolves blackboard tools and you pass them to Convex Agent, bridge them with `convexTools()` from `@crux/convex/agent`.
+When a prompt resolves blackboard tools and you pass them to Convex Agent, bridge them with `convexTools()` from `@use-crux/convex/agent`.
 
 ## Workspaces
 
-Use `convexWorkspaceBlobStore()` for binary and oversized workspace payloads. Keep metadata in `cruxConvexStore()`.
+Use `convexWorkspaceBlobStore()` for binary and oversized workspace payloads. Keep metadata in the contract store.
 
 ```ts title="convex/workspace.ts"
-import { storage } from '@crux/core/storage'
-import { workspace } from '@crux/core/workspace'
-import { cruxConvexStore, convexWorkspaceBlobStore } from '@crux/convex'
+import { storage } from '@use-crux/core/storage'
+import { workspace } from '@use-crux/core/workspace'
+import { defineConvexStoreContract, convexWorkspaceBlobStore } from '@use-crux/convex'
 import { components } from './_generated/api'
 import type { ActionCtx } from './_generated/server'
+
+const cruxDocuments = defineConvexStoreContract({ component: components.crux })
 
 export function createThreadWorkspace(ctx: ActionCtx, threadId: string) {
   return workspace({
     id: 'thread-workspace',
     namespace: threadId,
     storage: storage({
-      data: cruxConvexStore({ component: components.crux, ctx }),
+      data: cruxDocuments.store(ctx),
       blobs: convexWorkspaceBlobStore({ ctx }),
     }),
   })
@@ -114,18 +115,19 @@ Convex file storage methods differ by function context. If blob reads are unavai
 Semantic cache lookup needs an isolated vector namespace. Do not point it at a store shared with RAG chunks or memory entries unless you intentionally accept cross-feature vector crowding.
 
 ```ts
-const cacheStore = cruxConvexStore({
+const semanticCacheDocuments = defineConvexStoreContract({
   component: components.crux,
-  ctx,
   vectorIndexName: 'by_embedding',
   semanticCache: { isolatedVectorNamespace: true },
 })
+
+const cacheStore = semanticCacheDocuments.store(ctx)
 ```
 
 ## Best Practices
 
 - Namespace by thread, project, task, or workflow so data remains tenant-safe and easy to inspect.
-- Use `cruxConvexStore()` for JSON records; use `convexWorkspaceBlobStore()` for file bytes.
+- Use the contract store for JSON records; use `convexWorkspaceBlobStore()` for file bytes.
 - Keep mutation-only direct table writes app-local.
 - Use a dedicated vector space for semantic cache.
 - Do not create separate Convex-specific memory, blackboard, or workspace primitives unless Convex infrastructure requires a new lifecycle.

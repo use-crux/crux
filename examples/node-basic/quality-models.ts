@@ -5,8 +5,8 @@
  */
 
 import { openai } from '@ai-sdk/openai'
-import { generate } from '@crux/ai'
-import type { GenerateFn, ModelRef } from '@crux/core/quality'
+import { generate } from '@use-crux/ai'
+import type { GenerateFn, ModelRef } from '@use-crux/core/quality'
 
 /**
  * Model providers used by model-backed Quality examples.

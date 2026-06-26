@@ -28,7 +28,7 @@ describe('native semantic direct Crux projectors', () => {
     await writeFile(
       file,
       `
-        import { context, prompt, tool } from '@crux/core'
+        import { context, prompt, tool } from '@use-crux/core'
 
         const WRITER_SYSTEM = 'Write clearly.'
         function renderPrompt(input: { topic: string }) {
@@ -75,7 +75,7 @@ describe('native semantic direct Crux projectors', () => {
     await writeFile(
       file,
       `
-        import { context, tool } from '@crux/core'
+        import { context, tool } from '@use-crux/core'
 
         export const baseContext = context({ id: 'base' })
         export const helperTool = tool({ name: 'helper' })
@@ -97,7 +97,7 @@ describe('native semantic direct Crux projectors', () => {
     await writeFile(
       file,
       `
-        import { agent, prompt, tool } from '@crux/core'
+        import { agent, prompt, tool } from '@use-crux/core'
 
         function contextHandler() {
           return {}
@@ -133,8 +133,8 @@ describe('native semantic direct Crux projectors', () => {
     await writeFile(
       file,
       `
-        import { agent, prompt } from '@crux/core'
-        import { cascade, fallback, router } from '@crux/core/routing'
+        import { agent, prompt } from '@use-crux/core'
+        import { cascade, fallback, router } from '@use-crux/core/routing'
 
         function classifyRoute(input: { kind?: string }) {
           return input.kind === 'draft' ? 'draft' : 'default'
@@ -184,8 +184,8 @@ describe('native semantic direct Crux projectors', () => {
     await writeFile(
       file,
       `
-        import { agent, prompt } from '@crux/core'
-        import { fallback, router } from '@crux/core/routing'
+        import { agent, prompt } from '@use-crux/core'
+        import { fallback, router } from '@use-crux/core/routing'
 
         export const writerPrompt = prompt({ id: 'writer-route-target' })
         export const backupPrompt = prompt({ id: 'backup-route-target' })

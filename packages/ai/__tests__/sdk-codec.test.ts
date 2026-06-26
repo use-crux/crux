@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { LanguageModel } from 'ai'
 import { z } from 'zod'
-import type { ExecutorRequest, StructuredRequest } from '@crux/core/adapter'
+import type { ExecutorRequest, StructuredRequest } from '@use-crux/core/adapter'
 import { createAiSdkCodec } from '../src/sdk-codec'
 import { objectGenerationError, scriptedGateway } from './scripted-gateway'
 

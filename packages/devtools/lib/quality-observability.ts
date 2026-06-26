@@ -1,7 +1,7 @@
 /**
  * Devtools observability bridge for the standalone Quality runner.
  *
- * The runner loads the project's own `@crux/core` instance to avoid the
+ * The runner loads the project's own `@use-crux/core` instance to avoid the
  * dual-package hazard. These helpers therefore accept the small structural
  * subset of that internal runner module needed to install and flush the
  * canonical HTTP observability transport.

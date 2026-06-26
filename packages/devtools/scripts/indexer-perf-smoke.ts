@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { indexProjectAst, indexProjectSemantic } from '@crux/indexer'
+import { indexProjectAst, indexProjectSemantic } from '@use-crux/indexer'
 
 const fileCount = Number(process.env.CRUX_INDEXER_PERF_FILES ?? 80)
 const promptsPerFile = Number(process.env.CRUX_INDEXER_PERF_PROMPTS_PER_FILE ?? 4)
@@ -15,7 +15,7 @@ try {
   await writeFile(
     join(root, 'crux.config.ts'),
     `
-      import { config } from '@crux/core'
+      import { config } from '@use-crux/core'
       export default config({})
     `,
   )
@@ -37,7 +37,7 @@ try {
     await writeFile(
       join(root, `src/prompts-${fileIndex}.ts`),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         import { z } from 'zod'
 
         ${definitions}

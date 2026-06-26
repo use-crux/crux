@@ -15,11 +15,13 @@ import { existsSync, rmSync } from 'node:fs'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
-import { indexProjectAst, indexProjectSemantic } from '@crux/indexer'
-import type { IndexPatch, SemanticBackendName, SemanticBackendSelection } from '@crux/indexer'
+import { indexProjectAst, indexProjectSemantic } from '@use-crux/indexer'
+import type { IndexPatch, SemanticBackendName, SemanticBackendSelection, StaticExtractionTimingName } from '@use-crux/indexer'
+import { SEMANTIC_TIMING_ORDER, STATIC_TIMING_ORDER, printTimingSummary } from './indexer-benchmark-timings'
 import { formatNativeCoverage, type NativeCoverageSummary } from './indexer-benchmark-coverage'
 import { createMonorepoFixture } from './indexer-benchmark-fixture'
 import { projectIndexSnapshotFromAstPatch } from './indexer-benchmark-snapshot'
+import { measureProcessTreeMemoryDuring } from './process-memory'
 
 interface BenchmarkArgs {
   readonly root: string
@@ -50,9 +52,17 @@ interface SemanticTiming {
 interface BenchmarkResult {
   readonly label: string
   readonly elapsedMs: number
-  readonly rssMb: number
+  readonly rssStartMb: number
+  readonly rssEndMb: number
+  readonly rssPeakMb: number
   readonly ast: PatchBenchmarkResult
+  readonly staticTimings: readonly StaticTiming[]
   readonly semantics: readonly SemanticBenchmarkResult[]
+}
+
+interface StaticTiming {
+  readonly name: StaticExtractionTimingName
+  readonly durationMs: number
 }
 
 interface SemanticBenchmarkResult {
@@ -64,22 +74,6 @@ interface SemanticBenchmarkResult {
 
 const DEFAULT_BACKEND_ROOT = '/home/henri/private/karyla/packages/backend'
 const WORKSPACE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
-const SEMANTIC_TIMING_ORDER = [
-  'semantic.selection',
-  'semantic.preflight',
-  'semantic.cache.read',
-  'semantic.program.create',
-  'semantic.program.reuse',
-  'semantic.checker.create',
-  'semantic.analyzer.execution',
-  'semantic.merge',
-  'semantic.native.host.create',
-  'semantic.native.host.reuse',
-  'semantic.native.extractor.direct_crux',
-  'semantic.native.analyzer.shared',
-  'semantic.cache.write',
-  'semantic.patch.serialization',
-]
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2))
@@ -137,41 +131,59 @@ async function runPass(
   semanticBackends: readonly SemanticBackendName[],
 ): Promise<BenchmarkResult> {
   const passStarted = performance.now()
-  const astStarted = performance.now()
-  const patch = await indexProjectAst({ root, projectName: `benchmark-${label}` })
-  const astElapsedMs = performance.now() - astStarted
-  const ast = resultFromPatch(astElapsedMs, patch)
-
-  const semantics: SemanticBenchmarkResult[] = []
-  for (const backend of semanticBackends) {
-    const semanticTimings: SemanticTiming[] = []
-    const nativeCoverage: NativeCoverageSummary[] = []
-    const semanticStarted = performance.now()
-    const semanticPatch = await indexProjectSemantic({
+  const { value, memory } = await measureProcessTreeMemoryDuring(async () => {
+    const staticTimings: StaticTiming[] = []
+    const astStarted = performance.now()
+    const patch = await indexProjectAst({
       root,
-      projectName: `benchmark-${label}-${backend}`,
-      semanticBackend: semanticBackendSelection(backend),
-      previousIndex: projectIndexSnapshotFromAstPatch(patch),
-      semanticSourceProfile: patch.semanticSourceProfile,
-      semanticInstrumentation: {
-        onTiming: (timing) => semanticTimings.push(timing),
-        onNativeCoverage: (coverage) =>
-          nativeCoverage.push({
-            kind: coverage.kind,
-            ...('extractors' in coverage ? { extractors: coverage.extractors } : {}),
-            ...('reason' in coverage ? { reason: coverage.reason } : {}),
-          }),
+      projectName: `benchmark-${label}`,
+      staticInstrumentation: {
+        onTiming: (timing) => staticTimings.push(timing),
       },
     })
-    const semanticElapsedMs = performance.now() - semanticStarted
-    const semantic = resultFromPatch(semanticElapsedMs, semanticPatch)
-    semanticTimings.push({ name: 'semantic.patch.serialization', durationMs: semantic.serializationMs })
-    semantics.push({ backend, patch: semantic, timings: semanticTimings, nativeCoverage })
-  }
+    const astElapsedMs = performance.now() - astStarted
+    const ast = resultFromPatch(astElapsedMs, patch)
 
+    const semantics: SemanticBenchmarkResult[] = []
+    for (const backend of semanticBackends) {
+      const semanticTimings: SemanticTiming[] = []
+      const nativeCoverage: NativeCoverageSummary[] = []
+      const semanticStarted = performance.now()
+      const semanticPatch = await indexProjectSemantic({
+        root,
+        projectName: `benchmark-${label}-${backend}`,
+        semanticBackend: semanticBackendSelection(backend),
+        previousIndex: projectIndexSnapshotFromAstPatch(patch),
+        semanticSourceProfile: patch.semanticSourceProfile,
+        semanticInstrumentation: {
+          onTiming: (timing) => semanticTimings.push(timing),
+          onNativeCoverage: (coverage) =>
+            nativeCoverage.push({
+              kind: coverage.kind,
+              ...('extractors' in coverage ? { extractors: coverage.extractors } : {}),
+              ...('reason' in coverage ? { reason: coverage.reason } : {}),
+            }),
+        },
+      })
+      const semanticElapsedMs = performance.now() - semanticStarted
+      const semantic = resultFromPatch(semanticElapsedMs, semanticPatch)
+      semanticTimings.push({ name: 'semantic.patch.serialization', durationMs: semantic.serializationMs })
+      semantics.push({ backend, patch: semantic, timings: semanticTimings, nativeCoverage })
+    }
+
+    return { ast, semantics, staticTimings }
+  })
   const elapsedMs = performance.now() - passStarted
-  const rssMb = process.memoryUsage().rss / 1024 / 1024
-  return { label, elapsedMs, rssMb, ast, semantics }
+  return {
+    label,
+    elapsedMs,
+    rssStartMb: memory.rssStartMb,
+    rssEndMb: memory.rssEndMb,
+    rssPeakMb: memory.rssPeakMb,
+    ast: value.ast,
+    staticTimings: value.staticTimings,
+    semantics: value.semantics,
+  }
 }
 
 function resultFromPatch(elapsedMs: number, patch: IndexPatch): PatchBenchmarkResult {
@@ -193,19 +205,23 @@ function resultFromPatch(elapsedMs: number, patch: IndexPatch): PatchBenchmarkRe
 }
 
 function printResult(result: BenchmarkResult): void {
-  console.log(`${result.label}: total=${result.elapsedMs.toFixed(1)}ms rss=${result.rssMb.toFixed(1)}MB`)
+  console.log(
+    [
+      `${result.label}:`,
+      `total=${result.elapsedMs.toFixed(1)}ms`,
+      `treeRssStart=${result.rssStartMb.toFixed(1)}MB`,
+      `treeRssEnd=${result.rssEndMb.toFixed(1)}MB`,
+      `treeRssPeak=${result.rssPeakMb.toFixed(1)}MB`,
+    ].join(' '),
+  )
   printPatchResult('ast', result.ast)
+  printTimingSummary('ast', result.staticTimings, STATIC_TIMING_ORDER)
   for (const semantic of result.semantics) {
     printPatchResult(`semantic[${semantic.backend}]`, semantic.patch)
     if (semantic.nativeCoverage.length > 0) {
       console.log(`  ${semantic.backend}.native.coverage=${formatNativeCoverage(semantic.nativeCoverage)}`)
     }
-    for (const name of SEMANTIC_TIMING_ORDER) {
-      const durationMs = semantic.timings
-        .filter((timing) => timing.name === name)
-        .reduce((sum, timing) => sum + timing.durationMs, 0)
-      console.log(`  ${semantic.backend}.${name}=${durationMs > 0 ? `${durationMs.toFixed(1)}ms` : 'n/a'}`)
-    }
+    printTimingSummary(semantic.backend, semantic.timings, SEMANTIC_TIMING_ORDER)
   }
 }
 

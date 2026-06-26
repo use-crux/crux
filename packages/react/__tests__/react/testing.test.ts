@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { createMockTransport } from '../../src/testing'
-import type { JsonObject } from '@crux/core/store'
+import type { JsonObject } from '@use-crux/core/store'
 
 // ── useDocument ──
 

@@ -164,7 +164,7 @@ export function WaitingShell({ connected }: { connected: boolean }) {
               n={2}
               done={false}
               title="Connect your app"
-              code={`import { enableDevtools } from '@crux/core/observability'
+              code={`import { enableDevtools } from '@use-crux/core/observability'
 
 enableDevtools({
   prompts: [...],

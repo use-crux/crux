@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { ProjectDefinition } from '@crux/core/project-index'
+import type { ProjectDefinition } from '@use-crux/core/project-index'
 import type { ImportBinding } from '../../ast/imports'
 import type { ExtractedFacts, IndexerExtensionRuntime } from '../../extensions'
 import type { StaticFoundDefinition } from '../../types'

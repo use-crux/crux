@@ -1,5 +1,5 @@
-import { prompt } from '@crux/core'
-import { evaluate } from '@crux/core/quality'
+import { prompt } from '@use-crux/core'
+import { evaluate } from '@use-crux/core/quality'
 import { z } from 'zod'
 
 const implicitPrompt = prompt({

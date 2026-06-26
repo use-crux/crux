@@ -8,8 +8,8 @@ description: Store binary and oversized workspace files with blob storage.
 Use it for generated PDFs, images, CSVs, spreadsheets, uploaded files, and large text that should not live inside a JSON record.
 
 ```ts
-import { storage } from '@crux/core/storage'
-import { workspace } from '@crux/core/workspace'
+import { storage } from '@use-crux/core/storage'
+import { workspace } from '@use-crux/core/workspace'
 
 const files = workspace({
   id: 'thread-files',
@@ -25,7 +25,7 @@ The workspace stores file metadata in `DataStore`: path, MIME type, size, timest
 Use `inMemoryBlobStore()` for tests and demos:
 
 ```ts
-import { inMemoryBlobStore } from '@crux/core/storage'
+import { inMemoryBlobStore } from '@use-crux/core/storage'
 
 const blobs = inMemoryBlobStore()
 ```
@@ -63,7 +63,7 @@ That keeps model context small and lets your app or devtools fetch the actual by
 ## Interface
 
 ```ts
-import type { BlobReadResult, BlobRef, BlobStore } from '@crux/core/storage'
+import type { BlobReadResult, BlobRef, BlobStore } from '@use-crux/core/storage'
 
 const blobs: BlobStore = {
   async put(input): Promise<BlobRef> {
@@ -87,7 +87,7 @@ const blobs: BlobStore = {
 Use this shape for S3, R2, GCS, Azure Blob Storage, local disk, or an app-owned file service:
 
 ```ts
-import type { BlobReadResult, BlobRef, BlobStore } from '@crux/core/storage'
+import type { BlobReadResult, BlobRef, BlobStore } from '@use-crux/core/storage'
 
 export function s3BlobStore(bucket: string): BlobStore {
   return {

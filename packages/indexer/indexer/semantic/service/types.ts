@@ -8,9 +8,9 @@
  * @module
  */
 
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import type { IndexPatch, IndexPatchBudget } from '../../patches'
-import type { SemanticEvidenceBatchSource } from '../evidence'
+import type { SemanticEvidenceBatchSource } from '../evidence/projection'
 import type { SemanticIndexInstrumentation } from '../instrumentation'
 import type { SemanticSourceProfile } from '../source-profile'
 
@@ -28,6 +28,22 @@ export interface SemanticBackendIdentity<TName extends string = string> {
 }
 
 /**
+ * Identifies the compiler runtime that owns semantic project state.
+ *
+ * The backend identity describes Crux's evidence adapter. The compiler runtime
+ * identity describes the concrete compiler implementation behind that adapter,
+ * such as the JavaScript TypeScript package or a TypeScript-Go executable.
+ */
+export interface SemanticCompilerRuntimeIdentity<TName extends string = string> {
+  /** Compiler runtime name, such as `typescript` or `tsgo`. */
+  readonly name: TName
+  /** Compiler runtime, package, or protocol version. */
+  readonly version: string
+  /** Executable path or stable executable identifier when it affects output. */
+  readonly executable?: string
+}
+
+/**
  * Stable identity for one semantic project session.
  *
  * The identity describes the semantic project state a backend is allowed to
@@ -39,8 +55,8 @@ export interface SemanticProjectSessionIdentity {
   readonly root: string
   /** TypeScript or JavaScript config files selected for discovered shards. */
   readonly tsconfigFiles: readonly string[]
-  /** TypeScript package version used by the current semantic profile. */
-  readonly typescriptVersion: string
+  /** Compiler runtime that owns project state for this session. */
+  readonly compilerRuntime: SemanticCompilerRuntimeIdentity
   /** Crux-owned semantic compiler option identity. */
   readonly compilerOptionsId: string
   /** Backend implementation that owns the session. */
@@ -78,6 +94,16 @@ export interface SemanticBackendSessionInput {
   readonly identity: SemanticProjectSessionIdentity
   /** Optional timing hook used by benchmarks and worker diagnostics. */
   readonly instrumentation?: SemanticIndexInstrumentation
+}
+
+/**
+ * Input used when a backend reports the compiler runtime for a project root.
+ */
+export interface SemanticBackendRuntimeIdentityInput {
+  /** Absolute Project Index root. */
+  readonly root: string
+  /** Stable backend identity that will own the semantic session. */
+  readonly backend: SemanticBackendIdentity
 }
 
 /**
@@ -121,6 +147,10 @@ export interface SemanticBackend<TName extends string = string> {
   readonly identity: SemanticBackendIdentity<TName>
   /** Operational characteristics for planning and diagnostics. */
   readonly capabilities: SemanticBackendCapabilities
+  /** Runtime identity for the compiler implementation used by this backend. */
+  compilerRuntimeIdentity?(
+    input: SemanticBackendRuntimeIdentityInput,
+  ): SemanticCompilerRuntimeIdentity | Promise<SemanticCompilerRuntimeIdentity>
   /** Create or reuse a compiler session for a semantic project identity. */
   createSession(input: SemanticBackendSessionInput): SemanticBackendSession | Promise<SemanticBackendSession>
 }

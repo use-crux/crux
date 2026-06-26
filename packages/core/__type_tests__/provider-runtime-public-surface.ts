@@ -4,8 +4,9 @@
 
 import { expectTypeOf } from 'vitest'
 import type { z } from 'zod'
-import { defineProviderRuntime } from '@crux/core/adapter'
+import { defineProviderRuntime, providerRuntimeConformance } from '@use-crux/core/adapter'
 import type {
+  ConformanceViolation,
   CruxAdapter,
   CruxExecutor,
   ExecutorOutcome,
@@ -13,9 +14,11 @@ import type {
   ExecutorStreamHandle,
   NativeProviderPort,
   LoopOwnedRuntimeContract,
+  ProviderRuntimeConformanceHarness,
+  ProviderOwnership,
   SingleTurnRuntimeContract,
   StructuredAttempt,
-} from '@crux/core/adapter'
+} from '@use-crux/core/adapter'
 import type { Message } from '../messages'
 import type { AnyPrompt, ModelInfo } from '../types'
 
@@ -90,6 +93,7 @@ const turnContract = {
 
 const singleProvider = defineProviderRuntime({
   id: 'typed-single',
+  ownership: 'single-turn',
   turn: turnContract,
   extend: ({ client, runtime }) => ({
     embedding(input: string) {
@@ -97,6 +101,9 @@ const singleProvider = defineProviderRuntime({
     },
   }),
 })
+
+expectTypeOf(singleProvider.ownership).toEqualTypeOf<'single-turn'>()
+expectTypeOf(singleProvider.ownership).toMatchTypeOf<ProviderOwnership>()
 
 const singleRuntime = singleProvider.create(singleClient, { tenant: 'acme' })
 expectTypeOf(singleRuntime).toMatchTypeOf<
@@ -110,6 +117,19 @@ void singleRuntime.generate(prompt, {
   model: 'single-model',
   extra: { feature: true },
 })
+
+const singleConformanceHarness = {
+  capabilities: { ownership: 'single-turn' },
+  prepare: () => ({
+    client: singleClient,
+    model: 'single-model',
+    deps: { tenant: 'acme' },
+  }),
+} satisfies ProviderRuntimeConformanceHarness<SingleClient, string, SingleDeps>
+
+expectTypeOf(providerRuntimeConformance(singleProvider, singleConformanceHarness)).toEqualTypeOf<
+  Promise<ConformanceViolation[]>
+>()
 
 // @ts-expect-error - single-turn provider dependencies are required when TDeps is not empty.
 singleProvider.create(singleClient)
@@ -160,8 +180,60 @@ const loopContract = {
 
 const loopProvider = defineProviderRuntime({
   id: 'typed-loop',
+  ownership: 'loop-owned',
   loop: loopContract,
 })
+
+expectTypeOf(loopProvider.ownership).toEqualTypeOf<'loop-owned'>()
+expectTypeOf(loopProvider.ownership).toMatchTypeOf<ProviderOwnership>()
+
+const loopConformanceHarness = {
+  capabilities: { ownership: 'loop-owned' },
+  prepare: () => ({ client: loopClient, model: loopModel }),
+} satisfies ProviderRuntimeConformanceHarness<LoopClient, LoopModel>
+
+expectTypeOf(providerRuntimeConformance(loopProvider, loopConformanceHarness)).toEqualTypeOf<
+  Promise<ConformanceViolation[]>
+>()
+
+// Negative cases pass the invalid spec as a pre-built identifier so the
+// "no overload matches" diagnostic lands on the single call-argument line that
+// `@ts-expect-error` covers. Inline object literals attach the overload error to
+// nested property lines (and report against the last overload), which differs
+// between tsc and tsgo and leaves the directive on the wrong line.
+const singleOwnershipMismatch = {
+  id: 'typed-single-ownership-mismatch',
+  ownership: 'single-turn' as const,
+  loop: loopContract,
+}
+// @ts-expect-error - single-turn ownership requires turn mechanics, not loop mechanics.
+defineProviderRuntime(singleOwnershipMismatch)
+
+const loopOwnershipMismatch = {
+  id: 'typed-loop-ownership-mismatch',
+  ownership: 'loop-owned' as const,
+  turn: turnContract,
+}
+// @ts-expect-error - loop-owned ownership requires loop mechanics, not turn mechanics.
+defineProviderRuntime(loopOwnershipMismatch)
+
+const singleMutualExclusion = {
+  id: 'typed-single-mutual-exclusion',
+  ownership: 'single-turn' as const,
+  turn: turnContract,
+  loop: loopContract,
+}
+// @ts-expect-error - single-turn ownership still forbids loop mechanics.
+defineProviderRuntime(singleMutualExclusion)
+
+const loopMutualExclusion = {
+  id: 'typed-loop-mutual-exclusion',
+  ownership: 'loop-owned' as const,
+  turn: turnContract,
+  loop: loopContract,
+}
+// @ts-expect-error - loop-owned ownership still forbids turn mechanics.
+defineProviderRuntime(loopMutualExclusion)
 
 defineProviderRuntime({
   id: 'typed-loop-collision',

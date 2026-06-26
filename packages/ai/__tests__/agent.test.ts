@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
-import { prompt, resetRuntime, setRuntime } from '@crux/core'
-import type { CruxRuntime } from '@crux/core'
-import { resolve } from '@crux/ai/agent'
+import { prompt, resetRuntime, setRuntime } from '@use-crux/core'
+import type { CruxRuntime } from '@use-crux/core'
+import { resolve } from '@use-crux/ai/agent'
 import { emissionModel } from './mock-model'
 
 type ResolveEvent = Parameters<NonNullable<CruxRuntime['resolveHook']>>[0]
@@ -17,7 +17,7 @@ afterEach(() => {
   resetRuntime()
 })
 
-describe('@crux/ai/agent', () => {
+describe('@use-crux/ai/agent', () => {
   it('resolves instructions and wraps the AI SDK model with tracing middleware', async () => {
     const resolveEvents: ResolveEvent[] = []
     const executionEvents: ExecutionEvent[] = []

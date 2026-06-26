@@ -15,7 +15,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
     name: 'direct-crux-no-zod-native-path',
     files: {
       'src/index.ts': `
-        import { context, prompt, tool } from '@crux/core'
+        import { context, prompt, tool } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const searchTool = tool({ name: 'search', execute: async () => ({}) })
@@ -38,7 +38,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
     name: 'direct-crux-duplicate-variable-names',
     files: {
       'src/a.ts': `
-        import { context, prompt, tool } from '@crux/core'
+        import { context, prompt, tool } from '@use-crux/core'
 
         export const sharedContext = context({ id: 'a.context' })
         export const sharedTool = tool({ name: 'a.tool', execute: async () => ({}) })
@@ -49,7 +49,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         })
       `,
       'src/b.ts': `
-        import { context, prompt, tool } from '@crux/core'
+        import { context, prompt, tool } from '@use-crux/core'
 
         export const sharedContext = context({ id: 'b.context' })
         export const sharedTool = tool({ name: 'b.tool', execute: async () => ({}) })
@@ -76,7 +76,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         })
       `,
       'src/shared.ts': `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { z } from 'zod'
         import { NestedSchema } from './schema-fragments'
 
@@ -93,7 +93,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         export const sharedTools = { searchDocs }
       `,
       'src/index.ts': `
-        import { agent, prompt } from '@crux/core'
+        import { agent, prompt } from '@use-crux/core'
         import { WRITER_SYSTEM, WriterSchema, renderPrompt, sharedTools, usageHandler } from './shared'
 
         export const writerPrompt = prompt({
@@ -121,7 +121,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
     name: 'use-arrays-tool-maps-and-relations',
     files: {
       'src/primitives.ts': `
-        import { context, injectable, memory, tool } from '@crux/core'
+        import { context, injectable, memory, tool } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const localeContext = context({ id: 'locale' })
@@ -140,7 +140,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         }
       `,
       'src/authoring.ts': `
-        import { context, injectable, prompt } from '@crux/core'
+        import { context, injectable, prompt } from '@use-crux/core'
         import { baseTools, brandContext, editorialTools, guardInjection, injectEditorialTools, localeContext, nestedInjection, sessionMemory, sharedUse, summarizeTool } from './primitives'
 
         export const writerPrompt = prompt({
@@ -180,7 +180,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
     name: 'conditional-use-and-definition-enrichment',
     files: {
       'src/primitives.ts': `
-        import { blackboard, context, injectable, memory } from '@crux/core'
+        import { blackboard, context, injectable, memory } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
         export const policyContext = context({ id: 'policy' })
@@ -195,7 +195,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         export const includeDraftBoard = true
       `,
       'src/authoring.ts': `
-        import { match, prompt, when } from '@crux/core'
+        import { match, prompt, when } from '@use-crux/core'
         import { includeDraftBoard, hasBrand } from './conditions'
         import { brandContext, draftBoard, guardInjection, policyContext, sessionMemory } from './primitives'
 
@@ -223,7 +223,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
     name: 'dynamic-tools-contributions-and-router-folds',
     files: {
       'src/safety.ts': `
-        import { agent, constraint, guardrail, tool } from '@crux/core'
+        import { agent, constraint, guardrail, tool } from '@use-crux/core'
 
         export const safeTone = constraint({ name: 'safe-tone', check: () => ({ ok: true }) })
         export const factuality = constraint({ name: 'factuality', check: () => ({ ok: true }) })
@@ -246,7 +246,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         export const routes = { draft: writerAgent }
       `,
       'src/authoring.ts': `
-        import { injectable, prompt, router } from '@crux/core'
+        import { injectable, prompt, router } from '@use-crux/core'
         import { baseConstraints, extraConstraints, guardrails, partialTools, routes, sharedMetadata } from './safety'
 
         export const writerPrompt = prompt({
@@ -282,12 +282,12 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
     name: 'data-access-relations-and-lint-facts',
     files: {
       'src/resources.ts': `
-        import { workspace } from '@crux/core'
-        import { blackboard } from '@crux/core/agent'
-        import { memory, workingState } from '@crux/core/memory'
-        import { evaluate } from '@crux/core/quality'
-        import { retriever } from '@crux/core/retrieval'
-        import { llmJudge } from '@crux/core/scoring'
+        import { workspace } from '@use-crux/core'
+        import { blackboard } from '@use-crux/core/agent'
+        import { memory, workingState } from '@use-crux/core/memory'
+        import { evaluate } from '@use-crux/core/quality'
+        import { retriever } from '@use-crux/core/retrieval'
+        import { llmJudge } from '@use-crux/core/scoring'
         import { z } from 'zod'
 
         const writeOnlyState = workingState({ id: 'state', schema: z.object({ draft: z.string().optional() }) })
@@ -324,7 +324,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         export { hydrateDraft, persistAndReadBack, persistWithoutRead } from './helpers'
       `,
       'src/app.ts': `
-        import { flow, tool } from '@crux/core'
+        import { flow, tool } from '@use-crux/core'
         import { hydrateDraft, persistAndReadBack, persistWithoutRead } from './barrel'
 
         export const writerTool = tool({ name: 'writerTool', execute: persistWithoutRead })

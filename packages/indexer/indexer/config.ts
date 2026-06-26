@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
-import type { ProjectModelResolutionMode } from '@crux/core/project-index'
-import type { IndexDiagnostic, IndexSourceFile } from '@crux/core/project-index'
-import type { Crux, CruxExperimentalConfig, CruxIndexerConfig, CruxLintConfig, QualityConfig } from '@crux/core'
+import type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
+import type { IndexDiagnostic, IndexSourceFile } from '@use-crux/core/project-index'
+import type { Crux, CruxExperimentalConfig, CruxIndexerConfig, CruxLintConfig, QualityConfig } from '@use-crux/core'
 import {
   configImportFailedDiagnostic,
   configNotFoundDiagnostic,

@@ -10,6 +10,8 @@ export type {
   SemanticBackendSelectionEnv,
   SemanticBackendSession,
   SemanticBackendSessionInput,
+  SemanticBackendRuntimeIdentityInput,
+  SemanticCompilerRuntimeIdentity,
   SemanticIndexFilesInput,
   SemanticIndexProjectInput,
   SemanticIndexService,
@@ -27,10 +29,17 @@ export type {
   SemanticCompilerView,
 } from '../compiler-view'
 export type {
+  SemanticSyntaxKind,
+  SemanticSyntaxNode,
+  SemanticSyntaxNodeOf,
+  SemanticSyntaxSourceFile,
+  SemanticSyntaxView,
+} from '../syntax-view'
+export type {
   SemanticEvidenceBatch,
   SemanticEvidenceBatchKind,
   SemanticEvidenceBatchSource,
-} from '../evidence'
+} from '../evidence/projection'
 export type {
   SemanticSourceProfile,
   SemanticSourceProfileFile,
@@ -40,7 +49,7 @@ export {
   collectProjectedSemanticEvidence,
   projectSemanticEvidenceBatches,
   semanticEvidenceBatchesFromFacts,
-} from '../evidence'
+} from '../evidence/projection'
 export {
   createSemanticBackendFromSelection,
   semanticBackendSelectionFromConfig,
@@ -54,10 +63,10 @@ export {
   typescriptSemanticBackendCapabilities,
   typescriptSemanticBackendIdentity,
   type TypeScriptSemanticBackendOptions,
-} from './typescript-backend'
+} from '../backends/typescript/backend'
 export {
   createNativeSemanticBackend,
   nativeSemanticBackendCapabilities,
   nativeSemanticBackendIdentity,
   type NativeSemanticBackendOptions,
-} from './native-backend'
+} from '../backends/tsgo/backend'

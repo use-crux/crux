@@ -75,7 +75,7 @@ export interface Cassette {
  *
  * @example
  * ```ts
- * import { evaluate, cassette } from '@crux/core/quality'
+ * import { evaluate, cassette } from '@use-crux/core/quality'
  *
  * export default evaluate({
  *   task: supportPrompt,

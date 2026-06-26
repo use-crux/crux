@@ -8,11 +8,11 @@ import {
   plan, getPlan, updatePlan,
   planAgent,
   createPlanTool,
-} from '@crux/core/plan'
+} from '@use-crux/core/plan'
 import type {
   Plan, PlanUpdate, CreatePlanInput,
   ToolDef, PlanAgent, PlanAgentOptions, PlanContextMode,
-} from '@crux/core/plan'
+} from '@use-crux/core/plan'
 ```
 
 ## Overview
@@ -288,8 +288,8 @@ Plans use prefixed keys in the `CruxStore`:
 Give an LLM the plan creation tool and let it drive the process:
 
 ```ts title="agent-driven-plan.ts"
-import { createPlanTool, planAgent } from '@crux/core/plan'
-import { prompt, generate } from '@crux/ai'
+import { createPlanTool, planAgent } from '@use-crux/core/plan'
+import { prompt, generate } from '@use-crux/ai'
 
 // 1. Give the orchestrator a plan creation tool
 const orchestratorPrompt = prompt({
@@ -319,7 +319,7 @@ prompt({
 **Foundation API** — for cases where you create plans programmatically rather than through an LLM:
 
 ```ts title="manual-plan.ts"
-import { plan, planAgent } from '@crux/core/plan'
+import { plan, planAgent } from '@use-crux/core/plan'
 
 const p = await plan({
   title: 'Write SEO Blog Post',
@@ -338,8 +338,8 @@ prompt({
 A content writing pipeline where an orchestrator creates a plan, a reviewer approves it, and a writer follows it:
 
 ```ts title="content-pipeline.ts"
-import { createPlanTool, planAgent } from '@crux/core/plan'
-import { prompt, generate } from '@crux/ai'
+import { createPlanTool, planAgent } from '@use-crux/core/plan'
+import { prompt, generate } from '@use-crux/ai'
 
 // Phase 1: LLM creates a plan using the creation tool
 const orchestratorPrompt = prompt({

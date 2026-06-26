@@ -6,7 +6,7 @@ const MAX_AUTHORED_SOURCE_BYTES = 1_000_000
 const SAMPLE_BYTES = 128 * 1024
 
 const CRUX_SIGNAL_PATTERNS = [
-  /@crux\//,
+  /@use-crux\//,
   /\bprompt\s*\(/,
   /\bcontext\s*\(/,
   /\btool\s*\(/,
@@ -67,7 +67,7 @@ export function classifyStaticCandidateFile(
 
   if (isConfigFile(file)) return { action: 'index', file, bytes }
 
-  if (looksBundled(sample)) return { action: 'skip', file, bytes, reason: 'bundled' }
+  if (looksBundled(file, sample)) return { action: 'skip', file, bytes, reason: 'bundled' }
   if (looksGenerated(sample)) return { action: 'skip', file, bytes, reason: 'generated' }
 
   const hasCruxSignals = hasCruxInterest(sample, input.additionalCallNames)
@@ -122,25 +122,38 @@ function looksGenerated(sample: string): boolean {
   return /(@generated|auto-generated|automatically generated|do not edit|do not modify)/i.test(sample)
 }
 
-function looksBundled(sample: string): boolean {
+function looksBundled(file: string, sample: string): boolean {
   return (
     sample.includes('var __defProp = Object.defineProperty') ||
     sample.includes('var __commonJS =') ||
     sample.includes('__toESM') ||
     sample.includes('node_modules/.pnpm/') ||
-    sample.includes('//# sourceMappingURL=')
+    sample.includes('//# sourceMappingURL=') ||
+    looksHashedAssetChunk(file, sample)
   )
+}
+
+function looksHashedAssetChunk(file: string, sample: string): boolean {
+  const normalized = file.replace(/\\/g, '/')
+  if (!/\/assets\/[^/]+-[A-Za-z0-9_-]{8,}\.(?:[cm]?js|jsx)$/.test(normalized)) {
+    return false
+  }
+  return sample.startsWith('import{') || sample.includes('from"./') || longestLineLength(sample) > 2_000
 }
 
 function looksBase64Artifact(file: string, sample: string, bytes: number): boolean {
   if (bytes < 256_000) return false
   const lowerName = basename(file).toLowerCase()
   const artifactName = lowerName.includes('wasm') || lowerName.includes('base64')
-  const longestLine = sample.split(/\r?\n/).reduce((longest, line) => Math.max(longest, line.length), 0)
+  const longestLine = longestLineLength(sample)
   if (artifactName && longestLine > 50_000) return true
   if (longestLine < 100_000) return false
   const compact = sample.replace(/\s+/g, '')
   if (compact.length === 0) return false
   const base64Chars = compact.match(/[A-Za-z0-9+/=]/g)?.length ?? 0
   return base64Chars / compact.length > 0.95
+}
+
+function longestLineLength(sample: string): number {
+  return sample.split(/\r?\n/).reduce((longest, line) => Math.max(longest, line.length), 0)
 }

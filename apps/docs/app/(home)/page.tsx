@@ -25,11 +25,11 @@ const heroOutputs = [
 // Composition example.
 
 const compositionCode: CodeLine[] = [
-  { text: `import { prompt } from '@crux/core'`, type: 'import' },
-  { text: `import { memory, recentMessages, facts } from '@crux/core/memory'`, type: 'import' },
-  { text: `import { retriever } from '@crux/core/retrieval'`, type: 'import' },
-  { text: `import { guardrail } from '@crux/core/safety'`, type: 'import' },
-  { text: `import { generate } from '@crux/ai'`, type: 'import' },
+  { text: `import { prompt } from '@use-crux/core'`, type: 'import' },
+  { text: `import { memory, recentMessages, facts } from '@use-crux/core/memory'`, type: 'import' },
+  { text: `import { retriever } from '@use-crux/core/retrieval'`, type: 'import' },
+  { text: `import { guardrail } from '@use-crux/core/safety'`, type: 'import' },
+  { text: `import { generate } from '@use-crux/ai'`, type: 'import' },
   { text: ``, type: 'blank' },
   { text: `const chat = memory({`, type: 'code' },
   { text: `  store,`, type: 'code' },
@@ -62,11 +62,11 @@ const compositionCode: CodeLine[] = [
 // SDK adapter list.
 
 const adapters = [
-  { pkg: '@crux/ai', name: 'Vercel AI SDK' },
-  { pkg: '@crux/openai', name: 'OpenAI SDK' },
-  { pkg: '@crux/anthropic', name: 'Anthropic SDK' },
-  { pkg: '@crux/google', name: 'Google GenAI' },
-  { pkg: '@crux/core/ai-agent', name: 'Agent frameworks' },
+  { pkg: '@use-crux/ai', name: 'Vercel AI SDK' },
+  { pkg: '@use-crux/openai', name: 'OpenAI SDK' },
+  { pkg: '@use-crux/anthropic', name: 'Anthropic SDK' },
+  { pkg: '@use-crux/google', name: 'Google GenAI' },
+  { pkg: '@use-crux/core/ai-agent', name: 'Agent frameworks' },
 ]
 
 // ─────────────────────────────────────────────────────────────────────
@@ -194,7 +194,7 @@ export default function HomePage() {
             {/* Install */}
             <div className="mt-10 inline-flex items-center gap-3 rounded-lg border border-fd-border bg-fd-card/50 px-5 py-2.5 font-mono text-[13px] backdrop-blur-sm">
               <span className="select-none text-crux/50">$</span>
-              <span className="text-fd-foreground/80">npm install @crux/core</span>
+              <span className="text-fd-foreground/80">npm install @use-crux/core</span>
             </div>
           </div>
 

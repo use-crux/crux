@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { config } from '@crux/core'
-import type { CruxStore } from '@crux/core/store'
-import { inMemoryCruxStore } from '@crux/core/store'
+import { config } from '@use-crux/core'
+import type { CruxStore } from '@use-crux/core/store'
+import { inMemoryCruxStore } from '@use-crux/core/store'
 import { createCruxConvex } from '../index'
 import { setup } from '../bridge'
 
@@ -23,7 +23,7 @@ type TestHttpAction = {
   _handler: (ctx: unknown, request: Request) => Promise<Response>
 }
 
-describe('@crux/convex bridge setup', () => {
+describe('@use-crux/convex bridge setup', () => {
   afterEach(() => {
     // Individual tests dispose their config instance. This keeps failures from
     // leaking runtime state into the next test.

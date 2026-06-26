@@ -1,16 +1,19 @@
 /**
- * `@crux/react` — Reactive hooks for plans and task lists.
+ * `@use-crux/react` — Reactive hooks for plans and task lists.
  *
  * Transport-agnostic: works with Convex, SSE, polling, or any custom transport.
  * Wrap your app with `<CruxProvider transport={...}>` and use the domain hooks.
  *
  * @example
  * ```tsx
- * import { CruxProvider, usePlan, useTaskList, useTasks } from '@crux/react'
- * import { createConvexTransport } from '@crux/convex/react'
+ * import { CruxProvider, usePlan, useTaskList, useTasks } from '@use-crux/react'
+ * import { defineConvexStoreContract } from '@use-crux/convex'
+ * import { useQuery } from 'convex/react'
+ * import { components } from '../convex/_generated/api'
  *
- * // Setup
- * <CruxProvider transport={createConvexTransport(api)}>
+ * const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+ *
+ * <CruxProvider transport={cruxDocuments.transport({ useQuery })}>
  *   <App />
  * </CruxProvider>
  *

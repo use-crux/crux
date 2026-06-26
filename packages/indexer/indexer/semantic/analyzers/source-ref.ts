@@ -1,5 +1,4 @@
-import type { ProjectSourceRef } from '@crux/core/project-index'
-import type * as ts from 'typescript'
+import type { ProjectSourceRef } from '@use-crux/core/project-index'
 import type {
   SemanticAnalyzerContext,
   SemanticAnalyzerView,
@@ -7,12 +6,23 @@ import type {
   SemanticResolvedSource,
   SemanticSourceRefCandidate,
 } from '../candidates'
+import type { SemanticSyntaxNode } from '../syntax-view'
 import type { SemanticAnalyzer } from '../types'
 
 export interface SemanticSourceRefAnalyzerDeps {
-  readonly sourceRefCandidates: (candidate: SemanticDefinitionCandidate) => readonly SemanticSourceRefCandidate[]
-  readonly resolveExpression: (expression: ts.Expression, view: SemanticAnalyzerView) => SemanticResolvedSource | undefined
-  readonly sourceRef: (candidate: SemanticSourceRefCandidate, resolved: SemanticResolvedSource) => ProjectSourceRef
+  readonly sourceRefCandidates: (
+    candidate: SemanticDefinitionCandidate,
+    view: SemanticAnalyzerView,
+  ) => readonly SemanticSourceRefCandidate[]
+  readonly resolveExpression: (
+    expression: SemanticSyntaxNode,
+    view: SemanticAnalyzerView,
+  ) => SemanticResolvedSource | undefined
+  readonly sourceRef: (
+    candidate: SemanticSourceRefCandidate,
+    resolved: SemanticResolvedSource,
+    view: SemanticAnalyzerView,
+  ) => ProjectSourceRef
   readonly templateInterpolationSourceRefs: (
     candidate: SemanticDefinitionCandidate,
     view: SemanticAnalyzerView,
@@ -38,10 +48,10 @@ export function createSemanticSourceRefAnalyzer(
     analyze(candidate, context) {
       return {
         sourceRefs: [
-          ...deps.sourceRefCandidates(candidate).flatMap((refCandidate) => {
+          ...deps.sourceRefCandidates(candidate, context.view).flatMap((refCandidate) => {
             const resolved = deps.resolveExpression(refCandidate.expression, context.view)
             return resolved
-              ? [{ definitionId: refCandidate.definitionId, ref: deps.sourceRef(refCandidate, resolved) }]
+              ? [{ definitionId: refCandidate.definitionId, ref: deps.sourceRef(refCandidate, resolved, context.view) }]
               : []
           }),
           ...deps.templateInterpolationSourceRefs(candidate, context.view).map((ref) => ({

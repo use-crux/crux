@@ -8,10 +8,18 @@
  * @module
  */
 
-import type { ProjectModelProvenance, ResolvedProjectModel } from '@crux/core/project-index'
+import type { ProjectModelProvenance, ResolvedProjectModel } from '@use-crux/core/project-index'
 import type { IndexPatch, IndexPatchFacts, IndexPatchPhase } from '../patches'
 import type { ProjectConfigInspect } from '../project-config-inspect'
+import type { ProjectStaticIndexConfig } from '../static-index/config/inspect'
+import type { ProjectStaticSyntaxPlan } from '../static-index/plan'
+import type { StaticExtractionTimingName } from '../static/instrumentation'
 import type { SemanticSourceProfileFile } from '../semantic/source-profile'
+import type {
+  CheckStaticRulesResult,
+  ExtractStaticEvidenceBatchResult,
+  LoadStaticExtensionHostManifestResult,
+} from '../extensions'
 
 /** Current Project Index worker stream protocol version. */
 export const PROJECT_INDEX_WORKER_PROTOCOL_VERSION = 2 as const
@@ -105,6 +113,16 @@ export interface ProjectIndexArtifactMap {
   readonly projectModel: ResolvedProjectModel
   /** Effective configuration read model rendered by `crux config inspect`. */
   readonly projectConfig: ProjectConfigInspect
+  /** Executable-config fragment used before Go/Rust-owned Static Index planning. */
+  readonly projectStaticIndexConfig: ProjectStaticIndexConfig
+  /** Static syntax parsing plan consumed by native parser hosts. */
+  readonly projectStaticSyntaxPlan: ProjectStaticSyntaxPlan
+  /** Data-only extension runtime manifest loaded by the TypeScript static host. */
+  readonly staticExtensionHostManifest: LoadStaticExtensionHostManifestResult
+  /** TypeScript extractor facts produced from Static Index evidence jobs. */
+  readonly staticExtensionEvidenceBatch: ExtractStaticEvidenceBatchResult
+  /** TypeScript rule outputs produced from a native-finalized static graph. */
+  readonly staticRuleCheck: CheckStaticRulesResult
 }
 
 /** JSON artifact kinds supported by the V2 worker stream. */
@@ -153,10 +171,22 @@ export interface ProjectIndexSourceProfileBatchEvent extends ProjectIndexWorkerE
 export interface ProjectIndexPhaseSummary {
   /** Number of fact envelopes emitted for the transaction. */
   readonly factCount: number
+  /** Optional compiler phase timings for diagnostics and benchmarks. */
+  readonly timings?: readonly ProjectIndexPhaseTiming[]
   /** Optional whole-run incremental planning decision attached to the final patch. */
   readonly decision?: unknown
   /** Optional whole-run incremental execution report attached to the final patch. */
   readonly report?: unknown
+}
+
+/** Aggregated worker phase timing emitted for diagnostics and benchmarks. */
+export interface ProjectIndexPhaseTiming {
+  /** Stable timing bucket name. */
+  readonly name: StaticExtractionTimingName | string
+  /** Sum of durations for all observations in this bucket. */
+  readonly durationMs: number
+  /** Number of observations in this bucket. */
+  readonly count: number
 }
 
 /** Closes a successful transactional index phase stream. */

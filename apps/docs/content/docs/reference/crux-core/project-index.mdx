@@ -4,13 +4,13 @@ description: Design-plane contract for discovered Crux definitions, relations, s
 ---
 
 ```ts
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
-import { serializeProjectIndex } from '@crux/core/project-index/serializers'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
+import { serializeProjectIndex } from '@use-crux/core/project-index/serializers'
 ```
 
 The Project Index describes what exists in a local Crux project. It is separate from runtime observability: index definitions are prompts, contexts, tools, agents, flows, flow steps, compositions, RAG resources, memory, memory blocks, blackboards, workspaces, safety definitions, suites, evals, and other design-time resources; spans describe what happened during a run.
 
-`@crux/core` owns the TypeScript contract. The Go devtools backend mirrors the contract manually, builds the service-owned read model, and exposes it to web devtools and the TUI.
+`@use-crux/core` owns the TypeScript contract. The Go devtools backend mirrors the contract manually, builds the service-owned read model, and exposes it to web devtools and the TUI.
 
 ## Snapshot Shape
 
@@ -42,13 +42,13 @@ interface ProjectIndexSnapshot {
 
 ## Resolved Project Model
 
-`ResolvedProjectModel` is the config-inspection read model exported from `@crux/core/project-index`.
+`ResolvedProjectModel` is the config-inspection read model exported from `@use-crux/core/project-index`.
 It is not a runtime setup API and it is not a central registry requirement. Local tooling uses it to
 explain what Crux inferred or explicitly received while keeping policy/config separate from authored
 source visibility.
 
 ```ts
-import type { ProjectModelProvenance, ResolvedProjectModel } from '@crux/core/project-index'
+import type { ProjectModelProvenance, ResolvedProjectModel } from '@use-crux/core/project-index'
 ```
 
 The model contains the selected root, optional package name, config files, source roots, ignored
@@ -69,7 +69,7 @@ definitions without config registration. Registry-backed skills link to their re
 `skill.uses_registry`; bundled registries such as `skillsSh` are represented as built-in registry
 definitions and are not fetched during discovery.
 
-`@crux/indexer` produces this model with `resolveProjectModel(...)`, and `@crux/local` exposes it
+`@use-crux/indexer` produces this model with `resolveProjectModel(...)`, and `@use-crux/local` exposes it
 through `crux config inspect` for human or `--json` output.
 
 ```ts
@@ -103,12 +103,12 @@ Project Model diagnostics with source provenance.
 
 The index contract is produced by two packages:
 
-| Producer        | Responsibility                                                                                           |
-| --------------- | -------------------------------------------------------------------------------------------------------- |
-| `@crux/indexer` | Discovers source-authored definitions, relations, source refs, diagnostics, and index lint findings.     |
-| `@crux/local`   | Persists and serves the index read model, enriches it with quality state, and broadcasts updates to UIs. |
+| Producer            | Responsibility                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------- |
+| `@use-crux/indexer` | Discovers source-authored definitions, relations, source refs, diagnostics, and index lint findings.     |
+| `@use-crux/local`   | Persists and serves the index read model, enriches it with quality state, and broadcasts updates to UIs. |
 
-Runtime snapshots emitted by `withDevtools()` can enrich prompt/context/tool metadata, but source files and `.crux/quality` records are authoritative for authored definitions. See [@crux/indexer](/docs/reference/indexer) for the indexing package and [@crux/local](/docs/reference/local) for CLI/API access.
+Runtime snapshots emitted by `withDevtools()` can enrich prompt/context/tool metadata, but source files and `.crux/quality` records are authoritative for authored definitions. See [@use-crux/indexer](/docs/reference/indexer) for the indexing package and [@use-crux/local](/docs/reference/local) for CLI/API access.
 
 The indexing pipeline is designed as fast source truth plus background enrichment. During `crux dev`,
 the Go service asks the worker for a bounded static/AST pass first so it can publish useful Project
@@ -121,6 +121,31 @@ The semantic pass can enrich proven aliases, barrels, imported symbols, schema r
 primitive relations without blocking the first snapshot. The Go service owns stale-while-refresh cache
 loading, patch merging, final read-model state, and realtime publication; TypeScript workers emit
 neutral index facts/patches.
+
+## Semantic Backend Selection
+
+Semantic Project Index behavior is backend-neutral. The default backend uses the JavaScript
+TypeScript compiler API. Opt in to the experimental native semantic backend with
+`experimental.indexer.native: true` or
+`experimental.indexer.native: { engine: 'tsgo', tsserverPath?: string }` in `crux.config.ts`.
+
+When native semantic indexing is selected, TypeScript-Go owns semantic project setup, checker calls,
+declaration lookup, and AST traversal. Native direct projectors accelerate source shapes that Crux
+can prove exactly; unsupported shapes continue through the tsgo-backed shared analyzer path instead
+of falling back to the JavaScript TypeScript semantic backend. Both semantic backends emit the same
+Project Index facts, relations, diagnostics, lint findings, and source refs through the same read
+model.
+
+`experimental.indexer.nativeAst: true` or `{ frontend: 'oxc' }` is a separate static AST/source
+frontend experiment. It can accelerate the first source pass without selecting the native semantic
+backend.
+
+Native AST beta runs use Rust/Oxc for first-party Static Index work, but the Project Index contract
+does not change. TypeScript extension extractors and rules remain compatible through the trusted
+Node host, and their output must finalize into the same definitions, relations, diagnostics, lint
+findings, rule descriptors, sources, and source graph rows as the TypeScript Static Index baseline.
+Clients should treat fallback or Node-start diagnostics as indexing status: they explain why a beta
+run used TypeScript extension compatibility or degraded setup, not a different Project Index schema.
 
 ## Full-Fidelity Definitions
 
@@ -169,7 +194,7 @@ interface ProjectSourceRef {
 
 Clients should render `sourceRefs` as supporting source locations and should not use them as runtime graph edges. Authored graph links still come from `relations`; parsed schemas and primitive intelligence still live on `metadata`. Source file entries can include dependency/dependent edges derived from source refs so file maps can show "this prompt depends on that schema/fragment file" without turning those source dependencies into Crux runtime relations.
 
-Definitions include `metadata.runtimeJoin` hints where Crux can derive stable runtime identifiers. The object is typed as `ProjectRuntimeJoin` from `@crux/core/project-index`. These hints are for the Go read models to join spans/resources back to authored definitions without UI-side inference.
+Definitions include `metadata.runtimeJoin` hints where Crux can derive stable runtime identifiers. The object is typed as `ProjectRuntimeJoin` from `@use-crux/core/project-index`. These hints are for the Go read models to join spans/resources back to authored definitions without UI-side inference.
 
 `runtimeJoin` separates authored identity from runtime correlation. `definitionId` is always the index definition id. `spanAttributes` contains only stable attributes that runtime spans actually emit. Runtime-only correlation fields stay separate: `flowId` identifies one executing flow instance and `stepId` identifies one executing flow-step instance, so authored flow definitions join `flow.run` spans by primitive plus span name, while authored flow-step definitions join `flow.step` spans by primitive plus `stepLabel`/span name. Memory blocks join memory spans through `sourceDefinitionId`, `blockDefinitionId`, runtime `memoryId`, and `blockId`. Blackboards use memory-shaped spans with `memoryType: "blackboard"`; clients should not expect a separate `blackboardId` span attribute.
 

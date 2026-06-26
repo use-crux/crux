@@ -1,4 +1,4 @@
-import { context, createContexts } from '@crux/core'
+import { context, createContexts } from '@use-crux/core'
 
 export const supportPolicy = context({
   id: 'support.policy',

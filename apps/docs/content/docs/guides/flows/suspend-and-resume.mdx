@@ -8,7 +8,7 @@ Some pipelines can't finish in a single call. A content pipeline might need edit
 `flow.suspend()` pauses the flow at a named point and returns control to the caller. The flow's state — which steps completed and what they returned — is persisted to your `CruxStore`. Later, an external signal triggers a resume, and execution continues from where it left off. Completed steps replay instantly from cache; no function is re-executed.
 
 ```ts
-import { flow } from '@crux/core'
+import { flow } from '@use-crux/core'
 import { z } from 'zod'
 
 const reviewFlow = flow('content-review', async (flow) => {
@@ -46,9 +46,9 @@ This works from API routes, webhook handlers, UI buttons, or any other external 
 
 `handle.signal()` is the recommended API. It delegates to `signalFlow()` internally but is the proper entry point for application code.
 
-`signalFlow()` (exported from `@crux/core`) is a **low-level primitive** that only writes the signal payload to the CruxStore. It does NOT trigger the flow to resume — the caller must separately invoke `.run({ resume: flowId })` or, in Convex, schedule the resume action via `ctx.scheduler`. Use it only when you need bare store access without handle-level coordination.
+`signalFlow()` (exported from `@use-crux/core`) is a **low-level primitive** that only writes the signal payload to the CruxStore. It does NOT trigger the flow to resume — the caller must separately invoke `.run({ resume: flowId })` or, in Convex, schedule the resume action via `ctx.scheduler`. Use it only when you need bare store access without handle-level coordination.
 
-In Convex, the `@crux/convex/server` flow handle can also schedule the resume action. If a mutation-only module cannot import the handle, create a small app-local helper that calls `signalFlow()` and then `ctx.scheduler.runAfter()`.
+In Convex, the `@use-crux/convex/server` flow handle can also schedule the resume action. If a mutation-only module cannot import the handle, create a small app-local helper that calls `signalFlow()` and then `ctx.scheduler.runAfter()`.
 
 </Callout>
 
@@ -85,7 +85,7 @@ continues or finishes.
 The flow snapshot also stores the parent observability context. When the flow
 resumes in another worker, the resumed spans append to the same run id instead
 of creating a second standalone run. In Convex, `flow.signal(ctx, actionRef,
-flowId, name, payload)` from `@crux/convex/server` writes the signal and
+flowId, name, payload)` from `@use-crux/convex/server` writes the signal and
 schedules the resume action with that stored context automatically.
 
 ## Timeouts and Expiration
@@ -112,7 +112,7 @@ Cancel a flow from inside the flow function or externally:
 if (!approval.approved) return flow.cancel('Rejected by editor')
 
 // From outside — updates the stored snapshot
-import { cancelFlow } from '@crux/core'
+import { cancelFlow } from '@use-crux/core'
 await cancelFlow(flowId, 'Budget exceeded')
 ```
 
@@ -121,7 +121,7 @@ await cancelFlow(flowId, 'Budget exceeded')
 Query your store for flows by status:
 
 ```ts
-import { listFlows } from '@crux/core'
+import { listFlows } from '@use-crux/core'
 
 const suspended = await listFlows({ status: 'suspended' })
 // [{ flowId, name, status, suspendedAt, createdAt, updatedAt, timeoutAt? }]
@@ -151,7 +151,7 @@ await flow.waitUntil(
 **Suspend** — `flow.suspend()` throws a `FlowSuspendedError` to unwind the call stack. The internal executor catches it, persists a snapshot of completed steps to the store, and returns `{ status: 'suspended' }`.
 </Step>
 <Step>
-**Signal** — External code calls `handle.signal(flowId, name, payload)` to deliver the signal. Internally, this writes the payload to the CruxStore as a key-value entry. In Convex, `@crux/convex/server` flow handles can also schedule the resume action.
+**Signal** — External code calls `handle.signal(flowId, name, payload)` to deliver the signal. Internally, this writes the payload to the CruxStore as a key-value entry. In Convex, `@use-crux/convex/server` flow handles can also schedule the resume action.
 </Step>
 <Step>
 **Resume** — `handle.run({ resume: flowId })` loads the snapshot, replays completed steps from cache (no re-execution), and when `suspend()` is reached again, it finds the signal in the store and returns the payload instead of throwing.
@@ -167,6 +167,6 @@ The flow handler itself is stateless. All state lives in the store. This means a
 
 ## Related
 
-- [Convex flows](/docs/guides/convex/flows) — `@crux/convex/server` flows for cross-action suspend/resume
+- [Convex flows](/docs/guides/convex/flows) — `@use-crux/convex/server` flows for cross-action suspend/resume
 - [Storage](/docs/guides/storage/crux-store) — `CruxStore` backends that persist flow snapshots
 - [API reference](/docs/reference/crux-core/flow) — full type signatures for `suspend`, `signal`, `cancelFlow`, `listFlows`

@@ -1,5 +1,5 @@
 /**
- * `@crux/ai/agent` — Vercel AI SDK bridge for external agent frameworks.
+ * `@use-crux/ai/agent` — Vercel AI SDK bridge for external agent frameworks.
  *
  * Resolves Crux prompts into instructions and returns an AI SDK language model
  * suitable for frameworks such as `@convex-dev/agent` or Mastra. When Crux
@@ -9,7 +9,7 @@
  *
  * @example
  * ```ts
- * import { resolve } from '@crux/ai/agent'
+ * import { resolve } from '@use-crux/ai/agent'
  *
  * const { instructions, model } = await resolve(agentPrompt, {
  *   model: languageModel,
@@ -23,8 +23,8 @@
 
 import { wrapLanguageModel } from 'ai'
 import type { z } from 'zod'
-import type { ContextEntry, Prompt } from '@crux/core'
-import { getRuntime } from '@crux/core'
+import type { ContextEntry, Prompt } from '@use-crux/core'
+import { getRuntime } from '@use-crux/core'
 import { resolveAgentInstructions } from './prompt-resolution'
 import { createTracingMiddleware } from './tracing-middleware'
 import type { AgentResolveOptions, AgentResolveResult } from './types'

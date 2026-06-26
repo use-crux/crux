@@ -97,10 +97,10 @@ const withoutCode: CodeLine[] = [
 ]
 
 const withCode: CodeLine[] = [
-  { text: `import { context, prompt } from '@crux/core'`, type: 'import' },
-  { text: `import { guardrail } from '@crux/core/safety'`, type: 'import' },
-  { text: `import { constrain } from '@crux/core/constrain'`, type: 'import' },
-  { text: `import { generate } from '@crux/ai'`, type: 'import' },
+  { text: `import { context, prompt } from '@use-crux/core'`, type: 'import' },
+  { text: `import { guardrail } from '@use-crux/core/safety'`, type: 'import' },
+  { text: `import { constrain } from '@use-crux/core/constrain'`, type: 'import' },
+  { text: `import { generate } from '@use-crux/ai'`, type: 'import' },
   { text: `import { openai } from '@ai-sdk/openai'`, type: 'import' },
   { text: ``, type: 'blank' },
   { text: `const brand = context({`, type: 'highlight' },
@@ -450,7 +450,7 @@ export default function WhyPage() {
           </div>
           <div className="mt-9 inline-flex items-center gap-3 rounded-lg border border-fd-border bg-fd-card/50 px-5 py-2.5 font-mono text-[13px]">
             <span className="select-none text-crux/50">$</span>
-            <span className="text-fd-foreground/80">npm install @crux/core</span>
+            <span className="text-fd-foreground/80">npm install @use-crux/core</span>
           </div>
         </div>
       </section>

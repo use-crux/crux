@@ -11,7 +11,7 @@
  * 5. Asserting on an uncaptured signal throws {@link UncapturedSignalError}.
  * 6. All assertion outcomes lower into a per-cell `pass` score (engine).
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 

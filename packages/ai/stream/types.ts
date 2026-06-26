@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { JsonObject } from '@crux/core/store'
+import type { JsonObject } from '@use-crux/core/store'
 
 /**
  * A Crux data part payload sent through an AI SDK stream.

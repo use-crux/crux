@@ -6,7 +6,7 @@ description: Use retriever() for dense, sparse, hybrid, custom, prompt, and tool
 `retriever()` is the read side of a retrieval corpus. It turns a text query into scored hits and can also inject those hits into prompts or expose search tools to a model.
 
 ```ts
-import { retriever } from '@crux/core/retrieval'
+import { retriever } from '@use-crux/core/retrieval'
 
 const docs = retriever({
   id: 'docs',
@@ -163,7 +163,7 @@ Prefer `use: [docs]` in normal Crux prompt code.
 Use a reranker when raw retrieval gets good candidates but not the best order.
 
 ```ts
-import { reranker } from '@crux/core/retrieval'
+import { reranker } from '@use-crux/core/retrieval'
 
 const keepRelevant = reranker({
   name: 'keep-relevant',

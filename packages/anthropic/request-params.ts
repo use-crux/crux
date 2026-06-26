@@ -1,9 +1,9 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import type { z } from 'zod'
-import type { GenerationSettings, SystemBlock } from '@crux/core'
-import type { CallArgs } from '@crux/core/adapter'
-import type { NativeChatRequestArgs } from '@crux/core/adapter'
+import type { GenerationSettings, SystemBlock } from '@use-crux/core'
+import type { CallArgs } from '@use-crux/core/adapter'
+import type { NativeChatRequestArgs } from '@use-crux/core/adapter'
 import type { AnthropicExtra, AnthropicRequest } from './types'
 
 /** Default `max_tokens` when a call site does not provide one. */

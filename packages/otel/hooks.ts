@@ -6,7 +6,7 @@
  * @module
  */
 
-import type { InstrumentationHooks } from '@crux/core'
+import type { InstrumentationHooks } from '@use-crux/core'
 import type { SpanManager, SpanRef } from './span-manager'
 import type { TelemetryOptions } from './plugin'
 import {

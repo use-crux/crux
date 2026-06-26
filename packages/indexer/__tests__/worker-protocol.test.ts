@@ -1,71 +1,75 @@
 import { describe, expect, it } from 'vitest'
-import type { ResolvedProjectModel } from '@crux/core/project-index'
+import type { ResolvedProjectModel } from '@use-crux/core/project-index'
 import type { IndexPatch } from '../indexer/patches'
 import {
   indexPatchFromWorkerEvents,
   indexPatchToWorkerEvents,
   projectIndexArtifactToWorkerEvent,
-} from '../indexer/worker-protocol'
+} from '../contracts/worker-events'
+import {
+  workerEventFixtureOptions,
+  workerEventFixturePatch,
+} from '../contracts/worker-events/fixtures'
+import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
 
 describe('project index worker protocol', () => {
-  it('streams patch facts in ordered batches and reconstructs the same patch', () => {
-    const patch: IndexPatch = {
-      schemaVersion: 1,
-      phase: 'ast',
-      project: { root: '/repo', name: 'fixture', configFile: 'crux.config.ts' },
-      startedAt: '2026-06-18T10:00:00.000Z',
-      finishedAt: '2026-06-18T10:00:00.001Z',
-      status: 'ok',
-      invalidates: { all: true },
-      facts: {
-        definitions: [
-          {
-            id: 'prompt:writer',
-            kind: 'prompt',
-            name: 'writer',
-            fidelity: 'partial',
-            status: 'active',
-            source: { file: '/repo/src/writer.ts', line: 3 },
-          },
-        ],
-        diagnostics: [
-          {
-            id: 'diagnostic:writer',
-            severity: 'info',
-            code: 'index.writer',
-            message: 'writer indexed',
-            source: { file: '/repo/src/writer.ts', line: 3 },
-          },
-        ],
-        sources: [
-          {
-            file: '/repo/src/writer.ts',
-            status: 'indexed',
-            shardId: '.',
-            definitionIds: ['prompt:writer'],
-            diagnostics: ['diagnostic:writer'],
-          },
-        ],
-        sourceGraph: {
-          schemaVersion: 1,
-          producedBy: '@crux/indexer',
-          capabilities: ['definition-ownership', 'diagnostic-ownership', 'project-shards'],
-          shards: [{ id: '.', root: '/repo', packageFile: '/repo/package.json' }],
-        },
-      },
-    }
+  it('streams contract fixture facts in ordered batches and reconstructs the same patch', () => {
+    const events = indexPatchToWorkerEvents(workerEventFixturePatch, workerEventFixtureOptions)
 
-    const events = indexPatchToWorkerEvents(patch, {
-      transactionId: 'tx-ast',
-      producer: { name: '@crux/indexer', version: 'test' },
-      maxFactsPerBatch: 2,
-    })
-
-    expect(events.map((event) => event.type)).toEqual(['phase:start', 'fact:batch', 'fact:batch', 'phase:done'])
+    expect(events.map((event) => event.type)).toEqual([
+      'phase:start',
+      'fact:batch',
+      'fact:batch',
+      'sourceProfile:batch',
+      'phase:done',
+    ])
     expect(events[1]).toMatchObject({ type: 'fact:batch', sequence: 0 })
     expect(events[2]).toMatchObject({ type: 'fact:batch', sequence: 1 })
 
-    expect(indexPatchFromWorkerEvents(events)).toEqual(patch)
+    expect(indexPatchFromWorkerEvents(events)).toEqual(workerEventFixturePatch)
+  })
+
+  it('reconstructs the shared worker event fixture file', () => {
+    const fixture = readStaticIndexRuntimeSharedFixture('worker-events')
+
+    expect(fixture.events.map((event) => event.type)).toEqual([
+      'phase:start',
+      'fact:batch',
+      'sourceProfile:batch',
+      'phase:done',
+    ])
+    expect(indexPatchFromWorkerEvents(fixture.events)).toMatchObject({
+      phase: 'ast',
+      project: { root: '/repo', name: 'contract-spine' },
+      facts: {
+        definitions: [expect.objectContaining({ id: 'prompt:contract-spine' })],
+        diagnostics: [expect.objectContaining({ id: 'diagnostic:contract-spine' })],
+      },
+    })
+  })
+
+  it('loads shared worker event edge-case fixtures', () => {
+    const fixture = readStaticIndexRuntimeSharedFixture('worker-event-cases')
+
+    expect(fixture.artifactDone).toMatchObject({
+      protocolVersion: 2,
+      type: 'artifact:done',
+      artifact: 'projectStaticSyntaxPlan',
+      root: '/repo',
+    })
+    expect(fixture.artifactError).toMatchObject({
+      protocolVersion: 2,
+      type: 'artifact:error',
+      error: { message: 'static syntax plan failed' },
+    })
+    expect(fixture.phaseError).toMatchObject({
+      protocolVersion: 2,
+      type: 'phase:error',
+      phase: 'ast',
+      error: { code: 'E_STATIC_INDEX' },
+    })
+    expect(fixture.outOfOrderEvents.map((event) => event.type)).toEqual(['phase:start', 'fact:batch'])
+    expect(fixture.outOfOrderEvents[1]).toMatchObject({ type: 'fact:batch', sequence: 1 })
   })
 
   it('streams semantic source profile rows outside phase metadata', () => {
@@ -94,7 +98,7 @@ describe('project index worker protocol', () => {
 
     const events = indexPatchToWorkerEvents(patch, {
       transactionId: 'tx-ast',
-      producer: { name: '@crux/indexer', version: 'test' },
+      producer: { name: '@use-crux/indexer', version: 'test' },
       maxFactsPerBatch: 2,
     })
 
@@ -171,7 +175,7 @@ describe('project index worker protocol', () => {
 
     const events = indexPatchToWorkerEvents(patch, {
       transactionId: 'tx-runtime',
-      producer: { name: '@crux/indexer/project-runtime-indexer', version: 'test' },
+      producer: { name: '@use-crux/indexer/project-runtime-indexer', version: 'test' },
     })
     const batch = events.find((event) => event.type === 'fact:batch')
 

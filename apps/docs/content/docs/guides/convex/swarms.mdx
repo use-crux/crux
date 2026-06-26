@@ -5,18 +5,18 @@ description: Experimental cross-action swarm routing for Convex.
 
 # Convex Swarms
 
-`createComponentSwarm()` from `@crux/convex/swarm` is experimental. It explores cross-action swarm routing by running one agent turn per scheduled action, storing state in the Crux component, and scheduling the next turn after a handoff.
+`createComponentSwarm()` from `@use-crux/convex/swarm` is experimental. It explores cross-action swarm routing by running one agent turn per scheduled action, storing state in the Crux component, and scheduling the next turn after a handoff.
 
-For launch-critical code, keep swarms as immediate adapter compositions inside one Crux-aware action. Use `flow()` from `@crux/convex/server` when you need durable Convex orchestration, external signals, or resumable multi-step work.
+For launch-critical code, keep swarms as immediate adapter compositions inside one Crux-aware action. Use `flow()` from `@use-crux/convex/server` when you need durable Convex orchestration, external signals, or resumable multi-step work.
 
 ## Define The Swarm Runner
 
 ```ts title="convex/workflows/swarm.ts"
 'use node'
 
-import { action, internalAction, query } from '@crux/convex/server'
-import { createComponentSwarm } from '@crux/convex/swarm'
-import { generate } from '@crux/ai'
+import { action, internalAction, query } from '@use-crux/convex/server'
+import { createComponentSwarm } from '@use-crux/convex/swarm'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { components, internal } from '../_generated/api'
 import { v } from 'convex/values'

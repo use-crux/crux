@@ -1,11 +1,11 @@
-# @crux/otel
+# @use-crux/otel
 
 OpenTelemetry integration for Crux. Emits OTel spans for every instrumented Crux event — generate, stream, tools, flows, compositions, memory, compaction, scoring, and more.
 
 ## Install
 
 ```bash
-pnpm add @crux/otel @crux/core
+pnpm add @use-crux/otel @use-crux/core
 ```
 
 `@opentelemetry/api` is an optional peer dependency — only needed for the standard OTel `TracerProvider` path (see below).
@@ -13,8 +13,8 @@ pnpm add @crux/otel @crux/core
 ## Quick Start
 
 ```ts
-import { config } from '@crux/core'
-import { withTelemetry } from '@crux/otel'
+import { config } from '@use-crux/core'
+import { withTelemetry } from '@use-crux/otel'
 
 config({
   prompts,
@@ -24,7 +24,7 @@ config({
 
 ## Export Paths
 
-`@crux/otel` supports two export strategies:
+`@use-crux/otel` supports two export strategies:
 
 ### Standard OTel (Node.js servers)
 
@@ -43,7 +43,7 @@ const sdk = new NodeSDK({
 sdk.start()
 ```
 
-Then `@crux/otel` spans automatically appear in Datadog, Honeycomb, Grafana, etc.
+Then `@use-crux/otel` spans automatically appear in Datadog, Honeycomb, Grafana, etc.
 
 ### Lightweight (Lambda, Convex, Cloudflare Workers)
 
@@ -93,7 +93,7 @@ Tool spans intentionally record only shape and size metadata for `toModelOutput(
 
 ```ts
 interface TelemetryOptions {
-  /** Service name for span identification. @default '@crux/otel' */
+  /** Service name for span identification. @default '@use-crux/otel' */
   serviceName?: string
 
   /** Record prompt content as span attributes. @default false */
@@ -112,8 +112,8 @@ interface TelemetryOptions {
 Both devtools and OTel can run simultaneously. The plugin system's fan-out semantics ensure both receive every event:
 
 ```ts
-import { withDevtools } from '@crux/core/observability'
-import { withTelemetry } from '@crux/otel'
+import { withDevtools } from '@use-crux/core/observability'
+import { withTelemetry } from '@use-crux/otel'
 
 config({
   prompts,
@@ -123,7 +123,7 @@ config({
 
 ## Architecture
 
-`@crux/otel` is a pure consumer of `@crux/core`'s plugin system:
+`@use-crux/otel` is a pure consumer of `@use-crux/core`'s plugin system:
 
 - **`withTelemetry()`** returns a `CruxPlugin` with name `'crux:otel'`
 - **`SpanManager`** abstracts span lifecycle over both OTel tracer and lightweight `TraceSpan` tracking

@@ -1,9 +1,9 @@
 /**
- * Public provider runtime boundary tests for `@crux/ai`.
+ * Public provider runtime boundary tests for `@use-crux/ai`.
  */
 
 import { describe, expect, it } from 'vitest'
-import { prompt as makePrompt } from '@crux/core'
+import { prompt as makePrompt } from '@use-crux/core'
 import { z } from 'zod'
 import { aiSdkProviderRuntime } from '../src/profile'
 import { emissionModel } from './mock-model'

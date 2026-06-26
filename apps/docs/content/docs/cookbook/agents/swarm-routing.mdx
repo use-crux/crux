@@ -8,7 +8,7 @@ This recipe builds a customer-service swarm: a triage agent receives every incom
 ## Primitives used
 
 - `agent()` with `handoffs: [...]`
-- `swarm()` from `@crux/ai` for peer-to-peer LLM-routed transfer
+- `swarm()` from `@use-crux/ai` for peer-to-peer LLM-routed transfer
 
 ## When to reach for this pattern
 
@@ -19,9 +19,9 @@ This recipe builds a customer-service swarm: a triage agent receives every incom
 ## Full code
 
 ```ts
-import { agent } from '@crux/core/agent'
-import { swarm } from '@crux/ai'
-import { prompt } from '@crux/core'
+import { agent } from '@use-crux/core/agent'
+import { swarm } from '@use-crux/ai'
+import { prompt } from '@use-crux/core'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
@@ -104,7 +104,7 @@ Add `maxHandoffs: 5` to `swarm` to prevent the model from bouncing between agent
 
 ### Cross-action swarm (Convex)
 
-Convex actions have a 5-minute timeout. `createComponentSwarm()` from `@crux/convex/swarm` is experimental for cross-action swarms where each agent turn runs as its own scheduled action. For production launch paths, keep swarms immediate inside a Crux-aware action or model durable orchestration with `flow()`.
+Convex actions have a 5-minute timeout. `createComponentSwarm()` from `@use-crux/convex/swarm` is experimental for cross-action swarms where each agent turn runs as its own scheduled action. For production launch paths, keep swarms immediate inside a Crux-aware action or model durable orchestration with `flow()`.
 
 ### Cost tracking
 

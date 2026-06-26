@@ -29,7 +29,7 @@ import type { CruxStore } from './store/types'
  *
  * @example
  * ```ts
- * import { setRuntime, resetRuntime } from '@crux/core'
+ * import { setRuntime, resetRuntime } from '@use-crux/core'
  *
  * // Install all hooks at once
  * setRuntime({

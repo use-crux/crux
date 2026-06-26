@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { resolveProjectModel } from '../index'
+import { resolveProjectModel } from '..'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -25,7 +25,7 @@ describe('Project Model tools and registries', () => {
     await writeFile(
       join(root, 'src/tools.ts'),
       `
-        import { tool } from '@crux/core/tools'
+        import { tool } from '@use-crux/core/tools'
         import { z } from 'zod'
 
         export const searchDocs = tool({
@@ -62,7 +62,7 @@ describe('Project Model tools and registries', () => {
     await writeFile(
       join(root, 'src/skills.ts'),
       `
-        import { registry } from '@crux/core/skill'
+        import { registry } from '@use-crux/core/skill'
 
         export const acme = registry({
           name: 'acme',
@@ -103,7 +103,7 @@ describe('Project Model tools and registries', () => {
     await writeFile(
       join(root, 'src/skills.ts'),
       `
-        import { registry, skill } from '@crux/core/skill'
+        import { registry, skill } from '@use-crux/core/skill'
 
         export const acme = registry({
           name: 'acme',
@@ -156,7 +156,7 @@ describe('Project Model tools and registries', () => {
     await writeFile(
       join(root, 'src/skills.ts'),
       `
-        import { skill, skillsSh } from '@crux/core/skill'
+        import { skill, skillsSh } from '@use-crux/core/skill'
 
         export const seo = skill.fromRegistry(skillsSh, 'owner/repo/seo')
       `,

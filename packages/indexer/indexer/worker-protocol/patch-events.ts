@@ -9,7 +9,7 @@ import {
   type ProjectIndexPatchFactMap,
   type ProjectIndexWorkerEvent,
 } from './types'
-import type { ProjectModelProvenance } from '@crux/core/project-index'
+import type { ProjectModelProvenance } from '@use-crux/core/project-index'
 import { semanticSourceProfileFromStreamFiles, sourceProfileBatches } from './source-profile-events'
 
 const patchFactKinds = [

@@ -1,5 +1,5 @@
 {
-  "name": "@crux/react",
+  "name": "@use-crux/react",
   "version": "0.1.0",
   "description": "React bindings for Crux — provider, hooks, and transports for building AI UIs.",
   "keywords": ["react", "ai", "llm", "hooks", "ui", "crux"],
@@ -30,7 +30,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@crux/core": "workspace:*"
+    "@use-crux/core": "workspace:*"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0"

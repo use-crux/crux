@@ -5,8 +5,8 @@ import {
   runWithExecutionContext,
   type CruxRuntime,
   type InspectResult,
-} from '@crux/core'
-import type { SkillActivationSession } from '@crux/core/skill'
+} from '@use-crux/core'
+import type { SkillActivationSession } from '@use-crux/core/skill'
 import { extractCost } from './metadata'
 import { injectNewlyActivatedSkills } from './skill-injection'
 import { emitEstimatedToolEnds, cleanStaleStepTimings, recordStepTiming } from './tool-timing'

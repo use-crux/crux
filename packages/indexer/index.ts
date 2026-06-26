@@ -1,8 +1,40 @@
-export type { IndexProjectOptions, IndexProjectRuntimeOptions } from './indexer/index'
-export type { ProjectModelResolutionMode } from '@crux/core/project-index'
-export { indexProject, indexProjectAst, indexProjectRuntime, indexProjectSemantic } from './indexer/index'
+/**
+ * Public Crux Indexer entry point.
+ *
+ * This barrel exposes the high-level compiler facades for building Project
+ * Index snapshots, patches, project-model reads, config inspection, relation
+ * policies, incremental execution reports, and host-visible timing data.
+ * Low-level compiler, parser, semantic backend, host, and protocol contracts live
+ * behind explicit subpaths so this surface stays stable for SDK consumers.
+ *
+ * @module
+ */
+
+export type {
+  IndexProjectAstFromSyntaxRecordProviderOptions,
+  IndexProjectAstFromSyntaxRecordsOptions,
+  IndexProjectOptions,
+  IndexProjectRuntimeOptions,
+} from './indexer'
+export type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
+export {
+  indexProject,
+  indexProjectAst,
+  indexProjectAstFromSyntaxRecordProvider,
+  indexProjectAstFromSyntaxRecords,
+  indexProjectRuntime,
+  indexProjectSemantic,
+} from './indexer'
 export type { ResolveProjectModelOptions } from './indexer/project-model'
 export { resolveProjectModel } from './indexer/project-model'
+export type { InspectProjectStaticSyntaxPlanOptions, ProjectStaticSyntaxPlan } from './indexer/static-index/plan'
+export { inspectProjectStaticSyntaxPlan } from './indexer/static-index/plan'
+export type {
+  InspectProjectStaticIndexConfigOptions,
+  ProjectStaticIndexConfig,
+  ProjectStaticIndexExtensionReference,
+} from './indexer/static-index/config/inspect'
+export { inspectProjectStaticIndexConfig } from './indexer/static-index/config/inspect'
 export type {
   InspectProjectConfigOptions,
   ProjectConfigFileOrigin,
@@ -14,27 +46,9 @@ export type {
 } from './indexer/project-config-inspect'
 export { inspectProjectConfig } from './indexer/project-config-inspect'
 export { indexProjectIncremental } from './indexer/incremental'
-export {
-  astIndexPatchFromCompilerResult,
-  compileProjectIndex,
-  createProjectIndexCompiler,
-  projectIndexSnapshotFromCompilerResult,
-  runtimeIndexPatchFromCompilerResult,
-} from './indexer/compiler'
 export type {
-  ProjectIndexCompiler,
-  ProjectIndexCompileMode,
-  ProjectIndexCompilerInput,
-  ProjectIndexCompilerResult,
-} from './indexer/compiler'
-export type { CompilerOwnedProjection, ProjectIndexCompilerProfile } from './indexer/compiler/profile'
-export { createStaticExtraction } from './indexer/static/extraction/engine'
-export type {
-  SourceReader,
-  StaticExtractionEngine,
-  StaticExtractionOptions,
-  StaticFileExtraction,
-  StaticParseCacheStore,
+  StaticExtractionTiming,
+  StaticExtractionTimingName,
 } from './indexer/static/extraction/engine'
 export type {
   IncrementalExecutionMode,
@@ -52,32 +66,19 @@ export type {
   IndexPatchStatus,
 } from './indexer/patches'
 export type {
-  SemanticAnalyzeInput,
-  SemanticAnalyzeResult,
-  SemanticBackend,
-  SemanticBackendCapabilities,
-  SemanticBackendIdentity,
   SemanticBackendName,
-  SemanticBackendOption,
   SemanticBackendSelection,
-  SemanticBackendSelectionEnv,
-  SemanticBackendSession,
-  SemanticBackendSessionInput,
-  SemanticCompilerDeclaration,
-  SemanticCompilerNode,
-  SemanticCompilerSourceFile,
-  SemanticCompilerSymbol,
-  SemanticCompilerType,
-  SemanticCompilerView,
-  SemanticEvidenceBatch,
-  SemanticEvidenceBatchKind,
-  SemanticEvidenceBatchSource,
   SemanticSourceProfile,
   SemanticSourceProfileFile,
   SemanticSourceProfileHints,
   NativeSemanticBackendSelection,
   TypeScriptSemanticBackendSelection,
 } from './indexer/semantic/service'
+export type {
+  SemanticIndexInstrumentation,
+  SemanticIndexTiming,
+  SemanticIndexTimingName,
+} from './indexer/semantic/instrumentation'
 export {
   builtInRelationPolicies,
   createRelationPolicyTable,
@@ -86,7 +87,7 @@ export {
   relationIdentity,
   resolveRelationModel,
   withResolvedRelationReadModel,
-} from './indexer/relations/index'
+} from './indexer/relations'
 export type {
   IndexRelationPolicy,
   IndexRelationPresentation,
@@ -97,4 +98,4 @@ export type {
   RelationResolutionReport,
   UnresolvedRelationReason,
   UnresolvedRelationRef,
-} from './indexer/relations/index'
+} from './indexer/relations'

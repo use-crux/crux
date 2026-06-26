@@ -1,6 +1,7 @@
 import { type IndexExtractor } from '../extensions'
-import { internalStaticCallContext } from '../extensions/internal-native'
+import { internalStaticCallContext } from '../static-index/compatibility/syntax-record-bridge/native-context'
 import { routingFactsFromStaticContext } from './routing'
+import { routingFactsFromRecordContext } from './routing-record'
 
 /**
  * Extracts routing primitives through the extension boundary.
@@ -18,7 +19,7 @@ export const routingIndexExtractor: IndexExtractor = {
   ],
   extract: (ctx) => {
     const staticCtx = internalStaticCallContext(ctx)
-    if (!staticCtx) return { kind: 'none' }
+    if (!staticCtx) return routingFactsFromRecordContext(ctx)
     const extracted = routingFactsFromStaticContext(staticCtx)
     return extracted ? { kind: 'facts', facts: extracted } : { kind: 'none' }
   },

@@ -3,71 +3,71 @@ title: Packages
 description: What each Crux package does and when to install it.
 ---
 
-Crux is split into focused packages. Everyone needs `@crux/core`. Pick an adapter for your SDK, then add storage, React hooks, and the local runtime as needed.
+Crux is split into focused packages. Everyone needs `@use-crux/core`. Pick an adapter for your SDK, then add storage, React hooks, and the local runtime as needed.
 
 <Callout type="info">
-  You usually do not install every package. Start with `@crux/core`, add the adapter for your SDK, then add storage,
+  You usually do not install every package. Start with `@use-crux/core`, add the adapter for your SDK, then add storage,
   React, local devtools, or telemetry only when you need them.
 </Callout>
 
 ## Quick reference
 
-| Package           | What it does                                                                                                                         | Install when                                           |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| `@crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, index contracts, lint contracts, runtime bridge, observability | Always — this is the base                              |
-| `@crux/react`     | React provider, hooks, transports, and SSE server helper                                                                             | You render Crux plans/tasks/memory in React            |
-| `@crux/ai`        | Vercel AI SDK adapter (`generate`, `stream`), `@crux/ai/agent`, and stream integration for plans/tasks                               | You use `ai` / `@ai-sdk/*`                             |
-| `@crux/openai`    | OpenAI SDK adapter (`createOpenAI`)                                                                                                  | You use the `openai` package directly                  |
-| `@crux/google`    | Google GenAI adapter (`createGoogle`)                                                                                                | You use `@google/genai`                                |
-| `@crux/anthropic` | Anthropic SDK adapter (`createAnthropic`)                                                                                            | You use `@anthropic-ai/sdk` directly                   |
-| `@crux/convex`    | Convex DataStore adapter, workspace BlobStore, server boundaries, Agent bridge, compaction, swarm component                          | Your backend is Convex                                 |
-| `@crux/upstash`   | Upstash VectorStore, Redis DataStore adapter, compatibility stores                                                                   | You need managed vector search or Redis-backed storage |
-| `@crux/otel`      | OpenTelemetry spans for production observability                                                                                     | You need traces in Datadog, Honeycomb, Grafana, etc.   |
-| `@crux/local`     | Local Go runtime, dev server, web UI host, TUI, eval runner, index, lint, and trace services                                         | Development and debugging                              |
-| `@crux/devtools`  | React web devtools UI bundle                                                                                                         | Usually installed through `@crux/local`                |
+| Package               | What it does                                                                                                                         | Install when                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `@use-crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, index contracts, lint contracts, runtime bridge, observability | Always — this is the base                              |
+| `@use-crux/react`     | React provider, hooks, transports, and SSE server helper                                                                             | You render Crux plans/tasks/memory in React            |
+| `@use-crux/ai`        | Vercel AI SDK adapter (`generate`, `stream`), `@use-crux/ai/agent`, and stream integration for plans/tasks                           | You use `ai` / `@ai-sdk/*`                             |
+| `@use-crux/openai`    | OpenAI SDK adapter (`createOpenAI`)                                                                                                  | You use the `openai` package directly                  |
+| `@use-crux/google`    | Google GenAI adapter (`createGoogle`)                                                                                                | You use `@google/genai`                                |
+| `@use-crux/anthropic` | Anthropic SDK adapter (`createAnthropic`)                                                                                            | You use `@anthropic-ai/sdk` directly                   |
+| `@use-crux/convex`    | Convex DataStore adapter, workspace BlobStore, server boundaries, Agent bridge, compaction, swarm component                          | Your backend is Convex                                 |
+| `@use-crux/upstash`   | Upstash VectorStore, Redis DataStore adapter, compatibility stores                                                                   | You need managed vector search or Redis-backed storage |
+| `@use-crux/otel`      | OpenTelemetry spans for production observability                                                                                     | You need traces in Datadog, Honeycomb, Grafana, etc.   |
+| `@use-crux/local`     | Local Go runtime, dev server, web UI host, TUI, eval runner, index, lint, and trace services                                         | Development and debugging                              |
+| `@use-crux/devtools`  | React web devtools UI bundle                                                                                                         | Usually installed through `@use-crux/local`            |
 
-## `@crux/core`
+## `@use-crux/core`
 
 The base package. Contains all SDK-agnostic primitives, organized into subpath exports:
 
-| Subpath                     | Exports                                                                              |
-| --------------------------- | ------------------------------------------------------------------------------------ |
-| `@crux/core`                | `prompt`, `context`, `createPrompts`, `createContexts`, `config`, `when`, `match`    |
-| `@crux/core/memory`         | `memory`, `workingState`, `episodes`, `facts`, `procedures`                          |
-| `@crux/core/storage`        | `DataStore`, `VectorStore`, `BlobStore`, `storage`, `inMemoryStorage`                |
-| `@crux/core/compaction`     | `createSlidingWindow`, `createBudgetManager`, `extractKeyFacts`, `summarizeMessages` |
-| `@crux/core/scoring`        | `llmJudge`, `metrics`                                                                |
-| `@crux/core/agent`          | `agent`, `blackboard`, `handoff`, `delegate`, composition factories                  |
-| `@crux/core/flow`           | `flow`, `signalFlow`, `cancelFlow`, `createFlowId`                                   |
-| `@crux/core/plan`           | `plan`, `getPlan`, `updatePlan`, `planAgent`, `createPlanTool`                       |
-| `@crux/core/tasks`          | `tasklist`, `taskListAgent`, `taskWorker`, `createTaskListTool`                      |
-| `@crux/core/skill`          | `skill.inline`, `skill.fromFile`, `skill.fromRegistry`                               |
-| `@crux/core/safety`         | `guardrail`, `constraint`, safety plugins                                            |
-| `@crux/core/project-index`  | Project Index contracts and serializers                                              |
-| `@crux/core/lint`           | Authored-graph lint contracts                                                        |
-| `@crux/core/runtime-bridge` | Runtime bridge command-plane contract                                                |
-| `@crux/core/quality`        | `quality`, `suite`, `target`, `expect`, `cassette`                                   |
+| Subpath                         | Exports                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------ |
+| `@use-crux/core`                | `prompt`, `context`, `createPrompts`, `createContexts`, `config`, `when`, `match`    |
+| `@use-crux/core/memory`         | `memory`, `workingState`, `episodes`, `facts`, `procedures`                          |
+| `@use-crux/core/storage`        | `DataStore`, `VectorStore`, `BlobStore`, `storage`, `inMemoryStorage`                |
+| `@use-crux/core/compaction`     | `createSlidingWindow`, `createBudgetManager`, `extractKeyFacts`, `summarizeMessages` |
+| `@use-crux/core/scoring`        | `llmJudge`, `metrics`                                                                |
+| `@use-crux/core/agent`          | `agent`, `blackboard`, `handoff`, `delegate`, composition factories                  |
+| `@use-crux/core/flow`           | `flow`, `signalFlow`, `cancelFlow`, `createFlowId`                                   |
+| `@use-crux/core/plan`           | `plan`, `getPlan`, `updatePlan`, `planAgent`, `createPlanTool`                       |
+| `@use-crux/core/tasks`          | `tasklist`, `taskListAgent`, `taskWorker`, `createTaskListTool`                      |
+| `@use-crux/core/skill`          | `skill.inline`, `skill.fromFile`, `skill.fromRegistry`                               |
+| `@use-crux/core/safety`         | `guardrail`, `constraint`, safety plugins                                            |
+| `@use-crux/core/project-index`  | Project Index contracts and serializers                                              |
+| `@use-crux/core/lint`           | Authored-graph lint contracts                                                        |
+| `@use-crux/core/runtime-bridge` | Runtime bridge command-plane contract                                                |
+| `@use-crux/core/quality`        | `quality`, `suite`, `target`, `expect`, `cassette`                                   |
 
 ## Adapter packages
 
-All adapters follow the same factory pattern. They wrap `prompt.resolve()` and translate to provider-specific API calls.
+All adapters run the same Crux prompt and policy layer. OpenAI, Google, and Anthropic are `single-turn` adapters: Crux owns the tool loop and the adapter translates one provider turn at a time. `@use-crux/ai` is a `loop-owned` adapter because the Vercel AI SDK owns the multi-step model/tool loop natively. The public execution shape stays the same either way.
 
 ```ts
 // Vercel AI SDK
-import { generate, stream } from '@crux/ai'
+import { generate, stream } from '@use-crux/ai'
 
 // OpenAI SDK
-import { createOpenAI } from '@crux/openai'
+import { createOpenAI } from '@use-crux/openai'
 const openai = createOpenAI(client)
 await openai.generate(prompt, { model: 'gpt-4o', input })
 
 // Anthropic SDK
-import { createAnthropic } from '@crux/anthropic'
+import { createAnthropic } from '@use-crux/anthropic'
 const anthropic = createAnthropic(client)
 await anthropic.generate(prompt, { model: 'claude-haiku-4-5-20251001', input })
 
 // Google GenAI
-import { createGoogle } from '@crux/google'
+import { createGoogle } from '@use-crux/google'
 const google = createGoogle(client)
 await google.generate(prompt, { model: 'gemini-2.5-flash', input })
 ```
@@ -82,11 +82,11 @@ Persistent storage is split by capability. `DataStore` holds JSON records, `Vect
 
 ```ts
 // Convex
-import { cruxConvexStore, convexWorkspaceBlobStore } from '@crux/convex'
+import { defineConvexStoreContract, convexWorkspaceBlobStore } from '@use-crux/convex'
 
 // Upstash Vector + Redis
-import { upstashVectorStore } from '@crux/upstash'
-import { cruxRedisStore } from '@crux/upstash/redis'
+import { upstashVectorStore } from '@use-crux/upstash'
+import { cruxRedisStore } from '@use-crux/upstash/redis'
 ```
 
 For Convex runtime setup and boundary rules, see the [Convex guide](/docs/guides/convex).
@@ -95,7 +95,7 @@ For Convex runtime setup and boundary rules, see the [Convex guide](/docs/guides
 
 ```ts
 // OpenTelemetry
-import { withTelemetry } from '@crux/otel'
+import { withTelemetry } from '@use-crux/otel'
 
 config({
   plugins: [withTelemetry({ serviceName: 'my-app' })],
@@ -108,7 +108,12 @@ Supports two export paths: standard OTel TracerProvider (Node.js servers) and li
 
 ```ts
 // Only when app runtime code should send records to a known server/tunnel
-config({ devtools: { serverUrl: process.env.DEVTOOLS_URL } })
+config({
+  observability: {
+    serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
+})
 ```
 
 ```bash
@@ -125,19 +130,19 @@ crux quality run --ci   # CI mode with exit codes
 ### Minimal (prototyping)
 
 ```bash
-pnpm add @crux/core @crux/ai zod
+pnpm add @use-crux/core @use-crux/ai zod
 ```
 
 ### Production with Convex
 
 ```bash
-pnpm add @crux/core @crux/react @crux/ai @crux/convex @crux/local @crux/otel zod
+pnpm add @use-crux/core @use-crux/react @use-crux/ai @use-crux/convex @use-crux/local @use-crux/otel zod
 ```
 
 ### Multi-provider
 
 ```bash
-pnpm add @crux/core @crux/ai @crux/openai @crux/google @crux/anthropic zod
+pnpm add @use-crux/core @use-crux/ai @use-crux/openai @use-crux/google @use-crux/anthropic zod
 ```
 
 ## Where to next

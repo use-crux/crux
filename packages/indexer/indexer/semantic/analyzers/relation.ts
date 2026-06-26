@@ -1,5 +1,4 @@
-import type { ProjectRelation } from '@crux/core/project-index'
-import type * as ts from 'typescript'
+import type { ProjectRelation } from '@use-crux/core/project-index'
 import type { SemanticAnalyzerContext, SemanticAnalyzerView, SemanticDefinitionCandidate } from '../candidates'
 import type { SemanticAnalyzer } from '../types'
 

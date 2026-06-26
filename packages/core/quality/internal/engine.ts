@@ -8,7 +8,7 @@
  * comparison (Phase 4), cassette replay (Phase 5). Declaring those surfaces
  * today throws `NotImplementedError` rather than silently ignoring them.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 
@@ -157,7 +157,7 @@ export interface EngineOptions {
   /**
    * Authored-source frame resolver supplied by first-party tooling. Core
    * captures stack refs but delegates source-map/catalog/disk lookup so it
-   * never depends on `@crux/indexer` or the local server implementation.
+   * never depends on `@use-crux/indexer` or the local server implementation.
    */
   sourceFrameResolver?: QualitySourceFrameResolver
   /** Number of context lines requested on each side of assertion source frames. Default `4`. */

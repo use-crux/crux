@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { JsonObject, ListOptions, SetOptions, StoreEntry } from '@crux/core/store'
+import type { JsonObject, ListOptions, SetOptions, StoreEntry } from '@use-crux/core/store'
 
 /** Structural Convex document record accepted at the store boundary. */
 export type StoreDocRecord = Readonly<Record<string, unknown>>
@@ -79,13 +79,6 @@ export interface StoreDocComponentPort<TDoc extends StoreDocRecord = StoreDocRec
   searchDense?(query: StoreDocDenseSearchQuery): Promise<readonly TDoc[]>
 }
 
-/**
- * Backwards-compatible alias for older internal tests and adapters.
- *
- * @deprecated Use `StoreDocComponentPort` for new code.
- */
-export type StoreDocIo<TDoc extends StoreDocRecord = StoreDocRecord> = StoreDocComponentPort<TDoc>
-
 /** Decoded store document with policy metadata surfaced for callers. */
 export interface DecodedStoreDoc {
   /** Store key. */
@@ -99,7 +92,7 @@ export interface DecodedStoreDoc {
   /** Absolute expiry timestamp encoded in the value, when present. */
   expiresAt?: number
   /** Storage format used to decode the record. */
-  encoding: 'crux-doc' | 'raw-memory-doc'
+  encoding: 'crux-doc'
 }
 
 /** Codec for translating between Crux values and Convex memory documents. */

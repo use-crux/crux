@@ -25,8 +25,8 @@ import type {
   ProjectRelation,
   ResolvedProjectModel,
   SourceLocation,
-} from '@crux/core/project-index'
-import { createProjectModelDefinitionId, createProjectModelRelationId } from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
+import { createProjectModelDefinitionId, createProjectModelRelationId } from '@use-crux/core/project-index'
 import { compileProjectIndex } from './compiler'
 import { findConfigFiles } from './files'
 import { projectModelDiagnostics } from './project-model-diagnostics'
@@ -68,7 +68,7 @@ export interface ResolveProjectModelOptions {
  *
  * Use this facade when tooling needs to explain what Crux inferred versus what
  * was provided explicitly. The returned object is JSON-safe and follows the
- * public `@crux/core/project-index` Project Model contract.
+ * public `@use-crux/core/project-index` Project Model contract.
  */
 export async function resolveProjectModel(options: ResolveProjectModelOptions): Promise<ResolvedProjectModel> {
   const root = resolve(options.root)

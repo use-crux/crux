@@ -8,8 +8,8 @@ Cost tracking answers a different question than token budgeting. Token budgets p
 Use `withCostTracking()` when you want model spend to show up in devtools, the CLI, the TUI, and OpenTelemetry without writing provider-specific accounting code.
 
 ```ts
-import { config } from '@crux/core'
-import { modelPricing, withCostTracking } from '@crux/core/cost'
+import { config } from '@use-crux/core'
+import { modelPricing, withCostTracking } from '@use-crux/core/cost'
 
 const costs = withCostTracking({
   pricing: modelPricing({
@@ -85,7 +85,7 @@ The same cost events power all Crux observability surfaces:
 - `crux cost` shows the latest report and model/prompt breakdown.
 - `crux dev --tui` shows cost totals and budget events in the terminal dashboard.
 - Web devtools shows cost totals and budget status on the dashboard.
-- `@crux/otel` emits `crux.cost.report`, `crux.cost.warn`, and `crux.cost.limit` spans with cost attributes.
+- `@use-crux/otel` emits `crux.cost.report`, `crux.cost.warn`, and `crux.cost.limit` spans with cost attributes.
 
 ## Scope
 

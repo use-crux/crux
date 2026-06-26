@@ -64,6 +64,14 @@ export interface LoopOwnedProviderRuntimeSpec<
 > {
   /** Stable id used in metadata, observability, and provider matching. */
   readonly id: string
+  /**
+   * Declares that an upstream SDK owns the model/tool loop while Crux owns
+   * policy around the loop boundary.
+   *
+   * Existing specs may omit this during migration; core infers `'loop-owned'`
+   * from the `loop` contract.
+   */
+  readonly ownership?: 'loop-owned'
   /** Loop-owned SDK mechanics. */
   readonly loop: LoopOwnedRuntimeContract<TClient, TModel, TRawResponse, TRawStream>
   /** Provider-specific capabilities to expose next to generation. */

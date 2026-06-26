@@ -1,7 +1,7 @@
 /**
  * Internal error helpers for the Quality engine.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 

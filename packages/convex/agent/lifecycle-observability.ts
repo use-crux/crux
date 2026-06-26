@@ -1,5 +1,5 @@
-import type { ResolvedPrompt } from '@crux/core'
-import { observe } from '@crux/core/observability'
+import type { ResolvedPrompt } from '@use-crux/core'
+import { observe } from '@use-crux/core/observability'
 import { DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS, flushObservability } from '../observability'
 import type { ConvexRuntimeTarget } from '../runtime'
 import type { ConvexAgentOperation, PreparedAgentCall } from './lifecycle-types'

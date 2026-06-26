@@ -29,6 +29,7 @@ interface TestQueryInitializer {
 
 interface TestIndexRangeBuilder {
   gte(field: 'key', value: string): TestUpperBoundRangeBuilder
+  gt(field: 'key', value: string): TestUpperBoundRangeBuilder
 }
 
 interface TestUpperBoundRangeBuilder {
@@ -36,43 +37,40 @@ interface TestUpperBoundRangeBuilder {
 }
 
 interface TestOrderedQuery {
-  order(direction: 'asc' | 'desc'): TestPaginatedQuery
+  order(direction: 'asc' | 'desc'): TestTakenQuery
 }
 
-interface TestPaginatedQuery {
-  paginate(options: { numItems: number; cursor: string | null }): Promise<{
-    page: StoreDocRecord[]
-    isDone: boolean
-    continueCursor: string
-  }>
+interface TestTakenQuery {
+  take(limit: number): Promise<StoreDocRecord[]>
 }
 
 describe('component memory list contract', () => {
-  it('returns a canonical page and uses prefix-bounded by_key pagination', async () => {
+  it('returns a canonical page and uses component-safe key cursor pagination', async () => {
     const calls: Array<
       | { type: 'query'; table: string }
       | { type: 'withIndex'; indexName: string }
       | { type: 'gte'; field: string; value: string }
+      | { type: 'gt'; field: string; value: string }
       | { type: 'lt'; field: string; value: string }
       | { type: 'order'; direction: string }
-      | { type: 'paginate'; options: { numItems: number; cursor: string | null } }
+      | { type: 'take'; limit: number }
     > = []
-    const docs = [cruxDoc('memory:alpha')]
+    const docs = [cruxDoc('memory:alpha'), cruxDoc('memory:beta'), cruxDoc('memory:charlie')]
     const query = memoryList as unknown as TestRegisteredQuery<TestMemoryListArgs, TestMemoryListResult>
     const result = await query._handler(createCtx(calls, docs), {
       prefix: 'memory:',
       limit: 2,
-      cursor: 'cursor-1',
+      cursor: 'memory:aardvark',
     })
 
-    expect(result).toEqual({ docs, cursor: 'cursor-2' })
+    expect(result).toEqual({ docs: docs.slice(0, 2), cursor: 'memory:beta' })
     expect(calls).toEqual([
       { type: 'query', table: 'memories' },
       { type: 'withIndex', indexName: 'by_key' },
-      { type: 'gte', field: 'key', value: 'memory:' },
+      { type: 'gt', field: 'key', value: 'memory:aardvark' },
       { type: 'lt', field: 'key', value: 'memory;' },
       { type: 'order', direction: 'asc' },
-      { type: 'paginate', options: { numItems: 2, cursor: 'cursor-1' } },
+      { type: 'take', limit: 3 },
     ])
   })
 })
@@ -95,18 +93,23 @@ function createCtx(calls: Array<Record<string, unknown>>, docs: StoreDocRecord[]
                   },
                 }
               },
+              gt(field, value) {
+                calls.push({ type: 'gt', field, value })
+                return {
+                  lt(upperField, upperValue) {
+                    calls.push({ type: 'lt', field: upperField, value: upperValue })
+                    return {}
+                  },
+                }
+              },
             })
             return {
               order(direction) {
                 calls.push({ type: 'order', direction })
                 return {
-                  async paginate(options) {
-                    calls.push({ type: 'paginate', options })
-                    return {
-                      page: docs,
-                      isDone: false,
-                      continueCursor: 'cursor-2',
-                    }
+                  async take(limit) {
+                    calls.push({ type: 'take', limit })
+                    return docs.slice(0, limit)
                   },
                 }
               },

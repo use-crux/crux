@@ -1,10 +1,10 @@
-# @crux/local Context
+# @use-crux/local Context
 
 ## Language
 
 **QualityFS**:
 The internal Go package `internal/qualityfs` that owns the `.crux/quality` on-disk contract.
-_Avoid_: quality readers, indexread quality parsers, service file helpers
+_Avoid_: quality readers, Project Index read-model quality parsers, service file helpers
 
 **Quality Snapshot**:
 The immutable read model returned by `qualityfs.Snapshot`. It contains parsed records, overlay-folded
@@ -22,7 +22,7 @@ Quality Snapshot, observability-derived runs, and an explicit clock value into i
 _Avoid_: service insight loader, observability query, qualityfs snapshot
 
 **Project Index Read Model**:
-The devtools-facing read model produced by `internal/indexread`, enriched from raw Project Index
+The devtools-facing read model produced by `internal/projectindex/readmodel`, enriched from raw Project Index
 snapshots plus runtime and Quality Snapshot data.
 _Avoid_: raw store index, quality filesystem owner
 
@@ -60,7 +60,7 @@ _Avoid_: production telemetry default, cloud export default
 
 - Do not redeclare persisted `.crux/quality` record structs outside `internal/qualityfs`; use aliases
   only when keeping package-private service names readable.
-- Do not add new `.crux/quality` parsing helpers in `internal/quality` or `internal/indexread`.
+- Do not add new `.crux/quality` parsing helpers in `internal/quality` or `internal/projectindex/readmodel`.
 - Put new overlay/fold semantics in `internal/qualityfs` with boundary tests.
 - Keep observability run summaries out of `qualityfs`; they are runtime-derived, not part of the
   filesystem contract.

@@ -9,7 +9,7 @@ All adapters accept the same `prompt()` definitions — write once, run on any S
 <Tab value="Vercel AI SDK">
 
 ```ts title="generate.ts"
-import { generate, stream } from '@crux/ai'
+import { generate, stream } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 // Structured output
@@ -40,7 +40,7 @@ Also re-exports `tool`, `stepCountIs`, `hasToolCall`, and types like `LanguageMo
 <Tab value="OpenAI SDK">
 
 ```ts title="generate.ts"
-import { createOpenAI } from '@crux/openai'
+import { createOpenAI } from '@use-crux/openai'
 import OpenAI from 'openai'
 
 const adapter = createOpenAI(new OpenAI({ apiKey: '...' }))
@@ -71,7 +71,7 @@ Accepts OpenAI-native options: `tools`, `tool_choice`, `parallel_tool_calls`, an
 <Tab value="Google GenAI">
 
 ```ts title="generate.ts"
-import { createGoogle } from '@crux/google'
+import { createGoogle } from '@use-crux/google'
 import { GoogleGenAI } from '@google/genai'
 
 const adapter = createGoogle(new GoogleGenAI({ apiKey: '...' }))
@@ -96,7 +96,7 @@ const stream = await adapter.stream(greet, {
 })
 ```
 
-Accepts Google-native options: `tools`, `temperature`, `maxOutputTokens`, `topP`, `topK`, plus `extra.cache.skip` and `extra.cache.ttlSeconds` for per-call CachedContent control.
+Accepts Google-native options: `tools`, `temperature`, `maxOutputTokens`, `topP`, `topK`, plus `extra.cachedContent.skip` and `extra.cachedContent.ttlSeconds` for per-call CachedContent control.
 
 <Callout type="warn">
   The Google adapter validates structured output with Zod after generation. If the model returns invalid JSON, you'll
@@ -107,7 +107,7 @@ Accepts Google-native options: `tools`, `temperature`, `maxOutputTokens`, `topP`
 <Tab value="Anthropic SDK">
 
 ```ts title="generate.ts"
-import { createAnthropic } from '@crux/anthropic'
+import { createAnthropic } from '@use-crux/anthropic'
 import Anthropic from '@anthropic-ai/sdk'
 
 const adapter = createAnthropic(new Anthropic({ apiKey: '...' }))
@@ -143,10 +143,10 @@ Accepts Anthropic-native options: `tools`, `tool_choice`, `thinking`, `metadata`
 
 ## Agent frameworks
 
-For AI SDK-based agent frameworks that manage their own model calls, `@crux/ai/agent` returns composed instructions and a wrapped model instead of executing directly:
+For AI SDK-based agent frameworks that manage their own model calls, `@use-crux/ai/agent` returns composed instructions and a wrapped model instead of executing directly:
 
 ```ts title="agent.ts"
-import { resolve } from '@crux/ai/agent'
+import { resolve } from '@use-crux/ai/agent'
 
 const { instructions, model } = await resolve(chatAgent, {
   model: languageModel,
@@ -171,10 +171,10 @@ const agent = createAgent({
 The same prompt works across all adapters without modification:
 
 ```ts title="multi-sdk.ts"
-import { generate } from '@crux/ai'
-import { createOpenAI } from '@crux/openai'
-import { createGoogle } from '@crux/google'
-import { createAnthropic } from '@crux/anthropic'
+import { generate } from '@use-crux/ai'
+import { createOpenAI } from '@use-crux/openai'
+import { createGoogle } from '@use-crux/google'
+import { createAnthropic } from '@use-crux/anthropic'
 
 // Vercel AI SDK
 await generate(sentiment, { model: openai('gpt-4o'), input })
@@ -200,7 +200,7 @@ Each adapter provides `toMessages()` and `fromMessages()` to convert between SDK
 <Tab value="Vercel AI SDK">
 
 ```ts
-import { toMessages, fromMessages } from '@crux/ai'
+import { toMessages, fromMessages } from '@use-crux/ai'
 
 // SDK format → canonical
 const messages = toMessages(coreMessages)
@@ -213,7 +213,7 @@ const sdkMessages = fromMessages(messages)
 <Tab value="OpenAI SDK">
 
 ```ts
-import { toMessages, fromMessages } from '@crux/openai'
+import { toMessages, fromMessages } from '@use-crux/openai'
 
 // ChatCompletionMessageParam[] → canonical
 const messages = toMessages(chatMessages)
@@ -226,7 +226,7 @@ const sdkMessages = fromMessages(messages)
 <Tab value="Google GenAI">
 
 ```ts
-import { toMessages, fromMessages } from '@crux/google'
+import { toMessages, fromMessages } from '@use-crux/google'
 
 // Google Content[] → canonical
 const messages = toMessages(contents)
@@ -239,7 +239,7 @@ const sdkMessages = fromMessages(messages)
 <Tab value="Anthropic SDK">
 
 ```ts
-import { toMessages, fromMessages } from '@crux/anthropic'
+import { toMessages, fromMessages } from '@use-crux/anthropic'
 
 // Anthropic MessageParam[] → canonical
 const messages = toMessages(anthropicMessages)
@@ -253,13 +253,13 @@ const sdkMessages = fromMessages(messages)
 
 ## Framework-agnostic generate functions
 
-Some `@crux/core` APIs (like `llmJudge`, `extractKeyFacts`, `summarizeMessages`) accept a generic `GenerateObjectFn` or `GenerateTextFn` instead of being tied to a specific SDK. Each adapter exports these wrappers:
+Some `@use-crux/core` APIs (like `llmJudge`, `extractKeyFacts`, `summarizeMessages`) accept a generic `GenerateObjectFn` or `GenerateTextFn` instead of being tied to a specific SDK. Each adapter exports these wrappers:
 
 <Tabs items={['Vercel AI SDK', 'OpenAI SDK', 'Google GenAI', 'Anthropic SDK']}>
 <Tab value="Vercel AI SDK">
 
 ```ts
-import { generateObjectFn, generateTextFn } from '@crux/ai'
+import { generateObjectFn, generateTextFn } from '@use-crux/ai'
 
 const judge = llmJudge({ generate: generateObjectFn, model /* ... */ })
 const result = await summarizeMessages({ generate: generateTextFn, model, messages })
@@ -269,7 +269,7 @@ const result = await summarizeMessages({ generate: generateTextFn, model, messag
 <Tab value="OpenAI SDK">
 
 ```ts
-import { createGenerateObjectFn, createGenerateTextFn } from '@crux/openai'
+import { createGenerateObjectFn, createGenerateTextFn } from '@use-crux/openai'
 
 const generateObj = createGenerateObjectFn(client, 'gpt-4o')
 const generateTxt = createGenerateTextFn(client, 'gpt-4o')
@@ -279,7 +279,7 @@ const generateTxt = createGenerateTextFn(client, 'gpt-4o')
 <Tab value="Google GenAI">
 
 ```ts
-import { createGenerateObjectFn, createGenerateTextFn } from '@crux/google'
+import { createGenerateObjectFn, createGenerateTextFn } from '@use-crux/google'
 
 const generateObj = createGenerateObjectFn(client, 'gemini-2.5-flash')
 const generateTxt = createGenerateTextFn(client, 'gemini-2.5-flash')
@@ -289,7 +289,7 @@ const generateTxt = createGenerateTextFn(client, 'gemini-2.5-flash')
 <Tab value="Anthropic SDK">
 
 ```ts
-import { createGenerateObjectFn, createGenerateTextFn } from '@crux/anthropic'
+import { createGenerateObjectFn, createGenerateTextFn } from '@use-crux/anthropic'
 
 const generateObj = createGenerateObjectFn(client, 'claude-sonnet-4-5-20250929')
 const generateTxt = createGenerateTextFn(client, 'claude-haiku-4-5-20251001')
@@ -307,8 +307,8 @@ const generateTxt = createGenerateTextFn(client, 'claude-haiku-4-5-20251001')
 When a core API needs a `GenerateObjectFn` but you also need the full adapter runtime, bridge an existing adapter `generate()` function:
 
 ```ts
-import { createGenerateObjectFnFromGenerate } from '@crux/core/compaction'
-import { generate } from '@crux/ai'
+import { createGenerateObjectFnFromGenerate } from '@use-crux/core/compaction'
+import { generate } from '@use-crux/ai'
 
 const generateObj = createGenerateObjectFnFromGenerate(generate, {
   promptId: 'quality.judge',
@@ -342,7 +342,7 @@ const generateObj = createGenerateObjectFnFromGenerate(generate, {
   />
   <Card
     title="API Reference"
-    description="@crux/ai, @crux/openai, @crux/google, and @crux/anthropic adapter signatures."
+    description="@use-crux/ai, @use-crux/openai, @use-crux/google, and @use-crux/anthropic adapter signatures."
     href="/docs/reference/adapters/ai"
   />
 </Cards>

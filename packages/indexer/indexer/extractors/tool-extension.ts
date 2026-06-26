@@ -3,8 +3,8 @@ import { facts, type IndexExtractor, type ExtractContext } from '../extensions'
 import {
   internalDataAccessRefsForConfigObject,
   internalDataAccessRefsForConfigProperties,
-} from '../extensions/internal-data-access'
-import { primitiveDataIntelligence, type PrimitiveDataAccessRef } from './data-access'
+} from '../static-index/compatibility/syntax-record-bridge/data-access'
+import { primitiveDataIntelligence, uniqueDataAccesses, type PrimitiveDataAccessRef } from './data-access'
 
 const callbackProperties = ['execute', 'run', 'handler'] as const
 
@@ -16,11 +16,7 @@ const callbackProperties = ['execute', 'run', 'handler'] as const
  */
 export const toolIndexExtractor: IndexExtractor = {
   name: 'tool',
-  patterns: [
-    { kind: 'object' },
-    { kind: 'call', name: 'createTool' },
-    { kind: 'call', name: 'tool' },
-  ],
+  patterns: [{ kind: 'object' }, { kind: 'call', name: 'createTool' }, { kind: 'call', name: 'tool' }],
   extract: (ctx) => {
     if (!ctx.config) return { kind: 'none' }
     if (ctx.match.kind === 'object' && !isToolSchemaObject(ctx)) return { kind: 'none' }
@@ -30,10 +26,10 @@ export const toolIndexExtractor: IndexExtractor = {
     const namedInputSchema = ctx.sourceRef.schemaProperty({ property: 'inputSchema', definitionId: id })
     const parametersSchema = ctx.sourceRef.schemaProperty({ property: 'parameters', definitionId: id })
     const schema = inputSchema.schema ? inputSchema : namedInputSchema.schema ? namedInputSchema : parametersSchema
-    const dataAccesses = [
+    const dataAccesses = uniqueDataAccesses([
       ...internalDataAccessRefsForConfigObject(ctx),
       ...internalDataAccessRefsForConfigProperties(ctx, callbackProperties),
-    ]
+    ])
     const dataIntelligence = primitiveDataIntelligence(dataAccesses)
     const sourceRefs = [
       ...inputSchema.sourceRefs,
@@ -87,8 +83,8 @@ export const toolIndexExtractor: IndexExtractor = {
 function isToolSchemaObject(ctx: ExtractContext): boolean {
   return Boolean(
     ctx.config?.string('name') &&
-      ctx.config.string('description') &&
-      (ctx.config.has('input') || ctx.config.has('inputSchema') || ctx.config.has('parameters')),
+    ctx.config.string('description') &&
+    (ctx.config.has('input') || ctx.config.has('inputSchema') || ctx.config.has('parameters')),
   )
 }
 

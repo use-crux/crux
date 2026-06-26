@@ -1,4 +1,4 @@
-import type { IndexDiagnostic, IndexSourceFile, ProjectDefinition, SourceLocation } from '@crux/core/project-index'
+import type { IndexDiagnostic, IndexSourceFile, ProjectDefinition, SourceLocation } from '@use-crux/core/project-index'
 import { sourceForFile } from './ast/snippets'
 import type { SourceGraph } from './types'
 

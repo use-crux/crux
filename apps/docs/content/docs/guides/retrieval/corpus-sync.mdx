@@ -15,9 +15,9 @@ A corpus wraps an indexer with a source ledger. The ledger stores source hashes,
 ## Basic Sync
 
 ```ts
-import { corpus, indexer } from '@crux/core/indexing'
-import { inMemoryDataStore, inMemoryVectorStore } from '@crux/core/storage'
-import { filesSource } from '@crux/ingest/files'
+import { corpus, indexer } from '@use-crux/core/indexing'
+import { inMemoryDataStore, inMemoryVectorStore } from '@use-crux/core/storage'
+import { filesSource } from '@use-crux/ingest/files'
 
 const data = inMemoryDataStore()
 const vectors = inMemoryVectorStore()
@@ -287,7 +287,7 @@ index:start
 index:end
 ```
 
-The same stage records flow through source records, devtools, CLI/TUI, and `@crux/otel`.
+The same stage records flow through source records, devtools, CLI/TUI, and `@use-crux/otel`.
 
 ## Related
 

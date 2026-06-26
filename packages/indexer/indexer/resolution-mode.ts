@@ -1,14 +1,14 @@
 /**
  * Project Model resolution-mode helpers for indexer boundaries.
  *
- * Public contracts live in `@crux/core/project-index`; this module keeps the
+ * Public contracts live in `@use-crux/core/project-index`; this module keeps the
  * indexer-specific defaults and permission checks close to the compiler and
  * worker request handling code.
  *
  * @module
  */
 
-import { isProjectModelResolutionMode, type ProjectModelResolutionMode } from '@crux/core/project-index'
+import { isProjectModelResolutionMode, type ProjectModelResolutionMode } from '@use-crux/core/project-index'
 
 /** Default mode for Project Model and snapshot callers that may load config policy but not authored source modules. */
 export const DEFAULT_PROJECT_MODEL_RESOLUTION_MODE = 'config-policy' satisfies ProjectModelResolutionMode

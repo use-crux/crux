@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectRelation } from '@use-crux/core/project-index'
 import {
   builtInRelationPolicies,
   createRelationPolicyTable,
@@ -7,7 +7,7 @@ import {
   relationDiagnosticsFromReport,
   relationIdentity,
   resolveRelationModel,
-} from '../indexer/relations/index'
+} from '../indexer/relations'
 import { staticParseResultFromFacts } from '../indexer/static/read-model'
 import type { IndexRelationPolicy } from '../indexer/relations/types'
 import type { StaticFoundDefinition } from '../indexer/types'

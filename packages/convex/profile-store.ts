@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { CruxStore } from '@crux/core/store'
+import type { CruxStore } from '@use-crux/core/store'
 import type { ComponentApi } from './src/component/_generated/component'
 import { cruxConvexStore, type ConvexCtxPort, type ConvexMemoryStoreConfig } from './store'
 

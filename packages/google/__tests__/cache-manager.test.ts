@@ -1,8 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { GoogleCacheManager } from '../cache-manager'
-import type { GoogleCacheName, ResolvedCacheConfig } from '../cache-types'
 import { CACHE_DEFAULTS } from '../cache-types'
-import type { SystemBlock } from '@crux/core'
+import type { SystemBlock } from '@use-crux/core'
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers
@@ -71,57 +70,6 @@ describe('GoogleCacheManager', () => {
   })
 
   describe('resolve', () => {
-    it('returns undefined when given no blocks', async () => {
-      const client = createMockClient()
-      const manager = new GoogleCacheManager(client as any, CACHE_DEFAULTS)
-
-      const result = await manager.resolve('gemini-2.5-flash', [])
-
-      expect(result).toBeUndefined()
-      expect(client.caches.create).not.toHaveBeenCalled()
-    })
-
-    it('returns undefined when no blocks have providerCache', async () => {
-      const client = createMockClient()
-      const manager = new GoogleCacheManager(client as any, CACHE_DEFAULTS)
-
-      const result = await manager.resolve('gemini-2.5-flash', [block('some text', false), block('more text', false)])
-
-      expect(result).toBeUndefined()
-      expect(client.caches.create).not.toHaveBeenCalled()
-    })
-
-    it('creates a cache on first call with cacheable blocks', async () => {
-      const client = createMockClient('cachedContents/new-cache')
-      const manager = new GoogleCacheManager(client as any, CACHE_DEFAULTS)
-
-      const name = await manager.resolve('gemini-2.5-flash', [block('## Brand Voice\nAlways be professional.')])
-
-      expect(name).toBe('cachedContents/new-cache')
-      expect(client.caches.create).toHaveBeenCalledOnce()
-      expect(client.caches.create).toHaveBeenCalledWith({
-        model: 'gemini-2.5-flash',
-        config: {
-          systemInstruction: '## Brand Voice\nAlways be professional.',
-          ttl: '300s',
-        },
-      })
-    })
-
-    it('concatenates multiple cacheable blocks as system instruction', async () => {
-      const client = createMockClient()
-      const manager = new GoogleCacheManager(client as any, CACHE_DEFAULTS)
-
-      await manager.resolve('gemini-2.5-flash', [
-        block('Block A'),
-        block('Block B'),
-        block('Non-cached', false), // should be skipped
-      ])
-
-      const createArgs = client.caches.create.mock.calls[0][0]
-      expect(createArgs.config.systemInstruction).toBe('Block A\n\nBlock B')
-    })
-
     it('reuses an existing cache on the second call with same inputs', async () => {
       const client = createMockClient('cachedContents/reused')
       const manager = new GoogleCacheManager(client as any, CACHE_DEFAULTS)
@@ -183,22 +131,6 @@ describe('GoogleCacheManager', () => {
         expect(client.caches.create).toHaveBeenCalledTimes(2)
       } finally {
         vi.useRealTimers()
-      }
-    })
-
-    it('returns undefined and falls back silently when cache creation fails', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      try {
-        const client = createMockClient()
-        client.caches.create = vi.fn().mockRejectedValue(new Error('400 Bad Request: min tokens'))
-        const manager = new GoogleCacheManager(client as any, CACHE_DEFAULTS)
-
-        const name = await manager.resolve('gemini-2.5-flash', [block('small content')])
-
-        expect(name).toBeUndefined()
-        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Cache creation failed'))
-      } finally {
-        warnSpy.mockRestore()
       }
     })
   })

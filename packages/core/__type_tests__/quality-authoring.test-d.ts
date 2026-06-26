@@ -1,5 +1,5 @@
 /**
- * Type tests for the v1 Quality authoring surface (`@crux/core/quality`).
+ * Type tests for the v1 Quality authoring surface (`@use-crux/core/quality`).
  *
  * These implement the 17-item checklist from the Quality API spec (01 §12).
  * Items 1–16 live here; item 17 (the `tsc --extendedDiagnostics` instantiation

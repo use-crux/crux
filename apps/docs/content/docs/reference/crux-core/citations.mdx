@@ -10,7 +10,7 @@ import {
   grounding,
   renderCitationContext,
   resolveCitations,
-} from '@crux/core/citations'
+} from '@use-crux/core/citations'
 ```
 
 `grounding()` is the normal user-facing primitive. It wraps a retriever or retrieval pipeline and injects the evidence policy into `prompt()` or `context()` through `use`.
@@ -168,4 +168,4 @@ const sourceText = renderCitationContext(hits, {
 
 `grounding()` is not a retrieval pipeline. Use `retrievalPipeline()` to improve which hits are returned. Use `grounding()` to control how those hits are injected into a prompt and how the final answer is validated.
 
-`@crux/core/citations` does not do APA/MLA/BibTeX formatting. It validates source/chunk identity, quotes, spans, and UI-ready provenance.
+`@use-crux/core/citations` does not do APA/MLA/BibTeX formatting. It validates source/chunk identity, quotes, spans, and UI-ready provenance.

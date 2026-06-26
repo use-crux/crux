@@ -17,9 +17,9 @@ import type {
   Experiment,
   ExperimentCell,
   EvaluationManifest,
-} from '@crux/core/quality/internal/runner'
-import type { ReplayMode, RunOverrides } from '@crux/core/quality'
-import type { ProjectModelDiagnosticCode } from '@crux/core/project-index'
+} from '@use-crux/core/quality/internal/runner'
+import type { ReplayMode, RunOverrides } from '@use-crux/core/quality'
+import type { ProjectModelDiagnosticCode } from '@use-crux/core/project-index'
 import type { CollectedEvaluation, CollectError } from './quality-collect'
 import type { RunnerCore } from './quality-core-bridge'
 import { selectEvaluations, unknownIdMessage } from './quality-selection'
@@ -77,7 +77,7 @@ export type QualityRunEvent =
 // ─────────────────────────────────────────────────────────────────
 
 export interface ExecuteOptions {
-  /** The project's `@crux/core` runner contract (quality-core-bridge). */
+  /** The project's `@use-crux/core` runner contract (quality-core-bridge). */
   core: RunnerCore
   collected: readonly CollectedEvaluation[]
   /** Evaluation ids to run (exit 2 on unknown, with nearest-match hint). */

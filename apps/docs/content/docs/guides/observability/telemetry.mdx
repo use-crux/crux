@@ -3,20 +3,20 @@ title: Production Telemetry
 description: Send Crux traces to Datadog, Honeycomb, Grafana, and other observability platforms via OpenTelemetry.
 ---
 
-Crux devtools is great for development, but production environments need traces in your existing observability stack. `@crux/otel` emits OpenTelemetry spans for every instrumented event — one integration covers Datadog, Honeycomb, Grafana, New Relic, and any OTel-compatible platform.
+Crux devtools is great for development, but production environments need traces in your existing observability stack. `@use-crux/otel` emits OpenTelemetry spans for every instrumented event — one integration covers Datadog, Honeycomb, Grafana, New Relic, and any OTel-compatible platform.
 
 ## Setup
 
 <Tabs items={['pnpm', 'npm', 'yarn', 'bun']}>
-  <Tab value="pnpm">```bash pnpm add @crux/otel ```</Tab>
-  <Tab value="npm">```bash npm install @crux/otel ```</Tab>
-  <Tab value="yarn">```bash yarn add @crux/otel ```</Tab>
-  <Tab value="bun">```bash bun add @crux/otel ```</Tab>
+  <Tab value="pnpm">```bash pnpm add @use-crux/otel ```</Tab>
+  <Tab value="npm">```bash npm install @use-crux/otel ```</Tab>
+  <Tab value="yarn">```bash yarn add @use-crux/otel ```</Tab>
+  <Tab value="bun">```bash bun add @use-crux/otel ```</Tab>
 </Tabs>
 
 ```ts title="crux.config.ts"
-import { config } from '@crux/core'
-import { withTelemetry } from '@crux/otel'
+import { config } from '@use-crux/core'
+import { withTelemetry } from '@use-crux/otel'
 
 export default config({
   plugins: [withTelemetry({ serviceName: 'my-app' })],
@@ -27,11 +27,11 @@ That's it. Spans flow to whatever observability platform you've configured.
 
 ## Export paths
 
-`@crux/otel` supports two strategies depending on your runtime environment.
+`@use-crux/otel` supports two strategies depending on your runtime environment.
 
 ### Standard OTel (Node.js servers)
 
-For long-lived servers (Next.js, Express, Fastify), set up the OTel SDK once in your application entrypoint. `@crux/otel` creates spans via `@opentelemetry/api` which routes them through your globally registered `TracerProvider`.
+For long-lived servers (Next.js, Express, Fastify), set up the OTel SDK once in your application entrypoint. `@use-crux/otel` creates spans via `@opentelemetry/api` which routes them through your globally registered `TracerProvider`.
 
 ```ts title="instrumentation.ts"
 import { NodeSDK } from '@opentelemetry/sdk-node'
@@ -47,7 +47,7 @@ sdk.start()
 ```
 
 ```ts title="crux.config.ts"
-import { withTelemetry } from '@crux/otel'
+import { withTelemetry } from '@use-crux/otel'
 
 // No exporter needed — uses the global TracerProvider
 config({
@@ -112,13 +112,16 @@ Generate/stream spans follow the [OpenTelemetry GenAI semantic conventions](http
 
 ## Running alongside devtools
 
-Both local devtools and OTel can run simultaneously. Use `devtools.serverUrl` for a local server or
-tunnel, and keep production export explicit through `@crux/otel` or `observability` config. The
+Both local devtools and OTel can run simultaneously. Use `observability.serverUrl` for a local server
+or tunnel, and keep production export explicit through `@use-crux/otel` or observability config. The
 plugin system's fan-out semantics ensure every event reaches both configured destinations:
 
 ```ts title="crux.config.ts"
 config({
-  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // local server or tunnel only
+  observability: {
+    serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
   plugins: [withTelemetry({ serviceName: 'my-app' })],
 })
 ```
@@ -128,12 +131,12 @@ events, deliberately configured destinations.
 
 ## Options
 
-| Option          | Type                              | Default        | Description                                   |
-| --------------- | --------------------------------- | -------------- | --------------------------------------------- |
-| `serviceName`   | `string`                          | `'@crux/otel'` | Tracer name / service identifier              |
-| `recordContent` | `boolean`                         | `false`        | Include prompt content in span attributes     |
-| `attributes`    | `Record<string, string>`          | —              | Custom attributes on every span               |
-| `exporter`      | `UrlExporter \| CallbackExporter` | —              | Export strategy (omit for standard OTel path) |
+| Option          | Type                              | Default            | Description                                   |
+| --------------- | --------------------------------- | ------------------ | --------------------------------------------- |
+| `serviceName`   | `string`                          | `'@use-crux/otel'` | Tracer name / service identifier              |
+| `recordContent` | `boolean`                         | `false`            | Include prompt content in span attributes     |
+| `attributes`    | `Record<string, string>`          | —                  | Custom attributes on every span               |
+| `exporter`      | `UrlExporter \| CallbackExporter` | —                  | Export strategy (omit for standard OTel path) |
 
 ## Next steps
 
@@ -153,5 +156,5 @@ events, deliberately configured destinations.
     description="Visual development tracing with crux dev."
     href="/docs/guides/observability/devtools"
   />
-  <Card title="API Reference" description="@crux/otel API reference." href="/docs/reference/plugins/otel" />
+  <Card title="API Reference" description="@use-crux/otel API reference." href="/docs/reference/plugins/otel" />
 </Cards>

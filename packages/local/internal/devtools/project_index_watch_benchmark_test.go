@@ -3,20 +3,21 @@ package devtools
 import (
 	"context"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 type benchmarkWatchProjectIndexer struct {
-	result ProjectIndexIncrementalResult
+	result projectindex.ProjectIndexIncrementalResult
 }
 
-func (i benchmarkWatchProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (IndexPatch, error) {
-	return IndexPatch{}, nil
+func (i benchmarkWatchProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{}, nil
 }
 
-func (i benchmarkWatchProjectIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (ProjectIndexIncrementalResult, error) {
+func (i benchmarkWatchProjectIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (projectindex.ProjectIndexIncrementalResult, error) {
 	return i.result, nil
 }
 
@@ -25,24 +26,24 @@ func BenchmarkReindexProjectIncrementalWatchCommit(b *testing.B) {
 	changedFile := fmt.Sprintf("%s/src/file-000.ts", root)
 	previous := benchmarkWatchIndex(root, 500)
 	indexer := benchmarkWatchProjectIndexer{
-		result: ProjectIndexIncrementalResult{
-			Report: ProjectIndexIncrementalReport{
+		result: projectindex.ProjectIndexIncrementalResult{
+			Report: projectindex.ProjectIndexIncrementalReport{
 				PlanKind:               "source-file-reindex",
 				GraphConfidence:        "complete-enough-for-source-closure",
 				ChangedFiles:           []string{changedFile},
 				AffectedFiles:          []string{changedFile},
 				AffectedDefinitionIDs:  []string{"prompt:file-000"},
-				PatchCounts:            ProjectIndexPatchCounts{AST: 1, Total: 1},
+				PatchCounts:            projectindex.ProjectIndexPatchCounts{AST: 1, Total: 1},
 				SourceProfileFileCount: 1,
 				SemanticStatus:         "not-requested",
 			},
-			Patches: []IndexPatch{{
+			Patches: []projectindex.IndexPatch{{
 				SchemaVersion: 1,
-				Phase:         indexPatchPhaseAST,
+				Phase:         projectindex.PhaseAST,
 				Project:       store.ProjectIdentity{Root: root, Name: "benchmark"},
 				Status:        "ok",
-				Invalidates:   &IndexPatchInvalidation{Files: []string{changedFile}},
-				Facts: IndexPatchFacts{
+				Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{changedFile}},
+				Facts: projectindex.IndexPatchFacts{
 					Definitions: []store.ProjectDefinition{
 						{
 							ID:       "prompt:file-000.updated",
@@ -69,7 +70,7 @@ func BenchmarkReindexProjectIncrementalWatchCommit(b *testing.B) {
 	}
 	service := NewService(store.NewStore(), nil).WithProjectIndexer(indexer)
 	defer service.Shutdown()
-	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, indexPatchPhaseAST, "ok"))
+	service.ApplyIndexPatch(context.Background(), indexPatchFromSnapshot(previous, projectindex.PhaseAST, "ok"))
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -134,7 +135,7 @@ func benchmarkWatchIndex(root string, count int) store.IndexData {
 		Sources:       sources,
 		SourceGraph: &store.ProjectIndexSourceGraph{
 			SchemaVersion: 1,
-			ProducedBy:    "@crux/indexer",
+			ProducedBy:    "@use-crux/indexer",
 			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
 			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
 		},

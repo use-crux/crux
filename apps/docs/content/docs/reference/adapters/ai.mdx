@@ -1,12 +1,12 @@
 ---
-title: '@crux/ai'
+title: '@use-crux/ai'
 description: Vercel AI SDK adapter — generate, stream, dense embedding helpers, reranking helpers, and the SdkGateway test seam.
 ---
 
 ```ts
-import { generate, stream, embedding, reranker, aiSdkProviderRuntime } from '@crux/ai'
-import { generateObjectFn, generateTextFn, createCruxAi, CruxAIError } from '@crux/ai'
-import { resolve } from '@crux/ai/agent'
+import { generate, stream, embedding, reranker, aiSdkProviderRuntime } from '@use-crux/ai'
+import { generateObjectFn, generateTextFn, createCruxAi, CruxAIError } from '@use-crux/ai'
+import { resolve } from '@use-crux/ai/agent'
 ```
 
 <Callout type="info">
@@ -15,22 +15,22 @@ import { resolve } from '@crux/ai/agent'
 
 ## Architecture
 
-`@crux/ai` exports `aiSdkProviderRuntime`, a loop-owned provider runtime for the Vercel AI SDK. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, native `needsApproval`, `abortSignal`, `experimental_transform` for streaming guardrails). The bound runtime also exposes AI SDK embedding and reranking extensions through the same `SdkGateway` seam.
+`@use-crux/ai` exports `aiSdkProviderRuntime`, a normal Crux provider runtime with `ownership: 'loop-owned'` for the Vercel AI SDK. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, native `needsApproval`, `abortSignal`, `experimental_transform` for streaming guardrails). The bound runtime also exposes AI SDK embedding and reranking extensions through the same `SdkGateway` seam.
 
 The only module that calls AI SDK functions is the `SdkGateway` — inject a scripted one via [`createCruxAi`](#createcruxaioptions) to test without module mocks.
 
-Internally, `@crux/ai` keeps AI SDK request planning and result projection in a private call-plan codec. The executor asks the codec for a `generateText`, `generateObject`, `streamText`, `streamObject`, or replay plan, invokes the selected `SdkGateway` method, then decodes or attaches the raw SDK result. This is not a public extension API; it exists to keep the gateway seam stable and the adapter behavior testable.
+Internally, `@use-crux/ai` keeps AI SDK request planning and result projection in a private call-plan codec. The executor asks the codec for a `generateText`, `generateObject`, `streamText`, `streamObject`, or replay plan, invokes the selected `SdkGateway` method, then decodes or attaches the raw SDK result. This is not a public extension API; it exists to keep the gateway seam stable and the adapter behavior testable.
 
-**Cross-adapter parity:** switching a prompt between `@crux/ai` and a native adapter (`@crux/openai`, `@crux/anthropic`, `@crux/google`) changes nothing observable except model behavior itself — same default tool-loop budget (`maxSteps: 10`), same corrective-retry messages, same approval suspend/resume protocol, same canonical `tool.call` / `tool.args` / raw and model-facing `tool.result` telemetry, same routing and audit metadata. This is enforced by a cross-dialect parity suite in `@crux/core`. Note this differs from the raw AI SDK's own `generateText` default (`stopWhen: stepCountIs(1)`): Crux adapters loop tools by default; pass `maxSteps: 1` for single-step behavior.
+**Cross-adapter parity:** switching a prompt between `@use-crux/ai` and a native adapter (`@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google`) changes nothing observable except model behavior itself — same default tool-loop budget (`maxSteps: 10`), same corrective-retry messages, same approval suspend/resume protocol, same canonical `tool.call` / `tool.args` / raw and model-facing `tool.result` telemetry, same routing and audit metadata. This is enforced by a cross-dialect parity suite in `@use-crux/core`. Note this differs from the raw AI SDK's own `generateText` default (`stopWhen: stepCountIs(1)`): Crux adapters loop tools by default; pass `maxSteps: 1` for single-step behavior.
 
-Hallucinated tool calls are part of that parity: where the raw AI SDK throws `NoSuchToolError`/`InvalidToolInputError` and aborts the loop, `@crux/ai` uses the SDK's native `experimental_repairToolCall` to feed the model the same error tool result core-driven adapters produce (`{"error":"Tool \"x\" not found"}`), so the model self-corrects and the loop continues. The SDK's tool-error taxonomy never reaches your code.
+Hallucinated tool calls are part of that parity: where the raw AI SDK throws `NoSuchToolError`/`InvalidToolInputError` and aborts the loop, `@use-crux/ai` uses the SDK's native `experimental_repairToolCall` to feed the model the same error tool result core-driven adapters produce (`{"error":"Tool \"x\" not found"}`), so the model self-corrects and the loop continues. The SDK's tool-error taxonomy never reaches your code.
 
-### `@crux/ai/agent`
+### `@use-crux/ai/agent`
 
-Use `@crux/ai/agent` for AI SDK-compatible agent frameworks that own their own model loop, such as Convex Agent or Mastra. It composes instructions through the normal core prompt pipeline, then wraps the model with AI SDK middleware when Crux execution hooks are installed.
+Use `@use-crux/ai/agent` for AI SDK-compatible agent frameworks that own their own model loop, such as Convex Agent or Mastra. It composes instructions through the normal core prompt pipeline, then wraps the model with AI SDK middleware when Crux execution hooks are installed.
 
 ```ts
-import { resolve } from '@crux/ai/agent'
+import { resolve } from '@use-crux/ai/agent'
 
 const { instructions, model } = await resolve(chatPrompt, {
   model: languageModel,
@@ -113,7 +113,7 @@ const meta = await result.completion
 
 ### `createCruxAi(options?)`
 
-Build a `@crux/ai` instance bound to a specific `SdkGateway`. The package-level exports are an instance created with the live gateway; reach for this when you need the test seam.
+Build a `@use-crux/ai` instance bound to a specific `SdkGateway`. The package-level exports are an instance created with the live gateway; reach for this when you need the test seam.
 
 | Field             | Type          | Description                                                           |
 | ----------------- | ------------- | --------------------------------------------------------------------- |
@@ -122,7 +122,7 @@ Build a `@crux/ai` instance bound to a specific `SdkGateway`. The package-level 
 **Returns:** `CruxAi` — `{ generate, stream, generateTextFn, generateObjectFn, embedding, reranker }`
 
 ```ts
-import { createCruxAi } from '@crux/ai'
+import { createCruxAi } from '@use-crux/ai'
 
 const ai = createCruxAi({ gateway: myScriptedGateway })
 const result = await ai.generate(myPrompt, { model, input })
@@ -139,7 +139,7 @@ Coded error wrapper. `generate()`/`stream()` propagate underlying errors unchang
 
 ### `generateObjectFn`
 
-Pre-bound `GenerateObjectFn` for `@crux/core` APIs (judges, extraction). Pass `model` per-call.
+Pre-bound `GenerateObjectFn` for `@use-crux/core` APIs (judges, extraction). Pass `model` per-call.
 
 **Signature:** `GenerateObjectFn` — `(opts: { model, system?, prompt, schema }) => Promise<{ object: T }>`
 
@@ -149,11 +149,11 @@ Pre-bound `GenerateObjectFn` for `@crux/core` APIs (judges, extraction). Pass `m
 const judge = llmJudge({ generate: generateObjectFn, model, ... })
 ```
 
-For a `GenerateObjectFn` that also runs through full adapter prompt execution semantics, use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction`.
+For a `GenerateObjectFn` that also runs through full adapter prompt execution semantics, use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction`.
 
 ### `generateTextFn`
 
-Pre-bound `GenerateTextFn` for `@crux/core` APIs (summarization, compaction).
+Pre-bound `GenerateTextFn` for `@use-crux/core` APIs (summarization, compaction).
 
 **Signature:** `GenerateTextFn` — `(opts: { model, system?, prompt }) => Promise<{ text: string }>`
 
@@ -212,7 +212,7 @@ Use it with memory, indexers, or retrievers when you want the AI SDK model regis
 When a tool with `needsApproval` (set directly or via [approval middleware](/docs/reference/crux-core/tool-middleware)) fires, generation suspends: the result has `_meta.finishReason === 'tool_approval_required'`, `pendingApprovals` carries the minted requests (with anti-forgery tokens), and `messages` ends with the approval-request message. Persist the messages, collect a decision, append a `tool-approval-response`, and call `generate()` again.
 
 ```ts
-import { appendToolApprovalResponse } from '@crux/core/tool-middleware'
+import { appendToolApprovalResponse } from '@use-crux/core/tool-middleware'
 
 const first = await generate(assistant, { model, input, tools })
 
@@ -235,7 +235,7 @@ The approved tool executes during resume, its result is replayed into the loop a
 
 ### What is not exported
 
-AI SDK helpers (`tool`, `stepCountIs`, `hasToolCall`) and AI SDK types are no longer re-exported — import them from `'ai'` directly. Agent compositions come from `@crux/core/agent` or from `executorAdapter()`. The legacy `toMessages`/`fromMessages`/`createAIExecutor` exports were removed (RFC [use-crux/crux#28](https://github.com/use-crux/crux/issues/28)).
+AI SDK helpers (`tool`, `stepCountIs`, `hasToolCall`) and AI SDK types are no longer re-exported — import them from `'ai'` directly. Agent compositions come from `@use-crux/core/agent` or from `executorAdapter()`. The legacy `toMessages`/`fromMessages`/`createAIExecutor` exports were removed (RFC [use-crux/crux#28](https://github.com/use-crux/crux/issues/28)).
 
 ### Types
 
@@ -253,7 +253,7 @@ import type {
   ObjectStreamResult,
   GenerateReturn,
   StreamReturn,
-} from '@crux/ai'
+} from '@use-crux/ai'
 ```
 
 ## Related

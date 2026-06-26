@@ -1,10 +1,8 @@
-import ts from 'typescript'
-import type { ProjectRelation } from '@crux/core/project-index'
-import { stringProperty } from '../ast/literals'
+import type { ProjectRelation } from '@use-crux/core/project-index'
 import { safeId } from '../definitions'
 import { semanticCallbackAccessRelations, semanticFlowAccessRelations } from './access-relations'
 import { semanticAgentHandoffRelations } from './agent-handoff-relations'
-import type { SemanticAnalyzerView, SemanticDefinitionCandidate } from './candidates'
+import type { SemanticAnalyzerNode, SemanticAnalyzerView, SemanticDefinitionCandidate } from './candidates'
 import {
   arrayProperty,
   arrayPropertyExpressions,
@@ -29,6 +27,7 @@ import {
   toExpression,
   unwrapExpression,
 } from './model'
+import { semanticNodeKey, semanticStringLiteralProperty } from './syntax-readers'
 
 /**
  * Computes resolved semantic relations for one discovered definition.
@@ -83,15 +82,15 @@ function semanticInjectionUseRelations(
   candidate: SemanticDefinitionCandidate,
   view: SemanticAnalyzerView,
 ): ProjectRelation[] {
-  const use = propertyInitializer(candidate.object, 'use')
+  const use = propertyInitializer(candidate.object, 'use', view)
   if (!use) return []
-  const expressions = semanticUseExpressions(toExpression(use), view)
+  const expressions = semanticUseExpressions(toExpression(use, view), view)
   const relations: ProjectRelation[] = []
   expressions.forEach((expression, index) => {
     const target = semanticTargetForExpression(expression, view)
     const type = target ? semanticInjectionUseRelationType(candidate.kind, target.kind) : undefined
     if (!target || !type) return
-    relations.push(semanticRelation(candidate, type, `${candidate.definitionId}:use:${index + 1}`, target.id))
+    relations.push(semanticRelation(candidate, type, `${candidate.definitionId}:use:${index + 1}`, target.id, view))
   })
   return relations
 }
@@ -101,23 +100,24 @@ function semanticInjectionUseRelations(
  * and spread entries without executing code.
  */
 function semanticUseExpressions(
-  expression: ts.Expression,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
   view: SemanticAnalyzerView,
   seen = new Set<string>(),
-): ts.Expression[] {
-  const key = `${expression.getSourceFile().fileName}:${expression.pos}:${expression.end}`
+): SemanticAnalyzerNode<SemanticAnalyzerView>[] {
+  const key = semanticNodeKey(expression, view.syntax)
   if (seen.has(key)) return []
   const nextSeen = new Set(seen)
   nextSeen.add(key)
   const array = semanticArrayExpression(expression, view, nextSeen)
   if (!array) return [expression]
-  const expressions: ts.Expression[] = []
-  for (const element of array.elements) {
-    if (ts.isSpreadElement(element)) {
-      expressions.push(...semanticUseExpressions(element.expression, view, nextSeen))
+  const expressions: SemanticAnalyzerNode<SemanticAnalyzerView>[] = []
+  for (const element of view.syntax.arrayElements(array)) {
+    const spread = view.syntax.spreadExpression(element)
+    if (spread) {
+      expressions.push(...semanticUseExpressions(spread, view, nextSeen))
       continue
     }
-    if (ts.isExpression(element)) expressions.push(element)
+    expressions.push(element)
   }
   return expressions
 }
@@ -153,13 +153,13 @@ function semanticInjectionToolRelations(
   candidate: SemanticDefinitionCandidate,
   view: SemanticAnalyzerView,
 ): ProjectRelation[] {
-  const expressions: ts.Expression[] = []
-  const tools = propertyInitializer(candidate.object, 'tools')
-  if (tools) expressions.push(toExpression(tools))
+  const expressions: SemanticAnalyzerNode<SemanticAnalyzerView>[] = []
+  const tools = propertyInitializer(candidate.object, 'tools', view)
+  if (tools) expressions.push(toExpression(tools, view))
   if (candidate.kind === 'injectable') {
     const returned = semanticInjectableReturnObject(candidate, view)
-    const returnedTools = returned ? propertyInitializer(returned, 'tools') : undefined
-    if (returnedTools) expressions.push(toExpression(returnedTools))
+    const returnedTools = returned ? propertyInitializer(returned, 'tools', view) : undefined
+    if (returnedTools) expressions.push(toExpression(returnedTools, view))
   }
   const type = `${candidate.kind}.uses_tool`
   const relations: ProjectRelation[] = []
@@ -169,7 +169,7 @@ function semanticInjectionToolRelations(
       const key = `${type}:${target.id}`
       if (seenTargets.has(key)) continue
       seenTargets.add(key)
-      relations.push(semanticRelation(candidate, type, candidate.definitionId, target.id))
+      relations.push(semanticRelation(candidate, type, candidate.definitionId, target.id, view))
     }
   }
   return relations
@@ -182,20 +182,22 @@ function semanticInjectionToolRelations(
 function semanticInjectableReturnObject(
   candidate: SemanticDefinitionCandidate,
   view: SemanticAnalyzerView,
-): ts.ObjectLiteralExpression | undefined {
-  const inject = propertyInitializer(candidate.object, 'inject')
-  return inject ? semanticReturnedObjectExpression(toExpression(inject), view) : undefined
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  const inject = propertyInitializer(candidate.object, 'inject', view)
+  return inject ? semanticReturnedObjectExpression(toExpression(inject, view), view) : undefined
 }
 
 function semanticReturnedObjectExpression(
-  expression: ts.Expression,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
   view: SemanticAnalyzerView,
   seen = new Set<string>(),
-): ts.ObjectLiteralExpression | undefined {
-  const unwrapped = unwrapExpression(expression)
-  if (ts.isObjectLiteralExpression(unwrapped)) return unwrapped
-  if (ts.isArrowFunction(unwrapped)) return semanticReturnedObjectFromBody(unwrapped.body)
-  if (ts.isFunctionExpression(unwrapped)) return semanticReturnedObjectFromBlock(unwrapped.body)
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  const unwrapped = unwrapExpression(expression, view)
+  if (view.syntax.isKind(unwrapped, 'objectLiteral')) return unwrapped
+  for (const returned of view.syntax.functionReturnExpressions(unwrapped)) {
+    const object = semanticReturnedObjectFromExpression(returned, view)
+    if (object) return object
+  }
   const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved) return undefined
   const key = `${resolved.sourceFile.fileName}:${resolved.declaration.pos}:${resolved.declaration.end}:${resolved.symbol}`
@@ -203,28 +205,19 @@ function semanticReturnedObjectExpression(
   const nextSeen = new Set(seen)
   nextSeen.add(key)
   if (resolved.expression) return semanticReturnedObjectExpression(resolved.expression, view, nextSeen)
-  if (ts.isFunctionDeclaration(resolved.declaration) && resolved.declaration.body) {
-    return semanticReturnedObjectFromBlock(resolved.declaration.body)
+  for (const returned of view.syntax.functionReturnExpressions(resolved.declaration)) {
+    const object = semanticReturnedObjectFromExpression(returned, view)
+    if (object) return object
   }
   return undefined
 }
 
-function semanticReturnedObjectFromBody(body: ts.ConciseBody): ts.ObjectLiteralExpression | undefined {
-  return ts.isBlock(body) ? semanticReturnedObjectFromBlock(body) : semanticReturnedObjectFromExpression(body)
-}
-
-function semanticReturnedObjectFromBlock(block: ts.Block): ts.ObjectLiteralExpression | undefined {
-  for (const statement of block.statements) {
-    if (!ts.isReturnStatement(statement) || !statement.expression) continue
-    const returned = semanticReturnedObjectFromExpression(statement.expression)
-    if (returned) return returned
-  }
-  return undefined
-}
-
-function semanticReturnedObjectFromExpression(expression: ts.Expression): ts.ObjectLiteralExpression | undefined {
-  const unwrapped = unwrapExpression(expression)
-  return ts.isObjectLiteralExpression(unwrapped) ? unwrapped : undefined
+function semanticReturnedObjectFromExpression(
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  const unwrapped = unwrapExpression(expression, view)
+  return view.syntax.isKind(unwrapped, 'objectLiteral') ? unwrapped : undefined
 }
 
 /**
@@ -234,14 +227,14 @@ function semanticRouterRelations(candidate: SemanticDefinitionCandidate, view: S
   const routes = semanticObjectProperty(candidate.object, 'routes', view)
   if (!routes) return []
   const relations: ProjectRelation[] = []
-  for (const property of routes.properties) {
-    const routeKey = semanticObjectPropertyName(property)
-    const expression = objectMemberExpression(property)
+  for (const property of view.syntax.objectProperties(routes)) {
+    const routeKey = semanticObjectPropertyName(property, view)
+    const expression = objectMemberExpression(property, view)
     if (!routeKey || !expression) continue
     const target = semanticTargetForExpression(expression, view)
     const type = target ? routingTargetRelationType('router.route', target.kind) : undefined
     if (!target || !type) continue
-    relations.push(semanticRelation(candidate, type, `${candidate.definitionId}:route:${safeId(routeKey)}`, target.id))
+    relations.push(semanticRelation(candidate, type, `${candidate.definitionId}:route:${safeId(routeKey)}`, target.id, view))
   }
   return relations
 }
@@ -253,14 +246,14 @@ function semanticCascadeRelations(candidate: SemanticDefinitionCandidate, view: 
   const tiers = semanticArrayProperty(candidate.object, 'tiers', view)
   if (!tiers) return []
   const relations: ProjectRelation[] = []
-  tiers.elements.forEach((element, index) => {
-    if (!ts.isObjectLiteralExpression(element)) return
-    const model = propertyInitializer(element, 'model')
+  view.syntax.arrayElements(tiers).forEach((element, index) => {
+    if (!view.syntax.isKind(element, 'objectLiteral')) return
+    const model = propertyInitializer(element, 'model', view)
     if (!model) return
     const target = semanticTargetForExpression(model, view)
     const type = target ? routingTargetRelationType('cascade.tier', target.kind) : undefined
     if (!target || !type) return
-    relations.push(semanticRelation(candidate, type, `${candidate.definitionId}:tier:${index + 1}`, target.id))
+    relations.push(semanticRelation(candidate, type, `${candidate.definitionId}:tier:${index + 1}`, target.id, view))
   })
   return relations
 }
@@ -270,15 +263,14 @@ function semanticCascadeRelations(candidate: SemanticDefinitionCandidate, view: 
  */
 function semanticFallbackRelations(candidate: SemanticDefinitionCandidate, view: SemanticAnalyzerView): ProjectRelation[] {
   if (!candidate.call) return []
-  const options = semanticFallbackOptions(candidate.call)
-  const modelArgs = candidate.call.arguments.filter((argument) => argument !== options)
+  const options = semanticFallbackOptions(candidate.call, view)
+  const modelArgs = view.syntax.callArguments(candidate.call).filter((argument) => argument !== options)
   const relations: ProjectRelation[] = []
   modelArgs.forEach((argument, index) => {
-    if (!ts.isExpression(argument)) return
     const target = semanticTargetForExpression(argument, view)
     const type = target ? routingTargetRelationType('fallback.option', target.kind) : undefined
     if (!target || !type) return
-    relations.push(semanticRelation(candidate, type, `${candidate.definitionId}:option:${index + 1}`, target.id))
+    relations.push(semanticRelation(candidate, type, `${candidate.definitionId}:option:${index + 1}`, target.id, view))
   })
   return relations
 }
@@ -289,24 +281,24 @@ function semanticFallbackRelations(candidate: SemanticDefinitionCandidate, view:
  */
 function semanticAgentRelations(candidate: SemanticDefinitionCandidate, view: SemanticAnalyzerView): ProjectRelation[] {
   const relations: ProjectRelation[] = []
-  const prompt = propertyInitializer(candidate.object, 'prompt')
+  const prompt = propertyInitializer(candidate.object, 'prompt', view)
   const promptTarget = prompt ? semanticTargetForExpression(prompt, view) : undefined
   if (promptTarget?.kind === 'prompt') {
-    relations.push(semanticRelation(candidate, 'agent.uses_prompt', candidate.definitionId, promptTarget.id))
+    relations.push(semanticRelation(candidate, 'agent.uses_prompt', candidate.definitionId, promptTarget.id, view))
   }
 
   for (const property of ['model', 'languageModel'] as const) {
-    const model = propertyInitializer(candidate.object, property)
+    const model = propertyInitializer(candidate.object, property, view)
     const modelTarget = model ? semanticTargetForExpression(model, view) : undefined
     if (modelTarget && isRoutingTargetKind(modelTarget.kind)) {
-      relations.push(semanticRelation(candidate, 'agent.uses_routing', candidate.definitionId, modelTarget.id))
+      relations.push(semanticRelation(candidate, 'agent.uses_routing', candidate.definitionId, modelTarget.id, view))
     }
   }
 
-  const tools = propertyInitializer(candidate.object, 'tools')
+  const tools = propertyInitializer(candidate.object, 'tools', view)
   if (tools) {
-    for (const target of semanticToolMapTargets(toExpression(tools), view)) {
-      relations.push(semanticRelation(candidate, 'agent.uses_tool', candidate.definitionId, target.id))
+    for (const target of semanticToolMapTargets(toExpression(tools, view), view)) {
+      relations.push(semanticRelation(candidate, 'agent.uses_tool', candidate.definitionId, target.id, view))
     }
   }
   relations.push(...semanticAgentHandoffRelations(candidate, view))
@@ -317,27 +309,27 @@ function semanticAgentRelations(candidate: SemanticDefinitionCandidate, view: Se
  * Resolves `flow.step(label, target)` calls inside a flow handler.
  */
 function semanticFlowRelations(candidate: SemanticDefinitionCandidate, view: SemanticAnalyzerView): ProjectRelation[] {
-  const handler = propertyInitializer(candidate.object, 'handler')
+  const handler = propertyInitializer(candidate.object, 'handler', view)
   if (!handler) return []
   const relations: ProjectRelation[] = []
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === 'step'
-    ) {
-      const [stepArg, targetArg] = node.arguments
-      if (stepArg && ts.isStringLiteralLike(stepArg) && targetArg) {
+  const visit = (node: SemanticAnalyzerNode<SemanticAnalyzerView>): void => {
+    if (view.syntax.isKind(node, 'callExpression')) {
+      const targetExpression = view.syntax.callExpressionTarget(node)
+      if (targetExpression && view.syntax.propertyAccessName(targetExpression) === 'step') {
+        const [stepArg, targetArg] = view.syntax.callArguments(node)
+        const stepName = stepArg ? view.syntax.stringLiteralText(stepArg) : undefined
+        if (stepName && targetArg) {
         const target = semanticTargetForExpression(targetArg, view)
         const type = target ? flowStepRelationType(target.kind) : undefined
         if (target && type) {
           relations.push(
-            semanticRelation(candidate, type, `flow.step:${safeId(candidate.name)}:${safeId(stepArg.text)}`, target.id),
+            semanticRelation(candidate, type, `flow.step:${safeId(candidate.name)}:${safeId(stepName)}`, target.id, view),
           )
         }
       }
     }
-    ts.forEachChild(node, visit)
+    }
+    view.syntax.children(node).forEach(visit)
   }
   visit(handler)
   return relations
@@ -368,21 +360,21 @@ function semanticCompositionRelations(
  * Resolves parallel composition branches and their aggregate target relations.
  */
 function semanticParallelRelations(candidate: SemanticDefinitionCandidate, view: SemanticAnalyzerView): ProjectRelation[] {
-  const agents = objectProperty(candidate.object, 'agents')
+  const agents = objectProperty(candidate.object, 'agents', view)
   if (!agents) return []
   const relations: ProjectRelation[] = []
-  for (const property of agents.properties) {
-    const branchId = semanticObjectPropertyName(property)
-    const expression = objectMemberExpression(property)
+  for (const property of view.syntax.objectProperties(agents)) {
+    const branchId = semanticObjectPropertyName(property, view)
+    const expression = objectMemberExpression(property, view)
     if (!branchId || !expression) continue
     const target = semanticTargetForExpression(expression, view)
     if (!target) continue
     const compositionType = compositionRelationType(target.kind)
     const branchType = branchRelationType('parallel', target.kind)
-    if (compositionType) relations.push(semanticRelation(candidate, compositionType, candidate.definitionId, target.id))
+    if (compositionType) relations.push(semanticRelation(candidate, compositionType, candidate.definitionId, target.id, view))
     if (branchType) {
       relations.push(
-        semanticRelation(candidate, branchType, `${candidate.definitionId}:branch:${safeId(branchId)}`, target.id),
+        semanticRelation(candidate, branchType, `${candidate.definitionId}:branch:${safeId(branchId)}`, target.id, view),
       )
     }
   }
@@ -393,24 +385,24 @@ function semanticParallelRelations(candidate: SemanticDefinitionCandidate, view:
  * Resolves pipeline stages and their aggregate target relations.
  */
 function semanticPipelineRelations(candidate: SemanticDefinitionCandidate, view: SemanticAnalyzerView): ProjectRelation[] {
-  const steps = arrayProperty(candidate.object, 'steps')
+  const steps = arrayProperty(candidate.object, 'steps', view)
   if (!steps) return []
   const relations: ProjectRelation[] = []
-  steps.elements.forEach((element, index) => {
-    if (!ts.isObjectLiteralExpression(element)) return
-    const stageName = stringProperty(element, 'name') ?? `stage-${index + 1}`
+  view.syntax.arrayElements(steps).forEach((element, index) => {
+    if (!view.syntax.isKind(element, 'objectLiteral')) return
+    const stageName = semanticStringLiteralProperty(element, 'name', view.syntax) ?? `stage-${index + 1}`
     for (const property of ['agent', 'flow', 'prompt', 'tool'] as const) {
-      const expression = propertyInitializer(element, property)
+      const expression = propertyInitializer(element, property, view)
       if (!expression) continue
       const target = semanticTargetForExpression(expression, view)
       if (!target) continue
       const compositionType = compositionRelationType(target.kind)
       const stageType = branchRelationType('pipeline', target.kind)
       if (compositionType)
-        relations.push(semanticRelation(candidate, compositionType, candidate.definitionId, target.id))
+        relations.push(semanticRelation(candidate, compositionType, candidate.definitionId, target.id, view))
       if (stageType) {
         relations.push(
-          semanticRelation(candidate, stageType, `${candidate.definitionId}:stage:${safeId(stageName)}`, target.id),
+          semanticRelation(candidate, stageType, `${candidate.definitionId}:stage:${safeId(stageName)}`, target.id, view),
         )
       }
     }
@@ -426,21 +418,21 @@ function semanticConsensusRelations(
   view: SemanticAnalyzerView,
 ): ProjectRelation[] {
   const relations: ProjectRelation[] = []
-  for (const expression of arrayPropertyExpressions(candidate.object, 'agents')) {
+  for (const expression of arrayPropertyExpressions(candidate.object, 'agents', view)) {
     const target = semanticTargetForExpression(expression, view)
     if (target?.kind !== 'agent') continue
-    relations.push(semanticRelation(candidate, 'composition.uses_agent', candidate.definitionId, target.id))
-    relations.push(semanticRelation(candidate, 'consensus.includes_agent', candidate.definitionId, target.id))
+    relations.push(semanticRelation(candidate, 'composition.uses_agent', candidate.definitionId, target.id, view))
+    relations.push(semanticRelation(candidate, 'consensus.includes_agent', candidate.definitionId, target.id, view))
   }
-  const judge = propertyInitializer(candidate.object, 'judge')
+  const judge = propertyInitializer(candidate.object, 'judge', view)
   const judgeTarget = judge ? semanticTargetForExpression(judge, view) : undefined
   if (judgeTarget?.kind === 'agent' || judgeTarget?.kind === 'scorer') {
-    relations.push(semanticRelation(candidate, 'consensus.uses_judge', candidate.definitionId, judgeTarget.id))
+    relations.push(semanticRelation(candidate, 'consensus.uses_judge', candidate.definitionId, judgeTarget.id, view))
   }
-  const scorer = propertyInitializer(candidate.object, 'scorer')
+  const scorer = propertyInitializer(candidate.object, 'scorer', view)
   const scorerTarget = scorer ? semanticTargetForExpression(scorer, view) : undefined
   if (scorerTarget?.kind === 'scorer') {
-    relations.push(semanticRelation(candidate, 'consensus.uses_scorer', candidate.definitionId, scorerTarget.id))
+    relations.push(semanticRelation(candidate, 'consensus.uses_scorer', candidate.definitionId, scorerTarget.id, view))
   }
   return relations
 }
@@ -450,28 +442,28 @@ function semanticConsensusRelations(
  */
 function semanticSwarmRelations(candidate: SemanticDefinitionCandidate, view: SemanticAnalyzerView): ProjectRelation[] {
   const relations: ProjectRelation[] = []
-  const agents = objectProperty(candidate.object, 'agents')
+  const agents = objectProperty(candidate.object, 'agents', view)
   if (agents) {
-    for (const property of agents.properties) {
-      const expression = objectMemberExpression(property)
+    for (const property of view.syntax.objectProperties(agents)) {
+      const expression = objectMemberExpression(property, view)
       if (!expression) continue
       const target = semanticTargetForExpression(expression, view)
       if (target?.kind !== 'agent') continue
-      relations.push(semanticRelation(candidate, 'composition.uses_agent', candidate.definitionId, target.id))
-      relations.push(semanticRelation(candidate, 'swarm.includes_agent', candidate.definitionId, target.id))
+      relations.push(semanticRelation(candidate, 'composition.uses_agent', candidate.definitionId, target.id, view))
+      relations.push(semanticRelation(candidate, 'swarm.includes_agent', candidate.definitionId, target.id, view))
     }
   }
-  const blackboard = propertyInitializer(candidate.object, 'blackboard')
+  const blackboard = propertyInitializer(candidate.object, 'blackboard', view)
   const blackboardTarget = blackboard ? semanticTargetForExpression(blackboard, view) : undefined
   if (blackboardTarget?.kind === 'blackboard') {
-    relations.push(semanticRelation(candidate, 'swarm.uses_blackboard', candidate.definitionId, blackboardTarget.id))
+    relations.push(semanticRelation(candidate, 'swarm.uses_blackboard', candidate.definitionId, blackboardTarget.id, view))
   }
-  for (const expression of propertyInitializer(candidate.object, 'memory')
-    ? propertyExpressions(candidate.object, 'memory')
+  for (const expression of propertyInitializer(candidate.object, 'memory', view)
+    ? propertyExpressions(candidate.object, 'memory', view)
     : []) {
     const target = semanticTargetForExpression(expression, view)
     if (target?.kind === 'memory')
-      relations.push(semanticRelation(candidate, 'swarm.uses_memory', candidate.definitionId, target.id))
+      relations.push(semanticRelation(candidate, 'swarm.uses_memory', candidate.definitionId, target.id, view))
   }
   return relations
 }
@@ -483,9 +475,9 @@ function semanticSafetyRelations(candidate: SemanticDefinitionCandidate, view: S
   const relationType = candidate.kind === 'constraint' ? 'constraint.applies_to' : 'guardrail.applies_to'
   const relations: ProjectRelation[] = []
   for (const property of ['appliesTo', 'target', 'targets', 'for'] as const) {
-    for (const expression of propertyExpressions(candidate.object, property)) {
+    for (const expression of propertyExpressions(candidate.object, property, view)) {
       const target = semanticTargetForExpression(expression, view)
-      if (target) relations.push(semanticRelation(candidate, relationType, candidate.definitionId, target.id))
+      if (target) relations.push(semanticRelation(candidate, relationType, candidate.definitionId, target.id, view))
     }
   }
   return relations

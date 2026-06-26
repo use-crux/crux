@@ -1,13 +1,13 @@
 ---
-title: '@crux/anthropic'
+title: '@use-crux/anthropic'
 description: Anthropic SDK adapter — factory pattern with native options.
 ---
 
 Peer dependency: `@anthropic-ai/sdk`
 
 ```ts
-import { createAnthropic, anthropicProviderRuntime, anthropicTranscript, toMessages, fromMessages } from '@crux/anthropic'
-import { createGenerateObjectFn, createGenerateTextFn } from '@crux/anthropic'
+import { createAnthropic, anthropicProviderRuntime, anthropicTranscript, toMessages, fromMessages } from '@use-crux/anthropic'
+import { createGenerateObjectFn, createGenerateTextFn } from '@use-crux/anthropic'
 ```
 
 <Callout type="info">
@@ -18,7 +18,7 @@ import { createGenerateObjectFn, createGenerateTextFn } from '@crux/anthropic'
 
 Create an adapter bound to an Anthropic client.
 
-`createAnthropic()` is `anthropicProviderRuntime.create`. The package-owned `anthropicTranscript` owns `tool_use` / `tool_result` conversion plus assistant text/tool-call extraction. Anthropic-specific request params, cache-control system blocks, and response metadata normalization stay owned by `@crux/anthropic`; Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
+`createAnthropic()` is `anthropicProviderRuntime.create`. The package-owned `anthropicTranscript` owns `tool_use` / `tool_result` conversion plus assistant text/tool-call extraction. Anthropic-specific request params, cache-control system blocks, and response metadata normalization stay owned by `@use-crux/anthropic`; Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
 
 | Field    | Type        | Description                   |
 | -------- | ----------- | ----------------------------- |
@@ -32,7 +32,7 @@ Create an adapter bound to an Anthropic client.
 | `.stream(prompt, options)`   | Stream a prompt execution                                              |
 
 ```ts
-import { createAnthropic } from '@crux/anthropic'
+import { createAnthropic } from '@use-crux/anthropic'
 import Anthropic from '@anthropic-ai/sdk'
 
 const adapter = createAnthropic(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }))
@@ -124,7 +124,7 @@ Create a `GenerateObjectFn` bound to a client and model.
 
 **Returns:** `GenerateObjectFn`
 
-This is a provider-native helper generated from the same native chat profile as `createAnthropic()`. It uses Anthropic's structured parse surface and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
+This is a provider-native helper generated from the same native chat profile as `createAnthropic()`. It uses Anthropic's structured parse surface and returns the parsed `{ object }`, preserving provider errors. It does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory capture, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a `GenerateObjectFn` needs full adapter runtime behavior.
 
 ### `createGenerateTextFn(client, model)`
 
@@ -141,24 +141,24 @@ This helper is also generated from the native chat profile, so text helper calls
 
 ### Embeddings and rerankers
 
-`@crux/anthropic` is a generation adapter. It does not export a provider-native `embedding()` helper because Anthropic's direct SDK surface here does not provide the dense embedding API that Crux needs for `embedding()`.
+`@use-crux/anthropic` is a generation adapter. It does not export a provider-native `embedding()` helper because Anthropic's direct SDK surface here does not provide the dense embedding API that Crux needs for `embedding()`.
 
 When you want Anthropic for generation plus retrieval/indexing around it, use one of these patterns:
 
-- pair `createAnthropic()` with `embedding()` from `@crux/ai`
-- pair it with `embedding()` from `@crux/openai` or `@crux/google` for the write/query vector side
+- pair `createAnthropic()` with `embedding()` from `@use-crux/ai`
+- pair it with `embedding()` from `@use-crux/openai` or `@use-crux/google` for the write/query vector side
 - keep Anthropic as the chat model while another provider handles embeddings or reranking
 
-For model-based reranking, use `reranker()` from [`@crux/ai`](/docs/reference/adapters/ai).
+For model-based reranking, use `reranker()` from [`@use-crux/ai`](/docs/reference/adapters/ai).
 
 ### Types
 
 ```ts
-import type { AnthropicExtra, AnthropicRequest } from '@crux/anthropic'
+import type { AnthropicExtra, AnthropicRequest } from '@use-crux/anthropic'
 ```
 
 ## Related
 
 - Guide: [Execution](/docs/guides/prompts/execution)
 - Reference: [Prompts](/docs/reference/crux-core/prompts)
-- Reference: [@crux/ai (Vercel AI SDK)](/docs/reference/adapters/ai)
+- Reference: [@use-crux/ai (Vercel AI SDK)](/docs/reference/adapters/ai)

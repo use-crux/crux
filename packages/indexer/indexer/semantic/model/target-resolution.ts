@@ -1,11 +1,15 @@
-import ts from 'typescript'
-import type { ProjectRelation } from '@crux/core/project-index'
-import { stringProperty } from '../../ast/literals'
-import { sourceForNode } from '../../ast/snippets'
+import type { ProjectRelation } from '@use-crux/core/project-index'
 import { safeId } from '../../definitions'
-import { projectRelation } from '../../relations/index'
-import type { SemanticAnalyzerView, SemanticDefinitionCandidate, SemanticResolvedSource, SemanticTarget } from '../candidates'
-import { semanticObjectExpression, objectMemberExpression, semanticFallbackOptions } from './object-readers'
+import { projectRelation } from '../../relations'
+import type {
+  SemanticAnalyzerNode,
+  SemanticAnalyzerView,
+  SemanticDefinitionCandidate,
+  SemanticResolvedSource,
+  SemanticTarget,
+} from '../candidates'
+import { semanticSourceForNode, semanticStringLiteralProperty } from '../syntax-readers'
+import { objectMemberExpression, semanticFallbackOptions, semanticObjectExpression } from './object-readers'
 import {
   callExpressionName,
   isResolvableSourceExpression,
@@ -15,47 +19,36 @@ import {
   unwrapExpression,
 } from './source-refs'
 
-/** Returns whether an AST node is a callable/function-like declaration. */
+/** Returns whether a backend-owned syntax node is function-like. */
 export function semanticIsFunctionLike(
-  node: ts.Node,
-): node is ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction | ts.MethodDeclaration {
-  return (
-    ts.isFunctionDeclaration(node) ||
-    ts.isFunctionExpression(node) ||
-    ts.isArrowFunction(node) ||
-    ts.isMethodDeclaration(node)
-  )
+  node: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): boolean {
+  return view.syntax.isFunctionLike(node)
 }
 
 /**
  * Creates a resolved semantic relation anchored to the candidate object source.
- *
- * This helper is pure over its inputs and delegates stable id construction to
- * the shared relation registry.
  */
 export function semanticRelation(
   candidate: SemanticDefinitionCandidate,
   type: string,
   from: string,
   to: string,
+  view: SemanticAnalyzerView,
 ): ProjectRelation {
   return projectRelation({
     type,
     from,
     to,
     fidelity: 'resolved',
-    source: sourceForNode(candidate.object.getSourceFile(), candidate.object),
+    source: semanticSourceForNode(candidate.object, view.syntax),
   })
 }
 
-/**
- * Resolves all tool targets represented by a tool map expression.
- *
- * Spread properties are followed recursively and results are deduplicated by
- * target kind/id so callers receive a stable target list.
- */
+/** Resolves all tool targets represented by a tool map expression. */
 export function semanticToolMapTargets(
-  expression: ts.Expression,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
   view: SemanticAnalyzerView,
   seen = new Set<string>(),
 ): SemanticTarget[] {
@@ -65,12 +58,13 @@ export function semanticToolMapTargets(
     return target?.kind === 'tool' ? [target] : []
   }
   const targets: SemanticTarget[] = []
-  for (const property of object.properties) {
-    if (ts.isSpreadAssignment(property)) {
-      targets.push(...semanticToolMapTargets(property.expression, view, seen))
+  for (const property of view.syntax.objectProperties(object)) {
+    const spread = view.syntax.spreadExpression(property)
+    if (spread) {
+      targets.push(...semanticToolMapTargets(spread, view, seen))
       continue
     }
-    const member = objectMemberExpression(property)
+    const member = objectMemberExpression(property, view)
     if (!member) continue
     const target = semanticTargetForExpression(member, view, seen)
     if (target?.kind === 'tool') targets.push(target)
@@ -78,31 +72,22 @@ export function semanticToolMapTargets(
   return dedupeTargets(targets)
 }
 
-/**
- * Resolves an expression to the Project Index definition it represents.
- *
- * Direct call/new expressions are interpreted first; identifiers and property
- * accesses are followed through the TypeScript view with cycle protection.
- */
+/** Resolves an expression to the Project Index definition it represents. */
 export function semanticTargetForExpression(
-  expression: ts.Expression,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
   view: SemanticAnalyzerView,
   seen = new Set<string>(),
 ): SemanticTarget | undefined {
-  const unwrapped = unwrapExpression(expression)
-  const direct = semanticTargetForDefinitionExpression(unwrapped, expressionSymbolName(unwrapped))
+  const unwrapped = unwrapExpression(expression, view)
+  const direct = semanticTargetForDefinitionExpression(unwrapped, expressionSymbolName(unwrapped, view), view)
   if (direct) return direct
 
-  if (!isResolvableSourceExpression(unwrapped)) return undefined
+  if (!isResolvableSourceExpression(unwrapped, view)) return undefined
   const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved) return undefined
   return semanticTargetForResolved(resolved, view, seen)
 }
 
-/**
- * Resolves a target through a source declaration while preventing cycles across
- * declaration references.
- */
 function semanticTargetForResolved(
   resolved: SemanticResolvedSource,
   view: SemanticAnalyzerView,
@@ -113,150 +98,141 @@ function semanticTargetForResolved(
   if (seen.has(key)) return undefined
   const nextSeen = new Set(seen)
   nextSeen.add(key)
-  const expression = unwrapExpression(resolved.expression)
+  const expression = unwrapExpression(resolved.expression, view)
   return (
     semanticTargetForDefinitionExpression(
       expression,
-      symbolNameForDeclaration(resolved.declaration) ?? resolved.symbol,
+      symbolNameForDeclaration(resolved.declaration, view) ?? resolved.symbol,
+      view,
     ) ?? semanticTargetForExpression(expression, view, nextSeen)
   )
 }
 
-/**
- * Interprets direct call/new expressions as Project Index target definitions.
- */
 function semanticTargetForDefinitionExpression(
-  expression: ts.Expression,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
   variableName: string | undefined,
+  view: SemanticAnalyzerView,
 ): SemanticTarget | undefined {
-  if (ts.isCallExpression(expression)) {
-    const callName = callExpressionName(expression)
+  if (view.syntax.isKind(expression, 'callExpression')) {
+    const callName = callExpressionName(expression, view)
     if (callName === 'fallback') {
-      const target = semanticFallbackTarget(expression, variableName)
+      const target = semanticFallbackTarget(expression, variableName, view)
       if (target) return target
     }
-    const firstArg = expression.arguments[0]
-    const object = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
+    const [firstArg] = view.syntax.callArguments(expression)
+    const object = firstArg && view.syntax.isKind(firstArg, 'objectLiteral') ? firstArg : undefined
     if (object) {
-      const target = semanticDefinitionTargetForCall(callName, object, variableName)
+      const target = semanticDefinitionTargetForCall(callName, object, variableName, view)
       if (target) return target
     }
     if (callName === 'retriever') {
-      const name = object ? stringProperty(object, 'id') : undefined
+      const name = object ? semanticStringLiteralProperty(object, 'id', view.syntax) : undefined
       return { id: `rag.retriever:${safeId(name ?? variableName ?? 'anonymous')}`, kind: 'rag.retriever' }
     }
     if (callName === 'retrievalPipeline') {
       return { id: `rag.pipeline:${safeId(variableName ?? 'anonymous')}`, kind: 'rag.pipeline' }
     }
     if (callName === 'scorer' || callName === 'llmJudge') {
-      const name = object ? (stringProperty(object, 'id') ?? stringProperty(object, 'name')) : undefined
+      const name = object
+        ? (semanticStringLiteralProperty(object, 'id', view.syntax) ??
+          semanticStringLiteralProperty(object, 'name', view.syntax))
+        : undefined
       return { id: `scorer:${safeId(name ?? variableName ?? 'anonymous')}`, kind: 'scorer' }
     }
     if (callName === 'evaluate') {
-      const explicitId =
-        firstArg && ts.isStringLiteralLike(firstArg) ? firstArg.text : undefined
+      const explicitId = firstArg ? view.syntax.stringLiteralText(firstArg) : undefined
       return { id: `evaluation:${safeId(explicitId ?? variableName ?? 'anonymous')}`, kind: 'evaluation' }
     }
   }
-  if (ts.isNewExpression(expression) && callExpressionName(expression) === 'Agent') {
-    const object = expression.arguments?.find((arg): arg is ts.ObjectLiteralExpression =>
-      ts.isObjectLiteralExpression(arg),
-    )
+  if (view.syntax.isKind(expression, 'newExpression') && callExpressionName(expression, view) === 'Agent') {
+    const object = view.syntax.newArguments(expression).find((arg) => view.syntax.isKind(arg, 'objectLiteral'))
     if (!object) return undefined
-    const name = stringProperty(object, 'id') ?? stringProperty(object, 'name') ?? variableName ?? 'anonymous'
+    const name =
+      semanticStringLiteralProperty(object, 'id', view.syntax) ??
+      semanticStringLiteralProperty(object, 'name', view.syntax) ??
+      variableName ??
+      'anonymous'
     return { id: `agent:${safeId(name)}`, kind: 'agent' }
   }
   return undefined
 }
 
-/**
- * Maps known factory call names and config object values to target ids/kinds.
- */
 function semanticDefinitionTargetForCall(
   callName: string | undefined,
-  object: ts.ObjectLiteralExpression,
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
   variableName: string | undefined,
+  view: SemanticAnalyzerView,
 ): SemanticTarget | undefined {
   switch (callName) {
-    case 'prompt': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { id: `prompt:${safeId(name)}`, kind: 'prompt' }
-    }
-    case 'context': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { id: `context:${safeId(name)}`, kind: 'context' }
-    }
-    case 'injectable': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { id: `injectable:${safeId(name)}`, kind: 'injectable' }
-    }
+    case 'prompt':
+      return target('prompt', semanticStringLiteralProperty(object, 'id', view.syntax) ?? variableName)
+    case 'context':
+      return target('context', semanticStringLiteralProperty(object, 'id', view.syntax) ?? variableName)
+    case 'injectable':
+      return target('injectable', semanticStringLiteralProperty(object, 'id', view.syntax) ?? variableName)
     case 'tool':
     case 'createTool': {
-      const name = stringProperty(object, 'name') ?? stringProperty(object, 'title') ?? variableName ?? 'anonymous'
-      return { id: `tool:${safeId(name)}`, kind: 'tool' }
+      const name =
+        semanticStringLiteralProperty(object, 'name', view.syntax) ??
+        semanticStringLiteralProperty(object, 'title', view.syntax) ??
+        variableName
+      return target('tool', name)
     }
     case 'agent':
-    case 'convexAgent': {
-      const name = stringProperty(object, 'id') ?? stringProperty(object, 'name') ?? variableName ?? 'anonymous'
-      return { id: `agent:${safeId(name)}`, kind: 'agent' }
-    }
-    case 'memory': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { id: `memory:${safeId(name)}`, kind: 'memory' }
-    }
-    case 'blackboard': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { id: `blackboard:${safeId(name)}`, kind: 'blackboard' }
-    }
-    case 'workspace': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { id: `workspace:${safeId(name)}`, kind: 'workspace' }
-    }
+    case 'convexAgent':
+      return target(
+        'agent',
+        semanticStringLiteralProperty(object, 'id', view.syntax) ??
+          semanticStringLiteralProperty(object, 'name', view.syntax) ??
+          variableName,
+      )
+    case 'memory':
+      return target('memory', semanticStringLiteralProperty(object, 'id', view.syntax) ?? variableName)
+    case 'blackboard':
+      return target('blackboard', semanticStringLiteralProperty(object, 'id', view.syntax) ?? variableName)
+    case 'workspace':
+      return target('workspace', semanticStringLiteralProperty(object, 'id', view.syntax) ?? variableName)
     case 'flow':
-    case 'cruxFlow': {
-      const name = stringProperty(object, 'name') ?? variableName ?? 'anonymous'
-      return { id: `flow:${safeId(name)}`, kind: 'flow' }
-    }
+    case 'cruxFlow':
+      return target('flow', semanticStringLiteralProperty(object, 'name', view.syntax) ?? variableName)
     case 'parallel':
-      return { id: `composition.parallel:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.parallel' }
+      return target('composition.parallel', variableName)
     case 'pipeline':
-      return { id: `composition.pipeline:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.pipeline' }
+      return target('composition.pipeline', variableName)
     case 'swarm':
-      return { id: `composition.swarm:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.swarm' }
+      return target('composition.swarm', variableName)
     case 'consensus':
-      return { id: `composition.consensus:${safeId(variableName ?? 'anonymous')}`, kind: 'composition.consensus' }
-    case 'router': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { id: `routing.router:${safeId(name)}`, kind: 'routing.router' }
-    }
-    case 'cascade': {
-      const name = stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { id: `routing.cascade:${safeId(name)}`, kind: 'routing.cascade' }
-    }
+      return target('composition.consensus', variableName)
+    case 'router':
+      return target('routing.router', semanticStringLiteralProperty(object, 'id', view.syntax) ?? variableName)
+    case 'cascade':
+      return target('routing.cascade', semanticStringLiteralProperty(object, 'id', view.syntax) ?? variableName)
     default:
       return undefined
   }
 }
 
-/**
- * Builds the routing fallback target represented by a `fallback(...)` call.
- */
-function semanticFallbackTarget(call: ts.CallExpression, variableName: string | undefined): SemanticTarget | undefined {
-  const options = semanticFallbackOptions(call)
-  const name = (options ? stringProperty(options, 'id') : undefined) ?? variableName
+function semanticFallbackTarget(
+  call: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  variableName: string | undefined,
+  view: SemanticAnalyzerView,
+): SemanticTarget | undefined {
+  const options = semanticFallbackOptions(call, view)
+  const name = (options ? semanticStringLiteralProperty(options, 'id', view.syntax) : undefined) ?? variableName
   return name ? { id: `routing.fallback:${safeId(name)}`, kind: 'routing.fallback' } : undefined
 }
 
-/**
- * Returns the direct identifier name for target inference.
- */
-function expressionSymbolName(expression: ts.Expression): string | undefined {
-  return ts.isIdentifier(expression) ? expression.text : undefined
+function expressionSymbolName(
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): string | undefined {
+  return view.syntax.identifierText(expression)
 }
 
-/**
- * Deduplicates resolved targets while preserving first-seen order.
- */
+function target(kind: SemanticTarget['kind'], name: string | undefined): SemanticTarget {
+  return { id: `${kind}:${safeId(name ?? 'anonymous')}`, kind }
+}
+
 function dedupeTargets(targets: readonly SemanticTarget[]): SemanticTarget[] {
   const merged = new Map<string, SemanticTarget>()
   for (const target of targets) merged.set(`${target.kind}:${target.id}`, target)

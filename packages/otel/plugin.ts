@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { CruxPlugin } from '@crux/core'
+import type { CruxPlugin } from '@use-crux/core'
 import type { TraceSpan } from './types'
 import { createCallbackExporter, createUrlExporter, type SpanExporter } from './exporter'
 import { createLightweightSpanManager, type SpanManager } from './span-manager'
@@ -54,7 +54,7 @@ export interface TelemetryOptions {
   /**
    * Service name for span identification.
    * Used as the OTel tracer name or included in lightweight span metadata.
-   * @default '@crux/otel'
+   * @default '@use-crux/otel'
    */
   serviceName?: string
 
@@ -94,8 +94,8 @@ export interface TelemetryOptions {
  *
  * @example
  * ```ts
- * import { config } from '@crux/core'
- * import { withTelemetry } from '@crux/otel'
+ * import { config } from '@use-crux/core'
+ * import { withTelemetry } from '@use-crux/otel'
  *
  * config({
  *   prompts,

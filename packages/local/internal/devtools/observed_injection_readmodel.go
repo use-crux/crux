@@ -708,7 +708,7 @@ func (idx observedInjectionIndex) addSourceTool(sourceID string, toolName string
 }
 
 func observedInjectionFactToolNames(raw json.RawMessage) []string {
-	metadata := metadataObject(raw)
+	metadata := observedInjectionMetadata(raw)
 	if metadata == nil {
 		return nil
 	}
@@ -721,6 +721,17 @@ func observedInjectionFactToolNames(raw json.RawMessage) []string {
 		return nil
 	}
 	return stringListValue(tools["names"])
+}
+
+func observedInjectionMetadata(raw json.RawMessage) map[string]any {
+	if len(raw) == 0 {
+		return nil
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		return nil
+	}
+	return metadata
 }
 
 // observedInjectionCounts converts a sparse counter map into a deterministic

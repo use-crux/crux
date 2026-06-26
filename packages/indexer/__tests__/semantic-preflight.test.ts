@@ -1,8 +1,8 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
-import { indexProjectAst, indexProjectSemantic } from '../index'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
+import { indexProjectAst, indexProjectSemantic } from '..'
 import { applyIndexPatch, emptyIndexPatchState } from '../indexer/patches'
 
 const roots: string[] = []
@@ -24,7 +24,7 @@ describe('semantic preflight budgets', () => {
     await writeFile(
       join(root, 'src/large.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         const padding = '${'x'.repeat(128)}'
 
@@ -63,7 +63,7 @@ describe('semantic preflight budgets', () => {
     await writeFile(
       join(root, 'src/current.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const current = prompt({ id: 'current' })
       `,
     )
@@ -111,7 +111,7 @@ describe('semantic preflight budgets', () => {
     await writeFile(
       join(root, 'src/writer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         import { WriterInput } from './schema'
 
         export const writer = prompt({

@@ -9,10 +9,10 @@
  * @module
  */
 
-import { createFlowId, getExecutionContext, getRuntime } from '@crux/core'
-import type { CruxRuntime } from '@crux/core'
-import type { AnyAgent } from '@crux/core/agent'
-import { observe, type CapturedObservabilityContext } from '@crux/core/observability'
+import { createFlowId, getExecutionContext, getRuntime } from '@use-crux/core'
+import type { CruxRuntime } from '@use-crux/core'
+import type { AnyAgent } from '@use-crux/core/agent'
+import { observe, type CapturedObservabilityContext } from '@use-crux/core/observability'
 import type { ComponentApi } from './src/component/_generated/component'
 import { flushObservability } from './observability'
 
@@ -205,7 +205,7 @@ function buildAccumulateInput(
  * building block. Prefer the immediate adapter `swarm()`/`swarm()` style for
  * launch-critical flows, or use Convex `flow()` for durable orchestration.
  *
- * Unlike `swarm()` from `@crux/core/agent` which runs the entire loop
+ * Unlike `swarm()` from `@use-crux/core/agent` which runs the entire loop
  * in a single function call, the Convex swarm runner executes **one agent
  * turn per action**. After a handoff, the caller schedules the next turn
  * via `ctx.scheduler.runAfter()`.
@@ -219,7 +219,7 @@ function buildAccumulateInput(
  * @example
  * ```ts
  * // In your Convex action:
- * import { createConvexSwarm } from '@crux/convex/swarm'
+ * import { createConvexSwarm } from '@use-crux/convex/swarm'
  *
  * const swarm = createConvexSwarm(async (agent, input, agents) => {
  *   // Execute the agent using your SDK adapter
@@ -393,8 +393,8 @@ export function createConvexSwarm(
 
 // ── Component-based swarm ───────────────────────────────────────
 
-import { buildTransferTools } from '@crux/core/agent'
-import type { AnyPrompt } from '@crux/core'
+import { buildTransferTools } from '@use-crux/core/agent'
+import type { AnyPrompt } from '@use-crux/core'
 
 /** A generate function that the component swarm can call. */
 export type SwarmGenerateFn = (
@@ -445,8 +445,8 @@ export interface ComponentSwarmStartOptions {
  *
  * @example
  * ```ts
- * import { createComponentSwarm } from '@crux/convex/swarm'
- * import { generate } from '@crux/ai'
+ * import { createComponentSwarm } from '@use-crux/convex/swarm'
+ * import { generate } from '@use-crux/ai'
  * import { components, internal } from './_generated/api'
  *
  * const swarm = createComponentSwarm({
@@ -490,7 +490,7 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
     output: unknown
     handoff: { target: string; reason: string; context: string } | null
   }> {
-    // Build transfer tools (same as swarm in @crux/core)
+    // Build transfer tools (same as swarm in @use-crux/core)
     let pendingHandoff: {
       target: string
       reason: string

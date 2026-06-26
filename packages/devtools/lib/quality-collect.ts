@@ -10,9 +10,9 @@
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { glob } from 'tinyglobby'
-import type { ProjectModelDiagnosticCode } from '@crux/core/project-index'
-import type { Evaluation, EvaluationManifest } from '@crux/core/quality/internal/runner'
-import type { AnyPrompt } from '@crux/core'
+import type { ProjectModelDiagnosticCode } from '@use-crux/core/project-index'
+import type { Evaluation, EvaluationManifest } from '@use-crux/core/quality/internal/runner'
+import type { AnyPrompt } from '@use-crux/core'
 import type { RunnerCore } from './quality-core-bridge'
 
 // ─────────────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ function describeError(error: unknown): string {
  * exports; prompts without tests are skipped. Lowering failures (e.g. a tested
  * prompt without an explicit id) become collect errors.
  *
- * `core` is the PROJECT's `@crux/core` runner contract (see
+ * `core` is the PROJECT's `@use-crux/core` runner contract (see
  * quality-core-bridge) — lowering must happen in the same module instance
  * that defined the prompts.
  */

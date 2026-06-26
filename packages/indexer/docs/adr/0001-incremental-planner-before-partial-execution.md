@@ -1,6 +1,6 @@
 # Incremental Planner Before Partial Execution
 
-`@crux/indexer` will introduce an incremental planner before adding partial AST or semantic execution. The planner consumes previous index source graph evidence, computes the affected closure when it can prove correctness, and otherwise returns an explicit full reindex fallback. This separates invalidation correctness from execution optimization, matching proven compiler and build-system designs and preventing incomplete dependency modeling from producing stale index snapshots.
+`@use-crux/indexer` will introduce an incremental planner before adding partial AST or semantic execution. The planner consumes previous index source graph evidence, computes the affected closure when it can prove correctness, and otherwise returns an explicit full reindex fallback. This separates invalidation correctness from execution optimization, matching proven compiler and build-system designs and preventing incomplete dependency modeling from producing stale index snapshots.
 
 **Considered Options**
 

@@ -1,7 +1,7 @@
 /**
  * `fakeExecutor()` must pass the executor conformance suite — it is the
  * reference implementation of the `ExecutorSpec` contract. Real executors
- * (e.g. `@crux/ai`'s AiSdkExecutor) run this same suite with their own
+ * (e.g. `@use-crux/ai`'s AiSdkExecutor) run this same suite with their own
  * harness, which is what makes fake-backed policy tests transferable.
  */
 

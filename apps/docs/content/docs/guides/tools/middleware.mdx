@@ -8,7 +8,7 @@ Tool middleware wraps tools at the Crux boundary. Use it when the same policy sh
 Use the simple hooks when you only need to observe execution. Use `aroundExecute()` when the middleware needs to intercept the call, modify arguments, call the wrapped tool via `next()`, or return early without calling the tool.
 
 ```ts
-import { prompt, toolMiddleware } from '@crux/core'
+import { prompt, toolMiddleware } from '@use-crux/core'
 
 const auditTools = toolMiddleware({
   id: 'audit-tools',

@@ -17,12 +17,12 @@ and lint findings.
 _Avoid_: index, registry, knowledge graph
 
 **Project Index Snapshot**:
-The raw Project Index value stored by `@crux/local` and written to cache. It contains compiler and
+The raw Project Index value stored by `@use-crux/local` and written to cache. It contains compiler and
 runtime snapshot facts, but not derived quality annotations.
 _Avoid_: enriched index, devtools read model
 
 **Project Index Read Model**:
-The devtools-facing Project Index produced by `@crux/local/internal/indexread`. It starts from a
+The devtools-facing Project Index produced by `@use-crux/local/internal/indexread`. It starts from a
 Project Index Snapshot and joins in-memory runs, file-backed quality records, source mtimes, and
 safety target metadata.
 _Avoid_: store index, quality pass, hidden enrichment
@@ -116,6 +116,18 @@ The declared analysis cost/capability level for a rule or compiler pass: `syntax
 `semantic`.
 _Avoid_: static hook, lifecycle phase
 
+**Static Index**:
+The source-only Project Index lane that produces source graph rows, definitions, references,
+diagnostics, lint facts, and semantic source-profile handoff without TypeScript type checking. It is
+the product responsibility that may be implemented by TypeScript today and Rust/Oxc later.
+_Avoid_: static-index, AST phase, native AST compiler
+
+**Static Syntax**:
+File-local parser evidence consumed by the Static Index lane before facts are projected into the
+Project Index. Static Syntax may come from a TypeScript parser or an Oxc Syntax Frontend, but callers
+should not couple to either parser's raw AST objects.
+_Avoid_: raw AST, nativeAst, parser plugin payload
+
 **Semantic Read Model**:
 A stable read-only facade for type/program-aware analysis.
 _Avoid_: TypeScript TypeChecker, raw AST access
@@ -128,10 +140,10 @@ upstream API stability, and benchmark confidence justify switching defaults.
 _Avoid_: TypeScript mode, checker plugin
 
 **Static Syntax Frontend**:
-The parser/extractor lane that produces source-only Project Index facts and source graph rows before
-semantic enrichment. It is JavaScript today and can move to Rust/Oxc later without changing semantic
-backend or extension contracts.
-_Avoid_: semantic backend, type checker
+The implementation-specific parser frontend that emits **Static Syntax** for the **Static Index**.
+It is JavaScript today and can move to Rust/Oxc later without changing semantic backend or extension
+contracts.
+_Avoid_: semantic backend, type checker, nativeAst
 
 **Semantic Scope**:
 The file set, previous index snapshot, and source-graph dependency closure handed from static/source
@@ -183,6 +195,12 @@ compiler-option identity, and explicit epoch. Current writes use the binary loca
 `semantic-facts-v15` hard migration.
 _Avoid_: legacy JSON cache, backend-agnostic cache blob
 
+**Runtime Index**:
+Runtime-observed Project Index facts and diagnostics produced from local execution evidence rather
+than authored source alone. Runtime Index data enriches the local runtime read models without
+changing Static Index or Semantic Backend ownership.
+_Avoid_: static index, semantic backend, devtools-only annotation
+
 **Native Direct Primitive Manifest**:
 Internal compiler data that describes the subset of primitive projection behavior a native projector
 can prove without the shared analyzer: call names, definition identity fields, schema properties,
@@ -191,7 +209,7 @@ extension API; it is the way first-party native fast paths avoid hidden hardcode
 _Avoid_: native plugin manifest, tsgo primitive registry
 
 **Experimental Indexer Config**:
-The top-level `experimental.indexer` config bucket for unstable Project Indexer behavior, currently
+The top-level `experimental.indexer` config bucket for unstable Crux Indexer behavior, currently
 `experimental.indexer.native: true | { engine?: 'tsgo'; tsserverPath?: string }`.
 _Avoid_: indexer.semantic backend config, public unstableApi flag
 
@@ -234,9 +252,9 @@ _Avoid_: using in new public APIs after the rename slice
 
 - A **Project Index** contains zero or more **Index Source Rows**.
 - A **Project Index Compiler** produces **Extracted Facts** that are merged into a **Project Index**.
-- `@crux/local` stores a raw **Project Index Snapshot**; `GetIndex()` callers should treat it as
+- `@use-crux/local` stores a raw **Project Index Snapshot**; `GetIndex()` callers should treat it as
   cache/snapshot data, not the devtools-facing quality view.
-- `@crux/local/internal/indexread` produces the **Project Index Read Model**. It is the only owner of
+- `@use-crux/local/internal/indexread` produces the **Project Index Read Model**. It is the only owner of
   derived `IndexQuality` annotations.
 - A **Resolved Project Model** combines Project Index source facts with filesystem conventions,
   runtime evidence, and **Tooling Policy Config**.
@@ -256,8 +274,9 @@ _Avoid_: using in new public APIs after the rename slice
   when declared in the **Compiler Profile** and represented in cache identity.
 - A **Semantic Backend** is selected behind compiler-owned configuration and produces the same
   Project Index fact families regardless of implementation.
-- A **Static Syntax Frontend** feeds source facts and a **Semantic Scope** into semantic enrichment;
-  it does not depend on TypeScript type checking and may become native before semantic does.
+- A **Static Index** consumes **Static Syntax**, produces source-only Project Index facts, and feeds a
+  **Semantic Scope** into semantic enrichment; it does not depend on TypeScript type checking.
+- A **Static Syntax Frontend** emits **Static Syntax** and may become native before semantic does.
 - A **Semantic Source Profile** is the shared preflight/cache/backend handoff for a
   **Semantic Scope**. It avoids duplicate source scans and gives future Go/native frontends one
   stable place to pass source fingerprints into semantic enrichment.
@@ -275,7 +294,7 @@ _Avoid_: using in new public APIs after the rename slice
   `indexer` policy config, so unstable backend experiments have an obvious graduation path.
 - The **Extension Runtime** executes **Compiler Slots** and owns deterministic extension ordering, contribution identity, result policy, and cache identity inputs.
 - **Index Rule** identities participate in **Extension Runtime** cache identity inputs.
-- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Epochs live in `indexer/cache-identity.ts` and `@crux/local`'s `index_cache_identity.go`; they are migration levers, not hidden magic constants.
+- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Epochs live in `indexer/cache-identity.ts` and `@use-crux/local`'s `index_cache_identity.go`; they are migration levers, not hidden magic constants.
 - **Index Rule** metadata provides docs, option schema, and message declarations before a rule can run.
 - An **Indexer Extension** contributes **Extracted Facts** through the **Extension Boundary**.
 - First-party static primitive call names are owned by `cruxCoreExtension` extension extractors. Extractors emit **Extracted Facts**; the removed primitive extractor registry is not part of the extension boundary.
@@ -309,8 +328,9 @@ _Avoid_: using in new public APIs after the rename slice
   Extension**.
 - "Graph write" suggests mutation of the final Project Index graph, but the resolved term is
   **Extracted Fact** because extensions contribute immutable facts before validation and merge.
-- "Static" should become **Syntax** in public compiler language. **Semantic** means optional
-  type/program-aware analysis behind a stable read model.
+- "Static" should refer to the source-only **Static Index** lane. Use **Static Syntax** when the
+  specific parser evidence is meant. **Semantic** means optional type/program-aware analysis behind a
+  stable read model.
 - "Semantic backend config" should mean **Experimental Indexer Config** when referring to an
   unstable implementation selector. Do not introduce `indexer.semantic` public config.
 - "Profile" should mean **Compiler Profile**, the compiler-owned bundle of first-party extensions and compiler-owned projections; it is not public third-party plugin loading.

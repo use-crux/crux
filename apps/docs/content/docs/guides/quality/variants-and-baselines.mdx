@@ -8,7 +8,7 @@ execution overrides, `baseline` names the reference, and every variant runs
 the same cases so comparisons are paired per case.
 
 ```ts
-import { evaluate, target } from '@crux/core/quality'
+import { evaluate, target } from '@use-crux/core/quality'
 
 export default evaluate('support.bakeoff', {
   task: target.prompt(supportPrompt, { model: 'gpt-5' }),

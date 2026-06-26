@@ -1,4 +1,4 @@
-import type { IndexLintFinding } from '@crux/core/project-index'
+import type { IndexLintFinding } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
 import { indexLintGateFailures, selectIndexLintFindings } from '../indexer/lints/profiles'
 

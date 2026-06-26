@@ -1,25 +1,28 @@
-import type { ProjectSourceRef, ProjectSourceRefRole } from '@crux/core/project-index'
-import type * as ts from 'typescript'
+import type { ProjectSourceRef, ProjectSourceRefRole } from '@use-crux/core/project-index'
 import type { SemanticDefinitionCandidate, SemanticDefinitionKind, SemanticSourceRefCandidate } from './candidates'
-
-export interface SemanticSourceRefCandidateDeps {
-  readonly isResolvableSourceExpression: (expression: ts.Expression) => boolean
-  readonly propertyInitializer: (object: ts.ObjectLiteralExpression, name: string) => ts.Expression | undefined
-}
+import {
+  semanticIsResolvableSourceExpression,
+  semanticPropertyInitializer,
+} from './syntax-readers'
+import type { SemanticSyntaxNode, SemanticSyntaxSourceFile, SemanticSyntaxView } from './syntax-view'
 
 /**
- * Selects direct source-reference properties from an authored definition candidate.
+ * Selects direct source-reference properties from an authored definition.
  *
  * The returned values describe which expressions should be resolved by the
  * source-ref analyzer; symbol resolution remains outside this selector.
  */
-export function semanticSourceRefCandidates(
-  candidate: SemanticDefinitionCandidate,
-  deps: SemanticSourceRefCandidateDeps,
-): SemanticSourceRefCandidate[] {
+export function semanticSourceRefCandidates<
+  TNode extends SemanticSyntaxNode,
+  TCall extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
+  candidate: SemanticDefinitionCandidate<TNode, TCall>,
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
+): SemanticSourceRefCandidate<TNode, TCall, TNode>[] {
   return sourceRefPropertySpecs(candidate.kind).flatMap((spec) => {
-    const expression = deps.propertyInitializer(candidate.object, spec.property)
-    return expression && deps.isResolvableSourceExpression(expression) ? [{ ...candidate, ...spec, expression }] : []
+    const expression = semanticPropertyInitializer(candidate.object, spec.property, syntax)
+    return expression && semanticIsResolvableSourceExpression(expression, syntax) ? [{ ...candidate, ...spec, expression }] : []
   })
 }
 

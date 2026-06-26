@@ -40,7 +40,7 @@ import type {
   CruxContextContributionState,
   CruxPromptBudgetPreview,
   CruxRunDetailRequest,
-} from '@crux/core/observability'
+} from '@use-crux/core/observability'
 import type { ObservabilityRunDetailNode, TextSegment, Trace } from '@/types'
 import {
   findAllArtifacts,

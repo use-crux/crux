@@ -1,5 +1,5 @@
 /**
- * `@crux/core/memory` — Block-based memory for AI applications.
+ * `@use-crux/core/memory` — Block-based memory for AI applications.
  *
  * Use `memory()` to compose reusable memory blocks into prompts and agents.
  * Blocks can also be used directly from application code, cron jobs, and

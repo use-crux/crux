@@ -1,13 +1,13 @@
 import type { LanguageModel } from 'ai'
 import type { z } from 'zod'
-import type { GenerationSettings, ModelInfo } from '@crux/core'
+import type { GenerationSettings, ModelInfo } from '@use-crux/core'
 import type {
   ExecutorOutcome,
   ExecutorRequest,
   ExecutorStreamHandle,
   StructuredAttempt,
   StructuredRequest,
-} from '@crux/core/adapter'
+} from '@use-crux/core/adapter'
 import type { SdkGateway } from '../gateway'
 import type { SdkUsageLike } from '../meta'
 

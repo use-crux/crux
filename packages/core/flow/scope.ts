@@ -119,7 +119,7 @@ export async function withFlow<T, TInput = void>(
   const flowInput = (isResume && snapshot?.input !== undefined ? snapshot.input : options?.input) as TInput
 
   // Open the flow span: every child trace started inside the flow
-  // (e.g. via @crux/convex/server ctx.crux.runAction) captures this spanId as
+  // (e.g. via @use-crux/convex/server ctx.crux.runAction) captures this spanId as
   // its parentSpanId, so the trace tree shows
   // `flow > runtime-flow:start > <child agent>` instead of orphaning
   // the child under the parent's trace boundary.

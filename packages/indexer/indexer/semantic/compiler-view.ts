@@ -1,4 +1,9 @@
 import type { SemanticBackendIdentity } from './service/types'
+import type {
+  SemanticSyntaxNode,
+  SemanticSyntaxSourceFile,
+  SemanticSyntaxView,
+} from './syntax-view'
 
 /**
  * Opaque compiler node shape used by backend-neutral semantic views.
@@ -6,7 +11,7 @@ import type { SemanticBackendIdentity } from './service/types'
  * Backends may wrap TypeScript AST nodes, TypeScript-Go remote nodes, or
  * future native handles. Consumers should treat nodes as view-owned values.
  */
-export interface SemanticCompilerNode {
+export interface SemanticCompilerNode extends SemanticSyntaxNode {
   /** Numeric or string syntax kind owned by the backend. */
   readonly kind: string | number
   /** Start offset in the owning source file. */
@@ -18,10 +23,7 @@ export interface SemanticCompilerNode {
 /**
  * Opaque compiler source file node.
  */
-export interface SemanticCompilerSourceFile extends SemanticCompilerNode {
-  /** Absolute source file name. */
-  readonly fileName: string
-}
+export interface SemanticCompilerSourceFile extends SemanticCompilerNode, SemanticSyntaxSourceFile<SemanticCompilerNode> {}
 
 /**
  * Opaque compiler declaration node.
@@ -53,13 +55,17 @@ export interface SemanticCompilerType {
  */
 export interface SemanticCompilerView<
   TNode extends SemanticCompilerNode = SemanticCompilerNode,
-  TSourceFile extends TNode & SemanticCompilerSourceFile = TNode & SemanticCompilerSourceFile,
+  TSourceFile extends TNode & SemanticCompilerSourceFile & SemanticSyntaxSourceFile<TNode> = TNode &
+    SemanticCompilerSourceFile &
+    SemanticSyntaxSourceFile<TNode>,
   TDeclaration extends TNode & SemanticCompilerDeclaration = TNode & SemanticCompilerDeclaration,
   TSymbol extends SemanticCompilerSymbol = SemanticCompilerSymbol,
   TType extends SemanticCompilerType = SemanticCompilerType,
 > {
   /** Compiler backend that owns this view. */
   readonly identity: SemanticBackendIdentity
+  /** Backend-neutral syntax access paired with this compiler view. */
+  readonly syntax: SemanticSyntaxView<TNode, TSourceFile>
   /** Return source files selected for semantic analysis. */
   sourceFiles(files: readonly string[]): readonly TSourceFile[]
   /** Return the source file that owns a node. */

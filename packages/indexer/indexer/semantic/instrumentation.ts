@@ -1,10 +1,14 @@
 import { performance } from 'node:perf_hooks'
-import type { NativeSemanticCoverage } from './native/types'
+import type { NativeSemanticCoverage } from './backends/tsgo/types'
 
 export type SemanticIndexTimingName =
   | 'semantic.selection'
   | 'semantic.preflight'
+  | 'semantic.cache.disabled'
+  | 'semantic.cache.hit'
+  | 'semantic.cache.miss'
   | 'semantic.cache.read'
+  | 'semantic.cache.unkeyed'
   | 'semantic.program.create'
   | 'semantic.program.reuse'
   | 'semantic.checker.create'

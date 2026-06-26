@@ -1,5 +1,5 @@
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
-import type { IndexPatch } from '@crux/indexer'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
+import type { IndexPatch } from '@use-crux/indexer'
 
 /** Converts an AST/source patch into the previous-index shape consumed by semantic benchmarking. */
 export function projectIndexSnapshotFromAstPatch(patch: IndexPatch): ProjectIndexSnapshot {

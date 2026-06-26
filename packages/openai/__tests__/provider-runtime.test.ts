@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type OpenAI from 'openai'
 import type { ChatCompletion } from 'openai/resources/chat/completions'
-import { prompt as makePrompt } from '@crux/core'
+import { prompt as makePrompt } from '@use-crux/core'
 import { openaiProviderRuntime } from '../index'
 
 interface OpenAIRuntimeRequest {

@@ -18,8 +18,8 @@ import type {
   StoreEvent,
   VectorSearchOptions,
   VectorSearchQuery,
-} from '@crux/core/store'
-import { matchesFilter } from '@crux/core/store'
+} from '@use-crux/core/store'
+import { matchesFilter } from '@use-crux/core/store'
 
 /**
  * Minimal Redis client interface compatible with `@upstash/redis`.
@@ -119,7 +119,7 @@ export interface CruxRedisStoreConfig {
  * @example
  * ```ts
  * import { Redis } from '@upstash/redis'
- * import { cruxRedisStore } from '@crux/upstash/redis'
+ * import { cruxRedisStore } from '@use-crux/upstash/redis'
  *
  * const store = cruxRedisStore({
  *   redis: new Redis({ url: process.env.UPSTASH_URL!, token: process.env.UPSTASH_TOKEN! }),

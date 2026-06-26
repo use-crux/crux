@@ -1,6 +1,6 @@
 import type { GoogleGenAI } from '@google/genai'
-import type { DenseEmbedding } from '@crux/core/embedding'
-import { embedding as coreEmbedding } from '@crux/core/embedding'
+import type { DenseEmbedding } from '@use-crux/core/embedding'
+import { embedding as coreEmbedding } from '@use-crux/core/embedding'
 import type { GoogleEmbeddingConfig } from './types'
 
 /** Create a dense Crux embedding backed by `client.models.embedContent()`. */

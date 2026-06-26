@@ -25,7 +25,7 @@ export type { CruxLintConfig, CruxLintRuleConfig, CruxLintSelectedProfile } from
  *
  * Indexer extensions are JavaScript modules. Loading one is code execution, so
  * Crux treats the trust mode as an explicit tooling policy rather than a
- * convenience flag. Core stores this value; `@crux/indexer` enforces it before
+ * convenience flag. Core stores this value; `@use-crux/indexer` enforces it before
  * extension packages can contribute to compilation.
  */
 export type CruxIndexerExtensionTrustMode = 'first-party-only' | 'allowlisted' | 'unsafe-local-dev'
@@ -54,6 +54,17 @@ export interface CruxIndexerExtensionReference {
 
 export type CruxExperimentalIndexerNativeEngine = 'tsgo'
 
+export interface CruxExperimentalIndexerNativeAstConfig {
+  /**
+   * Native static syntax frontend.
+   *
+   * `oxc` is the first implementation and is hosted by the local Go runtime
+   * through the Rust/Oxc indexer worker. Future native frontends can graduate
+   * behind this unstable object without changing stable `indexer` config.
+   */
+  readonly frontend?: 'oxc'
+}
+
 export interface CruxExperimentalIndexerNativeConfig {
   /**
    * Native semantic engine implementation.
@@ -77,6 +88,16 @@ export interface CruxExperimentalIndexerConfig {
    * TypeScript compiler API backend.
    */
   readonly native?: boolean | CruxExperimentalIndexerNativeConfig
+  /**
+   * Enable the experimental native static AST compiler path.
+   *
+   * Set to `true` to let the local Go runtime use Rust/Oxc for the static
+   * Project Index pass when the native worker is available. Node may still be
+   * required for config loading, TypeScript-authored extensions, or rule
+   * compatibility work. This flag is deliberately separate from `native`,
+   * which controls semantic TypeScript-Go enrichment.
+   */
+  readonly nativeAst?: boolean | CruxExperimentalIndexerNativeAstConfig
 }
 
 export interface CruxExperimentalConfig {
@@ -124,7 +145,7 @@ export interface CruxDevtoolsConfig {
    * Enable the Runtime Bridge command plane.
    *
    * `true` uses the core default WS peer for long-lived local Node runtimes.
-   * Framework integrations such as `@crux/convex` can register HTTP bridge
+   * Framework integrations such as `@use-crux/convex` can register HTTP bridge
    * endpoints from their setup helpers. Explicit bridge config wins.
    */
   readonly bridge?: RuntimeBridgeOptions
@@ -141,6 +162,11 @@ export interface CruxObservabilityConfig {
    * never enabled by default.
    */
   readonly serverUrl?: string
+  /**
+   * Scoped bearer token for observability ingest when `serverUrl` points at an
+   * authenticated local devtools tunnel.
+   */
+  readonly token?: string
   /** Custom canonical observability graph transport. */
   readonly transport?: CruxObservabilityTransport
   /** Delivery bounds for batching, flushing, and shutdown. */

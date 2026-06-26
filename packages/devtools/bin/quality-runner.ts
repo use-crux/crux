@@ -26,9 +26,9 @@
  */
 
 import { join } from 'node:path'
-import type { ProjectModelDiagnostic } from '@crux/core/project-index'
-import type { ReplayMode } from '@crux/core/quality'
-import { SourceResolver } from '@crux/indexer/source-resolver'
+import type { ProjectModelDiagnostic } from '@use-crux/core/project-index'
+import type { ReplayMode } from '@use-crux/core/quality'
+import { SourceResolver } from '@use-crux/indexer/source-resolver'
 import { loadEnv } from '../lib/env'
 import { loadRunnerCore } from '../lib/quality-core-bridge'
 import { loadQualityProject, resolveQualityRunnerSettings, ensureQualityGitignore } from '../lib/quality-config'
@@ -85,7 +85,7 @@ async function main(): Promise<number> {
   let restoreObservability: (() => void) | undefined
   try {
     project = await loadQualityProject(configPath)
-    // The project's own @crux/core instance — never the bundled one (see
+    // The project's own @use-crux/core instance — never the bundled one (see
     // quality-core-bridge for the dual-package-hazard rationale).
     core = await loadRunnerCore(project.configDir)
     restoreObservability = enableQualityRunnerObservability(core, process.env.CRUX_DEVTOOLS_URL)

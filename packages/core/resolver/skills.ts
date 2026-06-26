@@ -114,7 +114,7 @@ export async function resolveSkillSurface(
         }),
       )
     } catch (err) {
-      ports.diagnostics.warn(`[@crux/core] Failed to fetch skill "${s.id}":`, err instanceof Error ? err.message : err)
+      ports.diagnostics.warn(`[@use-crux/core] Failed to fetch skill "${s.id}":`, err instanceof Error ? err.message : err)
       resolvedSkills.push(s)
     }
   }

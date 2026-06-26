@@ -35,9 +35,9 @@ const planTool = createPlanTool({
 Use `pipeline()` from your SDK adapter to chain agent steps with typed data flow:
 
 ```ts title="content-pipeline.ts"
-import { pipeline, generate } from '@crux/ai'
-import { createPlanTool, planAgent } from '@crux/core/plan'
-import { tasklist, taskWorker } from '@crux/core/tasks'
+import { pipeline, generate } from '@use-crux/ai'
+import { createPlanTool, planAgent } from '@use-crux/core/plan'
+import { tasklist, taskWorker } from '@use-crux/core/tasks'
 import { openai } from '@ai-sdk/openai'
 
 const model = openai('gpt-4o') // or any AI SDK model
@@ -76,10 +76,10 @@ See [Pipeline deep dive](/docs/guides/compositions/pipeline) for full pipeline d
 `flow()` provides named steps with retries, fallbacks, and devtools tracing. Define the flow once at module level and call `.run()` to execute:
 
 ```ts title="content-flow.ts"
-import { flow } from '@crux/core'
-import { generate } from '@crux/ai'
-import { createPlanTool, planAgent } from '@crux/core/plan'
-import { tasklist, taskWorker } from '@crux/core/tasks'
+import { flow } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
+import { createPlanTool, planAgent } from '@use-crux/core/plan'
+import { tasklist, taskWorker } from '@use-crux/core/tasks'
 
 const contentWriting = flow('content-writing', async (flow) => {
   // Step 1: Create plan
@@ -128,7 +128,7 @@ await contentWriting.run()
 See [Flows deep dive](/docs/guides/flows) for full flow documentation.
 
 <Callout type="info">
-  **Convex apps:** Use `flow()` from `@crux/convex/server`. It exposes `.action`, `.handler`, `.args`, and `.signal(ctx,
+  **Convex apps:** Use `flow()` from `@use-crux/convex/server`. It exposes `.action`, `.handler`, `.args`, and `.signal(ctx,
   actionRef, ...)` while preserving Crux observability across action boundaries.
 </Callout>
 
@@ -137,8 +137,8 @@ See [Flows deep dive](/docs/guides/flows) for full flow documentation.
 Use `Promise.all` or `parallel()` to run workers concurrently:
 
 ```ts title="parallel-workers.ts"
-import { parallel, generate } from '@crux/ai'
-import { taskWorker } from '@crux/core/tasks'
+import { parallel, generate } from '@use-crux/ai'
+import { taskWorker } from '@use-crux/core/tasks'
 
 const tasks = await handle.getTasks()
 
@@ -161,7 +161,7 @@ await Promise.all(
 For typed results from parallel agents, use `parallel()`:
 
 ```ts
-import { parallel } from '@crux/ai'
+import { parallel } from '@use-crux/ai'
 
 const { results } = await parallel({
   agents: {

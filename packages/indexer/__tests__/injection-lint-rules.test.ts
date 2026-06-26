@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { InputSchemaContribution, JsonSchema, ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
+import type { InputSchemaContribution, JsonSchema, ProjectDefinition, ProjectRelation } from '@use-crux/core/project-index'
 import { indexLintFindings } from '../indexer/lints/findings'
 
 const stringSchema = { type: 'string' } satisfies JsonSchema

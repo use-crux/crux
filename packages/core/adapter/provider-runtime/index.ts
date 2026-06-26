@@ -1,5 +1,5 @@
 /**
- * `@crux/core/adapter/provider-runtime` — provider runtime authoring.
+ * `@use-crux/core/adapter/provider-runtime` — provider runtime authoring.
  *
  * @module
  */
@@ -19,6 +19,8 @@ export type {
   LoopOwnedProviderRuntimeSpec,
   LoopOwnedRuntimeBindContext,
   LoopOwnedRuntimeContract,
+  ProviderOwnership,
+  ProviderRuntimeDepsArg,
   ProviderRuntimeKind,
   ProviderRuntimeSpec,
   SingleTurnRuntimeContract,

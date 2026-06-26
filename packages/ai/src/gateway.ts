@@ -1,7 +1,7 @@
 /**
- * `SdkGateway` — the seam between `@crux/ai` and the `ai` package.
+ * `SdkGateway` — the seam between `@use-crux/ai` and the `ai` package.
  *
- * This is the ONLY module in `@crux/ai` that calls AI SDK runtime
+ * This is the ONLY module in `@use-crux/ai` that calls AI SDK runtime
  * functions. Everything else (the executor, mapping code, metrics)
  * receives a gateway, which is what makes the whole adapter testable
  * without `vi.mock('ai')`:
@@ -17,7 +17,7 @@
 import { embedMany, generateObject, generateText, rerank, streamObject, streamText } from 'ai'
 
 /**
- * The narrow surface of the `ai` package that `@crux/ai` consumes.
+ * The narrow surface of the `ai` package that `@use-crux/ai` consumes.
  *
  * Signatures mirror the SDK's entry points with arguments forwarded
  * verbatim, so the live implementation is identity wiring and a test

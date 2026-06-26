@@ -22,10 +22,10 @@ Use indexing when you have source material that should be searchable later. Use 
 The shortest useful version looks like this. The embeddings are defined once and shared by the indexer and retriever.
 
 ```ts
-import { embedding } from '@crux/core/embedding'
-import { corpus, indexer } from '@crux/core/indexing'
-import { inMemoryDataStore, inMemoryVectorStore } from '@crux/core/storage'
-import { filesSource } from '@crux/ingest/files'
+import { embedding } from '@use-crux/core/embedding'
+import { corpus, indexer } from '@use-crux/core/indexing'
+import { inMemoryDataStore, inMemoryVectorStore } from '@use-crux/core/storage'
+import { filesSource } from '@use-crux/ingest/files'
 
 const dense = embedding({
   kind: 'dense',
@@ -95,7 +95,7 @@ The rule is simple: index the vector types you want to query later.
 Make the pipeline explicit once indexing becomes product infrastructure. This gives every transform and chunking choice a name, version, and fingerprint.
 
 ```ts
-import { chunker, corpus, indexer, indexingPipeline, transform } from '@crux/core/indexing'
+import { chunker, corpus, indexer, indexingPipeline, transform } from '@use-crux/core/indexing'
 
 const docsIndexer = indexer({
   id: 'docs',
@@ -227,7 +227,7 @@ console.log(preview.stages)
 Retrievers query active child chunks. Parent records and inactive generations are filtered out automatically.
 
 ```ts
-import { retriever } from '@crux/core/retrieval'
+import { retriever } from '@use-crux/core/retrieval'
 
 const docs = retriever({
   id: 'docs',

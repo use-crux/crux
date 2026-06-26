@@ -8,8 +8,8 @@ import type {
   StoreEvent,
   VectorSearchOptions,
   VectorSearchQuery,
-} from '@crux/core/store'
-import { getRuntime } from '@crux/core'
+} from '@use-crux/core/store'
+import { getRuntime } from '@use-crux/core'
 
 export interface ConvexRuntimeTarget {
   threadId?: string

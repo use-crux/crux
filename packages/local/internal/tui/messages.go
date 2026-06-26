@@ -17,3 +17,7 @@ type bootErrorMsg struct{ err string }
 type liveReadyMsg struct{}
 type startupSummaryMsg struct{ summary string }
 type tunnelURLMsg struct{ url string }
+type ingestTokenMsg struct {
+	token string
+	path  string
+}

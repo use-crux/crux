@@ -18,10 +18,10 @@ The important design rule is that semantic cache scope is a safety boundary. If 
 Install the plugin once and opt in per prompt:
 
 ```ts
-import { config, prompt } from '@crux/core'
-import { createSemanticCache } from '@crux/core/cache'
-import { embedding } from '@crux/openai'
-import { inMemoryCruxStore } from '@crux/core/store'
+import { config, prompt } from '@use-crux/core'
+import { createSemanticCache } from '@use-crux/core/cache'
+import { embedding } from '@use-crux/openai'
+import { inMemoryCruxStore } from '@use-crux/core/store'
 import { z } from 'zod'
 
 const classifyIntent = prompt({
@@ -95,7 +95,7 @@ If a prompt opts in but no plugin is installed, Crux warns in development and co
 The default write policy caches successful responses with a normal stop finish reason. For prompts with tools or other side effects, pass explicit policies:
 
 ```ts
-import { createSemanticCache, semanticCachePolicies } from '@crux/core/cache'
+import { createSemanticCache, semanticCachePolicies } from '@use-crux/core/cache'
 
 createSemanticCache({
   store,
@@ -138,12 +138,15 @@ Use a dedicated namespace/table/index for cache entries. Do not point the cache 
 For Convex, the explicit flag is a safety declaration, not a generic Convex limitation:
 
 ```ts
-const cacheStore = cruxConvexStore({
+import { defineConvexStoreContract } from '@use-crux/convex'
+
+const semanticCacheDocuments = defineConvexStoreContract({
   component: components.crux,
-  ctx,
   vectorIndexName: 'by_embedding',
   semanticCache: { isolatedVectorNamespace: true },
 })
+
+const cacheStore = semanticCacheDocuments.store(ctx)
 ```
 
 Only use that configuration when the backing table/index is dedicated to semantic-cache entries. A shared memory/RAG index can create false misses because unrelated vectors may rank ahead of cache entries before filters are applied.

@@ -4,7 +4,7 @@
  * @module
  */
 
-import { defineProviderRuntime } from '@crux/core/adapter'
+import { defineProviderRuntime } from '@use-crux/core/adapter'
 import { aiSdkExecutor } from './executor'
 import { createAiSdkRuntimeExtensions } from './extensions'
 import { extractModelInfo } from './provider-profile'
@@ -20,10 +20,11 @@ type AiSdkStreamRequest = Parameters<typeof aiSdkExecutor.runStream>[1]
  * The AI SDK owns the multi-step language-model loop; Crux owns policy around
  * it through the loop-owned provider runtime boundary. This keeps AI SDK model
  * objects as first-class Crux provider models without importing the SDK into
- * `@crux/core`.
+ * `@use-crux/core`.
  */
 export const aiSdkProviderRuntime = defineProviderRuntime({
   id: 'ai-sdk',
+  ownership: 'loop-owned',
   loop: {
     describeModel: extractModelInfo,
     settings: aiSdkExecutor.mapSettings,

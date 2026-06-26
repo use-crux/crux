@@ -1,12 +1,12 @@
 /**
- * @crux/core/skill — Markdown-based skill loading for Crux agents.
+ * @use-crux/core/skill — Markdown-based skill loading for Crux agents.
  *
  * Skills are reusable instruction sets that an LLM can load on-demand.
  * Compatible with the skills.sh community format (SKILL.md with YAML frontmatter).
  *
  * @example
  * ```ts
- * import { skill } from '@crux/core/skill'
+ * import { skill } from '@use-crux/core/skill'
  *
  * const tone = skill.inline({
  *   id: 'tone',
@@ -84,7 +84,7 @@ export const skill = Object.freeze({
    * Reads synchronously at call time. Parses YAML frontmatter.
    * Only available in Node.js environments (uses fs/path).
    *
-   * Import `@crux/core/skill/file-loader` directly if your bundler
+   * Import `@use-crux/core/skill/file-loader` directly if your bundler
    * chokes on the lazy require (e.g., Convex without 'use node').
    */
   fromFile(filePath: string): Skill {

@@ -1,11 +1,11 @@
-# @crux/upstash
+# @use-crux/upstash
 
 Upstash Vector and Redis adapters for Crux storage.
 
 ## Install
 
 ```bash
-pnpm add @crux/upstash @crux/core @upstash/vector
+pnpm add @use-crux/upstash @use-crux/core @upstash/vector
 ```
 
 `@upstash/vector` is a required peer dependency. `@upstash/redis` is an optional peer — install it only if you use the Redis store.
@@ -15,7 +15,7 @@ pnpm add @crux/upstash @crux/core @upstash/vector
 Use `upstashVectorStore()` as the canonical `VectorStore` for dense, sparse, and hybrid retrieval.
 
 ```ts
-import { upstashVectorStore } from '@crux/upstash'
+import { upstashVectorStore } from '@use-crux/upstash'
 
 const vectors = upstashVectorStore({
   index,
@@ -45,7 +45,7 @@ Do not reuse the same vector namespace for RAG chunks, memory, and semantic cach
 `cruxRedisStore()` is a Redis-backed key/value store with optional pub/sub. Plain Redis mode does not expose vector search:
 
 ```ts
-import { cruxRedisStore } from '@crux/upstash/redis'
+import { cruxRedisStore } from '@use-crux/upstash/redis'
 
 const store = cruxRedisStore({ redis })
 

@@ -1,14 +1,14 @@
 /**
  * Convex runtime profile for Crux tools.
  *
- * The public shape mirrors `@crux/core/tools`, with Convex runtime metadata
+ * The public shape mirrors `@use-crux/core/tools`, with Convex runtime metadata
  * made available to the execute function.
  *
  * @module
  */
 
 import { z } from 'zod'
-import type { NamedToolDef, ToolDef, ToolModelOutput, ToModelOutputArgs } from '@crux/core/tools'
+import type { NamedToolDef, ToolDef, ToolModelOutput, ToModelOutputArgs } from '@use-crux/core/tools'
 import { getConvexCruxRuntime, type ConvexCruxRuntime, type ConvexRuntimeTarget } from './runtime'
 
 const emptyInputSchema = z.object({})
@@ -100,4 +100,4 @@ export function tool<
   }) as ConvexToolDef<z.infer<TInputSchema>, TOutput, TName>
 }
 
-export type { NamedToolDef, ToolConfig, ToolDef, ToolModelOutput, ToModelOutputArgs } from '@crux/core/tools'
+export type { NamedToolDef, ToolConfig, ToolDef, ToolModelOutput, ToModelOutputArgs } from '@use-crux/core/tools'

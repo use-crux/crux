@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProject, indexProjectIncremental } from '../index'
+import { indexProject, indexProjectIncremental } from '..'
 import type { IndexPatchFacts } from '../indexer/patches'
 import { applyIndexPatch, emptyIndexPatchState, indexPatchFromSnapshot } from '../indexer/patches'
 
@@ -92,7 +92,7 @@ async function writeFixture(root: string, revision: 'first' | 'second'): Promise
   await writeFile(
     join(root, 'src/tool.ts'),
     `
-      import { tool } from '@crux/core'
+      import { tool } from '@use-crux/core'
       import { input } from './index'
 
       export const writerTool = tool({

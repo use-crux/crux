@@ -1,8 +1,11 @@
 import { resolve } from 'node:path'
-import ts from 'typescript'
 import { SEMANTIC_COMPILER_OPTIONS_ID } from '../../cache-identity'
 import { discoverProjectShards } from '../../shards/discovery'
-import type { SemanticBackendIdentity, SemanticProjectSessionIdentity } from './types'
+import type {
+  SemanticBackendIdentity,
+  SemanticCompilerRuntimeIdentity,
+  SemanticProjectSessionIdentity,
+} from './types'
 
 /**
  * Options for constructing a semantic project session identity.
@@ -10,8 +13,8 @@ import type { SemanticBackendIdentity, SemanticProjectSessionIdentity } from './
 export interface SemanticProjectSessionIdentityOptions {
   /** Backend that will own the session. */
   readonly backend: SemanticBackendIdentity
-  /** TypeScript version to record. Defaults to the installed compiler API. */
-  readonly typescriptVersion?: string
+  /** Compiler runtime that owns project state for this session. */
+  readonly compilerRuntime: SemanticCompilerRuntimeIdentity
   /** Compiler option identity to record. Defaults to Crux's semantic profile. */
   readonly compilerOptionsId?: string
 }
@@ -30,7 +33,7 @@ export function semanticProjectSessionIdentity(
   return {
     root: resolve(root),
     tsconfigFiles: discoveredTsconfigFiles(root),
-    typescriptVersion: options.typescriptVersion ?? ts.version,
+    compilerRuntime: options.compilerRuntime,
     compilerOptionsId: options.compilerOptionsId ?? SEMANTIC_COMPILER_OPTIONS_ID,
     backend: options.backend,
   }

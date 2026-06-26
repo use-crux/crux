@@ -1,4 +1,4 @@
-import { evaluate, type Scorer } from '@crux/core/quality'
+import { evaluate, type Scorer } from '@use-crux/core/quality'
 
 interface SupportQuestion {
   readonly question: string

@@ -1,4 +1,4 @@
-import { IndexRuleManifestSchema } from '@crux/core/project-index'
+import { IndexRuleManifestSchema } from '@use-crux/core/project-index'
 import type {
   IndexLintEvidence,
   IndexLintFinding,
@@ -10,7 +10,7 @@ import type {
   CruxLintMaturity,
   CruxLintProfile,
   SourceLocation,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 
 export const indexLintRuleIds = [
   'definition.missing_eval_coverage',
