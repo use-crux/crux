@@ -214,3 +214,20 @@ jobs:
         run: pnpm release:publish-staged -- --git-tag --git-push-tags
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Prepare GitHub release notes
+        id: release-notes
+        run: pnpm release:notes -- --out .tmp/github-release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release-notes.outputs.tag }}
+          RELEASE_TITLE: Crux ${{ steps.release-notes.outputs.tag }}
+          RELEASE_NOTES: ${{ steps.release-notes.outputs.notes_file }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --title "$RELEASE_TITLE" --notes-file "$RELEASE_NOTES"
+          else
+            gh release create "$RELEASE_TAG" --title "$RELEASE_TITLE" --notes-file "$RELEASE_NOTES" --target "$GITHUB_SHA"
+          fi
