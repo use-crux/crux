@@ -457,11 +457,14 @@ JavaScript TypeScript compiler API backend. The native static AST frontend is a 
 `experimental.indexer.nativeAst: true` or `experimental.indexer.nativeAst: { frontend: 'oxc' }`
 lets the local Go runtime use the Rust/Oxc indexer worker when available without changing the
 semantic backend. Both semantic backends emit the same Project Index semantic facts through the same
-extension-safe contract. Native direct projectors accelerate proven high-volume source shapes such as
-prompt/context/tool refs, context dependencies, agent prompt/tool/model-routing/callback config refs,
-literal agent handoff relations, and local routing child/target facts, while unsupported shapes stay
-inside the native backend's complete semantic analyzer path. Native remains experimental while the
-TypeScript-Go API and benchmark confidence mature.
+extension-safe contract. When native semantic indexing is selected, TypeScript-Go owns semantic
+project setup, checker calls, declaration lookup, and AST traversal; unsupported direct-projector
+shapes stay inside the native backend's complete shared analyzer path rather than falling back to the
+JavaScript TypeScript semantic backend. Native direct projectors accelerate proven high-volume source
+shapes such as prompt/context/tool refs, context dependencies, agent
+prompt/tool/model-routing/callback config refs, literal agent handoff relations, and local routing
+child/target facts. Native remains experimental while the TypeScript-Go API and benchmark confidence
+mature.
 
 ```ts
 import { config } from '@crux/core'

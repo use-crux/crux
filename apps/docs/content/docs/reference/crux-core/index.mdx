@@ -13,6 +13,11 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
 
 <Cards>
   <Card
+    title="Config"
+    description="crux.config.ts options, defaults, stability, and runtime/tooling ownership."
+    href="/docs/reference/crux-core/config"
+  />
+  <Card
     title="Prompts"
     description="prompt, createPrompts, the Prompt type."
     href="/docs/reference/crux-core/prompts"
@@ -99,7 +104,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   <Card
     title="Project Index"
     description="Design-plane definitions, relations, source locations, and diagnostics."
-    href="/docs/reference/crux-core/index"
+    href="/docs/reference/crux-core/project-index"
   />
   <Card
     title="Index Lint"
@@ -152,52 +157,13 @@ import type { CruxIndexerConfig, CruxLintConfig, ToolContentPart, ToolModelOutpu
 
 ## Tooling Config
 
-`config()` can store inert configuration for local Crux tooling. For Project Indexer extensions, use
-the `indexer` bag:
+Use `config()` for Crux project policy and explicit runtime behavior: Quality discovery, Project
+Index lint, Indexer extensions, experimental indexer flags, persistence, generation hooks, devtools,
+observability, and plugins. Prompts, contexts, tools, agents, flows, registries, and skills remain
+normal TypeScript exports discovered from source.
 
-```ts
-config({
-  indexer: {
-    extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
-    trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },
-  },
-  experimental: {
-    indexer: {
-      native: true,
-    },
-  },
-})
-```
-
-Core stores this data only. `@crux/indexer` owns extension trust checks, compatibility checks,
-loading, compiler execution, and diagnostics.
-
-`experimental.indexer.native` enables the native semantic Project Index backend. The field accepts
-`true`, `false`, or `{ engine?: 'tsgo'; tsserverPath?: string }`:
-
-```ts
-config({
-  experimental: {
-    indexer: {
-      native: {
-        engine: 'tsgo',
-        tsserverPath: '/path/to/tsgo',
-      },
-    },
-  },
-})
-```
-
-Omit the field to use the default JavaScript `typescript` compiler API backend. The native backend is
-experimental because the current TypeScript-Go engine depends on the unstable upstream
-native-preview API; Crux expects supported semantic facts to match the default backend without a
-JavaScript TypeScript semantic fallback.
-
-`experimental.indexer.nativeAst` is a separate beta for the static AST/source pass. Set it to `true`
-or `{ frontend: 'oxc' }` to let `@crux/local` use the Go-orchestrated Rust/Oxc native static
-compiler when the native worker is available. Node may still run for config/static-plan inspection,
-TypeScript-authored extensions, or rule compatibility work, and this flag does not enable the native
-semantic backend.
+See [Config](/docs/reference/crux-core/config) for the full `crux.config.ts` option reference,
+defaults, stability notes, and `crux config inspect` behavior.
 
 ## TypeScript Guarantees
 
@@ -238,6 +204,8 @@ tools.docsGetSource
 The single entry point for configuring Crux project policy and explicit runtime behavior. It applies immediately when the config file is imported. Module caching ensures it runs once per process.
 
 Prompt, context, tool, and registry definitions are authored in normal TypeScript modules and discovered from source by local tooling. They are not repeated in `config()`.
+
+For defaults, stability notes, and every nested option, see [Config](/docs/reference/crux-core/config).
 
 | Domain                        | Type                       | Description                                                                          |
 | ----------------------------- | -------------------------- | ------------------------------------------------------------------------------------ |
