@@ -75,4 +75,8 @@ func TestWorkerStaticIndexSchedulesTypeScriptRulesInLintPhase(t *testing.T) {
 	if !bytes.Contains(compiler.finalizeExtensionFacts, []byte("rule:native-rule")) {
 		t.Fatalf("finalize extension facts = %s, want TypeScript rule facts", compiler.finalizeExtensionFacts)
 	}
+	timing := worker.LastAstTiming()
+	if !containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexRules) {
+		t.Fatalf("timing.NodeReasons = %v, want %q", timing.NodeReasons, projectIndexNodeReasonStaticIndexRules)
+	}
 }

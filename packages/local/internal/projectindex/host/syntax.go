@@ -75,6 +75,7 @@ func (w *Bundle) indexProjectAstPatchResultFromNativeSyntaxRecords(ctx context.C
 		return projectindex.ProjectAstIndexResult{Patch: patch}, nil
 	}
 	if result.Status == session.StatusMissingCompiler {
+		timing = projectIndexAstTimingNativeOnlyBlocked(timing, projectIndexNativeOnlyReasonStaticIndexCompilerSetup)
 		timing.TotalMs = elapsedMs(started)
 		w.recordLastAstTiming(timing)
 		return projectindex.ProjectAstIndexResult{}, fmt.Errorf("nativeAst indexing requires a Static Index compiler; syntax-record projection fallback is disabled")

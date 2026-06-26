@@ -62,6 +62,18 @@ var projectIndexSemanticTimingBenchmarkNames = []string{
 	"semantic.native.analyzer.shared",
 }
 
+var projectIndexNodeReasonBenchmarkNames = []string{
+	projectIndexNodeReasonTypeScriptStaticCompiler,
+	projectIndexNodeReasonStaticPlanInspection,
+	projectIndexNodeReasonStaticIndexConfig,
+	projectIndexNodeReasonStaticIndexExtensions,
+	projectIndexNodeReasonSyntaxRecordProjection,
+	projectIndexNodeReasonStaticIndexEmpty,
+	projectIndexNodeReasonStaticIndexEvidence,
+	projectIndexNodeReasonStaticIndexRules,
+	projectIndexNodeReasonStaticIndexIncomplete,
+}
+
 func BenchmarkWorkerIndexProjectAstPatch(b *testing.B) {
 	root := os.Getenv("CRUX_INDEXER_BENCH_ROOT")
 	if root == "" {
@@ -209,14 +221,7 @@ func reportIndexingStatusMetrics(b *testing.B, indexing *store.ProjectIndexingSt
 }
 
 func reportTimingReasonMetrics(b *testing.B, timing ProjectIndexAstTiming) {
-	for _, reason := range []string{
-		projectIndexNodeReasonTypeScriptStaticCompiler,
-		projectIndexNodeReasonStaticPlanInspection,
-		projectIndexNodeReasonSyntaxRecordProjection,
-		projectIndexNodeReasonStaticIndexEmpty,
-		projectIndexNodeReasonStaticIndexEvidence,
-		projectIndexNodeReasonStaticIndexIncomplete,
-	} {
+	for _, reason := range projectIndexNodeReasonBenchmarkNames {
 		metricName := strings.NewReplacer("-", "_").Replace(reason)
 		b.ReportMetric(boolMetric(containsTimingReason(timing.NodeReasons, reason)), metricName+"_reason/op")
 	}

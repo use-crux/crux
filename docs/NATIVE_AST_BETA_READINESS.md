@@ -94,6 +94,33 @@ make local
 `packages/local/internal/assets/{embed,ui-embed}`, build the current-platform
 Rust/Oxc indexer worker, and build the current-platform Go binary.
 
+## Benchmark Command
+
+Use the benchmark runner when collecting beta soak or default-promotion
+performance evidence:
+
+```bash
+pnpm benchmark:native-ast
+```
+
+By default it benchmarks this repository with cold and warm TypeScript baseline
+runs plus cold and warm native AST runs. It builds the release Rust/Oxc worker,
+refreshes the embedded TypeScript worker assets used by the Go host, and invokes
+the existing Go Project Index benchmark entrypoints with
+`CRUX_INDEXER_BENCH_ROOT` and `CRUX_STATIC_INDEX_WORKER` set.
+
+Useful overrides:
+
+```bash
+CRUX_INDEXER_BENCH_ROOT=/path/to/project pnpm benchmark:native-ast
+CRUX_INDEXER_BENCH_MODES=native-cold,native-warm pnpm benchmark:native-ast
+CRUX_INDEXER_BENCH_COUNT=5 CRUX_INDEXER_BENCH_BENCHTIME=10s pnpm benchmark:native-ast
+```
+
+Archive the raw Go benchmark output and compare runs with `benchstat` when
+possible. Default promotion still needs a material end-to-end native win, with
+at least a `2x` cold-indexing target on release corpora.
+
 ## Known Residual Risks
 
 - The current gate proves correctness parity, not a final performance target.

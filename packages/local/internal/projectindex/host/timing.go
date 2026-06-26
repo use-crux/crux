@@ -53,6 +53,15 @@ func (w *Bundle) recordLastAstTiming(timing ProjectIndexAstTiming) {
 	w.lastAstTiming = timing
 }
 
+func (w *Bundle) recordLastAstTimingNodeRequired(reasons ...string) {
+	if w == nil {
+		return
+	}
+	w.timingsMu.Lock()
+	defer w.timingsMu.Unlock()
+	w.lastAstTiming = projectIndexAstTimingNodeRequired(w.lastAstTiming, reasons...)
+}
+
 const (
 	projectIndexNodeReasonTypeScriptStaticCompiler = "typescript-static-compiler"
 	projectIndexNodeReasonStaticPlanInspection     = "static-plan-inspection"
@@ -63,6 +72,8 @@ const (
 	projectIndexNodeReasonStaticIndexEvidence      = session.ReasonEvidence
 	projectIndexNodeReasonStaticIndexRules         = "static-index-rules"
 	projectIndexNodeReasonStaticIndexIncomplete    = session.ReasonIncomplete
+
+	projectIndexNativeOnlyReasonStaticIndexCompilerSetup = "static-index-compiler-setup"
 )
 
 func projectIndexAstTimingNodeRequired(timing ProjectIndexAstTiming, reasons ...string) ProjectIndexAstTiming {
@@ -72,6 +83,15 @@ func projectIndexAstTimingNodeRequired(timing ProjectIndexAstTiming, reasons ...
 	timing.NodeStarted = true
 	timing.NativeOnlyEligible = false
 	timing.NodeReasons = appendUniqueStrings(timing.NodeReasons, reasons...)
+	timing.NativeOnlyReasons = appendUniqueStrings(timing.NativeOnlyReasons, reasons...)
+	return timing
+}
+
+func projectIndexAstTimingNativeOnlyBlocked(timing ProjectIndexAstTiming, reasons ...string) ProjectIndexAstTiming {
+	if len(reasons) == 0 {
+		return timing
+	}
+	timing.NativeOnlyEligible = false
 	timing.NativeOnlyReasons = appendUniqueStrings(timing.NativeOnlyReasons, reasons...)
 	return timing
 }

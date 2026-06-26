@@ -18,7 +18,11 @@ func (w *Bundle) IndexProjectLintPatch(ctx context.Context, request projectindex
 	if !ok {
 		return projectindex.IndexPatch{}, fmt.Errorf("Static Index lint finalize requires a Static Index compiler")
 	}
+	requiresTypeScriptRules := lint.RequiresTypeScriptRules(request.PreviousIndex)
 	ruleFacts, err := w.staticLintRuleFacts(ctx, request)
+	if requiresTypeScriptRules {
+		w.recordLastAstTimingNodeRequired(projectIndexNodeReasonStaticIndexRules)
+	}
 	if err != nil {
 		return projectindex.IndexPatch{}, err
 	}

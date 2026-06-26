@@ -350,6 +350,16 @@ func TestWorker_indexProjectAstPatchErrorsWhenStaticSyntaxEnabledWithoutStaticIn
 	if !strings.Contains(err.Error(), "requires a Static Index compiler") {
 		t.Fatalf("IndexProjectAstPatch error = %v, want Static Index compiler requirement error", err)
 	}
+	timing := worker.LastAstTiming()
+	if timing.NodeStarted || len(timing.NodeReasons) != 0 {
+		t.Fatalf("timing NodeStarted=%v NodeReasons=%v, want no Node start for native worker setup failure", timing.NodeStarted, timing.NodeReasons)
+	}
+	if timing.NativeOnlyEligible {
+		t.Fatalf("timing.NativeOnlyEligible = true, want false when Static Index compiler setup fails")
+	}
+	if !containsTimingReason(timing.NativeOnlyReasons, projectIndexNativeOnlyReasonStaticIndexCompilerSetup) {
+		t.Fatalf("timing.NativeOnlyReasons = %v, want %q", timing.NativeOnlyReasons, projectIndexNativeOnlyReasonStaticIndexCompilerSetup)
+	}
 }
 
 func TestWorker_indexProjectAstPatchFallsBackWhenNativeAstConfigDisabled(t *testing.T) {
