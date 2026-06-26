@@ -23,7 +23,7 @@ describe('static extension host native lint finalization', () => {
     expect(result.outputs.map((finding) => finding.ruleId)).not.toContain('prompt.missing_input_schema')
     expect(result.ruleDescriptors.map((descriptor) => descriptor.id)).not.toContain('prompt.missing_input_schema')
     expect(result.facts).toEqual({
-      diagnostics: expect.arrayContaining([expect.objectContaining({ code: 'index.source_only' })]),
+      diagnostics: expect.arrayContaining([expect.objectContaining({ code: 'index.config_not_found' })]),
     })
   })
 })

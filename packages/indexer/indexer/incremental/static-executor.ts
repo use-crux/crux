@@ -44,6 +44,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
   for (const file of input.decision.affectedFiles) {
     if (input.decision.deletedFiles.includes(file)) continue
     const parsed = await extraction.extractFile(file)
+    const previousSource = previousSourceForFile(input.previousIndex, file)
     parsedFiles.push(file)
     if (parsed.semanticProfile) semanticProfiles.push(parsed.semanticProfile)
     dependenciesByFile.set(file, [...parsed.dependencies])
@@ -53,9 +54,10 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
       source: {
         file,
         status: 'indexed',
+        ...(previousSource?.shardId ? { shardId: previousSource.shardId } : {}),
         definitionIds: parsed.definitions.map((definition) => definition.id),
         dependencies: [...parsed.dependencies],
-        dependents: [...previousDependents(input.previousIndex, file)],
+        dependents: [...(previousSource?.dependents ?? [])],
         diagnostics: [],
       },
     })
@@ -124,8 +126,8 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
   }
 }
 
-function previousDependents(previousIndex: ProjectIndexSnapshot, file: string): readonly string[] {
-  return previousIndex.sources.find((source) => source.file === file)?.dependents ?? []
+function previousSourceForFile(previousIndex: ProjectIndexSnapshot, file: string) {
+  return previousIndex.sources.find((source) => source.file === file)
 }
 
 function mergeRuleDescriptors(descriptors: readonly IndexRuleDescriptor[]): readonly IndexRuleDescriptor[] {

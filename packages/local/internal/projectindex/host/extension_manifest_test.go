@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/cache"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
@@ -35,7 +36,7 @@ func TestWorkerStaticIndexLoadsConfiguredExtensionManifestWithoutNodeStaticPlan(
 	cacheKey := "static-cache-key:workflow-extension"
 	writeStaticIndexPlanCacheFile(t, root, cacheKey)
 	writeStaticIndexPlanCacheManifest(t, root, map[string]any{
-		"version":        "static-parse-v38",
+		"version":        cache.Epoch,
 		"root":           root,
 		"file":           "src/workflow.ts",
 		"sourceHash":     staticIndexPlanCacheFixtureHash(t, sourceFile),

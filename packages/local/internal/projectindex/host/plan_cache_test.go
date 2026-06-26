@@ -32,7 +32,7 @@ func TestProjectStaticIndexSyntaxPlanUsesWarmStaticCacheManifest(t *testing.T) {
 	cacheKey := "static-cache-key:writer"
 	writeStaticIndexPlanCacheFile(t, root, cacheKey)
 	writeStaticIndexPlanCacheManifest(t, root, map[string]any{
-		"version":    "static-parse-v38",
+		"version":    cache.Epoch,
 		"root":       root,
 		"file":       "src/writer.ts",
 		"sourceHash": staticIndexPlanCacheFixtureHash(t, sourceFile),
@@ -164,7 +164,7 @@ func writeStaticIndexPlanCacheFile(t testing.TB, root, cacheKey string) {
 		t.Fatalf("marshal cache key: %v", err)
 	}
 	sum := sha256.Sum256(cacheKeyJSON)
-	file := filepath.Join(root, ".crux", "cache", "index", "static-parse-v38", fmt.Sprintf("%x.json", sum))
+	file := filepath.Join(root, ".crux", "cache", "index", cache.Epoch, fmt.Sprintf("%x.json", sum))
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		t.Fatalf("mkdir cache: %v", err)
 	}
@@ -179,7 +179,7 @@ func writeStaticIndexPlanCacheManifest(t testing.TB, root string, entry map[stri
 	if err != nil {
 		t.Fatalf("marshal manifest entry: %v", err)
 	}
-	file := filepath.Join(root, ".crux", "cache", "index", "static-parse-v38", "manifest.jsonl")
+	file := filepath.Join(root, ".crux", "cache", "index", cache.Epoch, "manifest.jsonl")
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		t.Fatalf("mkdir manifest: %v", err)
 	}

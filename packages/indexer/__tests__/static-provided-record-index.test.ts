@@ -8,11 +8,7 @@ import {
   indexProjectAstFromSyntaxRecords,
   inspectProjectStaticSyntaxPlan,
 } from '..'
-import {
-  createTypeScriptStaticSyntaxFrontend,
-  type StaticSyntaxFileRecord,
-} from '../indexer/static-index/syntax'
-import { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static-index/syntax'
+import { createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
 import type { IndexPatch } from '../indexer/patches'
 
 const roots: string[] = []
@@ -93,69 +89,6 @@ describe('provided static syntax record indexing', () => {
 
     expect(plan.files).toContain(file)
     expect(plan.staticSyntaxEnabled).toBe(true)
-  })
-
-  it('reports Static Index cache hits so hosts can skip warm Rust/Oxc parsing', async () => {
-    const root = await fixtureRoot()
-    await mkdir(join(root, 'src'), { recursive: true })
-    const file = join(root, 'src/writer.ts')
-    const source = [
-      "import { prompt } from '@use-crux/core'",
-      '',
-      "export const writerPrompt = prompt({ id: 'writer.cached' })",
-    ].join('\n')
-    await writeFile(file, source)
-
-    const coldPlan = await inspectProjectStaticSyntaxPlan({
-      root,
-      projectName: 'provided-records',
-      includeCacheStatus: true,
-    })
-    expect(coldPlan.files).toEqual([file])
-    expect(coldPlan.filesToParse).toEqual([file])
-    expect(coldPlan.cacheMisses).toEqual([file])
-    expect(coldPlan.cacheHits).toEqual([])
-
-    const record = await createRustIdentityRecord({ root, file, source })
-    await indexProjectAstFromSyntaxRecords({
-      root,
-      projectName: 'provided-records',
-      records: [record],
-      frontendIdentity: OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
-    })
-
-    const warmPlan = await inspectProjectStaticSyntaxPlan({
-      root,
-      projectName: 'provided-records',
-      includeCacheStatus: true,
-    })
-
-    expect(warmPlan.files).toEqual([file])
-    expect(warmPlan.filesToParse).toEqual([])
-    expect(warmPlan.cacheHits).toEqual([file])
-    expect(warmPlan.cacheMisses).toEqual([])
-
-    const projectedFromCacheOnly = await indexProjectAstFromSyntaxRecords({
-      root,
-      projectName: 'provided-records',
-      records: [],
-      frontendIdentity: OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
-    })
-
-    expect((projectedFromCacheOnly.facts.definitions ?? []).map((definition) => definition.id)).toContain(
-      'prompt:writer.cached',
-    )
-
-    await writeFile(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true } }))
-    const changedConfigPlan = await inspectProjectStaticSyntaxPlan({
-      root,
-      projectName: 'provided-records',
-      includeCacheStatus: true,
-    })
-
-    expect(changedConfigPlan.filesToParse).toEqual([file])
-    expect(changedConfigPlan.cacheHits).toEqual([])
-    expect(changedConfigPlan.cacheMisses).toEqual([file])
   })
 
   it('includes the selected config file even when static globs ignore its directory', async () => {
@@ -290,18 +223,6 @@ describe('provided static syntax record indexing', () => {
     expect(patch.facts.definitions).toEqual([])
   })
 })
-
-async function createRustIdentityRecord(input: {
-  readonly root: string
-  readonly file: string
-  readonly source: string
-}): Promise<StaticSyntaxFileRecord> {
-  const record = await createTypeScriptStaticSyntaxFrontend({ callNames: ['prompt'] }).parseFile(input)
-  return {
-    ...record,
-    frontend: OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
-  }
-}
 
 function normalizedPatchFacts(patch: IndexPatch) {
   return {

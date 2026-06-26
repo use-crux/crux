@@ -40,7 +40,7 @@ export async function indexProjectIncremental(
       root: options.root,
       configPath: options.configPath,
       projectName: options.projectName,
-      mode: 'source-only',
+      mode: options.resolutionMode ?? 'source-only',
     })
     durationMsByPhase.ast = durationMsSince(astStarted)
     const snapshot = projectIndexSnapshotFromCompilerResult(compilerResult)

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/cache"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
@@ -30,7 +31,7 @@ func writeManifest(t testing.TB, root string, entry map[string]any) {
 	if err != nil {
 		t.Fatalf("marshal manifest entry: %v", err)
 	}
-	file := filepath.Join(root, ".crux", "cache", "index", "static-parse-v38", "manifest.jsonl")
+	file := filepath.Join(root, ".crux", "cache", "index", cache.Epoch, "manifest.jsonl")
 	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 		t.Fatalf("mkdir manifest dir: %v", err)
 	}

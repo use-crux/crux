@@ -28,6 +28,7 @@ export type StaticIndexRuntimeSharedFixtureName =
   | 'static-index-protocol'
   | 'static-index-protocol-cases'
   | 'static-index-identity'
+  | 'static-index-cache-identity'
   | 'worker-events'
   | 'worker-event-cases'
   | 'static-syntax-records'
@@ -86,6 +87,12 @@ export interface StaticIndexProtocolCasesSharedFixture {
 
 /** Shared Static Index compiler-owned identity manifest. */
 export type StaticIndexIdentitySharedFixture = StaticIndexIdentityManifest
+
+/** Shared cache namespace identities that TypeScript and Go both consume. */
+export interface StaticIndexCacheIdentitySharedFixture {
+  /** Static extraction cache namespace for TypeScript and Go-owned Static Index replay. */
+  readonly staticParseCacheEpoch: string
+}
 
 /** Shared Project Index worker event stream fixture. */
 export interface WorkerEventsSharedFixture {
@@ -205,6 +212,7 @@ export interface StaticIndexRuntimeSharedFixtureMap {
   readonly 'static-index-protocol': StaticIndexProtocolSharedFixture
   readonly 'static-index-protocol-cases': StaticIndexProtocolCasesSharedFixture
   readonly 'static-index-identity': StaticIndexIdentitySharedFixture
+  readonly 'static-index-cache-identity': StaticIndexCacheIdentitySharedFixture
   readonly 'worker-events': WorkerEventsSharedFixture
   readonly 'worker-event-cases': WorkerEventCasesSharedFixture
   readonly 'static-syntax-records': StaticSyntaxRecordsSharedFixture
@@ -222,6 +230,7 @@ const fixtureFiles = {
   'static-index-protocol': 'static-index-protocol.json',
   'static-index-protocol-cases': 'static-index-protocol-cases.json',
   'static-index-identity': 'static-index-identity.json',
+  'static-index-cache-identity': 'static-index-cache-identity.json',
   'worker-events': 'worker-events.json',
   'worker-event-cases': 'worker-event-cases.json',
   'static-syntax-records': 'static-syntax-records.json',

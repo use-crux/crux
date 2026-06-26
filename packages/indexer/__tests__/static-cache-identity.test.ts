@@ -3,7 +3,9 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
 import { afterEach, describe, expect, it } from 'vitest'
+import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
 import { facts, type IndexerExtension } from '../indexer/extensions'
+import { STATIC_PARSE_CACHE_EPOCH } from '../indexer/cache-identity'
 import { staticParseCacheManifestStatus } from '../indexer/static/extraction/cache'
 import { createStaticExtraction } from '../indexer/static/extraction/engine'
 
@@ -21,6 +23,12 @@ afterEach(async () => {
 })
 
 describe('static cache identity', () => {
+  it('pins the TypeScript static parse cache namespace to the shared Static Index fixture', () => {
+    const identity = readStaticIndexRuntimeSharedFixture('static-index-cache-identity')
+
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch)
+  })
+
   it('projects static host manifest facets into extraction identity', () => {
     const base = createStaticExtraction({
       root: '/fixture',

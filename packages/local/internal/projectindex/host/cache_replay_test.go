@@ -51,7 +51,7 @@ func TestWorkerStaticIndexReplaysWarmStaticCacheFacts(t *testing.T) {
 		"diagnostics":  []map[string]any{},
 	})
 	writeStaticIndexPlanCacheManifest(t, root, map[string]any{
-		"version":    "static-parse-v38",
+		"version":    cache.Epoch,
 		"root":       root,
 		"file":       "src/writer.ts",
 		"sourceHash": staticIndexPlanCacheFixtureHash(t, sourceFile),
@@ -64,7 +64,7 @@ func TestWorkerStaticIndexReplaysWarmStaticCacheFacts(t *testing.T) {
 		"cacheKey":       cacheKey,
 	})
 	writeStaticIndexPlanCacheManifest(t, root, map[string]any{
-		"version":        "static-parse-v38",
+		"version":        cache.Epoch,
 		"root":           root,
 		"file":           "crux.config.ts",
 		"sourceHash":     staticIndexPlanCacheFixtureHash(t, configFile),

@@ -101,7 +101,7 @@ describe('static extension host compatibility layer', () => {
 
     expect(result.method).toBe('loadStaticExtensionHostManifest')
     expect(result.nativeCompilerProtocolVersion).toBe(1)
-    expect(result.diagnostics).toEqual([expect.objectContaining({ code: 'index.source_only' })])
+    expect(result.diagnostics).toEqual([expect.objectContaining({ code: 'index.config_not_found' })])
     expect(result.ruleDescriptors).toEqual([])
     expect(JSON.parse(JSON.stringify(result))).toEqual(result)
   })
@@ -269,7 +269,7 @@ describe('static extension host compatibility layer', () => {
     expect(result.outputs.map((finding) => finding.ruleId)).toContain('prompt.missing_input_schema')
     expect(result.ruleDescriptors.map((descriptor) => descriptor.id)).toContain('prompt.missing_input_schema')
     expect(result.facts).toEqual({
-      diagnostics: expect.arrayContaining([expect.objectContaining({ code: 'index.source_only' })]),
+      diagnostics: expect.arrayContaining([expect.objectContaining({ code: 'index.config_not_found' })]),
       lintFindings: expect.arrayContaining([expect.objectContaining({ ruleId: 'prompt.missing_input_schema' })]),
     })
   })

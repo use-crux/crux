@@ -72,6 +72,25 @@ describe('indexer extension evidence contract', () => {
       ],
       constructors: [{ name: 'Agent', source: 'extractor-pattern' }],
       definitions: ['agent'],
+      extractors: [
+        {
+          extension: { name: '@acme/policies', version: '1' },
+          name: 'agent.compat',
+          constructors: [{ name: 'Agent', source: 'extractor-pattern' }],
+        },
+        {
+          extension: { name: '@acme/policies', version: '1' },
+          name: 'workflow.define',
+          calls: [
+            {
+              name: 'defineWorkflow',
+              importFrom: ['@acme/workflows'],
+              configArg: 1,
+              source: 'extractor-pattern',
+            },
+          ],
+        },
+      ],
       relations: ['agent.uses_tool'],
       compatibility: { mode: 'declared' },
     })

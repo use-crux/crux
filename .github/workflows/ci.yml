@@ -23,6 +23,12 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/local/go.mod
+          cache-dependency-path: packages/local/go.sum
+
       - name: Setup Rust
         run: |
           rustup toolchain install 1.93.0 --profile minimal
@@ -37,6 +43,9 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Native AST parity gate
+        run: pnpm test:native-ast-parity
 
       - name: Build
         run: pnpm build

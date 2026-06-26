@@ -2,6 +2,7 @@ import type { IndexPatch } from '../patches'
 import type { SemanticIndexInstrumentation } from '../semantic/instrumentation'
 import type { SemanticBackendSelection } from '../semantic/service'
 import type { IncrementalIndexDecision } from './types'
+import type { ProjectIndexSnapshot, ProjectModelResolutionMode } from '@use-crux/core/project-index'
 
 /**
  * Incremental execution mode.
@@ -35,7 +36,16 @@ export interface IndexProjectIncrementalOptions {
   /** Deleted files reported separately so invalidation can distinguish missing source from edits. */
   readonly deletedFiles?: readonly string[]
   /** Previous Project Index snapshot that supplies trusted source graph evidence. */
-  readonly previousIndex: import('@use-crux/core/project-index').ProjectIndexSnapshot
+  readonly previousIndex: ProjectIndexSnapshot
+  /**
+   * Resolution mode used when a watch change requires a full fallback reindex.
+   *
+   * Defaults to `source-only`, preserving the historical execution-free
+   * fallback. Hosts that already approved config policy imports can pass
+   * `config-policy` so lint-profile and extension config changes are reflected
+   * in the fallback patch.
+   */
+  readonly resolutionMode?: ProjectModelResolutionMode
   /** Optional project name supplied by an embedding CLI or local runtime. */
   readonly projectName?: string
   /** Optional Crux config path, relative to `root` unless already absolute. */

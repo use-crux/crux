@@ -36,9 +36,8 @@ export interface ProjectStaticIndexConfig {
   /**
    * Historical Go wire field for Static Index syntax enablement.
    *
-   * Go normalized the internal vocabulary from `nativeAst` to Static Syntax
-   * before this TypeScript artifact did. Keep emitting the old key until every
-   * embedded local runtime can consume `staticSyntaxEnabled`.
+   * Keep emitting the old key until every embedded local runtime can consume
+   * `staticSyntaxEnabled`.
    */
   readonly nativeAstEnabled: boolean
   /** Historical Go wire field for the selected Static Index syntax frontend. */
