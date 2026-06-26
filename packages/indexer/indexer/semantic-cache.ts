@@ -1,7 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { deserialize, serialize } from 'node:v8'
-import ts from 'typescript'
 import {
   cacheFileForIdentity,
   SEMANTIC_COMPILER_OPTIONS_ID,
@@ -23,7 +22,7 @@ import {
   type SemanticIndexTimingName,
 } from './semantic/instrumentation'
 import { DEFAULT_SEMANTIC_PREFLIGHT_BUDGET } from './semantic/preflight'
-import type { SemanticBackendIdentity } from './semantic/service'
+import type { SemanticBackendIdentity, SemanticCompilerRuntimeIdentity } from './semantic/service'
 import { semanticSourceProfile, type SemanticSourceProfile } from './semantic/source-profile'
 
 type ConfigFileHash = { readonly file: string; readonly sourceHash: string }
@@ -44,6 +43,8 @@ export interface SemanticIndexFactsCacheOptions {
   readonly sourceProfile?: SemanticSourceProfile
   /** Backend identity that owns the semantic facts. */
   readonly backendIdentity?: SemanticBackendIdentity
+  /** Compiler runtime identity that owns semantic project state. */
+  readonly compilerRuntime?: SemanticCompilerRuntimeIdentity
   /** Optional timing hook for semantic cache and analyzer work. */
   readonly instrumentation?: SemanticIndexInstrumentation
   /** Durable fact-cache behavior. Defaults to `read-write`. */
@@ -72,7 +73,7 @@ export async function* semanticIndexEvidenceBatchesCached(
       dependencyClosure: options.dependencyClosure,
       maxFiles: DEFAULT_SEMANTIC_PREFLIGHT_BUDGET.maxDependencyClosureFiles,
     }))
-  const cacheInput = await semanticCacheKeyInput(root, sourceProfile, options.backendIdentity)
+  const cacheInput = await semanticCacheKeyInput(root, sourceProfile, options.backendIdentity, options.compilerRuntime)
   const cacheIdentity = cacheInput ? sha256(JSON.stringify(cacheInput)) : undefined
   const produceEvidence =
     options.produceEvidence ??
@@ -114,11 +115,12 @@ async function semanticCacheKeyInput(
   root: string,
   sourceProfile: SemanticSourceProfile,
   backendIdentity: SemanticBackendIdentity | undefined,
+  compilerRuntime: SemanticCompilerRuntimeIdentity | undefined,
 ): Promise<
   | {
       version: string
       backend: SemanticBackendIdentity
-      typescriptVersion: string
+      compilerRuntime: SemanticCompilerRuntimeIdentity
       compilerOptionsVersion: string
       root: string
       files: Array<{ file: string; sourceHash: string }>
@@ -156,7 +158,7 @@ async function semanticCacheKeyInput(
     return {
       version: SEMANTIC_FACTS_CACHE_EPOCH,
       backend: backendIdentity ?? { name: 'typescript', version: 'v1' },
-      typescriptVersion: ts.version,
+      compilerRuntime: compilerRuntime ?? defaultSemanticCompilerRuntimeIdentity(backendIdentity),
       compilerOptionsVersion: SEMANTIC_COMPILER_OPTIONS_ID,
       root,
       files: fileInputs,
@@ -165,6 +167,14 @@ async function semanticCacheKeyInput(
   } catch {
     return undefined
   }
+}
+
+function defaultSemanticCompilerRuntimeIdentity(
+  backendIdentity: SemanticBackendIdentity | undefined,
+): SemanticCompilerRuntimeIdentity {
+  return backendIdentity
+    ? { name: backendIdentity.name, version: backendIdentity.version }
+    : { name: 'typescript', version: 'v1' }
 }
 
 function compareCacheFileInputs(left: ConfigFileHash, right: ConfigFileHash): number {

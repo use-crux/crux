@@ -2,6 +2,7 @@ import { semanticEvidenceBatchesFromFacts } from '../../evidence/projection'
 import { semanticIndexEvidenceBatchesForSourceFiles } from '../../evidence/facts'
 import { measureSemanticTiming } from '../../instrumentation'
 import { createTsgoSemanticCompilerHost, type TsgoSemanticCompilerHost } from './compiler-session'
+import { tsgoNativeSemanticRuntimeVersion } from './runtime-identity'
 import type { NativeSemanticAnalyzeResult, NativeSemanticEngine, NativeSemanticEngineIdentity } from './types'
 import type { SemanticBackendIdentity, SemanticProjectSessionIdentity } from '../../service/types'
 import type { SemanticAnalyzeInput } from '../../service/types'
@@ -11,7 +12,7 @@ const sharedAnalyzerExtractor = 'crux.shared-analyzer'
 
 export const tsgoNativeSemanticEngineIdentity = {
   name: 'tsgo',
-  version: 'native-preview-v1',
+  version: tsgoNativeSemanticRuntimeVersion,
 } as const satisfies NativeSemanticEngineIdentity<'tsgo'>
 
 export interface TsgoNativeSemanticEngineInput {

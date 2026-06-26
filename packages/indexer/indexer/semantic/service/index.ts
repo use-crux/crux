@@ -10,6 +10,8 @@ export type {
   SemanticBackendSelectionEnv,
   SemanticBackendSession,
   SemanticBackendSessionInput,
+  SemanticBackendRuntimeIdentityInput,
+  SemanticCompilerRuntimeIdentity,
   SemanticIndexFilesInput,
   SemanticIndexProjectInput,
   SemanticIndexService,

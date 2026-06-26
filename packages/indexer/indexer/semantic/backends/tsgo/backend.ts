@@ -2,6 +2,7 @@ import { semanticIndexEvidenceBatchesCached, type SemanticFactsCacheMode } from 
 import type { SemanticEvidenceBatch } from '../../evidence/projection'
 import { emitNativeSemanticCoverage, measureSemanticTiming } from '../../instrumentation'
 import { createTsgoNativeSemanticEngine, type TsgoNativeSemanticEngineInput } from './engine'
+import { nativeSemanticCompilerRuntimeIdentity } from './runtime-identity'
 import type { NativeSemanticEngine, NativeSemanticEngineName } from './types'
 import type {
   SemanticAnalyzeInput,
@@ -48,6 +49,13 @@ export function createNativeSemanticBackend(
   return {
     identity: nativeSemanticBackendIdentity,
     capabilities: nativeSemanticBackendCapabilities,
+    compilerRuntimeIdentity(input) {
+      return nativeSemanticCompilerRuntimeIdentity({
+        root: input.root,
+        engine: options.engine ?? 'tsgo',
+        tsserverPath: options.tsserverPath,
+      })
+    },
     createSession(input: SemanticBackendSessionInput): SemanticBackendSession {
       const engineForSession = () =>
         engineForIdentity(engines, input.identity, maxSessions, input.root, options, input.instrumentation)
@@ -57,6 +65,7 @@ export function createNativeSemanticBackend(
           return semanticIndexEvidenceBatchesCached(analyzeInput.root, analyzeInput.files, {
             sourceProfile: analyzeInput.sourceProfile,
             backendIdentity: nativeSemanticBackendIdentity,
+            compilerRuntime: input.identity.compilerRuntime,
             instrumentation: analyzeInput.instrumentation,
             cache: options.cache,
             produceEvidence: () => nativeSemanticEvidenceBatches(analyzeInput, engineForSession()),
@@ -121,7 +130,7 @@ function nativeSessionCacheKey(identity: SemanticProjectSessionIdentity): string
   return JSON.stringify({
     root: identity.root,
     tsconfigFiles: identity.tsconfigFiles,
-    typescriptVersion: identity.typescriptVersion,
+    compilerRuntime: identity.compilerRuntime,
     compilerOptionsId: identity.compilerOptionsId,
     backend: identity.backend,
   })

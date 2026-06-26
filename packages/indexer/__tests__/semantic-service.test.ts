@@ -42,6 +42,9 @@ describe('semantic index service', () => {
     }
     const backend: SemanticBackend<'test-semantic'> = {
       identity: { name: 'test-semantic', version: 'v1' },
+      compilerRuntimeIdentity() {
+        return { name: 'test-compiler', version: 'v2', executable: '/opt/test-compiler' }
+      },
       capabilities: {
         apiStability: 'stable',
         factProduction: 'complete',
@@ -74,6 +77,7 @@ describe('semantic index service', () => {
       identity: {
         root,
         backend: { name: 'test-semantic', version: 'v1' },
+        compilerRuntime: { name: 'test-compiler', version: 'v2', executable: '/opt/test-compiler' },
         tsconfigFiles: [join(root, 'tsconfig.json')],
       },
     })

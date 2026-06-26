@@ -22,6 +22,20 @@ afterEach(async () => {
 })
 
 describe('native semantic index service', () => {
+  it('reports tsgo and the configured executable as its compiler runtime identity', async () => {
+    const root = await fixtureRoot()
+    const backend = createNativeSemanticBackend({ tsserverPath: '/opt/bin/tsgo' })
+
+    expect(backend.compilerRuntimeIdentity).toBeTypeOf('function')
+    await expect(
+      Promise.resolve(backend.compilerRuntimeIdentity?.({ root, backend: backend.identity })),
+    ).resolves.toEqual({
+      name: 'tsgo',
+      version: 'native-preview-v1',
+      executable: '/opt/bin/tsgo',
+    })
+  })
+
   it('reuses the experimental native engine host for the same semantic project identity', async () => {
     const root = await fixtureRoot()
     await writeTsconfig(root)

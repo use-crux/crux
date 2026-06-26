@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { SEMANTIC_FACTS_CACHE_EPOCH } from '../indexer/cache-identity'
 import type { IndexPatchFacts } from '../indexer/patches'
 import { semanticIndexFactsCached } from '../indexer/semantic-cache'
-import type { SemanticBackendIdentity } from '../indexer/semantic/service'
+import type { SemanticBackendIdentity, SemanticCompilerRuntimeIdentity } from '../indexer/semantic/service'
 import type { SemanticSourceProfile } from '../indexer/semantic/source-profile'
 
 const roots: string[] = []
@@ -162,6 +162,41 @@ describe('semantic facts cache', () => {
     expect(cached.definitions).toEqual(facts.definitions)
     expect(producerCalls).toBe(1)
     await expect(cacheFileNames(root)).resolves.toHaveLength(1)
+  })
+
+  it('keys durable fact caches by compiler runtime identity', async () => {
+    const root = await fixtureRoot()
+    const file = join(root, 'src/writer.ts')
+    await writeFile(file, `export const writer = true`)
+    const backendIdentity: SemanticBackendIdentity = { name: 'test-cache-runtime', version: 'v1' }
+    const firstRuntime: SemanticCompilerRuntimeIdentity = { name: 'typescript', version: '5.9.3' }
+    const secondRuntime: SemanticCompilerRuntimeIdentity = {
+      name: 'tsgo',
+      version: 'native-preview-v1',
+      executable: '/opt/tsgo',
+    }
+    let producerCalls = 0
+
+    await semanticIndexFactsCached(root, [file], {
+      backendIdentity,
+      compilerRuntime: firstRuntime,
+      async *produceEvidence() {
+        producerCalls += 1
+        yield { kind: 'definitions', facts: cachedFacts().definitions ?? [] }
+      },
+    })
+
+    await semanticIndexFactsCached(root, [file], {
+      backendIdentity,
+      compilerRuntime: secondRuntime,
+      async *produceEvidence() {
+        producerCalls += 1
+        yield { kind: 'definitions', facts: cachedFacts().definitions ?? [] }
+      },
+    })
+
+    expect(producerCalls).toBe(2)
+    await expect(cacheFileNames(root)).resolves.toHaveLength(2)
   })
 })
 

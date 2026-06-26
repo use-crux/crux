@@ -1,5 +1,6 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import ts from 'typescript'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createSemanticIndexService, createTypeScriptSemanticBackend } from '../indexer/semantic/service'
 
@@ -16,6 +17,19 @@ afterEach(async () => {
 })
 
 describe('typescript semantic index service', () => {
+  it('reports the JavaScript TypeScript package as its compiler runtime identity', async () => {
+    const root = await fixtureRoot()
+    const backend = createTypeScriptSemanticBackend()
+
+    expect(backend.compilerRuntimeIdentity).toBeTypeOf('function')
+    await expect(
+      Promise.resolve(backend.compilerRuntimeIdentity?.({ root, backend: backend.identity })),
+    ).resolves.toEqual({
+      name: 'typescript',
+      version: ts.version,
+    })
+  })
+
   it('reuses TypeScript project state inside the semantic backend for the same source identity', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })

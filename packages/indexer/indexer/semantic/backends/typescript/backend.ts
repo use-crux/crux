@@ -1,3 +1,4 @@
+import ts from 'typescript'
 import { semanticIndexEvidenceBatchesCached, type SemanticFactsCacheMode } from '../../../semantic-cache'
 import { semanticIndexEvidenceBatches } from '../../evidence/facts'
 import { createSemanticProgramSession, type SemanticProgramSession } from './program'
@@ -6,6 +7,7 @@ import type {
   SemanticAnalyzeResult,
   SemanticBackend,
   SemanticBackendCapabilities,
+  SemanticCompilerRuntimeIdentity,
   SemanticBackendSession,
   SemanticBackendSessionInput,
   SemanticProjectSessionIdentity,
@@ -16,6 +18,12 @@ export const typescriptSemanticBackendIdentity = {
   name: 'typescript',
   version: 'v1',
 } as const
+
+/** Compiler runtime identity for the JavaScript TypeScript package. */
+export const typescriptSemanticCompilerRuntimeIdentity = {
+  name: 'typescript',
+  version: ts.version,
+} as const satisfies SemanticCompilerRuntimeIdentity<'typescript'>
 
 /** Operational profile for the TypeScript compiler API backend. */
 export const typescriptSemanticBackendCapabilities = {
@@ -48,6 +56,9 @@ export function createTypeScriptSemanticBackend(
   return {
     identity: typescriptSemanticBackendIdentity,
     capabilities: typescriptSemanticBackendCapabilities,
+    compilerRuntimeIdentity() {
+      return typescriptSemanticCompilerRuntimeIdentity
+    },
     createSession(input: SemanticBackendSessionInput): SemanticBackendSession {
       const programSession = sessionForIdentity(sessions, input.identity, maxSessions)
       return {
@@ -56,6 +67,7 @@ export function createTypeScriptSemanticBackend(
           return semanticIndexEvidenceBatchesCached(analyzeInput.root, analyzeInput.files, {
             sourceProfile: analyzeInput.sourceProfile,
             backendIdentity: typescriptSemanticBackendIdentity,
+            compilerRuntime: input.identity.compilerRuntime,
             instrumentation: analyzeInput.instrumentation,
             cache: options.cache,
             produceEvidence: ({ cacheIdentity }) =>
@@ -95,7 +107,7 @@ function semanticProjectSessionCacheKey(identity: SemanticProjectSessionIdentity
   return JSON.stringify({
     root: identity.root,
     tsconfigFiles: identity.tsconfigFiles,
-    typescriptVersion: identity.typescriptVersion,
+    compilerRuntime: identity.compilerRuntime,
     compilerOptionsId: identity.compilerOptionsId,
     backend: identity.backend,
   })
