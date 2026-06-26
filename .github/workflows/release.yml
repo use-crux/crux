@@ -109,7 +109,7 @@ jobs:
           - target: win32-arm64
             runner: blacksmith-4vcpu-ubuntu-2404
             rust_target: aarch64-pc-windows-gnullvm
-            apt_packages: clang lld
+            apt_packages: xz-utils
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -139,16 +139,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ${{ matrix.apt_packages }}
 
+      - name: Install llvm-mingw for Windows arm64
+        if: matrix.target == 'win32-arm64'
+        env:
+          LLVM_MINGW_VERSION: '20260616'
+        run: |
+          mkdir -p .tmp/toolchains
+          curl -fsSL \
+            -o .tmp/toolchains/llvm-mingw.tar.xz \
+            "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-x86_64.tar.xz"
+          tar -xJf .tmp/toolchains/llvm-mingw.tar.xz -C .tmp/toolchains
+          root="$PWD/.tmp/toolchains/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-x86_64"
+          echo "LLVM_MINGW_ROOT=$root" >> "$GITHUB_ENV"
+          echo "$root/bin" >> "$GITHUB_PATH"
+
       - name: Configure Windows arm64 linker
         if: matrix.target == 'win32-arm64'
         run: |
-          mkdir -p .tmp/ci-bin
-          cat > .tmp/ci-bin/aarch64-windows-linker <<'SH'
-          #!/usr/bin/env bash
-          exec clang --target=aarch64-pc-windows-gnullvm -fuse-ld=lld "$@"
-          SH
-          chmod +x .tmp/ci-bin/aarch64-windows-linker
-          echo "CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER=$PWD/.tmp/ci-bin/aarch64-windows-linker" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER=$LLVM_MINGW_ROOT/bin/aarch64-w64-mingw32-clang" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_AR=$LLVM_MINGW_ROOT/bin/llvm-ar" >> "$GITHUB_ENV"
 
       - name: Build local binary bundle
         run: make -C packages/local ${{ matrix.target }}
