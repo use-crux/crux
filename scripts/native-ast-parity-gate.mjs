@@ -4,8 +4,9 @@
  * Native AST parity gate for CI and release checks.
  *
  * The gate builds the Rust/Oxc worker first and then passes its absolute path
- * to every parity command. This makes missing-worker setups fail loudly instead
- * of silently skipping native checks.
+ * to every parity command. It also builds and embeds the Node worker bundle
+ * before Go host tests, which mirrors the fresh-checkout CI path instead of
+ * relying on locally generated assets.
  *
  * @module
  */
@@ -72,6 +73,17 @@ const commands = [
       '--max-mismatches=20',
     ],
     env: workerEnv,
+  },
+  {
+    label: 'Build devtools worker bundle for Go host tests',
+    command: 'pnpm',
+    args: ['--filter', '@use-crux/devtools', 'run', 'build:workers'],
+  },
+  {
+    label: 'Embed devtools workers for Go host tests',
+    command: 'make',
+    args: ['embed-workers'],
+    cwd: localPackageRoot,
   },
   {
     label: 'Run Go Project Index parity packages',
