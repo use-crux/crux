@@ -58,7 +58,7 @@ Use this store for memory blocks, blackboards, plans, prompt cache data, and wor
 
 ## Create An Agent Profile
 
-If you use the Convex Agent component, create one profile that owns both component references. This is the preferred boundary for Crux-native Convex Agent code.
+If you use the Convex Agent component, create one profile that owns both component references. This is the preferred boundary when Crux should own the profile-backed prompt, memory, skills, tools, and post-turn persistence lifecycle.
 
 ```ts title="convex/crux/profile.ts"
 import { createCruxConvex } from '@crux/convex'
@@ -72,7 +72,7 @@ export const crux = createCruxConvex({
 })
 ```
 
-Use `crux.convexAgent({ prompt, model, ... })` for agents, `crux.store(ctx)` for a request-scoped store, and `crux.run(ctx, target, fn)` for lower-level integrations that need Convex-bound memory/tools outside the high-level wrapper.
+Use `crux.convexAgent({ prompt, languageModel, ... })` when Crux should resolve the prompt for each Convex Agent turn. Use `crux.store(ctx)` for a request-scoped store and `crux.run(ctx, target, fn)` for lower-level integrations that need Convex-bound memory/tools outside the profile-backed helper.
 
 If tests, migrations, or alternate storage need to replace the default component store, configure one profile-level store factory:
 
@@ -87,6 +87,21 @@ export const crux = createCruxConvex({
 })
 ```
 
+## Runtime Bridge Only
+
+Use `createConvexRuntimeBridge()` when custom Convex actions or normal Convex Agent-shaped code need Crux runtime plumbing without the profile-backed `convexAgent()` helper:
+
+```ts title="convex/crux/runtime.ts"
+import { createConvexRuntimeBridge } from '@crux/convex'
+import { components } from '../_generated/api'
+
+export const runtime = createConvexRuntimeBridge({
+  component: components.crux,
+})
+```
+
+The bridge exposes the same `store(ctx)`, `run(ctx, target, fn)`, and `bridge(http, cruxConfig)` methods as the runtime part of `createCruxConvex()`. `createCruxConvex()` delegates those methods to this lower-level bridge.
+
 ## Runtime Layout
 
 Keep definitions portable and boundaries explicit:
@@ -97,7 +112,8 @@ convex/
     support.ts          # prompt(), context(), agent() definitions
   crux/
     store.ts            # cruxStore(ctx) for storage-only code
-    profile.ts          # createCruxConvex({ components }) for Convex Agent code
+    profile.ts          # createCruxConvex({ components }) for profile-backed Convex Agent code
+    runtime.ts          # createConvexRuntimeBridge({ component }) for bridge-only/runtime-only code
   chat/
     actions.ts          # @crux/convex/server action() entrypoints
   agent/

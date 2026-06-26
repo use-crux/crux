@@ -1,8 +1,7 @@
 import { readFile } from 'node:fs/promises'
-import { collectImportBindings } from '../ast/imports'
-import { createSourceFile } from '../ast/parse'
 import { sha256 } from '../cache-identity'
 import { isNativeDirectCandidateCallSet, isSemanticPrimitiveCallName } from './backends/tsgo/direct-projectors/manifest'
+import { collectSemanticSourceImportDependencies } from './source-imports'
 
 const defaultConcurrency = 64
 
@@ -144,9 +143,11 @@ async function semanticSourceProfileFromImports(
       ...queue,
       ...readProfiles.flatMap((profile) =>
         profile.source
-          ? [...collectImportBindings(createSourceFile(profile.file, profile.source), root, profile.file).values()].map(
-              (binding) => binding.file,
-            )
+          ? collectSemanticSourceImportDependencies({
+              root,
+              importerFile: profile.file,
+              source: profile.source,
+            }).map((dependency) => dependency.file)
           : [],
       ),
     ].sort()

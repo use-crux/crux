@@ -19,11 +19,10 @@ longer-running benchmark coverage.
 The native backend uses TypeScript-Go for semantic ownership. It can lower high-volume source shapes
 through direct native projectors and routes the remaining supported semantic surface through a
 tsgo-owned shared analyzer path. That shared path is part of the native backend and is not a
-JavaScript TypeScript semantic fallback. It currently uses a TypeScript AST facade for structural
-traversal while native-preview owns project/checker state. To benefit further from native compiler
-work, Crux needs the future syntax frontend to replace the facade with native AST traversal without
-exposing TypeScript compiler nodes, `TypeChecker` objects, or TypeScript-Go internals to workers or
-Indexer Extensions.
+JavaScript TypeScript semantic fallback. It traverses native-preview AST nodes through Crux's
+backend-neutral syntax/compiler views while native-preview owns project/checker state. Crux keeps raw
+TypeScript compiler nodes, `TypeChecker` objects, and TypeScript-Go internals inside backend
+implementations rather than exposing them to workers or Indexer Extensions.
 
 ## Decision
 
@@ -99,10 +98,12 @@ They should consume Crux facts/read models, not raw compiler AST or checker APIs
 
 - `SemanticAnalyzeResult` is a `SemanticEvidenceBatchSource`, not a compiler object graph.
 - Semantic fact caching stores projected Project Index facts, but cache misses stream evidence from
-  the selected backend before projection. Current cache writes use the binary local envelope after
-  the `semantic-facts-v15` hard migration.
+  the selected backend before projection. Native AST traversal and text-only semantic preflight are
+  hard-invalidated by the `semantic-facts-v17` cache epoch.
 - Semantic preflight produces one source profile for a request. Cache identity, native projector
   guards, and backend setup consume that profile instead of independently rereading selected sources.
+  It follows local static imports from source text and path-alias config without constructing
+  JavaScript TypeScript `SourceFile` objects; exact syntax traversal remains backend-owned.
 - Project Index workers stay alive across hot indexing requests. Patch-producing worker streams are
   request-scoped transactions over persistent NDJSON processes, so backend/session caches are useful
   during `crux dev` watch updates.
