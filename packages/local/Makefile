@@ -109,7 +109,8 @@ embed-ui: $(UI_EMBED_DIR)
 .PHONY: build-indexer-worker
 build-indexer-worker:
 	$(CARGO) build --release --manifest-path "$(INDEXER_WORKER_MANIFEST)" --package crux-indexer-worker --bin $(INDEXER_WORKER_BIN)
-	cp "$(INDEXER_WORKER_TARGET_DIR)/release/$(INDEXER_WORKER_BINARY)" "$(INDEXER_WORKER_BINARY)"
+	cp "$(INDEXER_WORKER_TARGET_DIR)/release/$(INDEXER_WORKER_BINARY)" "$(INDEXER_WORKER_BINARY).tmp"
+	mv "$(INDEXER_WORKER_BINARY).tmp" "$(INDEXER_WORKER_BINARY)"
 
 .PHONY: build
 build: build-devtools embed build-indexer-worker build-go

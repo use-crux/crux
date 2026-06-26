@@ -107,6 +107,19 @@ for TypeScript-authored extension or rule compatibility work. This flag does not
 semantic backend; use `experimental.indexer.native` separately for TypeScript-Go semantic
 enrichment.
 
+Native AST beta readiness is gated by exact normalized parity with the TypeScript Static Index
+baseline. The release gate builds the Rust/Oxc worker, runs Rust tests, runs the full
+`@use-crux/indexer` suite with `CRUX_STATIC_INDEX_WORKER`, runs repository static parity, runs Go
+production parity with `CRUX_INDEXER_PARITY_REQUIRED=1`, and verifies `make local`. TypeScript
+extension fallback is part of that gate: a configured TypeScript extension extractor or rule may
+run through the trusted Node host, but its facts still finalize through the same Project Index patch
+contract as native first-party output.
+
+If a native AST run is degraded, inspect the indexing diagnostics before treating missing source
+facts as absent code. Common causes are a missing Rust worker binary, failed worker startup,
+configured TypeScript extension work that requires Node, or config import failures. Remove the flag
+or set `experimental.indexer.nativeAst: false` to return to the TypeScript Static Index baseline.
+
 ## Responsibilities
 
 - discover authored Crux definitions in TypeScript and JavaScript source

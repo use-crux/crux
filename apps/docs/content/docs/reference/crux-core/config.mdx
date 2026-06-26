@@ -189,6 +189,13 @@ release. Stable-looking backend switches do not belong under `indexer`.
 - `nativeAst` controls the first static AST/source pass. It can use Rust/Oxc without selecting the
   native semantic backend.
 
+`experimental.indexer.nativeAst` is covered by the native AST beta gate before release promotion:
+Rust/Oxc output must match the TypeScript Static Index baseline after canonical normalization,
+including lint findings, source graph rows, cache behavior, and TypeScript extension fallback. Node
+can still start for config inspection or trusted TypeScript extension work. If native AST
+diagnostics report worker startup, fallback, or Node-start failures, remove the flag or set it to
+`false` to return to the TypeScript baseline.
+
 ```ts title="crux.config.ts"
 export default config({
   experimental: {
