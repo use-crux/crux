@@ -45,6 +45,10 @@
       "types": "./memory.ts",
       "import": "./memory.ts"
     },
+    "./react": {
+      "types": "./react.ts",
+      "import": "./react.ts"
+    },
     "./skill": {
       "types": "./skill.ts",
       "import": "./skill.ts"

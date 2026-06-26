@@ -39,7 +39,8 @@ export type {
   CruxConvexRunScope,
 } from './profile'
 export { defineConvexStoreContract } from './store-contract'
-export type { ConvexContext, ConvexCtxPort } from './store'
+export { cruxConvexStore } from './store'
+export type { ConvexContext, ConvexCtxPort, ConvexMemoryStoreConfig } from './store'
 export type {
   ConvexStoreContract,
   ConvexStoreContractTransportOptions,
