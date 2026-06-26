@@ -10,6 +10,7 @@ import {
   type NodeRangeIndex,
 } from '../../node-range-index'
 import type { SemanticBackendIdentity } from '../../service/types'
+import { createTypeScriptSemanticSyntaxView } from '../typescript/syntax-view'
 import type { TsgoTypeScriptSourceCache } from './source-cache'
 
 interface TsgoResolvedDeclarationSymbol {
@@ -46,9 +47,13 @@ export function createTsgoCompilerView(
   const shorthandSymbolCache = new Map<string, TsgoSymbol | undefined>()
   const typeCache = new Map<string, TsgoType | undefined>()
   const declarationsCache = new Map<string, readonly ts.Declaration[]>()
+  const syntax = createTypeScriptSemanticSyntaxView({
+    sourceFiles: sourceCache.sourceFiles,
+  })
 
   return {
     identity,
+    syntax,
     sourceFiles: sourceCache.sourceFiles,
     sourceFile: (node) => node.getSourceFile() as ts.SourceFile & SemanticCompilerSourceFile,
     sourceText: (node) => node.getText(),

@@ -195,6 +195,11 @@ describe('public indexer extension surface', () => {
       'SemanticIndexService',
       'SemanticIndexServiceOptions',
       'SemanticProjectSessionIdentity',
+      'SemanticSyntaxKind',
+      'SemanticSyntaxNode',
+      'SemanticSyntaxNodeOf',
+      'SemanticSyntaxSourceFile',
+      'SemanticSyntaxView',
       'TypeScriptSemanticBackendOptions',
     ])
     expect(namedValueExports(runtime)).toEqual(['runtimeIndexPatchFromCompilerResult'])

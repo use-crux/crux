@@ -14,6 +14,11 @@ import type {
   SemanticCompilerType,
   SemanticCompilerView,
 } from './compiler-view'
+import type { SemanticSyntaxNode, SemanticSyntaxSourceFile } from './syntax-view'
+
+type SemanticDefaultCallNode<TNode extends SemanticSyntaxNode> = TNode extends ts.ObjectLiteralExpression
+  ? ts.CallExpression
+  : TNode
 
 export type SemanticAnalyzerView = SemanticCompilerView<
   ts.Node,
@@ -52,41 +57,56 @@ export type SemanticSchemaMetadataKey = 'inputSchema' | 'outputSchema' | 'argsSc
 /**
  * Syntax-level Crux definition found before TypeScript symbol resolution.
  */
-export interface SemanticDefinitionCandidate {
+export interface SemanticDefinitionCandidate<
+  TNode extends SemanticSyntaxNode = ts.ObjectLiteralExpression,
+  TCall extends SemanticSyntaxNode = SemanticDefaultCallNode<TNode>,
+> {
   readonly definitionId: string
   readonly kind: SemanticDefinitionKind
   readonly name: string
-  readonly object: ts.ObjectLiteralExpression
-  readonly call?: ts.CallExpression
+  readonly object: TNode
+  readonly call?: TCall
 }
 
 /**
  * Analyzer input for a definition property that may resolve to a schema.
  */
-export interface SemanticSchemaCandidate extends SemanticDefinitionCandidate {
+export interface SemanticSchemaCandidate<
+  TNode extends SemanticSyntaxNode = ts.ObjectLiteralExpression,
+  TCall extends SemanticSyntaxNode = SemanticDefaultCallNode<TNode>,
+  TExpression extends SemanticSyntaxNode = ts.Expression,
+> extends SemanticDefinitionCandidate<TNode, TCall> {
   readonly property: SemanticSchemaProperty
   readonly metadataKey: SemanticSchemaMetadataKey
-  readonly expression: ts.Expression
+  readonly expression: TExpression
 }
 
 /**
  * Analyzer input for a definition property that may resolve to source code.
  */
-export interface SemanticSourceRefCandidate extends SemanticDefinitionCandidate {
+export interface SemanticSourceRefCandidate<
+  TNode extends SemanticSyntaxNode = ts.ObjectLiteralExpression,
+  TCall extends SemanticSyntaxNode = SemanticDefaultCallNode<TNode>,
+  TExpression extends SemanticSyntaxNode = ts.Expression,
+> extends SemanticDefinitionCandidate<TNode, TCall> {
   readonly property: string
   readonly role: ProjectSourceRefRole
-  readonly expression: ts.Expression
+  readonly expression: TExpression
   readonly metadata?: ProjectSourceRef['metadata']
 }
 
 /**
  * TypeScript symbol resolution result with enough source data to emit refs.
  */
-export interface SemanticResolvedSource {
+export interface SemanticResolvedSource<
+  TExpression extends SemanticSyntaxNode = ts.Expression,
+  TSourceFile extends SemanticSyntaxSourceFile = ts.SourceFile & SemanticCompilerSourceFile,
+  TDeclaration extends SemanticSyntaxNode = ts.Declaration,
+> {
   readonly symbol: string
-  readonly sourceFile: ts.SourceFile
-  readonly declaration: ts.Declaration
-  readonly expression?: ts.Expression
+  readonly sourceFile: TSourceFile
+  readonly declaration: TDeclaration
+  readonly expression?: TExpression
   readonly functionName?: string
 }
 
@@ -118,11 +138,14 @@ export interface SemanticAnalyzerContext {
 /**
  * Resolved memory block metadata used to enrich authored memory definitions.
  */
-export interface SemanticMemoryBlock {
+export interface SemanticMemoryBlock<
+  TObject extends SemanticSyntaxNode = ts.ObjectLiteralExpression,
+  TExpression extends SemanticSyntaxNode = ts.Expression,
+> {
   readonly id?: string
   readonly kind?: string
   readonly schema?: JsonSchema
-  readonly schemaExpression?: ts.Expression
-  readonly schemaResolved?: SemanticResolvedSource
-  readonly object: ts.ObjectLiteralExpression
+  readonly schemaExpression?: TExpression
+  readonly schemaResolved?: SemanticResolvedSource<TExpression>
+  readonly object: TObject
 }

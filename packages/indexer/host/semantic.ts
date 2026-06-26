@@ -42,6 +42,10 @@ export type {
   SemanticIndexService,
   SemanticIndexServiceOptions,
   SemanticProjectSessionIdentity,
+  SemanticSyntaxKind,
+  SemanticSyntaxNode,
+  SemanticSyntaxNodeOf,
+  SemanticSyntaxSourceFile,
+  SemanticSyntaxView,
   TypeScriptSemanticBackendOptions,
 } from '../indexer/semantic/service'
-

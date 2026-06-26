@@ -29,6 +29,13 @@ export type {
   SemanticCompilerView,
 } from '../compiler-view'
 export type {
+  SemanticSyntaxKind,
+  SemanticSyntaxNode,
+  SemanticSyntaxNodeOf,
+  SemanticSyntaxSourceFile,
+  SemanticSyntaxView,
+} from '../syntax-view'
+export type {
   SemanticEvidenceBatch,
   SemanticEvidenceBatchKind,
   SemanticEvidenceBatchSource,

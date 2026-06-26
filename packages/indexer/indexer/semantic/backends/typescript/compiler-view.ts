@@ -4,6 +4,7 @@ import type {
   SemanticCompilerView,
 } from '../../compiler-view'
 import type { SemanticBackendIdentity } from '../../service/types'
+import { createTypeScriptSemanticSyntaxView } from './syntax-view'
 
 export type TypeScriptSemanticCompilerView = SemanticCompilerView<
   ts.Node,
@@ -33,9 +34,7 @@ export function createTypeScriptSemanticCompilerView(
   input: TypeScriptSemanticCompilerViewInput,
 ): TypeScriptSemanticCompilerView {
   const { checker, identity, program } = input
-
-  return {
-    identity,
+  const syntax = createTypeScriptSemanticSyntaxView({
     sourceFiles(files) {
       const selected = new Set(files)
       return program
@@ -44,18 +43,22 @@ export function createTypeScriptSemanticCompilerView(
           selected.has(sourceFile.fileName),
         )
     },
+  })
+
+  return {
+    identity,
+    syntax,
+    sourceFiles(files) {
+      return syntax.sourceFiles(files)
+    },
     sourceFile(node) {
-      return node.getSourceFile() as ts.SourceFile & SemanticCompilerSourceFile
+      return syntax.sourceFile(node)
     },
     sourceText(node) {
-      return node.getText()
+      return syntax.text(node)
     },
     childNodes(node) {
-      const children: ts.Node[] = []
-      ts.forEachChild(node, (child) => {
-        children.push(child)
-      })
-      return children
+      return syntax.children(node)
     },
     symbolsAt(nodes) {
       return nodes.map((node) => checker.getSymbolAtLocation(node))

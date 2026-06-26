@@ -20,6 +20,13 @@ export {
   type TypeScriptSemanticCompilerView,
 } from './compiler-view'
 export {
+  createTypeScriptSemanticSyntaxView,
+  type TypeScriptSemanticSyntaxNode,
+  type TypeScriptSemanticSyntaxSourceFile,
+  type TypeScriptSemanticSyntaxView,
+  type TypeScriptSemanticSyntaxViewInput,
+} from './syntax-view'
+export {
   createTypeScriptSemanticFactInput,
   type SemanticIndexFactsOptions,
   type SemanticSourceFileFactInput,
