@@ -1,0 +1,154 @@
+{
+  "requiredEvidence": [
+    "positive",
+    "negative"
+  ],
+  "policyFixture": "index-lint-native-policy-parity.test.ts",
+  "rules": [
+    {
+      "ruleId": "definition.missing_eval_coverage",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "quality.missing_baseline",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "agent.unobservable_handoff",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "prompt.missing_input_schema",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "prompt.missing_output_schema",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "prompt.hidden_required_input",
+      "positiveFixture": "index-lint-native-injection-parity.test.ts",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+    },
+    {
+      "ruleId": "prompt.conflicting_injected_input",
+      "positiveFixture": "index-lint-native-injection-parity.test.ts",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+    },
+    {
+      "ruleId": "prompt.conditional_required_input",
+      "positiveFixture": "index-lint-native-injection-parity.test.ts",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+    },
+    {
+      "ruleId": "context.missing_input_schema",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "injection.dynamic_dependency",
+      "positiveFixture": "index-lint-native-injection-parity.test.ts",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+    },
+    {
+      "ruleId": "injection.dynamic_tools",
+      "positiveFixture": "index-lint-native-injection-parity.test.ts",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+    },
+    {
+      "ruleId": "prompt.indirect_tool_surface",
+      "positiveFixture": "index-lint-native-injection-parity.test.ts",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+    },
+    {
+      "ruleId": "injectable.unused",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "context.unused",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "injection.unresolved_target",
+      "positiveFixture": "index-lint-native-injection-parity.test.ts",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+    },
+    {
+      "ruleId": "injection.deep_schema_chain",
+      "positiveFixture": "index-lint-native-injection-parity.test.ts",
+      "negativeFixture": "index-lint-native-injection-parity.test.ts"
+    },
+    {
+      "ruleId": "flow.untyped_args",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "tool.missing_input_schema",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "tool.output_not_inspectable",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "flow.suspension_without_coverage",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "workspace.write_without_guardrail",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "memory.long_lived_without_retention",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "resource.write_without_read",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "consensus.missing_judge",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "shared_blackboard_without_policy",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "routing.missing_stable_id",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "routing.router_missing_default",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "routing.unresolved_target",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "routing.cascade_unreachable_tier",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    }
+  ]
+}

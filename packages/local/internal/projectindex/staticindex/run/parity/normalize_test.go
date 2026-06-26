@@ -2,6 +2,7 @@ package parity
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
@@ -108,6 +109,26 @@ func TestNormalizeProjectIndexFactsForParityKeepsMetadataArrayOrdering(t *testin
 
 	if FactsEqual(left, right) {
 		t.Fatalf("normalized facts matched after metadata array order changed:\n%s", mustNormalizeFacts(t, left))
+	}
+}
+
+func TestNormalizedFactFieldsCoverBetaParitySurfaces(t *testing.T) {
+	want := []string{
+		"prompts",
+		"contexts",
+		"tools",
+		"lint",
+		"definitions",
+		"relations",
+		"sourceRefs",
+		"diagnostics",
+		"lintFindings",
+		"ruleDescriptors",
+		"sources",
+		"sourceGraph",
+	}
+	if !reflect.DeepEqual(NormalizedFactFields, want) {
+		t.Fatalf("normalized fact fields = %#v, want %#v", NormalizedFactFields, want)
 	}
 }
 

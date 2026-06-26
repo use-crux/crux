@@ -1,5 +1,9 @@
 import { describe, expect } from 'vitest'
-import { extractNativeAndFallback, itWithRustOxc, jsonStable } from './native-first-party-fixture-helpers'
+import {
+  extractNativeAndFallback,
+  expectNativeExtractionParity,
+  itWithRustOxc,
+} from './native-first-party-fixture-helpers'
 
 describe('first-party Phase 6 native fixtures', () => {
   itWithRustOxc(
@@ -81,9 +85,7 @@ describe('first-party Phase 6 native fixtures', () => {
         [{ extension: '@crux/indexer/crux-core', extractor: 'tool' }],
         [{ extension: '@crux/indexer/crux-core', extractor: 'tool' }],
       ])
-      expect(jsonStable(nativeOut.definitions)).toEqual(jsonStable(fallbackOut.definitions))
-      expect(jsonStable(nativeOut.relations)).toEqual(jsonStable(fallbackOut.relations))
-      expect(jsonStable(nativeOut.diagnostics)).toEqual(jsonStable(fallbackOut.diagnostics))
+      expectNativeExtractionParity(nativeOut, fallbackOut)
     },
     30_000,
   )
@@ -135,9 +137,7 @@ describe('first-party Phase 6 native fixtures', () => {
           { extension: '@crux/indexer/crux-core', extractor: 'prompt' },
         ]),
       )
-      expect(jsonStable(nativeOut.definitions)).toEqual(jsonStable(fallbackOut.definitions))
-      expect(jsonStable(nativeOut.relations)).toEqual(jsonStable(fallbackOut.relations))
-      expect(jsonStable(nativeOut.diagnostics)).toEqual(jsonStable(fallbackOut.diagnostics))
+      expectNativeExtractionParity(nativeOut, fallbackOut)
     },
     30_000,
   )
@@ -177,9 +177,7 @@ describe('first-party Phase 6 native fixtures', () => {
           { extension: '@crux/indexer/crux-core', extractor: 'tool' },
         ]),
       )
-      expect(jsonStable(nativeOut.definitions)).toEqual(jsonStable(fallbackOut.definitions))
-      expect(jsonStable(nativeOut.relations)).toEqual(jsonStable(fallbackOut.relations))
-      expect(jsonStable(nativeOut.diagnostics)).toEqual(jsonStable(fallbackOut.diagnostics))
+      expectNativeExtractionParity(nativeOut, fallbackOut)
     },
     30_000,
   )
@@ -225,9 +223,7 @@ describe('first-party Phase 6 native fixtures', () => {
       expect(record.nativeFacts?.flatMap((fact) => fact.replaces ?? [])).toEqual(
         expect.arrayContaining([{ extension: '@crux/indexer/crux-core', extractor: 'injectable' }]),
       )
-      expect(jsonStable(nativeOut.definitions)).toEqual(jsonStable(fallbackOut.definitions))
-      expect(jsonStable(nativeOut.relations)).toEqual(jsonStable(fallbackOut.relations))
-      expect(jsonStable(nativeOut.diagnostics)).toEqual(jsonStable(fallbackOut.diagnostics))
+      expectNativeExtractionParity(nativeOut, fallbackOut)
     },
     30_000,
   )

@@ -51,6 +51,7 @@ import {
   toolOutputNeedsAdapter,
   workspaceAllowsWrites,
 } from './finding-helpers'
+import { qualityMissingBaselineFinding } from './quality'
 
 /**
  * Evaluates all built-in index lint findings over resolved definitions and
@@ -166,6 +167,9 @@ export function indexLintFindings(input: {
         }),
       )
     }
+
+    const qualityFinding = qualityMissingBaselineFinding(definition)
+    if (qualityFinding) findings.push(qualityFinding)
 
     if (definition.kind === 'tool' && !hasInputSchema(definition)) {
       findings.push(
@@ -421,7 +425,7 @@ export function indexLintFindings(input: {
             message: `${definition.kind} "${definition.name}" can receive runtime-dependent tools from ${source ? `${source.kind} "${source.name}"` : contribution.sourceDefinitionId}.`,
             ...((source?.source ?? definition.source) ? { source: source?.source ?? definition.source } : {}),
             primaryDefinitionId: definition.id,
-            relatedDefinitionIds: [definition.id, contribution.sourceDefinitionId],
+            relatedDefinitionIds: [...new Set([definition.id, contribution.sourceDefinitionId])],
             evidence: [
               definitionEvidence(definition, 'Definition can receive injected tools'),
               ...(source ? [definitionEvidence(source, 'Injected tool contributor is dynamic')] : []),

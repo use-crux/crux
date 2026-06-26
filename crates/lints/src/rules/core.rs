@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 use crate::builder::{StaticIndexLintBuilder, definition_evidence};
 use crate::contracts::{
@@ -275,12 +275,20 @@ fn quality_baseline_evidence(definition: &StaticIndexDefinition) -> Value {
     if let Some(last_run_id) = quality.and_then(|value| value.get("lastRunId")).cloned() {
         data["lastRunId"] = last_run_id;
     }
-    json!({
-        "kind": "quality",
-        "label": "Experiment history without baseline",
-        "description": "This definition has completed experiment data but no baseline quality record.",
-        "definitionId": definition.id,
-        "source": definition.source,
-        "data": data,
-    })
+    let mut evidence = Map::new();
+    evidence.insert("kind".to_string(), json!("quality"));
+    evidence.insert(
+        "label".to_string(),
+        json!("Experiment history without baseline"),
+    );
+    evidence.insert(
+        "description".to_string(),
+        json!("This definition has completed experiment data but no baseline quality record."),
+    );
+    evidence.insert("definitionId".to_string(), json!(definition.id));
+    if let Some(source) = definition.source.as_ref() {
+        evidence.insert("source".to_string(), json!(source));
+    }
+    evidence.insert("data".to_string(), data);
+    Value::Object(evidence)
 }

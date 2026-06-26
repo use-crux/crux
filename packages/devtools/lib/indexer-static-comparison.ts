@@ -244,7 +244,7 @@ function changedFields(
   actual: StaticExtractionProjection,
 ): readonly StaticProjectionField[] {
   return (['definitions', 'relations', 'diagnostics', 'dependencies'] as const).filter(
-    (field) => canonicalStaticJson(typescript[field]) !== canonicalStaticJson(actual[field]),
+    (field) => canonicalStaticJson({ [field]: typescript[field] }) !== canonicalStaticJson({ [field]: actual[field] }),
   )
 }
 

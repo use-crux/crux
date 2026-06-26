@@ -1,8 +1,9 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { it } from 'vitest'
+import { expect, it } from 'vitest'
 import { createStaticExtraction, type SourceReader } from '../indexer/static/extraction/engine'
+import type { StaticFileExtraction } from '../indexer/static/extraction/engine'
 import { createProvidedStaticSyntaxFrontend } from '../indexer/static-index/syntax'
 import { createRustOxcStaticSyntaxFrontend, rustOxcSyntaxFrontendTestStatus } from '../testing/rust-oxc-frontend'
 
@@ -10,7 +11,9 @@ const rustOxcStatus = rustOxcSyntaxFrontendTestStatus()
 
 /** Runs a Vitest case only when the Rust/Oxc syntax frontend is available. */
 export function itWithRustOxc(name: string, fn: () => Promise<void>, timeout?: number): void {
-  const testName = rustOxcStatus.available ? name : `${name} [skipped: ${rustOxcStatus.reason ?? 'Rust/Oxc unavailable'}]`
+  const testName = rustOxcStatus.available
+    ? name
+    : `${name} [skipped: ${rustOxcStatus.reason ?? 'Rust/Oxc unavailable'}]`
   if (rustOxcStatus.available) {
     it(testName, fn, timeout)
     return
@@ -91,6 +94,19 @@ export async function extractNativeAndFallback(input: NativeFirstPartyFixtureInp
 /** JSON-clones values so equality checks ignore object prototypes and readonly wrappers. */
 export function jsonStable<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+/**
+ * Asserts exact native/fallback parity for every static extraction surface.
+ *
+ * This intentionally compares the whole `StaticFileExtraction` object instead
+ * of cherry-picking definitions or relations. Phase 4 coverage depends on
+ * dependencies, semantic handoff rows, cache markers, and diagnostics staying
+ * covered when new fixture families are marked native-ready.
+ */
+export function expectNativeExtractionParity(nativeOut: StaticFileExtraction, fallbackOut: StaticFileExtraction): void {
+  expect(Object.keys(nativeOut).sort()).toEqual(Object.keys(fallbackOut).sort())
+  expect(jsonStable(nativeOut)).toEqual(jsonStable(fallbackOut))
 }
 
 /** Counts native fact packets that replace one bundled first-party extractor. */

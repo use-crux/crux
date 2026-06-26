@@ -1,13 +1,121 @@
 {
   "descriptors": [
     {
+      "id": "definition.missing_eval_coverage",
+      "source": "builtin",
+      "severity": "info",
+      "category": "evaluation",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Definition has no eval coverage",
+      "description": "Eval coverage lets you compare authored AI behavior against known cases and catch regressions before prompts, agents, flows, or pipelines drift.",
+      "rationale": "Eval coverage lets you compare authored AI behavior against known cases and catch regressions before prompts, agents, flows, or pipelines drift.",
+      "impact": "Uncovered definitions can regress silently when prompts, models, tools, or orchestration logic changes.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/definition-missing-eval-coverage",
+      "fixes": [
+        {
+          "title": "Add eval coverage",
+          "description": "Add a prompt, flow, RAG, or quality eval that covers this definition, or connect it to a suite so regressions can be detected.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line definition.missing_eval_coverage -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "quality.missing_baseline",
+      "source": "builtin",
+      "severity": "info",
+      "category": "quality",
+      "maturity": "preview",
+      "confidence": "high",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Quality target has no baseline",
+      "description": "A promoted baseline lets you compare future runs against known behavior and understand whether authored AI changes are regressions or improvements.",
+      "rationale": "A promoted baseline lets you compare future runs against known behavior and understand whether authored AI changes are regressions or improvements.",
+      "impact": "Without a baseline, quality history is visible but drift and regression checks cannot anchor to a known good run.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/quality-missing-baseline",
+      "fixes": [
+        {
+          "title": "Promote a baseline",
+          "description": "Promote a trusted experiment or variant as the baseline for this definition so future changes can be compared.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line quality.missing_baseline -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "agent.unobservable_handoff",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "observability",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Agent handoff target is not index-visible",
+      "description": "Index-visible handoff targets let you inspect the handoff path, connect parent and delegated work, and trust the trace tree when agents transfer control.",
+      "rationale": "Index-visible handoff targets let you inspect the handoff path, connect parent and delegated work, and trust the trace tree when agents transfer control.",
+      "impact": "A handoff to an unindexed or missing agent can appear as an orphaned tool call, missing branch, or disconnected trace segment.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/agent-unobservable-handoff",
+      "fixes": [
+        {
+          "title": "Make the handoff target visible",
+          "description": "Define and export the target agent with a stable id, or update the handoff id so it points at a index-visible agent.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line agent.unobservable_handoff -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
       "id": "prompt.missing_input_schema",
       "source": "builtin",
       "severity": "info",
       "category": "contracts",
       "maturity": "stable",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
       "title": "Prompt has no input schema",
       "description": "Prompt input schemas are the TypeScript contract for prompt inputs, context joins, replay, eval cases, and devtools inspection.",
       "rationale": "Prompt input schemas are the TypeScript contract for prompt inputs, context joins, replay, eval cases, and devtools inspection.",
@@ -26,7 +134,774 @@
         "directive": "// crux-lint-disable-next-line prompt.missing_input_schema -- reason"
       },
       "phase": "index",
-      "requires": ["definitions", "sources"],
+      "requires": [
+        "definitions",
+        "sources"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "prompt.missing_output_schema",
+      "source": "builtin",
+      "severity": "info",
+      "category": "contracts",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "strict"
+      ],
+      "title": "Prompt has no output schema",
+      "description": "Prompt output schemas make generated objects inspectable and comparable, and let evals assert structured behavior instead of only text.",
+      "rationale": "Prompt output schemas make generated objects inspectable and comparable, and let evals assert structured behavior instead of only text.",
+      "impact": "Unstructured prompt outputs can make downstream code, replay, and regression checks depend on ad hoc parsing.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/prompt-missing-output-schema",
+      "fixes": [
+        {
+          "title": "Declare prompt output",
+          "description": "Add an output schema when this prompt is expected to produce structured data or feed downstream logic.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line prompt.missing_output_schema -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "prompt.hidden_required_input",
+      "source": "builtin",
+      "severity": "info",
+      "category": "contracts",
+      "maturity": "preview",
+      "confidence": "high",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Prompt has injected required input",
+      "description": "Injected contexts and injectables can make a prompt require fields that are not visible in the prompt authored input schema. Surfacing those fields keeps prompt calls, eval cases, and replay inputs honest.",
+      "rationale": "Injected contexts and injectables can make a prompt require fields that are not visible in the prompt authored input schema. Surfacing those fields keeps prompt calls, eval cases, and replay inputs honest.",
+      "impact": "Callers can miss a required field because the requirement is hidden behind prompt composition instead of declared on the prompt itself.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/prompt-hidden-required-input",
+      "fixes": [
+        {
+          "title": "Make the requirement visible",
+          "description": "Either add the field to the prompt input schema, make the injected source optional, or document why the injected requirement is intentionally hidden.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line prompt.hidden_required_input -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "prompt.conflicting_injected_input",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "contracts",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Prompt has conflicting injected input",
+      "description": "When multiple injected sources contribute the same input field with obviously incompatible schemas, callers and eval cases cannot know which contract is authoritative.",
+      "rationale": "When multiple injected sources contribute the same input field with obviously incompatible schemas, callers and eval cases cannot know which contract is authoritative.",
+      "impact": "Prompt calls can validate differently depending on composition order, and generated devtools or replay forms may show a misleading contract.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/prompt-conflicting-injected-input",
+      "fixes": [
+        {
+          "title": "Align contributed schemas",
+          "description": "Rename one field, make the schemas compatible, or move the shared field into the prompt input schema so every injected source agrees on the contract.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line prompt.conflicting_injected_input -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "prompt.conditional_required_input",
+      "source": "builtin",
+      "severity": "info",
+      "category": "contracts",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Prompt has conditionally required input",
+      "description": "A field required by an injected source becomes only conditionally required when the source is guarded by when, match, or runtime-dependent composition. The global prompt schema must keep it optional, but authors still need to know which branch needs it.",
+      "rationale": "A field required by an injected source becomes only conditionally required when the source is guarded by when, match, or runtime-dependent composition. The global prompt schema must keep it optional, but authors still need to know which branch needs it.",
+      "impact": "Eval cases and callers can miss branch-specific input unless the conditional requirement is visible in the Project Index.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/prompt-conditional-required-input",
+      "fixes": [
+        {
+          "title": "Document the branch requirement",
+          "description": "Keep the global field optional, but document or model the branch where it is required. If the branch always runs, remove the conditional wrapper.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line prompt.conditional_required_input -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "context.missing_input_schema",
+      "source": "builtin",
+      "severity": "info",
+      "category": "contracts",
+      "maturity": "stable",
+      "confidence": "high",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Dynamic context has no resolved input schema",
+      "description": "Context input schemas make conditional and dynamic context injection explicit, inspectable, and type-safe across prompt composition.",
+      "rationale": "Context input schemas make conditional and dynamic context injection explicit, inspectable, and type-safe across prompt composition.",
+      "impact": "Dynamic context without a resolved input contract can hide missing fields until runtime and make context windows harder to debug.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/context-missing-input-schema",
+      "fixes": [
+        {
+          "title": "Declare resolvable context input",
+          "description": "Use an inline or import-safe schema for the context input so Crux can project the contract into the index.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line context.missing_input_schema -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "injection.dynamic_dependency",
+      "source": "builtin",
+      "severity": "info",
+      "category": "observability",
+      "maturity": "preview",
+      "confidence": "high",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Injection dependency is runtime-dependent",
+      "description": "Runtime-dependent injection is allowed, but the Project Index cannot fully explain the prompt or context graph from source alone. Marking the dynamic edge makes that blind spot visible.",
+      "rationale": "Runtime-dependent injection is allowed, but the Project Index cannot fully explain the prompt or context graph from source alone. Marking the dynamic edge makes that blind spot visible.",
+      "impact": "Devtools, eval coverage, and static linting may under-report the contexts, memory, or injectables that can affect this definition.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/injection-dynamic-dependency",
+      "fixes": [
+        {
+          "title": "Declare static use when possible",
+          "description": "Move stable dependencies into a static use array or keep the dynamic path intentional and documented with a suppression reason.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line injection.dynamic_dependency -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "injection.dynamic_tools",
+      "source": "builtin",
+      "severity": "info",
+      "category": "observability",
+      "maturity": "preview",
+      "confidence": "high",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Injected tools are runtime-dependent",
+      "description": "Contexts and injectables can contribute tools dynamically. That keeps authoring flexible, but it means the model-facing tool surface cannot be fully inspected from static source.",
+      "rationale": "Contexts and injectables can contribute tools dynamically. That keeps authoring flexible, but it means the model-facing tool surface cannot be fully inspected from static source.",
+      "impact": "A prompt or context may gain tools that are absent from the static Project Index, making safety review, replay, and eval setup less precise.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/injection-dynamic-tools",
+      "fixes": [
+        {
+          "title": "Expose stable tool names",
+          "description": "Prefer static tool maps or named tool contributors where possible. Suppress only when the runtime-selected tool set is intentional.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line injection.dynamic_tools -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "prompt.indirect_tool_surface",
+      "source": "builtin",
+      "severity": "info",
+      "category": "observability",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "strict"
+      ],
+      "title": "Prompt receives tools through injection",
+      "description": "Tools can enter a prompt through contexts and injectables rather than the prompt body itself. Surfacing that indirect tool surface makes safety review, eval setup, and replay easier to reason about.",
+      "rationale": "Tools can enter a prompt through contexts and injectables rather than the prompt body itself. Surfacing that indirect tool surface makes safety review, eval setup, and replay easier to reason about.",
+      "impact": "Authors can miss model-facing tools because the prompt does not declare them directly, especially when the tool source is multiple injection hops away.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/prompt-indirect-tool-surface",
+      "fixes": [
+        {
+          "title": "Review the indirect tool source",
+          "description": "Keep the indirect tool surface intentional, document the injected source, or move stable tools closer to the prompt when direct visibility matters.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line prompt.indirect_tool_surface -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "injectable.unused",
+      "source": "builtin",
+      "severity": "info",
+      "category": "composition",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "experimental"
+      ],
+      "title": "Injectable is not used by the indexed graph",
+      "description": "An index-visible injectable that is never reached from any prompt, context, or injectable may be dead authoring surface or a dynamically consumed dependency the static graph cannot see.",
+      "rationale": "An index-visible injectable that is never reached from any prompt, context, or injectable may be dead authoring surface or a dynamically consumed dependency the static graph cannot see.",
+      "impact": "Unused injectables can make prompt composition harder to scan and can hide stale schema or tool contracts.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/injectable-unused",
+      "fixes": [
+        {
+          "title": "Use, remove, or suppress",
+          "description": "Wire the injectable into a static use path, remove it if it is stale, or suppress the finding when it is intentionally consumed dynamically or externally.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line injectable.unused -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "context.unused",
+      "source": "builtin",
+      "severity": "info",
+      "category": "composition",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "experimental"
+      ],
+      "title": "Context is not used by the indexed graph",
+      "description": "A context that is not reachable from any prompt, context, or injectable may be dead authoring surface or may only be selected through dynamic runtime composition.",
+      "rationale": "A context that is not reachable from any prompt, context, or injectable may be dead authoring surface or may only be selected through dynamic runtime composition.",
+      "impact": "Unused contexts can keep stale prompt text, schema requirements, or tool surfaces alive without clear consumers.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/context-unused",
+      "fixes": [
+        {
+          "title": "Use, remove, or suppress",
+          "description": "Wire the context into a static use path, remove it if it is stale, or suppress the finding when dynamic or external composition is intentional.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line context.unused -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "injection.unresolved_target",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "observability",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Injection target is unresolved",
+      "description": "A static-looking use entry that cannot be resolved to an index-visible definition makes the injection graph incomplete and can hide schema, tools, memory, or prompt text.",
+      "rationale": "A static-looking use entry that cannot be resolved to an index-visible definition makes the injection graph incomplete and can hide schema, tools, memory, or prompt text.",
+      "impact": "Devtools and lints may under-report what affects the prompt or context because a visible use target could not be linked.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/injection-unresolved-target",
+      "fixes": [
+        {
+          "title": "Make the target resolvable",
+          "description": "Export or inline the target definition, avoid opaque aliases for static use entries, or intentionally mark the dependency as dynamic.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line injection.unresolved_target -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "injection.deep_schema_chain",
+      "source": "builtin",
+      "severity": "info",
+      "category": "composition",
+      "maturity": "preview",
+      "confidence": "high",
+      "profiles": [
+        "strict"
+      ],
+      "title": "Injected input comes from a deep chain",
+      "description": "Deeply injected schema requirements are harder to discover from the prompt surface and harder to keep aligned with callers and eval cases.",
+      "rationale": "Deeply injected schema requirements are harder to discover from the prompt surface and harder to keep aligned with callers and eval cases.",
+      "impact": "A prompt can appear simple while relying on fields contributed several composition hops away, making refactors and replay setup more fragile.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/injection-deep-schema-chain",
+      "fixes": [
+        {
+          "title": "Flatten or document the chain",
+          "description": "Move important input requirements closer to the prompt, reduce composition depth, or document why the deep injection path is intentional.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line injection.deep_schema_chain -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "flow.untyped_args",
+      "source": "builtin",
+      "severity": "info",
+      "category": "contracts",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Flow args are not inspectable",
+      "description": "Flow argument schemas document the durable or immediate entry contract and make flow starts, resumes, and eval cases inspectable.",
+      "rationale": "Flow argument schemas document the durable or immediate entry contract and make flow starts, resumes, and eval cases inspectable.",
+      "impact": "Untyped flow arguments can make resumed work and flow evals depend on undocumented input shapes.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/flow-untyped-args",
+      "fixes": [
+        {
+          "title": "Declare flow args",
+          "description": "Add an import-safe args schema or Convex validator object so Crux can project the flow input contract.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line flow.untyped_args -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "tool.missing_input_schema",
+      "source": "builtin",
+      "severity": "info",
+      "category": "contracts",
+      "maturity": "stable",
+      "confidence": "high",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Tool has no input schema",
+      "description": "Tool input schemas make model-emitted arguments inspectable, validateable, and easier for your team to debug across traces, evals, and generated devtools UI.",
+      "rationale": "Tool input schemas make model-emitted arguments inspectable, validateable, and easier for your team to debug across traces, evals, and generated devtools UI.",
+      "impact": "Untyped tool calls are harder to validate, inspect, replay, and explain when an agent makes a bad call.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/tool-missing-input-schema",
+      "fixes": [
+        {
+          "title": "Declare tool parameters",
+          "description": "Add a Zod or JSON-schema-compatible input schema to the tool parameters so arguments are validated and inspectable.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line tool.missing_input_schema -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "tool.output_not_inspectable",
+      "source": "builtin",
+      "severity": "info",
+      "category": "contracts",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "strict"
+      ],
+      "title": "Tool output is not model-inspectable",
+      "description": "A model-output adapter makes tool results explicit for traces, replay, and debugging the model intent-to-execution chain.",
+      "rationale": "A model-output adapter makes tool results explicit for traces, replay, and debugging the model intent-to-execution chain.",
+      "impact": "Raw tool outputs can be hard to inspect or compare when the application result differs from what the model receives.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/tool-output-not-inspectable",
+      "fixes": [
+        {
+          "title": "Declare model output mapping",
+          "description": "Add a toModelOutput adapter when the tool result needs a stable, inspectable model-facing representation.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line tool.output_not_inspectable -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "flow.suspension_without_coverage",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "evaluation",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Suspending flow has no eval coverage",
+      "description": "Suspension paths cross time, approval, and runtime boundaries, so you need regression coverage for resume behavior and stale pending work.",
+      "rationale": "Suspension paths cross time, approval, and runtime boundaries, so you need regression coverage for resume behavior and stale pending work.",
+      "impact": "A broken suspend/resume path can strand user work or continue with stale state after approval.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/flow-suspension-without-coverage",
+      "fixes": [
+        {
+          "title": "Cover suspend and resume",
+          "description": "Add a flow eval that exercises the suspend/resume path, including the expected approval or signal.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line flow.suspension_without_coverage -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "workspace.write_without_guardrail",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "safety",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Writable workspace has no guardrail",
+      "description": "Writable workspaces can mutate drafts, files, and artifacts; guardrails help you keep those mutations policy-checked, auditable, and observable.",
+      "rationale": "Writable workspaces can mutate drafts, files, and artifacts; guardrails help you keep those mutations policy-checked, auditable, and observable.",
+      "impact": "Unprotected workspace writes can damage user content or make file mutations difficult to audit after the fact.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/workspace-write-without-guardrail",
+      "fixes": [
+        {
+          "title": "Attach a guardrail",
+          "description": "Attach a guardrail to the workspace or its write/delete tools so mutations are inspectable and policy-checked.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line workspace.write_without_guardrail -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "memory.long_lived_without_retention",
+      "source": "builtin",
+      "severity": "info",
+      "category": "memory",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Long-lived memory has no retention policy",
+      "description": "Long-lived episodic and semantic memory can accumulate stale or sensitive facts; a retention policy makes lifetime and cleanup behavior explicit.",
+      "rationale": "Long-lived episodic and semantic memory can accumulate stale or sensitive facts; a retention policy makes lifetime and cleanup behavior explicit.",
+      "impact": "Memory without a visible retention policy can silently grow, preserve stale context, or keep user data longer than intended.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/memory-long-lived-without-retention",
+      "fixes": [
+        {
+          "title": "Declare memory retention",
+          "description": "Add an eviction or retention policy to long-lived memory so cleanup behavior is inspectable.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line memory.long_lived_without_retention -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "resource.write_without_read",
+      "source": "builtin",
+      "severity": "info",
+      "category": "observability",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "State resource is written but never read",
+      "description": "A memory, blackboard, or workspace that receives writes but has no visible read path can indicate unreachable context, forgotten state, or an output-only side effect that should be intentional.",
+      "rationale": "A memory, blackboard, or workspace that receives writes but has no visible read path can indicate unreachable context, forgotten state, or an output-only side effect that should be intentional.",
+      "impact": "Written-but-unread state can make agents appear to remember or persist work that is never actually used by prompts, tools, flows, or later runs.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/resource-write-without-read",
+      "fixes": [
+        {
+          "title": "Connect or document the read path",
+          "description": "Add a index-visible read path for this resource, or suppress the rule with a reason when the write is intentionally output-only.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line resource.write_without_read -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "consensus.missing_judge",
+      "source": "builtin",
+      "severity": "info",
+      "category": "composition",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Consensus has no visible judge or scorer",
+      "description": "Consensus compositions need an inspectable decision policy so users can understand why one answer, plan, or agent output won.",
+      "rationale": "Consensus compositions need an inspectable decision policy so users can understand why one answer, plan, or agent output won.",
+      "impact": "Without a visible judge or scorer, consensus behavior can look arbitrary in traces and may be hard to test or tune.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/consensus-missing-judge",
+      "fixes": [
+        {
+          "title": "Attach a judge or scorer",
+          "description": "Add a index-visible judge agent or scorer to the consensus composition so the decision policy is inspectable.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line consensus.missing_judge -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "shared_blackboard_without_policy",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "memory",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Shared blackboard has no conflict policy",
+      "description": "Shared blackboards can receive writes from multiple agents; a conflict policy helps your team understand and debug merge behavior.",
+      "rationale": "Shared blackboards can receive writes from multiple agents; a conflict policy helps your team understand and debug merge behavior.",
+      "impact": "Concurrent agent writes can overwrite or contradict each other without an explicit policy for resolving shared state.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/shared-blackboard-without-policy",
+      "fixes": [
+        {
+          "title": "Declare a conflict policy",
+          "description": "Declare a blackboard conflict policy, such as consensus, judge, or last-writer-wins, when multiple agents can write shared state.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line shared_blackboard_without_policy -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "routing.missing_stable_id",
+      "source": "builtin",
+      "severity": "info",
+      "category": "composition",
+      "maturity": "preview",
+      "confidence": "high",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Routing primitive has no stable id",
+      "description": "Stable routing ids let index definitions, route decision spans, and quality history join reliably even when variables or files are renamed.",
+      "rationale": "Stable routing ids let index definitions, route decision spans, and quality history join reliably even when variables or files are renamed.",
+      "impact": "Routes can still be indexed from variable names, but runtime joins and historical comparisons are less durable across refactors.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/routing-missing-stable-id",
+      "fixes": [
+        {
+          "title": "Add a routing id",
+          "description": "Add id to router(), cascade(), or fallback() options so authored routing and runtime spans share a stable join key.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line routing.missing_stable_id -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
       "fidelity": "safe"
     },
     {
@@ -36,7 +911,10 @@
       "category": "composition",
       "maturity": "preview",
       "confidence": "high",
-      "profiles": ["recommended", "strict"],
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
       "title": "Router has no default route",
       "description": "Routers need an explicit default route so unknown classifier outputs remain observable and deterministic instead of failing or silently depending on adapter behavior.",
       "rationale": "Routers need an explicit default route so unknown classifier outputs remain observable and deterministic instead of failing or silently depending on adapter behavior.",
@@ -55,7 +933,80 @@
         "directive": "// crux-lint-disable-next-line routing.router_missing_default -- reason"
       },
       "phase": "index",
-      "requires": ["definitions", "relations"],
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "routing.unresolved_target",
+      "source": "builtin",
+      "severity": "info",
+      "category": "observability",
+      "maturity": "preview",
+      "confidence": "medium",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Routing target is not index-visible",
+      "description": "Route, tier, and fallback option targets should connect to index-visible agents, prompts, or nested routing primitives so users can inspect the authored decision graph.",
+      "rationale": "Route, tier, and fallback option targets should connect to index-visible agents, prompts, or nested routing primitives so users can inspect the authored decision graph.",
+      "impact": "Unresolved route targets appear as plain model references, which limits architecture views, impact analysis, and runtime span joins.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/routing-unresolved-target",
+      "fixes": [
+        {
+          "title": "Make target visible",
+          "description": "Reference an exported Crux definition or routing primitive, or keep raw model targets intentional and suppress this rule with a reason.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line routing.unresolved_target -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
+      "id": "routing.cascade_unreachable_tier",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "composition",
+      "maturity": "preview",
+      "confidence": "high",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "Cascade tier makes later tiers unreachable",
+      "description": "A cascade tier without an evaluator accepts by default, so any following tiers are never reached unless that tier throws.",
+      "rationale": "A cascade tier without an evaluator accepts by default, so any following tiers are never reached unless that tier throws.",
+      "impact": "Expensive backup tiers may look configured but never run, making quality escalation and cost expectations misleading.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/routing-cascade-unreachable-tier",
+      "fixes": [
+        {
+          "title": "Add evaluator or reorder tiers",
+          "description": "Add evaluate to non-terminal tiers, or move unconditional accept tiers to the end of the cascade.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line routing.cascade_unreachable_tier -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
       "fidelity": "safe"
     }
   ]

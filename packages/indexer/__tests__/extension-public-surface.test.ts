@@ -17,6 +17,7 @@ describe('public indexer extension surface', () => {
       'host/semantic.ts',
       'host/static-compat.ts',
       'host/static-index.ts',
+      'contracts/parity/index.ts',
       'contracts/semantic/index.ts',
       'contracts/static-index/index.ts',
       'contracts/static-syntax/index.ts',
@@ -33,6 +34,7 @@ describe('public indexer extension surface', () => {
 
     expect(Object.keys(parsed.exports ?? {}).sort()).toEqual([
       '.',
+      './contracts/parity',
       './contracts/semantic',
       './contracts/static-index',
       './contracts/static-syntax',

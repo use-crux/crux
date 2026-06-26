@@ -6,7 +6,7 @@ use serde_json::{Map, Value, json};
 
 use crate::builder::definition_evidence;
 use crate::facts::{StaticIndexDefinition, StaticIndexRelation};
-use crate::injection::evidence_data::{generic_contribution_evidence, input_contribution_evidence};
+use crate::injection::evidence_data::input_contribution_evidence;
 
 pub(crate) fn contribution_evidence(
     owner: &StaticIndexDefinition,
@@ -93,12 +93,21 @@ pub(crate) fn tool_contribution_evidence(
     if let Some(source) = source {
         evidence.push(definition_evidence(source, source_label));
     }
-    evidence.push(generic_contribution_evidence(
-        owner,
-        contribution,
-        contribution_label,
-        &["name", "variable", "path", "conditionality", "branch"],
-    ));
+    let mut data = Map::new();
+    for key in ["name", "variable", "path", "conditionality", "branch"] {
+        if let Some(value) = contribution.get(key) {
+            data.insert(key.to_string(), value.clone());
+        }
+    }
+    evidence.push(json!({
+        "kind": "definition",
+        "label": contribution_label,
+        "definitionId": contribution.get("sourceDefinitionId")
+            .and_then(Value::as_str)
+            .unwrap_or(owner.id.as_str()),
+        "source": source.and_then(|source| source.source.as_ref()).or(owner.source.as_ref()),
+        "data": Value::Object(data),
+    }));
     evidence
 }
 

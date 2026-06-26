@@ -4,6 +4,7 @@
     "relations",
     "sourceRefs",
     "diagnostics",
+    "dependencies",
     "lints",
     "sources",
     "sourceGraph",
@@ -19,13 +20,18 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "static-index-protocol.json",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
-        "runtimeMetadata": "static-index-protocol.json",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase5-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -36,13 +42,18 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "static-index-protocol.json",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
-        "runtimeMetadata": "static-index-protocol.json",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase5-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -53,13 +64,18 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "static-index-protocol.json",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
-        "runtimeMetadata": "static-index-protocol.json",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase5-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -70,13 +86,18 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "static-index-protocol.json",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
-        "runtimeMetadata": "static-index-protocol.json",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase5-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -87,13 +108,18 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "static-index-protocol.json",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
-        "runtimeMetadata": "static-index-protocol.json",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase5-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -104,13 +130,18 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "static-index-protocol.json",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
-        "runtimeMetadata": "static-index-protocol.json",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase5-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -121,13 +152,18 @@
       "fixtureClasses": {
         "definitions": "first-party-phase5-native-fixtures.ts",
         "relations": "first-party-phase5-native-fixtures.ts",
-        "sourceRefs": "static-index-protocol.json",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
         "diagnostics": "first-party-phase5-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
-        "runtimeMetadata": "static-index-protocol.json",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase5-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -140,11 +176,16 @@
         "relations": "first-party-phase6-native-fixtures.ts",
         "sourceRefs": "first-party-phase6-native-fixtures.ts",
         "diagnostics": "first-party-phase6-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
+        "dependencies": "first-party-phase6-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase6-native-fixtures.ts",
+        "sourceGraph": "first-party-phase6-native-fixtures.ts",
         "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase6-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -157,11 +198,16 @@
         "relations": "first-party-phase6-native-fixtures.ts",
         "sourceRefs": "first-party-phase6-native-fixtures.ts",
         "diagnostics": "first-party-phase6-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
+        "dependencies": "first-party-phase6-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase6-native-fixtures.ts",
+        "sourceGraph": "first-party-phase6-native-fixtures.ts",
         "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase6-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -174,11 +220,16 @@
         "relations": "first-party-phase6-native-fixtures.ts",
         "sourceRefs": "first-party-phase6-native-fixtures.ts",
         "diagnostics": "first-party-phase6-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
+        "dependencies": "first-party-phase6-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase6-native-fixtures.ts",
+        "sourceGraph": "first-party-phase6-native-fixtures.ts",
         "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase6-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -191,11 +242,16 @@
         "relations": "first-party-phase6-native-fixtures.ts",
         "sourceRefs": "first-party-phase6-native-fixtures.ts",
         "diagnostics": "first-party-phase6-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
-        "runtimeMetadata": "static-index-protocol.json",
+        "dependencies": "first-party-phase6-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase6-native-fixtures.ts",
+        "sourceGraph": "first-party-phase6-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase6-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase6-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -208,11 +264,16 @@
         "relations": "first-party-phase6-agent-native-fixtures.ts",
         "sourceRefs": "first-party-phase6-agent-native-fixtures.ts",
         "diagnostics": "first-party-phase6-agent-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
+        "dependencies": "first-party-phase6-agent-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase6-agent-native-fixtures.ts",
+        "sourceGraph": "first-party-phase6-agent-native-fixtures.ts",
         "runtimeMetadata": "first-party-phase6-agent-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase6-agent-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -225,11 +286,16 @@
         "relations": "first-party-phase7-composition-native-fixtures.ts",
         "sourceRefs": "first-party-phase7-composition-native-fixtures.ts",
         "diagnostics": "first-party-phase7-composition-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
+        "dependencies": "first-party-phase7-composition-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase7-composition-native-fixtures.ts",
+        "sourceGraph": "first-party-phase7-composition-native-fixtures.ts",
         "runtimeMetadata": "first-party-phase7-composition-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase7-composition-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -242,11 +308,16 @@
         "relations": "first-party-phase7-native-fixtures.ts",
         "sourceRefs": "first-party-phase7-native-fixtures.ts",
         "diagnostics": "first-party-phase7-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
+        "dependencies": "first-party-phase7-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase7-native-fixtures.ts",
+        "sourceGraph": "first-party-phase7-native-fixtures.ts",
         "runtimeMetadata": "first-party-phase7-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase7-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -259,11 +330,16 @@
         "relations": "first-party-phase7-native-fixtures.ts",
         "sourceRefs": "first-party-phase7-native-fixtures.ts",
         "diagnostics": "first-party-phase7-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
+        "dependencies": "first-party-phase7-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase7-native-fixtures.ts",
+        "sourceGraph": "first-party-phase7-native-fixtures.ts",
         "runtimeMetadata": "first-party-phase7-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase7-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -276,11 +352,16 @@
         "relations": "first-party-phase7-native-fixtures.ts",
         "sourceRefs": "first-party-phase7-native-fixtures.ts",
         "diagnostics": "first-party-phase7-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
+        "dependencies": "first-party-phase7-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase7-native-fixtures.ts",
+        "sourceGraph": "first-party-phase7-native-fixtures.ts",
         "runtimeMetadata": "first-party-phase7-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase7-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     },
     {
@@ -293,11 +374,16 @@
         "relations": "first-party-phase7-flow-native-fixtures.ts",
         "sourceRefs": "first-party-phase7-flow-native-fixtures.ts",
         "diagnostics": "first-party-phase7-flow-native-fixtures.ts",
-        "lints": "static-index-protocol.json",
-        "sources": "static-index-protocol.json",
-        "sourceGraph": "static-index-protocol.json",
+        "dependencies": "first-party-phase7-flow-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase7-flow-native-fixtures.ts",
+        "sourceGraph": "first-party-phase7-flow-native-fixtures.ts",
         "runtimeMetadata": "first-party-phase7-flow-native-fixtures.ts",
         "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase7-flow-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
       }
     }
   ]

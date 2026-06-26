@@ -78,7 +78,15 @@ struct PrimitiveCoverageIdentity {
     extractor: String,
     family: String,
     native_covered: bool,
+    parity_fixtures: PrimitiveCoverageParityFixtures,
     fixture_classes: std::collections::BTreeMap<String, String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PrimitiveCoverageParityFixtures {
+    positive: String,
+    negative: String,
 }
 
 #[test]
@@ -295,19 +303,63 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
     assert_eq!(
         rule_ids,
         vec![
+            "definition.missing_eval_coverage",
+            "quality.missing_baseline",
+            "agent.unobservable_handoff",
             "prompt.missing_input_schema",
-            "routing.router_missing_default"
+            "prompt.missing_output_schema",
+            "prompt.hidden_required_input",
+            "prompt.conflicting_injected_input",
+            "prompt.conditional_required_input",
+            "context.missing_input_schema",
+            "injection.dynamic_dependency",
+            "injection.dynamic_tools",
+            "prompt.indirect_tool_surface",
+            "injectable.unused",
+            "context.unused",
+            "injection.unresolved_target",
+            "injection.deep_schema_chain",
+            "flow.untyped_args",
+            "tool.missing_input_schema",
+            "tool.output_not_inspectable",
+            "flow.suspension_without_coverage",
+            "workspace.write_without_guardrail",
+            "memory.long_lived_without_retention",
+            "resource.write_without_read",
+            "consensus.missing_judge",
+            "shared_blackboard_without_policy",
+            "routing.missing_stable_id",
+            "routing.router_missing_default",
+            "routing.unresolved_target",
+            "routing.cascade_unreachable_tier"
         ]
     );
 
     let coverage: PrimitiveCoverageIdentitiesFixture =
         fixture_json("primitive-coverage-identities.json");
-    assert_eq!(coverage.required_fixture_classes.len(), 9);
+    assert_eq!(coverage.required_fixture_classes.len(), 10);
+    assert!(
+        coverage
+            .required_fixture_classes
+            .iter()
+            .any(|class| class == "dependencies")
+    );
     assert_eq!(coverage.identities.len(), 17);
     for identity in coverage.identities {
         assert_eq!(identity.extension, "@crux/indexer/crux-core");
         assert_eq!(identity.family, identity.extractor);
         assert!(identity.native_covered);
+        assert_eq!(
+            identity.parity_fixtures.negative,
+            "first-party-native-negative-fixtures.test.ts"
+        );
+        assert_eq!(
+            identity.parity_fixtures.positive,
+            *identity
+                .fixture_classes
+                .get("definitions")
+                .expect("definitions fixture class")
+        );
         for class in &coverage.required_fixture_classes {
             assert!(
                 identity.fixture_classes.contains_key(class),

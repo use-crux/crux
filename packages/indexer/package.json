@@ -64,6 +64,10 @@
       "types": "./contracts/semantic/index.ts",
       "import": "./contracts/semantic/index.ts"
     },
+    "./contracts/parity": {
+      "types": "./contracts/parity/index.ts",
+      "import": "./contracts/parity/index.ts"
+    },
     "./source-resolver": {
       "types": "./source-resolver.ts",
       "import": "./source-resolver.ts"

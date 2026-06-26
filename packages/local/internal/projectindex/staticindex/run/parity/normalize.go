@@ -9,6 +9,21 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
+var NormalizedFactFields = []string{
+	"prompts",
+	"contexts",
+	"tools",
+	"lint",
+	"definitions",
+	"relations",
+	"sourceRefs",
+	"diagnostics",
+	"lintFindings",
+	"ruleDescriptors",
+	"sources",
+	"sourceGraph",
+}
+
 func NormalizeFacts(facts projectindex.IndexPatchFacts) (string, error) {
 	encoded, err := json.Marshal(facts)
 	if err != nil {

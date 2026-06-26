@@ -24,9 +24,16 @@ describe('canonicalStaticJson', () => {
     expect(canonicalStaticJson(first)).toBe(canonicalStaticJson(second))
   })
 
-  it('preserves array ordering as semantic output', () => {
+  it('sorts unordered fact arrays by stable identity', () => {
     const first = { definitions: [{ id: 'a' }, { id: 'b' }] }
     const second = { definitions: [{ id: 'b' }, { id: 'a' }] }
+
+    expect(canonicalStaticJson(first)).toBe(canonicalStaticJson(second))
+  })
+
+  it('keeps order inside dynamic metadata arrays', () => {
+    const first = { definitions: [{ id: 'a', metadata: { tags: ['alpha', 'beta'] } }] }
+    const second = { definitions: [{ id: 'a', metadata: { tags: ['beta', 'alpha'] } }] }
 
     expect(canonicalStaticJson(first)).not.toBe(canonicalStaticJson(second))
   })

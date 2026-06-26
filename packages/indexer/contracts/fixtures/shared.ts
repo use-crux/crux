@@ -21,6 +21,7 @@ import type { StaticSyntaxFileRecord } from '../static-syntax/schema'
 import type { ProjectIndexWorkerEvent } from '../worker-events/schema'
 import type { SemanticEvidenceBatch } from '../semantic/schema'
 import type { IndexRelationPolicy } from '../../indexer/relations/types'
+import type { IndexLintRuleId } from '../../indexer/lints/rules'
 
 /** File-backed fixture names that are intended to be consumed across runtimes. */
 export type StaticIndexRuntimeSharedFixtureName =
@@ -34,6 +35,7 @@ export type StaticIndexRuntimeSharedFixtureName =
   | 'semantic-evidence'
   | 'relation-specs'
   | 'rule-descriptors'
+  | 'lint-rule-parity-coverage'
   | 'primitive-coverage-identities'
 
 /** Typed payload for the shared Static Index protocol fixture. */
@@ -133,12 +135,36 @@ export interface RuleDescriptorsSharedFixture {
   readonly descriptors: readonly IndexRuleDescriptor[]
 }
 
+/** Fixture class proving a lint rule's normalized TypeScript and native outputs. */
+export type LintRuleParityEvidenceClass = 'positive' | 'negative'
+
+/** Worker-backed parity evidence for one built-in lint rule. */
+export interface LintRuleParityEvidenceFixture {
+  /** Built-in rule id covered by the parity fixture. */
+  readonly ruleId: IndexLintRuleId
+  /** Test file that compares the positive finding payload across TypeScript and Rust. */
+  readonly positiveFixture: string
+  /** Test file that proves the matched graph shape does not produce a false positive. */
+  readonly negativeFixture: string
+}
+
+/** Shared manifest for built-in lint parity coverage claims. */
+export interface LintRuleParityCoverageSharedFixture {
+  /** Evidence classes required before native lint coverage can be claimed. */
+  readonly requiredEvidence: readonly LintRuleParityEvidenceClass[]
+  /** Worker-backed parity fixtures for every built-in finding-producing rule. */
+  readonly rules: readonly LintRuleParityEvidenceFixture[]
+  /** Fixture proving config, profile, suppression, and diagnostic behavior through the native worker. */
+  readonly policyFixture: string
+}
+
 /** Fixture classes required before a first-party primitive can be native-covered. */
 export type PrimitiveCoverageFixtureClass =
   | 'definitions'
   | 'relations'
   | 'sourceRefs'
   | 'diagnostics'
+  | 'dependencies'
   | 'lints'
   | 'sources'
   | 'sourceGraph'
@@ -155,6 +181,13 @@ export interface PrimitiveCoverageIdentityFixture {
   readonly family: string
   /** Whether the family is currently advertised as native-covered. */
   readonly nativeCovered: boolean
+  /** Positive and negative native/fallback parity fixtures for this family. */
+  readonly parityFixtures: {
+    /** Fixture that proves supported syntax emits exact native facts. */
+    readonly positive: string
+    /** Fixture that proves unsupported/lookalike syntax does not emit partial native facts. */
+    readonly negative: string
+  }
   /** Existing fixture file that covers each required fixture class. */
   readonly fixtureClasses: Readonly<Record<PrimitiveCoverageFixtureClass, string>>
 }
@@ -179,6 +212,7 @@ export interface StaticIndexRuntimeSharedFixtureMap {
   readonly 'semantic-evidence': SemanticEvidenceSharedFixture
   readonly 'relation-specs': RelationSpecsSharedFixture
   readonly 'rule-descriptors': RuleDescriptorsSharedFixture
+  readonly 'lint-rule-parity-coverage': LintRuleParityCoverageSharedFixture
   readonly 'primitive-coverage-identities': PrimitiveCoverageIdentitiesSharedFixture
 }
 
@@ -195,6 +229,7 @@ const fixtureFiles = {
   'semantic-evidence': 'semantic-evidence.json',
   'relation-specs': 'relation-specs.json',
   'rule-descriptors': 'rule-descriptors.json',
+  'lint-rule-parity-coverage': 'lint-rule-parity-coverage.json',
   'primitive-coverage-identities': 'primitive-coverage-identities.json',
 } as const satisfies Record<StaticIndexRuntimeSharedFixtureName, string>
 

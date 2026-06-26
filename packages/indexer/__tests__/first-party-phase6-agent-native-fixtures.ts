@@ -1,5 +1,9 @@
 import { describe, expect } from 'vitest'
-import { extractNativeAndFallback, itWithRustOxc, jsonStable } from './native-first-party-fixture-helpers'
+import {
+  extractNativeAndFallback,
+  expectNativeExtractionParity,
+  itWithRustOxc,
+} from './native-first-party-fixture-helpers'
 
 describe('first-party Phase 6 native agent fixtures', () => {
   itWithRustOxc(
@@ -30,9 +34,7 @@ describe('first-party Phase 6 native agent fixtures', () => {
       expect(record.nativeFacts?.flatMap((fact) => fact.replaces ?? [])).toEqual(
         expect.arrayContaining([{ extension: '@crux/indexer/crux-core', extractor: 'agent' }]),
       )
-      expect(jsonStable(nativeOut.definitions)).toEqual(jsonStable(fallbackOut.definitions))
-      expect(jsonStable(nativeOut.relations)).toEqual(jsonStable(fallbackOut.relations))
-      expect(jsonStable(nativeOut.diagnostics)).toEqual(jsonStable(fallbackOut.diagnostics))
+      expectNativeExtractionParity(nativeOut, fallbackOut)
     },
     30_000,
   )
@@ -87,10 +89,7 @@ describe('first-party Phase 6 native agent fixtures', () => {
         [{ extension: '@crux/indexer/crux-core', extractor: 'agent' }],
         [{ extension: '@crux/indexer/crux-core', extractor: 'agent' }],
       ])
-
-      expect(jsonStable(nativeOut.definitions)).toEqual(jsonStable(fallbackOut.definitions))
-      expect(jsonStable(nativeOut.relations)).toEqual(jsonStable(fallbackOut.relations))
-      expect(jsonStable(nativeOut.diagnostics)).toEqual(jsonStable(fallbackOut.diagnostics))
+      expectNativeExtractionParity(nativeOut, fallbackOut)
 
       expect(nativeOut.definitions.find((definition) => definition.id === 'agent:Convex-Writer')).toMatchObject({
         metadata: expect.objectContaining({
@@ -151,9 +150,7 @@ describe('first-party Phase 6 native agent fixtures', () => {
         ),
       )
       expect(agentPackets).toHaveLength(1)
-      expect(jsonStable(nativeOut.definitions)).toEqual(jsonStable(fallbackOut.definitions))
-      expect(jsonStable(nativeOut.relations)).toEqual(jsonStable(fallbackOut.relations))
-      expect(jsonStable(nativeOut.diagnostics)).toEqual(jsonStable(fallbackOut.diagnostics))
+      expectNativeExtractionParity(nativeOut, fallbackOut)
     },
     30_000,
   )
