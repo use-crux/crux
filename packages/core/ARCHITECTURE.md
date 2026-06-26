@@ -57,7 +57,8 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 ├── prompts-tree.ts     createPrompts() — tree builder
 ├── plugin.ts           CruxPlugin interface, mergeRuntime(), applyPlugins()
 ├── configure.ts        configure() — registry, globals, plugin processing
-├── resolve.ts          compilePrompt() and the resolution pipeline — system composition, token dropping
+├── resolve.ts          compilePrompt() — public prompt compiler entrypoint
+├── resolver/           prompt-resolution pass internals — schema, ports, system composition, token dropping
 ├── tools.ts            SDK-agnostic tool() helper and ToolDef re-exports
 ├── tokenizer.ts        Pluggable token counter (default: chars/4)
 ├── runtime.ts          CruxRuntime — single object for all global hooks/reporters (getRuntime/setRuntime)
@@ -335,9 +336,9 @@ Settings merge
 Tool collection (only from active contexts)
   active context tools + prompt tools + call-site tools (last-write-wins)
   ↓
-ResolvedPrompt { system, systemBlocks, prompt, messages, schema, tools, toolMiddleware, settings }
-  ├── Resolution.args returns this object
-  └── Resolution.inspect() derives InspectResult from this same pass
+PromptResolution
+  ├── args: ResolvedPrompt { system, systemBlocks, prompt, messages, schema, tools, toolMiddleware, settings }
+  └── inspect() derives InspectResult from this same pass
   ↓
 Adapter execution
   prompt toolMiddleware + call-site toolMiddleware wrap final tools
@@ -350,7 +351,7 @@ The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29
 
 - **`resolver/lower.ts`** — `lowerEntry(entry, index)` turns each member of the `ContextEntry` union (context, `when()` wrapper, `match()` spec, skill, memory, blackboard, injectable, `contributor()` entry, falsy) into an internal `LoweredContributor` answering up to four questions: `gate` (sync include/exclude with reason + observability facts), `children` (sync nesting), `contribute` (async, the only I/O point), and — at definition time — `collectSchemaContributions()` (the "shape" question for input-schema merging). This is the only module that knows the union; family classification lives here too and reads `Context.family`, declared by the primitive factory that produced the context — memory, blackboard, retriever/grounding, handoff, and the skill surface (no id sniffing).
 - **`resolver/driver.ts`** — `resolveUse()` walks lowered contributors: gate facts emit first, children merge before the entry's own contribution, `Contribution.use` re-enters the pipeline with branch-local indices, tool collisions throw with the owning entry attributed, and all `context.contribution` artifact emission happens at exactly two sites (gate steps + contribution facts).
-- **`resolver/skills.ts`** — the cross-entry collector for skills. The shared pass calls it from the post-merge phase before either `Resolution.args` or `Resolution.inspect()` is projected, so skill indexing, lazy registry fetches, and loaded-skill contexts cannot drift between resolve and inspect. Resolve-mode skill tools are bound to a `SkillActivationSession` and the resolved prompt carries `_skillSession` as the explicit activation boundary.
+- **`resolver/skills.ts`** — the cross-entry collector for skills. The shared pass calls it from the post-merge phase before either `PromptResolution.args` or `PromptResolution.inspect()` is projected, so skill indexing, lazy registry fetches, and loaded-skill contexts cannot drift between resolve and inspect. Resolve-mode skill tools are bound to a `SkillActivationSession` and the resolved prompt carries `_skillSession` as the explicit activation boundary.
 - **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports: `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch), `ContextCachePort`, `ClockPort`, `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. Defaults wrap the pre-existing globals lazily, so `setRuntime()` / `configureObservability()` keep their install-takes-effect-immediately semantics. `compilePrompt(config, { ports })` binds the pipeline to explicit ports; in-memory fakes for every port ship from `@crux/core` (`resolver/fakes.ts`).
 - Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ store })`), which is the correct seam.
 - The lowered `Contributor` contract types are exported from `@crux/core` as advanced API for adapter and primitive authors. The lowering, driver, and schema collection functions stay internal to the compiled prompt boundary. The everyday authoring surface is `contributor()` — a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions through the same channels as other entries.

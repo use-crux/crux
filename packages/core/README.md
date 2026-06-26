@@ -4018,7 +4018,7 @@ For adapter and primitive authors, the lowered contract types every entry resolv
 
 ### Testable Resolution
 
-`compilePrompt(config, { ports })` is the single prompt-resolution boundary. It validates the config, merges the prompt and context input schemas once, binds resolver ports, then gives each call one pipeline pass with two projections: SDK-ready args and an inspection view of that same pass.
+`compilePrompt(config, { ports })` is the single prompt-resolution boundary. It validates the config, merges the prompt and context input schemas once, binds resolver ports, then gives each call one pipeline pass as a `PromptResolution`: SDK-ready `args` and an inspection view of that same pass.
 
 Pair it with the in-memory fakes exported from `@crux/core` to test prompt resolution with zero global setup and a clock you control:
 
@@ -4092,7 +4092,7 @@ result.text // string
 
 **Generation settings** — `GenerationSettings` provides SDK-agnostic fields (`temperature`, `maxTokens`, `topP`, `topK`, `stopSequences`, `frequencyPenalty`, `presencePenalty`) plus an index signature for pass-through. Each adapter maps these to its SDK's naming conventions.
 
-**Adapter author types** — `ResolvedPrompt`, `SystemBlock`, `ModelInfo`, `GenerationSettings`, `AnyPrompt`, and `AnyPromptConfig` are exported for adapter authors who consume `.resolve()` output. Adapter packages constrain context generics with `readonly Context<z.ZodType>[]` (rather than `Context<any>[]`) so that `MergedInput<...>` flows through `generate()`/`stream()` and downstream IDE autocomplete picks up merged context inputs without explicit type arguments.
+**Adapter author types** — `PromptResolution`, `ResolvedPrompt`, `SystemBlock`, `ModelInfo`, `GenerationSettings`, `AnyPrompt`, and `AnyPromptConfig` are exported for adapter authors who consume `.resolve()` output. Adapter packages constrain context generics with `readonly Context<z.ZodType>[]` (rather than `Context<any>[]`) so that `MergedInput<...>` flows through `generate()`/`stream()` and downstream IDE autocomplete picks up merged context inputs without explicit type arguments.
 
 **Compile-time API tests** — `__type_tests__/` covers public inference behavior that runtime tests cannot catch, including context input merging, grounding composition, and retriever tool-name inference for prefixed tools.
 
@@ -4286,7 +4286,8 @@ export default evaluate('editor.tone', {
 ├── prompts-tree.ts    # createPrompts()
 ├── configure.ts       # internal registry, devtools, middleware, tokenizer
 ├── config.ts          # config() — public configuration API
-├── resolve.ts         # Resolution pipeline — system composition, tools, schema merging
+├── resolve.ts         # compilePrompt() — public prompt compiler entrypoint
+├── resolver/          # Prompt-resolution pass internals — schema, ports, system composition, token dropping
 ├── tools.ts           # SDK-agnostic tool() helper and ToolDef re-exports
 ├── tokenizer.ts       # Pluggable tokenizer
 ├── middleware.ts       # Global middleware + instrumentation hooks
