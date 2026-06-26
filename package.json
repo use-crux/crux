@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
+    "@types/node": "^24.12.4",
     "@typescript/native-preview": "^7.0.0-dev.20260325.1",
     "prettier": "3.8.1",
     "turbo": "2.8.12",
