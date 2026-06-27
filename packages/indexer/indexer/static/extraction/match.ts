@@ -1,6 +1,6 @@
 import { relative } from 'node:path'
 import ts from 'typescript'
-import type { ProjectDefinitionKind, SourceLocation, SourceSnippet } from '@crux/core/project-index'
+import type { ProjectDefinitionKind, SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
 import { schemaProperty } from '../../ast/schemas'
 import { sourceForNode, sourceSnippetForNode } from '../../ast/snippets'
 import type { ImportBinding } from '../../ast/imports'
@@ -173,7 +173,7 @@ export function expressionName(expression: ts.Expression): string | undefined {
 }
 
 /**
- * Creates the parser-era helper bag that first-party extractors still receive through native static
+ * Creates the parser-era helper bag that first-party extractors still receive through Static Index
  * contexts.
  *
  * New extension code should prefer the stable `ExtractContext` builders. This helper is kept local to

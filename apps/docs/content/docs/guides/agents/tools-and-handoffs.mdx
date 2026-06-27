@@ -12,9 +12,9 @@ For in-process handoffs where both agents run in the same execution context:
 ```ts twoslash
 // @noErrors
 import { z } from 'zod'
-import { prompt } from '@crux/core'
-import { handoff } from '@crux/core/agent'
-import { generateTextFn } from '@crux/ai'
+import { prompt } from '@use-crux/core'
+import { handoff } from '@use-crux/core/agent'
+import { generateTextFn } from '@use-crux/ai'
 
 const researchHandoff = handoff({
   id: 'research-to-writer',
@@ -59,7 +59,7 @@ const writerPrompt = prompt({
 
 ## Stored handoff
 
-For distributed agents that run in separate processes, actions, or serverless functions, provide a `store` to enable `send()` and `receive()`. Convex apps use `cruxConvexStore()` and Crux-aware action boundaries; see the [Convex storage and boundary guides](/docs/guides/convex/storage-memory-workspaces) for the complete setup.
+For distributed agents that run in separate processes, actions, or serverless functions, provide a `store` to enable `send()` and `receive()`. Convex apps use `defineConvexStoreContract().store(ctx)` and Crux-aware action boundaries; see the [Convex storage and boundary guides](/docs/guides/convex/storage-memory-workspaces) for the complete setup.
 
 <Callout type="warn">
   `send()` and `receive()` throw if `store` is not configured. The stateless `prepare()` and `asContext()` work without

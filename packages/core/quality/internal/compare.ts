@@ -7,7 +7,7 @@
  * delta is reported with the SEM of those paired differences. Cases present
  * on only one side are excluded from the pairing and listed honestly.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 

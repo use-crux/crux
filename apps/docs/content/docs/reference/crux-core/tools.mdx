@@ -5,10 +5,10 @@ description: SDK-agnostic Crux tool definitions for prompts, contexts, adapters,
 
 # Tools
 
-Use `tool()` from `@crux/core/tools` when you want an SDK-agnostic Crux tool definition:
+Use `tool()` from `@use-crux/core/tools` when you want an SDK-agnostic Crux tool definition:
 
 ```ts
-import { tool } from '@crux/core/tools'
+import { tool } from '@use-crux/core/tools'
 import { z } from 'zod'
 
 export const searchDocs = tool({
@@ -24,6 +24,10 @@ export const searchDocs = tool({
 ```
 
 The helper returns a normal `ToolDef`. It exists to preserve input and output inference and to give adapter/runtime packages a stable API to mirror.
+
+Export tool values from normal TypeScript modules when local tooling should inspect them. The Project
+Index discovers statically visible `tool(...)` definitions from source; do not repeat tools in
+`crux.config.ts`.
 
 ## API
 
@@ -53,8 +57,8 @@ const now = tool({
 Tools can be declared directly on prompts or contributed by contexts:
 
 ```ts
-import { context, prompt } from '@crux/core'
-import { tool } from '@crux/core/tools'
+import { context, prompt } from '@use-crux/core'
+import { tool } from '@use-crux/core/tools'
 import { z } from 'zod'
 
 const projectSearch = context({
@@ -80,4 +84,4 @@ export const answerQuestion = prompt({
 
 ## Runtime Profiles
 
-Runtime packages can mirror this API while adding runtime-specific plumbing. For Convex, use `@crux/convex/tools` in Convex code. It keeps the same authoring shape but calls `execute()` with `{ input, ctx, target, runtime }` so tools can access the current Convex action context without app-level global wiring.
+Runtime packages can mirror this API while adding runtime-specific plumbing. For Convex, use `@use-crux/convex/tools` in Convex code. It keeps the same authoring shape but calls `execute()` with `{ input, ctx, target, runtime }` so tools can access the current Convex action context without app-level global wiring.

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -22,9 +24,45 @@ func findFreePort() int {
 	return 14400
 }
 
+func TestNewDevServerLoadsPersistentIngestToken(t *testing.T) {
+	tokenPath := filepath.Join(t.TempDir(), ".crux", "devtools", "ingest-token")
+	if err := os.MkdirAll(filepath.Dir(tokenPath), 0o700); err != nil {
+		t.Fatalf("mkdir token dir: %v", err)
+	}
+	if err := os.WriteFile(tokenPath, []byte("persisted-ingest-token\n"), 0o600); err != nil {
+		t.Fatalf("write token: %v", err)
+	}
+
+	srv := NewDevServer(DevServerOptions{
+		Port:                findFreePort(),
+		QualityDir:          t.TempDir(),
+		ObservabilityDBPath: filepath.Join(t.TempDir(), "observability.sqlite"),
+		IngestTokenPath:     tokenPath,
+	})
+	defer srv.Shutdown(context.Background())
+
+	if srv.IngestToken != "persisted-ingest-token" {
+		t.Fatalf("IngestToken = %q, want persisted-ingest-token", srv.IngestToken)
+	}
+	if srv.IngestTokenPath != tokenPath {
+		t.Fatalf("IngestTokenPath = %q, want %q", srv.IngestTokenPath, tokenPath)
+	}
+}
+
+func devServerTestOptions(t *testing.T, port int) DevServerOptions {
+	t.Helper()
+	dir := t.TempDir()
+	return DevServerOptions{
+		Port:                port,
+		QualityDir:          filepath.Join(dir, "quality"),
+		ObservabilityDBPath: filepath.Join(dir, "observability.sqlite"),
+		IngestTokenPath:     filepath.Join(dir, ".crux", "devtools", "ingest-token"),
+	}
+}
+
 func TestDevServer_start_and_query(t *testing.T) {
 	port := findFreePort()
-	srv := NewDevServer(DevServerOptions{Port: port, QualityDir: t.TempDir()})
+	srv := NewDevServer(devServerTestOptions(t, port))
 
 	if err := srv.Start(); err != nil {
 		t.Fatalf("Start() error: %v", err)
@@ -53,7 +91,7 @@ func TestDevServer_start_and_query(t *testing.T) {
 
 func TestDevServer_ingest_and_read(t *testing.T) {
 	port := findFreePort()
-	srv := NewDevServer(DevServerOptions{Port: port, QualityDir: t.TempDir()})
+	srv := NewDevServer(devServerTestOptions(t, port))
 
 	if err := srv.Start(); err != nil {
 		t.Fatalf("Start() error: %v", err)

@@ -115,9 +115,9 @@ export interface PromptCacheOptions<TInput = Record<string, unknown>> {
  * Declarative tool definition for the project tool catalog — name,
  * description, and parameter schema.
  *
- * These are plain data (no runtime implementation), registered via
- * `crux({ tools })` / `config({ tools })` so devtools and the project index
- * can present the tool surface alongside prompts and contexts.
+ * These are plain data (no runtime implementation). Local tooling discovers
+ * statically visible tool definitions from source so devtools and the project
+ * index can present the tool surface alongside prompts and contexts.
  *
  * @example
  * ```ts
@@ -438,7 +438,7 @@ export interface ContributorEntry<TInput extends z.ZodType = z.ZodType> extends 
 
 /**
  * A Skill entry in a prompt's `use` array.
- * Imported from @crux/core/skill — this is the minimal interface
+ * Imported from @use-crux/core/skill — this is the minimal interface
  * needed by the resolution pipeline.
  */
 export interface SkillEntry {
@@ -455,7 +455,7 @@ export interface SkillEntry {
  * A memory entry in a prompt's `use` array.
  *
  * This is intentionally structural to avoid a core type cycle: the concrete
- * implementation lives in `@crux/core/memory`, while prompt resolution only
+ * implementation lives in `@use-crux/core/memory`, while prompt resolution only
  * needs to expand it into context/tools and retain a lifecycle binding.
  */
 export interface MemoryEntry {
@@ -478,7 +478,7 @@ export interface MemoryEntry {
 /**
  * A blackboard entry in a prompt's `use` array.
  *
- * The concrete implementation lives in `@crux/core/agent`. Prompt resolution
+ * The concrete implementation lives in `@use-crux/core/agent`. Prompt resolution
  * only needs to expand it into context and focused tools.
  */
 export interface BlackboardEntry {
@@ -719,7 +719,7 @@ export interface PromptConfig<
    * Prompt-level cache intent.
    *
    * `cache.semantic` is consumed by `createSemanticCache()` from
-   * `@crux/core/cache`. It is inert without that plugin; Crux emits a
+   * `@use-crux/core/cache`. It is inert without that plugin; Crux emits a
    * development warning when a prompt declares semantic cache but no plugin is
    * installed.
    */

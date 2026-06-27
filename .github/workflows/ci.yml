@@ -23,6 +23,18 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/local/go.mod
+          cache-dependency-path: packages/local/go.sum
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install 1.93.0 --profile minimal
+          rustup default 1.93.0
+          rustc --version
+
       - name: Install
         run: pnpm install --frozen-lockfile
 
@@ -32,8 +44,14 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Native AST parity gate
+        run: pnpm test:native-ast-parity
+
       - name: Build
         run: pnpm build
+
+      - name: Validate npm package staging
+        run: pnpm release:stage:ts && pnpm release:validate
 
   typescript-compat:
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -69,6 +87,7 @@ jobs:
         typescript: ['5.5.4', '5.9.3', '6.0.3']
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      CRUX_INDEXER_SKIP_RUST_OXC_TESTS: true
     steps:
       - name: Checkout
         uses: actions/checkout@v5

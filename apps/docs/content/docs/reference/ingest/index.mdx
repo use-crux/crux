@@ -1,22 +1,22 @@
 ---
-title: '@crux/ingest'
+title: '@use-crux/ingest'
 description: Source loaders for inline text, files, and URLs — produce IngestDocument streams for corpus sync.
 ---
 
 ```ts
-import { textSource } from '@crux/ingest'
-import { fileSource, filesSource } from '@crux/ingest/files'
-import { urlSource, urlsSource } from '@crux/ingest/urls'
-import type { IngestDocument, SourceLoader } from '@crux/ingest'
+import { textSource } from '@use-crux/ingest'
+import { fileSource, filesSource } from '@use-crux/ingest/files'
+import { urlSource, urlsSource } from '@use-crux/ingest/urls'
+import type { IngestDocument, SourceLoader } from '@use-crux/ingest'
 ```
 
 ## Overview
 
-`@crux/ingest` is the source-loading layer for retrieval. It turns inline text, local files, folders, globs, and URLs into structured `IngestDocument` values that can flow into `corpus.sync()` or `indexer.indexDocuments()`.
+`@use-crux/ingest` is the source-loading layer for retrieval. It turns inline text, local files, folders, globs, and URLs into structured `IngestDocument` values that can flow into `corpus.sync()` or `indexer.indexDocuments()`.
 
 The important word is structured. Every parser produces `parts` first: text blocks, pages, tables, sheets, or JSON paths. Crux then derives `content` from those parts so the current chunking and retrieval path still works like normal text ingestion. That gives simple users a plain-text path and gives advanced users provenance for custom chunkers, UI citations, table-aware indexing, and future document-intelligence features.
 
-If your application already has a clean loading pipeline, you do not have to use this package. Yield the same document shape from your own loader and pass it to the corpus. `@crux/ingest` exists to make the default retrieval stack coherent, not to become mandatory ceremony.
+If your application already has a clean loading pipeline, you do not have to use this package. Yield the same document shape from your own loader and pass it to the corpus. `@use-crux/ingest` exists to make the default retrieval stack coherent, not to become mandatory ceremony.
 
 ## Subpaths
 
@@ -39,11 +39,11 @@ Crux ships these source loaders:
 
 | Loader | Import | What it loads | Use it when |
 | --- | --- | --- | --- |
-| `textSource()` | `@crux/ingest` | One or more in-memory `IngestDocument`-like objects. | Your app already has text, CMS records, API results, or generated documents in memory. |
-| `fileSource()` | `@crux/ingest/files` | One local file. | You want to index a known file and optionally control its `sourceId`. |
-| `filesSource()` | `@crux/ingest/files` | An array of paths, a directory, or a glob. | You want to index a local docs folder or file set. |
-| `urlSource()` | `@crux/ingest/urls` | One HTTP(S) URL. | You want to index a known web page or remote document. |
-| `urlsSource()` | `@crux/ingest/urls` | A list of HTTP(S) URLs. | You have an explicit URL list and do not need crawler behavior. |
+| `textSource()` | `@use-crux/ingest` | One or more in-memory `IngestDocument`-like objects. | Your app already has text, CMS records, API results, or generated documents in memory. |
+| `fileSource()` | `@use-crux/ingest/files` | One local file. | You want to index a known file and optionally control its `sourceId`. |
+| `filesSource()` | `@use-crux/ingest/files` | An array of paths, a directory, or a glob. | You want to index a local docs folder or file set. |
+| `urlSource()` | `@use-crux/ingest/urls` | One HTTP(S) URL. | You want to index a known web page or remote document. |
+| `urlsSource()` | `@use-crux/ingest/urls` | A list of HTTP(S) URLs. | You have an explicit URL list and do not need crawler behavior. |
 | Custom `SourceLoader` | any package | Any async iterable of `IngestLoadResult`. | You are loading from a CMS, database, queue, API, crawler, or connector. |
 
 All bundled loaders return the same `SourceLoader` shape:
@@ -149,7 +149,7 @@ Use `load()` for real sync jobs. It reports source-level failures as values, whi
 For when you already have the text in hand:
 
 ```ts
-import { textSource } from '@crux/ingest'
+import { textSource } from '@use-crux/ingest'
 
 const single = textSource({
   namespace: 'docs',
@@ -206,8 +206,8 @@ PDF parsing supports an OCR hook. Crux does not ship an OCR provider, but image-
 ## Pattern: pipe into a corpus
 
 ```ts
-import { corpus, indexer } from '@crux/core/indexing'
-import { filesSource } from '@crux/ingest/files'
+import { corpus, indexer } from '@use-crux/core/indexing'
+import { filesSource } from '@use-crux/ingest/files'
 
 const docsIndexer = indexer({
   id: 'docs',
@@ -235,9 +235,9 @@ Use `indexer.indexDocuments(source.load())` for one-off writes and tests. Use `c
 
 ## Observability
 
-Each parser run emits `ingest:parse:start` and `ingest:parse:end` through devtools, the CLI/TUI, and `@crux/otel`. OTel exports a `crux.ingest.parse` span with parser, format, byte length, part count, warning count, and privacy-safe hashed namespace/source identifiers.
+Each parser run emits `ingest:parse:start` and `ingest:parse:end` through devtools, the CLI/TUI, and `@use-crux/otel`. OTel exports a `crux.ingest.parse` span with parser, format, byte length, part count, warning count, and privacy-safe hashed namespace/source identifiers.
 
-## What `@crux/ingest` is not
+## What `@use-crux/ingest` is not
 
 It is not a crawler framework, connector marketplace, or full document-intelligence platform. Use it to normalize source material into structured documents, then let corpus sync and retrieval own the rest.
 

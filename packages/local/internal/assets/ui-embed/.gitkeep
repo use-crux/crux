@@ -1,0 +1,1 @@
+Generated UI embed assets are created by `make local` or `make -C packages/local build`.

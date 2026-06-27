@@ -7,7 +7,7 @@
  * keys; output snapshots are truncated at 32 KiB — full outputs live in the
  * trace store, reachable via `traceIds`.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 
@@ -23,10 +23,22 @@ export const OUTPUT_TRUNCATION_LIMIT = 32 * 1024
 export const TRUNCATION_MARKER = '…[truncated]'
 
 /**
+ * Feedback payload roots accepted by `quality.redact` root-qualified paths.
+ *
+ * Evaluation cell snapshots use value-relative paths such as `customer.email`.
+ * Feedback records contain multiple named payloads, so their configured paths
+ * are root-qualified: `metadata.customer.email`, `expected.answer`, or
+ * `proposal.statement`.
+ *
+ * @internal
+ */
+export type QualityRedactionRoot = 'metadata' | 'expected' | 'proposal'
+
+/**
  * Always-on redaction: key names that are redacted at every depth regardless
  * of configuration — authorization headers and API keys (spec 01 §9).
  */
-const ALWAYS_REDACTED_KEY = /^(authorization|proxy-authorization|api[-_]?key|x-api-key)$/i
+const ALWAYS_REDACTED_KEY = /^(authorization|proxy[-_]?authorization|api[-_]?key|x[-_]?api[-_]?key)$/i
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object'
@@ -68,6 +80,28 @@ function redactNode(value: unknown, paths: ReadonlyArray<readonly string[]>): un
 export function applyRedaction(value: unknown, paths: readonly string[]): unknown {
   const split = paths.map((path) => path.split('.').filter((segment) => segment !== ''))
   return redactNode(value, split)
+}
+
+/**
+ * Apply root-qualified `quality.redact` paths to a named feedback payload.
+ *
+ * Always-on authorization/API-key redaction still applies to every nested key.
+ * Configured paths are scoped by the first segment: `metadata.customer.email`
+ * becomes `customer.email` when redacting the `metadata` payload and is ignored
+ * for the `expected` or `proposal` payloads.
+ *
+ * @internal
+ */
+export function applyRootRedaction<TValue>(
+  value: TValue,
+  root: QualityRedactionRoot,
+  paths: readonly string[],
+): TValue {
+  const scopedPaths = paths.flatMap((path) => {
+    const [head, ...tail] = path.split('.').filter((segment) => segment !== '')
+    return head === root && tail.length > 0 ? [tail.join('.')] : []
+  })
+  return applyRedaction(value, scopedPaths) as TValue
 }
 
 /**

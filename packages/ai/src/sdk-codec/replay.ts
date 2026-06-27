@@ -1,4 +1,4 @@
-import type { ExecutorStreamHandle, ExecutorStreamMeta } from '@crux/core/adapter'
+import type { ExecutorStreamHandle, ExecutorStreamMeta } from '@use-crux/core/adapter'
 import { withLegacyStreamMeta } from './stream-meta'
 import type { CachedStreamPayload, SdkStreamResultLike } from './types'
 

@@ -1,11 +1,11 @@
 ---
-title: '@crux/local'
+title: '@use-crux/local'
 description: Local Crux runtime for the Go devtools server, TUI, traces, Quality, index, and lint.
 ---
 
 ```bash
 # Install
-npm install -g @crux/local
+npm install -g @use-crux/local
 # or download the binary from the releases page
 ```
 
@@ -38,6 +38,10 @@ crux dev --no-open        # Don't open the browser
 The Go server owns HTTP, WebSocket/SSE, read models, and UI serving. If the port is already in use, it automatically tries the next available port (up to +9).
 
 **Requires:** Node.js >= 24 for helper workers that import project TypeScript.
+
+On startup, `crux dev` generates or reuses a scoped observability ingest token at
+`.crux/devtools/ingest-token` and prints it as `CRUX_DEVTOOLS_TOKEN=...`. Use that token with a
+public tunnel origin when cloud runtimes need to post records back to your local server.
 
 The local HTTP API, in-process DirectClient, and WebSocket snapshot payloads share the same backend read-model registry. This keeps route parameters, query parsing, not-found handling, live invalidation messages, and initial snapshot payloads aligned between custom tooling and the embedded devtools UI.
 
@@ -104,6 +108,60 @@ breakdowns, followed by any threshold `warn`/`limit` events. Requires
 `withCostTracking()` in your Crux config — without it, no cost events are
 recorded and the command says so.
 
+## `crux config`
+
+Render the **effective Crux configuration**: every domain `config()` accepts, with each value resolved
+and tagged by where it came from. `crux config inspect` imports your `crux.config.ts` in inert
+`CRUX_INDEX=1` mode (no runtime side effects — no observability transport, no bridge, no store) so the
+view reflects your explicit overrides, not just defaults. For the full option surface, see
+[Config](/docs/reference/crux-core/config).
+
+```bash
+crux config inspect
+crux config inspect --json
+crux config inspect --cwd packages/backend
+crux config inspect --config crux.config.ts
+```
+
+| Flag       | Description                                               |
+| ---------- | --------------------------------------------------------- |
+| `--json`   | Output the full effective configuration as JSON           |
+| `--cwd`    | Project root to inspect (default: nearest config/package) |
+| `--config` | Crux config path relative to the project root             |
+| `--name`   | Project name to include in worker resolution              |
+
+The view is organized by `config()` domain, in interface order:
+
+- `Project` — root and package name
+- `Config file` — the resolved file, how it was located, its load status, and any import error
+- `quality:` — `id`, `dir`, `include`, `exclude`, `redact`, and the run defaults `trials` /
+  `concurrency` / `timeoutMs` / `replay` (the full `QualityConfig` surface)
+- `generation:` — `autoEscape`, `securityWarnings`, and whether a `tokenizer` / `middleware` is bound
+- `indexer:` — extension `trust` mode and configured `extensions`
+- `observability:` — `enabled`, `serverUrl`, token presence, and whether a custom `transport` is bound
+- `devtools:` — `serverUrl` and whether a `bridge` is configured
+- `persistence:` — whether a global `store` is bound
+- `lint:` — selected `profile` and rule-override count
+- `plugins:` — installed plugin names
+- `Discovered` — a compact count of authored definitions / relations / evaluations (context, not config;
+  the full index lives behind [`crux index`](#crux-index))
+- `Diagnostics` — config-load and project-model findings
+
+Every value carries a dim origin tag so a zero-config project reads as "these are the defaults Crux
+applied": `(default)` for a built-in default, `(config)` for an explicit value from `crux.config.ts`,
+`(package.json)` for package-derived values, and `(set)` for a bound non-serializable value (store,
+tokenizer, middleware, transport). The config-file status uses a colored glyph (`✓ loaded`,
+`✗ missing`/`import-failed`, `● unrecognized`). Paths are normalized for readability: the project root
+collapses to `~` and every other path is shown relative to it (`.crux/quality`, `evals/...`).
+
+On an interactive terminal an animated loader is shown while the config resolves; color and the loader
+are suppressed under `--no-color`, `NO_COLOR`, or a non-TTY pipe, and `--json` emits the machine-readable
+form (each setting as `{ value, origin }`, full absolute paths preserved). Worker lifecycle logs are
+silenced for this one-shot command — set `CRUX_STARTUP_DEBUG=1` to surface them when troubleshooting.
+
+A broken config never makes inspection fail: an import error degrades to an all-defaults view with an
+`import-failed` config status and the error surfaced under `Diagnostics`.
+
 ## `crux index`
 
 List Project Index definitions from the Go devtools service.
@@ -157,12 +215,12 @@ crux lint --include-suppressed     # Also show source-comment suppressed finding
 crux lint --json                   # Output as JSON
 ```
 
-| Flag                   | Description                                                           |
-| ---------------------- | -------------------------------------------------------------------- |
+| Flag                   | Description                                                            |
+| ---------------------- | ---------------------------------------------------------------------- |
 | `--profile <name>`     | Lint profile: `off`, `recommended` (default), `strict`, `experimental` |
-| `--fail-on <severity>` | Exit `1` when selected findings include `error`, `warning`, or `info` |
-| `--include-suppressed` | Include source-comment suppressed findings                           |
-| `--json`               | Output as JSON                                                        |
+| `--fail-on <severity>` | Exit `1` when selected findings include `error`, `warning`, or `info`  |
+| `--include-suppressed` | Include source-comment suppressed findings                             |
+| `--json`               | Output as JSON                                                         |
 
 Lists findings sorted by severity (`error` · `warning` · `info`), each with its
 rule id, target definition, source `file:line`, and — when available — the
@@ -172,8 +230,10 @@ finding sets exit code `1` so the command can gate CI.
 ## `crux quality`
 
 Run, watch, list, inspect, and promote Quality evaluations (`*.eval.ts` files
-plus colocated `prompt({ tests })`), discovered via the `quality:` block of
-`crux.config.ts`. See the [Quality guide](/docs/guides/quality).
+plus colocated `prompt({ tests })` when a prompt registry is available).
+File-defined evaluations are discovered by convention; `crux.config.ts` is
+optional policy/defaults, not a required primitive registry. See the
+[Quality guide](/docs/guides/quality).
 
 ```bash
 crux quality run [id...]            # Run all discovered evaluations, or the listed ids
@@ -189,29 +249,29 @@ Quality is the supported evaluation CLI namespace.
 
 ### `crux quality run` flags
 
-| Flag | Meaning |
-| --- | --- |
-| `[id...]` | Evaluation ids (explicit or path-derived). Unknown id → exit 2 with a nearest-match suggestion |
-| `--case <pattern>` | Filter cases by id/name; `*` glob; repeatable. **Demotes gates to informational** |
-| `--variant <name>` | Run a variant subset; repeatable. Demotes gates unless the baseline variant is included |
-| `--trials <n>` | Override trials for this run |
-| `--replay <mode>` | `live` · `record-new` · `replay-strict` · `refresh` — overrides declaration/config |
-| `--rescore` | Reuse cached outputs, re-run scorers/expects only (token-free judge iteration) |
-| `--experiment <label>` | Grouping label stored on the record(s) |
-| `--json` | Write the Experiment record(s) (versioned schema) as a JSON array to stdout (bool, consistent with every other quality subcommand) |
-| `--json-out <path>` | Write the same JSON array to a file path instead of stdout |
-| `--junit <path>` | Write JUnit XML (one testsuite per evaluation × variant; gate failures as a synthetic `gates` testcase; experimentId/configFingerprint/score means in properties) |
-| `--ci` | Force plain, non-animated output and no color, even on a TTY (explicit override for piping to a file while attached to a terminal). Off a TTY this is detected automatically |
-| `--max-concurrency <n>` | Cap parallel cells across all evaluations |
-| `--quiet` / `--verbose` | Reporter detail level |
+| Flag                    | Meaning                                                                                                                                                           |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `[id...]`               | Evaluation ids (explicit or path-derived). Unknown id → exit 2 with a nearest-match suggestion                                                                    |
+| `--case <pattern>`      | Filter cases by id/name; `*` glob; repeatable. **Demotes gates to informational**                                                                                 |
+| `--variant <name>`      | Run a variant subset; repeatable. Demotes gates unless the baseline variant is included                                                                           |
+| `--trials <n>`          | Override trials for this run                                                                                                                                      |
+| `--replay <mode>`       | `live` · `record-new` · `replay-strict` · `refresh` — overrides declaration/config                                                                                |
+| `--rescore`             | Reuse cached outputs, re-run scorers/expects only (token-free judge iteration)                                                                                    |
+| `--experiment <label>`  | Grouping label stored on the record(s)                                                                                                                            |
+| `--json`                | Write the Experiment record(s) (versioned schema) as a JSON array to stdout (bool, consistent with every other quality subcommand)                                |
+| `--json-out <path>`     | Write the same JSON array to a file path instead of stdout                                                                                                        |
+| `--junit <path>`        | Write JUnit XML (one testsuite per evaluation × variant; gate failures as a synthetic `gates` testcase; experimentId/configFingerprint/score means in properties) |
+| `--ci`                  | Force plain, non-animated output and no color, even on a TTY. Pair with explicit `--replay replay-strict` for token-free CI posture                               |
+| `--max-concurrency <n>` | Cap parallel cells across all evaluations                                                                                                                         |
+| `--quiet` / `--verbose` | Reporter detail level                                                                                                                                             |
 
 ### Exit codes
 
-| Code | Meaning |
-| --- | --- |
-| `0` | All blocking gates passed (or a filtered run with no errored cells) |
-| `1` | A blocking gate failed, an expect failed under the default policy, or any cell errored |
-| `2` | Definition/discovery error — unknown id, duplicate ids, dataset schema failure, missing `generate` for a model-backed task, invalid config. Nothing was executed |
+| Code | Meaning                                                                                                                                                          |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | All blocking gates passed (or a filtered run with no errored cells)                                                                                              |
+| `1`  | A blocking gate failed, an expect failed under the default policy, or any cell errored                                                                           |
+| `2`  | Definition/discovery error — unknown id, duplicate ids, dataset schema failure, missing `generate` for a model-backed task, invalid config. Nothing was executed |
 
 The reporter prints a per-evaluation tree with per-cell status; failures show
 the assertion diff, its `file:line` source ref, and the devtools trace deep
@@ -314,7 +374,7 @@ Run `crux completion <shell> --help` for shell-specific installation steps.
 
 ## Configuration
 
-The CLI discovers the devtools server by connecting to `localhost` on the configured port (default 4400). The Quality runner discovers `crux.config.ts` by walking up from the working directory.
+The CLI discovers the devtools server by connecting to `localhost` on the configured port (default 4400). Quality auto-attach accepts `CRUX_DEVTOOLS_URL` only when it points at a loopback devtools origin such as `localhost`, `127.0.0.1`, or `[::1]`; remote observability and cloud upload targets must be configured explicitly by project code. The Quality runner resolves a project root from `--cwd`, `--config`, the nearest config file, the nearest package root, or the current working directory.
 
 Set the `CRUX_STARTUP_DEBUG=1` environment variable to show startup timing diagnostics without the `--startup-debug` flag.
 

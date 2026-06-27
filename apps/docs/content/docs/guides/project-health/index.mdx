@@ -36,16 +36,16 @@ For each definition, Devtools can show:
 
 Diagnostics and lints are intentionally separate.
 
-| Signal | Meaning | Example |
-| --- | --- | --- |
-| Diagnostic | Crux could not fully understand or process something. | A file failed to parse, a package import failed, or semantic enrichment was unavailable. |
-| Lint finding | Crux understood the authored graph and found an actionable design issue. | A tool has no inspectable input schema, or a handoff target is not visible. |
+| Signal       | Meaning                                                                  | Example                                                                                  |
+| ------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Diagnostic   | Crux could not fully understand or process something.                    | A file failed to parse, a package import failed, or semantic enrichment was unavailable. |
+| Lint finding | Crux understood the authored graph and found an actionable design issue. | A tool has no inspectable input schema, or a handoff target is not visible.              |
 
 Treat diagnostics first when they prevent Crux from seeing the project clearly. Treat lint findings as product-quality feedback about the AI system Crux could see.
 
 ## Why The View Can Change After Startup
 
-During `crux dev`, Crux shows a fast first view quickly, then enriches it with deeper TypeScript understanding when available. A snapshot may briefly include an `index.static_only` diagnostic while that deeper pass is unavailable or still running.
+During `crux dev`, Crux shows a fast first view quickly, then enriches it with deeper TypeScript understanding when available. A snapshot may briefly include an `index.source_only` diagnostic while that deeper pass is unavailable or still running.
 
 That is expected. When enrichment succeeds, Crux clears the marker and updates Devtools with richer source refs and relations.
 
@@ -58,5 +58,5 @@ Read [Index Lint](/docs/guides/project-health/lint) to configure, fix, and suppr
 Most projects do not need these pages. Use them when you are building tooling, Devtools surfaces, or a package that teaches Crux about custom wrapper APIs.
 
 - Reference: [Project Index](/docs/reference/crux-core/project-index)
-- Reference: [@crux/indexer](/docs/reference/indexer)
+- Reference: [@use-crux/indexer](/docs/reference/indexer)
 - Advanced: [Writing an Indexer Extension](/docs/guides/advanced/writing-indexer-extension)

@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { IndexSourceFile, ProjectIndexSnapshot, ProjectDefinition } from '@crux/core/project-index'
+import type { IndexSourceFile, ProjectIndexSnapshot, ProjectDefinition } from '@use-crux/core/project-index'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProject } from '../index'
+import { indexProject } from '..'
 import {
   indexInvalidationFromDecision,
   explainIncrementalDecision,
@@ -66,6 +66,28 @@ describe('incremental index planner', () => {
       root,
       previousIndex: index({
         trustedSourceGraph: false,
+        sources: [{ file, status: 'indexed', dependencies: [], dependents: [] }],
+      }),
+      files: ['src/prompt.ts'],
+    })
+
+    expect(decision).toMatchObject({
+      kind: 'full-reindex-required',
+      reason: 'source-graph-marker-missing',
+      graphConfidence: 'source-graph-marker-missing',
+    })
+  })
+
+  it('falls back for trusted source graph snapshots without project shard evidence', () => {
+    const file = join(root, 'src/prompt.ts')
+    const decision = planIndexFiles({
+      root,
+      previousIndex: index({
+        sourceGraph: {
+          schemaVersion: 1,
+          producedBy: '@use-crux/indexer',
+          capabilities: ['source-dependencies', 'source-dependents', 'definition-ownership', 'diagnostic-ownership'],
+        },
         sources: [{ file, status: 'indexed', dependencies: [], dependents: [] }],
       }),
       files: ['src/prompt.ts'],
@@ -150,6 +172,85 @@ describe('incremental index planner', () => {
     })
   })
 
+  it('plans source changes through shard-local source graphs first', () => {
+    const app = join(root, 'packages/app/src/prompt.ts')
+    const lib = join(root, 'packages/lib/src/prompt.ts')
+    const decision = planIndexFiles({
+      root,
+      previousIndex: index({
+        sourceGraph: sourceGraphWithShards([
+          { id: 'packages/app', root: join(root, 'packages/app') },
+          { id: 'packages/lib', root: join(root, 'packages/lib') },
+        ]),
+        definitions: [definition('prompt:app', app), definition('prompt:lib', lib)],
+        sources: [
+          { file: app, status: 'indexed', shardId: 'packages/app', definitionIds: ['prompt:app'], dependencies: [], dependents: [] },
+          { file: lib, status: 'indexed', shardId: 'packages/lib', definitionIds: ['prompt:lib'], dependencies: [], dependents: [] },
+        ],
+      }),
+      files: ['packages/app/src/prompt.ts'],
+    })
+
+    expect(decision).toMatchObject({
+      kind: 'source-file-reindex',
+      affectedFiles: [app],
+      affectedDefinitionIds: ['prompt:app'],
+    })
+  })
+
+  it('falls back when affected files cross shards without reference evidence', () => {
+    const app = join(root, 'packages/app/src/index.ts')
+    const lib = join(root, 'packages/lib/src/prompt.ts')
+    const decision = planIndexFiles({
+      root,
+      previousIndex: index({
+        sourceGraph: sourceGraphWithShards([
+          { id: 'packages/app', root: join(root, 'packages/app') },
+          { id: 'packages/lib', root: join(root, 'packages/lib') },
+        ]),
+        definitions: [definition('prompt:lib', lib)],
+        sources: [
+          { file: app, status: 'indexed', shardId: 'packages/app', dependencies: [lib], dependents: [] },
+          { file: lib, status: 'indexed', shardId: 'packages/lib', definitionIds: ['prompt:lib'], dependencies: [], dependents: [app] },
+        ],
+      }),
+      files: ['packages/lib/src/prompt.ts'],
+    })
+
+    expect(decision).toMatchObject({
+      kind: 'full-reindex-required',
+      reason: 'cross-shard-evidence-incomplete',
+      graphConfidence: 'cross-shard-evidence-incomplete',
+    })
+  })
+
+  it('plans cross-shard closures when shard references explain the dependency', () => {
+    const app = join(root, 'packages/app/src/index.ts')
+    const lib = join(root, 'packages/lib/src/prompt.ts')
+    const decision = planIndexFiles({
+      root,
+      previousIndex: index({
+        sourceGraph: sourceGraphWithShards([
+          { id: 'packages/app', root: join(root, 'packages/app'), references: ['packages/lib'] },
+          { id: 'packages/lib', root: join(root, 'packages/lib') },
+        ]),
+        definitions: [definition('prompt:lib', lib)],
+        sources: [
+          { file: app, status: 'indexed', shardId: 'packages/app', dependencies: [lib], dependents: [] },
+          { file: lib, status: 'indexed', shardId: 'packages/lib', definitionIds: ['prompt:lib'], dependencies: [], dependents: [app] },
+        ],
+      }),
+      files: ['packages/lib/src/prompt.ts'],
+    })
+
+    expect(decision).toMatchObject({
+      kind: 'dependency-closure-reindex',
+      changedFiles: [lib],
+      affectedFiles: [app, lib],
+      affectedDefinitionIds: ['prompt:lib'],
+    })
+  })
+
   it('handles dependent cycles without repeated files', () => {
     const a = join(root, 'src/a.ts')
     const b = join(root, 'src/b.ts')
@@ -173,19 +274,21 @@ describe('incremental index planner', () => {
 
   it('falls back for config and resolver boundary changes', () => {
     const source = join(root, 'src/prompt.ts')
-    const decision = planIndexFiles({
-      root,
-      previousIndex: index({
-        sources: [{ file: source, status: 'indexed', dependencies: [], dependents: [] }],
-      }),
-      files: ['tsconfig.json'],
-    })
+    for (const file of ['tsconfig.json', 'pnpm-workspace.yaml']) {
+      const decision = planIndexFiles({
+        root,
+        previousIndex: index({
+          sources: [{ file: source, status: 'indexed', dependencies: [], dependents: [] }],
+        }),
+        files: [file],
+      })
 
-    expect(decision).toMatchObject({
-      kind: 'full-reindex-required',
-      reason: 'config-or-resolver-changed',
-      graphConfidence: 'config-or-resolver-changed',
-    })
+      expect(decision).toMatchObject({
+        kind: 'full-reindex-required',
+        reason: 'config-or-resolver-changed',
+        graphConfidence: 'config-or-resolver-changed',
+      })
+    }
   })
 
   it('falls back for unknown changed files', () => {
@@ -373,20 +476,20 @@ describe('incremental index planner', () => {
     await writeFile(
       join(fixture, 'src/prompt.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer', prompt: 'Write' })
       `,
     )
     await writeFile(
       join(fixture, 'src/index.ts'),
       `
-        import { createPrompts } from '@crux/core'
+        import { createPrompts } from '@use-crux/core'
         import { writer } from './prompt'
         export const prompts = createPrompts({ writer })
       `,
     )
 
-    const snapshot = await indexProject({ root: fixture, staticOnly: true })
+    const snapshot = await indexProject({ root: fixture, resolutionMode: 'source-only' })
     const decision = planIndexFiles({
       root: fixture,
       previousIndex: snapshot,
@@ -396,7 +499,7 @@ describe('incremental index planner', () => {
     expect(snapshot.sourceGraph).toEqual(
       expect.objectContaining({
         schemaVersion: 1,
-        producedBy: '@crux/indexer',
+        producedBy: '@use-crux/indexer',
         capabilities: expect.arrayContaining(['source-dependencies', 'source-dependents']),
       }),
     )
@@ -463,13 +566,15 @@ function index(input: {
         : {
             sourceGraph: {
               schemaVersion: 1,
-              producedBy: '@crux/indexer',
+              producedBy: '@use-crux/indexer',
               capabilities: [
                 'source-dependencies',
                 'source-dependents',
                 'definition-ownership',
                 'diagnostic-ownership',
+                'project-shards',
               ],
+              shards: [{ id: '.', root }],
             },
           }),
     definitions: [...(input.definitions ?? [])],
@@ -478,6 +583,23 @@ function index(input: {
     lintFindings: [],
     ruleDescriptors: [],
     sources: [...(input.sources ?? [])],
+  }
+}
+
+function sourceGraphWithShards(
+  shards: NonNullable<ProjectIndexSnapshot['sourceGraph']>['shards'],
+): NonNullable<ProjectIndexSnapshot['sourceGraph']> {
+  return {
+    schemaVersion: 1,
+    producedBy: '@use-crux/indexer',
+    capabilities: [
+      'source-dependencies',
+      'source-dependents',
+      'definition-ownership',
+      'diagnostic-ownership',
+      'project-shards',
+    ],
+    shards,
   }
 }
 

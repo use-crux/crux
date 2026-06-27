@@ -1,14 +1,15 @@
 /**
  * Internal execution session shared by Crux adapter factories.
  *
- * The public adapter APIs expose two provider contracts: `AdapterSpec` for
- * raw SDK calls where Crux owns each step, and `ExecutorSpec` for SDKs that
- * own their own loop. This module normalizes both contracts behind one
+ * Provider packages normally author `defineSingleTurnProviderBundle()` for raw
+ * chat SDKs or `defineProviderRuntime()` for loop-owned SDKs. The public
+ * compilers lower those specs into two execution IR contracts: `AdapterSpec`
+ * for raw SDK calls where Crux owns each step, and `ExecutorSpec` for SDKs
+ * that own their own loop. This module normalizes both contracts behind one
  * session so prompt resolution, tool lifecycle, validation retry, safety,
  * orchestration, timeout cleanup, metadata stamping, and memory capture stay
  * in one place.
  *
- * Adapter authors should keep implementing `AdapterSpec` or `ExecutorSpec`.
  * The types in this module are exported for internal composition and boundary
  * tests, not as a stable public authoring surface.
  *

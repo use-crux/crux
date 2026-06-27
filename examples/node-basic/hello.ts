@@ -1,6 +1,6 @@
 import { openai } from '@ai-sdk/openai'
-import { generate } from '@crux/ai'
-import { prompt } from '@crux/core'
+import { generate } from '@use-crux/ai'
+import { prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const classify = prompt({

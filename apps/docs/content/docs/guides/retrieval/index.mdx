@@ -30,7 +30,7 @@ Each primitive owns one job:
 | Primitive | Job | Start here |
 | --- | --- | --- |
 | `embedding()` | Turn text into dense or sparse vectors. | [Embeddings](/docs/guides/retrieval/embeddings) |
-| `@crux/ingest` | Load text, files, folders, and URLs into documents. | [Ingestion](/docs/guides/retrieval/ingestion) |
+| `@use-crux/ingest` | Load text, files, folders, and URLs into documents. | [Ingestion](/docs/guides/retrieval/ingestion) |
 | `indexer()` | Chunk documents, embed chunks, and write records. | [Indexing](/docs/guides/retrieval/indexing) |
 | `corpus()` | Keep repeated indexing jobs incremental and safe. | [Corpus sync](/docs/guides/retrieval/corpus-sync) |
 | `retriever()` | Query the corpus directly, as prompt context, or as tools. | [Querying](/docs/guides/retrieval/querying) |
@@ -42,12 +42,12 @@ Each primitive owns one job:
 Most apps start with this shape: define embeddings once, index a corpus, then use a retriever directly in a prompt.
 
 ```ts
-import { prompt } from '@crux/core'
-import { embedding } from '@crux/openai'
-import { corpus, indexer } from '@crux/core/indexing'
-import { retriever } from '@crux/core/retrieval'
-import { inMemoryDataStore, inMemoryVectorStore } from '@crux/core/storage'
-import { filesSource } from '@crux/ingest/files'
+import { prompt } from '@use-crux/core'
+import { embedding } from '@use-crux/openai'
+import { corpus, indexer } from '@use-crux/core/indexing'
+import { retriever } from '@use-crux/core/retrieval'
+import { inMemoryDataStore, inMemoryVectorStore } from '@use-crux/core/storage'
+import { filesSource } from '@use-crux/ingest/files'
 import { z } from 'zod'
 
 const dense = embedding({
@@ -182,7 +182,7 @@ const groundedDocs = grounding({
 Use a Quality suite when you want to prove the setup still works after changing chunking, retrieval, grounding, or prompts:
 
 ```ts
-import { expect, quality, suite, target } from '@crux/core/quality'
+import { expect, quality, suite, target } from '@use-crux/core/quality'
 
 await quality({ id: 'docs-rag' }).evaluate({
   suite: suite<{ question: string }>('docs', (test) => {

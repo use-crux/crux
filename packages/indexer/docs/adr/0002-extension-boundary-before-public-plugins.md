@@ -1,6 +1,6 @@
 # Extension Boundary Before Public Plugins
 
-`@crux/indexer` will introduce a pure functional extension boundary for first-party index extraction before adding public plugin loading. Crux Indexer Extensions will be shaped around compiler slots such as sources, parsers, extractors, resolvers, rules, and emitters; extensions will emit immutable extracted facts and relation specs, while Crux keeps parser internals, validation, merge order, source graph projection, cache keys, and index patching inside the Project Index Compiler.
+`@use-crux/indexer` will introduce a pure functional extension boundary for first-party index extraction before adding public plugin loading. Crux Indexer Extensions will be shaped around compiler slots such as sources, parsers, extractors, resolvers, rules, and emitters; extensions will emit immutable extracted facts and relation specs, while Crux keeps parser internals, validation, merge order, source graph projection, cache keys, and index patching inside the Project Index Compiler.
 
 **Considered Options**
 

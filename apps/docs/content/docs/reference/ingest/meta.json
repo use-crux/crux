@@ -1,5 +1,5 @@
 {
-  "title": "@crux/ingest",
-  "description": "@crux/ingest — source loaders for text, files, and URLs.",
+  "title": "@use-crux/ingest",
+  "description": "@use-crux/ingest — source loaders for text, files, and URLs.",
   "pages": ["index", "files", "urls"]
 }

@@ -17,17 +17,18 @@ export interface GoogleExtra extends Record<string, unknown> {
   /** Function declarations for tool use, bypassing Crux tool conversion. */
   readonly tools?: GoogleFunctionDeclaration[]
   /**
-   * Per-call CachedContent controls.
+   * Per-call Google CachedContent controls.
    *
-   * These options affect only the current request. `skip` falls back to a
-   * plain `systemInstruction`, while `ttlSeconds` overrides the adapter-level
-   * default TTL for a newly-created cache and participates in local cache
-   * reuse keys.
+   * These options affect only the current request. Use `skip` to bypass
+   * CachedContent resolution and send a plain `systemInstruction`, or
+   * `ttlSeconds` to override the adapter default for any new cache created by
+   * this request. Provider-neutral cache hints still come from
+   * `SystemBlock.providerCache` in `@use-crux/core`.
    */
   readonly cachedContent?: GoogleCachedContentCallOptions
 }
 
-/** Provider-native Google generation request assembled by the profile. */
+/** Provider-native Google generation request assembled by the provider runtime. */
 export interface GoogleRequest extends Record<string, unknown> {
   /** Google model identifier. */
   readonly model: string

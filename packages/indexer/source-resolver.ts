@@ -27,6 +27,7 @@ export type {
   SourceFrameUnavailable,
   SourceFrameUnavailableReason,
   SourceLocation,
+  SourceResolverFileSystem,
   SourceResolverOptions,
   SourceResolverWorkerRequest,
 } from './source-resolver/index'

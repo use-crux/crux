@@ -1,6 +1,7 @@
-import ts from 'typescript'
 import type { IndexDependency, IndexerExtensionRuntime } from '../../extensions'
 import { compilerProfileCacheInputs, type ProjectIndexCompilerProfile } from '../../compiler/profile'
+import { runtimeManifestCacheInputs } from '../../extensions/runtime/manifest-cache-inputs'
+import type { NativeFactProjectionMode, StaticSyntaxFrontendIdentity } from '../../static-index/syntax/record'
 
 /**
  * Structural identity for one static extraction engine.
@@ -22,11 +23,17 @@ export interface StaticExtractionIdentity {
 export function staticExtractionIdentity(input: {
   readonly profile: ProjectIndexCompilerProfile
   readonly extensionRuntime: IndexerExtensionRuntime
+  readonly syntaxFrontend: StaticSyntaxFrontendIdentity
+  readonly nativeFactProjection?: NativeFactProjectionMode
+  readonly additionalCacheInputs?: readonly IndexDependency[]
 }): StaticExtractionIdentity {
   const cacheInputs = stableDependencies([
     ...input.extensionRuntime.manifest.cacheInputs,
+    ...runtimeManifestCacheInputs(input.extensionRuntime.manifest),
+    ...(input.additionalCacheInputs ?? []),
     ...compilerProfileCacheInputs(input.profile),
-    syntaxFrontendIdentity(),
+    syntaxFrontendIdentity(input.syntaxFrontend),
+    ...nativeFactProjectionIdentity(input.nativeFactProjection),
   ])
   const callNames = new Set([
     ...input.extensionRuntime.manifest.callNames,
@@ -38,19 +45,49 @@ export function staticExtractionIdentity(input: {
   })
 }
 
-/**
- * Captures the TypeScript parser version as an explicit cache dependency.
- *
- * Static extraction relies on TypeScript's AST shape and source-position behavior. A TypeScript
- * upgrade can therefore change extracted facts even when project source and extension code are
- * unchanged.
- */
-function syntaxFrontendIdentity(): IndexDependency {
+export interface StaticExtensionPackageCacheInput {
+  readonly packageName: string
+  readonly exportName?: string
+  readonly packageVersion?: string
+}
+
+/** Captures installed extension package versions that are not part of the extension manifest. */
+export function staticExtensionPackageCacheInputs(
+  extensions: readonly StaticExtensionPackageCacheInput[],
+): readonly IndexDependency[] {
+  return extensions.flatMap((extension) =>
+    extension.packageVersion
+      ? [
+          {
+            kind: 'extension',
+            name: `package:${extension.packageName}#${extension.exportName ?? 'default'}`,
+            version: extension.packageVersion,
+          },
+        ]
+      : [],
+  )
+}
+
+/** Captures the selected syntax frontend as an explicit cache dependency. */
+function syntaxFrontendIdentity(frontend: StaticSyntaxFrontendIdentity): IndexDependency {
   return {
     kind: 'syntax-frontend',
-    name: 'typescript',
-    version: ts.version,
+    name: frontend.name,
+    version: frontend.version,
   }
+}
+
+/** Captures non-default native fact projection lanes in cache identity. */
+function nativeFactProjectionIdentity(mode: NativeFactProjectionMode | undefined): readonly IndexDependency[] {
+  if (!mode || mode === 'inline') return []
+  return [
+    {
+      kind: 'compiler-projection',
+      name: 'native-fact-projection',
+      version: mode,
+      phase: 'static',
+    },
+  ]
 }
 
 /**

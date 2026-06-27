@@ -1,4 +1,3 @@
-import ts from 'typescript'
 import type {
   InjectionReturnContributionFacts,
   InjectionToolFacts,
@@ -8,16 +7,18 @@ import type {
   ProjectDefinitionKind,
   ProjectRelation,
   ProjectSourceRef,
-} from '@crux/core/project-index'
-import { stringProperty } from '../ast/literals'
+} from '@use-crux/core/project-index'
 import { foldedIndexChild } from '../index-presentation'
 import { safeId } from '../definitions'
 import type {
+  SemanticAnalyzerNode,
+  SemanticAnalyzerView,
   SemanticDefinitionCandidate,
   SemanticDefinitionEnrichment,
   SemanticMemoryBlock,
   SemanticTarget,
 } from './candidates'
+import { semanticNodeKey } from './syntax-readers'
 import {
   callExpressionName,
   isResolvableSourceExpression,
@@ -44,6 +45,8 @@ import {
   unwrapExpression,
 } from './model'
 
+type SemanticNode = SemanticAnalyzerNode<SemanticAnalyzerView>
+
 /**
  * Produces semantic definition enrichments that cannot be represented by the
  * first static definition pass.
@@ -54,23 +57,23 @@ import {
  */
 export function semanticDefinitionEnrichments(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): SemanticDefinitionEnrichment[] {
   switch (candidate.kind) {
     case 'memory':
-      return semanticMemoryDefinitionEnrichments(candidate, checker)
+      return semanticMemoryDefinitionEnrichments(candidate, view)
     case 'workspace':
-      return semanticWorkspaceDefinitionEnrichments(candidate, checker)
+      return semanticWorkspaceDefinitionEnrichments(candidate, view)
     case 'routing.router':
-      return semanticRouterDefinitionEnrichments(candidate, checker)
+      return semanticRouterDefinitionEnrichments(candidate, view)
     case 'routing.cascade':
-      return semanticCascadeDefinitionEnrichments(candidate, checker)
+      return semanticCascadeDefinitionEnrichments(candidate, view)
     case 'routing.fallback':
-      return semanticFallbackDefinitionEnrichments(candidate, checker)
+      return semanticFallbackDefinitionEnrichments(candidate, view)
     case 'prompt':
     case 'context':
     case 'injectable':
-      return semanticInjectionDefinitionEnrichments(candidate, checker)
+      return semanticInjectionDefinitionEnrichments(candidate, view)
     default:
       return []
   }
@@ -78,11 +81,11 @@ export function semanticDefinitionEnrichments(
 
 function semanticInjectionDefinitionEnrichments(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): SemanticDefinitionEnrichment[] {
-  const useEntries = semanticInjectionUseEntryFacts(candidate, checker)
-  const tools = semanticInjectionToolFacts(candidate, checker)
-  const contributions = semanticInjectionReturnContributionFacts(candidate, checker)
+  const useEntries = semanticInjectionUseEntryFacts(candidate, view)
+  const tools = semanticInjectionToolFacts(candidate, view)
+  const contributions = semanticInjectionReturnContributionFacts(candidate, view)
   if (useEntries.length === 0 && !tools && !contributions) return []
   return [
     {
@@ -107,37 +110,37 @@ function semanticInjectionDefinitionEnrichments(
  */
 function semanticInjectionUseEntryFacts(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): InjectionUseFacts[] {
-  const use = propertyInitializer(candidate.object, 'use')
-  return use ? semanticInjectionUseEntries(toExpression(use), candidate.kind, checker) : []
+  const use = propertyInitializer(candidate.object, 'use', view)
+  return use ? semanticInjectionUseEntries(toExpression(use, view), candidate.kind, view) : []
 }
 
 function semanticInjectionToolFacts(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): InjectionToolFacts | undefined {
-  const expressions: ts.Expression[] = []
-  const tools = propertyInitializer(candidate.object, 'tools')
-  if (tools) expressions.push(toExpression(tools))
+  const expressions: SemanticNode[] = []
+  const tools = propertyInitializer(candidate.object, 'tools', view)
+  if (tools) expressions.push(toExpression(tools, view))
   if (candidate.kind === 'injectable') {
-    const returned = semanticInjectableReturnObject(candidate, checker)
-    const returnedTools = returned ? propertyInitializer(returned, 'tools') : undefined
-    if (returnedTools) expressions.push(toExpression(returnedTools))
+    const returned = semanticInjectableReturnObject(candidate, view)
+    const returnedTools = returned ? propertyInitializer(returned, 'tools', view) : undefined
+    if (returnedTools) expressions.push(toExpression(returnedTools, view))
   }
-  return mergeSemanticToolFacts(expressions.map((expression) => semanticToolFactsFromExpression(expression, checker)))
+  return mergeSemanticToolFacts(expressions.map((expression) => semanticToolFactsFromExpression(expression, view)))
 }
 
 function semanticInjectionReturnContributionFacts(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): InjectionReturnContributionFacts | undefined {
   if (candidate.kind !== 'injectable') return undefined
-  const returned = semanticInjectableReturnObject(candidate, checker)
+  const returned = semanticInjectableReturnObject(candidate, view)
   if (!returned) return undefined
-  const constraints = semanticReferenceContributionFacts(returned, 'constraints', 'constraint', checker)
-  const guardrails = semanticReferenceContributionFacts(returned, 'guardrails', 'guardrail', checker)
-  const metadata = semanticMetadataContributionFacts(returned, checker)
+  const constraints = semanticReferenceContributionFacts(returned, 'constraints', 'constraint', view)
+  const guardrails = semanticReferenceContributionFacts(returned, 'guardrails', 'guardrail', view)
+  const metadata = semanticMetadataContributionFacts(returned, view)
   const facts: InjectionReturnContributionFacts = {}
   if (constraints) facts.constraints = constraints
   if (guardrails) facts.guardrails = guardrails
@@ -146,26 +149,27 @@ function semanticInjectionReturnContributionFacts(
 }
 
 function semanticInjectionUseEntries(
-  expression: ts.Expression,
+  expression: SemanticNode,
   ownerKind: SemanticDefinitionCandidate['kind'],
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): InjectionUseFacts[] {
-  const unwrapped = unwrapExpression(expression)
-  if (ts.isArrayLiteralExpression(unwrapped)) {
-    return unwrapped.elements.flatMap((element) => {
-      if (ts.isSpreadElement(element)) {
-        return semanticInjectionUseEntriesFromExpression(element.expression, ownerKind, checker, {
+  const unwrapped = unwrapExpression(expression, view)
+  if (view.syntax.isKind(unwrapped, 'arrayLiteral')) {
+    return view.syntax.arrayElements(unwrapped).flatMap((element) => {
+      const spread = view.syntax.spreadExpression(element)
+      if (spread) {
+        return semanticInjectionUseEntriesFromExpression(spread, ownerKind, view, {
           conditionality: 'unknown',
           via: 'spread',
         })
       }
-      return semanticInjectionUseEntriesFromExpression(element, ownerKind, checker, {
+      return semanticInjectionUseEntriesFromExpression(element, ownerKind, view, {
         conditionality: 'always',
         via: 'direct',
       })
     })
   }
-  return semanticInjectionUseEntriesFromExpression(unwrapped, ownerKind, checker, {
+  return semanticInjectionUseEntriesFromExpression(unwrapped, ownerKind, view, {
     conditionality: 'always',
     via: 'array-ref',
   })
@@ -175,38 +179,40 @@ type SemanticInjectionUseContext = Required<Pick<InjectionUseFacts, 'conditional
   Pick<InjectionUseFacts, 'branch'>
 
 function semanticInjectionUseEntriesFromExpression(
-  expression: ts.Expression,
+  expression: SemanticNode,
   ownerKind: SemanticDefinitionCandidate['kind'],
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
   context: SemanticInjectionUseContext,
   seen = new Set<string>(),
 ): InjectionUseFacts[] {
-  const unwrapped = unwrapExpression(expression)
-  const key = `${unwrapped.getSourceFile().fileName}:${unwrapped.pos}:${unwrapped.end}`
+  const unwrapped = unwrapExpression(expression, view)
+  const key = semanticNodeKey(unwrapped, view.syntax)
   if (seen.has(key)) return []
   const nextSeen = new Set(seen)
   nextSeen.add(key)
-  if (ts.isCallExpression(unwrapped)) {
-    const helperEntries = semanticConditionalHelperUseEntries(unwrapped, ownerKind, checker, context, nextSeen)
+  if (view.syntax.isKind(unwrapped, 'callExpression')) {
+    const helperEntries = semanticConditionalHelperUseEntries(unwrapped, ownerKind, view, context, nextSeen)
     if (helperEntries) return helperEntries
   }
-  if (ts.isBinaryExpression(unwrapped) && unwrapped.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+  const logicalAnd = view.syntax.logicalAndOperands(unwrapped)
+  if (logicalAnd) {
     return semanticInjectionUseEntriesFromExpression(
-      unwrapped.right,
+      logicalAnd.right,
       ownerKind,
-      checker,
+      view,
       { conditionality: 'binary-guard', via: 'binary', branch: context.branch },
       nextSeen,
     )
   }
-  const array = semanticArrayExpression(unwrapped, checker, nextSeen)
+  const array = semanticArrayExpression(unwrapped, view, nextSeen)
   if (array) {
-    return array.elements.flatMap((element) => {
-      if (ts.isSpreadElement(element)) {
+    return view.syntax.arrayElements(array).flatMap((element) => {
+      const spread = view.syntax.spreadExpression(element)
+      if (spread) {
         return semanticInjectionUseEntriesFromExpression(
-          element.expression,
+          spread,
           ownerKind,
-          checker,
+          view,
           {
             conditionality: context.conditionality === 'always' ? 'unknown' : context.conditionality,
             via: 'spread',
@@ -215,63 +221,63 @@ function semanticInjectionUseEntriesFromExpression(
           nextSeen,
         )
       }
-      return ts.isExpression(element)
-        ? semanticInjectionUseEntriesFromExpression(element, ownerKind, checker, context, nextSeen)
-        : []
+      return semanticInjectionUseEntriesFromExpression(element, ownerKind, view, context, nextSeen)
     })
   }
-  return semanticInjectionUseEntryForTarget(unwrapped, ownerKind, checker, context)
+  return semanticInjectionUseEntryForTarget(unwrapped, ownerKind, view, context)
 }
 
 function semanticConditionalHelperUseEntries(
-  call: ts.CallExpression,
+  call: SemanticNode,
   ownerKind: SemanticDefinitionCandidate['kind'],
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
   context: SemanticInjectionUseContext,
   seen: Set<string>,
 ): InjectionUseFacts[] | undefined {
-  const callName = callExpressionName(call)
-  if (callName === 'when' && call.arguments[1]) {
+  const callName = callExpressionName(call, view)
+  const args = view.syntax.callArguments(call)
+  if (callName === 'when' && args[1]) {
     return semanticInjectionUseEntriesFromExpression(
-      call.arguments[1],
+      args[1],
       ownerKind,
-      checker,
+      view,
       { conditionality: 'when', via: 'when', branch: context.branch },
       seen,
     )
   }
-  if (callName === 'match' && call.arguments[0]) {
-    const object = semanticObjectExpression(call.arguments[0], checker, seen)
-    return object ? semanticMatchUseEntries(object, ownerKind, checker, seen) : []
+  if (callName === 'match' && args[0]) {
+    const object = semanticObjectExpression(args[0], view, seen)
+    return object ? semanticMatchUseEntries(object, ownerKind, view, seen) : []
   }
   return undefined
 }
 
 function semanticMatchUseEntries(
-  object: ts.ObjectLiteralExpression,
+  object: SemanticNode,
   ownerKind: SemanticDefinitionCandidate['kind'],
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
   seen: Set<string>,
 ): InjectionUseFacts[] {
-  const cases = semanticObjectProperty(object, 'cases', checker)
-  const defaults = propertyInitializer(object, 'default')
+  const cases = semanticObjectProperty(object, 'cases', view)
+  const defaults = propertyInitializer(object, 'default', view)
   const caseEntries =
-    cases?.properties.flatMap((property): InjectionUseFacts[] => {
-      if (!ts.isPropertyAssignment(property)) return []
-      const branch = semanticObjectPropertyName(property)
+    cases ? view.syntax.objectProperties(cases).flatMap((property): InjectionUseFacts[] => {
+      const branch = semanticObjectPropertyName(property, view)
+      const expression = view.syntax.propertyInitializer(property)
+      if (!expression) return []
       return semanticInjectionUseEntriesFromExpression(
-        property.initializer,
+        expression,
         ownerKind,
-        checker,
+        view,
         { conditionality: 'match-case', via: 'match', branch },
         seen,
       )
-    }) ?? []
+    }) : []
   const defaultEntries = defaults
     ? semanticInjectionUseEntriesFromExpression(
-        toExpression(defaults),
+        toExpression(defaults, view),
         ownerKind,
-        checker,
+        view,
         { conditionality: 'match-default', via: 'match', branch: 'default' },
         seen,
       )
@@ -280,17 +286,17 @@ function semanticMatchUseEntries(
 }
 
 function semanticInjectionUseEntryForTarget(
-  expression: ts.Expression,
+  expression: SemanticNode,
   ownerKind: SemanticDefinitionCandidate['kind'],
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
   context: SemanticInjectionUseContext,
 ): InjectionUseFacts[] {
-  const target = semanticTargetForExpression(expression, checker)
+  const target = semanticTargetForExpression(expression, view)
   const relationType = target ? semanticInjectionUseEntryRelationType(ownerKind, target.kind) : undefined
-  if (!target || !relationType) return [semanticUnresolvedUseEntry(expression, context, checker)]
+  if (!target || !relationType) return [semanticUnresolvedUseEntry(expression, context, view)]
   return [
     {
-      variable: semanticUseEntryVariable(expression, target),
+      variable: semanticUseEntryVariable(expression, target, view),
       relationHint: semanticRelationHintForTarget(target.kind),
       targetDefinitionId: target.id,
       targetKind: target.kind,
@@ -305,15 +311,15 @@ function semanticInjectionUseEntryForTarget(
 }
 
 function semanticUnresolvedUseEntry(
-  expression: ts.Expression,
+  expression: SemanticNode,
   context: SemanticInjectionUseContext,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): InjectionUseFacts {
-  const variable = semanticExpressionVariable(expression)
+  const variable = semanticExpressionVariable(expression, view)
   return {
     ...(variable ? { variable } : {}),
     relationHint: 'unknown',
-    conditionality: isDynamicSemanticUseExpression(expression, checker)
+    conditionality: isDynamicSemanticUseExpression(expression, view)
       ? 'dynamic'
       : context.conditionality === 'always'
         ? 'unknown'
@@ -324,39 +330,46 @@ function semanticUnresolvedUseEntry(
 }
 
 function isDynamicSemanticUseExpression(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: SemanticNode,
+  view: SemanticAnalyzerView,
   seen = new Set<string>(),
 ): boolean {
-  const unwrapped = unwrapExpression(expression)
-  const key = `${unwrapped.getSourceFile().fileName}:${unwrapped.pos}:${unwrapped.end}`
+  const unwrapped = unwrapExpression(expression, view)
+  const key = semanticNodeKey(unwrapped, view.syntax)
   if (seen.has(key)) return false
   const nextSeen = new Set(seen)
   nextSeen.add(key)
   if (
-    ts.isCallExpression(unwrapped) ||
-    ts.isConditionalExpression(unwrapped) ||
-    ts.isElementAccessExpression(unwrapped) ||
-    ts.isAwaitExpression(unwrapped)
+    view.syntax.isKind(unwrapped, 'callExpression') ||
+    view.syntax.isKind(unwrapped, 'elementAccessExpression') ||
+    view.syntax.kind(unwrapped) === 'unknown'
   ) {
     return true
   }
-  if (!isResolvableSourceExpression(unwrapped)) return false
-  const resolved = resolveSemanticExpression(unwrapped, checker)
-  return resolved?.expression ? isDynamicSemanticUseExpression(resolved.expression, checker, nextSeen) : false
+  if (!isResolvableSourceExpression(unwrapped, view)) return false
+  const resolved = resolveSemanticExpression(unwrapped, view)
+  return resolved?.expression ? isDynamicSemanticUseExpression(resolved.expression, view, nextSeen) : false
 }
 
-function semanticExpressionVariable(expression: ts.Expression): string | undefined {
-  const unwrapped = unwrapExpression(expression)
-  if (ts.isIdentifier(unwrapped)) return unwrapped.text
-  if (ts.isCallExpression(unwrapped)) return callExpressionName(unwrapped) ?? unwrapped.expression.getText()
-  if (ts.isPropertyAccessExpression(unwrapped)) return unwrapped.name.text
+function semanticExpressionVariable(
+  expression: SemanticNode,
+  view: SemanticAnalyzerView,
+): string | undefined {
+  const unwrapped = unwrapExpression(expression, view)
+  if (view.syntax.isKind(unwrapped, 'identifier')) return view.syntax.identifierText(unwrapped)
+  if (view.syntax.isKind(unwrapped, 'callExpression')) return callExpressionName(unwrapped, view) ?? view.syntax.text(unwrapped)
+  if (view.syntax.isKind(unwrapped, 'propertyAccessExpression')) return view.syntax.propertyAccessName(unwrapped)
   return undefined
 }
 
-function semanticUseEntryVariable(expression: ts.Expression, target: SemanticTarget): string {
-  const unwrapped = unwrapExpression(expression)
-  if (ts.isIdentifier(unwrapped)) return unwrapped.text
+function semanticUseEntryVariable(
+  expression: SemanticNode,
+  target: SemanticTarget,
+  view: SemanticAnalyzerView,
+): string {
+  const unwrapped = unwrapExpression(expression, view)
+  const identifier = view.syntax.identifierText(unwrapped)
+  if (identifier) return identifier
   return target.id.split(':').at(-1) ?? target.id
 }
 
@@ -393,13 +406,13 @@ function semanticRelationHintForTarget(kind: ProjectDefinitionKind): InjectionUs
 }
 
 function semanticToolFactsFromExpression(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: SemanticNode,
+  view: SemanticAnalyzerView,
   seen = new Set<string>(),
 ): InjectionToolFacts {
-  const object = semanticObjectExpression(expression, checker, seen)
+  const object = semanticObjectExpression(expression, view, seen)
   if (!object) {
-    const targets = semanticToolMapTargets(expression, checker, seen)
+    const targets = semanticToolMapTargets(expression, view, seen)
     if (targets.length > 0) {
       const names = targets.map((target) => target.id.split(':').at(-1) ?? target.id)
       return { hasTools: true, names, variables: names }
@@ -409,30 +422,25 @@ function semanticToolFactsFromExpression(
   const names: string[] = []
   const variables: string[] = []
   let dynamic = false
-  for (const property of object.properties) {
-    if (ts.isSpreadAssignment(property)) {
-      const spreadFacts = semanticToolFactsFromExpression(property.expression, checker, seen)
+  for (const property of view.syntax.objectProperties(object)) {
+    const spread = view.syntax.spreadExpression(property)
+    if (spread) {
+      const spreadFacts = semanticToolFactsFromExpression(spread, view, seen)
       dynamic = dynamic || Boolean(spreadFacts.dynamic)
       names.push(...(spreadFacts.names ?? []))
       variables.push(...(spreadFacts.variables ?? []))
       continue
     }
-    if (
-      (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
-      ts.isComputedPropertyName(property.name)
-    ) {
-      dynamic = true
-    }
-    const name = semanticObjectPropertyName(property)
-    const member = objectMemberExpression(property)
+    const name = semanticObjectPropertyName(property, view)
+    const member = objectMemberExpression(property, view)
     if (name) names.push(name)
     if (!member) continue
-    const target = semanticTargetForExpression(member, checker)
+    const target = semanticTargetForExpression(member, view)
     if (target?.kind === 'tool') {
       variables.push(target.id.split(':').at(-1) ?? target.id)
       continue
     }
-    const variable = semanticExpressionVariable(member)
+    const variable = semanticExpressionVariable(member, view)
     if (variable) variables.push(variable)
     if (!variable && !target) dynamic = true
   }
@@ -457,14 +465,14 @@ function mergeSemanticToolFacts(facts: readonly InjectionToolFacts[]): Injection
 }
 
 function semanticReferenceContributionFacts(
-  object: ts.ObjectLiteralExpression,
+  object: SemanticNode,
   property: string,
   targetKind: ProjectDefinitionKind,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): NonNullable<InjectionReturnContributionFacts['constraints']> | undefined {
-  const expression = propertyInitializer(object, property)
+  const expression = propertyInitializer(object, property, view)
   if (!expression) return undefined
-  const contribution = semanticReferenceContributionFromExpression(toExpression(expression), targetKind, checker)
+  const contribution = semanticReferenceContributionFromExpression(toExpression(expression, view), targetKind, view)
   if (contribution.variables.length === 0 && !contribution.dynamic) return undefined
   return {
     ...(contribution.variables.length > 0 ? { variables: [...new Set(contribution.variables)] } : {}),
@@ -473,52 +481,52 @@ function semanticReferenceContributionFacts(
 }
 
 function semanticReferenceContributionFromExpression(
-  expression: ts.Expression,
+  expression: SemanticNode,
   targetKind: ProjectDefinitionKind,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
   seen = new Set<string>(),
 ): { readonly variables: string[]; readonly dynamic: boolean } {
-  const unwrapped = unwrapExpression(expression)
-  const key = `${unwrapped.getSourceFile().fileName}:${unwrapped.pos}:${unwrapped.end}`
+  const unwrapped = unwrapExpression(expression, view)
+  const key = semanticNodeKey(unwrapped, view.syntax)
   if (seen.has(key)) return { variables: [], dynamic: true }
   const nextSeen = new Set(seen)
   nextSeen.add(key)
-  const array = semanticArrayExpression(unwrapped, checker, nextSeen)
+  const array = semanticArrayExpression(unwrapped, view, nextSeen)
   if (array) {
     const variables: string[] = []
     let dynamic = false
-    for (const element of array.elements) {
-      if (ts.isSpreadElement(element)) {
-        const spread = semanticReferenceContributionFromExpression(element.expression, targetKind, checker, nextSeen)
+    for (const element of view.syntax.arrayElements(array)) {
+      const spreadExpression = view.syntax.spreadExpression(element)
+      if (spreadExpression) {
+        const spread = semanticReferenceContributionFromExpression(spreadExpression, targetKind, view, nextSeen)
         variables.push(...spread.variables)
         dynamic = dynamic || spread.dynamic
         continue
       }
-      if (!ts.isExpression(element)) {
-        dynamic = true
-        continue
-      }
-      const entry = semanticReferenceContributionFromExpression(element, targetKind, checker, nextSeen)
+      const entry = semanticReferenceContributionFromExpression(element, targetKind, view, nextSeen)
       variables.push(...entry.variables)
       dynamic = dynamic || entry.dynamic
     }
     return { variables, dynamic }
   }
-  const target = semanticTargetForExpression(unwrapped, checker)
+  const target = semanticTargetForExpression(unwrapped, view)
   if (target?.kind === targetKind) {
-    return { variables: [semanticExpressionVariable(unwrapped) ?? target.id.split(':').at(-1) ?? target.id], dynamic: false }
+    return {
+      variables: [semanticExpressionVariable(unwrapped, view) ?? target.id.split(':').at(-1) ?? target.id],
+      dynamic: false,
+    }
   }
-  const variable = semanticExpressionVariable(unwrapped)
-  return { variables: variable ? [variable] : [], dynamic: isDynamicSemanticUseExpression(unwrapped, checker, nextSeen) }
+  const variable = semanticExpressionVariable(unwrapped, view)
+  return { variables: variable ? [variable] : [], dynamic: isDynamicSemanticUseExpression(unwrapped, view, nextSeen) }
 }
 
 function semanticMetadataContributionFacts(
-  object: ts.ObjectLiteralExpression,
-  checker: ts.TypeChecker,
+  object: SemanticNode,
+  view: SemanticAnalyzerView,
 ): NonNullable<InjectionReturnContributionFacts['metadata']> | undefined {
-  const expression = propertyInitializer(object, 'metadata')
+  const expression = propertyInitializer(object, 'metadata', view)
   if (!expression) return undefined
-  const contribution = semanticMetadataContributionFromExpression(toExpression(expression), checker)
+  const contribution = semanticMetadataContributionFromExpression(toExpression(expression, view), view)
   if (contribution.keys.length === 0 && !contribution.dynamic) return undefined
   return {
     ...(contribution.keys.length > 0 ? { keys: [...new Set(contribution.keys)] } : {}),
@@ -527,80 +535,73 @@ function semanticMetadataContributionFacts(
 }
 
 function semanticMetadataContributionFromExpression(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: SemanticNode,
+  view: SemanticAnalyzerView,
   seen = new Set<string>(),
 ): { readonly keys: string[]; readonly dynamic: boolean } {
-  const object = semanticObjectExpression(expression, checker, seen)
+  const object = semanticObjectExpression(expression, view, seen)
   if (!object) return { keys: [], dynamic: true }
   const keys: string[] = []
   let dynamic = false
-  for (const property of object.properties) {
-    if (ts.isSpreadAssignment(property)) {
-      const spread = semanticMetadataContributionFromExpression(property.expression, checker, seen)
+  for (const property of view.syntax.objectProperties(object)) {
+    const spreadExpression = view.syntax.spreadExpression(property)
+    if (spreadExpression) {
+      const spread = semanticMetadataContributionFromExpression(spreadExpression, view, seen)
       keys.push(...spread.keys)
       dynamic = dynamic || true
       continue
     }
-    const key = semanticObjectPropertyName(property)
+    const key = semanticObjectPropertyName(property, view)
     if (key) keys.push(key)
-    if (
-      !key ||
-      ((ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
-        ts.isComputedPropertyName(property.name))
-    ) {
-      dynamic = true
-    }
+    if (!key) dynamic = true
   }
   return { keys, dynamic }
 }
 
 function semanticInjectableReturnObject(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
-): ts.ObjectLiteralExpression | undefined {
-  const inject = propertyInitializer(candidate.object, 'inject')
-  return inject ? semanticReturnedObjectExpression(toExpression(inject), checker) : undefined
+  view: SemanticAnalyzerView,
+): SemanticNode | undefined {
+  const inject = propertyInitializer(candidate.object, 'inject', view)
+  return inject ? semanticReturnedObjectExpression(toExpression(inject, view), view) : undefined
 }
 
 function semanticReturnedObjectExpression(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: SemanticNode,
+  view: SemanticAnalyzerView,
   seen = new Set<string>(),
-): ts.ObjectLiteralExpression | undefined {
-  const unwrapped = unwrapExpression(expression)
-  if (ts.isObjectLiteralExpression(unwrapped)) return unwrapped
-  if (ts.isArrowFunction(unwrapped)) return semanticReturnedObjectFromBody(unwrapped.body)
-  if (ts.isFunctionExpression(unwrapped)) return semanticReturnedObjectFromBlock(unwrapped.body)
-  const resolved = resolveSemanticExpression(unwrapped, checker)
+): SemanticNode | undefined {
+  const unwrapped = unwrapExpression(expression, view)
+  if (view.syntax.isKind(unwrapped, 'objectLiteral')) return unwrapped
+  const returned = semanticReturnedObjectFromFunction(unwrapped, view)
+  if (returned) return returned
+  const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved) return undefined
   const key = semanticResolvedKey(resolved)
   if (seen.has(key)) return undefined
   const nextSeen = new Set(seen)
   nextSeen.add(key)
-  if (resolved.expression) return semanticReturnedObjectExpression(resolved.expression, checker, nextSeen)
-  if (ts.isFunctionDeclaration(resolved.declaration) && resolved.declaration.body) {
-    return semanticReturnedObjectFromBlock(resolved.declaration.body)
-  }
-  return undefined
+  if (resolved.expression) return semanticReturnedObjectExpression(resolved.expression, view, nextSeen)
+  return semanticReturnedObjectFromFunction(resolved.declaration, view)
 }
 
-function semanticReturnedObjectFromBody(body: ts.ConciseBody): ts.ObjectLiteralExpression | undefined {
-  return ts.isBlock(body) ? semanticReturnedObjectFromBlock(body) : semanticReturnedObjectFromExpression(body)
-}
-
-function semanticReturnedObjectFromBlock(block: ts.Block): ts.ObjectLiteralExpression | undefined {
-  for (const statement of block.statements) {
-    if (!ts.isReturnStatement(statement) || !statement.expression) continue
-    const returned = semanticReturnedObjectFromExpression(statement.expression)
+function semanticReturnedObjectFromFunction(
+  node: SemanticNode,
+  view: SemanticAnalyzerView,
+): SemanticNode | undefined {
+  for (const expression of view.syntax.functionReturnExpressions(node)) {
+    const returned = semanticReturnedObjectFromExpression(expression, view)
     if (returned) return returned
   }
   return undefined
 }
 
-function semanticReturnedObjectFromExpression(expression: ts.Expression): ts.ObjectLiteralExpression | undefined {
-  const unwrapped = unwrapExpression(expression)
-  return ts.isObjectLiteralExpression(unwrapped) ? unwrapped : undefined
+function semanticReturnedObjectFromExpression(
+  expression: SemanticNode,
+  view: SemanticAnalyzerView,
+): SemanticNode | undefined {
+  const unwrapped = unwrapExpression(expression, view)
+  return view.syntax.isKind(unwrapped, 'objectLiteral') ? unwrapped : undefined
 }
 
 /**
@@ -608,20 +609,20 @@ function semanticReturnedObjectFromExpression(expression: ts.Expression): ts.Obj
  */
 function semanticRouterDefinitionEnrichments(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): SemanticDefinitionEnrichment[] {
-  const routes = semanticObjectProperty(candidate.object, 'routes', checker)
+  const routes = semanticObjectProperty(candidate.object, 'routes', view)
   if (!routes) return []
-  return routes.properties.flatMap((property, index) => {
-    const routeKey = semanticObjectPropertyName(property)
-    const expression = objectMemberExpression(property)
+  return view.syntax.objectProperties(routes).flatMap((property, index) => {
+    const routeKey = semanticObjectPropertyName(property, view)
+    const expression = objectMemberExpression(property, view)
     if (!routeKey || !expression) return []
-    const target = semanticTargetForExpression(expression, checker)
+    const target = semanticTargetForExpression(expression, view)
     const ref = semanticRoutingTargetSourceRef(
       `${candidate.definitionId}:route:${safeId(routeKey)}`,
       'routes',
       expression,
-      checker,
+      view,
     )
     return ref
       ? [
@@ -658,21 +659,22 @@ function semanticRouterDefinitionEnrichments(
  */
 function semanticCascadeDefinitionEnrichments(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): SemanticDefinitionEnrichment[] {
-  const tiers = semanticArrayProperty(candidate.object, 'tiers', checker)
+  const tiers = semanticArrayProperty(candidate.object, 'tiers', view)
   if (!tiers) return []
-  return tiers.elements.flatMap((element, index) => {
-    if (!ts.isObjectLiteralExpression(element)) return []
+  return view.syntax.arrayElements(tiers).flatMap((element, index) => {
+    const tier = unwrapExpression(element, view)
+    if (!view.syntax.isKind(tier, 'objectLiteral')) return []
     const definitionId = `${candidate.definitionId}:tier:${index + 1}`
     const sourceRefs: ProjectSourceRef[] = []
-    const model = propertyInitializer(element, 'model')
-    const target = model ? semanticTargetForExpression(model, checker) : undefined
-    const targetRef = model ? semanticRoutingTargetSourceRef(definitionId, 'model', model, checker) : undefined
+    const model = propertyInitializer(tier, 'model', view)
+    const target = model ? semanticTargetForExpression(model, view) : undefined
+    const targetRef = model ? semanticRoutingTargetSourceRef(definitionId, 'model', model, view) : undefined
     if (targetRef) sourceRefs.push(targetRef)
-    const evaluate = propertyInitializer(element, 'evaluate')
+    const evaluate = propertyInitializer(tier, 'evaluate', view)
     const evaluateRef = evaluate
-      ? semanticResolvedSourceRef(definitionId, 'evaluate', 'callback', evaluate, checker)
+      ? semanticResolvedSourceRef(definitionId, 'evaluate', 'callback', evaluate, view)
       : undefined
     if (evaluateRef) sourceRefs.push(evaluateRef)
     return sourceRefs.length > 0
@@ -710,16 +712,15 @@ function semanticCascadeDefinitionEnrichments(
  */
 function semanticFallbackDefinitionEnrichments(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): SemanticDefinitionEnrichment[] {
   if (!candidate.call) return []
-  const options = semanticFallbackOptions(candidate.call)
-  const modelArgs = candidate.call.arguments.filter((argument) => argument !== options)
+  const options = semanticFallbackOptions(candidate.call, view)
+  const modelArgs = view.syntax.callArguments(candidate.call).filter((argument) => argument !== options)
   return modelArgs.flatMap((argument, index) => {
-    if (!ts.isExpression(argument)) return []
     const definitionId = `${candidate.definitionId}:option:${index + 1}`
-    const target = semanticTargetForExpression(argument, checker)
-    const ref = semanticRoutingTargetSourceRef(definitionId, 'model', argument, checker)
+    const target = semanticTargetForExpression(argument, view)
+    const ref = semanticRoutingTargetSourceRef(definitionId, 'model', argument, view)
     return ref
       ? [
           {
@@ -811,20 +812,19 @@ function semanticRoutingChildPresentation(
  */
 function semanticMemoryDefinitionEnrichments(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): SemanticDefinitionEnrichment[] {
-  const blocksExpression = propertyInitializer(candidate.object, 'blocks')
+  const blocksExpression = propertyInitializer(candidate.object, 'blocks', view)
   if (!blocksExpression) return []
-  const blocks = semanticArrayExpression(blocksExpression, checker, new Set())
+  const blocks = semanticArrayExpression(blocksExpression, view, new Set())
   if (!blocks) return []
 
   const blockMetadata: Array<Record<string, unknown>> = []
   const enrichments: SemanticDefinitionEnrichment[] = []
   const relations: ProjectRelation[] = []
 
-  for (const [index, element] of blocks.elements.entries()) {
-    if (!ts.isExpression(element)) continue
-    const block = semanticMemoryBlockForExpression(element, checker)
+  for (const [index, element] of view.syntax.arrayElements(blocks).entries()) {
+    const block = semanticMemoryBlockForExpression(element, view)
     if (!block) continue
     const blockId = block.id ?? block.kind ?? 'block'
     const definitionId = `memory.block:${safeId(candidate.name)}:${safeId(blockId)}`
@@ -843,6 +843,7 @@ function semanticMemoryDefinitionEnrichments(
               },
               block.schemaResolved,
               Boolean(block.schema),
+              view,
             ),
           ]
         : []
@@ -874,7 +875,7 @@ function semanticMemoryDefinitionEnrichments(
       },
       sourceRefs,
     })
-    relations.push(semanticRelation(candidate, 'memory.includes_block', candidate.definitionId, definitionId))
+    relations.push(semanticRelation(candidate, 'memory.includes_block', candidate.definitionId, definitionId, view))
   }
 
   if (blockMetadata.length === 0) return []
@@ -902,36 +903,36 @@ function semanticMemoryDefinitionEnrichments(
  * declarations with cycle protection.
  */
 function semanticMemoryBlockForExpression(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: SemanticNode,
+  view: SemanticAnalyzerView,
   seen = new Set<string>(),
 ): SemanticMemoryBlock | undefined {
-  const unwrapped = unwrapExpression(expression)
-  if (ts.isCallExpression(unwrapped)) return semanticMemoryBlockForCall(unwrapped, checker)
-  if (!isResolvableSourceExpression(unwrapped)) return undefined
-  const resolved = resolveSemanticExpression(unwrapped, checker)
+  const unwrapped = unwrapExpression(expression, view)
+  if (view.syntax.isKind(unwrapped, 'callExpression')) return semanticMemoryBlockForCall(unwrapped, view)
+  if (!isResolvableSourceExpression(unwrapped, view)) return undefined
+  const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved?.expression) return undefined
   const key = semanticResolvedKey(resolved)
   if (seen.has(key)) return undefined
   const nextSeen = new Set(seen)
   nextSeen.add(key)
-  return semanticMemoryBlockForExpression(resolved.expression, checker, nextSeen)
+  return semanticMemoryBlockForExpression(resolved.expression, view, nextSeen)
 }
 
 /**
  * Extracts memory block metadata from a known block factory call.
  */
-function semanticMemoryBlockForCall(call: ts.CallExpression, checker: ts.TypeChecker): SemanticMemoryBlock | undefined {
-  const callName = callExpressionName(call)
-  const [firstArg] = call.arguments
-  if (!firstArg || !ts.isObjectLiteralExpression(firstArg)) return undefined
-  const kind = semanticMemoryBlockKindForCall(callName, firstArg)
+function semanticMemoryBlockForCall(call: SemanticNode, view: SemanticAnalyzerView): SemanticMemoryBlock | undefined {
+  const callName = callExpressionName(call, view)
+  const [firstArg] = view.syntax.callArguments(call)
+  if (!firstArg || !view.syntax.isKind(firstArg, 'objectLiteral')) return undefined
+  const kind = semanticMemoryBlockKindForCall(callName, firstArg, view)
   if (!kind) return undefined
-  const schemaExpression = propertyInitializer(firstArg, 'schema')
-  const resolvedSchema = schemaExpression ? resolveSemanticExpression(schemaExpression, checker) : undefined
-  const schema = resolvedSchema ? semanticExpressionToJsonSchema(resolvedSchema, checker) : undefined
+  const schemaExpression = propertyInitializer(firstArg, 'schema', view)
+  const resolvedSchema = schemaExpression ? resolveSemanticExpression(schemaExpression, view) : undefined
+  const schema = resolvedSchema ? semanticExpressionToJsonSchema(resolvedSchema, view) : undefined
   return {
-    id: stringProperty(firstArg, 'id'),
+    id: semanticStringLiteralProperty(firstArg, 'id', view),
     kind,
     schema,
     schemaExpression,
@@ -945,7 +946,8 @@ function semanticMemoryBlockForCall(call: ts.CallExpression, checker: ts.TypeChe
  */
 function semanticMemoryBlockKindForCall(
   callName: string | undefined,
-  object: ts.ObjectLiteralExpression,
+  object: SemanticNode,
+  view: SemanticAnalyzerView,
 ): string | undefined {
   switch (callName) {
     case 'workingState':
@@ -961,7 +963,7 @@ function semanticMemoryBlockKindForCall(
     case 'reflections':
       return 'reflections'
     case 'memoryBlock':
-      return stringProperty(object, 'kind') ?? 'custom'
+      return semanticStringLiteralProperty(object, 'kind', view) ?? 'custom'
     default:
       return undefined
   }
@@ -973,19 +975,20 @@ function semanticMemoryBlockKindForCall(
  */
 function semanticWorkspaceDefinitionEnrichments(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): SemanticDefinitionEnrichment[] {
-  const mountsExpression = propertyInitializer(candidate.object, 'mounts')
+  const mountsExpression = propertyInitializer(candidate.object, 'mounts', view)
   if (!mountsExpression) return []
-  const mounts = semanticArrayExpression(mountsExpression, checker, new Set())
+  const mounts = semanticArrayExpression(mountsExpression, view, new Set())
   if (!mounts) return []
-  const metadata = mounts.elements
-    .filter((element): element is ts.ObjectLiteralExpression => ts.isObjectLiteralExpression(unwrapExpression(element)))
-    .map((element) => unwrapExpression(element) as ts.ObjectLiteralExpression)
+  const metadata = view.syntax
+    .arrayElements(mounts)
+    .map((element) => unwrapExpression(element, view))
+    .filter((element) => view.syntax.isKind(element, 'objectLiteral'))
     .map((mount) => ({
-      path: semanticStringLiteralProperty(mount, 'path'),
-      access: semanticStringLiteralProperty(mount, 'access'),
-      description: semanticStringLiteralProperty(mount, 'description'),
+      path: semanticStringLiteralProperty(mount, 'path', view),
+      access: semanticStringLiteralProperty(mount, 'access', view),
+      description: semanticStringLiteralProperty(mount, 'description', view),
     }))
     .filter((mount) => mount.path || mount.access || mount.description)
   if (metadata.length === 0) return []
@@ -1005,6 +1008,7 @@ function semanticWorkspaceDefinitionEnrichments(
                 'workspace.mounts_path',
                 candidate.definitionId,
                 `workspace.path:${safeId(candidate.name)}:${safeId(mount.path)}`,
+                view,
               ),
             ]
           : [],

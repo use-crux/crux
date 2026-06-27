@@ -6,14 +6,17 @@ import (
 )
 
 var ignoredDirectoryNames = map[string]bool{
+	".cache":       true,
 	".crux":        true,
 	".git":         true,
 	".next":        true,
 	".turbo":       true,
 	".vercel":      true,
+	".venv":        true,
 	"build":        true,
 	"coverage":     true,
 	"dist":         true,
+	"generated":    true,
 	"node_modules": true,
 	"out":          true,
 }
@@ -31,15 +34,20 @@ var watchedFileExtensions = map[string]bool{
 }
 
 var watchedBaseNames = map[string]bool{
-	".gitmodules":       true,
-	"crux.config.mts":   true,
-	"crux.config.ts":    true,
-	"jsconfig.json":     true,
-	"package-lock.json": true,
-	"package.json":      true,
-	"pnpm-lock.yaml":    true,
-	"tsconfig.json":     true,
-	"yarn.lock":         true,
+	".gitmodules":         true,
+	"crux.config.cjs":     true,
+	"crux.config.cts":     true,
+	"crux.config.js":      true,
+	"crux.config.mjs":     true,
+	"crux.config.mts":     true,
+	"crux.config.ts":      true,
+	"jsconfig.json":       true,
+	"package-lock.json":   true,
+	"package.json":        true,
+	"pnpm-lock.yaml":      true,
+	"pnpm-workspace.yaml": true,
+	"tsconfig.json":       true,
+	"yarn.lock":           true,
 }
 
 func shouldIgnoreDir(path string) bool {

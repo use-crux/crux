@@ -82,7 +82,7 @@ const brand = context({
 For mode-based switching, use `match()` instead of multiple `when()` calls:
 
 ```ts
-import { match } from '@crux/core'
+import { match } from '@use-crux/core'
 
 prompt({
   use: [
@@ -178,19 +178,22 @@ For user-facing input, rely on Crux's auto-escaping (enabled by default). Only u
 
 ## Start with `inMemoryDataStore()`, swap later
 
-Memory blocks can run on the in-memory store first, then move to `cruxConvexStore()` or a custom store for production. The block API does not change; only the store does.
+Memory blocks can run on the in-memory store first, then move to a Convex store contract or a custom store for production. The block API does not change; only the store does.
 
 ```ts
+import { defineConvexStoreContract } from '@use-crux/convex'
+
 // Development
 const data = inMemoryDataStore()
 const factsBlock = facts({ id: 'facts', embed })
 const mem = memory({ id: 'assistant', namespace: 'user:123', store: data, blocks: [factsBlock] })
 
 // Production -- same memory shape, persistent store
+const cruxDocuments = defineConvexStoreContract({ component: components.crux })
 const mem = memory({
   id: 'assistant',
   namespace: 'user:123',
-  store: cruxConvexStore({ component: components.crux, ctx }),
+  store: cruxDocuments.store(ctx),
   blocks: [factsBlock],
 })
 ```
@@ -228,12 +231,13 @@ Global middleware should observe, not mutate. Use it for logging, timing, and me
 ```ts
 // ✓ Observability middleware
 config({
-  prompts,
-  middleware: async (args, next) => {
-    const start = Date.now()
-    const result = await next(args)
-    metrics.record(args.promptId, Date.now() - start)
-    return result
+  generation: {
+    middleware: async (args, next) => {
+      const start = Date.now()
+      const result = await next(args)
+      metrics.record(args.promptId, Date.now() - start)
+      return result
+    },
   },
 })
 
@@ -276,7 +280,7 @@ blackboard({ id: 'pipeline-state', ... })
   />
   <Card
     title="Project Setup"
-    description="Organize prompts, register with config(), and wire up devtools."
+    description="Organize prompts, configure project policy, and wire up devtools."
     href="/docs/getting-started"
   />
   <Card title="Recipes" description="Full working examples combining multiple primitives." href="/docs/cookbook" />

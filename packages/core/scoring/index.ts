@@ -6,7 +6,7 @@
  *
  * `judgeConstraint()` bridges a judge into the safety module's `Constraint`
  * contract for online enforcement; the reverse bridge (`constraintScorer()`)
- * lives in `@crux/core/quality`.
+ * lives in `@use-crux/core/quality`.
  *
  * @module
  */

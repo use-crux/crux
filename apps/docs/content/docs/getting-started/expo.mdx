@@ -17,7 +17,7 @@ The simplest setup: your Expo app posts to a backend you control.
 ### Backend (Next.js Route Handler)
 
 ```ts title="app/api/summarize/route.ts"
-import { generate } from '@crux/ai'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 import { summarize } from '@/lib/ai/prompts'
@@ -97,8 +97,8 @@ export function Chat() {
 If your Expo app needs to subscribe to plan or task list changes (for approval flows, agent progress, etc.), wrap it in a `CruxProvider` and use the live hooks:
 
 ```tsx title="App.tsx"
-import { CruxProvider } from '@crux/react'
-import { createSSETransport } from '@crux/react'
+import { CruxProvider } from '@use-crux/react'
+import { createSSETransport } from '@use-crux/react'
 
 const transport = createSSETransport({
   url: `${process.env.EXPO_PUBLIC_API_URL}/api/crux/sse`,
@@ -110,7 +110,7 @@ export default function App() {
 ```
 
 ```tsx title="app/screens/PlanReview.tsx"
-import { usePlan } from '@crux/react'
+import { usePlan } from '@use-crux/react'
 
 export function PlanReview({ planId }: { planId: string }) {
   const plan = usePlan(planId)

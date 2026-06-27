@@ -8,9 +8,9 @@
  */
 
 import { useSyncExternalStore } from 'react'
-import type { CruxTransport } from '@crux/react'
-import type { JsonObject, StoreEntry, ListOptions } from '@crux/core/store'
-import { matchesFilter } from '@crux/core/store'
+import type { CruxTransport } from '@use-crux/react'
+import type { JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
+import { matchesFilter } from '@use-crux/core/store'
 import type { CruxDataPart } from './types'
 
 /**
@@ -36,8 +36,8 @@ export interface StreamTransport extends CruxTransport {
  *
  * @example
  * ```tsx
- * import { createStreamTransport } from '@crux/ai/stream'
- * import { CruxProvider, usePlan } from '@crux/react'
+ * import { createStreamTransport } from '@use-crux/ai/stream'
+ * import { CruxProvider, usePlan } from '@use-crux/react'
  *
  * function Chat() {
  *   const transport = useRef(createStreamTransport()).current

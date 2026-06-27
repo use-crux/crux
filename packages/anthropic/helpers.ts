@@ -1,11 +1,11 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { GenerateObjectFn, GenerateTextFn } from '@crux/core/compaction'
+import type { GenerateObjectFn, GenerateTextFn } from '@use-crux/core/compaction'
 import { anthropicHelpers } from './native'
 
 /**
  * Create a `GenerateObjectFn` that wraps an Anthropic client.
  *
- * The helper is generated from the same native chat profile as
+ * The helper is generated from the same provider runtime as
  * `createAnthropic()`, using Anthropic's structured parse surface and
  * preserving provider SDK errors.
  */
@@ -27,7 +27,7 @@ export function createGenerateObjectFn(client: Anthropic, model: string): Genera
  * Create a `GenerateTextFn` that wraps an Anthropic client.
  *
  * Text helper calls share request construction and response extraction with
- * the native Anthropic adapter profile.
+ * the Anthropic provider runtime.
  */
 export function createGenerateTextFn(client: Anthropic, model: string): GenerateTextFn {
   return anthropicHelpers.createGenerateTextFn(client, model)

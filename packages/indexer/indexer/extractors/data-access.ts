@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { DataAccessFact, SourceLocation } from '@crux/core/project-index'
+import type { DataAccessFact, SourceLocation } from '@use-crux/core/project-index'
 import { sourceForNode } from '../ast/snippets'
 import { resolveIdentifierSourceNode } from '../ast/source-refs'
 
@@ -74,14 +74,27 @@ function collectHelperDataAccessRefs(
       const symbol = child.expression.text
       if (!seen.has(symbol)) {
         seen.add(symbol)
-        const resolved = resolveIdentifierSourceNode(options.root, options.file, sourceFile, symbol, options.localInitializers)
+        const resolved = resolveIdentifierSourceNode(
+          options.root,
+          options.file,
+          sourceFile,
+          symbol,
+          options.localInitializers,
+        )
         if (resolved) {
           refs.push(...primitiveDataAccessRefsForNode(resolved.node, resolved.sourceFile))
-          collectHelperDataAccessRefs(resolved.node, resolved.sourceFile, {
-            root: options.root,
-            file: resolved.sourceFile.fileName,
-            localInitializers: resolved.localInitializers,
-          }, refs, seen, depth - 1)
+          collectHelperDataAccessRefs(
+            resolved.node,
+            resolved.sourceFile,
+            {
+              root: options.root,
+              file: resolved.sourceFile.fileName,
+              localInitializers: resolved.localInitializers,
+            },
+            refs,
+            seen,
+            depth - 1,
+          )
         }
       }
     }
@@ -90,7 +103,9 @@ function collectHelperDataAccessRefs(
   visit(node)
 }
 
-export function primitiveDataIntelligence(accesses: readonly PrimitiveDataAccessRef[]): Record<string, unknown> | undefined {
+export function primitiveDataIntelligence(
+  accesses: readonly PrimitiveDataAccessRef[],
+): Record<string, unknown> | undefined {
   if (accesses.length === 0) return undefined
   const reads = accesses.filter((access) => access.kind === 'read').map(accessToMetadata)
   const writes = accesses.filter((access) => access.kind === 'write').map(accessToMetadata)
@@ -101,6 +116,16 @@ export function primitiveDataIntelligence(accesses: readonly PrimitiveDataAccess
       ...(writes.length > 0 ? { writes } : {}),
     },
   }
+}
+
+export function uniqueDataAccesses(accesses: readonly PrimitiveDataAccessRef[]): readonly PrimitiveDataAccessRef[] {
+  const seen = new Set<string>()
+  return accesses.filter((access) => {
+    const key = `${access.kind}:${access.targetVariable}:${access.operation ?? ''}:${access.key ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function accessToMetadata(access: PrimitiveDataAccessRef): DataAccessFact {
@@ -115,7 +140,8 @@ function accessToMetadata(access: PrimitiveDataAccessRef): DataAccessFact {
 
 function dataAccessKind(method: string): 'read' | 'write' | undefined {
   if (['get', 'read', 'query', 'find', 'search', 'list', 'readFile', 'load'].includes(method)) return 'read'
-  if (['set', 'write', 'update', 'append', 'delete', 'put', 'writeFile', 'edit', 'deleteFile', 'save'].includes(method)) return 'write'
+  if (['set', 'write', 'update', 'append', 'delete', 'put', 'writeFile', 'edit', 'deleteFile', 'save'].includes(method))
+    return 'write'
   return undefined
 }
 

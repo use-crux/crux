@@ -8,7 +8,7 @@
  * comparison (Phase 4), cassette replay (Phase 5). Declaring those surfaces
  * today throws `NotImplementedError` rather than silently ignoring them.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 
@@ -84,6 +84,8 @@ import {
 } from './programmatic-runtime'
 import { emptyCellSignals, extractCellSignals, installSignalCapture, type CellSignals } from './signals'
 import { ulid } from './ulid'
+import { MissingQualityModelBindingError } from './errors'
+import type { ProjectModelDiagnosticCode } from '../../project-index'
 
 // ─────────────────────────────────────────────────────────────────
 // Errors
@@ -97,9 +99,13 @@ import { ulid } from './ulid'
  * @internal
  */
 export class QualityDefinitionError extends Error {
-  constructor(message: string) {
+  /** Stable diagnostic code for tooling surfaces that render definition failures. */
+  readonly code?: ProjectModelDiagnosticCode
+
+  constructor(message: string, options: { code?: ProjectModelDiagnosticCode } = {}) {
     super(message)
     this.name = 'QualityDefinitionError'
+    this.code = options.code
   }
 }
 
@@ -107,7 +113,7 @@ export class QualityDefinitionError extends Error {
 // Engine options
 // ─────────────────────────────────────────────────────────────────
 
-/** Ambient providers normally supplied by project config `quality.setup()`. @internal */
+/** Internal runner-supplied providers for compatibility and programmatic tests. @internal */
 export interface EngineSetup {
   generate?: GenerateFn
   model?: unknown
@@ -151,7 +157,7 @@ export interface EngineOptions {
   /**
    * Authored-source frame resolver supplied by first-party tooling. Core
    * captures stack refs but delegates source-map/catalog/disk lookup so it
-   * never depends on `@crux/indexer` or the local server implementation.
+   * never depends on `@use-crux/indexer` or the local server implementation.
    */
   sourceFrameResolver?: QualitySourceFrameResolver
   /** Number of context lines requested on each side of assertion source frames. Default `4`. */
@@ -337,7 +343,8 @@ function requireGenerate(params: Record<string, unknown>, setup: EngineSetup | u
   const generate = (params.generate as GenerateFn | undefined) ?? setup?.generate
   if (typeof generate !== 'function') {
     throw new QualityDefinitionError(
-      `${kind} tasks need an adapter generate fn: pass \`params.generate\`, target defaults, or configure quality.setup().`,
+      `${kind} tasks need an explicit adapter generate fn: pass \`generate\` in the eval through target defaults, params, or variants.`,
+      { code: 'project_model.model_executor_missing' },
     )
   }
   return generate
@@ -950,6 +957,9 @@ async function assembleCell(args: {
           ...(result.metadata !== undefined ? { metadata: result.metadata } : {}),
         })
       } catch (error) {
+        if (error instanceof MissingQualityModelBindingError) {
+          throw new QualityDefinitionError(error.message, { code: error.code })
+        }
         const sourceRef = error instanceof Error ? captureSourceRefFromStack(error.stack) : undefined
         cellError = {
           message: `scorer '${scorer.scorerName ?? scorer.name ?? '(dynamic)'}' threw: ${

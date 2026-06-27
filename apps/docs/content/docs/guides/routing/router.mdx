@@ -8,7 +8,7 @@ description: Classify input and select a model route before generation starts.
 Use a router when different request shapes should go to different models: short versus long, free versus enterprise, draft versus final, low-risk versus high-risk, or cheap versus careful.
 
 ```ts title="support-router.ts"
-import { router } from '@crux/core/routing'
+import { router } from '@use-crux/core/routing'
 import { openai } from '@ai-sdk/openai'
 import { anthropic } from '@ai-sdk/anthropic'
 
@@ -35,7 +35,7 @@ export const supportRouter = router({
 ```
 
 ```ts title="run.ts"
-import { generate } from '@crux/ai'
+import { generate } from '@use-crux/ai'
 import { supportPrompt } from './support-prompt'
 import { supportRouter } from './support-router'
 

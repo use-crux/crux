@@ -1,4 +1,4 @@
-import type { ProjectDefinitionIndexPresentation } from '@crux/core/project-index'
+import type { ProjectDefinitionIndexPresentation } from '@use-crux/core/project-index'
 
 export function foldedIndexChild(
   input: Omit<ProjectDefinitionIndexPresentation, 'standalone'>,

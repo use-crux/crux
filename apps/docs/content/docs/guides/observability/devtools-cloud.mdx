@@ -3,7 +3,9 @@ title: Cloud & Tunnel Setup
 description: Connect cloud backends like Convex, Vercel, or Lambda to your local devtools server.
 ---
 
-When your backend runs locally, devtools just works — `DEVTOOLS_URL` defaults to `http://localhost:4400`. But when your backend runs in the cloud (Convex, Vercel, AWS Lambda), the devtools server needs a **public URL** so your backend can reach it.
+When your backend runs locally, Quality CLI auto-attach works against loopback `crux dev` origins
+without project config. When application runtime code runs in the cloud (Convex, Vercel, AWS
+Lambda), the devtools server needs a **public URL** so that runtime can reach it.
 
 ## Creating a tunnel
 
@@ -13,37 +15,47 @@ The `--tunnel` flag creates a public URL automatically:
 crux dev --tunnel
 ```
 
-The tunnel URL is displayed in both the CLI output and the TUI header:
+The tunnel URL and scoped ingest token are displayed in the CLI output. In TUI mode, the tunnel URL
+appears in the breadcrumb and the ingest token path appears as `ingest token .crux/devtools/ingest-token`:
 
 ```
 OK Server ready at http://localhost:4400
-OK Tunnel: https://your-subdomain.ngrok-free.dev
+* Remote observability ingest: CRUX_DEVTOOLS_TOKEN=... (saved at .crux/devtools/ingest-token)
+OK Tunnel: https://your-subdomain.ngrok-free.dev?t=...
 ```
 
-In TUI mode (`crux dev --tunnel --tui`), the tunnel URL appears in the dashboard header bar alongside the local URL.
+The `?t=...` query token authenticates browser access to the devtools UI. For server-to-server
+observability posts, use the tunnel origin plus `CRUX_DEVTOOLS_TOKEN` instead. The ingest token is
+generated once per project and reused across `crux dev` restarts.
 
 ## Connecting your backend
 
-Set the `DEVTOOLS_URL` environment variable to the tunnel URL. For Convex:
+Set `DEVTOOLS_URL` to the tunnel origin and `CRUX_DEVTOOLS_TOKEN` to the token printed by `crux dev`.
+For Convex:
 
 ```bash
-npx convex env set DEVTOOLS_URL https://your-subdomain.ngrok-free.dev
+npx convex env set DEVTOOLS_URL 'https://your-subdomain.ngrok-free.dev'
+npx convex env set CRUX_DEVTOOLS_TOKEN '...'
 ```
 
-Your `crux.config.ts` picks it up automatically:
+Configure observability for this explicit tunnel/local-runtime connection:
 
 ```ts title="crux.config.ts"
 config({
-  prompts,
-  devtools: { serverUrl: process.env.DEVTOOLS_URL },
+  observability: {
+    serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
 })
 ```
 
-For other platforms, set `DEVTOOLS_URL` however your platform handles environment variables (e.g. `.env` files, Vercel dashboard, AWS Parameter Store).
+For other platforms, set `DEVTOOLS_URL` and `CRUX_DEVTOOLS_TOKEN` however your platform handles
+environment variables (e.g. `.env` files, Vercel dashboard, AWS Parameter Store). The HTTP
+transport also reads `CRUX_DEVTOOLS_TOKEN` automatically when `token` is omitted.
 
 <Callout type="warn">
   Free ngrok plans generate a new URL on every restart. If traces stop appearing, check that `DEVTOOLS_URL` matches the
-  current tunnel URL shown in the CLI output.
+  current tunnel origin. The `CRUX_DEVTOOLS_TOKEN` value persists unless `.crux/devtools/ingest-token` is deleted.
 </Callout>
 
 ## Tunnel providers
@@ -76,7 +88,7 @@ When traces arrive from a cloud backend, they can be grouped into logical sessio
 `withSession` groups all `generate()` calls inside it under a single session ID, visible as a collapsible group in the Timeline.
 
 ```ts
-import { withSession, createSessionId } from '@crux/core'
+import { withSession, createSessionId } from '@use-crux/core'
 
 const sessionId = createSessionId()
 await withSession(sessionId, async () => {
@@ -90,7 +102,7 @@ await withSession(sessionId, async () => {
 `flow` adds structured pipeline grouping within a session. Named steps via `flow.step()` tag every nested `generate()` call with a `stepId` and `stepLabel`.
 
 ```ts
-import { withSession, flow, createSessionId } from '@crux/core'
+import { withSession, flow, createSessionId } from '@use-crux/core'
 
 const researchFlow = flow('research', async (flow) => {
   const plan = await flow.step('plan', () => generate(planner, { model, input }))
@@ -104,7 +116,7 @@ In the Timeline, the session appears as a collapsible group with each flow shown
 
 ### Cross-action flows (Convex)
 
-For Convex, use `@crux/convex/server` action boundaries and `ctx.crux.runAction()` so the hidden `__crux` envelope carries run/span context across workers. See the [Convex observability guide](/docs/guides/convex/observability) for cross-action flows and devtools setup.
+For Convex, use `@use-crux/convex/server` action boundaries and `ctx.crux.runAction()` so the hidden `__crux` envelope carries run/span context across workers. See the [Convex observability guide](/docs/guides/convex/observability) for cross-action flows and devtools setup.
 
 ### Hierarchy in Timeline
 

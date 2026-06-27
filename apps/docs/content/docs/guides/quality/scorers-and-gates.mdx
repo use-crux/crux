@@ -45,22 +45,22 @@ standalone import, `judge` on a non-string output requires an annotated
 | `scorers.jsonValid()` / `scorers.jsonDiff()` | JSON validity / structural diff |
 | `scorers.retrieval.hitRateAtK(k)` · `recallAtK(k)` · `precisionAtK(k)` · `mrr()` · `ndcg(k?)` | Ranking quality against `expected: { sources: [{ sourceId, chunkId? }] }` |
 
-**Model-backed** (use the `quality.setup()` providers):
+**Model-backed** (bind `generate`, `model`, and `embed` from the eval or an
+eval-local helper):
 
 | Scorer | Measures |
 | --- | --- |
-| `scorers.judge({ name, rubric \| choiceScores, select?, model?, useCoT? })` | LLM-as-judge — free rubric (0–1) or classification with mapped scores |
-| `scorers.embeddingSimilarity()` | Cosine similarity to `expected` (needs `setup().embed`) |
-| `scorers.rag.faithfulness()` | Is the answer grounded in the retrieved context? |
-| `scorers.rag.answerRelevancy()` | Does the answer address the question? |
-| `scorers.rag.contextPrecision()` / `contextRecall()` | Retrieved-context quality vs the question / reference |
+| `scorers.judge({ name, rubric \| choiceScores, select?, generate, model, useCoT? })` | LLM-as-judge — free rubric (0–1) or classification with mapped scores |
+| `scorers.embeddingSimilarity({ embed })` | Cosine similarity to `expected` |
+| `scorers.rag.faithfulness({ generate, model })` | Is the answer grounded in the retrieved context? |
+| `scorers.rag.answerRelevancy({ generate, model })` | Does the answer address the question? |
+| `scorers.rag.contextPrecision({ generate, model })` / `contextRecall({ generate, model })` | Retrieved-context quality vs the question / reference |
 
 Judges run chain-of-thought by default; the rationale lands in
-`score.metadata.rationale`. Judge model resolution: `opts.model` →
-`setup().judgeModel` → `setup().model` — string refs resolve through
-`setup().models`. The `rag.*` scorers read retrieved context from the
-captured retrieval signals (with `input.context` as a fallback) and skip
-honestly (`score: null`) when there is none.
+`score.metadata.rationale`. Judge and RAG scorers require explicit
+`generate`/`model` bindings when they spend tokens. The `rag.*` scorers read
+retrieved context from the captured retrieval signals (with `input.context` as
+a fallback) and skip honestly (`score: null`) when there is none.
 
 `choiceScores` replaces a rubric with classification:
 
@@ -68,6 +68,8 @@ honestly (`score: null`) when there is none.
 s.judge({
   name: 'tone',
   choiceScores: { professional: 1, neutral: 0.6, rude: 0 },
+  generate: qualityRuntime.generate,
+  model: qualityRuntime.judgeModel,
   select: (o) => o.answer,
 })
 ```
@@ -78,7 +80,7 @@ Golden sets live in files, validated with any Standard Schema library (zod,
 valibot, arktype) — JSON, JSONL, or CSV by extension:
 
 ```ts
-import { evaluate, dataset } from '@crux/core/quality'
+import { evaluate, dataset } from '@use-crux/core/quality'
 
 export default evaluate('support.quality-bar', {
   task: supportPrompt,

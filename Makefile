@@ -6,9 +6,9 @@ help:
 	@echo "  make install       Install workspace dependencies"
 	@echo "  make dev           Run all dev tasks through Turbo"
 	@echo "  make docs          Run the docs app"
-	@echo "  make build         Build devtools workers/UI, embed them, then build Crux Local"
-	@echo "  make build-js      Build devtools workers and UI only"
-	@echo "  make local         Build devtools workers/UI, embed them, then build Crux Local"
+	@echo "  make build         Build local workers, devtools UI, Rust indexer worker, embeds, then Crux Local"
+	@echo "  make build-js      Build local worker bundles and devtools UI only"
+	@echo "  make local         Build local workers, devtools UI, Rust indexer worker, embeds, then Crux Local"
 	@echo "  make local-go      Build only Crux Local using currently embedded assets"
 	@echo "  make local-all     Build embedded Crux Local binaries for all supported platforms"
 	@echo "  make cli           Alias for make local"
@@ -33,7 +33,8 @@ build: local
 
 .PHONY: build-js
 build-js:
-	$(PNPM) --filter @crux/devtools build
+	$(PNPM) --filter @use-crux/local-workers build
+	$(PNPM) --filter @use-crux/devtools build
 
 .PHONY: local
 local:

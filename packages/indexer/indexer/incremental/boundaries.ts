@@ -4,12 +4,17 @@
  */
 export const indexBoundaryFileNames = [
   '.gitmodules',
+  'crux.config.cjs',
+  'crux.config.cts',
+  'crux.config.js',
+  'crux.config.mjs',
   'crux.config.mts',
   'crux.config.ts',
   'jsconfig.json',
   'package-lock.json',
   'package.json',
   'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
   'tsconfig.json',
   'yarn.lock',
 ] as const

@@ -1,191 +1,198 @@
-import ts from 'typescript'
+import { safeId } from '../definitions'
 import type { SemanticDefinitionCandidate } from './candidates'
-
-export interface SemanticDefinitionDiscoveryDeps {
-  readonly callExpressionName: (node: ts.CallExpression | ts.NewExpression) => string | undefined
-  readonly fallbackOptions: (call: ts.CallExpression) => ts.ObjectLiteralExpression | undefined
-  readonly propertyInitializer: (object: ts.ObjectLiteralExpression, name: string) => ts.Expression | undefined
-  readonly safeId: (value: string) => string
-  readonly stringProperty: (object: ts.ObjectLiteralExpression, name: string) => string | undefined
-  readonly unwrapExpression: (expression: ts.Expression) => ts.Expression
-  readonly variableNameForNode: (node: ts.Node) => string | undefined
-}
+import {
+  semanticNodeName,
+  semanticPropertyInitializer,
+  semanticStringLiteralProperty,
+  semanticVariableNameForNode,
+} from './syntax-readers'
+import type { SemanticSyntaxNode, SemanticSyntaxSourceFile, SemanticSyntaxView } from './syntax-view'
 
 /**
  * Finds authored Crux definitions in a source file without resolving imports.
  *
- * Discovery is deliberately syntax-only: it identifies calls/new expressions
- * that can become semantic candidates, then leaves schema/source/ref/relation
- * enrichment to focused analyzers.
+ * Discovery is syntax-only: it identifies calls and `new Agent(...)`
+ * expressions that can become semantic candidates, then leaves schema,
+ * source-ref, and relation enrichment to focused analyzers.
  */
-export function semanticDefinitionCandidates(
-  sourceFile: ts.SourceFile,
-  deps: SemanticDefinitionDiscoveryDeps,
-): SemanticDefinitionCandidate[] {
-  return semanticDefinitionCandidatesForNode(sourceFile, sourceFile, deps)
+export function semanticDefinitionCandidates<
+  TNode extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
+  sourceFile: TSourceFile,
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
+): SemanticDefinitionCandidate<TNode, TNode>[] {
+  return semanticDefinitionCandidatesForNode(sourceFile, syntax)
 }
 
 /**
- * Recursively collects candidates from a node and its children.
+ * Recursively collects candidates from a node and its semantic children.
  */
-function semanticDefinitionCandidatesForNode(
-  node: ts.Node,
-  sourceFile: ts.SourceFile,
-  deps: SemanticDefinitionDiscoveryDeps,
-): SemanticDefinitionCandidate[] {
+function semanticDefinitionCandidatesForNode<
+  TNode extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
+  node: TNode,
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
+): SemanticDefinitionCandidate<TNode, TNode>[] {
   return [
-    ...semanticDefinitionCandidatesForCurrentNode(node, deps),
-    ...node.getChildren(sourceFile).flatMap((child) => semanticDefinitionCandidatesForNode(child, sourceFile, deps)),
+    ...semanticDefinitionCandidatesForCurrentNode(node, syntax),
+    ...syntax.children(node).flatMap((child) => semanticDefinitionCandidatesForNode(child, syntax)),
   ]
 }
 
 /**
- * Converts a single AST node into zero or more semantic candidates.
+ * Converts a single syntax node into zero or more semantic candidates.
  */
-function semanticDefinitionCandidatesForCurrentNode(
-  node: ts.Node,
-  deps: SemanticDefinitionDiscoveryDeps,
-): SemanticDefinitionCandidate[] {
-  if (ts.isCallExpression(node)) {
-    return semanticCallExpressionCandidate(node, deps).map((candidate) => ({ ...candidate, call: node }))
+function semanticDefinitionCandidatesForCurrentNode<
+  TNode extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
+  node: TNode,
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
+): SemanticDefinitionCandidate<TNode, TNode>[] {
+  if (syntax.isKind(node, 'callExpression')) {
+    return semanticCallExpressionCandidate(node, syntax).map((candidate) => ({ ...candidate, call: node }))
   }
-  if (ts.isNewExpression(node) && deps.callExpressionName(node) === 'Agent') {
-    const object = node.arguments?.find((argument): argument is ts.ObjectLiteralExpression =>
-      ts.isObjectLiteralExpression(argument),
-    )
-    return object ? [semanticAgentCandidate(object, deps.variableNameForNode(node), deps)] : []
+  if (syntax.isKind(node, 'newExpression') && syntax.callExpressionName(node) === 'Agent') {
+    const object = syntax.newArguments(node).find((argument) => syntax.isKind(argument, 'objectLiteral'))
+    return object ? [semanticAgentCandidate(object, semanticVariableNameForNode(node, syntax), syntax)] : []
   }
   return []
 }
 
 /**
- * Converts a call expression into a candidate when it is a known Crux authoring helper.
+ * Converts a call expression into a candidate when it is a known Crux helper.
  */
-function semanticCallExpressionCandidate(
-  call: ts.CallExpression,
-  deps: SemanticDefinitionDiscoveryDeps,
-): SemanticDefinitionCandidate[] {
-  const firstArg = call.arguments[0]
-  const object = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
-  const callName = deps.callExpressionName(call)
-  const variableName = deps.variableNameForNode(call)
-  const fallbackCandidate = callName === 'fallback' ? semanticFallbackCandidate(call, variableName, deps) : undefined
+function semanticCallExpressionCandidate<
+  TNode extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
+  call: TNode,
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
+): SemanticDefinitionCandidate<TNode, TNode>[] {
+  const [firstArg] = syntax.callArguments(call)
+  const object = firstArg && syntax.isKind(firstArg, 'objectLiteral') ? firstArg : undefined
+  const callName = syntax.callExpressionName(call)
+  const variableName = semanticVariableNameForNode(call, syntax)
+  const fallbackCandidate = callName === 'fallback' ? semanticFallbackCandidate(call, variableName, syntax) : undefined
   const candidate =
-    fallbackCandidate ?? (object ? semanticDefinitionCandidateForCall(callName, object, variableName, deps) : undefined)
+    fallbackCandidate ?? (object ? semanticDefinitionCandidateForCall(callName, object, variableName, syntax) : undefined)
   return candidate ? [candidate] : []
 }
 
 /**
  * Maps a known helper call to the index definition it authors.
  */
-function semanticDefinitionCandidateForCall(
+function semanticDefinitionCandidateForCall<
+  TNode extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
   callName: string | undefined,
-  object: ts.ObjectLiteralExpression,
+  object: TNode,
   variableName: string | undefined,
-  deps: SemanticDefinitionDiscoveryDeps,
-): SemanticDefinitionCandidate | undefined {
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
+): SemanticDefinitionCandidate<TNode, TNode> | undefined {
   switch (callName) {
     case 'prompt': {
-      const name = deps.stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { definitionId: `prompt:${deps.safeId(name)}`, kind: 'prompt', name, object }
+      const name = semanticStringLiteralProperty(object, 'id', syntax) ?? variableName ?? 'anonymous'
+      return { definitionId: `prompt:${safeId(name)}`, kind: 'prompt', name, object }
     }
     case 'context': {
-      const name = deps.stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { definitionId: `context:${deps.safeId(name)}`, kind: 'context', name, object }
+      const name = semanticStringLiteralProperty(object, 'id', syntax) ?? variableName ?? 'anonymous'
+      return { definitionId: `context:${safeId(name)}`, kind: 'context', name, object }
     }
     case 'injectable': {
-      const name = deps.stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { definitionId: `injectable:${deps.safeId(name)}`, kind: 'injectable', name, object }
+      const name = semanticStringLiteralProperty(object, 'id', syntax) ?? variableName ?? 'anonymous'
+      return { definitionId: `injectable:${safeId(name)}`, kind: 'injectable', name, object }
     }
     case 'tool':
     case 'createTool': {
       const name =
-        deps.stringProperty(object, 'name') ?? deps.stringProperty(object, 'title') ?? variableName ?? 'anonymous'
-      return { definitionId: `tool:${deps.safeId(name)}`, kind: 'tool', name, object }
+        semanticStringLiteralProperty(object, 'name', syntax) ??
+        semanticStringLiteralProperty(object, 'title', syntax) ??
+        variableName ??
+        'anonymous'
+      return { definitionId: `tool:${safeId(name)}`, kind: 'tool', name, object }
     }
     case 'agent':
     case 'convexAgent':
-      return semanticAgentCandidate(object, variableName, deps)
+      return semanticAgentCandidate(object, variableName, syntax)
     case 'flow':
     case 'cruxFlow': {
-      const name = deps.stringProperty(object, 'name') ?? variableName ?? 'anonymous'
-      return { definitionId: `flow:${deps.safeId(name)}`, kind: 'flow', name, object }
+      const name = semanticStringLiteralProperty(object, 'name', syntax) ?? variableName ?? 'anonymous'
+      return { definitionId: `flow:${safeId(name)}`, kind: 'flow', name, object }
     }
     case 'parallel':
-      return {
-        definitionId: `composition.parallel:${deps.safeId(variableName ?? 'anonymous')}`,
-        kind: 'composition.parallel',
-        name: variableName ?? 'anonymous',
-        object,
-      }
+      return compositionCandidate('composition.parallel', object, variableName)
     case 'pipeline':
-      return {
-        definitionId: `composition.pipeline:${deps.safeId(variableName ?? 'anonymous')}`,
-        kind: 'composition.pipeline',
-        name: variableName ?? 'anonymous',
-        object,
-      }
+      return compositionCandidate('composition.pipeline', object, variableName)
     case 'swarm':
-      return {
-        definitionId: `composition.swarm:${deps.safeId(variableName ?? 'anonymous')}`,
-        kind: 'composition.swarm',
-        name: variableName ?? 'anonymous',
-        object,
-      }
+      return compositionCandidate('composition.swarm', object, variableName)
     case 'consensus':
-      return {
-        definitionId: `composition.consensus:${deps.safeId(variableName ?? 'anonymous')}`,
-        kind: 'composition.consensus',
-        name: variableName ?? 'anonymous',
-        object,
-      }
+      return compositionCandidate('composition.consensus', object, variableName)
     case 'router': {
-      const name = deps.stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { definitionId: `routing.router:${deps.safeId(name)}`, kind: 'routing.router', name, object }
+      const name = semanticStringLiteralProperty(object, 'id', syntax) ?? variableName ?? 'anonymous'
+      return { definitionId: `routing.router:${safeId(name)}`, kind: 'routing.router', name, object }
     }
     case 'cascade': {
-      const name = deps.stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { definitionId: `routing.cascade:${deps.safeId(name)}`, kind: 'routing.cascade', name, object }
+      const name = semanticStringLiteralProperty(object, 'id', syntax) ?? variableName ?? 'anonymous'
+      return { definitionId: `routing.cascade:${safeId(name)}`, kind: 'routing.cascade', name, object }
     }
     case 'constraint': {
-      const name = deps.stringProperty(object, 'name') ?? variableName ?? 'anonymous'
-      return { definitionId: `constraint:${deps.safeId(name)}`, kind: 'constraint', name, object }
+      const name = semanticStringLiteralProperty(object, 'name', syntax) ?? variableName ?? 'anonymous'
+      return { definitionId: `constraint:${safeId(name)}`, kind: 'constraint', name, object }
     }
     case 'guardrail': {
-      const name = deps.stringProperty(object, 'name') ?? variableName ?? 'anonymous'
-      return { definitionId: `guardrail:${deps.safeId(name)}`, kind: 'guardrail', name, object }
+      const name = semanticStringLiteralProperty(object, 'name', syntax) ?? variableName ?? 'anonymous'
+      return { definitionId: `guardrail:${safeId(name)}`, kind: 'guardrail', name, object }
     }
     case 'memory': {
-      const name = semanticAuthoredResourceName(object, variableName, deps)
-      return { definitionId: `memory:${deps.safeId(name)}`, kind: 'memory', name, object }
+      const name = semanticAuthoredResourceName(object, variableName, syntax)
+      return { definitionId: `memory:${safeId(name)}`, kind: 'memory', name, object }
     }
     case 'blackboard': {
-      const name = semanticAuthoredResourceName(object, variableName, deps)
-      return { definitionId: `blackboard:${deps.safeId(name)}`, kind: 'blackboard', name, object }
+      const name = semanticAuthoredResourceName(object, variableName, syntax)
+      return { definitionId: `blackboard:${safeId(name)}`, kind: 'blackboard', name, object }
     }
     case 'workspace': {
-      const name = deps.stringProperty(object, 'id') ?? variableName ?? 'anonymous'
-      return { definitionId: `workspace:${deps.safeId(name)}`, kind: 'workspace', name, object }
+      const name = semanticStringLiteralProperty(object, 'id', syntax) ?? variableName ?? 'anonymous'
+      return { definitionId: `workspace:${safeId(name)}`, kind: 'workspace', name, object }
     }
     default:
       return undefined
   }
 }
 
-/**
- * Builds the authored definition candidate for `fallback(...)`, whose options
- * object is not necessarily the first positional argument.
- */
-function semanticFallbackCandidate(
-  call: ts.CallExpression,
+function compositionCandidate<TNode extends SemanticSyntaxNode>(
+  kind:
+    | 'composition.parallel'
+    | 'composition.pipeline'
+    | 'composition.swarm'
+    | 'composition.consensus',
+  object: TNode,
   variableName: string | undefined,
-  deps: SemanticDefinitionDiscoveryDeps,
-): SemanticDefinitionCandidate | undefined {
-  const options = deps.fallbackOptions(call)
+): SemanticDefinitionCandidate<TNode, TNode> {
+  const name = variableName ?? 'anonymous'
+  return { definitionId: `${kind}:${safeId(name)}`, kind, name, object }
+}
+
+/**
+ * Builds the authored definition candidate for `fallback(...)`.
+ */
+function semanticFallbackCandidate<
+  TNode extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
+  call: TNode,
+  variableName: string | undefined,
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
+): SemanticDefinitionCandidate<TNode, TNode> | undefined {
+  const options = semanticFallbackOptions(call, syntax)
   if (!options) return undefined
-  const name = deps.stringProperty(options, 'id') ?? variableName ?? 'anonymous'
+  const name = semanticStringLiteralProperty(options, 'id', syntax) ?? variableName ?? 'anonymous'
   return {
-    definitionId: `routing.fallback:${deps.safeId(name)}`,
+    definitionId: `routing.fallback:${safeId(name)}`,
     kind: 'routing.fallback',
     name,
     object: options,
@@ -196,32 +203,40 @@ function semanticFallbackCandidate(
 /**
  * Resolves the stable index name for memory-like authored resources.
  */
-function semanticAuthoredResourceName(
-  object: ts.ObjectLiteralExpression,
+function semanticAuthoredResourceName<
+  TNode extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
+  object: TNode,
   variableName: string | undefined,
-  deps: SemanticDefinitionDiscoveryDeps,
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
 ): string {
-  const id = deps.propertyInitializer(object, 'id')
+  const id = semanticPropertyInitializer(object, 'id', syntax)
   if (!id) return variableName ?? 'anonymous'
-  const expression = deps.unwrapExpression(id)
-  if (ts.isStringLiteralLike(expression)) return expression.text
-  const prefix = semanticCreateMemoryIdPrefix(expression, deps)
+  const expression = syntax.unwrapExpression(id)
+  const literal = syntax.stringLiteralText(expression)
+  if (literal !== undefined) return literal
+  const prefix = semanticCreateMemoryIdPrefix(expression, syntax)
   if (prefix) return prefix.endsWith(':') ? prefix.slice(0, -1) : prefix
-  if (ts.isIdentifier(expression)) return expression.text
-  return variableName ?? 'anonymous'
+  return semanticNodeName(expression, syntax) ?? variableName ?? 'anonymous'
 }
 
 /**
  * Extracts the index-id prefix encoded by `createMemoryId(...)` calls.
  */
-function semanticCreateMemoryIdPrefix(
-  expression: ts.Expression,
-  deps: SemanticDefinitionDiscoveryDeps,
+function semanticCreateMemoryIdPrefix<
+  TNode extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
+  expression: TNode,
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
 ): string | undefined {
-  if (!ts.isCallExpression(expression) || deps.callExpressionName(expression) !== 'createMemoryId') return undefined
-  const [typeArg] = expression.arguments
-  if (!typeArg || !ts.isStringLiteralLike(typeArg)) return undefined
-  switch (typeArg.text) {
+  if (!syntax.isKind(expression, 'callExpression') || syntax.callExpressionName(expression) !== 'createMemoryId') {
+    return undefined
+  }
+  const [typeArg] = syntax.callArguments(expression)
+  const type = typeArg ? syntax.stringLiteralText(typeArg) : undefined
+  switch (type) {
     case 'session':
       return 'session:'
     case 'semantic':
@@ -238,11 +253,36 @@ function semanticCreateMemoryIdPrefix(
 /**
  * Builds the authored definition candidate for Agent object instantiation.
  */
-function semanticAgentCandidate(
-  object: ts.ObjectLiteralExpression,
+function semanticAgentCandidate<
+  TNode extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
+  object: TNode,
   variableName: string | undefined,
-  deps: SemanticDefinitionDiscoveryDeps,
-): SemanticDefinitionCandidate {
-  const name = deps.stringProperty(object, 'id') ?? deps.stringProperty(object, 'name') ?? variableName ?? 'anonymous'
-  return { definitionId: `agent:${deps.safeId(name)}`, kind: 'agent', name, object }
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
+): SemanticDefinitionCandidate<TNode, TNode> {
+  const name =
+    semanticStringLiteralProperty(object, 'id', syntax) ??
+    semanticStringLiteralProperty(object, 'name', syntax) ??
+    variableName ??
+    'anonymous'
+  return { definitionId: `agent:${safeId(name)}`, kind: 'agent', name, object }
+}
+
+function semanticFallbackOptions<
+  TNode extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(call: TNode, syntax: SemanticSyntaxView<TNode, TSourceFile>): TNode | undefined {
+  const last = syntax.callArguments(call).at(-1)
+  if (!last || !syntax.isKind(last, 'objectLiteral')) return undefined
+  const hasOptionsShape = Boolean(
+    semanticStringLiteralProperty(last, 'id', syntax) ||
+      semanticStringLiteralProperty(last, 'description', syntax) ||
+      semanticPropertyInitializer(last, 'timeout', syntax) ||
+      semanticPropertyInitializer(last, 'timeoutMs', syntax) ||
+      semanticPropertyInitializer(last, 'on', syntax) ||
+      semanticPropertyInitializer(last, 'shouldFallback', syntax) ||
+      semanticPropertyInitializer(last, 'onAttemptError', syntax),
+  )
+  return hasOptionsShape ? last : undefined
 }

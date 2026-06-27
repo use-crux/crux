@@ -10,12 +10,34 @@ coverage
 .env.*
 !.env.example
 
-# Native CLI build outputs
+# Rust build outputs
+target/
+
+# Local runtime build outputs
 packages/cli/crux
 packages/cli/bin
 packages/cli/dist
+packages/local/crux
+packages/local/crux.exe
+packages/local/crux-static-index-worker
+packages/local/crux-static-index-worker.exe
+packages/local/internal/assets/embed/*
+!packages/local/internal/assets/embed/.gitkeep
+packages/local/internal/assets/ui-embed/*
+!packages/local/internal/assets/ui-embed/.gitkeep
+
+# Release staging outputs
+.tmp/
 
 .crux
 
 # Local implementation workplans
 docs/plans/config-discovery-workplan/
+docs/plans/native-static-indexer-kit/
+docs/plans/indexer-native-runtime-architecture-workplan/
+docs/plans/indexer-static-index-runtime-reorg-workplan/
+docs/plans/indexer-native-architecture-cleanup-workplan/
+docs/plans/indexer-rust-go-architecture-workplan/
+docs/plans/native-semantic-tsgo-kit/
+docs/plans/native-ast-parity-beta-workplan/
+docs/plans/core-package-structure-kit/

@@ -1,5 +1,5 @@
 /**
- * `scriptedGateway()` — an in-memory `SdkGateway` for `@crux/ai` tests.
+ * `scriptedGateway()` — an in-memory `SdkGateway` for `@use-crux/ai` tests.
  *
  * Replaces `vi.mock('ai')`: tests script SDK results per method and assert
  * on the recorded call args. Streams replay scripted chunks through the

@@ -8,10 +8,10 @@ Approval is just message state. A CLI can run once, print the requested action, 
 ```ts title="approval-cli.ts"
 import readline from 'node:readline/promises'
 import { stdin as input, stdout as output } from 'node:process'
-import { prompt } from '@crux/core'
-import { approvalMiddleware } from '@crux/core/tool-middleware'
-import { toolApprovalResponse } from '@crux/core/adapter/tool'
-import { generate, tool } from '@crux/ai'
+import { prompt } from '@use-crux/core'
+import { approvalMiddleware } from '@use-crux/core/tool-middleware'
+import { toolApprovalResponse } from '@use-crux/core/adapter/tool'
+import { generate, tool } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 

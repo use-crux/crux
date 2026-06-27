@@ -1,7 +1,7 @@
 /**
  * Integration test — actually fetches a skill from skills.sh.
  * Skipped in CI (no network). Run manually with:
- *   pnpm --filter @crux/core test -- --run __tests__/skill/integration.test.ts
+ *   pnpm --filter @use-crux/core test -- --run __tests__/skill/integration.test.ts
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'

@@ -59,7 +59,7 @@ export interface RouterModel<
  *
  * @example
  * ```ts
- * import { router } from '@crux/core/routing'
+ * import { router } from '@use-crux/core/routing'
  *
  * const smartRouter = router({
  *   classify: (input) => input.tokens > 2000 ? 'complex' : 'simple',

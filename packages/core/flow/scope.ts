@@ -119,7 +119,7 @@ export async function withFlow<T, TInput = void>(
   const flowInput = (isResume && snapshot?.input !== undefined ? snapshot.input : options?.input) as TInput
 
   // Open the flow span: every child trace started inside the flow
-  // (e.g. via @crux/convex/server ctx.crux.runAction) captures this spanId as
+  // (e.g. via @use-crux/convex/server ctx.crux.runAction) captures this spanId as
   // its parentSpanId, so the trace tree shows
   // `flow > runtime-flow:start > <child agent>` instead of orphaning
   // the child under the parent's trace boundary.
@@ -315,7 +315,7 @@ export async function withFlow<T, TInput = void>(
       // Verify store is available before suspending
       const flowStore = store ?? getRuntime().store
       if (!flowStore) {
-        throw new Error('flow.suspend() requires a CruxStore. Configure one via config({ store }).')
+        throw new Error('flow.suspend() requires a CruxStore. Configure one via config({ persistence: { store } }).')
       }
 
       // Not resuming or no signal yet — suspend
@@ -348,7 +348,7 @@ export async function withFlow<T, TInput = void>(
       // Condition not met — verify store and suspend
       const flowStore = store ?? getRuntime().store
       if (!flowStore) {
-        throw new Error('flow.waitUntil() requires a CruxStore. Configure one via config({ store }).')
+        throw new Error('flow.waitUntil() requires a CruxStore. Configure one via config({ persistence: { store } }).')
       }
 
       throw new FlowSuspendedError(_name, _options as SuspendOptions)

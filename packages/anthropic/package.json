@@ -1,6 +1,6 @@
 {
-  "name": "@crux/anthropic",
-  "version": "0.1.0",
+  "name": "@use-crux/anthropic",
+  "version": "0.2.0",
   "license": "Apache-2.0",
   "description": "Anthropic SDK adapter for Crux — run Crux prompts and agents against Claude models.",
   "keywords": [
@@ -34,7 +34,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@crux/core": "workspace:*",
+    "@use-crux/core": "workspace:*",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
@@ -52,5 +52,5 @@
   "bugs": {
     "url": "https://github.com/use-crux/crux/issues"
   },
-  "homepage": "https://github.com/use-crux/crux/tree/main/packages/anthropic#readme"
+  "homepage": "https://cruxjs.dev/docs/reference/adapters/anthropic"
 }

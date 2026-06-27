@@ -1,8 +1,8 @@
 import type { Content, GoogleGenAI } from '@google/genai'
 import { z } from 'zod'
-import type { GenerationSettings } from '@crux/core'
-import type { CallArgs } from '@crux/core/adapter'
-import type { NativeChatRequestArgs } from '@crux/core/adapter/native-chat'
+import type { GenerationSettings } from '@use-crux/core'
+import type { CallArgs } from '@use-crux/core/adapter'
+import type { NativeChatRequestArgs } from '@use-crux/core/adapter'
 import type { GoogleCachedContentLifecycle } from './cached-content'
 import type { GoogleExtra, GoogleRequest } from './types'
 

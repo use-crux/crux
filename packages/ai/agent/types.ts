@@ -1,12 +1,13 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
 import type { z } from 'zod'
-import type { ContextEntry, InspectResult, MergedInput } from '@crux/core'
+import type { ContextEntry, InspectResult, MergedInput } from '@use-crux/core'
+import type { SkillActivationSession } from '@use-crux/core/skill'
 
 /**
  * Options for resolving a Crux prompt for an AI SDK-based agent framework.
  *
  * The model is a Vercel AI SDK language model. When Crux execution hooks are
- * installed, `@crux/ai/agent` returns a wrapped model that reports generate
+ * installed, `@use-crux/ai/agent` returns a wrapped model that reports generate
  * and stream traces while preserving the agent framework's own execution loop.
  */
 export type AgentResolveOptions<TOwnInput extends z.ZodType, TContexts extends readonly ContextEntry[]> = {
@@ -40,4 +41,6 @@ export interface AgentResolveResult {
   inspect: InspectResult
   /** Trace id returned by the runtime resolve hook, when one is installed. */
   resolveTraceId?: string
+  /** @internal Skill activation session used by Crux execution middleware. */
+  skillSession?: SkillActivationSession
 }

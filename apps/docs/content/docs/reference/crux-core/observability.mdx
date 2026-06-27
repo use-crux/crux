@@ -11,10 +11,10 @@ import {
   createCruxSpanId,
   normalizeObservedError,
   observe,
-} from '@crux/core/observability'
+} from '@use-crux/core/observability'
 ```
 
-`@crux/core/observability` is the canonical graph contract for Crux execution traces. It defines the record shapes emitted by the TypeScript runtime and consumed by the local Go devtools backend.
+`@use-crux/core/observability` is the canonical graph contract for Crux execution traces. It defines the record shapes emitted by the TypeScript runtime and consumed by the local Go devtools backend.
 
 The contract is lifecycle based:
 
@@ -53,17 +53,17 @@ Runtime bridge and eval-runner failures can happen outside a normal span. Those 
 
 ## Exports
 
-| Export                              | Purpose                           |
-| ----------------------------------- | --------------------------------- |
-| `CruxGraphRecordSchema`             | Zod schema for one graph record   |
-| `CruxGraphRecordBatchSchema`        | Zod schema for a batch of records |
-| `CRUX_OBSERVABILITY_SCHEMA_VERSION` | Current graph schema version      |
-| `createCruxRunId()`                 | Create a branded run id           |
-| `createCruxSpanId()`                | Create a branded span id          |
-| `createCruxArtifactId()`            | Create a branded artifact id      |
+| Export                              | Purpose                                                                |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| `CruxGraphRecordSchema`             | Zod schema for one graph record                                        |
+| `CruxGraphRecordBatchSchema`        | Zod schema for a batch of records                                      |
+| `CRUX_OBSERVABILITY_SCHEMA_VERSION` | Current graph schema version                                           |
+| `createCruxRunId()`                 | Create a branded run id                                                |
+| `createCruxSpanId()`                | Create a branded span id                                               |
+| `createCruxArtifactId()`            | Create a branded artifact id                                           |
 | `normalizeObservedError()`          | Normalize an unknown thrown value into safe inspectable error evidence |
-| `observedErrorSummary()`            | Produce the compact terminal span/run error summary |
-| `toSafeJsonValue()`                 | Convert unknown values into bounded, redacted JSON-safe previews |
+| `observedErrorSummary()`            | Produce the compact terminal span/run error summary                    |
+| `toSafeJsonValue()`                 | Convert unknown values into bounded, redacted JSON-safe previews       |
 
 Built-in primitives use canonical names such as `generation.call`, `generation.stream`, `prompt.resolve`, `prompt.budget`, `context.predicate`, `context.resolve`, `memory.read`, `memory.write`, `retrieval.pipeline`, `retrieval.query`, `retrieval.stage`, `indexing.pipeline`, `ingest.parse`, `corpus.sync`, `embedding.call`, `cache.lookup`, `cost.record`, `compaction.run`, `eval.run`, `eval.case`, `scoring.judge`, `citation.check`, `feedback.record`, `workspace.operation`, `plan.operation`, `task.operation`, `skill.load`, `security.warning`, `routing.router`, `routing.cascade`, `fallback.attempt`, `constraint.check`, `constraint.retry`, `guardrail.run`, `agent.run`, `flow.run`, `flow.step`, `flow.suspension`, `composition.parallel`, `composition.pipeline`, `composition.consensus`, `composition.swarm`, `handoff.prepare`, `delegate.invoke`, and `tool.call`.
 
@@ -71,20 +71,20 @@ Custom edge types and artifact kinds must use the `custom.*` namespace. Unknown 
 
 Common detail artifacts use stable kinds so `RunDetail.inspection` can route them without UI-specific parsing:
 
-| Artifact kind | Primary payload |
-| --- | --- |
-| `context.contribution` | Context inclusion state, source, primitive kind, priority, tokens, cache status, exclusion reason, segmented static/dynamic text, and contributed tool names in `injectedTools`. |
-| `prompt.budget` | Prompt token budget totals and dropped context contribution previews. |
-| `retrieval.hits` | Query, limit, returned hits, hit ranks, source/chunk ids, scores, and pipeline stage summaries. |
-| `citation.report` / `score.report` | Grounding markers, optional output anchors (`start`, `end`, `outputQuote`), score verdicts, judge rationales, and pass/fail detail. |
-| `composition.report` | Parallel branches, pipeline stages, consensus votes, or swarm handoff path. |
-| `handoff.payload` / `delegate.report` | Transfer contract data, hop metadata, input/output sizes, and delegate result preview. |
-| `constraint.report` / `guardrail.report` | Constraint attempts/retries and guardrail action reports with before/after previews when available. |
-| `routing.report` / `cache.report` | Router/cascade/fallback choices, full cascade tier ladders including skipped/not-reached tiers, evaluator notes/confidence/budgets, semantic cache hits/writes, and saved work. |
-| `compaction.report` | Before/after token counts and summary previews. |
-| `memory.snapshot` / `memory.recall` / `memory.diff` | Memory state snapshots, recalled block previews (`blockKind`, `key`, `preview`, `score`), and before/after write summaries with added/removed block summaries. |
-| `embedding.report` / `indexing.report` / `ingest.report` / `corpus.report` | Embedding shape/cache metrics, indexing totals/stage counts, loader status, and corpus source ledger summaries. |
-| `security.report` | Prompt-injection warning severity, pattern, field/location, action, and bounded preview. |
+| Artifact kind                                                              | Primary payload                                                                                                                                                                  |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `context.contribution`                                                     | Context inclusion state, source, primitive kind, priority, tokens, cache status, exclusion reason, segmented static/dynamic text, and contributed tool names in `injectedTools`. |
+| `prompt.budget`                                                            | Prompt token budget totals and dropped context contribution previews.                                                                                                            |
+| `retrieval.hits`                                                           | Query, limit, returned hits, hit ranks, source/chunk ids, scores, and pipeline stage summaries.                                                                                  |
+| `citation.report` / `score.report`                                         | Grounding markers, optional output anchors (`start`, `end`, `outputQuote`), score verdicts, judge rationales, and pass/fail detail.                                              |
+| `composition.report`                                                       | Parallel branches, pipeline stages, consensus votes, or swarm handoff path.                                                                                                      |
+| `handoff.payload` / `delegate.report`                                      | Transfer contract data, hop metadata, input/output sizes, and delegate result preview.                                                                                           |
+| `constraint.report` / `guardrail.report`                                   | Constraint attempts/retries and guardrail action reports with before/after previews when available.                                                                              |
+| `routing.report` / `cache.report`                                          | Router/cascade/fallback choices, full cascade tier ladders including skipped/not-reached tiers, evaluator notes/confidence/budgets, semantic cache hits/writes, and saved work.  |
+| `compaction.report`                                                        | Before/after token counts and summary previews.                                                                                                                                  |
+| `memory.snapshot` / `memory.recall` / `memory.diff`                        | Memory state snapshots, recalled block previews (`blockKind`, `key`, `preview`, `score`), and before/after write summaries with added/removed block summaries.                   |
+| `embedding.report` / `indexing.report` / `ingest.report` / `corpus.report` | Embedding shape/cache metrics, indexing totals/stage counts, loader status, and corpus source ledger summaries.                                                                  |
+| `security.report`                                                          | Prompt-injection warning severity, pattern, field/location, action, and bounded preview.                                                                                         |
 
 ## Runtime emitters
 
@@ -92,13 +92,13 @@ Use `observe.run()` for user-facing execution roots and `observe.span()` for ins
 
 Crux's built-in orchestration helpers emit these records automatically. `parallel()` creates sibling `agent.run` spans, `pipeline()` records `flow.step` plus nested `agent.run` spans, `flow()` / `withFlow()` records `flow.run`, step children, and `flow.suspension` timeline markers for intentional waits, `consensus()` nests its voter fanout, and `swarm` / `delegate` handoffs create `handoff.prepare` spans, canonical input/output artifacts, `handoff.payload` artifacts, and relation edges.
 
-Generation and streaming orchestration record operation deadlines when a timeout is configured. `@crux/ai` passes `timeoutMs` into core orchestration, which records `timeoutMs` / `deadlineAt` and emits `operation.deadline` before the provider call begins.
+Generation and streaming orchestration record operation deadlines when a timeout is configured. `@use-crux/ai` passes `timeoutMs` into core orchestration, which records `timeoutMs` / `deadlineAt` and emits `operation.deadline` before the provider call begins.
 
 Prompt and safety helpers emit the same graph contract automatically:
 
 - `prompt.resolve()` opens `prompt.resolve`, records conditional context inclusion/exclusion as `context.predicate`, and records resolved context text as `context.resolve` spans with `context.contribution` artifacts. Contributions that provide tools include `injectedTools`, including dropped text contributions whose tools still participate in the request. Direct injectables, retrievers/grounding, memory, and blackboards emit tool-only `context.contribution` previews when they contribute tools without resolved text. Segmented system content preserves `segments: { text, dynamic, source? }[]`, `staticTokens`, and `dynamicTokens` on context previews, inspect parts, and budget-dropped previews. Generation spans that consume the resolved prompt link back to included context artifacts and prompt-budget artifacts, and their `messages` artifact includes request `toolNames`; the Go read model projects those records into `RunDetailNode.request`. Token-budget decisions emit `prompt.budget` artifacts with dropped contribution previews.
 - Memory blocks and blackboards emit `memory.read` / `memory.write` spans, attach `memory.snapshot` artifacts when a read or write has inspectable state, attach `memory.recall` artifacts for non-empty read result previews, attach `memory.diff` artifacts for before/after write summaries, and connect those artifacts with semantic memory edges. Empty reads still emit the span but omit `memory.recall`, so UIs should not render a recalled-block card for zero-result reads. Raw namespaces are represented by `namespaceHash`; blackboard snapshots and diffs carry `memoryType: "blackboard"`.
-- Adapter-managed tools, including live `@crux/ai` tool calls, emit `tool.call` spans, consume `tool.args` artifacts, produce raw and model-facing `tool.result` artifacts, and record thrown `execute()` failures as rich error evidence on the same tool span while preserving the model-facing error output. Model-emitted tool intents attach to the generation as `tool.request` artifacts and are linked to the eventual tool execution by tool call id. Convex Agent streams expose an outer `generation.stream` plus child `generation.call` spans for each AI SDK step, so tool-call turns and later text turns are visible as consecutive streamed generations. Convex Agent fallback tool-call parts follow the same contract, so stop-condition tools remain inspectable even when no handler executes. Approval request, approval, denial, and token mismatch paths emit `tool.approval` spans.
+- Adapter-managed tools, including live `@use-crux/ai` tool calls, emit `tool.call` spans, consume `tool.args` artifacts, produce raw and model-facing `tool.result` artifacts, and record thrown `execute()` failures as rich error evidence on the same tool span while preserving the model-facing error output. Model-emitted tool intents attach to the generation as `tool.request` artifacts and are linked to the eventual tool execution by tool call id. Convex Agent streams expose an outer `generation.stream` plus child `generation.call` spans for each AI SDK step, so tool-call turns and later text turns are visible as consecutive streamed generations. Convex Agent fallback tool-call parts follow the same contract, so stop-condition tools remain inspectable even when no handler executes. Approval request, approval, denial, and token mismatch paths emit `tool.approval` spans.
 - Retrieval calls emit `retrieval.query` spans with bounded `retrieval.hits` artifacts and `retrieval.returned` edges. Retrieval pipelines open a parent `retrieval.pipeline` span and record fanout/query/hit stages as child `retrieval.stage` spans with inspectable stage output artifacts.
 - Indexing and corpus helpers emit `indexing.pipeline`, `ingest.parse`, and `corpus.sync` spans. Document transforms, chunkers, chunk transforms, dry runs, cache outcomes, loader results, and source-ledger summaries are visible through child spans plus `indexing.report`, `ingest.report`, and `corpus.report` artifacts.
 - Embeddings emit `embedding.call` spans with provider name, kind, dimensions, batch shape, usage, cost, governance metrics, and bounded `embedding.report` artifacts. Configured embedding caches emit nested `cache.lookup` spans with hit/miss/write counts and per-entry hit/miss events.
@@ -111,7 +111,7 @@ Prompt and safety helpers emit the same graph contract automatically:
 - The Safety session's guardrail phases open grouped and per-guard `guardrail.run` spans, attach `guardrail.report` artifacts for pass, warn, redact, transform, hold, and block actions, and emit `guardrail.blocked` edges for blocks.
 
 ```ts
-import { observe } from '@crux/core/observability'
+import { observe } from '@use-crux/core/observability'
 
 await observe.run({ name: 'support reply', rootPrimitive: 'agent.run' }, async () => {
   await observe.span({ name: 'retrieve docs', family: 'retrieval', primitive: 'retrieval.query' }, async () => {
@@ -142,12 +142,12 @@ The default runtime path is non-blocking: transport failures are captured as dia
 await observe.flush({ timeoutMs: 5000 })
 ```
 
-Observability delivery is queued into batches. The first delivery starts immediately for live devtools, and later records coalesce per microtask before being sent as bounded concurrent batches. This avoids head-of-line blocking when a collector, tunnel, or Convex network hop is slow. HTTP delivery normalizes unknown preview values into JSON-safe shapes and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact does not prevent terminal lifecycle records from reaching the backend. The Go observability backend reconciles out-of-order lifecycle records by stable ids and timestamps. The runtime never blocks user code on normal emits, but `flush()` and `shutdown()` wait for pending deliveries so serverless and Convex actions can preserve span starts, ends, artifacts, and events before the worker exits.
+Observability delivery is queued into batches. The first delivery starts immediately for live devtools, and later records coalesce per microtask before being sent as bounded concurrent batches. This avoids head-of-line blocking when a collector, tunnel, or Convex network hop is slow. HTTP delivery normalizes unknown preview values into JSON-safe shapes, sends `observability.token` / `CRUX_DEVTOOLS_TOKEN` as bearer auth when configured, and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact does not prevent terminal lifecycle records from reaching the backend. The Go observability backend reconciles out-of-order lifecycle records by stable ids and timestamps. The runtime never blocks user code on normal emits, but `flush()` and `shutdown()` wait for pending deliveries so serverless and Convex actions can preserve span starts, ends, artifacts, and events before the worker exits.
 
-Convex actions can use the helpers from `@crux/convex`:
+Convex actions can use the helpers from `@use-crux/convex`:
 
 ```ts
-import { withObservabilityFlush } from '@crux/convex/observability'
+import { withObservabilityFlush } from '@use-crux/convex/observability'
 
 export const run = internalAction({
   args: {},
@@ -157,21 +157,24 @@ export const run = internalAction({
 })
 ```
 
-`@crux/convex/server` actions flush automatically by default. Pass `observabilityFlushTimeoutMs: false` only when an outer serverless boundary already flushes.
+`@use-crux/convex/server` actions flush automatically by default. Pass `observabilityFlushTimeoutMs: false` only when an outer serverless boundary already flushes.
 
 Use `createHttpObservabilityTransport()` to send canonical batches to the local Crux backend endpoint:
 
 ```ts
-import { config } from '@crux/core'
+import { config } from '@use-crux/core'
 
 config({
-  prompts,
   observability: {
     serverUrl: 'http://localhost:4400',
     delivery: { maxPendingDeliveries: 1000 },
   },
 })
 ```
+
+The `observability` domain is explicit export configuration. `config()` with no `observability`
+block does not install telemetry, cloud upload, or raw-content capture. Use `devtools` only for local
+UI/control/tunnel/bridge behavior.
 
 The HTTP transport posts `{ records }` to `/api/observability/records`. The Go backend owns validation, persistence, read-model building, filtering, search, and subscriptions. Devtools keeps terminal run-detail pages refreshing for a short grace window, which catches late Convex/serverless flushes that arrive after the terminal run update. Convex Agent container streams fold into details in the Go read model, while step-level streamed generation turns, tools, handoffs, and delegated flows render as chronological agent children. Promoted tool executions preserve `source.canonicalParentSpanId` and sort after their request generation by relation, even when Convex action timestamps arrive slightly out of order.
 

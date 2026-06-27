@@ -19,5 +19,7 @@ export type {
   IncrementalExecutionMode,
   IncrementalExecutionReport,
   IncrementalIndexExecutionResult,
+  IncrementalPatchCounts,
+  IncrementalSemanticStatus,
   IndexProjectIncrementalOptions,
 } from './execution-types'

@@ -1,8 +1,16 @@
 {
-  "name": "@crux/otel",
-  "version": "0.1.0",
+  "name": "@use-crux/otel",
+  "version": "0.2.0",
   "description": "OpenTelemetry observability plugin for Crux — emit spans and attributes for prompts, agents, and flows.",
-  "keywords": ["opentelemetry", "otel", "observability", "tracing", "ai", "llm", "crux"],
+  "keywords": [
+    "opentelemetry",
+    "otel",
+    "observability",
+    "tracing",
+    "ai",
+    "llm",
+    "crux"
+  ],
   "license": "Apache-2.0",
   "author": "Crux",
   "private": true,
@@ -23,7 +31,7 @@
     }
   },
   "dependencies": {
-    "@crux/core": "workspace:*"
+    "@use-crux/core": "workspace:*"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.0.0"
@@ -52,5 +60,5 @@
   "bugs": {
     "url": "https://github.com/use-crux/crux/issues"
   },
-  "homepage": "https://github.com/use-crux/crux/tree/main/packages/otel#readme"
+  "homepage": "https://cruxjs.dev/docs/reference/plugins/otel"
 }

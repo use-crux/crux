@@ -6,7 +6,7 @@ description: Typed scratchpad memory for the current task.
 `workingState()` is a memory block for one typed value. Use it when the agent needs a current plan, current goal, iteration counter, draft state, or a small set of structured findings that should be updated in place.
 
 ```ts
-import { memory, workingState } from '@crux/core/memory'
+import { memory, workingState } from '@use-crux/core/memory'
 import { z } from 'zod'
 
 const state = workingState({

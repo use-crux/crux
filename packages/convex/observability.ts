@@ -6,7 +6,7 @@
  * handler returns, so actions should await a bounded flush in a finally block.
  */
 
-import { observe } from '@crux/core/observability'
+import { observe } from '@use-crux/core/observability'
 
 export interface ConvexObservabilityFlushOptions {
   /**

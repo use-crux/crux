@@ -1,17 +1,22 @@
 ---
-title: '@crux/core'
+title: '@use-crux/core'
 description: The base Crux package — package overview, config, registry API, and shared utilities.
 ---
 
-`@crux/core` is the base package — every Crux project depends on it. It contains all SDK-agnostic primitives organized into subpath exports. Pick the subpath page that matches what you need:
+`@use-crux/core` is the base package — every Crux project depends on it. It contains all SDK-agnostic primitives organized into subpath exports. Pick the subpath page that matches what you need:
 
 ## TypeScript compatibility
 
-`@crux/core` is tested with TypeScript `>=5.5 <7`. Crux also runs a TypeScript 7 native-preview check with `@typescript/native-preview` / `tsgo`, but that is a preview signal rather than a stable support promise.
+`@use-crux/core` is tested with TypeScript `>=5.5 <7`. Crux also runs a TypeScript 7 native-preview check with `@typescript/native-preview` / `tsgo`, but that is a preview signal rather than a stable support promise.
 
 The public type surface is kept compatible with TypeScript 5.5 so projects do not need the newest compiler just to use Crux definitions.
 
 <Cards>
+  <Card
+    title="Config"
+    description="crux.config.ts options, defaults, stability, and runtime/tooling ownership."
+    href="/docs/reference/crux-core/config"
+  />
   <Card
     title="Prompts"
     description="prompt, createPrompts, the Prompt type."
@@ -30,7 +35,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   />
   <Card
     title="Adapter Interface"
-    description="adapter, executorAdapter, AdapterSpec, ExecutorSpec, and conformance harnesses."
+    description="defineSingleTurnProviderBundle, defineProviderRuntime, adapter IR, and conformance harnesses."
     href="/docs/reference/adapters"
   />
   <Card
@@ -99,7 +104,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   <Card
     title="Project Index"
     description="Design-plane definitions, relations, source locations, and diagnostics."
-    href="/docs/reference/crux-core/index"
+    href="/docs/reference/crux-core/project-index"
   />
   <Card
     title="Index Lint"
@@ -121,53 +126,45 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
 ## Subpath imports
 
 ```ts
-import { prompt, context, createPrompts, createContexts, config, when, match } from '@crux/core'
-import { tool } from '@crux/core/tools'
-import { toolMiddleware, approvalMiddleware } from '@crux/core/tool-middleware'
-import { adapter, executorAdapter } from '@crux/core/adapter'
-import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
-import { adapterSpecConformance } from '@crux/core/adapter/testing'
-import { memory, workingState, episodes, facts, procedures } from '@crux/core/memory'
-import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@crux/core/compaction'
-import { agent, blackboard, handoff, delegate } from '@crux/core/agent'
-import { flow, signalFlow, cancelFlow, listFlows, createFlowId } from '@crux/core/flow'
-import { plan, getPlan, updatePlan, planAgent, createPlanTool } from '@crux/core/plan'
-import { tasklist, taskListAgent, taskWorker, createTaskListTool } from '@crux/core/tasks'
-import { skill } from '@crux/core/skill'
-import { guardrail } from '@crux/core/safety'
-import { constraint } from '@crux/core/safety'
-import { llmJudge, metrics, judgeConstraint } from '@crux/core/scoring'
-import { constraintScorer, expect, quality, suite, target } from '@crux/core/quality'
-import { createSemanticCache, semanticCachePolicies } from '@crux/core/cache'
-import { embedding } from '@crux/core/embedding'
-import { retriever, reranker } from '@crux/core/retrieval'
-import { grounding, citationSchema } from '@crux/core/citations'
-import { corpus, indexer } from '@crux/core/indexing'
-import { CruxProvider, usePlan, useTaskList, useTasks, createSSETransport, createPollingTransport } from '@crux/react'
-import { cruxSSEHandler } from '@crux/react/server'
-import { withDevtools } from '@crux/core/observability'
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
-import { serializeProjectIndex } from '@crux/core/project-index/serializers'
-import type { CruxIndexerConfig, CruxLintConfig, ToolContentPart, ToolModelOutput, ToModelOutputArgs } from '@crux/core'
+import { prompt, context, createPrompts, createContexts, config, when, match } from '@use-crux/core'
+import { tool } from '@use-crux/core/tools'
+import { toolMiddleware, approvalMiddleware } from '@use-crux/core/tool-middleware'
+import { adapter, executorAdapter, defineProviderRuntime, defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
+import { providerRuntimeConformance, transcriptCodecConformance } from '@use-crux/core/adapter/testing'
+import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
+import { memory, workingState, episodes, facts, procedures } from '@use-crux/core/memory'
+import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@use-crux/core/compaction'
+import { agent, blackboard, handoff, delegate } from '@use-crux/core/agent'
+import { flow, signalFlow, cancelFlow, listFlows, createFlowId } from '@use-crux/core/flow'
+import { plan, getPlan, updatePlan, planAgent, createPlanTool } from '@use-crux/core/plan'
+import { tasklist, taskListAgent, taskWorker, createTaskListTool } from '@use-crux/core/tasks'
+import { skill } from '@use-crux/core/skill'
+import { guardrail } from '@use-crux/core/safety'
+import { constraint } from '@use-crux/core/safety'
+import { llmJudge, metrics, judgeConstraint } from '@use-crux/core/scoring'
+import { constraintScorer, expect, quality, suite, target } from '@use-crux/core/quality'
+import { createSemanticCache, semanticCachePolicies } from '@use-crux/core/cache'
+import { embedding } from '@use-crux/core/embedding'
+import { retriever, reranker } from '@use-crux/core/retrieval'
+import { grounding, citationSchema } from '@use-crux/core/citations'
+import { corpus, indexer } from '@use-crux/core/indexing'
+import { CruxProvider, usePlan, useTaskList, useTasks, createSSETransport, createPollingTransport } from '@use-crux/react'
+import { cruxSSEHandler } from '@use-crux/react/server'
+import { withDevtools } from '@use-crux/core/observability'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
+import { serializeProjectIndex } from '@use-crux/core/project-index/serializers'
+import type { CruxIndexerConfig, CruxLintConfig, ToolContentPart, ToolModelOutput, ToModelOutputArgs } from '@use-crux/core'
 ```
 
 ## Tooling Config
 
-`config()` can store inert configuration for local Crux tooling. For Project Indexer extensions, use
-the `indexer` bag:
+Use `config()` for Crux project policy and explicit runtime behavior: Quality discovery, Project
+Index lint, Indexer extensions, experimental indexer flags, persistence, generation hooks, devtools,
+observability, and plugins. Prompts, contexts, tools, agents, flows, registries, and skills remain
+normal TypeScript exports discovered from source.
 
-```ts
-config({
-  prompts,
-  indexer: {
-    extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
-    trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },
-  },
-})
-```
-
-Core stores this data only. `@crux/indexer` owns extension trust checks, compatibility checks,
-loading, compiler execution, and diagnostics.
+See [Config](/docs/reference/crux-core/config) for the full `crux.config.ts` option reference,
+defaults, stability notes, and `crux config inspect` behavior.
 
 ## TypeScript Guarantees
 
@@ -201,40 +198,34 @@ tools.docsSearch
 tools.docsGetSource
 ```
 
-`@crux/core` also has a package-local `typecheck` task that runs strict TypeScript plus compile-time API tests. New production `any` usage is blocked by an explicit-`any` checker; existing legacy entries are tracked as debt and should only shrink.
+`@use-crux/core` also has a package-local `typecheck` task that runs strict TypeScript plus compile-time API tests. New production `any` usage is blocked by an explicit-`any` checker; existing legacy entries are tracked as debt and should only shrink.
 
 ## `config(config)`
 
-The single entry point for configuring Crux. Applies immediately when the config file is imported. Module caching ensures it runs once per process.
+The single entry point for configuring Crux project policy and explicit runtime behavior. It applies immediately when the config file is imported. Module caching ensures it runs once per process.
 
-| Option             | Type                       | Default        | Description                                                                              |
-| ------------------ | -------------------------- | -------------- | ---------------------------------------------------------------------------------------- |
-| `prompts`          | `PromptTree \| Prompt[]`   | required       | Prompts to register                                                                      |
-| `contexts`         | `ContextTree \| Context[]` | `[]`           | Additional contexts (auto-collected from prompt `use` arrays)                            |
-| `devtools`         | `{ serverUrl?: string }`   | —              | Enable devtools when `serverUrl` is set                                                  |
-| `middleware`       | `PromptMiddleware`         | —              | Global generate/stream wrapper — see [Middleware](/docs/guides/observability/middleware) |
-| `tokenizer`        | `(text: string) => number` | ~4 chars/token | Custom token counting                                                                    |
-| `plugins`          | `CruxPlugin[]`             | `[]`           | Composable runtime extensions — see [Plugins](/docs/guides/observability/plugins)        |
-| `tools`            | `FlowToolDef[]`            | —              | Tool definitions surfaced in devtools index                                              |
-| `autoEscape`       | `boolean`                  | `true`         | Auto-escape XML in inputs                                                                |
-| `securityWarnings` | `boolean`                  | `false`        | Warn on suspicious patterns                                                              |
-| `eval`             | `CruxEvalConfig`           | —              | Eval runner settings                                                                     |
-| `quality`          | `QualityConfig`            | —              | Local quality workbench settings for persisted experiments, variants, and suites         |
+Prompt, context, tool, and registry definitions are authored in normal TypeScript modules and discovered from source by local tooling. They are not repeated in `config()`.
 
-**Returns:** `Crux` — extends `PromptRegistry` with `.config` and lifecycle methods.
+For defaults, stability notes, and every nested option, see [Config](/docs/reference/crux-core/config).
 
-| Method / Property | Description                                    |
-| ----------------- | ---------------------------------------------- |
-| `.get(id)`        | Get prompt by id (throws if not found)         |
-| `.find(id)`       | Find prompt (returns `undefined` if not found) |
-| `.list()`         | All registered prompts                         |
-| `.byTag(tag)`     | Prompts matching a tag                         |
-| `.byTags(tags)`   | Prompts matching ALL tags                      |
-| `.tags()`         | All unique tags                                |
-| `.prompts`        | `readonly Prompt[]`                            |
-| `.contexts`       | `readonly Context[]`                           |
-| `.config`         | `Readonly<CruxConfig>`                         |
-| `.dispose()`      | Tear down middleware, devtools, globals        |
+| Domain                        | Type                       | Description                                                                          |
+| ----------------------------- | -------------------------- | ------------------------------------------------------------------------------------ |
+| `quality`                     | `QualityConfig`            | Local quality discovery, persistence root, redaction, and run defaults.              |
+| `lint`                        | `CruxLintConfig`           | Project Index lint profile and rule overrides.                                       |
+| `indexer`                     | `CruxIndexerConfig`        | Extension references, extension trust policy, and indexer rule options.              |
+| `experimental`                | `CruxExperimentalConfig`   | Unstable opt-in tooling features such as the TypeScript-Go semantic indexer backend. |
+| `persistence.store`           | `CruxStore`                | Explicit runtime persistence for flows, plans, and bridge reads.                     |
+| `generation.middleware`       | `PromptMiddleware`         | Global generate/stream wrapper.                                                      |
+| `generation.tokenizer`        | `(text: string) => number` | Custom token counting.                                                               |
+| `generation.autoEscape`       | `boolean`                  | Auto-escape XML-like user input. Defaults to `true`.                                 |
+| `generation.securityWarnings` | `boolean`                  | Warn on suspicious input patterns. Defaults to development-only.                     |
+| `devtools`                    | `CruxDevtoolsConfig`       | Non-default local, tunnel, remote, or Runtime Bridge behavior.                       |
+| `observability`               | `CruxObservabilityConfig`  | Explicit observability export or custom transport behavior.                          |
+| `plugins`                     | `CruxPlugin[]`             | Composable runtime extensions.                                                       |
+
+**Returns:** `Crux` — exposes the raw `.config`, lifecycle `.dispose()`, and compatibility registry methods. Source-discovered projects should use their authored prompt/context exports directly rather than looking them up through `config()`.
+| `.config` | `Readonly<CruxConfig>` |
+| `.dispose()` | Tear down middleware, devtools, globals |
 
 ### `CruxEvalConfig`
 
@@ -251,8 +242,8 @@ The single entry point for configuring Crux. Applies immediately when the config
 ## Plugin system
 
 ```ts
-import type { CruxPlugin, CruxRuntime, CruxPluginResult } from '@crux/core'
-import { mergeRuntime, applyPlugins } from '@crux/core'
+import type { CruxPlugin, CruxRuntime, CruxPluginResult } from '@use-crux/core'
+import { mergeRuntime, applyPlugins } from '@use-crux/core'
 ```
 
 ### `CruxPlugin`
@@ -266,8 +257,8 @@ import { mergeRuntime, applyPlugins } from '@crux/core'
 
 | Built-in plugin           | Package                                             |
 | ------------------------- | --------------------------------------------------- |
-| `withDevtools(options)`   | `@crux/core/observability` — name `'crux:devtools'` |
-| `withTelemetry(options?)` | `@crux/otel` — name `'crux:otel'`                   |
+| `withDevtools(options)`   | `@use-crux/core/observability` — name `'crux:devtools'` |
+| `withTelemetry(options?)` | `@use-crux/otel` — name `'crux:otel'`                   |
 
 ### `mergeRuntime(base, patch)`
 
@@ -284,8 +275,8 @@ Process an ordered list of plugins. Returns `{ runtime, dispose }`.
 ## Observability context
 
 ```ts
-import { observe } from '@crux/core/observability'
-import { withSession, createSessionId, createFlowId } from '@crux/core'
+import { observe } from '@use-crux/core/observability'
+import { withSession, createSessionId, createFlowId } from '@use-crux/core'
 ```
 
 ### `withSession(sessionId, fn)`
@@ -298,7 +289,7 @@ Generate unique IDs for cross-boundary correlation.
 
 ### `observe.captureContext()` / `observe.withContext(ctx, fn)`
 
-Snapshot and restore observability context across async boundaries. In Convex, prefer `@crux/convex/server` and `ctx.crux.runAction()` so the boundary helper handles propagation.
+Snapshot and restore observability context across async boundaries. In Convex, prefer `@use-crux/convex/server` and `ctx.crux.runAction()` so the boundary helper handles propagation.
 
 ### Captured observability context
 
@@ -312,7 +303,7 @@ Snapshot and restore observability context across async boundaries. In Convex, p
 ## Model fallback
 
 ```ts
-import { fallback, isFallback, classifyError, shouldAttemptFallback } from '@crux/core'
+import { fallback, isFallback, classifyError, shouldAttemptFallback } from '@use-crux/core'
 ```
 
 ### `fallback(...models, options?)`
@@ -350,8 +341,8 @@ Classifies an error into an `ErrorCategory` or `null`.
 ## Validation retry
 
 ```ts
-import { ValidationExhaustedError, isValidationExhaustedError, repairJsonText } from '@crux/core'
-import type { ValidationRetryOptions } from '@crux/core'
+import { ValidationExhaustedError, isValidationExhaustedError, repairJsonText } from '@use-crux/core'
+import type { ValidationRetryOptions } from '@use-crux/core'
 ```
 
 ### `ValidationRetryOptions`
@@ -375,7 +366,7 @@ See the [Validation retry guide](/docs/guides/safety/validation-retry).
 ## Security utilities
 
 ```ts
-import { safe, raw, limit, wrap, escapeXml, truncate, userContent, detectSuspiciousPatterns } from '@crux/core'
+import { safe, raw, limit, wrap, escapeXml, truncate, userContent, detectSuspiciousPatterns } from '@use-crux/core'
 ```
 
 | Function                         | Signature                             | Description                               |
@@ -392,7 +383,7 @@ import { safe, raw, limit, wrap, escapeXml, truncate, userContent, detectSuspici
 ## Embedding
 
 ```ts
-import { embedding } from '@crux/core/embedding'
+import { embedding } from '@use-crux/core/embedding'
 ```
 
 Creates a reusable dense or sparse embedding primitive with built-in batching, governance, and concurrency control. See the [Embeddings guide](/docs/guides/retrieval/embeddings) for usage.
@@ -427,7 +418,7 @@ Hybrid search uses both embeddings through `retriever()` or `VectorStore.search(
 Hybrid retrieval is composed _above_ this layer through stores or retrievers.
 
 ```ts
-import { embedding, embeddingCache, normalizeText } from '@crux/core/embedding'
+import { embedding, embeddingCache, normalizeText } from '@use-crux/core/embedding'
 
 const dense = embedding({
   kind: 'dense',
@@ -447,7 +438,7 @@ const dense = embedding({
 ## Retrieval
 
 ```ts
-import { retriever, reranker } from '@crux/core/retrieval'
+import { retriever, reranker } from '@use-crux/core/retrieval'
 ```
 
 Creates a query-first retriever that turns text into scored hits, prompt context, and query tools. See the [Retrieval guide](/docs/guides/retrieval) for the full architecture.
@@ -491,12 +482,12 @@ Retrievers expose:
 
 `reranker()` creates a provider-agnostic reranking stage that can be attached to a retriever through `rerank`.
 
-Use `grounding()` from `@crux/core/citations` when retrieval context must become a cited answer contract.
+Use `grounding()` from `@use-crux/core/citations` when retrieval context must become a cited answer contract.
 
 ## Indexing
 
 ```ts
-import { indexer } from '@crux/core/indexing'
+import { indexer } from '@use-crux/core/indexing'
 ```
 
 Creates the write-time document indexing primitive. It owns chunking, transforms, embedding at write time, and store writes.
@@ -522,11 +513,11 @@ Indexers expose:
 
 ## Routing
 
-`@crux/core/routing` exports `router`, `cascade`, `fallback`, the type guards `isRouter`, `isCascade`, `isFallback`, and `resolveModel`. Stable `id` fields on router/cascade/fallback configs are optional for execution but recommended for index and trace joins. See the [Routing guide](/docs/guides/routing) for full coverage.
+`@use-crux/core/routing` exports `router`, `cascade`, `fallback`, the type guards `isRouter`, `isCascade`, `isFallback`, and `resolveModel`. Stable `id` fields on router/cascade/fallback configs are optional for execution but recommended for index and trace joins. See the [Routing guide](/docs/guides/routing) for full coverage.
 
 ## Internal orchestration
 
-`@crux/core` exports orchestration primitives (`orchestrateGenerate`, `orchestrateStream`, `executeFallbackLoop`, `wrapStreamIterable`, `withAttemptTimeout`) used by adapter packages. They're stable for adapter authors but not intended for general application code. See [Building custom adapters](/docs/guides/advanced/building-adapters).
+`@use-crux/core` exports orchestration primitives (`orchestrateGenerate`, `orchestrateStream`, `executeFallbackLoop`, `wrapStreamIterable`, `withAttemptTimeout`) used by adapter packages. They're stable for adapter authors but not intended for general application code. See [Building custom adapters](/docs/guides/advanced/building-adapters).
 
 ## Types
 
@@ -537,6 +528,7 @@ import type {
   Context,
   PromptConfig,
   ContextDef,
+  PromptResolution,
   ResolvedPrompt,
   SystemBlock,
   InspectResult,
@@ -568,10 +560,10 @@ import type {
   FlowSummary,
   StepOptions,
   SuspendOptions,
-} from '@crux/core'
+} from '@use-crux/core'
 ```
 
-`SystemBlock`, `ResolvedPrompt`, `ModelInfo`, and `AnyPrompt` are re-exported from `@crux/core` for adapter authors who consume `.resolve()` output directly. Adapter packages constrain their context tuple as `readonly Context<z.ZodType>[]` (rather than `Context<any>[]`) so `MergedInput<TOwnInput, TContexts>` carries through `generate()` / `stream()` without explicit type arguments at the call site.
+`PromptResolution`, `SystemBlock`, `ResolvedPrompt`, `ModelInfo`, and `AnyPrompt` are re-exported from `@use-crux/core` for adapter authors who consume `.resolve()` output directly. Adapter packages constrain their context tuple as `readonly Context<z.ZodType>[]` (rather than `Context<any>[]`) so `MergedInput<TOwnInput, TContexts>` carries through `generate()` / `stream()` without explicit type arguments at the call site.
 
 ## Related
 

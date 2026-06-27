@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { SystemBlock } from '@crux/core'
+import type { SystemBlock } from '@use-crux/core'
 import { createBuiltInCachedContentLifecycle } from '../cached-content/built-in-lifecycle'
 import { CACHE_DEFAULTS, resolveCacheConfig } from '../cached-content/config'
 import type { GoogleCacheName, GoogleCachedContentCachePort } from '../cached-content/types'

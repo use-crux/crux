@@ -28,7 +28,8 @@ prompt({
 ```
 
 <Callout type="warn">
-Auto-escape only covers string values in the `input` schema. If you inject untrusted content via `rawFields` or `raw()`, you are responsible for sanitizing it.
+  Auto-escape only covers string values in the `input` schema. If you inject untrusted content via `rawFields` or
+  `raw()`, you are responsible for sanitizing it.
 </Callout>
 
 ### Escape table
@@ -36,7 +37,7 @@ Auto-escape only covers string values in the `input` schema. If you inject untru
 `escapeXml()` replaces the five characters that can break out of XML tag attributes or content:
 
 | Character | Replacement |
-|-----------|-------------|
+| --------- | ----------- |
 | `&`       | `&amp;`     |
 | `<`       | `&lt;`      |
 | `>`       | `&gt;`      |
@@ -48,7 +49,7 @@ Auto-escape only covers string values in the `input` schema. If you inject untru
 The `safe` tagged template auto-escapes every interpolated value via `escapeXml()`. The template literal strings themselves are **not** escaped — only the dynamic values are:
 
 ```ts title="prompts.ts"
-import { safe, raw, limit, wrap } from '@crux/core'
+import { safe, raw, limit, wrap } from '@use-crux/core'
 
 safe`
   Doc: ${raw(trustedHtml)}
@@ -57,14 +58,16 @@ safe`
 `
 ```
 
-| Helper | Returns | Effect |
-|--------|---------|--------|
-| `raw(v)` | `SafeWrapper` | Skip escaping (trusted content) |
-| `limit(v, n)` | `SafeWrapper` | Truncate + escape |
-| `wrap(v)` | `SafeWrapper` | Escape + wrap in `<user-input>` delimiters |
+| Helper        | Returns       | Effect                                     |
+| ------------- | ------------- | ------------------------------------------ |
+| `raw(v)`      | `SafeWrapper` | Skip escaping (trusted content)            |
+| `limit(v, n)` | `SafeWrapper` | Truncate + escape                          |
+| `wrap(v)`     | `SafeWrapper` | Escape + wrap in `<user-input>` delimiters |
 
 <Callout type="warn">
-`raw()`, `limit()`, and `wrap()` return `SafeWrapper` objects, **not** strings. They only work inside `safe` tagged templates. Using them in regular template literals (`` `...${wrap(v)}...` ``) produces `[object Object]`. For regular template literals, use `userContent()` instead.
+  `raw()`, `limit()`, and `wrap()` return `SafeWrapper` objects, **not** strings. They only work inside `safe` tagged
+  templates. Using them in regular template literals (`` `...${wrap(v)}...` ``) produces `[object Object]`. For regular
+  template literals, use `userContent()` instead.
 </Callout>
 
 ## Helper functions
@@ -74,10 +77,10 @@ safe`
 Truncates a string to a maximum length. Default `maxLength` is **10,000**. When the text exceeds the limit, the result is sliced and a `… [truncated]` suffix is appended:
 
 ```ts
-import { truncate } from '@crux/core'
+import { truncate } from '@use-crux/core'
 
-truncate(longArticle)          // → first 10,000 chars + "… [truncated]"
-truncate(userQuery, 500)       // → first 500 chars + "… [truncated]"
+truncate(longArticle) // → first 10,000 chars + "… [truncated]"
+truncate(userQuery, 500) // → first 500 chars + "… [truncated]"
 ```
 
 ### `raw(text)`
@@ -92,9 +95,7 @@ safe`
 // trustedHtml is interpolated as-is; userQuery is escaped
 ```
 
-<Callout type="warn">
-`raw()` bypasses all escaping. Only use it when you are certain the content is safe.
-</Callout>
+<Callout type="warn">`raw()` bypasses all escaping. Only use it when you are certain the content is safe.</Callout>
 
 ### `limit(text, maxLength?)`
 
@@ -118,7 +119,8 @@ safe`${wrap(feedback, 'customer-feedback')}`
 ```
 
 <Callout type="error">
-**Never use `wrap()` in regular template literals.** It returns an object, not a string — you'll get `[object Object]` in your prompt. Use `userContent()` instead for regular templates.
+  **Never use `wrap()` in regular template literals.** It returns an object, not a string — you'll get `[object Object]`
+  in your prompt. Use `userContent()` instead for regular templates.
 </Callout>
 
 ### `userContent(text, tag?)`
@@ -140,22 +142,22 @@ const prompt = `Feedback: ${userContent(feedback, 'customer-feedback')}`
 Security warnings are enabled by default in development (`NODE_ENV !== 'production'`) and disabled in production. When enabled, Crux runs `detectSuspiciousPatterns` on all input values and logs warnings to the console. Override explicitly if needed:
 
 ```ts
-config({ prompts, securityWarnings: false }) // disable in dev
-config({ prompts, securityWarnings: true })  // enable in prod
+config({ generation: { securityWarnings: false } }) // disable in dev
+config({ generation: { securityWarnings: true } }) // enable in prod
 ```
 
 ### `detectSuspiciousPatterns(text)`
 
 A dev-time heuristic that returns an array of warning strings. It checks for three categories of suspicious input:
 
-| Category | Examples detected |
-|----------|-------------------|
-| **Role injection** | `</system>`, `</assistant>`, `<\|im_start\|>` — attempts to close or open model-level message delimiters |
-| **Instruction override** | `ignore previous`, `disregard`, `new instructions` — attempts to override system-level instructions |
-| **Delimiter manipulation** | `---`, `===`, `***` — attempts to inject visual separators that could confuse prompt structure |
+| Category                   | Examples detected                                                                                        |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Role injection**         | `</system>`, `</assistant>`, `<\|im_start\|>` — attempts to close or open model-level message delimiters |
+| **Instruction override**   | `ignore previous`, `disregard`, `new instructions` — attempts to override system-level instructions      |
+| **Delimiter manipulation** | `---`, `===`, `***` — attempts to inject visual separators that could confuse prompt structure           |
 
 ```ts title="validation.ts"
-import { detectSuspiciousPatterns } from '@crux/core'
+import { detectSuspiciousPatterns } from '@use-crux/core'
 
 const warnings = detectSuspiciousPatterns(userInput)
 if (warnings.length > 0) {
@@ -164,7 +166,8 @@ if (warnings.length > 0) {
 ```
 
 <Callout type="info">
-`detectSuspiciousPatterns` is a heuristic, not a guarantee. It catches common patterns but is not foolproof — treat it as an extra layer of defense, not the only one.
+  `detectSuspiciousPatterns` is a heuristic, not a guarantee. It catches common patterns but is not foolproof — treat it
+  as an extra layer of defense, not the only one.
 </Callout>
 
 ## Audit trail
@@ -172,29 +175,30 @@ if (warnings.length > 0) {
 Combine middleware with `detectSuspiciousPatterns()` to log potential injection attempts to your monitoring system:
 
 ```ts title="crux.config.ts"
-import { detectSuspiciousPatterns } from '@crux/core'
+import { detectSuspiciousPatterns } from '@use-crux/core'
 
 config({
-  prompts,
-  middleware: async (args, next) => {
-    const input = args.preparedArgs?.input
-    if (input && typeof input === 'object') {
-      for (const [key, value] of Object.entries(input)) {
-        if (typeof value === 'string') {
-          const patterns = detectSuspiciousPatterns(value)
-          if (patterns.length > 0) {
-            myLogger.send({
-              type: 'security.warning',
-              promptId: args.promptId,
-              field: key,
-              patterns,
-              timestamp: new Date().toISOString(),
-            })
+  generation: {
+    middleware: async (args, next) => {
+      const input = args.preparedArgs?.input
+      if (input && typeof input === 'object') {
+        for (const [key, value] of Object.entries(input)) {
+          if (typeof value === 'string') {
+            const patterns = detectSuspiciousPatterns(value)
+            if (patterns.length > 0) {
+              myLogger.send({
+                type: 'security.warning',
+                promptId: args.promptId,
+                field: key,
+                patterns,
+                timestamp: new Date().toISOString(),
+              })
+            }
           }
         }
       }
-    }
-    return next(args)
+      return next(args)
+    },
   },
 })
 ```
@@ -218,7 +222,7 @@ When devtools is enabled and `securityWarnings` is active, suspicious input patt
 Security warnings are emitted from the devtools middleware with full trace correlation — each warning links to the `generate()` call that triggered it. The `onSecurityWarning` instrumentation hook is also available for custom integrations:
 
 ```ts
-import { updateRuntime } from '@crux/core'
+import { updateRuntime } from '@use-crux/core'
 
 updateRuntime({
   instrumentationHooks: {
@@ -233,8 +237,24 @@ updateRuntime({
 ## Next steps
 
 <Cards>
-  <Card title="Core Concepts" description="How contexts, prompts, and adapters compose together." href="/docs/foundations/mental-model" />
-  <Card title="Type System" description="Input merging, conditional return types, and settings." href="/docs/guides/advanced/type-system" />
-  <Card title="Middleware & Hooks" description="Global middleware for logging and error handling." href="/docs/guides/observability/middleware" />
-  <Card title="API Reference" description="Full security utility signatures — safe, escapeXml, limit, wrap, detectSuspiciousPatterns." href="/docs/reference/crux-core" />
+  <Card
+    title="Core Concepts"
+    description="How contexts, prompts, and adapters compose together."
+    href="/docs/foundations/mental-model"
+  />
+  <Card
+    title="Type System"
+    description="Input merging, conditional return types, and settings."
+    href="/docs/guides/advanced/type-system"
+  />
+  <Card
+    title="Middleware & Hooks"
+    description="Global middleware for logging and error handling."
+    href="/docs/guides/observability/middleware"
+  />
+  <Card
+    title="API Reference"
+    description="Full security utility signatures — safe, escapeXml, limit, wrap, detectSuspiciousPatterns."
+    href="/docs/reference/crux-core"
+  />
 </Cards>

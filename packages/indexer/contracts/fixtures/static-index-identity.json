@@ -1,0 +1,31 @@
+{
+  "protocolVersion": 2,
+  "compiler": {
+    "name": "crux-indexer-static-compiler",
+    "version": "phase-3"
+  },
+  "oxcFrontend": {
+    "name": "oxc-rust",
+    "version": "oxc_parser@0.133.0+crux_native_group3.5"
+  },
+  "primitiveManifest": {
+    "name": "crux-first-party-primitives",
+    "version": "1",
+    "digest": "sha256:primitive-manifest"
+  },
+  "relationPolicy": {
+    "name": "runtime-relation-specs",
+    "version": "1",
+    "digest": "sha256:relation-policy"
+  },
+  "ruleDescriptors": {
+    "name": "crux-indexer-rule-descriptors",
+    "version": "1",
+    "digest": "sha256:rule-descriptors"
+  },
+  "compilerProjection": {
+    "name": "crux-static-projection",
+    "version": "1",
+    "digest": "sha256:compiler-projection"
+  }
+}

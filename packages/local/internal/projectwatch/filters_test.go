@@ -10,8 +10,11 @@ func TestShouldWatchSourceAndBoundaryFiles(t *testing.T) {
 		"src/prompt.ts",
 		"src/tool.tsx",
 		"src/config.mjs",
+		"pnpm-workspace.yaml",
 		"package.json",
 		"pnpm-lock.yaml",
+		"crux.config.js",
+		"crux.config.mjs",
 		"crux.config.ts",
 		"tsconfig.json",
 	} {
@@ -41,6 +44,12 @@ func TestPathInsideIgnoredDir(t *testing.T) {
 	}
 	if !pathInsideIgnoredDir(root, filepath.Join(root, ".crux", "cache", "index.json")) {
 		t.Fatal(".crux path not ignored")
+	}
+	if !pathInsideIgnoredDir(root, filepath.Join(root, ".cache", "indexer", "state.json")) {
+		t.Fatal(".cache path not ignored")
+	}
+	if !pathInsideIgnoredDir(root, filepath.Join(root, "generated", "client.ts")) {
+		t.Fatal("generated path not ignored")
 	}
 	if pathInsideIgnoredDir(root, filepath.Join(root, "src", "prompt.ts")) {
 		t.Fatal("src path ignored unexpectedly")

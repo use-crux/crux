@@ -15,10 +15,10 @@ This guide gets Crux running in a Next.js 16 App Router project. Crux prompts ru
 {/* prettier-ignore-start */}
 
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
-  <Tab value="npm">```bash npm install @crux/core @crux/ai @ai-sdk/openai zod ```</Tab>
-  <Tab value="pnpm">```bash pnpm add @crux/core @crux/ai @ai-sdk/openai zod ```</Tab>
-  <Tab value="yarn">```bash yarn add @crux/core @crux/ai @ai-sdk/openai zod ```</Tab>
-  <Tab value="bun">```bash bun add @crux/core @crux/ai @ai-sdk/openai zod ```</Tab>
+  <Tab value="npm">```bash npm install @use-crux/core @use-crux/ai @ai-sdk/openai zod ```</Tab>
+  <Tab value="pnpm">```bash pnpm add @use-crux/core @use-crux/ai @ai-sdk/openai zod ```</Tab>
+  <Tab value="yarn">```bash yarn add @use-crux/core @use-crux/ai @ai-sdk/openai zod ```</Tab>
+  <Tab value="bun">```bash bun add @use-crux/core @use-crux/ai @ai-sdk/openai zod ```</Tab>
 </Tabs>
 {/* prettier-ignore-end */}
 
@@ -40,7 +40,7 @@ lib/
   ai/
     prompts.ts          ← Prompt definitions
     contexts.ts         ← Shared contexts
-    config.ts           ← config() + registry (optional)
+    config.ts           ← policy/defaults config (optional)
 ```
 
 <Callout type="idea">
@@ -56,7 +56,7 @@ lib/
 ### Create the prompt module
 
 ```ts title="lib/ai/prompts.ts"
-import { prompt, context } from '@crux/core'
+import { prompt, context } from '@use-crux/core'
 import { z } from 'zod'
 
 const brand = context({
@@ -86,7 +86,7 @@ export const summarize = prompt({
 ```ts title="app/actions/summarize.ts"
 'use server'
 
-import { generate } from '@crux/ai'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { summarize } from '@/lib/ai/prompts'
 
@@ -132,7 +132,7 @@ export default async function Page() {
 For chat or any long-form output, stream from a Route Handler:
 
 ```ts title="app/api/chat/route.ts"
-import { stream } from '@crux/ai'
+import { stream } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 import { chatPrompt } from '@/lib/ai/prompts'
@@ -159,7 +159,7 @@ export async function POST(req: Request) {
 <Cards>
   <Card
     title="Project Setup"
-    description="Organize prompts into trees with createPrompts() and config()."
+    description="Use config for explicit policy, overrides, and runtime defaults."
     href="/docs/guides/prompts"
   />
   <Card

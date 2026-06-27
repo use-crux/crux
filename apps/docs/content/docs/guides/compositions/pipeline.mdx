@@ -6,8 +6,8 @@ description: Chain agents sequentially with typed data flow between immediate st
 `pipeline()` chains agents sequentially — each step can access all previous outputs via a context accumulator. Use it for multi-step workflows like research-write-edit, or any process where each stage depends on earlier stages.
 
 ```ts title="research-pipeline.ts"
-import { pipeline } from '@crux/ai'
-import { agent } from '@crux/core/agent'
+import { pipeline } from '@use-crux/ai'
+import { agent } from '@use-crux/core/agent'
 
 const result = await pipeline({
   steps: [
@@ -150,7 +150,7 @@ const result = await pipeline({
 When an agent step uses a `CreationTool` (a tool that produces artifacts), the pipeline automatically captures the tool's `.created` values. Downstream steps can access them via `ctx[stepName]._created[toolName]`.
 
 ```ts title="pipeline-with-creation.ts"
-import { pipeline } from '@crux/ai'
+import { pipeline } from '@use-crux/ai'
 
 const result = await pipeline({
   steps: [

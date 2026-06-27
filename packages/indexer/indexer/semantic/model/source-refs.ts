@@ -1,15 +1,18 @@
-import ts from 'typescript'
-import type { JsonSchema, ProjectDefinition, ProjectSourceRef, ProjectSourceRefRole } from '@crux/core/project-index'
-import { propertyName } from '../../ast/literals'
-import { collectTopLevelInitializers } from '../../ast/initializers'
-import { expressionToJsonSchema } from '../../ast/schemas'
-import { sourceForNode, sourceSnippetForNode } from '../../ast/snippets'
+import type { JsonSchema, ProjectDefinition, ProjectSourceRef, ProjectSourceRefRole } from '@use-crux/core/project-index'
 import type {
+  SemanticAnalyzerNode,
+  SemanticAnalyzerView,
   SemanticDefinitionCandidate,
   SemanticResolvedSource,
   SemanticSchemaCandidate,
   SemanticSourceRefCandidate,
 } from '../candidates'
+import {
+  semanticNodeKey,
+  semanticNodeName,
+  semanticSourceForNode,
+  semanticSourceSnippetForNode,
+} from '../syntax-readers'
 import {
   callExpressionName,
   expressionFromDeclaration,
@@ -21,6 +24,7 @@ import {
   unwrapExpression,
   variableNameForNode,
 } from './source-ref-declarations'
+import { semanticExpressionToJsonSchemaNode, semanticTopLevelInitializers } from './schema-json'
 
 export {
   callExpressionName,
@@ -40,18 +44,19 @@ export {
  */
 export function semanticTemplateInterpolationSourceRefs(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): ProjectSourceRef[] {
-  const system = propertyInitializer(candidate.object, 'system')
+  const system = propertyInitializer(candidate.object, 'system', view)
   if (!system) return []
-  const template = unwrapExpression(system)
-  if (!ts.isTemplateExpression(template)) return []
+  const template = unwrapExpression(system, view)
+  const expressions = view.syntax.templateExpressions(template)
+  if (expressions.length === 0) return []
   const refs: ProjectSourceRef[] = []
   const seen = new Set<string>()
-  for (const span of template.templateSpans) {
-    const expression = unwrapExpression(span.expression)
-    if (!isResolvableSourceExpression(expression)) continue
-    const resolved = resolveSemanticExpression(expression, checker, expression.getText())
+  for (const spanExpression of expressions) {
+    const expression = unwrapExpression(spanExpression, view)
+    if (!isResolvableSourceExpression(expression, view)) continue
+    const resolved = resolveSemanticExpression(expression, view, view.syntax.text(expression))
     if (!resolved || seen.has(resolved.symbol)) continue
     seen.add(resolved.symbol)
     refs.push(
@@ -61,9 +66,10 @@ export function semanticTemplateInterpolationSourceRefs(
           property: 'system',
           role: 'system',
           expression,
-          metadata: { injected: true, fragment: isFragmentLike(resolved.expression) },
+          metadata: { injected: true, fragment: isFragmentLike(resolved.expression, view) },
         },
         resolved,
+        view,
       ),
     )
   }
@@ -79,28 +85,29 @@ export function semanticTemplateInterpolationSourceRefs(
  */
 export function semanticToolMapSourceRefs(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): ProjectSourceRef[] {
   if (!['prompt', 'context', 'injectable', 'agent'].includes(candidate.kind)) return []
-  const tools = propertyInitializer(candidate.object, 'tools')
+  const tools = propertyInitializer(candidate.object, 'tools', view)
   if (!tools) return []
-  const toolsExpression = unwrapExpression(tools)
-  const resolvedTools = isResolvableSourceExpression(toolsExpression)
-    ? resolveSemanticExpression(toolsExpression, checker)
+  const toolsExpression = unwrapExpression(tools, view)
+  const resolvedTools = isResolvableSourceExpression(toolsExpression, view)
+    ? resolveSemanticExpression(toolsExpression, view)
     : undefined
-  const object = ts.isObjectLiteralExpression(toolsExpression)
+  const object = view.syntax.isKind(toolsExpression, 'objectLiteral')
     ? toolsExpression
     : resolvedTools?.expression
-      ? unwrapExpression(resolvedTools.expression)
+      ? unwrapExpression(resolvedTools.expression, view)
       : undefined
-  if (!object || !ts.isObjectLiteralExpression(object)) return []
+  if (!object || !view.syntax.isKind(object, 'objectLiteral')) return []
   const refs: ProjectSourceRef[] = []
   const seen = new Set<string>()
-  for (const property of object.properties) {
-    if (ts.isSpreadAssignment(property)) {
-      const expression = unwrapExpression(property.expression)
-      if (!isResolvableSourceExpression(expression)) continue
-      const resolved = resolveSemanticExpression(expression, checker)
+  for (const property of view.syntax.objectProperties(object)) {
+    const spread = view.syntax.spreadExpression(property)
+    if (spread) {
+      const expression = unwrapExpression(spread, view)
+      if (!isResolvableSourceExpression(expression, view)) continue
+      const resolved = resolveSemanticExpression(expression, view)
       if (!resolved || seen.has(`spread:${resolved.symbol}`)) continue
       seen.add(`spread:${resolved.symbol}`)
       refs.push(
@@ -113,13 +120,14 @@ export function semanticToolMapSourceRefs(
             metadata: { toolMapContributor: 'spread' },
           },
           resolved,
+          view,
         ),
       )
       continue
     }
-    const expression = toolMapPropertyExpression(property)
-    if (!expression || !isResolvableSourceExpression(expression)) continue
-    const resolved = resolveSemanticExpression(expression, checker)
+    const expression = toolMapPropertyExpression(property, view)
+    if (!expression || !isResolvableSourceExpression(expression, view)) continue
+    const resolved = resolveSemanticExpression(expression, view)
     if (!resolved || seen.has(`property:${resolved.symbol}`)) continue
     seen.add(`property:${resolved.symbol}`)
     refs.push(
@@ -132,6 +140,7 @@ export function semanticToolMapSourceRefs(
           metadata: { toolMapContributor: 'property' },
         },
         resolved,
+        view,
       ),
     )
   }
@@ -153,11 +162,11 @@ export function semanticToolMapSourceRefs(
  */
 export function semanticInjectionConditionSourceRefs(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): ProjectSourceRef[] {
   if (!['prompt', 'context', 'injectable'].includes(candidate.kind)) return []
-  const use = propertyInitializer(candidate.object, 'use')
-  return use ? injectionConditionSourceRefsFromExpression(candidate.definitionId, use, checker, new Set()) : []
+  const use = propertyInitializer(candidate.object, 'use', view)
+  return use ? injectionConditionSourceRefsFromExpression(candidate.definitionId, use, view, new Set()) : []
 }
 
 /**
@@ -171,48 +180,48 @@ export function semanticInjectionConditionSourceRefs(
  */
 function injectionConditionSourceRefsFromExpression(
   definitionId: string,
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
   seen: Set<string>,
 ): ProjectSourceRef[] {
-  const unwrapped = unwrapExpression(expression)
-  const key = `${unwrapped.getSourceFile().fileName}:${unwrapped.pos}:${unwrapped.end}`
+  const unwrapped = unwrapExpression(expression, view)
+  const key = semanticNodeKey(unwrapped, view.syntax)
   if (seen.has(key)) return []
   const nextSeen = new Set(seen)
   nextSeen.add(key)
 
-  if (ts.isCallExpression(unwrapped)) {
-    const helperRefs = injectionConditionHelperSourceRefs(definitionId, unwrapped, checker, nextSeen)
+  if (view.syntax.isKind(unwrapped, 'callExpression')) {
+    const helperRefs = injectionConditionHelperSourceRefs(definitionId, unwrapped, view, nextSeen)
     if (helperRefs) return helperRefs
   }
 
-  if (ts.isBinaryExpression(unwrapped) && unwrapped.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+  const logicalAnd = view.syntax.logicalAndOperands(unwrapped)
+  if (logicalAnd) {
     return [
-      conditionSourceRef(definitionId, 'use', 'policy', unwrapped.left, checker, {
+      conditionSourceRef(definitionId, 'use', 'policy', logicalAnd.left, view, {
         condition: 'binary-guard',
         via: 'binary',
-        symbol: injectionConditionSymbol(unwrapped.left, 'binary-guard'),
+        symbol: injectionConditionSymbol(logicalAnd.left, 'binary-guard', view),
       }),
-      ...injectionConditionSourceRefsFromExpression(definitionId, unwrapped.right, checker, nextSeen),
+      ...injectionConditionSourceRefsFromExpression(definitionId, logicalAnd.right, view, nextSeen),
     ]
   }
 
-  const array = semanticConditionArrayExpression(unwrapped, checker, nextSeen)
+  const array = semanticConditionArrayExpression(unwrapped, view, nextSeen)
   if (!array) return []
-  return array.elements.flatMap((element) => {
-    if (ts.isSpreadElement(element)) {
+  return view.syntax.arrayElements(array).flatMap((element) => {
+    const spread = view.syntax.spreadExpression(element)
+    if (spread) {
       return [
-        conditionSourceRef(definitionId, 'use', 'config', element.expression, checker, {
+        conditionSourceRef(definitionId, 'use', 'config', spread, view, {
           condition: 'spread-target',
           via: 'spread',
-          symbol: injectionConditionSymbol(element.expression, 'spread-target'),
+          symbol: injectionConditionSymbol(spread, 'spread-target', view),
         }),
-        ...injectionConditionSourceRefsFromExpression(definitionId, element.expression, checker, nextSeen),
+        ...injectionConditionSourceRefsFromExpression(definitionId, spread, view, nextSeen),
       ]
     }
-    return ts.isExpression(element)
-      ? injectionConditionSourceRefsFromExpression(definitionId, element, checker, nextSeen)
-      : []
+    return injectionConditionSourceRefsFromExpression(definitionId, element, view, nextSeen)
   })
 }
 
@@ -231,90 +240,94 @@ function injectionConditionSourceRefsFromExpression(
  */
 function injectionConditionHelperSourceRefs(
   definitionId: string,
-  call: ts.CallExpression,
-  checker: ts.TypeChecker,
+  call: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
   seen: Set<string>,
 ): ProjectSourceRef[] | undefined {
-  const callName = callExpressionName(call)
-  if (callName === 'when' && call.arguments[1]) {
-    const predicate = call.arguments[0]
-    const target = call.arguments[1]
+  const callName = callExpressionName(call, view)
+  const args = view.syntax.callArguments(call)
+  if (callName === 'when' && args[1]) {
+    const predicate = args[0]
+    const target = args[1]
     return [
       ...(predicate
         ? [
-            conditionSourceRef(definitionId, 'use', 'policy', predicate, checker, {
+            conditionSourceRef(definitionId, 'use', 'policy', predicate, view, {
               condition: 'when-predicate',
               via: 'when',
-              symbol: injectionConditionSymbol(predicate, 'when-predicate'),
+              symbol: injectionConditionSymbol(predicate, 'when-predicate', view),
             }),
           ]
         : []),
-      conditionSourceRef(definitionId, 'use', 'config', target, checker, {
+      conditionSourceRef(definitionId, 'use', 'config', target, view, {
         condition: 'when-target',
         via: 'when',
-        symbol: injectionConditionSymbol(target, 'when-target'),
+        symbol: injectionConditionSymbol(target, 'when-target', view),
       }),
-      ...injectionConditionSourceRefsFromExpression(definitionId, target, checker, seen),
+      ...injectionConditionSourceRefsFromExpression(definitionId, target, view, seen),
     ]
   }
 
-  if (callName === 'match' && call.arguments[0]) {
-    const matchShape = semanticMatchConfigExpression(call, checker, seen)
+  if (callName === 'match' && args[0]) {
+    const matchShape = semanticMatchConfigExpression(call, view, seen)
     if (!matchShape) return []
     const refs: ProjectSourceRef[] = []
     if (matchShape.classifier) {
       refs.push(
-        conditionSourceRef(definitionId, 'use', 'policy', matchShape.classifier, checker, {
+        conditionSourceRef(definitionId, 'use', 'policy', matchShape.classifier, view, {
           condition: 'match-classifier',
           via: 'match',
-          symbol: injectionConditionSymbol(matchShape.classifier, 'match-classifier'),
+          symbol: injectionConditionSymbol(matchShape.classifier, 'match-classifier', view),
         }),
       )
     }
     refs.push(
-      conditionSourceRef(definitionId, 'use', 'config', matchShape.config, checker, {
+      conditionSourceRef(definitionId, 'use', 'config', matchShape.config, view, {
         condition: 'match-config',
         via: 'match',
-        symbol: injectionConditionSymbol(matchShape.config, 'match-config'),
+        symbol: injectionConditionSymbol(matchShape.config, 'match-config', view),
       }),
     )
-    const matchConfigObject = semanticConditionObjectExpression(matchShape.config, checker, seen)
-    const cases = matchConfigObject ? conditionObjectProperty(matchConfigObject, 'cases') : undefined
+    const matchConfigObject = semanticConditionObjectExpression(matchShape.config, view, seen)
+    const cases = matchConfigObject ? conditionObjectProperty(matchConfigObject, 'cases', view) : undefined
     if (cases) {
       refs.push(
-        conditionSourceRef(definitionId, 'use', 'config', cases.expression, checker, {
+        conditionSourceRef(definitionId, 'use', 'config', cases.expression, view, {
           condition: 'match-cases',
           via: 'match',
-          symbol: injectionConditionSymbol(cases.expression, 'match-cases'),
+          symbol: injectionConditionSymbol(cases.expression, 'match-cases', view),
         }),
       )
-      const casesObject = semanticConditionObjectExpression(cases.expression, checker, seen)
+      const casesObject = semanticConditionObjectExpression(cases.expression, view, seen)
       if (casesObject) {
-        for (const property of casesObject.properties) {
-          if (!ts.isPropertyAssignment(property)) continue
-          const branch = propertyName(property.name)
+        for (const property of view.syntax.objectProperties(casesObject)) {
+          const branch = view.syntax.propertyName(property)
+            ? semanticNodeName(view.syntax.propertyName(property)!, view.syntax)
+            : undefined
+          const expression = view.syntax.propertyInitializer(property)
+          if (!expression) continue
           refs.push(
-            conditionSourceRef(definitionId, 'use', 'config', property.initializer, checker, {
+            conditionSourceRef(definitionId, 'use', 'config', expression, view, {
               condition: 'match-case',
               via: 'match',
               branch,
-              symbol: branch ? `match-case:${branch}` : injectionConditionSymbol(property.initializer, 'match-case'),
+              symbol: branch ? `match-case:${branch}` : injectionConditionSymbol(expression, 'match-case', view),
             }),
-            ...injectionConditionSourceRefsFromExpression(definitionId, property.initializer, checker, seen),
+            ...injectionConditionSourceRefsFromExpression(definitionId, expression, view, seen),
           )
         }
       }
     }
-    const defaults = matchConfigObject ? conditionObjectProperty(matchConfigObject, 'default') : undefined
+    const defaults = matchConfigObject ? conditionObjectProperty(matchConfigObject, 'default', view) : undefined
     if (defaults) {
       refs.push(
-        conditionSourceRef(definitionId, 'use', 'config', defaults.expression, checker, {
+        conditionSourceRef(definitionId, 'use', 'config', defaults.expression, view, {
           condition: 'match-default',
           via: 'match',
           branch: 'default',
           symbol: 'match-default',
         }),
-        ...injectionConditionSourceRefsFromExpression(definitionId, defaults.expression, checker, seen),
+        ...injectionConditionSourceRefsFromExpression(definitionId, defaults.expression, view, seen),
       )
     }
     return refs
@@ -333,16 +346,20 @@ function injectionConditionHelperSourceRefs(
  * broadening runtime behavior or executing the classifier.
  */
 function semanticMatchConfigExpression(
-  call: ts.CallExpression,
-  checker: ts.TypeChecker,
+  call: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
   seen: Set<string>,
-): { classifier?: ts.Expression; config: ts.Expression } | undefined {
-  if (call.arguments[1]) {
-    const configObject = semanticConditionObjectExpression(call.arguments[1], checker, seen)
-    return configObject ? { classifier: call.arguments[0], config: call.arguments[1] } : undefined
+): {
+  classifier?: SemanticAnalyzerNode<SemanticAnalyzerView>
+  config: SemanticAnalyzerNode<SemanticAnalyzerView>
+} | undefined {
+  const args = view.syntax.callArguments(call)
+  if (args[1]) {
+    const configObject = semanticConditionObjectExpression(args[1], view, seen)
+    return configObject ? { classifier: args[0], config: args[1] } : undefined
   }
-  const configObject = semanticConditionObjectExpression(call.arguments[0], checker, seen)
-  return configObject ? { config: call.arguments[0] } : undefined
+  const configObject = args[0] ? semanticConditionObjectExpression(args[0], view, seen) : undefined
+  return configObject && args[0] ? { config: args[0] } : undefined
 }
 
 /**
@@ -354,15 +371,15 @@ function semanticMatchConfigExpression(
  * duplicating property-shape logic.
  */
 function conditionObjectProperty(
-  object: ts.ObjectLiteralExpression,
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
   name: string,
-): { expression: ts.Expression } | undefined {
-  for (const property of object.properties) {
-    if (
-      (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
-      propertyName(property.name) === name
-    ) {
-      return { expression: ts.isShorthandPropertyAssignment(property) ? property.name : property.initializer }
+  view: SemanticAnalyzerView,
+): { expression: SemanticAnalyzerNode<SemanticAnalyzerView> } | undefined {
+  for (const property of view.syntax.objectProperties(object)) {
+    const propertyNameNode = view.syntax.propertyName(property)
+    if (propertyNameNode && semanticNodeName(propertyNameNode, view.syntax) === name) {
+      const expression = view.syntax.propertyInitializer(property)
+      return expression ? { expression } : undefined
     }
   }
   return undefined
@@ -377,20 +394,20 @@ function conditionObjectProperty(
  * user-code execution.
  */
 function semanticConditionObjectExpression(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
   seen: Set<string>,
-): ts.ObjectLiteralExpression | undefined {
-  const unwrapped = unwrapExpression(expression)
-  if (ts.isObjectLiteralExpression(unwrapped)) return unwrapped
-  if (!isResolvableSourceExpression(unwrapped)) return undefined
-  const resolved = resolveSemanticExpression(unwrapped, checker)
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  const unwrapped = unwrapExpression(expression, view)
+  if (view.syntax.isKind(unwrapped, 'objectLiteral')) return unwrapped
+  if (!isResolvableSourceExpression(unwrapped, view)) return undefined
+  const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved?.expression) return undefined
   const key = semanticResolvedKey(resolved)
   if (seen.has(key)) return undefined
   const nextSeen = new Set(seen)
   nextSeen.add(key)
-  return semanticConditionObjectExpression(resolved.expression, checker, nextSeen)
+  return semanticConditionObjectExpression(resolved.expression, view, nextSeen)
 }
 
 /**
@@ -402,20 +419,20 @@ function semanticConditionObjectExpression(
  * computed arrays remain opaque and produce no invented source refs.
  */
 function semanticConditionArrayExpression(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
   seen: Set<string>,
-): ts.ArrayLiteralExpression | undefined {
-  const unwrapped = unwrapExpression(expression)
-  if (ts.isArrayLiteralExpression(unwrapped)) return unwrapped
-  if (!isResolvableSourceExpression(unwrapped)) return undefined
-  const resolved = resolveSemanticExpression(unwrapped, checker)
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  const unwrapped = unwrapExpression(expression, view)
+  if (view.syntax.isKind(unwrapped, 'arrayLiteral')) return unwrapped
+  if (!isResolvableSourceExpression(unwrapped, view)) return undefined
+  const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved?.expression) return undefined
   const key = semanticResolvedKey(resolved)
   if (seen.has(key)) return undefined
   const nextSeen = new Set(seen)
   nextSeen.add(key)
-  return semanticConditionArrayExpression(resolved.expression, checker, nextSeen)
+  return semanticConditionArrayExpression(resolved.expression, view, nextSeen)
 }
 
 /**
@@ -431,8 +448,8 @@ function conditionSourceRef(
   definitionId: string,
   property: string,
   role: ProjectSourceRefRole,
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
   options: {
     condition: string
     via: string
@@ -440,7 +457,7 @@ function conditionSourceRef(
     symbol: string
   },
 ): ProjectSourceRef {
-  const unwrapped = unwrapExpression(expression)
+  const unwrapped = unwrapExpression(expression, view)
   const metadata: ProjectSourceRef['metadata'] = {
     extensions: {
       injectionCondition: options.condition,
@@ -448,9 +465,9 @@ function conditionSourceRef(
       ...(options.branch ? { branch: options.branch } : {}),
     },
   }
-  const resolved = isResolvableSourceExpression(unwrapped) ? resolveSemanticExpression(unwrapped, checker) : undefined
+  const resolved = isResolvableSourceExpression(unwrapped, view) ? resolveSemanticExpression(unwrapped, view) : undefined
   if (resolved) {
-    const source = sourceForNode(resolved.sourceFile, resolved.declaration)
+    const source = semanticSourceForNode(resolved.declaration, view.syntax)
     return {
       id: `${definitionId}:source:${role}:${property}:${sourceRefIdSegment(options.condition)}:${sourceRefIdSegment(
         options.branch ?? '',
@@ -459,12 +476,11 @@ function conditionSourceRef(
       property,
       symbol: resolved.symbol,
       source: resolved.functionName ? { ...source, function: resolved.functionName } : source,
-      snippet: sourceSnippetForNode(resolved.sourceFile, resolved.declaration),
+      snippet: semanticSourceSnippetForNode(resolved.declaration, view.syntax),
       fidelity: 'resolved',
       metadata,
     }
   }
-  const sourceFile = unwrapped.getSourceFile()
   return {
     id: `${definitionId}:source:${role}:${property}:${sourceRefIdSegment(options.condition)}:${sourceRefIdSegment(
       options.branch ?? '',
@@ -472,8 +488,8 @@ function conditionSourceRef(
     role,
     property,
     symbol: options.symbol,
-    source: sourceForNode(sourceFile, unwrapped),
-    snippet: sourceSnippetForNode(sourceFile, unwrapped),
+    source: semanticSourceForNode(unwrapped, view.syntax),
+    snippet: semanticSourceSnippetForNode(unwrapped, view.syntax),
     fidelity: 'partial',
     metadata,
   }
@@ -487,11 +503,15 @@ function conditionSourceRef(
  * used for inline lambdas, branch arrays, and other expressions that have a
  * source location but no declaration node.
  */
-function injectionConditionSymbol(expression: ts.Expression, fallback: string): string {
-  const unwrapped = unwrapExpression(expression)
-  if (ts.isIdentifier(unwrapped)) return unwrapped.text
-  if (ts.isPropertyAccessExpression(unwrapped)) return unwrapped.name.text
-  if (ts.isCallExpression(unwrapped)) return callExpressionName(unwrapped) ?? fallback
+function injectionConditionSymbol(
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  fallback: string,
+  view: SemanticAnalyzerView,
+): string {
+  const unwrapped = unwrapExpression(expression, view)
+  if (view.syntax.isKind(unwrapped, 'identifier')) return view.syntax.identifierText(unwrapped) ?? fallback
+  if (view.syntax.isKind(unwrapped, 'propertyAccessExpression')) return view.syntax.propertyAccessName(unwrapped) ?? fallback
+  if (view.syntax.isKind(unwrapped, 'callExpression')) return callExpressionName(unwrapped, view) ?? fallback
   return fallback
 }
 
@@ -515,28 +535,29 @@ function sourceRefIdSegment(value: string): string {
 export function semanticNestedSchemaSourceRefs(
   candidate: SemanticSchemaCandidate,
   rootResolved: SemanticResolvedSource,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): ProjectSourceRef[] {
   if (!rootResolved.expression) return []
   const refs: ProjectSourceRef[] = []
   const seen = new Set<string>([rootResolved.symbol])
-  const visit = (node: ts.Node): void => {
-    if (ts.isIdentifier(node) && isReferenceIdentifier(node) && !isKnownLibraryIdentifier(node.text)) {
-      const resolved = resolveSemanticExpression(node, checker)
-      if (resolved?.expression && !seen.has(resolved.symbol) && schemaKind(resolved.expression)) {
+  const visit = (node: SemanticAnalyzerNode<SemanticAnalyzerView>): void => {
+    const name = view.syntax.identifierText(node)
+    if (name && isReferenceIdentifier(node, view) && !isKnownLibraryIdentifier(name)) {
+      const resolved = resolveSemanticExpression(node, view)
+      if (resolved?.expression && !seen.has(resolved.symbol) && schemaKind(resolved.expression, view)) {
         seen.add(resolved.symbol)
         refs.push(
-          semanticSchemaSourceRef(candidate, resolved, Boolean(semanticExpressionToJsonSchema(resolved, checker)), {
+          semanticSchemaSourceRef(candidate, resolved, Boolean(semanticExpressionToJsonSchema(resolved, view)), view, {
             nested: true,
           }),
         )
-        ts.forEachChild(resolved.expression, visit)
+        view.syntax.children(resolved.expression).forEach(visit)
         return
       }
     }
-    ts.forEachChild(node, visit)
+    view.syntax.children(node).forEach(visit)
   }
-  ts.forEachChild(rootResolved.expression, visit)
+  view.syntax.children(rootResolved.expression).forEach(visit)
   return refs
 }
 
@@ -544,19 +565,50 @@ export function semanticNestedSchemaSourceRefs(
  * Resolves an identifier or property access expression to its source
  * declaration.
  *
- * The type checker is the only external dependency; inline expressions return
+ * The compiler view is the only external dependency; inline expressions return
  * undefined because they do not have a reusable declaration to reference.
  */
 export function resolveSemanticExpression(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
   displaySymbol?: string,
 ): SemanticResolvedSource | undefined {
-  const unwrapped = unwrapExpression(expression)
-  if (ts.isIdentifier(unwrapped)) return resolveSemanticSymbol(unwrapped, checker, displaySymbol)
-  if (ts.isPropertyAccessExpression(unwrapped))
-    return resolveSemanticSymbol(unwrapped.name, checker, displaySymbol ?? unwrapped.getText())
+  const unwrapped = unwrapExpression(expression, view)
+  if (view.syntax.isKind(unwrapped, 'identifier')) return resolveSemanticSymbol(unwrapped, view, displaySymbol)
+  if (view.syntax.isKind(unwrapped, 'propertyAccessExpression')) {
+    const name = view.syntax.propertyAccessNameNode(unwrapped)
+    if (!name) return undefined
+    const resolved = resolveSemanticSymbol(name, view, displaySymbol ?? view.syntax.text(unwrapped))
+    return resolved && isUsablePropertyAccessResolution(unwrapped, resolved, view) ? resolved : undefined
+  }
   return undefined
+}
+
+function isUsablePropertyAccessResolution(
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  resolved: SemanticResolvedSource,
+  view: SemanticAnalyzerView,
+): boolean {
+  if (isNamespaceImportPropertyAccess(expression, view)) return true
+  const propertyName = view.syntax.propertyAccessName(expression)
+  const declarationName = symbolNameForDeclaration(resolved.declaration, view)
+  return !(
+    view.syntax.kind(resolved.declaration) === 'functionDeclaration' &&
+    declarationName === propertyName &&
+    resolved.sourceFile.fileName !== view.syntax.sourceFile(expression).fileName
+  )
+}
+
+function isNamespaceImportPropertyAccess(
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): boolean {
+  const receiver = view.syntax.propertyAccessExpression(expression)
+  const namespace = receiver ? view.syntax.identifierText(receiver) : undefined
+  if (!namespace) return false
+  return view.syntax
+    .children(view.syntax.sourceFile(expression))
+    .some((statement) => view.syntax.namespaceImportName(statement) === namespace)
 }
 
 /**
@@ -564,31 +616,23 @@ export function resolveSemanticExpression(
  * declaration that can be represented as index evidence.
  */
 function resolveSemanticSymbol(
-  node: ts.Node,
-  checker: ts.TypeChecker,
+  node: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
   displaySymbol?: string,
 ): SemanticResolvedSource | undefined {
-  const symbol = shorthandAssignmentValueSymbol(node, checker) ?? checker.getSymbolAtLocation(node)
-  const resolvedSymbol =
-    symbol && (symbol.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(symbol) : symbol
-  const declaration = resolvedSymbol?.declarations?.find(isSourceRefDeclaration)
+  const resolvedSymbol = view.resolvedSymbols([node])[0]
+  const declaration = resolvedSymbol
+    ? view.declarationsOf([resolvedSymbol])[0]?.find((item) => isSourceRefDeclaration(item, view))
+    : undefined
   if (!declaration) return undefined
-  const expression = expressionFromDeclaration(declaration)
+  const expression = expressionFromDeclaration(declaration, view)
   return {
-    symbol: displaySymbol ?? symbolNameForDeclaration(declaration) ?? resolvedSymbol?.getName() ?? node.getText(),
-    sourceFile: declaration.getSourceFile(),
+    symbol: displaySymbol ?? symbolNameForDeclaration(declaration, view) ?? resolvedSymbol?.name ?? view.syntax.text(node),
+    sourceFile: view.sourceFile(declaration),
     declaration,
     expression,
-    functionName: functionNameForDeclaration(declaration),
+    functionName: functionNameForDeclaration(declaration, view),
   }
-}
-
-/**
- * Reads the value symbol for shorthand object assignments.
- */
-function shorthandAssignmentValueSymbol(node: ts.Node, checker: ts.TypeChecker): ts.Symbol | undefined {
-  if (!ts.isIdentifier(node) || !ts.isShorthandPropertyAssignment(node.parent)) return undefined
-  return checker.getShorthandAssignmentValueSymbol(node.parent)
 }
 
 /**
@@ -617,6 +661,7 @@ export function semanticSchemaSourceRef(
   candidate: SemanticSchemaCandidate,
   resolved: SemanticResolvedSource,
   parsedSchema: boolean,
+  view: SemanticAnalyzerView,
   metadata?: ProjectSourceRef['metadata'],
 ): ProjectSourceRef {
   return semanticSourceRef(
@@ -624,12 +669,13 @@ export function semanticSchemaSourceRef(
       ...candidate,
       role: 'schema',
       metadata: {
-        schemaKind: schemaKind(resolved.expression),
+        schemaKind: schemaKind(resolved.expression, view),
         parsedSchema,
         ...metadata,
       },
     },
     resolved,
+    view,
   )
 }
 
@@ -637,22 +683,22 @@ export function semanticSchemaSourceRef(
  * Attempts to convert a resolved schema expression into Project Index JSON
  * schema.
  *
- * Identifier resolution is delegated recursively through the same type checker,
+ * Identifier resolution is delegated recursively through the same type view,
  * making nested schema conversion deterministic for a fixed TypeScript program.
  */
 export function semanticExpressionToJsonSchema(
   resolved: SemanticResolvedSource,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): JsonSchema | undefined {
   if (!resolved.expression) return undefined
-  return expressionToJsonSchema(resolved.expression, topLevelInitializers(resolved.sourceFile), {
+  return semanticExpressionToJsonSchemaNode(resolved.expression, semanticTopLevelInitializers(resolved.sourceFile, view), view, {
     resolveIdentifier: (identifier) => {
-      const nested = resolveSemanticExpression(identifier, checker)
-      if (!nested?.expression || !schemaKind(nested.expression)) return undefined
+      const nested = resolveSemanticExpression(identifier, view)
+      if (!nested?.expression || !schemaKind(nested.expression, view)) return undefined
       return {
         key: semanticResolvedKey(nested),
         expression: nested.expression,
-        localInitializers: topLevelInitializers(nested.sourceFile),
+        localInitializers: semanticTopLevelInitializers(nested.sourceFile, view),
       }
     },
   })
@@ -677,15 +723,16 @@ export function semanticResolvedKey(resolved: SemanticResolvedSource): string {
 export function semanticSourceRef(
   candidate: SemanticSourceRefCandidate,
   resolved: SemanticResolvedSource,
+  view: SemanticAnalyzerView,
 ): ProjectSourceRef {
-  const source = sourceForNode(resolved.sourceFile, resolved.declaration)
+  const source = semanticSourceForNode(resolved.declaration, view.syntax)
   return {
     id: `${candidate.definitionId}:source:${candidate.role}:${candidate.property}:${resolved.symbol}`,
     role: candidate.role,
     property: candidate.property,
     symbol: resolved.symbol,
     source: resolved.functionName ? { ...source, function: resolved.functionName } : source,
-    snippet: sourceSnippetForNode(resolved.sourceFile, resolved.declaration),
+    snippet: semanticSourceSnippetForNode(resolved.declaration, view.syntax),
     fidelity: 'resolved',
     ...(candidate.metadata ? { metadata: candidate.metadata } : {}),
   }
@@ -700,10 +747,10 @@ export function semanticSourceRef(
 export function semanticRoutingTargetSourceRef(
   definitionId: string,
   property: string,
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
 ): ProjectSourceRef | undefined {
-  return semanticResolvedSourceRef(definitionId, property, 'config', expression, checker, { routingTarget: true })
+  return semanticResolvedSourceRef(definitionId, property, 'config', expression, view, { routingTarget: true })
 }
 
 /**
@@ -716,22 +763,22 @@ export function semanticResolvedSourceRef(
   definitionId: string,
   property: string,
   role: ProjectSourceRefRole,
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
   metadata?: ProjectSourceRef['metadata'],
 ): ProjectSourceRef | undefined {
-  const unwrapped = unwrapExpression(expression)
-  if (!isResolvableSourceExpression(unwrapped)) return undefined
-  const resolved = resolveSemanticExpression(unwrapped, checker)
+  const unwrapped = unwrapExpression(expression, view)
+  if (!isResolvableSourceExpression(unwrapped, view)) return undefined
+  const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved) return undefined
-  const source = sourceForNode(resolved.sourceFile, resolved.declaration)
+  const source = semanticSourceForNode(resolved.declaration, view.syntax)
   return {
     id: `${definitionId}:source:${role}:${property}:${resolved.symbol}`,
     role,
     property,
     symbol: resolved.symbol,
     source: resolved.functionName ? { ...source, function: resolved.functionName } : source,
-    snippet: sourceSnippetForNode(resolved.sourceFile, resolved.declaration),
+    snippet: semanticSourceSnippetForNode(resolved.declaration, view.syntax),
     fidelity: 'resolved',
     ...(metadata ? { metadata } : {}),
   }
@@ -740,19 +787,11 @@ export function semanticResolvedSourceRef(
 /**
  * Returns the expression value represented by a tool-map object member.
  */
-function toolMapPropertyExpression(property: ts.ObjectLiteralElementLike): ts.Expression | undefined {
-  if (ts.isShorthandPropertyAssignment(property)) return property.name
-  if (ts.isPropertyAssignment(property)) return property.initializer
-  return undefined
-}
-
-/**
- * Builds a map of top-level initializer expressions for schema projection.
- */
-function topLevelInitializers(sourceFile: ts.SourceFile): Map<string, ts.Expression> {
-  const initializers = new Map<string, ts.Expression>()
-  collectTopLevelInitializers(sourceFile, initializers)
-  return initializers
+function toolMapPropertyExpression(
+  property: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
+  return view.syntax.propertyInitializer(property)
 }
 
 /**
@@ -767,40 +806,42 @@ function isKnownLibraryIdentifier(symbol: string): boolean {
  * Returns whether an identifier occurrence should be treated as a reference
  * rather than a declaration/property key.
  */
-function isReferenceIdentifier(node: ts.Identifier): boolean {
-  const parent = node.parent
-  if (ts.isPropertyAssignment(parent) && parent.name === node) return false
-  if (ts.isShorthandPropertyAssignment(parent) && parent.name === node) return false
-  if (ts.isMethodDeclaration(parent) && parent.name === node) return false
-  if (ts.isPropertyDeclaration(parent) && parent.name === node) return false
-  if (ts.isVariableDeclaration(parent) && parent.name === node) return false
-  if (ts.isFunctionDeclaration(parent) && parent.name === node) return false
-  if (ts.isParameter(parent) && parent.name === node) return false
-  if (ts.isPropertyAccessExpression(parent) && parent.name === node) return false
+function isReferenceIdentifier(
+  node: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): boolean {
+  const parent = view.syntax.parent(node)
+  if (!parent) return true
+  if (view.syntax.propertyName(parent) === node) return false
+  if (view.syntax.variableDeclarationName(parent) === node) return false
+  if (view.syntax.declarationName(parent) === node) return false
+  if (view.syntax.propertyAccessNameNode(parent) === node) return false
   return true
 }
 
 /**
  * Detects prompt fragment-like expressions for interpolation metadata.
  */
-function isFragmentLike(expression: ts.Expression | undefined): boolean {
+function isFragmentLike(
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView> | undefined,
+  view: SemanticAnalyzerView,
+): boolean {
   if (!expression) return false
-  const unwrapped = unwrapExpression(expression)
-  return (
-    ts.isStringLiteralLike(unwrapped) ||
-    ts.isTemplateExpression(unwrapped) ||
-    ts.isNoSubstitutionTemplateLiteral(unwrapped)
-  )
+  const unwrapped = unwrapExpression(expression, view)
+  return view.syntax.stringLiteralText(unwrapped) !== undefined || view.syntax.templateExpressions(unwrapped).length > 0
 }
 
 /**
  * Detects the schema dialect represented by a source expression.
  */
-function schemaKind(expression: ts.Expression | undefined): 'zod' | 'convex-validator' | 'json-schema' | undefined {
+function schemaKind(
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView> | undefined,
+  view: SemanticAnalyzerView,
+): 'zod' | 'convex-validator' | 'json-schema' | undefined {
   if (!expression) return undefined
-  if (containsReceiver(expression, 'z')) return 'zod'
-  if (containsReceiver(expression, 'v')) return 'convex-validator'
-  if (ts.isObjectLiteralExpression(expression)) return 'json-schema'
+  if (containsReceiver(expression, 'z', view)) return 'zod'
+  if (containsReceiver(expression, 'v', view)) return 'convex-validator'
+  if (view.syntax.isKind(expression, 'objectLiteral')) return 'json-schema'
   return undefined
 }
 
@@ -808,19 +849,20 @@ function schemaKind(expression: ts.Expression | undefined): 'zod' | 'convex-vali
  * Returns whether an AST subtree contains a call/property chain rooted at a
  * specific receiver name.
  */
-function containsReceiver(node: ts.Node, receiverName: string): boolean {
+function containsReceiver(
+  node: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  receiverName: string,
+  view: SemanticAnalyzerView,
+): boolean {
   let found = false
-  const visit = (child: ts.Node): void => {
+  const visit = (child: SemanticAnalyzerNode<SemanticAnalyzerView>): void => {
     if (found) return
-    if (
-      ts.isPropertyAccessExpression(child) &&
-      ts.isIdentifier(child.expression) &&
-      child.expression.text === receiverName
-    ) {
+    const receiver = view.syntax.propertyAccessExpression(child)
+    if (receiver && view.syntax.identifierText(receiver) === receiverName) {
       found = true
       return
     }
-    ts.forEachChild(child, visit)
+    view.syntax.children(child).forEach(visit)
   }
   visit(node)
   return found

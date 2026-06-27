@@ -74,7 +74,7 @@ export interface FallbackMeta {
  *
  * @example
  * ```ts
- * import { fallback } from '@crux/core'
+ * import { fallback } from '@use-crux/core'
  *
  * const model = fallback(gpt4o, claudeSonnet, geminiFlash)
  *

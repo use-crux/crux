@@ -3,7 +3,7 @@ title: Crawler-Style Custom Loader
 description: Crawl a small site in userland and feed the pages into Crux indexing without making crawling built-in.
 ---
 
-Crux does not ship a crawler in `@crux/ingest`, and that is intentional. Crawling has different tradeoffs around robots rules, concurrency, deduplication, link filtering, canonical URLs, and failure handling. Those concerns are real, but they do not belong in the minimal built-in loading layer.
+Crux does not ship a crawler in `@use-crux/ingest`, and that is intentional. Crawling has different tradeoffs around robots rules, concurrency, deduplication, link filtering, canonical URLs, and failure handling. Those concerns are real, but they do not belong in the minimal built-in loading layer.
 
 What Crux does give you is the contract you need to build a crawler in userland: a loader that yields `IngestDocument` values.
 
@@ -24,8 +24,8 @@ This is not meant to be a production crawler. It is meant to show the extension 
 ### `lib/rag/site-loader.ts`
 
 ```ts
-import { htmlToText } from '@crux/ingest/html'
-import type { IngestDocument, SourceLoader } from '@crux/ingest'
+import { htmlToText } from '@use-crux/ingest/html'
+import type { IngestDocument, SourceLoader } from '@use-crux/ingest'
 
 export function crawlSite(options: {
   namespace: string
@@ -88,9 +88,9 @@ function extractLinks(html: string, baseUrl: string, origin: string): string[] {
 ### `lib/rag/index-site.ts`
 
 ```ts
-import { embedding } from '@crux/core/embedding'
-import { corpus, indexer } from '@crux/core/indexing'
-import { inMemoryDataStore, inMemoryVectorStore } from '@crux/core/storage'
+import { embedding } from '@use-crux/core/embedding'
+import { corpus, indexer } from '@use-crux/core/indexing'
+import { inMemoryDataStore, inMemoryVectorStore } from '@use-crux/core/storage'
 
 import { crawlSite } from './site-loader'
 

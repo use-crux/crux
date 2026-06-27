@@ -1,17 +1,17 @@
 ---
 title: Ingesting Text, Files, and URLs
-description: Use @crux/ingest to produce documents for indexing.
+description: Use @use-crux/ingest to produce documents for indexing.
 ---
 
-`@crux/ingest` is the loading layer in Crux's retrieval stack. Its job is to take source material from the outside world and turn it into `IngestDocument` values that a corpus sync can consume.
+`@use-crux/ingest` is the loading layer in Crux's retrieval stack. Its job is to take source material from the outside world and turn it into `IngestDocument` values that a corpus sync can consume.
 
 That sounds small, but it matters. Without a clear ingestion layer, every retrieval project ends up inventing slightly different loaders, slightly different document shapes, and slightly different answers to what counts as a source.
 
 ## What ingest is for
 
-Use `@crux/ingest` when you want a first-party path for text, local files, folders, globs, or URLs. If your documents already exist in memory, you may not need it at all. You can pass documents straight into `corpus.sync()` or `indexer.indexDocuments()` and skip the loading layer entirely.
+Use `@use-crux/ingest` when you want a first-party path for text, local files, folders, globs, or URLs. If your documents already exist in memory, you may not need it at all. You can pass documents straight into `corpus.sync()` or `indexer.indexDocuments()` and skip the loading layer entirely.
 
-That is an important part of the design. `@crux/ingest` is there to make the full retrieval story coherent, not to become mandatory ceremony.
+That is an important part of the design. `@use-crux/ingest` is there to make the full retrieval story coherent, not to become mandatory ceremony.
 
 ## Bundled loaders
 
@@ -79,7 +79,7 @@ const loader = filesSource(
 
 ## The core contract
 
-Everything in `@crux/ingest` reduces to one small contract:
+Everything in `@use-crux/ingest` reduces to one small contract:
 
 ```ts
 type IngestDocument = {
@@ -108,7 +108,7 @@ There are two read modes. `load()` yields result objects, including failed sourc
 If the content is already in your app, `textSource()` is the simplest path:
 
 ```ts
-import { textSource } from '@crux/ingest'
+import { textSource } from '@use-crux/ingest'
 
 const loader = textSource({
   namespace: 'product-docs',
@@ -125,7 +125,7 @@ This is also the easiest bridge for your own connectors. If you already know how
 For local docs, `fileSource()` and `filesSource()` give you a standard path.
 
 ```ts
-import { filesSource } from '@crux/ingest'
+import { filesSource } from '@use-crux/ingest'
 
 const loader = filesSource({ directory: './docs', recursive: true }, { namespace: 'product-docs' })
 ```
@@ -139,7 +139,7 @@ The point is not to hide the source format. It is to normalize common formats in
 For web-hosted content, `urlSource()` and `urlsSource()` fetch content and normalize it into the same document model.
 
 ```ts
-import { urlsSource } from '@crux/ingest'
+import { urlsSource } from '@use-crux/ingest'
 
 const loader = urlsSource(['https://example.com/docs/roadmap', 'https://example.com/docs/pricing'], {
   namespace: 'product-docs',
@@ -148,14 +148,14 @@ const loader = urlsSource(['https://example.com/docs/roadmap', 'https://example.
 
 HTML is converted into readable text parts with title extraction. PDF responses are parsed into pages. Source URLs are preserved in metadata. Failed requests are returned as failed source results through `load()` and throw through `documents()`. The goal is a pragmatic ingestion path, not a crawler framework.
 
-That boundary matters. `@crux/ingest` should help users load documents, not pretend to solve every website-ingestion problem in the ecosystem.
+That boundary matters. `@use-crux/ingest` should help users load documents, not pretend to solve every website-ingestion problem in the ecosystem.
 
 ## Wiring into indexing
 
 The normal product pattern is simple: create an indexer for the write rules, wrap it in a corpus, and sync loader output into that corpus.
 
 ```ts
-import { corpus, indexer } from '@crux/core/indexing'
+import { corpus, indexer } from '@use-crux/core/indexing'
 
 const docsIndexer = indexer({
   id: 'docs',
@@ -241,7 +241,7 @@ That makes custom loaders a first-class story rather than a fallback:
 
 The package stays small, and users do not get blocked.
 
-## What `@crux/ingest` is not trying to be
+## What `@use-crux/ingest` is not trying to be
 
 It is not a crawler, a connector marketplace, a CMS framework, or a document intelligence platform. It is the thin loading layer that makes the rest of the retrieval stack coherent.
 
@@ -270,5 +270,5 @@ That restraint is part of the design quality. A smaller, clearer loading layer i
     description="Run ingestion repeatedly and keep stale sources safe."
     href="/docs/guides/retrieval/corpus-sync"
   />
-  <Card title="Ingest Reference" description="Full `@crux/ingest` API." href="/docs/reference/ingest" />
+  <Card title="Ingest Reference" description="Full `@use-crux/ingest` API." href="/docs/reference/ingest" />
 </Cards>

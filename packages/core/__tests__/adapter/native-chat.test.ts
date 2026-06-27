@@ -1,7 +1,7 @@
 /**
- * `defineNativeChatProvider()` should turn a provider wire-format profile into
- * the public `AdapterSpec` contract without forcing providers to restate Crux
- * adapter choreography.
+ * The internal native-chat compiler should turn provider wire-format hooks into
+ * the `AdapterSpec` contract without forcing profiles to restate Crux adapter
+ * choreography.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -193,7 +193,7 @@ function isNativeTestProviderMessage(value: unknown): value is NativeTestProvide
   return typeof value === 'object' && value !== null && 'role' in value && 'text' in value
 }
 
-describe('defineNativeChatProvider', () => {
+describe('native-chat compiler', () => {
   it('compiles a profile into a conforming AdapterSpec', async () => {
     const spec = nativeTestProfile.specFor(bindNativeTest)
     const harness: AdapterConformanceHarness<NativeTestClient, NativeTestRawResponse, NativeTestStream> = {

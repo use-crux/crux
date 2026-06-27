@@ -10,7 +10,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createToolLifecycle } from '../../../adapter/tool/session'
 import { toolMiddleware, approvalMiddleware, appendToolApprovalResponse } from '../../../tool-middleware'
-import { createSkillState, LOAD_SKILL_TOOL_NAME } from '../../../skill/tools'
+import { createSkillActivationSession } from '../../../skill'
+import { LOAD_SKILL_TOOL_NAME } from '../../../skill/tools'
 import { updateRuntime, resetRuntime } from '../../../runtime'
 import type { AdapterResponse } from '../../../adapter/types'
 import type { Message } from '../../../messages'
@@ -509,18 +510,26 @@ describe('createToolLifecycle — applySkillLoads', () => {
   afterEach(() => resetRuntime())
 
   function skillFixture() {
-    const state = createSkillState([
-      { id: 'sql', description: 'SQL skill', instructions: 'Always use parameterized queries.' } as Parameters<
-        typeof createSkillState
-      >[0][number],
-    ])
-    state.active.add('sql')
+    const session = createSkillActivationSession({
+      skills: [
+        {
+          _tag: 'Skill',
+          id: 'sql',
+          description: 'SQL skill',
+          instructions: 'Always use parameterized queries.',
+          references: [],
+          meta: { name: 'sql', description: 'SQL skill' },
+          dump: () => 'Always use parameterized queries.',
+        },
+      ],
+    })
+    session.activate('sql')
     const resolved = resolvedWith({
       system: 'base system',
       tools: { echo: { description: 'v1', execute: async () => 'one' } },
     })
-    ;(resolved as ResolvedPrompt & { _skillState?: unknown })._skillState = state
-    return { state, resolved }
+    ;(resolved as ResolvedPrompt & { _skillSession?: unknown })._skillSession = session
+    return { session, resolved }
   }
 
   it('is inert without LoadSkill calls or without a reresolve closure', async () => {
@@ -544,15 +553,14 @@ describe('createToolLifecycle — applySkillLoads', () => {
     const onSkillResolve = vi.fn()
     updateRuntime({ instrumentationHooks: { onSkillLoad, onSkillResolve } })
 
-    const { resolved } = skillFixture()
+    const { session, resolved } = skillFixture()
+    const loadedSkillText = session.loadedContexts()[0]?.systemFn({})
     const reResolved = resolvedWith({
-      system: 'rebuilt system',
+      system: `rebuilt system\n\n${loadedSkillText}`,
       systemBlocks: [{ text: 'rebuilt system' }],
       tools: { echo: { description: 'v2', execute: async () => 'two' } },
     })
-    ;(reResolved as ResolvedPrompt & { _skillState?: unknown })._skillState = (
-      resolved as ResolvedPrompt & { _skillState?: unknown }
-    )._skillState
+    ;(reResolved as ResolvedPrompt & { _skillSession?: unknown })._skillSession = session
     const reresolve = vi.fn(async () => reResolved)
 
     const lifecycle = createToolLifecycle({ regime: 'core', resolved, promptId: 'p1', reresolve })

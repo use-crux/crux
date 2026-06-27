@@ -3,7 +3,7 @@ import type {
   ProjectDefinition,
   ProjectDefinitionKind,
   ProjectRelation,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 const COVERAGE_TARGET_KINDS = new Set<ProjectDefinitionKind>([
   'prompt',
   'agent',

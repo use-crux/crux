@@ -1,6 +1,6 @@
-# @crux/local Architecture
+# @use-crux/local Architecture
 
-`@crux/local` is the Go runtime for local Crux development. It owns the HTTP server, WebSocket/SSE
+`@use-crux/local` is the Go runtime for local Crux development. It owns the HTTP server, WebSocket/SSE
 subscriptions, TUI, embedded devtools UI, observability read models, Project Index read models, and
 the local Quality Workbench filesystem boundary.
 
@@ -14,7 +14,7 @@ The product rule is:
 
 > Explicit construction decides behavior; Crux discovery provides visibility.
 
-For `@crux/local`, this means:
+For `@use-crux/local`, this means:
 
 - `crux dev`, Devtools, lint, and Quality should be able to start from conventions and the Project
   Index whenever possible.
@@ -43,8 +43,8 @@ internal/qualityfs
 ```
 
 `qualityfs` is a leaf package: it uses the Go standard library only and does not import `store`,
-`quality`, `indexread`, `observability`, or API packages. This keeps the persisted record contract
-separate from service orchestration and Project Index enrichment.
+`quality`, `projectindex/readmodel`, `observability`, or API packages. This keeps the persisted
+record contract separate from service orchestration and Project Index enrichment.
 
 `qualityfs` owns:
 
@@ -66,7 +66,7 @@ a snapshot are visible on the next call when the filesystem fingerprint changes.
 
 ## Consumers
 
-`internal/indexread` consumes `qualityfs.Load` and owns only Project Index read-model enrichment. It
+`internal/projectindex/readmodel` consumes `qualityfs.Load` and owns only Project Index read-model enrichment. It
 does not parse `.crux/quality` files directly and should not redeclare persisted quality records.
 
 `internal/quality.Service` owns local workbench API orchestration: event publishing, HTTP/API mapping,
@@ -76,6 +76,36 @@ below.
 
 `internal/store` stores raw Project Index snapshots and in-memory runtime/eval state. It must not
 persist derived `IndexQuality` fields or parse `.crux/quality`.
+
+## Project Index Runtime Boundary
+
+`internal/projectindex/service` is the Local facade for Project Index refreshes. Server, route, TUI,
+and devtools packages should call service and read-model APIs instead of importing worker, eventwire,
+cache, or Static Index internals directly.
+
+Internally the package keeps each refresh concern in its own file. `run.go` defines the `refreshRun`
+state (root/config/project, started time, watch run, semantic mode, generation, Static Index metadata,
+and previous/current snapshots) plus the single semantic-and-lint completion shared by both flows;
+`reindex_full.go` and `reindex_incremental.go` build a `refreshRun` and hand it to that completion so
+the semantic-mode branching is not duplicated. `patch_apply.go` owns patch normalization plus the
+commit/apply/publish write path, `semantic_scheduler.go`/`semantic_patch.go` own semantic phase
+scheduling, and `lint_scheduler.go` owns lint scheduling and prefetch.
+
+The target Go package names are responsibility names:
+
+- `internal/projectindex/eventwire`: Project Index worker event stream collection and validation.
+- `internal/projectindex/workers`: composition root for TypeScript worker lanes.
+- `internal/projectindex/workers/requestwire`: batched requests sent to TypeScript workers.
+- `internal/projectindex/workers/source`, `workers/semantic`, `workers/runtime`, and
+  `workers/node`: focused worker-lane adapters.
+- `internal/projectindex/staticindex/frontend`: Static Syntax frontend process adaptation.
+- `internal/projectindex/staticindex/compiler`: Go client for Rust Static Index compiler methods.
+- `internal/projectindex/staticindex/run`: deep module facade for Static Index prepare/analyze/finalize
+  orchestration, split into `prepare.go`, `analyze.go`, `finalize.go`, `compile.go`, and `cache.go`.
+
+The former `staticindex/syntax` and `staticindex/client` packages were renamed to
+`staticindex/frontend` and `staticindex/compiler`. New code should use the target vocabulary and
+should not add compatibility aliases for the old package names.
 
 ## Quality Insight Derivation
 

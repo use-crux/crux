@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
-import type { JsonSchema, ProjectSourceRef, ProjectSourceRefRole, SourceLocation, SourceSnippet } from '@crux/core/project-index'
+import type { JsonSchema, ProjectSourceRef, ProjectSourceRefRole, SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
 import { collectTopLevelInitializers, scopedInitializersForNode } from './initializers'
 import { collectImportBindings } from './imports'
 import { propertyName } from './literals'

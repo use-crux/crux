@@ -183,7 +183,7 @@ async function sdkVersion(): Promise<string> {
     try {
       const url = new URL(candidate, import.meta.url)
       const parsed = JSON.parse(await readFile(url, 'utf8')) as { name?: unknown; version?: unknown }
-      if (parsed.name === '@crux/core' && typeof parsed.version === 'string') {
+      if (parsed.name === '@use-crux/core' && typeof parsed.version === 'string') {
         cachedSdkVersion = parsed.version
         return cachedSdkVersion
       }

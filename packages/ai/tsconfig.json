@@ -15,7 +15,7 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "vitest"],
     "paths": {
-      "@crux/react": ["../crux-react/src/index.ts"]
+      "@use-crux/react": ["../crux-react/src/index.ts"]
     }
   },
   "include": [
@@ -24,6 +24,7 @@
     "stream/**/*.ts",
     "stream/**/*.tsx",
     "__tests__/**/*.ts",
+    "__type_tests__/**/*.ts",
     "__tests__/**/*.tsx"
   ],
   "exclude": ["node_modules"]

@@ -1,6 +1,6 @@
 import type OpenAI from 'openai'
-import type { DenseEmbedding } from '@crux/core/embedding'
-import { embedding as coreEmbedding } from '@crux/core/embedding'
+import type { DenseEmbedding } from '@use-crux/core/embedding'
+import { embedding as coreEmbedding } from '@use-crux/core/embedding'
 import type { OpenAIEmbeddingConfig } from './types'
 
 const OPENAI_EMBEDDING_DIMENSIONS: Record<string, number> = {

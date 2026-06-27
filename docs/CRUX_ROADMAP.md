@@ -233,6 +233,21 @@ Built on the mature graph:
 - Provider migration reports: context, cost, quality, and safety differences across models — the payoff of the proactive stance, since a deterministic harness makes models swappable.
 - Harness baselines: snapshot a full prompt/context/retrieval/memory/routing configuration and detect drift.
 
+## The Horizon (Long-Term, Not Near-Term)
+
+This mirrors the vision's [The Horizon](./CRUX_VISION.md#the-horizon). It is explicitly long-horizon: it explains what a deterministic, provable harness is *for*, and it must not pull effort from the core (explained, source-linked, tested turn assembly). It requires Crux to own no GPUs and host no weights — execution is delegated, exactly as inference execution is delegated to the user's SDK.
+
+The thesis: as open weights close the gap and inference prices fall, "which model" becomes a runtime decision and the durable asset moves onto the harness and the curated, eval-scored dataset it produces as a byproduct — records of (context, decision, output, quality verdict). That dataset powers two delivery mechanisms from one source: inject curated examples in context (any model, expressible today as a retriever over eval-passing examples), or distill into a smaller open model (cheaper per call). The same baseline suite certifies either path. Crux owns the two hard ends — quality-filtered dataset assembly and baseline certification — and rents the commoditized training middle from a provider.
+
+The staircase, each step independently valuable and taken only when the one below it has real users:
+
+1. **In-context specialization** — inject curated, eval-passing examples; works on any model. Near-term; mostly expressible today.
+2. **Governed dataset export** — clean, redaction-aware, eligibility-gated (context, output, verdict) records. **This is the one decision worth making now**, because it keeps every later step open. The only action the Horizon implies today: design cassettes and traces as clean, governed, exportable records, with the eligibility gate ("this memory is personal; it never enters a dataset") enforceable from day one.
+3. **One-shot distill and certify** — a button: assemble the dataset, delegate the training run to a provider, gate the result on the baseline suite, hand back a certified model.
+4. **Managed, live auto-tune** — continuously retrain as eligible data arrives, promoting new weights only when they pass the baseline suite (the baseline is the safety airbag); deletion is honored by exclude-and-retrain at the next cycle.
+
+Everything past step 2 is "design the seams now, build when there are users." This is also where privacy-as-a-graph-property earns its keep: data lineage from interaction to dataset to weights is the foundation of deletion compliance and a genuine differentiator.
+
 ## Experimental Track: Context Planner
 
 Deliberately outside the numbered phases. An optional planning layer that chooses among eligible context sources before normal resolution is a genuine long-term differentiator, but it must not fight the mission.
@@ -295,6 +310,7 @@ See [CRUX_CONFIG_STRATEGY.md](./CRUX_CONFIG_STRATEGY.md) for the detailed config
 - Do not add privacy claims that Crux cannot enforce or test.
 - Do not turn native primitives into unavoidable lock-in once stable adapter contracts can preserve the same insight model.
 - Do not make central config or cloud dashboards duplicate harness structure already present in code.
+- Do not own GPUs or host weights. Any future training, distillation, or hosting delegates execution to a provider; Crux assembles the dataset and certifies the result, nothing more.
 
 ## Open Questions
 

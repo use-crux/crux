@@ -1,3 +1,14 @@
+/**
+ * Public testing helpers for Crux Indexer Extensions.
+ *
+ * The helpers exercise real source-text extraction through an in-memory source
+ * reader. They are intended for extension authors who need deterministic
+ * fixtures without depending on parser-native contexts, TypeScript AST nodes,
+ * or package-internal compiler helpers.
+ *
+ * @module
+ */
+
 import { join } from 'node:path'
 import { createExtensionRegistry } from './indexer/extensions'
 import type { IndexDependency, IndexerExtension } from './extensions'
@@ -176,7 +187,7 @@ function canonical(value: unknown): string {
 }
 
 const fixtureCompilerProfile = {
-  name: '@crux/indexer/fixture-profile',
+  name: '@use-crux/indexer/fixture-profile',
   version: '1',
   extensions: [],
 } as const satisfies ProjectIndexCompilerProfile

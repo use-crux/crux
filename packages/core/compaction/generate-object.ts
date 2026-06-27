@@ -58,7 +58,7 @@ export interface GenerateObjectBridgeOptions {
  *
  * Use this when a Crux primitive expects the portable `GenerateObjectFn`
  * contract, but your application already has an adapter-backed `generate`
- * function from `@crux/ai` or another adapter. The bridge builds a temporary
+ * function from `@use-crux/ai` or another adapter. The bridge builds a temporary
  * structured prompt with the provided system text, user prompt, and Zod schema,
  * executes the adapter, and returns the adapter's `result.object`. Validation
  * remains the adapter's responsibility, just as it is for normal structured
@@ -70,8 +70,8 @@ export interface GenerateObjectBridgeOptions {
  *
  * @example
  * ```ts
- * import { createGenerateObjectFnFromGenerate } from '@crux/core/compaction'
- * import { generate } from '@crux/ai'
+ * import { createGenerateObjectFnFromGenerate } from '@use-crux/core/compaction'
+ * import { generate } from '@use-crux/ai'
  *
  * const generateObject = createGenerateObjectFnFromGenerate(generate)
  * const result = await generateObject({ model, prompt: 'Grade this', schema })

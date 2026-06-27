@@ -11,7 +11,7 @@ Context resolvers that call databases, RAG systems, or APIs run on every `prompt
 ## Quick Start
 
 ```ts title="contexts.ts"
-import { context } from '@crux/core'
+import { context } from '@use-crux/core'
 import { z } from 'zod'
 
 const brand = context({
@@ -81,9 +81,9 @@ When `cacheTtl > 0`:
 When `providerCache: true`:
 
 1. The resolution pipeline includes `systemBlocks` on `ResolvedPrompt` — one block per context, each with a `providerCache` flag
-2. **`@crux/anthropic`** converts blocks to Anthropic `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` (up to 4 breakpoints)
-3. **`@crux/google`** creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. A single CachedContent lifecycle handles creation, reuse, per-call TTL, concurrency dedup, and graceful error fallback automatically; configure it (TTL, max entries, `onError: 'throw'`, a custom cache port, or a fully custom lifecycle) via `createGoogle(client, { cache })` — see the [`@crux/google` reference](/docs/reference/adapters/google).
-4. **`@crux/ai` (Vercel AI SDK)** converts blocks to `SystemModelMessage[]` with `providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } }` when the model is Anthropic
+2. **`@use-crux/anthropic`** converts blocks to Anthropic `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` (up to 4 breakpoints)
+3. **`@use-crux/google`** creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. A single CachedContent lifecycle handles creation, reuse, per-call TTL, concurrency dedup, and graceful error fallback automatically; configure it (TTL, max entries, `onError: 'throw'`, a custom cache port, or a fully custom lifecycle) via `createGoogle(client, { cachedContent })` — see the [`@use-crux/google` reference](/docs/reference/adapters/google).
+4. **`@use-crux/ai` (Vercel AI SDK)** converts blocks to `SystemModelMessage[]` with `providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } }` when the model is Anthropic
 5. **OpenAI** prefix caching works automatically — Crux's deterministic context ordering already provides stable prefixes
 
 ## Requirements

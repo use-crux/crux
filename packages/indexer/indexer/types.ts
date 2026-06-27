@@ -1,7 +1,5 @@
-import type {
-  ProjectDefinition,
-  ProjectDefinitionKind,
-} from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectDefinitionKind } from '@use-crux/core/project-index'
+import type { SemanticSourceProfileFile } from './semantic/source-profile'
 
 /**
  * Source-file dependency graph used by incremental planning and source-row projection.
@@ -13,6 +11,8 @@ import type {
 export interface SourceGraph {
   /** Absolute source file path -> absolute source files that participate in its static output. */
   dependenciesByFile: Map<string, string[]>
+  /** Internal source-profile rows produced by the static phase for semantic handoff. */
+  semanticProfileByFile?: Map<string, SemanticSourceProfileFile>
 }
 
 /**
@@ -35,6 +35,8 @@ export interface StaticRelationRef {
   toVariable?: string
   /** Target definition id when the extractor already knows the exact static target. */
   toId?: string
+  /** Target definition id to use only when `toVariable` cannot bind to a known definition. */
+  fallbackToId?: string
 }
 
 /**

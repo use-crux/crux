@@ -1,7 +1,7 @@
 /**
  * Memory persistence functions for the crux Convex component.
  *
- * These provide the backing store for `cruxConvexStore({ component })`.
+ * These provide the backing store for the Convex store document contract.
  * Accessible from the host app via `components.crux.memory.*`.
  *
  * @module
@@ -9,6 +9,8 @@
 
 import { v } from 'convex/values'
 import { mutation, query } from './_generated/server.js'
+
+const DEFAULT_LIST_LIMIT = 100
 
 /**
  * Get a memory entry by key.
@@ -82,26 +84,65 @@ export const remove = mutation({
 })
 
 /**
- * List memory entries with optional prefix filter and limit.
+ * List one memory page by key prefix.
+ *
+ * The component owns only Convex-native I/O concerns here: key-indexed range
+ * selection, pagination, and page shaping. Decoded JSON filtering is handled by
+ * the store-document policy module in `@use-crux/convex`.
  */
 export const list = query({
   args: {
     prefix: v.optional(v.string()),
     limit: v.optional(v.number()),
     cursor: v.optional(v.string()),
-    filter: v.optional(v.any()),
   },
-  returns: v.any(),
-  handler: async (ctx, { prefix, limit }) => {
-    let results = await ctx.db
-      .query('memories')
-      .order('desc')
-      .take(limit ?? 100)
-
-    if (prefix) {
-      results = results.filter((doc) => doc.key.startsWith(prefix))
+  returns: v.object({
+    docs: v.array(v.any()),
+    cursor: v.optional(v.string()),
+  }),
+  handler: async (ctx, { prefix = '', limit, cursor }) => {
+    const numItems = normalizeListLimit(limit)
+    if (numItems <= 0) {
+      return { docs: [] }
     }
 
-    return results
+    const lowerBound = cursor ?? prefix
+    const query = ctx.db
+      .query('memories')
+      .withIndex(
+        'by_key',
+        lowerBound || prefix
+          ? (q) => {
+              const upper = prefixUpperBound(prefix)
+              const lower = cursor ? q.gt('key', cursor) : q.gte('key', prefix)
+              return upper === undefined ? lower : lower.lt('key', upper)
+            }
+          : undefined,
+      )
+      .order('asc')
+
+    const docs = await query.take(numItems + 1)
+    const page = docs.slice(0, numItems)
+    const hasMore = docs.length > numItems
+    const last = page.at(-1)
+
+    return {
+      docs: page,
+      ...(hasMore && last ? { cursor: last.key } : {}),
+    }
   },
 })
+
+function normalizeListLimit(limit: number | undefined): number {
+  return Math.max(0, Math.floor(limit ?? DEFAULT_LIST_LIMIT))
+}
+
+function prefixUpperBound(prefix: string): string | undefined {
+  for (let index = prefix.length - 1; index >= 0; index -= 1) {
+    const code = prefix.charCodeAt(index)
+    if (code < 0xffff) {
+      return `${prefix.slice(0, index)}${String.fromCharCode(code + 1)}`
+    }
+  }
+  return undefined
+}

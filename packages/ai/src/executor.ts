@@ -17,7 +17,7 @@ import type {
   ExecutorStreamHandle,
   StructuredAttempt,
   StructuredRequest,
-} from '@crux/core/adapter'
+} from '@use-crux/core/adapter'
 import type { SdkGateway } from './gateway'
 import { createAiSdkCodec } from './sdk-codec'
 import type { SdkLoopResultLike, SdkStreamResultLike } from './sdk-codec'
@@ -29,9 +29,9 @@ const codec = createAiSdkCodec()
 /**
  * The `ExecutorSpec` binding the Vercel AI SDK to `executorAdapter()`.
  *
- * Bind it with a gateway: `executorAdapter(aiSdkExecutor)(liveSdkGateway())`.
- * Tests bind a scripted gateway instead, or pass `MockLanguageModelV3`
- * models through the live gateway when real SDK loop semantics matter.
+ * This is intentionally internal to the package; public callers bind
+ * `aiSdkProviderRuntime.create(gateway)`. Tests exercise this executor directly
+ * only for low-level loop conformance.
  */
 export const aiSdkExecutor: ExecutorSpec<SdkGateway, LanguageModel, SdkLoopResultLike, SdkStreamResultLike> = {
   executorId: codec.executorId,

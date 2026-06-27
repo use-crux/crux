@@ -1,6 +1,6 @@
 import type { LanguageModelV3CallOptions } from '@ai-sdk/provider'
-import type { CruxRuntime } from '@crux/core'
-import { getLatestSkillState, getNewlyActivatedSkills, markSkillsInjected } from '@crux/core/skill'
+import type { CruxRuntime } from '@use-crux/core'
+import type { SkillActivationSession } from '@use-crux/core/skill'
 import type { PromptMessage } from './message-shapes'
 
 function appendText(content: string | import('./message-shapes').MessagePart[], text: string): void {
@@ -18,11 +18,11 @@ function appendText(content: string | import('./message-shapes').MessagePart[], 
 export function injectNewlyActivatedSkills(
   params: LanguageModelV3CallOptions,
   instrumentationHooks: CruxRuntime['instrumentationHooks'],
+  session?: SkillActivationSession,
 ): void {
-  const skillState = getLatestSkillState()
-  if (!skillState) return
+  if (!session) return
 
-  const newSkills = getNewlyActivatedSkills(skillState)
+  const newSkills = session.newlyActivated()
   if (newSkills.length === 0) return
 
   const prompt = params.prompt as unknown as PromptMessage[] | undefined
@@ -30,12 +30,7 @@ export function injectNewlyActivatedSkills(
 
   for (const message of prompt) {
     if (message.role !== 'system') continue
-    const skillInstructions = newSkills
-      .map((id) => {
-        const skill = skillState.available.get(id)
-        return skill ? `\n\n## Skill: ${skill.id}\n\n${skill.instructions}` : ''
-      })
-      .join('')
+    const skillInstructions = newSkills.map((skill) => `\n\n## Skill: ${skill.id}\n\n${skill.instructions}`).join('')
 
     if (typeof message.content === 'string') {
       message.content += skillInstructions
@@ -45,8 +40,8 @@ export function injectNewlyActivatedSkills(
     break
   }
 
-  markSkillsInjected(newSkills)
-  for (const id of newSkills) {
-    instrumentationHooks?.onSkillResolve?.({ skillId: id })
+  session.markInjected(newSkills.map((entry) => entry.id))
+  for (const skill of newSkills) {
+    instrumentationHooks?.onSkillResolve?.({ skillId: skill.id })
   }
 }

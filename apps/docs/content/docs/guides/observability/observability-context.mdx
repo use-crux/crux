@@ -13,10 +13,10 @@ Three rules keep the tree correct end-to-end:
 
 ### 1. Boundary primitives open an observed span
 
-Every primitive that opens a boundary in the run graph — `tool`, `delegate`, `flow`, `handoff`, `composition`, `retrieval`, `embedding`, `compaction` — records a canonical span through `@crux/core/observability`:
+Every primitive that opens a boundary in the run graph — `tool`, `delegate`, `flow`, `handoff`, `composition`, `retrieval`, `embedding`, `compaction` — records a canonical span through `@use-crux/core/observability`:
 
 ```ts
-import { observe } from '@crux/core/observability'
+import { observe } from '@use-crux/core/observability'
 
 return observe.span({
   name: 'delegate',
@@ -38,7 +38,7 @@ You don't normally write this yourself — the built-in primitives do it. Only w
 The canonical observability runtime reads the active span stack when a `run` or `span` starts and writes the deepest open span as `parentSpanId` on `span:start`:
 
 ```ts
-import { observe } from '@crux/core/observability'
+import { observe } from '@use-crux/core/observability'
 
 await observe.span({ name: 'handoff', family: 'handoff', primitive: 'handoff.prepare' }, async () => {
   await observe.span({ name: 'delegate', family: 'delegate', primitive: 'delegate.invoke' }, async () => {
@@ -53,7 +53,7 @@ In-process this works automatically via AsyncLocalStorage. You don't write code 
 
 `AsyncLocalStorage` does **not** survive process boundaries — `ctx.runAction()` in Convex, edge-worker `fetch()`, AWS Lambda invocation, an HTTP call to another service. Cross-boundary transports must pack the captured observability context into the call payload and the receiving side must restore it before any SDK call.
 
-**`@crux/convex/server` does this automatically:**
+**`@use-crux/convex/server` does this automatically:**
 
 ```ts
 // Calling side, inside a Crux-aware action or tool:
@@ -64,7 +64,7 @@ const result = await ctx.crux.runAction('research', iref.agent.subagent.runResea
   userId,
 })
 
-// Receiving side, via @crux/convex/server:
+// Receiving side, via @use-crux/convex/server:
 export const runResearch = internalAction({
   args: {
     taskId: v.id('subAgentTasks'),
@@ -78,13 +78,13 @@ export const runResearch = internalAction({
 })
 ```
 
-`ctx.crux.runAction()` captures the current observability context and packs it into the hidden `__crux` action args. `@crux/convex/server` actions restore that context before running the handler and await a bounded flush so Convex/serverless workers do not drop queued records after the handler returns.
+`ctx.crux.runAction()` captures the current observability context and packs it into the hidden `__crux` action args. `@use-crux/convex/server` actions restore that context before running the handler and await a bounded flush so Convex/serverless workers do not drop queued records after the handler returns.
 
 **For other runtimes** the contract is the same; only the packing differs:
 
 | Runtime                | Pack into                                        | Unpack via                                        |
 | ---------------------- | ------------------------------------------------ | ------------------------------------------------- |
-| Convex action          | `ctx.crux.runAction(label, ref, args)`           | `@crux/convex/server` action wrapper              |
+| Convex action          | `ctx.crux.runAction(label, ref, args)`           | `@use-crux/convex/server` action wrapper              |
 | HTTP / fetch           | `traceparent` request header or payload metadata | parse header → `observe.withContext`              |
 | Cloudflare Workers     | service binding payload field                    | `observe.withContext` in the receiving worker     |
 | AWS Lambda             | event field or X-Ray segment                     | `observe.withContext` in the handler              |
@@ -92,7 +92,7 @@ export const runResearch = internalAction({
 
 The receiving side **must** seed the context before any SDK call. Anything that runs before the seed will record `parentSpanId: undefined` and fall back to inference.
 
-For scheduled serverless workflows that resume later, the initiating action should keep the logical run open across workers. Use `observe.openRun()` to emit `run:start`, persist `run.captureContext()` with your workflow state, restore it with `observe.withContext()` in resumed workers, and call `observe.endRun()` when the workflow actually completes. `@crux/convex` uses this shape for multi-action swarm runs so resumed turns are siblings in the same run instead of unrelated runs.
+For scheduled serverless workflows that resume later, the initiating action should keep the logical run open across workers. Use `observe.openRun()` to emit `run:start`, persist `run.captureContext()` with your workflow state, restore it with `observe.withContext()` in resumed workers, and call `observe.endRun()` when the workflow actually completes. `@use-crux/convex` uses this shape for multi-action swarm runs so resumed turns are siblings in the same run instead of unrelated runs.
 
 Detail-only spans can pass `implicitRun: false` when they should enrich an existing trace but must not create a standalone run. Router and cascade resolution use this so direct generations are not mislabeled as `router.resolve`; inside an active run those spans are still fully recorded and inspectable.
 
@@ -113,7 +113,7 @@ Once every boundary primitive in your stack uses `observe.span()` and every asyn
 If you build a primitive that wraps user work in a span the timeline should show, follow this template:
 
 ```ts
-import { observe } from '@crux/core/observability'
+import { observe } from '@use-crux/core/observability'
 
 export async function myBoundary<T>(input: Input, fn: () => Promise<T>): Promise<T> {
   return observe.span(
@@ -131,7 +131,7 @@ export async function myBoundary<T>(input: Input, fn: () => Promise<T>): Promise
 For non-lexical lifetimes, use `observe.openSpan()`:
 
 ```ts
-import { observe } from '@crux/core/observability'
+import { observe } from '@use-crux/core/observability'
 
 const span = observe.openSpan({
   name: 'my-stream',

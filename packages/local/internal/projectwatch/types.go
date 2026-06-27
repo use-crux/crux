@@ -10,6 +10,21 @@ type Delta struct {
 	DeletedFiles []string
 }
 
+// Run is one serialized incremental indexing attempt produced by the watcher
+// queue. The ID is monotonically increasing for the lifetime of the runner.
+type Run struct {
+	ID    uint64
+	Delta Delta
+	Queue RunQueueStats
+}
+
+// RunQueueStats describes how file deltas were coalesced before a run started.
+type RunQueueStats struct {
+	DeltaBatchCount         int
+	CoalescedWhileRunning   bool
+	PendingRunReplacedCount int
+}
+
 // Options configures a project filesystem watcher.
 type Options struct {
 	Root     string

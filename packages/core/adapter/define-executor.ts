@@ -1,9 +1,13 @@
 /**
- * `executorAdapter()` — factory for loop-owning adapters.
+ * `executorAdapter()` — lower-level factory for loop-owned execution IR.
  *
  * The counterpart of `adapter()` for SDKs that drive their own multi-step
  * tool loop (e.g. the Vercel AI SDK). Accepts an `ExecutorSpec` and returns
  * a factory `(client: TClient) => CruxExecutor`.
+ *
+ * Provider packages should normally use
+ * `defineProviderRuntime({ ownership: 'loop-owned', loop })`, which compiles
+ * into this IR.
  *
  * The factory owns the entire policy layer so specs stay mechanical:
  * prompt resolution, routing dispatch (`fallback()`/`router()`/`cascade()`
@@ -176,7 +180,7 @@ export interface CruxExecutor<TClient, TModel, TRawResponse = unknown, TRawStrea
  *
  * @example
  * ```ts
- * import { executorAdapter, fakeExecutor } from '@crux/core/adapter'
+ * import { executorAdapter, fakeExecutor } from '@use-crux/core/adapter'
  *
  * const fake = fakeExecutor({ loops: [[{ text: 'hello' }]] })
  * const executor = executorAdapter(fake.spec)(fake.client)

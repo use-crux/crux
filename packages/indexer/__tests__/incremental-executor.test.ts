@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProject, indexProjectIncremental, indexProjectSemantic } from '../index'
+import { indexProject, indexProjectIncremental, indexProjectSemantic } from '..'
 import { applyIndexPatch, indexPatchFromSnapshot, emptyIndexPatchState } from '../indexer/patches'
 
 const roots: string[] = []
@@ -23,7 +23,7 @@ describe('incremental indexing executor', () => {
     await writeFile(
       join(root, 'src/writer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const writer = prompt({
           id: 'writer',
@@ -35,7 +35,7 @@ describe('incremental indexing executor', () => {
     await writeFile(
       join(root, 'src/stable.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const stable = prompt({
           id: 'stable',
@@ -45,11 +45,11 @@ describe('incremental indexing executor', () => {
       `,
     )
 
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
     await writeFile(
       join(root, 'src/writer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const writer = prompt({
           id: 'writer.updated',
@@ -70,7 +70,7 @@ describe('incremental indexing executor', () => {
       applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(previousIndex, 'ast', 'ok')),
       incremental.patches[0],
     )
-    const fullUpdatedIndex = await indexProject({ root, staticOnly: true })
+    const fullUpdatedIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const fullUpdatedState = applyIndexPatch(
       emptyIndexPatchState(),
       indexPatchFromSnapshot(fullUpdatedIndex, 'ast', 'ok'),
@@ -93,7 +93,7 @@ describe('incremental indexing executor', () => {
     await writeFile(
       join(root, 'src/prompt.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const writerPrompt = prompt({
           id: 'writer',
@@ -105,7 +105,7 @@ describe('incremental indexing executor', () => {
     await writeFile(
       join(root, 'src/agent.ts'),
       `
-        import { agent } from '@crux/core'
+        import { agent } from '@use-crux/core'
         import { writerPrompt } from './prompt'
 
         export const writerAgent = agent({
@@ -116,11 +116,11 @@ describe('incremental indexing executor', () => {
       `,
     )
 
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
     await writeFile(
       join(root, 'src/prompt.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const writerPrompt = prompt({
           id: 'writer.v2',
@@ -141,7 +141,7 @@ describe('incremental indexing executor', () => {
       applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(previousIndex, 'ast', 'ok')),
       incremental.patches[0],
     )
-    const fullUpdatedIndex = await indexProject({ root, staticOnly: true })
+    const fullUpdatedIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const fullUpdatedState = applyIndexPatch(
       emptyIndexPatchState(),
       indexPatchFromSnapshot(fullUpdatedIndex, 'ast', 'ok'),
@@ -160,7 +160,7 @@ describe('incremental indexing executor', () => {
     await writeFile(
       join(root, 'src/delete-me.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const temporary = prompt({
           id: 'temporary',
@@ -172,7 +172,7 @@ describe('incremental indexing executor', () => {
     await writeFile(
       join(root, 'src/stable.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const stable = prompt({
           id: 'stable',
@@ -182,7 +182,7 @@ describe('incremental indexing executor', () => {
       `,
     )
 
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
     await unlink(join(root, 'src/delete-me.ts'))
 
     const incremental = await indexProjectIncremental({
@@ -197,7 +197,7 @@ describe('incremental indexing executor', () => {
       applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(previousIndex, 'ast', 'ok')),
       incremental.patches[0],
     )
-    const fullUpdatedIndex = await indexProject({ root, staticOnly: true })
+    const fullUpdatedIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const fullUpdatedState = applyIndexPatch(
       emptyIndexPatchState(),
       indexPatchFromSnapshot(fullUpdatedIndex, 'ast', 'ok'),
@@ -226,7 +226,7 @@ describe('incremental indexing executor', () => {
     await writeFile(
       join(root, 'src/tool.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { input } from './index'
 
         export const writerTool = tool({
@@ -238,12 +238,12 @@ describe('incremental indexing executor', () => {
       `,
     )
 
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const previousSemanticPatch = await indexProjectSemantic({ root })
     await writeFile(
       join(root, 'src/tool.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { input } from './index'
 
         export const writerTool = tool({
@@ -269,7 +269,7 @@ describe('incremental indexing executor', () => {
         previousSemanticPatch,
       ),
     )
-    const fullUpdatedIndex = await indexProject({ root, staticOnly: true })
+    const fullUpdatedIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const fullUpdatedSemanticPatch = await indexProjectSemantic({ root, previousIndex: fullUpdatedIndex })
     const fullUpdatedState = applyIndexPatch(
       applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(fullUpdatedIndex, 'ast', 'ok')),
@@ -298,7 +298,7 @@ describe('incremental indexing executor', () => {
     await writeFile(
       join(root, 'src/tool.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { input } from './index'
 
         export const writerTool = tool({
@@ -310,7 +310,7 @@ describe('incremental indexing executor', () => {
       `,
     )
 
-    const astIndex = await indexProject({ root, staticOnly: true })
+    const astIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const enriched = await indexProjectIncremental({
       root,
       previousIndex: astIndex,
@@ -354,7 +354,7 @@ describe('incremental indexing executor', () => {
       (state, patch) => applyIndexPatch(state, patch),
       applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(enrichedIndex, 'ast', 'ok')),
     )
-    const fullUpdatedIndex = await indexProject({ root, staticOnly: true })
+    const fullUpdatedIndex = await indexProject({ root, resolutionMode: 'source-only' })
     const fullUpdatedSemanticPatch = await indexProjectSemantic({ root, previousIndex: enrichedIndex })
     const fullUpdatedState = applyIndexPatch(
       applyIndexPatch(emptyIndexPatchState(), indexPatchFromSnapshot(fullUpdatedIndex, 'ast', 'ok')),
@@ -372,7 +372,7 @@ describe('incremental indexing executor', () => {
     await writeFile(
       join(root, 'src/tool.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
 
         export const writerTool = tool({
           name: 'writer',
@@ -382,7 +382,7 @@ describe('incremental indexing executor', () => {
       `,
     )
 
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
     await writeFile(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true } }))
 
     const incremental = await indexProjectIncremental({

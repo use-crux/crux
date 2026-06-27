@@ -3,9 +3,9 @@ title: Agent framework integration
 description: Use createAgentSkillKit() to wire skills into Convex Agent, Mastra, or any framework that controls its own tool loop.
 ---
 
-When you use a Crux adapter directly (`@crux/anthropic`, `@crux/openai`, `@crux/google`, `@crux/ai`), skills are fully automatic — Crux owns the tool loop, so the executor can intercept `LoadSkill` mid-call and re-resolve the system prompt without your code touching it.
+When you use a Crux adapter directly (`@use-crux/anthropic`, `@use-crux/openai`, `@use-crux/google`, `@use-crux/ai`), skills are fully automatic — Crux owns the tool loop, so the executor can intercept `LoadSkill` mid-call and re-resolve the system prompt without your code touching it.
 
-External agent frameworks own that loop themselves. Convex Agent and Mastra, for instance, decide when to call the model, when to execute tools, and how the system prompt is assembled per turn. Crux cannot reach inside that loop. `createAgentSkillKit()` is the bridge: it gives you the same `LoadSkill` semantics, but driven through callbacks you provide.
+External agent frameworks own that loop themselves. Convex Agent and Mastra, for instance, decide when to call the model, when to execute tools, and how the system prompt is assembled per turn. Crux cannot reach inside that loop. `createAgentSkillKit()` is the bridge: it gives you the same session-backed `LoadSkill` semantics, driven through a persistence port you provide.
 
 ## The Problem the Kit Solves
 
@@ -13,34 +13,37 @@ Without the kit, integrating skills into a framework like Convex Agent means doi
 
 1. Pre-resolve the Crux prompt to extract `LoadSkill` / `LoadReference` tools
 2. Convert those tools to the framework's tool format
-3. Wrap `LoadSkill` with persistence so loaded skills survive across turns
+3. Wrap `LoadSkill` with session snapshot persistence so loaded skills survive across turns
 4. Read persisted skill IDs at the start of each turn
 5. Pass them into the resolve input so the system prompt includes loaded skill content
 
-`createAgentSkillKit()` handles steps 1, 2, 4, and 5. You provide step 3 — the persistence layer — via two small callbacks.
+`createAgentSkillKit()` handles steps 1, 2, 4, and 5. You provide step 3 — the persistence layer — as a `SkillActivationPersistence` port that stores the full `SkillActivationSnapshot`.
 
 ## What the Kit Gives You
 
 ```ts
-const kit = await createAgentSkillKit(prompt, persistence, initialInput)
+const kit = await createAgentSkillKit(prompt, {
+  target: { threadId },
+  persistence,
+})
 ```
 
 | Property                      | What it does                                                                                                              |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `kit.tools`                   | `LoadSkill` (with your `onActivate` callback wired in) and `LoadReference`, ready to merge into your agent's tool set.    |
+| `kit.tools`                   | Session-bound `LoadSkill` and `LoadReference`, ready to merge into your agent's tool set.                                 |
 | `kit.resolveInput(baseInput)` | Takes your per-turn dynamic input and returns it with `_crux_activeSkills` injected. Call this before `prompt.resolve()`. |
 | `kit.getActiveIds()`          | Returns the currently active skill IDs from your persistence layer. Useful for debugging and UI.                          |
 
-The kit takes two callbacks for persistence:
+The preferred persistence port stores snapshots:
 
-| Callback              | Called when                                     | What it should do                                                                           |
-| --------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `onActivate(skillId)` | The LLM calls `LoadSkill`                       | Persist `skillId` somewhere durable for this conversation (DB row, Convex doc, Redis, etc.) |
-| `loadActiveIds()`     | Each turn, before the system prompt is composed | Return the previously persisted skill IDs                                                   |
+| Method                   | Called when                                       | What it should do                                              |
+| ------------------------ | ------------------------------------------------- | -------------------------------------------------------------- |
+| `load(target)`           | Before pre-resolve and each `resolveInput()` call | Return a `SkillActivationSnapshot` or `null`                   |
+| `save(target, snapshot)` | After `LoadSkill` succeeds                        | Persist `activeSkillIds` and `injectedSkillIds` for the target |
 
 ## Convex Agent
 
-For Convex Agent, use `@crux/convex/agent` and pass skill tools through `convexTools()` so skill activation/deactivation remains observable in the Crux trace. See the [Convex Agent, tools, and skills guide](/docs/guides/convex/agent-tools-skills) for the full setup.
+For Convex Agent, use `@use-crux/convex/agent` and pass skill tools through `convexTools()` so skill activation/deactivation remains observable in the Crux trace. See the [Convex Agent, tools, and skills guide](/docs/guides/convex/agent-tools-skills) for the full setup.
 
 ## Behavior Across Turns
 
@@ -55,16 +58,16 @@ In practice this is rarely a problem: the tool-result version is still rich enou
 
 ## Persistence Choices
 
-The kit is intentionally agnostic about where active skill IDs live. A few patterns:
+The kit is intentionally agnostic about where activation snapshots live. A few patterns:
 
 | Storage                           | Good for                                                            |
 | --------------------------------- | ------------------------------------------------------------------- |
-| `cruxConvexStore` keyed by thread | Convex backends — co-locates skill state with the thread            |
+| Convex contract store keyed by thread | Convex backends — co-locates skill state with the thread            |
 | A field on the thread document    | Simplest if you already store thread metadata                       |
 | Redis                             | Stateless function runtimes that need fast per-conversation lookups |
 | In-memory map                     | Local development, tests, or single-process agents                  |
 
-Whatever you pick, `onActivate` and `loadActiveIds` must agree on the storage — they are called from the same conversation but at different points in the request lifecycle.
+Whatever you pick, `load()` and `save()` must agree on the storage — they are called from the same conversation but at different points in the request lifecycle.
 
 ## Related
 

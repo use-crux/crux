@@ -1,53 +1,21 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
-import { collectImportBindings } from '../../ast/imports'
-import { cacheFileForIdentity, sha256, STATIC_PARSE_CACHE_EPOCH } from '../../cache-identity'
-import { indexCacheBoundaryFileNames } from '../../incremental/boundaries'
+import { cacheFileForIdentity, STATIC_PARSE_CACHE_EPOCH } from '../../cache-identity'
+import { mapBounded } from '../../pipeline'
 import type { StaticParseResult } from '../types'
-import type { StaticFileExtraction, StaticParseCacheStore } from './engine'
-import type { ParseMemo } from './source-io'
+import type {
+  StaticFileExtraction,
+  StaticParseCacheEntryMetadata,
+  StaticParseCacheHit,
+  StaticParseCacheSourceHash,
+  StaticParseCacheStore,
+} from './types'
+import { createStaticParseCacheKeyContext } from './cache-key'
+import { createSourceHashMemo, type SourceHashMemo } from './source-hash-memo'
+export { cacheKeyInput, cacheKeyInputFromSyntaxRecord, createStaticParseCacheKeyContext } from './cache-key'
 
-/**
- * Computes the cache lookup input for one static file extraction.
- *
- * The result is intentionally a plain JSON value. The persistent cache hashes it into a filename,
- * while tests and custom stores can inspect it as data. When any required source/config read fails,
- * the function returns `undefined`; extraction should continue uncached rather than letting cache IO
- * affect indexing correctness.
- */
-export async function cacheKeyInput(input: {
-  readonly root: string
-  readonly file: string
-  readonly parseMemo: ParseMemo
-  readonly compilerInputs: readonly unknown[]
-}): Promise<unknown | undefined> {
-  try {
-    const source = await input.parseMemo.readSource(input.file)
-    const sourceFile = await input.parseMemo.readSourceFile(input.file)
-    const dependencyFiles = [
-      ...new Set(
-        [...collectImportBindings(sourceFile, input.root, input.file).values()].map((binding) => binding.file),
-      ),
-    ].sort()
-    const dependencies = []
-    for (const dependencyFile of dependencyFiles) {
-      dependencies.push({
-        file: relative(input.root, dependencyFile).replace(/\\/g, '/'),
-        sourceHash: sha256(await input.parseMemo.readSource(dependencyFile)),
-      })
-    }
-    return {
-      version: STATIC_PARSE_CACHE_EPOCH,
-      root: input.root,
-      file: relative(input.root, input.file).replace(/\\/g, '/'),
-      sourceHash: sha256(source),
-      dependencies,
-      configFiles: await configFileHashes(input.root),
-      compilerInputs: input.compilerInputs,
-    }
-  } catch {
-    return undefined
-  }
+interface StaticParseCacheManifestEntry extends StaticParseCacheEntryMetadata {
+  readonly cacheKey: string
 }
 
 /**
@@ -59,9 +27,54 @@ export async function cacheKeyInput(input: {
 export function persistentStaticParseCache(root: string): StaticParseCacheStore {
   return Object.freeze({
     get: async (key: string) => readCache(cacheFileForIdentity(root, STATIC_PARSE_CACHE_EPOCH, key)),
-    set: async (key: string, value: StaticFileExtraction) =>
-      writeCache(cacheFileForIdentity(root, STATIC_PARSE_CACHE_EPOCH, key), value),
+    set: async (key: string, value: StaticFileExtraction, metadata?: StaticParseCacheEntryMetadata) => {
+      await writeCache(cacheFileForIdentity(root, STATIC_PARSE_CACHE_EPOCH, key), value)
+      if (metadata) await writeCacheManifestEntry(root, key, metadata)
+    },
   })
+}
+
+/**
+ * Reads the static parse cache manifest for a native parser plan.
+ *
+ * The manifest is conservative: missing entries, changed source hashes, changed
+ * dependency hashes, changed config boundary files, or unreadable cache entries
+ * are all misses. It avoids TypeScript parsing during native planning while
+ * validating the exact evidence captured by the previous cache-key computation.
+ */
+export async function staticParseCacheManifestStatus(input: {
+  readonly root: string
+  readonly files: readonly string[]
+  readonly compilerInputs: readonly unknown[]
+}): Promise<{
+  readonly cacheHits: readonly string[]
+  readonly cacheMisses: readonly string[]
+  readonly cacheEntries: readonly StaticParseCacheHit[]
+}> {
+  const cache = persistentStaticParseCache(input.root)
+  const keyContext = createStaticParseCacheKeyContext(input.root)
+  const currentConfigFiles = await keyContext.configFiles()
+  const entriesByIdentity = await readCacheManifestEntries(input.root)
+  const sourceHashes = createSourceHashMemo()
+  const statuses = await mapBounded(input.files, 32, async (file) => ({
+    file,
+    entry: await staticParseCacheManifestHit({
+      root: input.root,
+      file,
+      compilerInputs: input.compilerInputs,
+      currentConfigFiles,
+      cache,
+      entriesByIdentity,
+      sourceHashes,
+    }),
+  }))
+  return {
+    cacheHits: statuses.filter((status) => status.entry).map((status) => status.file),
+    cacheMisses: statuses.filter((status) => !status.entry).map((status) => status.file),
+    cacheEntries: statuses.flatMap((status) =>
+      status.entry ? [{ file: status.file, cacheKey: status.entry.cacheKey }] : [],
+    ),
+  }
 }
 
 /**
@@ -77,24 +90,79 @@ export function noStaticParseCache(): StaticParseCacheStore {
   })
 }
 
-/**
- * Reads cache-boundary config files and returns content hashes for the files that exist.
- *
- * Static extraction can depend on configuration even when source text is unchanged, for example when
- * path aliases change import resolution. Missing config files are represented by absence so creating
- * one later naturally changes the cache key.
- */
-async function configFileHashes(root: string): Promise<Array<{ file: string; sourceHash: string }>> {
-  const configFiles = []
-  for (const name of indexCacheBoundaryFileNames) {
-    const file = join(root, name)
-    try {
-      configFiles.push({ file: name, sourceHash: sha256(await readFile(file, 'utf8')) })
-    } catch {
-      // Missing config files are represented by absence.
+async function staticParseCacheManifestHit(input: {
+  readonly root: string
+  readonly file: string
+  readonly compilerInputs: readonly unknown[]
+  readonly currentConfigFiles: readonly StaticParseCacheSourceHash[]
+  readonly cache: StaticParseCacheStore
+  readonly entriesByIdentity: ReadonlyMap<string, StaticParseCacheManifestEntry>
+  readonly sourceHashes: SourceHashMemo
+}): Promise<StaticParseCacheManifestEntry | undefined> {
+  try {
+    const entry = input.entriesByIdentity.get(cacheManifestIdentity(input.root, input.file, input.compilerInputs))
+    if (!entry) return undefined
+    if (entry.sourceHash !== (await input.sourceHashes.read(input.file))) return undefined
+    if (!sourceHashesEqual(entry.configFiles, input.currentConfigFiles)) return undefined
+    for (const dependency of entry.dependencies) {
+      if (dependency.sourceHash !== (await input.sourceHashes.read(join(input.root, dependency.file)))) {
+        return undefined
+      }
     }
+    return (await input.cache.get(entry.cacheKey)) ? entry : undefined
+  } catch {
+    return undefined
   }
-  return configFiles
+}
+
+async function writeCacheManifestEntry(
+  root: string,
+  cacheKey: string,
+  metadata: StaticParseCacheEntryMetadata,
+): Promise<void> {
+  try {
+    const file = cacheManifestLogFile(root)
+    await mkdir(dirname(file), { recursive: true })
+    await appendFile(file, `${JSON.stringify({ ...metadata, cacheKey })}\n`, 'utf8')
+  } catch {
+    // Cache manifests are best effort. Indexing must never fail because manifest IO failed.
+  }
+}
+
+async function readCacheManifestEntries(root: string): Promise<ReadonlyMap<string, StaticParseCacheManifestEntry>> {
+  const entriesByIdentity = new Map<string, StaticParseCacheManifestEntry>()
+  try {
+    const lines = (await readFile(cacheManifestLogFile(root), 'utf8')).split('\n')
+    for (const line of lines) {
+      if (line.trim().length === 0) continue
+      const parsed = JSON.parse(line) as unknown
+      if (!isStaticParseCacheManifestEntry(parsed)) continue
+      entriesByIdentity.set(cacheManifestIdentity(root, parsed.file, parsed.compilerInputs), parsed)
+    }
+  } catch {
+    // Missing or unreadable manifests simply produce all misses.
+  }
+  return entriesByIdentity
+}
+
+function cacheManifestLogFile(root: string): string {
+  return join(root, '.crux', 'cache', 'index', STATIC_PARSE_CACHE_EPOCH, 'manifest.jsonl')
+}
+
+function cacheManifestIdentity(root: string, file: string, compilerInputs: readonly unknown[]): string {
+  const relativeFile = file.startsWith(root) ? relative(root, file).replace(/\\/g, '/') : file
+  return JSON.stringify({ version: STATIC_PARSE_CACHE_EPOCH, root, file: relativeFile, compilerInputs })
+}
+
+function sourceHashesEqual(
+  left: readonly StaticParseCacheSourceHash[],
+  right: readonly StaticParseCacheSourceHash[],
+): boolean {
+  return JSON.stringify([...left].sort(compareSourceHash)) === JSON.stringify([...right].sort(compareSourceHash))
+}
+
+function compareSourceHash(left: StaticParseCacheSourceHash, right: StaticParseCacheSourceHash): number {
+  return left.file.localeCompare(right.file)
 }
 
 /**
@@ -142,5 +210,20 @@ function isStaticFileExtraction(value: unknown): value is StaticFileExtraction {
     Array.isArray(candidate.relations) &&
     Array.isArray(candidate.dependencies) &&
     Array.isArray(candidate.diagnostics)
+  )
+}
+
+function isStaticParseCacheManifestEntry(value: unknown): value is StaticParseCacheManifestEntry {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Partial<StaticParseCacheManifestEntry>
+  return (
+    candidate.version === STATIC_PARSE_CACHE_EPOCH &&
+    typeof candidate.root === 'string' &&
+    typeof candidate.file === 'string' &&
+    typeof candidate.sourceHash === 'string' &&
+    typeof candidate.cacheKey === 'string' &&
+    Array.isArray(candidate.dependencies) &&
+    Array.isArray(candidate.configFiles) &&
+    Array.isArray(candidate.compilerInputs)
   )
 }

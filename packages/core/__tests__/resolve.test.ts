@@ -51,7 +51,7 @@ describe('compilePrompt input schema', () => {
     )
   })
 
-  it("prompt-owned fields take precedence over context fields", () => {
+  it('prompt-owned fields take precedence over context fields', () => {
     const ctx = context({
       id: 'ctx',
       input: z.object({ lang: z.string() }),
@@ -340,7 +340,7 @@ describe('compilePrompt inspection', () => {
     expect(result.totalTokens).toBeGreaterThan(0)
   })
 
-  it('reuses the resolved pass when inspecting a Resolution', async () => {
+  it('reuses the resolved pass when inspecting a PromptResolution', async () => {
     const system = vi.fn(() => 'resolved once')
     const compiled = compilePrompt({ system } as AnyPromptConfig)
 

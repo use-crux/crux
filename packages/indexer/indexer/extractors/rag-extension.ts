@@ -1,4 +1,4 @@
-import type { ProjectDefinition } from '@crux/core/project-index'
+import type { ProjectDefinition } from '@use-crux/core/project-index'
 import type { IndexExtractor, ConfigReader } from '../extensions'
 import { facts } from '../extensions'
 import { foldedIndexChild } from '../index-presentation'

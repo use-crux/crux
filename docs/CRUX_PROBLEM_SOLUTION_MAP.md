@@ -204,7 +204,7 @@ Crux's answer: the composition contract.
 
 - Every native primitive already participates through the same composition and evidence model. That model — how a block contributes to a turn and what evidence it must emit — is the adapter contract in waiting.
 - Native primitives define the reference behavior and reporting shape; they are defaults, not lock-in.
-- Runtime profiles already exist conceptually through packages such as `@crux/convex`.
+- Runtime profiles already exist conceptually through packages such as `@use-crux/convex`.
 
 What to improve (v2 scope):
 
@@ -403,6 +403,12 @@ Deliver:
 - Discovery diagnostics with minimal fixes.
 - Explicit config only for behavior, policy, trust, data movement, and unusual overrides.
 
+## Beyond The Ten Problems (Long-Horizon)
+
+The ten problems above are the near-term focus. One forward-looking problem is worth naming so today's seams are designed for it, without building it yet: **as the model commoditizes, the durable asset becomes the harness and the curated, eval-scored dataset it produces.** A deterministic, provable harness emits (context, decision, output, quality verdict) records as a byproduct; the same baselines that prove the harness can certify a specialized or distilled model built from those records. See the vision's [The Horizon](./CRUX_VISION.md#the-horizon).
+
+The only near-term implication: keep cassettes and traces designed as clean, governed, eligibility-gated, exportable records (this rides Problem 8's privacy-as-graph-property work). Everything else — distillation, certification, auto-tune — is "design the seams, build when there are users," and Crux owns no GPUs and hosts no weights.
+
 ## What To Say No To
 
 - Generic prompt management as the main product.
@@ -411,6 +417,7 @@ Deliver:
 - Provider abstraction as the core mission.
 - More primitives before the existing ones meet the explanation-parity bar.
 - Enterprise governance claims before local turn correctness is excellent.
+- Owning GPUs or hosting weights; training execution is always delegated to a provider.
 - Presenting scaffolding as shipped.
 
 ## The Product Test

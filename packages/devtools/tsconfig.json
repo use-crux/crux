@@ -14,21 +14,10 @@
     "noEmit": true,
     "paths": {
       "@/*": ["./ui/src/*"],
-      "@crux/core": ["../core/index.ts"],
-      "@crux/core/*": ["../core/*"],
-      "@crux/indexer": ["../indexer/index.ts"],
-      "@crux/indexer/*": ["../indexer/*"]
+      "@use-crux/core": ["../core/index.ts"],
+      "@use-crux/core/*": ["../core/*"]
     }
   },
-  "include": [
-    "server/**/*.ts",
-    "bin/**/*.ts",
-    "bin/**/*.tsx",
-    "lib/**/*.ts",
-    "ink/**/*.ts",
-    "ink/**/*.tsx",
-    "ui/src/**/*.ts",
-    "ui/src/**/*.tsx"
-  ],
+  "include": ["ui/src/**/*.ts", "ui/src/**/*.tsx"],
   "exclude": ["node_modules", "dist"]
 }

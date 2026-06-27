@@ -6,8 +6,8 @@ description: Run multiple agents and determine a winner via voting with configur
 `consensus()` runs multiple agents (or the same agent multiple times) in parallel and picks a winner via voting. Use it when you need reliable classification, grading, or any decision where multiple opinions reduce error.
 
 ```ts title="classify-ticket.ts"
-import { consensus } from '@crux/ai'
-import { agent } from '@crux/core/agent'
+import { consensus } from '@use-crux/ai'
+import { agent } from '@use-crux/core/agent'
 
 const decision = await consensus({
   agents: [classifier, classifier, classifier],
@@ -64,7 +64,7 @@ await consensus({ ..., quorum: 2 })
 When quorum is not met, a `ConsensusError` is thrown with the vote breakdown:
 
 ```ts
-import { ConsensusError } from '@crux/core/agent'
+import { ConsensusError } from '@use-crux/core/agent'
 
 try {
   await consensus({ ..., quorum: 'unanimous' })

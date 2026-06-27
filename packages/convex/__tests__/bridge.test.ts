@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { config, prompt } from '@crux/core'
-import type { CruxStore } from '@crux/core/store'
-import { inMemoryCruxStore } from '@crux/core/store'
+import { config } from '@use-crux/core'
+import type { CruxStore } from '@use-crux/core/store'
+import { inMemoryCruxStore } from '@use-crux/core/store'
 import { createCruxConvex } from '../index'
 import { setup } from '../bridge'
 
@@ -23,9 +23,7 @@ type TestHttpAction = {
   _handler: (ctx: unknown, request: Request) => Promise<Response>
 }
 
-const bridgePrompt = prompt({ id: 'convex-bridge-test', system: 'Bridge test' })
-
-describe('@crux/convex bridge setup', () => {
+describe('@use-crux/convex bridge setup', () => {
   afterEach(() => {
     // Individual tests dispose their config instance. This keeps failures from
     // leaking runtime state into the next test.
@@ -33,7 +31,6 @@ describe('@crux/convex bridge setup', () => {
 
   it('registers HTTP manifest, command, and options routes', async () => {
     const crux = config({
-      prompts: [bridgePrompt],
       devtools: {
         serverUrl: 'https://project.convex.site',
       },
@@ -67,7 +64,6 @@ describe('@crux/convex bridge setup', () => {
     const store = inMemoryCruxStore()
     await store.set('memory:1', { ok: true })
     const crux = config({
-      prompts: [bridgePrompt],
       devtools: {
         bridge: {
           transport: 'http',
@@ -121,7 +117,6 @@ describe('@crux/convex bridge setup', () => {
       },
     } as unknown as CruxStore
     const crux = config({
-      prompts: [bridgePrompt],
       devtools: {
         bridge: {
           transport: 'http',
@@ -180,7 +175,6 @@ describe('@crux/convex bridge setup', () => {
 
   it('returns a structured 400 for malformed command requests', async () => {
     const crux = config({
-      prompts: [bridgePrompt],
       devtools: {
         bridge: {
           transport: 'http',
@@ -217,7 +211,6 @@ describe('@crux/convex bridge setup', () => {
 
   it('executes store.read with a component-backed default store', async () => {
     const crux = config({
-      prompts: [bridgePrompt],
       devtools: {
         bridge: {
           transport: 'http',
@@ -307,7 +300,6 @@ describe('@crux/convex bridge setup', () => {
     const store = inMemoryCruxStore()
     await store.set('blackboard:profile', { status: 'profile-ready' })
     const crux = config({
-      prompts: [bridgePrompt],
       devtools: {
         bridge: {
           transport: 'http',

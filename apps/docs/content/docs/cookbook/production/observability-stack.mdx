@@ -7,8 +7,8 @@ This recipe layers Crux's three observability mechanisms into one stack: devtool
 
 ## Primitives used
 
-- `withDevtools()` from `@crux/core/observability`
-- `withTelemetry()` from `@crux/otel`
+- `withDevtools()` from `@use-crux/core/observability`
+- `withTelemetry()` from `@use-crux/otel`
 - A custom `CruxPlugin` implementing `install(runtime)` with hooks
 - `config({ plugins: [...] })` to compose them
 
@@ -23,7 +23,7 @@ This recipe layers Crux's three observability mechanisms into one stack: devtool
 ### `lib/ai/plugins/cost-tracker.ts`
 
 ```ts
-import type { CruxPlugin, CruxRuntime } from '@crux/core'
+import type { CruxPlugin, CruxRuntime } from '@use-crux/core'
 
 interface CostTrackerOptions {
   onCost: (event: {
@@ -69,15 +69,16 @@ export function withCostTracker(options: CostTrackerOptions): CruxPlugin {
 ### `crux.config.ts`
 
 ```ts
-import { config } from '@crux/core'
-import { withTelemetry } from '@crux/otel'
+import { config } from '@use-crux/core'
+import { withTelemetry } from '@use-crux/otel'
 
-import { prompts } from './prompts'
 import { withCostTracker } from './lib/ai/plugins/cost-tracker'
 
 export default config({
-  prompts,
-  devtools: { serverUrl: process.env.DEVTOOLS_URL }, // dev only — empty in prod
+  observability: {
+    serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
   plugins: [
     // OTel spans for production
     withTelemetry({
@@ -104,9 +105,9 @@ export default config({
 ### Pass tenant context per request
 
 ```ts
-import { withSession, createSessionId } from '@crux/core'
+import { withSession, createSessionId } from '@use-crux/core'
 
-import { generate } from '@crux/ai'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { summarize } from './prompts'
 
@@ -124,16 +125,16 @@ export async function summarizeForTenant(tenantId: string, text: string) {
 ## How it works
 
 1. **`withDevtools()` + `withTelemetry()` + custom plugin compose.** Crux's plugin system fans out instrumentation hooks — every `onGenerateEnd` fires for _all_ installed plugins. None of them block each other.
-2. **`withDevtools` is auto-prepended.** When `devtools.serverUrl` is set, Crux installs the devtools plugin first. In production where the env var is unset, the plugin is a no-op.
+2. **Devtools is explicit local/tunnel visibility.** When `observability.serverUrl` is set, Crux installs the HTTP observability transport. Leave it unset outside deliberate local or staging tunnel sessions.
 3. **`withTelemetry` emits OTel spans.** Every generate, memory op, compaction, judge, flow step, and tool call becomes a span with `crux.*` attributes. Your existing OTel collector ingests them.
 4. **Your custom plugin reads from the same hooks.** No need to instrument prompts manually — `onGenerateEnd` fires on every call with `usage`, `durationMs`, and `metadata` populated.
 5. **`metadata` flows from call site to plugin.** Pass `metadata: { tenantId, region, featureFlag }` to `generate()` and your plugin sees it in every event.
 
 ## Variations
 
-### Devtools in production via tunnel
+### Devtools via tunnel
 
-For staging environments or for debugging customer issues, run `crux dev --tunnel` on your local machine and point `DEVTOOLS_URL` at the public tunnel. Production traffic streams to your local devtools UI.
+For staging environments or controlled debugging sessions, run `crux dev --tunnel` on your local machine and point `DEVTOOLS_URL` at the public tunnel origin. Set `CRUX_DEVTOOLS_TOKEN` to the scoped ingest token printed by `crux dev`. Treat this as an explicit temporary visibility channel, not default production telemetry.
 
 ### Sampling
 
@@ -150,7 +151,7 @@ withCostTracker({
 
 ### Trace context propagation across services
 
-Use `@crux/convex/server` boundaries and `ctx.crux.runAction()` so spans across Convex actions stay correlated through the hidden `__crux` context envelope.
+Use `@use-crux/convex/server` boundaries and `ctx.crux.runAction()` so spans across Convex actions stay correlated through the hidden `__crux` context envelope.
 
 ## Where to next
 
@@ -167,7 +168,7 @@ Use `@crux/convex/server` boundaries and `ctx.crux.runAction()` so spans across 
   />
   <Card
     title="Telemetry guide"
-    description="@crux/otel setup, attributes, span hierarchy."
+    description="@use-crux/otel setup, attributes, span hierarchy."
     href="/docs/guides/observability/telemetry"
   />
 </Cards>

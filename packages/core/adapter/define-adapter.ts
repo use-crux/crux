@@ -1,13 +1,13 @@
 /**
- * `adapter()` — factory for creating provider adapters.
+ * `adapter()` — lower-level factory for single-turn provider execution IR.
  *
  * Accepts an `AdapterSpec` (provider-specific hooks) and returns a factory
  * `(client: TClient) => CruxAdapter`. The adapter handles prompt resolution,
  * tool loops, settings mapping, and exposes `generate()`, `stream()`, plus
  * agent composition methods (parallel, pipeline, consensus, swarm).
  *
- * This is the shared infrastructure that future adapter rewrites will use.
- * Fallback chains and devtools hooks will be wired in here.
+ * Provider packages should normally use `defineSingleTurnProviderBundle()`,
+ * which compiles through the single-turn provider runtime into this IR.
  *
  * @module
  */
@@ -26,6 +26,7 @@ type AdapterResolveOpts = Parameters<AnyPrompt['resolve']>[0]
 import type { Message } from '../messages'
 import type { AdapterSpec } from './spec'
 import type { StreamHandle } from './types'
+import type { ApprovalRequestInfo } from './tool/approval'
 import { createCompositions } from '../agent/create-compositions'
 import type { AgentExecutor } from '../agent/executor'
 import type { ValidationRetryOptions } from '../validation-retry'
@@ -100,12 +101,16 @@ export interface AdapterGenerateResult<TRawResponse> {
   raw: TRawResponse
   /** Extracted text from the response. */
   text: string
+  /** Parsed structured output, when the prompt declares an output schema. */
+  object?: unknown
   /** Normalized metadata (usage, finish reason, tool calls, etc.). */
   _meta: TraceMeta
   /** Number of tool loop iterations performed. */
   steps: number
   /** Provider-agnostic Crux message history, including approval request/resume messages. */
   messages: Message[]
+  /** Approval requests awaiting a decision, present only when execution suspended. */
+  pendingApprovals?: readonly ApprovalRequestInfo[]
 }
 
 // ─────────────────────────────────────────────────────────────────

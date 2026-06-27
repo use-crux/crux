@@ -1,22 +1,114 @@
 import { resolve } from 'node:path'
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { ProjectIndexSnapshot, ProjectModelResolutionMode } from '@use-crux/core/project-index'
 import {
   astIndexPatchFromCompilerResult,
   compileProjectIndex,
   projectIndexSnapshotFromCompilerResult,
+  runtimeIndexPatchFromCompilerResult,
 } from './compiler'
-import { staticDefinitionFileSelection } from './files'
-import { enforceIndexPatchBudget, type IndexPatch, type IndexPatchBudget } from './patches'
-import { semanticIndexFactsCached } from './semantic-cache'
-import { semanticSupportSources } from './semantic-support'
+import type { IndexPatch, IndexPatchBudget } from './patches'
+import type { SemanticIndexInstrumentation } from './semantic/instrumentation'
+import type { SemanticSourceProfile } from './semantic/source-profile'
+import { createSemanticIndexService, type SemanticBackendSelection } from './semantic/service'
+import type { StaticExtractionInstrumentation } from './static/extraction/engine'
+import type { StaticParseCacheHit } from './static/extraction/types'
+import {
+  createProvidedStaticSyntaxFrontend,
+  type NativeFactProjectionMode,
+  type ProvidedStaticSyntaxRecordProvider,
+  type StaticSyntaxFileRecord,
+  type StaticSyntaxFrontendIdentity,
+} from './static-index/syntax'
 
 export interface IndexProjectOptions {
-  root: string
-  configPath?: string
-  projectName?: string
-  staticOnly?: boolean
-  semanticBudget?: IndexPatchBudget
-  previousIndex?: ProjectIndexSnapshot
+  /** Project root used for source discovery and config lookup. */
+  readonly root: string
+  /** Optional Crux config path, relative to `root` unless already absolute. */
+  readonly configPath?: string
+  /** Optional project name supplied by an embedding CLI or server. */
+  readonly projectName?: string
+  /** Controls how much evidence the Project Index compiler may gather. */
+  readonly resolutionMode?: ProjectModelResolutionMode
+  /** Budget for semantic enrichment patches. */
+  readonly semanticBudget?: IndexPatchBudget
+  /** Optional timing hook for semantic indexing benchmarks and worker diagnostics. */
+  readonly semanticInstrumentation?: SemanticIndexInstrumentation
+  /** Built-in semantic backend selection for this request. */
+  readonly semanticBackend?: SemanticBackendSelection
+  /** Existing snapshot used to select semantic files. */
+  readonly previousIndex?: ProjectIndexSnapshot
+  /** Internal AST/source handoff profile used to avoid duplicate semantic source scanning. */
+  readonly semanticSourceProfile?: SemanticSourceProfile
+}
+
+interface IndexProjectAstOptions {
+  readonly root: string
+  readonly configPath?: string
+  readonly projectName?: string
+  /** Optional timing hook for AST/static indexing benchmarks and worker diagnostics. */
+  readonly staticInstrumentation?: StaticExtractionInstrumentation
+  /** Internal max size for provided syntax-record memoization. */
+  readonly providedRecordCacheSize?: number
+  /**
+   * Internal native syntax-record fact lane to project.
+   *
+   * Defaults to `inline`, the existing combined native + TypeScript path.
+   * Native hosts can request `external` or `native-only` for split-lane
+   * experiments without changing public project config.
+   *
+   * @internal
+   */
+  readonly nativeFactProjection?: NativeFactProjectionMode
+}
+
+/** Options for projecting externally produced static syntax records. */
+export interface IndexProjectAstFromSyntaxRecordsOptions extends IndexProjectAstOptions {
+  /**
+   * Complete static syntax records for the files selected by the compiler.
+   *
+   * The compiler still reads source text for hashing, source graph rows, cache
+   * identity, and semantic handoff. Records are accepted only when their
+   * `sourceHash` matches the current source text.
+   */
+  readonly records: readonly StaticSyntaxFileRecord[]
+  /** Frontend identity to use when `records` is empty. */
+  readonly frontendIdentity?: StaticSyntaxFrontendIdentity
+  /** Internal validated static cache hits supplied by a native parser host. */
+  readonly staticCacheHits?: readonly StaticParseCacheHit[]
+}
+
+/** Options for projecting externally produced records through a lazy provider. */
+export interface IndexProjectAstFromSyntaxRecordProviderOptions extends IndexProjectAstOptions {
+  /**
+   * Lazy syntax record provider keyed by absolute source file path.
+   *
+   * Workers use this when records arrive as chunks or are spooled to disk, so
+   * projection does not require retaining the complete record set in memory.
+   */
+  readonly recordProvider: ProvidedStaticSyntaxRecordProvider
+  /** Frontend identity to use when the provider does not expose one directly. */
+  readonly frontendIdentity?: StaticSyntaxFrontendIdentity
+  /** Internal validated static cache hits supplied by a native parser host. */
+  readonly staticCacheHits?: readonly StaticParseCacheHit[]
+}
+
+/** Options for explicit runtime-rich Project Index enrichment. */
+export interface IndexProjectRuntimeOptions {
+  /** Project root used for runtime-rich evidence collection. */
+  readonly root: string
+  /** Optional Crux config path, relative to `root` unless already absolute. */
+  readonly configPath?: string
+  /** Optional project name supplied by an embedding CLI or server. */
+  readonly projectName?: string
+  /**
+   * Source/config/semantic snapshot to enrich.
+   *
+   * Runtime-rich indexing is modeled as an enrichment pass so callers cannot
+   * accidentally execute authored modules while asking for the base index.
+   */
+  readonly previousIndex: ProjectIndexSnapshot
+  /** Budget for runtime evidence patches. */
+  readonly runtimeBudget?: IndexPatchBudget
 }
 
 /**
@@ -30,7 +122,7 @@ export async function indexProject(options: IndexProjectOptions): Promise<Projec
     root: options.root,
     configPath: options.configPath,
     projectName: options.projectName,
-    mode: options.staticOnly ? 'source-only' : 'full',
+    mode: options.resolutionMode,
   })
   return projectIndexSnapshotFromCompilerResult(result)
 }
@@ -38,61 +130,97 @@ export async function indexProject(options: IndexProjectOptions): Promise<Projec
 /**
  * Builds an AST/source-only index patch without importing user config modules.
  */
-export async function indexProjectAst(options: IndexProjectOptions): Promise<IndexPatch> {
+export async function indexProjectAst(options: IndexProjectAstOptions): Promise<IndexPatch> {
   const result = await compileProjectIndex({
     root: options.root,
     configPath: options.configPath,
     projectName: options.projectName,
     mode: 'source-only',
+    staticInstrumentation: options.staticInstrumentation,
   })
   return astIndexPatchFromCompilerResult(result)
+}
+
+/**
+ * Builds an AST/source-only index patch from caller-provided syntax records.
+ *
+ * This is the worker bridge used by Static Index indexing: Go can obtain
+ * records from Rust/Oxc and Node can project them through the existing compiler
+ * and trusted TypeScript extension runtime without reparsing source into a
+ * TypeScript AST.
+ */
+export async function indexProjectAstFromSyntaxRecords(
+  options: IndexProjectAstFromSyntaxRecordsOptions,
+): Promise<IndexPatch> {
+  const result = await compileProjectIndex({
+    root: options.root,
+    configPath: options.configPath,
+    projectName: options.projectName,
+    mode: 'source-only',
+    staticSyntaxFrontend: createProvidedStaticSyntaxFrontend({
+      records: options.records,
+      identity: options.frontendIdentity,
+      instrumentation: options.staticInstrumentation,
+      recordCacheSize: options.providedRecordCacheSize,
+    }),
+    staticInstrumentation: options.staticInstrumentation,
+    staticCacheHits: options.staticCacheHits,
+    nativeFactProjection: options.nativeFactProjection,
+  })
+  return astIndexPatchFromCompilerResult(result)
+}
+
+/**
+ * Builds an AST/source-only index patch from a lazy syntax record provider.
+ *
+ * This keeps the compiler-facing extraction path identical to
+ * `indexProjectAstFromSyntaxRecords(...)`, but lets worker transports spool or
+ * page records instead of materializing one project-wide array.
+ */
+export async function indexProjectAstFromSyntaxRecordProvider(
+  options: IndexProjectAstFromSyntaxRecordProviderOptions,
+): Promise<IndexPatch> {
+  const result = await compileProjectIndex({
+    root: options.root,
+    configPath: options.configPath,
+    projectName: options.projectName,
+    mode: 'source-only',
+    staticSyntaxFrontend: createProvidedStaticSyntaxFrontend({
+      recordProvider: options.recordProvider,
+      identity: options.frontendIdentity,
+      instrumentation: options.staticInstrumentation,
+      recordCacheSize: options.providedRecordCacheSize,
+    }),
+    staticInstrumentation: options.staticInstrumentation,
+    staticCacheHits: options.staticCacheHits,
+    nativeFactProjection: options.nativeFactProjection,
+  })
+  return astIndexPatchFromCompilerResult(result)
+}
+
+/**
+ * Builds an explicit runtime-rich enrichment patch.
+ *
+ * This is the only package-level API that may import authored source modules.
+ * Default source/config indexing stays execution-free for project files.
+ */
+export async function indexProjectRuntime(options: IndexProjectRuntimeOptions): Promise<IndexPatch> {
+  const result = await compileProjectIndex({
+    root: options.root,
+    configPath: options.configPath,
+    projectName: options.projectName,
+    mode: 'runtime-rich',
+  })
+  return runtimeIndexPatchFromCompilerResult(result)
 }
 
 /**
  * Builds a semantic enrichment patch from compiler-resolved facts within the configured budget.
  */
 export async function indexProjectSemantic(options: IndexProjectOptions): Promise<IndexPatch> {
-  const root = resolve(options.root)
-  const startedAt = new Date().toISOString()
-  const staticSelection = staticDefinitionFileSelection(root)
-  const semanticFiles = semanticFilesForIndex(staticSelection.files, options.previousIndex)
-  const fileCount = semanticFiles.length
-  const basePatch: IndexPatch = {
-    schemaVersion: 1,
-    phase: 'semantic',
-    project: {
-      root,
-      ...(options.projectName ? { name: options.projectName } : {}),
-      ...(options.configPath ? { configFile: options.configPath } : {}),
-    },
-    startedAt,
-    status: 'ok',
-    facts: {},
-  }
-  const fileBudgetPatch = enforceIndexPatchBudget(basePatch, options.semanticBudget, { fileCount })
-  if (fileBudgetPatch.status === 'degraded') {
-    return { ...fileBudgetPatch, finishedAt: new Date().toISOString() }
-  }
-
-  const facts = await semanticIndexFactsCached(root, semanticFiles)
-  return enforceIndexPatchBudget(
-    {
-      ...basePatch,
-      facts: {
-        ...facts,
-        sources: semanticSupportSources(options.previousIndex, facts.sourceRefs),
-        sourceGraph: options.previousIndex?.sourceGraph,
-      },
-      finishedAt: new Date().toISOString(),
-    },
-    options.semanticBudget,
-    { fileCount },
-  )
-}
-
-function semanticFilesForIndex(
-  staticFiles: readonly string[],
-  previousIndex: ProjectIndexSnapshot | undefined,
-): readonly string[] {
-  return [...new Set([...staticFiles, ...(previousIndex?.sources.map((source) => source.file) ?? [])])].sort()
+  return createSemanticIndexService().indexProject({
+    ...options,
+    root: resolve(options.root),
+    sourceProfile: options.semanticSourceProfile,
+  })
 }

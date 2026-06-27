@@ -98,6 +98,6 @@ A skill ends up at the **system prompt level** once loaded — it carries the sa
 |---|---|
 | `skill.inline()` | Short, app-specific instructions that live next to the agent code. No need for a separate file. |
 | `skill.fromFile()` | Skills owned by your repo that benefit from version control, review, and reuse across agents. Read synchronously at import time. |
-| `skill.fromRegistry()` | Community skills (`skills.sh:...`) or skills hosted on a custom registry. Fetched lazily on first `prompt.resolve()` and cached in memory. See [Registries](/docs/guides/skills/registries). |
+| `skill.fromRegistry()` | Community skills from `skillsSh` or skills hosted on a custom registry value. Fetched lazily on first `prompt.resolve()` and cached in memory. See [Registries](/docs/guides/skills/registries). |
 
 You can mix all three in the same `use` array — the resolver treats them identically once loaded.

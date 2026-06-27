@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { prompt as makePrompt } from '@crux/core'
-import { agent as makeAgent } from '@crux/core/agent'
+import { prompt as makePrompt } from '@use-crux/core'
+import { agent as makeAgent } from '@use-crux/core/agent'
 import { z } from 'zod'
-import { createGoogle, embedding as makeEmbedding, fromMessages } from '../index'
+import { createGoogle, embedding as makeEmbedding } from '../index'
 
 const simplePrompt = makePrompt({
   id: 'test-prompt',
@@ -161,40 +161,6 @@ describe('Google adapter via adapter', () => {
     expect(typeof adapter.consensus).toBe('function')
     expect(typeof adapter.swarm).toBe('function')
   })
-
-  it('maps content tool outputs to Google function responses with media parts', () => {
-    const contents = fromMessages([
-      {
-        role: 'tool',
-        content: 'fallback',
-        metadata: {
-          toolCallId: 'call-1',
-          toolName: 'renderImage',
-          modelOutput: {
-            type: 'content',
-            value: [
-              { type: 'text', text: 'Rendered image' },
-              { type: 'image-data', data: 'base64-image', mediaType: 'image/png' },
-            ],
-          },
-        },
-      },
-    ])
-
-    expect(contents[0]).toEqual({
-      role: 'user',
-      parts: [
-        {
-          functionResponse: {
-            id: 'call-1',
-            name: 'renderImage',
-            response: { output: 'Rendered image\n[image:image/png] data:base64-image' },
-            parts: [{ inlineData: { data: 'base64-image', mimeType: 'image/png' } }],
-          },
-        },
-      ],
-    })
-  })
 })
 
 describe('embedding', () => {
@@ -238,155 +204,5 @@ describe('embedding', () => {
       [0.1, 0.2, 0.3],
       [0.4, 0.5, 0.6],
     ])
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────
-// Cache integration tests
-// ─────────────────────────────────────────────────────────────────
-
-describe('Google adapter — CachedContent integration', () => {
-  function createCacheAdapter() {
-    const mockGenerateContent = vi.fn().mockResolvedValue(googleResponse('cached response'))
-    const mockGenerateContentStream = vi.fn().mockResolvedValue({
-      [Symbol.asyncIterator]: async function* () {
-        yield { candidates: [{ content: { parts: [{ text: 'streamed' }] } }] }
-      },
-    })
-    const mockCachesCreate = vi.fn().mockResolvedValue({ name: 'cachedContents/test-cache' })
-    const mockClient = {
-      models: {
-        generateContent: mockGenerateContent,
-        generateContentStream: mockGenerateContentStream,
-      },
-      caches: {
-        create: mockCachesCreate,
-        delete: vi.fn().mockResolvedValue({}),
-        get: vi.fn(),
-        update: vi.fn(),
-      },
-    }
-    const adapter = createGoogle(mockClient as any)
-    return { adapter, mockGenerateContent, mockGenerateContentStream, mockCachesCreate, mockClient }
-  }
-
-  const promptWithCacheableBlocks = makePrompt({
-    id: 'cached-prompt',
-    system: '## Brand Voice\nBe professional.\n\n## Rules\nAlways respond in JSON.',
-  })
-
-  // Simulate resolved systemBlocks by creating a prompt whose resolution
-  // produces them. Since we can't easily control systemBlocks from the
-  // prompt definition alone, we test at the spec level instead.
-
-  it('passes cachedContent to generateContent when systemBlocks have providerCache', async () => {
-    const { mockGenerateContent, mockCachesCreate, mockClient } = createCacheAdapter()
-
-    // CachedContent lifecycle behavior is covered end to end by
-    // cached-content-boundary.test.ts. Here we only verify that the response
-    // path maps cachedContentTokenCount onto cacheReadTokens.
-    mockGenerateContent.mockResolvedValue({
-      ...googleResponse('hello'),
-      usageMetadata: {
-        promptTokenCount: 100,
-        candidatesTokenCount: 20,
-        totalTokenCount: 120,
-        cachedContentTokenCount: 80,
-      },
-    })
-
-    const adapter = createGoogle(mockClient as any)
-    const result = await adapter.generate(promptWithCacheableBlocks, {
-      model: 'gemini-2.5-flash',
-    })
-
-    const usage = result._meta.usage
-    expect(usage).toBeDefined()
-    expect(usage?.cacheReadTokens).toBe(80)
-  })
-
-  it('maps cachedContentTokenCount to cacheReadTokens in usage', async () => {
-    const mockGenerateContent = vi.fn().mockResolvedValue({
-      ...googleResponse('response'),
-      usageMetadata: {
-        promptTokenCount: 500,
-        candidatesTokenCount: 50,
-        totalTokenCount: 550,
-        cachedContentTokenCount: 400,
-      },
-    })
-    const mockClient = {
-      models: {
-        generateContent: mockGenerateContent,
-        generateContentStream: vi.fn(),
-      },
-      caches: {
-        create: vi.fn().mockResolvedValue({ name: 'cachedContents/x' }),
-        delete: vi.fn(),
-        get: vi.fn(),
-        update: vi.fn(),
-      },
-    }
-
-    const adapter = createGoogle(mockClient as any)
-    const result = await adapter.generate(simplePrompt, {
-      model: 'gemini-2.5-flash',
-    })
-
-    expect(result._meta.usage).toEqual({
-      inputTokens: 500,
-      outputTokens: 50,
-      totalTokens: 550,
-      cacheReadTokens: 400,
-    })
-  })
-
-  it('does not include cacheReadTokens when cachedContentTokenCount is absent', async () => {
-    const { adapter, mockGenerateContent } = createCacheAdapter()
-    mockGenerateContent.mockResolvedValue(googleResponse('no cache'))
-
-    const result = await adapter.generate(simplePrompt, {
-      model: 'gemini-2.5-flash',
-    })
-
-    const usage = result._meta.usage
-    expect(usage).toBeDefined()
-    expect(usage?.cacheReadTokens).toBeUndefined()
-  })
-
-  it('createGoogle with cache: false disables cache management', () => {
-    const mockClient = {
-      models: { generateContent: vi.fn().mockResolvedValue(googleResponse('ok')), generateContentStream: vi.fn() },
-      caches: { create: vi.fn(), delete: vi.fn(), get: vi.fn(), update: vi.fn() },
-    }
-
-    // Should not throw
-    const adapter = createGoogle(mockClient as any, { cache: false })
-    expect(adapter).toBeDefined()
-    expect(typeof adapter.generate).toBe('function')
-  })
-
-  it('createGoogle with custom cache config creates adapter', () => {
-    const mockClient = {
-      models: { generateContent: vi.fn().mockResolvedValue(googleResponse('ok')), generateContentStream: vi.fn() },
-      caches: { create: vi.fn(), delete: vi.fn(), get: vi.fn(), update: vi.fn() },
-    }
-
-    const adapter = createGoogle(mockClient as any, {
-      cache: { defaultTtlSeconds: 600, maxEntries: 10 },
-    })
-    expect(adapter).toBeDefined()
-  })
-
-  it('backward compatible: createGoogle(client) still works', () => {
-    const mockClient = {
-      models: { generateContent: vi.fn().mockResolvedValue(googleResponse('ok')), generateContentStream: vi.fn() },
-      caches: { create: vi.fn(), delete: vi.fn(), get: vi.fn(), update: vi.fn() },
-    }
-
-    const adapter = createGoogle(mockClient as any)
-    expect(adapter).toBeDefined()
-    expect(typeof adapter.generate).toBe('function')
-    expect(typeof adapter.stream).toBe('function')
   })
 })

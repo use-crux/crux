@@ -1,11 +1,11 @@
 /**
- * `@crux/core/quality` — the Quality public surface, curated exports only.
+ * `@use-crux/core/quality` — the Quality public surface, curated exports only.
  *
  * Five values: `evaluate`, `target`, `scorers`, `dataset`, `cassette`.
  * Everything else is types. The internal engine (normalization, matrix
  * execution, statistics, persistence) lives under `quality/internal/` and is
  * never exported, except the `@internal` tooling contract at
- * `@crux/core/quality/internal/runner` (no stability guarantees).
+ * `@use-crux/core/quality/internal/runner` (no stability guarantees).
  *
  * @module
  */
@@ -18,7 +18,7 @@ export { dataset } from './dataset'
 export { cassette } from './replay'
 
 // ── Types ─────────────────────────────────────────────────────────
-export type { Evaluation, EvaluateOptions, EvaluateApi, EvaluateFunction } from './evaluate'
+export type { Evaluation, EvaluationCoverageTargetId, EvaluateOptions, EvaluateApi, EvaluateFunction } from './evaluate'
 export type { Case, CaseOf, Turn } from './case'
 export type {
   CaseContext,
@@ -85,4 +85,4 @@ export type {
 } from './source-frame'
 export type { EvaluationManifest } from './manifest'
 export type { StandardSchemaV1 } from './standard-schema'
-export type { QualityConfig, QualitySetupResult } from './config'
+export type { QualityConfig } from './config'

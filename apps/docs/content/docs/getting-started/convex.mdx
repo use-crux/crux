@@ -3,7 +3,7 @@ title: Convex
 description: Run Crux prompts inside Convex actions and persist memory in the crux component.
 ---
 
-This quick start gets Crux running in a [Convex](https://convex.dev) project. Crux prompts run inside Convex actions; persistent memory uses `@crux/convex`. For cross-action flows, swarm routing, Convex Agent integration, workspaces, skills, blackboards, and devtools, see the full [Convex guide](/docs/guides/convex).
+This quick start gets Crux running in a [Convex](https://convex.dev) project. Crux prompts run inside Convex actions; persistent memory uses `@use-crux/convex`. For cross-action flows, swarm routing, Convex Agent integration, workspaces, skills, blackboards, and devtools, see the full [Convex guide](/docs/guides/convex).
 
 <Callout type="warning">
   Crux is in alpha. The install command below is the intended package set for the first public npm alpha; until that
@@ -13,16 +13,16 @@ This quick start gets Crux running in a [Convex](https://convex.dev) project. Cr
 ## Install
 
 ```bash
-pnpm add @crux/core @crux/ai @crux/convex @ai-sdk/openai zod
+pnpm add @use-crux/core @use-crux/ai @use-crux/convex @ai-sdk/openai zod
 ```
 
 ## Component setup
 
-`@crux/convex` ships a Convex component that handles Crux-owned persistence such as memory records and experimental cross-action swarm state. Install it once in your `convex.config.ts`:
+`@use-crux/convex` ships a Convex component that handles Crux-owned persistence such as memory records and experimental cross-action swarm state. Install it once in your `convex.config.ts`:
 
 ```ts title="convex/convex.config.ts"
 import { defineApp } from 'convex/server'
-import crux from '@crux/convex/convex.config'
+import crux from '@use-crux/convex/convex.config'
 
 const app = defineApp()
 app.use(crux)
@@ -48,7 +48,7 @@ convex/
 ## Step 1: Define a prompt
 
 ```ts title="convex/prompts/index.ts"
-import { context, prompt } from '@crux/convex'
+import { context, prompt } from '@use-crux/convex'
 import { z } from 'zod'
 
 const brand = context({
@@ -71,9 +71,9 @@ export const chat = prompt({
 ```ts title="convex/agent/chat.ts"
 'use node'
 
-import { action } from '@crux/convex/server'
+import { action } from '@use-crux/convex/server'
 import { v } from 'convex/values'
-import { generate } from '@crux/ai'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 import { chat } from '../prompts'
@@ -98,19 +98,18 @@ export const respond = action({
 
 ## Persistent memory
 
-`cruxConvexStore()` creates a `CruxStore` backed by the crux component's `memories` table. Use it with any memory primitive:
+`defineConvexStoreContract()` creates the shared Convex document contract. Use `contract.store(ctx)` with any memory primitive:
 
 ```ts title="convex/memory/store.ts"
-import { cruxConvexStore } from '@crux/convex'
-import { episodes, memory, workingState } from '@crux/convex/memory'
+import { defineConvexStoreContract } from '@use-crux/convex'
+import { episodes, memory, workingState } from '@use-crux/convex/memory'
 import { components } from '../_generated/api'
 import type { ActionCtx } from '../_generated/server'
 
+const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+
 export function createMemoryStore(ctx: ActionCtx) {
-  return cruxConvexStore({
-    component: components.crux,
-    ctx,
-  })
+  return cruxDocuments.store(ctx)
 }
 
 // Inside an action:
@@ -134,10 +133,14 @@ If you're using the [Convex Agent component](https://www.convex.dev/components/a
 ```ts title="convex/agent/setup.ts"
 'use node'
 
-import { createCruxConvex } from '@crux/convex'
+import { openai } from '@ai-sdk/openai'
+
+import { createCruxConvex } from '@use-crux/convex'
 import { components } from '../_generated/api'
 
 import { chat } from '../prompts'
+
+const languageModel = openai('gpt-4o')
 
 const crux = createCruxConvex({
   components: {
@@ -149,7 +152,7 @@ const crux = createCruxConvex({
 export const chatAgent = crux.convexAgent({
   name: 'Chat',
   prompt: chat,
-  model: languageModel,
+  languageModel,
 })
 
 await chatAgent.generateText(ctx, { threadId, userId }, { input: { message, mode } })
@@ -163,14 +166,19 @@ await crux.run(ctx, { threadId, userId }, async ({ store }) => {
 })
 ```
 
-The lower-level `Agent` export remains available for manual Convex Agent integrations, but the profile-created agent is the default path for Crux-native prompts.
+The lower-level `Agent` export remains available for manual Convex Agent integrations, but the profile-created agent is the default path when Crux should own prompt resolution, memory, skills, and tools for each turn.
+It keeps the Convex Agent call shape while Crux handles the request-scoped lifecycle internally.
+
+Use `languageModel` for new `convexAgent()` code to match Convex Agent terminology; `model` remains accepted for existing call sites.
+
+Use `createConvexRuntimeBridge()` when custom actions or normal Convex Agent-shaped code need the Crux runtime/store/bridge without the profile-backed agent helper.
 
 ## Action timeouts
 
 Convex actions have a 5-minute timeout. For long-running multi-agent workflows:
 
-- Treat `createComponentSwarm()` from `@crux/convex/swarm` as experimental cross-action swarm routing. For launch-critical code, run immediate swarm compositions inside a Crux-aware action or use `flow()` for durable orchestration.
-- Use `flow()` from `@crux/convex/server` for suspendable flows that scheduled-resume across action boundaries
+- Treat `createComponentSwarm()` from `@use-crux/convex/swarm` as experimental cross-action swarm routing. For launch-critical code, run immediate swarm compositions inside a Crux-aware action or use `flow()` for durable orchestration.
+- Use `flow()` from `@use-crux/convex/server` for suspendable flows that scheduled-resume across action boundaries
 - Use `ctx.crux.runAction()` across action boundaries to keep devtools traces correlated
 
 ## Next steps

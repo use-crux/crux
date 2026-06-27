@@ -329,6 +329,49 @@ describe('serializeProjectIndex', () => {
     expect(ProjectIndexSnapshotSchema.parse(legacy).ruleDescriptors).toEqual([])
   })
 
+  it('accepts project shard metadata on source graph and source rows', () => {
+    const index = serializeProjectIndex({
+      project: { root: '/repo' },
+      prompts: [],
+      indexedAt: '2026-05-25T00:00:00.000Z',
+      sourceGraph: {
+        schemaVersion: 1,
+        producedBy: '@use-crux/indexer',
+        capabilities: [
+          'source-dependencies',
+          'source-dependents',
+          'definition-ownership',
+          'diagnostic-ownership',
+          'project-shards',
+        ],
+        shards: [
+          {
+            id: '.',
+            root: '/repo',
+            name: '@fixture/root',
+            packageFile: '/repo/package.json',
+            configFile: '/repo/tsconfig.json',
+            discoveredBy: '/repo/package.json',
+            references: ['packages/app'],
+          },
+        ],
+      },
+      sources: [{ file: '/repo/src/index.ts', status: 'indexed', shardId: '.' }],
+    })
+
+    expect(ProjectIndexSnapshotSchema.parse(index).sourceGraph?.shards).toEqual([
+      expect.objectContaining({
+        id: '.',
+        root: '/repo',
+        name: '@fixture/root',
+        references: ['packages/app'],
+      }),
+    ])
+    expect(ProjectIndexSnapshotSchema.parse(index).sources[0]).toEqual(
+      expect.objectContaining({ file: '/repo/src/index.ts', shardId: '.' }),
+    )
+  })
+
   it('marks anonymous definitions as partial with diagnostics', () => {
     const prompt = makePrompt({
       system: 'Anonymous prompt.',

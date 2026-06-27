@@ -1,31 +1,61 @@
-export type { IndexProjectOptions } from './indexer/index'
-export { indexProject, indexProjectAst, indexProjectSemantic } from './indexer/index'
-export { indexProjectIncremental } from './indexer/incremental'
+/**
+ * Public Crux Indexer entry point.
+ *
+ * This barrel exposes the high-level compiler facades for building Project
+ * Index snapshots, patches, project-model reads, config inspection, relation
+ * policies, incremental execution reports, and host-visible timing data.
+ * Low-level compiler, parser, semantic backend, host, and protocol contracts live
+ * behind explicit subpaths so this surface stays stable for SDK consumers.
+ *
+ * @module
+ */
+
+export type {
+  IndexProjectAstFromSyntaxRecordProviderOptions,
+  IndexProjectAstFromSyntaxRecordsOptions,
+  IndexProjectOptions,
+  IndexProjectRuntimeOptions,
+} from './indexer'
+export type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
 export {
-  astIndexPatchFromCompilerResult,
-  compileProjectIndex,
-  createProjectIndexCompiler,
-  projectIndexSnapshotFromCompilerResult,
-} from './indexer/compiler'
+  indexProject,
+  indexProjectAst,
+  indexProjectAstFromSyntaxRecordProvider,
+  indexProjectAstFromSyntaxRecords,
+  indexProjectRuntime,
+  indexProjectSemantic,
+} from './indexer'
+export type { ResolveProjectModelOptions } from './indexer/project-model'
+export { resolveProjectModel } from './indexer/project-model'
+export type { InspectProjectStaticSyntaxPlanOptions, ProjectStaticSyntaxPlan } from './indexer/static-index/plan'
+export { inspectProjectStaticSyntaxPlan } from './indexer/static-index/plan'
 export type {
-  ProjectIndexCompiler,
-  ProjectIndexCompileMode,
-  ProjectIndexCompilerInput,
-  ProjectIndexCompilerResult,
-} from './indexer/compiler'
-export type { CompilerOwnedProjection, ProjectIndexCompilerProfile } from './indexer/compiler/profile'
-export { createStaticExtraction } from './indexer/static/extraction/engine'
+  InspectProjectStaticIndexConfigOptions,
+  ProjectStaticIndexConfig,
+  ProjectStaticIndexExtensionReference,
+} from './indexer/static-index/config/inspect'
+export { inspectProjectStaticIndexConfig } from './indexer/static-index/config/inspect'
 export type {
-  SourceReader,
-  StaticExtractionEngine,
-  StaticExtractionOptions,
-  StaticFileExtraction,
-  StaticParseCacheStore,
+  InspectProjectConfigOptions,
+  ProjectConfigFileOrigin,
+  ProjectConfigFileStatus,
+  ProjectConfigInspect,
+  ProjectConfigList,
+  ProjectConfigOrigin,
+  ProjectConfigSetting,
+} from './indexer/project-config-inspect'
+export { inspectProjectConfig } from './indexer/project-config-inspect'
+export { indexProjectIncremental } from './indexer/incremental'
+export type {
+  StaticExtractionTiming,
+  StaticExtractionTimingName,
 } from './indexer/static/extraction/engine'
 export type {
   IncrementalExecutionMode,
   IncrementalExecutionReport,
   IncrementalIndexExecutionResult,
+  IncrementalPatchCounts,
+  IncrementalSemanticStatus,
   IndexProjectIncrementalOptions,
 } from './indexer/incremental'
 export type {
@@ -35,6 +65,20 @@ export type {
   IndexPatchPhase,
   IndexPatchStatus,
 } from './indexer/patches'
+export type {
+  SemanticBackendName,
+  SemanticBackendSelection,
+  SemanticSourceProfile,
+  SemanticSourceProfileFile,
+  SemanticSourceProfileHints,
+  NativeSemanticBackendSelection,
+  TypeScriptSemanticBackendSelection,
+} from './indexer/semantic/service'
+export type {
+  SemanticIndexInstrumentation,
+  SemanticIndexTiming,
+  SemanticIndexTimingName,
+} from './indexer/semantic/instrumentation'
 export {
   builtInRelationPolicies,
   createRelationPolicyTable,
@@ -43,7 +87,7 @@ export {
   relationIdentity,
   resolveRelationModel,
   withResolvedRelationReadModel,
-} from './indexer/relations/index'
+} from './indexer/relations'
 export type {
   IndexRelationPolicy,
   IndexRelationPresentation,
@@ -54,4 +98,4 @@ export type {
   RelationResolutionReport,
   UnresolvedRelationReason,
   UnresolvedRelationRef,
-} from './indexer/relations/index'
+} from './indexer/relations'

@@ -1,12 +1,12 @@
 /**
- * @crux/core/skill — Markdown-based skill loading for Crux agents.
+ * @use-crux/core/skill — Markdown-based skill loading for Crux agents.
  *
  * Skills are reusable instruction sets that an LLM can load on-demand.
  * Compatible with the skills.sh community format (SKILL.md with YAML frontmatter).
  *
  * @example
  * ```ts
- * import { skill } from '@crux/core/skill'
+ * import { skill } from '@use-crux/core/skill'
  *
  * const tone = skill.inline({
  *   id: 'tone',
@@ -47,30 +47,24 @@ export { inlineSkill } from './loaders'
 export { parseFrontmatter } from './frontmatter'
 export type { ParsedSkillFile } from './frontmatter'
 export { generateIndex } from './project-index'
-export { registry, registerRegistry, resolveRegistrySkill } from './registry'
+export { registry, resolveRegistrySkill, skillsSh } from './registry'
 export type { RegistryConfig, Registry } from './registry'
 export { clearCache, cacheSize, DEFAULT_CACHE_TTL } from './cache'
-export {
-  registerSkillState,
-  getSkillState,
-  unregisterSkillState,
-  getLatestSkillState,
-  getNewlyActivatedSkills,
-  markSkillsInjected,
-  clearInjectedSkills,
-} from './state'
-export {
-  LOAD_SKILL_TOOL_NAME,
-  LOAD_REFERENCE_TOOL_NAME,
-  createSkillState,
-  createLoadSkillTool,
-  createLoadReferenceTool,
-} from './tools'
 export type { Skill, SkillMeta, SkillReference, InlineSkillConfig, LazySkill } from './types'
 export { SkillLoadError } from './types'
-export type { SkillActivationState } from './tools'
 export { createAgentSkillKit } from './agent-kit'
-export type { AgentSkillKit, SkillPersistence, SkillToolDef } from './agent-kit'
+export type { AgentSkillKit, AgentSkillKitOptions, SkillToolDef } from './agent-kit'
+export { createSkillActivationSession } from './session'
+export type {
+  SkillActivationPersistence,
+  SkillActivationResult,
+  SkillActivationSession,
+  SkillActivationSessionForTargetOptions,
+  SkillActivationSessionOptions,
+  SkillActivationSnapshot,
+  SkillActivationTarget,
+  SkillReferenceResult,
+} from './session'
 
 /**
  * The skill namespace — entry point for creating skills.
@@ -90,7 +84,7 @@ export const skill = Object.freeze({
    * Reads synchronously at call time. Parses YAML frontmatter.
    * Only available in Node.js environments (uses fs/path).
    *
-   * Import `@crux/core/skill/file-loader` directly if your bundler
+   * Import `@use-crux/core/skill/file-loader` directly if your bundler
    * chokes on the lazy require (e.g., Convex without 'use node').
    */
   fromFile(filePath: string): Skill {
@@ -103,7 +97,9 @@ export const skill = Object.freeze({
   /**
    * Load a skill from a registry.
    * Content is fetched lazily on first prompt.resolve(), then cached.
-   * All identifiers must be prefixed: 'skills.sh:owner/repo/skill' or 'myregistry:skill'.
+   *
+   * Pass a registry value explicitly. Use the exported `skillsSh` value for
+   * bundled skills.sh skills and `registry(...)` for custom registries.
    */
   fromRegistry: registrySkill,
 })

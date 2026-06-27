@@ -1,17 +1,20 @@
 /**
- * Convex transport for `@crux/react` hooks.
+ * Convex transport for `@use-crux/react` hooks.
  *
  * Uses Convex's native `useQuery()` for automatic WebSocket-based reactivity.
- * Plans, task lists, and tasks stored via `cruxConvexStore()` are automatically
- * reactive — no polling or SSE needed.
+ * App code should usually create this through
+ * `defineConvexStoreContract().transport()` so server stores and React reads
+ * share one document contract.
  *
  * @example
  * ```tsx
- * import { CruxProvider } from '@crux/react'
- * import { createConvexTransport } from '@crux/convex/react'
+ * import { CruxProvider } from '@use-crux/react'
+ * import { defineConvexStoreContract } from '@use-crux/convex'
+ * import { useQuery } from 'convex/react'
  * import { api } from '../convex/_generated/api'
  *
- * const transport = createConvexTransport({ api: api.crux, useQuery })
+ * const cruxDocuments = defineConvexStoreContract({ component: api.crux })
+ * const transport = cruxDocuments.transport({ useQuery })
  *
  * <ConvexProvider client={convex}>
  *   <CruxProvider transport={transport}>
@@ -28,44 +31,35 @@
  * `FunctionReference<...>` because importing Convex's strongly-typed reference
  * here triggers `TS2589: type instantiation excessively deep`. Adapter bridge.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Convex FunctionReference bridge — see backend/CLAUDE.md
-type UseQueryFn = (query: any, args: any) => any
+type UseQueryArgs = Record<string, unknown> | 'skip'
 
-/**
- * Minimal interface for the Convex component API.
- * Only requires the `memory` module with `get` and `list` query references.
- */
-interface CruxComponentApi {
-  memory: {
-    get: unknown
-    list: unknown
-  }
-}
+export type UseQueryFn = (query: unknown, args: UseQueryArgs) => unknown
 
 /**
  * Configuration for the Convex transport.
  */
-interface ConvexTransportConfig {
+export interface ConvexTransportConfig {
   /** The Convex component API (e.g., `api.crux` or `components.crux`). */
-  api: CruxComponentApi
+  api: ConvexCruxStoreTransportComponent
   /**
    * The Convex `useQuery` hook. Pass this to avoid requiring `convex/react`
-   * as a direct dependency of `@crux/convex`.
+   * as a direct dependency of `@use-crux/convex`.
    *
    * @example
    * ```ts
    * import { useQuery } from 'convex/react'
-   * createConvexTransport({ api: api.crux, useQuery })
+   * cruxDocuments.transport({ useQuery })
    * ```
    */
   useQuery: UseQueryFn
 }
 
 // Re-export the transport type for convenience
-export type { CruxTransport } from '@crux/react'
-import type { CruxTransport } from '@crux/react'
-import type { JsonObject, StoreEntry, ListOptions } from '@crux/core/store'
-import { createStoreDocCodec, type StoreDocRecord } from './store-doc'
+export type { CruxTransport } from '@use-crux/react'
+import type { CruxTransport } from '@use-crux/react'
+import type { JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
+import type { ConvexCruxStoreTransportComponent } from './store-component'
+import { createStoreDocCodec, type StoreDocPage, type StoreDocPageQuery, type StoreDocRecord } from './store-doc'
 
 /**
  * Create a `CruxTransport` backed by Convex's reactive queries.
@@ -83,12 +77,10 @@ import { createStoreDocCodec, type StoreDocRecord } from './store-doc'
  * @example
  * ```tsx
  * import { useQuery } from 'convex/react'
- * import { createConvexTransport } from '@crux/convex/react'
+ * import { defineConvexStoreContract } from '@use-crux/convex'
  *
- * const transport = createConvexTransport({
- *   api: api.crux,  // or components.crux
- *   useQuery,
- * })
+ * const cruxDocuments = defineConvexStoreContract({ component: api.crux })
+ * const transport = cruxDocuments.transport({ useQuery })
  *
  * <CruxProvider transport={transport}>
  *   <App />
@@ -108,10 +100,24 @@ export function createConvexTransport(config: ConvexTransportConfig): CruxTransp
     useDocumentList(prefix: string | undefined, options?: ListOptions): StoreEntry[] | undefined {
       const result = useQuery(
         api.memory.list,
-        prefix !== undefined ? { prefix, limit: options?.limit, filter: options?.filter } : 'skip',
+        prefix !== undefined
+          ? storeDocPageArgs({
+              prefix,
+              limit: options?.limit,
+              cursor: options?.cursor,
+            })
+          : 'skip',
       )
       if (result === undefined) return undefined // loading
-      return docs.entries(result as StoreDocRecord[], { filter: options?.filter })
+      return docs.entries((result as StoreDocPage<StoreDocRecord>).docs, { filter: options?.filter })
     },
+  }
+}
+
+function storeDocPageArgs(query: StoreDocPageQuery): Record<string, unknown> {
+  return {
+    prefix: query.prefix,
+    ...(query.limit === undefined ? {} : { limit: query.limit }),
+    ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
   }
 }

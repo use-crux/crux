@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createStoreDocCodec,
   createStoreDocStore,
-  type StoreDocIo,
+  type StoreDocComponentPort,
   type StoreDocRecord,
   type StoreDocWrite,
 } from '../store-doc'
@@ -47,30 +47,16 @@ describe('store document codec', () => {
     })
   })
 
-  it('decodes legacy raw memory documents through the raw memory shape', () => {
+  it('rejects documents that were not written in the current Crux store format', () => {
     const codec = createStoreDocCodec()
 
-    expect(
+    expect(() =>
       codec.decode({
-        key: 'legacy:alpha',
-        content: 'Legacy text',
+        key: 'memory:alpha',
+        content: JSON.stringify({ content: 'Alpha' }),
         metadata: { source: 'import' },
-        embedding: [0.4, 0.5],
-        createdAt: 10,
-        updatedAt: 20,
       }),
-    ).toEqual({
-      key: 'legacy:alpha',
-      value: {
-        content: 'Legacy text',
-        metadata: { source: 'import' },
-        embedding: [0.4, 0.5],
-        createdAt: 10,
-        updatedAt: 20,
-      },
-      expired: false,
-      encoding: 'raw-memory-doc',
-    })
+    ).toThrow(/current Crux store format/i)
   })
 })
 
@@ -181,19 +167,21 @@ function mapStoreDocIo(
   initialDocs: readonly StoreDocRecord[],
   vectorDocs: readonly StoreDocRecord[] = initialDocs,
 ): {
-  io: StoreDocIo
+  io: StoreDocComponentPort
   writes: StoreDocWrite[]
   deletes: string[]
 } {
   const docs = new Map(initialDocs.map((doc) => [String(doc.key), doc]))
   const writes: StoreDocWrite[] = []
   const deletes: string[] = []
-  const io: StoreDocIo = {
+  const io: StoreDocComponentPort = {
     async get(key) {
       return docs.get(key) ?? null
     },
     async list(query) {
-      return [...docs.values()].filter((doc) => String(doc.key).startsWith(query.prefix))
+      return {
+        docs: [...docs.values()].filter((doc) => String(doc.key).startsWith(query.prefix)),
+      }
     },
     async put(doc) {
       writes.push(doc)

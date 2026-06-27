@@ -188,11 +188,11 @@ func classifyFsEvent(root string, event fsnotify.Event) (classifiedEvent, bool) 
 type Runner struct {
 	mu      sync.Mutex
 	state   queueState
-	handler func(context.Context, Delta)
+	handler func(context.Context, Run)
 }
 
 // NewRunner creates a single-flight delta runner.
-func NewRunner(handler func(context.Context, Delta)) *Runner {
+func NewRunner(handler func(context.Context, Run)) *Runner {
 	return &Runner{handler: handler}
 }
 
@@ -203,13 +203,13 @@ func (r *Runner) Enqueue(ctx context.Context, delta Delta) {
 	r.state = transition.state
 	r.mu.Unlock()
 	if transition.action == queueActionStart {
-		go r.run(ctx, transition.delta)
+		go r.run(ctx, transition.run)
 	}
 }
 
-func (r *Runner) run(ctx context.Context, delta Delta) {
+func (r *Runner) run(ctx context.Context, run Run) {
 	for {
-		r.handler(ctx, delta)
+		r.handler(ctx, run)
 		r.mu.Lock()
 		transition := completeRun(r.state)
 		r.state = transition.state
@@ -217,6 +217,6 @@ func (r *Runner) run(ctx context.Context, delta Delta) {
 		if transition.action != queueActionContinue {
 			return
 		}
-		delta = transition.delta
+		run = transition.run
 	}
 }

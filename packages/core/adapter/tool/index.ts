@@ -1,5 +1,5 @@
 /**
- * `@crux/core/adapter/tool` — one deep module for the tool lifecycle.
+ * `@use-crux/core/adapter/tool` — one deep module for the tool lifecycle.
  *
  * Authoring: `toolMiddleware()` / `approvalMiddleware()`, plus the
  * app-facing approval helpers (`toolApprovalResponse`,

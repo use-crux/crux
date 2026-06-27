@@ -9,7 +9,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import { context, prompt } from '@crux/core'
+import { context, prompt } from '@use-crux/core'
 import { createGoogle } from '../index'
 import type { GoogleCacheName, GoogleCachedContentCachePort } from '../index'
 
@@ -153,9 +153,9 @@ describe('createGoogle CachedContent boundary', () => {
     expect(fake.cacheCreates[0]).toMatchObject({ config: { ttl: '900s' } })
   })
 
-  it('disables caching entirely with cache: false', async () => {
+  it('disables caching entirely with cachedContent: false', async () => {
     const fake = createGoogleFake()
-    const adapter = createGoogle(fake.client, { cache: false })
+    const adapter = createGoogle(fake.client, { cachedContent: false })
 
     await adapter.generate(cachedPrompt, { model: 'gemini-2.5-flash' })
 
@@ -186,7 +186,7 @@ describe('createGoogle CachedContent boundary', () => {
     fake.client.caches.create = (async () => {
       throw new Error('explode')
     }) as GoogleGenAI['caches']['create']
-    const adapter = createGoogle(fake.client, { cache: { onError: 'throw' } })
+    const adapter = createGoogle(fake.client, { cachedContent: { onError: 'throw' } })
 
     await expect(adapter.generate(cachedPrompt, { model: 'gemini-2.5-flash' })).rejects.toThrow('explode')
   })
@@ -206,7 +206,7 @@ describe('createGoogle CachedContent boundary', () => {
     const fake = createGoogleFake()
     const create = vi.fn(async () => 'cachedContents/custom-port' as GoogleCacheName)
     const port: GoogleCachedContentCachePort = { create, delete: async () => undefined }
-    const adapter = createGoogle(fake.client, { cache: { port } })
+    const adapter = createGoogle(fake.client, { cachedContent: { port } })
 
     await adapter.generate(cachedPrompt, { model: 'gemini-2.5-flash' })
 
@@ -222,12 +222,31 @@ describe('createGoogle CachedContent boundary', () => {
       reason: 'disabled' as const,
       config: { systemInstruction: 'From custom lifecycle' },
     }))
-    const adapter = createGoogle(fake.client, { cache: { prepare } })
+    const adapter = createGoogle(fake.client, { cachedContent: { prepare } })
 
     await adapter.generate(cachedPrompt, { model: 'gemini-2.5-flash' })
 
     expect(prepare).toHaveBeenCalledOnce()
     expect(fake.cacheCreates).toHaveLength(0)
     expect(lastConfig(fake.calls)).toMatchObject({ systemInstruction: 'From custom lifecycle' })
+  })
+
+  it('maps cachedContentTokenCount to cacheReadTokens in usage', async () => {
+    const fake = createGoogleFake()
+    fake.client.models.generateContent = (async () => ({
+      candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] }, finishReason: 'STOP' }],
+      usageMetadata: {
+        promptTokenCount: 500,
+        candidatesTokenCount: 50,
+        totalTokenCount: 550,
+        cachedContentTokenCount: 400,
+      },
+      text: 'ok',
+    })) as unknown as GoogleGenAI['models']['generateContent']
+    const adapter = createGoogle(fake.client)
+
+    const result = await adapter.generate(cachedPrompt, { model: 'gemini-2.5-flash' })
+
+    expect(result._meta.usage?.cacheReadTokens).toBe(400)
   })
 })

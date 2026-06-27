@@ -169,9 +169,7 @@ describe('error paths (previously uncovered)', () => {
         throw new Error('inject exploded')
       },
     })
-    await expect(resolver.resolve({ system: 'S', use: [inj] } as AnyConfig, {})).rejects.toThrow(
-      'inject exploded',
-    )
+    await expect(resolver.resolve({ system: 'S', use: [inj] } as AnyConfig, {})).rejects.toThrow('inject exploded')
   })
 
   it('tool collisions across entries throw with the colliding entry attributed', async () => {
@@ -265,7 +263,7 @@ describe('skill surface through the skill source port', () => {
     const result = await resolver.resolve({ system: 'S', use: [lazy('acme/seo')] } as AnyConfig, {})
     expect(result.system).toContain('seo')
     expect(f.diagnostics.warnings).toHaveLength(0)
-    expect(f.skills.registeredStates).toHaveLength(1)
+    expect((result as { _skillSession?: unknown })._skillSession).toBeDefined()
   })
 
   it('degrades a failed fetch to the placeholder with a diagnostics warning', async () => {
@@ -276,7 +274,7 @@ describe('skill surface through the skill source port', () => {
     expect(result.system).toContain('missing/skill')
     expect(f.diagnostics.warnings).toEqual([
       {
-        message: '[@crux/core] Failed to fetch skill "missing/skill":',
+        message: '[@use-crux/core] Failed to fetch skill "missing/skill":',
         detail: 'Skill "missing/skill" not found in in-memory registry',
       },
     ])

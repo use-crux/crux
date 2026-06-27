@@ -3,7 +3,7 @@ import type {
   IndexSourceFile,
   ProjectDefinition,
   ProjectRelation,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import { mergeDefinitionsById } from '../merge'
 import type {
   AddDefinitionInput,
@@ -108,6 +108,7 @@ class DefaultIndexGraphBuilder implements IndexGraphBuilder {
     const file = sourceFilePath(input.source.file)
     const source = this.ensureSource(file, input.source.status)
     source.status = mergeStatus(source.status, input.source.status)
+    source.shardId = input.source.shardId ?? source.shardId
     source.definitionIds = dedupeBranded([
       ...source.definitionIds,
       ...normalizedDefinitionIds(input.source.definitionIds),
@@ -149,6 +150,7 @@ class DefaultIndexGraphBuilder implements IndexGraphBuilder {
     const source: IndexSourceNode = {
       file,
       status,
+      shardId: undefined,
       definitionIds: [],
       relationIds: [],
       dependencies: [],
@@ -174,6 +176,7 @@ export function graphSources(graph: IndexGraph): IndexSourceFile[] {
     .map((source) => ({
       file: source.file,
       status: source.status,
+      ...(source.shardId ? { shardId: source.shardId } : {}),
       definitionIds: [...source.definitionIds],
       dependencies: [...source.dependencies],
       dependents: [...source.dependents],

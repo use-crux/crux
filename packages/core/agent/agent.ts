@@ -208,8 +208,8 @@ export function isAgent(value: unknown): value is AnyAgent {
  *
  * @example
  * ```ts
- * import { agent } from '@crux/core/agent'
- * import { prompt } from '@crux/core'
+ * import { agent } from '@use-crux/core/agent'
+ * import { prompt } from '@use-crux/core'
  *
  * const reviewer = agent({
  *   id: 'content-reviewer',

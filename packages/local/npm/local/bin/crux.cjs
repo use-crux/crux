@@ -3,8 +3,11 @@
 /**
  * npm wrapper for the crux Go binary.
  *
- * Resolves the platform-specific binary from @crux/local-{platform}-{arch}
+ * Resolves the platform-specific binary from @use-crux/local-{platform}-{arch}
  * and executes it with all arguments passed through.
+ *
+ * The platform package also ships the Rust Static Index worker in the same
+ * bin directory; the Go runtime discovers that sibling binary at startup.
  */
 
 const { execFileSync } = require("child_process");
@@ -24,7 +27,7 @@ if (!os || !cpu) {
 }
 
 const ext = platform === "win32" ? ".exe" : "";
-const pkg = `@crux/local-${os}-${cpu}`;
+const pkg = `@use-crux/local-${os}-${cpu}`;
 
 let binPath;
 try {

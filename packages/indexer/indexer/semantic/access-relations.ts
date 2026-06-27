@@ -1,25 +1,29 @@
-import ts from 'typescript'
-import type { ProjectDefinitionKind, ProjectRelation } from '@crux/core/project-index'
-import { sourceForNode } from '../ast/snippets'
+import type { ProjectDefinitionKind, ProjectRelation } from '@use-crux/core/project-index'
 import { safeId } from '../definitions'
-import { projectRelation } from '../relations/index'
-import type { SemanticDefinitionCandidate, SemanticDefinitionKind, SemanticResolvedSource, SemanticTarget } from './candidates'
+import { projectRelation } from '../relations'
+import type {
+  SemanticAnalyzerNode,
+  SemanticAnalyzerView,
+  SemanticDefinitionCandidate,
+  SemanticDefinitionKind,
+  SemanticResolvedSource,
+  SemanticTarget,
+} from './candidates'
 import {
   isEvalKind,
   isResolvableSourceExpression,
-  semanticIsFunctionLike,
   semanticResolvedKey,
   semanticTargetForExpression,
   propertyInitializer,
   resolveSemanticExpression,
   unwrapExpression,
 } from './model'
+import { semanticSourceForNode } from './syntax-readers'
 
 interface SemanticAccess {
   readonly kind: 'read' | 'write' | 'query' | 'score' | 'eval'
   readonly target: SemanticTarget
-  readonly sourceFile: ts.SourceFile
-  readonly node: ts.Node
+  readonly node: SemanticAnalyzerNode<SemanticAnalyzerView>
 }
 
 /**
@@ -28,14 +32,14 @@ interface SemanticAccess {
  */
 export function semanticCallbackAccessRelations(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): ProjectRelation[] {
   return semanticCallbackProperties(candidate.kind)
     .flatMap((property) => {
-      const expression = propertyInitializer(candidate.object, property)
-      return expression ? semanticAccessesForExpression(expression, checker) : []
+      const expression = propertyInitializer(candidate.object, property, view)
+      return expression ? semanticAccessesForExpression(expression, view) : []
     })
-    .flatMap((access) => semanticAccessRelation(candidate.kind, candidate.definitionId, access))
+    .flatMap((access) => semanticAccessRelation(candidate.kind, candidate.definitionId, access, view))
 }
 
 /**
@@ -44,26 +48,26 @@ export function semanticCallbackAccessRelations(
  */
 export function semanticFlowAccessRelations(
   candidate: SemanticDefinitionCandidate,
-  checker: ts.TypeChecker,
+  view: SemanticAnalyzerView,
 ): ProjectRelation[] {
-  const handler = propertyInitializer(candidate.object, 'handler')
+  const handler = propertyInitializer(candidate.object, 'handler', view)
   if (!handler) return []
   const relations: ProjectRelation[] = []
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === 'step'
-    ) {
-      const [stepArg, targetArg] = node.arguments
-      if (stepArg && ts.isStringLiteralLike(stepArg) && targetArg) {
-        const from = `flow.step:${safeId(candidate.name)}:${safeId(stepArg.text)}`
-        for (const access of semanticAccessesForExpression(targetArg, checker)) {
-          relations.push(...semanticAccessRelation('flow.step', from, access))
+  const visit = (node: SemanticAnalyzerNode<SemanticAnalyzerView>): void => {
+    if (view.syntax.isKind(node, 'callExpression')) {
+      const target = view.syntax.callExpressionTarget(node)
+      if (target && view.syntax.propertyAccessName(target) === 'step') {
+        const [stepArg, targetArg] = view.syntax.callArguments(node)
+        const stepName = stepArg ? view.syntax.stringLiteralText(stepArg) : undefined
+        if (stepName && targetArg) {
+          const from = `flow.step:${safeId(candidate.name)}:${safeId(stepName)}`
+          for (const access of semanticAccessesForExpression(targetArg, view)) {
+            relations.push(...semanticAccessRelation('flow.step', from, access, view))
+          }
         }
       }
     }
-    ts.forEachChild(node, visit)
+    view.syntax.children(node).forEach(visit)
   }
   visit(handler)
   return relations
@@ -92,10 +96,13 @@ function semanticCallbackProperties(kind: SemanticDefinitionKind): string[] {
  * Resolves an expression to a scannable access root and extracts access facts
  * from that root.
  */
-function semanticAccessesForExpression(expression: ts.Expression, checker: ts.TypeChecker): SemanticAccess[] {
-  const root = semanticAccessRootForExpression(expression, checker)
+function semanticAccessesForExpression(
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): SemanticAccess[] {
+  const root = semanticAccessRootForExpression(expression, view)
   if (!root) return []
-  return semanticAccessesForNode(root.node, root.sourceFile, checker, new Set(), 1)
+  return semanticAccessesForNode(root.node, view, new Set(), 1)
 }
 
 /**
@@ -103,28 +110,31 @@ function semanticAccessesForExpression(expression: ts.Expression, checker: ts.Ty
  * scanned for access calls.
  */
 function semanticAccessRootForExpression(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
-): { node: ts.Node; sourceFile: ts.SourceFile } | undefined {
-  const unwrapped = unwrapExpression(expression)
-  if (semanticIsFunctionLike(unwrapped)) return { node: unwrapped, sourceFile: unwrapped.getSourceFile() }
-  if (!isResolvableSourceExpression(unwrapped)) return undefined
-  const resolved = resolveSemanticExpression(unwrapped, checker)
+  expression: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): { node: SemanticAnalyzerNode<SemanticAnalyzerView> } | undefined {
+  const unwrapped = unwrapExpression(expression, view)
+  if (view.syntax.isFunctionLike(unwrapped)) return { node: unwrapped }
+  if (!isResolvableSourceExpression(unwrapped, view)) return undefined
+  const resolved = resolveSemanticExpression(unwrapped, view)
   if (!resolved) return undefined
-  const node = semanticAccessNodeForResolved(resolved)
-  return node ? { node, sourceFile: node.getSourceFile() } : undefined
+  const node = semanticAccessNodeForResolved(resolved, view)
+  return node ? { node } : undefined
 }
 
 /**
  * Chooses the function-like declaration or initializer represented by a
  * resolved source reference.
  */
-function semanticAccessNodeForResolved(resolved: SemanticResolvedSource): ts.Node | undefined {
+function semanticAccessNodeForResolved(
+  resolved: SemanticResolvedSource,
+  view: SemanticAnalyzerView,
+): SemanticAnalyzerNode<SemanticAnalyzerView> | undefined {
   if (resolved.expression) {
-    const expression = unwrapExpression(resolved.expression)
-    if (semanticIsFunctionLike(expression)) return expression
+    const expression = unwrapExpression(resolved.expression, view)
+    if (view.syntax.isFunctionLike(expression)) return expression
   }
-  if (semanticIsFunctionLike(resolved.declaration)) return resolved.declaration
+  if (view.syntax.isFunctionLike(resolved.declaration)) return resolved.declaration
   return undefined
 }
 
@@ -133,32 +143,32 @@ function semanticAccessNodeForResolved(resolved: SemanticResolvedSource): ts.Nod
  * local helper function calls to preserve common callback factoring.
  */
 function semanticAccessesForNode(
-  node: ts.Node,
-  sourceFile: ts.SourceFile,
-  checker: ts.TypeChecker,
+  node: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
   seen: Set<string>,
   helperDepth: number,
 ): SemanticAccess[] {
   const accesses: SemanticAccess[] = []
-  const visit = (child: ts.Node): void => {
-    if (ts.isCallExpression(child)) {
-      accesses.push(...semanticAccessesForCall(child, sourceFile, checker))
-      if (helperDepth > 0 && ts.isIdentifier(child.expression)) {
-        const resolved = resolveSemanticExpression(child.expression, checker)
-        const helperNode = resolved ? semanticAccessNodeForResolved(resolved) : undefined
+  const visit = (child: SemanticAnalyzerNode<SemanticAnalyzerView>): void => {
+    if (view.syntax.isKind(child, 'callExpression')) {
+      accesses.push(...semanticAccessesForCall(child, view))
+      const target = view.syntax.callExpressionTarget(child)
+      if (helperDepth > 0 && target && view.syntax.isKind(target, 'identifier')) {
+        const resolved = resolveSemanticExpression(target, view)
+        const helperNode = resolved ? semanticAccessNodeForResolved(resolved, view) : undefined
         if (resolved && helperNode) {
           const key = semanticResolvedKey(resolved)
           if (!seen.has(key)) {
             const nextSeen = new Set(seen)
             nextSeen.add(key)
             accesses.push(
-              ...semanticAccessesForNode(helperNode, helperNode.getSourceFile(), checker, nextSeen, helperDepth - 1),
+              ...semanticAccessesForNode(helperNode, view, nextSeen, helperDepth - 1),
             )
           }
         }
       }
     }
-    ts.forEachChild(child, visit)
+    view.syntax.children(child).forEach(visit)
   }
   visit(node)
   return accesses
@@ -169,22 +179,25 @@ function semanticAccessesForNode(
  * known target method or direct scorer/eval callable.
  */
 function semanticAccessesForCall(
-  call: ts.CallExpression,
-  sourceFile: ts.SourceFile,
-  checker: ts.TypeChecker,
+  call: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
 ): SemanticAccess[] {
-  if (!ts.isPropertyAccessExpression(call.expression)) {
-    const target = semanticTargetForExpression(call.expression, checker)
-    if (target?.kind === 'scorer') return [{ kind: 'score', target, sourceFile, node: call }]
-    if (isEvalKind(target?.kind)) return [{ kind: 'eval', target, sourceFile, node: call }]
+  const expression = view.syntax.callExpressionTarget(call)
+  if (!expression) return []
+  if (!view.syntax.isKind(expression, 'propertyAccessExpression')) {
+    const target = semanticTargetForExpression(expression, view)
+    if (target?.kind === 'scorer') return [{ kind: 'score', target, node: call }]
+    if (isEvalKind(target?.kind)) return [{ kind: 'eval', target, node: call }]
     return []
   }
-  const target = semanticTargetForExpression(call.expression.expression, checker)
+  const receiver = view.syntax.propertyAccessExpression(expression)
+  const target = receiver ? semanticTargetForExpression(receiver, view) : undefined
   if (!target) return []
-  const method = call.expression.name.text
+  const method = view.syntax.propertyAccessName(expression)
+  if (!method) return []
   const kind = semanticInvocationKind(method, target.kind)
   if (!kind) return []
-  return [{ kind, target, sourceFile, node: call }]
+  return [{ kind, target, node: call }]
 }
 
 /**
@@ -220,6 +233,7 @@ function semanticAccessRelation(
   fromKind: SemanticDefinitionKind | 'flow.step',
   from: string,
   access: SemanticAccess,
+  view: SemanticAnalyzerView,
 ): ProjectRelation[] {
   const type = semanticAccessRelationType(fromKind, access.kind, access.target.kind)
   if (!type) return []
@@ -229,7 +243,7 @@ function semanticAccessRelation(
       from,
       to: access.target.id,
       fidelity: 'resolved',
-      source: sourceForNode(access.sourceFile, access.node),
+      source: semanticSourceForNode(access.node, view.syntax),
     }),
   ]
 }

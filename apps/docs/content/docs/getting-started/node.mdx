@@ -15,10 +15,10 @@ Crux works in any Node.js (or Bun, or Deno) script. This guide covers the basic 
 {/* prettier-ignore-start */}
 
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
-  <Tab value="npm">```bash npm install @crux/core @crux/ai @ai-sdk/openai zod ```</Tab>
-  <Tab value="pnpm">```bash pnpm add @crux/core @crux/ai @ai-sdk/openai zod ```</Tab>
-  <Tab value="yarn">```bash yarn add @crux/core @crux/ai @ai-sdk/openai zod ```</Tab>
-  <Tab value="bun">```bash bun add @crux/core @crux/ai @ai-sdk/openai zod ```</Tab>
+  <Tab value="npm">```bash npm install @use-crux/core @use-crux/ai @ai-sdk/openai zod ```</Tab>
+  <Tab value="pnpm">```bash pnpm add @use-crux/core @use-crux/ai @ai-sdk/openai zod ```</Tab>
+  <Tab value="yarn">```bash yarn add @use-crux/core @use-crux/ai @ai-sdk/openai zod ```</Tab>
+  <Tab value="bun">```bash bun add @use-crux/core @use-crux/ai @ai-sdk/openai zod ```</Tab>
 </Tabs>
 {/* prettier-ignore-end */}
 
@@ -30,6 +30,8 @@ export OPENAI_API_KEY=sk-...
 
 ```
 src/
+  evals/
+    support.eval.ts    ← Quality evaluations discovered by convention
   prompts/
     index.ts          ← Prompt definitions
     contexts.ts       ← Shared contexts
@@ -39,8 +41,8 @@ src/
 ## Basic script
 
 ```ts title="src/index.ts"
-import { prompt } from '@crux/core'
-import { generate } from '@crux/ai'
+import { prompt } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
@@ -69,7 +71,7 @@ console.log(result.object)
 The same prompt can be reused across many inputs in parallel. The adapter is just a function call — there's no setup overhead per request.
 
 ```ts title="src/batch.ts"
-import { generate } from '@crux/ai'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { classify } from './prompts'
 
@@ -91,10 +93,10 @@ for (const [i, result] of results.entries()) {
 
 ## Using the OpenAI SDK directly
 
-If you'd rather call the OpenAI SDK directly (no Vercel AI SDK), use `@crux/openai`:
+If you'd rather call the OpenAI SDK directly (no Vercel AI SDK), use `@use-crux/openai`:
 
 ```ts title="src/openai-direct.ts"
-import { createOpenAI } from '@crux/openai'
+import { createOpenAI } from '@use-crux/openai'
 import OpenAI from 'openai'
 
 import { classify } from './prompts'
@@ -111,7 +113,7 @@ const result = await adapter.generate(classify, {
 ## Using the Anthropic SDK directly
 
 ```ts title="src/anthropic-direct.ts"
-import { createAnthropic } from '@crux/anthropic'
+import { createAnthropic } from '@use-crux/anthropic'
 import Anthropic from '@anthropic-ai/sdk'
 
 import { classify } from './prompts'
@@ -128,7 +130,7 @@ const result = await adapter.generate(classify, {
 ## Using Google GenAI directly
 
 ```ts title="src/google-direct.ts"
-import { createGoogle } from '@crux/google'
+import { createGoogle } from '@use-crux/google'
 import { GoogleGenAI } from '@google/genai'
 
 import { classify } from './prompts'
@@ -152,9 +154,9 @@ const result = await adapter.generate(classify, {
 <Cards>
   <Card
     title="Project Setup"
-    description="Organize prompts into trees with createPrompts() and config()."
+    description="Use config for explicit policy, overrides, and runtime defaults."
     href="/docs/guides/prompts"
   />
-  <Card title="Eval" description="Test your prompts across a model matrix from the CLI." href="/docs/guides/eval" />
+  <Card title="Quality" description="Test prompts, flows, agents, and functions from discovered eval files." href="/docs/guides/quality" />
   <Card title="Memory" description="Add persistent memory to agents and chat loops." href="/docs/guides/memory" />
 </Cards>

@@ -28,7 +28,7 @@ export const SCORER_INTERNAL: unique symbol = Symbol('crux.quality.scorer')
 /**
  * Ambient providers + per-cell facts the engine hands to model-backed
  * scorers. `generate`/`model`/`models`/`judgeModel`/`embed` come from
- * `quality.setup()`; `signals` are the executing cell's captured trace
+ * the evaluation runner; `signals` are the executing cell's captured trace
  * signals (rag scorers read retrieved context from them).
  *
  * @internal

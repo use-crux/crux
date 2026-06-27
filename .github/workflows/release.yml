@@ -11,11 +11,15 @@ permissions:
   id-token: write
   pull-requests: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
-  release:
+  changesets:
+    name: Changesets
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    outputs:
+      hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -28,19 +32,211 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          registry-url: https://registry.npmjs.org
 
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm build
-
-      - name: Create Release Pull Request or Publish
+      - name: Create Release Pull Request
+        id: changesets
         uses: changesets/action@v1
         with:
           version: pnpm version-packages
-          publish: pnpm release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  build-embed-assets:
+    name: Build Embed Assets
+    needs: changesets
+    if: needs.changesets.outputs.hasChangesets == 'false'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and embed devtools assets
+        run: make -C packages/local build-devtools embed
+
+      - name: Upload embed assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: embed-assets
+          path: |
+            packages/local/internal/assets/embed/**
+            packages/local/internal/assets/ui-embed/**
+          if-no-files-found: error
+
+  build-local-binary:
+    name: Build ${{ matrix.target }}
+    needs: [changesets, build-embed-assets]
+    if: needs.changesets.outputs.hasChangesets == 'false'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: blacksmith-4vcpu-ubuntu-2404
+            rust_target: x86_64-unknown-linux-gnu
+            apt_packages: ''
+          - target: linux-arm64
+            runner: blacksmith-4vcpu-ubuntu-2404
+            rust_target: aarch64-unknown-linux-gnu
+            apt_packages: gcc-aarch64-linux-gnu
+          - target: darwin-x64
+            runner: macos-latest
+            rust_target: x86_64-apple-darwin
+            apt_packages: ''
+          - target: darwin-arm64
+            runner: macos-latest
+            rust_target: aarch64-apple-darwin
+            apt_packages: ''
+          - target: win32-x64
+            runner: blacksmith-4vcpu-ubuntu-2404
+            rust_target: x86_64-pc-windows-gnu
+            apt_packages: gcc-mingw-w64-x86-64
+          - target: win32-arm64
+            runner: blacksmith-4vcpu-ubuntu-2404
+            rust_target: aarch64-pc-windows-gnullvm
+            apt_packages: xz-utils
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download embed assets
+        uses: actions/download-artifact@v7
+        with:
+          name: embed-assets
+          path: packages/local/internal/assets
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/local/go.mod
+          cache-dependency-path: packages/local/go.sum
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install 1.93.0 --profile minimal
+          rustup default 1.93.0
+          rustup target add ${{ matrix.rust_target }}
+          rustc --version
+
+      - name: Install cross-compilation packages
+        if: matrix.apt_packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt_packages }}
+
+      - name: Install llvm-mingw for Windows arm64
+        if: matrix.target == 'win32-arm64'
+        env:
+          LLVM_MINGW_VERSION: '20260616'
+        run: |
+          mkdir -p .tmp/toolchains
+          curl -fsSL \
+            -o .tmp/toolchains/llvm-mingw.tar.xz \
+            "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-x86_64.tar.xz"
+          tar -xJf .tmp/toolchains/llvm-mingw.tar.xz -C .tmp/toolchains
+          root="$PWD/.tmp/toolchains/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-x86_64"
+          echo "LLVM_MINGW_ROOT=$root" >> "$GITHUB_ENV"
+          echo "$root/bin" >> "$GITHUB_PATH"
+
+      - name: Configure Windows arm64 linker
+        if: matrix.target == 'win32-arm64'
+        run: |
+          echo "CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER=$LLVM_MINGW_ROOT/bin/aarch64-w64-mingw32-clang" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_AR=$LLVM_MINGW_ROOT/bin/llvm-ar" >> "$GITHUB_ENV"
+
+      - name: Build local binary bundle
+        run: make -C packages/local ${{ matrix.target }}
+
+      - name: Upload local binary bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: local-${{ matrix.target }}
+          path: packages/local/dist/crux-${{ matrix.target }}/bin/*
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    name: Publish
+    needs: [changesets, build-local-binary]
+    if: needs.changesets.outputs.hasChangesets == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Download local binary bundles
+        uses: actions/download-artifact@v7
+        with:
+          pattern: local-*
+          path: .tmp/local-artifacts
+
+      - name: Restore local binary bundles
+        run: |
+          mkdir -p packages/local/dist
+          for artifact in .tmp/local-artifacts/local-*; do
+            target="${artifact##*/local-}"
+            mkdir -p "packages/local/dist/crux-${target}/bin"
+            cp -R "${artifact}/." "packages/local/dist/crux-${target}/bin/"
+          done
+
+      - name: Configure git tags
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Stage and validate npm packages
+        run: pnpm release:stage && pnpm release:validate
+
+      - name: Publish staged npm packages
+        run: pnpm release:publish-staged -- --git-tag --git-push-tags
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Prepare GitHub release notes
+        id: release-notes
+        run: pnpm release:notes -- --out .tmp/github-release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release-notes.outputs.tag }}
+          RELEASE_TITLE: Crux ${{ steps.release-notes.outputs.tag }}
+          RELEASE_NOTES: ${{ steps.release-notes.outputs.notes_file }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --title "$RELEASE_TITLE" --notes-file "$RELEASE_NOTES"
+          else
+            gh release create "$RELEASE_TAG" --title "$RELEASE_TITLE" --notes-file "$RELEASE_NOTES" --target "$GITHUB_SHA"
+          fi

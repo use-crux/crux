@@ -1,6 +1,6 @@
 /**
  * Devtools index hook — prompts, contexts, tools registered with
- * `@crux/core`. Backed by `/api/index` and refreshed in place by the
+ * `@use-crux/core`. Backed by `/api/index` and refreshed in place by the
  * `index` WS event (the WS handler in `useDevtools.ts` calls
  * `queryClient.setQueryData` with the payload, so no extra network
  * round-trip).

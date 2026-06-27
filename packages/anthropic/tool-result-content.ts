@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { ToolContentPart, ToolModelOutput } from '@crux/core'
-import { renderToolContentPartAsText } from '@crux/core/adapter'
+import type { ToolContentPart, ToolModelOutput } from '@use-crux/core'
+import { renderToolContentPartAsText } from '@use-crux/core/adapter'
 
 export type AnthropicToolResultContent =
   | string
@@ -25,11 +25,6 @@ export function anthropicToolResultContent(
     case 'content':
       return anthropicContentBlocks(modelOutput.value)
   }
-}
-
-/** Whether a tool model output should mark Anthropic `tool_result.is_error`. */
-export function isErrorToolModelOutput(output: ToolModelOutput | undefined): boolean {
-  return output?.type === 'error-text' || output?.type === 'error-json'
 }
 
 function anthropicContentBlocks(

@@ -1,5 +1,5 @@
-import { staticFoundDefinitionsFromExtractedFacts } from '../extensions/static-normalizer'
-import { relationDiagnosticsFromReport, resolveRelationModel } from '../relations/index'
+import { staticFoundDefinitionsFromExtractedFacts } from '../static-index/compatibility/syntax-record-bridge/normalizer'
+import { relationDiagnosticsFromReport, resolveRelationModel } from '../relations'
 import type { StaticFactParseResult, StaticParseResult } from './types'
 
 /**

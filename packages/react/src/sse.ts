@@ -8,8 +8,8 @@
  */
 
 import { useSyncExternalStore } from 'react'
-import type { JsonObject, StoreEntry, ListOptions } from '@crux/core/store'
-import { matchesFilter } from '@crux/core/store'
+import type { JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
+import { matchesFilter } from '@use-crux/core/store'
 import type { CruxTransport } from './types'
 
 /**
@@ -51,8 +51,8 @@ export interface SSETransportOptions {
  *
  * @example
  * ```tsx
- * import { createSSETransport } from '@crux/react'
- * import { CruxProvider, usePlan } from '@crux/react'
+ * import { createSSETransport } from '@use-crux/react'
+ * import { CruxProvider, usePlan } from '@use-crux/react'
  *
  * const transport = createSSETransport('/api/crux/events')
  *

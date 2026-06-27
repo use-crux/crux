@@ -13,9 +13,9 @@ This recipe gives the model:
 - approval middleware for writes.
 
 ```ts
-import { approvalMiddleware, prompt } from '@crux/core'
-import { inMemoryStorage, storage } from '@crux/core/storage'
-import { workspace, workspaceToolNames } from '@crux/core/workspace'
+import { approvalMiddleware, prompt } from '@use-crux/core'
+import { inMemoryStorage, storage } from '@use-crux/core/storage'
+import { workspace, workspaceToolNames } from '@use-crux/core/workspace'
 
 const files = workspace({
   id: 'case-files',
@@ -78,15 +78,17 @@ const files = workspace({
 For production, replace the in-memory stores with durable adapters.
 
 ```ts
-import { cruxConvexStore, convexWorkspaceBlobStore } from '@crux/convex'
-import { storage } from '@crux/core/storage'
-import { workspace } from '@crux/core/workspace'
+import { defineConvexStoreContract, convexWorkspaceBlobStore } from '@use-crux/convex'
+import { storage } from '@use-crux/core/storage'
+import { workspace } from '@use-crux/core/workspace'
+
+const cruxDocuments = defineConvexStoreContract({ component: components.crux })
 
 const files = workspace({
   id: 'thread-files',
   namespace: threadId,
   storage: storage({
-    data: cruxConvexStore({ component: components.crux, ctx }),
+    data: cruxDocuments.store(ctx),
     blobs: convexWorkspaceBlobStore({ ctx }),
   }),
 })

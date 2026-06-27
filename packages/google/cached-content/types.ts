@@ -12,7 +12,7 @@
  * @module
  */
 
-import type { SystemBlock } from '@crux/core'
+import type { SystemBlock } from '@use-crux/core'
 
 // ─────────────────────────────────────────────────────────────────
 // Branded Types

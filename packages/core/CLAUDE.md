@@ -1,10 +1,10 @@
-# Crux Core (@crux/core)
+# Crux Core (@use-crux/core)
 
 SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API docs, ARCHITECTURE.md for internal module map.
 
 ## Key APIs by Subpath
 
-- **`@crux/core`** — `prompt()`, `context()`, `createPrompts()`, `createContexts()`, `config()`
+- **`@use-crux/core`** — `prompt()`, `context()`, `createPrompts()`, `createContexts()`, `config()`
 - **`/ai-agent`** — SDK-agnostic agent prompt instruction resolution
 - **`/devtools`** — `withDevtools()` plugin, `enableDevtools()`
 - **`/observability`** — canonical graph contract, schemas, runtime emitters, transports
@@ -25,7 +25,7 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API
 - **`/safety`** — `guardrail()`/`constraint()` authoring, the per-call `createSafety()` session (the only execution path), `createSafetyPlugin()`
 - **`/adapter/tool`** — `toolMiddleware()`/`approvalMiddleware()` authoring, app-facing approval helpers, the per-call `createToolLifecycle()` session (the only execution path for the tool lifecycle)
 
-React bindings live in **`@crux/react`** (`CruxProvider`, hooks, transports, `@crux/react/server`). Source indexing lives in **`@crux/indexer`**. The local Go runtime lives in **`@crux/local`**.
+React bindings live in **`@use-crux/react`** (`CruxProvider`, hooks, transports, `@use-crux/react/server`). Source indexing lives in **`@use-crux/indexer`**. The local Go runtime lives in **`@use-crux/local`**.
 
 ## Composition Patterns
 
@@ -39,9 +39,9 @@ React bindings live in **`@crux/react`** (`CruxProvider`, hooks, transports, `@c
 
 ## Testing & Evaluation
 
-- `evaluate()` from `@crux/core/quality` — author evaluations over any Crux primitive (prompt/flow/agent/retriever/fn)
+- `evaluate()` from `@use-crux/core/quality` — author evaluations over any Crux primitive (prompt/flow/agent/retriever/fn)
 - `evaluation.run()` — programmatic runs (Vitest bridge); `crux quality run` — CLI runner with watch/replay/baselines
-- Run unit tests: `pnpm --filter @crux/core test -- --run`
+- Run unit tests: `pnpm --filter @use-crux/core test -- --run`
 - Evals: `packages/backend/evals/` directory (Karyla consumer)
 
 ## Plugin System

@@ -1,7 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { configure } from '../configure'
 import { prompt as cruxPrompt } from '../define'
+import { resetObservabilityRuntime } from '../observability'
 import { getRuntime, resetRuntime } from '../runtime'
+import { defaultTokenizer, setTokenizer } from '../tokenizer'
 import type { CruxPlugin } from '../plugin'
 
 function makePrompt(id: string) {
@@ -11,6 +13,14 @@ function makePrompt(id: string) {
 describe('configure — plugins', () => {
   beforeEach(() => {
     resetRuntime()
+    resetObservabilityRuntime()
+    setTokenizer(defaultTokenizer)
+  })
+
+  afterEach(() => {
+    resetRuntime()
+    resetObservabilityRuntime()
+    setTokenizer(defaultTokenizer)
   })
 
   it('calls plugin install() with the current runtime', () => {

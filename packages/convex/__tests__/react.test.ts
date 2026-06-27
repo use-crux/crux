@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createConvexTransport } from '../react'
-import type { JsonObject } from '@crux/core/store'
+import type { JsonObject } from '@use-crux/core/store'
 
 const api = {
   memory: {
@@ -32,36 +32,43 @@ describe('createConvexTransport document boundary', () => {
       },
     })
 
-    expect(() => malformed.transport.useDocument('memory:bad')).toThrow(/expected a CruxStore document/i)
+    expect(() => malformed.transport.useDocument('memory:bad')).toThrow(/current Crux store format/i)
   })
 
   it('suppresses expired list documents and applies top-level filters', () => {
     const harness = createTransportHarness({
-      listResult: [
-        cruxDoc('memory:expired', { content: 'Old', namespace: 'kb', _expiresAt: 1 }),
-        cruxDoc('memory:fresh', { content: 'Fresh', namespace: 'kb' }),
-        cruxDoc('memory:other', { content: 'Other', namespace: 'other' }),
-      ],
+      listResult: {
+        docs: [
+          cruxDoc('memory:expired', { content: 'Old', namespace: 'kb', _expiresAt: 1 }),
+          cruxDoc('memory:fresh', { content: 'Fresh', namespace: 'kb' }),
+          cruxDoc('memory:other', { content: 'Other', namespace: 'other' }),
+        ],
+        cursor: 'cursor-1',
+      },
     })
 
-    expect(harness.transport.useDocumentList('memory:', { filter: { namespace: 'kb' } })).toEqual([
+    expect(harness.transport.useDocumentList('memory:', { limit: 3, filter: { namespace: 'kb' } })).toEqual([
       {
         key: 'memory:fresh',
         value: { content: 'Fresh', namespace: 'kb' },
       },
     ])
+    expect(harness.calls.at(-1)?.args).toEqual({ prefix: 'memory:', limit: 3 })
   })
 })
 
 function createTransportHarness(options: { getResult?: unknown; listResult?: unknown } = {}) {
+  const calls: Array<{ query: unknown; args: unknown }> = []
   const useQuery = (query: unknown, args: unknown): unknown => {
+    calls.push({ query, args })
     if (args === 'skip') return undefined
     if (query === api.memory.get) return options.getResult
-    if (query === api.memory.list) return options.listResult ?? []
+    if (query === api.memory.list) return options.listResult ?? { docs: [] }
     return undefined
   }
   return {
     transport: createConvexTransport({ api, useQuery }),
+    calls,
   }
 }
 

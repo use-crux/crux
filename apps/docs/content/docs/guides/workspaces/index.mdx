@@ -10,9 +10,9 @@ Use it when the model needs a durable working area: notes, intermediate drafts, 
 ## Basic Usage
 
 ```ts
-import { prompt } from '@crux/core'
-import { inMemoryStorage } from '@crux/core/storage'
-import { workspace } from '@crux/core/workspace'
+import { prompt } from '@use-crux/core'
+import { inMemoryStorage } from '@use-crux/core/storage'
+import { workspace } from '@use-crux/core/workspace'
 
 const ws = workspace({
   id: 'research',
@@ -99,7 +99,7 @@ Models see paths, metadata, previews when available, and blob URIs. Apps and dev
 Workspaces use two storage layers:
 
 ```ts
-import { storage } from '@crux/core/storage'
+import { storage } from '@use-crux/core/storage'
 
 workspace({
   storage: storage({
@@ -202,8 +202,8 @@ const ws = workspace({
 Use tool middleware for policy and approval.
 
 ```ts
-import { approvalMiddleware } from '@crux/core'
-import { workspaceToolNames } from '@crux/core/workspace'
+import { approvalMiddleware } from '@use-crux/core'
+import { workspaceToolNames } from '@use-crux/core/workspace'
 
 const names = workspaceToolNames({ prefix: 'research' })
 
@@ -220,7 +220,7 @@ Prefixes change the final tool names, so match the generated names.
 
 ## Convex
 
-Convex apps use `cruxConvexStore()` for workspace metadata and `convexWorkspaceBlobStore()` for binary/large payloads. See the [Convex guide](/docs/guides/convex) for the complete setup and runtime caveats.
+Convex apps use `defineConvexStoreContract().store(ctx)` for workspace metadata and `convexWorkspaceBlobStore()` for binary/large payloads. See the [Convex guide](/docs/guides/convex) for the complete setup and runtime caveats.
 
 ## Devtools
 

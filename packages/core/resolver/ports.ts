@@ -23,7 +23,7 @@
  * and that is the right seam for them.
  *
  * In-memory fakes for every port live in `./fakes.ts` and are exported from
- * `@crux/core`.
+ * `@use-crux/core`.
  *
  * @module
  */
@@ -38,8 +38,6 @@ import type {
 import { getRuntime } from '../runtime'
 import { isAutoEscapeEnabled, isSecurityWarningsEnabled } from '../configure'
 import { resolveRegistrySkill } from '../skill/registry'
-import { getLatestSkillState, registerSkillState } from '../skill/state'
-import type { SkillActivationState } from '../skill/tools'
 import type { SkillMeta, SkillReference } from '../skill/types'
 import type { ResolvedSystemContent } from './contract'
 
@@ -90,19 +88,15 @@ export interface ResolvedRegistrySkill {
 }
 
 /**
- * Where skills come from and where activation state lives.
+ * Where lazy registry skills come from.
  *
- * Covers the two skill-related ambient dependencies of resolution: fetching
- * lazy registry skills (the only network I/O in the pipeline) and the
- * process-wide activation state used to re-inject previously loaded skills.
+ * Registry fetch is the only skill-related network I/O in the pipeline.
+ * Skill activation state is carried explicitly by `SkillActivationSession`
+ * snapshots in resolve input.
  */
 export interface SkillSourcePort {
   /** Fetch a registry skill's full content. Rejections degrade to the placeholder skill with a diagnostic warning. */
   resolveRegistrySkill(id: string): Promise<ResolvedRegistrySkill>
-  /** Most recently registered activation state, if any (same-process skill activation carry-over). */
-  latestActivationState(): SkillActivationState | undefined
-  /** Register the activation state created for this resolution; returns its registry id. */
-  registerActivationState(state: SkillActivationState): string
 }
 
 /** A context-cache lookup result: the cached content plus its age, for instrumentation. */
@@ -203,8 +197,6 @@ const runtimeObservability: ObservabilityPort = {
 
 const runtimeSkillSource: SkillSourcePort = {
   resolveRegistrySkill: (id) => resolveRegistrySkill(id),
-  latestActivationState: () => getLatestSkillState(),
-  registerActivationState: (state) => registerSkillState(state),
 }
 
 /** Internal cache entry for a resolved context system contribution. */

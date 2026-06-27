@@ -6,7 +6,7 @@
  * can be inspected through `ctx.scores` and, when known by string, read from
  * the erased map without changing the public type contract.
  *
- * @internal Not exported from `@crux/core/quality` - engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` - engine plumbing only.
  * @module
  */
 

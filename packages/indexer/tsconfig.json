@@ -13,14 +13,16 @@
     "noEmit": true,
     "types": ["node", "vitest"],
     "paths": {
-      "@crux/core": ["../core/index.ts"],
-      "@crux/core/*": ["../core/*"]
+      "@use-crux/core": ["../core/index.ts"],
+      "@use-crux/core/*": ["../core/*"]
     }
   },
   "include": [
     "index.ts",
     "extensions.ts",
     "testing.ts",
+    "host/**/*.ts",
+    "contracts/**/*.ts",
     "indexer/**/*.ts",
     "source-resolver.ts",
     "source-resolver/**/*.ts",

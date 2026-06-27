@@ -1,5 +1,5 @@
 /**
- * Canonical message type for `@crux/core`.
+ * Canonical message type for `@use-crux/core`.
  *
  * Each AI SDK has its own message format (AI SDK's `CoreMessage`, OpenAI's
  * `ChatCompletionMessageParam`, etc.). Compaction and memory operate on

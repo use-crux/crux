@@ -1,7 +1,7 @@
 /**
  * AgentExecutor — SDK-agnostic interface for executing agents.
  *
- * Each adapter (`@crux/ai`, `@crux/openai`) implements this interface
+ * Each adapter (`@use-crux/ai`, `@use-crux/openai`) implements this interface
  * to bridge `Agent` instances to their SDK's `generate()` function.
  * Composition utilities use the executor internally — users don't
  * interact with it directly.
@@ -64,7 +64,7 @@ export interface ExecuteOptions {
  *
  * @example
  * ```ts
- * // In @crux/ai adapter:
+ * // In @use-crux/ai adapter:
  * const executor: AgentExecutor = async (agent, options) => {
  *   const model = agent.model ?? options.model
  *   const result = await generate(agent.prompt, { model, input: options.input })

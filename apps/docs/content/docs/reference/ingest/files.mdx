@@ -4,13 +4,13 @@ description: fileSource, filesSource — load IngestDocuments from individual fi
 ---
 
 ```ts
-import { fileSource, filesSource } from '@crux/ingest/files'
-import type { FileSourceOptions, FilesSourceOptions, FilesDirectoryInput, FilesGlobInput } from '@crux/ingest/files'
+import { fileSource, filesSource } from '@use-crux/ingest/files'
+import type { FileSourceOptions, FilesSourceOptions, FilesDirectoryInput, FilesGlobInput } from '@use-crux/ingest/files'
 ```
 
 ## Supported file types
 
-`fileSource()` and `filesSource()` use the same bundled parser index as the rest of `@crux/ingest`:
+`fileSource()` and `filesSource()` use the same bundled parser index as the rest of `@use-crux/ingest`:
 
 | Extension          | Format     | Notes                                                          |
 | ------------------ | ---------- | -------------------------------------------------------------- |
@@ -25,7 +25,7 @@ import type { FileSourceOptions, FilesSourceOptions, FilesDirectoryInput, FilesG
 
 The file extension determines the parser. For other formats, pre-extract to text, provide a custom parser, or use `textSource()`.
 
-For parser output details, see the [@crux/ingest overview](/docs/reference/ingest#bundled-parsers).
+For parser output details, see the [@use-crux/ingest overview](/docs/reference/ingest#bundled-parsers).
 
 ## `fileSource(path, options)`
 
@@ -110,8 +110,8 @@ filesSource({ glob: '**/*.md', cwd: './docs' }, { namespace: 'docs' })
 ## Example
 
 ```ts
-import { corpus, indexer } from '@crux/core/indexing'
-import { filesSource } from '@crux/ingest/files'
+import { corpus, indexer } from '@use-crux/core/indexing'
+import { filesSource } from '@use-crux/ingest/files'
 
 const docsIndexer = indexer({
   id: 'docs',
@@ -145,6 +145,6 @@ for await (const document of source.documents()) {
 
 ## Related
 
-- Reference: [@crux/ingest overview](/docs/reference/ingest)
+- Reference: [@use-crux/ingest overview](/docs/reference/ingest)
 - Reference: [URLs](/docs/reference/ingest/urls) — load HTTP-fetched documents
 - Reference: [Indexing](/docs/reference/crux-core/indexing) — `indexer`

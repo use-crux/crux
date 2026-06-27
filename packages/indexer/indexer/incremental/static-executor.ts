@@ -1,5 +1,11 @@
-import type { ProjectIndexSnapshot, ProjectDefinition, ProjectRelation } from '@crux/core/project-index'
+import type {
+  ProjectIndexSnapshot,
+  ProjectDefinition,
+  ProjectRelation,
+  IndexRuleDescriptor,
+} from '@use-crux/core/project-index'
 import { applyIndexLintConfig } from '../lints/config'
+import { indexLintFindings } from '../lints/findings'
 import { applyIndexLintSuppressions } from '../lints/suppressions'
 import { builtInIndexRuleDescriptors } from '../lints/rules'
 import { astIndexPatchFromCompilerResult, type ProjectIndexCompilerResult } from '../compiler'
@@ -8,6 +14,7 @@ import type { IndexPatch } from '../patches'
 import { createStaticExtraction } from '../static/extraction/engine'
 import { indexInvalidationFromDecision } from './invalidation'
 import type { DependencyClosureReindexDecision, SourceFileReindexDecision } from './types'
+import type { SemanticSourceProfile, SemanticSourceProfileFile } from '../semantic/source-profile'
 
 type StaticExecutableDecision = SourceFileReindexDecision | DependencyClosureReindexDecision
 
@@ -31,12 +38,15 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
   const dependenciesByFile = new Map<string, string[]>()
   const graphBuilder = createIndexGraphBuilder()
   const parsedFiles: string[] = []
+  const semanticProfiles: SemanticSourceProfileFile[] = []
   const extraction = createStaticExtraction({ root: input.decision.root })
 
   for (const file of input.decision.affectedFiles) {
     if (input.decision.deletedFiles.includes(file)) continue
     const parsed = await extraction.extractFile(file)
+    const previousSource = previousSourceForFile(input.previousIndex, file)
     parsedFiles.push(file)
+    if (parsed.semanticProfile) semanticProfiles.push(parsed.semanticProfile)
     dependenciesByFile.set(file, [...parsed.dependencies])
     definitions.push(...parsed.definitions)
     relations.push(...parsed.relations)
@@ -44,9 +54,10 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
       source: {
         file,
         status: 'indexed',
+        ...(previousSource?.shardId ? { shardId: previousSource.shardId } : {}),
         definitionIds: parsed.definitions.map((definition) => definition.id),
         dependencies: [...parsed.dependencies],
-        dependents: [...previousDependents(input.previousIndex, file)],
+        dependents: [...(previousSource?.dependents ?? [])],
         diagnostics: [],
       },
     })
@@ -55,15 +66,23 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
     parsed.dependencies.forEach((dependency) => graphBuilder.addDependency(file, dependency))
   }
   const ruleResult = extraction.rules.check({ definitions, relations })
-  const ruleDescriptors = [...builtInIndexRuleDescriptors(), ...extraction.rules.descriptors]
+  const lintRuleOutputs = [...indexLintFindings({ definitions, relations }), ...ruleResult.outputs]
+  const ruleDescriptors = mergeRuleDescriptors([
+    ...input.previousIndex.ruleDescriptors,
+    ...builtInIndexRuleDescriptors(),
+    ...extraction.rules.descriptors,
+  ])
+  const lintDiagnostics = [...ruleResult.diagnostics]
   const lintFindings = applyIndexLintConfig({
     config: input.previousIndex.lint,
     configFile: input.previousIndex.project.configFile,
-    diagnostics: [...ruleResult.diagnostics],
+    diagnostics: lintDiagnostics,
+    ruleDescriptors,
     findings: applyIndexLintSuppressions({
       files: input.decision.affectedFiles,
-      findings: ruleResult.outputs,
-      diagnostics: [...ruleResult.diagnostics],
+      findings: lintRuleOutputs,
+      diagnostics: lintDiagnostics,
+      ruleDescriptors,
     }),
   })
   const sources = graphSources(graphBuilder.graph)
@@ -79,7 +98,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
       lint: input.previousIndex.lint,
       definitions,
       relations,
-      diagnostics: [],
+      diagnostics: lintDiagnostics,
       lintFindings,
       ruleDescriptors,
       sources,
@@ -87,10 +106,15 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
     },
     sources,
     graphEvidence: { dependenciesByFile },
-    diagnostics: [],
+    diagnostics: lintDiagnostics,
     lintFindings,
     ruleDescriptors,
     sourceGraph: input.previousIndex.sourceGraph,
+    semanticSourceProfile: semanticSourceProfileForPartial(
+      input.decision.affectedFiles,
+      dependenciesByFile,
+      semanticProfiles,
+    ),
   }
 
   return {
@@ -102,6 +126,31 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
   }
 }
 
-function previousDependents(previousIndex: ProjectIndexSnapshot, file: string): readonly string[] {
-  return previousIndex.sources.find((source) => source.file === file)?.dependents ?? []
+function previousSourceForFile(previousIndex: ProjectIndexSnapshot, file: string) {
+  return previousIndex.sources.find((source) => source.file === file)
+}
+
+function mergeRuleDescriptors(descriptors: readonly IndexRuleDescriptor[]): readonly IndexRuleDescriptor[] {
+  const byId = new Map<string, IndexRuleDescriptor>()
+  for (const descriptor of descriptors) byId.set(descriptor.id, descriptor)
+  return [...byId.values()]
+}
+
+function semanticSourceProfileForPartial(
+  affectedFiles: readonly string[],
+  dependenciesByFile: ReadonlyMap<string, readonly string[]>,
+  profiles: readonly SemanticSourceProfileFile[],
+): SemanticSourceProfile | undefined {
+  if (profiles.length === 0) return undefined
+  const dependencyClosure = [
+    ...new Set([...affectedFiles, ...[...dependenciesByFile.values()].flatMap((dependencies) => [...dependencies])]),
+  ].sort()
+  const profiledFiles = new Set(profiles.map((profile) => profile.file))
+  const sortedProfiles = [...profiles].sort((left, right) => left.file.localeCompare(right.file))
+  return {
+    files: sortedProfiles,
+    dependencyClosure,
+    sourceBytes: sortedProfiles.reduce((sum, profile) => sum + profile.sourceBytes, 0),
+    complete: dependencyClosure.every((file) => profiledFiles.has(file)),
+  }
 }

@@ -1,21 +1,23 @@
 /**
- * `@crux/core/adapter` — Provider adapter abstraction.
+ * `@use-crux/core/adapter` — Provider adapter abstraction.
  *
- * Shared infrastructure for building AI provider adapters, in two dialects:
+ * Shared infrastructure for building AI provider adapters. Public provider
+ * authors should start with provider runtimes:
  *
- * - {@link adapter} + {@link AdapterSpec} — for raw provider SDKs without a
- *   tool loop (Anthropic, OpenAI, Google). Core drives the loop one
- *   provider call at a time.
- * - {@link executorAdapter} + {@link ExecutorSpec} — for orchestrating SDKs
- *   that own their own multi-step loop (the Vercel AI SDK). The SDK drives;
- *   core steers per step through a `StepObserver`.
+ * - {@link defineSingleTurnProviderBundle} — for raw provider SDKs without a
+ *   tool loop (Anthropic, OpenAI, Google). Core drives the loop one provider
+ *   call at a time.
+ * - {@link defineProviderRuntime} with `ownership: 'loop-owned'` and `loop`
+ *   — for orchestrating SDKs that own their own multi-step loop (the Vercel
+ *   AI SDK). The SDK drives; core steers each step through a `StepObserver`.
  *
- * Both factories drive the same per-call sessions — the `ToolLifecycle`
- * session from `@crux/core/adapter/tool` (middleware, approvals,
- * instrumentation, skill loads, memory capture) and the `Safety` session
- * from `@crux/core/safety` — so policy semantics never diverge between
- * dialects. Test executors with {@link fakeExecutor} and prove contract
- * fidelity with {@link executorSpecConformance}.
+ * Both dialects drive the same per-call sessions — the `ToolLifecycle` session
+ * from `@use-crux/core/adapter/tool` (middleware, approvals, instrumentation,
+ * skill loads, memory capture) and the `Safety` session from
+ * `@use-crux/core/safety` — so policy semantics never diverge between dialects.
+ * Test public provider runtimes with {@link providerRuntimeConformance}. Use
+ * {@link fakeExecutor}, {@link adapterSpecConformance}, and
+ * {@link executorSpecConformance} for lower-level execution IR tests.
  *
  * @module
  */
@@ -30,24 +32,59 @@ export type { AdapterSpec } from './spec'
 export { adapter } from './define-adapter'
 export type { CruxAdapter, AdapterGenerateOptions, AdapterStreamOptions, AdapterGenerateResult } from './define-adapter'
 
-// Profile helper for native chat SDKs that expose text, structured, and stream calls
-export { defineNativeChatProvider, appendNativeToolRound } from './native-chat'
+// Native single-turn provider contracts
 export type {
   NativeAssistantTurn,
-  NativeCallMode,
   NativeChatHelpers,
-  NativeChatProfile,
-  NativeChatProvider,
   NativeChatRequestArgs,
-  NativeChatRequestContext,
-  NativeMessageCodec,
-  NativeProviderDepsArg,
   NativeProviderPort,
-  NativeResponseMapper,
   NativeResponseMetadata,
-  NativeResponseNormalizer,
   NativeTranscriptCodec,
 } from './native-chat'
+
+// Canonical transcript IR and the codec compiler built on it
+export {
+  appendCanonicalToolRound,
+  appendNativeToolRound,
+  createToolResultEncodingHelpers,
+  defineProviderTranscriptCodec,
+  messagesToTranscriptUnits,
+  transcriptUnitsToMessages,
+} from './native-chat'
+export type {
+  OneOrMany,
+  ProviderToolCall,
+  ProviderToolResult,
+  ProviderTranscriptDialect,
+  ProviderTranscriptUnit,
+  ToolResultEncodingHelpers,
+} from './native-chat'
+
+// Provider runtime authoring layer
+export { defineProviderRuntime } from './provider-runtime'
+export { defineSingleTurnProviderBundle } from './provider-runtime'
+export type {
+  BoundLoopOwnedRuntime,
+  DefinedProviderRuntime,
+  DefinedSingleTurnProviderRuntime,
+  DefinedSingleTurnProviderBundle,
+  LoopOwnedProviderRuntime,
+  LoopOwnedProviderRuntimeSpec,
+  LoopOwnedRuntimeBindContext,
+  LoopOwnedRuntimeContract,
+  ProviderOwnership,
+  ProviderRuntimeDepsArg,
+  ProviderRuntimeKind,
+  ProviderRuntimeExtension,
+  ProviderRuntimeExtensionCollisionKeys,
+  ProviderRuntimeExtensionContext,
+  ProviderRuntimeExtender,
+  ProviderRuntimeSpec,
+  SingleTurnProviderBundleDeps,
+  SingleTurnProviderBundleSpec,
+  SingleTurnRuntimeContract,
+  SingleTurnProviderRuntimeSpec,
+} from './provider-runtime'
 
 // Executor specification interface (SDK-driven loop)
 export type { ExecutorSpec } from './executor-spec'
@@ -115,8 +152,14 @@ export type { ApprovalRequestInfo } from './tool/approval'
 export { setGenerationInterceptor, clearGenerationInterceptor } from './interception'
 export type { GenerationInterceptor, InterceptedGeneration } from './interception'
 
-// Testing utilities for the executor contract
-export { adapterSpecConformance, fakeExecutor, executorSpecConformance, transcriptCodecConformance } from './testing'
+// Testing utilities for public provider runtimes and lower-level execution IR.
+export {
+  adapterSpecConformance,
+  fakeExecutor,
+  executorSpecConformance,
+  providerRuntimeConformance,
+  transcriptCodecConformance,
+} from './testing'
 export type {
   AdapterConformanceCapabilities,
   AdapterConformanceEmission,
@@ -132,6 +175,15 @@ export type {
   FakeRawStream,
   ExecutorConformanceHarness,
   ConformanceViolation,
+  ProviderConformanceEmission,
+  ProviderConformancePrepared,
+  ProviderConformanceScript,
+  ProviderRuntimeConformanceCapabilities,
+  ProviderRuntimeConformanceGenerateOptions,
+  ProviderRuntimeConformanceGenerateResult,
+  ProviderRuntimeConformanceHarness,
+  ProviderRuntimeConformanceRuntime,
+  ProviderRuntimeConformanceStreamHandle,
   TranscriptConformanceScenario,
   TranscriptWrapperExpectation,
 } from './testing'

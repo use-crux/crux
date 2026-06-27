@@ -14,7 +14,7 @@ import {
   retrievalPipeline,
   retrievalStage,
   retriever,
-} from '@crux/core/retrieval'
+} from '@use-crux/core/retrieval'
 import type {
   Retriever,
   RetrieverHit,
@@ -24,13 +24,13 @@ import type {
   PlannedRetrievalQuery,
   RetrieverMode,
   RetrieveOptions,
-} from '@crux/core/retrieval'
+} from '@use-crux/core/retrieval'
 ```
 
-For grounded answers with validated citations, pair retrieval with `@crux/core/citations`:
+For grounded answers with validated citations, pair retrieval with `@use-crux/core/citations`:
 
 ```ts
-import { grounding, citationSchema } from '@crux/core/citations'
+import { grounding, citationSchema } from '@use-crux/core/citations'
 ```
 
 ## Overview
@@ -68,7 +68,7 @@ Use it when you want:
 - optional reranking before hits reach the prompt or tool surface
 - advanced query-time RAG composition through `retrievalPipeline()`
 
-It is intentionally read-first. Chunking and corpus writes belong to `@crux/core/indexing`. Raw text, file, and URL loading belong to `@crux/ingest`.
+It is intentionally read-first. Chunking and corpus writes belong to `@use-crux/core/indexing`. Raw text, file, and URL loading belong to `@use-crux/ingest`.
 
 The important thing to understand is that a retriever is not "a vector store wrapper." It is the public query surface that sits above embeddings and stores. In normal application code, that means users pass text in and get scored, citation-ready hits back. The embedding and store layers still matter, but they are lower-level dependencies of the retriever, not the main product surface.
 
@@ -235,7 +235,7 @@ import {
   multiQuery,
   parentExpand,
   retrievalPipeline,
-} from '@crux/core/retrieval'
+} from '@use-crux/core/retrieval'
 
 const advancedDocs = retrievalPipeline(docsRetriever, [
   multiQuery({
@@ -564,7 +564,7 @@ If you only need a one-off vector query, use `VectorStore.search()` directly ins
 
 If your retrieval system does not map well to `DataStore` plus `VectorStore`, use the custom retriever path instead of forcing your backend into a shape it does not naturally fit.
 
-If you want model-based reranking, `@crux/ai` exposes `reranker()` on top of AI SDK `rerank()`.
+If you want model-based reranking, `@use-crux/ai` exposes `reranker()` on top of AI SDK `rerank()`.
 
 ## Hooks emitted
 
@@ -589,7 +589,7 @@ Payloads include:
 These flow through:
 
 - `withDevtools()`
-- `@crux/otel` as `crux.retrieval` spans
+- `@use-crux/otel` as `crux.retrieval` spans
 - `crux dev` stats and timelines
 
 ## Related
@@ -599,6 +599,6 @@ These flow through:
 - Guide: [Retrieval Pipelines](/docs/guides/retrieval/pipelines)
 - Guide: [Grounding And Citations](/docs/guides/retrieval/grounding)
 - Guide: [Indexing Documents](/docs/guides/retrieval/indexing)
-- Reference: [@crux/core/indexing](/docs/reference/crux-core/indexing)
-- Reference: [@crux/core/storage](/docs/reference/crux-core/storage)
-- Reference: [@crux/upstash](/docs/reference/storage/upstash)
+- Reference: [@use-crux/core/indexing](/docs/reference/crux-core/indexing)
+- Reference: [@use-crux/core/storage](/docs/reference/crux-core/storage)
+- Reference: [@use-crux/upstash](/docs/reference/storage/upstash)

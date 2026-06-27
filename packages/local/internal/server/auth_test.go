@@ -15,7 +15,7 @@ func okHandler() http.Handler {
 
 func TestRequireSessionAuth_protectsApiAndWs(t *testing.T) {
 	const token = "test-token"
-	srv := httptest.NewServer(requireSessionAuth(token, okHandler()))
+	srv := httptest.NewServer(requireSessionAuth(token, "", okHandler()))
 	defer srv.Close()
 
 	// Static shell loads without a session.
@@ -33,7 +33,7 @@ func TestRequireSessionAuth_protectsApiAndWs(t *testing.T) {
 
 func TestRequireSessionAuth_tokenExchangeSetsCookie(t *testing.T) {
 	const token = "test-token"
-	srv := httptest.NewServer(requireSessionAuth(token, okHandler()))
+	srv := httptest.NewServer(requireSessionAuth(token, "", okHandler()))
 	defer srv.Close()
 
 	// Don't auto-follow redirects so we can inspect the exchange response.
@@ -72,9 +72,68 @@ func TestRequireSessionAuth_tokenExchangeSetsCookie(t *testing.T) {
 	}
 }
 
+func TestRequireSessionAuth_tokenizedApiRequestPassesWithoutRedirect(t *testing.T) {
+	const token = "test-token"
+	srv := httptest.NewServer(requireSessionAuth(token, "", okHandler()))
+	defer srv.Close()
+
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/observability/records?t="+token, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("POST tokenized API request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST tokenized API request status = %d, want 200", resp.StatusCode)
+	}
+	if loc := resp.Header.Get("Location"); loc != "" {
+		t.Fatalf("POST tokenized API request redirected to %q", loc)
+	}
+}
+
+func TestRequireSessionAuth_ingestBearerCanOnlyPostObservabilityRecords(t *testing.T) {
+	const sessionToken = "session-token"
+	const ingestToken = "ingest-token"
+	srv := httptest.NewServer(requireSessionAuth(sessionToken, ingestToken, okHandler()))
+	defer srv.Close()
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/observability/records", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+ingestToken)
+	if code := getStatusReq(t, srv.Client(), req); code != http.StatusOK {
+		t.Fatalf("POST /api/observability/records with ingest bearer = %d, want 200", code)
+	}
+
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/observability/runs"},
+		{method: http.MethodPost, path: "/api/quality/run"},
+		{method: http.MethodGet, path: "/ws/ui"},
+	} {
+		req, err := http.NewRequest(tc.method, srv.URL+tc.path, nil)
+		if err != nil {
+			t.Fatalf("new request %s %s: %v", tc.method, tc.path, err)
+		}
+		req.Header.Set("Authorization", "Bearer "+ingestToken)
+		if code := getStatusReq(t, srv.Client(), req); code != http.StatusUnauthorized {
+			t.Fatalf("%s %s with ingest bearer = %d, want 401", tc.method, tc.path, code)
+		}
+	}
+}
+
 func TestRequireSessionAuth_rejectsBadToken(t *testing.T) {
 	const token = "test-token"
-	srv := httptest.NewServer(requireSessionAuth(token, okHandler()))
+	srv := httptest.NewServer(requireSessionAuth(token, "", okHandler()))
 	defer srv.Close()
 
 	if code := getStatus(t, srv.Client(), srv.URL+"/?t=wrong", nil); code != http.StatusUnauthorized {

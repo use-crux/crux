@@ -1,7 +1,7 @@
 import { safeId } from '../definitions'
 import type { IndexExtractor, UnresolvedReference } from '../extensions'
 import { facts } from '../extensions'
-import type { ProjectSourceRefRole } from '@crux/core/project-index'
+import type { ProjectSourceRefRole } from '@use-crux/core/project-index'
 
 /**
  * Extracts constraint and guardrail definitions from safety primitives.

@@ -1,37 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import type { ProjectRelation } from '@crux/core/project-index'
 import { mergeSemanticAnalyzerResults } from '../indexer/semantic/runner'
 
-function relation(input: {
-  readonly id: string
-  readonly fidelity: ProjectRelation['fidelity']
-  readonly metadata?: ProjectRelation['metadata']
-}): ProjectRelation {
-  return {
-    id: input.id,
-    type: 'agent.uses_prompt',
-    from: 'agent:writer',
-    to: 'prompt:writer',
-    fidelity: input.fidelity,
-    metadata: input.metadata,
-  }
-}
-
 describe('mergeSemanticAnalyzerResults', () => {
-  it('merges relation facts by semantic identity so resolved facts replace provisional ids', () => {
-    const partial = relation({
-      id: 'static-relation:agent:writer:prompt:writer',
-      fidelity: 'partial',
-      metadata: { source: 'static' },
-    })
-    const resolved = relation({
-      id: 'relation:agent.uses_prompt:agent:writer:prompt:writer',
-      fidelity: 'resolved',
-      metadata: { source: 'semantic' },
-    })
+  it('preserves same-id source refs from different source declarations', () => {
+    const merged = mergeSemanticAnalyzerResults([
+      {
+        sourceRefs: [
+          sourceRefFact('/repo/src/retrieval.ts'),
+          sourceRefFact('/repo/src/citations.ts'),
+          sourceRefFact('/repo/src/retrieval.ts'),
+        ],
+      },
+    ])
 
-    expect(mergeSemanticAnalyzerResults([{ relations: [partial] }, { relations: [resolved] }]).relations).toEqual([
-      resolved,
+    expect(merged.sourceRefs).toHaveLength(2)
+    expect(merged.sourceRefs.map((fact) => fact.ref.source.file)).toEqual([
+      '/repo/src/retrieval.ts',
+      '/repo/src/citations.ts',
     ])
   })
 })
+
+function sourceRefFact(file: string) {
+  return {
+    definitionId: 'context:anonymous',
+    ref: {
+      id: 'context:anonymous:source:system:system:rendered',
+      role: 'system' as const,
+      property: 'system',
+      symbol: 'rendered',
+      source: { file, line: 1, column: 1 },
+      fidelity: 'resolved' as const,
+    },
+  }
+}

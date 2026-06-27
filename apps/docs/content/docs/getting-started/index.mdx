@@ -93,20 +93,20 @@ Once you know the first Crux piece you want, choose the walkthrough that matches
 
 ## What you'll install
 
-Every Crux project needs `@crux/core` plus exactly one adapter for your SDK of choice:
+Every Crux project needs `@use-crux/core` plus exactly one adapter for your SDK of choice:
 
 {/* prettier-ignore-start */}
 
 <Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
-  <Tab value="npm">```bash npm install @crux/core zod npm install @crux/ai # Vercel AI SDK (most common) ```</Tab>
-  <Tab value="pnpm">```bash pnpm add @crux/core zod pnpm add @crux/ai # Vercel AI SDK (most common) ```</Tab>
-  <Tab value="yarn">```bash yarn add @crux/core zod yarn add @crux/ai # Vercel AI SDK (most common) ```</Tab>
-  <Tab value="bun">```bash bun add @crux/core zod bun add @crux/ai # Vercel AI SDK (most common) ```</Tab>
+  <Tab value="npm">```bash npm install @use-crux/core zod npm install @use-crux/ai # Vercel AI SDK (most common) ```</Tab>
+  <Tab value="pnpm">```bash pnpm add @use-crux/core zod pnpm add @use-crux/ai # Vercel AI SDK (most common) ```</Tab>
+  <Tab value="yarn">```bash yarn add @use-crux/core zod yarn add @use-crux/ai # Vercel AI SDK (most common) ```</Tab>
+  <Tab value="bun">```bash bun add @use-crux/core zod bun add @use-crux/ai # Vercel AI SDK (most common) ```</Tab>
 </Tabs>
 {/* prettier-ignore-end */}
 
 <Callout type="info">
-  `@crux/ai` is the Vercel AI SDK adapter. You can also use `@crux/openai`, `@crux/google`, or `@crux/anthropic`
+  `@use-crux/ai` is the Vercel AI SDK adapter. You can also use `@use-crux/openai`, `@use-crux/google`, or `@use-crux/anthropic`
   directly — pick whichever SDK you already have in the project.
 </Callout>
 
@@ -115,8 +115,8 @@ Every Crux project needs `@crux/core` plus exactly one adapter for your SDK of c
 If you just want to see the smallest piece in isolation, start with a typed prompt:
 
 ```ts title="hello.ts"
-import { prompt } from '@crux/core'
-import { generate } from '@crux/ai'
+import { prompt } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 

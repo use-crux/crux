@@ -1,5 +1,5 @@
 /**
- * Type tests for the v1 Quality authoring surface (`@crux/core/quality`).
+ * Type tests for the v1 Quality authoring surface (`@use-crux/core/quality`).
  *
  * These implement the 17-item checklist from the Quality API spec (01 §12).
  * Items 1–16 live here; item 17 (the `tsc --extendedDiagnostics` instantiation
@@ -18,7 +18,7 @@ import { flow } from '../flow/scope'
 import { agent } from '../agent/agent'
 import type { Retriever, RetrieverHit } from '../retrieval'
 import { evaluate, scorers, dataset } from '../quality'
-import type { CaseOf, InputOf, OutputOf } from '../quality'
+import type { CaseOf, EvaluationCoverageTargetId, InputOf, OutputOf } from '../quality'
 
 // ─────────────────────────────────────────────────────────────────
 // Fixtures
@@ -89,6 +89,7 @@ const textCases = [{ input: { question: 'Summarize refunds.', locale: 'en' } }] 
 
 evaluate({
   task: supportPrompt,
+  covers: ['prompt:support'],
   data: [{ input: { question: 'How do refunds work?', locale: 'en' } }],
   expect: (ctx) => {
     expectTypeOf(ctx.input).toEqualTypeOf<{ question: string; locale: 'en' | 'nl' }>()
@@ -96,12 +97,21 @@ evaluate({
   },
 })
 
+expectTypeOf<'prompt:support'>().toExtend<EvaluationCoverageTargetId<'prompt'>>()
+
 evaluate({
   task: summaryPrompt,
   data: [{ input: { question: 'Summarize this.', locale: 'en' } }],
   expect: (ctx) => {
     expectTypeOf(ctx.output).toEqualTypeOf<string>()
   },
+})
+
+evaluate({
+  task: supportPrompt,
+  // @ts-expect-error — coverage targets must use Project Index definition ids such as `prompt:support`
+  covers: ['support'],
+  data: [{ input: { question: 'How do refunds work?', locale: 'en' } }],
 })
 
 evaluate({
@@ -410,10 +420,7 @@ evaluate({
 
 evaluate({
   task: supportAgent,
-  data: [
-    { input: { question: 'hi', locale: 'en' } },
-    { turns: [{ user: 'hello' }, { user: 'I want a refund' }] },
-  ],
+  data: [{ input: { question: 'hi', locale: 'en' } }, { turns: [{ user: 'hello' }, { user: 'I want a refund' }] }],
 })
 
 evaluate({

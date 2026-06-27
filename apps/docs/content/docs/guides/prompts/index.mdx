@@ -5,10 +5,10 @@ description: Define typed, composable prompts that run with any SDK adapter.
 
 `prompt()` is the main unit of LLM work in Crux. It describes what the model should see, what input the call accepts, what output shape it should return, and which reusable capabilities should be composed in.
 
-The prompt does not call a model by itself. Adapters such as `@crux/ai`, `@crux/openai`, `@crux/google`, and `@crux/anthropic` execute the same prompt definition against their SDKs.
+The prompt does not call a model by itself. Adapters such as `@use-crux/ai`, `@use-crux/openai`, `@use-crux/google`, and `@use-crux/anthropic` execute the same prompt definition against their SDKs.
 
 ```ts twoslash title="support-prompt.ts"
-import { context, prompt } from '@crux/core'
+import { context, prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const brand = context({
@@ -67,7 +67,7 @@ Every entry in `use` is injectable in the product sense: it can add instructions
 Omit `output` when the model should return text.
 
 ```ts twoslash title="text-prompt.ts"
-import { prompt } from '@crux/core'
+import { prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const rewrite = prompt({
@@ -82,7 +82,7 @@ const rewrite = prompt({
 ```
 
 ```ts title="run.ts"
-import { generate } from '@crux/ai'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 const result = await generate(rewrite, {
@@ -101,7 +101,7 @@ result.text
 Add `output` when downstream code needs typed data. Adapters switch to structured generation and validate the result with Zod.
 
 ```ts twoslash title="structured-prompt.ts"
-import { prompt } from '@crux/core'
+import { prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const classifyTicket = prompt({
@@ -138,10 +138,10 @@ result.object.urgency
 `use` is the main Crux composition surface. Put the capability in the array; Crux resolves the right context, tools, constraints, metadata, and lifecycle behavior.
 
 ```ts title="composition.ts"
-import { prompt, context } from '@crux/core'
-import { memory, recentMessages, facts } from '@crux/core/memory'
-import { grounding } from '@crux/core/retrieval'
-import { skill } from '@crux/core/skill'
+import { prompt, context } from '@use-crux/core'
+import { memory, recentMessages, facts } from '@use-crux/core/memory'
+import { grounding } from '@use-crux/core/retrieval'
+import { skill } from '@use-crux/core/skill'
 
 const policy = context({
   id: 'support-policy',
@@ -211,7 +211,7 @@ Use direct `prompt({ use: [...] })` for one-off wiring. Use `context({ use: [...
 Use `system` + `prompt` for the common single-turn shape.
 
 ```ts twoslash title="single-turn.ts"
-import { prompt } from '@crux/core'
+import { prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const titleIdeas = prompt({
@@ -225,7 +225,7 @@ const titleIdeas = prompt({
 Use `messages` when you need a full chat transcript, few-shot examples, or role-specific turns.
 
 ```ts twoslash title="messages.ts"
-import { prompt } from '@crux/core'
+import { prompt } from '@use-crux/core'
 import { z } from 'zod'
 
 const chatReply = prompt({

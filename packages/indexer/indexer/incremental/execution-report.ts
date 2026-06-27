@@ -1,4 +1,4 @@
-import type { IncrementalExecutionReport } from './execution-types'
+import type { IncrementalExecutionReport, IncrementalPatchCounts, IncrementalSemanticStatus } from './execution-types'
 import type { IndexPatchInvalidation } from './invalidation'
 import type { IncrementalIndexDecision } from './types'
 
@@ -9,6 +9,9 @@ interface ExecutionReportInput {
   readonly semanticAnalyzedFiles?: readonly string[]
   readonly fallbackReason?: string
   readonly durationMsByPhase?: Readonly<Record<string, number>>
+  readonly patchCounts?: IncrementalPatchCounts
+  readonly sourceProfileFileCount?: number
+  readonly semanticStatus?: IncrementalSemanticStatus
 }
 
 /**
@@ -34,6 +37,9 @@ export function incrementalExecutionReport(input: ExecutionReportInput): Increme
     invalidatedFiles: input.invalidation.files ?? [],
     invalidatedDefinitionIds: input.invalidation.definitionIds ?? [],
     durationMsByPhase: input.durationMsByPhase ?? {},
+    patchCounts: input.patchCounts ?? { ast: 0, semantic: 0, total: 0 },
+    sourceProfileFileCount: input.sourceProfileFileCount ?? 0,
+    semanticStatus: input.semanticStatus ?? 'not-requested',
   }
 }
 

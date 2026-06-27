@@ -1,5 +1,5 @@
 import type { LanguageModelV3CallOptions } from '@ai-sdk/provider'
-import type { CruxRuntime, ToolModelOutput } from '@crux/core'
+import type { CruxRuntime, ToolModelOutput } from '@use-crux/core'
 import type { PromptMessage } from './message-shapes'
 
 interface StepTimingEntry {

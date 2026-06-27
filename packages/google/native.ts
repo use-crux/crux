@@ -1,12 +1,7 @@
 import type { Content, GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import { adapter } from '@crux/core/adapter'
-import type { AdapterSpec } from '@crux/core/adapter'
-import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
-import type { NativeProviderPort } from '@crux/core/adapter/native-chat'
-import {
-  disabledCachedContentLifecycle,
-  resolveCachedContentLifecycle,
-} from './cached-content'
+import { defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
+import type { NativeProviderPort, SingleTurnProviderBundleSpec } from '@use-crux/core/adapter'
+import { disabledCachedContentLifecycle, resolveCachedContentLifecycle } from './cached-content'
 import type { GoogleCachedContentLifecycle, GoogleCachedContentOption } from './cached-content'
 import { googleTranscript } from './message-codec'
 import {
@@ -21,42 +16,71 @@ import { googleTextDelta } from './stream'
 import type { GoogleExtra, GoogleRequest } from './types'
 
 interface GoogleNativeDeps extends Record<string, unknown> {
-  readonly cachedContentLifecycle: GoogleCachedContentLifecycle
+  readonly cachedContentLifecycle?: GoogleCachedContentLifecycle
 }
+
+/**
+ * Fallback lifecycle for the raw runtime when no deps are supplied.
+ *
+ * `createGoogle()` always injects a real lifecycle, so this only applies to
+ * direct `googleProviderRuntime.create(client, {})` usage, where caching is off.
+ */
+const DISABLED_CACHED_CONTENT = disabledCachedContentLifecycle()
 
 /** Options for `createGoogle()`. */
 export interface CreateGoogleOptions {
   /**
-   * CachedContent configuration for Google's context caching API.
+   * Configure Google's CachedContent API integration.
    *
    * - `undefined` / omitted: caching enabled with defaults
    * - `GoogleCacheConfig`: custom TTL, max entries, error mode, or cache port
-   * - `false`: disable cache management entirely
+   * - `false`: disable CachedContent management entirely
    * - `GoogleCachedContentLifecycle`: a fully custom lifecycle implementation
    */
-  readonly cache?: GoogleCachedContentOption
+  readonly cachedContent?: GoogleCachedContentOption
 }
 
-/** Google native chat profile compiled into the public Crux adapter API. */
-const nativeGoogle = defineNativeChatProvider<
-  GoogleRequest,
-  GenerateContentResponse,
-  AsyncIterable<GenerateContentResponse>,
-  GoogleExtra,
-  GoogleNativeDeps,
-  Content
->({
-  providerId: 'google',
-  request: (args, { deps }) => googleRequest(args, deps.cachedContentLifecycle),
-  response: {
-    meta: googleResponseMeta,
-    text: googleResponseText,
+/** Google single-turn provider bundle compiled by core. */
+const google = defineSingleTurnProviderBundle({
+  id: 'google',
+  bind: bindGoogle,
+  profile: {
+    request: (args, { deps }) => googleRequest(args, deps.cachedContentLifecycle ?? DISABLED_CACHED_CONTENT),
+    response: {
+      meta: googleResponseMeta,
+      text: googleResponseText,
+    },
+    stream: { textDelta: googleTextDelta },
+    settings: googleSettings,
+    outputSchema: googleOutputSchema,
+    transcript: googleTranscript,
+  } satisfies SingleTurnProviderBundleSpec<
+    GoogleGenAI,
+    GoogleRequest,
+    GenerateContentResponse,
+    AsyncIterable<GenerateContentResponse>,
+    GoogleExtra,
+    GoogleNativeDeps,
+    Content
+  >['profile'],
+  deps: {
+    create: (client: GoogleGenAI, opts?: CreateGoogleOptions): GoogleNativeDeps => ({
+      cachedContentLifecycle: resolveCachedContentLifecycle(client, opts?.cachedContent),
+    }),
+    // Lightweight helpers run plain text/object generation without system
+    // blocks, so they leave caching off via the disabled fallback.
+    helpers: (): GoogleNativeDeps => ({}),
   },
-  stream: { textDelta: googleTextDelta },
-  settings: googleSettings,
-  outputSchema: googleOutputSchema,
-  transcript: googleTranscript,
 })
+
+/**
+ * Public Google provider runtime.
+ *
+ * Google is a single-turn provider: the SDK exposes one generate-content call
+ * or stream per turn, while Crux owns prompt resolution, tool loops,
+ * validation retry, safety, observability, and memory capture.
+ */
+export const googleProviderRuntime = google.runtime
 
 /** Bind a Google GenAI SDK client to the narrow native chat provider port. */
 function bindGoogle(
@@ -68,26 +92,8 @@ function bindGoogle(
   }
 }
 
-/** Build the native Google `AdapterSpec`, closing over a CachedContent lifecycle. */
-export function buildGoogleSpec(
-  cachedContentLifecycle: GoogleCachedContentLifecycle,
-): AdapterSpec<GoogleGenAI, GenerateContentResponse, AsyncIterable<GenerateContentResponse>, GoogleExtra> {
-  return nativeGoogle.specFor(bindGoogle, { cachedContentLifecycle })
-}
-
 /** Create a Google GenAI adapter bound to a client instance. */
-export function createGoogle(client: GoogleGenAI, opts?: CreateGoogleOptions) {
-  const cachedContentLifecycle = resolveCachedContentLifecycle(client, opts?.cache)
+export const createGoogle = google.create
 
-  return adapter(buildGoogleSpec(cachedContentLifecycle))(client)
-}
-
-/**
- * Lightweight helper factory generated from the Google native chat profile.
- *
- * Helpers run plain text/object generation without system blocks, so they use a
- * disabled CachedContent lifecycle and never create server-side caches.
- */
-export const googleHelpers = nativeGoogle.helpers(bindGoogle, {
-  cachedContentLifecycle: disabledCachedContentLifecycle(),
-})
+/** Lightweight helper factory generated from the Google provider runtime. */
+export const googleHelpers = google.helpers()

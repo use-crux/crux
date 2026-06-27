@@ -33,9 +33,9 @@ debug.droppedContexts // [{ id, reason, priority }]
 Prompts are SDK-agnostic — they don't import any adapter. Pass the prompt to whichever adapter you need:
 
 ```ts
-import { generate } from '@crux/ai'
-import { createOpenAI } from '@crux/openai'
-import { createAnthropic } from '@crux/anthropic'
+import { generate } from '@use-crux/ai'
+import { createOpenAI } from '@use-crux/openai'
+import { createAnthropic } from '@use-crux/anthropic'
 import OpenAI from 'openai'
 import Anthropic from '@anthropic-ai/sdk'
 
@@ -84,8 +84,9 @@ Only if you use `tokenBudget` for context dropping. Without a tokenizer, Crux es
 import { encode } from 'gpt-tokenizer'
 
 config({
-  prompts,
-  tokenizer: (text) => encode(text).length,
+  generation: {
+    tokenizer: (text) => encode(text).length,
+  },
 })
 ```
 
@@ -132,7 +133,7 @@ Yes. The Crux docs expose an [`llms.txt`](/llms.txt) endpoint that AI assistants
 
 ## Can I use Crux without any adapter?
 
-Yes. `@crux/core` is fully standalone. Use `.resolve()` to get the composed prompt data, then pass it to any SDK manually:
+Yes. `@use-crux/core` is fully standalone. Use `.resolve()` to get the composed prompt data, then pass it to any SDK manually:
 
 ```ts
 const { system, prompt, schema, settings } = await myPrompt.resolve({ input })

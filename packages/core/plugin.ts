@@ -36,7 +36,7 @@ export interface CruxPluginResult extends Partial<CruxRuntime> {
  *
  * @example
  * ```ts
- * import type { CruxPlugin } from '@crux/core'
+ * import type { CruxPlugin } from '@use-crux/core'
  *
  * const myPlugin: CruxPlugin = {
  *   name: 'my-tracer',

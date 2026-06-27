@@ -10,6 +10,7 @@
  */
 
 import type { AnyPrompt, GenerationSettings } from '../../types'
+import type { SkillActivationSession } from '../../skill/session'
 import type { StepDirective } from '../executor-types'
 import type { ExecutionResolveOpts } from './types'
 
@@ -36,6 +37,18 @@ export function buildResolveOpts(args: {
     tokenBudget: args.tokenBudget,
     ...(args.settings ?? {}),
   } as ExecutionResolveOpts
+}
+
+/** Build resolve options for a skill-triggered re-resolution. */
+export function withSkillActivationInput(
+  resolveOpts: ExecutionResolveOpts,
+  session: SkillActivationSession,
+): ExecutionResolveOpts {
+  const opts = resolveOpts as ExecutionResolveOpts & { readonly input?: Record<string, unknown> }
+  return {
+    ...opts,
+    input: session.resolveInput(opts.input),
+  } as unknown as ExecutionResolveOpts
 }
 
 /**

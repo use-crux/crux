@@ -5,7 +5,7 @@
  * engine later redacts those facts and projects them into both the rich
  * `assertions.outcomes` ledger and the legacy `assertions.failures` view.
  *
- * @internal Not exported from `@crux/core/quality` - engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` - engine plumbing only.
  * @module
  */
 

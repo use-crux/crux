@@ -9,8 +9,8 @@
  */
 
 import { useSyncExternalStore } from 'react'
-import type { CruxStore, JsonObject, StoreEntry, ListOptions } from '@crux/core/store'
-import { matchesFilter } from '@crux/core/store'
+import type { CruxStore, JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
+import { matchesFilter } from '@use-crux/core/store'
 import type { CruxTransport } from './types'
 
 /**
@@ -43,7 +43,7 @@ export interface PollingTransportOptions {
  *
  * @example
  * ```tsx
- * import { createPollingTransport } from '@crux/react'
+ * import { createPollingTransport } from '@use-crux/react'
  *
  * const transport = createPollingTransport(store, { intervalMs: 2000 })
  *

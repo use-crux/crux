@@ -8,7 +8,7 @@ description: Store dense, sparse, and hybrid vectors for retrieval and semantic 
 Use it when a feature needs dense, sparse, or hybrid vector search. Keep JSON records in [`DataStore`](/docs/guides/storage/crux-store), then store searchable vectors in `VectorStore` using the same keys.
 
 ```ts
-import { inMemoryDataStore, inMemoryVectorStore, storage } from '@crux/core/storage'
+import { inMemoryDataStore, inMemoryVectorStore, storage } from '@use-crux/core/storage'
 
 const data = inMemoryDataStore()
 const vectors = inMemoryVectorStore()
@@ -19,7 +19,7 @@ const appStorage = storage({ data, vectors })
 ## Interface
 
 ```ts
-import type { VectorStore } from '@crux/core/storage'
+import type { VectorStore } from '@use-crux/core/storage'
 
 const vectors: VectorStore = {
   async upsert(records) {
@@ -105,7 +105,7 @@ The retriever handles embedding the query, searching vectors, hydrating records 
 Use `inMemoryVectorStore()` for tests and examples:
 
 ```ts
-import { inMemoryVectorStore } from '@crux/core/storage'
+import { inMemoryVectorStore } from '@use-crux/core/storage'
 
 const vectors = inMemoryVectorStore()
 ```
@@ -113,7 +113,7 @@ const vectors = inMemoryVectorStore()
 Use Upstash Vector for production dense, sparse, or hybrid retrieval:
 
 ```ts
-import { upstashVectorStore } from '@crux/upstash'
+import { upstashVectorStore } from '@use-crux/upstash'
 import { Index } from '@upstash/vector'
 
 const vectors = upstashVectorStore({
@@ -132,7 +132,7 @@ See [Retrieval](/docs/guides/retrieval) for the user-facing retrieval APIs, [Ups
 Implement `VectorStore` when your vector database can upsert records by key and search them by dense, sparse, or hybrid query.
 
 ```ts
-import type { VectorStore } from '@crux/core/storage'
+import type { VectorStore } from '@use-crux/core/storage'
 
 export function myVectorStore(): VectorStore {
   return {

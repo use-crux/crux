@@ -5,7 +5,7 @@
  * @module
  */
 
-import type { AdapterResponse } from '@crux/core/adapter'
+import type { AdapterResponse } from '@use-crux/core/adapter'
 
 // ─────────────────────────────────────────────────────────────────
 // Cost extraction

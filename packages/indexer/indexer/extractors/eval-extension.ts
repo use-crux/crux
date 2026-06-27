@@ -1,8 +1,22 @@
 import { readFileSync } from 'node:fs'
-import type { ProjectDefinition, ProjectDefinitionKind } from '@crux/core/project-index'
+import type { ProjectDefinition, ProjectDefinitionKind } from '@use-crux/core/project-index'
 import { foldedIndexChild } from '../index-presentation'
 import { facts, type IndexExtractor, type ExtractContext, type StaticObjectReader } from '../extensions'
 import { assertionSitesFromSource } from '../evaluation-assertion-sites'
+
+const evaluationCoverageTargetPrefixes = {
+  prompt: 'prompt',
+  flow: 'flow',
+  agent: 'agent',
+  context: 'context',
+  memory: 'memory',
+} as const satisfies Readonly<Record<string, string>>
+
+type EvaluationCoveragePrefix = keyof typeof evaluationCoverageTargetPrefixes
+type EvaluationCoverageTargetPrefix<TPrefix extends EvaluationCoveragePrefix = EvaluationCoveragePrefix> =
+  (typeof evaluationCoverageTargetPrefixes)[TPrefix]
+type EvaluationCoverageTargetId<TPrefix extends EvaluationCoveragePrefix = EvaluationCoveragePrefix> =
+  `${EvaluationCoverageTargetPrefix<TPrefix>}:${string}`
 
 /**
  * Extracts Quality `evaluate()` definitions from source without executing it.
@@ -30,7 +44,7 @@ function extractEvaluation(ctx: ExtractContext) {
   const id = `evaluation:${ctx.source.safeId(name)}`
   const cases = ctx.config.objectArray('data')
   const namedCases = staticEvaluationCases(ctx, id, name, cases)
-  const coverage = taskCoverageRefs(ctx.config)
+  const coverage = taskCoverageRefs(ctx.config, explicitId, ctx.source.safeId)
   const assertionSites = staticAssertionSites(ctx)
   return facts({
     definitions: [
@@ -124,18 +138,51 @@ function staticEvaluationCases(
 /**
  * Normalizes the `task:` field into unresolved coverage references.
  *
- * `task` accepts a primitive identifier (`task: writerPrompt`), a
- * `target.*()` wrapper, or a plain function — only identifier references can
- * be resolved statically; everything else stays opaque until runtime
- * discovery reads the manifest.
+ * `task` accepts a primitive identifier (`task: writerPrompt`), a `target.*()`
+ * wrapper, or a plain function. Identifier references resolve against imports
+ * first; explicit evaluation ids such as `prompt.draft-edit` provide a fallback
+ * Project Index id for deterministic stand-ins.
  */
-function taskCoverageRefs(config: StaticObjectReader): {
-  readonly refs: ReadonlyArray<{ readonly toVariable?: string; readonly toId?: string }>
+function taskCoverageRefs(
+  config: StaticObjectReader,
+  explicitId: string | undefined,
+  safeId: (value: string) => string,
+): {
+  readonly refs: ReadonlyArray<{ readonly toVariable?: string; readonly toId?: string; readonly fallbackToId?: string }>
   readonly metadata?: readonly string[]
 } {
+  const explicitTargets = config.stringArray('covers')
+  if (explicitTargets.length > 0) {
+    return {
+      refs: explicitTargets.map((toId) => ({ toId })),
+      metadata: explicitTargets,
+    }
+  }
+
   const single = config.identifier('task')
-  const refs = single ? [{ toVariable: single }] : []
+  const inferredTargetId = coverageTargetFromEvaluationId(explicitId, safeId)
+  const refs = single
+    ? [{ toVariable: single, ...(inferredTargetId ? { fallbackToId: inferredTargetId } : {}) }]
+    : inferredTargetId
+      ? [{ toId: inferredTargetId }]
+      : []
   return { refs, ...(single ? { metadata: [single] } : {}) }
+}
+
+function coverageTargetFromEvaluationId(
+  explicitId: string | undefined,
+  safeId: (value: string) => string,
+): EvaluationCoverageTargetId | undefined {
+  if (!explicitId) return undefined
+  const separator = explicitId.indexOf('.')
+  if (separator <= 0 || separator === explicitId.length - 1) return undefined
+  const prefix = explicitId.slice(0, separator)
+  if (!isEvaluationCoveragePrefix(prefix)) return undefined
+  return `${evaluationCoverageTargetPrefixes[prefix]}:${safeId(explicitId.slice(separator + 1))}`
+}
+
+function isEvaluationCoveragePrefix(value: string): value is EvaluationCoveragePrefix {
+  return Object.prototype.hasOwnProperty.call(evaluationCoverageTargetPrefixes, value)
 }
 
 /** Builds folded eval child definitions with the same source defaults as the parent extractor context. */

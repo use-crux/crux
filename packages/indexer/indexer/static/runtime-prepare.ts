@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import type { InjectionUseFacts } from '@crux/core/project-index'
+import type { InjectionUseFacts } from '@use-crux/core/project-index'
 import { propertyName } from '../ast/literals'
 import type { ExtractedFacts } from '../extensions'
 

@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { PromptMiddleware } from '@crux/core'
+import type { PromptMiddleware } from '@use-crux/core'
 import type { SpanManager } from './span-manager'
 import type { TelemetryOptions } from './plugin'
 

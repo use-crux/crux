@@ -1,7 +1,6 @@
 import type { IndexerExtension } from '../extensions'
-import { cruxIndexLintRule } from '../lints/extension'
 import { relationSpecFromPolicy } from '../extensions'
-import { indexRelationPolicies } from '../relations/index'
+import { indexRelationPolicies } from '../relations'
 import { agentIndexExtractor } from './agent-extension'
 import { compositionIndexExtractor } from './composition-extension'
 import { contextIndexExtractor } from './context-extension'
@@ -14,6 +13,7 @@ import { ragRetrieverIndexExtractor } from './rag-extension'
 import { routingIndexExtractor } from './routing-extension'
 import { safetyIndexExtractor } from './safety-extension'
 import { scorerIndexExtractor } from './scorer-extension'
+import { registryIndexExtractor, registrySkillIndexExtractor } from './skill-registry-extension'
 import { toolIndexExtractor } from './tool-extension'
 import { workspaceIndexExtractor } from './workspace-extension'
 
@@ -25,11 +25,14 @@ import { workspaceIndexExtractor } from './workspace-extension'
  * all first-party static extractor patterns.
  */
 export const cruxCoreExtension: IndexerExtension = {
-  name: '@crux/indexer/crux-core',
+  name: '@use-crux/indexer/crux-core',
   version: '1',
   crux: {
     indexer: '^0.1.0',
     projectIndexSchema: 1,
+  },
+  static: {
+    evidence: { mode: 'declared' },
   },
   extractors: [
     ragRetrieverIndexExtractor,
@@ -37,6 +40,8 @@ export const cruxCoreExtension: IndexerExtension = {
     scorerIndexExtractor,
     workspaceIndexExtractor,
     evalIndexExtractor,
+    registryIndexExtractor,
+    registrySkillIndexExtractor,
     toolIndexExtractor,
     injectableIndexExtractor,
     contextIndexExtractor,
@@ -48,6 +53,5 @@ export const cruxCoreExtension: IndexerExtension = {
     routingIndexExtractor,
     flowIndexExtractor,
   ],
-  rules: [cruxIndexLintRule],
   relations: indexRelationPolicies.map(relationSpecFromPolicy),
 }

@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { SystemBlock } from '@crux/core'
+import type { SystemBlock } from '@use-crux/core'
 
 /** Decomposition of resolved system blocks into a cacheable prefix and suffix. */
 export interface SystemBlockPlan {

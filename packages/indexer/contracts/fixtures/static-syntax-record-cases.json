@@ -1,0 +1,203 @@
+{
+  "records": [
+    {
+      "schemaVersion": 1,
+      "frontend": {
+        "name": "oxc-rust",
+        "version": "oxc_parser@0.133.0+crux_native_group3.5"
+      },
+      "file": "/repo/src/agent.ts",
+      "sourceHash": "sha256:agent",
+      "imports": [
+        {
+          "localName": "Agent",
+          "importedName": "Agent",
+          "moduleSpecifier": "@use-crux/core",
+          "source": {
+            "file": "/repo/src/agent.ts",
+            "line": 1,
+            "column": 10
+          }
+        }
+      ],
+      "matches": [
+        {
+          "kind": "new",
+          "variableName": "agent",
+          "localName": "src/agent.ts:agent",
+          "exported": true,
+          "callee": {
+            "name": "Agent",
+            "direct": true,
+            "localName": "Agent",
+            "importedName": "Agent",
+            "moduleSpecifier": "@use-crux/core"
+          },
+          "args": [
+            {
+              "kind": "object",
+              "properties": [
+                {
+                  "name": "name",
+                  "value": {
+                    "kind": "literal",
+                    "value": "planner"
+                  },
+                  "shorthand": false,
+                  "source": {
+                    "file": "/repo/src/agent.ts",
+                    "line": 3,
+                    "column": 3
+                  }
+                },
+                {
+                  "name": "instructions",
+                  "value": {
+                    "kind": "function",
+                    "calls": [
+                      {
+                        "callee": {
+                          "name": "writeFile",
+                          "direct": false,
+                          "localName": "writeFile"
+                        },
+                        "receiver": {
+                          "kind": "identifier",
+                          "name": "workspace"
+                        },
+                        "args": [
+                          {
+                            "kind": "literal",
+                            "value": "notes.md"
+                          },
+                          {
+                            "kind": "literal",
+                            "value": "plan"
+                          }
+                        ],
+                        "source": {
+                          "file": "/repo/src/agent.ts",
+                          "line": 4,
+                          "column": 24
+                        }
+                      }
+                    ],
+                    "returns": [],
+                    "localInitializers": [],
+                    "source": {
+                      "file": "/repo/src/agent.ts",
+                      "line": 4,
+                      "column": 17
+                    }
+                  },
+                  "shorthand": false,
+                  "source": {
+                    "file": "/repo/src/agent.ts",
+                    "line": 4,
+                    "column": 3
+                  }
+                }
+              ],
+              "source": {
+                "file": "/repo/src/agent.ts",
+                "line": 2,
+                "column": 32
+              }
+            }
+          ],
+          "objectArg": {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "name",
+                "value": {
+                  "kind": "literal",
+                  "value": "planner"
+                },
+                "shorthand": false,
+                "source": {
+                  "file": "/repo/src/agent.ts",
+                  "line": 3,
+                  "column": 3
+                }
+              },
+              {
+                "name": "instructions",
+                "value": {
+                  "kind": "function",
+                  "calls": [
+                    {
+                      "callee": {
+                        "name": "writeFile",
+                        "direct": false,
+                        "localName": "writeFile"
+                      },
+                      "receiver": {
+                        "kind": "identifier",
+                        "name": "workspace"
+                      },
+                      "args": [
+                        {
+                          "kind": "literal",
+                          "value": "notes.md"
+                        },
+                        {
+                          "kind": "literal",
+                          "value": "plan"
+                        }
+                      ],
+                      "source": {
+                        "file": "/repo/src/agent.ts",
+                        "line": 4,
+                        "column": 24
+                      }
+                    }
+                  ],
+                  "returns": [],
+                  "localInitializers": [],
+                  "source": {
+                    "file": "/repo/src/agent.ts",
+                    "line": 4,
+                    "column": 17
+                  }
+                },
+                "shorthand": false,
+                "source": {
+                  "file": "/repo/src/agent.ts",
+                  "line": 4,
+                  "column": 3
+                }
+              }
+            ],
+            "source": {
+              "file": "/repo/src/agent.ts",
+              "line": 2,
+              "column": 32
+            }
+          },
+          "source": {
+            "file": "/repo/src/agent.ts",
+            "line": 2,
+            "column": 22
+          },
+          "localInitializers": []
+        }
+      ],
+      "nativeFacts": [],
+      "localInitializers": [],
+      "diagnostics": [
+        {
+          "id": "syntax:agent:recovered",
+          "severity": "warning",
+          "code": "syntax.recovered",
+          "message": "Recovered parser diagnostic",
+          "source": {
+            "file": "/repo/src/agent.ts",
+            "line": 6,
+            "column": 1
+          }
+        }
+      ]
+    }
+  ]
+}

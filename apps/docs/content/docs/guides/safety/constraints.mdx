@@ -11,7 +11,7 @@ Constraints ensure output quality by validating semantics and retrying with comb
 ## Quick Start
 
 ```ts title="constraints.ts"
-import { constraint } from '@crux/core/safety'
+import { constraint } from '@use-crux/core/safety'
 
 const citeSources = constraint({
   name: 'cite-sources',
@@ -38,7 +38,7 @@ Creates a frozen constraint object. Generic over a Zod schema for typed `output.
 
 ```ts
 import { z } from 'zod'
-import { constraint } from '@crux/core/safety'
+import { constraint } from '@use-crux/core/safety'
 
 const BlogPost = z.object({
   title: z.string(),
@@ -147,7 +147,7 @@ Constraints support three scoping levels, merged via union. When names collide, 
 ### Global (all generate calls)
 
 ```ts
-import { createSafetyPlugin } from '@crux/core/safety'
+import { createSafetyPlugin } from '@use-crux/core/safety'
 
 config({
   plugins: [createSafetyPlugin({ constraints: [targetLanguage] })],
@@ -247,7 +247,7 @@ result._meta.constraints
 ## Error Handling
 
 ```ts
-import { ConstraintViolationError } from '@crux/core/safety'
+import { ConstraintViolationError } from '@use-crux/core/safety'
 
 try {
   await adapter.generate(prompt, { constraints: [citeSources] })
@@ -268,7 +268,7 @@ try {
 ## Testing
 
 ```ts
-import { evaluateConstraint } from '@crux/core/safety'
+import { evaluateConstraint } from '@use-crux/core/safety'
 
 const report = await evaluateConstraint(citeSources, [
   { input: { text: 'See [1] and [2] for details' }, expect: true },
@@ -302,10 +302,10 @@ const factualAccuracy = constraint({
 
 Since constraints run in parallel, multiple LLM judges run concurrently — no sequential bottleneck.
 
-For scored quality dimensions you already express as an `llmJudge()`, skip the hand-rolled check entirely: `judgeConstraint(judge, { min })` from `@crux/core/scoring` wraps any judge as a normal constraint — the score threshold becomes the pass/fail verdict and the judge's reasoning becomes the retry feedback. One definition then serves CI evals (via `constraintScorer()` in `@crux/core/quality`) and production enforcement.
+For scored quality dimensions you already express as an `llmJudge()`, skip the hand-rolled check entirely: `judgeConstraint(judge, { min })` from `@use-crux/core/scoring` wraps any judge as a normal constraint — the score threshold becomes the pass/fail verdict and the judge's reasoning becomes the retry feedback. One definition then serves CI evals (via `constraintScorer()` in `@use-crux/core/quality`) and production enforcement.
 
 ```ts
-import { llmJudge, judgeConstraint } from '@crux/core/scoring'
+import { llmJudge, judgeConstraint } from '@use-crux/core/scoring'
 
 const brandVoiceGate = judgeConstraint(brandVoiceJudge, { min: 7, severity: 'suggest' })
 ```
@@ -322,7 +322,7 @@ Constraints emit three event types:
 | `constraint:retry` | Combined retry triggered | `constraintNames`, `attempt`, `combinedFeedback` |
 | `constraint:violation` | Assert exhausted | `constraintNames`, `totalAttempts` |
 
-These appear in the Constraints view in the devtools dashboard, are emitted as OTel spans when `@crux/otel` is active, and are wired through `InstrumentationHooks` (`onConstraintCheck`, `onConstraintRetry`, `onConstraintViolation`).
+These appear in the Constraints view in the devtools dashboard, are emitted as OTel spans when `@use-crux/otel` is active, and are wired through `InstrumentationHooks` (`onConstraintCheck`, `onConstraintRetry`, `onConstraintViolation`).
 
 ---
 

@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { AdapterResponse } from '@crux/core/adapter'
-import type { NativeAssistantTurn, NativeResponseMetadata } from '@crux/core/adapter/native-chat'
+import type { AdapterResponse } from '@use-crux/core/adapter'
+import type { NativeAssistantTurn, NativeResponseMetadata } from '@use-crux/core/adapter'
 import { anthropicTranscript } from './message-codec'
 
 /** Anthropic message shape returned by `messages.parse()`. */

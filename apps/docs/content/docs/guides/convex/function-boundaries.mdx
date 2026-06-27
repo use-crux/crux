@@ -5,10 +5,10 @@ description: Preserve Crux run/span context across Convex actions, queries, muta
 
 # Function Boundaries
 
-Use `@crux/convex/server` for Convex functions that participate in a Crux execution graph.
+Use `@use-crux/convex/server` for Convex functions that participate in a Crux execution graph.
 
 ```ts
-import { action, internalAction, query, mutation } from '@crux/convex/server'
+import { action, internalAction, query, mutation } from '@use-crux/convex/server'
 ```
 
 The wrappers preserve Convex's normal function shape while adding:
@@ -23,8 +23,8 @@ The wrappers preserve Convex's normal function shape while adding:
 ```ts title="convex/chat/actions.ts"
 'use node'
 
-import { action } from '@crux/convex/server'
-import { generate } from '@crux/ai'
+import { action } from '@use-crux/convex/server'
+import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { v } from 'convex/values'
 import { chatPrompt } from '../prompts/support'
@@ -77,7 +77,7 @@ This records an inspectable `runtime.convex.action` boundary, flushes the bounda
 Use `query()` and `mutation()` when a read/write needs Crux context propagation, but should not create a standalone run.
 
 ```ts title="convex/research/data.ts"
-import { query } from '@crux/convex/server'
+import { query } from '@use-crux/convex/server'
 import { v } from 'convex/values'
 
 export const getResearchInputs = query({
@@ -127,7 +127,7 @@ Scheduling crosses both time and worker boundaries, so detached work should not 
 
 ## Escape Hatches
 
-If you must call across a boundary that is not wrapped by `@crux/convex/server`, manually capture and restore context with `observe.captureContext()` and `observe.withContext()`. Prefer the Convex wrappers whenever possible.
+If you must call across a boundary that is not wrapped by `@use-crux/convex/server`, manually capture and restore context with `observe.captureContext()` and `observe.withContext()`. Prefer the Convex wrappers whenever possible.
 
 ## Best Practices
 

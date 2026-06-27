@@ -8,8 +8,8 @@ Memory does not define its own storage system. Every memory block persists throu
 That means the same data store adapter can back memory records, indexing metadata, plans, flows, blackboards, and workspace metadata.
 
 ```ts
-import { memory, workingState } from '@crux/core/memory'
-import { inMemoryDataStore } from '@crux/core/storage'
+import { memory, workingState } from '@use-crux/core/memory'
+import { inMemoryDataStore } from '@use-crux/core/storage'
 
 const store = inMemoryDataStore()
 
@@ -50,7 +50,7 @@ const mem = memory({
 })
 ```
 
-For production, pass a durable `DataStore`. Convex apps use `cruxConvexStore()`; see the [Convex guide](/docs/guides/convex) for setup and boundary rules.
+For production, pass a durable `DataStore`. Convex apps use `defineConvexStoreContract().store(ctx)`; see the [Convex guide](/docs/guides/convex) for setup and boundary rules.
 
 ## Vector Recall
 
@@ -98,7 +98,7 @@ Use:
 - Polling transport for universal fallback.
 
 ```tsx
-import { CruxProvider, createPollingTransport, useWorkingMemory } from '@crux/react'
+import { CruxProvider, createPollingTransport, useWorkingMemory } from '@use-crux/react'
 
 const transport = createPollingTransport(store)
 
@@ -121,7 +121,7 @@ For memory, choose storage based on the behavior you need:
 | Need                                  | Use                                                                     |
 | ------------------------------------- | ----------------------------------------------------------------------- |
 | Tests and examples                    | `inMemoryDataStore()`                                                   |
-| Convex app state and reactivity       | `cruxConvexStore()` as a `DataStore`; see [Convex](/docs/guides/convex) |
+| Convex app state and reactivity       | `defineConvexStoreContract().store(ctx)` as a `DataStore`; see [Convex](/docs/guides/convex) |
 | Redis-backed key-value records        | `cruxRedisStore()` as a `DataStore`                                     |
 | Dense/sparse/hybrid vector recall     | Pair memory data with a `VectorStore` such as Upstash Vector            |
 | Workspace files and generated outputs | `BlobStore`, not memory storage                                         |

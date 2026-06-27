@@ -16,7 +16,7 @@
  * about the entry union — `lowerEntry()` in `./lower.ts` is the single place
  * that does.
  *
- * This contract is exported from `@crux/core` as **advanced API** for
+ * This contract is exported from `@use-crux/core` as **advanced API** for
  * adapter and primitive authors (see use-crux/crux#29). Application code
  * composes entries with the public factories (`context()`, `memory()`,
  * `skill()`, `contributor()`, …) and never touches lowered contributors

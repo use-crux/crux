@@ -6,7 +6,7 @@
  * millisecond timestamp + 16 chars of randomness, monotonic within one
  * millisecond so rapid runs never collide or reorder.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 

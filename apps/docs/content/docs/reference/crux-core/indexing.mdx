@@ -4,7 +4,7 @@ description: Chunking and indexing primitives for turning documents into stored 
 ---
 
 ```ts
-import { chunker, corpus, indexer, indexingPipeline, transform } from '@crux/core/indexing'
+import { chunker, corpus, indexer, indexingPipeline, transform } from '@use-crux/core/indexing'
 import type {
   CruxDocument,
   CruxChunk,
@@ -18,7 +18,7 @@ import type {
   CorpusSyncResult,
   Indexer,
   Corpus,
-} from '@crux/core/indexing'
+} from '@use-crux/core/indexing'
 ```
 
 ## Overview
@@ -32,7 +32,7 @@ import type {
 - `DataStore` and `VectorStore` writes
 - source replacement and clearing
 
-It does not load files or URLs. That belongs to `@crux/ingest`.
+It does not load files or URLs. That belongs to `@use-crux/ingest`.
 
 The easiest way to think about an indexer is that it turns source material into a retrieval corpus. If retrieval is the read API, indexing is the write API.
 
@@ -239,7 +239,7 @@ Stored chunks also carry timestamps plus optional `embedding` and `sparseEmbeddi
 
 These models are intentionally plain. The point is not to hide chunking from users; it is to give them a stable, explicit shape that both indexing and retrieval can agree on.
 
-`parts` is accepted from `@crux/ingest`. The default chunker still chunks the derived `content`, but it preserves coarse provenance on produced chunks so downstream UI and custom retrieval logic can recover source pages, sheets, tables, and part IDs.
+`parts` is accepted from `@use-crux/ingest`. The default chunker still chunks the derived `content`, but it preserves coarse provenance on produced chunks so downstream UI and custom retrieval logic can recover source pages, sheets, tables, and part IDs.
 
 ## Pipeline API
 
@@ -283,7 +283,7 @@ Built-in chunkers:
 | Chunker | Use it when |
 | ------- | ----------- |
 | `chunker.text()` | You want the plain text default with stable chunk IDs. |
-| `chunker.structured()` | You want page, table, sheet, JSON path, and source span provenance from `@crux/ingest`. |
+| `chunker.structured()` | You want page, table, sheet, JSON path, and source span provenance from `@use-crux/ingest`. |
 | `chunker.parentChild()` | You want large parent records for display/context and smaller child records for search. |
 | `chunker.semantic()` | You want embedding, model/custom, or hybrid segmentation before chunk creation. |
 
@@ -598,7 +598,7 @@ await docsCorpus.sync(loader.load(), {
 })
 ```
 
-`documents` may be an array or async iterable of `CruxDocument`. It may also be an async iterable of ingest load results from `@crux/ingest`. Failed source results are recorded in the corpus ledger and do not stop the whole sync.
+`documents` may be an array or async iterable of `CruxDocument`. It may also be an async iterable of ingest load results from `@use-crux/ingest`. Failed source results are recorded in the corpus ledger and do not stop the whole sync.
 
 `mode` defaults to `replaceChanged`. It indexes new sources, reindexes changed sources, and skips unchanged sources. `appendOnly` indexes new sources but skips changed existing sources.
 
@@ -739,5 +739,5 @@ That is an important boundary for advanced users. Crux should make the common pa
 - Guide: [Indexing Documents](/docs/guides/retrieval/indexing)
 - Guide: [Corpus Sync](/docs/guides/retrieval/corpus-sync)
 - Guide: [Querying](/docs/guides/retrieval/querying)
-- Reference: [@crux/core/retrieval](/docs/reference/crux-core/retrieval)
-- Reference: [@crux/ingest](/docs/reference/ingest)
+- Reference: [@use-crux/core/retrieval](/docs/reference/crux-core/retrieval)
+- Reference: [@use-crux/ingest](/docs/reference/ingest)

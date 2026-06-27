@@ -2,8 +2,8 @@ import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { ProjectDefinitionKind } from '@crux/core/project-index'
-import { indexProject, indexProjectAst, indexProjectSemantic } from '../index'
+import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
+import { indexProject, indexProjectAst, indexProjectRuntime, indexProjectSemantic, resolveProjectModel } from '..'
 import { applyIndexPatch, emptyIndexPatchState } from '../indexer/patches'
 import { planIndexFiles } from '../indexer/incremental'
 import { staticDefinitionFiles } from '../indexer/files'
@@ -25,6 +25,433 @@ afterEach(async () => {
 })
 
 describe('project indexer', () => {
+  it('resolves a no-config Project Model from source and filesystem conventions', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await mkdir(join(root, 'evals'), { recursive: true })
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: '@fixture/no-config-model' }))
+    await writeFile(
+      join(root, 'src/writer.ts'),
+      `
+        import { prompt } from '@use-crux/core'
+
+        export const writerPrompt = prompt({
+          id: 'writer.prompt',
+          system: 'You are a concise writer.',
+          prompt: 'Draft the brief.',
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'evals/writer.eval.ts'),
+      `
+        import { evaluate } from '@use-crux/core/quality'
+
+        export const writerEval = evaluate('writer-eval', {
+          task: (input: { topic: string }) => input.topic,
+          data: [],
+        })
+      `,
+    )
+
+    const model = await resolveProjectModel({ root })
+
+    expect(model.root).toMatchObject({
+      value: root,
+      provenance: expect.objectContaining({ kind: 'filesystem' }),
+    })
+    expect(model.packageName).toMatchObject({
+      value: '@fixture/no-config-model',
+      provenance: expect.objectContaining({ kind: 'filesystem' }),
+    })
+    expect(model.configFiles).toContainEqual(
+      expect.objectContaining({
+        status: expect.objectContaining({ value: 'missing' }),
+      }),
+    )
+    expect(model.ignoredPaths.map((entry) => entry.value)).toContain('**/node_modules/**')
+    expect(model.quality).toMatchObject({
+      id: expect.objectContaining({ value: '@fixture/no-config-model' }),
+      persistenceRoot: expect.objectContaining({ value: join(root, '.crux/quality') }),
+      includeGlobs: [
+        expect.objectContaining({ value: 'evals/**/*.eval.ts' }),
+        expect.objectContaining({ value: '**/*.eval.ts' }),
+      ],
+    })
+    expect(model.quality.evaluationFiles.map((entry) => entry.value)).toContain(join(root, 'evals/writer.eval.ts'))
+    expect(model.definitions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'prompt:writer.prompt', kind: 'prompt' }),
+        expect.objectContaining({ id: 'evaluation:writer-eval', kind: 'evaluation' }),
+      ]),
+    )
+    expect(model.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'project_model.source_only_discovery',
+        severity: 'info',
+        message: expect.stringContaining('source discovery only'),
+      }),
+    )
+  })
+
+  it('reports no-config indexing as source-only discovery instead of missing primitive registration', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/writer.ts'),
+      `
+        import { prompt } from '@use-crux/core'
+
+        export const writerPrompt = prompt({
+          id: 'writer.prompt',
+          system: 'You are a concise writer.',
+          prompt: 'Draft the brief.',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'source-only-diagnostics' })
+    const diagnostic = snapshot.diagnostics.find((entry) => entry.code === 'index.config_not_found')
+
+    expect(diagnostic).toEqual(
+      expect.objectContaining({
+        severity: 'info',
+        message: expect.stringContaining('source discovery only'),
+        suggestedFix: expect.stringContaining('explicit policy'),
+      }),
+    )
+    expect(diagnostic?.suggestedFix).not.toMatch(/required|prompt|context|tool|primitive|registry/i)
+  })
+
+  it('indexes pnpm workspace packages as project shards', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'packages/app/src'), { recursive: true })
+    await mkdir(join(root, 'packages/lib/src'), { recursive: true })
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: '@fixture/workspace', private: true }))
+    await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n')
+    await writeFile(join(root, 'packages/app/package.json'), JSON.stringify({ name: '@fixture/app' }))
+    await writeFile(join(root, 'packages/app/tsconfig.json'), JSON.stringify({ references: [{ path: '../lib' }] }))
+    await writeFile(join(root, 'packages/lib/package.json'), JSON.stringify({ name: '@fixture/lib' }))
+    await writeFile(join(root, 'packages/lib/tsconfig.json'), JSON.stringify({ compilerOptions: {} }))
+    await writeFile(
+      join(root, 'packages/app/src/prompt.ts'),
+      `
+        import { prompt } from '@use-crux/core'
+
+        export const appPrompt = prompt({
+          id: 'app.prompt',
+          system: 'You write app copy.',
+          prompt: 'Draft the copy.',
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'packages/lib/src/prompt.ts'),
+      `
+        import { prompt } from '@use-crux/core'
+
+        export const libPrompt = prompt({
+          id: 'lib.prompt',
+          system: 'You write library copy.',
+          prompt: 'Draft the copy.',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'workspace-shards', resolutionMode: 'source-only' })
+
+    expect(snapshot.sourceGraph?.capabilities).toContain('project-shards')
+    expect(snapshot.sourceGraph?.shards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: '.', root, name: '@fixture/workspace' }),
+        expect.objectContaining({
+          id: 'packages/app',
+          root: join(root, 'packages/app'),
+          name: '@fixture/app',
+          references: ['packages/lib'],
+        }),
+        expect.objectContaining({ id: 'packages/lib', root: join(root, 'packages/lib'), name: '@fixture/lib' }),
+      ]),
+    )
+    expect(snapshot.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ file: join(root, 'packages/app/src/prompt.ts'), shardId: 'packages/app' }),
+        expect.objectContaining({ file: join(root, 'packages/lib/src/prompt.ts'), shardId: 'packages/lib' }),
+      ]),
+    )
+  })
+
+  it('carries semantic source profile on AST patches without adding it to the read model', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    const file = join(root, 'src/writer.ts')
+    await writeFile(
+      file,
+      `
+        import { prompt } from '@use-crux/core'
+
+        export const writerPrompt = prompt({
+          id: 'writer.profile',
+          system: 'Write clearly.',
+        })
+      `,
+    )
+
+    const patch = await indexProjectAst({ root, projectName: 'semantic-profile' })
+    const state = applyIndexPatch(emptyIndexPatchState(), patch)
+
+    expect(patch.semanticSourceProfile?.dependencyClosure).toContain(file)
+    expect(patch.semanticSourceProfile?.files).toContainEqual(
+      expect.objectContaining({
+        file,
+        sourceBytes: expect.any(Number),
+        sourceHash: expect.any(String),
+        hints: expect.objectContaining({
+          nativeDirectCruxCandidate: true,
+        }),
+      }),
+    )
+    expect(patch.semanticSourceProfile?.files[0]).not.toHaveProperty('source')
+    expect(JSON.stringify(state)).not.toContain('semanticSourceProfile')
+  })
+
+  it('discovers package.json workspace packages as project shards', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'apps/web/src'), { recursive: true })
+    await writeFile(
+      join(root, 'package.json'),
+      JSON.stringify({ name: '@fixture/npm-workspace', private: true, workspaces: ['apps/*'] }),
+    )
+    await writeFile(join(root, 'apps/web/package.json'), JSON.stringify({ name: '@fixture/web' }))
+    await writeFile(
+      join(root, 'apps/web/src/prompt.ts'),
+      `
+        import { prompt } from '@use-crux/core'
+
+        export const webPrompt = prompt({
+          id: 'web.prompt',
+          system: 'You write web copy.',
+          prompt: 'Draft the copy.',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({
+      root,
+      projectName: 'package-workspace-shards',
+      resolutionMode: 'source-only',
+    })
+
+    expect(snapshot.sourceGraph?.shards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: '.', root, name: '@fixture/npm-workspace' }),
+        expect.objectContaining({ id: 'apps/web', root: join(root, 'apps/web'), name: '@fixture/web' }),
+      ]),
+    )
+    expect(snapshot.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ file: join(root, 'apps/web/src/prompt.ts'), shardId: 'apps/web' }),
+      ]),
+    )
+  })
+
+  it('uses explicit eval ids as fallback coverage targets for deterministic tasks', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await mkdir(join(root, 'evals'), { recursive: true })
+    await writeFile(
+      join(root, 'src/prompts.ts'),
+      `
+        import { prompt } from '@use-crux/core'
+
+        export const draftEdit = prompt({
+          id: 'draft-edit',
+          system: 'You edit CMS drafts.',
+          prompt: 'Apply the requested edit.',
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'evals/draft-edit.eval.ts'),
+      `
+        import { evaluate } from '@use-crux/core/quality'
+
+        function deterministicDraftEdit(input: { instruction: string }) {
+          return { summary: input.instruction }
+        }
+
+        export const draftEditEval = evaluate('prompt.draft-edit', {
+          task: deterministicDraftEdit,
+          data: [{ input: { instruction: 'Tighten the intro' } }],
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'eval-id-coverage', resolutionMode: 'source-only' })
+
+    expect(snapshot.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'eval.covers_definition',
+          from: 'evaluation:prompt.draft-edit',
+          to: 'prompt:draft-edit',
+        }),
+      ]),
+    )
+    expect(snapshot.diagnostics).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'relation.unresolved_reference',
+          relatedDefinitionIds: ['evaluation:prompt.draft-edit'],
+        }),
+      ]),
+    )
+  })
+
+  it('uses explicit eval coverage targets before eval-id fallbacks', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await mkdir(join(root, 'evals'), { recursive: true })
+    await writeFile(
+      join(root, 'src/flows.ts'),
+      `
+        import { flow } from '@use-crux/core'
+
+        export const writerFlow = flow({
+          name: 'writer',
+          handler: async () => 'done',
+        })
+      `,
+    )
+    await writeFile(
+      join(root, 'evals/writer.eval.ts'),
+      `
+        import { evaluate } from '@use-crux/core/quality'
+
+        function deterministicWriterPipeline(input: { topic: string }) {
+          return { draft: input.topic }
+        }
+
+        export const writerPipelineEval = evaluate('flow.writer-pipeline', {
+          covers: ['flow:writer'],
+          task: deterministicWriterPipeline,
+          data: [{ input: { topic: 'Launch' } }],
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'explicit-eval-coverage', resolutionMode: 'source-only' })
+
+    expect(snapshot.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'eval.covers_definition',
+          from: 'evaluation:flow.writer-pipeline',
+          to: 'flow:writer',
+        }),
+      ]),
+    )
+    expect(snapshot.relations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'eval.covers_definition',
+          from: 'evaluation:flow.writer-pipeline',
+          to: 'flow:writer-pipeline',
+        }),
+      ]),
+    )
+  })
+
+  it('surfaces missing stable routing ids as Project Model diagnostics with source provenance', async () => {
+    const root = await fixtureRoot()
+    await writeFile(
+      join(root, 'routing.ts'),
+      `
+        import { router } from '@use-crux/core/routing'
+
+        export const badRouter = router({
+          classify: () => 'cheap',
+          routes: {
+            cheap: missingModel,
+          },
+        })
+      `,
+    )
+
+    const model = await resolveProjectModel({ root, projectName: 'routing-diagnostics', resolutionMode: 'source-only' })
+
+    expect(model.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'project_model.missing_stable_id',
+        severity: 'info',
+        message: expect.stringContaining('stable id'),
+        source: expect.objectContaining({ file: join(root, 'routing.ts') }),
+        suggestedFix: expect.stringContaining('stable id'),
+        provenance: expect.objectContaining({ kind: 'source', file: join(root, 'routing.ts') }),
+        details: expect.objectContaining({
+          ruleId: 'routing.missing_stable_id',
+          relatedDefinitionIds: expect.arrayContaining(['routing.router:badRouter']),
+        }),
+      }),
+    )
+  })
+
+  it('surfaces runtime-dependent tool maps as Project Model diagnostics with source provenance', async () => {
+    const root = await fixtureRoot()
+    await writeFile(
+      join(root, 'dynamic-tools.ts'),
+      `
+        import { context, prompt, tool } from '@use-crux/core'
+        import { z } from 'zod'
+
+        const searchDocs = tool({
+          name: 'searchDocs',
+          description: 'Search docs',
+          input: z.object({ query: z.string() }),
+          execute: async () => [],
+        })
+
+        function createTools(mode?: string) {
+          return mode ? {} : { searchDocs }
+        }
+
+        export const runtimeTools = context({
+          id: 'runtime-tools',
+          system: '',
+          tools: createTools(process.env.MODE),
+        })
+
+        export const writer = prompt({
+          id: 'writer',
+          system: 'Write clearly.',
+          prompt: 'Draft.',
+          use: [runtimeTools],
+        })
+      `,
+    )
+
+    const model = await resolveProjectModel({
+      root,
+      projectName: 'dynamic-tool-diagnostics',
+      resolutionMode: 'source-only',
+    })
+
+    expect(model.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'project_model.dynamic_tool_map_unproven',
+        severity: 'info',
+        message: expect.stringContaining('runtime-dependent tools'),
+        source: expect.objectContaining({ file: join(root, 'dynamic-tools.ts') }),
+        suggestedFix: expect.stringContaining('stable tool names'),
+        provenance: expect.objectContaining({ kind: 'source', file: join(root, 'dynamic-tools.ts') }),
+        details: expect.objectContaining({
+          ruleId: 'injection.dynamic_tools',
+          relatedDefinitionIds: expect.arrayContaining(['prompt:writer', 'context:runtime-tools']),
+        }),
+      }),
+    )
+  })
+
   it('keeps generated and bundled artifacts out of the static source scan', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
@@ -33,7 +460,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/writer.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const writer = prompt({
           id: 'writer',
@@ -45,7 +472,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
         export default config({})
       `,
     )
@@ -74,7 +501,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/huge-authored.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const huge = prompt({
           id: 'huge-authored',
@@ -86,7 +513,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
 
     expect(snapshot.definitions.some((definition) => definition.id === 'prompt:huge-authored')).toBe(false)
     expect(snapshot.diagnostics).toContainEqual(
@@ -103,7 +530,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config, prompt } from '@crux/core'
+        import { config, prompt } from '@use-crux/core'
 
         export const writerPrompt = prompt({
           id: 'writer.prompt',
@@ -111,11 +538,11 @@ describe('project indexer', () => {
           prompt: 'Draft.',
         })
 
-        export default config({ prompts: [writerPrompt] })
+        export default config({})
       `,
     )
 
-    const patch = await indexProjectAst({ root, projectName: 'fixture', staticOnly: true })
+    const patch = await indexProjectAst({ root, projectName: 'fixture' })
 
     expect(patch).toEqual(
       expect.objectContaining({
@@ -136,7 +563,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config, prompt } from '@crux/core'
+        import { config, prompt } from '@use-crux/core'
 
         throw new Error('this config must not execute during AST indexing')
 
@@ -146,7 +573,7 @@ describe('project indexer', () => {
           prompt: 'Draft.',
         })
 
-        export default config({ prompts: [writerPrompt] })
+        export default config({})
       `,
     )
 
@@ -155,8 +582,75 @@ describe('project indexer', () => {
     expect(patch.facts.definitions).toContainEqual(
       expect.objectContaining({ id: 'prompt:writer.prompt', kind: 'prompt', fidelity: 'resolved' }),
     )
-    expect(patch.facts.diagnostics).toContainEqual(expect.objectContaining({ code: 'index.static_only' }))
+    expect(patch.facts.diagnostics).toContainEqual(expect.objectContaining({ code: 'index.source_only' }))
     expect(patch.facts.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'index.config_import_failed' }))
+  })
+
+  it('keeps default Project Index snapshots free of authored source imports', async () => {
+    const root = await fixtureRoot()
+    const markerFile = join(root, 'runtime-imported.txt')
+    await writeFile(
+      join(root, 'runtime-source.ts'),
+      `
+        import { writeFileSync } from 'node:fs'
+        import { prompt } from '@use-crux/core'
+
+        writeFileSync(${JSON.stringify(markerFile)}, 'imported')
+
+        export const writerPrompt = prompt({
+          id: 'writer.default',
+          system: 'You are a writer.',
+          prompt: 'Draft.',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root, projectName: 'default-source-only' })
+
+    expect(snapshot.definitions).toContainEqual(
+      expect.objectContaining({ id: 'prompt:writer.default', kind: 'prompt', fidelity: 'resolved' }),
+    )
+    expect(await readdir(root)).not.toContain('runtime-imported.txt')
+    expect(snapshot.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'index.rich_import_failed' }))
+  })
+
+  it('imports authored source modules only through an explicit runtime patch', async () => {
+    const root = await fixtureRoot()
+    const markerFile = join(root, 'runtime-imported.txt')
+    await writeFile(
+      join(root, 'runtime-source.ts'),
+      `
+        import { writeFileSync } from 'node:fs'
+        import { prompt } from '@use-crux/core'
+
+        writeFileSync(${JSON.stringify(markerFile)}, 'runtime')
+
+        export const writerPrompt = prompt({
+          id: 'writer.runtime',
+          system: 'You are a writer.',
+          prompt: 'Draft.',
+        })
+      `,
+    )
+
+    const previousIndex = await indexProject({ root, projectName: 'runtime-rich' })
+    expect(await readdir(root)).not.toContain('runtime-imported.txt')
+
+    const runtimePatch = await indexProjectRuntime({ root, projectName: 'runtime-rich', previousIndex })
+
+    expect(runtimePatch).toEqual(
+      expect.objectContaining({
+        schemaVersion: 1,
+        phase: 'runtime',
+        project: expect.objectContaining({ root, name: 'runtime-rich' }),
+        status: 'ok',
+      }),
+    )
+    expect(runtimePatch.invalidates).toBeUndefined()
+    expect(runtimePatch.facts.definitions).toContainEqual(
+      expect.objectContaining({ id: 'prompt:writer.runtime', kind: 'prompt', fidelity: 'resolved' }),
+    )
+    expect(await readdir(root)).toContain('runtime-imported.txt')
   })
 
   it('can return a no-op semantic patch that preserves AST index facts', async () => {
@@ -164,7 +658,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config, prompt } from '@crux/core'
+        import { config, prompt } from '@use-crux/core'
 
         export const writerPrompt = prompt({
           id: 'writer.prompt',
@@ -172,11 +666,11 @@ describe('project indexer', () => {
           prompt: 'Draft.',
         })
 
-        export default config({ prompts: [writerPrompt] })
+        export default config({})
       `,
     )
 
-    const astPatch = await indexProjectAst({ root, projectName: 'fixture', staticOnly: true })
+    const astPatch = await indexProjectAst({ root, projectName: 'fixture' })
     const astState = applyIndexPatch(emptyIndexPatchState(), astPatch)
     const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture' })
     const semanticState = applyIndexPatch(astState, semanticPatch)
@@ -216,11 +710,11 @@ describe('project indexer', () => {
     await mkdir(join(root, 'src'), { recursive: true })
     await writeFile(
       join(root, 'src/one.ts'),
-      `import { prompt } from '@crux/core'; export const one = prompt({ id: 'one' })`,
+      `import { prompt } from '@use-crux/core'; export const one = prompt({ id: 'one' })`,
     )
     await writeFile(
       join(root, 'src/two.ts'),
-      `import { prompt } from '@crux/core'; export const two = prompt({ id: 'two' })`,
+      `import { prompt } from '@use-crux/core'; export const two = prompt({ id: 'two' })`,
     )
 
     const semanticPatch = await indexProjectSemantic({ root, projectName: 'fixture', semanticBudget: { maxFiles: 1 } })
@@ -251,7 +745,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tool.ts'),
       `
-        import { createTool, tool } from '@crux/core'
+        import { createTool, tool } from '@use-crux/core'
         import { schema } from './index'
 
         export const writerTool = tool({
@@ -316,7 +810,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tool.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { recallEpisodesInputSchema } from './schema'
 
         export const recallEpisodes = tool({
@@ -412,7 +906,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/shared.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { z } from 'zod'
         import { NestedSchema } from './schema-fragments'
 
@@ -462,7 +956,7 @@ describe('project indexer', () => {
       join(root, 'src/app.ts'),
       `
         import { Agent } from '@convex-dev/agent'
-        import { context, prompt } from '@crux/core'
+        import { context, prompt } from '@use-crux/core'
         import { FORMAT_GUIDE, SYSTEM, promptBody, schema, tools, usage } from './barrel'
 
         export const writer = prompt({
@@ -621,7 +1115,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/targets.ts'),
       `
-        import { agent, prompt, tool } from '@crux/core'
+        import { agent, prompt, tool } from '@use-crux/core'
         import { z } from 'zod'
 
         export const writerPrompt = prompt({
@@ -657,7 +1151,7 @@ describe('project indexer', () => {
       join(root, 'src/app.ts'),
       `
         import { Agent } from '@convex-dev/agent'
-        import { flow, guardrail, parallel, pipeline } from '@crux/core'
+        import { flow, guardrail, parallel, pipeline } from '@use-crux/core'
         import { agentPrompt, importedAgent, searchTool } from './barrel'
 
         const component = {} as never
@@ -885,8 +1379,8 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/app.ts'),
       `
-        import { flow, tool, workspace } from '@crux/core'
-        import { memory, workingState } from '@crux/core/memory'
+        import { flow, tool, workspace } from '@use-crux/core'
+        import { memory, workingState } from '@use-crux/core/memory'
         import { args, mounts, params, result, stateSchema } from './barrel'
 
         export const writerTool = tool({
@@ -1002,12 +1496,12 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/resources.ts'),
       `
-        import { workspace } from '@crux/core'
-        import { blackboard } from '@crux/core/agent'
-        import { evaluate } from '@crux/core/quality'
-        import { memory, workingState } from '@crux/core/memory'
-        import { retriever } from '@crux/core/retrieval'
-        import { llmJudge } from '@crux/core/scoring'
+        import { workspace } from '@use-crux/core'
+        import { blackboard } from '@use-crux/core/agent'
+        import { evaluate } from '@use-crux/core/quality'
+        import { memory, workingState } from '@use-crux/core/memory'
+        import { retriever } from '@use-crux/core/retrieval'
+        import { llmJudge } from '@use-crux/core/scoring'
         import { z } from 'zod'
 
         const state = workingState({ id: 'state', schema: z.object({ status: z.string().optional() }) })
@@ -1038,7 +1532,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/app.ts'),
       `
-        import { flow, tool } from '@crux/core'
+        import { flow, tool } from '@use-crux/core'
         import { runDraftAccess } from './barrel'
 
         export const writerTool = tool({
@@ -1156,9 +1650,9 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/resources.ts'),
       `
-        import { workspace } from '@crux/core'
-        import { blackboard } from '@crux/core/agent'
-        import { memory, workingState } from '@crux/core/memory'
+        import { workspace } from '@use-crux/core'
+        import { blackboard } from '@use-crux/core/agent'
+        import { memory, workingState } from '@use-crux/core/memory'
         import { z } from 'zod'
 
         const writeOnlyState = workingState({ id: 'state', schema: z.object({ draft: z.string().optional() }) })
@@ -1191,7 +1685,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tools.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { z } from 'zod'
         import { persistAndReadBack, persistWithoutRead } from './barrel'
 
@@ -1275,15 +1769,17 @@ describe('project indexer', () => {
     )
   })
 
-  it('discovers import-safe prompts, contexts, tools, evals, and suites', async () => {
-    const root = await fixtureRoot()
-    await mkdir(join(root, 'evals'), { recursive: true })
-    await mkdir(join(root, '.crux/quality/suites'), { recursive: true })
+  it(
+    'discovers import-safe prompts, contexts, tools, evals, and suites',
+    async () => {
+      const root = await fixtureRoot()
+      await mkdir(join(root, 'evals'), { recursive: true })
+      await mkdir(join(root, '.crux/quality/suites'), { recursive: true })
 
-    await writeFile(
-      join(root, 'crux.config.ts'),
-      `
-        import { config, context, prompt } from '@crux/core'
+      await writeFile(
+        join(root, 'crux.config.ts'),
+        `
+        import { config, context, prompt, tool } from '@use-crux/core'
         import { z } from 'zod'
 
         export const brandVoice = context({
@@ -1302,27 +1798,25 @@ describe('project indexer', () => {
           prompt: ({ input }) => input.topic,
         })
 
+        export const searchDocs = tool({
+          name: 'searchDocs',
+          description: 'Search docs',
+          parameters: z.object({ query: z.string() }),
+          execute: async () => [],
+        })
+
         export default config({
-          prompts: [writerPrompt],
-          contexts: [brandVoice],
-          tools: [
-            {
-              name: 'searchDocs',
-              description: 'Search docs',
-              parameters: z.object({ query: z.string() }),
-            },
-          ],
           quality: {
             include: 'evals/**/*.eval.ts',
           },
         })
       `,
-    )
+      )
 
-    await writeFile(
-      join(root, 'evals/writer.eval.ts'),
-      `
-        import { evaluate } from '@crux/core/quality'
+      await writeFile(
+        join(root, 'evals/writer.eval.ts'),
+        `
+        import { evaluate } from '@use-crux/core/quality'
         import { writerPrompt } from '../crux.config'
 
         export const writerEval = evaluate('writer-eval', {
@@ -1333,143 +1827,124 @@ describe('project indexer', () => {
           },
         })
       `,
-    )
+      )
 
-    const snapshot = await indexProject({ root, projectName: 'fixture' })
-    const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
+      const snapshot = await indexProject({ root, projectName: 'fixture' })
+      const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
-    expect(snapshot.project).toMatchObject({ root, name: 'fixture', configFile: join(root, 'crux.config.ts') })
-    expect(byId.get('prompt:writer.prompt')).toMatchObject({
-      kind: 'prompt',
-      fidelity: 'resolved',
-      name: 'writer.prompt',
-    })
-    expect(byId.get('context:brand.voice')).toMatchObject({
-      kind: 'context',
-      fidelity: 'resolved',
-      name: 'brand.voice',
-    })
-    expect(byId.get('tool:searchDocs')).toMatchObject({ kind: 'tool', fidelity: 'resolved', name: 'searchDocs' })
-    expect(byId.get('prompt:writer.prompt')?.source).toEqual(
-      expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
-    )
-    expect(byId.get('context:brand.voice')?.source).toEqual(
-      expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
-    )
-    expect(byId.get('tool:searchDocs')?.source).toEqual(
-      expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
-    )
-    expect(byId.get('evaluation:writer-eval')).toMatchObject({
-      kind: 'evaluation',
-      fidelity: 'resolved',
-      name: 'writer-eval',
-      metadata: expect.objectContaining({
-        taskKind: 'prompt',
-        taskRef: 'writer.prompt',
-        caseCount: 1,
-        assertionSites: [
-          expect.objectContaining({
-            assertionSiteId: expect.stringMatching(/^assertion-site:[a-f0-9]{16}$/),
-            callbackKind: 'expect',
-            callbackLevel: 'evaluation',
-            sourceRef: expect.stringMatching(/writer\.eval\.ts:\d+:\d+$/),
-            normalizedAssertionText: 'ctx.expect(ctx.output).toBeDefined()',
-          }),
-        ],
-        facts: expect.objectContaining({
-          kind: 'evaluation',
-          taskKind: 'prompt',
+      expect(snapshot.project).toMatchObject({ root, name: 'fixture', configFile: join(root, 'crux.config.ts') })
+      expect(byId.get('prompt:writer.prompt')).toMatchObject({
+        kind: 'prompt',
+        fidelity: 'resolved',
+        name: 'writer.prompt',
+      })
+      expect(byId.get('context:brand.voice')).toMatchObject({
+        kind: 'context',
+        fidelity: 'resolved',
+        name: 'brand.voice',
+      })
+      expect(byId.get('tool:searchDocs')).toMatchObject({ kind: 'tool', fidelity: 'resolved', name: 'searchDocs' })
+      expect(byId.get('prompt:writer.prompt')?.source).toEqual(
+        expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
+      )
+      expect(byId.get('context:brand.voice')?.source).toEqual(
+        expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
+      )
+      expect(byId.get('tool:searchDocs')?.source).toEqual(
+        expect.objectContaining({ file: join(root, 'crux.config.ts'), line: expect.any(Number) }),
+      )
+      expect(byId.get('evaluation:writer-eval')).toMatchObject({
+        kind: 'evaluation',
+        fidelity: 'resolved',
+        name: 'writer-eval',
+        metadata: expect.objectContaining({
           caseCount: 1,
+          covers: ['writerPrompt'],
           assertionSites: [
             expect.objectContaining({
               assertionSiteId: expect.stringMatching(/^assertion-site:[a-f0-9]{16}$/),
               callbackKind: 'expect',
               callbackLevel: 'evaluation',
+              sourceRef: expect.stringMatching(/writer\.eval\.ts:\d+:\d+$/),
+              normalizedAssertionText: 'ctx.expect(ctx.output).toBeDefined()',
             }),
           ],
+          facts: expect.objectContaining({
+            kind: 'evaluation',
+            caseCount: 1,
+            assertionSites: [
+              expect.objectContaining({
+                assertionSiteId: expect.stringMatching(/^assertion-site:[a-f0-9]{16}$/),
+                callbackKind: 'expect',
+                callbackLevel: 'evaluation',
+              }),
+            ],
+          }),
         }),
-      }),
-    })
-    expect(byId.get('evaluation.case:writer-eval:draft-title')).toMatchObject({
-      kind: 'evaluation.case',
-      fidelity: 'resolved',
-      name: 'draft title',
-      metadata: expect.objectContaining({
-        evaluationId: 'writer-eval',
-        caseId: 'draft-title',
-        facts: expect.objectContaining({ kind: 'evaluation.case', evaluationId: 'writer-eval' }),
-        indexPresentation: expect.objectContaining({
-          standalone: false,
-          parentDefinitionId: 'evaluation:writer-eval',
-          parentRelationType: 'evaluation.includes_case',
-          role: 'case',
+      })
+      expect(byId.get('evaluation.case:writer-eval:draft-title')).toMatchObject({
+        kind: 'evaluation.case',
+        fidelity: 'resolved',
+        name: 'draft title',
+        metadata: expect.objectContaining({
+          evaluationId: 'writer-eval',
+          caseId: 'draft-title',
+          facts: expect.objectContaining({ kind: 'evaluation.case', evaluationId: 'writer-eval' }),
+          indexPresentation: expect.objectContaining({
+            standalone: false,
+            parentDefinitionId: 'evaluation:writer-eval',
+            parentRelationType: 'evaluation.includes_case',
+            role: 'case',
+          }),
         }),
-      }),
-    })
-    expect(byId.get('prompt:writer.prompt')?.metadata).toEqual(
-      expect.objectContaining({
-        inputSchema: expect.objectContaining({ type: 'object' }),
-        outputSchema: undefined,
-        hasOutput: false,
-      }),
-    )
-    expect(byId.get('context:brand.voice')?.metadata).toEqual(
-      expect.objectContaining({
-        inputSchema: undefined,
-        isStatic: true,
-      }),
-    )
-    expect(byId.get('tool:searchDocs')?.metadata).toEqual(
-      expect.objectContaining({
-        inputSchema: expect.objectContaining({ type: 'object' }),
-      }),
-    )
-    expect(
-      snapshot.relations.some(
-        (relation) =>
-          relation.type === 'prompt.uses_context' &&
-          relation.from === 'prompt:writer.prompt' &&
-          relation.to === 'context:brand.voice',
-      ),
-    ).toBe(true)
-    expect(
-      snapshot.relations.some(
-        (relation) =>
-          relation.type === 'evaluation.targets_prompt' &&
-          relation.from === 'evaluation:writer-eval' &&
-          relation.to === 'prompt:writer.prompt',
-      ),
-    ).toBe(true)
-    expect(
-      snapshot.relations.some(
-        (relation) =>
-          relation.type === 'evaluation.includes_case' &&
-          relation.from === 'evaluation:writer-eval' &&
-          relation.to === 'evaluation.case:writer-eval:draft-title',
-      ),
-    ).toBe(true)
-
-    const snapshotAgain = await indexProject({ root, projectName: 'fixture' })
-    expect(snapshotAgain.definitions.map((definition) => definition.id)).toEqual(
-      snapshot.definitions.map((definition) => definition.id),
-    )
-    expect(snapshotAgain.relations.map((relation) => relation.id)).toEqual(
-      snapshot.relations.map((relation) => relation.id),
-    )
-    expect(snapshotAgain.diagnostics.map((diagnostic) => diagnostic.id)).toEqual(
-      snapshot.diagnostics.map((diagnostic) => diagnostic.id),
-    )
-    expect(snapshotAgain.lintFindings.map((finding) => finding.id)).toEqual(
-      snapshot.lintFindings.map((finding) => finding.id),
-    )
-  }, importSafeDiscoveryTimeoutMs)
+      })
+      expect(byId.get('prompt:writer.prompt')?.metadata).toEqual(
+        expect.objectContaining({
+          inputSchema: expect.objectContaining({ type: 'object' }),
+          hasOutput: false,
+        }),
+      )
+      expect(byId.get('context:brand.voice')?.metadata).toEqual(
+        expect.objectContaining({
+          isStatic: true,
+        }),
+      )
+      expect(byId.get('tool:searchDocs')?.metadata).toEqual(
+        expect.objectContaining({
+          inputSchema: expect.objectContaining({ type: 'object' }),
+        }),
+      )
+      expect(
+        snapshot.relations.some(
+          (relation) =>
+            relation.type === 'prompt.uses_context' &&
+            relation.from === 'prompt:writer.prompt' &&
+            relation.to === 'context:brand.voice',
+        ),
+      ).toBe(true)
+      const snapshotAgain = await indexProject({ root, projectName: 'fixture' })
+      expect(snapshotAgain.definitions.map((definition) => definition.id)).toEqual(
+        snapshot.definitions.map((definition) => definition.id),
+      )
+      expect(snapshotAgain.relations.map((relation) => relation.id)).toEqual(
+        snapshot.relations.map((relation) => relation.id),
+      )
+      expect(snapshotAgain.diagnostics.map((diagnostic) => diagnostic.id)).toEqual(
+        snapshot.diagnostics.map((diagnostic) => diagnostic.id),
+      )
+      expect(snapshotAgain.lintFindings.map((finding) => finding.id)).toEqual(
+        snapshot.lintFindings.map((finding) => finding.id),
+      )
+    },
+    importSafeDiscoveryTimeoutMs,
+  )
 
   it('falls back to static definitions without noisy partial diagnostics when imports fail', async () => {
     const root = await fixtureRoot()
     await writeFile(
       join(root, 'broken.prompt.ts'),
       `
-        import { context, prompt } from '@crux/core'
+        import { context, prompt } from '@use-crux/core'
         import { z } from 'zod'
 
         throw new Error('top-level side effect')
@@ -1501,7 +1976,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'broken.eval.ts'),
       `
-        import { evaluate } from '@crux/core/quality'
+        import { evaluate } from '@use-crux/core/quality'
 
         throw new Error('eval import side effect')
 
@@ -1569,8 +2044,10 @@ describe('project indexer', () => {
     expect(snapshot.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: 'index.config_not_found' }),
-        expect.objectContaining({ code: 'index.module_import_failed' }),
       ]),
+    )
+    expect(snapshot.diagnostics).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'index.module_import_failed' })]),
     )
     expect(snapshot.diagnostics).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'index.static_partial' })]),
@@ -1592,7 +2069,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'prompts/draft.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const draftEdit = prompt({ id: 'draft-edit', prompt: 'Edit draft' })
         export const seoEdit = prompt({ id: 'seo-edit', prompt: 'SEO edit' })
@@ -1601,7 +2078,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'prompts/agent.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
 
         export const karylaAgent = prompt({ id: 'karyla-agent', prompt: 'Agent system' })
       `,
@@ -1609,7 +2086,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'prompts/contexts/base.ts'),
       `
-        import { context } from '@crux/core'
+        import { context } from '@use-crux/core'
 
         export const currentDate = context({ id: 'current-date', system: 'Today' })
         export const proseMirrorSchema = context({ id: 'prosemirror-schema', system: 'Schema' })
@@ -1619,7 +2096,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'prompts/index.ts'),
       `
-        import { createPrompts, createContexts } from '@crux/core'
+        import { createPrompts, createContexts } from '@use-crux/core'
         import { draftEdit, seoEdit } from './draft'
         import { karylaAgent as systemPrompt } from './agent'
         import { currentDate, proseMirrorSchema, brand } from './contexts/base'
@@ -1637,7 +2114,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('prompt:draft-edit')?.path).toEqual(['editor', 'edit'])
@@ -1656,7 +2133,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/contexts.ts'),
       `
-        import { context } from '@crux/core'
+        import { context } from '@use-crux/core'
 
         export const currentDate = context({
           id: 'current-date',
@@ -1672,7 +2149,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/prompts.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         import { currentDate, proseMirrorSchema } from './contexts'
 
         const sharedContexts = [currentDate, proseMirrorSchema]
@@ -1691,7 +2168,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
 
     expect(snapshot.relations).toEqual(
       expect.arrayContaining([
@@ -1711,7 +2188,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'index.ts'),
       `
-        import { createContexts, createPrompts, context, prompt } from '@crux/core'
+        import { createContexts, createPrompts, context, prompt } from '@use-crux/core'
         import { z } from 'zod'
 
         const unknownKey = 'dynamic'
@@ -1744,7 +2221,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('prompt:stable-prompt')?.path).toEqual(['stable'])
@@ -1794,7 +2271,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tools.ts'),
       `
-        import { createTool } from '@crux/core/tool'
+        import { createTool } from '@use-crux/core/tool'
         import { z } from 'zod'
         import { importedExecute, importedWriterSchema } from './shared'
 
@@ -1820,7 +2297,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
     const localTool = byId.get('tool:localTool')
     const importedTool = byId.get('tool:importedTool')
@@ -1929,12 +2406,12 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/feature.ts'),
       `
-        import { context, prompt } from '@crux/core'
-        import { flow } from '@crux/core/flow'
-        import { blackboard } from '@crux/core/agent/blackboard'
-        import { guardrail } from '@crux/core/safety/guardrail'
-        import { llmJudge } from '@crux/core/scoring'
-        import { createTool } from '@crux/core/tool'
+        import { context, prompt } from '@use-crux/core'
+        import { flow } from '@use-crux/core/flow'
+        import { blackboard } from '@use-crux/core/agent/blackboard'
+        import { guardrail } from '@use-crux/core/safety/guardrail'
+        import { llmJudge } from '@use-crux/core/scoring'
+        import { createTool } from '@use-crux/core/tool'
         import { z } from 'zod'
 
         const notes = blackboard({ id: 'notes' })
@@ -2019,7 +2496,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
     const writerPrompt = byId.get('prompt:writer-prompt')
     const staticPrompt = byId.get('prompt:static-prompt')
@@ -2108,21 +2585,21 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/feature.ts'),
       `
-        import { context, prompt } from '@crux/core'
-        import { agent } from '@crux/core/agent'
-        import { blackboard } from '@crux/core/agent/blackboard'
-        import { flow } from '@crux/core/flow'
-        import { fallback } from '@crux/core/routing'
-        import { flow as cruxFlow } from '@crux/convex/server'
-        import { Agent } from '@crux/convex/agent'
-        import { memory, workingState } from '@crux/core/memory'
-        import { retriever, retrievalPipeline } from '@crux/core/retrieval'
-        import { constraint } from '@crux/core/safety/constraint'
-        import { guardrail } from '@crux/core/safety/guardrail'
-        import { llmJudge } from '@crux/core/scoring'
-        import { evaluate } from '@crux/core/quality'
-        import { createTool } from '@crux/core/tool'
-        import type { FlowToolDef } from '@crux/core'
+        import { context, prompt } from '@use-crux/core'
+        import { agent } from '@use-crux/core/agent'
+        import { blackboard } from '@use-crux/core/agent/blackboard'
+        import { flow } from '@use-crux/core/flow'
+        import { fallback } from '@use-crux/core/routing'
+        import { flow as cruxFlow } from '@use-crux/convex/server'
+        import { Agent } from '@use-crux/convex/agent'
+        import { memory, workingState } from '@use-crux/core/memory'
+        import { retriever, retrievalPipeline } from '@use-crux/core/retrieval'
+        import { constraint } from '@use-crux/core/safety/constraint'
+        import { guardrail } from '@use-crux/core/safety/guardrail'
+        import { llmJudge } from '@use-crux/core/scoring'
+        import { evaluate } from '@use-crux/core/quality'
+        import { createTool } from '@use-crux/core/tool'
+        import type { FlowToolDef } from '@use-crux/core'
         import { z } from 'zod'
 
         export const brand = context({ id: 'brand', system: 'Brand voice' })
@@ -2241,7 +2718,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('agent:writer-agent')).toMatchObject({ kind: 'agent', name: 'writer-agent' })
@@ -2995,8 +3472,8 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/convex-agent.ts'),
       `
-        import { convexAgent, createCruxConvex, prompt } from '@crux/convex'
-        import { tool } from '@crux/convex/tools'
+        import { convexAgent, createCruxConvex, prompt } from '@use-crux/convex'
+        import { tool } from '@use-crux/convex/tools'
         import { z } from 'zod'
         import { components } from './_generated/api'
 
@@ -3060,7 +3537,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('agent:Profile-Writer')).toMatchObject({
@@ -3142,11 +3619,11 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/runtime-tools.ts'),
       `
-        import { context, prompt } from '@crux/convex'
-        import type { ConvexAgentPrepareArgs, ConvexAgentPrepareResult } from '@crux/convex/agent'
-        import { memory } from '@crux/convex/memory'
-        import { tool } from '@crux/convex/tools'
-        import { blackboard, retriever } from '@crux/core'
+        import { context, prompt } from '@use-crux/convex'
+        import type { ConvexAgentPrepareArgs, ConvexAgentPrepareResult } from '@use-crux/convex/agent'
+        import { memory } from '@use-crux/convex/memory'
+        import { tool } from '@use-crux/convex/tools'
+        import { blackboard, retriever } from '@use-crux/core'
         import { z } from 'zod'
 
         export const karylaAgent = prompt({ id: 'karyla-agent', prompt: 'Help.' })
@@ -3212,7 +3689,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
     const promptFacts = byId.get('prompt:karyla-agent')?.metadata?.facts
     const contextFacts = byId.get('context:karyla-tools')?.metadata?.facts
@@ -3275,11 +3752,15 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config, tool } from '@use-crux/core'
+
+        export const searchDocs = tool({
+          name: 'searchDocs',
+          description: 'Search docs',
+          execute: async () => [],
+        })
 
         export default config({
-          prompts: [],
-          tools: [{ name: 'searchDocs', description: 'Search docs' }],
           lint: {
             profile: 'recommended',
             rules: {
@@ -3329,12 +3810,9 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
 
         export default config({
-          prompts: [],
-          contexts: [],
-          tools: [],
           lint: { profile: 'strict' },
         })
       `,
@@ -3342,7 +3820,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'static-contracts.ts'),
       `
-        import { context, createTool, flow, prompt } from '@crux/core'
+        import { context, createTool, flow, prompt } from '@use-crux/core'
         import { z } from 'zod'
 
         function makeSchema() {
@@ -3351,7 +3829,7 @@ describe('project indexer', () => {
 
         const RuntimeSchema = makeSchema()
 
-        throw new Error('static-only fixture')
+        throw new Error('source-only fixture')
 
         export const dynamicPrompt = prompt({
           id: 'dynamic-prompt',
@@ -3450,7 +3928,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'agents.ts'),
       `
-        import { agent, prompt } from '@crux/core'
+        import { agent, prompt } from '@use-crux/core'
 
         export const triagePrompt = prompt({
           id: 'triage-prompt',
@@ -3492,8 +3970,8 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { agent } from '@crux/core/agent'
-        import { consensus } from '@crux/core/compositions'
+        import { agent } from '@use-crux/core/agent'
+        import { consensus } from '@use-crux/core/compositions'
 
         const writer = agent({ id: 'writer', instructions: 'Write.' })
         const reviewer = agent({ id: 'reviewer', instructions: 'Review.' })
@@ -3530,7 +4008,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'routing.ts'),
       `
-        import { router } from '@crux/core/routing'
+        import { router } from '@use-crux/core/routing'
 
         const cheapModel = { modelId: 'cheap' }
         const preciseModel = { modelId: 'precise' }
@@ -3552,7 +4030,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'routing-router', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'routing-router', resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('routing.router:quality-router')).toMatchObject({
@@ -3623,7 +4101,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'inline-routing.ts'),
       `
-        import { cascade, router } from '@crux/core/routing'
+        import { cascade, router } from '@use-crux/core/routing'
 
         const fastModel = { modelId: 'fast' }
         const creativeModel = { modelId: 'creative' }
@@ -3667,7 +4145,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'inline-routing', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'inline-routing', resolutionMode: 'source-only' })
     const routers = snapshot.definitions.filter((definition) => definition.kind === 'routing.router')
     const routes = snapshot.definitions.filter((definition) => definition.kind === 'routing.router.route')
     const cascades = snapshot.definitions.filter((definition) => definition.kind === 'routing.cascade')
@@ -3732,7 +4210,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'routing.ts'),
       `
-        import { cascade, fallback } from '@crux/core/routing'
+        import { cascade, fallback } from '@use-crux/core/routing'
 
         const cheapModel = { modelId: 'cheap' }
         const strongModel = { modelId: 'strong' }
@@ -3758,7 +4236,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'routing-cascade', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'routing-cascade', resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('routing.cascade:quality-cascade')).toMatchObject({
@@ -3851,8 +4329,8 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'models.ts'),
       `
-        import { agent, prompt } from '@crux/core'
-        import { cascade, fallback, router } from '@crux/core/routing'
+        import { agent, prompt } from '@use-crux/core'
+        import { cascade, fallback, router } from '@use-crux/core/routing'
 
         export const writerPrompt = prompt({ id: 'writer-prompt', input: {}, prompt: () => 'write' })
         export const writerAgent = agent({ id: 'writer-agent', prompt: writerPrompt })
@@ -3892,7 +4370,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'app.ts'),
       `
-        import { agent, flow, parallel } from '@crux/core'
+        import { agent, flow, parallel } from '@use-crux/core'
         import { semanticRouter } from './models'
 
         export const orchestrator = agent({
@@ -4007,7 +4485,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'routing.ts'),
       `
-        import { cascade, fallback, router } from '@crux/core/routing'
+        import { cascade, fallback, router } from '@use-crux/core/routing'
 
         export const badRouter = router({
           classify: () => 'cheap',
@@ -4027,7 +4505,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, projectName: 'routing-lints', staticOnly: true })
+    const snapshot = await indexProject({ root, projectName: 'routing-lints', resolutionMode: 'source-only' })
 
     expect(snapshot.lintFindings).toEqual(
       expect.arrayContaining([
@@ -4060,11 +4538,9 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       `
-        import { config } from '@crux/core'
+        import { config } from '@use-crux/core'
 
         export default config({
-          prompts: [],
-          tools: [{ name: 'searchDocs', description: 'Search docs' }],
           lint: { profile: 'off' },
         })
       `,
@@ -4087,9 +4563,9 @@ describe('project indexer', () => {
       join(root, 'src/memory.ts'),
       `
         import { z } from 'zod'
-        import { blackboard } from '@crux/core/agent'
-        import { episodes, facts, memory, workingState } from '@crux/core/memory'
-        import { cruxConvexStore } from '@crux/convex'
+        import { blackboard } from '@use-crux/core/agent'
+        import { episodes, facts, memory, workingState } from '@use-crux/core/memory'
+        import { cruxConvexStore } from '@use-crux/convex'
 
         const threadBlackboardSchema = z.object({
           decisions: z.array(z.string()).default([]),
@@ -4133,7 +4609,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('blackboard:thread')).toMatchObject({
@@ -4220,7 +4696,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tools.ts'),
       `
-        import { createTool } from '@crux/core/tool'
+        import { createTool } from '@use-crux/core/tool'
 
         // crux-lint-disable-next-line tool.missing_input_schema -- generated external adapter
         export const ignoredTool = createTool({ name: 'ignoredTool', description: 'No schema' })
@@ -4233,7 +4709,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
 
     expect(snapshot.lintFindings).not.toEqual(
       expect.arrayContaining([
@@ -4259,12 +4735,12 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/__tests__/agentContexts.test.ts'),
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         const testPrompt = prompt({ id: 'test-only', prompt: 'Only for a unit test' })
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
 
     expect(snapshot.definitions.some((definition) => definition.id === 'prompt:test-only')).toBe(false)
     expect(snapshot.diagnostics.some((diagnostic) => diagnostic.source?.file.includes('__tests__'))).toBe(false)
@@ -4276,11 +4752,11 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/factory.ts'),
       `
-        import { prompt, workspace } from '@crux/core'
-        import { agent } from '@crux/core/agent'
-        import { flow } from '@crux/core/flow'
-        import { parallel, pipeline, swarm, consensus } from '@crux/core/agent'
-        import { createTool } from '@crux/core/tool'
+        import { prompt, workspace } from '@use-crux/core'
+        import { agent } from '@use-crux/core/agent'
+        import { flow } from '@use-crux/core/flow'
+        import { parallel, pipeline, swarm, consensus } from '@use-crux/core/agent'
+        import { createTool } from '@use-crux/core/tool'
 
         export const writerPrompt = prompt({ id: 'writer', prompt: 'Write' })
         export const searchDocs = createTool({ name: 'searchDocs', description: 'Search docs' })
@@ -4310,7 +4786,7 @@ describe('project indexer', () => {
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
 
     expect(byId.get('agent:writer-agent')).toMatchObject({ kind: 'agent', name: 'writer-agent' })
@@ -4373,14 +4849,14 @@ describe('project indexer', () => {
       join(root, 'src/import-safe.agent.ts'),
       `
         import { z } from 'zod'
-        import { context, prompt } from '@crux/core'
-        import { agent, blackboard } from '@crux/core/agent'
-        import { flow } from '@crux/core/flow'
-        import { memory } from '@crux/core/memory'
-        import { retriever, retrievalPipeline, retrievalStage } from '@crux/core/retrieval'
-        import { constraint } from '@crux/core/safety'
-        import { guardrail } from '@crux/core/safety'
-        import { llmJudge } from '@crux/core/scoring'
+        import { context, prompt } from '@use-crux/core'
+        import { agent, blackboard } from '@use-crux/core/agent'
+        import { flow } from '@use-crux/core/flow'
+        import { memory } from '@use-crux/core/memory'
+        import { retriever, retrievalPipeline, retrievalStage } from '@use-crux/core/retrieval'
+        import { constraint } from '@use-crux/core/safety'
+        import { guardrail } from '@use-crux/core/safety'
+        import { llmJudge } from '@use-crux/core/scoring'
 
         export const brand = context({ id: 'brand', system: 'Brand voice' })
         export const safeTone = constraint({ name: 'safe-tone', severity: 'assert', check: () => ({ pass: true }) })
@@ -4425,8 +4901,14 @@ describe('project indexer', () => {
       fidelity: 'resolved',
       source: expect.objectContaining({ line: expect.any(Number) }),
       metadata: expect.objectContaining({
-        promptId: 'writer',
-        handoffs: [{ id: 'reviewer-agent', when: 'Needs review' }],
+        static: true,
+        handoffs: ['reviewer-agent'],
+        facts: expect.objectContaining({
+          kind: 'agent',
+          promptId: 'writerPrompt',
+          handoffs: ['reviewer-agent'],
+          guardrails: ['outputGuard'],
+        }),
       }),
     })
     expect(byId.get('flow:writer-flow')).toMatchObject({ kind: 'flow', fidelity: 'resolved' })
@@ -4438,7 +4920,13 @@ describe('project indexer', () => {
     expect(byId.get('rag.pipeline:docsRag')).toMatchObject({
       kind: 'rag.pipeline',
       fidelity: 'resolved',
-      metadata: expect.objectContaining({ retrieverId: 'docs', stageNames: ['rewrite'] }),
+      metadata: expect.objectContaining({
+        static: true,
+        facts: expect.objectContaining({ kind: 'rag.pipeline' }),
+        intelligence: expect.objectContaining({
+          dependencies: expect.objectContaining({ retrievers: ['docsRetriever'] }),
+        }),
+      }),
     })
     expect(byId.get('memory:session-memory')).toMatchObject({ kind: 'memory', fidelity: 'resolved' })
     expect(byId.get('blackboard:notes')).toMatchObject({ kind: 'blackboard', fidelity: 'resolved' })
@@ -4531,9 +5019,9 @@ describe('project indexer', () => {
       await writeFile(
         join(root, 'crux.config.ts'),
         `
-          import { config, prompt } from '@crux/core'
+          import { config, prompt } from '@use-crux/core'
           export const writer = prompt({ id: 'writer', prompt: 'Write' })
-          export default config({ prompts: [writer] })
+          export default config({})
         `,
       )
     }
@@ -4553,7 +5041,7 @@ describe('project indexer', () => {
 
   it('plans file-delta indexing as an explicit full reindex until dependencies are materialized', async () => {
     const root = await fixtureRoot()
-    const previousIndex = await indexProject({ root, staticOnly: true })
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
 
     const decision = planIndexFiles({
       root,
@@ -4587,14 +5075,14 @@ describe('project indexer', () => {
     await writeFile(
       dependencyFile,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer', prompt: 'Write' })
       `,
     )
     await writeFile(
       indexFile,
       `
-        import { createPrompts } from '@crux/core'
+        import { createPrompts } from '@use-crux/core'
         import { writer } from './prompt'
         import { z } from 'zod'
         export const prompts = createPrompts({ writer })
@@ -4630,14 +5118,14 @@ describe('project indexer', () => {
     await writeFile(
       dependencyFile,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer', prompt: 'Write' })
       `,
     )
     await writeFile(
       indexFile,
       `
-        import { createPrompts } from '@crux/core'
+        import { createPrompts } from '@use-crux/core'
         import { writer } from '@/prompts/writer'
         export const prompts = createPrompts({ agent: { writer } })
       `,
@@ -4661,20 +5149,20 @@ describe('project indexer', () => {
     await writeFile(
       dependencyFile,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer', prompt: 'Write' })
       `,
     )
     await writeFile(
       indexFile,
       `
-        import { createPrompts } from '@crux/core'
+        import { createPrompts } from '@use-crux/core'
         import { writer } from './prompt'
         export const prompts = createPrompts({ writer })
       `,
     )
 
-    const snapshot = await indexProject({ root, staticOnly: true })
+    const snapshot = await indexProject({ root, resolutionMode: 'source-only' })
     const sourceByFile = new Map(snapshot.sources.map((source) => [source.file, source]))
 
     expect(sourceByFile.get(dependencyFile)).toEqual(
@@ -4698,14 +5186,14 @@ describe('project indexer', () => {
     await writeFile(
       dependencyFile,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer-v1', prompt: 'Write' })
       `,
     )
     await writeFile(
       indexFile,
       `
-        import { createPrompts } from '@crux/core'
+        import { createPrompts } from '@use-crux/core'
         import { writer } from './prompt'
         export const prompts = createPrompts({ writer })
       `,
@@ -4715,7 +5203,7 @@ describe('project indexer', () => {
     await writeFile(
       dependencyFile,
       `
-        import { prompt } from '@crux/core'
+        import { prompt } from '@use-crux/core'
         export const writer = prompt({ id: 'writer-v2', prompt: 'Write' })
       `,
     )
@@ -4763,7 +5251,7 @@ describe('project indexer', () => {
     await writeFile(
       join(root, 'src/tool.ts'),
       `
-        import { tool } from '@crux/core'
+        import { tool } from '@use-crux/core'
         import { ToolParams } from './contracts'
         export const searchDocs = tool({ name: 'searchDocs', parameters: ToolParams })
       `,

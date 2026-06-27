@@ -1,4 +1,4 @@
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 
 /**
  * Absolute source file path normalized against one project root.
@@ -24,6 +24,7 @@ export type GraphConfidence =
   | 'unresolved-imports-present'
   | 'closure-budget-exceeded'
   | 'source-graph-marker-missing'
+  | 'cross-shard-evidence-incomplete'
   | 'deleted-file-unknown'
   | 'deleted-file-unsafe'
 
@@ -43,6 +44,7 @@ export type FullReindexReason =
   | 'unresolved-imports-present'
   | 'closure-budget-exceeded'
   | 'source-graph-marker-missing'
+  | 'cross-shard-evidence-incomplete'
   | 'deleted-file-unknown'
   | 'deleted-file-unsafe'
 

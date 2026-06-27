@@ -1,6 +1,6 @@
-import type * as ts from 'typescript'
 import type {
   SemanticAnalyzerContext,
+  SemanticAnalyzerView,
   SemanticDefinitionCandidate,
   SemanticDefinitionEnrichment,
 } from '../candidates'
@@ -9,7 +9,7 @@ import type { SemanticAnalyzer } from '../types'
 export interface SemanticDefinitionEnrichmentAnalyzerDeps {
   readonly definitionEnrichments: (
     candidate: SemanticDefinitionCandidate,
-    checker: ts.TypeChecker,
+    view: SemanticAnalyzerView,
   ) => readonly SemanticDefinitionEnrichment[]
 }
 
@@ -22,7 +22,7 @@ export function createSemanticDefinitionEnrichmentAnalyzer(
   return {
     name: 'definition-enrichment',
     analyze(candidate, context) {
-      const enrichments = deps.definitionEnrichments(candidate, context.checker)
+      const enrichments = deps.definitionEnrichments(candidate, context.view)
 
       return {
         definitions: enrichments.map((enrichment) => enrichment.definition),

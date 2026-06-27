@@ -5,12 +5,13 @@ import type {
   ProjectIdentity,
   ProjectRelation,
   PromptMeta,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 import type { LoadedProjectConfig } from './config'
 import { discoverRuntimeEvalDefinitions } from './eval-discovery'
 import { evalGlobs } from './files'
 import { discoverResolvedDefinitionsFromStaticCandidates, discoverStaticDefinitions } from './static/discovery'
 import type { StaticExtractionEngine } from './static/extraction/engine'
+import type { ProjectShardFileBatch } from './shards/types'
 import type { SourceGraph } from './types'
 
 export interface ProjectDiscoveryResult {
@@ -33,6 +34,7 @@ export interface ProjectDiscoveryInput {
   readonly diagnostics: readonly IndexDiagnostic[]
   readonly sources: readonly IndexSourceFile[]
   readonly staticFiles: readonly string[]
+  readonly staticFileBatches?: readonly ProjectShardFileBatch[]
   readonly extraction: StaticExtractionEngine
 }
 
@@ -43,13 +45,13 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
   const definitions: ProjectDefinition[] = []
   const relations: ProjectRelation[] = []
   const localDiagnostics: IndexDiagnostic[] = []
-  const sourceGraph: SourceGraph = { dependenciesByFile: new Map() }
+  const sourceGraph: SourceGraph = { dependenciesByFile: new Map(), semanticProfileByFile: new Map() }
   const promptIds = new Set(
     initialFacts.prompts.map((prompt) => prompt.id).filter((id): id is string => typeof id === 'string'),
   )
 
   const failedImportFiles: string[] = []
-  if (!loaded.staticOnly) {
+  if (loaded.sourceImports) {
     const evalResult = await discoverRuntimeEvalDefinitions(root, evalGlobs(loaded), promptIds, sources)
     definitions.push(...evalResult.definitions)
     relations.push(...evalResult.relations)
@@ -57,7 +59,9 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
     failedImportFiles.push(...evalResult.failedImportFiles)
     sources = evalResult.sources
 
-    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, sources, staticFiles, extraction)
+    const resolvedRich = await discoverResolvedDefinitionsFromStaticCandidates(root, sources, staticFiles, extraction, {
+      staticFileBatches: input.staticFileBatches,
+    })
     definitions.push(...resolvedRich.definitions)
     relations.push(...resolvedRich.relations)
     diagnostics.push(...resolvedRich.diagnostics)
@@ -79,6 +83,7 @@ export async function discoverProjectDefinitions(input: ProjectDiscoveryInput): 
     knownDefinitionIds,
     staticFiles,
     extraction,
+    { staticFileBatches: input.staticFileBatches },
   )
   definitions.push(...staticResult.definitions)
   relations.push(...staticResult.relations)
@@ -101,5 +106,8 @@ function mergeSourceGraph(target: SourceGraph, incoming: SourceGraph): void {
       file,
       [...new Set([...(target.dependenciesByFile.get(file) ?? []), ...dependencies])].sort(),
     )
+  }
+  for (const [file, profile] of incoming.semanticProfileByFile ?? []) {
+    target.semanticProfileByFile?.set(file, profile)
   }
 }

@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { CruxStore, StoreEvent } from '@crux/core/store'
+import type { CruxStore, StoreEvent } from '@use-crux/core/store'
 import type { CruxDataPart } from './types'
 
 /**
@@ -58,7 +58,7 @@ interface CruxStreamWriterHandle {
  *
  * @example
  * ```ts
- * import { createCruxStreamWriter } from '@crux/ai/stream'
+ * import { createCruxStreamWriter } from '@use-crux/ai/stream'
  * import { createUIMessageStream, createUIMessageStreamResponse } from 'ai'
  *
  * const stream = createUIMessageStream({

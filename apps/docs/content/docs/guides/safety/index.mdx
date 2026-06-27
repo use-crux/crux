@@ -58,6 +58,6 @@ Rules of thumb:
 
 ## How this fits with the rest of Crux
 
-- **[Quality](/docs/guides/quality)** validates output quality *during testing*. Guardrails and constraints validate it *during execution*. `judgeConstraint()` (`@crux/core/scoring`) bridges the two by enforcing an LLM-judge score as a constraint.
+- **[Quality](/docs/guides/quality)** validates output quality *during testing*. Guardrails and constraints validate it *during execution*. `judgeConstraint()` (`@use-crux/core/scoring`) bridges the two by enforcing an LLM-judge score as a constraint.
 - **[Tools](/docs/guides/tools)** can implement domain-specific safety checks that need external data.
 - **[Devtools](/docs/guides/observability/devtools)** trace every guardrail hit and constraint retry.

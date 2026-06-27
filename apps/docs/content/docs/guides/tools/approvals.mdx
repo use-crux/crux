@@ -10,7 +10,7 @@ That return-and-resume shape works in serverless, Convex actions, CLI programs, 
 ## Add an approval policy
 
 ```ts
-import { approvalMiddleware, prompt } from '@crux/core'
+import { approvalMiddleware, prompt } from '@use-crux/core'
 
 const approvals = approvalMiddleware({
   id: 'dangerous-actions',
@@ -35,11 +35,11 @@ export const assistant = prompt({
 
 ## Native adapters
 
-Native adapters return Crux message history on `result.messages`. Use the message-shape helpers from `@crux/core/adapter/tool` (also exported from the `@crux/core` root) to find approval requests and append decisions.
+Native adapters return Crux message history on `result.messages`. Use the message-shape helpers from `@use-crux/core/adapter/tool` (also exported from the `@use-crux/core` root) to find approval requests and append decisions.
 
 ```ts
-import { appendToolApprovalResponse, findToolApprovalRequests } from '@crux/core/adapter/tool'
-import { createOpenAI } from '@crux/openai'
+import { appendToolApprovalResponse, findToolApprovalRequests } from '@use-crux/core/adapter/tool'
+import { createOpenAI } from '@use-crux/openai'
 
 const first = await openai.generate(assistant, {
   model: 'gpt-4o',
@@ -62,7 +62,7 @@ if (request) {
 }
 ```
 
-The same shape works with `@crux/google` and `@crux/anthropic` because approvals are handled by Crux before provider-specific message conversion.
+The same shape works with `@use-crux/google` and `@use-crux/anthropic` because approvals are handled by Crux before provider-specific message conversion.
 
 `approvalToken` binds the decision to the exact server-issued request. Keep the original returned `messages` on the server or in trusted session storage, then append the user decision to that history. Do not accept arbitrary client-fabricated message history for tools that can mutate data or call external systems.
 
@@ -70,7 +70,7 @@ The approval helpers are message-shape utilities and types only — safe to impo
 
 ## AI SDK adapter
 
-`@crux/ai` maps approval middleware to the AI SDK approval protocol. In React, render the tool UI part with `state === 'approval-requested'` and call `addToolApprovalResponse()`.
+`@use-crux/ai` maps approval middleware to the AI SDK approval protocol. In React, render the tool UI part with `state === 'approval-requested'` and call `addToolApprovalResponse()`.
 
 ```tsx
 'use client'

@@ -70,7 +70,7 @@ export function parseDuration(duration: string): number {
  * Writes the signal payload to the store. The flow will pick it up
  * on the next `flow().run({ resume })` call.
  *
- * Uses the CruxStore from the runtime config (set via `config({ store })`).
+ * Uses the CruxStore from the runtime config (set via `config({ persistence: { store } })`).
  */
 export async function signalFlow(flowId: string, name: string, payload: JsonObject = {}): Promise<void> {
   const store = resolveStore()
@@ -90,7 +90,7 @@ export async function getFlowSnapshot(flowId: string): Promise<FlowSnapshot | nu
 /**
  * List flows from the store, optionally filtered by status.
  *
- * Uses the CruxStore from the runtime config (set via `config({ store })`).
+ * Uses the CruxStore from the runtime config (set via `config({ persistence: { store } })`).
  */
 export async function listFlows(options?: ListFlowsOptions): Promise<FlowSummary[]> {
   const store = resolveStore()
@@ -111,7 +111,7 @@ export async function listFlows(options?: ListFlowsOptions): Promise<FlowSummary
  * Cancel a suspended flow externally.
  *
  * Updates the flow snapshot status to 'cancelled' in the store.
- * Uses the CruxStore from the runtime config (set via `config({ store })`).
+ * Uses the CruxStore from the runtime config (set via `config({ persistence: { store } })`).
  */
 export async function cancelFlow(flowId: string, reason?: string): Promise<void> {
   const store = resolveStore()

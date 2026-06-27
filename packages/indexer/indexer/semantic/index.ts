@@ -1,1 +1,1 @@
-export * from './facts'
+export * from './evidence/facts'

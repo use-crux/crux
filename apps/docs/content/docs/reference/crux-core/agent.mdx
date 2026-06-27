@@ -6,10 +6,10 @@ description: Agent definitions, composition utilities, blackboard, handoff, and 
 ## Composition utilities
 
 ```ts
-import { agent, isAgent, createCompositions } from '@crux/core/agent'
+import { agent, isAgent, createCompositions } from '@use-crux/core/agent'
 
 // Pre-bound versions from adapters:
-import { parallel, pipeline, consensus, agent } from '@crux/ai'
+import { parallel, pipeline, consensus, agent } from '@use-crux/ai'
 ```
 
 ### `agent(config)`
@@ -135,10 +135,10 @@ Factory that creates adapter-bound `parallel`, `pipeline`, and `consensus` funct
 
 ### `createFakeAgentExecutor(config?)`
 
-A conformant in-memory `AgentExecutor` for **testing** how compositions drive the executor without an SDK (the agent-layer analogue of the resolver fakes). Exported from `@crux/core/agent` and the package root.
+A conformant in-memory `AgentExecutor` for **testing** how compositions drive the executor without an SDK (the agent-layer analogue of the resolver fakes). Exported from `@use-crux/core/agent` and the package root.
 
 ```ts
-import { createFakeAgentExecutor, createPipeline } from '@crux/core/agent'
+import { createFakeAgentExecutor, createPipeline } from '@use-crux/core/agent'
 
 const executor = createFakeAgentExecutor({
   agents: {
@@ -170,7 +170,7 @@ A `Behavior` is `{ output }`, `{ transfer, reason }` (executes the generated `tr
 ## Building-block primitives
 
 ```ts
-import { blackboard, handoff, delegate } from '@crux/core/agent'
+import { blackboard, handoff, delegate } from '@use-crux/core/agent'
 ```
 
 ### `blackboard(config)`
@@ -351,9 +351,9 @@ import type {
   Blackboard, BlackboardConfig,
   HandoffInstance, HandoffConfig, HandoffPayload,
   Delegate, DelegateConfig, DelegateResult,
-} from '@crux/core/agent'
+} from '@use-crux/core/agent'
 
-import { ConsensusError } from '@crux/core/agent'
+import { ConsensusError } from '@use-crux/core/agent'
 ```
 
 ## Related

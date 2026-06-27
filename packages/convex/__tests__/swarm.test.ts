@@ -1,12 +1,12 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { prompt as makePrompt } from '@crux/core'
-import { agent as makeAgent } from '@crux/core/agent'
+import { prompt as makePrompt } from '@use-crux/core'
+import { agent as makeAgent } from '@use-crux/core/agent'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '@crux/core/observability'
+} from '@use-crux/core/observability'
 import { z } from 'zod'
 import { createConvexSwarm, createComponentSwarm } from '../swarm'
 

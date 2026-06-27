@@ -1,7 +1,7 @@
 /**
  * Provider quirks, quarantined.
  *
- * The only file in `@crux/ai` allowed to branch on provider identity.
+ * The only file in `@use-crux/ai` allowed to branch on provider identity.
  * Everything here is a pure function keyed off `ModelInfo`: Anthropic
  * schema sanitization, Anthropic prompt-cache breakpoints, and model
  * identity extraction.
@@ -12,8 +12,8 @@
 import { jsonSchema as wrapJsonSchema } from 'ai'
 import type { LanguageModel } from 'ai'
 import type { z } from 'zod'
-import type { ModelInfo, SystemBlock } from '@crux/core'
-import { sanitizeJsonSchema } from '@crux/core'
+import type { ModelInfo, SystemBlock } from '@use-crux/core'
+import { sanitizeJsonSchema } from '@use-crux/core'
 
 /**
  * Extract provider and model ID from an AI SDK `LanguageModel`.

@@ -16,17 +16,17 @@ import {
   createSafety,
   createSafetyPlugin,
   defaultConstraintFeedbackFormatter,
-} from '@crux/core/safety'
+} from '@use-crux/core/safety'
 ```
 
-`@crux/core/safety` is one deep module. Guardrails filter content; constraints validate generated output and can retry with feedback. Both are **authored** as frozen objects and **executed** through a single per-call `Safety` session that every adapter constructs internally — scope merging, phase ordering, retries, suspension policy, audits, and observability live in the session, never in adapter code.
+`@use-crux/core/safety` is one deep module. Guardrails filter content; constraints validate generated output and can retry with feedback. Both are **authored** as frozen objects and **executed** through a single per-call `Safety` session that every adapter constructs internally — scope merging, phase ordering, retries, suspension policy, audits, and observability live in the session, never in adapter code.
 
 ## Guardrails
 
 `guardrail(config)` creates a frozen guardrail object. Guardrails run on input, output, or streaming chunks and can pass, block, redact, transform, warn, or hold chunks. An optional `category` (e.g. `'pii'`, `'jailbreak'`) is carried through audits for risk-type aggregation.
 
 ```ts
-import { guardrail } from '@crux/core/safety'
+import { guardrail } from '@use-crux/core/safety'
 
 const piiGuard = guardrail({
   name: 'pii',
@@ -44,7 +44,7 @@ const piiGuard = guardrail({
 `constraint(config)` creates a semantic output check. Constraints run after schema validation. Failed assert constraints produce feedback and retry until they pass or exhaust.
 
 ```ts
-import { constraint } from '@crux/core/safety'
+import { constraint } from '@use-crux/core/safety'
 
 const citeSources = constraint({
   name: 'cite-sources',
@@ -66,8 +66,8 @@ Constraints bridge into the other predicate surfaces without new concepts: [`jud
 One plugin registers global guardrails and constraints. Per-prompt (`prompt({ constraints })`), per-context, and per-call attachment merge with name-keyed precedence: per-call wins over per-prompt wins over global.
 
 ```ts
-import { config } from '@crux/core'
-import { createSafetyPlugin } from '@crux/core/safety'
+import { config } from '@use-crux/core'
+import { createSafetyPlugin } from '@use-crux/core/safety'
 
 config({
   plugins: [createSafetyPlugin({ guardrails: [piiGuard], constraints: [citeSources] })],
@@ -99,8 +99,8 @@ const meta = safety.stamp(traceMeta)                              // audits atta
 | --- | --- |
 | Block, redact, transform, or warn on raw input/output | `guardrail()` |
 | Enforce business rules on generated output and retry | `constraint()` |
-| Enforce a minimum LLM-judge score and retry | `judgeConstraint()` (`@crux/core/scoring`) |
-| Regression-test a production constraint in eval suites | `constraintScorer()` (`@crux/core/quality`) |
+| Enforce a minimum LLM-judge score and retry | `judgeConstraint()` (`@use-crux/core/scoring`) |
+| Regression-test a production constraint in eval suites | `constraintScorer()` (`@use-crux/core/quality`) |
 | Repair JSON/schema parse failures | `validationRetry` |
 
 ## Related

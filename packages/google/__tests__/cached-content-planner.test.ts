@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SystemBlock } from '@crux/core'
+import type { SystemBlock } from '@use-crux/core'
 import { planSystemBlocks } from '../cached-content/planner'
 
 describe('planSystemBlocks', () => {

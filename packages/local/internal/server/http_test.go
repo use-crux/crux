@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -27,31 +28,38 @@ type fakeProjectIndexer struct {
 
 type fakeIncrementalProjectIndexer struct {
 	fullIndex       store.IndexData
-	result          devtools.ProjectIndexIncrementalResult
+	result          projectindex.ProjectIndexIncrementalResult
 	files           []string
 	deletedFiles    []string
 	calledFull      bool
 	calledIncrement bool
 }
 
+type fakeRuntimeProjectIndexer struct {
+	fullIndex       store.IndexData
+	runtimePatch    projectindex.IndexPatch
+	calledRuntime   bool
+	previousRuntime store.IndexData
+}
+
 func (f fakeProjectIndexer) IndexProject(context.Context, string, string, string) (store.IndexData, error) {
 	return f.index, nil
 }
 
-func (f fakeProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (devtools.IndexPatch, error) {
+func (f fakeProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
 	project := store.ProjectIdentity{}
 	if f.index.Project != nil {
 		project = *f.index.Project
 	}
-	return devtools.IndexPatch{
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
 		Phase:         "ast",
 		Project:       project,
 		StartedAt:     f.index.IndexedAt,
 		FinishedAt:    f.index.IndexedAt,
 		Status:        "ok",
-		Invalidates:   &devtools.IndexPatchInvalidation{All: true},
-		Facts: devtools.IndexPatchFacts{
+		Invalidates:   &projectindex.IndexPatchInvalidation{All: true},
+		Facts: projectindex.IndexPatchFacts{
 			Prompts:      f.index.Prompts,
 			Contexts:     f.index.Contexts,
 			Tools:        f.index.Tools,
@@ -64,30 +72,54 @@ func (f fakeProjectIndexer) IndexProjectAstPatch(context.Context, string, string
 	}, nil
 }
 
-func (f *fakeIncrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string, bool) (devtools.IndexPatch, error) {
+func (f *fakeIncrementalProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
 	f.calledFull = true
 	project := store.ProjectIdentity{}
 	if f.fullIndex.Project != nil {
 		project = *f.fullIndex.Project
 	}
-	return devtools.IndexPatch{
+	return projectindex.IndexPatch{
 		SchemaVersion: 1,
 		Phase:         "ast",
 		Project:       project,
 		Status:        "ok",
-		Invalidates:   &devtools.IndexPatchInvalidation{All: true},
-		Facts: devtools.IndexPatchFacts{
+		Invalidates:   &projectindex.IndexPatchInvalidation{All: true},
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: f.fullIndex.Definitions,
 			Sources:     f.fullIndex.Sources,
 		},
 	}, nil
 }
 
-func (f *fakeIncrementalProjectIndexer) IndexProjectIncremental(_ context.Context, _ string, _ string, _ string, _ store.IndexData, files []string, deletedFiles []string, _ string) (devtools.ProjectIndexIncrementalResult, error) {
+func (f *fakeIncrementalProjectIndexer) IndexProjectIncremental(_ context.Context, _ string, _ string, _ string, _ store.IndexData, files []string, deletedFiles []string, _ string) (projectindex.ProjectIndexIncrementalResult, error) {
 	f.calledIncrement = true
 	f.files = append([]string(nil), files...)
 	f.deletedFiles = append([]string(nil), deletedFiles...)
 	return f.result, nil
+}
+
+func (f *fakeRuntimeProjectIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	project := store.ProjectIdentity{}
+	if f.fullIndex.Project != nil {
+		project = *f.fullIndex.Project
+	}
+	return projectindex.IndexPatch{
+		SchemaVersion: 1,
+		Phase:         "ast",
+		Project:       project,
+		Status:        "ok",
+		Invalidates:   &projectindex.IndexPatchInvalidation{All: true},
+		Facts: projectindex.IndexPatchFacts{
+			Definitions: f.fullIndex.Definitions,
+			Sources:     f.fullIndex.Sources,
+		},
+	}, nil
+}
+
+func (f *fakeRuntimeProjectIndexer) IndexProjectRuntimePatch(_ context.Context, req projectindex.ProjectRuntimeIndexRequest) (projectindex.IndexPatch, error) {
+	f.calledRuntime = true
+	f.previousRuntime = req.PreviousIndex
+	return f.runtimePatch, nil
 }
 
 func newTestHTTPServer(t *testing.T, s *store.Store) http.Handler {
@@ -548,32 +580,91 @@ func TestHTTPServer_project_index_reindex_endpoint(t *testing.T) {
 	}
 }
 
+func TestHTTPServer_project_index_reindex_endpoint_accepts_runtime_rich(t *testing.T) {
+	root := t.TempDir()
+	s := store.NewStore()
+	indexer := &fakeRuntimeProjectIndexer{
+		fullIndex: store.IndexData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+			Definitions: []store.ProjectDefinition{
+				{ID: "prompt:ast", Kind: "prompt", Name: "ast", Fidelity: "partial", Status: "active"},
+			},
+		},
+		runtimePatch: projectindex.IndexPatch{
+			SchemaVersion: 1,
+			Phase:         "runtime",
+			Project:       store.ProjectIdentity{Root: root, Name: "project"},
+			Status:        "ok",
+			Facts: projectindex.IndexPatchFacts{
+				Definitions: []store.ProjectDefinition{
+					{ID: "prompt:runtime", Kind: "prompt", Name: "runtime", Fidelity: "resolved", Status: "active"},
+				},
+			},
+		},
+	}
+	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(t.TempDir()))).WithProjectIndexer(indexer)
+	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: t.TempDir()})
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	body := fmt.Sprintf(`{"root":%q,"runtimeRich":true}`, root)
+	resp, err := http.Post(ts.URL+"/api/project/index/reindex", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST runtime-rich reindex error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST runtime-rich reindex status = %d, want 200: %s", resp.StatusCode, responseBody)
+	}
+	var index store.IndexData
+	if err := json.NewDecoder(resp.Body).Decode(&index); err != nil {
+		t.Fatalf("decode runtime-rich index: %v", err)
+	}
+	if !indexer.calledRuntime {
+		t.Fatal("runtime indexer was not called")
+	}
+	if indexDefinitionByID(indexer.previousRuntime.Definitions, "prompt:ast") == nil {
+		t.Fatalf("previous runtime index = %+v, want AST definition", indexer.previousRuntime.Definitions)
+	}
+	if indexDefinitionByID(index.Definitions, "prompt:ast") == nil || indexDefinitionByID(index.Definitions, "prompt:runtime") == nil {
+		t.Fatalf("definitions = %+v, want AST and runtime definitions", index.Definitions)
+	}
+}
+
 func TestHTTPServer_project_index_reindex_endpoint_accepts_incremental_deltas(t *testing.T) {
 	root := t.TempDir()
 	s := store.NewStore()
 	previous := store.IndexData{
 		SchemaVersion: 1,
 		Project:       &store.ProjectIdentity{Root: root, Name: "project"},
+		SourceGraph: &store.ProjectIndexSourceGraph{
+			SchemaVersion: 1,
+			ProducedBy:    "@use-crux/indexer",
+			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
+			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
+		},
 		Definitions: []store.ProjectDefinition{
 			{ID: "prompt:old", Kind: "prompt", Name: "old", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/a.ts", Line: 1}},
 			{ID: "prompt:kept", Kind: "prompt", Name: "kept", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/b.ts", Line: 1}},
 		},
 		Sources: []store.IndexSourceFile{
-			{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"prompt:old"}},
-			{File: "src/b.ts", Status: "active", DefinitionIDs: []string{"prompt:kept"}},
+			{File: "src/a.ts", Status: "active", ShardID: ".", DefinitionIDs: []string{"prompt:old"}},
+			{File: "src/b.ts", Status: "active", ShardID: ".", DefinitionIDs: []string{"prompt:kept"}},
 		},
 	}
 	indexer := &fakeIncrementalProjectIndexer{
-		result: devtools.ProjectIndexIncrementalResult{
-			Report: devtools.ProjectIndexIncrementalReport{PlanKind: "source-file-reindex"},
-			Patches: []devtools.IndexPatch{
+		result: projectindex.ProjectIndexIncrementalResult{
+			Report: projectindex.ProjectIndexIncrementalReport{PlanKind: "source-file-reindex"},
+			Patches: []projectindex.IndexPatch{
 				{
 					SchemaVersion: 1,
 					Phase:         "ast",
 					Project:       store.ProjectIdentity{Root: root, Name: "project"},
 					Status:        "ok",
-					Invalidates:   &devtools.IndexPatchInvalidation{Files: []string{"src/a.ts"}},
-					Facts: devtools.IndexPatchFacts{
+					Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{"src/a.ts"}},
+					Facts: projectindex.IndexPatchFacts{
 						Definitions: []store.ProjectDefinition{
 							{ID: "prompt:new", Kind: "prompt", Name: "new", Fidelity: "resolved", Status: "active", Source: &store.SourceLoc{File: "src/a.ts", Line: 2}},
 						},
@@ -586,15 +677,16 @@ func TestHTTPServer_project_index_reindex_endpoint_accepts_incremental_deltas(t 
 		},
 	}
 	devSvc := devtools.NewService(s, quality.NewService(s, quality.Dir(t.TempDir()))).WithProjectIndexer(indexer)
-	devSvc.ApplyIndexPatch(context.Background(), devtools.IndexPatch{
+	devSvc.ApplyIndexPatch(context.Background(), projectindex.IndexPatch{
 		SchemaVersion: 1,
 		Phase:         "ast",
 		Project:       *previous.Project,
 		Status:        "ok",
-		Invalidates:   &devtools.IndexPatchInvalidation{All: true},
-		Facts: devtools.IndexPatchFacts{
+		Invalidates:   &projectindex.IndexPatchInvalidation{All: true},
+		Facts: projectindex.IndexPatchFacts{
 			Definitions: previous.Definitions,
 			Sources:     previous.Sources,
+			SourceGraph: previous.SourceGraph,
 		},
 	})
 	srv := NewHTTPServerWithServices(devSvc, ServerOptions{QualityDir: t.TempDir()})

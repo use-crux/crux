@@ -4,13 +4,13 @@ description: Design-plane contract for discovered Crux definitions, relations, s
 ---
 
 ```ts
-import type { ProjectIndexSnapshot } from '@crux/core/project-index'
-import { serializeProjectIndex } from '@crux/core/project-index/serializers'
+import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
+import { serializeProjectIndex } from '@use-crux/core/project-index/serializers'
 ```
 
 The Project Index describes what exists in a local Crux project. It is separate from runtime observability: index definitions are prompts, contexts, tools, agents, flows, flow steps, compositions, RAG resources, memory, memory blocks, blackboards, workspaces, safety definitions, suites, evals, and other design-time resources; spans describe what happened during a run.
 
-`@crux/core` owns the TypeScript contract. The Go devtools backend mirrors the contract manually, builds the service-owned read model, and exposes it to web devtools and the TUI.
+`@use-crux/core` owns the TypeScript contract. The Go devtools backend mirrors the contract manually, builds the service-owned read model, and exposes it to web devtools and the TUI.
 
 ## Snapshot Shape
 
@@ -40,20 +40,79 @@ interface ProjectIndexSnapshot {
 
 `sourceGraph` is indexer-owned provenance for `sources` dependency/dependent rows. It records the graph schema version, producer, and capabilities such as source dependencies, reverse dependents, definition ownership, and diagnostic ownership. Incremental planners and future partial index executors should trust source closures only when this marker is present with the required capabilities; older snapshots without it should fall back to full reindex.
 
+## Resolved Project Model
+
+`ResolvedProjectModel` is the config-inspection read model exported from `@use-crux/core/project-index`.
+It is not a runtime setup API and it is not a central registry requirement. Local tooling uses it to
+explain what Crux inferred or explicitly received while keeping policy/config separate from authored
+source visibility.
+
+```ts
+import type { ProjectModelProvenance, ResolvedProjectModel } from '@use-crux/core/project-index'
+```
+
+The model contains the selected root, optional package name, config files, source roots, ignored
+paths, discovered definitions, source-visible relations, Quality discovery settings, and
+diagnostics. Fields that can be inferred or overridden use `ProjectModelField<T>` so clients can show
+whether a value came from source, runtime evidence, filesystem convention, config, or CLI flags.
+
+Source-discovered prompt and context bundles are represented directly on definitions. For example,
+`createPrompts({ support: { answer } })` gives the `answer` prompt a provenance-bearing
+`path.value` of `["support", "answer"]`; `createContexts(...)` does the same for context leaves.
+Prompt/context `use` bindings that Crux can prove from source appear in `relations`, such as
+`prompt.uses_context`, with inferred visibility and source provenance. Users do not need to repeat
+these prompts, contexts, or relationships in `crux.config.ts` for local inspection.
+
+Tools and skill registries follow the same source-first rule. Exported `tool(...)` definitions,
+`registry(...)` values, and `skill.fromRegistry(registryValue, path)` calls appear as inferred
+definitions without config registration. Registry-backed skills link to their registry value with
+`skill.uses_registry`; bundled registries such as `skillsSh` are represented as built-in registry
+definitions and are not fetched during discovery.
+
+`@use-crux/indexer` produces this model with `resolveProjectModel(...)`, and `@use-crux/local` exposes it
+through `crux config inspect` for human or `--json` output.
+
+```ts
+type ProjectModelProvenance =
+  | { kind: 'source'; file: string; exportName?: string }
+  | { kind: 'runtime'; traceId?: string; attribute: string }
+  | { kind: 'filesystem'; path: string; convention: string }
+  | { kind: 'config'; path: string; key: string }
+  | { kind: 'cli'; flag: string }
+```
+
+Diagnostics use stable `ProjectModelDiagnosticCode` values, such as
+`project_model.source_only_discovery`, `project_model.missing_stable_id`,
+`project_model.dynamic_tool_map_unproven`,
+`project_model.prompt_test_dependency_unproven`, and
+`project_model.config_import_failed`, plus branded diagnostic ids. Definition
+and relation ids are branded separately. The brands disappear in JSON, but
+TypeScript callers must construct ids at a boundary with
+`createProjectModelDefinitionId()`, `createProjectModelRelationId()`, or
+`createProjectModelDiagnosticId()` instead of passing arbitrary strings through
+the public contract.
+
+Clients should render Project Model diagnostics as project facts with small suggested fixes. A
+missing config is allowed: the source-only diagnostic explains the discovery mode, not that prompts,
+contexts, or tools must be registered in config. Selected source-shape facts,
+such as missing stable ids, runtime-dependent tool maps, or tested prompts
+whose context dependencies are only partially proven, are projected into
+Project Model diagnostics with source provenance.
+
 ## Producers
 
 The index contract is produced by two packages:
 
-| Producer        | Responsibility                                                                                           |
-| --------------- | -------------------------------------------------------------------------------------------------------- |
-| `@crux/indexer` | Discovers source-authored definitions, relations, source refs, diagnostics, and index lint findings.     |
-| `@crux/local`   | Persists and serves the index read model, enriches it with quality state, and broadcasts updates to UIs. |
+| Producer            | Responsibility                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------- |
+| `@use-crux/indexer` | Discovers source-authored definitions, relations, source refs, diagnostics, and index lint findings.     |
+| `@use-crux/local`   | Persists and serves the index read model, enriches it with quality state, and broadcasts updates to UIs. |
 
-Runtime snapshots emitted by `withDevtools()` can enrich prompt/context/tool metadata, but source files and `.crux/quality` records are authoritative for authored definitions. See [@crux/indexer](/docs/reference/indexer) for the indexing package and [@crux/local](/docs/reference/local) for CLI/API access.
+Runtime snapshots emitted by `withDevtools()` can enrich prompt/context/tool metadata, but source files and `.crux/quality` records are authoritative for authored definitions. See [@use-crux/indexer](/docs/reference/indexer) for the indexing package and [@use-crux/local](/docs/reference/local) for CLI/API access.
 
 The indexing pipeline is designed as fast source truth plus background enrichment. During `crux dev`,
 the Go service asks the worker for a bounded static/AST pass first so it can publish useful Project
-Index data quickly. That first patch may carry an `index.static_only` diagnostic as a status marker.
+Index data quickly. That first patch may carry an `index.source_only` diagnostic as a status marker.
 When semantic enrichment succeeds, the service applies the semantic patch and clears that marker; when
 semantic enrichment is unavailable or degraded, the marker remains so clients can explain the current
 fidelity honestly.
@@ -63,11 +122,36 @@ primitive relations without blocking the first snapshot. The Go service owns sta
 loading, patch merging, final read-model state, and realtime publication; TypeScript workers emit
 neutral index facts/patches.
 
+## Semantic Backend Selection
+
+Semantic Project Index behavior is backend-neutral. The default backend uses the JavaScript
+TypeScript compiler API. Opt in to the experimental native semantic backend with
+`experimental.indexer.native: true` or
+`experimental.indexer.native: { engine: 'tsgo', tsserverPath?: string }` in `crux.config.ts`.
+
+When native semantic indexing is selected, TypeScript-Go owns semantic project setup, checker calls,
+declaration lookup, and AST traversal. Native direct projectors accelerate source shapes that Crux
+can prove exactly; unsupported shapes continue through the tsgo-backed shared analyzer path instead
+of falling back to the JavaScript TypeScript semantic backend. Both semantic backends emit the same
+Project Index facts, relations, diagnostics, lint findings, and source refs through the same read
+model.
+
+`experimental.indexer.nativeAst: true` or `{ frontend: 'oxc' }` is a separate static AST/source
+frontend experiment. It can accelerate the first source pass without selecting the native semantic
+backend.
+
+Native AST beta runs use Rust/Oxc for first-party Static Index work, but the Project Index contract
+does not change. TypeScript extension extractors and rules remain compatible through the trusted
+Node host, and their output must finalize into the same definitions, relations, diagnostics, lint
+findings, rule descriptors, sources, and source graph rows as the TypeScript Static Index baseline.
+Clients should treat fallback or Node-start diagnostics as indexing status: they explain why a beta
+run used TypeScript extension compatibility or degraded setup, not a different Project Index schema.
+
 ## Full-Fidelity Definitions
 
-Export definitions from discovered modules or register them through `crux.config.*` for full fidelity. Inline or dynamically generated definitions may still appear as partial entries, but Crux surfaces a diagnostic when it cannot prove IDs, relations, cases, or source locations.
+Export definitions from discovered modules for full source visibility. Use `crux.config.*` for explicit policy, trust, ownership, or overrides rather than duplicating every primitive registration. Inline or dynamically generated definitions may still appear as partial entries, but Crux surfaces a diagnostic when it cannot prove IDs, relations, cases, or source locations.
 
-Static relation extraction currently covers common design-time links such as prompt-to-context, agent-to-prompt, agent-to-tool, agent handoffs, flow-to-step, statically visible agent/tool/flow-step memory access, RAG pipeline-to-retriever, memory-to-memory-block, and composition-to-agent/flow. Workspaces carry source, namespace, mounts, tool exposure, and blob-storage hints when those values are literal. Source file entries include produced definition ids plus dependency/dependent file edges when known, and `sourceGraph` records whether those source rows are complete enough for source-closure planning. The Go service owns these definitions and relations so web devtools and the TUI render the same graph.
+Static relation extraction currently covers common design-time links such as prompt-to-context, agent-to-prompt, agent-to-tool, skill-to-registry, agent handoffs, flow-to-step, statically visible agent/tool/flow-step memory access, RAG pipeline-to-retriever, memory-to-memory-block, and composition-to-agent/flow. Workspaces carry source, namespace, mounts, tool exposure, and blob-storage hints when those values are literal. Source file entries include produced definition ids plus dependency/dependent file edges when known, and `sourceGraph` records whether those source rows are complete enough for source-closure planning. The Go service owns these definitions and relations so web devtools and the TUI render the same graph.
 
 Definitions can include supporting source references in `sourceRefs`. `source` remains the primary authored call site, while `sourceRefs` point at separate schema declarations, callback functions, handlers, prompt builders, system prompt constants, validators, policies, config bindings, helper functions, reusable text fragments, and nested schema fragments that Crux can prove from source. The resolver supports same-file identifiers and direct project imports for tool schemas, nested schema identifiers, agent/prompt/context callbacks, prompt `use` context targets, local context-array constants, prompt/context system constants, direct identifiers and conservative object-property paths injected into static system template strings, safety/scorer callbacks, tool callbacks, Convex Agent config/callback bindings, flow-step callbacks, Convex Agent tool-map contributors, and simple callback-factory arguments. For example, `createTool({ parameters: writerSchema, execute: runWriter })` can expose both `metadata.inputSchema` and refs for `writerSchema`, nested schemas such as `SearchStepSchema`, `runWriter`, and one statically visible helper called by `runWriter`; `prompt({ system: PLANNER_SYSTEM })` can expose the `PLANNER_SYSTEM` declaration; a context system template that injects `formatting.SUPPORTED_ELEMENTS` can expose that property declaration with `metadata.injected: true` and `metadata.fragment: true`; `new Agent(..., { tools, contextHandler, usageHandler })`, direct `convexAgent({...})`, and profile-created `crux.convexAgent({...})` can expose `prompt`, `tools`, `contextHandler`, `usageHandler`, and `prepare` bindings, tool-map spreads/properties, factory arguments passed into handler or prepare builders, and one helper level.
 
@@ -110,7 +194,7 @@ interface ProjectSourceRef {
 
 Clients should render `sourceRefs` as supporting source locations and should not use them as runtime graph edges. Authored graph links still come from `relations`; parsed schemas and primitive intelligence still live on `metadata`. Source file entries can include dependency/dependent edges derived from source refs so file maps can show "this prompt depends on that schema/fragment file" without turning those source dependencies into Crux runtime relations.
 
-Definitions include `metadata.runtimeJoin` hints where Crux can derive stable runtime identifiers. The object is typed as `ProjectRuntimeJoin` from `@crux/core/project-index`. These hints are for the Go read models to join spans/resources back to authored definitions without UI-side inference.
+Definitions include `metadata.runtimeJoin` hints where Crux can derive stable runtime identifiers. The object is typed as `ProjectRuntimeJoin` from `@use-crux/core/project-index`. These hints are for the Go read models to join spans/resources back to authored definitions without UI-side inference.
 
 `runtimeJoin` separates authored identity from runtime correlation. `definitionId` is always the index definition id. `spanAttributes` contains only stable attributes that runtime spans actually emit. Runtime-only correlation fields stay separate: `flowId` identifies one executing flow instance and `stepId` identifies one executing flow-step instance, so authored flow definitions join `flow.run` spans by primitive plus span name, while authored flow-step definitions join `flow.step` spans by primitive plus `stepLabel`/span name. Memory blocks join memory spans through `sourceDefinitionId`, `blockDefinitionId`, runtime `memoryId`, and `blockId`. Blackboards use memory-shaped spans with `memoryType: "blackboard"`; clients should not expect a separate `blackboardId` span attribute.
 

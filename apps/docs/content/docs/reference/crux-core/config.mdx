@@ -1,0 +1,374 @@
+---
+title: Config
+description: Full crux.config.ts reference for project policy, local tooling, runtime hooks, persistence, observability, plugins, and experimental indexer options.
+---
+
+`config()` is the single public API for Crux project configuration. Use it for policy, local tooling,
+runtime hooks, persistence, observability, plugins, and explicit experimental opt-ins.
+
+Do not repeat prompts, contexts, tools, agents, flows, registries, or skills in `config()`. Author
+those values in normal TypeScript modules and export them. Local tooling discovers them from source.
+
+```ts title="crux.config.ts"
+import { config } from '@use-crux/core'
+
+export default config({
+  quality: {
+    defaults: { replay: 'record-new' },
+  },
+  lint: {
+    profile: 'recommended',
+  },
+  generation: {
+    autoEscape: true,
+  },
+})
+```
+
+An empty config is valid:
+
+```ts title="crux.config.ts"
+import { config } from '@use-crux/core'
+
+export default config({})
+```
+
+## Behavior
+
+`config()` applies immediately when the module is imported. Node module caching means a normal
+`crux.config.ts` module runs once per process.
+
+When local tooling imports the config with `CRUX_INDEX=1`, Crux returns an inert config object: no
+observability transport, Runtime Bridge, store, middleware, tokenizer, or plugin side effects are
+installed. This is what `crux config inspect` uses.
+
+## Shape
+
+```ts
+interface CruxConfig {
+  quality?: QualityConfig
+  lint?: CruxLintConfig
+  indexer?: CruxIndexerConfig
+  experimental?: CruxExperimentalConfig
+  persistence?: CruxPersistenceConfig
+  generation?: CruxGenerationConfig
+  devtools?: CruxDevtoolsConfig
+  observability?: CruxObservabilityConfig
+  plugins?: readonly CruxPlugin[]
+}
+```
+
+| Option          | Type                      | Default                                                  | Consumed by                               |
+| --------------- | ------------------------- | -------------------------------------------------------- | ----------------------------------------- |
+| `quality`       | `QualityConfig`           | zero-config Quality defaults                             | `crux quality`, `crux dev`, Quality views |
+| `lint`          | `CruxLintConfig`          | `{ profile: 'recommended' }`                             | Project Index lint, `crux lint`, devtools |
+| `indexer`       | `CruxIndexerConfig`       | no third-party extensions                                | `@use-crux/indexer`                       |
+| `experimental`  | `CruxExperimentalConfig`  | no experimental flags                                    | `@use-crux/indexer`, `@use-crux/local`    |
+| `persistence`   | `CruxPersistenceConfig`   | no global store                                          | flows, plans, tasks, Runtime Bridge reads |
+| `generation`    | `CruxGenerationConfig`    | `autoEscape: true`; `securityWarnings` in development    | prompt resolution and generation          |
+| `devtools`      | `CruxDevtoolsConfig`      | no runtime devtools transport unless installed elsewhere | local devtools plugin and Runtime Bridge  |
+| `observability` | `CruxObservabilityConfig` | no explicit export transport                             | canonical observability transport         |
+| `plugins`       | `readonly CruxPlugin[]`   | `[]`                                                     | runtime plugin installer                  |
+
+## `quality`
+
+Quality config controls discovery, persistence, redaction, and run defaults. Model, judge, and
+embedding providers belong in eval code, not in config.
+
+| Option                         | Type                          | Default                                  | Notes                                                                        |
+| ------------------------------ | ----------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| `quality.id`                   | `string`                      | nearest `package.json` name              | Workbench id stored on Quality records.                                      |
+| `quality.dir`                  | `string`                      | `.crux/quality`                          | Persistence root for experiments, baselines, cassettes, and workbench state. |
+| `quality.include`              | `string \| readonly string[]` | `['evals/**/*.eval.ts', '**/*.eval.ts']` | Discovery globs relative to the project root.                                |
+| `quality.exclude`              | `string \| readonly string[]` | dependency/output defaults               | Extra discovery excludes.                                                    |
+| `quality.redact`               | `readonly string[]`           | built-in secret redaction only           | Dot paths removed from persisted records and cassettes.                      |
+| `quality.defaults.trials`      | `number`                      | `1`                                      | Default executions per evaluation cell.                                      |
+| `quality.defaults.concurrency` | `number`                      | `5`                                      | Default concurrent cell execution.                                           |
+| `quality.defaults.timeoutMs`   | `number`                      | `60_000`                                 | Default per-cell timeout.                                                    |
+| `quality.defaults.replay`      | `ReplayMode`                  | `live`                                   | Default cassette behavior.                                                   |
+
+```ts title="crux.config.ts"
+export default config({
+  quality: {
+    id: 'support-agent',
+    dir: '.crux/quality',
+    include: ['evals/**/*.eval.ts', 'src/**/*.eval.ts'],
+    redact: ['customer.email', 'metadata.privateNote'],
+    defaults: {
+      trials: 2,
+      concurrency: 4,
+      timeoutMs: 90_000,
+      replay: 'record-new',
+    },
+  },
+})
+```
+
+See [Quality](/docs/reference/crux-core/quality) and [`crux quality`](/docs/reference/local#crux-quality).
+
+## `lint`
+
+Lint config controls authored Project Index findings. It does not run ESLint or TypeScript checks.
+
+| Option                    | Type                                                   | Default                 | Notes                                             |
+| ------------------------- | ------------------------------------------------------ | ----------------------- | ------------------------------------------------- |
+| `lint.profile`            | `'off' \| 'recommended' \| 'strict' \| 'experimental'` | `recommended`           | Selects which Project Index findings are exposed. |
+| `lint.rules`              | `Record<string, CruxLintRuleConfig>`                   | `{}`                    | Rule overrides keyed by stable rule id.           |
+| `lint.rules[id].enabled`  | `boolean`                                              | rule enabled by profile | Set `false` to disable a rule project-wide.       |
+| `lint.rules[id].severity` | `'info' \| 'warning' \| 'error'`                       | rule default            | Overrides the displayed severity.                 |
+
+```ts title="crux.config.ts"
+export default config({
+  lint: {
+    profile: 'strict',
+    rules: {
+      'definition.missing_eval_coverage': { severity: 'error' },
+      'prompt.missing_output_schema': { enabled: false },
+    },
+  },
+})
+```
+
+See [Index Lint](/docs/reference/crux-core/lint).
+
+## `indexer`
+
+Indexer config is inert data stored by `@use-crux/core` and enforced by `@use-crux/indexer`. Loading an
+allowlisted extension imports JavaScript from `node_modules`; treat it like trusted build tooling.
+
+| Option                         | Type                                                        | Default                    | Notes                                                    |
+| ------------------------------ | ----------------------------------------------------------- | -------------------------- | -------------------------------------------------------- |
+| `indexer.extensions`           | `readonly CruxIndexerExtensionReference[]`                  | `[]`                       | Explicit extension package references.                   |
+| `indexer.extensions[].package` | `string`                                                    | required                   | Package specifier, for example `@acme/crux-indexer`.     |
+| `indexer.extensions[].export`  | `string`                                                    | `default`                  | Export to read from the package.                         |
+| `indexer.extensions[].version` | `string`                                                    | installed package accepted | Expected package version range.                          |
+| `indexer.extensions[].enabled` | `boolean`                                                   | `true`                     | Set `false` to keep a reference configured but unloaded. |
+| `indexer.extensions[].options` | `unknown`                                                   | `undefined`                | Extension-owned options.                                 |
+| `indexer.trust.mode`           | `'first-party-only' \| 'allowlisted' \| 'unsafe-local-dev'` | `first-party-only`         | Trust posture before importing extension packages.       |
+| `indexer.trust.allow`          | `readonly string[]`                                         | `[]`                       | Package/manifest names allowed in `allowlisted` mode.    |
+| `indexer.trust.deny`           | `readonly string[]`                                         | `[]`                       | Deny list; deny entries win over allow entries.          |
+| `indexer.rules`                | `Record<string, unknown>`                                   | `{}`                       | Extension-specific rule options keyed by rule id.        |
+
+```ts title="crux.config.ts"
+export default config({
+  indexer: {
+    extensions: [
+      {
+        package: '@acme/crux-indexer',
+        export: 'default',
+        version: '^1.0.0',
+      },
+    ],
+    trust: {
+      mode: 'allowlisted',
+      allow: ['@acme/crux-indexer'],
+    },
+  },
+})
+```
+
+See [Writing an Indexer Extension](/docs/guides/advanced/writing-indexer-extension).
+
+## `experimental.indexer`
+
+Experimental config is unstable by design. Options here may move, rename, or graduate before a stable
+release. Stable-looking backend switches do not belong under `indexer`.
+
+| Option                                     | Type                                                | Default                            | Notes                                                       |
+| ------------------------------------------ | --------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------- |
+| `experimental.indexer.native`              | `boolean \| CruxExperimentalIndexerNativeConfig`    | `false`                            | Selects the experimental native semantic backend.           |
+| `experimental.indexer.native.engine`       | `'tsgo'`                                            | `tsgo`                             | TypeScript-Go native-preview semantic engine.               |
+| `experimental.indexer.native.tsserverPath` | `string`                                            | resolved from project dependencies | Optional TypeScript-Go executable path.                     |
+| `experimental.indexer.nativeAst`           | `boolean \| CruxExperimentalIndexerNativeAstConfig` | `false`                            | Selects the experimental native static AST/source frontend. |
+| `experimental.indexer.nativeAst.frontend`  | `'oxc'`                                             | `oxc`                              | Rust/Oxc static frontend hosted by the local Go runtime.    |
+
+`experimental.indexer.native` and `experimental.indexer.nativeAst` are independent:
+
+- `native` controls semantic enrichment. When enabled, TypeScript-Go owns semantic project setup,
+  checker calls, declaration lookup, and AST traversal.
+- `nativeAst` controls the first static AST/source pass. It can use Rust/Oxc without selecting the
+  native semantic backend.
+
+`experimental.indexer.nativeAst` is covered by the native AST beta gate before release promotion:
+Rust/Oxc output must match the TypeScript Static Index baseline after canonical normalization,
+including lint findings, source graph rows, cache behavior, and TypeScript extension fallback. Node
+can still start for config inspection or trusted TypeScript extension work. If native AST
+diagnostics report worker startup, fallback, or Node-start failures, remove the flag or set it to
+`false` to return to the TypeScript baseline.
+
+```ts title="crux.config.ts"
+export default config({
+  experimental: {
+    indexer: {
+      native: {
+        engine: 'tsgo',
+        tsserverPath: '/path/to/tsgo',
+      },
+      nativeAst: {
+        frontend: 'oxc',
+      },
+    },
+  },
+})
+```
+
+See [Project Index semantic backend selection](/docs/reference/crux-core/project-index#semantic-backend-selection).
+
+## `generation`
+
+Generation config installs cross-cutting behavior for prompt resolution and adapter execution. Model
+choices usually belong in prompt, agent, eval, or adapter code.
+
+| Option                        | Type               | Default                                               | Notes                                                                       |
+| ----------------------------- | ------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------- |
+| `generation.middleware`       | `PromptMiddleware` | `undefined`                                           | Global generate/stream middleware. Plugins can layer additional middleware. |
+| `generation.tokenizer`        | `TokenizerFn`      | character estimate                                    | Custom token counting for budgets and related helpers.                      |
+| `generation.autoEscape`       | `boolean`          | `true`                                                | Escapes string input values before system/prompt functions receive them.    |
+| `generation.securityWarnings` | `boolean`          | `true` when `NODE_ENV !== 'production'`, else `false` | Emits warnings for suspicious input patterns.                               |
+
+```ts title="crux.config.ts"
+export default config({
+  generation: {
+    tokenizer: (text) => Math.ceil(text.length / 4),
+    autoEscape: true,
+    securityWarnings: process.env.NODE_ENV !== 'production',
+  },
+})
+```
+
+See [Prompt execution](/docs/guides/prompts/execution) and [Security warnings](/docs/guides/safety/security).
+
+## `persistence`
+
+Persistence config installs an explicit runtime store. Crux does not infer durability, tenancy, or data
+locality from source discovery.
+
+| Option              | Type        | Default     | Notes                                                                     |
+| ------------------- | ----------- | ----------- | ------------------------------------------------------------------------- |
+| `persistence.store` | `CruxStore` | `undefined` | Required for durable flows, plans, tasks, and Runtime Bridge store reads. |
+
+```ts title="crux.config.ts"
+import { inMemoryCruxStore } from '@use-crux/core/store'
+
+export default config({
+  persistence: {
+    store: inMemoryCruxStore(),
+  },
+})
+```
+
+See [Storage](/docs/reference/crux-core/storage).
+
+## `devtools`
+
+Use `devtools` for the local UI/control/tunnel domain and Runtime Bridge peers. Use
+`observability.serverUrl` when application runtime code should send records to a known local server
+or tunnel.
+
+| Option                        | Type                                            | Default                                         | Notes                                                                                         |
+| ----------------------------- | ----------------------------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `devtools.serverUrl`          | `string`                                        | `undefined`                                     | Installs the local devtools transport plugin when `observability` does not own the transport. |
+| `devtools.bridge`             | `boolean \| RuntimeBridgeOptions`               | `false`                                         | Enables the local command plane.                                                              |
+| `devtools.bridge.enabled`     | `boolean`                                       | `true` when object form is provided             | Turns an object-form bridge on or off.                                                        |
+| `devtools.bridge.url`         | `string`                                        | derived from `serverUrl` and transport defaults | Preferred command transport URL.                                                              |
+| `devtools.bridge.connectUrl`  | `string`                                        | `url`                                           | Alias for outbound WS connection behavior.                                                    |
+| `devtools.bridge.transport`   | `'ws' \| 'http'`                                | runtime default                                 | `ws` for long-lived Node peers; `http` for framework/serverless peers.                        |
+| `devtools.bridge.runtimeName` | `string`                                        | inferred                                        | Human-readable peer name.                                                                     |
+| `devtools.bridge.labels`      | `Record<string, string>`                        | `{}`                                            | Extra peer labels surfaced in local tooling.                                                  |
+| `devtools.bridge.heartbeatMs` | `number`                                        | transport default                               | Peer heartbeat interval.                                                                      |
+| `devtools.bridge.reconnect`   | `boolean \| { minMs?: number; maxMs?: number }` | transport default                               | WS reconnect behavior.                                                                        |
+
+```ts title="crux.config.ts"
+export default config({
+  devtools: {
+    serverUrl: 'http://localhost:4400',
+    bridge: {
+      transport: 'ws',
+      runtimeName: 'local-node-worker',
+    },
+  },
+})
+```
+
+See [Devtools Integration](/docs/reference/crux-core/devtools) and [Runtime Bridge](/docs/reference/crux-core/runtime-bridge).
+
+## `observability`
+
+Use `observability` for deliberate export, tunnel/serverless delivery, or custom transport behavior.
+For ordinary same-machine local devtools, `devtools.serverUrl` or `withDevtools()` is still enough.
+
+When `observability.enabled` is `false`, Crux explicitly disables the configured observability
+transport for this config instance. When `observability.serverUrl` is set, Crux creates an HTTP
+transport to that server. When `observability.token` is set, that token is sent as bearer auth for
+the scoped devtools ingest endpoint. When `observability.transport` is set, that custom transport wins.
+
+| Option                                        | Type                         | Default                              | Notes                                                           |
+| --------------------------------------------- | ---------------------------- | ------------------------------------ | --------------------------------------------------------------- |
+| `observability.enabled`                       | `boolean`                    | `true`                               | Set `false` to disable an existing configured transport.        |
+| `observability.serverUrl`                     | `string`                     | `undefined`                          | Creates an HTTP observability transport.                        |
+| `observability.token`                         | `string`                     | `CRUX_DEVTOOLS_TOKEN` when available | Bearer token for tunneled devtools ingest.                      |
+| `observability.transport`                     | `CruxObservabilityTransport` | `undefined`                          | Custom transport with `send(records)`.                          |
+| `observability.delivery.maxPendingDeliveries` | `number`                     | `1000`                               | Maximum in-flight transport sends before records remain queued. |
+
+```ts title="crux.config.ts"
+export default config({
+  observability: {
+    serverUrl: process.env.CRUX_OBSERVABILITY_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+    delivery: {
+      maxPendingDeliveries: 250,
+    },
+  },
+})
+```
+
+See [Observability](/docs/reference/crux-core/observability).
+
+## `plugins`
+
+Plugins install runtime hooks in order. Each plugin receives the cumulative runtime from all previous
+plugins. Cleanup runs when the returned Crux object is disposed.
+
+| Option              | Type                                                   | Default  | Notes                                                  |
+| ------------------- | ------------------------------------------------------ | -------- | ------------------------------------------------------ |
+| `plugins`           | `readonly CruxPlugin[]`                                | `[]`     | Ordered plugin list.                                   |
+| `plugins[].name`    | `string`                                               | required | Unique name for debugging and diagnostics.             |
+| `plugins[].install` | `(runtime: Readonly<CruxRuntime>) => CruxPluginResult` | required | Returns runtime fields to merge plus optional cleanup. |
+
+```ts title="crux.config.ts"
+export default config({
+  plugins: [
+    {
+      name: 'my-plugin',
+      install(runtime) {
+        return {
+          instrumentationHooks: {
+            onToolStart(event) {
+              console.log(event.toolName)
+            },
+          },
+        }
+      },
+    },
+  ],
+})
+```
+
+See [Observability plugins](/docs/guides/observability/plugins).
+
+## Inspect Effective Config
+
+Use `crux config inspect` to see the effective config, defaults, origins, and config-load diagnostics:
+
+```bash
+crux config inspect
+crux config inspect --json
+crux config inspect --cwd packages/backend
+crux config inspect --config crux.config.ts
+```
+
+Every value is tagged with where it came from: default, config, package metadata, or a bound runtime
+value. Broken config imports degrade to an all-defaults view with diagnostics instead of failing the
+inspection command.
+
+See [`crux config`](/docs/reference/local#crux-config).

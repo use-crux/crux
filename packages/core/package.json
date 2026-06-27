@@ -1,6 +1,6 @@
 {
-  "name": "@crux/core",
-  "version": "0.1.0",
+  "name": "@use-crux/core",
+  "version": "0.2.0",
   "license": "Apache-2.0",
   "description": "SDK-agnostic AI orchestration toolkit for TypeScript — prompts, context engineering, memory, retrieval, agents, flows, and evals.",
   "keywords": [
@@ -148,15 +148,15 @@
       "import": "./adapter/index.ts",
       "require": "./adapter/index.ts"
     },
-    "./adapter/native-chat": {
-      "types": "./adapter/native-chat/index.ts",
-      "import": "./adapter/native-chat/index.ts",
-      "require": "./adapter/native-chat/index.ts"
-    },
     "./adapter/testing": {
       "types": "./adapter/testing.ts",
       "import": "./adapter/testing.ts",
       "require": "./adapter/testing.ts"
+    },
+    "./adapter/testing/vitest": {
+      "types": "./adapter/testing/vitest.ts",
+      "import": "./adapter/testing/vitest.ts",
+      "require": "./adapter/testing/vitest.ts"
     },
     "./adapter/tool": {
       "types": "./adapter/tool/index.ts",
@@ -264,11 +264,11 @@
       "adapter": [
         "adapter/index.ts"
       ],
-      "adapter/native-chat": [
-        "adapter/native-chat/index.ts"
-      ],
       "adapter/testing": [
         "adapter/testing.ts"
+      ],
+      "adapter/testing/vitest": [
+        "adapter/testing/vitest.ts"
       ],
       "adapter/tool": [
         "adapter/tool/index.ts"
@@ -314,5 +314,5 @@
   "bugs": {
     "url": "https://github.com/use-crux/crux/issues"
   },
-  "homepage": "https://github.com/use-crux/crux/tree/main/packages/core#readme"
+  "homepage": "https://cruxjs.dev"
 }

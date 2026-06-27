@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { prompt as makePrompt } from '@crux/core'
-import { agent as makeAgent } from '@crux/core/agent'
+import { prompt as makePrompt } from '@use-crux/core'
+import { agent as makeAgent } from '@use-crux/core/agent'
 import { z } from 'zod'
-import { createOpenAI, embedding as makeEmbedding, fromMessages } from '../index'
+import { createOpenAI, embedding as makeEmbedding } from '../index'
 
 const simplePrompt = makePrompt({
   id: 'test-prompt',
@@ -161,35 +161,6 @@ describe('OpenAI adapter via adapter', () => {
     expect(typeof adapter.pipeline).toBe('function')
     expect(typeof adapter.consensus).toBe('function')
     expect(typeof adapter.swarm).toBe('function')
-  })
-
-  it('maps content tool outputs to OpenAI text content parts', () => {
-    const messages = fromMessages([
-      {
-        role: 'tool',
-        content: 'fallback',
-        metadata: {
-          toolCallId: 'call-1',
-          toolName: 'renderImage',
-          modelOutput: {
-            type: 'content',
-            value: [
-              { type: 'text', text: 'Rendered image' },
-              { type: 'image-url', url: 'https://example.com/chart.png' },
-            ],
-          },
-        },
-      },
-    ])
-
-    expect(messages[0]).toEqual({
-      role: 'tool',
-      content: [
-        { type: 'text', text: 'Rendered image' },
-        { type: 'text', text: '[image] https://example.com/chart.png' },
-      ],
-      tool_call_id: 'call-1',
-    })
   })
 })
 

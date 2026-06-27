@@ -1,12 +1,12 @@
 ---
-title: "@crux/upstash"
+title: "@use-crux/upstash"
 description: Upstash VectorStore and Redis DataStore adapters for Crux.
 ---
 
 Peer dependency: `@upstash/vector` >=1.2.2
 
 ```ts
-import { upstashVectorStore } from '@crux/upstash'
+import { upstashVectorStore } from '@use-crux/upstash'
 ```
 
 <Callout type="info">
@@ -18,7 +18,7 @@ For setup guidance and usage patterns, see the [Storage guide](/docs/guides/stor
 Create a `VectorStore` backed by Upstash Vector.
 
 ```ts
-import { upstashVectorStore } from '@crux/upstash'
+import { upstashVectorStore } from '@use-crux/upstash'
 import { Index } from '@upstash/vector'
 
 const vectors = upstashVectorStore({
@@ -88,7 +88,7 @@ Vectors are stored in Upstash under namespaced isolation. Text, metadata, and ti
 ### Usage
 
 ```ts
-import { cruxUpstashStore } from '@crux/upstash'
+import { cruxUpstashStore } from '@use-crux/upstash'
 import { Index } from '@upstash/vector'
 
 const store = cruxUpstashStore({
@@ -109,7 +109,7 @@ const store = cruxUpstashStore({
 Use it with indexing:
 
 ```ts
-import { corpus, indexer } from '@crux/core/indexing'
+import { corpus, indexer } from '@use-crux/core/indexing'
 
 const docsIndexer = indexer({
   id: 'docs',
@@ -132,7 +132,7 @@ const docsCorpus = corpus({
 Most users should query through `retriever()`:
 
 ```ts
-import { retriever } from '@crux/core/retrieval'
+import { retriever } from '@use-crux/core/retrieval'
 
 const docs = retriever({
   id: 'docs',
@@ -186,19 +186,19 @@ Store-backed retrievers automatically query with `_cruxRecordType = 'chunk'` and
 ### Types
 
 ```ts
-import type { CruxUpstashStoreConfig } from '@crux/upstash'
+import type { CruxUpstashStoreConfig } from '@use-crux/upstash'
 ```
 
 ---
 
-## `@crux/upstash/redis`
+## `@use-crux/upstash/redis`
 
 ### `cruxRedisStore(config)`
 
 Create a `CruxStore` backed by Redis. Documents are stored as JSON strings in Redis keys with a configurable prefix. Change notifications via Redis `PUBLISH`/`SUBSCRIBE`.
 
 ```ts
-import { cruxRedisStore } from '@crux/upstash/redis'
+import { cruxRedisStore } from '@use-crux/upstash/redis'
 ```
 
 | Field | Type | Description |
@@ -221,8 +221,8 @@ import { cruxRedisStore } from '@crux/upstash/redis'
 
 ```ts
 import { Redis } from '@upstash/redis'
-import { cruxRedisStore } from '@crux/upstash/redis'
-import { plan } from '@crux/core/plan'
+import { cruxRedisStore } from '@use-crux/upstash/redis'
+import { plan } from '@use-crux/core/plan'
 
 const store = cruxRedisStore({
   redis: new Redis({ url: process.env.UPSTASH_URL!, token: process.env.UPSTASH_TOKEN! }),
@@ -238,8 +238,8 @@ const p = await plan({ title: 'My Plan' })
 Pass a `subscriber` to enable `subscribe()`, then use with `cruxSSEHandler`:
 
 ```ts
-import { cruxRedisStore } from '@crux/upstash/redis'
-import { cruxSSEHandler } from '@crux/react/server'
+import { cruxRedisStore } from '@use-crux/upstash/redis'
+import { cruxSSEHandler } from '@use-crux/react/server'
 
 const store = cruxRedisStore({
   redis: new Redis({ url: process.env.UPSTASH_URL!, token: process.env.UPSTASH_TOKEN! }),
@@ -253,7 +253,7 @@ export const GET = cruxSSEHandler({ store })
 ### Types
 
 ```ts
-import type { CruxRedisStoreConfig, RedisClient, RedisSubscriber } from '@crux/upstash/redis'
+import type { CruxRedisStoreConfig, RedisClient, RedisSubscriber } from '@use-crux/upstash/redis'
 ```
 
 ## Related

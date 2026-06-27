@@ -1,5 +1,5 @@
 /**
- * Type tests for the hardened public surface of @crux/core.
+ * Type tests for the hardened public surface of @use-crux/core.
  *
  * These tests assert that the recent `any` → `z.ZodType`/`unknown` migrations
  * preserve (or improve) inference for the documented composition patterns.

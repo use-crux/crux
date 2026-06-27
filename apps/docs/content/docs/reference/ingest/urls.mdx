@@ -4,8 +4,8 @@ description: urlSource, urlsSource — fetch HTTP(S) URLs and load them as Inges
 ---
 
 ```ts
-import { urlSource, urlsSource } from '@crux/ingest/urls'
-import type { UrlSourceOptions, UrlsSourceOptions } from '@crux/ingest/urls'
+import { urlSource, urlsSource } from '@use-crux/ingest/urls'
+import type { UrlSourceOptions, UrlsSourceOptions } from '@use-crux/ingest/urls'
 ```
 
 ## What it does
@@ -17,7 +17,7 @@ Fetches the URL with `fetch`, inspects the `Content-Type` header, and:
 - **PDF** (`application/pdf`, `.pdf`, or `%PDF` bytes) → extracts page parts, with optional OCR hook support
 - **DOCX / XLSX** (`.docx`, `.xlsx`) → parses remote Office files when the URL extension identifies the format
 
-For the full parser inventory and output shapes, see the [@crux/ingest overview](/docs/reference/ingest#bundled-parsers).
+For the full parser inventory and output shapes, see the [@use-crux/ingest overview](/docs/reference/ingest#bundled-parsers).
 
 ## `urlSource(url, options)`
 
@@ -101,8 +101,8 @@ URLs are loaded **sequentially** (one at a time). For high-volume ingestion, bat
 ## Example
 
 ```ts
-import { corpus, indexer } from '@crux/core/indexing'
-import { urlsSource } from '@crux/ingest/urls'
+import { corpus, indexer } from '@use-crux/core/indexing'
+import { urlsSource } from '@use-crux/ingest/urls'
 
 const docsIndexer = indexer({
   id: 'web',
@@ -131,6 +131,6 @@ await docsCorpus.sync(source.load(), {
 
 ## Related
 
-- Reference: [@crux/ingest overview](/docs/reference/ingest)
+- Reference: [@use-crux/ingest overview](/docs/reference/ingest)
 - Reference: [Files](/docs/reference/ingest/files) — load from disk instead
 - Reference: [Indexing](/docs/reference/crux-core/indexing) — `indexer`

@@ -6,7 +6,7 @@ description: Compose reusable memory blocks for recent context, working state, e
 Memory is not one feature. A useful agent needs several kinds of state: the last few messages, a typed scratchpad, searchable events, durable facts, and learned operating procedures. Crux keeps those concerns separate as blocks, then composes them with `memory()`.
 
 ```ts
-import { memory, recentMessages, workingState, facts, procedures } from '@crux/core/memory'
+import { memory, recentMessages, workingState, facts, procedures } from '@use-crux/core/memory'
 import { z } from 'zod'
 
 const userMemory = memory({
@@ -119,14 +119,14 @@ Pass `memoryId` when you want direct calls to read and write the same keys as a 
 
 ## Observability
 
-Memory blocks emit `memory:read` and `memory:write` events with `memoryType: 'block'`, `blockId`, `blockKind`, and a privacy-safe `namespaceHash`. Devtools groups them in the Memory Explorer, the CLI includes them in memory stats, and `@crux/otel` adds block attributes to memory spans.
+Memory blocks emit `memory:read` and `memory:write` events with `memoryType: 'block'`, `blockId`, `blockKind`, and a privacy-safe `namespaceHash`. Devtools groups them in the Memory Explorer, the CLI includes them in memory stats, and `@use-crux/otel` adds block attributes to memory spans.
 
 ## Embeddings
 
 Semantic memory uses dense embeddings for recall. Embeddings are documented with retrieval because the same primitive powers indexing, retrievers, semantic cache, and memory.
 
 ```ts
-import { embedding } from '@crux/openai'
+import { embedding } from '@use-crux/openai'
 
 const dense = embedding({
   name: 'memory',

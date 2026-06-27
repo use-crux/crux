@@ -14,6 +14,7 @@ import (
 
 type DevtoolsReads interface {
 	ProjectIndex(context.Context) (api.IndexData, error)
+	ProjectIndexWatchStatus(context.Context) (api.ProjectIndexWatchStatus, error)
 }
 
 type QualityReads interface {
@@ -67,6 +68,11 @@ var ProjectIndex = readmodel.Get(Registry, "GET /api/project/index",
 	},
 	readmodel.Alias[Deps, api.IndexData]("GET /api/index"),
 	readmodel.SnapshotAlways[Deps, api.IndexData]("index", ""))
+
+var ProjectIndexWatch = readmodel.Get(Registry, "GET /api/project/index/watch",
+	func(ctx context.Context, deps Deps) (api.ProjectIndexWatchStatus, error) {
+		return deps.Devtools.ProjectIndexWatchStatus(ctx)
+	})
 
 var QualityActivity = readmodel.GetP[Deps, *readmodel.Limit, []api.QualityActivityEvent](Registry, "GET /api/quality/activity",
 	func() *readmodel.Limit { return &readmodel.Limit{} },

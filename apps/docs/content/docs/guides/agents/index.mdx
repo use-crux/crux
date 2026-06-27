@@ -19,12 +19,12 @@ These aren't layers — they're complementary. A customer support system might u
 Bundle a prompt with optional model, tools, and routing targets into a reusable [agent primitive](/docs/guides/agents/agent), then pick the pattern that fits:
 
 ```ts
-import { agent } from '@crux/core/agent'
-import { parallel, pipeline, consensus, swarm } from '@crux/ai'
+import { agent } from '@use-crux/core/agent'
+import { parallel, pipeline, consensus, swarm } from '@use-crux/ai'
 ```
 
 <Callout type="info">
-Each SDK adapter (`@crux/ai`, `@crux/openai`, `@crux/anthropic`, `@crux/google`) re-exports pre-bound versions of all patterns. Import from your adapter, not from `@crux/core`.
+Each SDK adapter (`@use-crux/ai`, `@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google`) re-exports pre-bound versions of all patterns. Import from your adapter, not from `@use-crux/core`.
 </Callout>
 
 ### Parallel — independent tasks, typed results

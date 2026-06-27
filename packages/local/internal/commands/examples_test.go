@@ -15,6 +15,7 @@ func TestCommandsLeadWithExamples(t *testing.T) {
 
 	cmds := []*cobra.Command{
 		NewCostCmd(f),
+		NewConfigCmd(f),
 		NewIndexCmd(f),
 		NewLintCmd(f),
 		NewInspectCmd(f),

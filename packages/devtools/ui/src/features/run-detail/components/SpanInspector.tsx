@@ -16,7 +16,7 @@ import { Chip, ScoreBar } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
 import { useNavigation, type NavState } from '@/app/navigation/useNavigation'
 import type { ObservabilityRunDetail, ObservabilityRunDetailNode } from '@/types'
-import type { CruxCitationReportPreview, CruxScoreReportPreview } from '@crux/core/observability'
+import type { CruxCitationReportPreview, CruxScoreReportPreview } from '@use-crux/core/observability'
 import { KindTag, StatusPill, type RunNodeKind } from './atoms'
 import { routingFacts, governanceFacts } from './GenerationDecisions'
 import {

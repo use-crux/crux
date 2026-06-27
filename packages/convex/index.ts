@@ -1,19 +1,17 @@
 /**
- * `@crux/convex` — Convex storage adapter for Crux.
+ * `@use-crux/convex` — Convex storage adapter for Crux.
  *
- * Provides `cruxConvexStore()` that implements `CruxStore` backed by
- * Convex tables. Entries are persisted as Convex documents with full indexing.
+ * Provides `defineConvexStoreContract()` for creating server-side stores and
+ * React transports backed by the same Convex store document contract.
  *
  * **Setup:** Install the crux Convex component and use the component ref:
  *
  * ```ts
- * import { cruxConvexStore } from '@crux/convex'
+ * import { defineConvexStoreContract } from '@use-crux/convex'
  * import { components } from './_generated/api'
  *
- * const store = cruxConvexStore({
- *   component: components.crux,
- *   ctx,
- * })
+ * const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+ * const store = cruxDocuments.store(ctx)
  * ```
  *
  * @module
@@ -25,6 +23,13 @@ export { flushObservability, withObservabilityFlush } from './observability'
 export type { ConvexActionHandler, ConvexObservabilityFlushOptions } from './observability'
 export { setup } from './bridge'
 export type { CruxConvexBridgeHttpRouter, CruxConvexBridgeSetupOptions } from './bridge'
+export { createConvexRuntimeBridge } from './runtime-bridge'
+export type {
+  ConvexRunScope,
+  ConvexRuntimeBridge,
+  ConvexRuntimeBridgeSetupOptions,
+  CreateConvexRuntimeBridgeOptions,
+} from './runtime-bridge'
 export { createCruxConvex } from './profile'
 export type {
   CreateCruxConvexOptions,
@@ -33,8 +38,20 @@ export type {
   CruxConvexProfileAgentConfig,
   CruxConvexRunScope,
 } from './profile'
+export { defineConvexStoreContract } from './store-contract'
 export { cruxConvexStore } from './store'
 export type { ConvexContext, ConvexCtxPort, ConvexMemoryStoreConfig } from './store'
+export type {
+  ConvexStoreContract,
+  ConvexStoreContractTransportOptions,
+  ConvexStoreSemanticCacheOptions,
+  DefineConvexStoreContractOptions,
+} from './store-contract'
+export type {
+  ConvexCruxStoreComponent,
+  ConvexCruxStoreMemoryComponent,
+  ConvexCruxStoreTransportComponent,
+} from './store-component'
 export {
   context,
   contributor,
@@ -51,7 +68,7 @@ export {
   userContent,
   when,
   wrap,
-} from '@crux/core'
+} from '@use-crux/core'
 export type {
   AnyPrompt,
   ConditionalContext,
@@ -71,7 +88,7 @@ export type {
   PromptTreeResult,
   ResolveOptions,
   ResolvedPrompt,
-} from '@crux/core'
+} from '@use-crux/core'
 export {
   convexRuntimeStore,
   getConvexCruxRuntime,
@@ -87,10 +104,10 @@ export type {
 export { convexAgent } from './agent'
 
 import type { z } from 'zod'
-import type { CompactionResult, Message, Context, ContextEntry, Prompt } from '@crux/core'
-import type { GenerateTextFn } from '@crux/core/compaction'
-import { summarizeMessages } from '@crux/core/compaction'
-import { getRuntime, countTokens } from '@crux/core'
+import type { CompactionResult, Message, Context, ContextEntry, Prompt } from '@use-crux/core'
+import type { GenerateTextFn } from '@use-crux/core/compaction'
+import { summarizeMessages } from '@use-crux/core/compaction'
+import { getRuntime, countTokens } from '@use-crux/core'
 import type { ConvexContext } from './store'
 
 // ─────────────────────────────────────────────────────────────────

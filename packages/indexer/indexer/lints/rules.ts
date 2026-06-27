@@ -1,14 +1,16 @@
+import { IndexRuleManifestSchema } from '@use-crux/core/project-index'
 import type {
   IndexLintEvidence,
   IndexLintFinding,
   IndexLintFix,
   IndexRuleDescriptor,
+  IndexRuleManifest,
   CruxLintCategory,
   CruxLintConfidence,
   CruxLintMaturity,
   CruxLintProfile,
   SourceLocation,
-} from '@crux/core/project-index'
+} from '@use-crux/core/project-index'
 
 export const indexLintRuleIds = [
   'definition.missing_eval_coverage',
@@ -46,6 +48,7 @@ export type IndexLintRuleId = (typeof indexLintRuleIds)[number]
 
 export interface IndexLintRule {
   readonly id: IndexLintRuleId
+  readonly manifest: IndexRuleManifest
   readonly severity: IndexLintFinding['severity']
   readonly category: CruxLintCategory
   readonly maturity: CruxLintMaturity
@@ -64,11 +67,37 @@ export interface IndexLintRule {
 
 const DOCS_BASE = '/docs/reference/crux-core/index-lints'
 
+type IndexLintRuleManifestOverrides = Partial<
+  Pick<IndexRuleManifest, 'phase' | 'requires' | 'fidelity' | 'schema' | 'defaultOptions' | 'budget'>
+>
+
+type IndexLintRuleInput = Omit<IndexLintRule, 'manifest'> & {
+  readonly manifest?: IndexLintRuleManifestOverrides
+}
+
 /**
  * Preserves literal rule metadata while checking the rule descriptor shape.
  */
-function defineIndexLintRule<const T extends IndexLintRule>(rule: T): T {
-  return rule
+function defineIndexLintRule<const T extends IndexLintRuleInput>(rule: T): T & IndexLintRule {
+  const docsUrl = `${DOCS_BASE}/${rule.docsSlug}`
+  return {
+    ...rule,
+    manifest: {
+      id: rule.id,
+      docs: {
+        description: rule.rationale,
+        recommended: rule.profiles.includes('recommended'),
+        url: docsUrl,
+      },
+      phase: rule.manifest?.phase ?? 'index',
+      requires: rule.manifest?.requires ?? ['definitions', 'relations'],
+      fidelity: rule.manifest?.fidelity ?? 'safe',
+      defaultSeverity: rule.severity,
+      ...(rule.manifest?.schema ? { schema: rule.manifest.schema } : {}),
+      ...(rule.manifest?.defaultOptions !== undefined ? { defaultOptions: rule.manifest.defaultOptions } : {}),
+      ...(rule.manifest?.budget ? { budget: rule.manifest.budget } : {}),
+    },
+  }
 }
 
 export const indexLintRules = {
@@ -164,6 +193,7 @@ export const indexLintRules = {
   }),
   'prompt.missing_input_schema': defineIndexLintRule({
     id: 'prompt.missing_input_schema',
+    manifest: { requires: ['definitions', 'sources'] },
     severity: 'info',
     category: 'contracts',
     maturity: 'stable',
@@ -736,6 +766,19 @@ export const indexLintRules = {
 } satisfies Record<IndexLintRuleId, IndexLintRule>
 
 /**
+ * Validates built-in rule manifests before compiler construction proceeds.
+ */
+export function validateBuiltInIndexRuleManifests(): readonly string[] {
+  return indexLintRuleIds.flatMap((ruleId) => {
+    const result = IndexRuleManifestSchema.safeParse(indexLintRules[ruleId].manifest)
+    if (result.success) return []
+    return result.error.issues.map(
+      (issue) => `${ruleId}: rule manifest is invalid at ${issue.path.join('.') || '(root)'}: ${issue.message}`,
+    )
+  })
+}
+
+/**
  * Returns public descriptors for all built-in index lint rules.
  */
 export function builtInIndexRuleDescriptors(): readonly IndexRuleDescriptor[] {
@@ -760,6 +803,12 @@ export function builtInIndexRuleDescriptors(): readonly IndexRuleDescriptor[] {
         scope: rule.suppression.scope,
         directive: `// crux-lint-disable-next-line ${rule.id} -- reason`,
       },
+      phase: rule.manifest.phase,
+      requires: [...rule.manifest.requires],
+      fidelity: rule.manifest.fidelity,
+      optionSchema: rule.manifest.schema,
+      defaultOptions: rule.manifest.defaultOptions,
+      budget: rule.manifest.budget,
     }
   })
 }

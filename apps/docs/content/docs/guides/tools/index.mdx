@@ -14,8 +14,8 @@ Tools from three sources are merged with last-write-wins precedence:
 3. **Call-site tools** — from `generate(prompt, { tools })`
 
 ```ts title="agent.ts"
-import { prompt, context } from '@crux/core'
-import { generate, tool, stepCountIs } from '@crux/ai'
+import { prompt, context } from '@use-crux/core'
+import { generate, tool, stepCountIs } from '@use-crux/ai'
 
 const search = context({
   id: 'search',
@@ -64,7 +64,7 @@ const result2 = await generate(agent, {
 Tools often return data that is useful for your app but too large, noisy, or unsafe to feed back into the model unchanged. Use `toModelOutput()` when the raw result and the model-facing result should be different.
 
 ```ts title="search-tool.ts"
-import { tool } from '@crux/ai'
+import { tool } from '@use-crux/ai'
 import { z } from 'zod'
 
 const searchDocs = tool({
@@ -156,7 +156,7 @@ const renderChart = tool({
 })
 ```
 
-If `toModelOutput()` is omitted, Crux uses the standard default: strings become `{ type: 'text' }`, everything else becomes JSON. `@crux/ai` passes model output through to the AI SDK. Native adapters preserve supported media natively where the provider allows it: Google uses function-response media parts, Anthropic uses native `tool_result` content blocks, and OpenAI Chat Completions receives deterministic text references for non-text parts because that API only accepts text tool results.
+If `toModelOutput()` is omitted, Crux uses the standard default: strings become `{ type: 'text' }`, everything else becomes JSON. `@use-crux/ai` passes model output through to the AI SDK. Native adapters preserve supported media natively where the provider allows it: Google uses function-response media parts, Anthropic uses native `tool_result` content blocks, and OpenAI Chat Completions receives deterministic text references for non-text parts because that API only accepts text tool results.
 
 ## Tool merging order
 
@@ -171,8 +171,8 @@ Tools are collected from three layers and merged with **last-write-wins** semant
 Internally, the resolve pipeline calls `collectContextTools()` to gather tools from all contexts (iterating through the `use` array in order, with later contexts overwriting earlier ones on name collision). Then prompt-level `config.tools` are merged on top via `Object.assign`. Finally, the adapter merges call-site tools last.
 
 ```ts title="tools.ts"
-import { prompt, context } from '@crux/core'
-import { generate, tool } from '@crux/ai'
+import { prompt, context } from '@use-crux/core'
+import { generate, tool } from '@use-crux/ai'
 import { z } from 'zod'
 
 // Context provides a basic search tool
@@ -270,7 +270,7 @@ const written = await generate(agent, {
 Control when multi-step tool use terminates using `stopWhen`. Crux re-exports the `stepCountIs` and `hasToolCall` helpers from the Vercel AI SDK:
 
 ```ts
-import { generate, tool, stepCountIs, hasToolCall } from '@crux/ai'
+import { generate, tool, stepCountIs, hasToolCall } from '@use-crux/ai'
 
 // Stop after a maximum of 10 tool-use steps
 const result = await generate(agent, {
@@ -335,5 +335,5 @@ If `execute` throws, the model receives the error message as the tool result and
   <Card title="Execution" description="Run prompts with Vercel AI SDK, OpenAI, Google GenAI, or agent frameworks." href="/docs/guides/prompts/execution" />
   <Card title="Core Concepts" description="How contexts, prompts, and adapters compose together." href="/docs/foundations/mental-model" />
   <Card title="Agents" description="Multi-agent coordination with blackboards and handoffs." href="/docs/guides/agents" />
-  <Card title="API Reference" description="Full @crux/core API — prompt tools, toolChoice, and stopWhen." href="/docs/reference/crux-core" />
+  <Card title="API Reference" description="Full @use-crux/core API — prompt tools, toolChoice, and stopWhen." href="/docs/reference/crux-core" />
 </Cards>

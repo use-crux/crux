@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { cruxConvexStore, type ConvexContext } from '../index'
+import { cruxConvexStore, type ConvexContext } from '../store'
 import type { ComponentApi } from '../src/component/_generated/component'
 
 describe('cruxConvexStore', () => {
@@ -64,36 +64,24 @@ describe('cruxConvexStore', () => {
     expect(results[0]?.score).toBe(0.92)
   })
 
-  it('passes list prefix, pagination, and filters to the component contract', async () => {
+  it('passes list prefix and pagination to the component page contract without decoded filters', async () => {
     const { store, ctx } = createStore()
 
-    ctx.runQuery.mockResolvedValue([
-      {
-        key: 'memory:1',
-        content: JSON.stringify({ kind: 'note', text: 'Alpha' }),
-        metadata: { _cruxDoc: true },
-        updatedAt: 1,
-      },
-      {
-        key: 'memory:2',
-        content: JSON.stringify({ kind: 'draft', text: 'Beta' }),
-        metadata: { _cruxDoc: true },
-        updatedAt: 2,
-      },
-    ])
+    ctx.runQuery.mockResolvedValue({
+      docs: [],
+      cursor: 'cursor-2',
+    })
 
     const result = await store.list('memory:', {
-      limit: 2,
       cursor: 'cursor-1',
       filter: { kind: 'note' },
     })
 
     expect(ctx.runQuery).toHaveBeenCalledWith('memory:list', {
       prefix: 'memory:',
-      limit: 2,
       cursor: 'cursor-1',
-      filter: { kind: 'note' },
     })
-    expect(result.entries).toEqual([{ key: 'memory:1', value: { kind: 'note', text: 'Alpha' } }])
+    expect(result.entries).toEqual([])
+    expect(result.cursor).toBe('cursor-2')
   })
 })

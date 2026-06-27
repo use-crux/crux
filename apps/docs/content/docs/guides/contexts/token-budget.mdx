@@ -6,8 +6,8 @@ description: Token-aware rendering and automatic context dropping under budget p
 When the assembled system message exceeds a token budget, the lowest-priority contexts are dropped first. Provider-specific adaptations let you tweak prompts per model without breaking portability.
 
 ```ts title="generate.ts"
-import { prompt, context } from '@crux/core'
-import { generate } from '@crux/ai'
+import { prompt, context } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
 
 const critical = context({ priority: 100, system: '## Critical Rules' })  // never dropped
 const guidelines = context({ priority: 50, system: '## Guidelines\n...' })
@@ -26,7 +26,8 @@ const result = await generate(myPrompt, {
 ```
 
 <Callout type="info">
-Use `.inspect()` to see exactly which contexts were kept, dropped, and why — see [Type System](/docs/guides/advanced/type-system) for the full inspection API.
+  Use `.inspect()` to see exactly which contexts were kept, dropped, and why — see [Type
+  System](/docs/guides/advanced/type-system) for the full inspection API.
 </Callout>
 
 ## How it works
@@ -41,13 +42,13 @@ Use `.inspect()` to see exactly which contexts were kept, dropped, and why — s
 
 These are two different mechanisms with different semantics:
 
-| | Conditional exclusion (`when`/`match`) | Token-budget dropping |
-|---|---|---|
-| **When evaluated** | Before resolution | After resolution |
-| **systemFn called?** | No | Yes (then dropped) |
-| **Tools contributed?** | No | Yes (tools always survive drops) |
-| **Inspect status** | `excludedContexts[]` | `droppedContexts[]` |
-| **Use case** | Input-dependent composition | Token pressure management |
+|                        | Conditional exclusion (`when`/`match`) | Token-budget dropping            |
+| ---------------------- | -------------------------------------- | -------------------------------- |
+| **When evaluated**     | Before resolution                      | After resolution                 |
+| **systemFn called?**   | No                                     | Yes (then dropped)               |
+| **Tools contributed?** | No                                     | Yes (tools always survive drops) |
+| **Inspect status**     | `excludedContexts[]`                   | `droppedContexts[]`              |
+| **Use case**           | Input-dependent composition            | Token pressure management        |
 
 Use `when`/`match` when a context is irrelevant to the current request (wrong mode, missing data, feature disabled). Use priority for graceful degradation under token pressure.
 
@@ -55,8 +56,8 @@ Use `when`/`match` when a context is irrelevant to the current request (wrong mo
 // Conditional: don't include research context if there's no research data
 const research = context({
   input: z.object({ synthesis: z.string().optional() }),
-  when: ({ input }) => !!input.synthesis,     // excluded when no data
-  priority: 40,                               // AND droppable under pressure
+  when: ({ input }) => !!input.synthesis, // excluded when no data
+  priority: 40, // AND droppable under pressure
   system: ({ input }) => `## Research\n${input.synthesis}`,
 })
 ```
@@ -67,8 +68,9 @@ The default tokenizer estimates tokens as `chars / 4`. For accurate counts, prov
 
 ```ts
 config({
-  prompts,
-  tokenizer: (text) => encode(text).length,
+  generation: {
+    tokenizer: (text) => encode(text).length,
+  },
 })
 ```
 
@@ -119,8 +121,24 @@ Settings merge with priority: `config.settings` < `adapt.settings` < call-site o
 ## Next steps
 
 <Cards>
-  <Card title="Middleware & Hooks" description="Global middleware and per-prompt lifecycle hooks for observability." href="/docs/guides/observability/middleware" />
-  <Card title="Compaction" description="Tools for keeping long conversations within token limits." href="/docs/guides/compaction" />
-  <Card title="Core Concepts" description="How contexts, prompts, and adapters compose together." href="/docs/foundations/mental-model" />
-  <Card title="API Reference" description="Full compaction and budget manager API signatures." href="/docs/reference/crux-core/compaction" />
+  <Card
+    title="Middleware & Hooks"
+    description="Global middleware and per-prompt lifecycle hooks for observability."
+    href="/docs/guides/observability/middleware"
+  />
+  <Card
+    title="Compaction"
+    description="Tools for keeping long conversations within token limits."
+    href="/docs/guides/compaction"
+  />
+  <Card
+    title="Core Concepts"
+    description="How contexts, prompts, and adapters compose together."
+    href="/docs/foundations/mental-model"
+  />
+  <Card
+    title="API Reference"
+    description="Full compaction and budget manager API signatures."
+    href="/docs/reference/crux-core/compaction"
+  />
 </Cards>

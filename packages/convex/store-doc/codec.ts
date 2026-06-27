@@ -1,14 +1,14 @@
 /**
  * Serialization and decoding policy for Convex store documents.
  *
- * The imperative store may decode legacy/raw memory records for compatibility.
- * React transport helpers are intentionally strict: reactive UI reads should
- * fail clearly when a document was not written by `cruxConvexStore()`.
+ * Server stores and React transport helpers are intentionally strict: reads
+ * fail clearly when a document was not written in the current Crux store
+ * document format.
  *
  * @module
  */
 
-import type { JsonObject } from '@crux/core/store'
+import type { JsonObject } from '@use-crux/core/store'
 import type { DecodedStoreDoc, StoreDocCodec, StoreDocCodecOptions, StoreDocRecord } from './types'
 
 /**
@@ -44,13 +44,13 @@ export function createStoreDocCodec(options: StoreDocCodecOptions = {}): StoreDo
     value(doc) {
       if (doc === undefined) return undefined
       if (doc === null) return null
-      const decoded = decodeStrictCruxStoreDoc(doc, now)
+      const decoded = decodeCruxStoreDoc(doc, now)
       return decoded.expired ? null : decoded.value
     },
 
     entries(docs, entryOptions) {
       return docs
-        .map((doc) => decodeStrictCruxStoreDoc(doc, now))
+        .map((doc) => decodeCruxStoreDoc(doc, now))
         .filter((decoded) => !decoded.expired && matchesTopLevelFilter(decoded.value, entryOptions?.filter))
         .map((decoded) => ({ key: decoded.key, value: decoded.value }))
     },
@@ -59,43 +59,22 @@ export function createStoreDocCodec(options: StoreDocCodecOptions = {}): StoreDo
   }
 }
 
-function decodeStrictCruxStoreDoc(doc: StoreDocRecord, now: () => number): DecodedStoreDoc {
-  const metadata = isRecord(doc.metadata) ? doc.metadata : undefined
-  if (metadata?._cruxDoc !== true || typeof doc.content !== 'string') {
-    throw new Error('createConvexTransport() expected a CruxStore document written by cruxConvexStore().')
-  }
-  return decodeCruxStoreDoc(doc, now)
-}
-
 function decodeCruxStoreDoc(doc: StoreDocRecord, now: () => number): DecodedStoreDoc {
   const key = requireStringField(doc, 'key')
   const metadata = isRecord(doc.metadata) ? doc.metadata : undefined
-  if (metadata?._cruxDoc) {
-    const content = requireStringField(doc, 'content')
-    const value = parseJsonObject(content)
-    const expiresAt = typeof value._expiresAt === 'number' ? value._expiresAt : undefined
-    return {
-      key,
-      value,
-      ...(typeof doc._score === 'number' ? { score: doc._score } : {}),
-      expired: expiresAt !== undefined && now() >= expiresAt,
-      ...(expiresAt !== undefined ? { expiresAt } : {}),
-      encoding: 'crux-doc',
-    }
+  if (metadata?._cruxDoc !== true || typeof doc.content !== 'string') {
+    throw new Error('Convex store expected a document written in the current Crux store format.')
   }
-
+  const content = requireStringField(doc, 'content')
+  const value = parseJsonObject(content)
+  const expiresAt = typeof value._expiresAt === 'number' ? value._expiresAt : undefined
   return {
     key,
-    value: {
-      content: typeof doc.content === 'string' ? doc.content : '',
-      metadata: metadata ?? {},
-      ...(isNumberArray(doc.embedding) ? { embedding: doc.embedding } : {}),
-      createdAt: typeof doc.createdAt === 'number' ? doc.createdAt : undefined,
-      updatedAt: typeof doc.updatedAt === 'number' ? doc.updatedAt : undefined,
-    },
+    value,
     ...(typeof doc._score === 'number' ? { score: doc._score } : {}),
-    expired: false,
-    encoding: 'raw-memory-doc',
+    expired: expiresAt !== undefined && now() >= expiresAt,
+    ...(expiresAt !== undefined ? { expiresAt } : {}),
+    encoding: 'crux-doc',
   }
 }
 

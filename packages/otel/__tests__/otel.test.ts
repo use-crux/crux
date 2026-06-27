@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { resetRuntime, getRuntime, prompt as cruxPrompt } from '@crux/core'
+import { resetRuntime, getRuntime, prompt as cruxPrompt } from '@use-crux/core'
 import { configure } from '../../core/configure'
 import { withTelemetry } from '../index'
 import { createCallbackExporter, createUrlExporter } from '../exporter'

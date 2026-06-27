@@ -14,7 +14,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
   type CruxGraphRecord,
-} from '@crux/core/observability'
+} from '@use-crux/core/observability'
 
 describe('Convex profile runtime', () => {
   afterEach(() => {

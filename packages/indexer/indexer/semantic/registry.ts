@@ -1,17 +1,18 @@
-import type { JsonSchema, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@crux/core/project-index'
-import type * as ts from 'typescript'
+import type { JsonSchema, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@use-crux/core/project-index'
 import { createSemanticDefinitionEnrichmentAnalyzer } from './analyzers/definition-enrichment'
 import { createSemanticRelationAnalyzer } from './analyzers/relation'
 import { createSemanticSchemaAnalyzer } from './analyzers/schema'
 import { createSemanticSourceRefAnalyzer } from './analyzers/source-ref'
 import type {
   SemanticAnalyzerContext,
+  SemanticAnalyzerView,
   SemanticDefinitionCandidate,
   SemanticDefinitionEnrichment,
   SemanticResolvedSource,
   SemanticSchemaCandidate,
   SemanticSourceRefCandidate,
 } from './candidates'
+import type { SemanticSyntaxNode } from './syntax-view'
 import type { SemanticAnalyzer } from './types'
 
 export type SemanticDefinitionAnalyzer = SemanticAnalyzer<SemanticDefinitionCandidate, SemanticAnalyzerContext>
@@ -20,44 +21,58 @@ export type SemanticDefinitionAnalyzer = SemanticAnalyzer<SemanticDefinitionCand
  * Runtime hooks required to build the semantic analyzer registry.
  *
  * The registry depends on helper functions owned by `semantic.ts` so analyzers
- * can stay small while the legacy resolver helpers are migrated gradually.
+ * can stay small while compiler-specific details stay behind the view.
  */
 export interface SemanticAnalyzerRegistryDeps {
   readonly toolMapSourceRefs: (
     candidate: SemanticDefinitionCandidate,
-    checker: ts.TypeChecker,
+    view: SemanticAnalyzerView,
   ) => readonly ProjectSourceRef[]
   readonly injectionConditionSourceRefs: (
     candidate: SemanticDefinitionCandidate,
-    checker: ts.TypeChecker,
+    view: SemanticAnalyzerView,
   ) => readonly ProjectSourceRef[]
   readonly definitionEnrichments: (
     candidate: SemanticDefinitionCandidate,
-    checker: ts.TypeChecker,
+    view: SemanticAnalyzerView,
   ) => readonly SemanticDefinitionEnrichment[]
   readonly definitionPatchBase: (candidate: SemanticDefinitionCandidate) => ProjectDefinition
-  readonly expressionToJsonSchema: (resolved: SemanticResolvedSource, checker: ts.TypeChecker) => JsonSchema | undefined
+  readonly expressionToJsonSchema: (resolved: SemanticResolvedSource, view: SemanticAnalyzerView) => JsonSchema | undefined
   readonly nestedSchemaSourceRefs: (
     candidate: SemanticSchemaCandidate,
     resolved: SemanticResolvedSource,
-    checker: ts.TypeChecker,
+    view: SemanticAnalyzerView,
   ) => readonly ProjectSourceRef[]
   readonly relationsForCandidate: (
     candidate: SemanticDefinitionCandidate,
-    checker: ts.TypeChecker,
+    view: SemanticAnalyzerView,
   ) => readonly ProjectRelation[]
-  readonly resolveExpression: (expression: ts.Expression, checker: ts.TypeChecker) => SemanticResolvedSource | undefined
-  readonly schemaCandidates: (candidate: SemanticDefinitionCandidate) => readonly SemanticSchemaCandidate[]
+  readonly resolveExpression: (
+    expression: SemanticSyntaxNode,
+    view: SemanticAnalyzerView,
+  ) => SemanticResolvedSource | undefined
+  readonly schemaCandidates: (
+    candidate: SemanticDefinitionCandidate,
+    view: SemanticAnalyzerView,
+  ) => readonly SemanticSchemaCandidate[]
   readonly schemaSourceRef: (
     candidate: SemanticSchemaCandidate,
     resolved: SemanticResolvedSource,
     parsedSchema: boolean,
+    view: SemanticAnalyzerView,
   ) => ProjectSourceRef
-  readonly sourceRef: (candidate: SemanticSourceRefCandidate, resolved: SemanticResolvedSource) => ProjectSourceRef
-  readonly sourceRefCandidates: (candidate: SemanticDefinitionCandidate) => readonly SemanticSourceRefCandidate[]
+  readonly sourceRef: (
+    candidate: SemanticSourceRefCandidate,
+    resolved: SemanticResolvedSource,
+    view: SemanticAnalyzerView,
+  ) => ProjectSourceRef
+  readonly sourceRefCandidates: (
+    candidate: SemanticDefinitionCandidate,
+    view: SemanticAnalyzerView,
+  ) => readonly SemanticSourceRefCandidate[]
   readonly templateInterpolationSourceRefs: (
     candidate: SemanticDefinitionCandidate,
-    checker: ts.TypeChecker,
+    view: SemanticAnalyzerView,
   ) => readonly ProjectSourceRef[]
 }
 

@@ -184,7 +184,7 @@ Instead, suites should import their own helpers:
 
 ```ts
 // evals/_shared/qualityModels.ts
-import { generate } from '@crux/ai'
+import { generate } from '@use-crux/ai'
 import { createAIClient, models } from '@packages/ai'
 
 const client = createAIClient()

@@ -44,7 +44,7 @@ import type {
   ListOptions,
   ListResult,
   SetOptions,
-} from '@crux/core/storage'
+} from '@use-crux/core/storage'
 
 type Row = {
   key: string
@@ -191,7 +191,7 @@ import type {
   VectorRecord,
   VectorSearchQuery,
   VectorStore,
-} from '@crux/core/storage'
+} from '@use-crux/core/storage'
 
 export function postgresVectorStore(pool: Queryable): VectorStore {
   return {
@@ -340,7 +340,7 @@ import type {
   BlobReadResult,
   BlobRef,
   BlobStore,
-} from '@crux/core/storage'
+} from '@use-crux/core/storage'
 
 export function postgresBlobStore(pool: Queryable): BlobStore {
   return {
@@ -439,8 +439,8 @@ async function toUint8Array(content: BlobPutInput['content']): Promise<Uint8Arra
 Wire it into a workspace:
 
 ```ts
-import { storage } from '@crux/core/storage'
-import { workspace } from '@crux/core/workspace'
+import { storage } from '@use-crux/core/storage'
+import { workspace } from '@use-crux/core/workspace'
 
 const files = workspace({
   id: 'thread-files',
@@ -459,7 +459,7 @@ await files.write('/outputs/report.pdf', pdfBytes, {
 ## Use It
 
 ```ts
-import { memory, workingState } from '@crux/core/memory'
+import { memory, workingState } from '@use-crux/core/memory'
 import { Pool } from 'pg'
 
 const data = postgresDataStore(

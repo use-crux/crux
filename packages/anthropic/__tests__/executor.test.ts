@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { prompt as makePrompt } from '@crux/core'
-import { agent as makeAgent } from '@crux/core/agent'
+import { prompt as makePrompt } from '@use-crux/core'
+import { agent as makeAgent } from '@use-crux/core/agent'
 import { z } from 'zod'
-import { createAnthropic, fromMessages } from '../index'
+import { createAnthropic } from '../index'
 
 const simplePrompt = makePrompt({
   id: 'test-prompt',
@@ -208,43 +208,6 @@ describe('Anthropic adapter (adapter)', () => {
       expect(result.results.a.agentId).toBe('basic')
       expect(result.results.a.output).toBe('hello')
       expect(result.results.a.durationMs).toBeGreaterThanOrEqual(0)
-    })
-
-    it('maps content tool outputs to Anthropic native tool_result blocks', () => {
-      const messages = fromMessages([
-        {
-          role: 'tool',
-          content: 'fallback',
-          metadata: {
-            toolCallId: 'call-1',
-            toolName: 'renderImage',
-            modelOutput: {
-              type: 'content',
-              value: [
-                { type: 'text', text: 'Rendered image' },
-                { type: 'image-data', data: 'base64-image', mediaType: 'image/png' },
-              ],
-            },
-          },
-        },
-      ])
-
-      expect(messages[0]).toEqual({
-        role: 'user',
-        content: [
-          {
-            type: 'tool_result',
-            tool_use_id: 'call-1',
-            content: [
-              { type: 'text', text: 'Rendered image' },
-              {
-                type: 'image',
-                source: { type: 'base64', data: 'base64-image', media_type: 'image/png' },
-              },
-            ],
-          },
-        ],
-      })
     })
   })
 

@@ -1,7 +1,7 @@
 /**
  * Shared in-memory `AgentExecutor` fake for testing the agent compositions.
  *
- * The real executor lives in the adapter packages (`@crux/ai`, `@crux/openai`)
+ * The real executor lives in the adapter packages (`@use-crux/ai`, `@use-crux/openai`)
  * — core only declares the {@link AgentExecutor} contract. To test how
  * `parallel()`, `pipeline()`, `consensus()`, and `swarm()` *drive* an executor
  * (option threading, error bubbling, result accumulation, execution-context
@@ -9,7 +9,7 @@
  * need one conformant fake. This is that fake — the agent-layer analogue of
  * the resolver `fakes.ts` re-exported from the root `index.ts`.
  *
- * It is a **test helper**, exported from `@crux/core/agent` and the package
+ * It is a **test helper**, exported from `@use-crux/core/agent` and the package
  * root so SDK consumers get the same seam the core suite uses.
  *
  * @example

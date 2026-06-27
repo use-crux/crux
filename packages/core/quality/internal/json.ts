@@ -5,7 +5,7 @@
  * JSON — object keys sorted recursively so semantically equal values produce
  * byte-equal strings.
  *
- * @internal Not exported from `@crux/core/quality` — engine plumbing only.
+ * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 

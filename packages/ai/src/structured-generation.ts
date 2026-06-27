@@ -13,9 +13,9 @@
  */
 
 import type { LanguageModel } from 'ai'
-import type { StructuredAttempt, StructuredRequest } from '@crux/core/adapter'
-import type { GenerateObjectFn } from '@crux/core/compaction'
-import { isCascade, isRouter, resolveModel } from '@crux/core/routing'
+import type { StructuredAttempt, StructuredRequest } from '@use-crux/core/adapter'
+import type { GenerateObjectFn } from '@use-crux/core/compaction'
+import { isCascade, isRouter, resolveModel } from '@use-crux/core/routing'
 import type { SdkGateway } from './gateway'
 import type { SdkLoopResultLike } from './sdk-codec'
 import { createAiSdkCodec } from './sdk-codec'
