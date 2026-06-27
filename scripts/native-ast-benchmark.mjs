@@ -158,7 +158,7 @@ function isBenchmarkProfileName(name) {
 function runGoBenchmark(profile) {
   const args = [
     'test',
-    './internal/projectindex/host',
+    './internal/projectindex/workers',
     '-run',
     '^$',
     '-bench',

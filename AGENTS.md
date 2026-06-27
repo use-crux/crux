@@ -86,7 +86,7 @@ Project Index cache identity is part of the read-model contract. If an indexer o
 - `packages/indexer/indexer/cache-identity.ts`: bump `STATIC_PARSE_CACHE_EPOCH` when static AST parser/extractor output changes in a way not already captured by source/config hashes, extension/extractor/rule identity, compiler profile identity, or compiler-owned projection identity.
 - `packages/indexer/indexer/cache-identity.ts`: bump `SEMANTIC_FACTS_CACHE_EPOCH` when semantic enrichment output changes in a way not already captured by source-closure/config hashes, TypeScript version, or `SEMANTIC_COMPILER_OPTIONS_ID`.
 - `packages/indexer/indexer/cache-identity.ts`: update `SEMANTIC_COMPILER_OPTIONS_ID` when TypeScript compiler option meaning changes for semantic enrichment.
-- `packages/local/internal/devtools/index_cache_identity.go`: bump `projectIndexSnapshotCacheEpoch` when the Go-owned `IndexData` snapshot shape, cache loading semantics, or client-visible Project Index metadata changes in a way that an existing `.crux/cache/index/index.json` could mask after restart.
+- `packages/local/internal/projectindex/cache/identity.go`: bump `ProjectIndexSnapshotCacheEpoch` when the Go-owned `IndexData` snapshot shape, cache loading semantics, or client-visible Project Index metadata changes in a way that an existing `.crux/cache/index/index.json` could mask after restart.
 
 For features that span AST output, semantic enrichment, and the Go snapshot, update all affected identities/epochs. Rebuild with `make build`, restart the local server, and run `crux index reindex` (or the reindex HTTP endpoint) to verify the fresh snapshot. Do not ask users to manually delete `.crux/cache` for normal contract migrations.
 

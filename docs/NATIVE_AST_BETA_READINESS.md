@@ -21,21 +21,21 @@ cargo build --package crux-static-index-worker --bin crux-static-index-worker
 cargo test
 CRUX_STATIC_INDEX_WORKER="$PWD/target/debug/crux-static-index-worker" pnpm --filter @use-crux/indexer test
 CRUX_STATIC_INDEX_WORKER="$PWD/target/debug/crux-static-index-worker" pnpm --filter @use-crux/local-workers parity:indexer-static -- --root="$PWD" --concurrency=8 --max-mismatches=20
-(cd packages/local && CRUX_INDEXER_PARITY_ROOT="$(git rev-parse --show-toplevel)" CRUX_STATIC_INDEX_WORKER="$(git rev-parse --show-toplevel)/target/debug/crux-static-index-worker" go test ./internal/projectindex/host -run TestWorkerStaticIndexMatchesTypeScriptProductionPath -count=1 -v)
+(cd packages/local && CRUX_INDEXER_PARITY_ROOT="$(git rev-parse --show-toplevel)" CRUX_STATIC_INDEX_WORKER="$(git rev-parse --show-toplevel)/target/debug/crux-static-index-worker" go test ./internal/projectindex/workers -run TestWorkerStaticIndexMatchesTypeScriptProductionPath -count=1 -v)
 make local
 ```
 
 Observed gate coverage:
 
-| Surface                         | Evidence                                                                                                                                                                                    |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rust worker build               | `cargo build --package crux-static-index-worker --bin crux-static-index-worker` passed.                                                                                                               |
-| Rust tests                      | `cargo test` passed, including `static-compiler` 62 tests, `worker` 18 tests, `syntax-oxc` 1 test, and doc tests.                                                                           |
-| Full indexer suite              | `CRUX_STATIC_INDEX_WORKER=target/debug/crux-static-index-worker pnpm --filter @use-crux/indexer test` passed with 87 files and 467 tests.                                                        |
+| Surface                         | Evidence                                                                                                                                                                                        |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust worker build               | `cargo build --package crux-static-index-worker --bin crux-static-index-worker` passed.                                                                                                         |
+| Rust tests                      | `cargo test` passed, including `static-compiler` 62 tests, `worker` 18 tests, `syntax-oxc` 1 test, and doc tests.                                                                               |
+| Full indexer suite              | `CRUX_STATIC_INDEX_WORKER=target/debug/crux-static-index-worker pnpm --filter @use-crux/indexer test` passed with 87 files and 467 tests.                                                       |
 | Repository static parity corpus | Local worker parity passed with `files=442 matched=442 canonicalMismatches=0 rawMismatches=30 errors=0`. Definitions, relations, and diagnostics matched exactly after canonical normalization. |
-| Go production path              | `TestWorkerStaticIndexMatchesTypeScriptProductionPath` passed from `packages/local` with the built Rust worker.                                                                             |
-| Local build path                | `make local` passed. It built local worker bundles and devtools UI, embedded assets, built the release Rust/Oxc worker, and built the Go `crux` binary.                                      |
-| Public docs                     | `pnpm --filter docs build` passed, including MDX generation, TypeScript, and 433 static pages.                                                                                              |
+| Go production path              | `TestWorkerStaticIndexMatchesTypeScriptProductionPath` passed from `packages/local` with the built Rust worker.                                                                                 |
+| Local build path                | `make local` passed. It built local worker bundles and devtools UI, embedded assets, built the release Rust/Oxc worker, and built the Go `crux` binary.                                         |
+| Public docs                     | `pnpm --filter docs build` passed, including MDX generation, TypeScript, and 433 static pages.                                                                                                  |
 
 `pnpm test:native-ast-parity` is the release command because it builds the
 current Rust/Oxc worker, points every worker-backed test at that binary, builds
@@ -79,7 +79,7 @@ cargo build --package crux-static-index-worker --bin crux-static-index-worker
 cargo test
 CRUX_STATIC_INDEX_WORKER="$PWD/target/debug/crux-static-index-worker" pnpm --filter @use-crux/indexer test
 CRUX_STATIC_INDEX_WORKER="$PWD/target/debug/crux-static-index-worker" pnpm --filter @use-crux/local-workers parity:indexer-static -- --root="$PWD" --concurrency=8 --max-mismatches=20
-(cd packages/local && CRUX_INDEXER_PARITY_ROOT="$(git rev-parse --show-toplevel)" CRUX_STATIC_INDEX_WORKER="$(git rev-parse --show-toplevel)/target/debug/crux-static-index-worker" go test ./internal/projectindex/host -run TestWorkerStaticIndexMatchesTypeScriptProductionPath -count=1 -v)
+(cd packages/local && CRUX_INDEXER_PARITY_ROOT="$(git rev-parse --show-toplevel)" CRUX_STATIC_INDEX_WORKER="$(git rev-parse --show-toplevel)/target/debug/crux-static-index-worker" go test ./internal/projectindex/workers -run TestWorkerStaticIndexMatchesTypeScriptProductionPath -count=1 -v)
 make local
 ```
 
