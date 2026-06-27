@@ -15,11 +15,14 @@ export { embedding } from './embedding'
 export { fromMessages, googleTranscript, toMessages } from './message-codec'
 export type { GoogleAssistantTurn } from './message-codec'
 export type {
+  GoogleCacheConfig,
+  GoogleCachedContentCachePort,
   GoogleCachedContentCallOptions,
-  GoogleCachedContentCreateOptions,
   GoogleCachedContentErrorMode,
-  GoogleCachedContentOptions,
-  GoogleCachedContentPort,
+  GoogleCachedContentLifecycle,
+  GoogleCachedContentOption,
+  GoogleCachedContentPlan,
+  GoogleCachedContentPrepareArgs,
   GoogleCacheName,
-} from './cache-types'
+} from './cached-content'
 export type { GoogleEmbeddingConfig, GoogleExtra, GoogleFunctionDeclaration, GoogleRequest } from './types'

@@ -38,8 +38,17 @@ result._meta // normalized usage, finish reason, etc.
 
 The adapter also exposes `stream()` and agent composition methods (parallel, pipeline, consensus, swarm), plus `embedding()`, `createGenerateObjectFn()`, and `createGenerateTextFn()` for `@use-crux/core` APIs that expect framework-agnostic functions. `createGenerateObjectFn()` is provider-native: it uses Google structured JSON output and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a helper call needs full adapter runtime behavior.
 
-Provider-level caching via Google's CachedContent API activates automatically for a leading run of system blocks with `providerCache: true`. The adapter sends that prefix as `cachedContent`, keeps the uncached remainder as `systemInstruction`, and shares the same planner between `generate()` and `stream()`. Disable cache lifecycle management with `createGoogle(client, { cachedContent: false })`, skip a single request with `extra: { cachedContent: { skip: true } }`, override a new cache object's TTL with `extra: { cachedContent: { ttlSeconds: 600 } }`, or provide a custom `GoogleCachedContentPort` with `createGoogle(client, { cachedContent: port })`.
+Provider-level caching via Google's CachedContent API activates automatically for a leading run of system blocks with `providerCache: true`. A single `GoogleCachedContentLifecycle` owns prefix detection, cache keying/reuse, SDK cache operations, and fallback policy; it returns a request-ready config patch that both `generate()` and `stream()` merge. The adapter sends the cacheable prefix as `cachedContent` and keeps the uncached remainder as `systemInstruction`.
 
-The package exports `googleProviderRuntime` for advanced adapter composition. Internally, Google uses `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter`; `createGoogle()` is the bundle's mapped `create(client, opts)` factory, which resolves CachedContent options before core receives the narrow cache resolver.
+Configure it through `createGoogle(client, { cachedContent })`:
+
+- `cachedContent: false` — disable cache lifecycle management entirely.
+- `cachedContent: { defaultTtlSeconds, maxEntries, onError }` — tune the built-in lifecycle. `onError: 'throw'` surfaces cache failures instead of falling back to an inline `systemInstruction`.
+- `cachedContent: { port }` — back caching with a custom `GoogleCachedContentCachePort` (create/delete) while keeping built-in keying, TTL, and eviction.
+- `cachedContent: <GoogleCachedContentLifecycle>` — supply a fully custom lifecycle.
+
+Per request, skip caching with `extra: { cachedContent: { skip: true } }` or override a new cache object's TTL with `extra: { cachedContent: { ttlSeconds: 600 } }`.
+
+The package exports `googleProviderRuntime` for advanced adapter composition. Internally, Google uses `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter`; `createGoogle()` is the bundle's mapped `create(client, opts)` factory, which resolves the CachedContent option into a lifecycle before core receives it.
 
 See the [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) and the [Crux docs](https://cruxjs.dev) for the full API.

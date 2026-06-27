@@ -1,19 +1,8 @@
-import type {
-  Content,
-  GenerateContentResponse,
-  GoogleGenAI,
-} from '@google/genai'
+import type { Content, GenerateContentResponse, GoogleGenAI } from '@google/genai'
 import { defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
-import type {
-  NativeProviderPort,
-  SingleTurnProviderBundleSpec,
-} from '@use-crux/core/adapter'
-import { GoogleCacheManager } from './cache-manager'
-import type {
-  GoogleCachedContentCreateOptions,
-  GoogleCachedContentPort,
-} from './cache-types'
-import { resolveCacheConfig } from './cache-types'
+import type { NativeProviderPort, SingleTurnProviderBundleSpec } from '@use-crux/core/adapter'
+import { disabledCachedContentLifecycle, resolveCachedContentLifecycle } from './cached-content'
+import type { GoogleCachedContentLifecycle, GoogleCachedContentOption } from './cached-content'
 import { googleTranscript } from './message-codec'
 import {
   asGoogleGenerateContentParams,
@@ -24,12 +13,19 @@ import {
 } from './request'
 import { googleResponseMeta, googleResponseText } from './response'
 import { googleTextDelta } from './stream'
-import type { GoogleSystemCacheResolver } from './system-cache-planner'
 import type { GoogleExtra, GoogleRequest } from './types'
 
 interface GoogleNativeDeps extends Record<string, unknown> {
-  readonly cacheResolver?: GoogleSystemCacheResolver
+  readonly cachedContentLifecycle?: GoogleCachedContentLifecycle
 }
+
+/**
+ * Fallback lifecycle for the raw runtime when no deps are supplied.
+ *
+ * `createGoogle()` always injects a real lifecycle, so this only applies to
+ * direct `googleProviderRuntime.create(client, {})` usage, where caching is off.
+ */
+const DISABLED_CACHED_CONTENT = disabledCachedContentLifecycle()
 
 /** Options for `createGoogle()`. */
 export interface CreateGoogleOptions {
@@ -37,11 +33,11 @@ export interface CreateGoogleOptions {
    * Configure Google's CachedContent API integration.
    *
    * - `undefined` / omitted: caching enabled with defaults
-   * - `GoogleCachedContentOptions`: use the built-in in-memory cache manager
-   * - `GoogleCachedContentPort`: provide a custom cache resolver
+   * - `GoogleCacheConfig`: custom TTL, max entries, error mode, or cache port
    * - `false`: disable CachedContent management entirely
+   * - `GoogleCachedContentLifecycle`: a fully custom lifecycle implementation
    */
-  readonly cachedContent?: GoogleCachedContentCreateOptions
+  readonly cachedContent?: GoogleCachedContentOption
 }
 
 /** Google single-turn provider bundle compiled by core. */
@@ -49,7 +45,7 @@ const google = defineSingleTurnProviderBundle({
   id: 'google',
   bind: bindGoogle,
   profile: {
-    request: (args, { deps }) => googleRequest(args, deps.cacheResolver),
+    request: (args, { deps }) => googleRequest(args, deps.cachedContentLifecycle ?? DISABLED_CACHED_CONTENT),
     response: {
       meta: googleResponseMeta,
       text: googleResponseText,
@@ -68,12 +64,11 @@ const google = defineSingleTurnProviderBundle({
     Content
   >['profile'],
   deps: {
-    create: (
-      client: GoogleGenAI,
-      opts?: CreateGoogleOptions,
-    ): GoogleNativeDeps => ({
-      cacheResolver: createGoogleCachedContentResolver(client, opts),
+    create: (client: GoogleGenAI, opts?: CreateGoogleOptions): GoogleNativeDeps => ({
+      cachedContentLifecycle: resolveCachedContentLifecycle(client, opts?.cachedContent),
     }),
+    // Lightweight helpers run plain text/object generation without system
+    // blocks, so they leave caching off via the disabled fallback.
     helpers: (): GoogleNativeDeps => ({}),
   },
 })
@@ -90,18 +85,10 @@ export const googleProviderRuntime = google.runtime
 /** Bind a Google GenAI SDK client to the narrow native chat provider port. */
 function bindGoogle(
   client: GoogleGenAI,
-): NativeProviderPort<
-  GoogleRequest,
-  GenerateContentResponse,
-  AsyncIterable<GenerateContentResponse>
-> {
+): NativeProviderPort<GoogleRequest, GenerateContentResponse, AsyncIterable<GenerateContentResponse>> {
   return {
-    call: (request) =>
-      client.models.generateContent(asGoogleGenerateContentParams(request)),
-    stream: (request) =>
-      client.models.generateContentStream(
-        asGoogleGenerateContentStreamParams(request),
-      ),
+    call: (request) => client.models.generateContent(asGoogleGenerateContentParams(request)),
+    stream: (request) => client.models.generateContentStream(asGoogleGenerateContentStreamParams(request)),
   }
 }
 
@@ -110,35 +97,3 @@ export const createGoogle = google.create
 
 /** Lightweight helper factory generated from the Google provider runtime. */
 export const googleHelpers = google.helpers()
-
-function createGoogleCachedContentResolver(
-  client: GoogleGenAI,
-  opts: CreateGoogleOptions | undefined,
-): GoogleSystemCacheResolver | undefined {
-  const cachedContent = opts?.cachedContent
-  if (cachedContent === false) return undefined
-  if (isGoogleCachedContentPort(cachedContent)) {
-    return {
-      resolve: (model, blocks, options) =>
-        cachedContent.resolve({
-          model,
-          blocks,
-          ...(options?.ttlSeconds === undefined
-            ? {}
-            : { ttlSeconds: options.ttlSeconds }),
-        }),
-    }
-  }
-  return new GoogleCacheManager(client, resolveCacheConfig(cachedContent))
-}
-
-function isGoogleCachedContentPort(
-  value: GoogleCachedContentCreateOptions | undefined,
-): value is GoogleCachedContentPort {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'resolve' in value &&
-    typeof value.resolve === 'function'
-  )
-}

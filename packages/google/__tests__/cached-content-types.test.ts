@@ -3,15 +3,15 @@ import { createGoogle } from '../index'
 import type {
   CreateGoogleOptions,
   GoogleCachedContentCallOptions,
-  GoogleCachedContentCreateOptions,
-  GoogleCachedContentPort,
+  GoogleCachedContentLifecycle,
+  GoogleCachedContentOption,
   GoogleExtra,
 } from '../index'
 
 type GoogleAdapter = ReturnType<typeof createGoogle>
 type GoogleGenerateExtra = NonNullable<Parameters<GoogleAdapter['generate']>[1]['extra']>
 
-expectTypeOf<CreateGoogleOptions['cachedContent']>().toEqualTypeOf<GoogleCachedContentCreateOptions | undefined>()
+expectTypeOf<CreateGoogleOptions['cachedContent']>().toEqualTypeOf<GoogleCachedContentOption | undefined>()
 expectTypeOf<GoogleExtra['cachedContent']>().toEqualTypeOf<GoogleCachedContentCallOptions | undefined>()
 expectTypeOf<GoogleGenerateExtra['cachedContent']>().toEqualTypeOf<GoogleCachedContentCallOptions | undefined>()
 
@@ -24,18 +24,20 @@ acceptGenerateExtra({ cachedContent: { ttlSeconds: 60 } })
 // @ts-expect-error Google CachedContent TTL overrides must be numeric seconds.
 acceptGenerateExtra({ cachedContent: { ttlSeconds: '60' } })
 
-const customPort = {
-  async resolve(args) {
-    expectTypeOf(args).toMatchTypeOf<Parameters<GoogleCachedContentPort['resolve']>[0]>()
-    return undefined
+// A fully custom lifecycle is an accepted CachedContent option.
+const customLifecycle: GoogleCachedContentLifecycle = {
+  async prepare() {
+    return { mode: 'inline', reason: 'disabled', config: {} }
   },
-} satisfies GoogleCachedContentPort
+}
+const customLifecycleOptions = { cachedContent: customLifecycle } satisfies CreateGoogleOptions
+expectTypeOf(customLifecycleOptions.cachedContent).toMatchTypeOf<GoogleCachedContentLifecycle>()
 
-const customPortOptions = {
-  cachedContent: customPort,
+// A tuning config (including a custom cache port) is also accepted.
+const configOptions = {
+  cachedContent: { defaultTtlSeconds: 600, maxEntries: 100, onError: 'throw' },
 } satisfies CreateGoogleOptions
-
-expectTypeOf(customPortOptions.cachedContent).toMatchTypeOf<GoogleCachedContentPort>()
+void configOptions
 
 const cachedContentCallOptions = {
   cachedContent: { skip: true, ttlSeconds: 120 },

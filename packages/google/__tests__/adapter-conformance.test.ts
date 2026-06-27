@@ -1,11 +1,12 @@
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
 import type { ProviderConformanceEmission, ProviderRuntimeConformanceHarness } from '@use-crux/core/adapter'
 import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
-import type { GoogleSystemCacheResolver } from '../system-cache-planner'
+import { disabledCachedContentLifecycle } from '../cached-content'
+import type { GoogleCachedContentLifecycle } from '../cached-content'
 import { googleProviderRuntime } from '../native'
 
 interface GoogleConformanceDeps extends Record<string, unknown> {
-  readonly cacheResolver?: GoogleSystemCacheResolver
+  readonly cachedContentLifecycle: GoogleCachedContentLifecycle
 }
 
 interface CapturedGoogleClient {
@@ -38,7 +39,7 @@ function googleConformanceHarness(): ProviderRuntimeConformanceHarness<GoogleGen
       return {
         client: captured.client,
         model: 'gemini-conformance',
-        deps: { cacheResolver: undefined },
+        deps: { cachedContentLifecycle: disabledCachedContentLifecycle() },
         inspect: {
           calls: () => captured.calls,
           messagesForCall: (index) => readRecord(captured.calls[index])?.contents,

@@ -1,5 +1,5 @@
 import type { Content } from '@google/genai'
-import type { GoogleCachedContentCallOptions } from './cache-types'
+import type { GoogleCachedContentCallOptions } from './cached-content'
 
 /** Google GenAI function declaration for tool use. */
 export interface GoogleFunctionDeclaration {
