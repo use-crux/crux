@@ -2,8 +2,9 @@
  * Test utilities for Crux adapter contracts.
  *
  * - {@link providerRuntimeConformance} — the public runtime-level suite for
- *   adapters built with `defineProviderRuntime()`. It binds the runtime through
- *   `.create()` and covers both `single-turn` and `loop-owned` ownership.
+ *   adapters built with `defineSingleTurnProviderBundle()` or
+ *   `defineProviderRuntime()`. It binds the runtime through `.create()` and
+ *   covers both `single-turn` and `loop-owned` ownership.
  * - `describeCruxAdapterConformance` from
  *   `@use-crux/core/adapter/testing/vitest` — the Vitest wrapper used by
  *   provider packages.

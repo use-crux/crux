@@ -4,7 +4,7 @@ description: Provider adapter abstraction for building AI provider integrations.
 ---
 
 ```ts
-import { defineProviderRuntime } from '@use-crux/core/adapter'
+import { defineProviderRuntime, defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
 import type {
   CruxAdapter,
   AdapterGenerateOptions,
@@ -19,6 +19,7 @@ import type {
   ProviderOwnership,
   ProviderRuntimeConformanceHarness,
   NativeTranscriptCodec,
+  SingleTurnProviderBundleSpec,
 } from '@use-crux/core/adapter'
 import { providerRuntimeConformance, transcriptCodecConformance } from '@use-crux/core/adapter/testing'
 import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
@@ -26,7 +27,7 @@ import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/v
 
 ## Overview
 
-The adapter package provides the public authoring surface for AI provider adapters. `defineProviderRuntime()` binds a stable runtime id to an explicit `ProviderOwnership`: `ownership: 'single-turn'` with `turn`, where Crux owns the provider step loop, or `ownership: 'loop-owned'` with `loop`, where the SDK owns the loop and Crux steers policy around it. Both branches compile into the same execution engine and share the same policy modules (validation retry, tool instrumentation, approvals) plus the same per-call [`Safety` session](/docs/reference/crux-core/safety), so behavior does not diverge between runtimes.
+The adapter package provides the public authoring surface for AI provider adapters. `defineSingleTurnProviderBundle()` is the preferred helper for raw chat SDKs where Crux owns the provider step loop. `defineProviderRuntime()` remains the lower-level runtime compiler: `ownership: 'single-turn'` with `turn` compiles the same core-owned loop mechanics directly, and `ownership: 'loop-owned'` with `loop` covers SDKs that own the loop while Crux steers policy around it. Both branches compile into the same execution engine and share the same policy modules (validation retry, tool instrumentation, approvals) plus the same per-call [`Safety` session](/docs/reference/crux-core/safety), so behavior does not diverge between runtimes.
 
 Built-in adapters are built on this abstraction: `@use-crux/openai`, `@use-crux/anthropic`, and `@use-crux/google` export single-turn provider runtimes, while `@use-crux/ai` exports a loop-owned provider runtime for the Vercel AI SDK. Native provider packages own a `NativeTranscriptCodec` for provider message conversion, assistant text/tool-call extraction, and provider-specific tool-round appends. Core injects transcript-produced `providerMessages` into request builders and composes `transcript.readAssistant(raw)` with response-level metadata. Core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and small tool-output helpers those codecs share.
 
@@ -34,7 +35,7 @@ Built-in adapters are built on this abstraction: `@use-crux/openai`, `@use-crux/
 
 | Your SDK…                                                                                 | Ownership     | Mechanics | Example                                           |
 | ----------------------------------------------------------------------------------------- | ------------- | --------- | ------------------------------------------------- |
-| Exposes text/structured/stream chat calls and leaves tool execution to Crux               | `single-turn` | `turn`    | `@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google` |
+| Exposes text/structured/stream chat calls and leaves tool execution to Crux               | `single-turn` | bundle    | `@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google` |
 | Runs its own multi-step tool loop (`generateText` with `stopWhen`, native tool execution) | `loop-owned`  | `loop`    | `@use-crux/ai`                                        |
 | Needs a bespoke non-chat boundary                                                         | n/a           | core IR   | custom provider                                   |
 
@@ -71,21 +72,20 @@ describeCruxAdapterConformance({
 
 Use `adapterSpecConformance()` and `executorSpecConformance()` only when you are testing lower-level compiler output or core execution IR directly. `fakeExecutor()` remains the in-memory reference implementation for policy tests that need a loop-owned runtime without loading an SDK.
 
-## `defineProviderRuntime({ ownership: 'single-turn', turn })`
+## `defineSingleTurnProviderBundle(spec)`
 
-Compile a raw chat SDK provider spec into a Crux adapter runtime.
+Compile a raw chat SDK provider bundle into a Crux adapter runtime, public `create()` factory, and lightweight helper factory.
 
 ```ts
-import { defineProviderRuntime } from '@use-crux/core/adapter'
+import { defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
 
-export const myProviderRuntime = defineProviderRuntime({
+const myProvider = defineSingleTurnProviderBundle({
   id: 'my-provider',
-  ownership: 'single-turn',
-  turn: {
-    bind: (client) => ({
-      call: (request) => client.chat.create(request),
-      stream: (request) => client.chat.stream(request),
-    }),
+  bind: (client) => ({
+    call: (request) => client.chat.create(request),
+    stream: (request) => client.chat.stream(request),
+  }),
+  profile: {
     request: buildRequest,
     transcript: myTranscript,
     response: {
@@ -101,12 +101,32 @@ export const myProviderRuntime = defineProviderRuntime({
   },
 })
 
-export const createMyProvider = myProviderRuntime.create
+export const myProviderRuntime = myProvider.runtime
+export const createMyProvider = myProvider.create
+export const myProviderHelpers = myProvider.helpers()
 ```
 
-The provider runtime owns provider wire facts: request bodies, SDK method binding, transcript conversion, assistant-turn extraction, response metadata extraction, stream delta extraction, settings/schema mapping, and provider-specific dependencies. Single-turn specs should use `transcript: NativeTranscriptCodec` plus `response.meta(raw)`; `response.text(raw, assistant)` is only needed when the SDK exposes parsed structured output separately from assistant message text. Crux owns prompt resolution, tool execution, default canonical tool-round appends, validation retry, safety, memory capture, and observability.
+The bundle owns provider wire facts: request bodies, SDK method binding, transcript conversion, assistant-turn extraction, response metadata extraction, stream delta extraction, settings/schema mapping, and provider-specific dependencies. Single-turn bundles should use `transcript: NativeTranscriptCodec` plus `response.meta(raw)`; `response.text(raw, assistant)` is only needed when the SDK exposes parsed structured output separately from assistant message text. Crux owns prompt resolution, tool execution, default canonical tool-round appends, validation retry, safety, memory capture, and observability.
 
 `request(args, ctx)` receives the usual canonical `CallArgs` plus `args.providerMessages`, already produced by `transcript.fromMessages(args.messages)`. Request builders should use `providerMessages` rather than re-running public `fromMessages()` wrappers.
+
+Use `deps.create` and `deps.helpers` when your public factories should accept provider-friendly arguments instead of the raw dependency object that core threads into request builders:
+
+```ts
+const google = defineSingleTurnProviderBundle({
+  id: 'google',
+  bind: bindGoogle,
+  profile: googleProfile,
+  deps: {
+    create: (client: GoogleGenAI, opts?: CreateGoogleOptions) => ({
+      cacheResolver: createGoogleCachedContentResolver(client, opts),
+    }),
+    helpers: () => ({}),
+  },
+})
+```
+
+`defineProviderRuntime({ ownership: 'single-turn', turn })` is still available for lower-level compiler tests or unusual adapter packages that need to assemble the runtime object directly. Normal single-turn providers should use the bundle helper so `runtime`, `create()`, helper factories, dependency mapping, and extension checks are compiled consistently.
 
 Test transcript codecs directly with `transcriptCodecConformance()`:
 
@@ -130,7 +150,7 @@ Provider packages may expose `GenerateTextFn` and `GenerateObjectFn` helpers whe
 
 ## Internal IR: `adapter(spec)`
 
-Create a core-driven adapter from a compiled `AdapterSpec`. Provider packages should implement `defineProviderRuntime({ ownership: 'single-turn', turn })`; use this only when testing core adapter internals or building a bespoke runtime compiler.
+Create a core-driven adapter from a compiled `AdapterSpec`. Provider packages should implement `defineSingleTurnProviderBundle()`; use this only when testing core adapter internals or building a bespoke runtime compiler.
 
 | Parameter | Type                                                     | Description                             |
 | --------- | -------------------------------------------------------- | --------------------------------------- |

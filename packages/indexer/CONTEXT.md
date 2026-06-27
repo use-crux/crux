@@ -22,9 +22,9 @@ runtime snapshot facts, but not derived quality annotations.
 _Avoid_: enriched index, devtools read model
 
 **Project Index Read Model**:
-The devtools-facing Project Index produced by `@use-crux/local/internal/indexread`. It starts from a
-Project Index Snapshot and joins in-memory runs, file-backed quality records, source mtimes, and
-safety target metadata.
+The devtools-facing Project Index produced by `@use-crux/local/internal/projectindex/readmodel`. It
+starts from a Project Index Snapshot and joins in-memory runs, file-backed quality records, source
+mtimes, and safety target metadata.
 _Avoid_: store index, quality pass, hidden enrichment
 
 **Resolved Project Model**:
@@ -145,6 +145,11 @@ It is JavaScript today and can move to Rust/Oxc later without changing semantic 
 contracts.
 _Avoid_: semantic backend, type checker, nativeAst
 
+**TypeScript Local Worker Package**:
+The private package that owns Local's TypeScript worker bundle entrypoints for Project Index source,
+semantic, runtime, and compatibility work.
+_Avoid_: devtools worker owner, UI package worker scripts
+
 **Semantic Scope**:
 The file set, previous index snapshot, and source-graph dependency closure handed from static/source
 indexing to semantic enrichment. It lets semantic backends skip duplicate discovery while preserving
@@ -254,8 +259,8 @@ _Avoid_: using in new public APIs after the rename slice
 - A **Project Index Compiler** produces **Extracted Facts** that are merged into a **Project Index**.
 - `@use-crux/local` stores a raw **Project Index Snapshot**; `GetIndex()` callers should treat it as
   cache/snapshot data, not the devtools-facing quality view.
-- `@use-crux/local/internal/indexread` produces the **Project Index Read Model**. It is the only owner of
-  derived `IndexQuality` annotations.
+- `@use-crux/local/internal/projectindex/readmodel` produces the **Project Index Read Model**. It is
+  the only owner of derived `IndexQuality` annotations.
 - A **Resolved Project Model** combines Project Index source facts with filesystem conventions,
   runtime evidence, and **Tooling Policy Config**.
 - **Tooling Policy Config** may override or constrain discovery, but must not be required to repeat

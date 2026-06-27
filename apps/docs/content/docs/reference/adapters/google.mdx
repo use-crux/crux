@@ -25,7 +25,7 @@ import { createGenerateObjectFn, createGenerateTextFn } from '@use-crux/google'
 
 Create an adapter bound to a Google GenAI client with optional CachedContent configuration.
 
-`createGoogle()` binds `googleProviderRuntime.create(client, { cacheResolver })` after resolving CachedContent options. The package-owned `googleTranscript` owns `Content[]` conversion plus assistant text/function-call extraction. The Google package still owns the SDK request shape, function-call normalization, response metadata normalization, and CachedContent lifecycle; the provider runtime supplies the adapter shell and default tool-round formatting.
+`createGoogle()` is the package's mapped single-turn bundle factory: it resolves CachedContent options, passes a narrow cache resolver into the provider runtime, and returns the bound adapter. The package-owned `googleTranscript` owns `Content[]` conversion plus assistant text/function-call extraction. The Google package still owns the SDK request shape, function-call normalization, response metadata normalization, and CachedContent lifecycle; the provider runtime supplies the adapter shell and default tool-round formatting.
 
 | Field                | Type                                                             | Description                                                                                                                     |
 | -------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |

@@ -1,7 +1,7 @@
 /**
  * `@use-crux/openai` — OpenAI SDK adapter.
  *
- * Built from the single-turn provider runtime in `@use-crux/core/adapter`.
+ * Built from the single-turn provider bundle in `@use-crux/core/adapter`.
  * The public surface stays intentionally small: create a Crux adapter, access
  * the provider runtime/profile, use lightweight compaction helpers, convert
  * messages, or create embeddings.

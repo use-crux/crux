@@ -77,6 +77,28 @@ below.
 `internal/store` stores raw Project Index snapshots and in-memory runtime/eval state. It must not
 persist derived `IndexQuality` fields or parse `.crux/quality`.
 
+## Project Index Runtime Boundary
+
+`internal/projectindex/service` is the Local facade for Project Index refreshes. Server, route, TUI,
+and devtools packages should call service and read-model APIs instead of importing worker, eventwire,
+cache, or Static Index internals directly.
+
+The target Go package names are responsibility names:
+
+- `internal/projectindex/eventwire`: Project Index worker event stream collection and validation.
+- `internal/projectindex/workers`: composition root for TypeScript worker lanes.
+- `internal/projectindex/workers/requestwire`: batched requests sent to TypeScript workers.
+- `internal/projectindex/workers/source`, `workers/semantic`, `workers/runtime`, and
+  `workers/node`: focused worker-lane adapters.
+- `internal/projectindex/staticindex/frontend`: Static Syntax frontend process adaptation.
+- `internal/projectindex/staticindex/compiler`: Go client for Rust Static Index compiler methods.
+- `internal/projectindex/staticindex/run`: deep module facade for Static Index prepare/analyze/finalize
+  orchestration.
+
+Current packages named `host`, `host/indexwire`, `wire`, `staticindex/syntax`, and
+`staticindex/client` are migration state for the Rust/Go architecture cleanup. New code should use
+the target vocabulary and should not add compatibility aliases for old package names.
+
 ## Quality Insight Derivation
 
 Insight derivation is pure package-local logic in `internal/quality`. `buildQualityInsightsFromRuns`

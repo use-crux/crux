@@ -1,7 +1,7 @@
 /**
  * `@use-crux/google` — Google GenAI SDK adapter.
  *
- * Built from the single-turn provider runtime in `@use-crux/core/adapter`.
+ * Built from the single-turn provider bundle in `@use-crux/core/adapter`.
  * Google-specific request params, function-call/function-response parts, and
  * CachedContent lifecycle remain owned by this package.
  *

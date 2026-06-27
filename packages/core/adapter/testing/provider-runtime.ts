@@ -1,11 +1,11 @@
 /**
  * Runtime-level provider adapter conformance.
  *
- * This suite exercises the public runtime returned by `defineProviderRuntime()`
- * instead of provider internals. Harnesses translate abstract scripts into
- * provider SDK fakes, while this runner owns the canonical Crux behavior:
- * generation, structured output, tool continuation, approval suspension, and
- * streaming.
+ * This suite exercises the public runtime returned by
+ * `defineSingleTurnProviderBundle()` or `defineProviderRuntime()` instead of
+ * provider internals. Harnesses translate abstract scripts into provider SDK
+ * fakes, while this runner owns the canonical Crux behavior: generation,
+ * structured output, tool continuation, approval suspension, and streaming.
  *
  * @module
  */

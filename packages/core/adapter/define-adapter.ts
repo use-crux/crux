@@ -6,9 +6,8 @@
  * tool loops, settings mapping, and exposes `generate()`, `stream()`, plus
  * agent composition methods (parallel, pipeline, consensus, swarm).
  *
- * Provider packages should normally use
- * `defineProviderRuntime({ ownership: 'single-turn', turn })`, which compiles
- * into this IR.
+ * Provider packages should normally use `defineSingleTurnProviderBundle()`,
+ * which compiles through the single-turn provider runtime into this IR.
  *
  * @module
  */

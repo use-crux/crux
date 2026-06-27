@@ -5,12 +5,18 @@
  */
 
 export { defineProviderRuntime } from './define'
+export { defineSingleTurnProviderBundle } from './single-turn-bundle'
 export type {
   ProviderRuntimeExtension,
   ProviderRuntimeExtensionCollisionKeys,
   ProviderRuntimeExtensionContext,
   ProviderRuntimeExtender,
 } from './extension-types'
+export type {
+  DefinedSingleTurnProviderBundle,
+  SingleTurnProviderBundleDeps,
+  SingleTurnProviderBundleSpec,
+} from './single-turn-bundle-types'
 export type {
   BoundLoopOwnedRuntime,
   DefinedProviderRuntime,

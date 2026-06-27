@@ -37,7 +37,7 @@ result.raw // raw Anthropic.Message
 
 `createAnthropic()` returns a `CruxAdapter` with `generate()`, `stream()`, and agent composition methods (`parallel`, `pipeline`, `consensus`, `swarm`). Use `createGenerateObjectFn(client, model)` / `createGenerateTextFn(client, model)` to satisfy `@use-crux/core` APIs that expect a generate function (e.g. `llmJudge`, `summarizeMessages`). `createGenerateObjectFn()` is provider-native: it uses Anthropic structured parsing and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a helper call needs full adapter runtime behavior.
 
-The package exports `anthropicProviderRuntime` for advanced adapter composition. `createAnthropic` is `anthropicProviderRuntime.create`; adapter authors should use `defineProviderRuntime()` from `@use-crux/core/adapter`.
+The package exports `anthropicProviderRuntime` for advanced adapter composition. Internally, Anthropic uses `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter`; adapter authors building similar single-turn providers should start there.
 
 ## Message and Tool-Round Serialization
 

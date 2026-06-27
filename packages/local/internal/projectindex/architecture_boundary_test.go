@@ -18,7 +18,14 @@ type expectedInternalPackage struct {
 	note string
 }
 
-func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
+type pendingInternalPackage struct {
+	current string
+	target  string
+	phase   int
+	note    string
+}
+
+func TestProjectIndexArchitecturePackagesUseBoundedContextLayout(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("could not determine test file location")
@@ -29,17 +36,17 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 
 	expectedPackages := []expectedInternalPackage{
 		{"projectindex/cache", "snapshot cache ownership moves here in Phase 2"},
-		{"projectindex/host", "Project Index host boundary"},
-		{"projectindex/host/client", "worker host client boundary"},
-		{"projectindex/host/indexwire", "host wire request boundary"},
-		{"projectindex/host/node", "Node-specific Project Index host wrapper"},
-		{"projectindex/host/runtime", "runtime indexing host boundary"},
-		{"projectindex/host/semantic", "semantic host boundary"},
+		{"projectindex/host", "current TypeScript worker host boundary until Phase 4 moves it to projectindex/workers"},
+		{"projectindex/host/client", "current worker host client boundary until Phase 4 splits focused worker lanes"},
+		{"projectindex/host/indexwire", "current TypeScript worker request boundary until Phase 4 moves it to workers/requestwire"},
+		{"projectindex/host/node", "current Node-specific worker wrapper until Phase 4 moves it to workers/node"},
+		{"projectindex/host/runtime", "current runtime indexing host boundary until Phase 4 moves it to workers/runtime"},
+		{"projectindex/host/semantic", "current semantic host boundary until Phase 4 moves it to workers/semantic"},
 		{"projectindex/model", "shared Project Index data model"},
 		{"projectindex/readmodel", "derived Project Index read model"},
 		{"projectindex/service", "runtime-facing Project Index service"},
 		{"projectindex/staticindex/cache", "Static Index cache boundary"},
-		{"projectindex/staticindex/client", "Static Index worker client boundary"},
+		{"projectindex/staticindex/client", "current Static Index compiler client boundary until Phase 6 moves it to staticindex/compiler"},
 		{"projectindex/staticindex/compat", "Static Index compatibility helpers"},
 		{"projectindex/staticindex/planner", "Static Index source planning boundary"},
 		{"projectindex/staticindex/planner/sourcegraph", "Static Index source graph planning"},
@@ -51,16 +58,36 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 		{"projectindex/staticindex/run/patch", "Static Index patch projection"},
 		{"projectindex/staticindex/session", "Static Index session orchestration boundary"},
 		{"projectindex/staticindex/sourceprofile", "Static Index source profile boundary"},
-		{"projectindex/staticindex/syntax", "Static Syntax worker boundary"},
-		{"projectindex/staticindex/syntax/record", "Static Syntax record model"},
-		{"projectindex/staticindex/syntax/stream", "Static Syntax stream decoder"},
-		{"projectindex/wire", "Project Index worker event stream"},
+		{"projectindex/staticindex/syntax", "current Static Syntax frontend boundary until Phase 6 moves it to staticindex/frontend"},
+		{"projectindex/staticindex/syntax/record", "current Static Syntax record model until Phase 6 moves it under staticindex/frontend"},
+		{"projectindex/staticindex/syntax/stream", "current Static Syntax stream decoder until Phase 6 moves it under staticindex/frontend"},
+		{"projectindex/wire", "current Project Index worker event stream until Phase 4 moves it to projectindex/eventwire"},
 		{"process/workerproc", "generic JSON-lines worker process package"},
 		{"assets", "generated local runtime asset owner"},
 	}
 	for _, expected := range expectedPackages {
 		if info, err := os.Stat(filepath.Join(internalDir, expected.path)); err != nil || !info.IsDir() {
 			t.Fatalf("expected Project Index package %q to exist under internal/ (%s)", expected.path, expected.note)
+		}
+	}
+
+	pendingTargets := []pendingInternalPackage{
+		{"projectindex/wire", "projectindex/eventwire", 4, "Project Index worker event stream"},
+		{"projectindex/host", "projectindex/workers", 4, "TypeScript worker hosting composition root"},
+		{"projectindex/host/indexwire", "projectindex/workers/requestwire", 4, "TypeScript worker request batching"},
+		{"projectindex/host/client", "projectindex/workers/source", 4, "source worker lane"},
+		{"projectindex/host/semantic", "projectindex/workers/semantic", 4, "semantic worker lane"},
+		{"projectindex/host/runtime", "projectindex/workers/runtime", 4, "runtime worker lane"},
+		{"projectindex/host/node", "projectindex/workers/node", 4, "Node worker adapter"},
+		{"projectindex/staticindex/syntax", "projectindex/staticindex/frontend", 6, "Static Syntax frontend process adapter"},
+		{"projectindex/staticindex/client", "projectindex/staticindex/compiler", 6, "Rust Static Index compiler client"},
+	}
+	for _, pending := range pendingTargets {
+		if info, err := os.Stat(filepath.Join(internalDir, pending.current)); err != nil || !info.IsDir() {
+			t.Fatalf("current package %q must remain explicit until Phase %d moves it to %q (%s)", pending.current, pending.phase, pending.target, pending.note)
+		}
+		if _, err := os.Stat(filepath.Join(internalDir, pending.target)); !os.IsNotExist(err) {
+			t.Fatalf("target package %q exists before Phase %d updates this pending inventory (%s)", pending.target, pending.phase, pending.note)
 		}
 	}
 
@@ -72,7 +99,6 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 		"localassets",
 		"nodeworker",
 		filepath.Join("process", "node"),
-		filepath.Join("projectindex", "staticindex", "compiler"),
 		"projectindexstore",
 		"projectindexwire",
 	}
@@ -83,7 +109,7 @@ func TestProjectIndexPackagesUseBoundedContextLayout(t *testing.T) {
 	}
 }
 
-func TestProjectIndexRootDoesNotAliasCacheOwnership(t *testing.T) {
+func TestProjectIndexArchitectureRootDoesNotAliasCacheOwnership(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("could not determine test file location")
@@ -111,7 +137,7 @@ func TestProjectIndexRootDoesNotAliasCacheOwnership(t *testing.T) {
 	})
 }
 
-func TestServerAndDevtoolsDoNotImportProjectIndexInternals(t *testing.T) {
+func TestProjectIndexArchitectureServerAndDevtoolsDoNotImportProjectIndexInternals(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("could not determine test file location")
@@ -164,11 +190,15 @@ func forbiddenRouteProjectIndexImport(importPath string, testFile bool) bool {
 	switch {
 	case importPath == projectIndex+"cache":
 		return true
+	case importPath == projectIndex+"eventwire":
+		return true
 	case importPath == projectIndex+"host" || strings.HasPrefix(importPath, projectIndex+"host/"):
 		return true
 	case importPath == projectIndex+"model":
 		return true
 	case importPath == projectIndex+"wire":
+		return true
+	case importPath == projectIndex+"workers" || strings.HasPrefix(importPath, projectIndex+"workers/"):
 		return true
 	default:
 		return false
@@ -210,7 +240,7 @@ func forEachProjectIndexRootObject(t *testing.T, projectIndexDir string, visit f
 	}
 }
 
-func TestProjectIndexCacheIdentityLivesInCachePackage(t *testing.T) {
+func TestProjectIndexArchitectureCacheIdentityLivesInCachePackage(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("could not determine test file location")
