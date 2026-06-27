@@ -4,9 +4,9 @@
  * Shared infrastructure for building AI provider adapters. Public provider
  * authors should start with provider runtimes:
  *
- * - {@link defineProviderRuntime} with `ownership: 'single-turn'` and `turn`
- *   — for raw provider SDKs without a tool loop (Anthropic, OpenAI, Google).
- *   Core drives the loop one provider call at a time.
+ * - {@link defineSingleTurnProviderBundle} — for raw provider SDKs without a
+ *   tool loop (Anthropic, OpenAI, Google). Core drives the loop one provider
+ *   call at a time.
  * - {@link defineProviderRuntime} with `ownership: 'loop-owned'` and `loop`
  *   — for orchestrating SDKs that own their own multi-step loop (the Vercel
  *   AI SDK). The SDK drives; core steers each step through a `StepObserver`.
@@ -44,10 +44,12 @@ export type {
 
 // Provider runtime authoring layer
 export { defineProviderRuntime } from './provider-runtime'
+export { defineSingleTurnProviderBundle } from './provider-runtime'
 export type {
   BoundLoopOwnedRuntime,
   DefinedProviderRuntime,
   DefinedSingleTurnProviderRuntime,
+  DefinedSingleTurnProviderBundle,
   LoopOwnedProviderRuntime,
   LoopOwnedProviderRuntimeSpec,
   LoopOwnedRuntimeBindContext,
@@ -60,6 +62,8 @@ export type {
   ProviderRuntimeExtensionContext,
   ProviderRuntimeExtender,
   ProviderRuntimeSpec,
+  SingleTurnProviderBundleDeps,
+  SingleTurnProviderBundleSpec,
   SingleTurnRuntimeContract,
   SingleTurnProviderRuntimeSpec,
 } from './provider-runtime'

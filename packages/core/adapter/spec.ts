@@ -1,10 +1,9 @@
 /**
  * `AdapterSpec` — the lower-level execution IR for single-turn adapters.
  *
- * Provider packages should normally author
- * `defineProviderRuntime({ ownership: 'single-turn', turn })`. Core compiles
- * that public runtime contract into this IR for execution tests and internal
- * adapter plumbing.
+ * Provider packages should normally author `defineSingleTurnProviderBundle()`.
+ * Core compiles that public bundle through the single-turn provider runtime
+ * into this IR for execution tests and internal adapter plumbing.
  *
  * @module
  */
@@ -21,8 +20,8 @@ import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '.
 /**
  * Provider-specific single-turn execution specification.
  *
- * Prefer `defineProviderRuntime()` for public adapter authoring. The base
- * `adapter()` handles all shared orchestration: tool loops, fallback,
+ * Prefer `defineSingleTurnProviderBundle()` for public adapter authoring. The
+ * base `adapter()` handles all shared orchestration: tool loops, fallback,
  * devtools, compositions.
  *
  * @typeParam TClient - The provider's SDK client type

@@ -1,7 +1,7 @@
 /**
  * `@use-crux/anthropic` — Anthropic SDK adapter.
  *
- * Built from the single-turn provider runtime in `@use-crux/core/adapter`.
+ * Built from the single-turn provider bundle in `@use-crux/core/adapter`.
  * Anthropic-specific request params, message/tool-result blocks, cache-control
  * system blocks, and response normalization stay owned by this package.
  *

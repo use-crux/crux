@@ -1,8 +1,18 @@
-import type { Content, GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import { defineProviderRuntime } from '@use-crux/core/adapter'
-import type { NativeProviderPort, SingleTurnRuntimeContract } from '@use-crux/core/adapter'
+import type {
+  Content,
+  GenerateContentResponse,
+  GoogleGenAI,
+} from '@google/genai'
+import { defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
+import type {
+  NativeProviderPort,
+  SingleTurnProviderBundleSpec,
+} from '@use-crux/core/adapter'
 import { GoogleCacheManager } from './cache-manager'
-import type { GoogleCachedContentCreateOptions, GoogleCachedContentPort } from './cache-types'
+import type {
+  GoogleCachedContentCreateOptions,
+  GoogleCachedContentPort,
+} from './cache-types'
 import { resolveCacheConfig } from './cache-types'
 import { googleTranscript } from './message-codec'
 import {
@@ -34,19 +44,21 @@ export interface CreateGoogleOptions {
   readonly cachedContent?: GoogleCachedContentCreateOptions
 }
 
-/** Google provider hooks shared by the public runtime and lightweight helpers. */
-const googleProviderHooks = {
-  request: (args, { deps }) => googleRequest(args, deps.cacheResolver),
-  response: {
-    meta: googleResponseMeta,
-    text: googleResponseText,
-  },
-  stream: { textDelta: googleTextDelta },
-  settings: googleSettings,
-  outputSchema: googleOutputSchema,
-  transcript: googleTranscript,
-} satisfies Omit<
-  SingleTurnRuntimeContract<
+/** Google single-turn provider bundle compiled by core. */
+const google = defineSingleTurnProviderBundle({
+  id: 'google',
+  bind: bindGoogle,
+  profile: {
+    request: (args, { deps }) => googleRequest(args, deps.cacheResolver),
+    response: {
+      meta: googleResponseMeta,
+      text: googleResponseText,
+    },
+    stream: { textDelta: googleTextDelta },
+    settings: googleSettings,
+    outputSchema: googleOutputSchema,
+    transcript: googleTranscript,
+  } satisfies SingleTurnProviderBundleSpec<
     GoogleGenAI,
     GoogleRequest,
     GenerateContentResponse,
@@ -54,23 +66,17 @@ const googleProviderHooks = {
     GoogleExtra,
     GoogleNativeDeps,
     Content
-  >,
-  'bind'
->
-
-/** Google runtime hooks including the client binder. */
-const googleRuntimeHooks = {
-  bind: bindGoogle,
-  ...googleProviderHooks,
-} satisfies SingleTurnRuntimeContract<
-  GoogleGenAI,
-  GoogleRequest,
-  GenerateContentResponse,
-  AsyncIterable<GenerateContentResponse>,
-  GoogleExtra,
-  GoogleNativeDeps,
-  Content
->
+  >['profile'],
+  deps: {
+    create: (
+      client: GoogleGenAI,
+      opts?: CreateGoogleOptions,
+    ): GoogleNativeDeps => ({
+      cacheResolver: createGoogleCachedContentResolver(client, opts),
+    }),
+    helpers: (): GoogleNativeDeps => ({}),
+  },
+})
 
 /**
  * Public Google provider runtime.
@@ -79,31 +85,31 @@ const googleRuntimeHooks = {
  * or stream per turn, while Crux owns prompt resolution, tool loops,
  * validation retry, safety, observability, and memory capture.
  */
-export const googleProviderRuntime = defineProviderRuntime({
-  id: 'google',
-  ownership: 'single-turn',
-  turn: googleRuntimeHooks,
-})
+export const googleProviderRuntime = google.runtime
 
 /** Bind a Google GenAI SDK client to the narrow native chat provider port. */
 function bindGoogle(
   client: GoogleGenAI,
-): NativeProviderPort<GoogleRequest, GenerateContentResponse, AsyncIterable<GenerateContentResponse>> {
+): NativeProviderPort<
+  GoogleRequest,
+  GenerateContentResponse,
+  AsyncIterable<GenerateContentResponse>
+> {
   return {
-    call: (request) => client.models.generateContent(asGoogleGenerateContentParams(request)),
-    stream: (request) => client.models.generateContentStream(asGoogleGenerateContentStreamParams(request)),
+    call: (request) =>
+      client.models.generateContent(asGoogleGenerateContentParams(request)),
+    stream: (request) =>
+      client.models.generateContentStream(
+        asGoogleGenerateContentStreamParams(request),
+      ),
   }
 }
 
 /** Create a Google GenAI adapter bound to a client instance. */
-export function createGoogle(client: GoogleGenAI, opts?: CreateGoogleOptions) {
-  const cacheResolver = createGoogleCachedContentResolver(client, opts)
-
-  return googleProviderRuntime.create(client, { cacheResolver })
-}
+export const createGoogle = google.create
 
 /** Lightweight helper factory generated from the Google provider runtime. */
-export const googleHelpers = googleProviderRuntime.helpers({})
+export const googleHelpers = google.helpers()
 
 function createGoogleCachedContentResolver(
   client: GoogleGenAI,
@@ -117,7 +123,9 @@ function createGoogleCachedContentResolver(
         cachedContent.resolve({
           model,
           blocks,
-          ...(options?.ttlSeconds === undefined ? {} : { ttlSeconds: options.ttlSeconds }),
+          ...(options?.ttlSeconds === undefined
+            ? {}
+            : { ttlSeconds: options.ttlSeconds }),
         }),
     }
   }
@@ -127,5 +135,10 @@ function createGoogleCachedContentResolver(
 function isGoogleCachedContentPort(
   value: GoogleCachedContentCreateOptions | undefined,
 ): value is GoogleCachedContentPort {
-  return typeof value === 'object' && value !== null && 'resolve' in value && typeof value.resolve === 'function'
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'resolve' in value &&
+    typeof value.resolve === 'function'
+  )
 }

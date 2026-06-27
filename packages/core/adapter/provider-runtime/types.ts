@@ -24,6 +24,11 @@ export type {
 } from './runtime-types'
 export type { SingleTurnProviderRuntimeSpec, SingleTurnRuntimeContract } from './single-turn-types'
 export type {
+  DefinedSingleTurnProviderBundle,
+  SingleTurnProviderBundleDeps,
+  SingleTurnProviderBundleSpec,
+} from './single-turn-bundle-types'
+export type {
   BoundLoopOwnedRuntime,
   LoopOwnedProviderRuntimeSpec,
   LoopOwnedRuntimeBindContext,

@@ -20,25 +20,24 @@ Crux adapters translate between the SDK-agnostic prompt system and a specific AI
 4. **Call** the SDK
 5. **Normalize** metadata for devtools, evals, and quality experiments
 
-Step 3 is identical across all adapters. Provider runtimes compile into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. If your SDK has ordinary chat text/structured/stream calls, start with `defineProviderRuntime({ ownership: 'single-turn', turn })`; use the lower-level shared orchestration functions only when you are writing a bespoke runtime compiler.
+Step 3 is identical across all adapters. Provider runtimes compile into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. If your SDK has ordinary chat text/structured/stream calls, start with `defineSingleTurnProviderBundle()`; use `defineProviderRuntime()` only when you need the lower-level runtime compiler directly.
 
 ## Fast path: native chat providers
 
-Use `defineProviderRuntime()` from `@use-crux/core/adapter` when your SDK boundary looks like OpenAI Chat Completions, Anthropic Messages, or Google GenAI content generation: Crux should own the loop, and your package should own provider wire facts.
+Use `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter` when your SDK boundary looks like OpenAI Chat Completions, Anthropic Messages, or Google GenAI content generation: Crux should own the loop, and your package should own provider wire facts.
 
 ```ts
-import { defineProviderRuntime } from '@use-crux/core/adapter'
+import { defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
 
 const bindAcme = (client: AcmeClient) => ({
   call: (request, mode) => (mode === 'structured' ? client.parse(request) : client.create(request)),
   stream: (request) => client.stream(request),
 })
 
-export const acmeProviderRuntime = defineProviderRuntime({
+const acme = defineSingleTurnProviderBundle({
   id: 'acme',
-  ownership: 'single-turn',
-  turn: {
-    bind: bindAcme,
+  bind: bindAcme,
+  profile: {
     request: acmeRequest,
     response: acmeResponse,
     stream: {
@@ -51,8 +50,12 @@ export const acmeProviderRuntime = defineProviderRuntime({
   },
 })
 
-export const createAcme = acmeProviderRuntime.create
+export const acmeProviderRuntime = acme.runtime
+export const createAcme = acme.create
+export const acmeHelpers = acme.helpers()
 ```
+
+The bundle keeps the public runtime, adapter factory, and lightweight helper factory in one place. If the public factory should accept options instead of a raw dependency object, add `deps.create` and `deps.helpers` mappers; Google uses this to keep CachedContent policy in `@use-crux/google` while core receives only a narrow cache resolver.
 
 This keeps tests small: bind `acmeProviderRuntime.create(scriptedClient)`, run prompts through the public adapter methods, and assert on the scripted client's captured request bodies. For reusable adapter coverage, add the provider-runtime conformance suite; it exercises the same public runtime boundary used by the built-in adapters:
 

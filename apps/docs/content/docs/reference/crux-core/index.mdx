@@ -35,7 +35,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   />
   <Card
     title="Adapter Interface"
-    description="defineProviderRuntime, ownership models, adapter IR, and conformance harnesses."
+    description="defineSingleTurnProviderBundle, defineProviderRuntime, adapter IR, and conformance harnesses."
     href="/docs/reference/adapters"
   />
   <Card
@@ -129,7 +129,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
 import { prompt, context, createPrompts, createContexts, config, when, match } from '@use-crux/core'
 import { tool } from '@use-crux/core/tools'
 import { toolMiddleware, approvalMiddleware } from '@use-crux/core/tool-middleware'
-import { adapter, executorAdapter, defineProviderRuntime } from '@use-crux/core/adapter'
+import { adapter, executorAdapter, defineProviderRuntime, defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
 import { providerRuntimeConformance, transcriptCodecConformance } from '@use-crux/core/adapter/testing'
 import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
 import { memory, workingState, episodes, facts, procedures } from '@use-crux/core/memory'

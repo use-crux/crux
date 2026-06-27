@@ -16,3 +16,5 @@
 Refresh npm-facing package documentation and homepage metadata so package pages point users to cruxjs.dev and the core package README presents a concise onboarding path.
 
 Allow `@use-crux/google` consumers to use either `@google/genai` 1.x or 2.x.
+
+Document the single-turn provider bundle authoring path in adapter package READMEs.
