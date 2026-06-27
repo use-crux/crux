@@ -41,7 +41,8 @@ export function messagesToTranscriptUnits(messages: readonly Message[]): Provide
 
   for (const message of messages) {
     if (message.role === 'tool') {
-      ;(pendingResults ??= []).push(toolResultFromMessage(message))
+      const result = toolResultFromMessage(message)
+      if (result) (pendingResults ??= []).push(result)
       continue
     }
 
@@ -155,11 +156,20 @@ export function createToolResultEncodingHelpers(): ToolResultEncodingHelpers {
   }
 }
 
-function toolResultFromMessage(message: Message): ProviderToolResult {
+/**
+ * Read a `ProviderToolResult` from a canonical `tool` message, or `undefined`
+ * when the message lacks a usable `toolCallId`. A tool result with no call id
+ * cannot be correlated on the wire, so it is dropped rather than emitted with a
+ * fabricated empty id that would produce invalid provider output.
+ */
+function toolResultFromMessage(message: Message): ProviderToolResult | undefined {
   const metadata = message.metadata
+  const toolCallId = metadata?.toolCallId
+  if (typeof toolCallId !== 'string' || toolCallId === '') return undefined
+
   const modelOutput = toolModelOutputFromMetadata(metadata)
   return {
-    toolCallId: typeof metadata?.toolCallId === 'string' ? metadata.toolCallId : '',
+    toolCallId,
     ...(typeof metadata?.toolName === 'string' ? { toolName: metadata.toolName } : {}),
     text: message.content,
     ...(modelOutput ? { modelOutput } : {}),

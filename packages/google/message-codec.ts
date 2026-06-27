@@ -98,17 +98,17 @@ function decodeMessage(value: unknown): ProviderTranscriptUnit {
   const content = isGoogleContentLike(value) ? value : { role: 'user', parts: [{ text: String(value ?? '') }] }
   const parts = content.parts ?? []
 
-  const functionResponse = parts.find((part) => isFunctionResponse(part.functionResponse))?.functionResponse
-  if (isFunctionResponse(functionResponse)) {
+  const functionResponses = parts.flatMap((part) =>
+    isFunctionResponse(part.functionResponse) ? [part.functionResponse] : [],
+  )
+  if (functionResponses.length > 0) {
     return {
       kind: 'tool-results',
-      results: [
-        {
-          toolCallId: functionResponse.id ?? '',
-          toolName: functionResponse.name ?? 'tool',
-          text: googleFunctionResponseContent(functionResponse.response),
-        },
-      ],
+      results: functionResponses.map((functionResponse) => ({
+        toolCallId: functionResponse.id ?? '',
+        toolName: functionResponse.name ?? 'tool',
+        text: googleFunctionResponseContent(functionResponse.response),
+      })),
     }
   }
 

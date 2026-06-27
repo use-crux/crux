@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { Message } from '@use-crux/core'
+import type { Message, ToolContentPart, ToolModelOutput } from '@use-crux/core'
 import { defineProviderTranscriptCodec } from '@use-crux/core/adapter'
 import type {
   NativeAssistantTurn,
@@ -111,9 +111,11 @@ function decodeMessage(value: unknown): readonly ProviderTranscriptUnit[] {
     } else if (block.type === 'tool_use') {
       toolCalls.push({ id: block.id, name: block.name, args: block.input })
     } else if (block.type === 'tool_result') {
+      const decoded = toolResultContent(block.content)
       toolResults.push({
         toolCallId: block.tool_use_id,
-        text: toolResultText(block.content),
+        text: decoded.text,
+        ...(decoded.modelOutput ? { modelOutput: decoded.modelOutput } : {}),
         ...(block.is_error ? { isError: true } : {}),
       })
     }
@@ -162,12 +164,53 @@ function toolInput(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : { value }
 }
 
-function toolResultText(content: Anthropic.ToolResultBlockParam['content']): string {
-  if (typeof content === 'string') return content
-  if (Array.isArray(content)) {
-    return content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('')
+interface DecodedToolResult {
+  readonly text: string
+  readonly modelOutput?: ToolModelOutput
+}
+
+/**
+ * Decode an Anthropic `tool_result` block's content into canonical form.
+ *
+ * Text-only results keep a plain `text` rendering. When the block carries rich
+ * blocks (images, PDFs), they are reconstructed as a `content` model output so
+ * structured tool results survive `toMessages()` instead of being flattened to
+ * text; `text` still holds the joined text parts as a deterministic fallback.
+ */
+function toolResultContent(content: Anthropic.ToolResultBlockParam['content']): DecodedToolResult {
+  if (typeof content === 'string') return { text: content }
+  if (!Array.isArray(content)) return { text: '' }
+
+  const parts: ToolContentPart[] = []
+  let hasRichPart = false
+  for (const block of content) {
+    if (block.type === 'text') {
+      parts.push({ type: 'text', text: block.text })
+    } else if (block.type === 'image') {
+      const part = imageBlockToPart(block.source)
+      if (part) {
+        parts.push(part)
+        hasRichPart = true
+      }
+    } else if (block.type === 'document' && block.source.type === 'base64') {
+      parts.push({
+        type: 'file-data',
+        data: block.source.data,
+        mediaType: block.source.media_type,
+        ...(typeof block.title === 'string' ? { filename: block.title } : {}),
+      })
+      hasRichPart = true
+    }
   }
-  return ''
+
+  const text = parts.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('')
+  return hasRichPart ? { text, modelOutput: { type: 'content', value: parts } } : { text }
+}
+
+function imageBlockToPart(source: Anthropic.ImageBlockParam['source']): ToolContentPart | undefined {
+  if (source.type === 'base64') return { type: 'image-data', data: source.data, mediaType: source.media_type }
+  if (source.type === 'url') return { type: 'image-url', url: source.url }
+  return undefined
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

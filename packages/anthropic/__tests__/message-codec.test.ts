@@ -255,6 +255,42 @@ describe('anthropic transcript wire decoding', () => {
     ])
   })
 
+  it('preserves rich tool_result content through fromMessages/toMessages round-trip', () => {
+    const richToolMessage = toolMessage('toolu_render', 'render', {
+      type: 'content',
+      value: [
+        { type: 'text', text: 'Rendered report' },
+        { type: 'image-data', data: 'base64-image', mediaType: 'image/png' },
+        { type: 'image-url', url: 'https://example.com/image.png' },
+        { type: 'file-data', data: 'base64-file-pdf', mediaType: 'application/pdf', filename: 'report.pdf' },
+      ],
+    })
+
+    const decoded = toMessages(fromMessages([richToolMessage]))
+
+    // Rich content survives instead of being flattened to text, and the
+    // canonical tool-call id is retained. `content` carries the joined text
+    // fallback; `toolName` is not part of the Anthropic tool_result wire shape.
+    expect(decoded).toEqual([
+      {
+        role: 'tool',
+        content: 'Rendered report',
+        metadata: {
+          toolCallId: 'toolu_render',
+          modelOutput: {
+            type: 'content',
+            value: [
+              { type: 'text', text: 'Rendered report' },
+              { type: 'image-data', data: 'base64-image', mediaType: 'image/png' },
+              { type: 'image-url', url: 'https://example.com/image.png' },
+              { type: 'file-data', data: 'base64-file-pdf', mediaType: 'application/pdf', filename: 'report.pdf' },
+            ],
+          },
+        },
+      },
+    ])
+  })
+
   it('reads mixed assistant text and tool_use blocks as a canonical assistant turn', () => {
     const turn = anthropicTranscript.readAssistant({
       content: [

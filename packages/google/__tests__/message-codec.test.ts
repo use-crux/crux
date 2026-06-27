@@ -194,6 +194,25 @@ describe('google transcript conformance', () => {
   })
 })
 
+describe('google transcript wire decoding', () => {
+  it('decodes every functionResponse part in a grouped tool-results content', () => {
+    const messages = toMessages([
+      {
+        role: 'user',
+        parts: [
+          { functionResponse: { id: 'call_1', name: 'weather', response: { output: { temp: 18 } } } },
+          { functionResponse: { id: 'call_2', name: 'calendar', response: { output: 'busy' } } },
+        ],
+      },
+    ] satisfies Content[])
+
+    expect(messages).toEqual([
+      { role: 'tool', content: '{"output":{"temp":18}}', metadata: { toolCallId: 'call_1', toolName: 'weather' } },
+      { role: 'tool', content: '{"output":"busy"}', metadata: { toolCallId: 'call_2', toolName: 'calendar' } },
+    ])
+  })
+})
+
 function toolMessage(
   toolCallId: string,
   toolName: string,

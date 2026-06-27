@@ -87,6 +87,30 @@ describe('messagesToTranscriptUnits', () => {
       { kind: 'text', role: 'user', text: 'thanks' },
     ])
   })
+
+  it('skips tool messages without a usable toolCallId instead of fabricating one', () => {
+    const units = messagesToTranscriptUnits([
+      { role: 'tool', content: 'orphan', metadata: { toolName: 'weather' } },
+      { role: 'tool', content: 'empty id', metadata: { toolCallId: '' } },
+      toolMessage('tc_1', 'search', 'hit', { type: 'json', value: { ok: true } }),
+    ])
+
+    expect(units).toEqual([
+      {
+        kind: 'tool-results',
+        results: [{ toolCallId: 'tc_1', toolName: 'search', text: 'hit', modelOutput: { type: 'json', value: { ok: true } } }],
+      },
+    ])
+  })
+
+  it('emits no tool-results unit when every tool message is malformed', () => {
+    const units = messagesToTranscriptUnits([
+      { role: 'user', content: 'hi' },
+      { role: 'tool', content: 'orphan', metadata: {} },
+    ])
+
+    expect(units).toEqual([{ kind: 'text', role: 'user', text: 'hi' }])
+  })
 })
 
 describe('transcriptUnitsToMessages', () => {
