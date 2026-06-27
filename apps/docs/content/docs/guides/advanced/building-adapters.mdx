@@ -106,6 +106,30 @@ export const acmeTranscript = {
 
 Keep tool-call ids, provider-specific roles, rich tool results, and assistant extraction in this codec. Request builders should consume `args.providerMessages` rather than converting `args.messages` again.
 
+### Compile a codec from a dialect
+
+Writing `fromMessages`/`toMessages`/`appendToolRound` by hand means re-reading `Message.metadata` (tool calls, tool names, model output, error flags) in every provider. Instead, implement a `ProviderTranscriptDialect` and let core own the canonical transcript semantics. Core extracts neutral `ProviderTranscriptUnit`s, groups adjacent tool results, renders fallback text through shared `ToolResultEncodingHelpers`, and appends each tool round exactly once with `appendCanonicalToolRound()`:
+
+```ts
+import { defineProviderTranscriptCodec } from '@use-crux/core/adapter'
+import type { ProviderTranscriptDialect } from '@use-crux/core/adapter'
+
+const acmeDialect: ProviderTranscriptDialect<YourSDKMessage, AcmeResponse> = {
+  // `system` units can be dropped; return undefined to emit nothing.
+  encodeText: ({ role, text }) => (role === 'system' ? undefined : { role, content: text }),
+  encodeAssistant: ({ text, toolCalls = [] }) => encodeAssistant(text, toolCalls),
+  // `helpers.plainText` / `contentParts` / `errorFlag` give one canonical reading
+  // of each result; fan out to one wire message per result via a returned array.
+  encodeToolResults: ({ results }, helpers) => results.map((r) => encodeToolResult(r, helpers)),
+  decodeMessage: (msg) => decodeToUnits(msg),
+  readAssistant: (raw) => ({ text: raw.message.content, toolCalls: raw.message.toolCalls }),
+}
+
+export const acmeTranscript = defineProviderTranscriptCodec(acmeDialect)
+```
+
+A dialect only ever sees neutral units (`ProviderToolCall`, `ProviderToolResult`) and SDK types — never raw `Message.metadata` — so the public `fromMessages()` and runtime tool-round appends cannot drift apart. Prefer this over a hand-written `NativeTranscriptCodec` for any tool-calling provider; reach for a bespoke `appendToolRound` only if the canonical transcript units genuinely cannot represent your wire format.
+
 ## Request, response, and settings hooks
 
 Runtime hooks should be narrow and typed. Request hooks build SDK-native input; response hooks normalize metadata only; transcript hooks own assistant text/tool calls.

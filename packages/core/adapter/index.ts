@@ -42,6 +42,24 @@ export type {
   NativeTranscriptCodec,
 } from './native-chat'
 
+// Canonical transcript IR and the codec compiler built on it
+export {
+  appendCanonicalToolRound,
+  appendNativeToolRound,
+  createToolResultEncodingHelpers,
+  defineProviderTranscriptCodec,
+  messagesToTranscriptUnits,
+  transcriptUnitsToMessages,
+} from './native-chat'
+export type {
+  OneOrMany,
+  ProviderToolCall,
+  ProviderToolResult,
+  ProviderTranscriptDialect,
+  ProviderTranscriptUnit,
+  ToolResultEncodingHelpers,
+} from './native-chat'
+
 // Provider runtime authoring layer
 export { defineProviderRuntime } from './provider-runtime'
 export { defineSingleTurnProviderBundle } from './provider-runtime'
