@@ -72,3 +72,61 @@ func (s *Service) applyLintPatchIfCurrent(ctx context.Context, patch projectinde
 func isEmptyIndexPatch(patch projectindex.IndexPatch) bool {
 	return !cache.HasPatchFacts(patch.Facts) && len(patch.FactEnvelopes) == 0
 }
+
+// projectLintPrefetchTask runs immutable lint input collection in the background
+// so it can overlap semantic enrichment for the same refresh.
+type projectLintPrefetchTask struct {
+	cancel context.CancelFunc
+	done   <-chan projectLintPrefetchTaskResult
+}
+
+type projectLintPrefetchTaskResult struct {
+	prefetch projectindex.ProjectLintPrefetchResult
+	err      error
+}
+
+func (s *Service) startProjectLintPrefetch(ctx context.Context, request projectindex.ProjectLintIndexRequest) *projectLintPrefetchTask {
+	indexer, ok := s.indexer.(LintPrefetchClient)
+	if !ok {
+		return nil
+	}
+	prefetchCtx, cancel := context.WithTimeout(ctx, ProjectIndexLintTimeout)
+	if isZeroIndexPatchBudget(request.Budget) {
+		request.Budget = ProjectIndexLintBudget
+	}
+	done := make(chan projectLintPrefetchTaskResult, 1)
+	go func() {
+		prefetch, err := indexer.PrefetchProjectLintFacts(prefetchCtx, request)
+		done <- projectLintPrefetchTaskResult{prefetch: prefetch, err: err}
+	}()
+	return &projectLintPrefetchTask{cancel: cancel, done: done}
+}
+
+func (t *projectLintPrefetchTask) wait() (*projectindex.ProjectLintPrefetchResult, error) {
+	if t == nil {
+		return nil, nil
+	}
+	result := <-t.done
+	if result.err != nil {
+		return nil, result.err
+	}
+	return &result.prefetch, nil
+}
+
+func (t *projectLintPrefetchTask) stop() {
+	if t != nil && t.cancel != nil {
+		t.cancel()
+	}
+}
+
+func applyProjectLintPrefetch(request *projectindex.ProjectLintIndexRequest, prefetch *projectLintPrefetchTask) error {
+	if request == nil {
+		return nil
+	}
+	result, err := prefetch.wait()
+	if err != nil {
+		return err
+	}
+	request.Prefetch = result
+	return nil
+}

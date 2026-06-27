@@ -83,6 +83,14 @@ persist derived `IndexQuality` fields or parse `.crux/quality`.
 and devtools packages should call service and read-model APIs instead of importing worker, eventwire,
 cache, or Static Index internals directly.
 
+Internally the package keeps each refresh concern in its own file. `run.go` defines the `refreshRun`
+state (root/config/project, started time, watch run, semantic mode, generation, Static Index metadata,
+and previous/current snapshots) plus the single semantic-and-lint completion shared by both flows;
+`reindex_full.go` and `reindex_incremental.go` build a `refreshRun` and hand it to that completion so
+the semantic-mode branching is not duplicated. `patch_apply.go` owns patch normalization plus the
+commit/apply/publish write path, `semantic_scheduler.go`/`semantic_patch.go` own semantic phase
+scheduling, and `lint_scheduler.go` owns lint scheduling and prefetch.
+
 The target Go package names are responsibility names:
 
 - `internal/projectindex/eventwire`: Project Index worker event stream collection and validation.

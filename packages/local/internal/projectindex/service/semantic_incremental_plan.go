@@ -27,34 +27,6 @@ func (s *Service) startPlannedProjectIncrementalSemanticPatch(
 	return s.startProjectSemanticPatchTask(ctx, mode, request)
 }
 
-func (s *Service) applyPlannedProjectIncrementalSemanticPatch(
-	ctx context.Context,
-	request projectindex.ProjectSemanticIndexRequest,
-	task *projectSemanticPatchTask,
-	lintPrefetch *projectLintPrefetchTask,
-	astIndex store.IndexData,
-) (store.IndexData, error) {
-	if task == nil {
-		return s.applyProjectSemanticPatch(ctx, request, lintPrefetch)
-	}
-	result := task.wait()
-	if result.stage != "semantic" || !projectSemanticRequestScopeMatches(result.request, request) {
-		return s.applyProjectSemanticPatch(ctx, request, lintPrefetch)
-	}
-	patch := projectindex.JoinSemanticPatch(result.patch, astIndex)
-	return s.applyProjectSemanticPatchResult(ctx, request, result.startedAt, patch, result.err, lintPrefetch)
-}
-
-func (s *Service) applyPlannedProjectIncrementalSemanticPatchInBackground(
-	request projectindex.ProjectSemanticIndexRequest,
-	task *projectSemanticPatchTask,
-	astIndex store.IndexData,
-) {
-	go func() {
-		_, _ = s.applyPlannedProjectIncrementalSemanticPatch(s.ctx, request, task, nil, astIndex)
-	}()
-}
-
 func projectIncrementalSemanticRequestFromPreviousGraph(
 	root string,
 	configPath string,

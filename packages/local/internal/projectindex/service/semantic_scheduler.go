@@ -2,10 +2,9 @@ package service
 
 import (
 	"context"
-	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"time"
 
-	"github.com/use-crux/crux/packages/local/internal/store"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
 type projectSemanticPatchTask struct {
@@ -105,32 +104,4 @@ func (t *projectSemanticPatchTask) stop() {
 	if t != nil && t.cancel != nil {
 		t.cancel()
 	}
-}
-
-func (s *Service) applyPlannedProjectSemanticPatch(
-	ctx context.Context,
-	request projectindex.ProjectSemanticIndexRequest,
-	task *projectSemanticPatchTask,
-	lintPrefetch *projectLintPrefetchTask,
-	astIndex store.IndexData,
-) (store.IndexData, error) {
-	if task == nil {
-		return s.applyProjectSemanticPatch(ctx, request, lintPrefetch)
-	}
-	result := task.wait()
-	if result.stage != "semantic" || !projectSemanticRequestEvidenceMatches(result.request, request) {
-		return s.applyProjectSemanticPatch(ctx, request, lintPrefetch)
-	}
-	patch := projectindex.JoinSemanticPatch(result.patch, astIndex)
-	return s.applyProjectSemanticPatchResult(ctx, request, result.startedAt, patch, result.err, lintPrefetch)
-}
-
-func (s *Service) applyPlannedProjectSemanticPatchInBackground(
-	request projectindex.ProjectSemanticIndexRequest,
-	task *projectSemanticPatchTask,
-	astIndex store.IndexData,
-) {
-	go func() {
-		_, _ = s.applyPlannedProjectSemanticPatch(s.ctx, request, task, nil, astIndex)
-	}()
 }
