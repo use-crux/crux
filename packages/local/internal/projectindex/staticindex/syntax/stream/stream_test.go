@@ -8,8 +8,8 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 )
 
 func TestSendStreamsSyntaxRecordsAsStartChunksAndDone(t *testing.T) {
@@ -18,7 +18,7 @@ func TestSendStreamsSyntaxRecordsAsStartChunksAndDone(t *testing.T) {
 		json.RawMessage(`{"file":"src/two.ts"}`),
 	}
 	parser := &recordingParser{records: records}
-	req := indexwire.Request{
+	req := requestwire.Request{
 		ProtocolVersion: 2,
 		Method:          "indexProjectAstFromSyntaxRecords",
 		Root:            "/repo",
@@ -50,9 +50,9 @@ func TestSendStreamsSyntaxRecordsAsStartChunksAndDone(t *testing.T) {
 	if len(sent) != 3 {
 		t.Fatalf("sent requests = %d, want start, chunk, done", len(sent))
 	}
-	start, ok := sent[0].(indexwire.Request)
+	start, ok := sent[0].(requestwire.Request)
 	if !ok {
-		t.Fatalf("start type = %T, want indexwire.Request", sent[0])
+		t.Fatalf("start type = %T, want requestwire.Request", sent[0])
 	}
 	if start.RequestKind != "start" || start.RequestID != "request-1" || len(start.SyntaxRecords) != 0 {
 		t.Fatalf("start = %+v, want compact start request", start)
@@ -61,16 +61,16 @@ func TestSendStreamsSyntaxRecordsAsStartChunksAndDone(t *testing.T) {
 	if !ok {
 		t.Fatalf("chunk type = %T, want raw JSON line", sent[1])
 	}
-	var chunkReq indexwire.Request
+	var chunkReq requestwire.Request
 	if err := json.Unmarshal(chunk, &chunkReq); err != nil {
 		t.Fatalf("unmarshal chunk: %v", err)
 	}
 	if chunkReq.RequestKind != "syntaxRecords" || chunkReq.RequestID != "request-1" || len(chunkReq.SyntaxRecordsBatch) != 2 {
 		t.Fatalf("chunk = %+v, want syntax record batch", chunkReq)
 	}
-	done, ok := sent[2].(indexwire.Request)
+	done, ok := sent[2].(requestwire.Request)
 	if !ok {
-		t.Fatalf("done type = %T, want indexwire.Request", sent[2])
+		t.Fatalf("done type = %T, want requestwire.Request", sent[2])
 	}
 	if done.RequestKind != "done" || done.RequestID != "request-1" {
 		t.Fatalf("done = %+v, want done request", done)
@@ -80,7 +80,7 @@ func TestSendStreamsSyntaxRecordsAsStartChunksAndDone(t *testing.T) {
 func TestSendPropagatesParserErrors(t *testing.T) {
 	parser := &recordingParser{err: fmt.Errorf("parse failed")}
 
-	_, err := Send(context.Background(), func(any) error { return nil }, indexwire.Request{
+	_, err := Send(context.Background(), func(any) error { return nil }, requestwire.Request{
 		Method: "indexProjectAstFromSyntaxRecords",
 		Root:   "/repo",
 	}, "request-1", projectindex.ProjectStaticSyntaxPlan{Root: "/repo", Files: []string{"/repo/src/one.ts"}}, parser)

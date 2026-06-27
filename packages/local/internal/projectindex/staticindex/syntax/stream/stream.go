@@ -7,9 +7,9 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax/record"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 )
 
 type Timing struct {
@@ -24,7 +24,7 @@ type Timing struct {
 func Stream(
 	ctx context.Context,
 	worker *workerproc.Worker,
-	req indexwire.Request,
+	req requestwire.Request,
 	plan projectindex.ProjectStaticSyntaxPlan,
 	parser syntax.StreamParser,
 	handle func(json.RawMessage) error,
@@ -34,7 +34,7 @@ func Stream(
 	var sendDoneAt time.Time
 	err := workerproc.StreamCallSession(ctx, worker, func(send workerproc.StreamSender) error {
 		var err error
-		timing, err = Send(ctx, send, req, indexwire.NewID("index"), plan, parser)
+		timing, err = Send(ctx, send, req, requestwire.NewID("index"), plan, parser)
 		sendDoneAt = time.Now()
 		return err
 	}, func(raw json.RawMessage) (bool, error) {
@@ -52,7 +52,7 @@ func Stream(
 func Send(
 	ctx context.Context,
 	send workerproc.StreamSender,
-	req indexwire.Request,
+	req requestwire.Request,
 	requestID string,
 	plan projectindex.ProjectStaticSyntaxPlan,
 	parser syntax.StreamParser,
@@ -60,10 +60,10 @@ func Send(
 	parseRequests := record.ParseRequests(plan)
 	var timing Timing
 	parseStarted := time.Now()
-	if err := send(indexwire.Start(req, requestID)); err != nil {
+	if err := send(requestwire.Start(req, requestID)); err != nil {
 		return timing, err
 	}
-	chunker := indexwire.NewRecordChunker(func(records []json.RawMessage) error {
+	chunker := requestwire.NewRecordChunker(func(records []json.RawMessage) error {
 		timing.ChunkCount++
 		chunkBytes := 0
 		for _, record := range records {
@@ -84,7 +84,7 @@ func Send(
 	if err := chunker.Flush(); err != nil {
 		return timing, err
 	}
-	if err := send(indexwire.Request{
+	if err := send(requestwire.Request{
 		ProtocolVersion: 2,
 		Method:          req.Method,
 		RequestID:       requestID,

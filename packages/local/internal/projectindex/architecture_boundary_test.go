@@ -36,12 +36,12 @@ func TestProjectIndexArchitecturePackagesUseBoundedContextLayout(t *testing.T) {
 
 	expectedPackages := []expectedInternalPackage{
 		{"projectindex/cache", "snapshot cache ownership moves here in Phase 2"},
-		{"projectindex/host", "current TypeScript worker host boundary until Phase 4 moves it to projectindex/workers"},
-		{"projectindex/host/client", "current worker host client boundary until Phase 4 splits focused worker lanes"},
-		{"projectindex/host/indexwire", "current TypeScript worker request boundary until Phase 4 moves it to workers/requestwire"},
-		{"projectindex/host/node", "current Node-specific worker wrapper until Phase 4 moves it to workers/node"},
-		{"projectindex/host/runtime", "current runtime indexing host boundary until Phase 4 moves it to workers/runtime"},
-		{"projectindex/host/semantic", "current semantic host boundary until Phase 4 moves it to workers/semantic"},
+		{"projectindex/workers", "TypeScript worker hosting composition root"},
+		{"projectindex/workers/source", "source/AST TypeScript worker phase client"},
+		{"projectindex/workers/requestwire", "TypeScript worker request batching"},
+		{"projectindex/workers/node", "Node worker process adapter"},
+		{"projectindex/workers/runtime", "runtime indexing worker lane"},
+		{"projectindex/workers/semantic", "semantic worker lane"},
 		{"projectindex/model", "shared Project Index data model"},
 		{"projectindex/readmodel", "derived Project Index read model"},
 		{"projectindex/service", "runtime-facing Project Index service"},
@@ -61,7 +61,7 @@ func TestProjectIndexArchitecturePackagesUseBoundedContextLayout(t *testing.T) {
 		{"projectindex/staticindex/syntax", "current Static Syntax frontend boundary until Phase 6 moves it to staticindex/frontend"},
 		{"projectindex/staticindex/syntax/record", "current Static Syntax record model until Phase 6 moves it under staticindex/frontend"},
 		{"projectindex/staticindex/syntax/stream", "current Static Syntax stream decoder until Phase 6 moves it under staticindex/frontend"},
-		{"projectindex/wire", "current Project Index worker event stream until Phase 4 moves it to projectindex/eventwire"},
+		{"projectindex/eventwire", "Project Index worker event stream collector"},
 		{"process/workerproc", "generic JSON-lines worker process package"},
 		{"assets", "generated local runtime asset owner"},
 	}
@@ -72,13 +72,6 @@ func TestProjectIndexArchitecturePackagesUseBoundedContextLayout(t *testing.T) {
 	}
 
 	pendingTargets := []pendingInternalPackage{
-		{"projectindex/wire", "projectindex/eventwire", 4, "Project Index worker event stream"},
-		{"projectindex/host", "projectindex/workers", 4, "TypeScript worker hosting composition root"},
-		{"projectindex/host/indexwire", "projectindex/workers/requestwire", 4, "TypeScript worker request batching"},
-		{"projectindex/host/client", "projectindex/workers/source", 4, "source worker lane"},
-		{"projectindex/host/semantic", "projectindex/workers/semantic", 4, "semantic worker lane"},
-		{"projectindex/host/runtime", "projectindex/workers/runtime", 4, "runtime worker lane"},
-		{"projectindex/host/node", "projectindex/workers/node", 4, "Node worker adapter"},
 		{"projectindex/staticindex/syntax", "projectindex/staticindex/frontend", 6, "Static Syntax frontend process adapter"},
 		{"projectindex/staticindex/client", "projectindex/staticindex/compiler", 6, "Rust Static Index compiler client"},
 	}
@@ -88,6 +81,18 @@ func TestProjectIndexArchitecturePackagesUseBoundedContextLayout(t *testing.T) {
 		}
 		if _, err := os.Stat(filepath.Join(internalDir, pending.target)); !os.IsNotExist(err) {
 			t.Fatalf("target package %q exists before Phase %d updates this pending inventory (%s)", pending.target, pending.phase, pending.note)
+		}
+	}
+
+	// Phase 4 retired the old worker hosting/wire package names. They must not
+	// reappear as compatibility shims.
+	movedPhase4Roots := []string{
+		"projectindex/host",
+		"projectindex/wire",
+	}
+	for _, packagePath := range movedPhase4Roots {
+		if _, err := os.Stat(filepath.Join(internalDir, packagePath)); !os.IsNotExist(err) {
+			t.Fatalf("old Phase 4 package %q must be moved under projectindex/workers or projectindex/eventwire without an alias", packagePath)
 		}
 	}
 
@@ -192,11 +197,7 @@ func forbiddenRouteProjectIndexImport(importPath string, testFile bool) bool {
 		return true
 	case importPath == projectIndex+"eventwire":
 		return true
-	case importPath == projectIndex+"host" || strings.HasPrefix(importPath, projectIndex+"host/"):
-		return true
 	case importPath == projectIndex+"model":
-		return true
-	case importPath == projectIndex+"wire":
 		return true
 	case importPath == projectIndex+"workers" || strings.HasPrefix(importPath, projectIndex+"workers/"):
 		return true

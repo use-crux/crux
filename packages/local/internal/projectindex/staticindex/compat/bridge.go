@@ -6,17 +6,17 @@ import (
 	"fmt"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 )
 
 type ArtifactReader interface {
-	ReadArtifact(context.Context, indexwire.Request, projectindex.ProjectIndexArtifactKind) (json.RawMessage, error)
+	ReadArtifact(context.Context, requestwire.Request, projectindex.ProjectIndexArtifactKind) (json.RawMessage, error)
 }
 
-type ArtifactReaderFunc func(context.Context, indexwire.Request, projectindex.ProjectIndexArtifactKind) (json.RawMessage, error)
+type ArtifactReaderFunc func(context.Context, requestwire.Request, projectindex.ProjectIndexArtifactKind) (json.RawMessage, error)
 
-func (f ArtifactReaderFunc) ReadArtifact(ctx context.Context, request indexwire.Request, artifact projectindex.ProjectIndexArtifactKind) (json.RawMessage, error) {
+func (f ArtifactReaderFunc) ReadArtifact(ctx context.Context, request requestwire.Request, artifact projectindex.ProjectIndexArtifactKind) (json.RawMessage, error) {
 	return f(ctx, request, artifact)
 }
 
@@ -26,7 +26,7 @@ func LoadManifest(
 	root string,
 	configPath string,
 ) (projectindex.StaticExtensionHostManifestResult, error) {
-	req := indexwire.Request{
+	req := requestwire.Request{
 		Method:                        "loadStaticExtensionHostManifest",
 		Root:                          root,
 		ConfigPath:                    configPath,
@@ -50,7 +50,7 @@ func ExtractEvidenceFacts(
 	if len(jobs) == 0 {
 		return nil, nil
 	}
-	req := indexwire.Request{
+	req := requestwire.Request{
 		Method:         "extractStaticEvidenceBatch",
 		Root:           root,
 		ConfigPath:     configPath,
@@ -81,7 +81,7 @@ func CheckRuleFacts(
 	if err != nil {
 		return nil, fmt.Errorf("marshal static rule graph: %w", err)
 	}
-	req := indexwire.Request{
+	req := requestwire.Request{
 		Method:             "checkStaticRules",
 		Root:               root,
 		ConfigPath:         configPath,

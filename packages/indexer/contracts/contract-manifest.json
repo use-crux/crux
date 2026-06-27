@@ -14,7 +14,7 @@
     {
       "version": "projectIndexWorkerEvents",
       "runtime": "go",
-      "path": "packages/local/internal/projectindex/wire/worker_protocol.go",
+      "path": "packages/local/internal/projectindex/eventwire/worker_protocol.go",
       "pattern": "projectIndexWorkerProtocolVersion\\s*=\\s*(\\d+)"
     },
     {
@@ -62,11 +62,11 @@
       ],
       "mirrors": {
         "go": [
-          "packages/local/internal/projectindex/wire/worker_protocol.go",
-          "packages/local/internal/projectindex/wire/worker_protocol_facts.go",
-          "packages/local/internal/projectindex/wire/worker_protocol_source_profile.go",
-          "packages/local/internal/projectindex/wire/worker_artifact.go",
-          "packages/local/internal/projectindex/wire/shared_fixtures_test.go"
+          "packages/local/internal/projectindex/eventwire/worker_protocol.go",
+          "packages/local/internal/projectindex/eventwire/worker_protocol_facts.go",
+          "packages/local/internal/projectindex/eventwire/worker_protocol_source_profile.go",
+          "packages/local/internal/projectindex/eventwire/worker_artifact.go",
+          "packages/local/internal/projectindex/eventwire/shared_fixtures_test.go"
         ],
         "rust": [
           "crates/protocol/src/worker.rs",

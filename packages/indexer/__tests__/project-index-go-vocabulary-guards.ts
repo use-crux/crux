@@ -59,25 +59,14 @@ export interface ProjectIndexGoVocabularyObservation<
 /** Go Project Index vocabulary guards in phase order. */
 export const projectIndexGoVocabularyGuards = [
   {
+    // Phase 4 renamed `host/indexwire` to `workers/requestwire`, so the
+    // deprecated `indexwire` term must no longer appear in any non-test source
+    // file. The allowlist is intentionally empty: there is no remaining
+    // migration surface.
     term: 'indexwire',
     replacement: 'requestwire',
     targetedPhase: 4,
-    allowedPaths: [
-      'packages/local/internal/projectindex/host/indexwire',
-      'packages/local/internal/projectindex/host/artifact.go',
-      'packages/local/internal/projectindex/host/ast.go',
-      'packages/local/internal/projectindex/host/client/client.go',
-      'packages/local/internal/projectindex/host/patch.go',
-      'packages/local/internal/projectindex/host/phase_clients.go',
-      'packages/local/internal/projectindex/host/record_stream.go',
-      'packages/local/internal/projectindex/host/records.go',
-      'packages/local/internal/projectindex/host/runtime/worker.go',
-      'packages/local/internal/projectindex/host/semantic/worker.go',
-      'packages/local/internal/projectindex/host/stream.go',
-      'packages/local/internal/projectindex/staticindex/compat/bridge.go',
-      'packages/local/internal/projectindex/staticindex/planner/inspect.go',
-      'packages/local/internal/projectindex/staticindex/syntax/stream/stream.go',
-    ],
+    allowedPaths: [],
   },
 ] as const satisfies readonly ProjectIndexGoVocabularyGuard[]
 

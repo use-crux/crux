@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compat"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 )
 
 const (
@@ -17,12 +17,12 @@ const (
 )
 
 type ArtifactReader interface {
-	ReadArtifact(context.Context, indexwire.Request, projectindex.ProjectIndexArtifactKind) (json.RawMessage, error)
+	ReadArtifact(context.Context, requestwire.Request, projectindex.ProjectIndexArtifactKind) (json.RawMessage, error)
 }
 
-type ArtifactReaderFunc func(context.Context, indexwire.Request, projectindex.ProjectIndexArtifactKind) (json.RawMessage, error)
+type ArtifactReaderFunc func(context.Context, requestwire.Request, projectindex.ProjectIndexArtifactKind) (json.RawMessage, error)
 
-func (f ArtifactReaderFunc) ReadArtifact(ctx context.Context, request indexwire.Request, artifact projectindex.ProjectIndexArtifactKind) (json.RawMessage, error) {
+func (f ArtifactReaderFunc) ReadArtifact(ctx context.Context, request requestwire.Request, artifact projectindex.ProjectIndexArtifactKind) (json.RawMessage, error) {
 	return f(ctx, request, artifact)
 }
 
@@ -94,7 +94,7 @@ func LoadConfig(
 	if reader == nil {
 		return projectindex.ProjectStaticIndexConfig{}, fmt.Errorf("Static Index config reader is not configured")
 	}
-	req := indexwire.Request{
+	req := requestwire.Request{
 		Method:     "inspectProjectStaticIndexConfig",
 		Root:       root,
 		ConfigPath: configPath,

@@ -95,9 +95,10 @@ The target Go package names are responsibility names:
 - `internal/projectindex/staticindex/run`: deep module facade for Static Index prepare/analyze/finalize
   orchestration.
 
-Current packages named `host`, `host/indexwire`, `wire`, `staticindex/syntax`, and
-`staticindex/client` are migration state for the Rust/Go architecture cleanup. New code should use
-the target vocabulary and should not add compatibility aliases for old package names.
+Current packages named `staticindex/syntax` and `staticindex/client` are migration state for the
+Rust/Go architecture cleanup until Phase 6 renames them to `staticindex/frontend` and
+`staticindex/compiler`. New code should use the target vocabulary and should not add compatibility
+aliases for old package names.
 
 ## Quality Insight Derivation
 

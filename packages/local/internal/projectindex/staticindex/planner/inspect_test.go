@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 )
 
 func TestLoadConfigBuildsStaticIndexConfigRequest(t *testing.T) {
@@ -96,12 +96,12 @@ func TestInspectLoadsNodeConfigAndExtensionManifest(t *testing.T) {
 }
 
 type recordingReader struct {
-	requests  []indexwire.Request
+	requests  []requestwire.Request
 	artifacts []projectindex.ProjectIndexArtifactKind
 	responses []json.RawMessage
 }
 
-func (r *recordingReader) ReadArtifact(_ context.Context, request indexwire.Request, artifact projectindex.ProjectIndexArtifactKind) (json.RawMessage, error) {
+func (r *recordingReader) ReadArtifact(_ context.Context, request requestwire.Request, artifact projectindex.ProjectIndexArtifactKind) (json.RawMessage, error) {
 	r.requests = append(r.requests, request)
 	r.artifacts = append(r.artifacts, artifact)
 	response := r.responses[0]

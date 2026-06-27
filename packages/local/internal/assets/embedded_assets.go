@@ -4,7 +4,7 @@ import (
 	"embed"
 	"net/http"
 
-	"github.com/use-crux/crux/packages/local/internal/projectindex/host"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/workers"
 )
 
 //go:embed embed/quality-runner.mjs
@@ -40,9 +40,9 @@ func EmbeddedSourceResolverScript() []byte {
 	return embeddedSourceResolver
 }
 
-// NewEmbeddedProjectIndexer creates the local Project Index host with the
+// NewEmbeddedProjectIndexer creates the local Project Index worker bundle with the
 // scripts embedded by the local runtime.
-func NewEmbeddedProjectIndexer(scriptPath string) *host.Bundle {
+func NewEmbeddedProjectIndexer(scriptPath string) *workers.Bundle {
 	return NewProjectIndexer(ProjectIndexerOptions{
 		ScriptPath: scriptPath,
 		Assets: ProjectIndexerAssets{
