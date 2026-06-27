@@ -143,13 +143,11 @@ Now the call has memory, retrieval, input screening, structured output, retryabl
 
 ## Get started
 
-Install the core package and an adapter after the first public alpha package release:
+Install the core package and an adapter:
 
 ```bash
 pnpm add @use-crux/core @use-crux/ai ai @ai-sdk/openai zod
 ```
-
-Until then, use this repository as a workspace, or start from the examples and docs while the npm package pipeline is being finalized.
 
 Pick a walkthrough:
 
@@ -220,8 +218,8 @@ Under the hood, Crux has three layers:
 
 ## Packages
 
-| Package           | Purpose                                                                                                                                                      |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Package               | Purpose                                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `@use-crux/core`      | SDK-agnostic primitives for prompts, contexts, memory, storage, retrieval, safety, routing, quality, agents, flows, plans, tasks, skills, and observability. |
 | `@use-crux/ai`        | Vercel AI SDK adapter for `generate`, `stream`, structured output, and Crux-aware stream integration.                                                        |
 | `@use-crux/openai`    | OpenAI SDK adapter.                                                                                                                                          |
