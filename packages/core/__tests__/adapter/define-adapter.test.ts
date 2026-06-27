@@ -12,7 +12,7 @@ import type { AdapterSpec } from '../../adapter/spec'
 import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '../../adapter/types'
 import type { Message } from '../../messages'
 import type { GenerationSettings, TraceMeta } from '../../types'
-import { prompt as makePrompt } from '../../define'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import { z } from 'zod'
 import { ValidationExhaustedError } from '../../validation-retry'
 import {

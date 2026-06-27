@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { context, match, when } from '../../context'
-import { prompt as makePrompt } from '../../define'
+import { context, match, when } from '../../prompt/context'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import { blackboard } from '../../agent/blackboard'
-import { injectable } from '../../injectable'
+import { injectable } from '../../prompt/injectable'
 import { memory, memoryBlock } from '../../memory'
 import type {
   CruxContextContributionPreview,

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { defineProviderRuntime } from '../../adapter'
 import { fakeExecutor } from '../../adapter/testing'
-import { prompt as makePrompt } from '../../define'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import type { Message } from '../../messages'
 import type { GenerationSettings } from '../../types'
 

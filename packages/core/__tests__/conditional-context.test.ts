@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { context, when, match } from '../context'
+import { context, when, match } from '../prompt/context'
 import { compilePrompt, type ResolveCallOptions } from '../resolve'
-import { prompt as makePrompt } from '../define'
+import { prompt as makePrompt } from '../prompt/prompt'
 import { setTokenizer, defaultTokenizer } from '../tokenizer'
 import type { AnyPromptConfig, ContextEntry } from '../types'
 

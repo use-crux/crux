@@ -1,7 +1,71 @@
+/**
+ * Core SDK-agnostic type surface.
+ *
+ * This module owns the provider-neutral generation/resolution contracts —
+ * base SDK aliases, {@link GenerationSettings}, provider adaptation,
+ * {@link ResolvedPrompt}/{@link InspectResult}, runtime middleware, and model
+ * metadata.
+ *
+ * Prompt/context authoring types now live in the `prompt/` domain
+ * (`prompt/context-types.ts`, `prompt/prompt-types.ts`, `prompt/type-utils.ts`).
+ * They are re-exported here so the many existing `./types` importers keep
+ * resolving unchanged during the structure refactor. This re-export shim is
+ * temporary: later phases drain the remaining contracts into their own domain
+ * type files and reduce this module to its intentional, minimal surface.
+ *
+ * @module
+ */
+
 import type { z } from 'zod'
 import type { CruxArtifactId, CruxContextInjectableKind } from './observability/contract'
-import type { SkillMeta } from './skill/types'
 import type { ToolMiddleware } from './tool-middleware'
+import type { ContextEntry, ContextTextSegment, MemoryEntry } from './prompt/context-types'
+import type { AnyPromptConfig } from './prompt/prompt-types'
+import type { MergedInput } from './prompt/type-utils'
+
+// ─────────────────────────────────────────────────────────────────
+// Prompt authoring re-export shim (owned by the `prompt/` domain)
+// ─────────────────────────────────────────────────────────────────
+
+export type {
+  CacheOption,
+  ContextTextSegment,
+  ContextSystemContent,
+  ContextSystemResult,
+  ContextSystemArg,
+  ContextDef,
+  Context,
+  ConditionalContext,
+  MatchSpec,
+  ContextEntry,
+  PromptInjection,
+  InjectableEntry,
+  ContributorContribution,
+  ContributorEntry,
+  SkillEntry,
+  MemoryEntry,
+  BlackboardEntry,
+  ContextTree,
+} from './prompt/context-types'
+
+export type {
+  SemanticCacheMode,
+  SemanticCacheQueryContext,
+  SemanticCachePromptOptions,
+  PromptCacheOptions,
+  PromptInputArg,
+  PromptConfig,
+  PrepareHookArgs,
+  GenerateHookArgs,
+  ErrorHookArgs,
+  PromptResult,
+  PromptHooks,
+  Prompt,
+  AnyPrompt,
+  AnyPromptConfig,
+} from './prompt/prompt-types'
+
+export type { Simplify, DeepReadonly, MergeContextInputs, MergedInput } from './prompt/type-utils'
 
 // ─────────────────────────────────────────────────────────────────
 // Base Types (SDK-agnostic)
@@ -17,14 +81,7 @@ export type AnyToolSet = Record<string, unknown>
 export type AnyMessage = { role: string; content: unknown }
 
 // ─────────────────────────────────────────────────────────────────
-// Utility Types
-// ─────────────────────────────────────────────────────────────────
-
-/** Flatten intersection types into a single object for clean IDE tooltips. */
-export type Simplify<T> = { [K in keyof T]: T[K] } & {}
-
-// ─────────────────────────────────────────────────────────────────
-// Cache Types
+// System Blocks
 // ─────────────────────────────────────────────────────────────────
 
 /**
@@ -51,65 +108,9 @@ export interface SystemBlock {
   readonly dynamicTokens?: number
 }
 
-/**
- * Cache configuration for a context.
- *
- * Controls both application-level resolver caching (TTL) and
- * provider-level token caching (e.g., Anthropic `cache_control`).
- *
- * Shorthands:
- * - `number` — TTL in ms, `providerCache` defaults to `true`
- * - `true` — 5-minute TTL, `providerCache` defaults to `true`
- * - `false` — no caching
- *
- * Object form for fine-grained control:
- * - `{ ttl?: number; providerCache?: boolean }`
- */
-export type CacheOption =
-  | number
-  | boolean
-  | {
-      /** TTL in ms for caching the resolver output. */
-      ttl?: number
-      /**
-       * Whether to hint the LLM provider to cache this content block.
-       * Anthropic: emits `cache_control` breakpoint. OpenAI: no-op (automatic).
-       * @default true (when cache is set)
-       */
-      providerCache?: boolean
-    }
-
 // ─────────────────────────────────────────────────────────────────
-// Semantic Response Cache Types
+// Project Tool Catalog
 // ─────────────────────────────────────────────────────────────────
-
-export type SemanticCacheMode = 'readwrite' | 'readonly' | 'writeonly' | 'off'
-
-/**
- * Context passed to a prompt-level semantic cache `query` callback.
- *
- * Generic over the prompt's merged input shape so `ctx.input.<field>`
- * autocompletes when the option is set inline on a `prompt()`.
- */
-export interface SemanticCacheQueryContext<TInput = Record<string, unknown>> {
-  promptId: string | undefined
-  input: TInput
-  resolved: ResolvedPrompt
-  preparedArgs: Record<string, unknown>
-  operation: 'generate' | 'stream'
-}
-
-export interface SemanticCachePromptOptions<TInput = Record<string, unknown>> {
-  mode?: SemanticCacheMode
-  version?: string
-  ttl?: number
-  threshold?: number
-  query?: (ctx: SemanticCacheQueryContext<TInput>) => string | Promise<string>
-}
-
-export interface PromptCacheOptions<TInput = Record<string, unknown>> {
-  semantic?: boolean | SemanticCachePromptOptions<TInput>
-}
 
 /**
  * Declarative tool definition for the project tool catalog — name,
@@ -138,420 +139,6 @@ export interface FlowToolDef {
   /** Zod schema for the tool's parameters. */
   parameters: z.ZodType
 }
-
-// ─────────────────────────────────────────────────────────────────
-// Context Types
-// ─────────────────────────────────────────────────────────────────
-
-/** Argument passed to a context's dynamic `system` function. */
-export interface ContextSystemArg<TInput> {
-  /** The merged input object, typed to include this context's declared fields. */
-  input: TInput
-}
-
-/**
- * Configuration object for `context()`.
- *
- * @template TInput - Zod schema declaring what input fields this context needs.
- *
- * @example
- * ```ts
- * // Static context — always contributes the same system text
- * { system: '## Rules\n...' }
- *
- * // Dynamic context — reads from input to conditionally contribute
- * {
- *   input: z.object({ lang: z.string().optional() }),
- *   system: ({ input }) => input.lang ? `Respond in ${input.lang}.` : '',
- * }
- * ```
- */
-export interface ContextDef<TInput extends z.ZodType = z.ZodType> {
-  /** Unique identifier for introspection and debugging. */
-  id?: string
-  /** Human-readable description (surfaces in IDE hover). */
-  description?: string
-  /** Zod schema for input fields this context requires. Merges into the prompt's input type. */
-  input?: TInput
-  /**
-   * System message contribution — either a static string or a function
-   * that receives the resolved input. Return `''` to contribute nothing.
-   */
-  system:
-    | string
-    | ContextSystemContent
-    | ((arg: ContextSystemArg<z.infer<TInput>>) => ContextSystemResult | Promise<ContextSystemResult>)
-  /**
-   * Nested composable entries that this context contributes before its own
-   * system text. This lets reusable contexts bundle retrieval, grounding,
-   * memory, blackboards, or custom injectable primitives.
-   */
-  use?: readonly ContextEntry[]
-  /**
-   * Priority for token-aware rendering (0–100). Higher = kept first when
-   * token budget is tight. Contexts without priority default to `50`.
-   */
-  priority?: number
-  /**
-   * Tools to contribute to any prompt that `use`s this context.
-   * Either a static tool set or a function that receives the resolved input
-   * and returns a tool set. Tools from contexts are merged (lowest precedence)
-   * with prompt-level and call-site tools.
-   */
-  tools?: AnyToolSet | ((arg: ContextSystemArg<z.infer<TInput>>) => AnyToolSet)
-  /**
-   * Input fields that contain trusted, pre-formatted content (HTML, Markdown)
-   * and should NOT be auto-escaped. Only relevant when auto-escape is enabled.
-   *
-   * Typed against this context's own input — IDE autocomplete shows field
-   * names declared by the schema.
-   */
-  rawFields?: readonly Extract<keyof z.infer<TInput>, string>[]
-  /**
-   * Predicate evaluated at resolve time against this context's own input.
-   * When it returns `false`, the context is excluded entirely — no `systemFn`
-   * call, no tool contribution, no token counting.
-   *
-   * Typed against this context's own input schema for full autocomplete.
-   *
-   * @example
-   * ```ts
-   * context({
-   *   input: z.object({ lang: z.string().optional() }),
-   *   when: ({ input }) => !!input.lang && input.lang !== 'English',
-   *   system: ({ input }) => `Respond in ${input.lang}.`,
-   * })
-   * ```
-   */
-  when?: (arg: ContextSystemArg<z.infer<TInput>>) => boolean
-
-  /**
-   * Cache configuration for this context.
-   *
-   * - `number` — TTL in ms. Enables both resolver caching and provider cache hints.
-   * - `true` — 5-minute TTL with provider caching.
-   * - `{ ttl?, providerCache? }` — Fine-grained control over each layer.
-   * - `false` / omitted — No caching.
-   *
-   * Requires `id` when `ttl > 0` (needed for cache key derivation).
-   * Static string `system` contexts silently skip TTL caching (nothing to cache).
-   */
-  cache?: CacheOption
-
-  /**
-   * Constraints contributed by this context. Merged into any prompt that
-   * `use`s this context via union merge (per-call wins over per-prompt
-   * wins over context-level).
-   */
-  constraints?: import('./safety/constraint/types').Constraint[]
-
-  /**
-   * Guardrails contributed by this context. Merged into any prompt that
-   * `use`s this context via union merge (per-call wins over per-prompt
-   * wins over context-level).
-   */
-  guardrails?: import('./safety/guardrail/types').Guardrail[]
-
-  /**
-   * Family label for observability grouping (`memory`, `blackboard`,
-   * `retriever`, `skill`, …). Set by primitive factories whose `asContext()`
-   * expands into a plain context, so devtools can attribute the contribution
-   * to its source primitive. Plain application contexts should omit it.
-   *
-   * @default 'context'
-   */
-  family?: CruxContextInjectableKind
-}
-
-/**
- * A reusable, typed context fragment created by `context()`.
- *
- * Contexts contribute to the system message of any prompt that references
- * them via `use`. If the context declares an `input` schema, those fields
- * are merged into the prompt's required input type.
- *
- * @template TInput - Zod schema for this context's input fields.
- */
-export interface Context<TInput extends z.ZodType = z.ZodType> {
-  /** Discriminant tag for runtime type checking. */
-  readonly _tag: 'Context'
-  /** Unique identifier for introspection. */
-  readonly id: string | undefined
-  /** Human-readable description. */
-  readonly description: string | undefined
-  /** The Zod schema for this context's input, or `undefined` if static. */
-  readonly inputSchema: TInput | undefined
-  /** The top-level keys declared in the input schema (for conflict detection). */
-  readonly inputKeys: readonly string[]
-  /** Resolves the system message contribution given the merged input. */
-  readonly systemFn: (input: Record<string, unknown>) => ContextSystemResult | Promise<ContextSystemResult>
-  /** Whether plain string results from this context should be treated as static or dynamic for observability. */
-  readonly systemKind?: 'static' | 'dynamic'
-  /** Nested `use` entries contributed before this context's own system text. */
-  readonly useEntries: readonly ContextEntry[]
-  /** Priority for token-aware rendering (0–100). Default: `50`. */
-  readonly priority: number
-  /** Resolves tools to contribute, or `undefined` if no tools. */
-  readonly toolsFn: ((input: Record<string, unknown>) => AnyToolSet) | undefined
-  /** Input fields that should skip auto-escaping (trusted content). */
-  readonly rawFields: readonly string[]
-  /**
-   * Predicate evaluated at resolve time. When it returns `false`,
-   * the context is excluded entirely (no systemFn, no tools, no tokens).
-   * `undefined` means the context is always active.
-   */
-  readonly when: ((input: Record<string, unknown>) => boolean) | undefined
-  /** Cache TTL in milliseconds for resolver output. `0` means no caching. */
-  readonly cacheTtl: number
-  /** Whether to hint the LLM provider to cache this content block. */
-  readonly providerCache: boolean
-  /**
-   * Family label for observability grouping, declared by the primitive
-   * factory that produced this context (`memory`, `blackboard`, `retriever`,
-   * `skill`). `undefined` means a plain application context.
-   */
-  readonly family?: CruxContextInjectableKind
-  /** Constraints contributed by this context. Merged at resolution time. */
-  readonly constraints: readonly import('./safety/constraint/types').Constraint[]
-  /** Guardrails contributed by this context. Merged at resolution time. */
-  readonly guardrails: readonly import('./safety/guardrail/types').Guardrail[]
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Conditional Context Types
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * A context wrapped with a runtime predicate via the `when()` function.
- *
- * When the predicate returns `false` at resolve time, the wrapped context
- * is excluded entirely — no `systemFn` call, no tool contribution.
- * Its input keys become `Partial<>` in the merged prompt input type.
- *
- * @template TCtx - The wrapped context type.
- */
-export interface ConditionalContext<TCtx extends Context<z.ZodType> = Context<z.ZodType>> {
-  /** Discriminant tag for runtime type checking. */
-  readonly _tag: 'ConditionalContext'
-  /** The wrapped context instance. */
-  readonly context: TCtx
-  /** Predicate evaluated against the merged input at resolve time. */
-  readonly predicate: (input: Record<string, unknown>) => boolean
-}
-
-/**
- * A multi-way context switch created by `match()`.
- *
- * Selects which context(s) to include based on a discriminator value
- * derived from the input. Only the matching branch is resolved.
- */
-export interface MatchSpec {
-  /** Discriminant tag for runtime type checking. */
-  readonly _tag: 'MatchSpec'
-  /** Extracts the discriminator value from the merged input. */
-  readonly on: (input: Record<string, unknown>) => string
-  /** Map of discriminator values to context(s). */
-  readonly cases: Readonly<Record<string, Context<z.ZodType> | readonly Context<z.ZodType>[]>>
-  /** Fallback context(s) when no case matches. */
-  readonly default?: Context<z.ZodType> | readonly Context<z.ZodType>[]
-}
-
-/**
- * An entry in the `use` array of `prompt()`.
- *
- * Supports plain contexts, conditional wrappers, match specs, and
- * falsy values (for the `flag && ctx` pattern).
- */
-export type ContextEntry =
-  | Context<z.ZodType>
-  | ConditionalContext<Context<z.ZodType>>
-  | MatchSpec
-  | SkillEntry
-  | MemoryEntry
-  | BlackboardEntry
-  | InjectableEntry
-  | ContributorEntry<z.ZodType>
-  | false
-  | null
-  | undefined
-
-export interface PromptInjection {
-  contexts?: readonly Context<z.ZodType>[]
-  tools?: AnyToolSet
-  constraints?: readonly import('./safety/constraint/types').Constraint[]
-  guardrails?: readonly import('./safety/guardrail/types').Guardrail[]
-  metadata?: Readonly<Record<string, unknown>>
-}
-
-export interface InjectableEntry {
-  readonly _tag: string
-  readonly id: string
-  readonly inputSchema?: z.ZodType | undefined
-  readonly inputKeys?: readonly string[]
-  inject(args: { input: Record<string, unknown>; promptId?: string }): PromptInjection | Promise<PromptInjection>
-}
-
-/**
- * What a custom contributor adds to a prompt.
- *
- * Like {@link PromptInjection}, but with one extra channel: `use` re-enters
- * the resolution pipeline with *any* entry kind (skills, memories,
- * blackboards, further contributors), not just plain contexts. Re-entered
- * entries are gated and recursed exactly like top-level `use:` entries.
- */
-export interface ContributorContribution {
-  /** Contexts to resolve and append (re-entered through the pipeline, like injectable contexts). */
-  contexts?: readonly Context<z.ZodType>[]
-  /** Arbitrary entries to re-enter the pipeline with (gated, recursive). */
-  use?: readonly ContextEntry[]
-  /** Tools to merge — name collisions with other entries throw at resolve time. */
-  tools?: AnyToolSet
-  constraints?: readonly import('./safety/constraint/types').Constraint[]
-  guardrails?: readonly import('./safety/guardrail/types').Guardrail[]
-  /** Merged into `ResolvedPrompt.metadata` (last write wins per key). */
-  metadata?: Readonly<Record<string, unknown>>
-}
-
-/**
- * A custom prompt contributor created by `contributor()`.
- *
- * A first-class citizen of the `use:` array: it can gate itself with `when`,
- * bundle nested entries via `useEntries`, and write to every prompt channel
- * from `contribute()`. Structurally also a valid {@link InjectableEntry} —
- * the `inject` adapter exposes the `PromptInjection`-compatible subset of
- * its contribution — so code paths that predate contributors keep working.
- */
-export interface ContributorEntry<TInput extends z.ZodType = z.ZodType> extends InjectableEntry {
-  readonly _tag: 'Contributor'
-  /** Family label for observability grouping. Defaults to `injectable`. */
-  readonly family: string
-  readonly inputSchema?: TInput | undefined
-  /** Predicate gating participation, evaluated against the merged input at resolve time. */
-  readonly when?: (input: Record<string, unknown>) => boolean
-  /** Nested entries resolved before this contributor's own contribution. */
-  readonly useEntries: readonly ContextEntry[]
-  contribute(args: {
-    input: Record<string, unknown>
-    promptId?: string
-  }): ContributorContribution | Promise<ContributorContribution>
-}
-
-/**
- * A Skill entry in a prompt's `use` array.
- * Imported from @use-crux/core/skill — this is the minimal interface
- * needed by the resolution pipeline.
- */
-export interface SkillEntry {
-  readonly _tag: 'Skill'
-  readonly id: string
-  readonly description: string
-  readonly instructions: string
-  readonly references: readonly { readonly name: string; readonly content: string }[]
-  readonly meta: SkillMeta
-  dump(): string
-}
-
-/**
- * A memory entry in a prompt's `use` array.
- *
- * This is intentionally structural to avoid a core type cycle: the concrete
- * implementation lives in `@use-crux/core/memory`, while prompt resolution only
- * needs to expand it into context/tools and retain a lifecycle binding.
- */
-export interface MemoryEntry {
-  readonly _tag: 'Memory'
-  readonly id: string
-  asContext(): Context<z.ZodType>
-  asTools(options?: { input?: Record<string, unknown>; namespace?: string }): AnyToolSet
-  captureTurn(
-    turn: {
-      messages: Array<{ role: string; content: string; metadata?: Record<string, unknown> }>
-      toolEvents?: Array<{ toolCallId?: string; toolName: string; args?: unknown; result?: unknown; error?: string }>
-      source?: { traceId?: string; promptId?: string }
-      metadata?: Record<string, unknown>
-    },
-    options?: Record<string, unknown>,
-  ): Promise<void>
-  flush(options?: Record<string, unknown>): Promise<void>
-}
-
-/**
- * A blackboard entry in a prompt's `use` array.
- *
- * The concrete implementation lives in `@use-crux/core/agent`. Prompt resolution
- * only needs to expand it into context and focused tools.
- */
-export interface BlackboardEntry {
-  readonly _tag: 'Blackboard'
-  readonly id: string
-  asContext(): Context<z.ZodType>
-  asTools(): AnyToolSet
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Context Tree Types (for createContexts)
-// ─────────────────────────────────────────────────────────────────
-
-/** A nested object where leaves are `Context` instances and branches are groups. */
-export type ContextTree = { [key: string]: Context<z.ZodType> | ContextTree }
-
-/** Recursively marks all properties as `readonly`, preserving `Context` leaf types. */
-export type DeepReadonly<T> = {
-  readonly [K in keyof T]: T[K] extends Context<z.ZodType> ? T[K] : DeepReadonly<T[K]>
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Input Schema Merging
-// ─────────────────────────────────────────────────────────────────
-
-/** Extract inferred type from a Context's input, or `{}` if no input declared. */
-type InferContextInput<C> = C extends Context<infer S> ? (S extends z.ZodType ? z.infer<S> : {}) : {}
-
-/**
- * Extract inferred type from a ContextEntry.
- *
- * - `Context<T>` → required (`z.infer<T>`)
- * - `ConditionalContext<Context<T>>` → optional (`Partial<z.infer<T>>`)
- * - `ContributorEntry<T>` → required (`z.infer<T>`; contributors declare schemas like injectables)
- * - `MatchSpec` → `{}` (no type-level contribution; declare fields on prompt input)
- * - `false | null | undefined` → `{}` (filtered out at runtime)
- */
-type InferContextEntryInput<E> =
-  E extends Context<z.ZodType>
-    ? InferContextInput<E>
-    : E extends ConditionalContext<infer TCtx>
-      ? Partial<InferContextInput<TCtx>>
-      : E extends ContributorEntry<infer S>
-        ? S extends z.ZodType
-          ? z.infer<S>
-          : {}
-        : {} // MatchSpec, false, null, undefined
-
-/**
- * Recursively intersect all context entry input types from a tuple.
- *
- * Handles the widened `ContextEntry` union: plain contexts contribute required
- * keys, conditional contexts contribute optional keys, and falsy/match entries
- * contribute nothing.
- *
- * @example
- * Given `[Context<{a: string}>, ConditionalContext<Context<{b: number}>>]`,
- * produces `{a: string} & {b?: number}`.
- */
-export type MergeContextInputs<T extends readonly ContextEntry[]> = T extends readonly [
-  infer First,
-  ...infer Rest extends readonly ContextEntry[],
-]
-  ? InferContextEntryInput<First> & MergeContextInputs<Rest>
-  : {}
-
-/**
- * The final merged input type for a prompt: its own input intersected
- * with all context inputs, flattened via `Simplify` for clean IDE display.
- */
-export type MergedInput<TOwnInput extends z.ZodType, TContexts extends readonly ContextEntry[]> = Simplify<
-  z.infer<TOwnInput> & MergeContextInputs<TContexts>
->
 
 // ─────────────────────────────────────────────────────────────────
 // Generation Settings
@@ -629,197 +216,8 @@ export type AdapterMap = {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Prompt Configuration
+// Token Usage & Trace Metadata
 // ─────────────────────────────────────────────────────────────────
-
-/** Argument passed to a prompt's dynamic `system` and `prompt` functions. */
-export interface PromptInputArg<TInput> {
-  /** The fully merged input object (prompt's own fields + all context fields). */
-  input: TInput
-}
-
-/** A contiguous span of resolved prompt/context text for observability. */
-export interface ContextTextSegment {
-  /** Resolved text for this span. */
-  text: string
-  /** Whether the span came from runtime input/interpolation rather than static author text. */
-  dynamic: boolean
-  /** Optional source key for dynamic spans, such as `account.plan` or `workspace.name`. */
-  source?: string
-}
-
-/** Structured system/context content for precise observability segmentation. */
-export interface ContextSystemContent {
-  /** Resolved segments in display order. Empty segments are ignored. */
-  segments: readonly ContextTextSegment[]
-}
-
-export type ContextSystemResult = string | ContextSystemContent
-
-/**
- * Configuration object for `prompt()`.
- *
- * @template TOwnInput  - Zod schema for this prompt's own input fields.
- * @template TOutput    - Zod schema for structured output, or `undefined` for text mode.
- * @template TContexts  - Tuple of contexts referenced via `use`.
- */
-export interface PromptConfig<
-  TOwnInput extends z.ZodType,
-  TOutput extends z.ZodType | undefined,
-  TContexts extends readonly ContextEntry[],
-> {
-  /** Unique identifier for registry lookup and introspection. */
-  id?: string
-  /** Human-readable description (surfaces in IDE hover). */
-  description?: string
-  /** Tags for categorization and registry filtering. */
-  tags?: readonly string[]
-  /**
-   * Contexts to compose into this prompt. Their input schemas merge into
-   * the prompt's input type, and their system contributions are appended
-   * to the system message in array order.
-   */
-  use?: TContexts
-  /** Zod schema for this prompt's own input fields. */
-  input?: TOwnInput
-  /**
-   * Zod schema for structured output. Adapters use this to determine
-   * whether to call structured generation (e.g. `generateObject`) or
-   * text generation (e.g. `generateText`).
-   */
-  output?: TOutput
-
-  /**
-   * System message — role/identity text that appears first.
-   * Mutually exclusive with `messages`.
-   */
-  system?:
-    | string
-    | ContextSystemContent
-    | ((arg: PromptInputArg<MergedInput<TOwnInput, TContexts>>) => ContextSystemResult | Promise<ContextSystemResult>)
-  /**
-   * User prompt text.
-   * Mutually exclusive with `messages`.
-   */
-  prompt?: string | ((arg: PromptInputArg<MergedInput<TOwnInput, TContexts>>) => string)
-  /**
-   * Multi-turn / few-shot messages array. Context system text is prepended
-   * to the first system message (or inserted at the start).
-   * Mutually exclusive with `system` and `prompt`.
-   */
-  messages?: (arg: PromptInputArg<MergedInput<TOwnInput, TContexts>>) => AnyMessage[]
-
-  /** Default generation settings. Overridden by `adapt` settings and call-site settings. */
-  settings?: GenerationSettings
-  /** Provider-specific prompt/settings adaptations. */
-  adapt?: AdapterMap
-  /** Lifecycle hooks for observability and debugging. */
-  hooks?: PromptHooks<TOutput>
-  /**
-   * Prompt-level cache intent.
-   *
-   * `cache.semantic` is consumed by `createSemanticCache()` from
-   * `@use-crux/core/cache`. It is inert without that plugin; Crux emits a
-   * development warning when a prompt declares semantic cache but no plugin is
-   * installed.
-   */
-  cache?: PromptCacheOptions<MergedInput<TOwnInput, TContexts>>
-
-  /**
-   * Tools available to the model during generation.
-   * Tools from contexts (via `use`) and call-site tools are merged in at resolve time.
-   */
-  tools?: AnyToolSet
-  /** Middleware applied to tools before adapter execution. */
-  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
-  /** Default tool choice strategy. Adapter-specific format. */
-  toolChoice?: unknown
-  /** Stop condition(s) for multi-step tool use. Adapter-specific format. */
-  stopWhen?: unknown
-
-  /**
-   * Constraints to check after structural (Zod) validation passes during generation.
-   * Combined with context-level and per-call constraints via union merge (per-call wins).
-   * For I/O safety filtering, use guardrails instead.
-   */
-  constraints?: import('./safety/constraint/types').Constraint[]
-
-  /**
-   * Guardrails to run on input/output during generation.
-   * Combined with context-level and per-call guardrails via union merge (per-call wins).
-   * For semantic output quality validation with retry, use constraints instead.
-   */
-  guardrails?: import('./safety/guardrail/types').Guardrail[]
-
-  /**
-   * Input fields that contain trusted, pre-formatted content (HTML, Markdown)
-   * and should NOT be auto-escaped. Only relevant when auto-escape is enabled.
-   *
-   * Field names are typed against the merged input — IDE autocomplete shows
-   * available keys and typos are rejected at compile time.
-   *
-   * @example
-   * ```ts
-   * prompt({
-   *   input: z.object({ instruction: z.string(), indexedHtml: z.string() }),
-   *   rawFields: ['indexedHtml'],
-   *   // instruction: auto-escaped, indexedHtml: passed through
-   * })
-   * ```
-   */
-  rawFields?: readonly Extract<keyof MergedInput<TOwnInput, TContexts>, string>[]
-
-  /**
-   * Custom sanitization hook — runs after Zod validation and auto-escape,
-   * before system/prompt functions. Use for truncation, domain-specific
-   * validation, or additional transforms.
-   *
-   * @example
-   * ```ts
-   * prompt({
-   *   input: z.object({ query: z.string() }),
-   *   sanitize: (input) => ({
-   *     ...input,
-   *     query: truncate(input.query, 500),
-   *   }),
-   * })
-   * ```
-   */
-  sanitize?: (input: MergedInput<TOwnInput, TContexts>) => MergedInput<TOwnInput, TContexts>
-
-  /**
-   * Colocated test cases for this prompt — Quality rung 0.
-   *
-   * Cases are pure data (`name?`, `input`, `expected?`): the Quality runner
-   * lowers them into an evaluation with id `prompt:<promptId>` that validates
-   * each output against the prompt's output schema; `expected` is reported,
-   * never matched implicitly. Anything richer (callbacks, scorers, variants)
-   * graduates to a `*.eval.ts` file.
-   *
-   * Input and result types are inferred from the prompt's schemas.
-   *
-   * @example
-   * ```ts
-   * prompt({
-   *   id: 'support',
-   *   input: z.object({ question: z.string() }),
-   *   output: z.object({ answer: z.string() }),
-   *   tests: [
-   *     { input: { question: 'How do refunds work?' } },
-   *     { name: 'dutch', input: { question: 'Hoe werkt een refund?' }, expected: '14 dagen' },
-   *   ],
-   * })
-   * ```
-   */
-  tests?: Array<{
-    /** Descriptive name for this test case. Defaults to a content hash of `input`. */
-    name?: string
-    /** Input to pass to the generate call — typed from the prompt's merged input. */
-    input: MergedInput<TOwnInput, TContexts>
-    /** Opaque expected payload — reported alongside results, never matched implicitly. */
-    expected?: unknown
-  }>
-}
 
 /** Token usage from an AI call. */
 export interface TokenUsage {
@@ -950,142 +348,6 @@ export type ResolveOptions<TOwnInput extends z.ZodType, TContexts extends readon
     : { input: MergedInput<TOwnInput, TContexts> })
 
 // ─────────────────────────────────────────────────────────────────
-// Lifecycle Hooks
-// ─────────────────────────────────────────────────────────────────
-
-/** Arguments passed to `onPrepare` hooks. */
-export interface PrepareHookArgs {
-  /** The prompt ID (if set). */
-  promptId: string | undefined
-  /** The assembled system message. */
-  system: string | undefined
-  /** The user prompt text (if using system+prompt mode). */
-  prompt: string | undefined
-  /** Estimated token count of the system message. */
-  systemTokens: number
-  /** Contexts that were dropped due to token budget. */
-  droppedContexts: DroppedContext[]
-}
-
-/** Arguments passed to `onGenerate` hooks, alongside the result. */
-export interface GenerateHookArgs {
-  /** The prompt ID (if set). */
-  promptId: string | undefined
-  /** Wall-clock duration in milliseconds. */
-  durationMs: number
-}
-
-/** Arguments passed to `onError` hooks. */
-export interface ErrorHookArgs {
-  /** The prompt ID (if set). */
-  promptId: string | undefined
-  /** The error that was thrown. */
-  error: unknown
-}
-
-/**
- * The shape of an adapter result handed to `onGenerate` hooks.
- *
- * Structured output prompts (`TOutput extends z.ZodType`) get a typed
- * `object` field; text-only prompts get `text`. Both carry usage and
- * provider metadata under `_meta`. Adapter-specific fields pass through
- * the index signature.
- */
-export type PromptResult<TOutput extends z.ZodType | undefined = undefined> = {
-  text?: string
-  usage?: TokenUsage
-  _meta?: TraceMeta
-  [key: string]: unknown
-} & (TOutput extends z.ZodType<infer O> ? { object: O } : { text: string })
-
-/**
- * Lifecycle hooks for a single prompt instance.
- *
- * @example
- * ```ts
- * prompt({
- *   output: z.object({ score: z.number() }),
- *   hooks: {
- *     onPrepare: (args) => console.log('System tokens:', args.systemTokens),
- *     onGenerate: (args, result) => trackScore(result.object.score), // typed!
- *     onError: (args) => reportError(args.error),
- *   },
- * })
- * ```
- */
-export interface PromptHooks<TOutput extends z.ZodType | undefined = undefined> {
-  /** Called after the system message is assembled. */
-  onPrepare?: (args: PrepareHookArgs) => void
-  /**
-   * Called after generation completes successfully.
-   *
-   * `result.object` is typed from the prompt's output schema when set;
-   * text-only prompts receive a typed `result.text`.
-   */
-  onGenerate?: (args: GenerateHookArgs, result: PromptResult<TOutput>) => void
-  /** Called when generation throws an error. */
-  onError?: (args: ErrorHookArgs) => void
-}
-
-/**
- * Global middleware function that wraps every adapter `generate()` call.
- *
- * @example
- * ```ts
- * updateRuntime({
- *   middleware: async (args, next) => {
- *     const start = Date.now()
- *     const result = await next(args)
- *     console.log(`${args.promptId} took ${Date.now() - start}ms`)
- *     return result
- *   },
- * })
- * ```
- */
-export interface PromptMiddlewareArgs {
-  promptId: string | undefined
-  preparedArgs: Record<string, unknown>
-  operation?: 'generate' | 'stream'
-  promptConfig?: AnyPromptConfig
-  input?: Record<string, unknown>
-  provider?: string
-  model?: unknown
-  resolved?: ResolvedPrompt
-  outputMode?: 'text' | 'object'
-  createCachedStreamResult?: (cached: {
-    text?: string
-    object?: unknown
-    meta?: Record<string, unknown>
-  }) => MiddlewareResult
-}
-
-/**
- * Heterogeneous middleware return value.
- *
- * Adapters return adapter-shaped objects (text + `_meta`, possibly `object` for
- * structured output). Middleware composes around these without knowing the
- * concrete shape, so the structural contract here covers the fields that
- * devtools/cache/etc. read on the way back.
- */
-export interface MiddlewareResult {
-  text?: string
-  object?: unknown
-  _meta?: TraceMeta & {
-    streaming?: { ttftMs?: number; tokensPerSecond?: number; totalChunks?: number }
-    fallback?: { attempts: number; failedModels: string[]; details: unknown[] }
-    traceId?: string
-    _streamCompletion?: Promise<MiddlewareResult>
-    semanticCache?: Record<string, unknown>
-  }
-  [key: string]: unknown
-}
-
-export type PromptMiddleware = (
-  args: PromptMiddlewareArgs,
-  next: (args: PromptMiddlewareArgs) => Promise<MiddlewareResult>,
-) => Promise<MiddlewareResult>
-
-// ─────────────────────────────────────────────────────────────────
 // Inspect Result
 // ─────────────────────────────────────────────────────────────────
 
@@ -1094,7 +356,7 @@ export interface DroppedContext {
   /** Context source identifier (id or positional label). */
   source: string
   /** Primitive kind that produced this contribution. */
-  injectableKind?: import('./observability/contract').CruxContextInjectableKind
+  injectableKind?: CruxContextInjectableKind
   /** The text that would have been contributed. */
   text: string
   /** Estimated token count of the dropped text. */
@@ -1173,86 +435,66 @@ export interface InspectResult {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Prompt Instance
+// Runtime Middleware
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * A defined prompt instance — the main public type returned by `prompt()`.
+ * Global middleware function that wraps every adapter `generate()` call.
  *
- * Prompts are SDK-agnostic, portable artifacts. They handle composition,
- * resolution, and inspection. Execution is handled by adapter functions
- * (`generate()`, `stream()`) from adapter subpaths.
- *
- * @template TOwnInput  - Zod schema for this prompt's own input fields.
- * @template TOutput    - Zod schema for structured output, or `undefined` for text mode.
- * @template TContexts  - Tuple of contexts referenced via `use`.
+ * @example
+ * ```ts
+ * updateRuntime({
+ *   middleware: async (args, next) => {
+ *     const start = Date.now()
+ *     const result = await next(args)
+ *     console.log(`${args.promptId} took ${Date.now() - start}ms`)
+ *     return result
+ *   },
+ * })
+ * ```
  */
-export interface Prompt<
-  TOwnInput extends z.ZodType,
-  TOutput extends z.ZodType | undefined,
-  TContexts extends readonly ContextEntry[],
-> {
-  /** Discriminant tag for runtime type checking. */
-  readonly _tag: 'Prompt'
-  /** Unique identifier for registry lookup and introspection. */
-  readonly id: string | undefined
-  /** Human-readable description. */
-  readonly description: string | undefined
-  /** Tags for categorization. */
-  readonly tags: readonly string[]
-  /** The contexts this prompt composes via `use`. */
-  readonly contexts: TContexts
-  /** The merged Zod input schema (prompt's own + all context inputs), for runtime validation. */
-  readonly inputSchema: z.ZodType | undefined
-  /** The Zod output schema, or `undefined` for text mode. */
-  readonly outputSchema: TOutput
-  /** `true` if this prompt has an `output` schema (structured mode), `false` otherwise. */
-  readonly hasOutput: TOutput extends z.ZodType ? true : false
-  /** The raw prompt configuration — exposed for adapters and the inspector. */
-  readonly config: PromptConfig<TOwnInput, TOutput, TContexts>
-
-  /**
-   * Resolve the prompt into SDK-agnostic data without executing.
-   *
-   * Runs the full composition pipeline: input validation, system assembly,
-   * context composition, token budgets, provider adaptation, settings merging.
-   *
-   * @example
-   * ```ts
-   * const resolved = prompt.resolve({ input: { ... }, provider: 'openai' })
-   * // → { system, prompt, schema, tools, settings }
-   * ```
-   */
-  resolve(opts: ResolveOptions<TOwnInput, TContexts>): Promise<ResolvedPrompt>
-
-  /**
-   * Inspect the assembled prompt without executing.
-   *
-   * Returns a structured breakdown of every part of the system message
-   * with source attribution and token counts.
-   *
-   * @example
-   * ```ts
-   * const debug = await prompt.inspect({ input: { ... }, tokenBudget: 4000 })
-   * debug.system.parts     // per-context breakdown
-   * debug.totalTokens      // total estimated tokens
-   * debug.droppedContexts  // what was dropped for budget
-   * ```
-   */
-  inspect(opts: ResolveOptions<TOwnInput, TContexts>): Promise<InspectResult>
+export interface PromptMiddlewareArgs {
+  promptId: string | undefined
+  preparedArgs: Record<string, unknown>
+  operation?: 'generate' | 'stream'
+  promptConfig?: AnyPromptConfig
+  input?: Record<string, unknown>
+  provider?: string
+  model?: unknown
+  resolved?: ResolvedPrompt
+  outputMode?: 'text' | 'object'
+  createCachedStreamResult?: (cached: {
+    text?: string
+    object?: unknown
+    meta?: Record<string, unknown>
+  }) => MiddlewareResult
 }
 
 /**
- * Base prompt type for heterogeneous collections (e.g., swarm agent maps).
- * Any `Prompt<TInput, TOutput, TContexts>` is assignable to `AnyPrompt`.
+ * Heterogeneous middleware return value.
+ *
+ * Adapters return adapter-shaped objects (text + `_meta`, possibly `object` for
+ * structured output). Middleware composes around these without knowing the
+ * concrete shape, so the structural contract here covers the fields that
+ * devtools/cache/etc. read on the way back.
  */
-export type AnyPrompt = Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>
+export interface MiddlewareResult {
+  text?: string
+  object?: unknown
+  _meta?: TraceMeta & {
+    streaming?: { ttftMs?: number; tokensPerSecond?: number; totalChunks?: number }
+    fallback?: { attempts: number; failedModels: string[]; details: unknown[] }
+    traceId?: string
+    _streamCompletion?: Promise<MiddlewareResult>
+    semanticCache?: Record<string, unknown>
+  }
+  [key: string]: unknown
+}
 
-/**
- * Base prompt config for heterogeneous collections and middleware contexts.
- * Any `PromptConfig<TInput, TOutput, TContexts>` is assignable to `AnyPromptConfig`.
- */
-export type AnyPromptConfig = PromptConfig<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>
+export type PromptMiddleware = (
+  args: PromptMiddlewareArgs,
+  next: (args: PromptMiddlewareArgs) => Promise<MiddlewareResult>,
+) => Promise<MiddlewareResult>
 
 // ─────────────────────────────────────────────────────────────────
 // Model Info (used by adapters and resolve pipeline)

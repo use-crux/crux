@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { prompt } from '../../define'
+import { prompt } from '../../prompt/prompt'
 import {
   createInMemoryObservabilityTransport,
   observe,

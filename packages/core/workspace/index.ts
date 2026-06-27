@@ -9,7 +9,7 @@
  */
 
 import { z } from 'zod'
-import { context } from '../context'
+import { context } from '../prompt/context'
 import { observe } from '../observability'
 import { getRuntime } from '../runtime'
 import { inMemoryBlobStore, inMemoryDataStore } from '../store/memory'

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createSemanticCache } from '../../cache'
-import { prompt as makePrompt } from '../../define'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import { embedding, embeddingCache } from '../../embedding'
 import {
   createInMemoryObservabilityTransport,

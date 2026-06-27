@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../../define'
+import { prompt } from '../../prompt/prompt'
 import { flow } from '../../flow/scope'
 import { evaluate, target } from '../../quality'
 import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'

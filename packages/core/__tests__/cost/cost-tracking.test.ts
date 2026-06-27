@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../../define'
+import { prompt } from '../../prompt/prompt'
 import { applyPlugins } from '../../plugin'
 import { getRuntime, resetRuntime, setRuntime } from '../../runtime'
 import { orchestrateGenerate } from '../../orchestrate'

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { resetRuntime, getRuntime } from '../runtime'
 import { withDevtools, enableDevtools } from '../observability'
 import { configure } from '../configure'
-import { prompt as cruxPrompt } from '../define'
+import { prompt as cruxPrompt } from '../prompt/prompt'
 import { observe, resetObservabilityRuntime } from '../observability'
 import type { CruxPlugin } from '../plugin'
 

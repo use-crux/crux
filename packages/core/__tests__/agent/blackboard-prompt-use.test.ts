@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../../define'
+import { prompt } from '../../prompt/prompt'
 import { blackboard } from '../../agent'
 import { resetRuntime, updateRuntime } from '../../runtime'
 

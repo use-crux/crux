@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { createBudgetManager } from '../../compaction/budget'
 import { summarizeMessages } from '../../compaction/summarize'
 import { CostLimitError, modelPricing, withCostTracking } from '../../cost'
-import { prompt } from '../../define'
+import { prompt } from '../../prompt/prompt'
 import {
   createInMemoryObservabilityTransport,
   observe,

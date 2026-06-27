@@ -17,7 +17,7 @@ import { z } from 'zod'
 import type { CruxStore } from '../store/types'
 import type { Context } from '../types'
 import type { GenerateTextFn } from '../compaction/types'
-import { context } from '../context'
+import { context } from '../prompt/context'
 import { getRuntime } from '../runtime'
 import { observe } from '../observability'
 

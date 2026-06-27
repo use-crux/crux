@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { context } from '../context'
+import { context } from '../prompt/context'
 import type { AnyToolSet, Context } from '../types'
 import type { CruxStore, JsonObject, ScoredEntry } from '../store/types'
 import { inMemoryCruxStore } from '../store/memory'

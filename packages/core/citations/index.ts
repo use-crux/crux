@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { context } from '../context'
+import { context } from '../prompt/context'
 import { constraint } from '../safety/constraint'
 import type { Constraint } from '../safety/constraint'
 import { observe } from '../observability'

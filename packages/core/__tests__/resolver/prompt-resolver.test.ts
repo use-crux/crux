@@ -11,9 +11,9 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
 import { compilePrompt, type ResolveCallOptions } from '../../resolve'
-import { context, when, match } from '../../context'
-import { injectable } from '../../injectable'
-import { contributor } from '../../contributor'
+import { context, when, match } from '../../prompt/context'
+import { injectable } from '../../prompt/injectable'
+import { contributor } from '../../prompt/contributor'
 import { handoff } from '../../agent/handoff'
 import {
   recordingObservability,

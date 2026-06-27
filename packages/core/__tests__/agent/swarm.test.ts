@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../define'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import { agent as makeAgent } from '../../agent/agent'
 import { createSwarm } from '../../agent/swarm'
 import { createFakeAgentExecutor } from '../../agent/fakes'

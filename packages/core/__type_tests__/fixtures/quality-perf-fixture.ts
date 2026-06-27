@@ -7,7 +7,7 @@
  */
 
 import { z } from 'zod'
-import { prompt } from '../../define'
+import { prompt } from '../../prompt/prompt'
 import { agent } from '../../agent/agent'
 import { flow } from '../../flow/scope'
 import { evaluate, target, scorers } from '../../quality'

@@ -451,7 +451,7 @@ describe('runEvaluation — declared gates', () => {
 
 describe('runEvaluation — definition errors', () => {
   it('a prompt task without a generate fn is a definition error', async () => {
-    const { prompt } = await import('../../define')
+    const { prompt } = await import('../../prompt/prompt')
     const { z } = await import('zod')
     const supportPrompt = prompt({
       id: 'support',

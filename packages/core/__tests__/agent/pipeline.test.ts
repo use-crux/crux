@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../define'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import { agent as makeAgent } from '../../agent/agent'
 import { createPipeline } from '../../agent/pipeline'
 import { createFakeAgentExecutor } from '../../agent/fakes'

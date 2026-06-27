@@ -6,9 +6,9 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { context, match, when } from '../context'
-import { contributor } from '../contributor'
-import { prompt } from '../define'
+import { context, match, when } from '../prompt/context'
+import { contributor } from '../prompt/contributor'
+import { prompt } from '../prompt/prompt'
 import type { ContextDef, PromptHooks, PromptResult } from '../types'
 
 // ─────────────────────────────────────────────────────────────────

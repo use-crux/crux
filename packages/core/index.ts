@@ -53,13 +53,10 @@
  * @module
  */
 
-// Core definition API
-export { prompt } from './define'
-export { context, createContexts, when, match } from './context'
-export { injectable } from './injectable'
-export { contributor, isContributorEntry } from './contributor'
-export type { ContributorConfig } from './contributor'
-export type { ContributorContribution, ContributorEntry } from './types'
+// Core definition API (prompt authoring domain)
+export { prompt, context, createContexts, when, match, injectable, contributor, isContributorEntry } from './prompt'
+export type { ContributorConfig } from './prompt'
+export type { ContributorContribution, ContributorEntry } from './prompt'
 export { compilePrompt } from './resolve'
 export type { CompiledPrompt, CompilePromptOptions, PromptResolution, Resolution, ResolveCallOptions } from './resolve'
 // In-memory fakes for every resolver port — the same deterministic seams the
@@ -125,7 +122,7 @@ export type {
 } from './resolver/contract'
 export { workspace, memoryWorkspaceBlobStore, workspaceToolNames } from './workspace'
 export { inMemoryBlobStore, inMemoryDataStore, inMemoryStorage, inMemoryVectorStore, storage } from './storage'
-export type { ContextTreeResult } from './context'
+export type { ContextTreeResult } from './prompt'
 export type {
   Workspace,
   WorkspaceBlobReadResult,
@@ -151,8 +148,8 @@ export type {
   VectorRecord,
   VectorStore,
 } from './storage'
-export { createPrompts } from './prompts-tree'
-export type { PromptTree, PromptTreeResult } from './prompts-tree'
+export { createPrompts } from './prompt'
+export type { PromptTree, PromptTreeResult } from './prompt'
 export { tool } from './tools'
 export type { NamedToolDef, ToolConfig } from './tools'
 
@@ -291,12 +288,8 @@ export type { Safety, SafetyCallOptions, SafetyOutput, SafetyStream, SafetyProto
 export { createSafetyPlugin } from './safety/plugin'
 export type { SafetyPolicy } from './safety/plugin'
 
-// Type exports
+// Type exports — prompt authoring domain
 export type {
-  // Base types
-  AnyModel,
-  AnyToolSet,
-  AnyMessage,
   PromptInjection,
   InjectableEntry,
   // Context
@@ -316,6 +309,23 @@ export type {
   AnyPrompt,
   PromptConfig,
   PromptInputArg,
+  // Input merging
+  MergedInput,
+  MergeContextInputs,
+  Simplify,
+  // Hooks
+  PromptHooks,
+  PrepareHookArgs,
+  GenerateHookArgs,
+  ErrorHookArgs,
+} from './prompt'
+
+// Type exports — provider-neutral generation/resolution surface
+export type {
+  // Base types
+  AnyModel,
+  AnyToolSet,
+  AnyMessage,
   // Resolution
   ResolvedPrompt,
   ResolveOptions,
@@ -324,15 +334,7 @@ export type {
   GenerationSettings,
   PromptAdaptation,
   AdapterMap,
-  // Input merging
-  MergedInput,
-  MergeContextInputs,
-  Simplify,
-  // Hooks & middleware
-  PromptHooks,
-  PrepareHookArgs,
-  GenerateHookArgs,
-  ErrorHookArgs,
+  // Middleware
   PromptMiddlewareArgs,
   PromptMiddleware,
   // Inspection
@@ -461,13 +463,13 @@ export type {
   SourceStatus,
 } from './indexing'
 
-// Semantic response cache
+// Semantic response cache (prompt-level cache intent)
 export type {
   SemanticCacheMode,
   SemanticCachePromptOptions,
   PromptCacheOptions,
   SemanticCacheQueryContext,
-} from './types'
+} from './prompt'
 
 // Cost tracking
 export { CostLimitError, modelPricing, withCostTracking } from './cost'

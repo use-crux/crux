@@ -67,7 +67,7 @@ describe('retrievalPipeline', () => {
   })
 
   it('can inject both context and prefixed tools from prompt use', async () => {
-    const { prompt } = await import('../../define')
+    const { prompt } = await import('../../prompt/prompt')
     const { retriever } = baseRetriever({
       launch: [hit('doc-1/a', 'Launch checklist')],
     })

@@ -8,8 +8,8 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { context, when, match, createContexts } from '../context'
-import { prompt } from '../define'
+import { context, when, match, createContexts } from '../prompt/context'
+import { prompt } from '../prompt/prompt'
 import type {
   AnyPrompt,
   AnyPromptConfig,

@@ -24,8 +24,8 @@ import type {
   IndexRuleDescriptor,
   IndexSourceFile,
 } from './index'
-import { getPromptDefinitionSource } from '../define'
-import { getContextDefinitionSource } from '../context'
+import { getPromptDefinitionSource } from '../prompt/prompt'
+import { getContextDefinitionSource } from '../prompt/context'
 
 /**
  * Convert a Zod schema to JSON Schema using Zod v4's static `z.toJSONSchema()`.

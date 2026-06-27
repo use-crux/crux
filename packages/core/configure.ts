@@ -12,7 +12,7 @@
 import type { z } from 'zod'
 import type { AnyPrompt, Context, Prompt, PromptMiddleware, ContextTree, FlowToolDef } from './types'
 import type { TokenizerFn } from './tokenizer'
-import type { PromptTree } from './prompts-tree'
+import type { PromptTree } from './prompt/prompts-tree'
 import type { CruxPlugin } from './plugin'
 import type { RuntimeBridgeOptions } from './runtime-bridge'
 import { setTokenizer } from './tokenizer'

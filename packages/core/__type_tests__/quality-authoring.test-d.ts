@@ -13,7 +13,7 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../define'
+import { prompt } from '../prompt/prompt'
 import { flow } from '../flow/scope'
 import { agent } from '../agent/agent'
 import type { Retriever, RetrieverHit } from '../retrieval'

@@ -1,15 +1,9 @@
 import type { z } from 'zod'
-import type {
-  ContextEntry,
-  Prompt,
-  PromptConfig,
-  ResolveOptions,
-  ResolvedPrompt,
-  InspectResult,
-  PrepareHookArgs,
-} from './types'
-import { compilePrompt, type ResolveCallOptions } from './resolve'
-import { captureSource } from './project-index/source'
+import type { ContextEntry } from './context-types'
+import type { Prompt, PromptConfig, PrepareHookArgs } from './prompt-types'
+import type { ResolveOptions, ResolvedPrompt, InspectResult } from '../types'
+import { compilePrompt, type ResolveCallOptions } from '../resolve'
+import { captureSource } from '../project-index/source'
 
 /** Module-scoped map: frozen prompt → definition-site source location. */
 const definitionSourceMap = new WeakMap<object, { file: string; line: number; column?: number }>()

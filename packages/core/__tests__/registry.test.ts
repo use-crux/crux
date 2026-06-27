@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { configure } from '../configure'
-import { prompt as cruxPrompt } from '../define'
+import { prompt as cruxPrompt } from '../prompt/prompt'
 
 function makePrompt(id: string, tags: string[] = []) {
   return cruxPrompt({ id, tags, system: `Prompt ${id}` })

@@ -4,7 +4,7 @@ import { generateIndex } from '../../skill/project-index'
 import { LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME } from '../../skill/tools'
 import { compilePrompt } from '../../resolve'
 import type { AnyPromptConfig, ContextEntry } from '../../types'
-import { context } from '../../context'
+import { context } from '../../prompt/context'
 import { setTokenizer } from '../../tokenizer'
 
 // Use a simple 1-char-per-token tokenizer for deterministic tests

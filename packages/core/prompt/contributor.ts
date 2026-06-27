@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 import { getInputShapeKeys } from './injectable'
-import type { ContextEntry, ContributorContribution, ContributorEntry, PromptInjection } from './types'
+import type { ContextEntry, ContributorContribution, ContributorEntry, PromptInjection } from './context-types'
 
 /**
  * Configuration for {@link contributor}.

@@ -369,7 +369,7 @@ describe('retriever', () => {
   })
 
   it('injects search tools by default when used directly in a prompt', async () => {
-    const { prompt } = await import('../../define')
+    const { prompt } = await import('../../prompt/prompt')
     const retriever = makeRetriever({
       id: 'docs',
       namespace: 'docs',
@@ -394,7 +394,7 @@ describe('retriever', () => {
   })
 
   it('injects context by default when context query is configured', async () => {
-    const { prompt } = await import('../../define')
+    const { prompt } = await import('../../prompt/prompt')
     const retriever = makeRetriever({
       id: 'docs',
       namespace: 'docs',

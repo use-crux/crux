@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { prompt } from '../../define'
+import { prompt } from '../../prompt/prompt'
 import { inMemoryBlobStore, inMemoryDataStore, storage } from '../../storage'
 import { workspace, workspaceToolNames } from '../../workspace'
 import { resetRuntime, setRuntime } from '../../runtime'

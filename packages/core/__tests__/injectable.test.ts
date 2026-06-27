@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { context } from '../context'
-import { injectable } from '../injectable'
-import { prompt } from '../define'
+import { context } from '../prompt/context'
+import { injectable } from '../prompt/injectable'
+import { prompt } from '../prompt/prompt'
 import { constraint } from '../safety/constraint'
 
 describe('injectable()', () => {

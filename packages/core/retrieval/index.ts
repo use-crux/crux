@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { GenerateObjectFn, GenerateTextFn } from '../compaction/types'
-import { context } from '../context'
+import { context } from '../prompt/context'
 import type { DenseEmbedding, SparseEmbedding } from '../embedding'
 import type { QueryableCruxEntity } from '../entity'
 import { observe } from '../observability'

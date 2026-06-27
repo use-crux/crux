@@ -1,7 +1,5 @@
 import type { z } from 'zod'
 import type {
-  AnyToolSet,
-  CacheOption,
   Context,
   ContextDef,
   ContextSystemContent,
@@ -10,9 +8,11 @@ import type {
   ContextTree,
   ConditionalContext,
   MatchSpec,
-  DeepReadonly,
-} from './types'
-import { captureSource } from './project-index/source'
+  CacheOption,
+} from './context-types'
+import type { DeepReadonly } from './type-utils'
+import type { AnyToolSet } from '../types'
+import { captureSource } from '../project-index/source'
 
 /** Module-scoped map: frozen context → definition-site source location. */
 const definitionSourceMap = new WeakMap<object, { file: string; line: number; column?: number }>()
@@ -46,9 +46,9 @@ interface StaticContextDef {
   /** Static system message text — always contributes the same content. */
   system: string | ContextSystemContent
   /** Family label for observability grouping. Set by primitive factories; plain contexts omit it. */
-  family?: import('./observability/contract').CruxContextInjectableKind
+  family?: import('../observability/contract').CruxContextInjectableKind
   /** Nested entries resolved before this context's own system text. */
-  use?: readonly import('./types').ContextEntry[]
+  use?: readonly import('./context-types').ContextEntry[]
   /** Priority for token-aware rendering (0–100). Default: `50`. */
   priority?: number
   /** Static tools to contribute to prompts that `use` this context. */
@@ -61,9 +61,9 @@ interface StaticContextDef {
   /** Cache configuration. See `CacheOption` for details. */
   cache?: CacheOption
   /** Constraints contributed by this context. */
-  constraints?: import('./safety/constraint/types').Constraint[]
+  constraints?: import('../safety/constraint/types').Constraint[]
   /** Guardrails contributed by this context. */
-  guardrails?: import('./safety/guardrail/types').Guardrail[]
+  guardrails?: import('../safety/guardrail/types').Guardrail[]
 }
 
 /** Default TTL (5 minutes) — matches Anthropic's cache window. */

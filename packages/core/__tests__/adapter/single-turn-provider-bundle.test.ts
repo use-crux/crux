@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { prompt as makePrompt } from '../../define'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import type { Message } from '../../messages'
 import {
   defineSingleTurnProviderBundle,

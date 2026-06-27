@@ -1,4 +1,4 @@
-import type { AnyPrompt } from './types'
+import type { AnyPrompt } from './prompt-types'
 
 // ─────────────────────────────────────────────────────────────────
 // Types

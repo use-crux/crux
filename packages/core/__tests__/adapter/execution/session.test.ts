@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../../define'
+import { prompt as makePrompt } from '../../../prompt/prompt'
 import { validateStructuredOutput } from '../../../adapter/policy/validation-retry'
 import type { Message } from '../../../messages'
 import type { ModelInfo } from '../../../types'

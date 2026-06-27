@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { configure } from '../configure'
-import { prompt as cruxPrompt } from '../define'
+import { prompt as cruxPrompt } from '../prompt/prompt'
 import { resetObservabilityRuntime } from '../observability'
 import { getRuntime, resetRuntime } from '../runtime'
 import { defaultTokenizer, setTokenizer } from '../tokenizer'

@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import type { InjectableEntry, PromptInjection } from './types'
+import type { InjectableEntry, PromptInjection } from './context-types'
 
 type ZodObjectShapeLike = {
   readonly shape?: unknown

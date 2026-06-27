@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../define'
-import { context } from '../context'
+import { prompt as makePrompt } from '../prompt/prompt'
+import { context } from '../prompt/context'
 
 describe('prompt', () => {
   it('returns a frozen Prompt with _tag, id, description, tags', () => {

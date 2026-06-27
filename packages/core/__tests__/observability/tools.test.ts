@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { adapter as makeAdapter } from '../../adapter/define-adapter'
 import type { AdapterResponse } from '../../adapter/types'
-import { prompt } from '../../define'
+import { prompt } from '../../prompt/prompt'
 import type { Message } from '../../messages'
 import {
   createInMemoryObservabilityTransport,
