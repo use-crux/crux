@@ -57,8 +57,14 @@
 export { prompt, context, createContexts, when, match, injectable, contributor, isContributorEntry } from './prompt'
 export type { ContributorConfig } from './prompt'
 export type { ContributorContribution, ContributorEntry } from './prompt'
-export { compilePrompt } from './resolve'
-export type { CompiledPrompt, CompilePromptOptions, PromptResolution, Resolution, ResolveCallOptions } from './resolve'
+export { compilePrompt } from './resolver/compile'
+export type {
+  CompiledPrompt,
+  CompilePromptOptions,
+  PromptResolution,
+  Resolution,
+  ResolveCallOptions,
+} from './resolver/compile'
 // In-memory fakes for every resolver port — the same deterministic seams the
 // core test suite uses, for SDK consumers testing resolution without global
 // runtime/observability setup.

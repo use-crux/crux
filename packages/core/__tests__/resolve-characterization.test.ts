@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { z } from 'zod'
-import { compilePrompt, type ResolveCallOptions } from '../resolve'
+import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
 import { context, when, match } from '../prompt/context'
 import { injectable } from '../prompt/injectable'
 import {

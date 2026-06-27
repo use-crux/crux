@@ -1,7 +1,7 @@
 /**
  * Public and internal types for the prompt compiler boundary.
  *
- * The root `resolve.ts` module re-exports the public contracts from here.
+ * The `resolver/compile.ts` boundary re-exports the public contracts from here.
  * Keeping the shapes in a small module lets the compiler entrypoint stay thin
  * while the resolution pass implementation imports the same contracts without
  * creating a runtime dependency cycle.
@@ -10,7 +10,8 @@
  */
 
 import type { z } from 'zod'
-import type { GenerationSettings, InspectResult, ResolvedPrompt } from '../types'
+import type { GenerationSettings } from '../types'
+import type { InspectResult, ResolvedPrompt } from './types'
 import type { ResolverPorts } from './ports'
 
 /**

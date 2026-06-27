@@ -1,24 +1,26 @@
 /**
- * Prompt compiler entrypoint.
+ * Prompt compiler entrypoint — the single public boundary over `resolver/`.
  *
- * `compilePrompt()` is the public boundary: it performs definition-time
- * validation/schema merging once, binds resolver ports, then delegates each
- * call to one prompt-resolution pass with `args` and `inspect()` projections.
+ * `compilePrompt()` performs definition-time validation/schema merging once,
+ * binds resolver ports, then delegates each call to one prompt-resolution pass
+ * with `args` and `inspect()` projections. Prompt instances and adapters reach
+ * resolution only through this boundary; they never import the lower/driver
+ * pass internals directly.
  *
  * @module
  */
 
-import type { AnyPromptConfig } from './types'
-import { runPromptPass, runPromptResolvePass, validatePromptConfig } from './resolver/pass'
-import { withDefaultResolverPorts } from './resolver/ports'
-import { compileInputSchema } from './resolver/schema'
+import type { AnyPromptConfig } from '../prompt/prompt-types'
+import { runPromptPass, runPromptResolvePass, validatePromptConfig } from './pass'
+import { withDefaultResolverPorts } from './ports'
+import { compileInputSchema } from './schema'
 import type {
   CompiledPrompt,
   CompilePromptOptions,
   PromptResolution,
   PromptResolutionPass,
   ResolveCallOptions,
-} from './resolver/compiler-types'
+} from './compiler-types'
 
 export type {
   CompiledPrompt,
@@ -26,7 +28,7 @@ export type {
   PromptResolution,
   Resolution,
   ResolveCallOptions,
-} from './resolver/compiler-types'
+} from './compiler-types'
 
 function createResolution(pass: PromptResolutionPass): PromptResolution {
   const inspection = pass.inspection

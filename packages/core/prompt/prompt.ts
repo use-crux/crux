@@ -2,7 +2,7 @@ import type { z } from 'zod'
 import type { ContextEntry } from './context-types'
 import type { Prompt, PromptConfig, PrepareHookArgs } from './prompt-types'
 import type { ResolveOptions, ResolvedPrompt, InspectResult } from '../types'
-import { compilePrompt, type ResolveCallOptions } from '../resolve'
+import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
 import { captureSource } from '../project-index/source'
 
 /** Module-scoped map: frozen prompt → definition-site source location. */

@@ -5,7 +5,7 @@ import { detectSuspiciousPatterns } from '../sanitize'
 import { prompt as makePrompt } from '../prompt/prompt'
 import { context } from '../prompt/context'
 import { configure } from '../configure'
-import { compilePrompt, type ResolveCallOptions } from '../resolve'
+import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
 import type { AnyPromptConfig, PromptConfig } from '../types'
 
 async function resolveCompiled(config: AnyPromptConfig, opts: ResolveCallOptions = {}) {

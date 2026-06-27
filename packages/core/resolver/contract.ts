@@ -32,10 +32,10 @@ import type {
   Context,
   ContextEntry,
   ContextTextSegment,
-  ExcludedContext,
   MemoryEntry,
   SkillEntry,
 } from '../types'
+import type { ExcludedContext } from './types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type {
