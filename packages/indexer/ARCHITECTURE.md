@@ -63,6 +63,11 @@ worker bridges for static indexing, semantic enrichment, runtime patch conversio
 compatibility-host calls. Before public release, each host-only surface must be removed, made
 intentionally public, or kept package-private through build output.
 
+Local TypeScript worker bundles are target-owned by the private `packages/local-workers` package.
+`@use-crux/devtools` should own only the React/Vite UI and UI-local tests. Until the worker-package
+split lands, any worker scripts that still live in the devtools package are migration state rather
+than architecture precedent.
+
 Accepted non-public surfaces:
 
 - compiler profiles and compiler-owned projections
@@ -175,9 +180,10 @@ quality annotations. `@use-crux/local` stores those raw snapshots in `store.Stor
 returns the raw value for cache writes, runtime snapshot merging, suite discovery, and other callers
 that must not observe derived fields.
 
-The devtools-facing read model is produced by `@use-crux/local/internal/indexread`. Its `Model.Index()`
-is the single owner of derived `definition.quality` data and local metadata enrichment. The
-`.crux/quality` filesystem contract is owned separately by `@use-crux/local/internal/qualityfs`; indexread
+The devtools-facing read model is produced by `@use-crux/local/internal/projectindex/readmodel`. Its
+`Model.Index()` is the single owner of derived `definition.quality` data and local metadata
+enrichment. The `.crux/quality` filesystem contract is owned separately by
+`@use-crux/local/internal/qualityfs`; the Project Index read model
 loads a `qualityfs.Snapshot` instead of parsing those files itself. The pipeline order is fixed:
 
 1. Join in-memory eval, RAG eval, and flow runs from an atomic `Store.Snapshot()`.
@@ -188,8 +194,8 @@ loads a `qualityfs.Snapshot` instead of parsing those files itself. The pipeline
 This split keeps `@use-crux/indexer` responsible for authored source facts while `@use-crux/local` owns the
 runtime/file-system read model consumed by HTTP, websocket snapshots, and the React devtools UI. New
 `.crux/quality` parsing, overlay, or normalization rules belong in `internal/qualityfs`; new
-`IndexQuality` aggregation rules belong in `internal/indexread`, not in `store`, `quality.Service`,
-or devtools call sites.
+`IndexQuality` aggregation rules belong in `internal/projectindex/readmodel`, not in `store`,
+`quality.Service`, or devtools call sites.
 
 Quality workbench insights are another local boundary: `quality.Service` loads a `qualityfs.Snapshot`
 and observability-derived runs, then calls pure `deriveInsights` logic with an explicit clock. That
@@ -647,7 +653,7 @@ Implemented v1 behavior:
   affected definitions, parsed/analyzed files, invalidation, and cache counters.
 - The devtools Go patch applier supports exact file/definition invalidation and source-row union
   merging, so runtime partial patches no longer require all-or-nothing invalidation.
-- The local project index worker and devtools service have an incremental bridge. The service falls
+- The local Project Index service and TypeScript worker bundle have an incremental bridge. The service falls
   back to full reindex if no previous source graph or incremental-capable worker is available.
 - Incremental worker patches are streamed as bounded V2 events. Source-profile rows are carried as
   `sourceProfile:batch` events rather than as one large patch payload, and semantic workers receive
@@ -672,9 +678,10 @@ Known v1 boundary:
   watcher recursively registers project directories, ignores generated/cache directories, debounces
   event bursts, coalesces changed/deleted file sets, and feeds a single-flight incremental reindex
   runner so index refreshes never overlap.
-- Opt-in watch benchmarks live in `@use-crux/devtools` (`perf:indexer:watch`) for planner/AST/semantic
-  worker timing and in `packages/local/internal/devtools` for Go-side patch commit and projection
-  timing. They are not part of deterministic default CI.
+- Opt-in watch benchmarks currently live in `@use-crux/devtools` (`perf:indexer:watch`) for
+  planner/AST/semantic worker timing until the private worker package owns those scripts. Go-side
+  patch commit and projection timing lives under `packages/local/internal/devtools`. These benchmarks
+  are not part of deterministic default CI.
 
 For the durable implementation checklist and slice-by-slice TDD plan, see
 [docs/incremental-planner-execution-plan.md](./docs/incremental-planner-execution-plan.md).

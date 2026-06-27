@@ -14,40 +14,17 @@ import { nativeDirectPrimitiveManifest } from '../indexer/semantic/backends/tsgo
 import { createSemanticIndexService } from '../indexer/semantic/service'
 import { createTypeScriptSemanticBackend } from '../indexer/semantic/backends/typescript'
 import { collectStaticIndexVocabularyObservations, staticIndexVocabularyGuards } from './static-index-naming-guards'
+import { architectureBaselineRequiredTokens } from './architecture-target-inventory'
+import {
+  collectProjectIndexGoVocabularyObservations,
+  projectIndexGoVocabularyGuards,
+} from './project-index-go-vocabulary-guards'
 
 const indexerDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'indexer')
 const indexerPackageDir = join(indexerDir, '..')
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 
 const committedArchitectureBaseline = join(indexerPackageDir, 'docs', 'static-index-runtime-architecture-baseline.md')
-
-/**
- * Committed architecture doc tokens that must stay aligned with the executable
- * ownership guards. The strings are intentionally path-shaped so stale
- * responsibility names are caught by a cheap, behavior-level docs check.
- */
-const architectureBaselineRequiredTokens = [
-  'packages/indexer/indexer/static-index/config',
-  'packages/indexer/indexer/static-index/plan',
-  'packages/indexer/indexer/static-index/protocol',
-  'packages/indexer/indexer/static-index/syntax',
-  'packages/indexer/indexer/static-index/extension-host',
-  'packages/indexer/indexer/static-index/compatibility/syntax-record-bridge',
-  'packages/local/internal/projectindex/staticindex/planner',
-  'packages/local/internal/projectindex/staticindex/sourceprofile',
-  'packages/local/internal/projectindex/staticindex/cache',
-  'packages/local/internal/projectindex/staticindex/syntax',
-  'packages/local/internal/projectindex/staticindex/client',
-  'packages/local/internal/projectindex/staticindex/protocol',
-  'packages/local/internal/projectindex/staticindex/run',
-  'crates/protocol',
-  'crates/syntax-oxc',
-  'crates/facts',
-  'crates/primitives',
-  'crates/lints',
-  'crates/static-compiler',
-  'crates/worker',
-] as const
 
 describe('indexer architecture boundaries', () => {
   it('keeps the committed architecture baseline aligned with target ownership folders', () => {
@@ -78,7 +55,9 @@ describe('indexer architecture boundaries', () => {
     expect(createStaticExtensionRegistry([extension]).extractors).toHaveLength(1)
     expect(createStaticRecordEvidenceReader).toBeTypeOf('function')
     expect(loadIndexerExtensionReferences).toBeTypeOf('function')
-    expect(staticIndexExtractorCoverage({ extension: { name: '@use-crux/test-extension', version: '0.0.0' }, name: 'x' })).toMatchObject({
+    expect(
+      staticIndexExtractorCoverage({ extension: { name: '@use-crux/test-extension', version: '0.0.0' }, name: 'x' }),
+    ).toMatchObject({
       covered: false,
     })
 
@@ -232,6 +211,20 @@ describe('indexer architecture boundaries', () => {
     expect(observationFor(observations, 'native_static').matches).toEqual([])
     expect(observationFor(observations, 'NATIVE_STATIC').matches).toEqual([])
     expect(observationFor(observations, 'CRUX_INDEXER_WORKER').matches).toEqual([])
+  })
+
+  it('keeps stale Go Project Index vocabulary out of new source files', () => {
+    const observations = collectProjectIndexGoVocabularyObservations(repoRoot)
+
+    expect(
+      projectIndexGoVocabularyGuards.map(({ term, replacement, targetedPhase }) => ({
+        term,
+        replacement,
+        targetedPhase,
+      })),
+    ).toEqual([{ term: 'indexwire', replacement: 'requestwire', targetedPhase: 4 }])
+    expect(observations.map(({ guard }) => guard.term)).toEqual(['indexwire'])
+    expect(observations[0]?.matches).toEqual([])
   })
 })
 
