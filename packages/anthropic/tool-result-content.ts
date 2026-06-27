@@ -27,11 +27,6 @@ export function anthropicToolResultContent(
   }
 }
 
-/** Whether a tool model output should mark Anthropic `tool_result.is_error`. */
-export function isErrorToolModelOutput(output: ToolModelOutput | undefined): boolean {
-  return output?.type === 'error-text' || output?.type === 'error-json'
-}
-
 function anthropicContentBlocks(
   parts: readonly ToolContentPart[],
 ): Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam> {

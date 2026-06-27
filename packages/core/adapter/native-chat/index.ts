@@ -6,6 +6,21 @@
 
 export { defineNativeChatProvider } from './define-native-chat-provider'
 export { appendNativeToolRound } from './tool-round'
+export {
+  appendCanonicalToolRound,
+  createToolResultEncodingHelpers,
+  defineProviderTranscriptCodec,
+  messagesToTranscriptUnits,
+  transcriptUnitsToMessages,
+} from './transcript'
+export type {
+  OneOrMany,
+  ProviderToolCall,
+  ProviderToolResult,
+  ProviderTranscriptDialect,
+  ProviderTranscriptUnit,
+  ToolResultEncodingHelpers,
+} from './transcript'
 export type {
   NativeAssistantTurn,
   NativeCallMode,

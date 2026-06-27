@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { prompt as makePrompt } from '@use-crux/core'
 import { agent as makeAgent } from '@use-crux/core/agent'
 import { z } from 'zod'
-import { createGoogle, embedding as makeEmbedding, fromMessages } from '../index'
+import { createGoogle, embedding as makeEmbedding } from '../index'
 
 const simplePrompt = makePrompt({
   id: 'test-prompt',
@@ -160,40 +160,6 @@ describe('Google adapter via adapter', () => {
     expect(typeof adapter.pipeline).toBe('function')
     expect(typeof adapter.consensus).toBe('function')
     expect(typeof adapter.swarm).toBe('function')
-  })
-
-  it('maps content tool outputs to Google function responses with media parts', () => {
-    const contents = fromMessages([
-      {
-        role: 'tool',
-        content: 'fallback',
-        metadata: {
-          toolCallId: 'call-1',
-          toolName: 'renderImage',
-          modelOutput: {
-            type: 'content',
-            value: [
-              { type: 'text', text: 'Rendered image' },
-              { type: 'image-data', data: 'base64-image', mediaType: 'image/png' },
-            ],
-          },
-        },
-      },
-    ])
-
-    expect(contents[0]).toEqual({
-      role: 'user',
-      parts: [
-        {
-          functionResponse: {
-            id: 'call-1',
-            name: 'renderImage',
-            response: { output: 'Rendered image\n[image:image/png] data:base64-image' },
-            parts: [{ inlineData: { data: 'base64-image', mimeType: 'image/png' } }],
-          },
-        },
-      ],
-    })
   })
 })
 

@@ -128,6 +128,8 @@ const google = defineSingleTurnProviderBundle({
 
 `defineProviderRuntime({ ownership: 'single-turn', turn })` is still available for lower-level compiler tests or unusual adapter packages that need to assemble the runtime object directly. Normal single-turn providers should use the bundle helper so `runtime`, `create()`, helper factories, dependency mapping, and extension checks are compiled consistently.
 
+Rather than hand-writing a `NativeTranscriptCodec`, compile one from a `ProviderTranscriptDialect` with `defineProviderTranscriptCodec()`. Core owns the canonical transcript semantics — extracting neutral `ProviderTranscriptUnit`s from `Message[]`, grouping adjacent tool results, rendering fallback text/error flags through shared `ToolResultEncodingHelpers`, and appending each tool round once via `appendCanonicalToolRound()` — while the dialect only encodes/decodes its SDK wire format and reads the assistant turn. A dialect never interprets raw `Message.metadata`, so `fromMessages()` and runtime tool-round appends cannot drift. See [Building adapters](/docs/guides/advanced/building-adapters) for a full dialect example; reach for a bespoke `appendToolRound` only when the canonical units cannot represent your wire format.
+
 Test transcript codecs directly with `transcriptCodecConformance()`:
 
 ```ts

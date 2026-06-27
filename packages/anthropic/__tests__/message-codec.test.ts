@@ -3,18 +3,23 @@ import type Anthropic from '@anthropic-ai/sdk'
 import type { Message, ToolModelOutput } from '@use-crux/core'
 import { transcriptCodecConformance } from '@use-crux/core/adapter/testing'
 import type { ToolResultEntry } from '@use-crux/core/adapter'
-import { anthropicMessageToolRoundCodec, anthropicTranscript, fromMessages, toMessages } from '../message-codec'
+import { anthropicTranscript, fromMessages, toMessages } from '../message-codec'
 
-describe('anthropicMessageToolRoundCodec', () => {
+describe('anthropic transcript wire encoding', () => {
   it('serializes canonical assistant tool calls and tool results to Anthropic blocks', () => {
-    const messages = anthropicMessageToolRoundCodec.toAnthropicMessages([
+    const messages = fromMessages([
       { role: 'user', content: 'Weather in Paris?' },
       {
         role: 'assistant',
         content: 'I will check.',
-        metadata: { toolCalls: [{ id: 'toolu_weather', name: 'weather', args: { city: 'Paris' } }] },
+        metadata: {
+          toolCalls: [{ id: 'toolu_weather', name: 'weather', args: { city: 'Paris' } }],
+        },
       },
-      toolMessage('toolu_weather', 'weather', { type: 'json', value: { forecast: 'cloudy' } }),
+      toolMessage('toolu_weather', 'weather', {
+        type: 'json',
+        value: { forecast: 'cloudy' },
+      }),
     ])
 
     expect(messages).toEqual([
@@ -23,7 +28,12 @@ describe('anthropicMessageToolRoundCodec', () => {
         role: 'assistant',
         content: [
           { type: 'text', text: 'I will check.' },
-          { type: 'tool_use', id: 'toolu_weather', name: 'weather', input: { city: 'Paris' } },
+          {
+            type: 'tool_use',
+            id: 'toolu_weather',
+            name: 'weather',
+            input: { city: 'Paris' },
+          },
         ],
       },
       {
@@ -40,9 +50,15 @@ describe('anthropicMessageToolRoundCodec', () => {
   })
 
   it('sets is_error on Anthropic tool_result blocks for error model outputs', () => {
-    const messages = anthropicMessageToolRoundCodec.toAnthropicMessages([
-      toolMessage('toolu_weather', 'weather', { type: 'error-json', value: { error: 'unavailable' } }),
-      toolMessage('toolu_search', 'search', { type: 'error-text', value: 'Search failed' }),
+    const messages = fromMessages([
+      toolMessage('toolu_weather', 'weather', {
+        type: 'error-json',
+        value: { error: 'unavailable' },
+      }),
+      toolMessage('toolu_search', 'search', {
+        type: 'error-text',
+        value: 'Search failed',
+      }),
     ])
 
     expect(messages).toEqual([
@@ -72,7 +88,7 @@ describe('anthropicMessageToolRoundCodec', () => {
   })
 
   it('serializes execution-denied tool outputs without marking Anthropic is_error', () => {
-    const messages = anthropicMessageToolRoundCodec.toAnthropicMessages([
+    const messages = fromMessages([
       toolMessage('toolu_publish', 'publishPost', {
         type: 'execution-denied',
         reason: 'Human approval is required.',
@@ -94,7 +110,7 @@ describe('anthropicMessageToolRoundCodec', () => {
   })
 
   it('uses native Anthropic image and PDF blocks for supported rich tool content', () => {
-    const messages = anthropicMessageToolRoundCodec.toAnthropicMessages([
+    const messages = fromMessages([
       toolMessage('toolu_render', 'render', {
         type: 'content',
         value: [
@@ -102,7 +118,12 @@ describe('anthropicMessageToolRoundCodec', () => {
           { type: 'image-data', data: 'base64-image', mediaType: 'image/png' },
           { type: 'image-url', url: 'https://example.com/image.png' },
           { type: 'media', data: 'base64-pdf', mediaType: 'application/pdf' },
-          { type: 'file-data', data: 'base64-file-pdf', mediaType: 'application/pdf', filename: 'report.pdf' },
+          {
+            type: 'file-data',
+            data: 'base64-file-pdf',
+            mediaType: 'application/pdf',
+            filename: 'report.pdf',
+          },
         ],
       }),
     ])
@@ -116,12 +137,33 @@ describe('anthropicMessageToolRoundCodec', () => {
             tool_use_id: 'toolu_render',
             content: [
               { type: 'text', text: 'Rendered report' },
-              { type: 'image', source: { type: 'base64', data: 'base64-image', media_type: 'image/png' } },
-              { type: 'image', source: { type: 'url', url: 'https://example.com/image.png' } },
-              { type: 'document', source: { type: 'base64', data: 'base64-pdf', media_type: 'application/pdf' } },
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  data: 'base64-image',
+                  media_type: 'image/png',
+                },
+              },
+              {
+                type: 'image',
+                source: { type: 'url', url: 'https://example.com/image.png' },
+              },
               {
                 type: 'document',
-                source: { type: 'base64', data: 'base64-file-pdf', media_type: 'application/pdf' },
+                source: {
+                  type: 'base64',
+                  data: 'base64-pdf',
+                  media_type: 'application/pdf',
+                },
+              },
+              {
+                type: 'document',
+                source: {
+                  type: 'base64',
+                  data: 'base64-file-pdf',
+                  media_type: 'application/pdf',
+                },
                 title: 'report.pdf',
               },
             ],
@@ -132,13 +174,16 @@ describe('anthropicMessageToolRoundCodec', () => {
   })
 
   it('falls back to deterministic text for unsupported rich tool content', () => {
-    const messages = anthropicMessageToolRoundCodec.toAnthropicMessages([
+    const messages = fromMessages([
       toolMessage('toolu_file', 'readFile', {
         type: 'content',
         value: [
           { type: 'media', data: 'base64-audio', mediaType: 'audio/mpeg' },
           { type: 'file-url', url: 'https://example.com/file.csv' },
-          { type: 'custom', providerOptions: { anthropic: { id: 'custom-1' } } },
+          {
+            type: 'custom',
+            providerOptions: { anthropic: { id: 'custom-1' } },
+          },
         ],
       }),
     ])
@@ -153,22 +198,32 @@ describe('anthropicMessageToolRoundCodec', () => {
             content: [
               { type: 'text', text: '[media:audio/mpeg] data:base64-audio' },
               { type: 'text', text: '[file] https://example.com/file.csv' },
-              { type: 'text', text: '[custom] {"anthropic":{"id":"custom-1"}}' },
+              {
+                type: 'text',
+                text: '[custom] {"anthropic":{"id":"custom-1"}}',
+              },
             ],
           },
         ],
       },
     ])
   })
+})
 
-  it('reads Anthropic text, tool_use, and tool_result blocks into Crux metadata', () => {
-    const messages = anthropicMessageToolRoundCodec.toCruxMessages([
+describe('anthropic transcript wire decoding', () => {
+  it('reads Anthropic text, tool_use, and tool_result blocks into canonical messages', () => {
+    const messages = toMessages([
       {
         role: 'assistant',
         content: [
           { type: 'text', text: 'First. ' },
           { type: 'text', text: 'Second.' },
-          { type: 'tool_use', id: 'toolu_weather', name: 'weather', input: { city: 'Paris' } },
+          {
+            type: 'tool_use',
+            id: 'toolu_weather',
+            name: 'weather',
+            input: { city: 'Paris' },
+          },
         ],
       },
       {
@@ -188,18 +243,20 @@ describe('anthropicMessageToolRoundCodec', () => {
       {
         role: 'assistant',
         content: 'First. Second.',
-        metadata: { toolCalls: [{ id: 'toolu_weather', name: 'weather', args: { city: 'Paris' } }] },
+        metadata: {
+          toolCalls: [{ id: 'toolu_weather', name: 'weather', args: { city: 'Paris' } }],
+        },
       },
       {
-        role: 'user',
-        content: '',
-        metadata: { toolResults: [{ toolCallId: 'toolu_weather', content: '18 C and cloudy', isError: true }] },
+        role: 'tool',
+        content: '18 C and cloudy',
+        metadata: { toolCallId: 'toolu_weather', isError: true },
       },
     ])
   })
 
   it('reads mixed assistant text and tool_use blocks as a canonical assistant turn', () => {
-    const turn = anthropicMessageToolRoundCodec.readAssistantTurn({
+    const turn = anthropicTranscript.readAssistant({
       content: [
         textBlock('I will check. '),
         toolUseBlock('toolu_weather', 'weather', { city: 'Paris' }),
@@ -216,55 +273,23 @@ describe('anthropicMessageToolRoundCodec', () => {
       ],
     })
   })
+})
 
-  it('appends assistant turns and tool results to canonical history', () => {
-    const messages = anthropicMessageToolRoundCodec.appendToolRound({
-      history: [{ role: 'user', content: 'Weather in Paris?' }],
-      assistant: {
-        text: '',
-        toolCalls: [{ id: 'toolu_weather', name: 'weather', args: { city: 'Paris' } }],
-      },
-      toolResults: [
-        {
-          toolCallId: 'toolu_weather',
-          name: 'weather',
-          output: { forecast: 'cloudy' },
-          modelOutput: { type: 'json', value: { forecast: 'cloudy' } },
-          content: '{"forecast":"cloudy"}',
-          outputSize: 21,
-          modelOutputSize: 21,
-        },
-      ],
-    })
-
-    expect(messages).toEqual([
-      { role: 'user', content: 'Weather in Paris?' },
-      {
-        role: 'assistant',
-        content: '',
-        metadata: { toolCalls: [{ id: 'toolu_weather', name: 'weather', args: { city: 'Paris' } }] },
-      },
-      {
-        role: 'tool',
-        content: '{"forecast":"cloudy"}',
-        metadata: {
-          toolCallId: 'toolu_weather',
-          toolName: 'weather',
-          modelOutput: { type: 'json', value: { forecast: 'cloudy' } },
-        },
-      },
-    ])
-  })
-
-  it('keeps Anthropic transcript wrappers and assistant extraction behind one codec', () => {
+describe('anthropic transcript conformance', () => {
+  it('passes the native transcript codec laws through one fixture', () => {
     const canonicalMessages: Message[] = [
       { role: 'user', content: 'Weather in Paris?' },
       {
         role: 'assistant',
         content: 'I will check.',
-        metadata: { toolCalls: [{ id: 'toolu_weather', name: 'weather', args: { city: 'Paris' } }] },
+        metadata: {
+          toolCalls: [{ id: 'toolu_weather', name: 'weather', args: { city: 'Paris' } }],
+        },
       },
-      toolMessage('toolu_weather', 'weather', { type: 'json', value: { forecast: 'cloudy' } }),
+      toolMessage('toolu_weather', 'weather', {
+        type: 'json',
+        value: { forecast: 'cloudy' },
+      }),
     ]
     const providerMessages: Anthropic.MessageParam[] = [
       { role: 'user', content: 'Weather in Paris?' },
@@ -272,21 +297,32 @@ describe('anthropicMessageToolRoundCodec', () => {
         role: 'assistant',
         content: [
           { type: 'text', text: 'I will check.' },
-          { type: 'tool_use', id: 'toolu_weather', name: 'weather', input: { city: 'Paris' } },
+          {
+            type: 'tool_use',
+            id: 'toolu_weather',
+            name: 'weather',
+            input: { city: 'Paris' },
+          },
         ],
       },
       {
         role: 'user',
-        content: [{ type: 'tool_result', tool_use_id: 'toolu_weather', content: '{"forecast":"cloudy"}' }],
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'toolu_weather',
+            content: '{"forecast":"cloudy"}',
+          },
+        ],
       },
     ]
     const decodedMessages: Message[] = [
-      canonicalMessages[0]!,
+      { role: 'user', content: 'Weather in Paris?' },
       canonicalMessages[1]!,
       {
-        role: 'user',
-        content: '',
-        metadata: { toolResults: [{ toolCallId: 'toolu_weather', content: '{"forecast":"cloudy"}' }] },
+        role: 'tool',
+        content: '{"forecast":"cloudy"}',
+        metadata: { toolCallId: 'toolu_weather' },
       },
     ]
     const assistant = {

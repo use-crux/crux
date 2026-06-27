@@ -1,15 +1,18 @@
 /**
  * Default native chat tool-round transcript append.
  *
- * Providers with canonical assistant/tool message semantics can reuse this;
- * providers with richer transcript needs can override `appendToolRound` in
- * their `NativeChatProfile`.
+ * Thin compatibility wrapper over the canonical append law owned by the
+ * transcript IR. Providers whose codec is compiled with
+ * `defineProviderTranscriptCodec()` already append through
+ * {@link appendCanonicalToolRound}; this export remains for specs that wire an
+ * `appendToolRound` by hand.
  *
  * @module
  */
 
 import type { Message } from '../../messages'
 import type { AdapterResponse, ToolResultEntry } from '../types'
+import { appendCanonicalToolRound } from './transcript'
 
 /**
  * Append an assistant tool-call turn and its tool results using canonical
@@ -25,25 +28,5 @@ export function appendNativeToolRound(
   assistant: AdapterResponse,
   results: readonly ToolResultEntry[],
 ): Message[] {
-  return [
-    ...messages,
-    {
-      role: 'assistant',
-      content: assistant.text,
-      metadata: { toolCalls: assistant.toolCalls },
-    },
-    ...results.map(
-      (result): Message => ({
-        role: 'tool',
-        content: result.content,
-        metadata: {
-          toolCallId: result.toolCallId,
-          toolName: result.name,
-          modelOutput: result.modelOutput,
-          ...(result.isError !== undefined ? { isError: result.isError } : {}),
-          ...(result.modelOutputError !== undefined ? { modelOutputError: result.modelOutputError } : {}),
-        },
-      }),
-    ),
-  ]
+  return appendCanonicalToolRound(messages, assistant, results)
 }
