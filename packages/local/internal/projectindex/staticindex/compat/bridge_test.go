@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/host/indexwire"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -88,12 +88,12 @@ func TestCheckRuleFactsBuildsRuleRequest(t *testing.T) {
 }
 
 type recordingReader struct {
-	request  indexwire.Request
+	request  requestwire.Request
 	artifact projectindex.ProjectIndexArtifactKind
 	response json.RawMessage
 }
 
-func (r *recordingReader) ReadArtifact(_ context.Context, request indexwire.Request, artifact projectindex.ProjectIndexArtifactKind) (json.RawMessage, error) {
+func (r *recordingReader) ReadArtifact(_ context.Context, request requestwire.Request, artifact projectindex.ProjectIndexArtifactKind) (json.RawMessage, error) {
 	r.request = request
 	r.artifact = artifact
 	return r.response, nil

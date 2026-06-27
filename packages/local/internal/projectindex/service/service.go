@@ -101,31 +101,3 @@ func (s *Service) WatchStatus() api.ProjectIndexWatchStatus {
 	}
 	return s.watchStatus.Snapshot()
 }
-
-// ApplyIndexPatch applies a phase patch and publishes the resulting snapshot.
-func (s *Service) ApplyIndexPatch(_ context.Context, patch projectindex.IndexPatch) store.IndexData {
-	s.indexMu.Lock()
-	defer s.indexMu.Unlock()
-	return s.applyIndexPatchLocked(patch)
-}
-
-func (s *Service) applyIndexPatchLocked(patch projectindex.IndexPatch) store.IndexData {
-	applied := s.indexState.Apply(patch)
-	s.store.SetIndexData(applied)
-	index := s.indexReadModel()
-	s.publishIndex(index)
-	return index
-}
-
-func (s *Service) indexReadModel() store.IndexData {
-	if s.readModel != nil {
-		return s.readModel()
-	}
-	return s.store.GetIndex()
-}
-
-func (s *Service) publishIndex(index store.IndexData) {
-	if s.publish != nil {
-		s.publish(index)
-	}
-}

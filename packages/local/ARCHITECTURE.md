@@ -83,6 +83,14 @@ persist derived `IndexQuality` fields or parse `.crux/quality`.
 and devtools packages should call service and read-model APIs instead of importing worker, eventwire,
 cache, or Static Index internals directly.
 
+Internally the package keeps each refresh concern in its own file. `run.go` defines the `refreshRun`
+state (root/config/project, started time, watch run, semantic mode, generation, Static Index metadata,
+and previous/current snapshots) plus the single semantic-and-lint completion shared by both flows;
+`reindex_full.go` and `reindex_incremental.go` build a `refreshRun` and hand it to that completion so
+the semantic-mode branching is not duplicated. `patch_apply.go` owns patch normalization plus the
+commit/apply/publish write path, `semantic_scheduler.go`/`semantic_patch.go` own semantic phase
+scheduling, and `lint_scheduler.go` owns lint scheduling and prefetch.
+
 The target Go package names are responsibility names:
 
 - `internal/projectindex/eventwire`: Project Index worker event stream collection and validation.
@@ -93,11 +101,11 @@ The target Go package names are responsibility names:
 - `internal/projectindex/staticindex/frontend`: Static Syntax frontend process adaptation.
 - `internal/projectindex/staticindex/compiler`: Go client for Rust Static Index compiler methods.
 - `internal/projectindex/staticindex/run`: deep module facade for Static Index prepare/analyze/finalize
-  orchestration.
+  orchestration, split into `prepare.go`, `analyze.go`, `finalize.go`, `compile.go`, and `cache.go`.
 
-Current packages named `host`, `host/indexwire`, `wire`, `staticindex/syntax`, and
-`staticindex/client` are migration state for the Rust/Go architecture cleanup. New code should use
-the target vocabulary and should not add compatibility aliases for old package names.
+The former `staticindex/syntax` and `staticindex/client` packages were renamed to
+`staticindex/frontend` and `staticindex/compiler`. New code should use the target vocabulary and
+should not add compatibility aliases for the old package names.
 
 ## Quality Insight Derivation
 

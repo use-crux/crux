@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::core::facts::{
-    StaticIndexDefinition, StaticIndexFidelity, StaticIndexIndexPatchFacts, StaticIndexRelation,
+    StaticIndexDefinition, StaticIndexFidelity, StaticIndexPatchFacts, StaticIndexRelation,
     StaticIndexRelationRef, StaticIndexSourceLocation,
 };
 use crate::read::injection::{ResolvedInjectionUseEntryTarget, is_injection_use_relation_type};
@@ -30,7 +30,7 @@ use crate::relation::report::{
 /// Resolver output plus the report needed for relation diagnostics.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct StaticIndexRelationModel {
-    pub facts: StaticIndexIndexPatchFacts,
+    pub facts: StaticIndexPatchFacts,
     pub report: StaticIndexRelationResolutionReport,
 }
 
@@ -60,7 +60,7 @@ pub(crate) fn merge_relations_by_identity(
 
 /// Resolves native/extension facts into canonical relations and enriched definitions.
 pub(crate) fn resolve_static_index_relation_model(
-    mut facts: StaticIndexIndexPatchFacts,
+    mut facts: StaticIndexPatchFacts,
     policies: &StaticIndexRelationPolicyTable,
 ) -> StaticIndexRelationModel {
     let definitions_by_id = definitions_by_id(&facts.definitions);

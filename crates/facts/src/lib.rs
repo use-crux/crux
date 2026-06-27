@@ -13,7 +13,7 @@ use serde_json::Value;
 /// Static facts that can become an `IndexPatchFacts` payload.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StaticIndexIndexPatchFacts {
+pub struct StaticIndexPatchFacts {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub root: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,12 +33,12 @@ pub struct StaticIndexIndexPatchFacts {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rule_descriptors: Vec<StaticIndexRuleDescriptor>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub sources: Vec<StaticIndexIndexSourceFile>,
+    pub sources: Vec<StaticIndexSourceRow>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_graph: Option<StaticIndexSourceGraph>,
 }
 
-impl StaticIndexIndexPatchFacts {
+impl StaticIndexPatchFacts {
     /// Sorts fact collections by stable Project Index identities.
     pub fn canonicalize(&mut self) {
         self.definitions
@@ -258,7 +258,7 @@ pub struct StaticIndexRuleDescriptor {
 /// Source row in the Project Index source table.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StaticIndexIndexSourceFile {
+pub struct StaticIndexSourceRow {
     pub file: String,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -281,13 +281,13 @@ pub struct StaticIndexSourceGraph {
     pub produced_by: String,
     pub capabilities: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub shards: Option<Vec<StaticIndexProjectIndexShard>>,
+    pub shards: Option<Vec<StaticIndexSourceGraphShard>>,
 }
 
 /// Package/workspace shard row inside the source graph.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StaticIndexProjectIndexShard {
+pub struct StaticIndexSourceGraphShard {
     pub id: String,
     pub root: String,
     #[serde(skip_serializing_if = "Option::is_none")]

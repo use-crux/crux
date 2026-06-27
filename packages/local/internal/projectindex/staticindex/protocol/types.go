@@ -3,7 +3,7 @@ package protocol
 import (
 	"encoding/json"
 
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 )
 
 const (
@@ -104,17 +104,17 @@ type SourceFile struct {
 }
 
 type Plan struct {
-	Root                     string                       `json:"root"`
-	ProjectName              string                       `json:"projectName,omitempty"`
-	Files                    []SourceFile                 `json:"files"`
-	PrimaryFiles             []SourceFile                 `json:"primaryFiles,omitempty"`
-	CacheHits                []SourceFile                 `json:"cacheHits"`
-	CacheMisses              []SourceFile                 `json:"cacheMisses"`
-	CallNames                []string                     `json:"callNames,omitempty"`
-	CallInterests            []syntax.CallInterest        `json:"callInterests,omitempty"`
-	ConstructorNames         []string                     `json:"constructorNames,omitempty"`
-	ConstructorInterests     []syntax.ConstructorInterest `json:"constructorInterests,omitempty"`
-	PruneNativeFactCallNames []string                     `json:"pruneNativeFactCallNames,omitempty"`
+	Root                     string                         `json:"root"`
+	ProjectName              string                         `json:"projectName,omitempty"`
+	Files                    []SourceFile                   `json:"files"`
+	PrimaryFiles             []SourceFile                   `json:"primaryFiles,omitempty"`
+	CacheHits                []SourceFile                   `json:"cacheHits"`
+	CacheMisses              []SourceFile                   `json:"cacheMisses"`
+	CallNames                []string                       `json:"callNames,omitempty"`
+	CallInterests            []frontend.CallInterest        `json:"callInterests,omitempty"`
+	ConstructorNames         []string                       `json:"constructorNames,omitempty"`
+	ConstructorInterests     []frontend.ConstructorInterest `json:"constructorInterests,omitempty"`
+	PruneNativeFactCallNames []string                       `json:"pruneNativeFactCallNames,omitempty"`
 }
 
 type AnalyzeFile struct {
@@ -132,22 +132,22 @@ type LintSuppression struct {
 }
 
 type PrepareRequest struct {
-	ID                       uint64                       `json:"id,omitempty"`
-	ProtocolVersion          int                          `json:"protocolVersion"`
-	Method                   string                       `json:"method"`
-	Root                     string                       `json:"root"`
-	ProjectName              string                       `json:"projectName,omitempty"`
-	ConfigPath               string                       `json:"configPath,omitempty"`
-	Identity                 RunIdentity                  `json:"identity"`
-	Files                    []SourceFile                 `json:"files"`
-	PrimaryFiles             []SourceFile                 `json:"primaryFiles,omitempty"`
-	CallNames                []string                     `json:"callNames,omitempty"`
-	CallInterests            []syntax.CallInterest        `json:"callInterests,omitempty"`
-	ConstructorNames         []string                     `json:"constructorNames,omitempty"`
-	ConstructorInterests     []syntax.ConstructorInterest `json:"constructorInterests,omitempty"`
-	PruneNativeFactCallNames []string                     `json:"pruneNativeFactCallNames,omitempty"`
-	CacheInputs              []json.RawMessage            `json:"cacheInputs,omitempty"`
-	ExtensionHost            json.RawMessage              `json:"extensionHost,omitempty"`
+	ID                       uint64                         `json:"id,omitempty"`
+	ProtocolVersion          int                            `json:"protocolVersion"`
+	Method                   string                         `json:"method"`
+	Root                     string                         `json:"root"`
+	ProjectName              string                         `json:"projectName,omitempty"`
+	ConfigPath               string                         `json:"configPath,omitempty"`
+	Identity                 RunIdentity                    `json:"identity"`
+	Files                    []SourceFile                   `json:"files"`
+	PrimaryFiles             []SourceFile                   `json:"primaryFiles,omitempty"`
+	CallNames                []string                       `json:"callNames,omitempty"`
+	CallInterests            []frontend.CallInterest        `json:"callInterests,omitempty"`
+	ConstructorNames         []string                       `json:"constructorNames,omitempty"`
+	ConstructorInterests     []frontend.ConstructorInterest `json:"constructorInterests,omitempty"`
+	PruneNativeFactCallNames []string                       `json:"pruneNativeFactCallNames,omitempty"`
+	CacheInputs              []json.RawMessage              `json:"cacheInputs,omitempty"`
+	ExtensionHost            json.RawMessage                `json:"extensionHost,omitempty"`
 }
 
 type PrepareResponse struct {

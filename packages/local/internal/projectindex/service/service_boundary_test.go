@@ -19,15 +19,35 @@ func TestServicePackageKeepsFacadeAndPipelineSplit(t *testing.T) {
 	serviceDir := filepath.Dir(file)
 
 	requiredFiles := []string{
-		"service.go",
-		"pipeline.go",
-		"full_reindex.go",
-		"incremental_reindex.go",
-		"runtime_reindex.go",
+		"service.go",             // facade only: Options/Service/New/With*/Has*/WatchStatus
+		"pipeline.go",            // pipeline entry + reindex context
+		"run.go",                 // refreshRun state shared by full/incremental flows
+		"patch_apply.go",         // patch normalization + commit/apply/publish
+		"reindex_full.go",        // full reindex flow
+		"reindex_incremental.go", // incremental/watch reindex flow
+		"runtime_reindex.go",     // runtime-rich reindex flow
+		"semantic_scheduler.go",  // semantic phase task scheduling
+		"lint_scheduler.go",      // lint phase scheduling + prefetch
+		"watch.go",               // watch status store
 	}
 	for _, name := range requiredFiles {
 		if _, err := os.Stat(filepath.Join(serviceDir, name)); err != nil {
 			t.Fatalf("Project Index service layout is missing %s: %v", name, err)
+		}
+	}
+
+	// The pre-Phase-5 file names must be gone; the no-backcompat policy forbids
+	// leaving both the old and new layout in place.
+	removedFiles := []string{
+		"full_reindex.go",
+		"incremental_reindex.go",
+		"lint.go",
+		"lint_prefetch.go",
+		"semantic_task.go",
+	}
+	for _, name := range removedFiles {
+		if _, err := os.Stat(filepath.Join(serviceDir, name)); err == nil {
+			t.Fatalf("Project Index service layout still has retired file %s", name)
 		}
 	}
 }
@@ -109,148 +129,47 @@ func TestServiceRecordsIncrementalWatchStatusWithFakeClient(t *testing.T) {
 	}
 }
 
-type boundaryIndexer struct {
-	semanticCalls   int
-	lintCalls       int
-	lintSawSemantic bool
-}
-
-func (i *boundaryIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
-	return projectindex.IndexPatch{
-		SchemaVersion: 1,
-		Phase:         projectindex.PhaseAST,
-		Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
-		Status:        "ok",
-		Facts: projectindex.IndexPatchFacts{
-			Definitions: []store.ProjectDefinition{{
-				ID:       "prompt:writer",
-				Kind:     "prompt",
-				Name:     "writer",
-				Fidelity: "partial",
-				Status:   "active",
-			}},
+func TestServiceIncrementalSharesSemanticAndLintCompletion(t *testing.T) {
+	indexer := &boundarySemanticIncrementalIndexer{}
+	published := []store.IndexData{}
+	service := New(Options{
+		Store:   store.NewStore(),
+		Indexer: indexer,
+		Publish: func(index store.IndexData) {
+			published = append(published, index)
 		},
-	}, nil
-}
+	})
+	service.ApplyIndexPatch(context.Background(), projectindex.PatchFromSnapshot(boundaryPreviousIndex(), projectindex.PhaseAST, "ok"))
 
-func (i *boundaryIndexer) IndexProjectSemanticPatch(context.Context, projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
-	i.semanticCalls++
-	return projectindex.IndexPatch{
-		SchemaVersion: 1,
-		Phase:         projectindex.PhaseSemantic,
-		Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
-		Status:        "ok",
-		Facts: projectindex.IndexPatchFacts{
-			Definitions: []store.ProjectDefinition{{
-				ID:          "prompt:writer",
-				Kind:        "prompt",
-				Name:        "writer",
-				Description: "semantic",
-				Fidelity:    "resolved",
-				Status:      "active",
-			}},
-		},
-	}, nil
-}
-
-func (i *boundaryIndexer) IndexProjectLintPatch(_ context.Context, request projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
-	i.lintCalls++
-	i.lintSawSemantic = findBoundaryDefinition(request.PreviousIndex.Definitions, "prompt:writer") != nil
-	return projectindex.IndexPatch{}, nil
-}
-
-func findBoundaryDefinition(definitions []store.ProjectDefinition, id string) *store.ProjectDefinition {
-	for index := range definitions {
-		if definitions[index].ID == id {
-			return &definitions[index]
-		}
+	index, err := service.ReindexProjectIncrementalWithOptions(
+		context.Background(),
+		"/repo",
+		"crux.config.ts",
+		"project",
+		[]string{"/repo/src/writer.ts"},
+		nil,
+		ProjectReindexOptions{Semantic: ProjectSemanticInline},
+	)
+	if err != nil {
+		t.Fatalf("ReindexProjectIncrementalWithOptions error = %v", err)
 	}
-	return nil
-}
 
-type boundaryIncrementalIndexer struct{}
-
-func (i *boundaryIncrementalIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
-	return projectindex.IndexPatch{}, nil
-}
-
-func (i *boundaryIncrementalIndexer) IndexProjectIncremental(
-	context.Context,
-	string,
-	string,
-	string,
-	store.IndexData,
-	[]string,
-	[]string,
-	string,
-) (projectindex.ProjectIndexIncrementalResult, error) {
-	return projectindex.ProjectIndexIncrementalResult{
-		Report: projectindex.ProjectIndexIncrementalReport{
-			PlanKind:        "source-file-reindex",
-			GraphConfidence: "complete-enough-for-source-closure",
-			ChangedFiles:    []string{"/repo/src/writer.ts"},
-			AffectedFiles:   []string{"/repo/src/writer.ts"},
-			DurationMsByPhase: map[string]float64{
-				"ast.incremental": 4,
-			},
-		},
-		Patches: []projectindex.IndexPatch{{
-			SchemaVersion: 1,
-			Phase:         projectindex.PhaseAST,
-			Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
-			Status:        "ok",
-			Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{"/repo/src/writer.ts"}},
-			Facts: projectindex.IndexPatchFacts{
-				Definitions: []store.ProjectDefinition{{
-					ID:       "prompt:writer",
-					Kind:     "prompt",
-					Name:     "writer",
-					Source:   &store.SourceLoc{File: "/repo/src/writer.ts"},
-					Fidelity: "partial",
-					Status:   "active",
-				}},
-				Sources: []store.IndexSourceFile{{
-					File:          "/repo/src/writer.ts",
-					Status:        "indexed",
-					ShardID:       ".",
-					DefinitionIDs: []string{"prompt:writer"},
-				}},
-			},
-		}},
-	}, nil
-}
-
-func boundaryPreviousIndex() store.IndexData {
-	return store.IndexData{
-		SchemaVersion: 1,
-		Project:       &store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
-		SourceGraph: &store.ProjectIndexSourceGraph{
-			SchemaVersion: 1,
-			ProducedBy:    "@use-crux/indexer",
-			Capabilities: []string{
-				"source-dependencies",
-				"source-dependents",
-				"definition-ownership",
-				"diagnostic-ownership",
-				"project-shards",
-			},
-			Shards: []store.ProjectIndexShard{{ID: ".", Root: "/repo/src"}},
-		},
-		Definitions: []store.ProjectDefinition{{
-			ID:       "prompt:writer",
-			Kind:     "prompt",
-			Name:     "writer",
-			Source:   &store.SourceLoc{File: "/repo/src/writer.ts"},
-			Fidelity: "partial",
-			Status:   "active",
-		}},
-		Sources: []store.IndexSourceFile{{
-			File:          "/repo/src/writer.ts",
-			Status:        "indexed",
-			ShardID:       ".",
-			DefinitionIDs: []string{"prompt:writer"},
-			Dependencies:  []string{},
-			Dependents:    []string{},
-		}},
+	// The incremental flow must run the same semantic + lint completion as the
+	// full flow: semantic enrichment is applied, then lint observes it.
+	if indexer.semanticCalls == 0 {
+		t.Fatal("semantic phase did not run through the shared completion")
+	}
+	if indexer.lintCalls != 1 {
+		t.Fatalf("lint calls = %d, want 1", indexer.lintCalls)
+	}
+	if !indexer.lintSawSemantic {
+		t.Fatal("lint phase did not receive semantic-enriched index")
+	}
+	writer := findBoundaryDefinition(index.Definitions, "prompt:writer")
+	if writer == nil || writer.Description != "semantic" {
+		t.Fatalf("definitions = %+v, want semantic-enriched writer", index.Definitions)
+	}
+	if len(published) == 0 {
+		t.Fatal("Publish was not called")
 	}
 }

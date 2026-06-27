@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::builder::StaticIndexLintBuilder;
-use crate::facts::{StaticIndexIndexPatchFacts, StaticIndexLintFinding};
+use crate::facts::{StaticIndexLintFinding, StaticIndexPatchFacts};
 use crate::filter::{StaticIndexLintOptions, apply_lint_filters};
 use crate::injection::rules::injection_lint_findings;
 use crate::propagation::propagate_findings;
@@ -11,7 +11,7 @@ use crate::rules::core::core_lint_findings;
 
 /// Appends built-in first-party lint findings to finalized native facts.
 pub fn append_builtin_lint_findings(
-    facts: &mut StaticIndexIndexPatchFacts,
+    facts: &mut StaticIndexPatchFacts,
     options: &StaticIndexLintOptions,
 ) {
     let mut seen = facts
@@ -34,7 +34,7 @@ pub fn append_builtin_lint_findings(
     );
 }
 
-fn builtin_index_lint_findings(facts: &StaticIndexIndexPatchFacts) -> Vec<StaticIndexLintFinding> {
+fn builtin_index_lint_findings(facts: &StaticIndexPatchFacts) -> Vec<StaticIndexLintFinding> {
     let builder = StaticIndexLintBuilder::new();
     let by_id = facts
         .definitions

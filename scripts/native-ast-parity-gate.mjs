@@ -17,7 +17,12 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const workerPath = resolve(repoRoot, 'target', 'debug', process.platform === 'win32' ? 'crux-indexer-worker.exe' : 'crux-indexer-worker')
+const workerPath = resolve(
+  repoRoot,
+  'target',
+  'debug',
+  process.platform === 'win32' ? 'crux-static-index-worker.exe' : 'crux-static-index-worker',
+)
 const localPackageRoot = resolve(repoRoot, 'packages', 'local')
 
 /**
@@ -47,7 +52,7 @@ const commands = [
   {
     label: 'Build Rust/Oxc Static Index worker',
     command: 'cargo',
-    args: ['build', '--package', 'crux-indexer-worker', '--bin', 'crux-indexer-worker'],
+    args: ['build', '--package', 'crux-static-index-worker', '--bin', 'crux-static-index-worker'],
   },
   {
     label: 'Run Rust Static Index tests',
@@ -61,11 +66,11 @@ const commands = [
     env: workerEnv,
   },
   {
-    label: 'Run devtools static parity over repository corpus',
+    label: 'Run local-workers static parity over repository corpus',
     command: 'pnpm',
     args: [
       '--filter',
-      '@use-crux/devtools',
+      '@use-crux/local-workers',
       'parity:indexer-static',
       '--',
       `--root=${repoRoot}`,
@@ -75,12 +80,12 @@ const commands = [
     env: workerEnv,
   },
   {
-    label: 'Build devtools worker bundle for Go host tests',
+    label: 'Build local worker bundle for Go host tests',
     command: 'pnpm',
-    args: ['--filter', '@use-crux/devtools', 'run', 'build:workers'],
+    args: ['--filter', '@use-crux/local-workers', 'build'],
   },
   {
-    label: 'Embed devtools workers for Go host tests',
+    label: 'Embed local workers for Go host tests',
     command: 'make',
     args: ['embed-workers'],
     cwd: localPackageRoot,

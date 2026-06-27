@@ -3,15 +3,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::core::facts::{
-    StaticIndexDefinition, StaticIndexDiagnosticSeverity, StaticIndexIndexPatchFacts,
-    StaticIndexIndexSourceFile, StaticIndexProjectIndexShard, StaticIndexProjectSourceRef,
-    StaticIndexSourceGraph,
+    StaticIndexDefinition, StaticIndexDiagnosticSeverity, StaticIndexPatchFacts,
+    StaticIndexProjectSourceRef, StaticIndexSourceGraph, StaticIndexSourceGraphShard,
+    StaticIndexSourceRow,
 };
 
 /// Projects source-ref facts and source graph rows into the AST patch shape.
 pub(crate) fn with_static_index_source_model(
-    mut facts: StaticIndexIndexPatchFacts,
-) -> StaticIndexIndexPatchFacts {
+    mut facts: StaticIndexPatchFacts,
+) -> StaticIndexPatchFacts {
     fold_source_refs_into_definitions(&mut facts.definitions, &facts.source_refs);
     facts.source_refs.clear();
     facts.sources = source_rows(&facts);
@@ -41,8 +41,8 @@ fn fold_source_refs_into_definitions(
     }
 }
 
-fn source_rows(facts: &StaticIndexIndexPatchFacts) -> Vec<StaticIndexIndexSourceFile> {
-    let mut rows = BTreeMap::<String, StaticIndexIndexSourceFile>::new();
+fn source_rows(facts: &StaticIndexPatchFacts) -> Vec<StaticIndexSourceRow> {
+    let mut rows = BTreeMap::<String, StaticIndexSourceRow>::new();
     for source in &facts.sources {
         merge_source_row(&mut rows, source.clone());
     }
@@ -85,14 +85,14 @@ fn source_rows(facts: &StaticIndexIndexPatchFacts) -> Vec<StaticIndexIndexSource
 }
 
 fn merge_source_row(
-    rows: &mut BTreeMap<String, StaticIndexIndexSourceFile>,
-    incoming: StaticIndexIndexSourceFile,
+    rows: &mut BTreeMap<String, StaticIndexSourceRow>,
+    incoming: StaticIndexSourceRow,
 ) {
     let existing = rows.remove(&incoming.file);
     rows.insert(
         incoming.file.clone(),
         match existing {
-            Some(existing) => StaticIndexIndexSourceFile {
+            Some(existing) => StaticIndexSourceRow {
                 file: incoming.file,
                 status: merge_source_status(&existing.status, &incoming.status),
                 shard_id: incoming.shard_id.or(existing.shard_id),
@@ -111,13 +111,13 @@ fn merge_source_row(
 }
 
 fn ensure_source_row<'a>(
-    rows: &'a mut BTreeMap<String, StaticIndexIndexSourceFile>,
+    rows: &'a mut BTreeMap<String, StaticIndexSourceRow>,
     file: &str,
     status: &str,
-) -> &'a mut StaticIndexIndexSourceFile {
+) -> &'a mut StaticIndexSourceRow {
     let row = rows
         .entry(file.to_string())
-        .or_insert_with(|| StaticIndexIndexSourceFile {
+        .or_insert_with(|| StaticIndexSourceRow {
             file: file.to_string(),
             status: status.to_string(),
             shard_id: None,
@@ -130,7 +130,7 @@ fn ensure_source_row<'a>(
     row
 }
 
-fn source_dependencies(source: &StaticIndexIndexSourceFile) -> Vec<(String, String)> {
+fn source_dependencies(source: &StaticIndexSourceRow) -> Vec<(String, String)> {
     source
         .dependencies
         .iter()
@@ -157,7 +157,7 @@ fn source_ref_dependencies(definitions: &[StaticIndexDefinition]) -> Vec<(String
 }
 
 fn assign_source_shards(
-    rows: &mut BTreeMap<String, StaticIndexIndexSourceFile>,
+    rows: &mut BTreeMap<String, StaticIndexSourceRow>,
     source_graph: Option<&StaticIndexSourceGraph>,
 ) {
     let Some(shards) = source_graph.and_then(|graph| graph.shards.as_deref()) else {
@@ -170,7 +170,7 @@ fn assign_source_shards(
     }
 }
 
-fn shard_id_for_file(file: &str, shards: &[StaticIndexProjectIndexShard]) -> Option<String> {
+fn shard_id_for_file(file: &str, shards: &[StaticIndexSourceGraphShard]) -> Option<String> {
     shards
         .iter()
         .filter(|shard| file == shard.root || file.starts_with(&format!("{}/", shard.root)))

@@ -32,7 +32,7 @@ the public extension-author product concept.
 **Consequences**
 
 The rename must scan all Crux packages, not only this package. Current index/indexer naming
-appears in core public contracts, devtools workers, CLI embeds, docs, snapshots, patch payloads,
+appears in core public contracts, local worker bundles, CLI embeds, docs, snapshots, patch payloads,
 cache files, and tests.
 
 Because this is pre-launch, serialized snapshot, patch, and cache terminology should be renamed

@@ -92,4 +92,6 @@ pub(crate) mod telemetry;
 #[cfg(test)]
 mod architecture_tests;
 #[cfg(test)]
+mod contract_manifest_tests;
+#[cfg(test)]
 mod shared_fixtures_tests;

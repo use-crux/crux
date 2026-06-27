@@ -117,6 +117,40 @@ func (s *Service) applyProjectSemanticPatchInBackground(request projectindex.Pro
 	}()
 }
 
+// applyPlannedSemanticPatch consumes a planned semantic task when it still
+// matches the finalized request, otherwise it falls back to indexing the
+// semantic patch inline. The matcher distinguishes full (evidence) from
+// incremental (scope) refreshes so both flows share one implementation.
+func (s *Service) applyPlannedSemanticPatch(
+	ctx context.Context,
+	request projectindex.ProjectSemanticIndexRequest,
+	task *projectSemanticPatchTask,
+	lintPrefetch *projectLintPrefetchTask,
+	astIndex store.IndexData,
+	matches semanticRequestMatcher,
+) (store.IndexData, error) {
+	if task == nil {
+		return s.applyProjectSemanticPatch(ctx, request, lintPrefetch)
+	}
+	result := task.wait()
+	if result.stage != "semantic" || !matches(result.request, request) {
+		return s.applyProjectSemanticPatch(ctx, request, lintPrefetch)
+	}
+	patch := projectindex.JoinSemanticPatch(result.patch, astIndex)
+	return s.applyProjectSemanticPatchResult(ctx, request, result.startedAt, patch, result.err, lintPrefetch)
+}
+
+func (s *Service) applyPlannedSemanticPatchInBackground(
+	request projectindex.ProjectSemanticIndexRequest,
+	task *projectSemanticPatchTask,
+	astIndex store.IndexData,
+	matches semanticRequestMatcher,
+) {
+	go func() {
+		_, _ = s.applyPlannedSemanticPatch(s.ctx, request, task, nil, astIndex, matches)
+	}()
+}
+
 func semanticSourceProfileFromPatches(patches []projectindex.IndexPatch) *projectindex.SemanticSourceProfile {
 	for index := len(patches) - 1; index >= 0; index-- {
 		if patches[index].SemanticSourceProfile != nil {

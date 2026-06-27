@@ -3,13 +3,13 @@ use std::collections::BTreeMap;
 use serde_json::json;
 
 use crate::core::facts::{
-    StaticIndexDefinition, StaticIndexFidelity, StaticIndexIndexPatchFacts, StaticIndexRelationRef,
+    StaticIndexDefinition, StaticIndexFidelity, StaticIndexPatchFacts, StaticIndexRelationRef,
 };
 use crate::relation::model::{built_in_relation_policy_table, resolve_static_index_relation_model};
 
 #[test]
 fn relation_ref_aliases_enrich_duplicate_target_use_entries() {
-    let facts = StaticIndexIndexPatchFacts {
+    let facts = StaticIndexPatchFacts {
         root: None,
         project_name: None,
         definitions: vec![
@@ -61,7 +61,7 @@ fn relation_ref_aliases_enrich_duplicate_target_use_entries() {
 
 #[test]
 fn relation_ref_aliases_do_not_enrich_duplicate_resolved_variables() {
-    let facts = StaticIndexIndexPatchFacts {
+    let facts = StaticIndexPatchFacts {
         root: None,
         project_name: None,
         definitions: vec![

@@ -19,8 +19,8 @@ packages/cli/bin
 packages/cli/dist
 packages/local/crux
 packages/local/crux.exe
-packages/local/crux-indexer-worker
-packages/local/crux-indexer-worker.exe
+packages/local/crux-static-index-worker
+packages/local/crux-static-index-worker.exe
 packages/local/internal/assets/embed/*
 !packages/local/internal/assets/embed/.gitkeep
 packages/local/internal/assets/ui-embed/*
@@ -40,3 +40,4 @@ docs/plans/indexer-native-architecture-cleanup-workplan/
 docs/plans/indexer-rust-go-architecture-workplan/
 docs/plans/native-semantic-tsgo-kit/
 docs/plans/native-ast-parity-beta-workplan/
+docs/plans/core-package-structure-kit/

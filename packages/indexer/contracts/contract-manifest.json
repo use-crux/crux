@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "protocolVersions": {
+    "projectIndexWorkerEvents": 2,
+    "staticIndexCompiler": 2
+  },
+  "protocolVersionChecks": [
+    {
+      "version": "projectIndexWorkerEvents",
+      "runtime": "typescript",
+      "path": "packages/indexer/indexer/worker-protocol/types.ts",
+      "pattern": "PROJECT_INDEX_WORKER_PROTOCOL_VERSION\\s*=\\s*(\\d+)"
+    },
+    {
+      "version": "projectIndexWorkerEvents",
+      "runtime": "go",
+      "path": "packages/local/internal/projectindex/eventwire/worker_protocol.go",
+      "pattern": "projectIndexWorkerProtocolVersion\\s*=\\s*(\\d+)"
+    },
+    {
+      "version": "projectIndexWorkerEvents",
+      "runtime": "rust",
+      "path": "crates/static-compiler/src/finalizer/events.rs",
+      "pattern": "\\\"protocolVersion\\\"\\s*:\\s*(\\d+)"
+    },
+    {
+      "version": "staticIndexCompiler",
+      "runtime": "typescript",
+      "path": "packages/indexer/indexer/static-index/protocol/identity.ts",
+      "pattern": "STATIC_INDEX_COMPILER_PROTOCOL_VERSION\\s*=\\s*(\\d+)"
+    },
+    {
+      "version": "staticIndexCompiler",
+      "runtime": "go",
+      "path": "packages/local/internal/projectindex/staticindex/protocol/types.go",
+      "pattern": "Version\\s*=\\s*(\\d+)"
+    },
+    {
+      "version": "staticIndexCompiler",
+      "runtime": "rust",
+      "path": "crates/protocol/src/static_index.rs",
+      "pattern": "STATIC_INDEX_PROTOCOL_VERSION:\\s*u8\\s*=\\s*(\\d+)"
+    }
+  ],
+  "groups": [
+    {
+      "id": "worker-events",
+      "label": "Project Index worker events",
+      "description": "Versioned NDJSON event stream for Project Index patch facts, source profiles, and artifacts.",
+      "mirrorStatus": "checked-mirror",
+      "canonical": [
+        "packages/indexer/contracts/worker-events/schema.ts",
+        "packages/indexer/contracts/worker-events/fixtures.ts",
+        "packages/indexer/indexer/worker-protocol/types.ts",
+        "packages/indexer/indexer/worker-protocol/patch-events.ts",
+        "packages/indexer/indexer/worker-protocol/artifact-events.ts",
+        "packages/indexer/indexer/worker-protocol/source-profile-events.ts"
+      ],
+      "fixtures": [
+        "packages/indexer/contracts/fixtures/worker-events.json",
+        "packages/indexer/contracts/fixtures/worker-event-cases.json"
+      ],
+      "mirrors": {
+        "go": [
+          "packages/local/internal/projectindex/eventwire/worker_protocol.go",
+          "packages/local/internal/projectindex/eventwire/worker_protocol_facts.go",
+          "packages/local/internal/projectindex/eventwire/worker_protocol_source_profile.go",
+          "packages/local/internal/projectindex/eventwire/worker_artifact.go",
+          "packages/local/internal/projectindex/eventwire/shared_fixtures_test.go"
+        ],
+        "rust": [
+          "crates/protocol/src/project_index_events.rs",
+          "crates/static-compiler/src/finalizer/events.rs",
+          "crates/static-compiler/src/shared_fixtures_tests.rs"
+        ]
+      },
+      "fixtureCoverage": "Shared worker-event fixtures are consumed by TypeScript, Go, and Rust for success, artifact, phase-error, and out-of-order stream cases.",
+      "jsonBoundaries": [
+        "Go decodes worker event headers and artifact payloads from json.RawMessage before event-type validation.",
+        "Rust finalizer event emission uses serde_json::Value for Project Index facts because fact payloads are typed by the TypeScript contract spine."
+      ]
+    },
+    {
+      "id": "static-syntax-records",
+      "label": "Static Syntax records",
+      "description": "Parser evidence records emitted before source-only Project Index projection.",
+      "mirrorStatus": "checked-mirror",
+      "canonical": [
+        "packages/indexer/contracts/static-syntax/schema.ts",
+        "packages/indexer/indexer/static-index/syntax/record/types.ts",
+        "packages/indexer/indexer/static-index/syntax/record/value-types.ts",
+        "packages/indexer/indexer/static-index/syntax/record/schema.ts"
+      ],
+      "fixtures": [
+        "packages/indexer/contracts/fixtures/static-syntax-records.json",
+        "packages/indexer/contracts/fixtures/static-syntax-record-cases.json"
+      ],
+      "mirrors": {
+        "go": [
+          "packages/local/internal/projectindex/staticindex/planner/build.go",
+          "packages/local/internal/projectindex/staticindex/frontend/record/request.go",
+          "packages/local/internal/projectindex/staticindex/frontend/record/collect.go",
+          "packages/local/internal/projectindex/staticindex/frontend/event.go",
+          "packages/local/internal/projectindex/staticindex/frontend/shared_fixtures_test.go"
+        ],
+        "rust": [
+          "crates/protocol/src/static_syntax.rs",
+          "crates/syntax-oxc/src/syntax/frontend.rs",
+          "crates/static-compiler/src/shared_fixtures_tests.rs"
+        ]
+      },
+      "fixtureCoverage": "Shared static syntax fixtures cover imports, call matches, object values, native fact packets, constructor matches, callback summaries, and parser diagnostics across TypeScript, Go, and Rust.",
+      "jsonBoundaries": [
+        "Static syntax records intentionally preserve extension-shaped native fact packets as JSON-safe payloads until TypeScript contract validation classifies them."
+      ]
+    },
+    {
+      "id": "static-index",
+      "label": "Static Index compiler protocol",
+      "description": "Static Index prepare, analyze, finalize, and compile protocol for source-only Project Index compilation.",
+      "mirrorStatus": "checked-mirror",
+      "canonical": [
+        "packages/indexer/contracts/static-index/schema.ts",
+        "packages/indexer/contracts/static-index/fixtures.ts",
+        "packages/indexer/indexer/static-index/protocol/index.ts",
+        "packages/indexer/indexer/static-index/protocol/request.ts",
+        "packages/indexer/indexer/static-index/protocol/response.ts",
+        "packages/indexer/indexer/static-index/protocol/identity.ts"
+      ],
+      "fixtures": [
+        "packages/indexer/contracts/fixtures/static-index-protocol.json",
+        "packages/indexer/contracts/fixtures/static-index-protocol-cases.json",
+        "packages/indexer/contracts/fixtures/static-index-identity.json"
+      ],
+      "mirrors": {
+        "go": [
+          "packages/local/internal/projectindex/staticindex/protocol/types.go",
+          "packages/local/internal/projectindex/staticindex/protocol/stream.go",
+          "packages/local/internal/projectindex/staticindex/protocol/validation.go",
+          "packages/local/internal/projectindex/staticindex/protocol/identity.go",
+          "packages/local/internal/projectindex/staticindex/protocol/shared_fixtures_test.go"
+        ],
+        "rust": ["crates/protocol/src/static_index.rs", "crates/static-compiler/src/shared_fixtures_tests.rs"]
+      },
+      "fixtureCoverage": "Shared Static Index protocol and identity fixtures are decoded by TypeScript, Go, and Rust for every method, cache-sensitive identity owner, worker-error, and invalid-stream case.",
+      "jsonBoundaries": [
+        "Go keeps cacheInputs, extensionHost, diagnostics, facts, and extensionEvidenceInterests as json.RawMessage at extension/runtime boundaries.",
+        "Rust keeps diagnostics, facts, extension evidence jobs, cache inputs, and finalizer events as serde_json::Value until TypeScript-owned contract validation classifies them."
+      ]
+    },
+    {
+      "id": "semantic-evidence",
+      "label": "Semantic Evidence",
+      "description": "Backend-neutral semantic facts streamed before shared Project Index projection.",
+      "mirrorStatus": "typescript-only",
+      "canonical": [
+        "packages/indexer/contracts/semantic/schema.ts",
+        "packages/indexer/indexer/semantic/evidence/projection.ts",
+        "packages/indexer/indexer/semantic/service/types.ts",
+        "packages/indexer/indexer/semantic/backends/tsgo/types.ts"
+      ],
+      "fixtures": ["packages/indexer/contracts/fixtures/semantic-evidence.json"],
+      "mirrors": {
+        "go": [],
+        "rust": []
+      },
+      "fixtureCoverage": "A TS-only semantic evidence fixture covers definitions, relations, source refs, diagnostics, lint findings, and degraded/unsupported cases; Go hosts consume Project Index patch events today and Rust has no semantic evidence mirror.",
+      "jsonBoundaries": [
+        "Go and Rust do not mirror Semantic Evidence structs today; Go consumes the Project Index worker event protocol after TypeScript projection."
+      ]
+    }
+  ]
+}

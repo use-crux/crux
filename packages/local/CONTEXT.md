@@ -34,7 +34,7 @@ _Avoid_: generic wire, request wire, worker host
 **Project Index Workers**:
 The `internal/projectindex/workers` package family that composes Local's TypeScript worker lanes and
 Node process adapters.
-_Avoid_: host, projectindexer, devtools workers
+_Avoid_: host, projectindexer, UI-owned worker packages
 
 **TypeScript Worker Request Wire**:
 The `internal/projectindex/workers/requestwire` package that builds batched requests for TypeScript

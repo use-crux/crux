@@ -2,15 +2,15 @@
 //!
 //! The adapter owns method dispatch and response streaming only. Compiler
 //! behavior lives behind `crux_indexer_static_compiler::pipeline`, and
-//! serializable response envelopes live in `protocol::worker`.
+//! serializable response envelopes live in `protocol::process`.
 
 use std::io::Write;
 
+use crate::protocol::process::WorkerResponseEnvelope;
 use crate::protocol::static_index::{
     StaticIndexAnalyzeRequest, StaticIndexCompileRequest, StaticIndexFinalizeRequest,
     StaticIndexPrepareRequest,
 };
-use crate::protocol::worker::WorkerResponseEnvelope;
 use crate::worker::analyze_stream::write_analyze_stream;
 use crate::worker::compile_stream::write_compile_stream;
 use crate::worker::finalize_stream::write_finalize_stream;

@@ -25,12 +25,12 @@ const tsPackages = [
 ]
 
 const localPlatforms = [
-  { id: 'linux-x64', os: 'linux', cpu: 'x64', crux: 'crux', worker: 'crux-indexer-worker' },
-  { id: 'linux-arm64', os: 'linux', cpu: 'arm64', crux: 'crux', worker: 'crux-indexer-worker' },
-  { id: 'darwin-x64', os: 'darwin', cpu: 'x64', crux: 'crux', worker: 'crux-indexer-worker' },
-  { id: 'darwin-arm64', os: 'darwin', cpu: 'arm64', crux: 'crux', worker: 'crux-indexer-worker' },
-  { id: 'win32-x64', os: 'win32', cpu: 'x64', crux: 'crux.exe', worker: 'crux-indexer-worker.exe' },
-  { id: 'win32-arm64', os: 'win32', cpu: 'arm64', crux: 'crux.exe', worker: 'crux-indexer-worker.exe' },
+  { id: 'linux-x64', os: 'linux', cpu: 'x64', crux: 'crux', worker: 'crux-static-index-worker' },
+  { id: 'linux-arm64', os: 'linux', cpu: 'arm64', crux: 'crux', worker: 'crux-static-index-worker' },
+  { id: 'darwin-x64', os: 'darwin', cpu: 'x64', crux: 'crux', worker: 'crux-static-index-worker' },
+  { id: 'darwin-arm64', os: 'darwin', cpu: 'arm64', crux: 'crux', worker: 'crux-static-index-worker' },
+  { id: 'win32-x64', os: 'win32', cpu: 'x64', crux: 'crux.exe', worker: 'crux-static-index-worker.exe' },
+  { id: 'win32-arm64', os: 'win32', cpu: 'arm64', crux: 'crux.exe', worker: 'crux-static-index-worker.exe' },
 ]
 
 const options = parseArgs(process.argv.slice(2))

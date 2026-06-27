@@ -12,7 +12,7 @@ use crate::contracts::{
 };
 use crate::emit::push_definition_finding;
 use crate::facts::{
-    StaticIndexDefinition, StaticIndexIndexPatchFacts, StaticIndexLintFinding, StaticIndexRelation,
+    StaticIndexDefinition, StaticIndexLintFinding, StaticIndexPatchFacts, StaticIndexRelation,
 };
 use crate::helpers::{
     child_definitions_by_parent, covered_definition_ids, has_items, relation_sources,
@@ -23,7 +23,7 @@ use crate::rules::relation::relation_lint_findings;
 
 pub(crate) fn core_lint_findings(
     builder: &StaticIndexLintBuilder,
-    facts: &StaticIndexIndexPatchFacts,
+    facts: &StaticIndexPatchFacts,
     by_id: &BTreeMap<&str, &StaticIndexDefinition>,
 ) -> Vec<StaticIndexLintFinding> {
     let covered = covered_definition_ids(&facts.definitions, &facts.relations);

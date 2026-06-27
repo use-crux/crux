@@ -345,6 +345,33 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             .any(|class| class == "dependencies")
     );
     assert_eq!(coverage.identities.len(), 17);
+
+    // The Rust first-party projection manifest must cover exactly these
+    // identities, with the same stable replacement identity it stamps when it
+    // replaces TypeScript extractor output.
+    let manifest_identities = crate::primitives::manifest::first_party_primitive_identities();
+    let manifest_extractors = manifest_identities
+        .iter()
+        .map(|identity| identity.extractor)
+        .collect::<std::collections::BTreeSet<_>>();
+    let fixture_extractors = coverage
+        .identities
+        .iter()
+        .map(|identity| identity.extractor.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        manifest_extractors, fixture_extractors,
+        "first-party manifest must project exactly the covered extractor identities"
+    );
+    for identity in &manifest_identities {
+        assert_eq!(identity.extension, "@use-crux/indexer/crux-core");
+        assert_eq!(
+            identity.family, identity.extractor,
+            "{} family",
+            identity.extractor
+        );
+    }
+
     for identity in coverage.identities {
         assert_eq!(identity.extension, "@use-crux/indexer/crux-core");
         assert_eq!(identity.family, identity.extractor);

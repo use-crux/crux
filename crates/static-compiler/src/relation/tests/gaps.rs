@@ -1,4 +1,4 @@
-use crate::core::facts::{StaticIndexFidelity, StaticIndexIndexPatchFacts, StaticIndexRelationRef};
+use crate::core::facts::{StaticIndexFidelity, StaticIndexPatchFacts, StaticIndexRelationRef};
 use crate::relation::model::{
     StaticIndexRelationPolicyTable, built_in_relation_policy_table,
     resolve_static_index_relation_model,
@@ -8,7 +8,7 @@ use crate::relation::tests::{definition, relation_ref};
 
 #[test]
 fn missing_policy_is_conserved_as_unresolved_reference_and_diagnostic() {
-    let facts = StaticIndexIndexPatchFacts {
+    let facts = StaticIndexPatchFacts {
         root: None,
         project_name: None,
         definitions: vec![definition(
@@ -43,7 +43,7 @@ fn missing_policy_is_conserved_as_unresolved_reference_and_diagnostic() {
 
 #[test]
 fn duplicate_missing_policy_refs_count_once_per_relation_identity() {
-    let facts = StaticIndexIndexPatchFacts {
+    let facts = StaticIndexPatchFacts {
         root: None,
         project_name: None,
         definitions: vec![definition(
@@ -85,7 +85,7 @@ fn duplicate_missing_policy_refs_count_once_per_relation_identity() {
 
 #[test]
 fn missing_policy_gap_count_keeps_first_owner_scope() {
-    let facts = StaticIndexIndexPatchFacts {
+    let facts = StaticIndexPatchFacts {
         root: None,
         project_name: None,
         definitions: vec![

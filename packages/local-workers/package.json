@@ -1,0 +1,53 @@
+{
+  "name": "@use-crux/local-workers",
+  "version": "0.2.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Private TypeScript worker bundles embedded by Crux Local",
+  "type": "module",
+  "scripts": {
+    "build": "node ./scripts/build-workers.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "perf:indexer": "tsx ./scripts/indexer-benchmark.ts",
+    "perf:indexer-static": "tsx ./scripts/indexer-static-benchmark.ts",
+    "perf:indexer-static:extensions": "tsx ./scripts/indexer-static-extension-guard.ts",
+    "perf:indexer:watch": "tsx ./scripts/indexer-watch-benchmark.ts",
+    "parity:indexer-static": "tsx ./scripts/indexer-static-parity.ts",
+    "parity:indexer-semantic": "tsx ./lib/indexer-semantic-parity.ts"
+  },
+  "dependencies": {
+    "@use-crux/core": "workspace:*",
+    "@use-crux/indexer": "workspace:*",
+    "tinyglobby": "^0.2.16",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "esbuild": "^0.28.0",
+    "tsx": "^4.22.3",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.7"
+  },
+  "peerDependencies": {
+    "@ngrok/ngrok": ">=1.0.0",
+    "localtunnel": ">=2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@ngrok/ngrok": {
+      "optional": true
+    },
+    "localtunnel": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/use-crux/crux.git",
+    "directory": "packages/local-workers"
+  },
+  "bugs": {
+    "url": "https://github.com/use-crux/crux/issues"
+  },
+  "homepage": "https://cruxjs.dev/docs/reference/crux-local"
+}

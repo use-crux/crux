@@ -14,6 +14,13 @@ type staticIndexProtocolSharedFixture struct {
 	Responses []json.RawMessage `json:"responses"`
 }
 
+func TestSharedStaticIndexProtocolFixturesAreDeclaredByContractManifest(t *testing.T) {
+	assertSharedStaticIndexRuntimeManifestFixture(t, "static-index-identity.json")
+	assertSharedStaticIndexRuntimeManifestFixture(t, "static-index-protocol.json")
+	assertSharedStaticIndexRuntimeManifestFixture(t, "static-index-protocol-cases.json")
+	assertSharedStaticIndexRuntimeManifestGoMirror(t)
+}
+
 func TestSharedStaticIndexIdentityFixtureMatchesManifest(t *testing.T) {
 	var fixture IdentityManifest
 	readSharedStaticIndexRuntimeFixture(t, "static-index-identity.json", &fixture)
@@ -186,12 +193,74 @@ func readSharedStaticIndexRuntimeFixture(t *testing.T, name string, out any) {
 
 func sharedStaticIndexRuntimeFixturePath(t *testing.T, name string) string {
 	t.Helper()
+	return filepath.Join(sharedStaticIndexRuntimeRepoRoot(t), "packages", "indexer", "contracts", "fixtures", name)
+}
+
+func assertSharedStaticIndexRuntimeManifestFixture(t *testing.T, name string) {
+	t.Helper()
+	manifest := readSharedStaticIndexRuntimeContractManifest(t)
+	path := filepath.ToSlash(filepath.Join("packages", "indexer", "contracts", "fixtures", name))
+	group := sharedStaticIndexRuntimeManifestGroup(t, manifest, "static-index")
+	if !containsString(group.Fixtures, path) {
+		t.Fatalf("contract manifest static-index fixtures = %v, want %s", group.Fixtures, path)
+	}
+}
+
+func assertSharedStaticIndexRuntimeManifestGoMirror(t *testing.T) {
+	t.Helper()
+	manifest := readSharedStaticIndexRuntimeContractManifest(t)
+	group := sharedStaticIndexRuntimeManifestGroup(t, manifest, "static-index")
+	currentPath := currentSharedStaticIndexRuntimeTestPath(t)
+	if !containsString(group.Mirrors.Go, currentPath) {
+		t.Fatalf("contract manifest static-index Go mirrors = %v, want %s", group.Mirrors.Go, currentPath)
+	}
+}
+
+func readSharedStaticIndexRuntimeContractManifest(t *testing.T) contractManifest {
+	t.Helper()
+	path := filepath.Join(sharedStaticIndexRuntimeRepoRoot(t), "packages", "indexer", "contracts", "contract-manifest.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read contract manifest %s: %v", path, err)
+	}
+	var manifest contractManifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("decode contract manifest %s: %v", path, err)
+	}
+	return manifest
+}
+
+func sharedStaticIndexRuntimeManifestGroup(t *testing.T, manifest contractManifest, id string) contractManifestGroup {
+	t.Helper()
+	for _, group := range manifest.Groups {
+		if group.ID == id {
+			return group
+		}
+	}
+	t.Fatalf("contract manifest missing group %q", id)
+	return contractManifestGroup{}
+}
+
+func currentSharedStaticIndexRuntimeTestPath(t *testing.T) string {
+	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "..", ".."))
-	return filepath.Join(repoRoot, "packages", "indexer", "contracts", "fixtures", name)
+	relative, err := filepath.Rel(sharedStaticIndexRuntimeRepoRoot(t), file)
+	if err != nil {
+		t.Fatalf("relative path for %s: %v", file, err)
+	}
+	return filepath.ToSlash(relative)
+}
+
+func sharedStaticIndexRuntimeRepoRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "..", ".."))
 }
 
 func sameStrings(left []string, right []string) bool {
@@ -204,4 +273,25 @@ func sameStrings(left []string, right []string) bool {
 		}
 	}
 	return true
+}
+
+type contractManifest struct {
+	Groups []contractManifestGroup `json:"groups"`
+}
+
+type contractManifestGroup struct {
+	ID       string   `json:"id"`
+	Fixtures []string `json:"fixtures"`
+	Mirrors  struct {
+		Go []string `json:"go"`
+	} `json:"mirrors"`
+}
+
+func containsString(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
 }

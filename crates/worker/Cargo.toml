@@ -1,5 +1,5 @@
 [package]
-name = "crux-indexer-worker"
+name = "crux-static-index-worker"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true

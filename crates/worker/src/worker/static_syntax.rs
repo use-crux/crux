@@ -7,7 +7,7 @@ use rayon::prelude::*;
 
 use crux_indexer_static_compiler::compat::parse_static_syntax_record;
 
-use crate::protocol::worker::BatchWorkerFileRequest;
+use crate::protocol::process::BatchWorkerFileRequest;
 use crate::protocol::{
     self, BatchWorkerRequest, ParseRequest, SingleWorkerRequest, WorkerRequest, WorkerResponse,
     WorkerStreamEvent,
@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn disk_source_reads_must_stay_under_root() {
         let base = env::temp_dir().join(format!(
-            "crux-indexer-worker-{}-{}",
+            "crux-static-index-worker-{}-{}",
             process::id(),
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)

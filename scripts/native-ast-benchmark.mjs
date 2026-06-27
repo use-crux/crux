@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url'
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const localPackageRoot = resolve(repoRoot, 'packages', 'local')
-const workerBinaryName = process.platform === 'win32' ? 'crux-indexer-worker.exe' : 'crux-indexer-worker'
+const workerBinaryName = process.platform === 'win32' ? 'crux-static-index-worker.exe' : 'crux-static-index-worker'
 const workerPath = resolve(repoRoot, 'target', 'release', workerBinaryName)
 const benchmarkRoot = resolve(process.env.CRUX_INDEXER_BENCH_ROOT ?? repoRoot)
 const benchmarkPattern =
@@ -100,18 +100,18 @@ console.log(`Profiles: ${selectedProfiles.map((profile) => profile.name).join(',
 run({
   label: 'Build release Rust/Oxc Static Index worker',
   command: 'cargo',
-  args: ['build', '--release', '--package', 'crux-indexer-worker', '--bin', 'crux-indexer-worker'],
+  args: ['build', '--release', '--package', 'crux-static-index-worker', '--bin', 'crux-static-index-worker'],
 })
 assertWorkerExists()
 
 run({
-  label: 'Build devtools worker bundle for Go host benchmarks',
+  label: 'Build local worker bundle for Go host benchmarks',
   command: 'pnpm',
-  args: ['--filter', '@use-crux/devtools', 'run', 'build:workers'],
+  args: ['--filter', '@use-crux/local-workers', 'build'],
 })
 
 run({
-  label: 'Embed devtools workers for Go host benchmarks',
+  label: 'Embed local workers for Go host benchmarks',
   command: 'make',
   args: ['embed-workers'],
   cwd: localPackageRoot,
@@ -158,7 +158,7 @@ function isBenchmarkProfileName(name) {
 function runGoBenchmark(profile) {
   const args = [
     'test',
-    './internal/projectindex/host',
+    './internal/projectindex/workers',
     '-run',
     '^$',
     '-bench',

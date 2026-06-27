@@ -24,7 +24,7 @@ npx @use-crux/local --help
 npm i -g @use-crux/local
 ```
 
-This package is a thin Node wrapper. On install it resolves the matching prebuilt binary from a platform package (`@use-crux/local-<os>-<cpu>`) and execs it, passing all arguments straight through. Each platform package ships both `bin/crux` and the sibling `bin/crux-indexer-worker` binary that `crux` discovers at runtime.
+This package is a thin Node wrapper. On install it resolves the matching prebuilt binary from a platform package (`@use-crux/local-<os>-<cpu>`) and execs it, passing all arguments straight through. Each platform package ships both `bin/crux` and the sibling `bin/crux-static-index-worker` binary that `crux` discovers at runtime.
 
 ## Usage
 
