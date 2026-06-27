@@ -70,14 +70,14 @@ changeset file you added/updated or that no changeset was needed.
 
 Prefer root `make` targets for repository workflows:
 
-- `make build` builds devtools workers/UI, embeds them into the Go binary, builds the current-platform Rust/Oxc indexer worker, then builds Crux Local. It must not run the root Turbo build or build `docs`.
-- `make local` builds devtools workers/UI, embeds them into `packages/local/internal/assets/{embed,ui-embed}`, builds the current-platform Rust/Oxc indexer worker, then builds the current-platform Go binary.
+- `make build` builds local TypeScript worker bundles and devtools UI, embeds them into the Go binary, builds the current-platform Rust/Oxc indexer worker, then builds Crux Local. It must not run the root Turbo build or build `docs`.
+- `make local` builds local TypeScript worker bundles and devtools UI, embeds them into `packages/local/internal/assets/{embed,ui-embed}`, builds the current-platform Rust/Oxc indexer worker, then builds the current-platform Go binary.
 - `make local-go` rebuilds only the Go binary from already embedded assets.
 - `make local-all` builds embedded platform Go binaries and Rust/Oxc indexer workers under `packages/local/dist/`.
 - `make cli`, `make cli-go`, and `make cli-all` are compatibility aliases for the local targets.
 - `make docs` runs the docs app.
 
-The lower-level `packages/local/Makefile` owns Go-specific build details. Do not manually copy devtools assets for normal builds; use `make local` or `make -C packages/local build`.
+The lower-level `packages/local/Makefile` owns Go-specific build details. Do not manually copy local worker or devtools UI assets for normal builds; use `make local` or `make -C packages/local build`.
 
 ## Project Index Cache Identity
 

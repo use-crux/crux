@@ -105,13 +105,13 @@ run({
 assertWorkerExists()
 
 run({
-  label: 'Build devtools worker bundle for Go host benchmarks',
+  label: 'Build local worker bundle for Go host benchmarks',
   command: 'pnpm',
-  args: ['--filter', '@use-crux/devtools', 'run', 'build:workers'],
+  args: ['--filter', '@use-crux/local-workers', 'build'],
 })
 
 run({
-  label: 'Embed devtools workers for Go host benchmarks',
+  label: 'Embed local workers for Go host benchmarks',
   command: 'make',
   args: ['embed-workers'],
   cwd: localPackageRoot,

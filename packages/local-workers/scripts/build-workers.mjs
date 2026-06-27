@@ -78,7 +78,7 @@ try {
   if (message.includes('installed esbuild for another platform')) {
     console.error(
       [
-        'Failed to build the bundled devtools server because esbuild was installed for a different platform.',
+        'Failed to build the bundled local worker package because esbuild was installed for a different platform.',
         'This commonly happens when the repo is installed in WSL/Linux and the build is run from Windows, or vice versa.',
         'Run the build from the same environment that installed node_modules, or reinstall dependencies in the active environment.',
       ].join('\n'),

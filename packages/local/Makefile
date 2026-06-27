@@ -6,7 +6,7 @@ GO ?= go
 CARGO ?= cargo
 RUSTUP ?= rustup
 
-DEVTOOLS_DIST := ../devtools/dist
+LOCAL_WORKERS_DIST := ../local-workers/dist
 DEVTOOLS_UI := ../devtools/ui/dist
 EMBED_DIR := internal/assets/embed
 UI_EMBED_DIR := internal/assets/ui-embed
@@ -34,7 +34,9 @@ $(EMBED_DIR) $(UI_EMBED_DIR) dist:
 .PHONY: help
 help:
 	@echo "Crux Local targets:"
-	@echo "  make build           Build devtools workers/UI, embed them, then build ./crux"
+	@echo "  make build           Build local workers/UI, embed them, then build ./crux"
+	@echo "  make build-local-workers Build bundled Node workers"
+	@echo "  make build-devtools-ui Build React UI"
 	@echo "  make build-devtools  Build bundled Node workers and React UI"
 	@echo "  make build-indexer-worker  Build the current-platform Rust/Oxc indexer worker"
 	@echo "  make embed           Copy built devtools assets into Go embed directories"
@@ -44,53 +46,60 @@ help:
 	@echo "  make test            Run Go tests"
 	@echo "  make clean           Remove local runtime build outputs"
 
-.PHONY: build-devtools
-build-devtools:
+.PHONY: build-local-workers
+build-local-workers:
+	cd ../.. && $(PNPM) --filter @use-crux/local-workers build
+
+.PHONY: build-devtools-ui
+build-devtools-ui:
 	cd ../.. && $(PNPM) --filter @use-crux/devtools build
+
+.PHONY: build-devtools
+build-devtools: build-local-workers build-devtools-ui
 
 .PHONY: embed
 embed: embed-workers embed-ui
 
 .PHONY: embed-workers
 embed-workers: $(EMBED_DIR)
-	@if [ -f "$(DEVTOOLS_DIST)/quality-runner.mjs" ]; then \
-		cp "$(DEVTOOLS_DIST)/quality-runner.mjs" "$(EMBED_DIR)/quality-runner.mjs"; \
-		echo "Embedded quality-runner.mjs from devtools dist"; \
+	@if [ -f "$(LOCAL_WORKERS_DIST)/quality-runner.mjs" ]; then \
+		cp "$(LOCAL_WORKERS_DIST)/quality-runner.mjs" "$(EMBED_DIR)/quality-runner.mjs"; \
+		echo "Embedded quality-runner.mjs from local-workers dist"; \
 	else \
-		echo "Error: $(DEVTOOLS_DIST)/quality-runner.mjs not found"; \
-		echo "Run 'make build-devtools' first"; \
+		echo "Error: $(LOCAL_WORKERS_DIST)/quality-runner.mjs not found"; \
+		echo "Run 'make build-local-workers' first"; \
 		exit 1; \
 	fi
-	@if [ -f "$(DEVTOOLS_DIST)/source-resolver.mjs" ]; then \
-		cp "$(DEVTOOLS_DIST)/source-resolver.mjs" "$(EMBED_DIR)/source-resolver.mjs"; \
-		echo "Embedded source-resolver.mjs from devtools dist"; \
+	@if [ -f "$(LOCAL_WORKERS_DIST)/source-resolver.mjs" ]; then \
+		cp "$(LOCAL_WORKERS_DIST)/source-resolver.mjs" "$(EMBED_DIR)/source-resolver.mjs"; \
+		echo "Embedded source-resolver.mjs from local-workers dist"; \
 	else \
-		echo "Error: $(DEVTOOLS_DIST)/source-resolver.mjs not found"; \
-		echo "Run 'make build-devtools' first"; \
+		echo "Error: $(LOCAL_WORKERS_DIST)/source-resolver.mjs not found"; \
+		echo "Run 'make build-local-workers' first"; \
 		exit 1; \
 	fi
-	@if [ -f "$(DEVTOOLS_DIST)/project-indexer.mjs" ]; then \
-		cp "$(DEVTOOLS_DIST)/project-indexer.mjs" "$(EMBED_DIR)/project-indexer.mjs"; \
-		echo "Embedded project-indexer.mjs from devtools dist"; \
+	@if [ -f "$(LOCAL_WORKERS_DIST)/project-indexer.mjs" ]; then \
+		cp "$(LOCAL_WORKERS_DIST)/project-indexer.mjs" "$(EMBED_DIR)/project-indexer.mjs"; \
+		echo "Embedded project-indexer.mjs from local-workers dist"; \
 	else \
-		echo "Error: $(DEVTOOLS_DIST)/project-indexer.mjs not found"; \
-		echo "Run 'make build-devtools' first"; \
+		echo "Error: $(LOCAL_WORKERS_DIST)/project-indexer.mjs not found"; \
+		echo "Run 'make build-local-workers' first"; \
 		exit 1; \
 	fi
-	@if [ -f "$(DEVTOOLS_DIST)/project-semantic-indexer.mjs" ]; then \
-		cp "$(DEVTOOLS_DIST)/project-semantic-indexer.mjs" "$(EMBED_DIR)/project-semantic-indexer.mjs"; \
-		echo "Embedded project-semantic-indexer.mjs from devtools dist"; \
+	@if [ -f "$(LOCAL_WORKERS_DIST)/project-semantic-indexer.mjs" ]; then \
+		cp "$(LOCAL_WORKERS_DIST)/project-semantic-indexer.mjs" "$(EMBED_DIR)/project-semantic-indexer.mjs"; \
+		echo "Embedded project-semantic-indexer.mjs from local-workers dist"; \
 	else \
-		echo "Error: $(DEVTOOLS_DIST)/project-semantic-indexer.mjs not found"; \
-		echo "Run 'make build-devtools' first"; \
+		echo "Error: $(LOCAL_WORKERS_DIST)/project-semantic-indexer.mjs not found"; \
+		echo "Run 'make build-local-workers' first"; \
 		exit 1; \
 	fi
-	@if [ -f "$(DEVTOOLS_DIST)/project-runtime-indexer.mjs" ]; then \
-		cp "$(DEVTOOLS_DIST)/project-runtime-indexer.mjs" "$(EMBED_DIR)/project-runtime-indexer.mjs"; \
-		echo "Embedded project-runtime-indexer.mjs from devtools dist"; \
+	@if [ -f "$(LOCAL_WORKERS_DIST)/project-runtime-indexer.mjs" ]; then \
+		cp "$(LOCAL_WORKERS_DIST)/project-runtime-indexer.mjs" "$(EMBED_DIR)/project-runtime-indexer.mjs"; \
+		echo "Embedded project-runtime-indexer.mjs from local-workers dist"; \
 	else \
-		echo "Error: $(DEVTOOLS_DIST)/project-runtime-indexer.mjs not found"; \
-		echo "Run 'make build-devtools' first"; \
+		echo "Error: $(LOCAL_WORKERS_DIST)/project-runtime-indexer.mjs not found"; \
+		echo "Run 'make build-local-workers' first"; \
 		exit 1; \
 	fi
 

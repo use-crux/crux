@@ -157,12 +157,7 @@ async function runPass(
         semanticSourceProfile: patch.semanticSourceProfile,
         semanticInstrumentation: {
           onTiming: (timing) => semanticTimings.push(timing),
-          onNativeCoverage: (coverage) =>
-            nativeCoverage.push({
-              kind: coverage.kind,
-              ...('extractors' in coverage ? { extractors: coverage.extractors } : {}),
-              ...('reason' in coverage ? { reason: coverage.reason } : {}),
-            }),
+          onNativeCoverage: (coverage) => nativeCoverage.push(nativeCoverageSummary(coverage)),
         },
       })
       const semanticElapsedMs = performance.now() - semanticStarted
@@ -184,6 +179,22 @@ async function runPass(
     staticTimings: value.staticTimings,
     semantics: value.semantics,
   }
+}
+
+function nativeCoverageSummary(coverage: {
+  readonly kind: string
+  readonly extractors?: unknown
+  readonly reason?: unknown
+}): NativeCoverageSummary {
+  return {
+    kind: coverage.kind,
+    ...(isStringArray(coverage.extractors) ? { extractors: coverage.extractors } : {}),
+    ...(typeof coverage.reason === 'string' ? { reason: coverage.reason } : {}),
+  }
+}
+
+function isStringArray(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
 }
 
 function resultFromPatch(elapsedMs: number, patch: IndexPatch): PatchBenchmarkResult {

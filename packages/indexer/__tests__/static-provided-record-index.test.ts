@@ -93,7 +93,7 @@ describe('provided static syntax record indexing', () => {
 
   it('includes the selected config file even when static globs ignore its directory', async () => {
     const root = await fixtureRoot()
-    const configFile = join(root, 'packages/devtools/lib/__fixtures__/quality-project/crux.config.ts')
+    const configFile = join(root, 'packages/local-workers/lib/__fixtures__/quality-project/crux.config.ts')
     await mkdir(dirname(configFile), { recursive: true })
     await writeFile(
       configFile,

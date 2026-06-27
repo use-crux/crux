@@ -148,7 +148,7 @@ _Avoid_: semantic backend, type checker, nativeAst
 **TypeScript Local Worker Package**:
 The private package that owns Local's TypeScript worker bundle entrypoints for Project Index source,
 semantic, runtime, and compatibility work.
-_Avoid_: devtools worker owner, UI package worker scripts
+_Avoid_: UI package worker owner, UI package worker scripts
 
 **Semantic Scope**:
 The file set, previous index snapshot, and source-graph dependency closure handed from static/source

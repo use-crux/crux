@@ -52,11 +52,11 @@ export function prepareMutation(
   switch (scenario) {
     case 'leaf-prompt-edit': {
       const source = findSource(index, (candidate) => hasDefinitions(candidate) && !hasDependents(candidate))
-      return source && appendMutation(source.file, scenario)
+      return source ? appendMutation(source.file, scenario) : undefined
     }
     case 'imported-helper-edit': {
       const source = findSource(index, (candidate) => !hasDefinitions(candidate) && hasDependents(candidate))
-      return source && appendMutation(source.file, scenario)
+      return source ? appendMutation(source.file, scenario) : undefined
     }
     case 'unrelated-helper-edit': {
       const source = findSource(
@@ -64,15 +64,15 @@ export function prepareMutation(
         (candidate) => !hasDefinitions(candidate) && !hasDependents(candidate) && !hasDependencies(candidate),
       )
       const file = source?.file ?? findUnindexedTypeScriptFile(root, index)
-      return file && appendMutation(file, scenario)
+      return file ? appendMutation(file, scenario) : undefined
     }
     case 'config-edit': {
       const file = findConfigBoundary(root)
-      return file && appendMutation(file, scenario)
+      return file ? appendMutation(file, scenario) : undefined
     }
     case 'deleted-file': {
       const source = findSource(index, (candidate) => hasDefinitions(candidate) && !hasDependents(candidate))
-      return source && { file: source.file, deleted: true, apply: () => unlinkSync(source.file) }
+      return source ? { file: source.file, deleted: true, apply: () => unlinkSync(source.file) } : undefined
     }
   }
 }
@@ -92,7 +92,7 @@ function appendMutation(file: string, scenario: WatchScenarioName): WatchMutatio
 }
 
 function findSource(index: ProjectIndexSnapshot, predicate: (source: IndexSourceFile) => boolean): IndexSourceFile | undefined {
-  return index.sources?.find((source) => source.status !== 'deleted' && existsSync(source.file) && predicate(source))
+  return index.sources?.find((source) => existsSync(source.file) && predicate(source))
 }
 
 function findConfigBoundary(root: string): string | undefined {

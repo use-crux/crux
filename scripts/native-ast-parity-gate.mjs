@@ -61,11 +61,11 @@ const commands = [
     env: workerEnv,
   },
   {
-    label: 'Run devtools static parity over repository corpus',
+    label: 'Run local-workers static parity over repository corpus',
     command: 'pnpm',
     args: [
       '--filter',
-      '@use-crux/devtools',
+      '@use-crux/local-workers',
       'parity:indexer-static',
       '--',
       `--root=${repoRoot}`,
@@ -75,12 +75,12 @@ const commands = [
     env: workerEnv,
   },
   {
-    label: 'Build devtools worker bundle for Go host tests',
+    label: 'Build local worker bundle for Go host tests',
     command: 'pnpm',
-    args: ['--filter', '@use-crux/devtools', 'run', 'build:workers'],
+    args: ['--filter', '@use-crux/local-workers', 'build'],
   },
   {
-    label: 'Embed devtools workers for Go host tests',
+    label: 'Embed local workers for Go host tests',
     command: 'make',
     args: ['embed-workers'],
     cwd: localPackageRoot,

@@ -13,6 +13,7 @@
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
+import type { SourceReader } from '@use-crux/indexer/host/static-index'
 import {
   preloadStaticSources,
   runStaticFrontendExtraction,
@@ -88,7 +89,7 @@ async function main(): Promise<void> {
 async function runScenario(
   args: Args,
   files: readonly string[],
-  sources: ReadonlyMap<string, string>,
+  sources: SourceReader,
   scenario: Scenario,
 ): Promise<ScenarioResult> {
   const elapsed: number[] = []
@@ -199,7 +200,8 @@ function parseArgs(argv: readonly string[]): Args {
 
 function frontend(value: string | undefined): StaticFrontendName {
   if (!value || value === 'oxc-rust') return 'oxc-rust'
-  if (value === 'typescript' || value === 'oxc') return value
+  if (value === 'oxc') return 'oxc-rust'
+  if (value === 'typescript') return value
   throw new Error(`Unknown static frontend ${value}`)
 }
 

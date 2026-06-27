@@ -65,10 +65,8 @@ enrichment, runtime patch conversion, and Static Index compatibility-host calls.
 release, each host-only surface must be removed, made intentionally public, or kept package-private
 through build output.
 
-Local TypeScript worker bundles are target-owned by the private `packages/local-workers` package.
-`@use-crux/devtools` should own only the React/Vite UI and UI-local tests. Until the worker-package
-split lands, any worker scripts that still live in the devtools package are migration state rather
-than architecture precedent.
+Local TypeScript worker bundles are owned by the private `packages/local-workers` package.
+`@use-crux/devtools` owns only the React/Vite UI and UI-local tests.
 
 Accepted non-public surfaces:
 
@@ -680,8 +678,8 @@ Known v1 boundary:
   watcher recursively registers project directories, ignores generated/cache directories, debounces
   event bursts, coalesces changed/deleted file sets, and feeds a single-flight incremental reindex
   runner so index refreshes never overlap.
-- Opt-in watch benchmarks currently live in `@use-crux/devtools` (`perf:indexer:watch`) for
-  planner/AST/semantic worker timing until the private worker package owns those scripts. Go-side
+- Opt-in watch benchmarks live in `@use-crux/local-workers` (`perf:indexer:watch`) for
+  planner/AST/semantic worker timing. Go-side
   patch commit and projection timing lives under `packages/local/internal/devtools`. These benchmarks
   are not part of deterministic default CI.
 
