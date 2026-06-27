@@ -198,6 +198,32 @@ describe('GoogleCachedContentStore', () => {
     expect(port.creates).toHaveLength(3)
   })
 
+  it('deletes a cache created by an in-flight create that finishes during dispose', async () => {
+    let release!: (name: GoogleCacheName) => void
+    const created = new Promise<GoogleCacheName>((resolve) => {
+      release = resolve
+    })
+    const deletes: GoogleCacheName[] = []
+    const port: GoogleCachedContentCachePort = {
+      create: () => created,
+      delete: async ({ name }) => {
+        deletes.push(name)
+      },
+    }
+    const store = new GoogleCachedContentStore(port, STORE_CONFIG)
+
+    // Start a resolve whose create is still in flight, then dispose.
+    const resolving = store.resolve({ model: 'm', texts: ['late'], ttlSeconds: 300 })
+    const disposing = store.dispose()
+    release('cachedContents/late' as GoogleCacheName)
+
+    const [result] = await Promise.all([resolving, disposing])
+
+    // The late create must not be tracked, and its server-side cache is released.
+    expect(result).toBeUndefined()
+    expect(deletes).toEqual(['cachedContents/late'])
+  })
+
   it('ignores delete failures during dispose', async () => {
     const port = fakePort({
       delete: async () => {

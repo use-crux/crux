@@ -184,6 +184,24 @@ describe('built-in CachedContent lifecycle', () => {
     expect(plan.mode === 'cached' && plan.meta?.ttlSeconds).toBe(900)
   })
 
+  it.each([0, -5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'ignores an invalid per-call TTL (%s) and uses the default',
+    async (ttlSeconds) => {
+      const port = fakePort()
+      const lifecycle = createBuiltInCachedContentLifecycle({ port, config: CACHE_DEFAULTS })
+
+      const plan = await lifecycle.prepare({
+        model: 'm',
+        system: 'Cached rules',
+        systemBlocks: [{ source: 'context:rules', text: 'Cached rules', providerCache: true }],
+        call: { ttlSeconds },
+      })
+
+      expect(port.creates[0].ttlSeconds).toBe(CACHE_DEFAULTS.defaultTtlSeconds)
+      expect(plan.mode === 'cached' && plan.meta?.ttlSeconds).toBe(CACHE_DEFAULTS.defaultTtlSeconds)
+    },
+  )
+
   it('reports reuse on the second prepare with identical inputs', async () => {
     const port = fakePort()
     const lifecycle = createBuiltInCachedContentLifecycle({ port, config: CACHE_DEFAULTS })
@@ -208,5 +226,22 @@ describe('built-in CachedContent lifecycle', () => {
     await lifecycle.dispose?.()
 
     expect(del).toHaveBeenCalledWith({ name: 'cachedContents/disposable' })
+  })
+})
+
+describe('resolveCacheConfig validation', () => {
+  it('applies defaults for omitted fields', () => {
+    expect(resolveCacheConfig()).toEqual(CACHE_DEFAULTS)
+  })
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects an invalid defaultTtlSeconds (%s)',
+    (defaultTtlSeconds) => {
+      expect(() => resolveCacheConfig({ defaultTtlSeconds })).toThrow(/defaultTtlSeconds/)
+    },
+  )
+
+  it.each([0, -1, 2.5, Number.NaN])('rejects an invalid maxEntries (%s)', (maxEntries) => {
+    expect(() => resolveCacheConfig({ maxEntries })).toThrow(/maxEntries/)
   })
 })

@@ -47,9 +47,10 @@ describe('resolveCachedContentLifecycle', () => {
   })
 
   it('routes create/delete through a custom cache port instead of the client', async () => {
-    const { client, create } = fakeClient()
+    const { client, create, del } = fakeClient()
     const customCreate = vi.fn(async () => 'cachedContents/custom' as GoogleCacheName)
-    const port: GoogleCachedContentCachePort = { create: customCreate, delete: async () => undefined }
+    const customDelete = vi.fn(async () => undefined)
+    const port: GoogleCachedContentCachePort = { create: customCreate, delete: customDelete }
 
     const lifecycle = resolveCachedContentLifecycle(client, { port })
     const plan = await lifecycle.prepare({ model: 'm', system: 'Cached rules', systemBlocks: PREFIX })
@@ -57,6 +58,11 @@ describe('resolveCachedContentLifecycle', () => {
     expect(plan.mode === 'cached' && plan.config.cachedContent).toBe('cachedContents/custom')
     expect(customCreate).toHaveBeenCalledOnce()
     expect(create).not.toHaveBeenCalled()
+
+    await lifecycle.dispose?.()
+
+    expect(customDelete).toHaveBeenCalledWith({ name: 'cachedContents/custom' })
+    expect(del).not.toHaveBeenCalled()
   })
 
   it('returns a user-supplied advanced lifecycle as-is', async () => {

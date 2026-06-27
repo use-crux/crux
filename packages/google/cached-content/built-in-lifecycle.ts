@@ -15,6 +15,7 @@ import { GoogleCachedContentStore } from './cache-store'
 import { planSystemBlocks } from './planner'
 import type {
   GoogleCachedContentCachePort,
+  GoogleCachedContentCallOptions,
   GoogleCachedContentInlinePlan,
   GoogleCachedContentInlineReason,
   GoogleCachedContentLifecycle,
@@ -53,7 +54,7 @@ export function createBuiltInCachedContentLifecycle(
     const { cacheablePrefix, uncachedInstruction } = planSystemBlocks(args)
     if (cacheablePrefix.length === 0) return inline('no-cacheable-prefix', args.system)
 
-    const ttlSeconds = args.call?.ttlSeconds ?? deps.config.defaultTtlSeconds
+    const ttlSeconds = resolveCallTtlSeconds(args.call, deps.config.defaultTtlSeconds)
 
     let resolution
     try {
@@ -84,6 +85,19 @@ export function createBuiltInCachedContentLifecycle(
     prepare,
     dispose: () => store.dispose(),
   }
+}
+
+/**
+ * Resolve the TTL for a request.
+ *
+ * A per-call override is honored only when it is a finite, positive number;
+ * anything else (0, negative, `NaN`, `Infinity`) falls back to the adapter
+ * default rather than poisoning the cache key, local expiry, or the SDK
+ * `ttl: "<n>s"` payload.
+ */
+function resolveCallTtlSeconds(call: GoogleCachedContentCallOptions | undefined, fallback: number): number {
+  const override = call?.ttlSeconds
+  return typeof override === 'number' && Number.isFinite(override) && override > 0 ? override : fallback
 }
 
 /** Build an inline (uncached) plan, omitting `systemInstruction` when absent. */

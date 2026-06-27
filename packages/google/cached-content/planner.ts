@@ -30,17 +30,18 @@ export interface PlanSystemBlocksArgs {
 /**
  * Split resolved system blocks into a cacheable prefix and an inline suffix.
  *
- * When the leading blocks are cacheable, the suffix is reconstructed from the
- * remaining blocks. When no leading block is cacheable, the prefix is empty and
- * the flat `system` string is used verbatim as the inline instruction.
+ * The uncached suffix is always reconstructed from the blocks that follow the
+ * cacheable prefix, so the result stays derived from the block list rather than
+ * a mirrored `system` field. When no blocks are provided at all, the flat
+ * `system` string is used verbatim.
  */
 export function planSystemBlocks(args: PlanSystemBlocksArgs): SystemBlockPlan {
   const cacheablePrefix = cacheableSystemPrefix(args.systemBlocks)
-  if (cacheablePrefix.length === 0) {
+  if (!args.systemBlocks) {
     return { cacheablePrefix, uncachedInstruction: args.system }
   }
 
-  const uncachedBlocks = args.systemBlocks?.slice(cacheablePrefix.length) ?? []
+  const uncachedBlocks = args.systemBlocks.slice(cacheablePrefix.length)
   return { cacheablePrefix, uncachedInstruction: joinSystemBlocks(uncachedBlocks) }
 }
 

@@ -56,4 +56,16 @@ describe('planSystemBlocks', () => {
     expect(plan.cacheablePrefix).toEqual([])
     expect(plan.uncachedInstruction).toBe('Plain system')
   })
+
+  it('derives the suffix from blocks even when the flat system is omitted', () => {
+    const systemBlocks: SystemBlock[] = [
+      { source: 'context:rules', text: 'Cached rules', providerCache: true },
+      { source: 'prompt', text: 'Prompt rules', providerCache: false },
+    ]
+
+    const plan = planSystemBlocks({ systemBlocks })
+
+    expect(plan.cacheablePrefix).toEqual(systemBlocks.slice(0, 1))
+    expect(plan.uncachedInstruction).toBe('Prompt rules')
+  })
 })

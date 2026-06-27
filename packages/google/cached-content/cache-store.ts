@@ -63,6 +63,9 @@ type CacheEntry = ActiveCacheEntry | CreatingCacheEntry
 export class GoogleCachedContentStore {
   private readonly entries = new Map<CacheKey, CacheEntry>()
 
+  /** True while {@link dispose} is draining, so in-flight creates self-clean. */
+  private disposing = false
+
   constructor(
     private readonly port: GoogleCachedContentCachePort,
     private readonly config: CacheStoreConfig,
@@ -130,6 +133,15 @@ export class GoogleCachedContentStore {
         return undefined
       }
 
+      if (this.disposing) {
+        // The store was disposed while this create was in flight. Do not track
+        // the entry — release the just-created server-side cache instead so it
+        // cannot leak past disposal.
+        this.entries.delete(key)
+        await this.port.delete({ name }).catch(() => undefined)
+        return undefined
+      }
+
       const entry: ActiveCacheEntry = {
         status: 'active',
         name,
@@ -169,13 +181,26 @@ export class GoogleCachedContentStore {
    * Delete failures are ignored — a cache may have already expired server-side.
    */
   async dispose(): Promise<void> {
-    const deletions: Promise<unknown>[] = []
-    for (const entry of this.entries.values()) {
-      if (entry.status === 'active') {
-        deletions.push(this.port.delete({ name: entry.name }).catch(() => undefined))
+    this.disposing = true
+    try {
+      // Wait for in-flight creates to settle. With `disposing` set, each one
+      // self-cleans (deletes its cache, skips tracking), so none can repopulate
+      // the map after we clear it.
+      const inflight = [...this.entries.values()]
+        .filter((entry): entry is CreatingCacheEntry => entry.status === 'creating')
+        .map((entry) => entry.promise.catch(() => undefined))
+      await Promise.allSettled(inflight)
+
+      const deletions: Promise<unknown>[] = []
+      for (const entry of this.entries.values()) {
+        if (entry.status === 'active') {
+          deletions.push(this.port.delete({ name: entry.name }).catch(() => undefined))
+        }
       }
+      await Promise.allSettled(deletions)
+      this.entries.clear()
+    } finally {
+      this.disposing = false
     }
-    await Promise.allSettled(deletions)
-    this.entries.clear()
   }
 }

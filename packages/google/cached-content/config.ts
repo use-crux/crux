@@ -98,12 +98,35 @@ export const CACHE_DEFAULTS = {
   onError: 'fallback',
 } as const satisfies ResolvedCacheConfig
 
-/** Resolve user config into a fully-defaulted value config. */
+/**
+ * Resolve user config into a fully-defaulted value config.
+ *
+ * Missing fields fall back to {@link CACHE_DEFAULTS}, but invalid numeric values
+ * are rejected up front so they cannot poison cache keying, local expiry, or the
+ * provider TTL payload later.
+ *
+ * @throws RangeError when `defaultTtlSeconds` is not a positive finite number or
+ *   `maxEntries` is not a positive integer.
+ */
 export function resolveCacheConfig(config?: GoogleCacheConfig): ResolvedCacheConfig {
+  const defaultTtlSeconds = config?.defaultTtlSeconds ?? CACHE_DEFAULTS.defaultTtlSeconds
+  const maxEntries = config?.maxEntries ?? CACHE_DEFAULTS.maxEntries
+
+  if (!Number.isFinite(defaultTtlSeconds) || defaultTtlSeconds <= 0) {
+    throw new RangeError(
+      `createGoogle(): cache.defaultTtlSeconds must be a positive number, received ${String(config?.defaultTtlSeconds)}.`,
+    )
+  }
+  if (!Number.isInteger(maxEntries) || maxEntries < 1) {
+    throw new RangeError(
+      `createGoogle(): cache.maxEntries must be a positive integer, received ${String(config?.maxEntries)}.`,
+    )
+  }
+
   return {
     enabled: config?.enabled ?? CACHE_DEFAULTS.enabled,
-    defaultTtlSeconds: config?.defaultTtlSeconds ?? CACHE_DEFAULTS.defaultTtlSeconds,
-    maxEntries: config?.maxEntries ?? CACHE_DEFAULTS.maxEntries,
+    defaultTtlSeconds,
+    maxEntries,
     onError: config?.onError ?? CACHE_DEFAULTS.onError,
   }
 }
