@@ -39,6 +39,9 @@ mod injection {
     pub(crate) mod model;
     pub(crate) mod tools;
 }
+pub mod manifest;
+#[cfg(test)]
+mod manifest_tests;
 mod memory {
     pub(crate) mod blocks;
     pub(crate) mod facts;

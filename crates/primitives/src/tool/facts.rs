@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde_json::{Map, Value};
 
 use crate::{
@@ -9,11 +7,8 @@ use crate::{
         data_access_relation_refs, primitive_data_intelligence, unique_data_accesses,
     },
     definition::{NativeDefinitionInput, safe_id, static_index_definition},
-    protocol::{
-        SourceLocation, SourceSnippet, StaticImportRecord, StaticInitializerRecord,
-        StaticNativeFactExtractorIdentity, StaticNativeFactProjection, StaticSourceMatch,
-        StaticSyntaxFileRecord, StaticSyntaxValue,
-    },
+    manifest::CustomProjectionInput,
+    protocol::{SourceLocation, SourceSnippet, StaticSourceMatch, StaticSyntaxValue},
     record_values::{direct_string_property, has_property},
     routing::output::extracted_facts,
     schema::{SchemaProjection, schema_property},
@@ -29,28 +24,25 @@ struct ToolParts<'a> {
     snippet: Option<&'a SourceSnippet>,
 }
 
-/// Projects one complete first-party `tool` fact packet when the record evidence is sufficient.
-pub(crate) fn project_tool_native_fact(
-    file: &str,
-    imports: &[StaticImportRecord],
-    local_initializers: &[StaticInitializerRecord],
-    match_index: usize,
-    source_match: &StaticSourceMatch,
-    records_by_file: Option<&HashMap<String, StaticSyntaxFileRecord>>,
-) -> Option<StaticNativeFactProjection> {
-    let (context, parts) = match source_match {
+/// Projects the facts for one complete first-party `tool` packet.
+///
+/// The `tool` primitive matches both a `createTool`/`tool` call and a bare
+/// tool-schema object, so it owns its own match handling behind the manifest's
+/// custom-handler entry. The manifest stamps the `tool` extractor identity.
+pub(crate) fn tool_native_facts(input: &CustomProjectionInput<'_>) -> Option<Value> {
+    let (context, parts) = match input.source_match {
         StaticSourceMatch::Call { .. } => {
-            let call = call_parts(source_match)?;
+            let call = call_parts(input.source_match)?;
             if !matches!(call.callee_name, "createTool" | "tool") {
                 return None;
             }
             let object = call.object_arg?;
             let context = PrimitiveContext::new_with_records(
-                file,
-                imports,
-                local_initializers,
+                input.file,
+                input.imports,
+                input.local_initializers,
                 &call,
-                records_by_file,
+                input.records_by_file,
             );
             (
                 context,
@@ -75,11 +67,11 @@ pub(crate) fn project_tool_native_fact(
                 return None;
             }
             let context = PrimitiveContext::from_initializers_with_records(
-                file,
-                imports,
-                local_initializers,
+                input.file,
+                input.imports,
+                input.local_initializers,
                 match_initializers,
-                records_by_file,
+                input.records_by_file,
             );
             (
                 context,
@@ -93,15 +85,7 @@ pub(crate) fn project_tool_native_fact(
         }
         _ => return None,
     };
-    let facts = tool_facts(&context, &parts)?;
-    Some(StaticNativeFactProjection {
-        match_index,
-        replaces: vec![StaticNativeFactExtractorIdentity {
-            extension: "@use-crux/indexer/crux-core".to_string(),
-            extractor: "tool".to_string(),
-        }],
-        facts,
-    })
+    tool_facts(&context, &parts)
 }
 
 fn tool_facts(context: &PrimitiveContext<'_>, parts: &ToolParts<'_>) -> Option<Value> {

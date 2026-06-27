@@ -65,6 +65,24 @@ Static Index internals.
 | `static-index`          | `packages/indexer/contracts/static-index/schema.ts` plus `indexer/static-index/{config,plan,protocol,extension-host,compatibility}/*` | `internal/projectindex/staticindex/{cache,compiler,protocol,run,sourceprofile,frontend,planner}`                                                          | `crates/protocol/src/static_index.rs`; `crates/static-compiler/src/pipeline.rs`                                                                                                                                                                                          | checked-mirror  |
 | `semantic-evidence`     | `packages/indexer/contracts/semantic/schema.ts`, `indexer/semantic/evidence/projection.ts`, and service/native contracts              | TypeScript semantic workers are hosted under `internal/projectindex/workers/semantic`, which consumes patch events, not semantic evidence structs         | None today                                                                                                                                                                                                                                                               | typescript-only |
 
+## First-Party Primitive Projection Manifests
+
+Two distinct manifests describe first-party primitive shapes. They serve
+different lanes and must not be conflated:
+
+| Manifest                               | Owner                                                               | Role                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust static first-party manifest       | `crates/primitives/src/manifest.rs`                                 | The explicit registry of every first-party primitive the native Static Syntax lane projects. Declares identity (`extension`/`extractor`/`family`), matched call/constructor names, definition kinds + id prefixes, schema properties, and supported local reference forms, and drives dispatch + `replaces` identity stamping in `crates/primitives/src/projection`. It is a registry over hand-written handlers, not a data-driven projector. |
+| TypeScript-Go semantic direct manifest | `packages/indexer/indexer/semantic/backends/tsgo/direct-projectors` | The data-driven manifest the semantic TSGo backend uses to project directly from TypeScript-Go AST evidence. Its declarations (call name, schema, source refs, dependencies) drive projection in that lane.                                                                                                                                                                                                                                    |
+
+The Rust manifest carries the canonical `crux-first-party-primitives` name and a
+stable contract digest (`first_party_primitive_manifest_digest`) that aligns
+with the Static Index `primitiveManifest` cache-identity component. Manifest
+coverage is held in bijection with the shared
+`packages/indexer/contracts/fixtures/primitive-coverage-identities.json` fixture
+by `crates/primitives/src/manifest_tests.rs` and
+`crates/static-compiler/src/shared_fixtures_tests.rs`.
+
 ## Parity Fixture Gaps
 
 - `worker-events`: Shared worker-event fixtures are consumed by TypeScript, Go, and Rust for success, artifact, phase-error, and out-of-order stream cases.

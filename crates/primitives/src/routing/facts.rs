@@ -1,39 +1,29 @@
+use serde_json::Value;
+
 use crate::{
     context::{PrimitiveContext, call_parts},
-    protocol::{
-        StaticImportRecord, StaticInitializerRecord, StaticNativeFactExtractorIdentity,
-        StaticNativeFactProjection, StaticSourceMatch,
-    },
+    manifest::CustomProjectionInput,
     routing::cascade::cascade_facts,
     routing::fallback::fallback_facts,
     routing::router::router_facts,
 };
 
-/// Projects an exact native packet for one supported first-party routing match.
-pub(crate) fn project_routing_native_fact(
-    file: &str,
-    imports: &[StaticImportRecord],
-    local_initializers: &[StaticInitializerRecord],
-    match_index: usize,
-    source_match: &StaticSourceMatch,
-) -> Option<StaticNativeFactProjection> {
-    let parts = call_parts(source_match)?;
+/// Projects the facts for one supported first-party routing match.
+///
+/// Routing dispatches over `router`/`cascade`/`fallback` and resolves only
+/// same-file evidence, so it owns its match handling behind the manifest's
+/// custom-handler entry. The manifest stamps the `routing` extractor identity.
+pub(crate) fn routing_native_facts(input: &CustomProjectionInput<'_>) -> Option<Value> {
+    let parts = call_parts(input.source_match)?;
     if parts.callee_direct == Some(false) {
         return None;
     }
-    let context = PrimitiveContext::new(file, imports, local_initializers, &parts);
-    let facts = match parts.callee_name {
-        "router" => router_facts(&context, &parts)?,
-        "cascade" => cascade_facts(&context, &parts)?,
-        "fallback" => fallback_facts(&context, &parts)?,
-        _ => return None,
-    };
-    Some(StaticNativeFactProjection {
-        match_index,
-        replaces: vec![StaticNativeFactExtractorIdentity {
-            extension: "@use-crux/indexer/crux-core".to_string(),
-            extractor: "routing".to_string(),
-        }],
-        facts,
-    })
+    let context =
+        PrimitiveContext::new(input.file, input.imports, input.local_initializers, &parts);
+    match parts.callee_name {
+        "router" => router_facts(&context, &parts),
+        "cascade" => cascade_facts(&context, &parts),
+        "fallback" => fallback_facts(&context, &parts),
+        _ => None,
+    }
 }
