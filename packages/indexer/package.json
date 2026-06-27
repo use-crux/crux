@@ -81,7 +81,8 @@
     }
   },
   "scripts": {
-    "test": "vitest run --maxWorkers=1",
+    "check:contracts": "node ../../scripts/check-indexer-contracts.mjs",
+    "test": "pnpm run check:contracts && vitest run --maxWorkers=1",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

@@ -20,6 +20,7 @@
     "typecheck:ts55": "node ./scripts/typecheck-typescript-compat.mjs 5.5.4",
     "typecheck:ts60": "node ./scripts/typecheck-typescript-compat.mjs 6.0.3",
     "typecheck:tsgo-preview": "node ./scripts/typecheck-typescript-compat.mjs tsgo",
+    "check:indexer-contracts": "node ./scripts/check-indexer-contracts.mjs",
     "test:indexer:compiler-runtime": "node ./scripts/test-indexer-compiler-runtime.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,mdx}\" --ignore-path .gitignore",
     "changeset": "changeset",

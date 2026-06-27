@@ -9,6 +9,12 @@ import (
 	"testing"
 )
 
+func TestSharedStaticSyntaxFixturesAreDeclaredByContractManifest(t *testing.T) {
+	assertSharedStaticSyntaxManifestFixture(t, "static-syntax-records.json")
+	assertSharedStaticSyntaxManifestFixture(t, "static-syntax-record-cases.json")
+	assertSharedStaticSyntaxManifestGoMirror(t)
+}
+
 func TestSharedStaticSyntaxRecordFixtureDecodesFromStreamEvent(t *testing.T) {
 	var fixture struct {
 		Records []json.RawMessage `json:"records"`
@@ -130,10 +136,93 @@ func readSharedStaticSyntaxFixture(t *testing.T, name string, out any) {
 
 func sharedStaticSyntaxFixturePath(t *testing.T, name string) string {
 	t.Helper()
+	return filepath.Join(sharedStaticSyntaxRepoRoot(t), "packages", "indexer", "contracts", "fixtures", name)
+}
+
+func assertSharedStaticSyntaxManifestFixture(t *testing.T, name string) {
+	t.Helper()
+	manifest := readSharedStaticSyntaxContractManifest(t)
+	path := filepath.ToSlash(filepath.Join("packages", "indexer", "contracts", "fixtures", name))
+	group := sharedStaticSyntaxManifestGroup(t, manifest, "static-syntax-records")
+	if !containsString(group.Fixtures, path) {
+		t.Fatalf("contract manifest static-syntax-records fixtures = %v, want %s", group.Fixtures, path)
+	}
+}
+
+func assertSharedStaticSyntaxManifestGoMirror(t *testing.T) {
+	t.Helper()
+	manifest := readSharedStaticSyntaxContractManifest(t)
+	group := sharedStaticSyntaxManifestGroup(t, manifest, "static-syntax-records")
+	currentPath := currentSharedStaticSyntaxTestPath(t)
+	if !containsString(group.Mirrors.Go, currentPath) {
+		t.Fatalf("contract manifest static-syntax-records Go mirrors = %v, want %s", group.Mirrors.Go, currentPath)
+	}
+}
+
+func readSharedStaticSyntaxContractManifest(t *testing.T) contractManifest {
+	t.Helper()
+	path := filepath.Join(sharedStaticSyntaxRepoRoot(t), "packages", "indexer", "contracts", "contract-manifest.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read contract manifest %s: %v", path, err)
+	}
+	var manifest contractManifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("decode contract manifest %s: %v", path, err)
+	}
+	return manifest
+}
+
+func sharedStaticSyntaxManifestGroup(t *testing.T, manifest contractManifest, id string) contractManifestGroup {
+	t.Helper()
+	for _, group := range manifest.Groups {
+		if group.ID == id {
+			return group
+		}
+	}
+	t.Fatalf("contract manifest missing group %q", id)
+	return contractManifestGroup{}
+}
+
+func currentSharedStaticSyntaxTestPath(t *testing.T) string {
+	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "..", ".."))
-	return filepath.Join(repoRoot, "packages", "indexer", "contracts", "fixtures", name)
+	relative, err := filepath.Rel(sharedStaticSyntaxRepoRoot(t), file)
+	if err != nil {
+		t.Fatalf("relative path for %s: %v", file, err)
+	}
+	return filepath.ToSlash(relative)
+}
+
+func sharedStaticSyntaxRepoRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "..", ".."))
+}
+
+type contractManifest struct {
+	Groups []contractManifestGroup `json:"groups"`
+}
+
+type contractManifestGroup struct {
+	ID       string   `json:"id"`
+	Fixtures []string `json:"fixtures"`
+	Mirrors  struct {
+		Go []string `json:"go"`
+	} `json:"mirrors"`
+}
+
+func containsString(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
 }

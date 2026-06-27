@@ -1,10 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import type { StaticSyntaxFileRecord } from '../contracts/static-syntax/schema'
 import { indexPatchFromWorkerEvents, indexPatchToWorkerEvents } from '../contracts/worker-events/schema'
-import {
-  workerEventFixtureOptions,
-  workerEventFixturePatch,
-} from '../contracts/worker-events/fixtures'
+import { workerEventFixtureOptions, workerEventFixturePatch } from '../contracts/worker-events/fixtures'
 import {
   StaticIndexCompilerRequestSchema,
   StaticIndexCompilerResponseSchema,
@@ -14,10 +11,11 @@ import {
   staticIndexCompilerRequestFixtures,
   staticIndexCompilerResponseFixtures,
 } from '../contracts/static-index/fixtures'
+import { readStaticIndexRuntimeSharedFixture, staticIndexRuntimeContractFixtureGroups } from '../contracts/fixtures'
 import {
-  readStaticIndexRuntimeSharedFixture,
-  staticIndexRuntimeContractFixtureGroups,
-} from '../contracts/fixtures'
+  staticIndexRuntimeContractManifest,
+  staticIndexRuntimeContractManifestGroups,
+} from '../contracts/contract-manifest'
 import { projectSemanticEvidenceBatches, semanticEvidenceBatchKinds } from '../contracts/semantic/schema'
 
 describe('Static Index runtime contract spine', () => {
@@ -77,5 +75,22 @@ describe('Static Index runtime contract spine', () => {
       'static-index',
       'semantic-evidence',
     ])
+  })
+
+  it('exports the canonical cross-language manifest from the contracts package', () => {
+    expect(staticIndexRuntimeContractManifestGroups).toEqual(staticIndexRuntimeContractFixtureGroups)
+    expect(staticIndexRuntimeContractManifest.groups.map((group) => group.id)).toEqual(
+      staticIndexRuntimeContractFixtureGroups,
+    )
+    expect(staticIndexRuntimeContractManifest.groups.map((group) => group.mirrorStatus)).toEqual([
+      'checked-mirror',
+      'checked-mirror',
+      'checked-mirror',
+      'typescript-only',
+    ])
+    expect(staticIndexRuntimeContractManifest.protocolVersions).toEqual({
+      projectIndexWorkerEvents: 2,
+      staticIndexCompiler: 2,
+    })
   })
 })

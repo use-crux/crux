@@ -8,13 +8,10 @@
  * @module
  */
 
+import { staticIndexRuntimeContractManifestGroups } from '../contract-manifest'
+
 /** Contract groups with shared TypeScript fixture payloads. */
-export const staticIndexRuntimeContractFixtureGroups = [
-  'worker-events',
-  'static-syntax-records',
-  'static-index',
-  'semantic-evidence',
-] as const
+export const staticIndexRuntimeContractFixtureGroups = staticIndexRuntimeContractManifestGroups
 
 export {
   readStaticIndexRuntimeSharedFixture,
@@ -30,10 +27,7 @@ export {
   type WorkerEventsSharedFixture,
 } from './shared'
 
-export {
-  workerEventFixtureOptions,
-  workerEventFixturePatch,
-} from '../worker-events/fixtures'
+export { workerEventFixtureOptions, workerEventFixturePatch } from '../worker-events/fixtures'
 export {
   staticIndexCompilerRequestFixtures,
   staticIndexCompilerResponseFixtures,

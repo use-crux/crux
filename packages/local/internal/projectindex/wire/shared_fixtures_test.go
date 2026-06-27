@@ -9,6 +9,12 @@ import (
 	"testing"
 )
 
+func TestSharedWorkerEventFixturesAreDeclaredByContractManifest(t *testing.T) {
+	assertSharedWorkerEventManifestFixture(t, "worker-events.json")
+	assertSharedWorkerEventManifestFixture(t, "worker-event-cases.json")
+	assertSharedWorkerEventManifestGoMirror(t)
+}
+
 func TestSharedWorkerEventFixtureDecodes(t *testing.T) {
 	var fixture struct {
 		Events []json.RawMessage `json:"events"`
@@ -112,10 +118,93 @@ func readSharedWorkerEventFixture(t *testing.T, name string, out any) {
 
 func sharedWorkerEventFixturePath(t *testing.T, name string) string {
 	t.Helper()
+	return filepath.Join(sharedWorkerEventRepoRoot(t), "packages", "indexer", "contracts", "fixtures", name)
+}
+
+func assertSharedWorkerEventManifestFixture(t *testing.T, name string) {
+	t.Helper()
+	manifest := readSharedWorkerEventContractManifest(t)
+	path := filepath.ToSlash(filepath.Join("packages", "indexer", "contracts", "fixtures", name))
+	group := sharedWorkerEventManifestGroup(t, manifest, "worker-events")
+	if !containsString(group.Fixtures, path) {
+		t.Fatalf("contract manifest worker-events fixtures = %v, want %s", group.Fixtures, path)
+	}
+}
+
+func assertSharedWorkerEventManifestGoMirror(t *testing.T) {
+	t.Helper()
+	manifest := readSharedWorkerEventContractManifest(t)
+	group := sharedWorkerEventManifestGroup(t, manifest, "worker-events")
+	currentPath := currentSharedWorkerEventTestPath(t)
+	if !containsString(group.Mirrors.Go, currentPath) {
+		t.Fatalf("contract manifest worker-events Go mirrors = %v, want %s", group.Mirrors.Go, currentPath)
+	}
+}
+
+func readSharedWorkerEventContractManifest(t *testing.T) contractManifest {
+	t.Helper()
+	path := filepath.Join(sharedWorkerEventRepoRoot(t), "packages", "indexer", "contracts", "contract-manifest.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read contract manifest %s: %v", path, err)
+	}
+	var manifest contractManifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("decode contract manifest %s: %v", path, err)
+	}
+	return manifest
+}
+
+func sharedWorkerEventManifestGroup(t *testing.T, manifest contractManifest, id string) contractManifestGroup {
+	t.Helper()
+	for _, group := range manifest.Groups {
+		if group.ID == id {
+			return group
+		}
+	}
+	t.Fatalf("contract manifest missing group %q", id)
+	return contractManifestGroup{}
+}
+
+func currentSharedWorkerEventTestPath(t *testing.T) string {
+	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", ".."))
-	return filepath.Join(repoRoot, "packages", "indexer", "contracts", "fixtures", name)
+	relative, err := filepath.Rel(sharedWorkerEventRepoRoot(t), file)
+	if err != nil {
+		t.Fatalf("relative path for %s: %v", file, err)
+	}
+	return filepath.ToSlash(relative)
+}
+
+func sharedWorkerEventRepoRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", ".."))
+}
+
+type contractManifest struct {
+	Groups []contractManifestGroup `json:"groups"`
+}
+
+type contractManifestGroup struct {
+	ID       string   `json:"id"`
+	Fixtures []string `json:"fixtures"`
+	Mirrors  struct {
+		Go []string `json:"go"`
+	} `json:"mirrors"`
+}
+
+func containsString(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
 }
