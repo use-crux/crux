@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 )
 
 func TestWorkerConstructionDoesNotStartNodePhaseWorkers(t *testing.T) {
@@ -39,7 +39,7 @@ type closingSyntaxParser struct {
 	closed int
 }
 
-func (p *closingSyntaxParser) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (p *closingSyntaxParser) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by lifecycle test")
 }
 

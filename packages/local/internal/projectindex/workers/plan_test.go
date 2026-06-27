@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
 func TestWorkerStaticIndexBuildsPlanWithoutNodeStaticPlan(t *testing.T) {
@@ -250,7 +250,7 @@ func (c *staticIndexConfigOnlyCompiler) StaticIndexFinalizeStream(ctx context.Co
 	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *staticIndexConfigOnlyCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexConfigOnlyCompiler) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by Static Index config-only plan")
 }
 
@@ -258,5 +258,5 @@ func (c *staticIndexConfigOnlyCompiler) Concurrency() int { return 1 }
 
 func (c *staticIndexConfigOnlyCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*staticIndexConfigOnlyCompiler)(nil)
+var _ frontend.Parser = (*staticIndexConfigOnlyCompiler)(nil)
 var _ StaticCompiler = (*staticIndexConfigOnlyCompiler)(nil)

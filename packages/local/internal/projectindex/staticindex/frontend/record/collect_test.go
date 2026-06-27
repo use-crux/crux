@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 )
 
 func TestCollectUsesParserConcurrency(t *testing.T) {
@@ -171,10 +171,10 @@ func fileWithSource(t *testing.T, root string, rel string) string {
 
 type recordingSyntaxParser struct {
 	concurrency int
-	requests    []syntax.Request
+	requests    []frontend.Request
 }
 
-func (p *recordingSyntaxParser) ParseFile(_ context.Context, request syntax.Request) (json.RawMessage, error) {
+func (p *recordingSyntaxParser) ParseFile(_ context.Context, request frontend.Request) (json.RawMessage, error) {
 	p.requests = append(p.requests, request)
 	return json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"frontend":{"name":"test-rust","version":"1"},"file":%q,"sourceHash":"hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}`, request.File)), nil
 }
@@ -188,15 +188,15 @@ func (p *recordingSyntaxParser) Close() error {
 }
 
 type recordingBatchSyntaxParser struct {
-	requests []syntax.Request
+	requests []frontend.Request
 }
 
-func (p *recordingBatchSyntaxParser) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (p *recordingBatchSyntaxParser) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called")
 }
 
-func (p *recordingBatchSyntaxParser) ParseFiles(_ context.Context, requests []syntax.Request) ([]json.RawMessage, error) {
-	p.requests = append([]syntax.Request(nil), requests...)
+func (p *recordingBatchSyntaxParser) ParseFiles(_ context.Context, requests []frontend.Request) ([]json.RawMessage, error) {
+	p.requests = append([]frontend.Request(nil), requests...)
 	records := make([]json.RawMessage, 0, len(requests))
 	for _, request := range requests {
 		records = append(records, json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"frontend":{"name":"test-rust","version":"1"},"file":%q,"sourceHash":"hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}`, request.File)))
@@ -228,7 +228,7 @@ func newBlockingSyntaxParser(concurrency int, fileCount int) *blockingSyntaxPars
 	}
 }
 
-func (p *blockingSyntaxParser) ParseFile(ctx context.Context, request syntax.Request) (json.RawMessage, error) {
+func (p *blockingSyntaxParser) ParseFile(ctx context.Context, request frontend.Request) (json.RawMessage, error) {
 	inFlight := p.inFlight.Add(1)
 	defer p.inFlight.Add(-1)
 	for {

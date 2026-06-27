@@ -1,4 +1,4 @@
-package syntaxstream
+package frontendstream
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 )
 
@@ -91,17 +91,17 @@ func TestSendPropagatesParserErrors(t *testing.T) {
 }
 
 type recordingParser struct {
-	requests []syntax.Request
+	requests []frontend.Request
 	records  []json.RawMessage
 	err      error
 }
 
-func (p *recordingParser) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (p *recordingParser) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called")
 }
 
-func (p *recordingParser) ParseFilesStream(_ context.Context, requests []syntax.Request, handle syntax.RecordHandler) error {
-	p.requests = append([]syntax.Request(nil), requests...)
+func (p *recordingParser) ParseFilesStream(_ context.Context, requests []frontend.Request, handle frontend.RecordHandler) error {
+	p.requests = append([]frontend.Request(nil), requests...)
 	if p.err != nil {
 		return p.err
 	}
@@ -117,4 +117,4 @@ func (p *recordingParser) Concurrency() int { return 1 }
 
 func (p *recordingParser) Close() error { return nil }
 
-var _ syntax.StreamParser = (*recordingParser)(nil)
+var _ frontend.StreamParser = (*recordingParser)(nil)

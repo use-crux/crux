@@ -7,27 +7,27 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	staticclient "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/client"
+	staticcompiler "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/session"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
 // WithSyntaxParser overrides the parser used for static syntax records.
-func (w *Bundle) WithSyntaxParser(worker syntax.Parser) *Bundle {
+func (w *Bundle) WithSyntaxParser(worker frontend.Parser) *Bundle {
 	w.syntaxParser = worker
 	return w
 }
 
-func syntaxWorkerFromEnv() syntax.Parser {
-	commandPath, ok := syntax.CommandPathFromEnv()
+func syntaxWorkerFromEnv() frontend.Parser {
+	commandPath, ok := frontend.CommandPathFromEnv()
 	if !ok {
 		return nil
 	}
-	if syntax.UseAdaptivePoolFromEnv() {
-		return staticclient.NewAdaptivePool(syntax.DefaultPoolSize(), commandPath, "serve")
+	if frontend.UseAdaptivePoolFromEnv() {
+		return staticcompiler.NewAdaptivePool(frontend.DefaultPoolSize(), commandPath, "serve")
 	}
-	return staticclient.NewPool(syntax.PoolSizeFromEnv(), commandPath, "serve")
+	return staticcompiler.NewPool(frontend.PoolSizeFromEnv(), commandPath, "serve")
 }
 
 // InspectProjectStaticSyntaxPlan returns the static parser plan used by the

@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax/record"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax/stream"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend/record"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend/stream"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 )
 
@@ -17,7 +17,7 @@ func (w *Bundle) indexProjectAstPatchFromNativeSyntaxRecordStream(
 	configPath string,
 	projectName string,
 	plan projectindex.ProjectStaticSyntaxPlan,
-	parser syntax.StreamParser,
+	parser frontend.StreamParser,
 ) (projectindex.IndexPatch, ProjectIndexAstTiming, error) {
 	req := requestwire.Request{
 		ProtocolVersion: 2,
@@ -36,7 +36,7 @@ func (w *Bundle) indexProjectAstPatchFromNativeSyntaxRecordStream(
 		MaxFactsPerBatch: requestwire.MaxFactsPerBatch(req.Method),
 		Producer:         workerProducer,
 	})
-	streamTiming, err := syntaxstream.Stream(ctx, w.worker, req, plan, parser, collector.Handle, func() bool {
+	streamTiming, err := frontendstream.Stream(ctx, w.worker, req, plan, parser, collector.Handle, func() bool {
 		return collector.CompletedPatchCount() >= 1
 	})
 	timing := astTimingFromSyntaxStream(streamTiming)
@@ -54,7 +54,7 @@ func (w *Bundle) indexProjectAstPatchFromNativeSyntaxRecordStream(
 	return patches[0], timing, nil
 }
 
-func astTimingFromSyntaxStream(timing syntaxstream.Timing) ProjectIndexAstTiming {
+func astTimingFromSyntaxStream(timing frontendstream.Timing) ProjectIndexAstTiming {
 	return ProjectIndexAstTiming{
 		NativeParseAndForwardMs: timing.ParseAndForwardMs,
 		NodeProjectionMs:        timing.ProjectionMs,

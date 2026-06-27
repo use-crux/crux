@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
 func TestWorkerStaticIndexErrorsWhenFinalizeHasNoPatch(t *testing.T) {
@@ -171,11 +171,11 @@ func (c *staticIndexNoPatchCompiler) StaticIndexFinalizeStream(ctx context.Conte
 	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *staticIndexNoPatchCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexNoPatchCompiler) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by fallback test")
 }
 
-func (c *staticIndexNoPatchCompiler) ParseFilesStream(_ context.Context, requests []syntax.Request, handle syntax.RecordHandler) error {
+func (c *staticIndexNoPatchCompiler) ParseFilesStream(_ context.Context, requests []frontend.Request, handle frontend.RecordHandler) error {
 	c.streamParseCalls++
 	if len(requests) != 1 || requests[0].File != c.sourceFile {
 		return fmt.Errorf("stream requests = %+v, want %s", requests, c.sourceFile)
@@ -188,6 +188,6 @@ func (c *staticIndexNoPatchCompiler) Concurrency() int { return 1 }
 
 func (c *staticIndexNoPatchCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*staticIndexNoPatchCompiler)(nil)
-var _ syntax.StreamParser = (*staticIndexNoPatchCompiler)(nil)
+var _ frontend.Parser = (*staticIndexNoPatchCompiler)(nil)
+var _ frontend.StreamParser = (*staticIndexNoPatchCompiler)(nil)
 var _ StaticCompiler = (*staticIndexNoPatchCompiler)(nil)

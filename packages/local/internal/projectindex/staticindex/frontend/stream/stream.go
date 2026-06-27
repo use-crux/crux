@@ -1,4 +1,4 @@
-package syntaxstream
+package frontendstream
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax/record"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend/record"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 )
 
@@ -26,7 +26,7 @@ func Stream(
 	worker *workerproc.Worker,
 	req requestwire.Request,
 	plan projectindex.ProjectStaticSyntaxPlan,
-	parser syntax.StreamParser,
+	parser frontend.StreamParser,
 	handle func(json.RawMessage) error,
 	done func() bool,
 ) (Timing, error) {
@@ -55,7 +55,7 @@ func Send(
 	req requestwire.Request,
 	requestID string,
 	plan projectindex.ProjectStaticSyntaxPlan,
-	parser syntax.StreamParser,
+	parser frontend.StreamParser,
 ) (Timing, error) {
 	parseRequests := record.ParseRequests(plan)
 	var timing Timing
@@ -72,7 +72,7 @@ func Send(
 		if chunkBytes > timing.MaxChunkBytes {
 			timing.MaxChunkBytes = chunkBytes
 		}
-		return send(syntax.RecordBatchRequestLine(req.Method, requestID, records))
+		return send(frontend.RecordBatchRequestLine(req.Method, requestID, records))
 	})
 	if err := parser.ParseFilesStream(ctx, parseRequests, func(_ int, record json.RawMessage) error {
 		timing.RecordCount++

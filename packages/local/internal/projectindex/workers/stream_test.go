@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -154,7 +154,7 @@ func TestProjectIndexSyntaxRecordChunkerFlushesIncrementally(t *testing.T) {
 
 func TestProjectIndexSyntaxRecordBatchRequestLineEncodesRawRecords(t *testing.T) {
 	record := json.RawMessage(`{"schemaVersion":1,"file":"/repo/src/one.ts","matches":[]}`)
-	line := syntax.RecordBatchRequestLine("indexProjectAstFromSyntaxRecords", "request-1", []json.RawMessage{record})
+	line := frontend.RecordBatchRequestLine("indexProjectAstFromSyntaxRecords", "request-1", []json.RawMessage{record})
 
 	var req requestwire.Request
 	if err := json.Unmarshal(line, &req); err != nil {

@@ -46,7 +46,7 @@ func TestProjectIndexArchitecturePackagesUseBoundedContextLayout(t *testing.T) {
 		{"projectindex/readmodel", "derived Project Index read model"},
 		{"projectindex/service", "runtime-facing Project Index service"},
 		{"projectindex/staticindex/cache", "Static Index cache boundary"},
-		{"projectindex/staticindex/client", "current Static Index compiler client boundary until Phase 6 moves it to staticindex/compiler"},
+		{"projectindex/staticindex/compiler", "Go client for Rust Static Index compiler methods"},
 		{"projectindex/staticindex/compat", "Static Index compatibility helpers"},
 		{"projectindex/staticindex/planner", "Static Index source planning boundary"},
 		{"projectindex/staticindex/planner/sourcegraph", "Static Index source graph planning"},
@@ -58,9 +58,9 @@ func TestProjectIndexArchitecturePackagesUseBoundedContextLayout(t *testing.T) {
 		{"projectindex/staticindex/run/patch", "Static Index patch projection"},
 		{"projectindex/staticindex/session", "Static Index session orchestration boundary"},
 		{"projectindex/staticindex/sourceprofile", "Static Index source profile boundary"},
-		{"projectindex/staticindex/syntax", "current Static Syntax frontend boundary until Phase 6 moves it to staticindex/frontend"},
-		{"projectindex/staticindex/syntax/record", "current Static Syntax record model until Phase 6 moves it under staticindex/frontend"},
-		{"projectindex/staticindex/syntax/stream", "current Static Syntax stream decoder until Phase 6 moves it under staticindex/frontend"},
+		{"projectindex/staticindex/frontend", "Static Syntax frontend process adapter (Rust/Oxc)"},
+		{"projectindex/staticindex/frontend/record", "Static Syntax record model"},
+		{"projectindex/staticindex/frontend/stream", "Static Syntax stream decoder"},
 		{"projectindex/eventwire", "Project Index worker event stream collector"},
 		{"process/workerproc", "generic JSON-lines worker process package"},
 		{"assets", "generated local runtime asset owner"},
@@ -68,19 +68,6 @@ func TestProjectIndexArchitecturePackagesUseBoundedContextLayout(t *testing.T) {
 	for _, expected := range expectedPackages {
 		if info, err := os.Stat(filepath.Join(internalDir, expected.path)); err != nil || !info.IsDir() {
 			t.Fatalf("expected Project Index package %q to exist under internal/ (%s)", expected.path, expected.note)
-		}
-	}
-
-	pendingTargets := []pendingInternalPackage{
-		{"projectindex/staticindex/syntax", "projectindex/staticindex/frontend", 6, "Static Syntax frontend process adapter"},
-		{"projectindex/staticindex/client", "projectindex/staticindex/compiler", 6, "Rust Static Index compiler client"},
-	}
-	for _, pending := range pendingTargets {
-		if info, err := os.Stat(filepath.Join(internalDir, pending.current)); err != nil || !info.IsDir() {
-			t.Fatalf("current package %q must remain explicit until Phase %d moves it to %q (%s)", pending.current, pending.phase, pending.target, pending.note)
-		}
-		if _, err := os.Stat(filepath.Join(internalDir, pending.target)); !os.IsNotExist(err) {
-			t.Fatalf("target package %q exists before Phase %d updates this pending inventory (%s)", pending.target, pending.phase, pending.note)
 		}
 	}
 
@@ -93,6 +80,18 @@ func TestProjectIndexArchitecturePackagesUseBoundedContextLayout(t *testing.T) {
 	for _, packagePath := range movedPhase4Roots {
 		if _, err := os.Stat(filepath.Join(internalDir, packagePath)); !os.IsNotExist(err) {
 			t.Fatalf("old Phase 4 package %q must be moved under projectindex/workers or projectindex/eventwire without an alias", packagePath)
+		}
+	}
+
+	// Phase 6 renamed the Static Syntax frontend and Rust Static Index compiler
+	// client packages. The old "syntax"/"client" names must be gone, not aliased.
+	movedPhase6Roots := []string{
+		"projectindex/staticindex/syntax",
+		"projectindex/staticindex/client",
+	}
+	for _, packagePath := range movedPhase6Roots {
+		if _, err := os.Stat(filepath.Join(internalDir, packagePath)); !os.IsNotExist(err) {
+			t.Fatalf("old Phase 6 package %q must be moved to projectindex/staticindex/frontend or projectindex/staticindex/compiler without an alias", packagePath)
 		}
 	}
 

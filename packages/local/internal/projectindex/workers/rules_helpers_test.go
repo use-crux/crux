@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
 func staticIndexRulesIndexerScript() string {
@@ -193,7 +193,7 @@ func (c *staticIndexRuleCompiler) StaticIndexFinalizeStream(ctx context.Context,
 	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *staticIndexRuleCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexRuleCompiler) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by Static Index rule scheduling")
 }
 
@@ -201,7 +201,7 @@ func (c *staticIndexRuleCompiler) Concurrency() int { return 1 }
 
 func (c *staticIndexRuleCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*staticIndexRuleCompiler)(nil)
+var _ frontend.Parser = (*staticIndexRuleCompiler)(nil)
 var _ StaticCompiler = (*staticIndexRuleCompiler)(nil)
 
 func staticIndexRuleEvents(root string, phase string, includeRule bool) ([]json.RawMessage, error) {

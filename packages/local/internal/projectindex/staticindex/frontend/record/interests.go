@@ -2,16 +2,16 @@ package record
 
 import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 )
 
-func CallInterests(input []projectindex.StaticCallInterest) []syntax.CallInterest {
+func CallInterests(input []projectindex.StaticCallInterest) []frontend.CallInterest {
 	if len(input) == 0 {
 		return nil
 	}
-	interests := make([]syntax.CallInterest, 0, len(input))
+	interests := make([]frontend.CallInterest, 0, len(input))
 	for _, interest := range input {
-		interests = append(interests, syntax.CallInterest{
+		interests = append(interests, frontend.CallInterest{
 			Name:       interest.Name,
 			ImportFrom: append([]string(nil), interest.ImportFrom...),
 			ConfigArg:  interest.ConfigArg,
@@ -23,13 +23,13 @@ func CallInterests(input []projectindex.StaticCallInterest) []syntax.CallInteres
 	return interests
 }
 
-func ConstructorInterests(input []projectindex.StaticConstructorInterest) []syntax.ConstructorInterest {
+func ConstructorInterests(input []projectindex.StaticConstructorInterest) []frontend.ConstructorInterest {
 	if len(input) == 0 {
 		return nil
 	}
-	interests := make([]syntax.ConstructorInterest, 0, len(input))
+	interests := make([]frontend.ConstructorInterest, 0, len(input))
 	for _, interest := range input {
-		interests = append(interests, syntax.ConstructorInterest{
+		interests = append(interests, frontend.ConstructorInterest{
 			Name:       interest.Name,
 			ImportFrom: append([]string(nil), interest.ImportFrom...),
 			ConfigArg:  interest.ConfigArg,
@@ -41,13 +41,13 @@ func ConstructorInterests(input []projectindex.StaticConstructorInterest) []synt
 	return interests
 }
 
-func callbackInterests(input []projectindex.StaticCallbackInterest) []syntax.CallbackInterest {
+func callbackInterests(input []projectindex.StaticCallbackInterest) []frontend.CallbackInterest {
 	if len(input) == 0 {
 		return nil
 	}
-	interests := make([]syntax.CallbackInterest, 0, len(input))
+	interests := make([]frontend.CallbackInterest, 0, len(input))
 	for _, interest := range input {
-		interests = append(interests, syntax.CallbackInterest{
+		interests = append(interests, frontend.CallbackInterest{
 			Property: interest.Property,
 			MaxDepth: interest.MaxDepth,
 		})

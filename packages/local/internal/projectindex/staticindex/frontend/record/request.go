@@ -2,14 +2,14 @@ package record
 
 import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 )
 
-func ParseRequests(plan projectindex.ProjectStaticSyntaxPlan) []syntax.Request {
+func ParseRequests(plan projectindex.ProjectStaticSyntaxPlan) []frontend.Request {
 	files := Files(plan)
-	requests := make([]syntax.Request, 0, len(files))
+	requests := make([]frontend.Request, 0, len(files))
 	for _, file := range files {
-		requests = append(requests, syntax.Request{
+		requests = append(requests, frontend.Request{
 			Root:                     plan.Root,
 			File:                     file,
 			ReadSourceFromDisk:       true,

@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	staticclient "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/client"
+	staticcompiler "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/sourceprofile"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
 func TestSyntaxCompilerCallsCommandWorker(t *testing.T) {
-	worker := staticclient.New(shellPath(t), fakeStaticIndexCompilerWorker(t))
+	worker := staticcompiler.New(shellPath(t), fakeStaticIndexCompilerWorker(t))
 	defer worker.Close()
 
 	identity := protocol.SkeletonIdentity()
@@ -167,12 +167,12 @@ func (c *recordingStaticIndexCompiler) StaticIndexFinalizeStream(ctx context.Con
 	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *recordingStaticIndexCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *recordingStaticIndexCompiler) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	c.parseCalls++
 	return nil, fmt.Errorf("ParseFile should not be called by Static Index skeleton")
 }
 
-func (c *recordingStaticIndexCompiler) ParseFiles(context.Context, []syntax.Request) ([]json.RawMessage, error) {
+func (c *recordingStaticIndexCompiler) ParseFiles(context.Context, []frontend.Request) ([]json.RawMessage, error) {
 	c.batchParseCalls++
 	return nil, fmt.Errorf("ParseFiles should not be called by Static Index skeleton")
 }
@@ -207,8 +207,8 @@ func staticIndexTestTelemetry(selected, hits, misses, analyzed int) protocol.Tel
 	}
 }
 
-var _ syntax.Parser = (*recordingStaticIndexCompiler)(nil)
-var _ syntax.BatchParser = (*recordingStaticIndexCompiler)(nil)
+var _ frontend.Parser = (*recordingStaticIndexCompiler)(nil)
+var _ frontend.BatchParser = (*recordingStaticIndexCompiler)(nil)
 var _ StaticCompiler = (*recordingStaticIndexCompiler)(nil)
 
 func staticIndexTestAnalyzeStream(response protocol.AnalyzeResponse, handle protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 )
 
 func TestWorkerPlanProjectSemanticRequestUsesStaticIndexSourceProfile(t *testing.T) {
@@ -128,7 +128,7 @@ func waitForStaticSyntaxPlanWaiter(t testing.TB, worker *Bundle) {
 
 type noopSyntaxParser struct{}
 
-func (noopSyntaxParser) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (noopSyntaxParser) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	return json.RawMessage(`{}`), nil
 }
 

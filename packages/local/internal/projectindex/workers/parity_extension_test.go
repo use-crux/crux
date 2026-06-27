@@ -8,15 +8,15 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 )
 
 func TestWorkerNativeStaticIndexUsesTypeScriptExtensionFallbackInProductionPath(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
-	if os.Getenv(syntax.WorkerEnv) == "" {
-		t.Skipf("set %s to run production Static Index extension fallback parity", syntax.WorkerEnv)
+	if os.Getenv(frontend.WorkerEnv) == "" {
+		t.Skipf("set %s to run production Static Index extension fallback parity", frontend.WorkerEnv)
 	}
 
 	root := t.TempDir()

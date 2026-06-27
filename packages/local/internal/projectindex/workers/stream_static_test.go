@@ -12,12 +12,12 @@ import (
 	"strings"
 	"testing"
 
-	staticclient "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/client"
+	staticcompiler "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 )
 
 func TestSyntaxCompilerAnalyzeStreamAcceptsChunkedEvents(t *testing.T) {
-	worker := staticclient.New(shellPath(t), fakeStaticIndexAnalyzeStreamWorker(t))
+	worker := staticcompiler.New(shellPath(t), fakeStaticIndexAnalyzeStreamWorker(t))
 	defer worker.Close()
 
 	identity := protocol.SkeletonIdentity()
@@ -56,7 +56,7 @@ func TestSyntaxCompilerAnalyzeStreamAcceptsChunkedEvents(t *testing.T) {
 }
 
 func TestSyntaxCompilerAnalyzeStreamRejectsUnlabeledEvents(t *testing.T) {
-	worker := staticclient.New(shellPath(t), fakeStaticIndexAnalyzeUnlabeledEventWorker(t))
+	worker := staticcompiler.New(shellPath(t), fakeStaticIndexAnalyzeUnlabeledEventWorker(t))
 	defer worker.Close()
 
 	_, err := worker.StaticIndexAnalyzeStream(context.Background(), protocol.AnalyzeRequest{
@@ -77,7 +77,7 @@ func TestSyntaxCompilerAnalyzeStreamRejectsUnlabeledEvents(t *testing.T) {
 }
 
 func TestSyntaxCompilerAnalyzeStreamIgnoresDoneResponseFacts(t *testing.T) {
-	worker := staticclient.New(shellPath(t), fakeStaticIndexAnalyzeDoneFactsWorker(t))
+	worker := staticcompiler.New(shellPath(t), fakeStaticIndexAnalyzeDoneFactsWorker(t))
 	defer worker.Close()
 
 	response, err := worker.StaticIndexAnalyzeStream(context.Background(), protocol.AnalyzeRequest{
@@ -101,7 +101,7 @@ func TestSyntaxCompilerAnalyzeStreamIgnoresDoneResponseFacts(t *testing.T) {
 }
 
 func TestSyntaxCompilerFinalizeStreamAcceptsPatchEvents(t *testing.T) {
-	worker := staticclient.New(shellPath(t), fakeStaticIndexFinalizeStreamWorker(t))
+	worker := staticcompiler.New(shellPath(t), fakeStaticIndexFinalizeStreamWorker(t))
 	defer worker.Close()
 
 	events := []json.RawMessage{}

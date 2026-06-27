@@ -101,12 +101,11 @@ The target Go package names are responsibility names:
 - `internal/projectindex/staticindex/frontend`: Static Syntax frontend process adaptation.
 - `internal/projectindex/staticindex/compiler`: Go client for Rust Static Index compiler methods.
 - `internal/projectindex/staticindex/run`: deep module facade for Static Index prepare/analyze/finalize
-  orchestration.
+  orchestration, split into `prepare.go`, `analyze.go`, `finalize.go`, `compile.go`, and `cache.go`.
 
-Current packages named `staticindex/syntax` and `staticindex/client` are migration state for the
-Rust/Go architecture cleanup until Phase 6 renames them to `staticindex/frontend` and
-`staticindex/compiler`. New code should use the target vocabulary and should not add compatibility
-aliases for old package names.
+The former `staticindex/syntax` and `staticindex/client` packages were renamed to
+`staticindex/frontend` and `staticindex/compiler`. New code should use the target vocabulary and
+should not add compatibility aliases for the old package names.
 
 ## Quality Insight Derivation
 

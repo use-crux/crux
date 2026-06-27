@@ -98,10 +98,10 @@
       "mirrors": {
         "go": [
           "packages/local/internal/projectindex/staticindex/planner/build.go",
-          "packages/local/internal/projectindex/staticindex/syntax/record/request.go",
-          "packages/local/internal/projectindex/staticindex/syntax/record/collect.go",
-          "packages/local/internal/projectindex/staticindex/syntax/event.go",
-          "packages/local/internal/projectindex/staticindex/syntax/shared_fixtures_test.go"
+          "packages/local/internal/projectindex/staticindex/frontend/record/request.go",
+          "packages/local/internal/projectindex/staticindex/frontend/record/collect.go",
+          "packages/local/internal/projectindex/staticindex/frontend/event.go",
+          "packages/local/internal/projectindex/staticindex/frontend/shared_fixtures_test.go"
         ],
         "rust": [
           "crates/protocol/src/static_syntax.rs",

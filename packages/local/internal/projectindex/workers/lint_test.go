@@ -8,7 +8,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"testing"
 
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -184,7 +184,7 @@ func (c *staticIndexLintCompiler) StaticIndexFinalizeStream(ctx context.Context,
 	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *staticIndexLintCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexLintCompiler) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by lint finalize")
 }
 
@@ -192,7 +192,7 @@ func (c *staticIndexLintCompiler) Concurrency() int { return 1 }
 
 func (c *staticIndexLintCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*staticIndexLintCompiler)(nil)
+var _ frontend.Parser = (*staticIndexLintCompiler)(nil)
 var _ StaticCompiler = (*staticIndexLintCompiler)(nil)
 
 func staticIndexLintPatchEvents(root string) ([]json.RawMessage, error) {

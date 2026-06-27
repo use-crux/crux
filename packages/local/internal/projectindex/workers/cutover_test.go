@@ -10,8 +10,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
 func TestWorkerStaticIndexCutoverUsesFinalizePatchEvents(t *testing.T) {
@@ -172,9 +172,9 @@ func (c *staticIndexCutoverCompiler) StaticIndexPrepare(_ context.Context, reque
 			CacheHits:                []protocol.SourceFile{},
 			CacheMisses:              append([]protocol.SourceFile(nil), request.Files...),
 			CallNames:                append([]string(nil), request.CallNames...),
-			CallInterests:            append([]syntax.CallInterest(nil), request.CallInterests...),
+			CallInterests:            append([]frontend.CallInterest(nil), request.CallInterests...),
 			ConstructorNames:         append([]string(nil), request.ConstructorNames...),
-			ConstructorInterests:     append([]syntax.ConstructorInterest(nil), request.ConstructorInterests...),
+			ConstructorInterests:     append([]frontend.ConstructorInterest(nil), request.ConstructorInterests...),
 			PruneNativeFactCallNames: append([]string(nil), request.PruneNativeFactCallNames...),
 		},
 		Diagnostics: []json.RawMessage{},
@@ -245,17 +245,17 @@ func (c *staticIndexCutoverCompiler) StaticIndexFinalizeStream(ctx context.Conte
 	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *staticIndexCutoverCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexCutoverCompiler) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	c.parseCalls++
 	return nil, fmt.Errorf("ParseFile should not be called by Static Index cutover")
 }
 
-func (c *staticIndexCutoverCompiler) ParseFiles(context.Context, []syntax.Request) ([]json.RawMessage, error) {
+func (c *staticIndexCutoverCompiler) ParseFiles(context.Context, []frontend.Request) ([]json.RawMessage, error) {
 	c.batchParseCalls++
 	return nil, fmt.Errorf("ParseFiles should not be called by Static Index cutover")
 }
 
-func (c *staticIndexCutoverCompiler) ParseFilesStream(context.Context, []syntax.Request, syntax.RecordHandler) error {
+func (c *staticIndexCutoverCompiler) ParseFilesStream(context.Context, []frontend.Request, frontend.RecordHandler) error {
 	c.streamParseCalls++
 	return fmt.Errorf("ParseFilesStream should not be called by Static Index cutover")
 }
@@ -264,7 +264,7 @@ func (c *staticIndexCutoverCompiler) Concurrency() int { return 1 }
 
 func (c *staticIndexCutoverCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*staticIndexCutoverCompiler)(nil)
-var _ syntax.BatchParser = (*staticIndexCutoverCompiler)(nil)
-var _ syntax.StreamParser = (*staticIndexCutoverCompiler)(nil)
+var _ frontend.Parser = (*staticIndexCutoverCompiler)(nil)
+var _ frontend.BatchParser = (*staticIndexCutoverCompiler)(nil)
+var _ frontend.StreamParser = (*staticIndexCutoverCompiler)(nil)
 var _ StaticCompiler = (*staticIndexCutoverCompiler)(nil)

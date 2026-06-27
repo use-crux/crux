@@ -8,10 +8,10 @@ import (
 	"sync"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 )
 
-func Collect(ctx context.Context, parser syntax.Parser, plan projectindex.ProjectStaticSyntaxPlan) ([]json.RawMessage, error) {
+func Collect(ctx context.Context, parser frontend.Parser, plan projectindex.ProjectStaticSyntaxPlan) ([]json.RawMessage, error) {
 	if parser == nil {
 		return nil, fmt.Errorf("project syntax parser is not configured")
 	}
@@ -20,7 +20,7 @@ func Collect(ctx context.Context, parser syntax.Parser, plan projectindex.Projec
 	if len(files) == 0 {
 		return records, nil
 	}
-	if batchParser, ok := parser.(syntax.BatchParser); ok {
+	if batchParser, ok := parser.(frontend.BatchParser); ok {
 		return batchParser.ParseFiles(ctx, ParseRequests(plan))
 	}
 
@@ -90,12 +90,12 @@ sendJobs:
 	return records, nil
 }
 
-func parseFile(ctx context.Context, parser syntax.Parser, plan projectindex.ProjectStaticSyntaxPlan, file string) (json.RawMessage, error) {
+func parseFile(ctx context.Context, parser frontend.Parser, plan projectindex.ProjectStaticSyntaxPlan, file string) (json.RawMessage, error) {
 	source, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("read source for native syntax record %s: %w", file, err)
 	}
-	record, err := parser.ParseFile(ctx, syntax.Request{
+	record, err := parser.ParseFile(ctx, frontend.Request{
 		Root:                     plan.Root,
 		File:                     file,
 		Source:                   string(source),

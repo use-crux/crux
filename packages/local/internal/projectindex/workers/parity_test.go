@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend/record"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run/parity"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax/record"
 )
 
 func TestWorkerStaticIndexMatchesTypeScriptProductionPath(t *testing.T) {
@@ -74,11 +74,11 @@ func TestProductionStaticParityEnvRequiredFlag(t *testing.T) {
 func requireProductionStaticParityEnv(t testing.TB) string {
 	t.Helper()
 	root := os.Getenv("CRUX_INDEXER_PARITY_ROOT")
-	worker := os.Getenv(syntax.WorkerEnv)
+	worker := os.Getenv(frontend.WorkerEnv)
 	if root != "" && worker != "" {
 		return root
 	}
-	message := "set CRUX_INDEXER_PARITY_ROOT and " + syntax.WorkerEnv + " to run production Static Index parity"
+	message := "set CRUX_INDEXER_PARITY_ROOT and " + frontend.WorkerEnv + " to run production Static Index parity"
 	if parityEnvRequired() {
 		t.Fatal(message)
 	}

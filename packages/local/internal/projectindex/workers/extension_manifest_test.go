@@ -11,9 +11,9 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/cache"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
 func TestWorkerStaticIndexLoadsConfiguredExtensionManifestWithoutNodeStaticPlan(t *testing.T) {
@@ -287,7 +287,7 @@ func (c *staticIndexExtensionManifestCompiler) StaticIndexFinalizeStream(ctx con
 	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *staticIndexExtensionManifestCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexExtensionManifestCompiler) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by extension manifest test")
 }
 
@@ -295,7 +295,7 @@ func (c *staticIndexExtensionManifestCompiler) Concurrency() int { return 1 }
 
 func (c *staticIndexExtensionManifestCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*staticIndexExtensionManifestCompiler)(nil)
+var _ frontend.Parser = (*staticIndexExtensionManifestCompiler)(nil)
 var _ StaticCompiler = (*staticIndexExtensionManifestCompiler)(nil)
 
 func containsPhaseTiming(timings []projectindex.ProjectIndexPhaseTiming, name string) bool {

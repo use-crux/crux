@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"testing"
 
-	staticclient "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/client"
+	staticcompiler "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/sourceprofile"
 )
 
 func TestSyntaxCompilerPoolUsesCommandWorker(t *testing.T) {
-	pool := staticclient.NewPool(2, shellPath(t), fakeStaticIndexCompilerWorker(t))
+	pool := staticcompiler.NewPool(2, shellPath(t), fakeStaticIndexCompilerWorker(t))
 	defer pool.Close()
 
 	identity := protocol.SkeletonIdentity()
@@ -56,4 +56,4 @@ func TestSyntaxCompilerPoolUsesCommandWorker(t *testing.T) {
 	}
 }
 
-var _ StaticCompiler = (*staticclient.Pool)(nil)
+var _ StaticCompiler = (*staticcompiler.Pool)(nil)

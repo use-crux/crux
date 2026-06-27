@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 )
 
 func TestWorker_indexProjectAstPatchFromNativeSyntaxRecordStreamStreamsLegacyRecords(t *testing.T) {
@@ -184,15 +184,15 @@ func containsTimingReason(values []string, want string) bool {
 }
 
 type streamOnlySyntaxParser struct {
-	requests []syntax.Request
+	requests []frontend.Request
 }
 
-func (p *streamOnlySyntaxParser) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (p *streamOnlySyntaxParser) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called for stream-capable syntax parser")
 }
 
-func (p *streamOnlySyntaxParser) ParseFilesStream(_ context.Context, requests []syntax.Request, handle syntax.RecordHandler) error {
-	p.requests = append([]syntax.Request(nil), requests...)
+func (p *streamOnlySyntaxParser) ParseFilesStream(_ context.Context, requests []frontend.Request, handle frontend.RecordHandler) error {
+	p.requests = append([]frontend.Request(nil), requests...)
 	for index := len(requests) - 1; index >= 0; index-- {
 		request := requests[index]
 		record := json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"frontend":{"name":"oxc-rust","version":"test"},"file":%q,"sourceHash":"hash","imports":[],"matches":[],"localInitializers":[],"diagnostics":[]}`, request.File))
@@ -211,5 +211,5 @@ func (p *streamOnlySyntaxParser) Close() error {
 	return nil
 }
 
-var _ syntax.Parser = (*streamOnlySyntaxParser)(nil)
-var _ syntax.StreamParser = (*streamOnlySyntaxParser)(nil)
+var _ frontend.Parser = (*streamOnlySyntaxParser)(nil)
+var _ frontend.StreamParser = (*streamOnlySyntaxParser)(nil)

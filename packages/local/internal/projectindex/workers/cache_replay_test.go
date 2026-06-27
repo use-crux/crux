@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/cache"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
 func TestWorkerStaticIndexReplaysWarmStaticCacheFacts(t *testing.T) {
@@ -122,9 +122,9 @@ func (c *staticIndexCacheReplayCompiler) StaticIndexPrepare(_ context.Context, r
 			CacheHits:                hits,
 			CacheMisses:              misses,
 			CallNames:                append([]string(nil), request.CallNames...),
-			CallInterests:            append([]syntax.CallInterest(nil), request.CallInterests...),
+			CallInterests:            append([]frontend.CallInterest(nil), request.CallInterests...),
 			ConstructorNames:         append([]string(nil), request.ConstructorNames...),
-			ConstructorInterests:     append([]syntax.ConstructorInterest(nil), request.ConstructorInterests...),
+			ConstructorInterests:     append([]frontend.ConstructorInterest(nil), request.ConstructorInterests...),
 			PruneNativeFactCallNames: append([]string(nil), request.PruneNativeFactCallNames...),
 		},
 		Diagnostics: []json.RawMessage{},
@@ -184,7 +184,7 @@ func (c *staticIndexCacheReplayCompiler) StaticIndexFinalizeStream(ctx context.C
 	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *staticIndexCacheReplayCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexCacheReplayCompiler) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by Static Index cache replay")
 }
 
@@ -274,5 +274,5 @@ func staticIndexCacheReplayEvents(root, projectName string) ([]json.RawMessage, 
 	return events, nil
 }
 
-var _ syntax.Parser = (*staticIndexCacheReplayCompiler)(nil)
+var _ frontend.Parser = (*staticIndexCacheReplayCompiler)(nil)
 var _ StaticCompiler = (*staticIndexCacheReplayCompiler)(nil)

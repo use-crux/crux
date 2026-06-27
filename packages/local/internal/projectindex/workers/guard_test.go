@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compat"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
 func TestProjectStaticPlanStaticIndexSchedulableRejectsCompatibilityEvidence(t *testing.T) {
@@ -154,11 +154,11 @@ func (c *staticIndexGuardCompiler) StaticIndexFinalizeStream(ctx context.Context
 	return staticIndexTestFinalizeStream(response, handle)
 }
 
-func (c *staticIndexGuardCompiler) ParseFile(context.Context, syntax.Request) (json.RawMessage, error) {
+func (c *staticIndexGuardCompiler) ParseFile(context.Context, frontend.Request) (json.RawMessage, error) {
 	return nil, fmt.Errorf("ParseFile should not be called by guard fallback")
 }
 
-func (c *staticIndexGuardCompiler) ParseFilesStream(_ context.Context, requests []syntax.Request, handle syntax.RecordHandler) error {
+func (c *staticIndexGuardCompiler) ParseFilesStream(_ context.Context, requests []frontend.Request, handle frontend.RecordHandler) error {
 	c.streamParseCalls++
 	if len(requests) != 1 || requests[0].File != c.sourceFile {
 		return fmt.Errorf("stream requests = %+v, want %s", requests, c.sourceFile)
@@ -171,6 +171,6 @@ func (c *staticIndexGuardCompiler) Concurrency() int { return 1 }
 
 func (c *staticIndexGuardCompiler) Close() error { return nil }
 
-var _ syntax.Parser = (*staticIndexGuardCompiler)(nil)
-var _ syntax.StreamParser = (*staticIndexGuardCompiler)(nil)
+var _ frontend.Parser = (*staticIndexGuardCompiler)(nil)
+var _ frontend.StreamParser = (*staticIndexGuardCompiler)(nil)
 var _ StaticCompiler = (*staticIndexGuardCompiler)(nil)

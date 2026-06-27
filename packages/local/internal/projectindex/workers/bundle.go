@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/node"
 	runtimeworker "github.com/use-crux/crux/packages/local/internal/projectindex/workers/runtime"
 	semanticworker "github.com/use-crux/crux/packages/local/internal/projectindex/workers/semantic"
@@ -19,7 +19,7 @@ type Bundle struct {
 	worker         *workerproc.Worker
 	semanticWorker *semanticworker.Worker
 	runtimeWorker  *runtimeworker.Worker
-	syntaxParser   syntax.Parser
+	syntaxParser   frontend.Parser
 	timingsMu      sync.Mutex
 	lastAstTiming  ProjectIndexAstTiming
 	planMu         sync.Mutex

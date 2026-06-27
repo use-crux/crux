@@ -1,12 +1,12 @@
-package client
+package compiler
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/use-crux/crux/packages/local/internal/process/workerproc"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/protocol"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/syntax"
 )
 
 // Static is the Go-owned boundary for the Rust/Oxc static compiler lane.
@@ -24,23 +24,23 @@ type CompileStreamer interface {
 }
 
 type Worker struct {
-	*syntax.Worker
+	*frontend.Worker
 }
 
 func New(commandPath string, commandArgs ...string) *Worker {
-	return &Worker{Worker: syntax.New(commandPath, commandArgs...)}
+	return &Worker{Worker: frontend.New(commandPath, commandArgs...)}
 }
 
 type Pool struct {
-	*syntax.Pool
+	*frontend.Pool
 }
 
 func NewPool(size int, commandPath string, commandArgs ...string) *Pool {
-	return &Pool{Pool: syntax.NewPool(size, commandPath, commandArgs...)}
+	return &Pool{Pool: frontend.NewPool(size, commandPath, commandArgs...)}
 }
 
 func NewAdaptivePool(maxSize int, commandPath string, commandArgs ...string) *Pool {
-	return &Pool{Pool: syntax.NewAdaptivePool(maxSize, commandPath, commandArgs...)}
+	return &Pool{Pool: frontend.NewAdaptivePool(maxSize, commandPath, commandArgs...)}
 }
 
 func (p *Pool) staticIndexWorker() (*Worker, error) {

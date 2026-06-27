@@ -1,5 +1,5 @@
 package workers
 
-import staticclient "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/client"
+import staticcompiler "github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/compiler"
 
-type StaticCompiler = staticclient.Static
+type StaticCompiler = staticcompiler.Static
