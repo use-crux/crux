@@ -282,15 +282,9 @@ describe('Google adapter — CachedContent integration', () => {
   it('passes cachedContent to generateContent when systemBlocks have providerCache', async () => {
     const { mockGenerateContent, mockCachesCreate, mockClient } = createCacheAdapter()
 
-    // Call the spec directly to control systemBlocks
-    const { buildGoogleSpec: buildSpec } = (await import('../index')) as any
-
-    // Instead, test through the public adapter with a prompt that produces systemBlocks.
-    // The adapter's generate() resolves the prompt, which may or may not produce
-    // systemBlocks. Since we're testing cache manager integration, let's verify
-    // via the cache-manager test suite and check the token mapping here instead.
-
-    // Test: cachedContentTokenCount maps to cacheReadTokens
+    // CachedContent lifecycle behavior is covered end to end by
+    // cached-content-boundary.test.ts. Here we only verify that the response
+    // path maps cachedContentTokenCount onto cacheReadTokens.
     mockGenerateContent.mockResolvedValue({
       ...googleResponse('hello'),
       usageMetadata: {

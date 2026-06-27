@@ -3,9 +3,11 @@ import { adapter } from '@crux/core/adapter'
 import type { AdapterSpec } from '@crux/core/adapter'
 import { defineNativeChatProvider } from '@crux/core/adapter/native-chat'
 import type { NativeProviderPort } from '@crux/core/adapter/native-chat'
-import { GoogleCacheManager } from './cache-manager'
-import type { GoogleCacheConfig } from './cache-types'
-import { resolveCacheConfig } from './cache-types'
+import {
+  disabledCachedContentLifecycle,
+  resolveCachedContentLifecycle,
+} from './cached-content'
+import type { GoogleCachedContentLifecycle, GoogleCachedContentOption } from './cached-content'
 import { googleTranscript } from './message-codec'
 import {
   asGoogleGenerateContentParams,
@@ -19,19 +21,20 @@ import { googleTextDelta } from './stream'
 import type { GoogleExtra, GoogleRequest } from './types'
 
 interface GoogleNativeDeps extends Record<string, unknown> {
-  readonly cacheManager?: GoogleCacheManager
+  readonly cachedContentLifecycle: GoogleCachedContentLifecycle
 }
 
 /** Options for `createGoogle()`. */
 export interface CreateGoogleOptions {
   /**
-   * Cache configuration for Google's CachedContent API.
+   * CachedContent configuration for Google's context caching API.
    *
    * - `undefined` / omitted: caching enabled with defaults
-   * - `GoogleCacheConfig`: custom TTL, max entries, etc.
+   * - `GoogleCacheConfig`: custom TTL, max entries, error mode, or cache port
    * - `false`: disable cache management entirely
+   * - `GoogleCachedContentLifecycle`: a fully custom lifecycle implementation
    */
-  readonly cache?: GoogleCacheConfig | false
+  readonly cache?: GoogleCachedContentOption
 }
 
 /** Google native chat profile compiled into the public Crux adapter API. */
@@ -44,7 +47,7 @@ const nativeGoogle = defineNativeChatProvider<
   Content
 >({
   providerId: 'google',
-  request: (args, { deps }) => googleRequest(args, deps.cacheManager),
+  request: (args, { deps }) => googleRequest(args, deps.cachedContentLifecycle),
   response: {
     meta: googleResponseMeta,
     text: googleResponseText,
@@ -65,20 +68,26 @@ function bindGoogle(
   }
 }
 
-/** Build the native Google `AdapterSpec`, closing over an optional cache manager. */
+/** Build the native Google `AdapterSpec`, closing over a CachedContent lifecycle. */
 export function buildGoogleSpec(
-  cacheManager?: GoogleCacheManager,
+  cachedContentLifecycle: GoogleCachedContentLifecycle,
 ): AdapterSpec<GoogleGenAI, GenerateContentResponse, AsyncIterable<GenerateContentResponse>, GoogleExtra> {
-  return nativeGoogle.specFor(bindGoogle, { cacheManager })
+  return nativeGoogle.specFor(bindGoogle, { cachedContentLifecycle })
 }
 
 /** Create a Google GenAI adapter bound to a client instance. */
 export function createGoogle(client: GoogleGenAI, opts?: CreateGoogleOptions) {
-  const cacheManager =
-    opts?.cache !== false ? new GoogleCacheManager(client, resolveCacheConfig(opts?.cache)) : undefined
+  const cachedContentLifecycle = resolveCachedContentLifecycle(client, opts?.cache)
 
-  return adapter(buildGoogleSpec(cacheManager))(client)
+  return adapter(buildGoogleSpec(cachedContentLifecycle))(client)
 }
 
-/** Lightweight helper factory generated from the Google native chat profile. */
-export const googleHelpers = nativeGoogle.helpers(bindGoogle, {})
+/**
+ * Lightweight helper factory generated from the Google native chat profile.
+ *
+ * Helpers run plain text/object generation without system blocks, so they use a
+ * disabled CachedContent lifecycle and never create server-side caches.
+ */
+export const googleHelpers = nativeGoogle.helpers(bindGoogle, {
+  cachedContentLifecycle: disabledCachedContentLifecycle(),
+})

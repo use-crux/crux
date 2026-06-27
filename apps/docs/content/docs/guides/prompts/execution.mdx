@@ -96,7 +96,7 @@ const stream = await adapter.stream(greet, {
 })
 ```
 
-Accepts Google-native options: `tools`, `temperature`, `maxOutputTokens`, `topP`, `topK`, plus `extra.cache.skip` and `extra.cache.ttlSeconds` for per-call CachedContent control.
+Accepts Google-native options: `tools`, `temperature`, `maxOutputTokens`, `topP`, `topK`, plus `extra.cachedContent.skip` and `extra.cachedContent.ttlSeconds` for per-call CachedContent control.
 
 <Callout type="warn">
   The Google adapter validates structured output with Zod after generation. If the model returns invalid JSON, you'll

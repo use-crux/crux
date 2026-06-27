@@ -595,7 +595,7 @@ const google = createGoogle(new GoogleGenAI({ apiKey: '...' }), {
 })
 ```
 
-Accepts Google-native options: `tools` (function declarations), `temperature`, `maxOutputTokens`, `topP`, `topK`. Cache management is automatic — when the leading system blocks have `providerCache: true`, the adapter creates/reuses a server-side `CachedContent` object for that prefix and keeps the uncached remainder inline. Disable cache lifecycle management with `createGoogle(client, { cache: false })`, skip a single call with `extra: { cache: { skip: true } }`, or override a new cache object's TTL with `extra: { cache: { ttlSeconds } }`.
+Accepts Google-native options: `tools` (function declarations), `temperature`, `maxOutputTokens`, `topP`, `topK`. Cache management is automatic — when the leading system blocks have `providerCache: true`, the adapter creates/reuses a server-side `CachedContent` object for that prefix and keeps the uncached remainder inline. Disable cache lifecycle management with `createGoogle(client, { cache: false })`, skip a single call with `extra: { cachedContent: { skip: true } }`, or override a new cache object's TTL with `extra: { cachedContent: { ttlSeconds } }`.
 
 ### Anthropic SDK
 

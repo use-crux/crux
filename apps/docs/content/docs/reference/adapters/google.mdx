@@ -20,22 +20,24 @@ Create an adapter bound to a Google GenAI client with optional cache configurati
 
 `@crux/google` is built from the shared `defineNativeChatProvider()` profile used by the other native chat adapters.
 The package-owned `googleTranscript` owns `Content[]` conversion plus assistant text/function-call extraction. The
-Google package still owns the SDK request shape, function-call normalization, response metadata normalization, and
-CachedContent manager; the shared core profile only supplies the adapter shell, structured/text helper plumbing, and
+Google package still owns the SDK request shape, function-call normalization, response metadata normalization, and the
+CachedContent lifecycle; the shared core profile only supplies the adapter shell, structured/text helper plumbing, and
 default tool-round formatting.
 
-| Field        | Type                         | Description                                                            |
-| ------------ | ---------------------------- | ---------------------------------------------------------------------- |
-| `client`     | `GoogleGenAI`                | The Google GenAI client instance                                       |
-| `opts.cache` | `GoogleCacheConfig \| false` | Cache configuration (optional). Omit for defaults, `false` to disable. |
+| Field        | Type                                                          | Description                                                                      |
+| ------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `client`     | `GoogleGenAI`                                                | The Google GenAI client instance                                                 |
+| `opts.cache` | `GoogleCacheConfig \| false \| GoogleCachedContentLifecycle` | CachedContent configuration (optional). Omit for defaults, `false` to disable, or pass a custom lifecycle. |
 
 **`GoogleCacheConfig`:**
 
-| Field               | Type      | Default | Description                            |
-| ------------------- | --------- | ------- | -------------------------------------- |
-| `enabled`           | `boolean` | `true`  | Enable/disable cache management        |
-| `defaultTtlSeconds` | `number`  | `300`   | TTL for server-side cache objects      |
-| `maxEntries`        | `number`  | `50`    | Max concurrent cache entries in memory |
+| Field               | Type                             | Default       | Description                                                                          |
+| ------------------- | -------------------------------- | ------------- | ----------------------------------------------------------------------------------- |
+| `enabled`           | `boolean`                        | `true`        | Enable/disable cache management                                                      |
+| `defaultTtlSeconds` | `number`                         | `300`         | TTL for server-side cache objects                                                   |
+| `maxEntries`        | `number`                         | `50`          | Max concurrent cache entries in memory                                              |
+| `onError`           | `'fallback' \| 'throw'`          | `'fallback'`  | Behavior when a cache operation throws. `'fallback'` sends a plain `systemInstruction`; `'throw'` surfaces the error. |
+| `port`              | `GoogleCachedContentCachePort`   | SDK-backed    | Override the create/delete boundary while keeping built-in keying, TTL, and eviction. |
 
 **Returns:**
 
@@ -60,9 +62,10 @@ result._meta.usage
 
 <Callout type="info">
   When the leading resolved system blocks have `providerCache: true`, the adapter automatically creates and reuses a
-  Google `CachedContent` object for that prefix, then sends any uncached remainder as `systemInstruction`. The cache
-  manager is passed to the native chat profile as provider-owned dependencies, so the same planner is used for
-  `generate()` and `stream()` without moving cache lifecycle into core.
+  Google `CachedContent` object for that prefix, then sends any uncached remainder as `systemInstruction`. A single
+  `GoogleCachedContentLifecycle` owns prefix detection, cache keying/reuse, SDK cache operations, and fallback policy,
+  and returns a request-ready config patch. `createGoogle()` builds it; `generate()` and `stream()` only merge the
+  patch, so the cache lifecycle never leaks into core.
 </Callout>
 
 ```ts
@@ -71,13 +74,19 @@ const adapter = createGoogle(client, {
   cache: { defaultTtlSeconds: 600, maxEntries: 100 },
 })
 
+// Surface cache failures instead of silently falling back
+const strict = createGoogle(client, { cache: { onError: 'throw' } })
+
 // Disable caching entirely
 const adapter = createGoogle(client, { cache: false })
+
+// Back caching with a custom cache port, or a fully custom lifecycle
+const custom = createGoogle(client, { cache: { port: myCachePort } })
 
 // Skip or tune cache lifecycle for one request
 await adapter.generate(prompt, {
   model: 'gemini-2.5-flash',
-  extra: { cache: { ttlSeconds: 600 } },
+  extra: { cachedContent: { ttlSeconds: 600 } },
 })
 ```
 
@@ -95,8 +104,8 @@ await adapter.generate(prompt, {
 | `options.maxOutputTokens`        | `number?`                                      | Max output tokens                                                                   |
 | `options.topP`                   | `number?`                                      | Top-p sampling                                                                      |
 | `options.topK`                   | `number?`                                      | Top-k sampling                                                                      |
-| `options.extra.cache.skip`       | `boolean?`                                     | Skip caching for this call                                                          |
-| `options.extra.cache.ttlSeconds` | `number?`                                      | TTL in seconds for a newly-created cache on this call                               |
+| `options.extra.cachedContent.skip`       | `boolean?`                             | Skip caching for this call                                                          |
+| `options.extra.cachedContent.ttlSeconds` | `number?`                              | TTL in seconds for a newly-created cache on this call                               |
 
 **Returns:** normalized Crux generate result with:
 
@@ -126,8 +135,8 @@ Stream a prompt execution.
 | `options.maxOutputTokens`        | `number?`                                      | Max output tokens                                                                   |
 | `options.topP`                   | `number?`                                      | Top-p sampling                                                                      |
 | `options.topK`                   | `number?`                                      | Top-k sampling                                                                      |
-| `options.extra.cache.skip`       | `boolean?`                                     | Skip caching for this call                                                          |
-| `options.extra.cache.ttlSeconds` | `number?`                                      | TTL in seconds for a newly-created cache on this call                               |
+| `options.extra.cachedContent.skip`       | `boolean?`                             | Skip caching for this call                                                          |
+| `options.extra.cachedContent.ttlSeconds` | `number?`                              | TTL in seconds for a newly-created cache on this call                               |
 
 **Returns:** Google GenAI stream.
 
@@ -220,6 +229,11 @@ This helper is dense-only. Google's SDK returns token counts per embedded input 
 import type {
   CreateGoogleOptions,
   GoogleCacheConfig,
+  GoogleCachedContentCachePort,
+  GoogleCachedContentLifecycle,
+  GoogleCachedContentOption,
+  GoogleCachedContentPlan,
+  GoogleCacheName,
   GoogleEmbeddingConfig,
   GoogleExtra,
   GoogleFunctionDeclaration,

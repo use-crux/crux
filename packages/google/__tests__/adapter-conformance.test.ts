@@ -11,8 +11,7 @@ import type { CallArgs, ToolResultEntry } from '@crux/core/adapter'
 import type { Message, SystemBlock } from '@crux/core'
 import { buildGoogleSpec, fromMessages, googleTranscript, toMessages } from '../index'
 import type { GoogleExtra } from '../index'
-import { GoogleCacheManager } from '../cache-manager'
-import { CACHE_DEFAULTS } from '../cache-types'
+import { disabledCachedContentLifecycle, resolveCachedContentLifecycle } from '../cached-content'
 
 interface GoogleFakeRequest {
   readonly model: unknown
@@ -30,7 +29,7 @@ interface GoogleFakeClient {
 
 describe('Google AdapterSpec conformance', () => {
   it('conforms to the native adapter contract', async () => {
-    const spec = buildGoogleSpec()
+    const spec = buildGoogleSpec(disabledCachedContentLifecycle())
     const harness: AdapterConformanceHarness<
       GoogleGenAI,
       GenerateContentResponse,
@@ -50,7 +49,7 @@ describe('Google AdapterSpec conformance', () => {
   })
 
   it('serializes functionCall and functionResponse parts in the second call payload', async () => {
-    const spec = buildGoogleSpec()
+    const spec = buildGoogleSpec(disabledCachedContentLifecycle())
     const fake = createGoogleFake({
       emissions: [
         { text: '', toolCalls: [{ id: 'ignored-by-google', name: 'weather', args: { city: 'Paris' } }] },
@@ -199,7 +198,7 @@ describe('Google AdapterSpec conformance', () => {
   })
 
   it('uses responseJsonSchema for structured output requests', async () => {
-    const spec = buildGoogleSpec()
+    const spec = buildGoogleSpec(disabledCachedContentLifecycle())
     const fake = createGoogleFake({ structuredTexts: ['{"ok":true}'] })
     const schema = z.object({ ok: z.boolean() })
     const schemaParams = spec.wrapOutputSchema?.(schema)
@@ -214,8 +213,7 @@ describe('Google AdapterSpec conformance', () => {
 
   it('splits cacheable system blocks into cachedContent and uncached systemInstruction', async () => {
     const fake = createGoogleFake({ emissions: [{ text: 'ok' }] })
-    const cacheManager = new GoogleCacheManager(fake.client, CACHE_DEFAULTS)
-    const spec = buildGoogleSpec(cacheManager)
+    const spec = buildGoogleSpec(resolveCachedContentLifecycle(fake.client, undefined))
 
     await spec.call(
       fake.client,

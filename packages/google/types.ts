@@ -1,4 +1,5 @@
 import type { Content } from '@google/genai'
+import type { GoogleCachedContentCallOptions } from './cached-content'
 
 /** Google GenAI function declaration for tool use. */
 export interface GoogleFunctionDeclaration {
@@ -23,12 +24,7 @@ export interface GoogleExtra extends Record<string, unknown> {
    * default TTL for a newly-created cache and participates in local cache
    * reuse keys.
    */
-  readonly cache?: {
-    /** Force skip caching for this call. */
-    readonly skip?: boolean
-    /** TTL in seconds for this call's Google CachedContent object. */
-    readonly ttlSeconds?: number
-  }
+  readonly cachedContent?: GoogleCachedContentCallOptions
 }
 
 /** Provider-native Google generation request assembled by the profile. */
