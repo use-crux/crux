@@ -16,7 +16,7 @@
 import { z } from 'zod'
 import type { HandoffInstance } from './handoff'
 import type { ToolDef } from '../types/tool'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
 
 // ── Types ───────────────────────────────────────────────────────────

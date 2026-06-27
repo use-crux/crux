@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { flow as makeFlow, createFlowId, signalFlow, type FlowScope } from '../../flow/scope'
-import { updateRuntime, resetRuntime } from '../../runtime'
-import { getExecutionContext, runWithExecutionContext, withSession } from '../../execution-context'
+import { updateRuntime, resetRuntime } from '../../runtime/runtime'
+import { getExecutionContext, runWithExecutionContext, withSession } from '../../runtime/execution-context'
 import { inMemoryCruxStore } from '../../store/memory'
 
 describe('createFlowId', () => {

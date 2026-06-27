@@ -1,6 +1,6 @@
 import type { DenseEmbedding, SparseEmbedding } from '../embedding'
 import { observe } from '../observability'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 import type { CruxStore, DataStore, JsonObject, SparseVector, Storage, StoreEntry, VectorStore } from '../store/types'
 
 export interface CruxDocument {

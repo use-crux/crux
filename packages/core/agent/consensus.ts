@@ -12,7 +12,7 @@ import { createParallel } from './parallel'
 import { isAgent } from './agent'
 import type { AgentLike, InferAgentLikeInput, InferAgentLikeOutput } from './agent'
 import type { AgentExecutor, AgentResult } from './executor'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
 import type { RetryOptions } from '../retry'
 

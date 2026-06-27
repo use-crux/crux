@@ -13,7 +13,7 @@ import type { SlidingWindowConfig, SlidingWindow, SlidingWindowStats } from './t
 import { inMemoryCruxStore } from '../store/memory'
 import { countTokens } from '../tokenizer'
 import { summarizeMessages } from './summarize'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 
 /**
  * Create a stateful sliding window compaction manager.

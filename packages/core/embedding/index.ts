@@ -1,5 +1,5 @@
 import type { CruxStore, EmbedFn, JsonObject, SparseVector } from '../store/types'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
 
 export interface EmbeddingUsage {

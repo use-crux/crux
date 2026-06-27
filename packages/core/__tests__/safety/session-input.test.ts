@@ -13,7 +13,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { createSafety, GuardrailBlockedError } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
-import { resetRuntime } from '../../runtime'
+import { resetRuntime } from '../../runtime/runtime'
 import type { Message } from '../../messages'
 
 afterEach(() => {

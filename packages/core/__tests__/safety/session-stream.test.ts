@@ -9,7 +9,7 @@ import { createSafety, GuardrailBlockedError, ConstraintViolationError } from '.
 import type { SafetyCallOptions } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
-import { resetRuntime } from '../../runtime'
+import { resetRuntime } from '../../runtime/runtime'
 
 afterEach(() => {
   resetRuntime()

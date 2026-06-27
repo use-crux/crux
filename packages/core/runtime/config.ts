@@ -31,10 +31,10 @@
 
 import type { PromptRegistry } from './configure'
 import type { CruxConfig } from './config-types'
-import { connectRuntimeBridge } from './runtime-bridge'
+import { connectRuntimeBridge } from '../runtime-bridge'
 import { configure } from './configure'
 import { updateRuntime } from './runtime'
-import { configureObservability, createHttpObservabilityTransport } from './observability'
+import { configureObservability, createHttpObservabilityTransport } from '../observability'
 
 // ─────────────────────────────────────────────────────────────────
 // Types

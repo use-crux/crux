@@ -14,7 +14,7 @@ import { prompt as makePrompt } from '../../prompt/prompt'
 import { fallback } from '../../fallback'
 import { ValidationExhaustedError } from '../../validation-retry'
 import { appendToolApprovalResponse } from '../../tool-middleware'
-import { resetRuntime } from '../../runtime'
+import { resetRuntime } from '../../runtime/runtime'
 import type { Message } from '../../messages'
 import type { StepDirective } from '../../adapter/executor-types'
 

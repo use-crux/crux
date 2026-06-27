@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest'
 import { flow as makeFlow, signalFlow, type FlowScope } from '../../flow/scope'
-import { updateRuntime, resetRuntime } from '../../runtime'
+import { updateRuntime, resetRuntime } from '../../runtime/runtime'
 import { inMemoryCruxStore } from '../../store/memory'
 
 // ── External step functions (simulating separate files) ────────

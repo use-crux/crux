@@ -15,8 +15,8 @@
 import type { FallbackModel, FallbackMeta, FallbackAttemptDetail } from './fallback'
 import { classifyError, shouldAttemptFallback } from './fallback'
 import type { PromptMiddleware, MiddlewareResult, AnyPromptConfig, ResolvedPrompt } from './types'
-import type { StreamProgressReporter } from './middleware'
-import { getRuntime } from './runtime'
+import type { StreamProgressReporter } from './runtime/middleware'
+import { getRuntime } from './runtime/runtime'
 import { warnMissingSemanticCachePlugin } from './cache'
 import { observe } from './observability'
 

@@ -29,7 +29,7 @@
 
 import type { Message } from '../messages'
 import type { TraceMeta } from '../types'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 import type {
   Constraint,
   ConstraintAudit,

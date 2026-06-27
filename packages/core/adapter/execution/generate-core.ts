@@ -10,7 +10,7 @@
  */
 
 import type { TraceMeta } from '../../types'
-import { getRuntime } from '../../runtime'
+import { getRuntime } from '../../runtime/runtime'
 import { ValidationExhaustedError } from '../../validation-retry'
 import { createSafety } from '../../safety/session'
 import { orchestrateGenerate } from '../../orchestrate'

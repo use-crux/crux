@@ -4,7 +4,7 @@ import type { AnyToolSet, Context } from '../types'
 import type { CruxStore, JsonObject, ScoredEntry } from '../store/types'
 import { inMemoryCruxStore } from '../store/memory'
 import type { DenseEmbedding } from '../embedding'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
 import { registerInspectableResource } from '../runtime-bridge/resources'
 

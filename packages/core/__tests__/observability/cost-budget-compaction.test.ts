@@ -11,9 +11,9 @@ import {
   setObservabilityTransport,
 } from '../../observability'
 import { orchestrateGenerate } from '../../orchestrate'
-import { applyPlugins } from '../../plugin'
-import { getRuntime, resetRuntime, setRuntime } from '../../runtime'
-import { runWithExecutionContext } from '../../execution-context'
+import { applyPlugins } from '../../runtime/plugin'
+import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
+import { runWithExecutionContext } from '../../runtime/execution-context'
 
 function install(plugin: ReturnType<ReturnType<typeof withCostTracking>['asPlugin']>) {
   const applied = applyPlugins([plugin], getRuntime())

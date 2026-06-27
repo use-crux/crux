@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { flow as makeFlow, signalFlow, cancelFlow, type FlowHandle, type FlowRunOptions } from '../../flow/scope'
-import { updateRuntime, resetRuntime } from '../../runtime'
+import { updateRuntime, resetRuntime } from '../../runtime/runtime'
 import { inMemoryCruxStore } from '../../store/memory'
 import type { CruxStore } from '../../store/types'
 

@@ -6,7 +6,7 @@ import {
   setObservabilityTransport,
 } from '../../observability'
 import { plan, updatePlan } from '../../plan/plans'
-import { resetRuntime, updateRuntime } from '../../runtime'
+import { resetRuntime, updateRuntime } from '../../runtime/runtime'
 import { inMemoryCruxStore } from '../../store/memory'
 
 describe('canonical plan observability', () => {

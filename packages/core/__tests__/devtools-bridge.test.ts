@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { config } from '../config'
+import { config } from '../runtime/config'
 import { blackboard } from '../agent/blackboard'
 import {
   BridgeCommandRequestSchema,

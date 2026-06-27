@@ -18,8 +18,8 @@ import type {
   StreamStartHook,
   InstrumentationHooks,
 } from './middleware'
-import type { CruxObservabilityTransport, ObservabilityDeliveryOptions } from './observability'
-import type { CruxStore } from './store/types'
+import type { CruxObservabilityTransport, ObservabilityDeliveryOptions } from '../observability'
+import type { CruxStore } from '../store/types'
 
 /**
  * The set of global hooks and reporters that instrument Crux primitives.
@@ -60,9 +60,9 @@ export interface CruxRuntime {
   /** Global CruxStore for flow state persistence (suspend/resume). */
   store?: CruxStore
   /** Global constraints registered via createConstraintPlugin(). */
-  globalConstraints?: import('./safety/constraint/types').Constraint[]
+  globalConstraints?: import('../safety/constraint/types').Constraint[]
   /** Global guardrails registered via createGuardrailPlugin(). */
-  globalGuardrails?: import('./safety/guardrail/types').Guardrail[]
+  globalGuardrails?: import('../safety/guardrail/types').Guardrail[]
   /** True when createSemanticCache() is installed. Used for dev warnings on inert prompt hints. */
   semanticCacheInstalled?: boolean
 }

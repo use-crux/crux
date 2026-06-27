@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { updateRuntime, resetRuntime } from '../../../runtime'
+import { updateRuntime, resetRuntime } from '../../../runtime/runtime'
 import { instrumentToolSet, renderToolModelOutput } from '../../../adapter/tool/emission'
 import type { ToolModelOutput } from '../../../types/tool'
 

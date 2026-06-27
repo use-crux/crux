@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { inMemoryCruxStore } from '../../store/memory'
 import { plan } from '../../plan/plans'
 import { tasklist, getTaskList, getTaskListByPlan } from '../../plan/tasks'
-import { updateRuntime, resetRuntime } from '../../runtime'
+import { updateRuntime, resetRuntime } from '../../runtime/runtime'
 
 /** Create a fresh store and register it in the runtime. */
 function setup() {

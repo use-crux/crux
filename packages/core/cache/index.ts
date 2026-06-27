@@ -1,7 +1,7 @@
 import type { DenseEmbedding } from '../embedding'
 import { observe } from '../observability'
-import type { CruxPlugin } from '../plugin'
-import { getRuntime } from '../runtime'
+import type { CruxPlugin } from '../runtime/plugin'
+import { getRuntime } from '../runtime/runtime'
 import type { CruxStore, JsonObject, ScoredEntry } from '../store/types'
 import type {
   MiddlewareResult,

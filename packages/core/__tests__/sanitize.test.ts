@@ -4,7 +4,7 @@ import { escapeXml, truncate, safe, raw, limit, wrap, userContent } from '../san
 import { detectSuspiciousPatterns } from '../sanitize'
 import { prompt as makePrompt } from '../prompt/prompt'
 import { context } from '../prompt/context'
-import { configure } from '../configure'
+import { configure } from '../runtime/configure'
 import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
 import type { AnyPromptConfig, PromptConfig } from '../types'
 

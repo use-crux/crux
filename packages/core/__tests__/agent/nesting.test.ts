@@ -11,8 +11,8 @@ import { createFakeAgentExecutor } from '../../agent/fakes'
 // one-off shape the shared fake can't model (see SCRATCHPAD); it keeps a
 // bespoke inline executor and reads the ambient context directly.
 import type { AgentExecutor } from '../../agent/executor'
-import { getExecutionContext } from '../../execution-context'
-import type { ExecutionContext } from '../../execution-context'
+import { getExecutionContext } from '../../runtime/execution-context'
+import type { ExecutionContext } from '../../runtime/execution-context'
 
 // ── Test helpers ──────────────────────────────────────────────────
 

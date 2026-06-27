@@ -1,7 +1,7 @@
-import type { CruxPlugin } from '../plugin'
+import type { CruxPlugin } from '../runtime/plugin'
 import { observe } from '../observability'
-import { getRuntime } from '../runtime'
-import { getExecutionContext } from '../execution-context'
+import { getRuntime } from '../runtime/runtime'
+import { getExecutionContext } from '../runtime/execution-context'
 import type { PromptMiddlewareArgs, TokenUsage, TraceMeta } from '../types'
 
 export type CostSource = 'actual' | 'estimated'

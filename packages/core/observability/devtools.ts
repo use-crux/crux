@@ -23,9 +23,9 @@
 
 import type { z } from 'zod'
 import type { AnyPrompt, Context, FlowToolDef } from '../types'
-import type { CruxPlugin, CruxPluginResult } from '../plugin'
+import type { CruxPlugin, CruxPluginResult } from '../runtime/plugin'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
-import { getRuntime, setRuntime, resetRuntime, type CruxRuntime } from '../runtime'
+import { getRuntime, setRuntime, resetRuntime, type CruxRuntime } from '../runtime/runtime'
 import { configureObservability } from './observe'
 import { createHttpObservabilityTransport } from './transport'
 import { IndexSnapshotSchema } from '../project-index'

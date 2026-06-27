@@ -5,7 +5,7 @@ import { agent as makeAgent } from '../../agent/agent'
 import { createSwarm } from '../../agent/swarm'
 import { createFakeAgentExecutor } from '../../agent/fakes'
 import type { FakeAgentBehavior } from '../../agent/fakes'
-import { setRuntime, getRuntime } from '../../runtime'
+import { setRuntime, getRuntime } from '../../runtime/runtime'
 
 // ── Test helpers ──────────────────────────────────────────────────
 

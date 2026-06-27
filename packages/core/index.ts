@@ -159,8 +159,8 @@ export type { PromptTree, PromptTreeResult } from './prompt'
 export { tool } from './tools'
 export type { NamedToolDef, ToolConfig } from './tools'
 
-// Configuration
-export { config } from './config'
+// Configuration + runtime domain (runtime/config/plugin/hook surface)
+export { config } from './runtime'
 export type {
   CruxConfig,
   Crux,
@@ -180,12 +180,12 @@ export type {
   CruxLintSelectedProfile,
   CruxObservabilityConfig,
   CruxPersistenceConfig,
-} from './config'
+} from './runtime'
 export type { QualityConfig } from './quality/config'
-export type { PromptRegistry } from './configure'
+export type { PromptRegistry } from './runtime'
 
-export { withSession, createSessionId, getExecutionContext, runWithExecutionContext } from './execution-context'
-export type { ExecutionContext } from './execution-context'
+export { withSession, createSessionId, getExecutionContext, runWithExecutionContext } from './runtime'
+export type { ExecutionContext } from './runtime'
 export {
   flow,
   createFlowId,
@@ -213,11 +213,11 @@ export type {
 export { setTokenizer, countTokens } from './tokenizer'
 
 // Plugin system
-export { mergeRuntime, applyPlugins } from './plugin'
-export type { CruxPlugin, CruxPluginResult, ApplyPluginsResult } from './plugin'
+export { mergeRuntime, applyPlugins } from './runtime'
+export type { CruxPlugin, CruxPluginResult, ApplyPluginsResult } from './runtime'
 
 // Hook types — needed by plugin authors
-export type { InstrumentationHooks } from './middleware'
+export type { InstrumentationHooks } from './runtime'
 export {
   toolMiddleware,
   approvalMiddleware,
@@ -252,6 +252,7 @@ export type {
 // Runtime hooks — prefer `config()` for centralized setup
 export { getRuntime, setRuntime, updateRuntime, resetRuntime, resolveStore } from './runtime'
 export type { CruxRuntime } from './runtime'
+export type { PromptMiddleware, PromptMiddlewareArgs } from './runtime'
 
 // Canonical observability graph contract.
 export * from './observability'
@@ -340,9 +341,6 @@ export type {
   GenerationSettings,
   PromptAdaptation,
   AdapterMap,
-  // Middleware
-  PromptMiddlewareArgs,
-  PromptMiddleware,
   // Inspection
   InspectResult,
   InspectPart,

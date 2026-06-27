@@ -14,7 +14,7 @@ import type { Context } from '../types'
 import type { ToolDef } from '../types/tool'
 import { inMemoryCruxStore } from '../store/memory'
 import { context } from '../prompt/context'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
 import { registerInspectableResource } from '../runtime-bridge/resources'
 

@@ -10,9 +10,9 @@
  * @module
  */
 
-import { getRuntime } from '../../runtime'
+import { getRuntime } from '../../runtime/runtime'
 import { currentObservabilityTransport, observe } from '../../observability'
-import { getExecutionContext } from '../../execution-context'
+import { getExecutionContext } from '../../runtime/execution-context'
 import type { JsonValue, ToolContentPart, ToolModelOutput } from '../../types/tool'
 
 // ─────────────────────────────────────────────────────────────────

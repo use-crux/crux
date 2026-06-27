@@ -1,9 +1,12 @@
 /**
- * Plugin system for composable runtime hook installation.
+ * Runtime merge semantics for plugin composition.
  *
- * Plugins receive the current runtime state and return a partial patch
- * that is merged using fan-out semantics (all handlers called) for hooks
- * and layered chaining for middleware (new wraps old).
+ * `mergeRuntime()` folds a partial runtime patch (typically a plugin's
+ * `install()` result) into a base runtime. Hooks fan out (every handler is
+ * called), middleware layers (new wraps old), safety policies concatenate, and
+ * last-write-wins fields (observability transport/delivery) overwrite. The
+ * private fan-out/chaining helpers live here so `plugin.ts` can stay focused on
+ * the plugin contract and `applyPlugins()` orchestration.
  *
  * @module
  */
@@ -12,62 +15,6 @@ import type { CruxRuntime } from './runtime'
 import type { InstrumentationHooks, ResolveHook, ResolveHookArgs, StreamProgressReporter } from './middleware'
 import type { PromptMiddleware } from './types'
 
-// ─────────────────────────────────────────────────────────────────
-// Plugin interface
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Result returned by a plugin's `install()` method.
- *
- * Contains partial runtime fields to merge plus an optional `dispose`
- * function for cleanup when the registry is torn down.
- */
-export interface CruxPluginResult extends Partial<CruxRuntime> {
-  /** Called when the plugin is uninstalled (registry.dispose()). */
-  dispose?: () => void
-}
-
-/**
- * A composable plugin that hooks into the Crux runtime.
- *
- * Plugins are installed in order via `config({ plugins: [...] })`.
- * Each plugin's `install()` receives the cumulative runtime from all
- * prior plugins, enabling layered composition.
- *
- * @example
- * ```ts
- * import type { CruxPlugin } from '@use-crux/core'
- *
- * const myPlugin: CruxPlugin = {
- *   name: 'my-tracer',
- *   install(runtime) {
- *     return {
- *       instrumentationHooks: {
- *         onToolStart: (e) => console.log('tool:', e.toolName),
- *       },
- *       dispose: () => console.log('cleanup'),
- *     }
- *   },
- * }
- * ```
- */
-export interface CruxPlugin {
-  /** Unique plugin name for debugging and error messages. */
-  readonly name: string
-  /**
-   * Install the plugin. Receives the cumulative runtime (including
-   * hooks from prior plugins). Returns runtime fields to merge.
-   *
-   * @param runtime - Frozen snapshot of the current cumulative runtime.
-   * @returns Partial runtime patch with optional dispose function.
-   */
-  install(runtime: Readonly<CruxRuntime>): CruxPluginResult
-}
-
-// ─────────────────────────────────────────────────────────────────
-// mergeRuntime — fan-out hooks, layered middleware
-// ─────────────────────────────────────────────────────────────────
-
 /**
  * Merge a partial runtime patch into a base runtime.
  *
@@ -75,7 +22,7 @@ export interface CruxPlugin {
  *   base and patch handlers are called for every event.
  * - **Middleware**: Layered chaining — patch middleware wraps base middleware.
  * - **streamProgressHook**: Fan-out — both reporters receive chunks.
- * - **instrumentationHooks**: Per-hook fan-out for all 15 sub-hooks.
+ * - **instrumentationHooks**: Per-hook fan-out for all sub-hooks.
  * - **observability transport**: Last-write-wins.
  *
  * @param base - The current runtime state.
@@ -139,62 +86,6 @@ export function mergeRuntime(base: CruxRuntime, patch: Partial<CruxRuntime>): Cr
   }
 
   return result
-}
-
-// ─────────────────────────────────────────────────────────────────
-// applyPlugins
-// ─────────────────────────────────────────────────────────────────
-
-/** Result of applying plugins — the merged runtime and a combined dispose function. */
-export interface ApplyPluginsResult {
-  /** The merged runtime after all plugins have been applied. */
-  runtime: CruxRuntime
-  /** Dispose all plugins in reverse order. */
-  dispose: () => void
-}
-
-/**
- * Apply an ordered list of plugins to an initial runtime.
- *
- * Each plugin's `install()` receives the cumulative runtime from all
- * prior plugins. Results are merged using {@link mergeRuntime}.
- * Dispose functions are collected and called in reverse order.
- *
- * @param plugins - Ordered list of plugins to apply.
- * @param initialRuntime - The base runtime before any plugins.
- * @returns The final merged runtime and a combined dispose function.
- *
- * @example
- * ```ts
- * const { runtime, dispose } = applyPlugins(
- *   [withDevtools({ serverUrl }), withTelemetry({ serviceName: 'app' })],
- *   getRuntime(),
- * )
- * setRuntime(runtime)
- * // later: dispose()
- * ```
- */
-export function applyPlugins(plugins: ReadonlyArray<CruxPlugin>, initialRuntime: CruxRuntime): ApplyPluginsResult {
-  const disposeFns: Array<() => void> = []
-  let runtime = { ...initialRuntime }
-
-  for (const plugin of plugins) {
-    const { dispose, ...patch } = plugin.install(Object.freeze({ ...runtime }))
-    runtime = mergeRuntime(runtime, patch)
-    if (dispose) {
-      disposeFns.push(dispose)
-    }
-  }
-
-  return {
-    runtime,
-    dispose() {
-      // Reverse order: last installed → first disposed
-      for (let i = disposeFns.length - 1; i >= 0; i--) {
-        disposeFns[i]()
-      }
-    },
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────

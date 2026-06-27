@@ -12,7 +12,7 @@
 
 import type { z } from 'zod'
 import type { Message } from '../../messages'
-import { getRuntime } from '../../runtime'
+import { getRuntime } from '../../runtime/runtime'
 import type { Safety } from '../../safety/session'
 import { ValidationExhaustedError } from '../../validation-retry'
 import type { ExecutorRequest } from '../executor-types'

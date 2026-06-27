@@ -47,8 +47,8 @@ import {
   deniedToolModelOutput,
 } from '../../tool-middleware'
 import type { ToolMiddleware } from '../../tool-middleware'
-import { getRuntime } from '../../runtime'
-import { getExecutionContext } from '../../execution-context'
+import { getRuntime } from '../../runtime/runtime'
+import { getExecutionContext } from '../../runtime/execution-context'
 import { observe } from '../../observability'
 import {
   instrumentToolSet,

@@ -164,7 +164,7 @@ describe('pipeline: context accumulation', () => {
 
   it('emits composition events to instrumentation hooks', async () => {
     const events: Array<{ type: string; data: unknown }> = []
-    const { setRuntime, resetRuntime } = await import('../../runtime')
+    const { setRuntime, resetRuntime } = await import('../../runtime/runtime')
 
     setRuntime({
       instrumentationHooks: {

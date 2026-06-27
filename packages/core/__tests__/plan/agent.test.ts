@@ -9,7 +9,7 @@ import {
   createPlanTool,
   createTaskListTool,
 } from '../../plan/agent'
-import { updateRuntime, resetRuntime } from '../../runtime'
+import { updateRuntime, resetRuntime } from '../../runtime/runtime'
 
 /** Create a fresh store and register it in the runtime. */
 function setup() {

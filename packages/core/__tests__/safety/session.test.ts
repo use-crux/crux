@@ -12,7 +12,7 @@ import { createSafety, GuardrailBlockedError, ConstraintViolationError } from '.
 import type { SafetyOutput } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
-import { updateRuntime, resetRuntime } from '../../runtime'
+import { updateRuntime, resetRuntime } from '../../runtime/runtime'
 import type { Message } from '../../messages'
 
 afterEach(() => {

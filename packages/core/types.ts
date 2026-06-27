@@ -2,26 +2,27 @@
  * Core SDK-agnostic type surface.
  *
  * This module owns the provider-neutral generation contracts — base SDK
- * aliases, {@link GenerationSettings}, provider adaptation, runtime middleware,
- * the project tool catalog, and model metadata.
+ * aliases, {@link GenerationSettings}, provider adaptation, the project tool
+ * catalog, and model metadata.
  *
  * Prompt/context authoring types live in the `prompt/` domain
  * (`prompt/context-types.ts`, `prompt/prompt-types.ts`, `prompt/type-utils.ts`),
- * and prompt resolution/inspection output contracts ({@link ResolvedPrompt},
+ * prompt resolution/inspection output contracts ({@link ResolvedPrompt},
  * {@link ResolveOptions}, {@link SystemBlock}, {@link InspectResult}, and the
  * dropped/excluded context shapes) live in the `resolver/` domain
- * (`resolver/types.ts`). Both are re-exported here so the many existing
- * `./types` importers keep resolving unchanged during the structure refactor.
- * This re-export shim is temporary: later phases drain the remaining contracts
- * (generation settings/adaptation, runtime middleware) into their own domain
- * type files and reduce this module to its intentional, minimal surface.
+ * (`resolver/types.ts`), and the runtime middleware contracts
+ * ({@link PromptMiddleware}, {@link PromptMiddlewareArgs}, {@link MiddlewareResult})
+ * live in the `runtime/` domain (`runtime/types.ts`). All are re-exported here
+ * so the many existing `./types` importers keep resolving unchanged during the
+ * structure refactor. This re-export shim is temporary: the final cleanup phase
+ * drains the remaining contracts (generation settings/adaptation) into their
+ * own domain type files and reduces this module to its intentional, minimal
+ * surface.
  *
  * @module
  */
 
 import type { z } from 'zod'
-import type { AnyPromptConfig } from './prompt/prompt-types'
-import type { ResolvedPrompt } from './resolver/types'
 
 // ─────────────────────────────────────────────────────────────────
 // Prompt authoring re-export shim (owned by the `prompt/` domain)
@@ -80,6 +81,12 @@ export type {
   ExcludedContext,
   InspectResult,
 } from './resolver/types'
+
+// ─────────────────────────────────────────────────────────────────
+// Runtime middleware re-export shim (owned by the `runtime/` domain)
+// ─────────────────────────────────────────────────────────────────
+
+export type { PromptMiddlewareArgs, MiddlewareResult, PromptMiddleware } from './runtime/types'
 
 // ─────────────────────────────────────────────────────────────────
 // Base Types (SDK-agnostic)
@@ -235,68 +242,6 @@ export interface TraceMeta {
   /** Guardrail audit trail — present when guardrails ran during generation. */
   guardrails?: import('./safety/guardrail/types').GuardrailAudit
 }
-
-// ─────────────────────────────────────────────────────────────────
-// Runtime Middleware
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Global middleware function that wraps every adapter `generate()` call.
- *
- * @example
- * ```ts
- * updateRuntime({
- *   middleware: async (args, next) => {
- *     const start = Date.now()
- *     const result = await next(args)
- *     console.log(`${args.promptId} took ${Date.now() - start}ms`)
- *     return result
- *   },
- * })
- * ```
- */
-export interface PromptMiddlewareArgs {
-  promptId: string | undefined
-  preparedArgs: Record<string, unknown>
-  operation?: 'generate' | 'stream'
-  promptConfig?: AnyPromptConfig
-  input?: Record<string, unknown>
-  provider?: string
-  model?: unknown
-  resolved?: ResolvedPrompt
-  outputMode?: 'text' | 'object'
-  createCachedStreamResult?: (cached: {
-    text?: string
-    object?: unknown
-    meta?: Record<string, unknown>
-  }) => MiddlewareResult
-}
-
-/**
- * Heterogeneous middleware return value.
- *
- * Adapters return adapter-shaped objects (text + `_meta`, possibly `object` for
- * structured output). Middleware composes around these without knowing the
- * concrete shape, so the structural contract here covers the fields that
- * devtools/cache/etc. read on the way back.
- */
-export interface MiddlewareResult {
-  text?: string
-  object?: unknown
-  _meta?: TraceMeta & {
-    streaming?: { ttftMs?: number; tokensPerSecond?: number; totalChunks?: number }
-    fallback?: { attempts: number; failedModels: string[]; details: unknown[] }
-    traceId?: string
-    _streamCompletion?: Promise<MiddlewareResult>
-    semanticCache?: Record<string, unknown>
-  }
-  [key: string]: unknown
-}
-
-export type PromptMiddleware = (
-  args: PromptMiddlewareArgs,
-  next: (args: PromptMiddlewareArgs) => Promise<MiddlewareResult>,
-) => Promise<MiddlewareResult>
 
 // ─────────────────────────────────────────────────────────────────
 // Model Info (used by adapters and resolve pipeline)

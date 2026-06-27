@@ -18,7 +18,7 @@ import type { CruxStore } from '../store/types'
 import type { Context } from '../types'
 import type { GenerateTextFn } from '../compaction/types'
 import { context } from '../prompt/context'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
 
 // ── Types ───────────────────────────────────────────────────────────

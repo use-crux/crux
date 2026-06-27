@@ -24,7 +24,7 @@ import { appendToolApprovalResponse, toolMiddleware } from '../../tool-middlewar
 import { skill } from '../../skill'
 import { LOAD_SKILL_TOOL_NAME } from '../../skill/tools'
 import { ValidationExhaustedError } from '../../validation-retry'
-import { updateRuntime, resetRuntime } from '../../runtime'
+import { updateRuntime, resetRuntime } from '../../runtime/runtime'
 import type { Message } from '../../messages'
 import {
   createInMemoryObservabilityTransport,

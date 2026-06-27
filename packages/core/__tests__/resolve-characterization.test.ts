@@ -21,7 +21,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../observability'
-import { updateRuntime, resetRuntime } from '../runtime'
+import { updateRuntime, resetRuntime } from '../runtime/runtime'
 import { setTokenizer, defaultTokenizer } from '../tokenizer'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'

@@ -35,8 +35,8 @@
 import type { AnyAgent } from './agent'
 import type { AgentExecutor, AgentResult, ExecuteOptions } from './executor'
 import type { AnyModel } from '../types'
-import { getExecutionContext } from '../execution-context'
-import type { ExecutionContext } from '../execution-context'
+import { getExecutionContext } from '../runtime/execution-context'
+import type { ExecutionContext } from '../runtime/execution-context'
 
 // ── Behavior config ────────────────────────────────────────────────
 

@@ -9,9 +9,9 @@
 
 import type { Plan, PlanHandle, CreatePlanInput, PlanUpdate } from './types'
 import { planKey } from './helpers'
-import { getRuntime, resolveStore } from '../runtime'
+import { getRuntime, resolveStore } from '../runtime/runtime'
 import { observe } from '../observability'
-import { getExecutionContext } from '../execution-context'
+import { getExecutionContext } from '../runtime/execution-context'
 import { planAgent } from './agent'
 
 /**

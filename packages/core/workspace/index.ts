@@ -11,7 +11,7 @@
 import { z } from 'zod'
 import { context } from '../prompt/context'
 import { observe } from '../observability'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 import { inMemoryBlobStore, inMemoryDataStore } from '../store/memory'
 import type { BlobReadResult, BlobRef, BlobStore, DataStore, JsonObject, Storage } from '../store/types'
 import type { AnyToolSet, Context, PromptInjection } from '../types'

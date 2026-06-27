@@ -1,6 +1,6 @@
 import type { JsonValue, ToolModelOutput } from './types/tool'
-import { getRuntime } from './runtime'
-import { getExecutionContext } from './execution-context'
+import { getRuntime } from './runtime/runtime'
+import { getExecutionContext } from './runtime/execution-context'
 
 export type ToolApprovalStatus = 'approved' | 'denied'
 

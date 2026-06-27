@@ -10,8 +10,8 @@ import {
   setObservabilityTransport,
 } from '../../observability'
 import { orchestrateGenerate } from '../../orchestrate'
-import { applyPlugins } from '../../plugin'
-import { getRuntime, resetRuntime, setRuntime } from '../../runtime'
+import { applyPlugins } from '../../runtime/plugin'
+import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
 import { inMemoryCruxStore } from '../../store'
 
 function install(plugin: ReturnType<typeof createSemanticCache>) {

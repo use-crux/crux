@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { configure } from '../configure'
+import { configure } from '../runtime/configure'
 import { prompt as cruxPrompt } from '../prompt/prompt'
 
 function makePrompt(id: string, tags: string[] = []) {

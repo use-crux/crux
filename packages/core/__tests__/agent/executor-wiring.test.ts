@@ -21,7 +21,7 @@ import { createSwarm } from '../../agent/swarm'
 import { createFakeAgentExecutor } from '../../agent/fakes'
 import { createFakeAgentExecutor as fromAgentBarrel } from '../../agent'
 import { createFakeAgentExecutor as fromPackageRoot } from '../../index'
-import { setRuntime, resetRuntime } from '../../runtime'
+import { setRuntime, resetRuntime } from '../../runtime/runtime'
 
 afterEach(() => {
   resetRuntime()

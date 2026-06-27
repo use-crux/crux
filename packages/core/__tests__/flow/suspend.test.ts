@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { flow as makeFlow, signalFlow, listFlows } from '../../flow/scope'
-import { resetRuntime, updateRuntime } from '../../runtime'
+import { resetRuntime, updateRuntime } from '../../runtime/runtime'
 import { inMemoryCruxStore } from '../../store/memory'
 import {
   createInMemoryObservabilityTransport,
@@ -787,7 +787,7 @@ describe('suspend/resume instrumentation hooks', () => {
     let resumedSessionId: string | undefined
     let resumedParentFlowId: string | undefined
 
-    const { runWithExecutionContext, getExecutionContext } = await import('../../execution-context')
+    const { runWithExecutionContext, getExecutionContext } = await import('../../runtime/execution-context')
 
     const flowFn = async (flow: { flowId: string; step: any; suspend: any }) => {
       await flow.step('plan', async () => 'planned')
