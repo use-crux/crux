@@ -2,7 +2,7 @@
 
 Anthropic SDK adapter for Crux. Runs Crux prompts and agents directly against Claude models through the official `@anthropic-ai/sdk` client.
 
-Orchestration — prompt composition, context engineering, memory, tools, agents — lives in [`@use-crux/core`](../core). This package is the binding: `createAnthropic()` wraps an `Anthropic` client through the `single-turn` `anthropicProviderRuntime` and owns no orchestration logic of its own. It is generation-only; pair it with `embedding()` from `@use-crux/ai` or another provider for retrieval/indexing.
+Orchestration — prompt composition, context engineering, memory, tools, agents — lives in [`@use-crux/core`](https://cruxjs.dev/docs/reference/crux-core). This package is the binding: `createAnthropic()` wraps an `Anthropic` client through the `single-turn` `anthropicProviderRuntime` and owns no orchestration logic of its own. It is generation-only; pair it with `embedding()` from `@use-crux/ai` or another provider for retrieval/indexing.
 
 ## Install
 
@@ -45,4 +45,4 @@ Anthropic provider-history conversion is owned inside this package. The public `
 
 Anthropic has no native `tool` role, so canonical Crux tool messages become `user` messages with `tool_result` content blocks. Assistant tool calls become ordered `tool_use` blocks alongside optional text. Rich tool outputs keep native Anthropic image and PDF blocks where supported, and unsupported media falls back to deterministic text references.
 
-See [@use-crux/core](../core) and the [Crux docs](https://cruxjs.dev) for the full API.
+See the [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) and the [Crux docs](https://cruxjs.dev) for the full API.

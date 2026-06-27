@@ -1,6 +1,6 @@
 # @use-crux/google
 
-Google GenAI (Gemini) adapter for Crux. Wraps a `GoogleGenAI` client so Crux prompts and agents run against Google models — prompt composition, context engineering, memory, and flows all live in [`@use-crux/core`](../core); this package is a `single-turn` provider runtime and owns only the Google wire boundary.
+Google GenAI (Gemini) adapter for Crux. Wraps a `GoogleGenAI` client so Crux prompts and agents run against Google models — prompt composition, context engineering, memory, and flows all live in [`@use-crux/core`](https://cruxjs.dev/docs/reference/crux-core); this package is a `single-turn` provider runtime and owns only the Google wire boundary.
 
 ## Install
 
@@ -8,7 +8,7 @@ Google GenAI (Gemini) adapter for Crux. Wraps a `GoogleGenAI` client so Crux pro
 pnpm add @use-crux/google @use-crux/core @google/genai
 ```
 
-`@google/genai` (`^1.0.0`) is a peer dependency.
+`@google/genai` (`^1.0.0 || ^2.0.0`) is a peer dependency.
 
 ## Usage
 
@@ -42,4 +42,4 @@ Provider-level caching via Google's CachedContent API activates automatically fo
 
 The package exports `googleProviderRuntime` for advanced adapter composition. `createGoogle()` binds `googleProviderRuntime.create(client, { cacheResolver })` after resolving CachedContent options; adapter authors should use `defineProviderRuntime()` from `@use-crux/core/adapter`.
 
-See [@use-crux/core](../core) and the [Crux docs](https://cruxjs.dev) for the full API.
+See the [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) and the [Crux docs](https://cruxjs.dev) for the full API.

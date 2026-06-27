@@ -18,10 +18,7 @@ import { filesSource } from '@use-crux/ingest/files'
 import { urlsSource } from '@use-crux/ingest/urls'
 
 // Load and parse files from a directory into IngestDocument results.
-const source = filesSource(
-  { directory: './docs', recursive: true },
-  { namespace: 'docs' },
-)
+const source = filesSource({ directory: './docs', recursive: true }, { namespace: 'docs' })
 
 for await (const result of source.load()) {
   if (result.ok) {
@@ -43,4 +40,4 @@ The package exposes three entry points:
 Loaders auto-detect format (txt, md, html, pdf, csv, json, docx, xlsx) and parse with the built-in
 parsers. Each yielded result is either a parsed `IngestDocument` or a typed `IngestError`.
 
-See [@use-crux/core](../core) and the [Crux docs](https://cruxjs.dev) for the full API.
+See the [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) and the [Crux docs](https://cruxjs.dev) for the full API.

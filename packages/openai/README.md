@@ -1,6 +1,6 @@
 # @use-crux/openai
 
-OpenAI SDK adapter for Crux. Wraps an `OpenAI` client so Crux prompts and agents run against OpenAI models — prompt composition, context engineering, memory, and flows all live in [`@use-crux/core`](../core); this package is a `single-turn` provider runtime and owns only the OpenAI wire boundary.
+OpenAI SDK adapter for Crux. Wraps an `OpenAI` client so Crux prompts and agents run against OpenAI models — prompt composition, context engineering, memory, and flows all live in [`@use-crux/core`](https://cruxjs.dev/docs/reference/crux-core); this package is a `single-turn` provider runtime and owns only the OpenAI wire boundary.
 
 ## Install
 
@@ -40,4 +40,4 @@ The adapter also exposes `stream()` and agent composition methods (parallel, pip
 
 The package exports `openaiProviderRuntime` for advanced adapter composition. `createOpenAI` is `openaiProviderRuntime.create`; adapter authors should use `defineProviderRuntime()` from `@use-crux/core/adapter`.
 
-See [@use-crux/core](../core) and the [Crux docs](https://cruxjs.dev) for the full API.
+See the [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) and the [Crux docs](https://cruxjs.dev) for the full API.

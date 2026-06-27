@@ -70,5 +70,5 @@
   "bugs": {
     "url": "https://github.com/use-crux/crux/issues"
   },
-  "homepage": "https://github.com/use-crux/crux/tree/main/packages/ingest#readme"
+  "homepage": "https://cruxjs.dev/docs/reference/ingest"
 }
