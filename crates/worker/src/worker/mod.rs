@@ -22,7 +22,7 @@ pub fn run_from_args() -> Result<(), String> {
     let mode = std::env::args().nth(1);
     match mode.as_deref() {
         Some("serve") => serve(),
-        _ => Err("usage: crux-indexer-worker serve".to_string()),
+        _ => Err("usage: crux-static-index-worker serve".to_string()),
     }
 }
 

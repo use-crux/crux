@@ -5,9 +5,9 @@ use std::collections::BTreeSet;
 
 use crate::core::definition_merge::merge_definitions_by_id;
 use crate::core::facts::{
-    StaticIndexDefinition, StaticIndexDiagnostic, StaticIndexIndexPatchFacts,
-    StaticIndexIndexSourceFile, StaticIndexRelation, StaticIndexRuleDescriptor,
-    StaticIndexSourceGraph, StaticIndexSourceRefFact,
+    StaticIndexDefinition, StaticIndexDiagnostic, StaticIndexPatchFacts, StaticIndexRelation,
+    StaticIndexRuleDescriptor, StaticIndexSourceGraph, StaticIndexSourceRefFact,
+    StaticIndexSourceRow,
 };
 use crate::finalizer::lint_model::apply_static_index_lint_model;
 use crate::lints::builder::builtin_rule_descriptors;
@@ -104,7 +104,7 @@ pub(crate) fn finalize_static_index_values_with_lint_facts(
     policies: &StaticIndexRelationPolicyTable,
     lint_options: &StaticIndexLintOptions,
 ) -> StaticIndexFinalizeOutput {
-    let mut facts = StaticIndexIndexPatchFacts::default();
+    let mut facts = StaticIndexPatchFacts::default();
     for value in native_facts.iter().chain(extension_facts.iter()) {
         merge_fact_value(&mut facts, value);
     }
@@ -123,7 +123,7 @@ pub(crate) fn finalize_static_index_values_with_lint_facts(
     StaticIndexFinalizeOutput { model, counts }
 }
 
-pub(crate) fn append_missing_builtin_rule_descriptors(facts: &mut StaticIndexIndexPatchFacts) {
+pub(crate) fn append_missing_builtin_rule_descriptors(facts: &mut StaticIndexPatchFacts) {
     if !has_materialized_non_descriptor_facts(facts) {
         return;
     }
@@ -139,7 +139,7 @@ pub(crate) fn append_missing_builtin_rule_descriptors(facts: &mut StaticIndexInd
     }
 }
 
-fn has_materialized_non_descriptor_facts(facts: &StaticIndexIndexPatchFacts) -> bool {
+fn has_materialized_non_descriptor_facts(facts: &StaticIndexPatchFacts) -> bool {
     !facts.definitions.is_empty()
         || !facts.relations.is_empty()
         || !facts.relation_refs.is_empty()
@@ -150,8 +150,8 @@ fn has_materialized_non_descriptor_facts(facts: &StaticIndexIndexPatchFacts) -> 
         || facts.source_graph.is_some()
 }
 
-pub(crate) fn merge_fact_value(facts: &mut StaticIndexIndexPatchFacts, value: &Value) {
-    if let Ok(grouped) = serde_json::from_value::<StaticIndexIndexPatchFacts>(value.clone()) {
+pub(crate) fn merge_fact_value(facts: &mut StaticIndexPatchFacts, value: &Value) {
+    if let Ok(grouped) = serde_json::from_value::<StaticIndexPatchFacts>(value.clone()) {
         merge_grouped_facts(facts, grouped);
         return;
     }
@@ -177,7 +177,7 @@ pub(crate) fn merge_fact_value(facts: &mut StaticIndexIndexPatchFacts, value: &V
             })
         }
         Some("source" | "sources") => {
-            push_parsed::<StaticIndexIndexSourceFile, _>(payload, |fact| facts.sources.push(fact))
+            push_parsed::<StaticIndexSourceRow, _>(payload, |fact| facts.sources.push(fact))
         }
         Some("source-graph" | "sourceGraph" | "source_graph") => {
             push_parsed::<StaticIndexSourceGraph, _>(payload, |fact| {
@@ -188,10 +188,7 @@ pub(crate) fn merge_fact_value(facts: &mut StaticIndexIndexPatchFacts, value: &V
     }
 }
 
-fn merge_grouped_facts(
-    facts: &mut StaticIndexIndexPatchFacts,
-    grouped: StaticIndexIndexPatchFacts,
-) {
+fn merge_grouped_facts(facts: &mut StaticIndexPatchFacts, grouped: StaticIndexPatchFacts) {
     facts.definitions.extend(grouped.definitions);
     facts.relation_refs.extend(grouped.relation_refs);
     facts.relations.extend(grouped.relations);
@@ -215,7 +212,7 @@ where
     }
 }
 
-fn fact_counts(facts: &StaticIndexIndexPatchFacts) -> StaticIndexFinalizeFactCounts {
+fn fact_counts(facts: &StaticIndexPatchFacts) -> StaticIndexFinalizeFactCounts {
     StaticIndexFinalizeFactCounts {
         definitions: facts.definitions.len(),
         relations: facts.relations.len(),

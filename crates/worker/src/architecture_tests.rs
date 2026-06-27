@@ -111,11 +111,12 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
     assert_eq!(
         crate_dir.file_name().and_then(|name| name.to_str()),
         Some("worker"),
-        "worker crate folder should stay crates/worker; the package/bin rename is tracked as Phase 7 migration state"
+        "worker crate folder stays crates/worker; only the package/bin name carries the product-specific Static Index name"
     );
 
     let expected_files = [
-        (crates.join("protocol/src"), "worker.rs"),
+        (crates.join("protocol/src"), "process.rs"),
+        (crates.join("protocol/src"), "project_index_events.rs"),
         (crates.join("protocol/src"), "static_syntax.rs"),
         (crates.join("protocol/src"), "static_index.rs"),
         (crates.join("syntax-oxc/src"), "syntax/frontend.rs"),
@@ -130,6 +131,7 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
         ),
         (crates.join("static-compiler/src"), "pipeline.rs"),
         (crates.join("static-compiler/src"), "finalizer/run.rs"),
+        (src.clone(), "bin/crux-static-index-worker.rs"),
         (src.clone(), "worker/mod.rs"),
         (src.clone(), "worker/static_syntax.rs"),
         (src.clone(), "worker/static_index.rs"),
@@ -140,39 +142,6 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
             "expected Rust responsibility boundary file {}/{}",
             root.display(),
             path
-        );
-    }
-
-    for (current, target, phase, note) in [
-        (
-            crates.join("protocol/src/worker.rs"),
-            crates.join("protocol/src/process.rs"),
-            7,
-            "process-level JSONL envelopes",
-        ),
-        (
-            crates.join("protocol/src/worker.rs"),
-            crates.join("protocol/src/project_index_events.rs"),
-            7,
-            "Project Index worker event stream ABI",
-        ),
-        (
-            src.join("bin/crux-indexer-worker.rs"),
-            src.join("bin/crux-static-index-worker.rs"),
-            7,
-            "Static Index worker binary",
-        ),
-    ] {
-        assert!(
-            current.is_file(),
-            "current Rust path {} must remain explicit until Phase {phase} moves it to {} ({note})",
-            current.display(),
-            target.display()
-        );
-        assert!(
-            !target.exists(),
-            "target Rust path {} exists before Phase {phase} updates this pending inventory ({note})",
-            target.display()
         );
     }
 
@@ -190,6 +159,8 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
     let old_paths = [
         crates.join("crux-indexer-worker"),
         crates.join("extractors"),
+        crates.join("protocol/src/worker.rs"),
+        src.join("bin/crux-indexer-worker.rs"),
         src.join("index_compiler"),
         src.join("serve.rs"),
         src.join("server"),
@@ -213,17 +184,17 @@ fn rust_runtime_boundaries_use_responsibility_module_names() {
 }
 
 #[test]
-fn rust_worker_binary_rename_is_phase_7_pending_inventory() {
+fn rust_worker_binary_uses_static_index_name() {
     let manifest = fs::read_to_string(crate_dir().join("Cargo.toml"))
         .expect("worker crate manifest should be readable");
 
     assert!(
-        manifest.contains("name = \"crux-indexer-worker\""),
-        "current worker package name must remain explicit until Phase 7 renames it"
+        manifest.contains("name = \"crux-static-index-worker\""),
+        "worker package/bin should be named crux-static-index-worker after Phase 7"
     );
     assert!(
-        !manifest.contains("crux-static-index-worker"),
-        "target worker package/bin name should appear only after Phase 7 updates scripts and tests"
+        !manifest.contains("crux-indexer-worker"),
+        "old crux-indexer-worker package/bin name must be removed, not aliased"
     );
 }
 

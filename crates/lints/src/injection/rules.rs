@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use crate::builder::{StaticIndexLintBuilder, definition_evidence};
 use crate::emit::push_definition_finding;
-use crate::facts::{StaticIndexDefinition, StaticIndexIndexPatchFacts, StaticIndexLintFinding};
+use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding, StaticIndexPatchFacts};
 use crate::injection::entries::{indirect_tool_surface_findings, injection_entry_findings};
 use crate::injection::evidence::injection_consumed_definition_ids;
 use crate::injection::inputs::prompt_input_injection_findings;
@@ -12,7 +12,7 @@ use crate::injection::model::build_all_injection_models;
 
 pub(crate) fn injection_lint_findings<'a>(
     builder: &StaticIndexLintBuilder,
-    facts: &'a StaticIndexIndexPatchFacts,
+    facts: &'a StaticIndexPatchFacts,
     by_id: &BTreeMap<&'a str, &'a StaticIndexDefinition>,
 ) -> Vec<StaticIndexLintFinding> {
     let models = build_all_injection_models(&facts.definitions, &facts.relations, by_id);

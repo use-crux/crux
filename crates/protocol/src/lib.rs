@@ -4,8 +4,9 @@
 //! Rust worker boundary, but it does not parse source text, project facts, run
 //! lint rules, or perform process I/O.
 
+pub mod process;
+pub mod project_index_events;
 pub mod static_index;
 pub mod static_syntax;
-pub mod worker;
 
 pub use static_syntax::*;

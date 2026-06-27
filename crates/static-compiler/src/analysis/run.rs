@@ -5,7 +5,7 @@ use serde_json::{Map, Value};
 
 use crate::{
     analysis::parse::{ParsedAnalyzeFile, parsed_analyze_file, primary_analyze_files},
-    core::facts::StaticIndexIndexPatchFacts,
+    core::facts::StaticIndexPatchFacts,
     core::scoped_definitions::{ScopedDefinition, scoped_definitions_by_variable},
     primitives::projection::project_static_syntax_record_with_records,
     protocol::StaticSyntaxFileRecord,
@@ -17,11 +17,11 @@ use crate::{
 /// Typed fact groups emitted by Static Index analysis before wire serialization.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct StaticIndexAnalysisFacts {
-    groups: Vec<StaticIndexIndexPatchFacts>,
+    groups: Vec<StaticIndexPatchFacts>,
 }
 
 impl StaticIndexAnalysisFacts {
-    pub(crate) fn new(groups: Vec<StaticIndexIndexPatchFacts>) -> Self {
+    pub(crate) fn new(groups: Vec<StaticIndexPatchFacts>) -> Self {
         Self { groups }
     }
 
@@ -73,7 +73,7 @@ fn analyze_parsed_file(
     request: &StaticIndexAnalyzeRequest,
     parsed: &ParsedAnalyzeFile,
     records_by_file: &HashMap<String, StaticSyntaxFileRecord>,
-) -> Vec<StaticIndexIndexPatchFacts> {
+) -> Vec<StaticIndexPatchFacts> {
     let native_facts = project_static_syntax_record_with_records(
         &parsed.record,
         &parsed.source_text,
@@ -129,13 +129,13 @@ fn analyze_parsed_file(
     groups
 }
 
-impl From<Vec<StaticIndexIndexPatchFacts>> for StaticIndexAnalysisFacts {
-    fn from(groups: Vec<StaticIndexIndexPatchFacts>) -> Self {
+impl From<Vec<StaticIndexPatchFacts>> for StaticIndexAnalysisFacts {
+    fn from(groups: Vec<StaticIndexPatchFacts>) -> Self {
         Self::new(groups)
     }
 }
 
-fn primary_definition_id(grouped: &StaticIndexIndexPatchFacts) -> Option<String> {
+fn primary_definition_id(grouped: &StaticIndexPatchFacts) -> Option<String> {
     grouped
         .definitions
         .first()
@@ -147,7 +147,7 @@ fn grouped_finalize_facts_from_extracted(
     root: &str,
     project_name: Option<&str>,
     scoped_definitions: &HashMap<String, ScopedDefinition>,
-) -> Option<StaticIndexIndexPatchFacts> {
+) -> Option<StaticIndexPatchFacts> {
     let definition_entries = extracted
         .get("definitions")
         .and_then(Value::as_array)
@@ -192,8 +192,8 @@ fn grouped_finalize_facts_from_extracted(
     group_from_value(Value::Object(grouped))
 }
 
-fn group_from_value(value: Value) -> Option<StaticIndexIndexPatchFacts> {
-    serde_json::from_value::<StaticIndexIndexPatchFacts>(value).ok()
+fn group_from_value(value: Value) -> Option<StaticIndexPatchFacts> {
+    serde_json::from_value::<StaticIndexPatchFacts>(value).ok()
 }
 
 struct OwnerDefinition {

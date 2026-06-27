@@ -51,9 +51,9 @@ func syntaxWorkerCommandPath() (string, bool) {
 
 func syntaxWorkerBinaryName() string {
 	if runtime.GOOS == "windows" {
-		return "crux-indexer-worker.exe"
+		return "crux-static-index-worker.exe"
 	}
-	return "crux-indexer-worker"
+	return "crux-static-index-worker"
 }
 
 func syntaxWorkerPoolSizeFromEnv() int {

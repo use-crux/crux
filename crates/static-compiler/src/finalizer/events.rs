@@ -1,6 +1,6 @@
 use serde_json::{Map, Value, json};
 
-use crate::{core::facts::StaticIndexIndexPatchFacts, finalizer::run::StaticIndexFinalizeOutput};
+use crate::{core::facts::StaticIndexPatchFacts, finalizer::run::StaticIndexFinalizeOutput};
 
 const PROJECT_INDEX_PRODUCER_NAME: &str = "@use-crux/indexer/project-indexer";
 const AST_PHASE: &str = "ast";
@@ -124,7 +124,7 @@ fn project_json(project: &StaticIndexFinalizeProject) -> Value {
 }
 
 fn fact_envelopes(
-    facts: &StaticIndexIndexPatchFacts,
+    facts: &StaticIndexPatchFacts,
     project_root: &str,
     producer_version: &str,
     phase: &str,

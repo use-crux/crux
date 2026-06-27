@@ -3,9 +3,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub use crate::worker::{
-    BatchWorkerRequest, SingleWorkerRequest, WorkerRequest, WorkerResponse, WorkerStreamEvent,
-};
+pub use crate::process::{BatchWorkerRequest, SingleWorkerRequest, WorkerRequest};
+pub use crate::project_index_events::{WorkerResponse, WorkerStreamEvent};
 
 #[derive(Debug)]
 /// Source text plus selector interests for one static syntax parse.

@@ -17,7 +17,12 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const workerPath = resolve(repoRoot, 'target', 'debug', process.platform === 'win32' ? 'crux-indexer-worker.exe' : 'crux-indexer-worker')
+const workerPath = resolve(
+  repoRoot,
+  'target',
+  'debug',
+  process.platform === 'win32' ? 'crux-static-index-worker.exe' : 'crux-static-index-worker',
+)
 const localPackageRoot = resolve(repoRoot, 'packages', 'local')
 
 /**
@@ -47,7 +52,7 @@ const commands = [
   {
     label: 'Build Rust/Oxc Static Index worker',
     command: 'cargo',
-    args: ['build', '--package', 'crux-indexer-worker', '--bin', 'crux-indexer-worker'],
+    args: ['build', '--package', 'crux-static-index-worker', '--bin', 'crux-static-index-worker'],
   },
   {
     label: 'Run Rust Static Index tests',

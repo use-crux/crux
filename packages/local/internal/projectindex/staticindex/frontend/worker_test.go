@@ -48,13 +48,13 @@ func TestWorkerParsesFileThroughCommandWorker(t *testing.T) {
 }
 
 func TestWorkerCommandPathUsesExplicitEnv(t *testing.T) {
-	t.Setenv(syntaxWorkerEnv, "/opt/crux/crux-indexer-worker")
+	t.Setenv(syntaxWorkerEnv, "/opt/crux/crux-static-index-worker")
 
 	got, ok := syntaxWorkerCommandPath()
 	if !ok {
 		t.Fatalf("syntaxWorkerCommandPath() ok = false, want true")
 	}
-	if got != "/opt/crux/crux-indexer-worker" {
+	if got != "/opt/crux/crux-static-index-worker" {
 		t.Fatalf("syntaxWorkerCommandPath() = %q, want explicit env path", got)
 	}
 }

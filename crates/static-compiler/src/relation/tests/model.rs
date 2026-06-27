@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde_json::json;
 
 use crate::core::facts::{
-    StaticIndexDefinition, StaticIndexFidelity, StaticIndexIndexPatchFacts, StaticIndexRelation,
+    StaticIndexDefinition, StaticIndexFidelity, StaticIndexPatchFacts, StaticIndexRelation,
     StaticIndexRelationRef,
 };
 use crate::relation::model::{
@@ -99,7 +99,7 @@ fn relation_refs_bind_and_project_injection_read_model_metadata() {
         StaticIndexFidelity::Resolved,
         Some(json!({ "exportName": "brandContext" })),
     );
-    let facts = StaticIndexIndexPatchFacts {
+    let facts = StaticIndexPatchFacts {
         root: None,
         project_name: None,
         definitions: vec![prompt, context],
@@ -142,7 +142,7 @@ fn relation_refs_bind_and_project_injection_read_model_metadata() {
 
 #[test]
 fn eval_coverage_refs_do_not_resolve_through_project_wide_variable_fallback() {
-    let facts = StaticIndexIndexPatchFacts {
+    let facts = StaticIndexPatchFacts {
         root: None,
         project_name: None,
         definitions: vec![
@@ -185,7 +185,7 @@ fn eval_coverage_refs_do_not_resolve_through_project_wide_variable_fallback() {
 
 #[test]
 fn routing_target_relations_project_child_target_metadata() {
-    let facts = StaticIndexIndexPatchFacts {
+    let facts = StaticIndexPatchFacts {
         root: None,
         project_name: None,
         definitions: vec![definition(

@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url'
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const localPackageRoot = resolve(repoRoot, 'packages', 'local')
-const workerBinaryName = process.platform === 'win32' ? 'crux-indexer-worker.exe' : 'crux-indexer-worker'
+const workerBinaryName = process.platform === 'win32' ? 'crux-static-index-worker.exe' : 'crux-static-index-worker'
 const workerPath = resolve(repoRoot, 'target', 'release', workerBinaryName)
 const benchmarkRoot = resolve(process.env.CRUX_INDEXER_BENCH_ROOT ?? repoRoot)
 const benchmarkPattern =
@@ -100,7 +100,7 @@ console.log(`Profiles: ${selectedProfiles.map((profile) => profile.name).join(',
 run({
   label: 'Build release Rust/Oxc Static Index worker',
   command: 'cargo',
-  args: ['build', '--release', '--package', 'crux-indexer-worker', '--bin', 'crux-indexer-worker'],
+  args: ['build', '--release', '--package', 'crux-static-index-worker', '--bin', 'crux-static-index-worker'],
 })
 assertWorkerExists()
 

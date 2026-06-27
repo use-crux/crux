@@ -19,8 +19,8 @@ packages/cli/bin
 packages/cli/dist
 packages/local/crux
 packages/local/crux.exe
-packages/local/crux-indexer-worker
-packages/local/crux-indexer-worker.exe
+packages/local/crux-static-index-worker
+packages/local/crux-static-index-worker.exe
 packages/local/internal/assets/embed/*
 !packages/local/internal/assets/embed/.gitkeep
 packages/local/internal/assets/ui-embed/*

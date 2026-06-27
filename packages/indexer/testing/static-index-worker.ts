@@ -114,7 +114,9 @@ function handleWorkerLine(line: string): void {
   try {
     response = JSON.parse(line) as StaticIndexWorkerEnvelope
   } catch (error) {
-    rejectAll(new Error(`Invalid Static Index worker response: ${error instanceof Error ? error.message : String(error)}`))
+    rejectAll(
+      new Error(`Invalid Static Index worker response: ${error instanceof Error ? error.message : String(error)}`),
+    )
     return
   }
   const pending = state.pending.get(response.id)
@@ -143,9 +145,9 @@ function workerCommand(): { readonly bin: string; readonly args: readonly string
       '--manifest-path',
       WORKSPACE_MANIFEST,
       '--package',
-      'crux-indexer-worker',
+      'crux-static-index-worker',
       '--bin',
-      'crux-indexer-worker',
+      'crux-static-index-worker',
       '--',
       'serve',
     ],

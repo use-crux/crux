@@ -89,12 +89,12 @@ func TestLocalAllToolchainPreflightReportsMissingCrossLinkers(t *testing.T) {
 
 func supportedPlatformBundles() []platformBundle {
 	return []platformBundle{
-		{name: "linux-x64", cruxBinary: "crux", workerBinary: "crux-indexer-worker"},
-		{name: "linux-arm64", cruxBinary: "crux", workerBinary: "crux-indexer-worker"},
-		{name: "darwin-x64", cruxBinary: "crux", workerBinary: "crux-indexer-worker"},
-		{name: "darwin-arm64", cruxBinary: "crux", workerBinary: "crux-indexer-worker"},
-		{name: "win32-x64", cruxBinary: "crux.exe", workerBinary: "crux-indexer-worker.exe"},
-		{name: "win32-arm64", cruxBinary: "crux.exe", workerBinary: "crux-indexer-worker.exe"},
+		{name: "linux-x64", cruxBinary: "crux", workerBinary: "crux-static-index-worker"},
+		{name: "linux-arm64", cruxBinary: "crux", workerBinary: "crux-static-index-worker"},
+		{name: "darwin-x64", cruxBinary: "crux", workerBinary: "crux-static-index-worker"},
+		{name: "darwin-arm64", cruxBinary: "crux", workerBinary: "crux-static-index-worker"},
+		{name: "win32-x64", cruxBinary: "crux.exe", workerBinary: "crux-static-index-worker.exe"},
+		{name: "win32-arm64", cruxBinary: "crux.exe", workerBinary: "crux-static-index-worker.exe"},
 	}
 }
 

@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use crate::core::definition_merge::merge_definitions_by_id;
-use crate::core::facts::StaticIndexIndexPatchFacts;
+use crate::core::facts::StaticIndexPatchFacts;
 use crate::finalizer::run::{append_missing_builtin_rule_descriptors, merge_fact_value};
 use crate::lints::filter::StaticIndexLintOptions;
 use crate::lints::findings::append_builtin_lint_findings;
@@ -13,7 +13,7 @@ use crate::relation::model::{StaticIndexRelationPolicyTable, resolve_static_inde
 use crate::source::model::with_static_index_source_model;
 
 pub(crate) fn apply_static_index_lint_model(
-    facts: &mut StaticIndexIndexPatchFacts,
+    facts: &mut StaticIndexPatchFacts,
     lint_facts: &[Value],
     policies: &StaticIndexRelationPolicyTable,
     lint_options: &StaticIndexLintOptions,

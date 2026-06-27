@@ -69,7 +69,7 @@
           "packages/local/internal/projectindex/eventwire/shared_fixtures_test.go"
         ],
         "rust": [
-          "crates/protocol/src/worker.rs",
+          "crates/protocol/src/project_index_events.rs",
           "crates/static-compiler/src/finalizer/events.rs",
           "crates/static-compiler/src/shared_fixtures_tests.rs"
         ]

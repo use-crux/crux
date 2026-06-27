@@ -13,7 +13,7 @@ UI_EMBED_DIR := internal/assets/ui-embed
 INDEXER_WORKER_MANIFEST := ../../Cargo.toml
 INDEXER_WORKER_TARGET_DIR := ../../target
 HOST_EXE_EXT := $(if $(filter Windows_NT,$(OS)),.exe,)
-INDEXER_WORKER_BIN := crux-indexer-worker
+INDEXER_WORKER_BIN := crux-static-index-worker
 INDEXER_WORKER_BINARY := $(INDEXER_WORKER_BIN)$(HOST_EXE_EXT)
 LOCAL_ALL_RUST_TARGETS := x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-gnu aarch64-pc-windows-gnullvm
 LOCAL_ALL_REQUIRED_TOOLS := $(GO) $(CARGO) $(RUSTUP)
@@ -117,7 +117,7 @@ embed-ui: $(UI_EMBED_DIR)
 
 .PHONY: build-indexer-worker
 build-indexer-worker:
-	$(CARGO) build --release --manifest-path "$(INDEXER_WORKER_MANIFEST)" --package crux-indexer-worker --bin $(INDEXER_WORKER_BIN)
+	$(CARGO) build --release --manifest-path "$(INDEXER_WORKER_MANIFEST)" --package crux-static-index-worker --bin $(INDEXER_WORKER_BIN)
 	cp "$(INDEXER_WORKER_TARGET_DIR)/release/$(INDEXER_WORKER_BINARY)" "$(INDEXER_WORKER_BINARY).tmp"
 	mv "$(INDEXER_WORKER_BINARY).tmp" "$(INDEXER_WORKER_BINARY)"
 
@@ -170,7 +170,7 @@ define PLATFORM_TARGET
 $(1): dist
 	mkdir -p dist/crux-$(1)/bin
 	GOOS=$(2) GOARCH=$(3) $(GO) build $(LDFLAGS) -o dist/crux-$(1)/bin/crux$(5) ./cmd/crux/
-	$(CARGO) build --release --manifest-path "$(INDEXER_WORKER_MANIFEST)" --package crux-indexer-worker --bin $(INDEXER_WORKER_BIN) --target "$(4)"
+	$(CARGO) build --release --manifest-path "$(INDEXER_WORKER_MANIFEST)" --package crux-static-index-worker --bin $(INDEXER_WORKER_BIN) --target "$(4)"
 	cp "$(INDEXER_WORKER_TARGET_DIR)/$(4)/release/$(INDEXER_WORKER_BIN)$(5)" "dist/crux-$(1)/bin/$(INDEXER_WORKER_BIN)$(5)"
 endef
 

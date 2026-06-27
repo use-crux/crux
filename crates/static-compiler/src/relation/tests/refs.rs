@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde_json::json;
 
 use crate::core::facts::{
-    StaticIndexDefinition, StaticIndexFidelity, StaticIndexIndexPatchFacts, StaticIndexRelationRef,
+    StaticIndexDefinition, StaticIndexFidelity, StaticIndexPatchFacts, StaticIndexRelationRef,
     StaticIndexSourceLocation,
 };
 use crate::relation::model::{StaticIndexRelationPolicyTable, resolve_static_index_relation_model};
@@ -17,7 +17,7 @@ fn relation_refs_honor_from_variable_target_kind_type_and_source() {
         column: Some(4),
         function_name: None,
     };
-    let facts = StaticIndexIndexPatchFacts {
+    let facts = StaticIndexPatchFacts {
         root: None,
         project_name: None,
         definitions: vec![
