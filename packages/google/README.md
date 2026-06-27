@@ -8,7 +8,7 @@ Google GenAI (Gemini) adapter for Crux. Wraps a `GoogleGenAI` client so Crux pro
 pnpm add @use-crux/google @use-crux/core @google/genai
 ```
 
-`@google/genai` (`^1.0.0`) is a peer dependency.
+`@google/genai` (`^1.0.0 || ^2.0.0`) is a peer dependency.
 
 ## Usage
 
