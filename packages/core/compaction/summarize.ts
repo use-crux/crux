@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { CompactionResult } from '../messages'
+import type { CompactionResult } from '../generation/messages'
 import type { SummarizeConfig } from './types'
 import { countTokens } from '../tokenizer'
 import { observe } from '../observability'

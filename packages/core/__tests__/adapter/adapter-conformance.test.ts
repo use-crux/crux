@@ -17,7 +17,7 @@ import type {
 import type { AdapterSpec } from '../../adapter/spec'
 import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '../../adapter/types'
 import type { GenerationSettings } from '../../types'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 
 interface FakeNativeClient {
   readonly calls: FakeNativeBody[]

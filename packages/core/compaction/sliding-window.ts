@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { Message } from '../messages'
+import type { Message } from '../generation/messages'
 import type { SlidingWindowConfig, SlidingWindow, SlidingWindowStats } from './types'
 import { inMemoryCruxStore } from '../store/memory'
 import { countTokens } from '../tokenizer'

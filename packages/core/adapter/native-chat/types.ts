@@ -9,7 +9,7 @@
 
 import type { z } from 'zod'
 import type { GenerateObjectFn, GenerateTextFn } from '../../compaction'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import type { GenerationSettings, TraceMeta } from '../../types'
 import type { CruxAdapter } from '../define-adapter'
 import type { AdapterSpec } from '../spec'

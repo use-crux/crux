@@ -17,8 +17,8 @@ import { runWithExecutionContext, getExecutionContext } from '../runtime/executi
 import type { GenerateTextFn } from '../compaction/types'
 import { observe } from '../observability'
 import type { CruxSpanId } from '../observability'
-import { executeWithRetry } from '../retry'
-import type { RetryOptions } from '../retry'
+import { executeWithRetry } from '../generation/retry'
+import type { RetryOptions } from '../generation/retry'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -81,7 +81,7 @@ export interface SwarmOptions<
    * Validation-feedback retry for structured output.
    * Applied to all agents unless overridden at agent level.
    */
-  validationRetry?: import('../validation-retry').ValidationRetryOptions
+  validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
   /**
    * How to build input for the next agent after a handoff.
    *

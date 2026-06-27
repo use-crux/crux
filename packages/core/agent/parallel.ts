@@ -13,8 +13,8 @@ import type { AgentExecutor, AgentResult } from './executor'
 import { getRuntime } from '../runtime/runtime'
 import { runWithExecutionContext, getExecutionContext } from '../runtime/execution-context'
 import { observe } from '../observability'
-import { executeWithRetry } from '../retry'
-import type { RetryOptions } from '../retry'
+import { executeWithRetry } from '../generation/retry'
+import type { RetryOptions } from '../generation/retry'
 
 /**
  * Intersect the input shapes of every agent in a `parallel()` map.
@@ -70,7 +70,7 @@ export interface ParallelOptions<TAgents extends Record<string, AgentLike>> {
    * Validation-feedback retry for structured output.
    * Applied to all agents in this parallel group.
    */
-  validationRetry?: import('../validation-retry').ValidationRetryOptions
+  validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────

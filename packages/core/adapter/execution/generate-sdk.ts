@@ -10,10 +10,10 @@
  * @module
  */
 
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import { createSafety } from '../../safety/session'
 import type { Safety } from '../../safety/session'
-import { orchestrateGenerate } from '../../orchestrate'
+import { orchestrateGenerate } from '../../generation/orchestrate'
 import type { ExecutorOutcome, ExecutorRequest, StepDirective, StepObserver } from '../executor-types'
 import { describeTools, interceptGeneration, type InterceptedGeneration } from '../interception'
 import { createToolLifecycle } from '../tool/session'

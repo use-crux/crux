@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { orchestrateGenerate, orchestrateStream, type OrchestrationSpec } from '../../orchestrate'
+import { orchestrateGenerate, orchestrateStream, type OrchestrationSpec } from '../../generation'
 import type { AnyPromptConfig } from '../../types'
 import {
   createInMemoryObservabilityTransport,

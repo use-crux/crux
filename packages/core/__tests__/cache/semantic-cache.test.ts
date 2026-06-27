@@ -6,7 +6,7 @@ import { embedding } from '../../embedding'
 import { inMemoryCruxStore } from '../../store'
 import { applyPlugins } from '../../runtime/plugin'
 import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
-import { orchestrateGenerate, orchestrateStream } from '../../orchestrate'
+import { orchestrateGenerate, orchestrateStream } from '../../generation/orchestrate'
 
 function denseEmbedding() {
   return embedding({

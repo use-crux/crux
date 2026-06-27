@@ -13,7 +13,7 @@
 
 import type { z } from 'zod'
 import type { GenerationSettings, ModelInfo, SystemBlock, TraceMeta } from '../types'
-import type { Message } from '../messages'
+import type { Message } from '../generation/messages'
 import type { JsonValue } from '../types/tool'
 import type { AdapterResponse } from './types'
 

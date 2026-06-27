@@ -257,17 +257,17 @@ export type { PromptMiddleware, PromptMiddlewareArgs } from './runtime'
 // Canonical observability graph contract.
 export * from './observability'
 
-// Canonical message type
-export type { Message, CompactionResult } from './messages'
+// Canonical message type (generation lifecycle domain)
+export type { Message, CompactionResult } from './generation'
 
-// Fallback
-export { fallback, isFallback, classifyError, shouldAttemptFallback } from './fallback'
-export type { FallbackModel, FallbackOptions, FallbackMeta, FallbackAttemptDetail, ErrorCategory } from './fallback'
+// Fallback (generation lifecycle domain)
+export { fallback, isFallback, classifyError, shouldAttemptFallback } from './generation'
+export type { FallbackModel, FallbackOptions, FallbackMeta, FallbackAttemptDetail, ErrorCategory } from './generation'
 
-// Validation Retry
-export { ValidationExhaustedError, isValidationExhaustedError } from './validation-retry'
-export type { ValidationRetryOptions, ValidationExhaustedErrorInit } from './validation-retry'
-export { repairJsonText } from './repair-json'
+// Validation Retry (generation lifecycle domain)
+export { ValidationExhaustedError, isValidationExhaustedError } from './generation'
+export type { ValidationRetryOptions, ValidationExhaustedErrorInit } from './generation'
+export { repairJsonText } from './generation'
 
 // Sanitization
 export { escapeXml, truncate, userContent, safe, raw, limit, wrap } from './sanitize'
@@ -327,7 +327,7 @@ export type {
   ErrorHookArgs,
 } from './prompt'
 
-// Type exports — provider-neutral generation/resolution surface
+// Type exports — provider-neutral base/resolution surface
 export type {
   // Base types
   AnyModel,
@@ -337,10 +337,6 @@ export type {
   ResolvedPrompt,
   ResolveOptions,
   SystemBlock,
-  // Settings & adaptation
-  GenerationSettings,
-  PromptAdaptation,
-  AdapterMap,
   // Inspection
   InspectResult,
   InspectPart,
@@ -348,11 +344,12 @@ export type {
   ExcludedContext,
   // Model info
   ModelInfo,
-  TokenUsage,
-  TraceMeta,
   // Project tool catalog
   FlowToolDef,
 } from './types'
+
+// Type exports — generation lifecycle domain (settings, adaptation, usage)
+export type { GenerationSettings, PromptAdaptation, AdapterMap, TokenUsage, TraceMeta } from './generation'
 export type { TokenizerFn } from './tokenizer'
 
 // Store
@@ -525,8 +522,8 @@ export type {
   executeFallbackLoop,
   withAttemptTimeout,
   wrapStreamIterable,
-} from './orchestrate'
-/** @internal */ export type { OrchestrationSpec, TextDeltaExtractor } from './orchestrate'
+} from './generation'
+/** @internal */ export type { OrchestrationSpec, TextDeltaExtractor } from './generation'
 
 // Provider adapter abstraction (also available as @use-crux/core/adapter subpath)
 export { adapter } from './adapter/define-adapter'

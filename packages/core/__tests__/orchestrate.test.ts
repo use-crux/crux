@@ -1,17 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { FallbackModel } from '../fallback'
-import { fallback } from '../fallback'
+import type { FallbackModel } from '../generation/fallback'
+import { fallback } from '../generation/fallback'
 
-// We'll import from the module under test once it exists
-// For now, these imports will fail (red phase)
 import {
   withAttemptTimeout,
   executeFallbackLoop,
   orchestrateGenerate,
   orchestrateStream,
   wrapStreamIterable,
-} from '../orchestrate'
-import type { OrchestrationSpec, TextDeltaExtractor } from '../orchestrate'
+} from '../generation'
+import type { OrchestrationSpec, TextDeltaExtractor } from '../generation'
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers

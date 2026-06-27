@@ -23,13 +23,13 @@ import type { GenerationSettings, TraceMeta, AnyPrompt } from '../types'
  * We narrow from `unknown` once and reuse this contract for every call.
  */
 type AdapterResolveOpts = Parameters<AnyPrompt['resolve']>[0]
-import type { Message } from '../messages'
+import type { Message } from '../generation/messages'
 import type { AdapterSpec } from './spec'
 import type { StreamHandle } from './types'
 import type { ApprovalRequestInfo } from './tool/approval'
 import { createCompositions } from '../agent/create-compositions'
 import type { AgentExecutor } from '../agent/executor'
-import type { ValidationRetryOptions } from '../validation-retry'
+import type { ValidationRetryOptions } from '../generation/validation-retry'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tool-middleware'

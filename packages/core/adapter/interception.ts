@@ -20,7 +20,7 @@
  */
 
 import type { ModelInfo } from '../types'
-import type { Message } from '../messages'
+import type { Message } from '../generation/messages'
 
 /**
  * A normalized, serializable description of one model call at the executor

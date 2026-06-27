@@ -10,11 +10,11 @@ import { describe, it, expect, vi } from 'vitest'
 import { adapter as makeAdapter } from '../../adapter/define-adapter'
 import type { AdapterSpec } from '../../adapter/spec'
 import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '../../adapter/types'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import type { GenerationSettings, TraceMeta } from '../../types'
 import { prompt as makePrompt } from '../../prompt/prompt'
 import { z } from 'zod'
-import { ValidationExhaustedError } from '../../validation-retry'
+import { ValidationExhaustedError } from '../../generation/validation-retry'
 import {
   approvalMiddleware,
   appendToolApprovalResponse,

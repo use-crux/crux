@@ -12,7 +12,7 @@
 import { runWithExecutionContext, getExecutionContext } from '../runtime/execution-context'
 import { captureSource } from '../project-index/source'
 import { getRuntime, resolveStore } from '../runtime/runtime'
-import { executeWithRetry } from '../retry'
+import { executeWithRetry } from '../generation/retry'
 import type { CruxStore, JsonObject } from '../store/types'
 import { observe } from '../observability'
 

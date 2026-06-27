@@ -14,7 +14,7 @@ import { createSkillActivationSession } from '../../../skill'
 import { LOAD_SKILL_TOOL_NAME } from '../../../skill/tools'
 import { updateRuntime, resetRuntime } from '../../../runtime/runtime'
 import type { AdapterResponse } from '../../../adapter/types'
-import type { Message } from '../../../messages'
+import type { Message } from '../../../generation/messages'
 import type { ResolvedPrompt } from '../../../types'
 
 function resolvedWith(partial: Partial<ResolvedPrompt>): ResolvedPrompt {

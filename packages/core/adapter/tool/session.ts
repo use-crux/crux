@@ -35,7 +35,7 @@
 
 import { z } from 'zod'
 import type { ResolvedPrompt } from '../../types'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import type { JsonValue, ToolModelOutput } from '../../types/tool'
 import type { SystemBlock } from '../../types'
 import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'

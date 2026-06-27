@@ -6,9 +6,9 @@
  * @module
  */
 
-import { observe } from './observability'
-import { ConstraintViolationError } from './safety/constraint/errors'
-import { GuardrailBlockedError } from './safety/guardrail/errors'
+import { observe } from '../observability'
+import { ConstraintViolationError } from '../safety/constraint/errors'
+import { GuardrailBlockedError } from '../safety/guardrail/errors'
 import { ValidationExhaustedError } from './validation-retry'
 
 // ── Types ───────────────────────────────────────────────────────────

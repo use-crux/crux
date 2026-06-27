@@ -10,8 +10,8 @@
  */
 
 import type { AnyPrompt, GenerationSettings, ModelInfo, TraceMeta } from '../../types'
-import type { Message } from '../../messages'
-import type { ValidationRetryOptions } from '../../validation-retry'
+import type { Message } from '../../generation/messages'
+import type { ValidationRetryOptions } from '../../generation/validation-retry'
 import type { Constraint } from '../../safety/constraint/types'
 import type { Guardrail } from '../../safety/guardrail/types'
 import type { ToolMiddleware } from '../../tool-middleware'

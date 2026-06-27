@@ -14,7 +14,7 @@ import type { AgentLike, InferAgentLikeInput, InferAgentLikeOutput } from './age
 import type { AgentExecutor, AgentResult } from './executor'
 import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
-import type { RetryOptions } from '../retry'
+import type { RetryOptions } from '../generation/retry'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@ export interface ConsensusOptions<
    * Validation-feedback retry for structured output.
    * Applied to all voter agents.
    */
-  validationRetry?: import('../validation-retry').ValidationRetryOptions
+  validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
 }
 
 /** The result of a consensus vote. */

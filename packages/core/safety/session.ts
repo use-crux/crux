@@ -27,7 +27,7 @@
  * @module
  */
 
-import type { Message } from '../messages'
+import type { Message } from '../generation/messages'
 import type { TraceMeta } from '../types'
 import { getRuntime } from '../runtime/runtime'
 import type {

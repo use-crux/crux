@@ -9,7 +9,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { orchestrateGenerate } from '../../orchestrate'
+import { orchestrateGenerate } from '../../generation/orchestrate'
 import { applyPlugins } from '../../runtime/plugin'
 import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
 import { inMemoryCruxStore } from '../../store'

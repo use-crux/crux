@@ -8,7 +8,7 @@
  */
 
 import type { z } from 'zod'
-import type { Message, CompactionResult } from '../messages'
+import type { Message, CompactionResult } from '../generation/messages'
 import type { CruxStore } from '../store/types'
 
 // ── Generate Function Abstractions ──────────────────────────────────

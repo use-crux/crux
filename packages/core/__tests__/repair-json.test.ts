@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { repairJsonText } from '../repair-json'
+import { repairJsonText } from '../generation/repair-json'
 
 describe('repairJsonText()', () => {
   it('returns valid JSON unchanged', () => {

@@ -11,10 +11,10 @@
  */
 
 import type { z } from 'zod'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import { getRuntime } from '../../runtime/runtime'
 import type { Safety } from '../../safety/session'
-import { ValidationExhaustedError } from '../../validation-retry'
+import { ValidationExhaustedError } from '../../generation/validation-retry'
 import type { ExecutorRequest } from '../executor-types'
 import { interceptGeneration, type InterceptedGeneration } from '../interception'
 import { formatValidationFeedback } from '../policy/validation-retry'

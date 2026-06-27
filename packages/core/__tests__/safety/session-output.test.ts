@@ -12,7 +12,7 @@ import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
 import { updateRuntime, resetRuntime, getRuntime } from '../../runtime/runtime'
 import { applyPlugins } from '../../runtime/plugin'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 
 afterEach(() => {
   resetRuntime()

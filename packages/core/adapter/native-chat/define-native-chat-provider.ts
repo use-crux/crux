@@ -6,7 +6,7 @@
 
 import type { z } from 'zod'
 import type { GenerateObjectFn, GenerateTextFn } from '../../compaction'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import { adapter } from '../define-adapter'
 import type { AdapterSpec } from '../spec'
 import type { AdapterResponse, CallArgs, StreamHandle } from '../types'

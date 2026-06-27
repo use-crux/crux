@@ -11,9 +11,9 @@
 
 import type { TraceMeta } from '../../types'
 import { getRuntime } from '../../runtime/runtime'
-import { ValidationExhaustedError } from '../../validation-retry'
+import { ValidationExhaustedError } from '../../generation/validation-retry'
 import { createSafety } from '../../safety/session'
-import { orchestrateGenerate } from '../../orchestrate'
+import { orchestrateGenerate } from '../../generation/orchestrate'
 import type { AdapterResponse, CallArgs } from '../types'
 import { formatValidationFeedback, validateStructuredOutput } from '../policy/validation-retry'
 import { createToolLifecycle } from '../tool/session'

@@ -10,7 +10,7 @@
  * @module
  */
 
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import type { AdapterResponse, ToolResultEntry } from '../types'
 import { appendCanonicalToolRound } from './transcript'
 

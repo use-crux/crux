@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { RetryOptions } from '../retry'
+import type { RetryOptions } from '../generation/retry'
 import type { JsonObject } from '../store/types'
 import type { CapturedObservabilityContext } from '../observability'
 import type { ZodType } from 'zod'

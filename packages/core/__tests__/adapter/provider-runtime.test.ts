@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { defineProviderRuntime } from '../../adapter'
 import { fakeExecutor } from '../../adapter/testing'
 import { prompt as makePrompt } from '../../prompt/prompt'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import type { GenerationSettings } from '../../types'
 
 interface RuntimeProviderMessage {

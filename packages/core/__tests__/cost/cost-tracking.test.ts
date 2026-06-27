@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prompt } from '../../prompt/prompt'
 import { applyPlugins } from '../../runtime/plugin'
 import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
-import { orchestrateGenerate } from '../../orchestrate'
+import { orchestrateGenerate } from '../../generation/orchestrate'
 import { runWithExecutionContext } from '../../runtime/execution-context'
 import { CostLimitError, modelPricing, withCostTracking } from '../../cost'
 

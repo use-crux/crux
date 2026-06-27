@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fallback, type FallbackModel } from '../../fallback'
+import { fallback, type FallbackModel } from '../../generation/fallback'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { executeFallbackLoop } from '../../orchestrate'
+import { executeFallbackLoop } from '../../generation/fallback-loop'
 import { cascade, router } from '../../routing'
 import { resolveModel } from '../../routing/resolve'
 

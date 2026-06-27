@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import type { AdapterResponse } from '../types'
 
 /**

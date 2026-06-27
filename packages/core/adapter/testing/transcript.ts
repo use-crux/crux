@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import type { NativeAssistantTurn, NativeTranscriptCodec } from '../native-chat'
 import type { ToolResultEntry } from '../types'
 import type { ConformanceViolation } from '../testing'

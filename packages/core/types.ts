@@ -1,23 +1,23 @@
 /**
  * Core SDK-agnostic type surface.
  *
- * This module owns the provider-neutral generation contracts — base SDK
- * aliases, {@link GenerationSettings}, provider adaptation, the project tool
- * catalog, and model metadata.
+ * This module owns the few remaining provider-neutral base contracts — the SDK
+ * aliases ({@link AnyModel}, {@link AnyToolSet}, {@link AnyMessage}), the project
+ * tool catalog ({@link FlowToolDef}), and model metadata ({@link ModelInfo}).
  *
- * Prompt/context authoring types live in the `prompt/` domain
- * (`prompt/context-types.ts`, `prompt/prompt-types.ts`, `prompt/type-utils.ts`),
- * prompt resolution/inspection output contracts ({@link ResolvedPrompt},
- * {@link ResolveOptions}, {@link SystemBlock}, {@link InspectResult}, and the
- * dropped/excluded context shapes) live in the `resolver/` domain
- * (`resolver/types.ts`), and the runtime middleware contracts
- * ({@link PromptMiddleware}, {@link PromptMiddlewareArgs}, {@link MiddlewareResult})
- * live in the `runtime/` domain (`runtime/types.ts`). All are re-exported here
- * so the many existing `./types` importers keep resolving unchanged during the
- * structure refactor. This re-export shim is temporary: the final cleanup phase
- * drains the remaining contracts (generation settings/adaptation) into their
- * own domain type files and reduces this module to its intentional, minimal
- * surface.
+ * Every domain-owned type now lives in its domain:
+ * - prompt/context authoring → `prompt/` (`prompt/context-types.ts`,
+ *   `prompt/prompt-types.ts`, `prompt/type-utils.ts`);
+ * - prompt resolution/inspection output → `resolver/` (`resolver/types.ts`);
+ * - runtime middleware contracts → `runtime/` (`runtime/types.ts`);
+ * - generation policy ({@link GenerationSettings}, {@link PromptAdaptation},
+ *   {@link AdapterMap}, {@link TokenUsage}, {@link TraceMeta}) → `generation/`
+ *   (`generation/types.ts`).
+ *
+ * All of those are re-exported here so the many existing `./types` importers keep
+ * resolving unchanged during the structure refactor. These re-export shims are
+ * temporary: the final cleanup phase reduces this module to its intentional,
+ * minimal surface.
  *
  * @module
  */
@@ -89,6 +89,12 @@ export type {
 export type { PromptMiddlewareArgs, MiddlewareResult, PromptMiddleware } from './runtime/types'
 
 // ─────────────────────────────────────────────────────────────────
+// Generation policy re-export shim (owned by the `generation/` domain)
+// ─────────────────────────────────────────────────────────────────
+
+export type { GenerationSettings, PromptAdaptation, AdapterMap, TokenUsage, TraceMeta } from './generation/types'
+
+// ─────────────────────────────────────────────────────────────────
 // Base Types (SDK-agnostic)
 // ─────────────────────────────────────────────────────────────────
 
@@ -131,116 +137,6 @@ export interface FlowToolDef {
   description: string
   /** Zod schema for the tool's parameters. */
   parameters: z.ZodType
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Generation Settings
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * SDK-agnostic generation settings.
- *
- * Common settings shared across AI providers. Each adapter maps these
- * to its SDK's expected field names (e.g. `maxTokens` → `max_tokens` for OpenAI).
- *
- * Merged with last-write-wins priority:
- * `config.settings` < `adapt.settings` < call-site overrides.
- *
- * The index signature allows SDK-specific settings to pass through.
- */
-export interface GenerationSettings {
-  /** Sampling temperature (0–2). Higher = more random. */
-  temperature?: number
-  /** Maximum number of tokens to generate. */
-  maxTokens?: number
-  /** Nucleus sampling threshold. */
-  topP?: number
-  /** Top-K sampling. */
-  topK?: number
-  /** Sequences that stop generation. */
-  stopSequences?: string[]
-  /** Penalize frequent tokens. */
-  frequencyPenalty?: number
-  /** Penalize already-present tokens. */
-  presencePenalty?: number
-  /** Extensible — SDK-specific settings pass through. */
-  [key: string]: unknown
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Provider Adaptation
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Provider-specific prompt modifications.
- *
- * Applied *after* system/prompt composition, allowing you to tweak the
- * final text for specific models without polluting business logic.
- */
-export interface PromptAdaptation {
-  /** Text prepended to the system message. */
-  prependSystem?: string
-  /** Text appended to the system message. */
-  appendSystem?: string
-  /** Text prepended to the user prompt. */
-  prependPrompt?: string
-  /** Text appended to the user prompt. */
-  appendPrompt?: string
-  /** Generation settings overrides for this provider. */
-  settings?: GenerationSettings
-}
-
-/**
- * Map of provider keys to their adaptations.
- *
- * Resolution priority: exact `provider` match → `modelId` prefix (for OpenRouter) → `'*'` wildcard.
- *
- * @example
- * ```ts
- * {
- *   anthropic: { appendSystem: '\nReturn raw JSON.' },
- *   openai: { settings: { temperature: 0.1 } },
- *   '*': { appendSystem: '\nJSON only.' },
- * }
- * ```
- */
-export type AdapterMap = {
-  [provider: string]: PromptAdaptation
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Token Usage & Trace Metadata
-// ─────────────────────────────────────────────────────────────────
-
-/** Token usage from an AI call. */
-export interface TokenUsage {
-  inputTokens?: number
-  outputTokens?: number
-  totalTokens?: number
-  cacheReadTokens?: number
-  cacheWriteTokens?: number
-  reasoningTokens?: number
-}
-
-/**
- * Normalized metadata attached to generate() results by each adapter.
- *
- * Adapters set `result._meta` after SDK calls so devtools middleware,
- * evals, and quality experiments can extract data without knowing which SDK
- * produced it.
- */
-export interface TraceMeta {
-  usage?: TokenUsage
-  /** Total cost in USD — only present when the provider returns it (e.g. OpenRouter). */
-  cost?: number
-  finishReason?: string
-  toolCalls?: Array<{ id?: string; name: string; args: unknown }>
-  responseId?: string
-  actualModelId?: string
-  /** Constraint audit trail — present when constraints ran during generation. */
-  constraints?: import('./safety/constraint/types').ConstraintAudit
-  /** Guardrail audit trail — present when guardrails ran during generation. */
-  guardrails?: import('./safety/guardrail/types').GuardrailAudit
 }
 
 // ─────────────────────────────────────────────────────────────────

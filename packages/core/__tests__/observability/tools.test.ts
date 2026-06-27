@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { adapter as makeAdapter } from '../../adapter/define-adapter'
 import type { AdapterResponse } from '../../adapter/types'
 import { prompt } from '../../prompt/prompt'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import {
   createInMemoryObservabilityTransport,
   observe,
