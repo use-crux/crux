@@ -48,6 +48,40 @@ Default mounts are `/workspace` and `/outputs`. Optional `/sources` mounts are c
 
 Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOperation` hooks. Devtools can show workspace ids, namespaces, paths, operations, and file metadata from the protocol stream; OTel receives only privacy-safe attributes such as workspace id, operation, MIME type, size, status, and path hash.
 
+## Package Structure Policy
+
+`@use-crux/core` is a **package-root source package**: the package root is the public source
+root, and domain folders own implementation depth. Core is not migrating to a `src/` layout —
+most Crux TypeScript packages publish from package root, and `scripts/stage-npm-packages.mjs`
+maps Core with `sourceRoot: '.'`.
+
+The rules:
+
+- **Package root = public source root.** Keep only public entrypoints/shims and project files at
+  `packages/core/`: `index.ts` (the main barrel), `package.json`, `tsconfig.json`,
+  `vitest.config.ts`, docs/legal files, and root compatibility shims that exist solely to preserve
+  an existing `package.json` subpath (for example `./tools` and `./tool-middleware`).
+- **Domain folders own implementation.** Product domains — `prompt/`, `resolver/`, `runtime/`,
+  `generation/`, `tools/`, `shared/`, plus the existing `adapter/`, `agent/`, `safety/`,
+  `quality/`, `observability/`, `retrieval/`, `indexing/`, `memory/`, and the rest — hold the real
+  code behind curated domain barrels. New root *implementation* files are not added.
+- **Curated barrels, not dumping grounds.** Each domain `index.ts` is a curated barrel or public
+  entrypoint, never substantial implementation. Avoid broad `export *` over internals, and put
+  implementation that is not a stable intra-package contract under a domain-local `internal/`
+  folder. Do not add a package-wide `packages/core/internal/`.
+- **Provider-agnostic.** Core must not depend on provider SDKs, React, Convex, or app packages;
+  provider packages depend on Core, never the reverse.
+- **Public contract is verified through imports, not file paths.** Behavior and inference are
+  pinned through the published `@use-crux/core` barrel and its subpaths
+  (`__tests__/public-import-surface.test.ts` at runtime, `__type_tests__/public-root-imports.ts`
+  under `tsc`). Implementation files stay free to move between domains as long as those public
+  imports keep resolving and keep their documented shape.
+
+> **Migration note:** the Module Map below still lists several root implementation files
+> (`define.ts`, `context.ts`, `resolve.ts`, `runtime.ts`, `tools.ts`, …). Those are being relocated
+> into the domain folders described above as part of the Core package structure refactor; this map
+> is rewritten to match the final layout in the refactor's final cleanup phase.
+
 ## Module Map
 
 ```
