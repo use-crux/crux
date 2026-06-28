@@ -1,0 +1,81 @@
+/**
+ * Workspace manifest rendering for context injection.
+ *
+ * Produces the markdown system text that lists mounted roots, top-level files,
+ * and any explicitly included file contents, so a prompt can see the workspace
+ * without calling tools.
+ *
+ * @module
+ */
+
+import type { DataStore } from '../store/types'
+import { recordToReadResult } from './content'
+import { mountForPath, normalizePath } from './path'
+import { getRequiredRecord, listAllFileEntries, listEntries } from './store'
+import type { NormalizedMount, WorkspaceContextOptions, WorkspaceListResult } from './types'
+
+/** Render the markdown manifest for a workspace namespace. */
+export async function renderWorkspaceManifest(args: {
+  readonly store: DataStore
+  readonly workspaceId: string
+  readonly mounts: readonly NormalizedMount[]
+  readonly namespace: string
+  readonly options?: WorkspaceContextOptions
+}): Promise<string> {
+  const { store, workspaceId, mounts, namespace, options } = args
+  const rootListing: WorkspaceListResult = {
+    entries: await listEntries({
+      store,
+      workspaceId,
+      namespace,
+      mounts,
+      queryPath: normalizePath('/'),
+      isGlob: false,
+    }),
+  }
+  const files = await listAllFileEntries(store, workspaceId, namespace)
+  const lines = [
+    `## Workspace (${workspaceId})`,
+    `Namespace: ${namespace}`,
+    '',
+    'Mounted roots:',
+    ...mounts.map((mount) => `- ${mount.path} (${mount.access})${mount.description ? `: ${mount.description}` : ''}`),
+  ]
+  if (rootListing.entries.length > 0) {
+    lines.push('', 'Files:')
+    for (const entry of rootListing.entries) {
+      if (entry.kind === 'directory') {
+        lines.push(`- ${entry.path}/`)
+      } else {
+        lines.push(`- ${entry.path} (${entry.mimeType}, ${entry.size} bytes)`)
+      }
+    }
+    for (const file of files) {
+      lines.push(`- ${file.path} (${file.mimeType}, ${file.size} bytes)`)
+    }
+  }
+  lines.push(
+    '',
+    'Use workspace tools to list and read file contents when needed. Binary files are returned as metadata/URI references.',
+  )
+
+  const includes = options?.include ?? []
+  if (includes.length > 0) {
+    lines.push('', 'Included workspace files:')
+    for (const include of includes) {
+      const normalized = normalizePath(include)
+      mountForPath(normalized, mounts, 'read')
+      const record = await getRequiredRecord(store, workspaceId, namespace, normalized)
+      const result = recordToReadResult(record, options?.maxInlineBytes)
+      if (result.kind === 'text') {
+        lines.push(`### ${result.path}`, result.content)
+      } else if (result.kind === 'json') {
+        lines.push(`### ${result.path}`, '```json', JSON.stringify(result.content, null, 2), '```')
+      } else {
+        lines.push(`### ${result.path}`, `[binary ${result.mimeType}, ${result.size} bytes]`)
+      }
+    }
+  }
+
+  return lines.join('\n')
+}
