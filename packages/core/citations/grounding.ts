@@ -12,7 +12,7 @@
 
 import { context } from '../prompt/context'
 import type { RetrieverHit } from '../retrieval'
-import type { PromptInjection } from '../types'
+import type { PromptInjection } from '../prompt/context-types'
 import { citationConstraint } from './constraint'
 import type { Grounding, GroundingConfig, GroundingResolution } from './types'
 

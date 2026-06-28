@@ -12,7 +12,7 @@
 import type { z } from 'zod'
 import type { DenseEmbedding, SparseEmbedding } from '../embedding'
 import type { CruxStore, DataStore, Storage, VectorStore } from '../store/types'
-import type { Context, PromptInjection } from '../types'
+import type { Context, PromptInjection } from '../prompt/context-types'
 import type { ToolDef } from '../types/tool'
 import type { QueryableCruxEntity } from '../tools/entity'
 

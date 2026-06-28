@@ -326,26 +326,28 @@ export type {
   ErrorHookArgs,
 } from './prompt'
 
-// Type exports — provider-neutral base/resolution surface
+// Type exports — provider-neutral base surface (owned by the root type module)
 export type {
   // Base types
   AnyModel,
   AnyToolSet,
   AnyMessage,
-  // Resolution
-  ResolvedPrompt,
-  ResolveOptions,
-  SystemBlock,
-  // Inspection
-  InspectResult,
-  InspectPart,
-  DroppedContext,
-  ExcludedContext,
   // Model info
   ModelInfo,
   // Project tool catalog
   FlowToolDef,
 } from './types'
+
+// Type exports — prompt resolution + inspection output (resolver domain)
+export type {
+  ResolvedPrompt,
+  ResolveOptions,
+  SystemBlock,
+  InspectResult,
+  InspectPart,
+  DroppedContext,
+  ExcludedContext,
+} from './resolver/types'
 
 // Type exports — generation lifecycle domain (settings, adaptation, usage)
 export type { GenerationSettings, PromptAdaptation, AdapterMap, TokenUsage, TraceMeta } from './generation'

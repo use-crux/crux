@@ -4,7 +4,8 @@ import { context, when, match } from '../prompt/context'
 import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
 import { prompt as makePrompt } from '../prompt/prompt'
 import { setTokenizer, defaultTokenizer } from '../shared/tokenizer'
-import type { AnyPromptConfig, ContextEntry } from '../types'
+import type { AnyPromptConfig } from '../prompt/prompt-types'
+import type { ContextEntry } from '../prompt/context-types'
 
 // Set up tokenizer for tests that need resolve/inspect
 beforeEach(() => {

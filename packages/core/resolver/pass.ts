@@ -9,7 +9,9 @@
  */
 
 import type { z } from 'zod'
-import type { AnyToolSet, AnyMessage, AnyPromptConfig, ContextEntry, ModelInfo } from '../types'
+import type { AnyToolSet, AnyMessage, ModelInfo } from '../types'
+import type { AnyPromptConfig } from '../prompt/prompt-types'
+import type { ContextEntry } from '../prompt/context-types'
 import type { ResolvedPrompt } from './types'
 import { LOAD_REFERENCE_TOOL_NAME, LOAD_SKILL_TOOL_NAME } from '../skill/tools'
 import { countTokens } from '../shared/tokenizer'

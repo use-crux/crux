@@ -13,7 +13,8 @@
 import { observe } from '../observability'
 import { getRuntime } from '../runtime/runtime'
 import { getExecutionContext } from '../runtime/execution-context'
-import type { PromptMiddlewareArgs, TokenUsage, TraceMeta } from '../types'
+import type { PromptMiddlewareArgs } from '../runtime/types'
+import type { TokenUsage, TraceMeta } from '../generation/types'
 import type { CostEntry, CostReport, CostTracker, CostTrackingOptions } from './types'
 import { buildReport, costEntryAttributes } from './report'
 

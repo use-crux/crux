@@ -8,7 +8,7 @@ import { defineProviderRuntime } from '../../adapter'
 import { fakeExecutor } from '../../adapter/testing'
 import { prompt as makePrompt } from '../../prompt/prompt'
 import type { Message } from '../../generation/messages'
-import type { GenerationSettings } from '../../types'
+import type { GenerationSettings } from '../../generation/types'
 
 interface RuntimeProviderMessage {
   readonly role: Message['role']

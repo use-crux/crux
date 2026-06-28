@@ -8,7 +8,9 @@
  */
 
 import { z } from 'zod'
-import type { AnyPrompt, Context, FlowToolDef } from '../types'
+import type { FlowToolDef } from '../types'
+import type { AnyPrompt } from '../prompt/prompt-types'
+import type { Context } from '../prompt/context-types'
 import type {
   PromptMeta,
   ContextMeta,

@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { TraceMeta } from '../../types'
+import type { TraceMeta } from '../../generation/types'
 import { getRuntime } from '../../runtime/runtime'
 import { ValidationExhaustedError } from '../../generation/validation-retry'
 import { createSafety } from '../../safety/session'

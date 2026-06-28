@@ -10,7 +10,7 @@
 
 import { observe } from '../observability'
 import type { JsonObject } from '../store/types'
-import type { SemanticCacheMode } from '../types'
+import type { SemanticCacheMode } from '../prompt/prompt-types'
 
 /** Emit a `cache.report` artifact for a lookup hit or write and link it to the span. */
 export function emitSemanticCacheArtifact(

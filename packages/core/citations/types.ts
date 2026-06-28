@@ -10,7 +10,7 @@
 
 import type { z } from 'zod'
 import type { Retriever, RetrieverHit, RetrievalInjectMode, RetrievalToolConfig } from '../retrieval'
-import type { InjectableEntry, PromptInjection } from '../types'
+import type { InjectableEntry, PromptInjection } from '../prompt/context-types'
 import type { Citation } from './schema'
 
 /** Whether a citation quote is forbidden, optional, or required. */

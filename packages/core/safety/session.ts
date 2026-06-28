@@ -28,7 +28,7 @@
  */
 
 import type { Message } from '../generation/messages'
-import type { TraceMeta } from '../types'
+import type { TraceMeta } from '../generation/types'
 import { getRuntime } from '../runtime/runtime'
 import type {
   Constraint,
@@ -586,9 +586,7 @@ export function createSafety(options: SafetyCallOptions): Safety {
       // Constraints run report-only — a live stream cannot regenerate.
       if (constraints.length > 0) {
         const checks = await Promise.all(
-          constraints.map(async (c) =>
-            observeConstraintCheck(c, { text, parsed: undefined }, constraintContext()),
-          ),
+          constraints.map(async (c) => observeConstraintCheck(c, { text, parsed: undefined }, constraintContext())),
         )
         const entries: ConstraintAuditEntry[] = checks.map((check) => ({
           constraint: check.constraint.name,

@@ -10,7 +10,8 @@
  */
 
 import type { z } from 'zod'
-import type { AnyPrompt, Context } from '../types'
+import type { AnyPrompt } from '../prompt/prompt-types'
+import type { Context } from '../prompt/context-types'
 
 /**
  * Accepts a PromptTree, the frozen result of createPrompts(), or a flat array.

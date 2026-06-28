@@ -11,7 +11,7 @@
 
 import { observe } from '../observability'
 import { getRuntime } from '../runtime/runtime'
-import type { MiddlewareResult } from '../types'
+import type { MiddlewareResult } from '../runtime/types'
 import { buildHitMeta, hydrateResult, lookupEntry, resultKindFromArgs } from './entry'
 import { emitSemanticCacheArtifact } from './observability'
 import { hashStable, resolveQueryText } from './query'

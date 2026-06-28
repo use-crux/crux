@@ -26,15 +26,15 @@
  */
 
 import type { z } from 'zod'
+import type { AnyToolSet } from '../types'
 import type {
-  AnyToolSet,
   BlackboardEntry,
   Context,
   ContextEntry,
   ContextTextSegment,
   MemoryEntry,
   SkillEntry,
-} from '../types'
+} from '../prompt/context-types'
 import type { ExcludedContext } from './types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'

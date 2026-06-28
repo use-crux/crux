@@ -20,7 +20,7 @@
  */
 
 import { z } from 'zod'
-import type { Context } from '../types'
+import type { Context } from '../prompt/context-types'
 import type { ToolDef, CreationTool } from '../types/tool'
 import type { Plan, PlanHandle, Task, TaskStatus, TaskListHandle } from './types'
 import { context } from '../prompt/context'

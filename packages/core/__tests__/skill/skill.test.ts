@@ -3,7 +3,8 @@ import { createSkillActivationSession, skill, SkillLoadError } from '../../skill
 import { generateIndex } from '../../skill/project-index'
 import { LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME } from '../../skill/tools'
 import { compilePrompt } from '../../resolver/compile'
-import type { AnyPromptConfig, ContextEntry } from '../../types'
+import type { AnyPromptConfig } from '../../prompt/prompt-types'
+import type { ContextEntry } from '../../prompt/context-types'
 import { context } from '../../prompt/context'
 import { setTokenizer } from '../../shared/tokenizer'
 

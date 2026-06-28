@@ -8,7 +8,8 @@
  * @module
  */
 
-import type { AdapterMap, GenerationSettings, ModelInfo, PromptAdaptation } from '../types'
+import type { ModelInfo } from '../types'
+import type { AdapterMap, GenerationSettings, PromptAdaptation } from '../generation/types'
 
 /** Select the provider/model adaptation block that applies to a call. */
 export function selectAdaptation(adapt: AdapterMap | undefined, modelInfo: ModelInfo): PromptAdaptation | undefined {

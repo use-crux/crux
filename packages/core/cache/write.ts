@@ -11,8 +11,15 @@
 
 import { observe } from '../observability'
 import { getRuntime } from '../runtime/runtime'
-import type { MiddlewareResult } from '../types'
-import { attachMissMeta, cacheKey, extractFinishReason, extractToolCalls, resultKindFromResult, serializeResult } from './entry'
+import type { MiddlewareResult } from '../runtime/types'
+import {
+  attachMissMeta,
+  cacheKey,
+  extractFinishReason,
+  extractToolCalls,
+  resultKindFromResult,
+  serializeResult,
+} from './entry'
 import { emitSemanticCacheArtifact, emitSemanticCacheSkipSpan } from './observability'
 import { hashStable, resolveQueryText } from './query'
 import { shouldCache } from './policies'

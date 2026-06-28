@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { MiddlewareResult } from '../../types'
+import type { MiddlewareResult } from '../../runtime/types'
 import { createSafety } from '../../safety/session'
 import { orchestrateStream } from '../../generation/orchestrate'
 import type { CallArgs, StreamHandle } from '../types'

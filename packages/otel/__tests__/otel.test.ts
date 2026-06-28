@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { resetRuntime, getRuntime, prompt as cruxPrompt } from '@use-crux/core'
-import { configure } from '../../core/configure'
+import { configure } from '../../core/runtime/configure'
 import { withTelemetry } from '../index'
 import { createCallbackExporter, createUrlExporter } from '../exporter'
 import type { TraceSpan } from '../types'
@@ -67,7 +67,6 @@ describe('withTelemetry', () => {
 
     reg.dispose()
   })
-
 })
 
 describe('createCallbackExporter', () => {

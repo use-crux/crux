@@ -9,7 +9,7 @@
  */
 
 import type { CruxStore, ScoredEntry } from '../store/types'
-import type { MiddlewareResult, PromptMiddlewareArgs } from '../types'
+import type { MiddlewareResult, PromptMiddlewareArgs } from '../runtime/types'
 import type { CacheableResult, SemanticCacheEntry } from './types'
 
 /** Vector-search the store for the closest matching cache entry above threshold. */

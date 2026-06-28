@@ -8,16 +8,12 @@
  * devtools, caches, and cost trackers read as a call flows back through the
  * middleware stack.
  *
- * These types previously lived in the root `types.ts` mega file; they are
- * re-exported from there as a temporary compatibility shim while the structure
- * refactor is in progress (removed/reduced in the final cleanup phase).
- *
  * @module
  */
 
 import type { AnyPromptConfig } from '../prompt/prompt-types'
 import type { ResolvedPrompt } from '../resolver/types'
-import type { TraceMeta } from '../types'
+import type { TraceMeta } from '../generation/types'
 
 // ─────────────────────────────────────────────────────────────────
 // Runtime Middleware

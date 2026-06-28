@@ -12,7 +12,9 @@
  */
 
 import type { z } from 'zod'
-import type { Prompt, Context, AnyModel, AnyToolSet } from '../types'
+import type { AnyModel, AnyToolSet } from '../types'
+import type { Prompt } from '../prompt/prompt-types'
+import type { Context } from '../prompt/context-types'
 
 // ── Types ───────────────────────────────────────────────────────────
 

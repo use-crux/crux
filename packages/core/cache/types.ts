@@ -12,11 +12,8 @@
 
 import type { DenseEmbedding } from '../embedding'
 import type { CruxStore, JsonObject } from '../store/types'
-import type {
-  PromptMiddlewareArgs,
-  SemanticCacheMode,
-  SemanticCachePromptOptions,
-} from '../types'
+import type { PromptMiddlewareArgs } from '../runtime/types'
+import type { SemanticCacheMode, SemanticCachePromptOptions } from '../prompt/prompt-types'
 
 /** Context for resolving a cache scope key for a single call. */
 export interface SemanticCacheScopeContext {

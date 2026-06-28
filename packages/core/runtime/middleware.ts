@@ -12,7 +12,7 @@
  * @module
  */
 
-import type { InspectResult } from '../types'
+import type { InspectResult } from '../resolver/types'
 
 export type { InstrumentationHooks } from './instrumentation-hooks'
 

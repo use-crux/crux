@@ -5,7 +5,8 @@
  */
 
 import type { z } from 'zod'
-import type { GenerationSettings, ModelInfo } from '../../types'
+import type { ModelInfo } from '../../types'
+import type { GenerationSettings } from '../../generation/types'
 import type {
   ExecutorOutcome,
   ExecutorRequest,

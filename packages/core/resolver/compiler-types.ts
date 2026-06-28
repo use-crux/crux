@@ -10,7 +10,7 @@
  */
 
 import type { z } from 'zod'
-import type { GenerationSettings } from '../types'
+import type { GenerationSettings } from '../generation/types'
 import type { InspectResult, ResolvedPrompt } from './types'
 import type { ResolverPorts } from './ports'
 

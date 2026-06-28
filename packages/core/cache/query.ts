@@ -9,7 +9,8 @@
  */
 
 import type { CruxStore } from '../store/types'
-import type { PromptMiddlewareArgs, SemanticCachePromptOptions, SemanticCacheQueryContext } from '../types'
+import type { PromptMiddlewareArgs } from '../runtime/types'
+import type { SemanticCachePromptOptions, SemanticCacheQueryContext } from '../prompt/prompt-types'
 import type { NormalizedPromptHint, SemanticCacheConfig, SemanticCacheScopeContext } from './types'
 
 /** Default cache namespace when none is configured. */
@@ -57,7 +58,10 @@ export function normalizePromptHint(value: unknown): NormalizedPromptHint | null
 }
 
 /** Resolve the configured scope to a non-empty scope key. */
-export async function resolveScope(scope: SemanticCacheConfig['scope'], ctx: SemanticCacheScopeContext): Promise<string> {
+export async function resolveScope(
+  scope: SemanticCacheConfig['scope'],
+  ctx: SemanticCacheScopeContext,
+): Promise<string> {
   if (scope === 'global') return 'global'
   const value = await scope(ctx)
   if (!value) throw new Error('createSemanticCache() scope resolved to an empty value.')

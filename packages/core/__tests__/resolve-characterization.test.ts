@@ -25,7 +25,9 @@ import { updateRuntime, resetRuntime } from '../runtime/runtime'
 import { setTokenizer, defaultTokenizer } from '../shared/tokenizer'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
-import type { MemoryEntry, BlackboardEntry, SkillEntry, PromptConfig, AnyToolSet, ContextEntry } from '../types'
+import type { AnyToolSet } from '../types'
+import type { MemoryEntry, BlackboardEntry, SkillEntry, ContextEntry } from '../prompt/context-types'
+import type { PromptConfig } from '../prompt/prompt-types'
 
 afterEach(() => {
   setTokenizer(defaultTokenizer)

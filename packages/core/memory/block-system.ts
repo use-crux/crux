@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { context } from '../prompt/context'
-import type { AnyToolSet, Context } from '../types'
+import type { AnyToolSet } from '../types'
+import type { Context } from '../prompt/context-types'
 import type { CruxStore, JsonObject, ScoredEntry } from '../store/types'
 import { inMemoryCruxStore } from '../store/memory'
 import type { DenseEmbedding } from '../embedding'

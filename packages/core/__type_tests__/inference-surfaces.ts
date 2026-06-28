@@ -9,7 +9,8 @@ import { z } from 'zod'
 import { context, match, when } from '../prompt/context'
 import { contributor } from '../prompt/contributor'
 import { prompt } from '../prompt/prompt'
-import type { ContextDef, PromptHooks, PromptResult } from '../types'
+import type { ContextDef } from '../prompt/context-types'
+import type { PromptHooks, PromptResult } from '../prompt/prompt-types'
 
 // ─────────────────────────────────────────────────────────────────
 // Shared fixtures

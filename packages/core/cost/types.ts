@@ -10,7 +10,7 @@
  */
 
 import type { CruxPlugin } from '../runtime/plugin'
-import type { TokenUsage } from '../types'
+import type { TokenUsage } from '../generation/types'
 
 /** Whether a recorded cost was reported by the provider or estimated locally. */
 export type CostSource = 'actual' | 'estimated'

@@ -15,14 +15,10 @@
  */
 
 import type { z } from 'zod'
-import type {
-  ContextEntry,
-  GenerationSettings,
-  MergeContextInputs,
-  Prompt,
-  AnyPrompt,
-  Simplify,
-} from '../types'
+import type { ContextEntry } from '../prompt/context-types'
+import type { GenerationSettings } from '../generation/types'
+import type { MergeContextInputs, Simplify } from '../prompt/type-utils'
+import type { Prompt, AnyPrompt } from '../prompt/prompt-types'
 import type { Agent, AnyAgent } from '../agent/agent'
 import type { FlowHandle } from '../flow/types'
 import type { Retriever, RetrieveOptions, RetrieverHit } from '../retrieval'
@@ -228,8 +224,12 @@ export interface AnyTarget {
  * // Target<{ question: string }, { answer: string }, PromptParams<…>, 'modelCalls' | 'citations' | 'safety'>
  * ```
  */
-export interface Target<in out TInput, out TOutput, in TParams extends object, out TCaps extends Capability>
-  extends AnyTarget {
+export interface Target<
+  in out TInput,
+  out TOutput,
+  in TParams extends object,
+  out TCaps extends Capability,
+> extends AnyTarget {
   readonly capabilities: readonly TCaps[]
   /**
    * Inference-only phantom carrying the target's generics. Never present at
@@ -594,9 +594,7 @@ export interface TargetConstructor {
    * })
    * ```
    */
-  <I extends Record<string, unknown>, O, P extends object = {}>(
-    spec: CustomTargetSpec<I, O, P>,
-  ): Target<I, O, P, never>
+  <I extends Record<string, unknown>, O, P extends object = {}>(spec: CustomTargetSpec<I, O, P>): Target<I, O, P, never>
 
   /**
    * Wrap a prompt with execution defaults. The result captures

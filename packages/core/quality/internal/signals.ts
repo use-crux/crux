@@ -26,7 +26,7 @@ import type {
   CruxSpanStatus,
 } from '../../observability/contract'
 import { currentObservabilityTransport, observe, setObservabilityTransport } from '../../observability'
-import type { TokenUsage } from '../../types'
+import type { TokenUsage } from '../../generation/types'
 import type { Capability } from '../target'
 
 // ─────────────────────────────────────────────────────────────────

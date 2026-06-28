@@ -9,7 +9,8 @@
  * @module
  */
 
-import type { AnyPrompt, GenerationSettings, TraceMeta } from '../../types'
+import type { AnyPrompt } from '../../prompt/prompt-types'
+import type { GenerationSettings, TraceMeta } from '../../generation/types'
 import type { Message } from '../../generation/messages'
 import type { ProviderOwnership } from '../provider-runtime'
 import type { StepObserver } from '../executor-types'

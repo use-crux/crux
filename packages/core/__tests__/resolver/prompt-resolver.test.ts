@@ -25,7 +25,9 @@ import {
   recordingInstrumentation,
 } from '../../resolver/fakes'
 import type { ResolverPorts } from '../../resolver/ports'
-import type { InspectResult, PromptConfig, ResolvedPrompt, SkillEntry } from '../../types'
+import type { InspectResult, ResolvedPrompt } from '../../resolver/types'
+import type { PromptConfig } from '../../prompt/prompt-types'
+import type { SkillEntry } from '../../prompt/context-types'
 
 type AnyConfig = PromptConfig<z.ZodType, z.ZodType | undefined, readonly never[]>
 

@@ -16,7 +16,7 @@
  * @module
  */
 
-import type { AnyPrompt } from '../types'
+import type { AnyPrompt } from '../prompt/prompt-types'
 import type { Case } from './case'
 import type { AssertContext, CaseContext } from './expect'
 import type { Dataset } from './dataset'

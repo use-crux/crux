@@ -9,7 +9,7 @@
  */
 
 import type { z } from 'zod'
-import type { GenerationSettings } from '../types'
+import type { GenerationSettings } from '../generation/types'
 import type { Message } from '../generation/messages'
 import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from './types'
 

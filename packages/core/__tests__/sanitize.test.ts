@@ -6,7 +6,7 @@ import { prompt as makePrompt } from '../prompt/prompt'
 import { context } from '../prompt/context'
 import { configure } from '../runtime/configure'
 import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
-import type { AnyPromptConfig, PromptConfig } from '../types'
+import type { AnyPromptConfig, PromptConfig } from '../prompt/prompt-types'
 
 async function resolveCompiled(config: AnyPromptConfig, opts: ResolveCallOptions = {}) {
   return (await compilePrompt(config).resolve(opts)).args

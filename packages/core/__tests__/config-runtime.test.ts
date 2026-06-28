@@ -11,7 +11,7 @@ import type { CruxPlugin } from '../runtime/plugin'
 import { getRuntime, resetRuntime, updateRuntime } from '../runtime/runtime'
 import { inMemoryCruxStore } from '../store'
 import { countTokens, defaultTokenizer, setTokenizer } from '../shared/tokenizer'
-import type { PromptMiddleware } from '../types'
+import type { PromptMiddleware } from '../runtime/types'
 
 describe('config — runtime domain mapping', () => {
   beforeEach(() => {

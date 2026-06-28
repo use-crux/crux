@@ -12,7 +12,7 @@
 
 import type { z } from 'zod'
 import type { BlobReadResult, BlobRef, BlobStore, DataStore, JsonObject, Storage } from '../store/types'
-import type { Context, PromptInjection } from '../types'
+import type { Context, PromptInjection } from '../prompt/context-types'
 import type { JsonValue, ToolDef } from '../types/tool'
 
 /** Default inline storage cutoff: text/JSON at or below this size is stored inline. */

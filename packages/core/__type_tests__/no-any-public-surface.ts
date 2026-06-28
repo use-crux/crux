@@ -10,19 +10,10 @@ import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import { context, when, match, createContexts } from '../prompt/context'
 import { prompt } from '../prompt/prompt'
-import type {
-  AnyPrompt,
-  AnyPromptConfig,
-  ConditionalContext,
-  Context,
-  ContextEntry,
-  MatchSpec,
-  MiddlewareResult,
-  Prompt,
-  PromptMiddleware,
-  PromptMiddlewareArgs,
-  ResolvedPrompt,
-} from '../types'
+import type { AnyPrompt, AnyPromptConfig, Prompt } from '../prompt/prompt-types'
+import type { ConditionalContext, Context, ContextEntry, MatchSpec } from '../prompt/context-types'
+import type { MiddlewareResult, PromptMiddleware, PromptMiddlewareArgs } from '../runtime/types'
+import type { ResolvedPrompt } from '../resolver/types'
 
 // ─────────────────────────────────────────────────────────────────
 // Context inference still flows through createContexts / when / match

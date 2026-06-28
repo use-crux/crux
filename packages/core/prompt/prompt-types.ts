@@ -4,32 +4,19 @@
  * cache intent.
  *
  * These types describe the user-facing prompt surface. Resolution output
- * ({@link ResolvedPrompt}, {@link InspectResult}) and provider-neutral
- * settings live in the root type module; this module composes them into the
- * authoring API.
+ * ({@link ResolvedPrompt}, {@link InspectResult}) is owned by `resolver/types.ts`
+ * and provider-neutral generation settings by `generation/types.ts`; this module
+ * composes them into the authoring API.
  *
  * @module
  */
 
 import type { z } from 'zod'
-import type {
-  ContextEntry,
-  ContextSystemContent,
-  ContextSystemResult,
-} from './context-types'
+import type { ContextEntry, ContextSystemContent, ContextSystemResult } from './context-types'
 import type { MergedInput } from './type-utils'
-import type {
-  AdapterMap,
-  AnyMessage,
-  AnyToolSet,
-  DroppedContext,
-  GenerationSettings,
-  InspectResult,
-  ResolveOptions,
-  ResolvedPrompt,
-  TokenUsage,
-  TraceMeta,
-} from '../types'
+import type { AnyMessage, AnyToolSet } from '../types'
+import type { AdapterMap, GenerationSettings, TokenUsage, TraceMeta } from '../generation/types'
+import type { DroppedContext, InspectResult, ResolveOptions, ResolvedPrompt } from '../resolver/types'
 import type { ToolMiddleware } from '../tools/types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'

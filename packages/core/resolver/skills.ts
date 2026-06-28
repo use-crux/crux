@@ -18,7 +18,8 @@
  */
 
 import type { z } from 'zod'
-import type { AnyToolSet, Context, SkillEntry } from '../types'
+import type { AnyToolSet } from '../types'
+import type { Context, SkillEntry } from '../prompt/context-types'
 import { generateIndex } from '../skill/project-index'
 import { createSkillActivationSession, type SkillActivationSession } from '../skill/session'
 import type { ResolverPorts } from './ports'
@@ -114,7 +115,10 @@ export async function resolveSkillSurface(
         }),
       )
     } catch (err) {
-      ports.diagnostics.warn(`[@use-crux/core] Failed to fetch skill "${s.id}":`, err instanceof Error ? err.message : err)
+      ports.diagnostics.warn(
+        `[@use-crux/core] Failed to fetch skill "${s.id}":`,
+        err instanceof Error ? err.message : err,
+      )
       resolvedSkills.push(s)
     }
   }

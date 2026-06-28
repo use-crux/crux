@@ -34,10 +34,10 @@
  */
 
 import { z } from 'zod'
-import type { ResolvedPrompt } from '../../types'
+import type { ResolvedPrompt } from '../../resolver/types'
 import type { Message } from '../../generation/messages'
 import type { JsonValue, ToolModelOutput } from '../../types/tool'
-import type { SystemBlock } from '../../types'
+import type { SystemBlock } from '../../resolver/types'
 import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'
 import { applyToolMiddleware, notifyToolApprovalResponses } from '../../tools/middleware'
 import { findToolApprovalRequests, findToolApprovalDecision, deniedToolModelOutput } from '../../tools/approvals'

@@ -1,98 +1,23 @@
 /**
- * Core SDK-agnostic type surface.
+ * Core SDK-agnostic base type surface.
  *
- * This module owns the few remaining provider-neutral base contracts — the SDK
- * aliases ({@link AnyModel}, {@link AnyToolSet}, {@link AnyMessage}), the project
- * tool catalog ({@link FlowToolDef}), and model metadata ({@link ModelInfo}).
+ * This module owns the few provider-neutral primitives that do not belong to a
+ * single product domain: the SDK aliases ({@link AnyModel}, {@link AnyToolSet},
+ * {@link AnyMessage}), the static project tool catalog entry ({@link FlowToolDef}),
+ * and provider/model metadata ({@link ModelInfo}). They are intentionally
+ * dependency-free so every domain can import them without creating a cycle.
  *
- * Every domain-owned type now lives in its domain:
- * - prompt/context authoring → `prompt/` (`prompt/context-types.ts`,
- *   `prompt/prompt-types.ts`, `prompt/type-utils.ts`);
- * - prompt resolution/inspection output → `resolver/` (`resolver/types.ts`);
- * - runtime middleware contracts → `runtime/` (`runtime/types.ts`);
- * - generation policy ({@link GenerationSettings}, {@link PromptAdaptation},
- *   {@link AdapterMap}, {@link TokenUsage}, {@link TraceMeta}) → `generation/`
- *   (`generation/types.ts`).
- *
- * All of those are re-exported here so the many existing `./types` importers keep
- * resolving unchanged during the structure refactor. These re-export shims are
- * temporary: the final cleanup phase reduces this module to its intentional,
- * minimal surface.
+ * Domain-owned types live in their domain modules — import them from there:
+ * - prompt/context authoring → `prompt/context-types.ts`,
+ *   `prompt/prompt-types.ts`, `prompt/type-utils.ts`;
+ * - prompt resolution/inspection output → `resolver/types.ts`;
+ * - runtime middleware contracts → `runtime/types.ts`;
+ * - generation policy (settings, adaptation, usage, trace) → `generation/types.ts`.
  *
  * @module
  */
 
 import type { z } from 'zod'
-
-// ─────────────────────────────────────────────────────────────────
-// Prompt authoring re-export shim (owned by the `prompt/` domain)
-// ─────────────────────────────────────────────────────────────────
-
-export type {
-  CacheOption,
-  ContextTextSegment,
-  ContextSystemContent,
-  ContextSystemResult,
-  ContextSystemArg,
-  ContextDef,
-  Context,
-  ConditionalContext,
-  MatchSpec,
-  ContextEntry,
-  PromptInjection,
-  InjectableEntry,
-  ContributorContribution,
-  ContributorEntry,
-  SkillEntry,
-  MemoryEntry,
-  BlackboardEntry,
-  ContextTree,
-} from './prompt/context-types'
-
-export type {
-  SemanticCacheMode,
-  SemanticCacheQueryContext,
-  SemanticCachePromptOptions,
-  PromptCacheOptions,
-  PromptInputArg,
-  PromptConfig,
-  PrepareHookArgs,
-  GenerateHookArgs,
-  ErrorHookArgs,
-  PromptResult,
-  PromptHooks,
-  Prompt,
-  AnyPrompt,
-  AnyPromptConfig,
-} from './prompt/prompt-types'
-
-export type { Simplify, DeepReadonly, MergeContextInputs, MergedInput } from './prompt/type-utils'
-
-// ─────────────────────────────────────────────────────────────────
-// Resolver output re-export shim (owned by the `resolver/` domain)
-// ─────────────────────────────────────────────────────────────────
-
-export type {
-  SystemBlock,
-  ResolvedPrompt,
-  ResolveOptions,
-  DroppedContext,
-  InspectPart,
-  ExcludedContext,
-  InspectResult,
-} from './resolver/types'
-
-// ─────────────────────────────────────────────────────────────────
-// Runtime middleware re-export shim (owned by the `runtime/` domain)
-// ─────────────────────────────────────────────────────────────────
-
-export type { PromptMiddlewareArgs, MiddlewareResult, PromptMiddleware } from './runtime/types'
-
-// ─────────────────────────────────────────────────────────────────
-// Generation policy re-export shim (owned by the `generation/` domain)
-// ─────────────────────────────────────────────────────────────────
-
-export type { GenerationSettings, PromptAdaptation, AdapterMap, TokenUsage, TraceMeta } from './generation/types'
 
 // ─────────────────────────────────────────────────────────────────
 // Base Types (SDK-agnostic)

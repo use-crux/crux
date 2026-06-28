@@ -23,7 +23,8 @@ import type { CruxArtifactId, CruxContextInjectableKind } from '../observability
 import type { ToolMiddleware } from '../tools/types'
 import type { ContextEntry, ContextTextSegment, MemoryEntry } from '../prompt/context-types'
 import type { MergedInput } from '../prompt/type-utils'
-import type { AnyMessage, AnyToolSet, GenerationSettings } from '../types'
+import type { AnyMessage, AnyToolSet } from '../types'
+import type { GenerationSettings } from '../generation/types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 

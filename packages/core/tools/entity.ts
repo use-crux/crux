@@ -6,7 +6,7 @@
  */
 
 import type { z } from 'zod'
-import type { Context } from '../types'
+import type { Context } from '../prompt/context-types'
 import type { ToolDef } from '../types/tool'
 
 /**

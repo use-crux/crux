@@ -9,7 +9,8 @@
 
 import { z } from 'zod'
 import { context } from '../prompt/context'
-import type { AnyToolSet, Context, PromptInjection } from '../types'
+import type { AnyToolSet } from '../types'
+import type { Context, PromptInjection } from '../prompt/context-types'
 import { createRetrieverTools } from './tools'
 import type {
   RetrievalInjectMode,

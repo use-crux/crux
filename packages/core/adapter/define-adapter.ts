@@ -12,7 +12,8 @@
  * @module
  */
 
-import type { GenerationSettings, TraceMeta, AnyPrompt } from '../types'
+import type { GenerationSettings, TraceMeta } from '../generation/types'
+import type { AnyPrompt } from '../prompt/prompt-types'
 
 /**
  * Loosely-typed resolve options used at the adapter boundary.

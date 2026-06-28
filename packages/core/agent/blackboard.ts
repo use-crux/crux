@@ -10,7 +10,7 @@
 
 import { z } from 'zod'
 import type { CruxStore, ToolConfig } from '../store/types'
-import type { Context } from '../types'
+import type { Context } from '../prompt/context-types'
 import type { ToolDef } from '../types/tool'
 import { inMemoryCruxStore } from '../store/memory'
 import { context } from '../prompt/context'

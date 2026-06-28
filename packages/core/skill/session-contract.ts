@@ -9,7 +9,8 @@
  */
 
 import type { z } from 'zod'
-import type { AnyToolSet, Context } from '../types'
+import type { AnyToolSet } from '../types'
+import type { Context } from '../prompt/context-types'
 import type { Skill } from './types'
 
 /**

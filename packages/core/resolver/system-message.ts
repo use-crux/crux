@@ -11,7 +11,7 @@
  */
 
 import { z } from 'zod'
-import type { Context } from '../types'
+import type { Context } from '../prompt/context-types'
 import type { DroppedContext, InspectPart, SystemBlock } from './types'
 import type { CruxArtifactId, CruxContextContributionPreview } from '../observability/contract'
 import { countTokens } from '../shared/tokenizer'

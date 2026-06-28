@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { TokenUsage } from '../types'
+import type { TokenUsage } from '../generation/types'
 import type { ModelPrice, ModelPricing } from './types'
 
 /**
