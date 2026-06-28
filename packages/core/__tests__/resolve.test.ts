@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { z } from 'zod'
 import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
 import { context } from '../prompt/context'
-import { setTokenizer, defaultTokenizer } from '../tokenizer'
+import { setTokenizer, defaultTokenizer } from '../shared/tokenizer'
 import type { AnyPromptConfig } from '../types'
 
 afterEach(() => {

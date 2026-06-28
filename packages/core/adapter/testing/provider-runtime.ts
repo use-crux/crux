@@ -12,7 +12,7 @@
 
 import { z } from 'zod'
 import { prompt as makePrompt } from '../../prompt/prompt'
-import { appendToolApprovalResponse } from '../../tool-middleware'
+import { appendToolApprovalResponse } from '../../tools/approvals'
 import type { DefinedProviderRuntime, ProviderRuntimeDepsArg } from '../provider-runtime'
 import type { ConformanceViolation } from '../testing'
 import type {

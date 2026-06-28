@@ -6,8 +6,8 @@
  */
 
 import type { z } from 'zod'
-import type { Context } from './types'
-import type { ToolDef } from './types/tool'
+import type { Context } from '../types'
+import type { ToolDef } from '../types/tool'
 
 /**
  * Any entity that can inject itself into an LLM conversation

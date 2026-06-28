@@ -8,7 +8,7 @@
  * @module
  */
 
-import { countTokens } from '../tokenizer'
+import { countTokens } from '../shared/tokenizer'
 import type { ContextSystemContent, ContextSystemResult, ContextTextSegment } from '../types'
 import type { ResolvedSystemContent } from './contract'
 

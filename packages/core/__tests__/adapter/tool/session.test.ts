@@ -9,7 +9,8 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createToolLifecycle } from '../../../adapter/tool/session'
-import { toolMiddleware, approvalMiddleware, appendToolApprovalResponse } from '../../../tool-middleware'
+import { toolMiddleware, approvalMiddleware } from '../../../tools/middleware'
+import { appendToolApprovalResponse } from '../../../tools/approvals'
 import { createSkillActivationSession } from '../../../skill'
 import { LOAD_SKILL_TOOL_NAME } from '../../../skill/tools'
 import { updateRuntime, resetRuntime } from '../../../runtime/runtime'

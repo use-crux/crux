@@ -35,7 +35,7 @@ export type {
 export type { ApprovalRequestInfo } from './approval'
 
 // ── Middleware authoring ───────────────────────────────────────────
-export { toolMiddleware, approvalMiddleware } from '../../tool-middleware'
+export { toolMiddleware, approvalMiddleware } from '../../tools/middleware'
 export type {
   ToolMiddleware,
   ToolMiddlewareConfig,
@@ -49,7 +49,7 @@ export type {
   ToolExecuteFunction,
   ToolLike,
   ToolMatcher,
-} from '../../tool-middleware'
+} from '../../tools/types'
 
 // ── App-facing approval helpers (render approval UIs with these) ──
 export {
@@ -59,7 +59,7 @@ export {
   findToolApprovalRequests,
   findToolApprovalDecision,
   deniedToolModelOutput,
-} from '../../tool-middleware'
+} from '../../tools/approvals'
 export type {
   ToolApprovalDecision,
   ToolApprovalRequest,
@@ -67,4 +67,4 @@ export type {
   ToolApprovalRequestPayload,
   ToolApprovalResponsePart,
   ToolApprovalStatus,
-} from '../../tool-middleware'
+} from '../../tools/types'

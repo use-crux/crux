@@ -15,7 +15,7 @@ import type { CruxLintConfig as CoreCruxLintConfig } from '../project-index'
 import type { QualityConfig } from '../quality/config'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
 import type { CruxStore } from '../store/types'
-import type { TokenizerFn } from '../tokenizer'
+import type { TokenizerFn } from '../shared/tokenizer'
 import type { PromptMiddleware } from './types'
 
 export type { CruxLintConfig, CruxLintRuleConfig, CruxLintSelectedProfile } from '../lint'

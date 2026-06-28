@@ -5,7 +5,7 @@ import { LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME } from '../../skill/tool
 import { compilePrompt } from '../../resolver/compile'
 import type { AnyPromptConfig, ContextEntry } from '../../types'
 import { context } from '../../prompt/context'
-import { setTokenizer } from '../../tokenizer'
+import { setTokenizer } from '../../shared/tokenizer'
 
 // Use a simple 1-char-per-token tokenizer for deterministic tests
 beforeEach(() => {

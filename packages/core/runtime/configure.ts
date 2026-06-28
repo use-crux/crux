@@ -15,7 +15,7 @@
 import type { z } from 'zod'
 import type { AnyPrompt, Context, FlowToolDef } from '../types'
 import type { PromptMiddleware } from './types'
-import type { TokenizerFn } from '../tokenizer'
+import type { TokenizerFn } from '../shared/tokenizer'
 import type { CruxPlugin } from './plugin'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
 import {
@@ -29,7 +29,7 @@ import {
   isContext,
   isPrompt,
 } from './configure-registry'
-import { setTokenizer } from '../tokenizer'
+import { setTokenizer } from '../shared/tokenizer'
 import { getRuntime, setRuntime, resetRuntime } from './runtime'
 import { applyPlugins } from './plugin'
 import { withDevtools } from '../observability'

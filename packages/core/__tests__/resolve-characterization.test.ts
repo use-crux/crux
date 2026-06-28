@@ -22,7 +22,7 @@ import {
   setObservabilityTransport,
 } from '../observability'
 import { updateRuntime, resetRuntime } from '../runtime/runtime'
-import { setTokenizer, defaultTokenizer } from '../tokenizer'
+import { setTokenizer, defaultTokenizer } from '../shared/tokenizer'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { MemoryEntry, BlackboardEntry, SkillEntry, PromptConfig, AnyToolSet, ContextEntry } from '../types'

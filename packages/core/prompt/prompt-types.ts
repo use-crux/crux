@@ -30,7 +30,7 @@ import type {
   TokenUsage,
   TraceMeta,
 } from '../types'
-import type { ToolMiddleware } from '../tool-middleware'
+import type { ToolMiddleware } from '../tools/types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 

@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  applyToolMiddleware,
-  approvalMiddleware,
-  notifyToolApprovalResponses,
-  toolApprovalResponse,
-  toolMiddleware,
-} from '../tool-middleware'
+import { applyToolMiddleware, approvalMiddleware, notifyToolApprovalResponses, toolMiddleware } from '../tools/middleware'
+import { toolApprovalResponse } from '../tools/approvals'
 
 describe('toolMiddleware()', () => {
   it('wraps matching tool execution with before/after hooks', async () => {

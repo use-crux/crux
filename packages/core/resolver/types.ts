@@ -20,7 +20,7 @@
 
 import type { z } from 'zod'
 import type { CruxArtifactId, CruxContextInjectableKind } from '../observability/contract'
-import type { ToolMiddleware } from '../tool-middleware'
+import type { ToolMiddleware } from '../tools/types'
 import type { ContextEntry, ContextTextSegment, MemoryEntry } from '../prompt/context-types'
 import type { MergedInput } from '../prompt/type-utils'
 import type { AnyMessage, AnyToolSet, GenerationSettings } from '../types'

@@ -3,7 +3,7 @@ import { configure } from '../runtime/configure'
 import { prompt as cruxPrompt } from '../prompt/prompt'
 import { resetObservabilityRuntime } from '../observability'
 import { getRuntime, resetRuntime } from '../runtime/runtime'
-import { defaultTokenizer, setTokenizer } from '../tokenizer'
+import { defaultTokenizer, setTokenizer } from '../shared/tokenizer'
 import type { CruxPlugin } from '../runtime/plugin'
 
 function makePrompt(id: string) {

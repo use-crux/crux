@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { context, when, match } from '../prompt/context'
 import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
 import { prompt as makePrompt } from '../prompt/prompt'
-import { setTokenizer, defaultTokenizer } from '../tokenizer'
+import { setTokenizer, defaultTokenizer } from '../shared/tokenizer'
 import type { AnyPromptConfig, ContextEntry } from '../types'
 
 // Set up tokenizer for tests that need resolve/inspect

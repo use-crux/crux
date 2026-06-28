@@ -10,7 +10,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { appendToolApprovalResponse } from '../../tool-middleware'
+import { appendToolApprovalResponse } from '../../tools/approvals'
 import type { ToolModelOutput } from '../../types/tool'
 
 interface MockClient {

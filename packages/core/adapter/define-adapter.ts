@@ -32,7 +32,7 @@ import type { AgentExecutor } from '../agent/executor'
 import type { ValidationRetryOptions } from '../generation/validation-retry'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
-import type { ToolMiddleware } from '../tool-middleware'
+import type { ToolMiddleware } from '../tools/types'
 import { coreStepDialect, createAdapterExecution } from './execution/session'
 
 // ─────────────────────────────────────────────────────────────────

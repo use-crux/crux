@@ -156,8 +156,8 @@ export type {
 } from './storage'
 export { createPrompts } from './prompt'
 export type { PromptTree, PromptTreeResult } from './prompt'
-export { tool } from './tools'
-export type { NamedToolDef, ToolConfig } from './tools'
+export { tool } from './tools/define-tool'
+export type { NamedToolDef, ToolConfig } from './tools/types'
 
 // Configuration + runtime domain (runtime/config/plugin/hook surface)
 export { config } from './runtime'
@@ -210,7 +210,7 @@ export type {
 } from './flow/scope'
 
 // Tokenizer
-export { setTokenizer, countTokens } from './tokenizer'
+export { setTokenizer, countTokens } from './shared/tokenizer'
 
 // Plugin system
 export { mergeRuntime, applyPlugins } from './runtime'
@@ -218,16 +218,15 @@ export type { CruxPlugin, CruxPluginResult, ApplyPluginsResult } from './runtime
 
 // Hook types — needed by plugin authors
 export type { InstrumentationHooks } from './runtime'
+export { toolMiddleware, approvalMiddleware } from './tools/middleware'
 export {
-  toolMiddleware,
-  approvalMiddleware,
   toolApprovalResponse,
   toolApprovalResponseMessage,
   appendToolApprovalResponse,
   findToolApprovalRequests,
   findToolApprovalDecision,
   deniedToolModelOutput,
-} from './tool-middleware'
+} from './tools/approvals'
 export type {
   ToolApprovalDecision,
   ToolApprovalDecisionEvent,
@@ -247,7 +246,7 @@ export type {
   ToolMiddlewareNext,
   ToolResultContext,
   ApprovalMiddlewareConfig,
-} from './tool-middleware'
+} from './tools/types'
 
 // Runtime hooks — prefer `config()` for centralized setup
 export { getRuntime, setRuntime, updateRuntime, resetRuntime, resolveStore } from './runtime'
@@ -270,8 +269,8 @@ export type { ValidationRetryOptions, ValidationExhaustedErrorInit } from './gen
 export { repairJsonText } from './generation'
 
 // Sanitization
-export { escapeXml, truncate, userContent, safe, raw, limit, wrap } from './sanitize'
-export type { SuspiciousPatternWarning } from './sanitize'
+export { escapeXml, truncate, userContent, safe, raw, limit, wrap } from './shared/sanitize'
+export type { SuspiciousPatternWarning } from './shared/sanitize'
 
 // Guardrail
 export { guardrail, isGuardrail, GuardrailBlockedError } from './safety/guardrail'
@@ -350,7 +349,7 @@ export type {
 
 // Type exports — generation lifecycle domain (settings, adaptation, usage)
 export type { GenerationSettings, PromptAdaptation, AdapterMap, TokenUsage, TraceMeta } from './generation'
-export type { TokenizerFn } from './tokenizer'
+export type { TokenizerFn } from './shared/tokenizer'
 
 // Store
 export { inMemoryCruxStore } from './store/memory'
@@ -392,8 +391,8 @@ export type {
 } from './memory'
 
 // Entity interface
-export { composeTools } from './entity'
-export type { CruxEntity, QueryableCruxEntity } from './entity'
+export { composeTools } from './tools/entity'
+export type { CruxEntity, QueryableCruxEntity } from './tools/entity'
 
 // Retrieval
 export {
@@ -515,7 +514,7 @@ export type {
 } from './plan/types'
 
 // Adapter internals — used by @use-crux/ai, @use-crux/openai, @use-crux/google, @use-crux/convex
-/** @internal */ export { sanitizeJsonSchema } from './schema-compat'
+/** @internal */ export { sanitizeJsonSchema } from './shared/schema-compat'
 /** @internal */ export {
   orchestrateGenerate,
   orchestrateStream,

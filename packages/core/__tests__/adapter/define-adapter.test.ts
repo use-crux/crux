@@ -15,12 +15,8 @@ import type { GenerationSettings, TraceMeta } from '../../types'
 import { prompt as makePrompt } from '../../prompt/prompt'
 import { z } from 'zod'
 import { ValidationExhaustedError } from '../../generation/validation-retry'
-import {
-  approvalMiddleware,
-  appendToolApprovalResponse,
-  findToolApprovalRequests,
-  toolMiddleware,
-} from '../../tool-middleware'
+import { approvalMiddleware, toolMiddleware } from '../../tools/middleware'
+import { appendToolApprovalResponse, findToolApprovalRequests } from '../../tools/approvals'
 
 // ─────────────────────────────────────────────────────────────────
 // Mock Types
