@@ -1,71 +1,117 @@
-import { describe, expect, it, vi } from 'vitest'
-import { defineConvexStoreContract, type ConvexCruxStoreComponent, type ConvexCtxPort } from '../index'
+import { describe, expect, it } from 'vitest'
+import {
+  createInMemoryConvexStoreDocumentComponent,
+  defineConvexStoreContract,
+  type StoreDocDenseSearchQuery,
+  type StoreDocRecord,
+} from '../index'
+import { STORE_DOC_COMPONENT_SPEC } from '../store-doc'
 
-describe('defineConvexStoreContract', () => {
-  it('creates a server store and transport from the same component contract', async () => {
-    const component = createComponent()
-    const ctx = {
-      runQuery: vi.fn(),
-      runMutation: vi.fn(),
-      vectorSearch: vi.fn(),
-    }
-    const useQuery = vi.fn((query: unknown, args: unknown) => {
-      if (args === 'skip') return undefined
-      if (query === component.memory.get) return cruxDoc('memory:alpha', { content: 'Alpha' })
-      if (query === component.memory.list) return { docs: [cruxDoc('memory:alpha', { content: 'Alpha' })] }
-      return undefined
-    })
-
+describe('defineConvexStoreContract document boundary', () => {
+  it('uses one in-memory component for server writes and React reads', async () => {
+    const component = createInMemoryConvexStoreDocumentComponent()
     const docs = defineConvexStoreContract({
       component,
-      vectorIndexName: 'by_custom_embedding',
       now: () => 1_000,
       semanticCache: { isolatedVectorNamespace: true },
     })
+    const store = docs.store(component.ctx)
+    const transport = docs.transport({ useQuery: component.useQuery })
 
-    const store = docs.store(ctx as unknown as ConvexCtxPort)
-    await store.set('memory:alpha', { content: 'Alpha', embedding: [0.1, 0.2] }, { ttl: 250 })
+    await store.set('memory:alpha', { content: 'Alpha', namespace: 'kb' }, { ttl: 500 })
 
-    expect(ctx.runMutation).toHaveBeenCalledWith(component.memory.set, {
-      key: 'memory:alpha',
-      content: JSON.stringify({ content: 'Alpha', embedding: [0.1, 0.2], _expiresAt: 1_250 }),
-      metadata: { _cruxDoc: true },
-      embedding: [0.1, 0.2],
-      updatedAt: 1_000,
+    await expect(store.get('memory:alpha')).resolves.toEqual({
+      content: 'Alpha',
+      namespace: 'kb',
+      [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 1_500,
     })
+    expect(transport.useDocument('memory:alpha')).toEqual({
+      content: 'Alpha',
+      namespace: 'kb',
+      [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 1_500,
+    })
+    expect(transport.useDocumentList('memory:', { filter: { namespace: 'kb' } })).toEqual([
+      {
+        key: 'memory:alpha',
+        value: { content: 'Alpha', namespace: 'kb', [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 1_500 },
+      },
+    ])
     expect(store.capabilities?.()).toEqual({
       ttl: true,
       vectorSearch: { dense: true, sparse: false, hybrid: false },
       semanticCache: { isolatedVectorNamespace: true },
     })
 
-    const transport = docs.transport({ useQuery })
+    await store.delete('memory:alpha')
 
-    expect(transport.useDocument('memory:alpha')).toEqual({ content: 'Alpha' })
-    expect(useQuery).toHaveBeenCalledWith(component.memory.get, { key: 'memory:alpha' })
-    expect(transport.useDocumentList('memory:')).toEqual([
-      { key: 'memory:alpha', value: { content: 'Alpha' } },
+    await expect(store.get('memory:alpha')).resolves.toBeNull()
+    expect(transport.useDocument('memory:alpha')).toBeNull()
+  })
+
+  it('applies TTL suppression, pagination fill, and dense vector result shaping through the component', async () => {
+    let now = 1_000
+    const component = createInMemoryConvexStoreDocumentComponent({
+      denseSearch: denseSearchByScore,
+    })
+    const docs = defineConvexStoreContract({ component, now: () => now })
+    const store = docs.store(component.ctx)
+    const transport = docs.transport({ useQuery: component.useQuery })
+
+    await store.set('memory:expired', { content: 'Old', namespace: 'kb' }, { ttl: 1 })
+    await store.set('memory:fresh-a', {
+      content: 'Alpha',
+      namespace: 'kb',
+      embedding: [1, 0],
+    })
+    await store.set('memory:fresh-b', {
+      content: 'Beta',
+      namespace: 'other',
+      embedding: [0.5, 0.5],
+    })
+    now = 2_000
+
+    expect(transport.useDocument('memory:expired')).toBeNull()
+    await expect(store.get('memory:expired')).resolves.toBeNull()
+    await expect(store.list('memory:', { limit: 1, filter: { namespace: 'kb' } })).resolves.toEqual({
+      entries: [
+        {
+          key: 'memory:fresh-a',
+          value: { content: 'Alpha', namespace: 'kb', embedding: [1, 0] },
+        },
+      ],
+      cursor: 'memory:fresh-a',
+    })
+    await expect(
+      store.searchVectors!({
+        dense: [1, 0],
+        limit: 2,
+        threshold: 0.7,
+        filter: { namespace: 'kb' },
+      }),
+    ).resolves.toEqual([
+      {
+        key: 'memory:fresh-a',
+        value: { content: 'Alpha', namespace: 'kb', embedding: [1, 0] },
+        score: 1,
+      },
     ])
-    expect(useQuery).toHaveBeenCalledWith(component.memory.list, { prefix: 'memory:' })
   })
 })
 
-function createComponent(): ConvexCruxStoreComponent {
-  return {
-    memory: {
-      get: Symbol('memory.get'),
-      list: Symbol('memory.list'),
-      set: Symbol('memory.set'),
-      remove: Symbol('memory.remove'),
-    },
-  }
+function denseSearchByScore(
+  query: StoreDocDenseSearchQuery,
+  docs: readonly StoreDocRecord[],
+): readonly StoreDocRecord[] {
+  return docs
+    .map((doc) => ({ ...doc, _score: dot(query.vector, vectorFromDoc(doc)) }))
+    .sort((left, right) => Number(right._score) - Number(left._score))
+    .slice(0, query.limit)
 }
 
-function cruxDoc(key: string, value: Record<string, unknown>): Record<string, unknown> {
-  return {
-    key,
-    content: JSON.stringify(value),
-    metadata: { _cruxDoc: true },
-    updatedAt: 1,
-  }
+function vectorFromDoc(doc: StoreDocRecord): readonly number[] {
+  return Array.isArray(doc.embedding) && doc.embedding.every((item) => typeof item === 'number') ? doc.embedding : []
+}
+
+function dot(left: readonly number[], right: readonly number[]): number {
+  return left.reduce((total, value, index) => total + value * (right[index] ?? 0), 0)
 }

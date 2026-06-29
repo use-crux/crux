@@ -8,5 +8,6 @@
  */
 
 export * from './store-doc/types'
+export * from './store-doc/manifest'
 export * from './store-doc/codec'
 export * from './store-doc/store'

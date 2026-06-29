@@ -9,3 +9,4 @@ Complete the profile-backed `convexAgent()` lifecycle around the Convex Agent me
 - Derive public generation args/options/results from upstream Convex Agent method types while omitting Crux-owned `system`, `prompt`, `messages`, and `tools`.
 - Add the `crux` config namespace for Crux-owned lifecycle controls: `crux.prepare`, `crux.runtime.store`, `crux.runtime.namespace`, `crux.observe`, `crux.persistence`, and advanced `crux.driver`. Existing top-level `prepare`, `store`, and `namespace` remain as deprecated compatibility aliases.
 - Move Crux-only prompt resolution to `agent.crux.resolve()` with direct `agent.resolve()` kept as a deprecated compatibility alias.
+- Deepen the Convex store document contract with a substitutable `ComponentDocumentPort`, normalized `ConvexStoreDocumentComponent`, and `createInMemoryConvexStoreDocumentComponent()` for server/React boundary tests.

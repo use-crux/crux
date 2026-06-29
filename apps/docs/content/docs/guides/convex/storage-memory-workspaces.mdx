@@ -27,6 +27,23 @@ The component query boundary stays Convex-native: `components.crux.memory.list` 
 
 The same document boundary powers the HTTP devtools bridge and contract React transport, so list filters, dense vector scores, expired-record behavior, and strict decoding stay consistent across server actions and reactive UI reads.
 
+For contract tests that should exercise server writes and React reads together, use
+`createInMemoryConvexStoreDocumentComponent()` instead of mocking individual
+component functions. It provides a local component, `ctx`, and `useQuery`
+substitute backed by one record set:
+
+```ts
+import { createInMemoryConvexStoreDocumentComponent, defineConvexStoreContract } from '@use-crux/convex'
+
+const component = createInMemoryConvexStoreDocumentComponent()
+const cruxDocuments = defineConvexStoreContract({ component })
+
+const store = cruxDocuments.store(component.ctx)
+const transport = cruxDocuments.transport({
+  useQuery: component.useQuery,
+})
+```
+
 ## Memory Blocks
 
 Memory blocks do not need Convex-specific definitions. They need a durable store and a namespace.

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createStoreDocCodec,
   createStoreDocStore,
+  STORE_DOC_COMPONENT_SPEC,
   type StoreDocComponentPort,
   type StoreDocRecord,
   type StoreDocWrite,
@@ -26,9 +27,9 @@ describe('store document codec', () => {
         content: 'Alpha',
         namespace: 'kb',
         embedding: [0.1, 0.2, 0.3],
-        _expiresAt: 1_500,
+        [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 1_500,
       }),
-      metadata: { _cruxDoc: true },
+      metadata: { [STORE_DOC_COMPONENT_SPEC.fields.marker]: true },
       embedding: [0.1, 0.2, 0.3],
       updatedAt: 1_000,
     })
@@ -39,7 +40,7 @@ describe('store document codec', () => {
         content: 'Alpha',
         namespace: 'kb',
         embedding: [0.1, 0.2, 0.3],
-        _expiresAt: 1_500,
+        [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 1_500,
       },
       expired: false,
       expiresAt: 1_500,
@@ -62,8 +63,16 @@ describe('store document codec', () => {
 
 describe('store document store', () => {
   it('suppresses expired documents, deletes them lazily, filters consistently, and reports capabilities', async () => {
-    const expired = cruxDoc('memory:expired', { content: 'Old', namespace: 'kb', _expiresAt: 900 }, 0.99)
-    const fresh = cruxDoc('memory:fresh', { content: 'Fresh', namespace: 'kb', _expiresAt: 2_000 }, 0.88)
+    const expired = cruxDoc(
+      'memory:expired',
+      { content: 'Old', namespace: 'kb', [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 900 },
+      0.99,
+    )
+    const fresh = cruxDoc(
+      'memory:fresh',
+      { content: 'Fresh', namespace: 'kb', [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 2_000 },
+      0.88,
+    )
     const other = cruxDoc('memory:other', { content: 'Other', namespace: 'other' }, 0.95)
     const { io, writes, deletes } = mapStoreDocIo([expired, fresh, other], [expired, fresh, other])
     const store = createStoreDocStore({
@@ -82,9 +91,9 @@ describe('store document store', () => {
           content: 'New',
           embedding: [0.1, 0.2],
           namespace: 'kb',
-          _expiresAt: 1_250,
+          [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 1_250,
         }),
-        metadata: { _cruxDoc: true },
+        metadata: { [STORE_DOC_COMPONENT_SPEC.fields.marker]: true },
         embedding: [0.1, 0.2],
         updatedAt: 1_000,
       },
@@ -94,18 +103,23 @@ describe('store document store', () => {
     await expect(store.get('memory:fresh')).resolves.toEqual({
       content: 'Fresh',
       namespace: 'kb',
-      _expiresAt: 2_000,
+      [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 2_000,
     })
 
     await expect(store.list('memory:', { filter: { namespace: 'kb' } })).resolves.toEqual({
       entries: [
         {
           key: 'memory:fresh',
-          value: { content: 'Fresh', namespace: 'kb', _expiresAt: 2_000 },
+          value: { content: 'Fresh', namespace: 'kb', [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 2_000 },
         },
         {
           key: 'memory:new',
-          value: { content: 'New', embedding: [0.1, 0.2], namespace: 'kb', _expiresAt: 1_250 },
+          value: {
+            content: 'New',
+            embedding: [0.1, 0.2],
+            namespace: 'kb',
+            [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 1_250,
+          },
         },
       ],
     })
@@ -119,7 +133,7 @@ describe('store document store', () => {
     ).resolves.toEqual([
       {
         key: 'memory:fresh',
-        value: { content: 'Fresh', namespace: 'kb', _expiresAt: 2_000 },
+        value: { content: 'Fresh', namespace: 'kb', [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 2_000 },
         score: 0.88,
       },
     ])
@@ -156,7 +170,7 @@ function cruxDoc(key: string, value: StoreDocRecord, score?: number): StoreDocRe
   return {
     key,
     content: JSON.stringify(value),
-    metadata: { _cruxDoc: true },
+    metadata: { [STORE_DOC_COMPONENT_SPEC.fields.marker]: true },
     createdAt: 1,
     updatedAt: 2,
     ...(score === undefined ? {} : { _score: score }),

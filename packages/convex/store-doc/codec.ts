@@ -9,6 +9,7 @@
  */
 
 import type { JsonObject } from '@use-crux/core/store'
+import { STORE_DOC_COMPONENT_SPEC } from './manifest'
 import type { DecodedStoreDoc, StoreDocCodec, StoreDocCodecOptions, StoreDocRecord } from './types'
 
 /**
@@ -25,13 +26,13 @@ export function createStoreDocCodec(options: StoreDocCodecOptions = {}): StoreDo
       const updatedAt = now()
       const stored =
         setOptions?.ttl !== undefined && setOptions.ttl > 0
-          ? { ...value, _expiresAt: updatedAt + setOptions.ttl }
+          ? { ...value, [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: updatedAt + setOptions.ttl }
           : value
       const embedding = isNumberArray(value.embedding) ? value.embedding : undefined
       return {
         key,
         content: JSON.stringify(stored),
-        metadata: { _cruxDoc: true },
+        metadata: { [STORE_DOC_COMPONENT_SPEC.fields.marker]: true },
         ...(embedding ? { embedding } : {}),
         updatedAt,
       }
@@ -62,12 +63,13 @@ export function createStoreDocCodec(options: StoreDocCodecOptions = {}): StoreDo
 function decodeCruxStoreDoc(doc: StoreDocRecord, now: () => number): DecodedStoreDoc {
   const key = requireStringField(doc, 'key')
   const metadata = isRecord(doc.metadata) ? doc.metadata : undefined
-  if (metadata?._cruxDoc !== true || typeof doc.content !== 'string') {
+  if (metadata?.[STORE_DOC_COMPONENT_SPEC.fields.marker] !== true || typeof doc.content !== 'string') {
     throw new Error('Convex store expected a document written in the current Crux store format.')
   }
   const content = requireStringField(doc, 'content')
   const value = parseJsonObject(content)
-  const expiresAt = typeof value._expiresAt === 'number' ? value._expiresAt : undefined
+  const expiresAtValue = value[STORE_DOC_COMPONENT_SPEC.fields.expiresAt]
+  const expiresAt = typeof expiresAtValue === 'number' ? expiresAtValue : undefined
   return {
     key,
     value,

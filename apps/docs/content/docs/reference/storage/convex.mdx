@@ -33,13 +33,13 @@ import { tool } from '@use-crux/convex/tools'
 
 `@use-crux/convex` intentionally mirrors core Crux subpaths where possible. Use these imports in Convex code so Crux primitives can late-bind Convex runtime plumbing:
 
-| Subpath                | Classification                       | Export behavior                                                                                                               |
-| ---------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Subpath                    | Classification                       | Export behavior                                                                                                                   |
+| -------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | `@use-crux/convex/context` | Identical re-export                  | Same API as `@use-crux/core/context`.                                                                                             |
 | `@use-crux/convex/skill`   | Identical re-export + Convex adapter | Same skill authoring/session API as `@use-crux/core/skill`; adds `convexSkillActivationPersistence()` for Convex store snapshots. |
-| `@use-crux/convex/memory`  | Convex-bound drop-in                 | Re-exports memory block helpers and changes only `memory()` defaults.                                                         |
-| `@use-crux/convex/tools`   | Convex-bound drop-in                 | Mirrors `tool()` and injects Convex runtime metadata into execution.                                                          |
-| `@use-crux/convex/agent`   | Mixed                                | Convex-Agent-compatible `Agent` facade plus the profile-backed `convexAgent()` helper.                                        |
+| `@use-crux/convex/memory`  | Convex-bound drop-in                 | Re-exports memory block helpers and changes only `memory()` defaults.                                                             |
+| `@use-crux/convex/tools`   | Convex-bound drop-in                 | Mirrors `tool()` and injects Convex runtime metadata into execution.                                                              |
+| `@use-crux/convex/agent`   | Mixed                                | Convex-Agent-compatible `Agent` facade plus the profile-backed `convexAgent()` helper.                                            |
 
 The package root is curated. It exports Convex APIs plus common prompt authoring helpers (`prompt`, `context`, `createPrompts`, `createContexts`, and sanitization helpers), but it does not blanket re-export every `@use-crux/core` API. If a Convex mirror exists, prefer it; if no mirror exists yet, import the SDK-agnostic primitive from `@use-crux/core`.
 
@@ -122,17 +122,69 @@ Define the shared Convex store document contract for a crux Convex component.
 
 **Returns:** `ConvexStoreContract`
 
-| Method                               | Description                                           |
-| ------------------------------------ | ----------------------------------------------------- |
-| `.codec`                             | Shared current-format store document codec            |
-| `.store(ctx)`                        | Create a server-side `CruxStore` for a Convex ctx     |
-| `.transport({ useQuery })`           | Create a React transport for Convex reactive queries  |
+| Method                     | Description                                          |
+| -------------------------- | ---------------------------------------------------- |
+| `.codec`                   | Shared current-format store document codec           |
+| `.store(ctx)`              | Create a server-side `CruxStore` for a Convex ctx    |
+| `.transport({ useQuery })` | Create a React transport for Convex reactive queries |
 
 The contract's server store is intentionally dense-only today. It throws explicit errors for sparse or hybrid `searchVectors()` queries instead of silently degrading.
 
 Store values are written as `_cruxDoc` records with JSON `content`, optional top-level `embedding`, `updatedAt`, and an `_expiresAt` value inside the JSON payload when `ttl` is provided. The component list query is a narrow Convex I/O contract: `components.crux.memory.list` accepts `prefix`, `limit`, and `cursor`, reads the `by_key` index, and returns `{ docs, cursor }`.
 
 The same document contract is used by server stores, the HTTP bridge, and React transport: imperative reads suppress expired entries and lazily delete them, vector hits map Convex `_score` to `ScoredEntry.score`, and list/vector filters use top-level exact-match semantics. Filtered `list()` calls with a `limit` fill from additional component pages so `limit` means "up to N matching entries." Server and React reads are strict about current `_cruxDoc` records so malformed documents fail clearly.
+
+### Document Boundary Substitution
+
+Most apps should pass generated component refs directly:
+
+```ts
+const cruxDocuments = defineConvexStoreContract({
+  component: components.crux,
+})
+```
+
+Tests, migrations, and alternate runtimes can substitute the normalized document component instead. The built-in in-memory component exposes generated-like refs, a structural `ctx`, and a `useQuery` substitute backed by the same records:
+
+```ts
+import { createInMemoryConvexStoreDocumentComponent, defineConvexStoreContract } from '@use-crux/convex'
+
+const component = createInMemoryConvexStoreDocumentComponent()
+const cruxDocuments = defineConvexStoreContract({ component })
+
+const store = cruxDocuments.store(component.ctx)
+const transport = cruxDocuments.transport({
+  useQuery: component.useQuery,
+})
+
+await store.set('memory:alpha', {
+  content: 'Alpha',
+  namespace: 'kb',
+})
+
+transport.useDocument('memory:alpha')
+```
+
+Use `ComponentDocumentPort` when you need to replace only the raw document I/O layer:
+
+```ts
+import type { ComponentDocumentPort } from '@use-crux/convex'
+
+const io: ComponentDocumentPort = {
+  get: async (key) => rawDocs.get(key) ?? null,
+  list: async ({ prefix }) => ({
+    docs: [...rawDocs.values()].filter((doc) => String(doc.key).startsWith(prefix)),
+  }),
+  put: async (doc) => {
+    rawDocs.set(doc.key, doc)
+  },
+  delete: async (key) => {
+    rawDocs.delete(key)
+  },
+}
+```
+
+`convexComponentDocumentPort({ ctx, component })` is the generated Convex adapter for that port. It forwards raw document operations to `component.memory.*` and delegates dense vector search to `ctx.vectorSearch()` when the current context supports it.
 
 ### `convexWorkspaceBlobStore(config)`
 
@@ -351,9 +403,9 @@ import { defineConvexStoreContract } from '@use-crux/convex'
 import { CruxProvider } from '@use-crux/react'
 ```
 
-| Field      | Type               | Description                                            |
-| ---------- | ------------------ | ------------------------------------------------------ |
-| `useQuery` | `UseQueryFn`       | Convex `useQuery` hook                                 |
+| Field      | Type         | Description            |
+| ---------- | ------------ | ---------------------- |
+| `useQuery` | `UseQueryFn` | Convex `useQuery` hook |
 
 **Returns:** `CruxTransport`
 

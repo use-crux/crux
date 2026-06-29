@@ -12,9 +12,21 @@
 import type { CruxStore } from '@use-crux/core/store'
 import type { CruxTransport } from '@use-crux/react'
 import { createConvexTransport, type UseQueryFn } from './react'
-import { cruxConvexStore, type ConvexCtxPort } from './store'
-import type { ConvexCruxStoreComponent } from './store-component'
-import { createStoreDocCodec, type StoreDocCodec, type StoreDocCodecOptions } from './store-doc'
+import { convexComponentDocumentPort, type ConvexCtxPort } from './store'
+import type {
+  ConvexCruxStoreComponent,
+  ConvexCruxStoreTransportComponent,
+  ConvexStoreDocumentComponent,
+} from './store-component'
+import { isConvexStoreDocumentComponent } from './store-document-component'
+import {
+  STORE_DOC_COMPONENT_SPEC,
+  createStoreDocCodec,
+  createStoreDocStore,
+  type StoreDocCodec,
+  type StoreDocCodecOptions,
+  type StoreDocRecord,
+} from './store-doc'
 
 /** Options for semantic-cache capability metadata on Convex stores. */
 export interface ConvexStoreSemanticCacheOptions {
@@ -28,9 +40,14 @@ export interface ConvexStoreSemanticCacheOptions {
 }
 
 /** Configuration for `defineConvexStoreContract()`. */
-export interface DefineConvexStoreContractOptions {
-  /** The Crux persistence component ref from `components.crux`. */
-  readonly component: ConvexCruxStoreComponent
+export interface DefineConvexStoreContractOptions<TCtx extends ConvexCtxPort = ConvexCtxPort> {
+  /**
+   * The Crux persistence component.
+   *
+   * Pass generated Convex refs from `components.crux` in apps, or a normalized
+   * `ConvexStoreDocumentComponent` in tests and alternate runtimes.
+   */
+  readonly component: ConvexCruxStoreComponent | ConvexStoreDocumentComponent<TCtx>
   /**
    * Vector index name for dense vector search via `ctx.vectorSearch`.
    *
@@ -58,7 +75,7 @@ export interface ConvexStoreContractTransportOptions {
    *
    * Defaults to the component passed to `defineConvexStoreContract()`.
    */
-  readonly api?: ConvexCruxStoreComponent
+  readonly api?: ConvexCruxStoreTransportComponent
 }
 
 /**
@@ -69,6 +86,8 @@ export interface ConvexStoreContractTransportOptions {
  * with matching document decoding semantics.
  */
 export interface ConvexStoreContract<TCtx extends ConvexCtxPort = ConvexCtxPort> {
+  /** Normalized or generated component used by this contract. */
+  readonly component: ConvexCruxStoreComponent | ConvexStoreDocumentComponent<TCtx>
   /** Shared store document codec used by this contract. */
   readonly codec: StoreDocCodec
   /** Create a server-side Crux store for a Convex action or mutation context. */
@@ -101,25 +120,36 @@ export interface ConvexStoreContract<TCtx extends ConvexCtxPort = ConvexCtxPort>
  * ```
  */
 export function defineConvexStoreContract<TCtx extends ConvexCtxPort = ConvexCtxPort>(
-  options: DefineConvexStoreContractOptions,
+  options: DefineConvexStoreContractOptions<TCtx>,
 ): ConvexStoreContract<TCtx> {
-  const { component, now, semanticCache, vectorIndexName } = options
+  const { component, now, semanticCache, vectorIndexName = STORE_DOC_COMPONENT_SPEC.defaultVectorIndexName } = options
   const codec = createStoreDocCodec({ now })
+  const refs = isConvexStoreDocumentComponent(component) ? component.refs : component
 
   return {
+    component,
     codec,
     store(ctx) {
-      return cruxConvexStore({
-        component,
-        ctx,
-        ...(now === undefined ? {} : { now }),
-        ...(vectorIndexName === undefined ? {} : { vectorIndexName }),
-        ...(semanticCache === undefined ? {} : { semanticCache }),
+      return createStoreDocStore<StoreDocRecord>({
+        io: isConvexStoreDocumentComponent(component)
+          ? component.io(ctx, { vectorIndexName })
+          : convexComponentDocumentPort({ component, ctx, vectorIndexName }),
+        now,
+        semanticCache,
+        denseVectorSearch: true,
       })
     },
     transport(args) {
+      if (isConvexStoreDocumentComponent(component)) {
+        return component.reads({
+          useQuery: args.useQuery,
+          api: args.api ?? refs,
+          now,
+        })
+      }
       return createConvexTransport({
-        api: args.api ?? component,
+        api: args.api ?? refs,
+        now,
         useQuery: args.useQuery,
       })
     },
