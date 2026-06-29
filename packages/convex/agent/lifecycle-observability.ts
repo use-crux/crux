@@ -2,7 +2,12 @@ import type { ResolvedPrompt } from '@use-crux/core'
 import { observe } from '@use-crux/core/observability'
 import { DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS, flushObservability } from '../observability'
 import type { ConvexRuntimeTarget } from '../runtime'
-import type { ConvexAgentOperation, PreparedAgentCall } from './lifecycle-types'
+import type {
+  ConvexAgentObserveArgs,
+  ConvexAgentObserveConfig,
+  ConvexAgentOperation,
+  PreparedAgentCall,
+} from './lifecycle-types'
 
 const CONVEX_AGENT_START_FLUSH_TIMEOUT_MS = 1000
 const CONVEX_AGENT_FINAL_FLUSH_TIMEOUT_MS = DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS
@@ -15,15 +20,25 @@ export async function observeAgentRun<R>(
   promptId: string | undefined,
   operation: ConvexAgentOperation,
   target: ConvexRuntimeTarget,
+  config: ConvexAgentObserveConfig | undefined,
   fn: (recordPrepared: PreparedAgentRecorder) => Promise<R>,
 ): Promise<R> {
+  if (config?.enabled === false) {
+    return await fn(async () => undefined)
+  }
   let preparedForEnd: PreparedAgentCall | undefined
   let targetForEnd = target
+  const observeArgs = { agentName, promptId, operation, target }
+  const spanName = await observeAgentRunName(config, observeArgs)
+  const attributes = await observeAgentRunAttributes(config, observeArgs)
   const span = observe.openSpan({
-    name: agentName,
+    name: spanName,
     family: 'agent',
     primitive: 'agent.run',
-    attributes: agentRunAttributes(agentName, promptId, operation, target),
+    attributes: {
+      ...attributes,
+      ...agentRunAttributes(agentName, promptId, operation, target),
+    },
   })
   const recordPrepared: PreparedAgentRecorder = async (prepared, preparedTarget) => {
     preparedForEnd = prepared
@@ -36,23 +51,45 @@ export async function observeAgentRun<R>(
       await flushObservability({ timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS })
       const result = await fn(recordPrepared)
       span.end({
-        attributes: preparedForEnd
-          ? preparedAgentRunAttributes(agentName, promptId, operation, targetForEnd, preparedForEnd)
-          : undefined,
+        attributes: {
+          ...attributes,
+          ...(preparedForEnd
+            ? preparedAgentRunAttributes(agentName, promptId, operation, targetForEnd, preparedForEnd)
+            : agentRunAttributes(agentName, promptId, operation, targetForEnd)),
+        },
       })
       return result
     })
   } catch (error) {
     span.error(
       error,
-      preparedForEnd
-        ? preparedAgentRunAttributes(agentName, promptId, operation, targetForEnd, preparedForEnd)
-        : undefined,
+      {
+        ...attributes,
+        ...(preparedForEnd
+          ? preparedAgentRunAttributes(agentName, promptId, operation, targetForEnd, preparedForEnd)
+          : agentRunAttributes(agentName, promptId, operation, targetForEnd)),
+      },
     )
     throw error
   } finally {
     await flushObservability({ timeoutMs: CONVEX_AGENT_FINAL_FLUSH_TIMEOUT_MS })
   }
+}
+
+async function observeAgentRunName(
+  config: ConvexAgentObserveConfig | undefined,
+  args: ConvexAgentObserveArgs,
+): Promise<string> {
+  if (!config?.name) return args.agentName
+  return typeof config.name === 'function' ? await config.name(args) : config.name
+}
+
+async function observeAgentRunAttributes(
+  config: ConvexAgentObserveConfig | undefined,
+  args: ConvexAgentObserveArgs,
+): Promise<Record<string, unknown>> {
+  if (!config?.attributes) return {}
+  return typeof config.attributes === 'function' ? await config.attributes(args) : config.attributes
 }
 
 function agentRunAttributes(

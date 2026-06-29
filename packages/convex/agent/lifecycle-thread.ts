@@ -1,5 +1,6 @@
 import type { ConvexAgentContextMessage, ConvexAgentContextSnapshot, ConvexAgentThreadSession } from './driver'
 import type {
+  AnyConvexPrompt,
   ConvexAgentPrepareMessages,
   ConvexAgentThreadTarget,
   ConvexAgentOperation,
@@ -21,21 +22,29 @@ interface PreparedThreadCallHandler<R> {
   readonly operation: Exclude<ConvexAgentOperation, 'resolve'>
 }
 
+type ThreadTurnArgs = Record<string, unknown> & {
+  readonly input: unknown
+  readonly tokenBudget?: number
+}
+
 interface ThreadPrepareState {
   run<R>(
-    callArgs: Record<string, unknown>,
+    callArgs: ThreadTurnArgs,
     options: Record<string, unknown> | undefined,
     fn: PreparedThreadCallHandler<R>,
   ): Promise<R>
 }
 
 /** Wrap a Convex Agent thread with Crux prompt resolution for each turn. */
-export function wrapCruxConvexThread(thread: ConvexAgentThreadSession, state: ThreadPrepareState): CruxConvexThread {
+export function wrapCruxConvexThread<TPrompt extends AnyConvexPrompt>(
+  thread: ConvexAgentThreadSession,
+  state: ThreadPrepareState,
+): CruxConvexThread<TPrompt> {
   return {
     threadId: thread.threadId,
     getMetadata: () => thread.getMetadata(),
     updateMetadata: (patch) => thread.updateMetadata(patch),
-    generateText: async (args = {}, options) => {
+    generateText: async (args, options) => {
       const handler: PreparedThreadCallHandler<unknown> = Object.assign(
         async (call: PreparedThreadCall) => {
           const result = await call.prepared.session.generateText(
@@ -48,15 +57,16 @@ export function wrapCruxConvexThread(thread: ConvexAgentThreadSession, state: Th
             resolved: call.prepared.resolved,
             input: call.prepared.input,
             result,
+            persistence: call.prepared.persistence,
             captureMessages: call.prepared.captureMessages,
           })
           return result
         },
         { operation: 'generateText' as const },
       )
-      return await state.run(args, options, handler)
+      return await state.run(args as ThreadTurnArgs, options as Record<string, unknown> | undefined, handler)
     },
-    streamText: async (args = {}, options) => {
+    streamText: async (args, options) => {
       const handler: PreparedThreadCallHandler<unknown> = Object.assign(
         async (call: PreparedThreadCall) => {
           const userOnFinish = isFinishCallback(call.prepared.callArgs.onFinish)
@@ -67,6 +77,7 @@ export function wrapCruxConvexThread(thread: ConvexAgentThreadSession, state: Th
               resolved: call.prepared.resolved,
               input: call.prepared.input,
               result,
+              persistence: call.prepared.persistence,
               captureMessages: call.prepared.captureMessages,
             })
             if (userOnFinish) return await userOnFinish(result)
@@ -76,9 +87,54 @@ export function wrapCruxConvexThread(thread: ConvexAgentThreadSession, state: Th
         },
         { operation: 'streamText' as const },
       )
-      return await state.run(args, options, handler)
+      return await state.run(args as ThreadTurnArgs, options as Record<string, unknown> | undefined, handler)
     },
-  }
+    generateObject: async (args, options) => {
+      const handler: PreparedThreadCallHandler<unknown> = Object.assign(
+        async (call: PreparedThreadCall) => {
+          const result = await call.prepared.session.generateObject(
+            call.ctx,
+            call.target,
+            call.prepared.callArgs,
+            call.options,
+          )
+          await afterPreparedAgentCall({
+            resolved: call.prepared.resolved,
+            input: call.prepared.input,
+            result,
+            persistence: call.prepared.persistence,
+            captureMessages: call.prepared.captureMessages,
+          })
+          return result
+        },
+        { operation: 'generateObject' as const },
+      )
+      return await state.run(args as ThreadTurnArgs, options as Record<string, unknown> | undefined, handler)
+    },
+    streamObject: async (args, options) => {
+      const handler: PreparedThreadCallHandler<unknown> = Object.assign(
+        async (call: PreparedThreadCall) => {
+          const userOnFinish = isFinishCallback(call.prepared.callArgs.onFinish)
+            ? call.prepared.callArgs.onFinish
+            : undefined
+          call.prepared.callArgs.onFinish = async (result: unknown) => {
+            await afterPreparedAgentCall({
+              resolved: call.prepared.resolved,
+              input: call.prepared.input,
+              result,
+              persistence: call.prepared.persistence,
+              captureMessages: call.prepared.captureMessages,
+            })
+            if (userOnFinish) return await userOnFinish(result)
+            return undefined
+          }
+          return await call.prepared.session.streamObject(call.ctx, call.target, call.prepared.callArgs, call.options)
+        },
+        { operation: 'streamObject' as const },
+      )
+      return await state.run(args as ThreadTurnArgs, options as Record<string, unknown> | undefined, handler)
+    },
+  } as CruxConvexThread<TPrompt>
 }
 
 /** Merge per-thread call args with Crux-resolved args, keeping resolved tools authoritative. */
@@ -87,10 +143,18 @@ export function withThreadCallArgs(prepared: PreparedAgentCall, callArgs: Record
     ...prepared,
     callArgs: {
       ...prepared.callArgs,
-      ...callArgs,
+      ...convexCallArgsFromTurnArgs(callArgs),
       tools: prepared.convexTools,
     },
   }
+}
+
+/** Remove Crux-only prompt controls before forwarding call args to Convex Agent. */
+export function convexCallArgsFromTurnArgs(callArgs: Record<string, unknown>): Record<string, unknown> {
+  const { input: _input, tokenBudget: _tokenBudget, ...convexCallArgs } = callArgs
+  void _input
+  void _tokenBudget
+  return convexCallArgs
 }
 
 /** Convert a context snapshot into the public prepare message shape. */

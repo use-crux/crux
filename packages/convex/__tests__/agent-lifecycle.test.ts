@@ -9,6 +9,33 @@ import { inMemoryCruxStore } from '../memory'
 import { tool } from '../tools'
 import { FakeConvexAgentDriver } from './fixtures/fakeAgentDriver'
 
+function createObjectLifecycle(driver: FakeConvexAgentDriver) {
+  const output = z.object({
+    title: z.string(),
+  })
+  const basePrompt = prompt({
+    id: 'object-agent',
+    input: z.object({
+      topic: z.string(),
+    }),
+    output,
+    system: 'Return structured editorial metadata.',
+    prompt: ({ input }) => `topic:${input.topic}`,
+  })
+  const lifecycle = createProfileBackedAgentLifecycle({
+    components: {
+      crux: { marker: 'crux' } as never,
+      agent: { marker: 'agent' } as never,
+    },
+    driver,
+    languageModel: {} as LanguageModelV3,
+    name: 'Object Agent',
+    prompt: basePrompt,
+    store: () => inMemoryCruxStore(),
+  })
+  return { lifecycle, output }
+}
+
 describe('profile-backed Convex Agent lifecycle', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -146,4 +173,89 @@ describe('profile-backed Convex Agent lifecycle', () => {
 
     expect(driver.definitions[0]?.languageModel).toBe(languageModel)
   })
+
+  it('preserves the Convex Agent generateObject call shape while injecting resolved schema and prompt state', async () => {
+    const driver = new FakeConvexAgentDriver()
+    driver.objectResult = { object: { title: 'Draft title' } }
+    const { lifecycle, output } = createObjectLifecycle(driver)
+
+    const result = await lifecycle.invokeObject({
+      ctx: { marker: 'ctx' },
+      target: { threadId: 'thread-object', userId: 'user-object' },
+      args: {
+        input: {
+          topic: 'Crux',
+        },
+        temperature: 0.1,
+      },
+      options: {
+        storageOptions: { saveMessages: 'promptAndOutput' },
+      },
+    })
+
+    expect(result).toEqual({ object: { title: 'Draft title' } })
+    expect(driver.generatedObjectCalls).toEqual([
+      {
+        ctx: { marker: 'ctx' },
+        target: { threadId: 'thread-object', userId: 'user-object' },
+        args: expect.objectContaining({
+          temperature: 0.1,
+          prompt: 'topic:Crux',
+          system: expect.stringContaining('Return structured editorial metadata.'),
+          schema: output,
+          tools: driver.definitions[0]?.tools,
+        }),
+        options: {
+          storageOptions: { saveMessages: 'promptAndOutput' },
+        },
+      },
+    ])
+    expect(driver.generatedObjectCalls[0]?.args).not.toHaveProperty('input')
+  })
+
+  it('preserves the Convex Agent streamObject call shape while injecting resolved schema and prompt state', async () => {
+    const driver = new FakeConvexAgentDriver()
+    driver.objectStreamResult = { partialObjectStream: 'streamed object' }
+    const userOnFinish = vi.fn()
+    driver.onStreamObject = async ({ args }) => {
+      await (args.onFinish as (result: unknown) => Promise<void>)({ object: { title: 'Streamed title' } })
+    }
+    const { lifecycle, output } = createObjectLifecycle(driver)
+
+    const result = await lifecycle.invokeObjectStream({
+      ctx: { marker: 'ctx' },
+      target: { threadId: 'thread-object-stream', userId: 'user-object' },
+      args: {
+        input: {
+          topic: 'Crux',
+        },
+        temperature: 0.1,
+        onFinish: userOnFinish,
+      },
+      options: {
+        storageOptions: { saveMessages: 'promptAndOutput' },
+      },
+    })
+
+    expect(result).toEqual({ partialObjectStream: 'streamed object' })
+    expect(userOnFinish).toHaveBeenCalledWith({ object: { title: 'Streamed title' } })
+    expect(driver.streamedObjectCalls).toEqual([
+      {
+        ctx: { marker: 'ctx' },
+        target: { threadId: 'thread-object-stream', userId: 'user-object' },
+        args: expect.objectContaining({
+          temperature: 0.1,
+          prompt: 'topic:Crux',
+          system: expect.stringContaining('Return structured editorial metadata.'),
+          schema: output,
+          tools: driver.definitions[0]?.tools,
+        }),
+        options: {
+          storageOptions: { saveMessages: 'promptAndOutput' },
+        },
+      },
+    ])
+    expect(driver.streamedObjectCalls[0]?.args).not.toHaveProperty('input')
+  })
+
 })

@@ -6,15 +6,33 @@ import type { z } from 'zod'
 import type { ComponentApi } from '../src/component/_generated/component'
 import type { ConvexRuntimeTarget } from '../runtime'
 import type {
+  ConvexGenerateObjectArgs,
+  ConvexGenerateObjectOptions,
+  ConvexGenerateObjectResult,
+  ConvexGenerateTextArgs,
+  ConvexGenerateTextOptions,
+  ConvexGenerateTextResult,
+  ConvexStreamObjectArgs,
+  ConvexStreamObjectOptions,
+  ConvexStreamObjectResult,
+  ConvexStreamTextArgs,
+  ConvexStreamTextOptions,
+  ConvexStreamTextResult,
+} from './convex-agent-method-types'
+import type {
   ConvexAgentCallArgs,
+  ConvexAgentObserveArgs,
+  ConvexAgentObserveConfig,
   ConvexAgentPrepareArgs,
   ConvexAgentPrepareMessages,
   ConvexAgentPrepareResult,
+  ConvexAgentPersistenceConfig,
   ConvexAgentThreadTarget,
   CruxConvexThread,
   PromptInput,
 } from './lifecycle-types'
 import type { ConvexAgentContextMessage } from './driver'
+import type { ConvexAgentDriver } from './driver'
 import type { ConvexAgentComponent } from './facade'
 import type { ToolRecord } from './sdk-tools'
 
@@ -56,6 +74,38 @@ export type ConvexAgentModelConfig =
       model: LanguageModelV3
     }
 
+/** Crux runtime options for profile-backed Convex Agent turns. */
+export interface ConvexAgentCruxRuntimeConfig {
+  /** Request-scoped store factory used by prompt memory, skills, and Crux tools. */
+  store?: (ctx: unknown) => CruxStore | Promise<CruxStore>
+  /** Namespace override for Convex-profile memory and skill state. */
+  namespace?:
+    | string
+    | ((args: {
+        input: Record<string, unknown>
+        promptId?: string
+        target?: ConvexRuntimeTarget
+      }) => string | Promise<string>)
+}
+
+/** Crux-owned lifecycle controls for `convexAgent()`. */
+export interface ConvexAgentCruxConfig<
+  TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
+> {
+  /** Advanced adapter override used by tests and custom Convex Agent runtimes. */
+  driver?: ConvexAgentDriver
+  /** Runtime binding for request-scoped Crux store and namespace state. */
+  runtime?: ConvexAgentCruxRuntimeConfig
+  /** Profile `agent.run` observability controls. */
+  observe?: ConvexAgentObserveConfig
+  /** Best-effort post-turn skill and memory persistence controls. */
+  persistence?: ConvexAgentPersistenceConfig
+  /** Per-turn hook that can override prompt input, contexts, tools, and budget. */
+  prepare?: (
+    args: ConvexAgentPrepareArgs<TPrompt>,
+  ) => ConvexAgentPrepareResult<TPrompt> | Promise<ConvexAgentPrepareResult<TPrompt>>
+}
+
 /** Public `convexAgent()` configuration before model binding. */
 export interface ConvexAgentBaseConfig<
   TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
@@ -78,20 +128,28 @@ export interface ConvexAgentBaseConfig<
   tokenBudget?: number
   /** Extra tools added to every turn after prompt-resolved tools. */
   tools?: ToolRecord
-  /** Per-turn hook that can override prompt input, contexts, tools, and budget. */
+  /** Crux-owned lifecycle controls. Prefer this namespace for new code. */
+  crux?: ConvexAgentCruxConfig<TPrompt>
+  /**
+   * Per-turn hook that can override prompt input, contexts, tools, and budget.
+   *
+   * @deprecated Use `crux.prepare`.
+   */
   prepare?: (
     args: ConvexAgentPrepareArgs<TPrompt>,
   ) => ConvexAgentPrepareResult<TPrompt> | Promise<ConvexAgentPrepareResult<TPrompt>>
-  /** Request-scoped store factory. */
+  /**
+   * Request-scoped store factory.
+   *
+   * @deprecated Use `crux.runtime.store`.
+   */
   store?: (ctx: unknown) => CruxStore | Promise<CruxStore>
-  /** Namespace override for Convex-profile memory and skill state. */
-  namespace?:
-    | string
-    | ((args: {
-        input: Record<string, unknown>
-        promptId?: string
-        target?: ConvexRuntimeTarget
-      }) => string | Promise<string>)
+  /**
+   * Namespace override for Convex-profile memory and skill state.
+   *
+   * @deprecated Use `crux.runtime.namespace`.
+   */
+  namespace?: ConvexAgentCruxRuntimeConfig['namespace']
 }
 
 /** Complete config for a profile-backed Convex Agent helper. */
@@ -104,37 +162,103 @@ export interface CruxConvexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | u
   readonly name: string
   /** Prompt resolved for each turn. */
   readonly prompt: TPrompt
-  /** Resolve the prompt and execute a non-streaming text generation turn. */
+  /** Crux-only diagnostics and lifecycle helpers, separated from the Convex Agent-shaped surface. */
+  readonly crux: {
+    /** Resolve the prompt without invoking Convex Agent generation. */
+    resolve(ctx: unknown, target: ConvexRuntimeTarget, args: ConvexAgentCallArgs<TPrompt>): Promise<ResolvedPrompt>
+  }
+  /**
+   * Resolve the Crux prompt and execute a non-streaming Convex Agent turn.
+   *
+   * `args` follows upstream `Agent.generateText()` args except Crux owns
+   * `system`, `prompt`, `messages`, and `tools`. Provide typed prompt `input`
+   * plus normal generation settings such as `temperature` or `promptMessageId`.
+   */
   generateText(
     ctx: unknown,
     target: ConvexRuntimeTarget,
-    args: ConvexAgentCallArgs<TPrompt>,
-    options?: Record<string, unknown>,
-  ): Promise<unknown>
-  /** Resolve the prompt and execute a streaming text generation turn. */
+    args: ConvexAgentCallArgs<TPrompt, ConvexGenerateTextArgs>,
+    options?: ConvexGenerateTextOptions,
+  ): ConvexGenerateTextResult
+  /**
+   * Resolve the Crux prompt and execute a streaming Convex Agent turn.
+   *
+   * `args` follows upstream `Agent.streamText()` args except Crux owns
+   * `system`, `prompt`, `messages`, and `tools`. Provide typed prompt `input`
+   * plus normal streaming settings such as `stopWhen` or callbacks.
+   */
   streamText(
     ctx: unknown,
     target: ConvexRuntimeTarget,
-    args: ConvexAgentCallArgs<TPrompt>,
-    options?: Record<string, unknown>,
-  ): Promise<unknown>
-  /** Resolve the prompt without invoking Convex Agent generation. */
-  resolve(ctx: unknown, target: ConvexRuntimeTarget, args: ConvexAgentCallArgs<TPrompt>): Promise<ResolvedPrompt>
-  /** Continue an existing Convex Agent thread through the Crux lifecycle. */
-  continueThread(
+    args: ConvexAgentCallArgs<TPrompt, ConvexStreamTextArgs>,
+    options?: ConvexStreamTextOptions,
+  ): ConvexStreamTextResult
+  /**
+   * Resolve the Crux prompt and execute a structured Convex Agent turn.
+   *
+   * `args` follows upstream `Agent.generateObject()` args except Crux owns the
+   * resolved prompt fields. When the prompt declares `output`, Crux injects the
+   * resolved schema into the Convex Agent call.
+   */
+  generateObject(
     ctx: unknown,
-    target: ConvexAgentThreadTarget,
-    args: ConvexAgentCallArgs<TPrompt>,
-  ): Promise<{ thread: CruxConvexThread }>
+    target: ConvexRuntimeTarget,
+    args: ConvexAgentCallArgs<TPrompt, ConvexGenerateObjectArgs>,
+    options?: ConvexGenerateObjectOptions,
+  ): ConvexGenerateObjectResult
+  /**
+   * Resolve the Crux prompt and execute a streaming structured Convex Agent turn.
+   *
+   * `args` follows upstream `Agent.streamObject()` args except Crux owns the
+   * resolved prompt fields. When the prompt declares `output`, Crux injects the
+   * resolved schema into the Convex Agent call.
+   */
+  streamObject(
+    ctx: unknown,
+    target: ConvexRuntimeTarget,
+    args: ConvexAgentCallArgs<TPrompt, ConvexStreamObjectArgs>,
+    options?: ConvexStreamObjectOptions,
+  ): ConvexStreamObjectResult
+  /**
+   * Resolve the prompt without invoking Convex Agent generation.
+   *
+   * @deprecated Use `agent.crux.resolve()` so Crux-only diagnostics stay
+   * separate from the Convex Agent-shaped generation surface.
+   */
+  resolve(ctx: unknown, target: ConvexRuntimeTarget, args: ConvexAgentCallArgs<TPrompt>): Promise<ResolvedPrompt>
+  /**
+   * Continue an existing Convex Agent thread through the Crux lifecycle.
+   *
+   * Per-turn Crux `input` belongs on `thread.generateText()`,
+   * `thread.streamText()`, `thread.generateObject()`, or
+   * `thread.streamObject()`, matching Convex Agent's continuation call order.
+   */
+  continueThread(ctx: unknown, target: ConvexAgentThreadTarget): Promise<{ thread: CruxConvexThread<TPrompt> }>
 }
 
 export type {
   ConvexAgentCallArgs,
   ConvexAgentContextMessage,
+  ConvexAgentDriver,
+  ConvexAgentObserveArgs,
+  ConvexAgentObserveConfig,
   ConvexAgentPrepareArgs,
   ConvexAgentPrepareMessages,
   ConvexAgentPrepareResult,
+  ConvexAgentPersistenceConfig,
   ConvexAgentThreadTarget,
+  ConvexGenerateObjectArgs,
+  ConvexGenerateObjectOptions,
+  ConvexGenerateObjectResult,
+  ConvexGenerateTextArgs,
+  ConvexGenerateTextOptions,
+  ConvexGenerateTextResult,
+  ConvexStreamObjectArgs,
+  ConvexStreamObjectOptions,
+  ConvexStreamObjectResult,
+  ConvexStreamTextArgs,
+  ConvexStreamTextOptions,
+  ConvexStreamTextResult,
   CruxConvexThread,
   PromptInput,
 }

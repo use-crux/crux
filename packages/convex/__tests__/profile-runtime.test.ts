@@ -465,17 +465,12 @@ describe('Convex profile runtime', () => {
       }),
     })
 
-    const { thread } = await agent.continueThread(
-      ctx,
-      { threadId: 'thread-5', userId: 'user-1' },
-      {
-        input: {},
-      },
-    )
-    const stopWhen = Symbol('stopWhen')
+    const { thread } = await agent.continueThread(ctx, { threadId: 'thread-5', userId: 'user-1' })
+    const stopWhen = Symbol('stopWhen') as never
     await observe.run({ name: 'chat', rootPrimitive: 'agent.run' }, async () => {
       await thread.streamText(
         {
+          input: {},
           promptMessageId: 'message-1',
           stopWhen,
         },
@@ -630,16 +625,11 @@ describe('Convex profile runtime', () => {
       store: () => inMemoryCruxStore(),
     })
 
-    const { thread } = await agent.continueThread(
-      ctx,
-      { threadId: 'thread-6', userId: 'user-1' },
-      {
-        input: {
-          mode: 'chat',
-        },
-      },
-    )
+    const { thread } = await agent.continueThread(ctx, { threadId: 'thread-6', userId: 'user-1' })
     await thread.streamText({
+      input: {
+        mode: 'chat',
+      },
       promptMessageId: 'message-2',
     })
 
@@ -799,12 +789,12 @@ describe('Convex profile runtime', () => {
       prepare: () => ({ use: [captureMemory] }),
     })
 
-    const { thread } = await agent.continueThread(ctx, { threadId: 'thread-cap', userId: 'user-1' }, { input: {} })
+    const { thread } = await agent.continueThread(ctx, { threadId: 'thread-cap', userId: 'user-1' })
 
     await observe.run({ name: 'chat', rootPrimitive: 'agent.run' }, async () => {
       // The turn must resolve even though post-turn memory capture throws.
       await expect(
-        thread.streamText({ promptMessageId: 'message-1' }, { saveStreamDeltas: true }),
+        thread.streamText({ input: {}, promptMessageId: 'message-1' }, { saveStreamDeltas: true }),
       ).resolves.toBeDefined()
     })
     await observe.flush()

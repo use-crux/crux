@@ -3,6 +3,7 @@ import type { SkillActivationSession } from '@use-crux/core/skill'
 import { observe } from '@use-crux/core/observability'
 import { flushObservability } from '../observability'
 import type { ConvexAgentContextMessage } from './driver'
+import type { ConvexAgentPersistenceConfig } from './lifecycle-types'
 import { convexSkillActivationPersistence } from './skill-activation-persistence'
 import { isRecord, stringValue } from './lifecycle-utils'
 
@@ -18,14 +19,19 @@ export async function afterPreparedAgentCall(args: {
   readonly resolved: ResolvedPrompt
   readonly input: Record<string, unknown>
   readonly result: unknown
+  readonly persistence?: ConvexAgentPersistenceConfig
   readonly captureMessages?: readonly ConvexAgentContextMessage[]
 }): Promise<void> {
-  await runBestEffortPersistence('persist skills', 'agent.afterCall.persistSkills', () =>
-    persistActiveSkills(args.resolved),
-  )
-  await runBestEffortPersistence('capture memory', 'agent.afterCall.captureMemory', () =>
-    captureResolvedMemory(args.resolved, args.input, args.result, args.captureMessages),
-  )
+  if (args.persistence?.skills !== false) {
+    await runBestEffortPersistence('persist skills', 'agent.afterCall.persistSkills', () =>
+      persistActiveSkills(args.resolved),
+    )
+  }
+  if (args.persistence?.memory !== false) {
+    await runBestEffortPersistence('capture memory', 'agent.afterCall.captureMemory', () =>
+      captureResolvedMemory(args.resolved, args.input, args.result, args.captureMessages),
+    )
+  }
 }
 
 async function runBestEffortPersistence(

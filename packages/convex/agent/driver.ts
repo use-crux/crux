@@ -60,6 +60,18 @@ export interface ConvexAgentSession {
     args: Record<string, unknown>,
     options?: Record<string, unknown>,
   ): Promise<unknown>
+  generateObject(
+    ctx: unknown,
+    target: ConvexRuntimeTarget,
+    args: Record<string, unknown>,
+    options?: Record<string, unknown>,
+  ): Promise<unknown>
+  streamObject(
+    ctx: unknown,
+    target: ConvexRuntimeTarget,
+    args: Record<string, unknown>,
+    options?: Record<string, unknown>,
+  ): Promise<unknown>
   continueThread(
     ctx: unknown,
     target: { threadId: string; userId?: string | null },
