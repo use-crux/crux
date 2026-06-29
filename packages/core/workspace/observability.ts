@@ -9,7 +9,7 @@
  */
 
 import { observe } from '../observability'
-import { getRuntime } from '../runtime/runtime'
+import type { WorkspaceProvenance } from './artifact-types'
 import type { WorkspaceOperation } from './types'
 
 interface WorkspaceEvent {
@@ -17,6 +17,16 @@ interface WorkspaceEvent {
   readonly operation: WorkspaceOperation
   readonly namespace: string
   readonly path: string
+}
+
+/** Capture artifact provenance from an already-active caller run/span. */
+export function activeWorkspaceProvenance(): WorkspaceProvenance | undefined {
+  const context = observe.captureContext()
+  if (!context) return undefined
+  return {
+    runId: context.runId,
+    ...(context.currentSpanId ? { spanId: context.currentSpanId } : {}),
+  }
 }
 
 /** Run a workspace operation inside a span, emitting artifacts, hooks, and timings. */

@@ -9,24 +9,22 @@
  * @module
  */
 
-import { z } from 'zod'
-import { context } from '../prompt/context'
 import { inMemoryBlobStore, inMemoryDataStore } from '../store/memory'
-import type { Context, PromptInjection } from '../prompt/context-types'
 import { analyzeContent, createFileRecord, findOccurrences, recordToFile } from './content'
-import { renderWorkspaceManifest } from './manifest'
 import { mountForPath, normalizeMounts, normalizePath, defaultMounts } from './path'
-import { instrument } from './observability'
+import { activeWorkspaceProvenance, instrument } from './observability'
 import { fileKey, getRecord, getRequiredRecord, listEntries } from './store'
 import { createWorkspaceTools } from './tools'
 import { hasGlob } from './glob'
 import { recordToReadResult } from './read-result'
+import { createWorkspaceFilesystemOps } from './fs-ops'
+import { createWorkspaceArtifactOps } from './artifacts'
+import { createWorkspaceContextAdapters } from './context-adapters'
 import {
   DEFAULT_INLINE_TEXT_BYTES,
   type Workspace,
   type WorkspaceConfig,
   type WorkspaceContent,
-  type WorkspaceContextOptions,
   type WorkspaceDeleteOptions,
   type WorkspaceEditOptions,
   type WorkspaceEditPatch,
@@ -119,7 +117,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
     options?: WorkspaceWriteOptions,
   ): Promise<WorkspaceFile> {
     const namespace = options?.namespace ?? (await resolveNamespace())
-    return writeForNamespace(namespace, path, content, options)
+    return writeForNamespace(namespace, path, content, options, artifactWriteProvenance(options))
   }
 
   async function writeForNamespace(
@@ -127,6 +125,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
     path: string,
     content: WorkspaceContent,
     options?: WorkspaceWriteOptions,
+    producedBy = artifactWriteProvenance(options),
   ): Promise<WorkspaceFile> {
     return instrument({ workspaceId: config.id, operation: 'write', namespace, path }, async () => {
       const normalized = normalizePath(path)
@@ -141,6 +140,9 @@ export function workspace(config: WorkspaceConfig): Workspace {
         mount: mount.path,
         analysis,
         metadata: options?.metadata,
+        status: options?.status,
+        artifactKind: options?.kind,
+        producedBy,
         existing,
         now,
         inlineTextBelowBytes,
@@ -186,7 +188,9 @@ export function workspace(config: WorkspaceConfig): Workspace {
       return writeForNamespace(namespace, path, next, {
         mimeType: options?.mimeType ?? current.mimeType,
         metadata: current.metadata,
-      })
+        status: current.status,
+        kind: current.artifactKind,
+      }, current.producedBy)
     })
   }
 
@@ -207,6 +211,8 @@ export function workspace(config: WorkspaceConfig): Workspace {
     })
   }
 
+  const fsOps = createWorkspaceFilesystemOps({ workspaceId: config.id, store, blobs, mounts, inlineTextBelowBytes, resolveNamespace })
+  const artifactOps = createWorkspaceArtifactOps({ workspaceId: config.id, store, mounts, resolveNamespace })
   const asTools = createWorkspaceTools({
     workspaceId: config.id,
     defaultToolOptions: config.tools,
@@ -215,27 +221,19 @@ export function workspace(config: WorkspaceConfig): Workspace {
       read,
       write,
       edit,
+      rename: fsOps.rename,
+      grep: fsOps.grep,
       remove,
     },
   })
-
-  function asContext(options?: WorkspaceContextOptions): Context<z.ZodObject<{}>> {
-    return context({
-      id: `workspace:${config.id}`,
-      description: `Workspace: ${config.id}`,
-      input: z.object({}).passthrough(),
-      priority: options?.priority ?? 65,
-      system: async ({ input }) =>
-        renderWorkspaceManifest({
-          store,
-          blobs,
-          workspaceId: config.id,
-          mounts,
-          namespace: await resolveNamespace(input),
-          options,
-        }),
-    })
-  }
+  const contextAdapters = createWorkspaceContextAdapters({
+    workspaceId: config.id,
+    store,
+    blobs,
+    mounts,
+    resolveNamespace,
+    asTools,
+  })
 
   const ws: Workspace = {
     _tag: 'Workspace',
@@ -246,32 +244,20 @@ export function workspace(config: WorkspaceConfig): Workspace {
     write,
     edit,
     delete: remove,
-    asContext,
+    exists: fsOps.exists,
+    stat: fsOps.stat,
+    append: fsOps.append,
+    rename: fsOps.rename,
+    move: fsOps.move,
+    copy: fsOps.copy,
+    grep: fsOps.grep,
+    artifacts: artifactOps.artifacts,
+    finalize: artifactOps.finalize,
+    asContext: contextAdapters.asContext,
     asTools: <const Options extends WorkspaceToolOptions & WorkspaceNamespaceOption = {}>(
       options?: Options,
     ): WorkspaceTools<WorkspaceToolPrefix<Options>, WorkspaceToolDelete<Options>> => asTools(options),
-    async inject(args): Promise<PromptInjection> {
-      const namespace = await resolveNamespace(args.input, args.promptId)
-      return {
-        contexts: [
-          context({
-            id: `workspace:${config.id}`,
-            description: `Workspace: ${config.id}`,
-            input: z.object({}).passthrough(),
-            priority: 65,
-            system: () => renderWorkspaceManifest({ store, blobs, workspaceId: config.id, mounts, namespace }),
-          }),
-        ],
-        tools: asTools({ namespace }),
-        metadata: {
-          workspace: {
-            id: config.id,
-            namespace,
-            mounts: mounts.map((mount) => ({ path: mount.path, access: mount.access })),
-          },
-        },
-      }
-    },
+    inject: contextAdapters.inject,
   }
 
   return Object.freeze(ws)
@@ -284,4 +270,9 @@ export function memoryWorkspaceBlobStore(): WorkspaceBlobStore {
 
 function assertNonEmpty(value: string, message: string): void {
   if (!value.trim()) throw new Error(message)
+}
+
+function artifactWriteProvenance(options: WorkspaceWriteOptions | undefined) {
+  if (!options?.status && !options?.kind) return undefined
+  return activeWorkspaceProvenance()
 }

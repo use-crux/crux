@@ -9,6 +9,7 @@
  */
 
 import type { JsonValue } from '../types/tool'
+import type { WorkspaceArtifactStatus, WorkspaceProvenance } from './artifact-types'
 import {
   FILE_RECORD_VERSION,
   type ContentAnalysis,
@@ -61,6 +62,9 @@ export async function createFileRecord(input: {
   readonly mount: WorkspacePath
   readonly analysis: ContentAnalysis
   readonly metadata: Record<string, JsonValue> | undefined
+  readonly status: WorkspaceArtifactStatus | undefined
+  readonly artifactKind: string | undefined
+  readonly producedBy: WorkspaceProvenance | undefined
   readonly existing: WorkspaceFileRecord | null
   readonly now: number
   readonly inlineTextBelowBytes: number
@@ -76,6 +80,9 @@ export async function createFileRecord(input: {
     mimeType: input.analysis.mimeType,
     size: input.analysis.size,
     metadata: input.metadata,
+    status: input.status,
+    kind: input.artifactKind,
+    producedBy: input.producedBy ?? input.existing?.producedBy,
     createdAt: input.existing?.createdAt ?? input.now,
     updatedAt: input.now,
   }
@@ -135,6 +142,7 @@ export function recordToFile(record: WorkspaceFileRecord): WorkspaceFile {
   return {
     kind: 'file',
     path: record.path,
+    ...recordArtifactFields(record),
     mimeType: record.mimeType,
     size: record.size,
     mount: record.mount,
@@ -144,6 +152,19 @@ export function recordToFile(record: WorkspaceFileRecord): WorkspaceFile {
     ...(record.metadata ? { metadata: record.metadata } : {}),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+  }
+}
+
+/** Public artifact fields shared by listing/stat/read results. */
+export function recordArtifactFields(record: WorkspaceFileRecord): {
+  readonly status?: WorkspaceArtifactStatus
+  readonly artifactKind?: string
+  readonly producedBy?: WorkspaceFileRecord['producedBy']
+} {
+  return {
+    ...(record.status ? { status: record.status } : {}),
+    ...(record.kind ? { artifactKind: record.kind } : {}),
+    ...(record.producedBy ? { producedBy: record.producedBy } : {}),
   }
 }
 

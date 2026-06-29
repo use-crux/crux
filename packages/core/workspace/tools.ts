@@ -15,6 +15,7 @@ import {
   fileModelOutput,
   modelJsonOutput,
   readModelOutput,
+  readOptionalBoolean,
   readOptionalPositiveInteger,
   readOptionalString,
   readRequiredString,
@@ -27,8 +28,11 @@ import type {
   WorkspaceEditOptions,
   WorkspaceEditPatch,
   WorkspaceFile,
+  WorkspaceGrepOptions,
+  WorkspaceGrepResult,
   WorkspaceListOptions,
   WorkspaceListResult,
+  WorkspaceMoveOptions,
   WorkspaceNamespaceOption,
   WorkspaceReadOptions,
   WorkspaceReadResult,
@@ -45,6 +49,8 @@ export interface WorkspaceToolOperations {
   read(path: string, options?: WorkspaceReadOptions): Promise<WorkspaceReadResult>
   write(path: string, content: WorkspaceContent, options?: WorkspaceWriteOptions): Promise<WorkspaceFile>
   edit(path: string, patch: WorkspaceEditPatch, options?: WorkspaceEditOptions): Promise<WorkspaceFile>
+  rename(from: string, to: string, options?: WorkspaceMoveOptions): Promise<WorkspaceFile>
+  grep(query: string, options?: WorkspaceGrepOptions): Promise<WorkspaceGrepResult>
   remove(path: string, options?: WorkspaceDeleteOptions): Promise<void>
 }
 
@@ -137,8 +143,39 @@ export function createWorkspaceTools(args: {
               occurrence: readOptionalPositiveInteger(toolArgs.occurrence),
             },
             { namespace },
-          ),
+        ),
         toModelOutput: fileModelOutput,
+      },
+      [names.renameFile]: {
+        description: `Rename or move a workspace file in "${workspaceId}". Fails if the destination exists unless overwrite is true.`,
+        parameters: z.object({
+          from: z.string().describe('Existing absolute workspace path.'),
+          to: z.string().describe('Destination absolute workspace path.'),
+          overwrite: z.boolean().optional(),
+        }),
+        execute: (toolArgs: Record<string, unknown>) =>
+          ops.rename(readRequiredString(toolArgs.from, 'from'), readRequiredString(toolArgs.to, 'to'), {
+            overwrite: readOptionalBoolean(toolArgs.overwrite),
+            namespace,
+          }),
+        toModelOutput: fileModelOutput,
+      },
+      [names.grep]: {
+        description: `Search text files in workspace "${workspaceId}". Returns at most maxResults matches, defaulting to 100.`,
+        parameters: z.object({
+          query: z.string().describe('Substring or regular expression to search for.'),
+          path: z.string().optional().describe('Optional absolute path or glob scope.'),
+          ignoreCase: z.boolean().optional(),
+          maxResults: z.number().int().positive().optional(),
+        }),
+        execute: (toolArgs: Record<string, unknown>) =>
+          ops.grep(readRequiredString(toolArgs.query, 'query'), {
+            path: readOptionalString(toolArgs.path),
+            ignoreCase: readOptionalBoolean(toolArgs.ignoreCase),
+            maxResults: readOptionalPositiveInteger(toolArgs.maxResults),
+            namespace,
+          }),
+        toModelOutput: modelJsonOutput('Workspace grep matches'),
       },
     }
 

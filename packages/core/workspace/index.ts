@@ -12,7 +12,16 @@ export { workspace, memoryWorkspaceBlobStore } from './define-workspace'
 export { workspaceToolNames } from './tool-io'
 
 export type {
+  WorkspaceArtifact,
+  WorkspaceArtifactsQuery,
+  WorkspaceArtifactStatus,
+  WorkspaceFinalizeOptions,
+  WorkspaceProvenance,
+} from './artifact-types'
+
+export type {
   Workspace,
+  WorkspaceAppendOptions,
   WorkspaceBlobReadResult,
   WorkspaceBlobRef,
   WorkspaceBlobStore,
@@ -25,11 +34,15 @@ export type {
   WorkspaceEditOptions,
   WorkspaceEditPatch,
   WorkspaceFile,
+  WorkspaceGrepMatch,
+  WorkspaceGrepOptions,
+  WorkspaceGrepResult,
   WorkspaceListEntry,
   WorkspaceListOptions,
   WorkspaceListResult,
   WorkspaceMount,
   WorkspaceMountAccess,
+  WorkspaceMoveOptions,
   WorkspaceNamespaceOption,
   WorkspaceOperation,
   WorkspaceJsonContent,
@@ -38,4 +51,5 @@ export type {
   WorkspaceTools,
   WorkspaceToolNames,
   WorkspaceToolOptions,
+  WorkspaceWriteOptions,
 } from './types'

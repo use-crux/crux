@@ -27,6 +27,8 @@ export function workspaceToolNames<const Options extends Pick<WorkspaceToolOptio
     readFile: prefix ? `read${prefix}WorkspaceFile` : 'readWorkspaceFile',
     writeFile: prefix ? `write${prefix}WorkspaceFile` : 'writeWorkspaceFile',
     editFile: prefix ? `edit${prefix}WorkspaceFile` : 'editWorkspaceFile',
+    renameFile: prefix ? `rename${prefix}WorkspaceFile` : 'renameWorkspaceFile',
+    grep: prefix ? `grep${prefix}Workspace` : 'grepWorkspace',
     deleteFile: prefix ? `delete${prefix}WorkspaceFile` : 'deleteWorkspaceFile',
   } as WorkspaceToolNames<WorkspaceToolPrefix<Options>>
 }
@@ -55,6 +57,11 @@ export function readOptionalString(value: unknown): string | undefined {
 /** Read an optional positive-integer tool argument. */
 export function readOptionalPositiveInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined
+}
+
+/** Read an optional boolean tool argument. */
+export function readOptionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined
 }
 
 /** Coerce a tool `content` argument into a string or JSON value. */

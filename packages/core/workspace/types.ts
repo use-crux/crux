@@ -13,7 +13,30 @@
 import type { z } from 'zod'
 import type { BlobReadResult, BlobRef, BlobStore, DataStore, JsonObject, Storage } from '../store/types'
 import type { Context, PromptInjection } from '../prompt/context-types'
-import type { JsonValue, ToolDef } from '../types/tool'
+import type { JsonValue } from '../types/tool'
+import type {
+  WorkspaceAppendOptions,
+  WorkspaceGrepOptions,
+  WorkspaceGrepResult,
+  WorkspaceMoveOptions,
+} from './fs-types'
+import type {
+  WorkspaceArtifact,
+  WorkspaceArtifactsQuery,
+  WorkspaceArtifactStatus,
+  WorkspaceFinalizeOptions,
+  WorkspaceProvenance,
+} from './artifact-types'
+import type { WorkspaceToolDelete, WorkspaceToolPrefix, WorkspaceTools } from './tool-types'
+
+export type {
+  WorkspaceAppendOptions,
+  WorkspaceGrepMatch,
+  WorkspaceGrepOptions,
+  WorkspaceGrepResult,
+  WorkspaceMoveOptions,
+} from './fs-types'
+export type { WorkspaceToolDelete, WorkspaceToolNames, WorkspaceToolPrefix, WorkspaceTools } from './tool-types'
 
 /** Default inline storage cutoff: text/JSON at or below this size is stored inline. */
 export const DEFAULT_INLINE_TEXT_BYTES = 64_000
@@ -26,7 +49,20 @@ export type WorkspacePath = string & { readonly __brand: 'WorkspacePath' }
 /** Access level for a workspace mount. */
 export type WorkspaceMountAccess = 'read' | 'readwrite'
 /** A workspace file operation. */
-export type WorkspaceOperation = 'list' | 'read' | 'write' | 'edit' | 'delete'
+export type WorkspaceOperation =
+  | 'list'
+  | 'read'
+  | 'write'
+  | 'edit'
+  | 'delete'
+  | 'exists'
+  | 'stat'
+  | 'append'
+  | 'rename'
+  | 'copy'
+  | 'grep'
+  | 'artifacts'
+  | 'finalize'
 
 /** A mounted root within a workspace. */
 export interface WorkspaceMount {
@@ -75,6 +111,10 @@ export type WorkspaceContent = string | WorkspaceJsonContent | Uint8Array | Blob
 export interface WorkspaceWriteOptions extends WorkspaceNamespaceOption {
   readonly mimeType?: string
   readonly metadata?: Record<string, JsonValue>
+  /** Artifact lifecycle status to store with the file. */
+  readonly status?: WorkspaceArtifactStatus
+  /** App-facing artifact classifier. Stored as `kind` on the record. */
+  readonly kind?: string
 }
 
 /** Options for {@link Workspace.read}. */
@@ -110,6 +150,9 @@ export interface WorkspaceDeleteOptions extends WorkspaceNamespaceOption {
 export interface WorkspaceFile {
   readonly kind: 'file'
   readonly path: string
+  readonly status?: WorkspaceArtifactStatus
+  readonly artifactKind?: string
+  readonly producedBy?: WorkspaceProvenance
   readonly mimeType: string
   readonly size: number
   readonly mount: string
@@ -142,6 +185,9 @@ export type WorkspaceReadResult =
   | {
       readonly kind: 'text'
       readonly path: string
+      readonly status?: WorkspaceArtifactStatus
+      readonly artifactKind?: string
+      readonly producedBy?: WorkspaceProvenance
       readonly mimeType: string
       readonly content: string
       readonly size: number
@@ -152,6 +198,9 @@ export type WorkspaceReadResult =
   | {
       readonly kind: 'json'
       readonly path: string
+      readonly status?: WorkspaceArtifactStatus
+      readonly artifactKind?: string
+      readonly producedBy?: WorkspaceProvenance
       readonly mimeType: 'application/json'
       readonly content: JsonValue
       readonly size: number
@@ -160,6 +209,9 @@ export type WorkspaceReadResult =
   | {
       readonly kind: 'binary'
       readonly path: string
+      readonly status?: WorkspaceArtifactStatus
+      readonly artifactKind?: string
+      readonly producedBy?: WorkspaceProvenance
       readonly mimeType: string
       readonly uri: string
       readonly size: number
@@ -184,6 +236,15 @@ export interface Workspace {
   write(path: string, content: WorkspaceContent, options?: WorkspaceWriteOptions): Promise<WorkspaceFile>
   edit(path: string, patch: WorkspaceEditPatch, options?: WorkspaceEditOptions): Promise<WorkspaceFile>
   delete(path: string, options?: WorkspaceDeleteOptions): Promise<void>
+  exists(path: string, options?: WorkspaceNamespaceOption): Promise<boolean>
+  stat(path: string, options?: WorkspaceNamespaceOption): Promise<WorkspaceFile | null>
+  append(path: string, content: string, options?: WorkspaceAppendOptions): Promise<WorkspaceFile>
+  rename(from: string, to: string, options?: WorkspaceMoveOptions): Promise<WorkspaceFile>
+  move(from: string, to: string, options?: WorkspaceMoveOptions): Promise<WorkspaceFile>
+  copy(from: string, to: string, options?: WorkspaceMoveOptions): Promise<WorkspaceFile>
+  grep(query: string, options?: WorkspaceGrepOptions): Promise<WorkspaceGrepResult>
+  artifacts(options?: WorkspaceArtifactsQuery): Promise<readonly WorkspaceArtifact[]>
+  finalize(path: string, options?: WorkspaceFinalizeOptions): Promise<WorkspaceArtifact>
   asContext(options?: WorkspaceContextOptions): Context<z.ZodObject<{}>>
   asTools<const Options extends WorkspaceToolOptions & WorkspaceNamespaceOption = {}>(
     options?: Options,
@@ -197,45 +258,6 @@ export interface WorkspaceContextOptions {
   readonly maxInlineBytes?: number
   readonly priority?: number
 }
-
-/** Extract the literal prefix from workspace tool options. */
-export type WorkspaceToolPrefix<Options> = Options extends { readonly prefix?: infer Prefix }
-  ? Extract<Prefix, string> extends never
-    ? undefined
-    : Extract<Prefix, string>
-  : undefined
-
-/** Extract whether delete is explicitly enabled from workspace tool options. */
-export type WorkspaceToolDelete<Options> = Options extends { readonly delete: true } ? true : false
-
-type WorkspaceToolPrefixPart<Prefix extends string | undefined> = Prefix extends string ? Capitalize<Prefix> : ''
-
-/** Resolved generated workspace tool names for a literal prefix. */
-export interface WorkspaceToolNames<Prefix extends string | undefined = undefined> {
-  readonly list: `list${WorkspaceToolPrefixPart<Prefix>}Workspace`
-  readonly readFile: `read${WorkspaceToolPrefixPart<Prefix>}WorkspaceFile`
-  readonly writeFile: `write${WorkspaceToolPrefixPart<Prefix>}WorkspaceFile`
-  readonly editFile: `edit${WorkspaceToolPrefixPart<Prefix>}WorkspaceFile`
-  readonly deleteFile: `delete${WorkspaceToolPrefixPart<Prefix>}WorkspaceFile`
-}
-
-/** Generated workspace tools for a literal prefix and delete-tool setting. */
-export type WorkspaceTools<
-  Prefix extends string | undefined = undefined,
-  Delete extends boolean | undefined = false,
-> = {
-  readonly [Key in WorkspaceToolNames<Prefix>['list']]: ToolDef
-} & {
-  readonly [Key in WorkspaceToolNames<Prefix>['readFile']]: ToolDef
-} & {
-  readonly [Key in WorkspaceToolNames<Prefix>['writeFile']]: ToolDef
-} & {
-  readonly [Key in WorkspaceToolNames<Prefix>['editFile']]: ToolDef
-} & (Delete extends true
-    ? {
-        readonly [Key in WorkspaceToolNames<Prefix>['deleteFile']]: ToolDef
-      }
-    : {})
 
 /** The persisted record for a workspace file. Internal. */
 export interface WorkspaceFileRecord extends JsonObject {
@@ -253,6 +275,9 @@ export interface WorkspaceFileRecord extends JsonObject {
   readonly uri?: string
   readonly preview?: string
   readonly metadata?: Record<string, JsonValue>
+  readonly status?: WorkspaceArtifactStatus
+  readonly kind?: string
+  readonly producedBy?: WorkspaceProvenance
   readonly createdAt: number
   readonly updatedAt: number
 }

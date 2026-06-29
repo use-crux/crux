@@ -126,8 +126,10 @@ describe('workspace()', () => {
 
     expect(Object.keys(resolved.tools ?? {}).sort()).toEqual([
       'editWorkspaceFile',
+      'grepWorkspace',
       'listWorkspace',
       'readWorkspaceFile',
+      'renameWorkspaceFile',
       'writeWorkspaceFile',
     ])
   })
@@ -174,12 +176,16 @@ describe('workspace()', () => {
     expect(Object.keys(ws.asTools()).sort()).toEqual([
       'deleteResearchWorkspaceFile',
       'editResearchWorkspaceFile',
+      'grepResearchWorkspace',
       'listResearchWorkspace',
       'readResearchWorkspaceFile',
+      'renameResearchWorkspaceFile',
       'writeResearchWorkspaceFile',
     ])
     expect(workspaceToolNames({ prefix: 'research' })).toMatchObject({
       deleteFile: 'deleteResearchWorkspaceFile',
+      grep: 'grepResearchWorkspace',
+      renameFile: 'renameResearchWorkspaceFile',
       writeFile: 'writeResearchWorkspaceFile',
     })
   })

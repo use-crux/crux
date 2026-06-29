@@ -95,6 +95,17 @@ export async function listAllFileEntries(
   }
 }
 
+/** List stored file records in a namespace. */
+export async function listFileRecords(
+  store: DataStore,
+  workspaceId: string,
+  namespace: string,
+  options: { readonly filter?: Record<string, unknown> } = {},
+): Promise<readonly WorkspaceFileRecord[]> {
+  const listed = await store.list(filePrefix(workspaceId, namespace), options.filter ? { filter: options.filter } : undefined)
+  return listed.entries.flatMap((entry) => (isFileRecord(entry.value) ? [entry.value] : []))
+}
+
 function directoryEntries(
   records: readonly WorkspaceFileRecord[],
   dir: WorkspacePath,

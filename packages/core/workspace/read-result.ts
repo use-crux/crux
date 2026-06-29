@@ -10,12 +10,15 @@
 import type { BlobContent } from '../store/types'
 import type { JsonValue } from '../types/tool'
 import {
+  recordArtifactFields,
+  byteLength,
+} from './content'
+import {
   DEFAULT_INLINE_TEXT_BYTES,
   type WorkspaceBlobStore,
   type WorkspaceFileRecord,
   type WorkspaceReadResult,
 } from './types'
-import { byteLength } from './content'
 
 export interface RecordToReadResultOptions {
   /** Blob store used to hydrate text and JSON records stored out-of-line. */
@@ -40,6 +43,7 @@ export async function recordToReadResult(
     return {
       kind: 'json',
       path: record.path,
+      ...recordArtifactFields(record),
       mimeType: 'application/json',
       content: record.inlineJson,
       size: record.size,
@@ -59,6 +63,7 @@ export async function recordToReadResult(
       return {
         kind: 'json',
         path: record.path,
+        ...recordArtifactFields(record),
         mimeType: 'application/json',
         content: JSON.parse(text) as JsonValue,
         size: record.size,
@@ -80,6 +85,7 @@ function textReadResult(
   return {
     kind: 'text',
     path: record.path,
+    ...recordArtifactFields(record),
     mimeType: record.mimeType,
     content: window.content,
     size: record.size,
@@ -159,6 +165,7 @@ function binaryReference(record: WorkspaceFileRecord): Extract<WorkspaceReadResu
   return {
     kind: 'binary',
     path: record.path,
+    ...recordArtifactFields(record),
     mimeType: record.mimeType,
     uri: record.uri,
     size: record.size,

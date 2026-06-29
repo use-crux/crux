@@ -9,9 +9,10 @@
  */
 
 import type { BlobStore, DataStore } from '../store/types'
+import { recordToArtifact } from './artifacts'
 import { mountForPath, normalizePath } from './path'
 import { recordToReadResult } from './read-result'
-import { getRequiredRecord, listAllFileEntries, listEntries } from './store'
+import { getRequiredRecord, listAllFileEntries, listEntries, listFileRecords } from './store'
 import type { NormalizedMount, WorkspaceContextOptions, WorkspaceListResult } from './types'
 
 const MANIFEST_FILE_LIMIT = 100
@@ -35,6 +36,9 @@ export async function renderWorkspaceManifest(args: {
     isGlob: false,
   })
   const files = await listAllFileEntries(store, workspaceId, namespace, { limit: MANIFEST_FILE_LIMIT })
+  const finalArtifacts = (
+    await listFileRecords(store, workspaceId, namespace, { filter: { status: 'final' } })
+  ).map((record) => recordToArtifact(record, { workspaceId, namespace }))
   const lines = [
     `## Workspace (${workspaceId})`,
     `Namespace: ${namespace}`,
@@ -56,6 +60,13 @@ export async function renderWorkspaceManifest(args: {
     }
     if (files.cursor) {
       lines.push(`- ...more files omitted; use workspace tools to list additional entries.`)
+    }
+  }
+  if (finalArtifacts.length > 0) {
+    lines.push('', 'Final artifacts:')
+    for (const artifact of finalArtifacts) {
+      const label = artifact.kind ?? 'artifact'
+      lines.push(`- ${artifact.path} (${label}, ${artifact.mimeType}, ${artifact.size} bytes)`)
     }
   }
   lines.push(
