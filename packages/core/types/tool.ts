@@ -63,7 +63,7 @@ export function isCreationToolNotCreatedError(error: unknown): error is Creation
  *
  * Call `created()` after tool execution to retrieve the captured entity. It
  * throws `CreationToolNotCreatedError` when no entity has been created yet,
- * avoiding non-null assertions like `tool.created!`.
+ * avoiding unsafe non-null assertions against captured creation state.
  */
 export interface CreationTool<T> extends ToolDef<Record<string, unknown>, string> {
   /** Return the last entity created by this tool. */

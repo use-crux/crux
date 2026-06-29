@@ -1,182 +1,116 @@
 ---
-title: Task worker pool
-description: A task list as a queue, taskWorker per task, agent loop draining tasks in parallel with a live UI.
+title: Task Worker Pool
+description: Run one worker handle per pending task and show progress from a task ledger.
 ---
 
-This recipe builds a worker pool: a task list holds the work, you spawn an agent per `todo` task using `taskWorker`, and the agent itself uses `startTask` / `completeTask` tools to drive its lifecycle. A simple drainer runs N tasks in parallel; the UI subscribes to live status.
+This recipe uses a task ledger as the visible work record and your own code as the runner. The ledger records state; it does not provide queueing, retries, or scheduling.
 
-## Primitives used
-
-- `tasklist()` from `@use-crux/core/tasks` for the persistent task list (supports `addTask` / `updateTask` / `getTasks`)
-- `taskWorker(taskListId, taskId)` — binds an agent's prompt to a single assigned task, exposing `asContext()` + `asTools()`
-- `useTaskList()` / `useTasks()` from `@use-crux/react` for the live UI
-
-## When to reach for this pattern
-
-- You have **many similar pieces of work** to run (batch classification, batch summarization, multi-document indexing)
-- You want each task to **survive restarts** — `tasklist` is persistent
-- You want a **live UI** showing per-task progress — done / in-progress / failed
-- You want the agent to drive its own lifecycle via tool calls (`startTask`, `reportProgress`, `completeTask`, `failTask`)
-
-## Full code
-
-### Backend — define the work and a per-task agent
+## Setup
 
 ```ts
-import { tasklist } from '@use-crux/core/tasks'
-import { taskWorker } from '@use-crux/core/tasks'
-import { prompt } from '@use-crux/core'
-import { agent } from '@use-crux/core/agent'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { prompt, generate } from '@use-crux/ai'
+import { tasks } from '@use-crux/core/tasks'
 
-// 1. Build the task list and seed it
-export async function startBatch(documents: { id: string; text: string }[]) {
-  const list = await tasklist({})
-  for (const doc of documents) {
-    await list.addTask({
-      id: doc.id, // user-provided meaningful id
-      label: `Summarize ${doc.id}`,
-      description: doc.text.slice(0, 200),
-    })
-  }
-  return list.id
-}
+const work = await tasks({ title: 'Batch enrichment' })
 
-// 2. The summarizer prompt — the worker context provides the assignment
-const summarizePrompt = prompt({
-  id: 'summarize-task',
-  input: z.object({ text: z.string() }),
-  system: `You are a summarization worker. Use your task tools to drive the lifecycle:
-     1. Call startTask when you begin.
-     2. Call completeTask with a summary when finished.
-     3. Call failTask if you cannot complete the task.`,
-  prompt: ({ input }) => `Summarize the following text:\n\n${input.text}`,
-})
-
-// 3. Drain the queue — one agent per todo task, N in parallel
-export async function drainList(taskListId: string, documents: Map<string, string>, concurrency = 5) {
-  const handle = createHandle(taskListId)
-  const tasks = await handle.getTasks()
-  const todos = tasks.filter((t) => t.status === 'todo')
-
-  // Simple parallel drainer
-  const queue = [...todos]
-  const inflight = new Set<Promise<unknown>>()
-
-  while (queue.length || inflight.size) {
-    while (inflight.size < concurrency && queue.length) {
-      const task = queue.shift()!
-      const work = runOneTask(taskListId, task.id, documents.get(task.id) ?? '').finally(() => inflight.delete(work))
-      inflight.add(work)
-    }
-    if (inflight.size) await Promise.race(inflight)
-  }
-}
-
-async function runOneTask(taskListId: string, taskId: string, text: string) {
-  const worker = taskWorker(taskListId, taskId)
-
-  const reviewerAgent = agent({
-    id: `worker-${taskId}`,
-    prompt: summarizePrompt,
-    tools: worker.asTools(), // startTask, reportProgress, completeTask, failTask
-  })
-
-  await generate(agent.prompt, {
-    model: openai('gpt-4o-mini'),
-    input: { text },
-    use: [worker.asContext()], // injects the assignment + guidelines
-    stopWhen: { stepCountIs: 5 },
-  })
-}
+await work.add({ id: 'account-1', label: 'Enrich account 1' })
+await work.add({ id: 'account-2', label: 'Enrich account 2' })
+await work.add({ id: 'account-3', label: 'Enrich account 3' })
 ```
 
-`createHandle(taskListId)` is the rehydrate helper from `@use-crux/core/tasks`. The worker's `asTools()` exposes `startTask` / `reportProgress` / `completeTask` / `failTask` bound to this specific `taskId` — the agent doesn't need to pass IDs around.
+## Drain Pending Tasks
 
-### Live UI
+```ts
+async function drainPending(taskListId: string) {
+  const work = tasks.ref(taskListId)
+  const pending = (await work.list()).filter((item) => item.status === 'pending')
 
-```tsx
-'use client'
-import { useTaskList, useTasks } from '@use-crux/react'
+  await Promise.all(
+    pending.map((item) => {
+      const worker = work.worker(item.id, {
+        guidelines: 'Return a short JSON-safe result.',
+      })
 
-export function BatchProgress({ taskListId }: { taskListId: string }) {
-  const list = useTaskList(taskListId)
-  const tasks = useTasks(taskListId)
-
-  if (!list) return null
-
-  const counts = {
-    todo: tasks.filter((t) => t.status === 'todo').length,
-    in_progress: tasks.filter((t) => t.status === 'in_progress').length,
-    completed: tasks.filter((t) => t.status === 'completed').length,
-    failed: tasks.filter((t) => t.status === 'failed').length,
-  }
-
-  return (
-    <div>
-      <p>
-        {counts.completed} / {tasks.length} done • {counts.in_progress} running • {counts.failed} failed
-      </p>
-      <ul>
-        {tasks.map((t) => (
-          <li key={t.id} className={`task task-${t.status}`}>
-            {t.label} — <code>{t.status}</code>
-            {t.progress && <p className="muted">{t.progress}</p>}
-            {t.status === 'failed' && t.error && <pre>{t.error}</pre>}
-          </li>
-        ))}
-      </ul>
-    </div>
+      return generate(
+        prompt({
+          use: [worker.asContext()],
+          tools: worker.asTools(),
+          system: 'Complete the assigned enrichment task.',
+        }),
+        { model, input: {} },
+      )
+    }),
   )
 }
 ```
 
-## How it works
+## Add Backpressure
 
-1. **The tasklist is the queue.** Each task has `id` (user-provided meaningful string), `label`, optional `description`, and tracks its own `status` and `result`. Persisted in `CruxStore`.
-2. **`taskWorker(taskListId, taskId)` is per-task.** It returns an object with `asContext()` (injects the assignment into the system prompt at priority 95 by default) and `asTools()` (startTask / reportProgress / completeTask / failTask, all bound to this taskId — no IDs in tool inputs).
-3. **The agent drives its own lifecycle.** The system prompt instructs the model to call `startTask` first, then `completeTask` (with the summary as the `result`) when done, or `failTask` on errors. The task's status updates as the model calls tools.
-4. **The drainer is just a small loop.** Crux doesn't bake in a "worker pool runner" — you write the parallelism that fits your runtime (Promise pool, p-limit, BullMQ, Convex scheduler, etc.). The list itself is the source of truth.
-
-## Variations
-
-### Different agents per task kind
-
-If different tasks need different agents, dispatch on task metadata:
+Use your own runner when you need concurrency limits:
 
 ```ts
-const task = await handle.getTasks().then((ts) => ts.find((t) => t.id === taskId))
-const agent = task?.assignee?.agent === 'classifier' ? classifierAgent : summarizerAgent
+async function drainInBatches(taskListId: string, batchSize = 3) {
+  const work = tasks.ref(taskListId)
+  const pending = (await work.list()).filter((item) => item.status === 'pending')
+
+  for (let index = 0; index < pending.length; index += batchSize) {
+    const batch = pending.slice(index, index + batchSize)
+    await Promise.all(batch.map((item) => runOneTask(work.id, item.id)))
+  }
+}
+
+async function runOneTask(taskListId: string, taskId: string) {
+  const work = tasks.ref(taskListId)
+  const worker = work.worker(taskId)
+
+  return generate(
+    prompt({
+      use: [worker.asContext()],
+      tools: worker.asTools(),
+      system: 'Complete this task.',
+    }),
+    { model, input: {} },
+  )
+}
 ```
 
-The task list's `addTask({ assignee: { agent: 'classifier' } })` field is meant for this.
+For retries, schedules, and cross-process locks, put the IDs into a durable runner payload and rebind with `tasks.ref(taskListId)` inside the job.
 
-### Pause and resume
+## UI
 
-`tasklist({})` plus `addTask` can be called from anywhere — including a webhook handler. The drainer can be re-invoked from a cron job; only `todo` tasks get picked up.
+Subscribe with `useTasks(taskListId)` and render the core status vocabulary directly.
 
-### Cross-action (Convex)
+```tsx
+function BatchProgress({ taskListId }: { taskListId: string }) {
+  const state = useTasks(taskListId)
 
-Convex actions have a 5-minute timeout. Schedule one drainer action per N tasks via `ctx.crux.scheduler.runAfter('run task', 0, internal.batch.runOne, { taskListId, taskId })` from a Crux-aware action — each task gets a fresh action timeout and the hidden `__crux` envelope keeps devtools traces correlated.
+  if (state.status === 'loading') return <p>Loading...</p>
 
-## Where to next
+  return (
+    <ul>
+      {state.data.map((item) => (
+        <li key={item.id}>
+          <span>{item.label}</span>
+          <span>{item.status}</span>
+          {item.progress ? <small>{item.progress}</small> : null}
+        </li>
+      ))}
+    </ul>
+  )
+}
+```
+
+## Related
 
 <Cards>
   <Card
-    title="Plans & Tasks guide"
-    description="Plan vs tasklist, status semantics, orchestration patterns."
+    title="Plans & Tasks"
+    description="Plans, task ledgers, status semantics, and workers."
     href="/docs/guides/plans-and-tasks"
   />
   <Card
-    title="Reactive UI"
-    description="usePlan, useTaskList, useTasks, and transports."
-    href="/docs/guides/plans-and-tasks/reactive-ui"
-  />
-  <Card
-    title="Task workers"
-    description="taskWorker reference and lifecycle."
-    href="/docs/guides/plans-and-tasks/workers"
+    title="Tasks Reference"
+    description="Canonical task-ledger handle methods and lifecycle errors."
+    href="/docs/reference/crux-core/tasks"
   />
 </Cards>

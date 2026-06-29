@@ -1,544 +1,293 @@
 ---
-title: Task Lists
-description: Structured task tracking with auto-completion, agent integration, and task worker primitives.
+title: Tasks
+description: Reference for task ledgers, task specs, lifecycle methods, workers, statuses, and errors.
 ---
 
 ```ts
-import {
-  tasklist, getTaskList, getTaskListByPlan,
-  deriveTaskListStatus,
-  taskListAgent, taskWorker,
-  createTaskListTool,
-} from '@use-crux/core/tasks'
+import { task, tasks } from '@use-crux/core/tasks'
+
 import type {
-  TaskList, TaskListStatus, TaskListHandle, CreateTaskListInput,
-  Task, TaskStatus, TaskUpdate, CreateTaskInput,
-  TaskListAgent, TaskListAgentOptions,
-  TaskWorker, TaskWorkerOptions,
+  AddTaskInput,
+  JsonObject,
+  JsonValue,
+  Task,
+  TaskEdit,
+  TaskList,
+  TaskListStatus,
+  TaskStatus,
+  TasksHandle,
+  TasksInput,
 } from '@use-crux/core/tasks'
 ```
 
 ## Overview
 
-Task lists are structured work tracking with live status updates. They persist via `CruxStore` adapters and emit instrumentation events for devtools observability.
-
-Task lists are standalone entities. They can be associated with a plan, a thread, a session, or anything via the `planId` field or `metadata`. The `planId` field is a convenience for linking to a [Plan](/docs/reference/crux-core/plan), but task lists work independently without any plan association.
-
-Agent integration primitives (`taskListAgent`, `taskWorker`) provide context injection and focused LLM tools for task management and execution.
-
-## Why Task Lists?
-
-Task lists solve the "what is the agent doing right now?" problem. Without them, multi-step agent work is a black box — you know the agent started and eventually finished, but not what happened in between.
-
-Task lists provide:
-
-1. **Structured visibility.** Each step has a status, progress message, and assignee. UIs can show real-time progress bars. Logs capture exactly which step failed and why.
-2. **Auto-completion.** You update individual tasks; the list status derives automatically. No manual bookkeeping to forget.
-3. **Worker isolation.** Each worker agent gets tools scoped to its assigned task — no risk of updating the wrong task. See [Worker Pattern](#worker-pattern) below.
-
-## Independence
-
-Task lists are NOT tied to plans. The `planId` field is optional metadata for linking to a plan — but task lists work independently for any scenario that needs structured tracking.
-
-Common uses without plans:
+`tasks()` creates a persistent task ledger and returns a command handle. Use dynamic ledgers for runtime-discovered IDs, or defined ledgers with `task()` specs for typed IDs and schema-backed completion results.
 
 ```ts
-// Track work for a chat thread
-const handle = await tasklist({
-  metadata: { threadId: 'thread-abc' },
-})
-
-// Track a data processing pipeline
-const handle = await tasklist({
-  metadata: { pipelineId: 'etl-daily-2025-03-25' },
-})
-
-// Track user onboarding steps
-const handle = await tasklist({
-  metadata: { userId: 'user-123', flow: 'onboarding' },
+const work = await tasks({
+  title: 'Launch tasks',
 })
 ```
 
-## TaskList API
-
-### `tasklist(input)`
-
-Create a task list and return a fluent handle. The list is persisted immediately with status `'pending'` — no lazy creation, which avoids race conditions from concurrent `addTask()` calls.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `input` | `CreateTaskListInput` | Optional `planId` association and metadata |
-
-**Returns:** `Promise<TaskListHandle>`
-
 ```ts
-const handle = await tasklist({ planId: p.id })
-await handle.addTask({ id: 'research', label: 'Research sources' })
-await handle.updateTask('research', { status: 'completed' })
-```
-
-The `planId` is optional. Task lists work without any plan association:
-
-```ts
-// Standalone task list — no plan needed
-const handle = await tasklist({
-  metadata: { threadId: 'thread-abc', purpose: 'data-pipeline' },
+const work = await tasks({
+  items: {
+    research: task('Research channels'),
+    draft: task('Draft announcement'),
+  },
 })
 ```
 
-### `getTaskList(taskListId)`
+## `tasks(input?)`
 
-Get a task list by ID. Self-heals stale status — if the persisted status doesn't match the derived status from tasks, it's corrected and persisted.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `taskListId` | `string` | The task list's ID |
-
-**Returns:** `Promise<TaskList | null>`
-
-### `getTaskListByPlan(planId)`
-
-Find the task list associated with a plan.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `planId` | `string` | The plan's ID |
-
-**Returns:** `Promise<TaskList | null>`
-
-### `deriveTaskListStatus(tasks)`
-
-Derive a task list's status from its tasks. Pure function — no side effects.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `tasks` | `Task[]` | All tasks (including removed). Removed tasks are filtered out internally. |
-
-**Returns:** `TaskListStatus` (never returns `'discarded'` or `'pending'`)
-
-## TaskListHandle
-
-The fluent handle returned by `tasklist()`. All mutations trigger auto-completion evaluation.
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `addTask(input)` | `(CreateTaskInput) => Promise<Task>` | Add a new task with status `'pending'` |
-| `updateTask(taskId, update)` | `(string, TaskUpdate) => Promise<Task>` | Update status, progress, assignee, result, error, or duration |
-| `removeTask(taskId)` | `(string) => Promise<void>` | Soft-delete a task. Removed tasks don't count for auto-completion |
-| `discard(reason?)` | `(string?) => Promise<void>` | Discard the list. Cancels all `pending`/`in_progress` tasks |
-| `getTasks()` | `() => Promise<Task[]>` | Get all non-removed tasks |
-| `getStatus()` | `() => Promise<TaskListStatus>` | Get current status (self-heals if stale) |
-| `id` | `string` (readonly) | The task list's ID |
-
-## Context Injection
-
-Both `taskListAgent` and `taskWorker` provide `.asContext()` which returns a Crux `Context` — a composable fragment that injects a markdown section into the system message at generation time.
-
-### Task List Agent Context
-
-`taskListAgent(id).asContext()` renders a task summary with status icons:
-
-```markdown
-## Tasks (2/4)
-✓ Research sources — completed [researcher]
-✓ Create outline — completed
-⟳ Write draft — in_progress "Writing section 2 of 4..."
-○ Review and polish — pending
-```
-
-Status icons: `✓` completed, `⟳` in_progress, `○` pending, `✕` failed/cancelled, `⊖` skipped.
-
-### Task Worker Context
-
-`taskWorker(listId, taskId).asContext()` renders the worker's specific assignment and guidelines:
-
-```markdown
-## Your Assignment
-**Task:** Write introduction (assigned to writer / claude-sonnet-4-20250514)
-**Description:** Write a compelling introduction that hooks the reader
-**Status:** pending
-
-## Guidelines
-- Call `startTask` when you begin working on this task.
-- Use `reportProgress` to report what you are doing as you work.
-- Call `completeTask` when finished, optionally providing a structured result.
-- Call `failTask` if you encounter an unrecoverable issue, with an error message.
-```
-
-<Callout type="info">
-Task worker context defaults to priority `95` — the highest of any built-in context. This ensures the worker's assignment is always present, even under tight token budgets. Task list agent context defaults to priority `80`.
-</Callout>
-
-## Worker Pattern
-
-The most common pattern is one agent assigned to one task. `taskWorker` provides focused tools (`startTask`, `reportProgress`, `completeTask`, `failTask`) with NO `taskId` parameter — it is bound at creation time.
-
-This is better for LLMs because:
-
-- **Fewer parameters.** Each tool takes zero or one parameter. The LLM never needs to remember which task ID to pass.
-- **Less confusion.** A worker cannot accidentally update someone else's task. The scope is enforced at the API level.
-- **Clearer intent.** Tool names like `startTask` and `completeTask` map directly to the worker's lifecycle, instead of a generic `updateTask` with a status parameter.
+Creates a task ledger.
 
 ```ts
-// Orchestrator dispatches work to multiple workers
-for (const task of tasks) {
-  const worker = taskWorker(taskList.id, task.id)
+const work = await tasks({
+  plan: roadmap,
+  title: 'Launch tasks',
+  metadata: { threadId: 'thread-123' },
+})
+```
 
-  const workerPrompt = prompt({
-    use: [planAgent.asContext(), worker.asContext()],
-    tools: worker.asTools(),
-    system: 'Complete your assigned task.',
-  })
-
-  await generate(workerPrompt, { model: myModel, input: {} })
+```ts
+interface TasksInput<TItems = undefined> {
+  plan?: PlanHandle | string
+  title?: string
+  items?: TItems
+  metadata?: JsonObject
 }
 ```
 
-## Overriding Defaults
+`plan` accepts a plan handle or plan ID. Metadata must be JSON-safe.
 
-### Custom Context Rendering
+## `task(label, options?)`
 
-Both agent types support `renderContext` overrides:
+Defines an initial task spec for `tasks({ items })`. It does not persist anything by itself.
 
 ```ts
-// Task list agent — custom task summary
-const agent = taskListAgent(taskList.id, {
-  renderContext: (tasks) => {
-    const done = tasks.filter(t => t.status === 'completed').length
-    return `<tasks progress="${done}/${tasks.length}">\n${tasks.map(t =>
-      `  <task id="${t.id}" status="${t.status}">${t.label}</task>`
-    ).join('\n')}\n</tasks>`
-  },
-})
-
-// Task worker — custom assignment rendering
-const worker = taskWorker(taskList.id, 'research', {
-  renderContext: (task, allTasks) =>
-    `You are working on: "${task.label}"\n` +
-    `Overall progress: ${allTasks.filter(t => t.status === 'completed').length}/${allTasks.length} tasks done.`,
+const spec = task('Draft announcement', {
+  description: 'Write the announcement in markdown.',
+  assignee: { agent: 'writer' },
+  result: z.object({ markdown: z.string() }),
+  metadata: { phase: 'writing' },
 })
 ```
 
-### Custom Worker Guidelines
+## `tasks.ref(taskListId)`
 
-Replace the default lifecycle instructions:
+Returns a handle for an existing task ledger without reading the store first.
 
 ```ts
-const worker = taskWorker(taskList.id, 'research', {
-  guidelines: [
-    'Start by calling `startTask`.',
-    'Report findings as you discover them using `reportProgress`.',
-    'When you have at least 5 sources, call `completeTask` with a JSON result.',
-    'If no sources are found after exhaustive search, call `failTask`.',
-  ].join('\n- '),
+const work = tasks.ref(taskListId)
+const current = await work.get()
+```
+
+## `tasks.list(options?)`
+
+Lists task ledgers from the configured store.
+
+```ts
+const ledgers = await tasks.list({
+  plan: roadmap,
+  limit: 20,
 })
 ```
 
-### Custom Tool Descriptions
-
-Wrap individual tools to override descriptions:
-
 ```ts
-const { startTask, completeTask, ...rest } = worker.asTools()
-
-const tools = {
-  ...rest,
-  startTask: {
-    ...startTask,
-    description: 'Signal that you are beginning the research phase.',
-  },
-  completeTask: {
-    ...completeTask,
-    description: 'Submit your research findings. Include a "sources" array in the result.',
-  },
+interface TaskListListOptions {
+  plan?: PlanHandle | string
+  metadata?: Record<string, unknown>
+  limit?: number
+  cursor?: string
 }
 ```
 
-## Agent Integration
+## `tasks.tool(options?)`
 
-Agent handles for task list management and task execution, plus a standalone creation tool. All follow the focused tools pattern — multiple dedicated tools instead of a single tool with an action parameter.
-
-### `taskListAgent(taskListId, options?)`
-
-Create an agent handle for an existing task list. Provides context injection and tools for task list management.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `taskListId` | `string` | The task list's ID |
-| `options` | `TaskListAgentOptions?` | Render overrides |
-
-**Returns:** `TaskListAgent`
-
-| Member | Description |
-|--------|-------------|
-| `.taskListId` | The task list's ID (readonly) |
-| `.asContext(opts?)` | Returns a `Context` with task list summary (default priority: 80) |
-| `.asTools()` | Returns `{ listTasks, addTask, updateTask, removeTask, discardTaskList }` |
-
-**`TaskListAgentOptions`:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `renderContext` | `(tasks: Task[]) => string` | Override the default context rendering |
+Creates a focused prompt tool that persists a new task ledger. After a model call, use `created()` to get the created handle.
 
 ```ts
-const agent = taskListAgent(taskList.id)
+const makeTasks = tasks.tool({
+  plan: roadmap,
+  title: 'Execution tasks',
+  template: 'Create short task labels with stable snake_case IDs.',
+})
 
-// Monitor only:
-const { listTasks } = agent.asTools()
+await generate(
+  prompt({
+    system: 'Create a task ledger for the plan.',
+    tools: { makeTasks },
+  }),
+  { model, input: {} },
+)
 
-// Full management:
-const tools = agent.asTools()
-prompt({ tools })
+const work = makeTasks.created()
 ```
 
-### `taskWorker(taskListId, taskId, options?)`
-
-Create an agent handle scoped to a single assigned task. The `taskId` is bound at creation — worker tools don't require it as a parameter, reducing LLM error surface.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `taskListId` | `string` | The task list's ID |
-| `taskId` | `string` | The specific task's ID |
-| `options` | `TaskWorkerOptions?` | Render and guidelines overrides |
-
-**Returns:** `TaskWorker`
-
-| Member | Description |
-|--------|-------------|
-| `.taskListId` | The task list's ID (readonly) |
-| `.taskId` | The task's ID (readonly) |
-| `.asContext(opts?)` | Returns a `Context` with task assignment and guidelines (default priority: 95) |
-| `.asTools()` | Returns `{ startTask, reportProgress, completeTask, failTask }` |
-
-**`TaskWorkerOptions`:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `renderContext` | `(task: Task, allTasks: Task[]) => string` | Override the default context rendering |
-| `guidelines` | `string` | Override the default worker guidelines |
+## `TasksHandle`
 
 ```ts
-const worker = taskWorker(taskList.id, 'write-intro')
+interface TasksHandle<TItems = undefined> {
+  readonly id: string
+  get(): Promise<TaskList | null>
+  list(options?: { includeRemoved?: boolean }): Promise<Task[]>
+  getTask(id: TaskId<TItems>): Promise<Task | null>
+  add(input: AddTaskInput): Promise<Task>
+  edit(id: TaskId<TItems>, patch: TaskEdit): Promise<Task>
+  start(id: TaskId<TItems>): Promise<Task>
+  progress(id: TaskId<TItems>, message: string): Promise<Task>
+  complete(id: TaskId<TItems>, result?: JsonValue): Promise<Task>
+  fail(id: TaskId<TItems>, error: string): Promise<Task>
+  skip(id: TaskId<TItems>, reason?: string): Promise<Task>
+  cancel(id: TaskId<TItems>, reason?: string): Promise<Task>
+  remove(id: TaskId<TItems>): Promise<void>
+  discard(reason?: string): Promise<void>
+  asContext(options?: TasksContextOptions): Context
+  asTools(): Record<string, ToolDef>
+  worker(id: TaskId<TItems>, options?: TaskWorkerOptions): TaskWorker
+}
+```
+
+Defined ledgers narrow `TaskId<TItems>` to the keys in `items`. Dynamic ledgers accept arbitrary string IDs.
+
+## Lifecycle
+
+```ts
+await work.add({ id: 'research', label: 'Research channels' })
+await work.start('research')
+await work.progress('research', 'Checking partner launches')
+await work.complete('research', { channels: ['partners'] })
+```
+
+Allowed lifecycle methods:
+
+- `start(id)`: `pending` to `in_progress`
+- `progress(id, message)`: writes a progress message and keeps status
+- `complete(id, result?)`: marks work completed
+- `fail(id, error)`: marks work failed
+- `skip(id, reason?)`: marks work skipped
+- `cancel(id, reason?)`: marks work cancelled
+- `remove(id)`: soft-removes the task from active derivation
+- `discard(reason?)`: discards the whole ledger and cancels active pending or in-progress tasks
+
+`edit()` updates non-status display fields only:
+
+```ts
+await work.edit('research', {
+  label: 'Research launch channels',
+  metadata: { owner: 'growth' },
+})
+```
+
+## Workers
+
+`worker(id)` creates a task-scoped handle with context and tools bound to one task.
+
+```ts
+const worker = work.worker('research', {
+  guidelines: 'Return source URLs in the result.',
+})
+
 prompt({
-  use: [worker.asContext()],
+  use: [roadmap.asContext(), worker.asContext()],
   tools: worker.asTools(),
 })
 ```
 
-### `createTaskListTool(options?)`
-
-Standalone tool for creating new task lists. Use when no task list exists yet. Optionally accepts a `template` string that is included in the tool description to guide LLM output format.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `options` | `{ template?: string }?` | Optional template for LLM guidance |
-
-**Returns:** `ToolDef`
+## Statuses
 
 ```ts
-// Basic
-const tools = { createTaskList: createTaskListTool() }
+type TaskStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+  | 'skipped'
+  | 'cancelled'
 
-// With template
-const tools = {
-  createTaskList: createTaskListTool({
-    template: 'Tasks should follow: research, draft, review, publish',
-  }),
+type TaskListStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'discarded'
+```
+
+Ledger status is derived from active task rows:
+
+- empty ledgers and all-pending ledgers are `pending`;
+- any in-progress task makes the ledger `in_progress`;
+- completed or skipped active tasks derive `completed`;
+- failures derive `failed` unless work is still in progress;
+- cancellations derive `cancelled` when there are no failures or in-progress tasks;
+- `discard()` sets `discarded`.
+
+Removed tasks are not active.
+
+## Errors
+
+Task lifecycle failures throw typed structural errors:
+
+```ts
+try {
+  await work.complete('missing')
+} catch (error) {
+  if (error instanceof Error && error.name === 'TaskNotFoundError') {
+    // Read structured fields from the error object.
+  }
 }
 ```
+
+Public task errors:
+
+- `TaskListNotFoundError`
+- `TaskNotFoundError`
+- `DuplicateTaskIdError`
+- `TaskRemovedError`
+- `TaskListDiscardedError`
+- `InvalidTaskTransitionError`
+- `TaskResultValidationError`
+- `TaskJsonValueError`
 
 ## Types
 
-### `TaskListHandle`
-
-The fluent handle returned by `tasklist()`. Extends `TaskList` data with methods for task management, context injection, and tool exposure.
-
-| Method | Signature | Returns | Description |
-|--------|-----------|---------|-------------|
-| `addTask(input)` | `(CreateTaskInput) => Promise<Task>` | `Promise<Task>` | Add a new task with status `'pending'` |
-| `updateTask(taskId, update)` | `(string, TaskUpdate) => Promise<Task>` | `Promise<Task>` | Update status, progress, assignee, result, error, or duration |
-| `removeTask(taskId)` | `(string) => Promise<void>` | `Promise<void>` | Soft-delete a task (excluded from auto-completion) |
-| `discard(reason?)` | `(string?) => Promise<void>` | `Promise<void>` | Discard the list, cancel all `pending`/`in_progress` tasks |
-| `getTasks()` | `() => Promise<Task[]>` | `Promise<Task[]>` | Get all non-removed tasks |
-| `getStatus()` | `() => Promise<TaskListStatus>` | `Promise<TaskListStatus>` | Get current status (self-heals if stale) |
-| `asContext(opts?)` | `(ContextOptions?) => Context` | `Context` | Create a Context for system message injection |
-| `asTools()` | `() => TaskListTools` | `{ listTasks, addTask, updateTask, removeTask, discardTaskList }` | Returns focused tools for LLM agents |
-| `worker(taskId)` | `(string) => TaskWorker` | `TaskWorker` | Create a worker handle scoped to a single task |
-| `id` | `string` (readonly) | — | The task list's ID |
-
-### `TaskList`
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | UUID, generated by `tasklist()` |
-| `planId` | `string?` | Optional association with a plan, thread, session, or any entity |
-| `status` | `TaskListStatus` | Current derived status |
-| `metadata` | `Record<string, unknown>?` | Arbitrary user metadata |
-| `createdAt` | `number` | Unix timestamp (ms) |
-| `updatedAt` | `number` | Unix timestamp (ms) |
-| `completedAt` | `number?` | Set when all tasks complete |
-| `discardedAt` | `number?` | Set when the list is discarded |
-| `discardReason` | `string?` | Reason provided when discarding |
-
-### `TaskListStatus`
-
 ```ts
-type TaskListStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'discarded'
-```
-
-### `Task`
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | User-provided meaningful ID (e.g., `'research'`, `'write-intro'`) |
-| `taskListId` | `string` | Parent task list ID |
-| `label` | `string` | Human-readable task label |
-| `description` | `string?` | Longer description of the task |
-| `status` | `TaskStatus` | Current task status |
-| `progress` | `string?` | Human-readable progress message (e.g., `"Writing section 2..."`) |
-| `assignee` | `{ agent?: string; model?: string }?` | Which agent/model is assigned |
-| `result` | `unknown?` | Structured result data from a completed task |
-| `error` | `string?` | Error message if the task failed |
-| `durationMs` | `number?` | How long the task took in milliseconds |
-| `createdAt` | `number` | Unix timestamp (ms) |
-| `updatedAt` | `number` | Unix timestamp (ms) |
-| `removedAt` | `number?` | Set when soft-deleted via `removeTask()` |
-
-### `TaskStatus`
-
-```ts
-type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped' | 'cancelled'
-```
-
-### `ToolDef`
-
-The tool shape returned by all agent integration primitives. Compatible with AI SDK tool format.
-
-```ts
-interface ToolDef {
-  description: string
-  parameters: z.ZodType
-  execute: (args: Record<string, unknown>) => Promise<string>
-}
-```
-
-### Input Types
-
-```ts
-interface CreateTaskListInput {
+interface TaskList {
+  id: string
   planId?: string
-  metadata?: Record<string, unknown>
+  title?: string
+  status: TaskListStatus
+  metadata?: JsonObject
+  createdAt: number
+  updatedAt: number
+  completedAt?: number
+  discardedAt?: number
+  discardReason?: string
 }
 
-interface CreateTaskInput {
-  id: string        // user-provided meaningful ID
+interface Task {
+  id: string
+  taskListId: string
   label: string
   description?: string
-  assignee?: { agent?: string; model?: string }
-}
-
-interface TaskUpdate {
-  status?: TaskStatus
+  status: TaskStatus
   progress?: string
   assignee?: { agent?: string; model?: string }
-  result?: unknown
+  metadata?: JsonObject
+  result?: JsonValue
   error?: string
   durationMs?: number
+  createdAt: number
+  updatedAt: number
+  removedAt?: number
 }
 ```
-
-## Auto-Completion
-
-After every task mutation (`addTask`, `updateTask`, `removeTask`), the list status is re-evaluated using `deriveTaskListStatus()`:
-
-| Condition | Derived Status |
-|-----------|---------------|
-| All active tasks `completed` or `skipped` | `'completed'` |
-| Any task `failed` AND no tasks `in_progress` | `'failed'` |
-| All tasks removed (empty active list) | `'completed'` |
-| Otherwise | `'in_progress'` |
-
-<Callout type="info">
-`'discarded'` is never derived — it's set explicitly via `discard()`. `'pending'` is the initial status before any tasks change state.
-</Callout>
-
-### Auto-Completion Walkthrough
-
-Here is how the state machine works through a typical lifecycle:
-
-```
-1. tasklist()                  → list status: 'pending'
-2. addTask('a')               → list status: 'pending'    (no task has started)
-3. addTask('b')               → list status: 'pending'
-4. updateTask('a', in_progress) → list status: 'in_progress' (a task started)
-5. updateTask('a', completed)   → list status: 'in_progress' (b still pending)
-6. updateTask('b', in_progress) → list status: 'in_progress'
-7. updateTask('b', completed)   → list status: 'completed'   (all done!)
-```
-
-If task `b` fails instead:
-
-```
-6. updateTask('b', failed)    → list status: 'failed'     (a task failed, none in_progress)
-```
-
-If task `b` fails while `a` is still in progress:
-
-```
-5. updateTask('b', failed)    → list status: 'in_progress' (a is still working)
-6. updateTask('a', completed) → list status: 'failed'      (b failed, nothing in_progress)
-```
-
-<Callout type="warning">
-The `'failed'` status only triggers when no tasks are `in_progress`. This prevents premature failure — if one task fails but others are still running, the list waits for them to finish before declaring failure.
-</Callout>
-
-## Storage Keys
-
-Task lists and tasks use prefixed keys in the `CruxStore`:
-
-| Entity | Key Format | Example |
-|--------|------------|---------|
-| TaskList | `tasklist:{id}` | `tasklist:e5f6g7h8` |
-| Task | `task:{listId}:{taskId}` | `task:e5f6g7h8:research` |
-
-## Usage Example
-
-Full task list workflow — create a list, add tasks, use agent primitives for execution:
-
-```ts title="task-workflow.ts"
-import {
-  tasklist,
-  taskListAgent, taskWorker,
-} from '@use-crux/core/tasks'
-
-// 1. Create a task list (standalone or linked to a plan)
-const handle = await tasklist({
-  metadata: { purpose: 'blog-post-pipeline' },
-})
-
-// 2. Add tasks with meaningful IDs
-await handle.addTask({ id: 'research', label: 'Research sources', assignee: { model: 'gpt-4.1' } })
-await handle.addTask({ id: 'outline', label: 'Create outline' })
-await handle.addTask({ id: 'write', label: 'Write draft' })
-await handle.addTask({ id: 'review', label: 'Review and polish' })
-
-// 3. Create agent handles for LLM integration
-const taskListAgent = taskListAgent(handle.id)
-const worker = taskWorker(handle.id, 'research')
-
-// 4. Use in prompts
-prompt({
-  use: [worker.asContext()],
-  tools: { ...worker.asTools(), ...taskListAgent.asTools() },
-})
-```
-
-Task lists can also be linked to plans for combined intent + execution workflows. See the [Plans reference](/docs/reference/crux-core/plan) for the plan API, and the [Task Lists guide](/docs/guides/plans-and-tasks/tasks) for patterns combining both.
 
 ## Related
 
-- Guide: [Tasks](/docs/guides/plans-and-tasks/tasks)
-- Reference: [Plan](/docs/reference/crux-core/plan)
-- Cookbook: [Task worker pool](/docs/cookbook/workflows/task-worker-pool)
+- [Plan reference](/docs/reference/crux-core/plan)
+- [Plans & Tasks guide](/docs/guides/plans-and-tasks)
+- [Flow reference](/docs/reference/crux-core/flow)

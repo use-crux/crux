@@ -36,7 +36,7 @@ data: {"entity":"plan","key":"plan:abc","value":{...},"event":"set"}
 
 | Field    | Type                             | Description                         |
 | -------- | -------------------------------- | ----------------------------------- |
-| `entity` | `'plan' \| 'tasklist' \| 'task'` | Entity type classified from the key |
+| `entity` | `'plan' \| 'taskLedger' \| 'task'` | Entity type classified from the key |
 | `key`    | `string`                         | The full store key                  |
 | `value`  | `JsonObject \| null`             | The value (`null` for deletes)      |
 | `event`  | `'set' \| 'delete'`              | The event type                      |
@@ -48,7 +48,7 @@ The handler classifies store keys into entity types:
 | Key Prefix  | Entity     |
 | ----------- | ---------- |
 | `plan:`     | `plan`     |
-| `tasklist:` | `tasklist` |
+| task ledger keys | `taskLedger` |
 | `task:`     | `task`     |
 
 Keys that don't match any known prefix are silently skipped.

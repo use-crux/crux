@@ -1,297 +1,123 @@
 ---
-title: Working with Plans
-description: Create, update, and inject plan documents for agent intent tracking with version control and approval workflows.
+title: Plans
+description: Store versioned intent documents and expose them as context or focused tools.
 ---
 
-<Callout type="info">
-  For full API signatures and type definitions, see the [Plans reference](/docs/reference/crux-core/plan).
-</Callout>
+Plans capture what the agent intends to do. They are freeform documents with title, content, metadata, timestamps, and a version that increments when title or content changes.
 
-## What Is a Plan?
-
-A plan is a pure document: title + content + version + metadata. It describes what an agent intends to do — objectives, approach, key considerations. Plans have no status field. Status, approval, and lifecycle are user-land concerns you model with `metadata`.
-
-The `version` field increments automatically whenever title or content changes, so you can detect modifications after creation or approval.
-
-## Creating Plans
-
-### Programmatic Creation
-
-For cases where you create plans in application code (not through an LLM):
-
-```ts title="create-plan.ts"
+```ts
 import { plan } from '@use-crux/core/plan'
 
-const p = await plan({
-  title: 'Rewrite Landing Page',
-  content: `## Goal
-Rewrite the landing page copy for better conversion.
-
-## Approach
-1. Analyze current copy weaknesses
-2. Research competitor messaging
-3. Write new hero section
-4. A/B test variations`,
+const roadmap = await plan({
+  title: 'Roadmap analysis',
+  content: 'Compare customer feedback, usage data, and support volume.',
+  metadata: { threadId: 'thread-123' },
 })
-
-p.id // generated UUID
-p.version // 1
-p.title // 'Rewrite Landing Page'
 ```
 
-<Callout type="info"></Callout>
+## Handles
 
-### LLM-Driven Creation
+`plan()` returns a command handle, not a data snapshot.
 
-The recommended approach: give the LLM a plan creation tool and let it decide what the plan should contain.
+```ts
+roadmap.id
+await roadmap.get()
+await roadmap.update({ content: 'Updated objective and approach.' })
+```
 
-```ts title="llm-creates-plan.ts"
-import { createPlanTool, planAgent } from '@use-crux/core/plan'
-import { prompt, generate } from '@use-crux/ai'
+Bind an existing plan without reading it first:
 
-const planTool = createPlanTool({
-  template: `## Goal\n[What we want to achieve]\n\n## Audience\n[Target reader]\n\n## Sections\n1. [Section]\n2. [Section]`,
+```ts
+const roadmap = plan.ref(planId)
+const current = await roadmap.get()
+```
+
+List plans by metadata:
+
+```ts
+const threadPlans = await plan.list({
+  metadata: { threadId: 'thread-123' },
+  limit: 20,
+})
+```
+
+## Context
+
+`asContext()` injects the latest plan content into a prompt at resolve time.
+
+```ts
+prompt({
+  use: [roadmap.asContext()],
+  system: 'Follow the plan unless the user changes the objective.',
+})
+```
+
+Use reference mode when the model only needs a compact pointer:
+
+```ts
+prompt({
+  use: [roadmap.asContext({ mode: 'reference', priority: 60 })],
+})
+```
+
+Custom rendering is useful when your plan content has a stable house style:
+
+```ts
+roadmap.asContext({
+  renderContext: (p) => `# ${p.title}\n\nVersion ${p.version}\n\n${p.content}`,
+})
+```
+
+## Tools
+
+`asTools()` gives the model focused plan read/update tools bound to this plan.
+
+```ts
+const tools = roadmap.asTools()
+
+prompt({
+  tools: {
+    getPlan: tools.getPlan,
+    updatePlan: tools.updatePlan,
+  },
+})
+```
+
+Create plans from model output with `plan.tool()`. Use `created()` after execution to read the handle safely.
+
+```ts
+const makePlan = plan.tool({
+  template: '## Goal\n\n## Constraints\n\n## Steps',
 })
 
 await generate(
   prompt({
-    system: 'You are a content strategist. Create a plan for the requested article.',
-    tools: { createPlan: planTool },
+    system: 'Create a concise execution plan.',
+    tools: { makePlan },
   }),
-  { model, input: { userRequest: 'Write a guide about TypeScript monorepos' } },
+  { model, input: { request } },
 )
 
-// The tool captures what it created
-const planId = planTool.created!.id
-const planAgent = planAgent(planId)
+const roadmap = makePlan.created()
 ```
 
-The `template` option guides the LLM's output structure without constraining it. The `.created` property on the tool captures the `PlanHandle` after the LLM calls it — use this for inter-step data flow in pipelines.
+## Metadata
 
-The `onCreated` callback fires immediately when the plan is created:
+Plan metadata must be JSON-safe. Store IDs and small routing fields, not functions, class instances, or cyclic values.
 
 ```ts
-const planTool = createPlanTool({
-  onCreated: (handle) => console.log('Plan created:', handle.id),
+await roadmap.update({
+  metadata: {
+    threadId: 'thread-123',
+    source: 'support',
+  },
 })
 ```
 
-## The PlanHandle
+## Use Plans For
 
-`plan()` returns a `PlanHandle` — a snapshot of the plan data plus methods for ongoing interaction:
+- Human-reviewable agent intent before execution.
+- A shared document that worker prompts can read.
+- Traceable revisions to the objective or approach.
 
-```ts
-const p = await plan({ title: 'My Plan', content: '...' })
-
-// Data snapshot (extends Plan)
-p.id // string
-p.title // string
-p.content // string
-p.version // number
-p.metadata // Record<string, unknown> | undefined
-
-// Methods
-await p.update({ content: 'Updated approach...' }) // returns updated Plan
-await p.get() // re-reads latest from store
-p.asContext() // Context for system message
-p.asTools() // { getPlan, updatePlan }
-```
-
-## Agent Integration
-
-### planAgent
-
-For existing plans, `planAgent()` creates a handle without creating a new entity:
-
-```ts title="plan-agent.ts"
-import { planAgent } from '@use-crux/core/plan'
-
-const planAgent = planAgent(planId)
-
-// Inject plan content into the system message
-prompt({
-  use: [planAgent.asContext()],
-  system: 'Follow the plan to complete the work.',
-})
-
-// Expose tools — pick which ones to give the LLM
-const { getPlan, updatePlan } = planAgent.asTools()
-prompt({ tools: { getPlan } }) // read-only access
-```
-
-### Context Injection
-
-`.asContext()` injects the plan into the system message at generation time. Two modes:
-
-**Full mode** (default) — injects title and content:
-
-```ts
-planAgent.asContext()
-// Renders: ## Plan: My Title (v1)\n...content...
-```
-
-**Reference mode** — injects metadata only, LLM reads content via `getPlan` tool on demand:
-
-```ts
-const planAgent = planAgent(planId, { context: 'reference' })
-// Renders: ## Plan: My Title (v1)\nUse the `getPlan` tool to read the full content.
-```
-
-Use reference mode for large plans to save tokens. The LLM pulls full content only when needed.
-
-**Custom rendering** — override with `renderContext`:
-
-```ts
-const planAgent = planAgent(planId, {
-  renderContext: (plan) => `# ${plan.title}\n${plan.content}\n\n_v${plan.version}_`,
-})
-```
-
-**Priority** — contexts are sorted by priority (higher = preserved first under token pressure):
-
-```ts
-planAgent.asContext({ priority: 95 }) // make plan the highest priority
-```
-
-Default plan priority is 80. Worker assignment context defaults to 95.
-
-<Callout type="info">
-  An empty context (e.g., a plan that was deleted) returns `''` and is silently omitted from the system message. No
-  error is thrown.
-</Callout>
-
-### Focused Tools
-
-`.asTools()` returns two dedicated tools:
-
-| Tool         | Description                                                                           |
-| ------------ | ------------------------------------------------------------------------------------- |
-| `getPlan`    | Read the current plan — title, content, version, metadata                             |
-| `updatePlan` | Update title, content, or metadata. Version auto-increments on title/content changes. |
-
-Each tool has `.describe()` on all Zod parameters and a self-contained description. The LLM doesn't need external context to use them correctly.
-
-```ts
-// Read-only access for a worker
-const { getPlan } = planAgent.asTools()
-
-// Full access for an orchestrator
-const tools = planAgent.asTools()
-```
-
-## Version Tracking
-
-The `version` field increments only on title or content changes — metadata-only updates don't bump the version:
-
-```ts
-const p = await plan({ title: 'My Plan', content: 'v1 content' })
-// p.version === 1
-
-await p.update({ content: 'v2 content' })
-// version === 2
-
-await p.update({ metadata: { status: 'approved' } })
-// version still 2 — metadata-only change
-```
-
-Use version to detect if a plan was modified after approval:
-
-```ts
-const current = await p.get()
-if (current && current.version > approvedVersion) {
-  // Plan was modified after approval — needs re-review
-}
-```
-
-## Approval Workflow
-
-Plans have no built-in status. Implement approval using `metadata`:
-
-```ts title="approval-workflow.ts"
-import { plan, updatePlan, getPlan } from '@use-crux/core/plan'
-
-// Agent creates a plan
-const p = await plan({
-  title: 'Rewrite Landing Page',
-  content: '## Goal\n...',
-  metadata: { approval: 'pending' },
-})
-
-// Human reviews and approves
-await updatePlan(p.id, {
-  metadata: { approval: 'approved', approvedBy: 'henri', approvedAt: Date.now() },
-})
-
-// Agent checks approval before executing
-const current = await getPlan(p.id)
-if (current?.metadata?.approval !== 'approved') {
-  throw new Error('Plan not approved')
-}
-```
-
-This keeps the Plan type simple while giving full control — add `approvedBy`, `approvedAt`, `rejectionReason`, or any domain-specific metadata.
-
-Combine with `usePlan()` for a reactive approval UI:
-
-```tsx title="plan-approval.tsx"
-import { usePlan } from '@use-crux/react'
-
-function PlanApproval({ planId }: { planId: string }) {
-  const plan = usePlan(planId)
-  if (!plan) return <Loading />
-
-  const approval = plan.metadata?.approval as string | undefined
-
-  return (
-    <div>
-      <h2>
-        {plan.title} (v{plan.version})
-      </h2>
-      <div>{plan.content}</div>
-
-      {approval === 'pending' && (
-        <div>
-          <button onClick={() => approvePlan(planId)}>Approve</button>
-          <button onClick={() => rejectPlan(planId)}>Reject</button>
-        </div>
-      )}
-      {approval === 'approved' && <span>Approved by {plan.metadata?.approvedBy as string}</span>}
-    </div>
-  )
-}
-```
-
-<Callout type="tip">
-  Use `plan.version` to detect if the agent modified the plan after approval. If `version` increased since approval,
-  prompt for re-review.
-</Callout>
-
-## How Context Injection Works
-
-When you pass `planAgent.asContext()` to a prompt's `use` array:
-
-1. **Resolution.** The context resolver calls the context's `system` function, which reads the plan from the `CruxStore`.
-2. **Rendering.** The function returns a markdown string (e.g., `## Plan: My Title (v1)\n...content...`).
-3. **Assembly.** All contexts in the `use` array are sorted by priority and concatenated. Under token pressure, lower-priority contexts are trimmed first.
-4. **Injection.** The assembled system message is passed to the LLM.
-
-Contexts are composable — combine plan context with task context, memory context, and custom contexts:
-
-```ts
-prompt({
-  use: [
-    planAgent.asContext(), // priority 80: the plan
-    worker.asContext(), // priority 95: the assigned task
-    agentMemory, // composed scratchpad / recent / facts blocks
-  ],
-  system: 'Complete your assigned task following the plan.',
-})
-```
-
-## Devtools
-
-Plan events are automatically captured by devtools instrumentation:
-
-- `plan:created`, `plan:updated` — plan lifecycle
-
-These appear in the devtools dashboard under the Plans & Tasks view. See the [Devtools reference](/docs/reference/crux-core/devtools) for the full event list.
+Use `flow()` or an external durable runner for execution guarantees such as queues, retries, schedules, and resume behavior.

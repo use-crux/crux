@@ -18,7 +18,7 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API
 - **`/quality`** — `evaluate()`, `target.*`, `scorers.*`, `dataset()`, `cassette()` (the Quality system: evaluations → experiments → baselines, replay at the executor boundary)
 - **`/agent`** — `agent()`, `parallel()`, `pipeline()`, `consensus()`, `swarm()`, `blackboard()`, `handoff()`, `delegate()`
 - **`/store`** — `CruxStore` interface, `inMemoryCruxStore()`
-- **`/plan` + `/tasks`** — `plan()`, `tasklist()`, `planAgent()`, `createPlanTool()`
+- **`/plan` + `/tasks`** — `plan()`, `tasks()`, `task()`, handle contexts, handle tools, and workers
 - **`/index`** — project index contracts, schemas, serializers, and source metadata helpers
 - **`/lint`** — index lint contracts and rule registry metadata
 - **`/runtime-bridge`** — local devtools bridge contracts for runtime resources

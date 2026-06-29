@@ -169,10 +169,16 @@ Plans are freeform documents describing intent. Task lists are structured work t
 
 ```ts
 import { plan } from '@use-crux/core/plan'
-import { tasklist } from '@use-crux/core/tasks'
+import { task, tasks } from '@use-crux/core/tasks'
 
 const p = await plan({ title: 'Q1 roadmap', content: '...' })
-const tl = await tasklist({ planId: p.id, title: 'Roadmap tasks', tasks: [...] })
+const work = await tasks({
+  plan: p,
+  title: 'Roadmap tasks',
+  items: {
+    research: task('Research customer asks'),
+  },
+})
 ```
 
 → [Plans & Tasks guide](/docs/guides/plans-and-tasks)

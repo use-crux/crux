@@ -25,7 +25,7 @@ indexer configuration and Project Index contracts, but it must not depend on com
 
 Crux public APIs use names that describe the thing a user is declaring or doing:
 
-- Use simple nouns for user-authored primitives: `prompt()`, `context()`, `agent()`, `flow()`, `embedding()`, `indexer()`, `retriever()`, `reranker()`, `memory()`, `workspace()`, `guardrail()`, `constraint()`, `blackboard()`, `handoff()`, `delegate()`, `registry()`, `planAgent()`, `taskListAgent()`, , and `taskWorker()`.
+- Use simple nouns for user-authored primitives: `prompt()`, `context()`, `agent()`, `flow()`, `embedding()`, `indexer()`, `retriever()`, `reranker()`, `memory()`, `workspace()`, `guardrail()`, `constraint()`, `blackboard()`, `handoff()`, `delegate()`, `registry()`, `plan()`, and `tasks()`.
 - Use provider-local noun exports in adapter packages. For example, `@use-crux/ai`, `@use-crux/openai`, and `@use-crux/google` all export `embedding()`. Consumers can alias at import sites when multiple providers are used in one file, e.g. `import { embedding as openAIEmbedding } from '@use-crux/openai'`.
 - Use `createX()` for runtime infrastructure factories that produce machinery rather than domain definitions: transports, middleware, plugins, reporters, stores, adapter clients, pipelines, and other operational helpers.
 - Use verbs for one-off operations: `generate()`, `stream()`, `retrieve()`, `indexDocuments()`, `signalFlow()`, `cancelFlow()`, and similar execution functions.
@@ -191,11 +191,11 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── types.ts        Memory types
 │   └── utils.ts        Memory helpers
 ├── plan/
-│   ├── index.ts        Barrel: plan, tasklist, agent primitives, types
+│   ├── index.ts        Barrel: plan, tasks, task specs, types
 │   ├── types.ts        Plan, TaskList, Task, status types, TaskListHandle
 │   ├── plans.ts        plan(), getPlan(), updatePlan() — canonical plan.operation spans for mutations
-│   ├── tasks.ts        tasklist(), getTaskList(), TaskListHandle — canonical task.operation spans for mutations
-│   ├── agent.ts        planAgent(), taskListAgent(), taskWorker(), createPlanTool(), createTaskListTool(), ToolDef
+│   ├── tasks.ts        tasks(), getTaskList(), TaskListHandle - canonical task.operation spans for mutations
+│   ├── agent.ts        internal plan/task context and tool helpers, ToolDef
 │   └── helpers.ts      deriveTaskListStatus(), key conventions
 ├── tasks/
 │   └── index.ts        Barrel: canonical @use-crux/core/tasks import (re-exports task APIs from plan/)
@@ -602,7 +602,7 @@ TypeScript inference is treated as an architecture constraint, not a best-effort
 
 Workspace observability is centralized in the workspace `instrument()` helper. Public calls and workspace tools share the same `workspace.operation` spans, namespace hashing, and bounded result artifacts. The Go backend exposes these through the `workspace` resource activity projection, including linked artifacts and edges, so devtools/TUI readers do not need a workspace-specific tracing protocol.
 
-Plan/task observability is owned by the mutation functions that persist state. `plan()` and `updatePlan()` emit `plan.operation` spans with JSON artifacts containing the plan id, title, version, content, content preview, and metadata; `tasklist()`, `addTask()`, `updateTask()`, `removeTask()`, and `discard()` emit `task.operation`. The Go backend exposes these through the `plan` and `task` resource activity projections and builds the Plans & Tasks read model from those artifacts, so runtime stores behind Convex/serverless boundaries do not need a separate direct enumeration path. Read helpers stay cheap and do not create spans unless a caller wraps them.
+Plan/task observability is owned by the mutation functions that persist state. `plan()` emits `plan.operation` spans with JSON artifacts containing the plan id, title, version, content, content preview, and metadata; task-ledger mutations emit `task.operation`. The Go backend exposes these through the `plan` and `task` resource activity projections and builds the Plans & Tasks read model from those artifacts, so runtime stores behind Convex/serverless boundaries do not need a separate direct enumeration path. Read helpers stay cheap and do not create spans unless a caller wraps them.
 
 Skill loading emits `skill.load` spans from both `fileSkill()` and `resolveRegistrySkill()`, including parse/reference metadata, cache-hit/fetch source, instruction sizes, and bounded previews.
 

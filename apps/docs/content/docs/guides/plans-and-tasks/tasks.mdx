@@ -1,301 +1,123 @@
 ---
-title: Working with Task Lists
-description: Structured task tracking with auto-completion, agent integration, assignees, and focused tools.
+title: Tasks
+description: Track structured work with dynamic or typed task ledgers.
 ---
 
-<Callout type="info">
-For full API signatures and type definitions, see the [Task Lists reference](/docs/reference/crux-core/tasks).
-</Callout>
-
-## What Is a Task List?
-
-A task list is a set of structured work items with status tracking, progress updates, and auto-completion. Task lists are **independent from plans** — they can track work for a thread, session, pipeline, or anything with discrete steps. The optional `planId` field links a task list to a plan, but it's entirely optional.
-
-## Creating Task Lists
-
-```ts title="create-tasklist.ts"
-import { tasklist } from '@use-crux/core/tasks'
-
-// Standalone — no plan association
-const handle = await tasklist({
-  metadata: { threadId: 'thread-abc', userRequest: 'Set up my project' },
-})
-
-// Linked to a plan
-const handle = await tasklist({ planId: plan.id })
-```
-
-<Callout type="info">
-`tasklist()` persists the list immediately with status `'pending'`. This is intentional — lazy creation would cause race conditions if multiple `addTask()` calls happen concurrently.
-</Callout>
-
-<Callout type="info">
-</Callout>
-
-## The TaskListHandle
-
-`tasklist()` returns a `TaskListHandle` — the primary interface for all task operations:
+`tasks()` creates a task ledger. Ledgers can stand alone or attach to a plan handle or plan ID.
 
 ```ts
-const handle = await tasklist({ metadata: { threadId: 'abc' } })
+import { z } from 'zod'
+import { task, tasks } from '@use-crux/core/tasks'
 
-handle.id                                    // string (generated UUID)
-
-// Task CRUD
-await handle.addTask({ id: 'research', label: 'Research sources' })
-await handle.updateTask('research', { status: 'in_progress' })
-await handle.removeTask('research')          // soft-delete
-
-// Lifecycle
-await handle.discard('User cancelled')       // cancels pending/in_progress tasks
-await handle.getTasks()                      // excludes removed tasks
-await handle.getStatus()                     // self-heals if stale
-
-// Agent integration
-handle.asContext()                           // Context for system message
-handle.asTools()                             // { listTasks, addTask, updateTask, removeTask, discardTaskList }
-handle.worker('research')                    // TaskWorker handle scoped to one task
-```
-
-## Adding Tasks
-
-Tasks require a meaningful user-provided ID and a human-readable label:
-
-```ts
-await handle.addTask({ id: 'research', label: 'Research competitor messaging' })
-await handle.addTask({ id: 'hero', label: 'Write hero section' })
-await handle.addTask({ id: 'cta', label: 'Write call-to-action' })
-```
-
-Optional fields:
-
-```ts
-await handle.addTask({
-  id: 'write-intro',
-  label: 'Write introduction',
-  description: 'A compelling opening paragraph that hooks the reader.',
-  assignee: { agent: 'writer', model: 'claude-sonnet-4-5-20250514' },
+const work = await tasks({
+  title: 'Import job',
+  metadata: { jobId: 'import-42' },
 })
 ```
 
-<Callout type="warning">
-Use meaningful IDs like `'research'`, `'write-intro'`, `'review'` — not UUIDs. The task list already has a UUID. Meaningful task IDs make logs, devtools output, and worker bindings readable.
-</Callout>
+## Dynamic Ledgers
 
-## Updating Tasks
+Dynamic ledgers are best when task IDs come from user input, model output, or runtime data.
 
 ```ts
-// Start working
-await handle.updateTask('research', { status: 'in_progress' })
-
-// Report progress
-await handle.updateTask('research', { progress: 'Found 3 relevant sources...' })
-
-// Complete with result
-await handle.updateTask('research', {
-  status: 'completed',
-  result: { competitors: ['Acme', 'Widget Co'] },
-  durationMs: 4500,
+await work.add({
+  id: 'extract',
+  label: 'Extract CSV rows',
+  metadata: { file: 'customers.csv' },
 })
 
-// Reassign
-await handle.updateTask('write', {
-  assignee: { agent: 'senior-writer', model: 'claude-sonnet-4-20250514' },
-})
+await work.start('extract')
+await work.progress('extract', 'Parsed 1,200 rows')
+await work.complete('extract', { rows: 1200 })
 ```
 
-The `assignee` is informational — it doesn't route work automatically. Your orchestration code reads the assignee and dispatches accordingly.
+Results and metadata must be JSON-safe.
 
-## Progress Tracking
+## Defined Ledgers
 
-The `progress` field provides human-readable status updates during long-running tasks:
+Defined ledgers are best when the task set is known at author time. IDs are inferred from object keys, and result schemas infer `complete()` payloads.
 
 ```ts
-await handle.updateTask('write', {
-  status: 'in_progress',
-  progress: 'Writing section 1 of 4...',
-})
-
-// Later...
-await handle.updateTask('write', {
-  progress: 'Writing section 3 of 4...',
-})
-```
-
-Progress strings are freeform. They're especially useful with [reactive hooks](/docs/guides/plans-and-tasks/reactive-ui) — the UI updates in real time as the agent reports progress.
-
-## Auto-Completion
-
-Task list status derives automatically from individual task statuses via `deriveTaskListStatus()`:
-
-| All tasks | List status |
-|-----------|-------------|
-| All `completed` | `completed` |
-| Any `in_progress` | `in_progress` |
-| Any `failed` (none in_progress) | `failed` |
-| All `pending` | `pending` |
-| Mix of terminal statuses | Based on worst outcome |
-
-The status self-heals on every read via `getStatus()`. If the stored status doesn't match derived status, it's corrected automatically.
-
-```ts
-await handle.updateTask('research', { status: 'completed' })
-await handle.updateTask('write', { status: 'completed' })
-await handle.updateTask('review', { status: 'completed' })
-
-const status = await handle.getStatus() // 'completed' — auto-derived
-```
-
-<Callout type="tip">
-Don't manually set the task list status. Update individual task statuses and let auto-completion handle the rest. The only exception is `discard()`, which explicitly overrides auto-completion.
-</Callout>
-
-## Dynamic Tasks
-
-Tasks can be added or removed mid-execution. Auto-completion re-evaluates after every mutation:
-
-```ts
-// Agent discovers it needs an extra step
-await handle.addTask({ id: 'fact-check', label: 'Verify statistics' })
-
-// Agent decides a task isn't needed
-await handle.removeTask('fact-check')
-```
-
-`removeTask()` is a soft delete — the task remains in storage with a `removedAt` timestamp, but it's excluded from status derivation and `getTasks()` results.
-
-## Discarding
-
-Call `discard()` to abandon a task list. All `pending` and `in_progress` tasks are automatically set to `cancelled`:
-
-```ts
-await handle.discard('User cancelled the operation')
-
-const status = await handle.getStatus() // 'discarded'
-```
-
-Once discarded, the status is permanent. Auto-completion will not override it.
-
-## Agent Integration
-
-### taskListAgent
-
-For existing task lists, `taskListAgent()` creates a handle without creating a new entity:
-
-```ts title="tasklist-agent.ts"
-import { taskListAgent } from '@use-crux/core/tasks'
-
-const taskAgent = taskListAgent(handle.id)
-
-// Full management access
-prompt({
-  use: [taskAgent.asContext()],
-  tools: taskAgent.asTools(),
-})
-
-// Monitor only — give the LLM read access
-const { listTasks } = taskAgent.asTools()
-prompt({ tools: { listTasks } })
-```
-
-### Context Injection
-
-`.asContext()` injects a summary with status icons into the system message:
-
-```
-## Tasks (2/4)
-✓ Research sources — completed
-⟳ Write hero section — in_progress "Drafting v1..."
-○ Write CTA — pending
-○ Review — pending
-```
-
-Override with `renderContext`:
-
-```ts
-const taskAgent = taskListAgent(handle.id, {
-  renderContext: (tasks) => {
-    const summary = tasks.map(t => `- [${t.status}] ${t.label}`).join('\n')
-    return `## Current Tasks\n${summary}`
+const work = await tasks({
+  items: {
+    research: task('Research channels', {
+      result: z.object({ channels: z.array(z.string()) }),
+    }),
+    draft: task('Draft copy', {
+      result: z.object({ markdown: z.string() }),
+    }),
   },
 })
+
+await work.complete('research', { channels: ['partners', 'community'] })
 ```
 
-### Focused Tools
+Defined ledgers do not accept dynamic `add()` calls. Use a dynamic ledger when new task IDs are discovered at runtime.
 
-`.asTools()` returns five dedicated tools:
+## Lifecycle
 
-| Tool | Description |
-|------|-------------|
-| `listTasks` | List all active tasks with status, progress, assignee |
-| `addTask` | Add a new task with ID, label, description, assignee |
-| `updateTask` | Change status, progress, assignee, or record results |
-| `removeTask` | Soft-delete a task (excluded from auto-completion) |
-| `discardTaskList` | Abandon the list, cancel pending tasks |
-
-Pick which tools each agent needs:
+Use lifecycle methods instead of editing status fields directly:
 
 ```ts
-// Monitor only
-const { listTasks } = taskAgent.asTools()
+await work.start('draft')
+await work.progress('draft', 'Writing intro and offer')
+await work.complete('draft', { markdown: '# Launch\n\n...' })
 
-// Full management
-const tools = taskAgent.asTools()
+await work.fail('draft', 'Model returned invalid markdown')
+await work.skip('draft', 'Covered by existing announcement')
+await work.cancel('draft', 'Launch paused')
+await work.remove('draft')
 ```
 
-### LLM-Driven Creation
+Terminal tasks are immutable through lifecycle methods. Removed tasks do not count toward the ledger status.
 
-When no task list exists yet, give the LLM a creation tool:
+## Status Derivation
 
-```ts title="creation-tool.ts"
-import { createTaskListTool } from '@use-crux/core/tasks'
+Task statuses are:
 
-const taskListTool = createTaskListTool({
-  template: 'Tasks should be granular: research, draft, review, publish',
-})
+- `pending`
+- `in_progress`
+- `completed`
+- `failed`
+- `skipped`
+- `cancelled`
 
-prompt({
-  tools: { createTaskList: taskListTool },
-})
+Ledger statuses are:
 
-// After the LLM calls it:
-const handle = taskListTool.created
-```
+- `pending` for empty ledgers or ledgers where all active tasks are pending.
+- `in_progress` when any active task is in progress.
+- `completed` when all active tasks are completed or skipped.
+- `failed` when at least one active task failed and none are in progress.
+- `cancelled` when terminal active tasks include cancellation, without failures.
+- `discarded` when the whole ledger is abandoned.
 
-After creation, switch to `taskListAgent()` for ongoing management.
+## Errors
 
-## Task Lists Without Plans
-
-Task lists don't require plans. Common standalone patterns:
-
-**Thread-based work:**
+Task mutations throw typed lifecycle errors with structured fields:
 
 ```ts
-const handle = await tasklist({
-  metadata: { threadId: 'thread-abc', userRequest: 'Set up my project' },
-})
-await handle.addTask({ id: 'init', label: 'Initialize project structure' })
-await handle.addTask({ id: 'deps', label: 'Install dependencies' })
+try {
+  await work.add({ id: 'research', label: 'Duplicate research task' })
+} catch (error) {
+  if (error instanceof Error && error.name === 'DuplicateTaskIdError') {
+    // error.taskListId and error.taskId are available on the structural error.
+  }
+}
 ```
 
-**Pipeline tracking:**
+Common errors include `TaskListNotFoundError`, `TaskNotFoundError`, `DuplicateTaskIdError`, `TaskRemovedError`, `TaskListDiscardedError`, `InvalidTaskTransitionError`, `TaskResultValidationError`, and `TaskJsonValueError`.
+
+## Existing Ledgers
+
+Bind an existing ledger by ID:
 
 ```ts
-const handle = await tasklist({
-  metadata: { sessionId: 'etl-run-42', pipeline: 'daily-sync' },
-})
-await handle.addTask({ id: 'extract', label: 'Extract from source API' })
-await handle.addTask({ id: 'transform', label: 'Transform and validate' })
-await handle.addTask({ id: 'load', label: 'Load into database' })
+const work = tasks.ref(taskListId)
+const current = await work.get()
 ```
 
-The `planId` field is just a convenience that enables `getTaskListByPlan()` lookups and `useTaskList({ planId })` in the UI.
+List ledgers, optionally scoped to a plan:
 
-## Devtools
-
-Task list and task events are automatically captured by devtools instrumentation:
-
-- `tasklist:created`, `tasklist:completed`, `tasklist:discarded` — task list lifecycle
-- `task:added`, `task:updated`, `task:removed` — individual task mutations
-
-These appear in the devtools dashboard under the Plans & Tasks view. See the [Devtools reference](/docs/reference/crux-core/devtools) for the full event list.
+```ts
+const ledgers = await tasks.list({ plan: launchPlan })
+```

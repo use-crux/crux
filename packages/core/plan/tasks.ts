@@ -131,20 +131,14 @@ export async function tasklist(input: CreateTaskListInput): Promise<TaskListHand
 }
 
 /**
- * Create a task list and return a handle for managing tasks.
+ * Create the persisted task-ledger row behind `tasks()`.
  *
- * The list is persisted immediately with status `'pending'`.
- * No lazy creation — avoids race conditions from concurrent `addTask()` calls.
+ * The ledger is persisted immediately with status `pending`; eager creation
+ * avoids races between concurrent task additions.
  *
- * @param input - Optional planId association and metadata.
- * @returns A `TaskListHandle` for fluent task management.
- *
- * @example
- * ```ts
- * const taskList = await tasklist({ planId: plan.id })
- * await taskList.addTask({ id: 'research', label: 'Research sources' })
- * await taskList.updateTask('research', { status: 'completed' })
- * ```
+ * @param input - Internal plan ID association, title, and metadata.
+ * @param taskSpecs - Optional typed task definitions carried by the returned handle.
+ * @returns A command handle for the created task ledger.
  */
 async function createTaskList(
   input: CreateTaskListInput,

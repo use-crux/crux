@@ -1,208 +1,65 @@
 ---
-title: Worker Agents
-description: The worker pattern — one agent assigned to one task with focused, scope-bound tools.
+title: Workers
+description: Bind an agent to one task with scoped context and lifecycle tools.
 ---
 
-## The Problem
-
-When an agent manages multiple tasks, the LLM must remember which task ID to pass, pick the right status value, and avoid accidentally updating the wrong task. This creates a large error surface:
+A worker handle is created from a task ledger:
 
 ```ts
-// Generic tool — LLM must get the taskId right every time
-updateTask({ taskId: 'research', status: 'in_progress' })
-updateTask({ taskId: 'research', progress: 'Found 3 sources...' })
-updateTask({ taskId: 'research', status: 'completed', result: { ... } })
+const worker = work.worker('research')
 ```
 
-## The Worker Pattern
-
-A worker is an agent assigned to exactly one task. The `taskId` is bound at creation — all worker tools operate on that specific task without the LLM needing to specify which task.
+The worker is scoped to one task ID. Its context describes the assignment, and its tools mutate only that task.
 
 ```ts
-// Worker tools — no taskId needed, intent is clear from the tool name
-startTask()
-reportProgress({ message: 'Found 3 sources...' })
-completeTask({ result: { ... } })
+await generate(
+  prompt({
+    use: [launchPlan.asContext(), worker.asContext()],
+    tools: worker.asTools(),
+    system: 'Complete the assigned task and report progress.',
+  }),
+  { model, input: {} },
+)
 ```
-
-Fewer parameters, clearer names, enforced scope. The LLM cannot accidentally update the wrong task.
-
-## Creating Workers
-
-Two ways to create a worker:
-
-```ts
-import { taskWorker } from '@use-crux/core/tasks'
-
-// From a standalone function
-const worker = taskWorker(taskListId, 'research')
-
-// From a TaskListHandle (shorthand)
-const worker = handle.worker('research')
-```
-
-Both are equivalent — `.worker()` is a convenience method on `TaskListHandle`.
-
-## Worker Context
-
-`.asContext()` injects the task assignment and guidelines into the system message at priority 95 (higher than plans at 80):
-
-```
-## Your Assignment
-**Task:** Research competitor messaging (assigned to researcher)
-**Status:** pending
 
 ## Guidelines
-- Call `startTask` when you begin working on this task.
-- Use `reportProgress` to report what you are doing as you work.
-- Call `completeTask` when finished, optionally providing a structured result.
-- Call `failTask` if you encounter an unrecoverable issue, with an error message.
-```
 
-Combine with plan context for full visibility:
+Pass task-specific guidance when the worker is created:
 
 ```ts
-import { planAgent } from '@use-crux/core/plan'
-import { taskWorker } from '@use-crux/core/tasks'
-
-const planAgent = planAgent(planId)
-const worker = taskWorker(handle.id, 'research')
-
-prompt({
-  use: [
-    planAgent.asContext(),     // priority 80 — overall project context
-    worker.asContext(),        // priority 95 — specific assignment
-  ],
-  tools: worker.asTools(),
-  system: 'You are a research assistant. Complete your assigned task.',
+const writer = work.worker('draft', {
+  guidelines: 'Write markdown. Include source links. Keep the tone direct.',
 })
 ```
 
-Under token pressure, the assignment (priority 95) is preserved first, then the plan (priority 80).
+## Custom Context
 
-## Worker Tools
-
-`.asTools()` returns four lifecycle tools:
-
-| Tool | What it does |
-|------|-------------|
-| `startTask` | Mark the task as `in_progress`. Call when you begin working. |
-| `reportProgress` | Update the `progress` field with a human-readable message. |
-| `completeTask` | Mark as `completed`, optionally with a structured `result`. |
-| `failTask` | Mark as `failed` with an `error` message. |
-
-None require a `taskId` parameter — it's bound at creation.
+Use `renderContext` when the default assignment summary is not enough:
 
 ```ts
-const { startTask, reportProgress, completeTask, failTask } = worker.asTools()
-```
-
-When a worker calls `completeTask` or `failTask`, auto-completion re-evaluates the task list status. If all tasks are completed, the list auto-completes.
-
-## Full Lifecycle Example
-
-```ts title="worker-lifecycle.ts"
-import { planAgent } from '@use-crux/core/plan'
-import { taskWorker } from '@use-crux/core/tasks'
-import { prompt, generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-
-const model = openai('gpt-4o') // or any AI SDK model
-
-const planAgent = planAgent(planId)
-const worker = taskWorker(handle.id, 'research')
-
-const draftPrompt = prompt({
-  use: [planAgent.asContext(), worker.asContext()],
-  tools: worker.asTools(),
-  system: 'You are a research assistant. Complete your assigned task.',
-})
-
-// The worker agent will:
-// 1. See the plan in its system message (overall project context)
-// 2. See its specific assignment (what task to do)
-// 3. Call startTask() to mark it in progress
-// 4. Call reportProgress() as it works
-// 5. Call completeTask() when done (triggers auto-completion check)
-await generate(prompt, { model, input: {} })
-```
-
-## Overriding Guidelines
-
-Replace the default guidelines with task-specific instructions:
-
-```ts
-const worker = taskWorker(handle.id, 'research', {
-  guidelines: 'Start immediately. Report progress every 30 seconds. Include source URLs in result.',
-})
-```
-
-## Custom Context Rendering
-
-Replace the default assignment format:
-
-```ts
-const worker = taskWorker(handle.id, 'research', {
+const reviewer = work.worker('review', {
   renderContext: (task, allTasks) => {
-    const total = allTasks.length
-    const done = allTasks.filter(t => t.status === 'completed').length
-    return `Your task: ${task.label}\nOverall: ${done}/${total} complete`
+    const completed = allTasks.filter((item) => item.status === 'completed').length
+    return `Task: ${task.label}\nStatus: ${task.status}\nCompleted nearby tasks: ${completed}`
   },
 })
 ```
 
-## Wrapping Tools
+## Worker Pool
 
-Override tool descriptions or add validation by wrapping:
+Workers are handles, not a scheduler. You can run a small pool in user code:
 
 ```ts
-const { completeTask, ...rest } = worker.asTools()
+const active = (await work.list()).filter((item) => item.status === 'pending')
 
-const tools = {
-  ...rest,
-  completeTask: {
-    ...completeTask,
-    description: 'Submit your research findings. The result MUST include a "sources" array.',
-    async execute(args: Record<string, unknown>) {
-      const result = args.result as Record<string, unknown>
-      if (!result?.sources) {
-        return JSON.stringify({ error: 'Result must include a sources array' })
-      }
-      return completeTask.execute(args)
-    },
-  },
-}
-```
-
-## Fan-Out Pattern
-
-The most common orchestration pattern: create a task for each piece of work, then fan out workers:
-
-```ts title="fan-out.ts"
-const tasks = await handle.getTasks()
-
-// Run workers sequentially
-for (const task of tasks) {
-  const worker = taskWorker(handle.id, task.id)
-  await generate(
-    prompt({
-      use: [planAgent.asContext(), worker.asContext()],
-      tools: worker.asTools(),
-      system: 'Complete your assigned task.',
-    }),
-    { model, input: {} },
-  )
-}
-
-// Or in parallel
 await Promise.all(
-  tasks.map(async (task) => {
-    const worker = taskWorker(handle.id, task.id)
-    await generate(
+  active.map((item) => {
+    const worker = work.worker(item.id)
+    return generate(
       prompt({
-        use: [planAgent.asContext(), worker.asContext()],
+        use: [launchPlan.asContext(), worker.asContext()],
         tools: worker.asTools(),
-        system: 'Complete your assigned task.',
+        system: 'Complete this task.',
       }),
       { model, input: {} },
     )
@@ -210,4 +67,4 @@ await Promise.all(
 )
 ```
 
-See [Pipeline & Flow Patterns](/docs/guides/plans-and-tasks/orchestration) for more orchestration examples.
+Use a durable runner when you need retries, scheduling, backpressure, or cross-process queue semantics.

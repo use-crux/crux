@@ -1,14 +1,9 @@
 /**
- * Agent integration primitives for Plans and TaskLists.
+ * Internal context and tool helpers for plan and task-ledger handles.
  *
- * Three agent handles for different roles:
- * - `planAgent()` — plan document management (read/update)
- * - `taskListAgent()` — task list oversight (list/add/update/remove/discard)
- * - `taskWorker()` — single-task assignment (start/progress/complete/fail)
- *
- * Plus standalone creation tools:
- * - `createPlanTool()` — create new plans
- * - `createTaskListTool()` — create new task lists
+ * Public callers use `plan()`, `tasks()`, and handle methods. This module
+ * contains the focused tool/context implementations that those handles
+ * delegate to.
  *
  * Following LLM tool best practices:
  * - Multiple focused tools (not single tool with action param)
@@ -39,7 +34,7 @@ export type { ToolDef, CreationTool } from '../types/tool'
 /** How to inject plan context into the system message. */
 export type PlanContextMode = 'full' | 'reference'
 
-/** Options for `planAgent()`. */
+/** Options for internal plan context/tool helpers. */
 export interface PlanAgentOptions {
   /** How to inject context: `'full'` (default) injects content, `'reference'` injects metadata only. */
   context?: PlanContextMode
@@ -60,7 +55,7 @@ export interface PlanAgent {
 }
 
 /**
- * Create an agent handle for an existing plan.
+ * Create the internal context/tool helper for an existing plan.
  *
  * @param planId - The plan's ID.
  * @param options - Context mode and render overrides.
@@ -68,13 +63,13 @@ export interface PlanAgent {
  *
  * @example
  * ```ts
- * const agent = planAgent(plan.id)
+ * const helper = plan.ref(plan.id)
  *
  * // Context: inject plan into system message
- * prompt({ use: [agent.asContext()] })
+ * prompt({ use: [helper.asContext()] })
  *
  * // Tools: expose to LLM (pick which ones)
- * const { getPlan, updatePlan } = agent.asTools()
+ * const { getPlan, updatePlan } = helper.asTools()
  * prompt({ tools: { getPlan } })  // read-only
  * ```
  */
@@ -141,7 +136,7 @@ export function planAgent(planId: string, options?: PlanAgentOptions): PlanAgent
 // TaskList Agent
 // ─────────────────────────────────────────────────────────────────
 
-/** Options for `taskListAgent()`. */
+/** Options for internal task-ledger context/tool helpers. */
 export interface TaskListAgentOptions {
   /** Override the default context rendering. Receives all active tasks, returns markdown string. */
   renderContext?: (tasks: Task[]) => string
@@ -181,7 +176,7 @@ const STATUS_ICON: Record<TaskStatus, string> = {
  *
  * @example
  * ```ts
- * const agent = taskListAgent(taskList.id)
+ * const work = tasks.ref(taskList.id)
  *
  * // Monitor only:
  * const { listTasks } = agent.asTools()
@@ -330,7 +325,7 @@ export function taskListAgent(taskListId: string, options?: TaskListAgentOptions
 // Task Worker — single-task assignment for worker agents
 // ─────────────────────────────────────────────────────────────────
 
-/** Options for `taskWorker()`. */
+/** Options for internal task worker context/tool helpers. */
 export interface TaskWorkerOptions {
   /** Override the default context rendering. Receives the assigned task and all tasks. */
   renderContext?: (task: Task, allTasks: Task[]) => string
@@ -374,9 +369,9 @@ const DEFAULT_GUIDELINES = [
  *
  * @example
  * ```ts
- * const worker = taskWorker(taskList.id, 'write-intro')
+ * const worker = work.worker('write-intro')
  * prompt({
- *   use: [planAgent.asContext(), worker.asContext()],
+ *   use: [roadmap.asContext(), worker.asContext()],
  *   tools: worker.asTools(),
  * })
  * ```
@@ -487,7 +482,7 @@ export function taskWorker(taskListId: string, taskId: string, options?: TaskWor
  * Create a standalone tool for creating new plans.
  *
  * Use this when no plan exists yet — the agent creates one.
- * After creation, use `planAgent()` for ongoing management.
+ * After creation, use the returned plan handle for ongoing management.
  *
  * @param options - Optional template to guide the plan structure.
  * @returns A tool definition compatible with AI SDK.
@@ -503,7 +498,7 @@ export function createPlanTool(options?: {
  * Create a standalone tool for creating new task lists.
  *
  * Use this when no task list exists yet — the agent creates one.
- * After creation, use `taskListAgent()` for ongoing management.
+ * After creation, use the returned task-ledger handle for ongoing management.
  *
  * @param options - Optional template to guide task creation.
  * @returns A tool definition compatible with AI SDK.
