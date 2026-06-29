@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { CodePanel, type CodeLine, CruxFooter, SectionHead, Tile } from '../_components'
+import { TrackedLink } from '@/components/tracked-link'
 
 export const metadata: Metadata = {
   title: 'Why Crux',
@@ -222,9 +223,9 @@ export default function WhyPage() {
             <span className="text-fd-muted-foreground">a model problem.</span>
           </h1>
           <p className="mx-auto mt-7 max-w-xl text-[1.05rem] leading-[1.65] text-fd-muted-foreground">
-            When LLM features fail in production, the fix usually isn&apos;t the prompt and isn&apos;t the model. It&apos;s a
-            missing memory write, a stale retrieval, a guardrail that should&apos;ve blocked the input, a router that picked
-            the wrong model, an eval that should&apos;ve caught it before ship. That layer is the{' '}
+            When LLM features fail in production, the fix usually isn&apos;t the prompt and isn&apos;t the model.
+            It&apos;s a missing memory write, a stale retrieval, a guardrail that should&apos;ve blocked the input, a
+            router that picked the wrong model, an eval that should&apos;ve caught it before ship. That layer is the{' '}
             <span className="text-fd-foreground">harness</span>: everything around the model call. Crux is a kit of
             typed building blocks for it. Pick what you need, drop the rest. No runtime to adopt, no framework to fight.
           </p>
@@ -241,10 +242,7 @@ export default function WhyPage() {
           />
           <div className="grid auto-rows-min grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
             {harnessItems.map((it, i) => (
-              <div
-                key={it.n}
-                className={i === 6 ? 'lg:col-span-2' : ''}
-              >
+              <div key={it.n} className={i === 6 ? 'lg:col-span-2' : ''}>
                 <Tile name={it.n} sub={it.body} soft={i % 2 === 0} />
               </div>
             ))}
@@ -310,7 +308,9 @@ export default function WhyPage() {
               headerKicker={
                 <span className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-[#ED6A5E]" />
-                  <span className="font-mono text-[11px] tracking-[0.1em] text-fd-muted-foreground">WITHOUT CRUX · A PROMPT</span>
+                  <span className="font-mono text-[11px] tracking-[0.1em] text-fd-muted-foreground">
+                    WITHOUT CRUX · A PROMPT
+                  </span>
                 </span>
               }
               lines={withoutCode}
@@ -340,10 +340,7 @@ export default function WhyPage() {
           />
           <ul className="border-t border-fd-border">
             {principles.map((p, i) => (
-              <li
-                key={p.n}
-                className="grid gap-7 border-b border-fd-border py-6 sm:grid-cols-[3rem_1fr]"
-              >
+              <li key={p.n} className="grid gap-7 border-b border-fd-border py-6 sm:grid-cols-[3rem_1fr]">
                 <span className="font-mono text-[11px] tracking-[0.15em] text-crux">
                   {String(i + 1).padStart(2, '0')}
                 </span>
@@ -426,8 +423,10 @@ export default function WhyPage() {
             One install, one prompt. Add memory, retrieval, guardrails, and traces as you need them.
           </p>
           <div className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Link
+            <TrackedLink
               href="/docs/getting-started"
+              event="get_started_clicked"
+              properties={{ location: 'why_page' }}
               className="group inline-flex items-center gap-2 rounded-lg bg-fd-primary px-6 py-2.5 text-sm font-semibold text-fd-primary-foreground transition-all hover:opacity-90"
             >
               Get Started
@@ -440,13 +439,15 @@ export default function WhyPage() {
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
               </svg>
-            </Link>
-            <Link
+            </TrackedLink>
+            <TrackedLink
               href="/compare"
+              event="comparison_cta_clicked"
+              properties={{ location: 'why_page' }}
               className="inline-flex items-center gap-2 rounded-lg border border-fd-border px-6 py-2.5 text-sm font-semibold transition-colors hover:bg-fd-accent"
             >
               See Comparisons
-            </Link>
+            </TrackedLink>
           </div>
           <div className="mt-9 inline-flex items-center gap-3 rounded-lg border border-fd-border bg-fd-card/50 px-5 py-2.5 font-mono text-[13px]">
             <span className="select-none text-crux/50">$</span>

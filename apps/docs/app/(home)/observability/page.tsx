@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { CodePanel, type CodeLine, CruxFooter, DevWindow, SectionHead } from '../_components'
+import { TrackedLink } from '@/components/tracked-link'
 
 export const metadata: Metadata = {
   title: 'Observability',
@@ -235,18 +236,22 @@ export default function ObservabilityPage() {
               production.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
-              <Link
+              <TrackedLink
                 href="/docs/guides/observability/devtools"
+                event="observability_demo_clicked"
+                properties={{ location: 'hero' }}
                 className="inline-flex items-center gap-2 rounded-lg bg-fd-primary px-6 py-2.5 text-sm font-semibold text-fd-primary-foreground transition-all hover:opacity-90"
               >
                 Open devtools demo
-              </Link>
-              <Link
+              </TrackedLink>
+              <TrackedLink
                 href="/docs/guides/observability"
+                event="docs_cta_clicked"
+                properties={{ location: 'observability_hero' }}
                 className="inline-flex items-center gap-2 rounded-lg border border-fd-border px-6 py-2.5 text-sm font-semibold transition-colors hover:bg-fd-accent"
               >
                 Read the docs
-              </Link>
+              </TrackedLink>
             </div>
           </div>
 
@@ -927,12 +932,14 @@ export default function ObservabilityPage() {
             Trace your harness end to end. Locally, and in production.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Link
+            <TrackedLink
               href="/docs/guides/observability/devtools"
+              event="observability_demo_clicked"
+              properties={{ location: 'cta_bottom' }}
               className="inline-flex items-center gap-2 rounded-lg bg-fd-primary px-6 py-2.5 text-sm font-semibold text-fd-primary-foreground transition-all hover:opacity-90"
             >
               Open devtools demo
-            </Link>
+            </TrackedLink>
             <Link
               href="/"
               className="inline-flex items-center gap-2 rounded-lg border border-fd-border px-6 py-2.5 text-sm font-semibold transition-colors hover:bg-fd-accent"
