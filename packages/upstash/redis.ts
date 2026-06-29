@@ -27,7 +27,7 @@ import { matchesFilter } from '@use-crux/core/store'
  */
 export interface RedisClient {
   get<T = string | JsonObject>(key: string): Promise<T | null>
-  set(key: string, value: string, opts?: { px?: number; nx?: true }): Promise<unknown>
+  set(key: string, value: string, opts?: { px?: number; nx?: true }): Promise<'OK' | null>
   del(...keys: string[]): Promise<number>
   keys(pattern: string): Promise<string[]>
   publish(channel: string, message: string): Promise<number>

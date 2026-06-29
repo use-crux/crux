@@ -65,7 +65,7 @@ export const set = mutation({
 })
 
 /**
- * Insert a memory entry by key only when no entry exists.
+ * Insert a memory entry by key only when no active entry exists.
  */
 export const insert = mutation({
   args: {
@@ -82,8 +82,19 @@ export const insert = mutation({
       .withIndex(STORE_DOC_COMPONENT_SPEC.indexes.byKey, (q) => q.eq(STORE_DOC_COMPONENT_SPEC.fields.key, args.key))
       .first()
 
-    if (existing) {
+    if (existing && !isExpiredStoreDoc(existing)) {
       return false
+    }
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        content: args.content,
+        metadata: args.metadata,
+        embedding: args.embedding,
+        createdAt: args.updatedAt,
+        updatedAt: args.updatedAt,
+      })
+      return true
     }
 
     await ctx.db.insert(STORE_DOC_COMPONENT_SPEC.table, {
@@ -180,4 +191,19 @@ function prefixUpperBound(prefix: string): string | undefined {
     }
   }
   return undefined
+}
+
+function isExpiredStoreDoc(doc: Record<string, unknown>): boolean {
+  const metadata = doc.metadata as Record<string, unknown> | undefined
+  if (metadata?.[STORE_DOC_COMPONENT_SPEC.fields.marker] !== true || typeof doc.content !== 'string') {
+    return false
+  }
+
+  try {
+    const value = JSON.parse(doc.content) as Record<string, unknown>
+    const expiresAt = value[STORE_DOC_COMPONENT_SPEC.fields.expiresAt]
+    return typeof expiresAt === 'number' && Date.now() >= expiresAt
+  } catch {
+    return false
+  }
 }

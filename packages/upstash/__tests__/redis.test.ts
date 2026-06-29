@@ -12,7 +12,7 @@ function createMockRedis(): RedisClient & { data: Map<string, string> } {
       const val = data.get(key)
       return val !== undefined ? (val as T) : null
     },
-    async set(key: string, value: string, opts?: { nx?: true }) {
+    async set(key: string, value: string, opts?: { px?: number; nx?: true }): Promise<'OK' | null> {
       if (opts?.nx && data.has(key)) return null
       data.set(key, value)
       return 'OK'

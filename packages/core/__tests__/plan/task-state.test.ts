@@ -44,7 +44,7 @@ describe('TaskList state correctness', () => {
   })
 
   it('rejects concurrent duplicate task IDs atomically', async () => {
-    const store = createDuplicateReadRaceStore()
+    const store = createDuplicateInsertRaceStore()
     updateRuntime({ store })
     const handle = await tasks()
 
@@ -234,31 +234,31 @@ describe('TaskList state correctness', () => {
   })
 })
 
-function createDuplicateReadRaceStore(): CruxStore {
+function createDuplicateInsertRaceStore(): CruxStore {
   const base = inMemoryCruxStore()
   let taskKey: string | undefined
-  let waitingTaskReads = 0
-  let releaseReads: (() => void) | undefined
+  let waitingTaskInserts = 0
+  let releaseInserts: (() => void) | undefined
   const releasePromise = new Promise<void>((resolve) => {
-    releaseReads = resolve
+    releaseInserts = resolve
   })
 
   return {
     async get(key: string): Promise<JsonObject | null> {
-      if (key.startsWith('task:') && !taskKey) {
-        taskKey = key
-      }
-      if (key === taskKey) {
-        waitingTaskReads += 1
-        if (waitingTaskReads === 2) releaseReads?.()
-        await releasePromise
-      }
       return base.get(key)
     },
     set(key: string, value: JsonObject, options?: SetOptions): Promise<void> {
       return base.set(key, value, options)
     },
-    setIfAbsent(key: string, value: JsonObject, options?: SetOptions): Promise<boolean> {
+    async setIfAbsent(key: string, value: JsonObject, options?: SetOptions): Promise<boolean> {
+      if (key.startsWith('task:') && !taskKey) {
+        taskKey = key
+      }
+      if (key === taskKey) {
+        waitingTaskInserts += 1
+        if (waitingTaskInserts === 2) releaseInserts?.()
+        await releasePromise
+      }
       return base.setIfAbsent(key, value, options)
     },
     delete(key: string): Promise<void> {

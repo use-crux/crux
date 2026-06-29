@@ -102,7 +102,8 @@ export function createInMemoryConvexStoreDocumentComponent(
       docs.set(doc.key, doc)
     },
     async insert(doc) {
-      if (docs.has(doc.key)) return false
+      const existing = docs.get(doc.key)
+      if (existing && !isExpiredStoreDoc(existing)) return false
       docs.set(doc.key, doc)
       return true
     },
@@ -208,5 +209,20 @@ function pageQueryFromArgs(args: Record<string, unknown>): StoreDocPageQuery {
     prefix: typeof args.prefix === 'string' ? args.prefix : '',
     ...(typeof args.limit === 'number' ? { limit: args.limit } : {}),
     ...(typeof args.cursor === 'string' ? { cursor: args.cursor } : {}),
+  }
+}
+
+function isExpiredStoreDoc(doc: StoreDocRecord): boolean {
+  const metadata = doc.metadata as Record<string, unknown> | undefined
+  if (metadata?.[STORE_DOC_COMPONENT_SPEC.fields.marker] !== true || typeof doc.content !== 'string') {
+    return false
+  }
+
+  try {
+    const value = JSON.parse(doc.content) as Record<string, unknown>
+    const expiresAt = value[STORE_DOC_COMPONENT_SPEC.fields.expiresAt]
+    return typeof expiresAt === 'number' && Date.now() >= expiresAt
+  } catch {
+    return false
   }
 }

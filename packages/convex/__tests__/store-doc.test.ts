@@ -82,7 +82,7 @@ describe('store document store', () => {
       0.88,
     )
     const other = cruxDoc('memory:other', { content: 'Other', namespace: 'other' }, 0.95)
-    const { io, writes, deletes } = mapStoreDocIo([expired, fresh, other], [expired, fresh, other])
+    const { io, writes, deletes } = mapStoreDocIo([expired, fresh, other], [expired, fresh, other], () => 1_000)
     const store = createStoreDocStore({
       io,
       now: () => 1_000,
@@ -188,6 +188,26 @@ describe('store document store', () => {
       }),
     ).rejects.toThrow(/does not support hybrid/i)
   })
+
+  it('treats expired documents as absent in the atomic insert path', async () => {
+    const expired = cruxDoc('memory:expired', {
+      content: 'Old',
+      [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 900,
+    })
+    const { io, writes } = mapStoreDocIo([expired], [expired], () => 1_000)
+    const store = createStoreDocStore({ io, now: () => 1_000 })
+
+    await expect(store.setIfAbsent('memory:expired', { content: 'Replacement' })).resolves.toBe(true)
+    await expect(store.get('memory:expired')).resolves.toEqual({ content: 'Replacement' })
+    expect(writes).toEqual([
+      {
+        key: 'memory:expired',
+        content: JSON.stringify({ content: 'Replacement' }),
+        metadata: { [STORE_DOC_COMPONENT_SPEC.fields.marker]: true },
+        updatedAt: 1_000,
+      },
+    ])
+  })
 })
 
 function cruxDoc(key: string, value: StoreDocRecord, score?: number): StoreDocRecord {
@@ -204,6 +224,7 @@ function cruxDoc(key: string, value: StoreDocRecord, score?: number): StoreDocRe
 function mapStoreDocIo(
   initialDocs: readonly StoreDocRecord[],
   vectorDocs: readonly StoreDocRecord[] = initialDocs,
+  now: () => number = Date.now,
 ): {
   io: StoreDocComponentPort
   writes: StoreDocWrite[]
@@ -226,7 +247,8 @@ function mapStoreDocIo(
       docs.set(doc.key, doc)
     },
     async insert(doc) {
-      if (docs.has(doc.key)) return false
+      const existing = docs.get(doc.key)
+      if (existing && !isExpiredStoreDoc(existing, now)) return false
       writes.push(doc)
       docs.set(doc.key, doc)
       return true
@@ -239,4 +261,19 @@ function mapStoreDocIo(
     },
   }
   return { io, writes, deletes }
+}
+
+function isExpiredStoreDoc(doc: StoreDocRecord, now: () => number): boolean {
+  const metadata = doc.metadata as Record<string, unknown> | undefined
+  if (metadata?.[STORE_DOC_COMPONENT_SPEC.fields.marker] !== true || typeof doc.content !== 'string') {
+    return false
+  }
+
+  try {
+    const value = JSON.parse(doc.content) as Record<string, unknown>
+    const expiresAt = value[STORE_DOC_COMPONENT_SPEC.fields.expiresAt]
+    return typeof expiresAt === 'number' && now() >= expiresAt
+  } catch {
+    return false
+  }
 }

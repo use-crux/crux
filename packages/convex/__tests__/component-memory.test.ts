@@ -31,6 +31,7 @@ interface TestMutationCtx {
   db: {
     query(table: typeof STORE_DOC_COMPONENT_SPEC.table): TestFirstQueryInitializer
     insert(table: typeof STORE_DOC_COMPONENT_SPEC.table, doc: StoreDocRecord): Promise<string>
+    patch(id: unknown, doc: StoreDocRecord): Promise<void>
   }
 }
 
@@ -113,17 +114,33 @@ describe('component memory list contract', () => {
 
   it('inserts a memory document only when the key is absent', async () => {
     const insertedDocs: StoreDocRecord[] = []
+    const patchedDocs: StoreDocRecord[] = []
     const query = memoryInsert as unknown as TestRegisteredMutation<StoreDocRecord, boolean>
 
     await expect(
-      query._handler(createInsertCtx(cruxDoc('memory:existing'), insertedDocs), cruxDoc('memory:existing')),
+      query._handler(createInsertCtx(cruxDoc('memory:existing'), insertedDocs, patchedDocs), cruxDoc('memory:existing')),
     ).resolves.toBe(false)
-    await expect(query._handler(createInsertCtx(null, insertedDocs), cruxDoc('memory:new'))).resolves.toBe(true)
+    await expect(query._handler(createInsertCtx(null, insertedDocs, patchedDocs), cruxDoc('memory:new'))).resolves.toBe(true)
+    await expect(
+      query._handler(
+        createInsertCtx(expiredCruxDoc('memory:expired'), insertedDocs, patchedDocs),
+        cruxDoc('memory:expired'),
+      ),
+    ).resolves.toBe(true)
 
     expect(insertedDocs).toEqual([
       {
         ...cruxDoc('memory:new'),
         createdAt: 2,
+        embedding: undefined,
+      },
+    ])
+    expect(patchedDocs).toEqual([
+      {
+        content: JSON.stringify({ text: 'memory:expired' }),
+        metadata: { [STORE_DOC_COMPONENT_SPEC.fields.marker]: true },
+        createdAt: 2,
+        updatedAt: 2,
         embedding: undefined,
       },
     ])
@@ -184,7 +201,11 @@ function createCtx(calls: Array<Record<string, unknown>>, docs: StoreDocRecord[]
   }
 }
 
-function createInsertCtx(existing: StoreDocRecord | null, insertedDocs: StoreDocRecord[]): TestMutationCtx {
+function createInsertCtx(
+  existing: StoreDocRecord | null,
+  insertedDocs: StoreDocRecord[],
+  patchedDocs: StoreDocRecord[],
+): TestMutationCtx {
   return {
     db: {
       query() {
@@ -207,6 +228,9 @@ function createInsertCtx(existing: StoreDocRecord | null, insertedDocs: StoreDoc
         insertedDocs.push(doc)
         return 'doc-id'
       },
+      async patch(_id, doc) {
+        patchedDocs.push(doc)
+      },
     },
   }
 }
@@ -218,5 +242,15 @@ function cruxDoc(key: string): StoreDocRecord {
     metadata: { [STORE_DOC_COMPONENT_SPEC.fields.marker]: true },
     createdAt: 1,
     updatedAt: 2,
+  }
+}
+
+function expiredCruxDoc(key: string): StoreDocRecord {
+  return {
+    ...cruxDoc(key),
+    content: JSON.stringify({
+      text: key,
+      [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 1,
+    }),
   }
 }
