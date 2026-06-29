@@ -3281,6 +3281,9 @@ export interface MemoryStoreDetail extends MemoryStore {
   owner?: string
   source?: { file: string; line: number; column?: number; function?: string }
   backend?: string
+  captureMode?: string
+  budget?: Record<string, unknown>
+  blocks?: readonly MemoryBlockMetadata[]
   conflictPolicy?: string
   evictionPolicy?: string
   state: MemoryStoreState
@@ -3289,6 +3292,18 @@ export interface MemoryStoreDetail extends MemoryStore {
   // of the projected `state`; anything else means projection-only and the UI
   // surfaces `message` + `docsUrl` as a notice.
   inspection?: MemoryInspection
+}
+
+export interface MemoryBlockMetadata {
+  id?: string
+  kind?: string
+  priority?: number
+  budget?: Record<string, unknown>
+  writeMode?: string
+  renderStrategy?: string
+  renderLimit?: number
+  retentionPolicy?: string
+  hasEmbed?: boolean
 }
 
 export interface MemoryOperationRecord {

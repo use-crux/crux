@@ -40,7 +40,13 @@ func TestMemoryStoreDetailJoinsIndexMetadataAndTrend(t *testing.T) {
 				Metadata: json.RawMessage(`{
 					"schema": {"name":"SessionState","fields":[{"name":"user_name","type":"string"}]},
 					"backend": "convexMemoryStore",
-					"evictionPolicy": "on run.end"
+					"captureMode": "afterResponse",
+					"budget": {"maxTokens": 1200},
+					"evictionPolicy": "on run.end",
+					"blocks": [
+						{"id":"state","kind":"working","priority":80,"budget":{"maxTokens":300}},
+						{"id":"facts","kind":"facts","writeMode":"propose","renderStrategy":"semantic","renderLimit":4}
+					]
 				}`),
 			},
 		},
@@ -62,6 +68,18 @@ func TestMemoryStoreDetailJoinsIndexMetadataAndTrend(t *testing.T) {
 	}
 	if detail.Backend != "convexMemoryStore" || detail.EvictionPolicy != "on run.end" {
 		t.Fatalf("backend=%q eviction=%q", detail.Backend, detail.EvictionPolicy)
+	}
+	if detail.CaptureMode != "afterResponse" {
+		t.Fatalf("captureMode = %q", detail.CaptureMode)
+	}
+	if budget, ok := detail.Budget.(map[string]any); !ok || budget["maxTokens"] != float64(1200) {
+		t.Fatalf("budget = %#v", detail.Budget)
+	}
+	if len(detail.Blocks) != 2 {
+		t.Fatalf("blocks = %#v", detail.Blocks)
+	}
+	if detail.Blocks[1].RenderStrategy != "semantic" || detail.Blocks[1].RenderLimit != float64(4) || detail.Blocks[1].WriteMode != "propose" {
+		t.Fatalf("facts block = %#v", detail.Blocks[1])
 	}
 	if detail.Stats.Trend == nil || len(detail.Stats.Trend.Reads) != 8 || len(detail.Stats.Trend.Writes) != 8 {
 		t.Fatalf("trend = %#v", detail.Stats.Trend)

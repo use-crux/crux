@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { context } from '../prompt/context'
 import type { AnyToolSet } from '../types'
-import type { Context } from '../prompt/context-types'
 import type { CruxStore, JsonObject, ScoredEntry } from '../store/types'
 import { inMemoryCruxStore } from '../store/memory'
 import type { DenseEmbedding } from '../embedding'
@@ -13,6 +12,24 @@ import {
   resolveMemoryNamespaceSync,
   type MemoryNamespace,
 } from './namespace'
+import type {
+  Memory,
+  MemoryBlock,
+  MemoryBlockConfig,
+  MemoryBlockContext,
+  MemoryBlockKind,
+  MemoryCaptureConfig,
+  MemoryCaptureMode,
+  MemoryConfig,
+  MemoryMessage,
+  MemoryPolicy,
+  MemoryProposal,
+  MemoryProposalStatus,
+  MemoryRuntimeOptions,
+  MemoryToolEvent,
+  MemoryTurn,
+  MemoryWriteMode,
+} from './contracts'
 import {
   isMemoryEntryRenderStrategy,
   renderBudgetedMemoryBlocksWithDecision,
@@ -22,204 +39,30 @@ import {
   type MemoryRenderBudgetDecision,
 } from './rendering'
 
-export type MemoryBlockKind = 'recent' | 'working' | 'episodes' | 'facts' | 'procedures' | 'reflections' | 'custom'
-export type MemoryWriteMode = 'propose' | 'auto' | 'manual'
-export type MemoryProposalStatus = 'pending' | 'approved' | 'rejected'
-export type MemoryCaptureMode = 'inline' | 'afterResponse' | 'detached'
-export type { MemoryNamespace } from './namespace'
 export type {
+  Memory,
+  MemoryBlock,
+  MemoryBlockConfig,
+  MemoryBlockContext,
+  MemoryBlockKind,
   MemoryBudget,
+  MemoryCaptureConfig,
+  MemoryCaptureMode,
+  MemoryConfig,
+  MemoryMessage,
+  MemoryNamespace,
+  MemoryPolicy,
+  MemoryProposal,
+  MemoryProposalStatus,
+  MemoryRuntimeOptions,
   MemoryEntryRenderStrategy,
   MemoryListRenderStrategy,
   MemoryRenderQuery,
   MemorySemanticRenderStrategy,
-} from './rendering'
-
-/** Capture scheduling options for memory turn and tool-event writes. */
-export interface MemoryCaptureConfig {
-  /**
-   * Capture scheduling mode.
-   *
-   * - `inline`: await block capture before `captureTurn()`/`captureToolEvent()` resolves.
-   * - `afterResponse`: start capture after generation and hand it to `waitUntil` when provided.
-   * - `detached`: start capture in the background; `flush()` can still await pending work.
-   */
-  mode?: MemoryCaptureMode
-  /** Runtime hook for environments that keep background work alive after a response. */
-  waitUntil?: (promise: Promise<unknown>) => void
-}
-
-export interface MemoryRuntimeOptions {
-  store: CruxStore
-  namespace: string
-  memoryId?: string
-  traceId?: string
-  promptId?: string
-}
-
-export interface MemoryToolEvent {
-  toolCallId?: string
-  toolName: string
-  args?: unknown
-  result?: unknown
-  error?: string
-}
-
-export interface MemoryMessage {
-  role: string
-  content: string
-  metadata?: Record<string, unknown>
-}
-
-export interface MemoryTurn {
-  id?: string
-  messages: MemoryMessage[]
-  toolEvents?: MemoryToolEvent[]
-  source?: {
-    traceId?: string
-    promptId?: string
-  }
-  metadata?: Record<string, unknown>
-}
-
-export interface MemoryProposal {
-  id: string
-  memoryId: string
-  blockId: string
-  blockKind: MemoryBlockKind
-  namespace: string
-  status: MemoryProposalStatus
-  candidate: unknown
-  source?: {
-    turnId?: string
-    traceId?: string
-    promptId?: string
-    toolCallId?: string
-  }
-  createdAt: number
-  updatedAt: number
-  reason?: string
-}
-
-export interface MemoryPolicy<TCandidate> {
-  shouldRemember?: (candidate: TCandidate, ctx: MemoryBlockContext) => boolean | Promise<boolean>
-  redact?: (candidate: TCandidate, ctx: MemoryBlockContext) => TCandidate | Promise<TCandidate>
-  validate?: z.ZodType<TCandidate>
-}
-
-export interface MemoryBlockContext extends MemoryRuntimeOptions {
-  input?: Record<string, unknown>
-  propose(candidate: unknown, options: { block: MemoryBlock; source?: MemoryProposal['source'] }): Promise<string>
-}
-
-export interface MemoryBlock {
-  readonly _tag: 'MemoryBlock'
-  readonly id: string
-  readonly kind: MemoryBlockKind
-  readonly priority: number
-  readonly budget?: MemoryBudget
-  render?(ctx: MemoryBlockContext): Promise<string> | string
-  tools?(ctx: MemoryBlockContext): AnyToolSet | Promise<AnyToolSet>
-  captureTurn?(turn: MemoryTurn, ctx: MemoryBlockContext): Promise<void>
-  captureToolEvent?(event: MemoryToolEvent, ctx: MemoryBlockContext): Promise<void>
-  flush?(ctx: MemoryBlockContext): Promise<void>
-  approveProposal?(proposal: MemoryProposal, ctx: MemoryBlockContext, edit?: unknown): Promise<void>
-}
-
-export interface MemoryBlockConfig {
-  id: string
-  kind?: MemoryBlockKind
-  priority?: number
-  /** Approximate token budget for this block's rendered body. */
-  budget?: MemoryBudget
-  render?: (ctx: MemoryBlockContext) => Promise<string> | string
-  tools?: (ctx: MemoryBlockContext) => AnyToolSet | Promise<AnyToolSet>
-  captureTurn?: (turn: MemoryTurn, ctx: MemoryBlockContext) => Promise<void>
-  captureToolEvent?: (event: MemoryToolEvent, ctx: MemoryBlockContext) => Promise<void>
-  flush?: (ctx: MemoryBlockContext) => Promise<void>
-  approveProposal?: (proposal: MemoryProposal, ctx: MemoryBlockContext, edit?: unknown) => Promise<void>
-}
-
-export interface MemoryConfig {
-  /** Stable identifier used in store keys, traces, and devtools resources. */
-  id: string
-  /** Store backing this memory instance. Defaults to an in-memory store. */
-  store?: CruxStore
-  /** Namespace scope for all reads, writes, tools, capture, and proposals. */
-  namespace: MemoryNamespace
-  /** Ordered memory blocks composed by this memory instance. */
-  blocks: readonly MemoryBlock[]
-  /**
-   * Capture scheduling behavior for turn and tool-event writes.
-   *
-   * - `inline`: `captureTurn()` and `captureToolEvent()` await block capture before resolving.
-   * - `afterResponse`: capture is started after generation and passed to `waitUntil` when provided.
-   * - `detached`: capture starts in the background and can still be awaited with `flush()`.
-   *
-   * Defaults to `afterResponse`.
-   */
-  capture?: MemoryCaptureConfig
-  /**
-   * @deprecated Use `capture` instead. Legacy `deferred` maps to
-   * `capture.mode: "afterResponse"` and legacy `manual` maps to
-   * `capture.mode: "detached"` because capture still starts immediately.
-   */
-  processing?: {
-    mode?: 'deferred' | 'inline' | 'manual'
-    waitUntil?: (promise: Promise<unknown>) => void
-  }
-  /**
-   * Approximate token budget for the composed memory context.
-   *
-   * Blocks are rendered in priority order. Block-level budgets trim individual
-   * block bodies first, then this memory-level budget keeps higher-priority
-   * sections before lower-priority sections. Counting uses the configured Crux
-   * tokenizer.
-   */
-  budget?: MemoryBudget
-}
-
-export interface Memory {
-  readonly _tag: 'Memory'
-  readonly id: string
-  readonly blocks: readonly MemoryBlock[]
-  readonly config: MemoryConfig
-  asContext(options?: { priority?: number }): Context
-  asTools(options?: { input?: Record<string, unknown>; namespace?: string }): AnyToolSet
-  captureTurn(
-    turn: MemoryTurn,
-    options?: Partial<MemoryRuntimeOptions> & { input?: Record<string, unknown> },
-  ): Promise<void>
-  captureToolEvent(
-    event: MemoryToolEvent,
-    options?: Partial<MemoryRuntimeOptions> & { input?: Record<string, unknown> },
-  ): Promise<void>
-  flush(options?: Partial<MemoryRuntimeOptions> & { input?: Record<string, unknown> }): Promise<void>
-  proposals: {
-    list(
-      options?: {
-        namespace?: string
-        input?: Record<string, unknown>
-        promptId?: string
-        blockId?: string
-        status?: MemoryProposalStatus
-      },
-    ): Promise<MemoryProposal[]>
-    approve(
-      id: string,
-      options?: { namespace?: string; input?: Record<string, unknown>; promptId?: string; edit?: unknown },
-    ): Promise<void>
-    reject(
-      id: string,
-      options?: { namespace?: string; input?: Record<string, unknown>; promptId?: string; reason?: string },
-    ): Promise<void>
-    edit(
-      id: string,
-      patch: unknown,
-      options?: { namespace?: string; input?: Record<string, unknown>; promptId?: string },
-    ): Promise<void>
-  }
-}
+  MemoryToolEvent,
+  MemoryTurn,
+  MemoryWriteMode,
+} from './contracts'
 
 export interface MemoryEntryApi {
   key: string

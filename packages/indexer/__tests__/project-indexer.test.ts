@@ -4589,21 +4589,31 @@ describe('project indexer', () => {
         export function createSessionMemory(threadId: string, ctx: unknown) {
           const store = cruxConvexStore({ ctx })
           const memoryId = createMemoryId('session', threadId)
-          const state = workingState({ id: 'state', schema: sessionSchema })
-          return memory({ id: memoryId, store, blocks: [state] })
+          const state = workingState({
+            id: 'state',
+            schema: sessionSchema,
+            budget: { maxTokens: 300 },
+          })
+          return memory({
+            id: memoryId,
+            store,
+            capture: { mode: 'afterResponse' },
+            budget: { maxTokens: 1200 },
+            blocks: [state],
+          })
         }
 
         export function createUserEpisodicMemory(userId: string, projectId: string, ctx: unknown) {
           const store = cruxConvexStore({ ctx })
           const memoryId = createMemoryId('episodic', userId, projectId)
-          const history = episodes({ id: 'episodes' })
+          const history = episodes({ id: 'episodes', retention: '90d', render: { strategy: 'recent', limit: 4 } })
           return memory({ id: memoryId, store, blocks: [history], processing: { mode: 'inline' } })
         }
 
         export function createProjectSemanticMemory(projectId: string, ctx: unknown) {
           const store = cruxConvexStore({ ctx })
           const memoryId = createMemoryId('semantic', projectId)
-          const knowledge = facts({ id: 'facts' })
+          const knowledge = facts({ id: 'facts', write: { mode: 'propose' }, render: { strategy: 'semantic', limit: 3 } })
           return memory({ id: memoryId, store, blocks: [knowledge] })
         }
       `,
@@ -4632,15 +4642,33 @@ describe('project indexer', () => {
       expect.objectContaining({
         runtimeIdPrefix: 'session:',
         backend: 'cruxConvexStore',
+        captureMode: 'afterResponse',
+        budget: { maxTokens: 1200 },
         schema: expect.objectContaining({
           properties: expect.objectContaining({ userIntent: expect.objectContaining({ type: 'string' }) }),
         }),
-        blocks: [expect.objectContaining({ id: 'state', kind: 'working' })],
+        blocks: [
+          expect.objectContaining({
+            id: 'state',
+            kind: 'working',
+            budget: { maxTokens: 300 },
+            schema: expect.objectContaining({
+              properties: expect.objectContaining({ userIntent: expect.objectContaining({ type: 'string' }) }),
+            }),
+          }),
+        ],
       }),
     )
     expect(byId.get('memory.block:session:state')).toMatchObject({
       kind: 'memory.block',
-      metadata: expect.objectContaining({ memoryId: 'memory:session', blockKind: 'working' }),
+      metadata: expect.objectContaining({
+        memoryId: 'memory:session',
+        blockKind: 'working',
+        budget: { maxTokens: 300 },
+        schema: expect.objectContaining({
+          properties: expect.objectContaining({ userIntent: expect.objectContaining({ type: 'string' }) }),
+        }),
+      }),
     })
     expect(byId.get('memory:user-episodes')?.metadata).toEqual(
       expect.objectContaining({
@@ -4651,6 +4679,9 @@ describe('project indexer', () => {
           expect.objectContaining({
             id: 'episodes',
             kind: 'episodes',
+            retentionPolicy: '90d',
+            renderStrategy: 'recent',
+            renderLimit: 4,
             schema: expect.objectContaining({ name: 'EpisodicEntry' }),
           }),
         ],
@@ -4665,6 +4696,9 @@ describe('project indexer', () => {
           expect.objectContaining({
             id: 'facts',
             kind: 'facts',
+            writeMode: 'propose',
+            renderStrategy: 'semantic',
+            renderLimit: 3,
             schema: expect.objectContaining({ name: 'SemanticFact' }),
           }),
         ],

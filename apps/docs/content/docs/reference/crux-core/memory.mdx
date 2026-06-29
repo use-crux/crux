@@ -13,7 +13,7 @@ import {
   facts,
   procedures,
   reflections,
-} from '@use-crux/core/memory'
+} from "@use-crux/core/memory";
 ```
 
 ## `memory(config)`
@@ -22,12 +22,24 @@ Composes memory blocks into a prompt-usable memory object.
 
 ```ts
 const mem = memory({
-  id: 'assistant',
+  id: "assistant",
   store,
   namespace: ({ input }) => `user:${input.userId}`,
-  blocks: [recentMessages({ id: 'recent' }), facts({ id: 'facts' })],
-  processing: { mode: 'deferred' },
-})
+  capture: { mode: "afterResponse" },
+  budget: { maxTokens: 1200 },
+  blocks: [
+    recentMessages({ id: "recent" }),
+    facts({
+      id: "facts",
+      embed: dense,
+      render: {
+        strategy: "semantic",
+        query: ({ input }) => String(input.message),
+        limit: 5,
+      },
+    }),
+  ],
+});
 ```
 
 `memory()` returns an object with `_tag: 'Memory'`, `asContext()`, `asTools()`, `captureTurn()`, `captureToolEvent()`, `flush()`, and `proposals`.
@@ -38,8 +50,39 @@ Prompts can use the memory object directly:
 prompt({
   use: [mem],
   // ...
-})
+});
 ```
+
+### `MemoryConfig`
+
+```ts
+interface MemoryConfig {
+  id: string;
+  store?: CruxStore;
+  namespace:
+    | string
+    | ((ctx: {
+        input?: Record<string, unknown>;
+        promptId?: string;
+      }) => string | Promise<string>);
+  blocks: readonly MemoryBlock[];
+  capture?: {
+    mode?: "inline" | "afterResponse" | "detached";
+    waitUntil?: (promise: Promise<unknown>) => void;
+  };
+  processing?: {
+    mode?: "deferred" | "inline" | "manual";
+    waitUntil?: (promise: Promise<unknown>) => void;
+  };
+  budget?: { maxTokens?: number };
+}
+```
+
+`capture` is the beta field for scheduling memory writes. `processing` is deprecated compatibility: `deferred` maps to `afterResponse`, `inline` remains `inline`, and `manual` maps to `detached` because capture still starts immediately.
+
+Dynamic namespaces are resolved consistently for context rendering, capture, direct block calls, proposal operations, and tools. `asTools()` is synchronous, so async namespaces or async block tools throw clear errors at that boundary instead of falling back to an empty namespace or silently dropping tools.
+
+`budget.maxTokens` is enforced for the composed memory context. Blocks render in priority order; lower-priority sections are trimmed or dropped before higher-priority sections.
 
 ## `memoryBlock(config)`
 
@@ -47,13 +90,14 @@ Creates a custom memory block.
 
 ```ts
 const block = memoryBlock({
-  id: 'custom',
-  kind: 'custom',
+  id: "custom",
+  kind: "custom",
   priority: 50,
-  render: async (ctx) => 'Rendered memory',
+  budget: { maxTokens: 300 },
+  render: async (ctx) => "Rendered memory",
   captureTurn: async (turn, ctx) => {},
   tools: (ctx) => ({}),
-})
+});
 ```
 
 A block can implement render, tools, turn capture, tool-event capture, flush, and proposal approval independently.
@@ -78,6 +122,25 @@ Methods: `record(entry, options)`, `recall(query, options)`, `list(options)`, `d
 
 Methods: `add(entry, options)`, `find(query, options)`, `list(options)`, `delete(key, options)`, `render(options)`.
 
+Entry-style memory blocks accept built-in render strategies:
+
+```ts
+type MemoryEntryRenderStrategy =
+  | {
+      strategy?: "list" | "recent";
+      limit?: number;
+      filter?: Record<string, unknown>;
+    }
+  | {
+      strategy: "semantic";
+      query: string | ((ctx: MemoryBlockContext) => string | Promise<string>);
+      limit?: number;
+      filter?: Record<string, unknown>;
+    };
+```
+
+`episodes`, `facts`, and `procedures` support `render: false` to store memory without rendering it. `facts` and `procedures` also accept a custom render function.
+
 `reflections(config)` stores generated reflections on supplied memory text. It is a small wrapper for reflection workflows and can be expanded by custom blocks when products need richer behavior.
 
 ## Runtime Options
@@ -86,15 +149,30 @@ Direct block methods accept:
 
 ```ts
 type MemoryRuntimeOptions = {
-  store: CruxStore
-  namespace: string
-  memoryId?: string
-  traceId?: string
-  promptId?: string
-}
+  store: CruxStore;
+  namespace: string;
+  memoryId?: string;
+  traceId?: string;
+  promptId?: string;
+};
 ```
 
 Use the same `memoryId` as the composed `memory()` object when direct block calls should share storage keys with prompt-bound memory.
+
+## Capture
+
+`captureTurn(turn, options)` captures completed user/assistant turns. `captureToolEvent(event, options)` captures tool calls with available `toolCallId`, `toolName`, `args`, `result`, and `error`.
+
+```ts
+await mem.captureToolEvent({
+  toolCallId: "call_1",
+  toolName: "search",
+  args: { query: "pricing" },
+  result: { hits: 3 },
+});
+```
+
+Use `flush()` to await pending work after `afterResponse` or `detached` capture.
 
 ## Proposals
 
@@ -102,17 +180,19 @@ Use the same `memoryId` as the composed `memory()` object when direct block call
 
 ```ts
 const pending = await mem.proposals.list({
-  namespace: 'user:123',
-  blockId: 'facts',
-  status: 'pending',
-})
+  namespace: "user:123",
+  blockId: "facts",
+  status: "pending",
+});
 
-await mem.proposals.approve(pending[0].id)
-await mem.proposals.edit(pending[1].id, { content: 'Edited fact' })
-await mem.proposals.reject(pending[2].id, { reason: 'Not true' })
+await mem.proposals.approve(pending[0].id);
+await mem.proposals.edit(pending[1].id, { content: "Edited fact" });
+await mem.proposals.reject(pending[2].id, { reason: "Not true" });
 ```
 
 `facts()` and `procedures()` default to `write: { mode: 'propose' }`. Use `write: { mode: 'auto' }` when the product has a safe automatic write path.
+
+Proposal transitions are pending-only. Approved and rejected proposals cannot be approved again, rejected again, or edited into duplicate writes.
 
 ## Observability
 
@@ -129,3 +209,33 @@ Block memory emits `memory.read` and `memory.write` spans with:
 ```
 
 Reads that return entries also attach `memory.recall` artifacts with `returned` and `blocks[]` summaries (`blockKind`, `key`, `preview`, and optional `score`). Empty reads emit the read span but do not attach `memory.recall`, which keeps devtools from showing empty recalled-block cards. Writes with inspectable before/after state attach `memory.diff` artifacts with `before`, `after`, and added/removed/updated block summaries. Write events may also include `writeMode` and `proposalStatus`.
+
+Budgeted memory rendering emits a composed `memory.read` span with a `memory.snapshot` artifact that records `candidateBlocks`, `includedBlocks`, `trimmedBlocks`, `droppedBlocks`, `usedTokens`, and `maxTokens`.
+
+```ts title="budgeted-memory-observation.ts"
+{
+  primitive: "memory.read",
+  attributes: {
+    memoryId: "assistant",
+    memoryType: "memory",
+    operation: "render",
+    namespaceHash: "sha256:...",
+    budgetMaxTokens: 1200,
+    budgetIncludedBlocks: ["facts"],
+    budgetTrimmedBlocks: ["facts"],
+    budgetDroppedBlocks: ["episodes"],
+  },
+  artifact: {
+    kind: "memory.snapshot",
+    preview: {
+      budget: {
+        maxTokens: 1200,
+        usedTokens: 1190,
+        includedBlocks: ["facts"],
+        trimmedBlocks: ["facts"],
+        droppedBlocks: ["episodes"],
+      },
+    },
+  },
+}
+```

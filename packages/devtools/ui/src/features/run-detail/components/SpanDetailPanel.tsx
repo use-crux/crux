@@ -86,6 +86,7 @@ import {
 } from '../lib/span-detail-inspection'
 import { retrievalEntries } from '../lib/span-detail-retrieval'
 import { collectToolRequests, resolveToolPayload } from '../lib/span-detail-tool'
+import { memoryRenderBudgetDecision } from '../lib/memory-span-detail'
 import { AgentCard, CompositionCard, EvalCard, EvalRunCard, FlowCard, OperationReportCard } from './PrimitiveCards'
 import { GenerationDetail } from './GenerationDetail'
 import { ContextComposition, hasContextContributions } from './ContextComposition'
@@ -1415,6 +1416,7 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
   const isBlackboard = memoryType === 'blackboard'
   const query = findAttribute(node, 'query') as string | undefined
   const writeMode = findAttribute(node, 'writeMode') as string | undefined
+  const proposalStatus = findAttribute(node, 'proposalStatus') as string | undefined
   const resultsRaw = findAttribute(node, 'results', 'entries')
   // Prefer the B5 `memory.recall` blocks; else legacy result attributes.
   const results = recallBlocks ?? (Array.isArray(resultsRaw) ? (resultsRaw as Array<Record<string, unknown>>) : [])
@@ -1445,6 +1447,7 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
         ? [[String(snapObj.field), snapObj.value]]
         : Object.entries(snapObj)
       : []
+  const budgetDecision = memoryRenderBudgetDecision(snapObj, node)
 
   return (
     <div className="flex flex-col gap-5">
@@ -1476,6 +1479,17 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
             write · {writeMode}
           </Chip>
         )}
+        {proposalStatus && (
+          <Chip tone={proposalStatus === 'pending' ? 'warn' : proposalStatus === 'approved' ? 'ok' : 'muted'} mono>
+            proposal · {proposalStatus}
+          </Chip>
+        )}
+        {budgetDecision && (
+          <Chip tone={budgetDecision.dropped.length > 0 ? 'warn' : 'gold'} mono>
+            budget · {budgetDecision.usedTokens != null ? `${budgetDecision.usedTokens}/` : ''}
+            {budgetDecision.maxTokens ?? 'set'}
+          </Chip>
+        )}
         {memoryId && (
           <span className="ml-auto truncate font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
             {memoryId}
@@ -1499,6 +1513,32 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
             style={{ background: 'var(--qw-bg-elev)', border: '1px solid var(--qw-border)', color: 'var(--qw-fg)' }}
           >
             {query}
+          </div>
+        </SpanSection>
+      )}
+
+      {budgetDecision && (
+        <SpanSection
+          title="Render budget"
+          right={
+            budgetDecision.maxTokens != null ? (
+              <Chip tone={budgetDecision.dropped.length > 0 ? 'warn' : 'gold'} mono>
+                max {budgetDecision.maxTokens}
+              </Chip>
+            ) : undefined
+          }
+        >
+          <div
+            className="grid gap-2 rounded-[8px] px-3.5 py-3"
+            style={{
+              background: 'var(--qw-bg-elev)',
+              border: '1px solid var(--qw-border)',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+            }}
+          >
+            <BudgetBlockList label="Included" blocks={budgetDecision.included} tone="ok" />
+            <BudgetBlockList label="Trimmed" blocks={budgetDecision.trimmed} tone="gold" />
+            <BudgetBlockList label="Dropped" blocks={budgetDecision.dropped} tone="warn" />
           </div>
         </SpanSection>
       )}
@@ -1568,6 +1608,37 @@ function MemoryTab({ node }: { node: ObservabilityRunDetailNode }) {
             </div>
           </SpanSection>
         )
+      )}
+    </div>
+  )
+}
+
+function BudgetBlockList({
+  label,
+  blocks,
+  tone,
+}: {
+  label: string
+  blocks: readonly string[]
+  tone: ChipTone
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.08em]" style={{ color: 'var(--qw-fg-faint)' }}>
+        {label}
+      </div>
+      {blocks.length === 0 ? (
+        <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+          none
+        </span>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {blocks.map((block) => (
+            <Chip key={block} tone={tone} mono>
+              {block}
+            </Chip>
+          ))}
+        </div>
       )}
     </div>
   )

@@ -1,39 +1,42 @@
 ---
 title: Memory Stores
-description: How memory blocks use DataStore for persistence, recall, and production storage.
+description: How memory blocks use CruxStore for persistence, recall, and production storage.
 ---
 
-Memory does not define its own storage system. Every memory block persists through [`DataStore`](/docs/guides/storage/crux-store).
+Memory does not define its own storage system. Every memory block persists through [`CruxStore`](/docs/reference/crux-core/store).
 
 That means the same data store adapter can back memory records, indexing metadata, plans, flows, blackboards, and workspace metadata.
 
 ```ts
-import { memory, workingState } from '@use-crux/core/memory'
-import { inMemoryDataStore } from '@use-crux/core/storage'
+import { memory, workingState } from "@use-crux/core/memory";
+import { inMemoryCruxStore } from "@use-crux/core/memory";
 
-const store = inMemoryDataStore()
+const store = inMemoryCruxStore();
 
 const mem = memory({
-  id: 'assistant',
-  namespace: 'thread:123',
+  id: "assistant",
+  namespace: "thread:123",
   store,
-  blocks: [workingState({ id: 'scratch', schema })],
-})
+  blocks: [workingState({ id: "scratch", schema })],
+});
 ```
 
-For general store APIs, TTL, adapters, subscriptions, and custom database implementations, use the [DataStore guide](/docs/guides/storage/crux-store). For vector search, use the [VectorStore guide](/docs/guides/storage/vector-store). For workspace files and generated binary outputs, use [BlobStore](/docs/guides/storage/blob-storage).
+For general store APIs, TTL, adapters, subscriptions, and custom database implementations, use the [store reference](/docs/reference/crux-core/store). For vector search, use the [VectorStore guide](/docs/guides/storage/vector-store). For workspace files and generated binary outputs, use `BlobStore`, not memory storage.
 
 ## What Memory Stores
 
-Memory blocks write JSON records to the configured `DataStore`.
+Memory blocks write JSON records to the configured `CruxStore`.
 
 ```ts
 const mem = memory({
-  id: 'support-agent',
+  id: "support-agent",
   namespace: `user:${userId}`,
   store,
-  blocks: [workingState({ id: 'profile', schema: profileSchema }), episodes({ id: 'history', embed: dense })],
-})
+  blocks: [
+    workingState({ id: "profile", schema: profileSchema }),
+    episodes({ id: "history", embed: dense }),
+  ],
+});
 ```
 
 The `id` identifies the memory collection. The `namespace` scopes records to a user, thread, tenant, session, or agent. Use stable namespaces so memory can be recalled on later turns.
@@ -44,30 +47,30 @@ If you do not pass a store, memory uses in-memory storage. That is useful for te
 
 ```ts
 const mem = memory({
-  id: 'assistant',
-  namespace: 'demo',
-  blocks: [workingState({ id: 'scratch', schema })],
-})
+  id: "assistant",
+  namespace: "demo",
+  blocks: [workingState({ id: "scratch", schema })],
+});
 ```
 
-For production, pass a durable `DataStore`. Convex apps use `defineConvexStoreContract().store(ctx)`; see the [Convex guide](/docs/guides/convex) for setup and boundary rules.
+For production, pass a durable `CruxStore`. Convex apps can use `cruxConvexStore()`. Upstash-backed apps can use `cruxRedisStore()` for Redis records, or `cruxUpstashStore()` when they need Convex persistence plus Upstash Vector recall.
 
 ## Vector Recall
 
-Some memory blocks can use vector search when configured with a vector-capable store path.
+Some memory blocks can use vector search when configured with a vector-capable store.
 
 ```ts
 const history = episodes({
-  id: 'history',
+  id: "history",
   embed: dense,
-})
+});
 ```
 
 Rules:
 
 1. If the store supports vectors, embedding-backed blocks can recall semantically relevant entries.
 2. If the store does not support vectors, blocks that can degrade safely fall back to non-vector behavior such as recency or listing.
-3. Stores should throw for unsupported sparse or hybrid query modes instead of silently degrading.
+3. Memory vector search filters by `namespace` and `blockId`, hydrates JSON records before returning public entries, skips expired or missing records, and applies threshold and limit.
 
 For dense, sparse, and hybrid vector capabilities, see [VectorStore](/docs/guides/storage/vector-store).
 
@@ -77,12 +80,12 @@ Memory records can use stores that support TTL. TTL is a store feature, not a me
 
 ```ts
 await store.set(
-  'memory:temporary-note',
+  "memory:temporary-note",
   {
-    content: 'Remember this only briefly.',
+    content: "Remember this only briefly.",
   },
   { ttl: 300_000 },
-)
+);
 ```
 
 Use TTL for short-lived scratch records, resolver caches, or temporary agent state. Do not use TTL for facts, episodes, or user preferences that should survive future sessions.
@@ -98,18 +101,22 @@ Use:
 - Polling transport for universal fallback.
 
 ```tsx
-import { CruxProvider, createPollingTransport, useWorkingMemory } from '@use-crux/react'
+import {
+  CruxProvider,
+  createPollingTransport,
+  useWorkingMemory,
+} from "@use-crux/react";
 
-const transport = createPollingTransport(store)
+const transport = createPollingTransport(store);
 
 function MemoryPanel() {
-  const profile = useWorkingMemory<{ tone: string }>('profile')
-  return <pre>{JSON.stringify(profile, null, 2)}</pre>
+  const profile = useWorkingMemory<{ tone: string }>("profile");
+  return <pre>{JSON.stringify(profile, null, 2)}</pre>;
 }
 
-;<CruxProvider transport={transport}>
+<CruxProvider transport={transport}>
   <MemoryPanel />
-</CruxProvider>
+</CruxProvider>;
 ```
 
 See [React reference](/docs/reference/react) for exact hook and transport APIs.
@@ -118,21 +125,21 @@ See [React reference](/docs/reference/react) for exact hook and transport APIs.
 
 For memory, choose storage based on the behavior you need:
 
-| Need                                  | Use                                                                     |
-| ------------------------------------- | ----------------------------------------------------------------------- |
-| Tests and examples                    | `inMemoryDataStore()`                                                   |
-| Convex app state and reactivity       | `defineConvexStoreContract().store(ctx)` as a `DataStore`; see [Convex](/docs/guides/convex) |
-| Redis-backed key-value records        | `cruxRedisStore()` as a `DataStore`                                     |
-| Dense/sparse/hybrid vector recall     | Pair memory data with a `VectorStore` such as Upstash Vector            |
-| Workspace files and generated outputs | `BlobStore`, not memory storage                                         |
+| Need                                  | Use                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------ |
+| Tests and examples                    | `inMemoryCruxStore()`                                                    |
+| Convex app state and reactivity       | `cruxConvexStore()`                                                      |
+| Redis-backed key-value records        | `cruxRedisStore()` from `@use-crux/upstash/redis`                        |
+| Dense vector recall                   | `cruxUpstashStore()` with Convex persistence and an Upstash Vector index |
+| Workspace files and generated outputs | `BlobStore`, not memory storage                                          |
 
 ## Related
 
 <Cards>
   <Card
-    title="DataStore"
+    title="CruxStore"
     description="General record storage, TTL, adapters, and custom stores."
-    href="/docs/guides/storage/crux-store"
+    href="/docs/reference/crux-core/store"
   />
   <Card
     title="Working memory"

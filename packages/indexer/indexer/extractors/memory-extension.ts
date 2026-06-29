@@ -260,6 +260,7 @@ function memoryBlockMetadataFromCall(block: ConfigCallReader): MemoryBlockMetada
   const id = block.config.string('id')
   const kind = memoryBlockKindForCall(block.name, block.config)
   const render = block.config.object('render')
+  const renderDisabled = block.config.boolean('render') === false
   return {
     id,
     kind,
@@ -268,7 +269,7 @@ function memoryBlockMetadataFromCall(block: ConfigCallReader): MemoryBlockMetada
     schema: block.config.schema('schema') ?? defaultMemoryBlockSchema(kind),
     writeMode: block.config.nestedString(['write', 'mode']),
     hasEmbed: block.config.has('embed'),
-    renderStrategy: render?.string('strategy'),
+    renderStrategy: renderDisabled ? 'disabled' : render?.string('strategy'),
     renderLimit: render?.number('limit'),
     retentionPolicy: block.config.string('retention'),
   }

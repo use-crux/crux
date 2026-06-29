@@ -43,6 +43,7 @@ pub mod manifest;
 #[cfg(test)]
 mod manifest_tests;
 mod memory {
+    pub(crate) mod block_metadata;
     pub(crate) mod blocks;
     pub(crate) mod facts;
     pub(crate) mod id;

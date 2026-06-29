@@ -1,12 +1,14 @@
 use std::collections::HashSet;
 
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext},
-    definition::{NativeDefinitionInput, folded_index_child, safe_id, static_index_definition},
+    memory::block_metadata::block_definition,
     protocol::StaticSyntaxValue,
-    record_values::{has_property, number_property, property_value, resolve_static_value},
+    record_values::{
+        has_property, json_object_property, number_property, property_value, resolve_static_value,
+    },
     schema::syntax_value_to_json_schema,
 };
 
@@ -15,9 +17,13 @@ pub(crate) struct MemoryBlockMetadata {
     pub(crate) id: Option<String>,
     pub(crate) kind: Option<String>,
     pub(crate) priority: Option<f64>,
+    pub(crate) budget: Option<Value>,
     pub(crate) schema: Option<Value>,
     pub(crate) write_mode: Option<String>,
     pub(crate) has_embed: bool,
+    pub(crate) render_strategy: Option<String>,
+    pub(crate) render_limit: Option<f64>,
+    pub(crate) retention_policy: Option<String>,
 }
 
 pub(crate) struct MemoryBlocksProjection {
@@ -44,10 +50,6 @@ pub(crate) fn memory_blocks(
         blocks,
         definitions,
     }
-}
-
-pub(crate) fn memory_block_metadata_values(blocks: &[MemoryBlockMetadata]) -> Vec<Value> {
-    blocks.iter().map(memory_block_metadata_value).collect()
 }
 
 pub(crate) fn default_memory_block_schema(kind: &str) -> Option<Value> {
@@ -120,91 +122,14 @@ fn memory_block_metadata_from_call(
         id: direct_string(config, "id"),
         kind,
         priority: number_property(config, "priority", &context.initializers),
+        budget: json_object_property(config, Some("budget"), &context.initializers).unwrap_or(None),
         schema,
         write_mode: nested_string_property(config, &["write", "mode"], context),
         has_embed: has_property(config, "embed"),
+        render_strategy: render_strategy(config, context),
+        render_limit: render_limit(config, context),
+        retention_policy: direct_string(config, "retention"),
     })
-}
-
-fn block_definition(
-    context: &PrimitiveContext<'_>,
-    parts: &CallParts<'_>,
-    definition_key: &str,
-    memory_id: &str,
-    block: &MemoryBlockMetadata,
-    index: usize,
-) -> Value {
-    let block_key = block
-        .id
-        .as_deref()
-        .or(block.kind.as_deref())
-        .unwrap_or("block");
-    let id = format!(
-        "memory.block:{}:{}",
-        safe_id(definition_key),
-        safe_id(block_key)
-    );
-    let mut metadata = memory_block_metadata_map(block);
-    metadata.insert(
-        "exportName".to_string(),
-        Value::String(parts.variable_name.to_string()),
-    );
-    metadata.insert("memoryId".to_string(), Value::String(memory_id.to_string()));
-    metadata.insert(
-        "indexPresentation".to_string(),
-        folded_index_child(memory_id, "memory.includes_block", "block", index),
-    );
-    metadata.insert("facts".to_string(), memory_block_facts(memory_id, block));
-    static_index_definition(NativeDefinitionInput {
-        id,
-        kind: "memory.block",
-        name: block_key.to_string(),
-        file: context.file,
-        source: parts.source,
-        snippet: parts.snippet,
-        metadata,
-    })
-}
-
-fn memory_block_metadata_value(block: &MemoryBlockMetadata) -> Value {
-    let mut metadata = Map::new();
-    insert_string(&mut metadata, "id", block.id.clone());
-    insert_string(&mut metadata, "kind", block.kind.clone());
-    insert_number(&mut metadata, "priority", block.priority);
-    if let Some(schema) = block.schema.clone() {
-        metadata.insert("schema".to_string(), schema);
-    }
-    insert_string(&mut metadata, "writeMode", block.write_mode.clone());
-    metadata.insert("hasEmbed".to_string(), Value::Bool(block.has_embed));
-    Value::Object(metadata)
-}
-
-fn memory_block_metadata_map(block: &MemoryBlockMetadata) -> Map<String, Value> {
-    let mut metadata = Map::new();
-    insert_string(&mut metadata, "blockId", block.id.clone());
-    insert_string(&mut metadata, "blockKind", block.kind.clone());
-    insert_number(&mut metadata, "priority", block.priority);
-    if let Some(schema) = block.schema.clone() {
-        metadata.insert("schema".to_string(), schema);
-    }
-    insert_string(&mut metadata, "writeMode", block.write_mode.clone());
-    metadata.insert("hasEmbed".to_string(), Value::Bool(block.has_embed));
-    metadata
-}
-
-fn memory_block_facts(memory_id: &str, block: &MemoryBlockMetadata) -> Value {
-    let mut facts = Map::new();
-    facts.insert(
-        "kind".to_string(),
-        Value::String("memory.block".to_string()),
-    );
-    facts.insert("memoryId".to_string(), Value::String(memory_id.to_string()));
-    insert_string(&mut facts, "blockId", block.id.clone());
-    insert_string(&mut facts, "blockKind", block.kind.clone());
-    insert_number(&mut facts, "priority", block.priority);
-    insert_string(&mut facts, "writeMode", block.write_mode.clone());
-    facts.insert("hasEmbed".to_string(), Value::Bool(block.has_embed));
-    Value::Object(facts)
 }
 
 fn memory_block_kind_for_call(call_name: &str, config: &StaticSyntaxValue) -> Option<String> {
@@ -255,14 +180,25 @@ fn direct_string(object: &StaticSyntaxValue, name: &str) -> Option<String> {
     }
 }
 
-fn insert_string(metadata: &mut Map<String, Value>, key: &str, value: Option<String>) {
-    if let Some(value) = value {
-        metadata.insert(key.to_string(), Value::String(value));
+fn render_strategy(object: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -> Option<String> {
+    let value = property_value(object, "render")?;
+    let resolved = resolve_static_value(value, &context.initializers, &mut HashSet::new());
+    match resolved {
+        StaticSyntaxValue::Literal {
+            value: crate::protocol::LiteralValue::Boolean(false),
+        } => Some("disabled".to_string()),
+        StaticSyntaxValue::Object { .. } => direct_string(resolved, "strategy"),
+        _ => None,
     }
 }
 
-fn insert_number(metadata: &mut Map<String, Value>, key: &str, value: Option<f64>) {
-    if let Some(value) = value {
-        metadata.insert(key.to_string(), json!(value));
+fn render_limit(object: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -> Option<f64> {
+    let value = property_value(object, "render")?;
+    let resolved = resolve_static_value(value, &context.initializers, &mut HashSet::new());
+    match resolved {
+        StaticSyntaxValue::Object { .. } => {
+            number_property(resolved, "limit", &context.initializers)
+        }
+        _ => None,
     }
 }

@@ -46,6 +46,9 @@ type memoryStoreDetail struct {
 	Owner          string            `json:"owner,omitempty"`
 	Source         *store.SourceLoc  `json:"source,omitempty"`
 	Backend        string            `json:"backend,omitempty"`
+	CaptureMode    string            `json:"captureMode,omitempty"`
+	Budget         any               `json:"budget,omitempty"`
+	Blocks         []memoryBlockInfo `json:"blocks,omitempty"`
 	ConflictPolicy string            `json:"conflictPolicy,omitempty"`
 	EvictionPolicy string            `json:"evictionPolicy,omitempty"`
 	State          any               `json:"state"`
@@ -831,6 +834,13 @@ func enrichMemoryStoreDetail(detail *memoryStoreDetail, inst *store.MemoryInstan
 		meta := rawMap(def.Metadata)
 		detail.Owner = stringValue(meta, "owner", detail.Owner)
 		detail.Backend = stringValue(meta, "backend", detail.Backend)
+		detail.CaptureMode = stringValue(meta, "captureMode", detail.CaptureMode)
+		if budget, ok := meta["budget"]; ok && budget != nil {
+			detail.Budget = budget
+		}
+		if blocks := memoryBlocksFromDefinition(meta); len(blocks) > 0 {
+			detail.Blocks = blocks
+		}
 		detail.ConflictPolicy = stringValue(meta, "conflictPolicy", detail.ConflictPolicy)
 		detail.EvictionPolicy = stringValue(meta, "evictionPolicy", detail.EvictionPolicy)
 	}
@@ -838,6 +848,12 @@ func enrichMemoryStoreDetail(detail *memoryStoreDetail, inst *store.MemoryInstan
 	meta := latestMemoryMetadata(events)
 	detail.Owner = stringValue(meta, "owner", stringValue(meta, "agentId", detail.Owner))
 	detail.Backend = stringValue(meta, "backend", stringValue(meta, "store", detail.Backend))
+	detail.CaptureMode = stringValue(meta, "captureMode", detail.CaptureMode)
+	if detail.Budget == nil {
+		if budget, ok := meta["budget"]; ok && budget != nil {
+			detail.Budget = budget
+		}
+	}
 	detail.ConflictPolicy = stringValue(meta, "conflictPolicy", detail.ConflictPolicy)
 	detail.EvictionPolicy = stringValue(meta, "evictionPolicy", detail.EvictionPolicy)
 	if detail.Schema == nil {

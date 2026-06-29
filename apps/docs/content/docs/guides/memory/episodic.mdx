@@ -6,19 +6,25 @@ description: Append-only event memory with optional dense recall.
 `episodes()` stores things that happened. It is the right block for chat turns, tool results, observations, product events, and decisions that may be useful later.
 
 ```ts
-import { episodes, memory } from '@use-crux/core/memory'
+import { episodes, memory } from "@use-crux/core/memory";
 
 const history = episodes({
-  id: 'history',
+  id: "history",
   embed: dense, // optional, enables vector recall
-})
+  retention: "90d",
+  render: {
+    strategy: "semantic",
+    query: ({ input }) => String(input.message),
+    limit: 5,
+  },
+});
 
 const agentMemory = memory({
-  id: 'assistant',
+  id: "assistant",
   store,
   namespace: ({ input }) => `user:${input.userId}`,
   blocks: [history],
-})
+});
 ```
 
 The block can capture prompt turns automatically through `memory()`, or you can record events directly:
@@ -26,18 +32,18 @@ The block can capture prompt turns automatically through `memory()`, or you can 
 ```ts
 await history.record(
   {
-    content: 'User asked about pricing tiers',
-    metadata: { source: 'chat', topic: 'pricing' },
+    content: "User asked about pricing tiers",
+    metadata: { source: "chat", topic: "pricing" },
   },
-  { store, namespace: 'user:123', memoryId: 'assistant' },
-)
+  { store, namespace: "user:123", memoryId: "assistant" },
+);
 
-const matches = await history.recall('pricing discussion', {
+const matches = await history.recall("pricing discussion", {
   store,
-  namespace: 'user:123',
-  memoryId: 'assistant',
+  namespace: "user:123",
+  memoryId: "assistant",
   limit: 5,
-})
+});
 ```
 
 With a dense embedding and vector-capable store, `recall()` uses vector search. Without one, it falls back to listing recent entries. That fallback keeps the block useful in development, but production recall should use a dense embedding when relevance matters.
@@ -47,20 +53,38 @@ With a dense embedding and vector-capable store, `recall()` uses vector search. 
 Episodes are append-only, so they need a retention policy. Pass `retention` to describe the window:
 
 ```ts
-const history = episodes({ id: 'episodes', retention: '90d' })
+const history = episodes({ id: "episodes", retention: "90d" });
 ```
 
-`retention` is descriptive — it does not enforce anything on its own; it rides on every read/write event so devtools can show the real policy. To enforce it, run a periodic sweep that evicts stale entries with `evict()` rather than `delete()`:
+`retention` is descriptive. It does not enforce anything on its own; it rides on every read/write event so devtools can show the real policy. To enforce it, run a periodic sweep that evicts stale entries with `evict()` rather than `delete()`:
 
 ```ts
-await history.evict(staleKey, { ...runtime, evictedCount: total, gcAt: Date.now() })
+await history.evict(staleKey, {
+  ...runtime,
+  evictedCount: total,
+  gcAt: Date.now(),
+});
 ```
 
 `evict()` removes the entry like `delete()` but emits an `evict` write carrying GC telemetry (`lastGcAt`, `lastGcEvicted`), so the sweep is attributable in devtools instead of a silent drop.
 
 ## How It Renders
 
-When included in `memory()`, episodes render as a short "Relevant episodes" section. Keep this block lower priority than working state and operating memory; events are useful context, but they should not crowd out the current task or learned procedures.
+When included in `memory()`, episodes render as a short "Relevant episodes" section. The default is a recent/list view. Configure a semantic strategy when the current input should choose the events:
+
+```ts
+episodes({
+  id: "history",
+  embed: dense,
+  render: {
+    strategy: "semantic",
+    query: ({ input }) => String(input.message),
+    limit: 5,
+  },
+});
+```
+
+Keep this block lower priority than working state and operating memory; events are useful context, but they should not crowd out the current task or learned procedures. Use `render: false` if episodes are only for audit or manual recall.
 
 ## When Not to Use It
 

@@ -75,6 +75,63 @@ describe('first-party memory extractor fixtures', () => {
       }),
     })
   })
+
+  it('normalizes legacy capture aliases and keeps explicit list render metadata inspectable', async () => {
+    const out = await extractFixtureSource(
+      cruxFixture,
+      `
+        export const legacyMemory = memory({
+          id: 'legacy',
+          namespace: 'tenant:acme',
+          processing: { mode: 'manual' },
+          blocks: [
+            procedures({
+              id: 'steps',
+              write: { mode: 'auto' },
+              render: { strategy: 'list', limit: 5 },
+            }),
+            memoryBlock({
+              id: 'scratch',
+              kind: 'custom',
+              render: false,
+            }),
+          ],
+        })
+      `,
+    )
+
+    expect(definition(out.definitions, 'memory:legacy')).toMatchObject({
+      kind: 'memory',
+      metadata: expect.objectContaining({
+        captureMode: 'detached',
+        facts: expect.objectContaining({
+          captureMode: 'detached',
+        }),
+      }),
+    })
+    expect(definition(out.definitions, 'memory.block:legacy:steps')).toMatchObject({
+      kind: 'memory.block',
+      metadata: expect.objectContaining({
+        writeMode: 'auto',
+        renderStrategy: 'list',
+        renderLimit: 5,
+        facts: expect.objectContaining({
+          writeMode: 'auto',
+          renderStrategy: 'list',
+          renderLimit: 5,
+        }),
+      }),
+    })
+    expect(definition(out.definitions, 'memory.block:legacy:scratch')).toMatchObject({
+      kind: 'memory.block',
+      metadata: expect.objectContaining({
+        renderStrategy: 'disabled',
+        facts: expect.objectContaining({
+          renderStrategy: 'disabled',
+        }),
+      }),
+    })
+  })
 })
 
 function definition(definitions: readonly ProjectDefinition[], id: string): ProjectDefinition | undefined {
