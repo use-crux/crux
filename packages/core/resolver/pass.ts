@@ -2,8 +2,11 @@
  * One prompt-resolution compiler pass.
  *
  * This module owns the ordered pass from validated input to SDK-ready
- * `ResolvedPrompt` plus an inspect projection. The public `compilePrompt()`
- * entrypoint binds schemas and ports, then delegates each call here.
+ * `ResolvedPrompt` plus an inspect projection. The resolver plan
+ * (`createPromptResolverPlan`) binds config, schema, and ports, then delegates
+ * each call here; the public `compilePrompt()` entrypoint never touches this
+ * pass directly. `runPromptPass` is mode-agnostic — observability scoping for
+ * `'resolve'` lives in the plan, so this function is the pure ordered transform.
  *
  * @module
  */
@@ -14,7 +17,6 @@ import type { AnyPromptConfig } from '../prompt/prompt-types'
 import type { ContextEntry } from '../prompt/context-types'
 import type { ResolvedPrompt } from './types'
 import { LOAD_REFERENCE_TOOL_NAME, LOAD_SKILL_TOOL_NAME } from '../skill/tools'
-import { countTokens } from '../shared/tokenizer'
 import { detectSuspiciousPatterns, escapeXml } from '../shared/sanitize'
 import { resolveUse } from './driver'
 import { guardInputs } from './input-guard'
@@ -33,7 +35,7 @@ import { safeParseSchema } from './schema'
 import { createSkillToolSurface } from './skills'
 import { buildSystemMessage } from './system-message'
 import { renderPromptText, resolveSystemContent } from './system-content'
-import type { PromptResolutionPass, ResolutionEmissionMode, ResolveCallOptions } from './compiler-types'
+import type { PromptResolutionPass, ProjectionMode, ResolveCallOptions } from './compiler-types'
 
 /** Validate prompt config invariants that the compiler depends on. */
 export function validatePromptConfig(config: AnyPromptConfig): void {
@@ -45,37 +47,13 @@ export function validatePromptConfig(config: AnyPromptConfig): void {
   }
 }
 
-/** Run a normal, observable prompt-resolution pass. */
-export async function runPromptResolvePass(
-  config: AnyPromptConfig,
-  opts: ResolveCallOptions,
-  mergedSchema: z.ZodType | undefined,
-  ports: ResolverPorts,
-): Promise<PromptResolutionPass> {
-  validatePromptConfig(config)
-  return ports.observability.scope(
-    {
-      name: config.id ?? 'prompt.resolve',
-      family: 'prompt',
-      primitive: 'prompt.resolve',
-      attributes: {
-        promptId: config.id,
-        contextEntryCount: (config.use ?? []).length,
-        hasMessages: !!config.messages,
-        hasOutput: !!config.output,
-      },
-    },
-    async () => runPromptPass(config, opts, mergedSchema, ports, 'resolve'),
-  )
-}
-
 /** Run one compiler pass and return both resolved args and inspect data. */
 export async function runPromptPass(
   config: AnyPromptConfig,
   opts: ResolveCallOptions,
   mergedSchema: z.ZodType | undefined,
   ports: ResolverPorts,
-  mode: ResolutionEmissionMode,
+  mode: ProjectionMode,
 ): Promise<PromptResolutionPass> {
   let input = opts.input ?? {}
 
@@ -136,7 +114,7 @@ export async function runPromptPass(
   }
 
   const guardedInput = guardInputs(input as Record<string, unknown>, config.id)
-  const ownSystem = await resolveSystemContent(config.system, guardedInput)
+  const ownSystem = await resolveSystemContent(config.system, guardedInput, ports.tokenizer.count)
   const composed = await buildSystemMessage(ownSystem, postMerge.contexts, guardedInput, opts.tokenBudget, ports)
   let system = composed.system
   const systemBlocks = composed.blocks
@@ -167,7 +145,7 @@ export async function runPromptPass(
     promptText = await renderPromptText(config.prompt, guardedInput)
   }
 
-  const promptInfo = promptText ? { text: promptText, tokens: countTokens(promptText) } : undefined
+  const promptInfo = promptText ? { text: promptText, tokens: ports.tokenizer.count(promptText) } : undefined
   assertNoObjectPromptText(promptText, config.id)
 
   const modelInfo: ModelInfo = {
@@ -206,7 +184,7 @@ export async function runPromptPass(
   let skillTools: AnyToolSet = {}
   let skillSession: unknown
   if (mode === 'resolve' && postMerge.skills.length > 0) {
-    const toolSurface = createSkillToolSurface(postMerge.skills, input)
+    const toolSurface = createSkillToolSurface(postMerge.skills, input, ports)
     skillTools = toolSurface.tools
     skillSession = toolSurface.session
   }
@@ -260,7 +238,7 @@ export async function runPromptPass(
     }))
   }
 
-  const systemTokens = composed.system ? countTokens(composed.system) : 0
+  const systemTokens = composed.system ? ports.tokenizer.count(composed.system) : 0
   const promptTokens = promptInfo?.tokens ?? 0
   const skillToolNames = postMerge.skills.length > 0 ? [LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME] : []
   const inspectTools = { ...contextTools, ...postMerge.injectedTools, ...blackboardTools, ...configTools }

@@ -62,6 +62,7 @@ export type {
   CompiledPrompt,
   CompilePromptOptions,
   PromptResolution,
+  PromptResolutionPipeline,
   Resolution,
   ResolveCallOptions,
 } from './resolver/compile'
@@ -76,6 +77,8 @@ export {
   collectingDiagnostics,
   staticPolicy,
   recordingInstrumentation,
+  staticTokenizer,
+  createResolverFakes,
 } from './resolver/fakes'
 export type {
   RecordedArtifact,
@@ -85,6 +88,8 @@ export type {
   InMemoryContextCache,
   CollectingDiagnostics,
   RecordingInstrumentation,
+  ResolverFakes,
+  ResolverFakesOptions,
 } from './resolver/fakes'
 // Test helper: a conformant in-memory `AgentExecutor` for composition tests
 // (the agent-layer analogue of the resolver fakes above).
@@ -110,6 +115,7 @@ export type {
   ResolverPorts,
   ResolveTraceScope,
   SkillSourcePort,
+  TokenizerPort,
 } from './resolver/ports'
 // The contributor contract types — the lowered form every `use:` entry
 // resolves through internally. App code composes entries with the factories

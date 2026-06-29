@@ -14,7 +14,6 @@ import { z } from 'zod'
 import type { Context } from '../prompt/context-types'
 import type { DroppedContext, InspectPart, SystemBlock } from './types'
 import type { CruxArtifactId, CruxContextContributionPreview } from '../observability/contract'
-import { countTokens } from '../shared/tokenizer'
 import type { ResolvedSystemContent } from './contract'
 import { contextContributionKind, contextInjectedToolNames, contextInjects } from './lower'
 import type { ResolverPorts } from './ports'
@@ -66,8 +65,9 @@ export async function buildSystemMessage(
   const droppedContexts: DroppedContext[] = []
   let promptBudgetArtifactId: CruxArtifactId | undefined
 
-  const ownContent = typeof ownSystem === 'string' ? normalizeSystemContent(ownSystem, false) : ownSystem
-  const ownTokens = ownContent.text ? countTokens(ownContent.text) : 0
+  const count = ports.tokenizer.count
+  const ownContent = typeof ownSystem === 'string' ? normalizeSystemContent(ownSystem, false, count) : ownSystem
+  const ownTokens = ownContent.text ? count(ownContent.text) : 0
   parts.push({
     source: 'prompt',
     text: ownContent.text,
@@ -118,6 +118,7 @@ export async function buildSystemMessage(
             resolvedContent = normalizeSystemContent(
               await ctx.systemFn(input),
               ctx.systemKind !== 'static',
+              count,
               `Context "${source}" system function`,
               contextInferenceInput,
             )
@@ -136,13 +137,14 @@ export async function buildSystemMessage(
           resolvedContent = normalizeSystemContent(
             await ctx.systemFn(input),
             ctx.systemKind !== 'static',
+            count,
             `Context "${source}" system function`,
             contextInferenceInput,
           )
         }
 
         if (resolvedContent.text) {
-          const tokens = countTokens(resolvedContent.text)
+          const tokens = count(resolvedContent.text)
           injectedTools = contextInjectedToolNames(ctx, input)
           const preview = {
             kind: 'context.contribution',
@@ -188,7 +190,7 @@ export async function buildSystemMessage(
       continue
     }
 
-    const tokens = countTokens(text.text)
+    const tokens = count(text.text)
     resolved.push({
       source,
       injectableKind: contextContributionKind(ctx),

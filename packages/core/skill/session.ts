@@ -35,6 +35,18 @@ export type {
   SkillReferenceResult,
 } from './session-contract'
 
+/**
+ * Read activated skill identifiers from a resolve input's `_crux_activeSkills`
+ * field. Adapter loops re-inject this field after `LoadSkill` to carry the
+ * active set forward across re-resolutions; anything else returns no ids.
+ */
+export function readActiveSkillIds(input: unknown): readonly string[] {
+  if (!input || typeof input !== 'object') return []
+  const value = (input as Record<string, unknown>)._crux_activeSkills
+  if (!Array.isArray(value)) return []
+  return value.filter((id): id is string => typeof id === 'string')
+}
+
 let sessionCounter = 0
 
 interface CreateSkillActivationSession {
