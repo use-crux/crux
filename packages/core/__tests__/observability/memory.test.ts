@@ -197,7 +197,7 @@ describe('canonical memory observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.read' }))
   })
 
-    it('records memory context hydration as child memory.read spans', async () => {
+  it('records memory context hydration as child memory.read spans', async () => {
     const store = inMemoryCruxStore()
     const recent = recentMessages({ id: 'recent' })
     await recent.addTurn(
@@ -260,14 +260,18 @@ describe('canonical memory observability', () => {
       expect.objectContaining({
         primitive: 'memory.write',
         name: 'facts.propose',
-        attributes: expect.objectContaining({ writeMode: 'propose', proposalStatus: 'pending' }),
+        attributes: expect.objectContaining({
+          writeMode: 'propose',
+          proposalStatus: 'pending',
+          proposalSourcePromptId: 'p1',
+        }),
       }),
     )
     expect(spanStarts).toContainEqual(
       expect.objectContaining({
         primitive: 'memory.write',
         name: 'facts.approveProposal',
-        attributes: expect.objectContaining({ proposalStatus: 'approved' }),
+        attributes: expect.objectContaining({ proposalStatus: 'approved', proposalSourcePromptId: 'p1' }),
       }),
     )
     expect(transport.records).toContainEqual(

@@ -1,22 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
+import { describeCruxStoreConformance } from '@use-crux/core/store/testing/vitest'
 import { cruxUpstashStore } from '../index'
+import { createFakeUpstashVectorIndex } from './fake-upstash-vector'
 
 function fnRef(name: string) {
   return { _type: name }
 }
 
 function createStore() {
-  const namespace = {
-    upsert: vi.fn().mockResolvedValue(undefined),
-    query: vi.fn().mockResolvedValue([]),
-    delete: vi.fn().mockResolvedValue(undefined),
-  }
-  const index = {
-    namespace: vi.fn(() => namespace),
-    upsert: vi.fn(),
-    query: vi.fn(),
-    delete: vi.fn(),
-  }
+  const { index, namespace } = createFakeUpstashVectorIndex()
   const docs = new Map<string, any>()
   const fns = {
     get: fnRef('get'),
@@ -28,7 +20,14 @@ function createStore() {
   const ctx = {
     runQuery: vi.fn(async (fn, args) => {
       if (fn === fns.get) return docs.get(args.key) ?? null
-      if (fn === fns.list) return [...docs.values()].filter((doc) => doc.key.startsWith(args.prefix))
+      if (fn === fns.list) {
+        const matching = [...docs.values()].filter((doc) => doc.key.startsWith(args.prefix))
+        const cursorIndex = args.cursor ? matching.findIndex((doc) => doc.key === args.cursor) + 1 : 0
+        const limit = args.limit ?? matching.length
+        const page = matching.slice(cursorIndex, cursorIndex + limit)
+        const hasMore = cursorIndex + limit < matching.length
+        return { docs: page, cursor: hasMore ? page.at(-1)?.key : undefined }
+      }
       return null
     }),
     runMutation: vi.fn(async (fn, args) => {
@@ -69,6 +68,15 @@ function createStore() {
     docs,
   }
 }
+
+describeCruxStoreConformance({
+  name: 'cruxUpstashStore',
+  prepare: () => createStore().store,
+  supports: {
+    ttl: true,
+    vectorSearch: true,
+  },
+})
 
 describe('cruxUpstashStore', () => {
   it('preserves arbitrary CruxStore JSON values for semantic-cache entries', async () => {
@@ -140,6 +148,27 @@ describe('cruxUpstashStore', () => {
       cruxType: 'semantic-cache-entry',
       result: { text: 'cached answer' },
     })
+  })
+
+  it('lists page-shaped Convex component docs and applies decoded filters locally', async () => {
+    const { store, ctx } = createStore()
+    await store.set('memory:1', { kind: 'note', text: 'Alpha' })
+    await store.set('memory:2', { kind: 'task', text: 'Skip me' })
+    await store.set('memory:3', { kind: 'note', text: 'Beta' })
+
+    await expect(store.list('memory:', { limit: 2, filter: { kind: 'note' } })).resolves.toEqual({
+      entries: [
+        { key: 'memory:1', value: { kind: 'note', text: 'Alpha' } },
+        { key: 'memory:3', value: { kind: 'note', text: 'Beta' } },
+      ],
+    })
+
+    const listCalls = ctx.runQuery.mock.calls.filter(([, args]) => args && args.prefix === 'memory:')
+    expect(listCalls.map(([, args]) => args)).toEqual([
+      { prefix: 'memory:', limit: 2 },
+      { prefix: 'memory:', limit: 1, cursor: 'memory:2' },
+    ])
+    expect(listCalls.every(([, args]) => !('filter' in args))).toBe(true)
   })
 
   it('stores index metadata needed for native filtered retrieval', async () => {

@@ -15,6 +15,7 @@ import { context, when, match } from '../../prompt/context'
 import { injectable } from '../../prompt/injectable'
 import { contributor } from '../../prompt/contributor'
 import { handoff } from '../../agent/handoff'
+import { memory, memoryBlock } from '../../memory'
 import {
   createResolverFakes,
   fixedClock,
@@ -345,6 +346,34 @@ describe('tokenizer port', () => {
     const inspect = await resolver.inspect(config, { tokenBudget: 8 })
     expect(inspect.droppedContexts.map((d) => d.source)).toEqual(['context:drop'])
     expect(inspect.droppedContexts[0]).toMatchObject({ tokens: 5, priority: 10 })
+  })
+
+  it('treats memory context as a budgeted resolver contribution', async () => {
+    const f = fakePorts()
+    f.ports.tokenizer = staticTokenizer(wordCount)
+    const resolver = compiledResolver(f.ports)
+    const mem = memory({
+      id: 'budget-memory',
+      namespace: 'thread:1',
+      blocks: [
+        memoryBlock({
+          id: 'facts',
+          kind: 'facts',
+          render: () => 'memory details consume budget',
+        }),
+      ],
+    })
+    const config: AnyConfig = {
+      system: 'sys',
+      use: [mem, context({ id: 'safety', priority: 90, system: 'must follow policy' })],
+    }
+
+    const inspect = await resolver.inspect(config, { tokenBudget: 8 })
+
+    expect(inspect.system.total).toContain('must follow policy')
+    expect(inspect.system.total).not.toContain('memory details consume budget')
+    expect(inspect.droppedContexts.map((d) => d.source)).toEqual(['context:memory:budget-memory'])
+    expect(inspect.droppedContexts[0]).toMatchObject({ injectableKind: 'memory', priority: 55 })
   })
 
   it('refreshes a cached context split for the active tokenizer on a cache hit', async () => {

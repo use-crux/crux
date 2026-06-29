@@ -40,7 +40,13 @@ func TestMemoryStoreDetailJoinsIndexMetadataAndTrend(t *testing.T) {
 				Metadata: json.RawMessage(`{
 					"schema": {"name":"SessionState","fields":[{"name":"user_name","type":"string"}]},
 					"backend": "convexMemoryStore",
-					"evictionPolicy": "on run.end"
+					"captureMode": "afterResponse",
+					"budget": {"maxTokens": 1200},
+					"evictionPolicy": "on run.end",
+					"blocks": [
+						{"id":"state","kind":"working","priority":80,"budget":{"maxTokens":300}},
+						{"id":"facts","kind":"facts","writeMode":"propose","renderStrategy":"semantic","renderLimit":4}
+					]
 				}`),
 			},
 		},
@@ -62,6 +68,18 @@ func TestMemoryStoreDetailJoinsIndexMetadataAndTrend(t *testing.T) {
 	}
 	if detail.Backend != "convexMemoryStore" || detail.EvictionPolicy != "on run.end" {
 		t.Fatalf("backend=%q eviction=%q", detail.Backend, detail.EvictionPolicy)
+	}
+	if detail.CaptureMode != "afterResponse" {
+		t.Fatalf("captureMode = %q", detail.CaptureMode)
+	}
+	if budget, ok := detail.Budget.(map[string]any); !ok || budget["maxTokens"] != float64(1200) {
+		t.Fatalf("budget = %#v", detail.Budget)
+	}
+	if len(detail.Blocks) != 2 {
+		t.Fatalf("blocks = %#v", detail.Blocks)
+	}
+	if detail.Blocks[1].RenderStrategy != "semantic" || detail.Blocks[1].RenderLimit != float64(4) || detail.Blocks[1].WriteMode != "propose" {
+		t.Fatalf("facts block = %#v", detail.Blocks[1])
 	}
 	if detail.Stats.Trend == nil || len(detail.Stats.Trend.Reads) != 8 || len(detail.Stats.Trend.Writes) != 8 {
 		t.Fatalf("trend = %#v", detail.Stats.Trend)
@@ -308,6 +326,49 @@ func TestMemoryStoreDetailIndexHealthIsEmbedderAware(t *testing.T) {
 			t.Fatalf("index = %#v", index)
 		}
 	})
+}
+
+func TestMemoryStoreDetailUsesIndexedBlockRetention(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewStore()
+	st.SetIndexData(store.IndexData{
+		Definitions: []store.ProjectDefinition{
+			{
+				ID:       "memory:user-episodes",
+				Kind:     "memory",
+				Name:     "user-episodes:*",
+				Fidelity: "partial",
+				Metadata: json.RawMessage(`{
+					"runtimeIdPrefix": "user-episodes:",
+					"blocks": [
+						{"id":"episodes","kind":"episodes","retentionPolicy":"90d"}
+					]
+				}`),
+			},
+		},
+	})
+	st.MemoryWrite(store.MemoryWriteEvent{
+		MemoryID:   "user-episodes:user:project",
+		MemoryType: "episodic",
+		Operation:  "record",
+		EntryKey:   "episode_1",
+		Content:    "hello",
+		TraceID:    "trace_a",
+		Timestamp:  2000,
+		Snapshot:   json.RawMessage(`{"key":"episode_1","content":"hello"}`),
+	})
+
+	service := NewService(st, quality.NewService(st, t.TempDir()))
+	value, found, err := service.MemoryStoreDetail(ctx, "user-episodes:user:project")
+	if err != nil || !found {
+		t.Fatalf("memory detail found=%v err=%v", found, err)
+	}
+	detail := value.(memoryStoreDetail)
+	state := detail.State.(map[string]any)
+	retention, ok := state["retention"].(map[string]any)
+	if !ok || retention["policy"] != "90d" {
+		t.Fatalf("retention = %#v", state["retention"])
+	}
 }
 
 // In the live devtools the in-memory instance index is never populated (it is

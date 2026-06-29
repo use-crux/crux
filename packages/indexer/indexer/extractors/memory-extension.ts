@@ -55,17 +55,25 @@ export const memoryIndexExtractor: IndexExtractor = {
             order: index,
           }),
           priority: block.priority,
+          budget: block.budget,
           schema: block.schema,
           writeMode: block.writeMode,
           hasEmbed: block.hasEmbed,
+          renderStrategy: block.renderStrategy,
+          renderLimit: block.renderLimit,
+          retentionPolicy: block.retentionPolicy,
           facts: {
             kind: 'memory.block',
             memoryId: id,
             blockId: block.id,
             blockKind: block.kind,
             priority: block.priority,
+            budget: block.budget,
             writeMode: block.writeMode,
             hasEmbed: block.hasEmbed,
+            renderStrategy: block.renderStrategy,
+            renderLimit: block.renderLimit,
+            retentionPolicy: block.retentionPolicy,
           },
         },
       }),
@@ -170,9 +178,13 @@ interface MemoryBlockMetadata {
   readonly id?: string
   readonly kind?: string
   readonly priority?: number
+  readonly budget?: Record<string, unknown>
   readonly schema?: Record<string, unknown>
   readonly writeMode?: string
   readonly hasEmbed: boolean
+  readonly renderStrategy?: string
+  readonly renderLimit?: number
+  readonly retentionPolicy?: string
 }
 
 /** Static metadata for an authored memory store referenced by a memory definition. */
@@ -204,8 +216,12 @@ function staticMemoryMetadata(
   const schema =
     workingSchemas.length === 1 ? workingSchemas[0].schema : defaultSchemas.length === 1 ? defaultSchemas[0] : undefined
   const backend = authoredStoreName(config)
+  const budget = recordJson(config.json('budget'))
+  const captureMode = normalizedCaptureMode(config)
   return {
     backend,
+    captureMode,
+    budget,
     evictionPolicy: config.string('evictionPolicy'),
     blocks: blocks.length > 0 ? blocks : undefined,
     blockCount: blocks.length > 0 ? blocks.length : undefined,
@@ -213,6 +229,8 @@ function staticMemoryMetadata(
     facts: {
       kind: 'memory',
       backend,
+      captureMode,
+      budget,
       evictionPolicy: config.string('evictionPolicy'),
       blockCount: blocks.length > 0 ? blocks.length : undefined,
     },
@@ -241,13 +259,35 @@ function memoryBlockMetadata(config: ConfigReader): readonly MemoryBlockMetadata
 function memoryBlockMetadataFromCall(block: ConfigCallReader): MemoryBlockMetadata {
   const id = block.config.string('id')
   const kind = memoryBlockKindForCall(block.name, block.config)
+  const render = block.config.object('render')
+  const renderDisabled = block.config.boolean('render') === false
   return {
     id,
     kind,
     priority: block.config.number('priority'),
+    budget: recordJson(block.config.json('budget')),
     schema: block.config.schema('schema') ?? defaultMemoryBlockSchema(kind),
     writeMode: block.config.nestedString(['write', 'mode']),
     hasEmbed: block.config.has('embed'),
+    renderStrategy: renderDisabled ? 'disabled' : render?.string('strategy'),
+    renderLimit: render?.number('limit'),
+    retentionPolicy: block.config.string('retention'),
+  }
+}
+
+/** Normalizes the beta capture config and the deprecated processing alias for index metadata. */
+function normalizedCaptureMode(config: ConfigReader): string | undefined {
+  const captureMode = config.nestedString(['capture', 'mode'])
+  if (captureMode) return captureMode
+  switch (config.nestedString(['processing', 'mode'])) {
+    case 'deferred':
+      return 'afterResponse'
+    case 'manual':
+      return 'detached'
+    case 'inline':
+      return 'inline'
+    default:
+      return undefined
   }
 }
 
@@ -471,4 +511,9 @@ function expressionName(expression: ts.Expression): string | undefined {
 /** Removes absent metadata records before spreading optional contract/runtime data. */
 function isRecord(value: Record<string, unknown> | undefined): value is Record<string, unknown> {
   return Boolean(value)
+}
+
+/** Narrows conservative JSON reader output to object metadata. */
+function recordJson(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
 }

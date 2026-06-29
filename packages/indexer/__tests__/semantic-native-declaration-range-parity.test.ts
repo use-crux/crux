@@ -65,25 +65,33 @@ describe('native semantic declaration range parity', () => {
         export function createSessionMemory(threadId: string) {
           const memoryId = createMemoryId('session', threadId)
           const runtime = { memoryId } satisfies Pick<MemoryRuntimeOptions, 'memoryId'>
-          const state = workingState({ id: 'state', schema: threadBlackboardSchema })
+          const state = workingState({
+            id: 'state',
+            schema: threadBlackboardSchema,
+            budget: { maxTokens: 300 },
+          })
           const tools = memoryBlock({
             id: 'session-tools',
             kind: 'working',
+            render: false,
             tools: () => ({ runtime }),
           })
           const knowledge = facts({
             id: 'facts',
-            render: async () => '',
+            write: { mode: 'propose' },
+            render: { strategy: 'semantic', limit: 3 },
           })
           return memory({
             id: memoryId,
+            capture: { mode: 'afterResponse' },
+            budget: { maxTokens: 1200 },
             blocks: [state, tools, knowledge],
           })
         }
 
         export function createProjectMemory(projectId: string) {
           const memoryId = createMemoryId('semantic', projectId)
-          const projectFacts = facts({ id: 'project-facts' })
+          const projectFacts = facts({ id: 'project-facts', retention: '90d' })
           return memory({
             id: memoryId,
             blocks: [projectFacts],

@@ -6,50 +6,84 @@ description: Compose reusable memory blocks for recent context, working state, e
 Memory is not one feature. A useful agent needs several kinds of state: the last few messages, a typed scratchpad, searchable events, durable facts, and learned operating procedures. Crux keeps those concerns separate as blocks, then composes them with `memory()`.
 
 ```ts
-import { memory, recentMessages, workingState, facts, procedures } from '@use-crux/core/memory'
-import { z } from 'zod'
+import {
+  episodes,
+  facts,
+  memory,
+  procedures,
+  recentMessages,
+  workingState,
+} from "@use-crux/core/memory";
+import { z } from "zod";
 
 const userMemory = memory({
-  id: 'assistant',
+  id: "assistant",
   store,
   namespace: ({ input }) => `user:${input.userId}`,
+  capture: { mode: "afterResponse" },
+  budget: { maxTokens: 1200 },
   blocks: [
-    recentMessages({ id: 'recent', maxMessages: 12 }),
+    recentMessages({ id: "recent", maxMessages: 12, priority: 80 }),
     workingState({
-      id: 'state',
+      id: "state",
+      priority: 90,
       schema: z.object({
         goal: z.string().optional(),
         openQuestions: z.array(z.string()).default([]),
       }),
     }),
+    episodes({
+      id: "episodes",
+      embed: dense,
+      retention: "90d",
+      render: {
+        strategy: "semantic",
+        query: ({ input }) => String(input.message),
+        limit: 4,
+      },
+    }),
     facts({
-      id: 'facts',
+      id: "facts",
       embed: dense,
       extract: extractFactsFromTurn,
-      write: { mode: 'propose' },
+      write: { mode: "propose" },
+      render: {
+        strategy: "semantic",
+        query: ({ input }) => String(input.message),
+        limit: 5,
+      },
     }),
     procedures({
-      id: 'procedures',
+      id: "procedures",
       embed: dense,
-      write: { mode: 'auto' },
+      write: { mode: "propose" },
+      render: { strategy: "recent", limit: 3 },
     }),
   ],
-})
+});
 ```
 
 Use the composed memory directly in a prompt:
 
 ```ts
 const assistantPrompt = prompt({
-  id: 'assistant',
+  id: "assistant",
   use: [userMemory],
   input: z.object({ userId: z.string(), message: z.string() }),
-  system: 'Use memory when it is relevant. Do not invent preferences.',
+  system: "Use memory when it is relevant. Do not invent preferences.",
   prompt: ({ input }) => input.message,
-})
+});
 ```
 
 On every call, Crux renders each block into prompt context. After the model finishes, the adapter captures the user and assistant turn, runs each block's capture logic, and flushes pending writes. Streaming works the same way after `stream().completion()`.
+
+`capture.mode` controls when capture work is awaited:
+
+- `inline` waits before `captureTurn()` or adapter generation resolves.
+- `afterResponse` starts capture after generation and hands the promise to `waitUntil` when one is configured.
+- `detached` starts capture in the background; call `flush()` when you need to await it.
+
+The older `processing` field is still accepted as a deprecated alias, but new code should use `capture`.
 
 ## How to Think About Blocks
 
@@ -57,7 +91,7 @@ On every call, Crux renders each block into prompt context. After the model fini
 
 `workingState()` is task state. It is one typed value, validated by Zod, that the application or agent can overwrite as the task progresses.
 
-`episodes()` is an append-only event log. It is for things that happened: conversations, tool results, observations, decisions, and user actions. With a dense embedding it can recall related events.
+`episodes()` is an append-only event log. It is for things that happened: conversations, tool results, observations, decisions, and user actions. With a dense embedding it can recall related events. Use `retention` to document the real eviction window and `evict()` from your sweep job when entries age out.
 
 `facts()` is extracted knowledge. It is for conclusions such as user preferences or stable project details. By default facts are proposed before becoming active memory.
 
@@ -65,18 +99,45 @@ On every call, Crux renders each block into prompt context. After the model fini
 
 `memoryBlock()` is the escape hatch. Use it when a product has its own memory domain, render format, tools, or approval workflow.
 
+## Rendering and Budgets
+
+Memory renders blocks in priority order. `budget.maxTokens` is enforced at both the block and composed-memory level, using the configured Crux tokenizer for counting. Block budgets trim a block's own rendered text first; the memory budget then keeps higher-priority sections before lower-priority sections.
+
+Entry-style blocks support built-in render strategies:
+
+```ts
+facts({
+  id: "profile",
+  embed: dense,
+  render: {
+    strategy: "semantic",
+    query: ({ input }) => String(input.message),
+    limit: 5,
+  },
+});
+
+episodes({
+  id: "history",
+  render: { strategy: "recent", limit: 4 },
+});
+```
+
+Use `render: false` when a block should store memory but never appear in prompt context.
+
 ## Proposals
 
 Long-term memory should not silently mutate just because a model guessed something. For that reason `facts()` and `procedures()` default to proposed writes.
 
 ```ts
-const pending = await userMemory.proposals.list({ namespace: 'user:123' })
+const pending = await userMemory.proposals.list({ namespace: "user:123" });
 
-await userMemory.proposals.approve(pending[0].id)
+await userMemory.proposals.approve(pending[0].id);
 await userMemory.proposals.reject(pending[1].id, {
-  reason: 'Too speculative',
-})
+  reason: "Too speculative",
+});
 ```
+
+Proposal transitions are strict. Only pending proposals can be approved, rejected, or edited; terminal proposals cannot be approved a second time and cannot create duplicate memory writes.
 
 If a memory is safe to write immediately, set `write: { mode: 'auto' }`. If a block should only be written by application code, keep the default block capture empty and call its direct methods yourself.
 
@@ -86,7 +147,7 @@ Policies run before a fact or procedure is proposed or written. Use them to reda
 
 ```ts
 const profile = facts({
-  id: 'profile',
+  id: "profile",
   extract: extractFactsFromTurn,
   policy: {
     redact: removeSecrets,
@@ -96,7 +157,7 @@ const profile = facts({
     }),
     shouldRemember: (fact) => fact.confidence >= 0.7,
   },
-})
+});
 ```
 
 ## Direct Use
@@ -105,38 +166,98 @@ Blocks are useful outside prompt execution. You can store state from route handl
 
 ```ts
 await state.patch(
-  { goal: 'Prepare launch plan' },
-  { store, namespace: 'user:123', memoryId: 'assistant' },
-)
+  { goal: "Prepare launch plan" },
+  { store, namespace: "user:123", memoryId: "assistant" },
+);
 
 await episodesBlock.record(
-  { content: 'User accepted the launch plan', metadata: { source: 'ui' } },
-  { store, namespace: 'user:123', memoryId: 'assistant' },
-)
+  { content: "User accepted the launch plan", metadata: { source: "ui" } },
+  { store, namespace: "user:123", memoryId: "assistant" },
+);
 ```
 
 Pass `memoryId` when you want direct calls to read and write the same keys as a composed `memory()` instance.
 
+## Shared Read-Only Policy Memory
+
+Policy memory can be a render-only block. Because it has no capture or write hooks, it is shared context rather than mutable user memory:
+
+```ts
+import { memory, memoryBlock } from "@use-crux/core/memory";
+
+const supportPolicy = memory({
+  id: "support-policy",
+  namespace: "org:acme",
+  blocks: [
+    memoryBlock({
+      id: "tone",
+      kind: "procedures",
+      priority: 100,
+      render: () =>
+        "Support policy:\n- Confirm account-impacting actions before running tools.",
+    }),
+  ],
+});
+```
+
 ## Observability
 
-Memory blocks emit `memory:read` and `memory:write` events with `memoryType: 'block'`, `blockId`, `blockKind`, and a privacy-safe `namespaceHash`. Devtools groups them in the Memory Explorer, the CLI includes them in memory stats, and `@use-crux/otel` adds block attributes to memory spans.
+Memory blocks emit `memory.read` and `memory.write` spans with `memoryType: 'block'`, `blockId`, `blockKind`, and a privacy-safe `namespaceHash`. Budgeted memory rendering also emits an inspectable `memory.read` observation for the composed memory context, including which blocks were included, trimmed, or dropped. Devtools groups memory in the Memory Explorer, the CLI includes it in memory stats, and `@use-crux/otel` adds block attributes to memory spans.
+
+The runtime keeps raw namespaces out of trace attributes. Use `namespaceHash` for correlation, then inspect the attached artifact for the safe summary:
+
+```ts title="memory-trace-shape.ts"
+{
+  primitive: "memory.read",
+  name: "supportMemory.render",
+  attributes: {
+    memoryId: "supportMemory",
+    memoryType: "memory",
+    operation: "render",
+    namespaceHash: "sha256:...",
+    budgetMaxTokens: 1200,
+    budgetIncludedBlocks: ["facts", "procedures"],
+    budgetTrimmedBlocks: ["facts"],
+    budgetDroppedBlocks: ["episodes"],
+  },
+}
+```
+
+The corresponding `memory.snapshot` preview carries the same render decision in a UI-friendly shape:
+
+```ts
+{
+  kind: "memory.snapshot",
+  memoryType: "memory",
+  operation: "render",
+  budget: {
+    maxTokens: 1200,
+    usedTokens: 1184,
+    includedBlocks: ["facts", "procedures"],
+    trimmedBlocks: ["facts"],
+    droppedBlocks: ["episodes"],
+  },
+}
+```
+
+Proposal writes also carry review state. A proposed fact write appears with `writeMode: "propose"` and `proposalStatus: "pending"`; approval or rejection updates the proposal record and later write observations can show `proposalStatus: "approved"` or `"rejected"` when that state is available.
 
 ## Embeddings
 
 Semantic memory uses dense embeddings for recall. Embeddings are documented with retrieval because the same primitive powers indexing, retrievers, semantic cache, and memory.
 
 ```ts
-import { embedding } from '@use-crux/openai'
+import { embedding } from "@use-crux/openai";
 
 const dense = embedding({
-  name: 'memory',
-  model: 'text-embedding-3-small',
-})
+  name: "memory",
+  model: "text-embedding-3-small",
+});
 
 const profileFacts = facts({
-  id: 'facts',
+  id: "facts",
   embed: dense,
-})
+});
 ```
 
 Read [Embeddings](/docs/guides/retrieval/embeddings) when you need the dense, sparse, hybrid, caching, truncation, and retry model.
@@ -144,9 +265,29 @@ Read [Embeddings](/docs/guides/retrieval/embeddings) when you need the dense, sp
 ## Where to Next
 
 <Cards>
-  <Card title="Working state" description="Typed task state with Zod validation." href="/docs/guides/memory/working" />
-  <Card title="Episodes" description="Append-only event memory with dense recall." href="/docs/guides/memory/episodic" />
-  <Card title="Facts and procedures" description="Long-term extracted knowledge and operating memory." href="/docs/guides/memory/semantic" />
-  <Card title="Storage" description="DataStore persistence, vector recall compatibility, TTL, and adapters." href="/docs/guides/storage/crux-store" />
-  <Card title="Embeddings" description="Dense, sparse, and hybrid vector setup." href="/docs/guides/retrieval/embeddings" />
+  <Card
+    title="Working state"
+    description="Typed task state with Zod validation."
+    href="/docs/guides/memory/working"
+  />
+  <Card
+    title="Episodes"
+    description="Append-only event memory with dense recall."
+    href="/docs/guides/memory/episodic"
+  />
+  <Card
+    title="Facts and procedures"
+    description="Long-term extracted knowledge and operating memory."
+    href="/docs/guides/memory/semantic"
+  />
+  <Card
+    title="Storage"
+    description="CruxStore persistence, vector recall compatibility, TTL, and adapters."
+    href="/docs/guides/memory/stores"
+  />
+  <Card
+    title="Embeddings"
+    description="Dense, sparse, and hybrid vector setup."
+    href="/docs/guides/retrieval/embeddings"
+  />
 </Cards>

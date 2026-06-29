@@ -1,15 +1,18 @@
+use std::collections::HashSet;
+
 use serde_json::{Map, Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext},
     definition::{NativeDefinitionInput, safe_id, static_index_definition},
-    memory::blocks::{
-        MemoryBlockMetadata, default_memory_block_schema, memory_block_metadata_values,
-        memory_blocks,
-    },
+    memory::block_metadata::memory_block_metadata_values,
+    memory::blocks::{MemoryBlockMetadata, default_memory_block_schema, memory_blocks},
     memory::id::authored_memory_id,
     memory::store::{authored_store, authored_store_name, store_definition, store_id},
-    record_values::direct_string_property,
+    protocol::{LiteralValue, StaticSyntaxValue},
+    record_values::{
+        direct_string_property, json_object_property, property_value, resolve_static_value,
+    },
     routing::output::extracted_facts,
 };
 
@@ -48,6 +51,7 @@ pub(crate) fn memory_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
         id_info.runtime_id_prefix.clone(),
     );
     metadata.extend(static_memory_metadata(
+        context,
         &block_projection.blocks,
         config,
         &block_projection.definitions,
@@ -87,6 +91,7 @@ pub(crate) fn memory_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
 }
 
 fn static_memory_metadata(
+    context: &PrimitiveContext<'_>,
     blocks: &[MemoryBlockMetadata],
     config: &crate::protocol::StaticSyntaxValue,
     block_definitions: &[Value],
@@ -96,8 +101,13 @@ fn static_memory_metadata(
     let schema = memory_schema(blocks);
     let backend = authored_store_name(store);
     let eviction_policy = direct_string_property(config, "evictionPolicy");
+    let capture_mode = normalized_capture_mode(config, context);
+    let budget =
+        json_object_property(config, Some("budget"), &context.initializers).unwrap_or(None);
     let mut metadata = Map::new();
     insert_string(&mut metadata, "backend", backend.clone());
+    insert_string(&mut metadata, "captureMode", capture_mode.clone());
+    insert_value(&mut metadata, "budget", budget.clone());
     insert_string(&mut metadata, "evictionPolicy", eviction_policy.clone());
     if !blocks.is_empty() {
         metadata.insert(
@@ -111,7 +121,7 @@ fn static_memory_metadata(
     }
     metadata.insert(
         "facts".to_string(),
-        memory_fact_metadata(backend, eviction_policy, blocks.len()),
+        memory_fact_metadata(backend, capture_mode, budget, eviction_policy, blocks.len()),
     );
     metadata.insert(
         "intelligence".to_string(),
@@ -143,17 +153,53 @@ fn memory_schema(blocks: &[MemoryBlockMetadata]) -> Option<Value> {
 
 fn memory_fact_metadata(
     backend: Option<String>,
+    capture_mode: Option<String>,
+    budget: Option<Value>,
     eviction_policy: Option<String>,
     block_count: usize,
 ) -> Value {
     let mut facts = Map::new();
     facts.insert("kind".to_string(), Value::String("memory".to_string()));
     insert_string(&mut facts, "backend", backend);
+    insert_string(&mut facts, "captureMode", capture_mode);
+    insert_value(&mut facts, "budget", budget);
     insert_string(&mut facts, "evictionPolicy", eviction_policy);
     if block_count > 0 {
         facts.insert("blockCount".to_string(), json!(block_count));
     }
     Value::Object(facts)
+}
+
+fn normalized_capture_mode(
+    config: &StaticSyntaxValue,
+    context: &PrimitiveContext<'_>,
+) -> Option<String> {
+    nested_string_property(config, &["capture", "mode"], context).or_else(|| {
+        match nested_string_property(config, &["processing", "mode"], context).as_deref() {
+            Some("deferred") => Some("afterResponse".to_string()),
+            Some("manual") => Some("detached".to_string()),
+            Some("inline") => Some("inline".to_string()),
+            _ => None,
+        }
+    })
+}
+
+fn nested_string_property(
+    object: &StaticSyntaxValue,
+    path: &[&str],
+    context: &PrimitiveContext<'_>,
+) -> Option<String> {
+    let mut current = object;
+    for segment in path {
+        current = property_value(current, segment)?;
+        current = resolve_static_value(current, &context.initializers, &mut HashSet::new());
+    }
+    match current {
+        StaticSyntaxValue::Literal {
+            value: LiteralValue::String(value),
+        } => Some(value.clone()),
+        _ => None,
+    }
 }
 
 fn memory_intelligence(
@@ -187,5 +233,11 @@ fn memory_intelligence(
 fn insert_string(metadata: &mut Map<String, Value>, key: &str, value: Option<String>) {
     if let Some(value) = value {
         metadata.insert(key.to_string(), Value::String(value));
+    }
+}
+
+fn insert_value(metadata: &mut Map<String, Value>, key: &str, value: Option<Value>) {
+    if let Some(value) = value {
+        metadata.insert(key.to_string(), value);
     }
 }

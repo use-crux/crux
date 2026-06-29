@@ -6,47 +6,60 @@ description: Typed scratchpad memory for the current task.
 `workingState()` is a memory block for one typed value. Use it when the agent needs a current plan, current goal, iteration counter, draft state, or a small set of structured findings that should be updated in place.
 
 ```ts
-import { memory, workingState } from '@use-crux/core/memory'
-import { z } from 'zod'
+import { memory, workingState } from "@use-crux/core/memory";
+import { z } from "zod";
 
 const state = workingState({
-  id: 'state',
+  id: "state",
+  priority: 90,
   schema: z.object({
     goal: z.string(),
     step: z.number(),
     findings: z.array(z.string()).default([]),
   }),
-})
+});
 
 const agentMemory = memory({
-  id: 'research-agent',
+  id: "research-agent",
   store,
   namespace: ({ input }) => `thread:${input.threadId}`,
   blocks: [state],
-})
+});
 ```
 
 The composed memory renders the current state into prompt context. The block also exposes direct methods for application code:
 
 ```ts
 await state.set(
-  { goal: 'Compare vector databases', step: 1, findings: [] },
-  { store, namespace: 'thread:abc', memoryId: 'research-agent' },
-)
+  { goal: "Compare vector databases", step: 1, findings: [] },
+  { store, namespace: "thread:abc", memoryId: "research-agent" },
+);
 
 await state.patch(
-  { step: 2, findings: ['Upstash supports hybrid search'] },
-  { store, namespace: 'thread:abc', memoryId: 'research-agent' },
-)
+  { step: 2, findings: ["Upstash supports hybrid search"] },
+  { store, namespace: "thread:abc", memoryId: "research-agent" },
+);
 
 const current = await state.get({
   store,
-  namespace: 'thread:abc',
-  memoryId: 'research-agent',
-})
+  namespace: "thread:abc",
+  memoryId: "research-agent",
+});
 ```
 
-`workingState()` validates every write with the supplied Zod schema. Invalid writes throw immediately; they are not silently dropped.
+`workingState()` validates every write with the supplied Zod schema. Invalid writes throw immediately; they are not silently dropped. The schema also drives TypeScript inference for `get`, `set`, and `patch`, so application code gets the same shape the agent sees in prompt context.
+
+When this block is used inside `memory()`, it renders ahead of lower-priority blocks. Give working state a high priority and set a composed memory budget when the state should survive memory token pressure:
+
+```ts
+const agentMemory = memory({
+  id: "research-agent",
+  store,
+  namespace: ({ input }) => `thread:${input.threadId}`,
+  budget: { maxTokens: 900 },
+  blocks: [workingState({ id: "state", priority: 90, schema })],
+});
+```
 
 ## When to Use It
 

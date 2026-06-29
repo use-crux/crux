@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { describeCruxStoreConformance } from '@use-crux/core/store/testing/vitest'
 import { cruxConvexStore, type ConvexContext } from '../store'
+import type { StoreDocRecord } from '../store-doc'
 import type { ComponentApi } from '../src/component/_generated/component'
 
 describe('cruxConvexStore', () => {
@@ -13,11 +15,45 @@ describe('cruxConvexStore', () => {
         list: 'memory:list',
       },
     }
+    const docs = new Map<string, StoreDocRecord>()
 
     const ctx = {
-      runQuery: vi.fn(),
-      runMutation: vi.fn(),
-      vectorSearch: vi.fn(),
+      runQuery: vi.fn(async (ref: unknown, args: Record<string, unknown>) => {
+        if (ref === 'memory:get') {
+          return typeof args.key === 'string' ? (docs.get(args.key) ?? null) : null
+        }
+        if (ref === 'memory:list') {
+          const prefix = typeof args.prefix === 'string' ? args.prefix : ''
+          const cursor = typeof args.cursor === 'string' ? args.cursor : undefined
+          const limit = typeof args.limit === 'number' ? args.limit : Number.POSITIVE_INFINITY
+          const matching = [...docs.values()]
+            .filter((doc) => typeof doc.key === 'string' && doc.key.startsWith(prefix))
+            .sort((a, b) => String(a.key).localeCompare(String(b.key)))
+          const start = cursor ? matching.findIndex((doc) => doc.key === cursor) + 1 : 0
+          const page = matching.slice(start, start + limit)
+          const hasMore = start + limit < matching.length
+          return { docs: page, cursor: hasMore ? String(page.at(-1)?.key) : undefined }
+        }
+        return null
+      }),
+      runMutation: vi.fn(async (ref: unknown, args: Record<string, unknown>) => {
+        if (ref === 'memory:set') {
+          const key = String(args.key)
+          const existing = docs.get(key)
+          docs.set(key, {
+            ...args,
+            key,
+            createdAt: existing?.createdAt ?? args.updatedAt,
+          })
+        }
+        if (ref === 'memory:remove' && typeof args.key === 'string') {
+          docs.delete(args.key)
+        }
+        return null
+      }),
+      vectorSearch: vi.fn(async (_table: string, _index: string, opts: { vector: readonly number[]; limit?: number }) =>
+        searchStoredVectors(docs, opts.vector, opts.limit ?? 10),
+      ),
     }
 
     return {
@@ -29,6 +65,15 @@ describe('cruxConvexStore', () => {
       ctx,
     }
   }
+
+  describeCruxStoreConformance({
+    name: 'cruxConvexStore',
+    prepare: () => createStore().store,
+    supports: {
+      ttl: true,
+      vectorSearch: true,
+    },
+  })
 
   it('wires dense vector search through the configured Convex vector index', async () => {
     const { store, ctx } = createStore({
@@ -88,3 +133,32 @@ describe('cruxConvexStore', () => {
     expect(result.cursor).toBe('cursor-2')
   })
 })
+
+function searchStoredVectors(
+  docs: Map<string, StoreDocRecord>,
+  queryVector: readonly number[],
+  limit: number,
+): StoreDocRecord[] {
+  return [...docs.values()]
+    .filter((doc) => Array.isArray(doc.embedding))
+    .map((doc) => ({
+      ...doc,
+      _score: cosineSimilarity([...queryVector], (doc.embedding as number[] | undefined) ?? []),
+    }))
+    .sort((a, b) => Number(b._score ?? 0) - Number(a._score ?? 0))
+    .slice(0, limit)
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length || a.length === 0) return 0
+  let dot = 0
+  let normA = 0
+  let normB = 0
+  for (let index = 0; index < a.length; index += 1) {
+    dot += a[index] * b[index]
+    normA += a[index] * a[index]
+    normB += b[index] * b[index]
+  }
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB)
+  return denominator === 0 ? 0 : dot / denominator
+}

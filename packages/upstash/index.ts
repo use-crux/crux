@@ -19,51 +19,15 @@ import type {
   VectorSearchOptions,
   VectorSearchQuery,
 } from '@use-crux/core/store'
-import type { VectorHit, VectorRecord, VectorStore } from '@use-crux/core/storage'
+import { matchesFilter } from '@use-crux/core/store'
 import { toStoreValue } from '@use-crux/core/memory'
 import type { RawMemoryDocument } from '@use-crux/core/memory'
+import { normalizeListPage } from './convex-list-page'
+import { upstashFilter, upstashVectorStore } from './vector-store'
+import type { UpstashIndex, UpstashVectorStoreConfig } from './vector-store'
 
-interface UpstashUpsertData {
-  id: string
-  vector?: number[]
-  sparseVector?: SparseVector
-  metadata?: Record<string, unknown>
-}
-
-interface UpstashQueryData {
-  vector?: number[]
-  sparseVector?: SparseVector
-  topK: number
-  includeMetadata?: boolean
-  filter?: string
-  fusion?: 'rrf' | 'dbsf'
-}
-
-interface UpstashQueryResult {
-  id: string | number
-  score: number
-  metadata?: Record<string, unknown>
-}
-
-/**
- * Structural shape of an `@upstash/vector` index — both the SDK's `Index` and
- * `Index.namespace(...)` satisfy this. The SDK's input/output types are a
- * complex discriminated union (alt forms with `data:` vs `vector:` vs
- * `sparseVector:`), so we accept `unknown` for the params and narrow at
- * call sites with our own `UpstashUpsertData` / `UpstashQueryData` shapes.
- */
-interface UpstashIndex {
-  namespace(name: string): UpstashNamespace
-  upsert(data: unknown): Promise<unknown>
-  query(data: unknown): Promise<UpstashQueryResult[]>
-  delete(ids: unknown): Promise<unknown>
-}
-
-interface UpstashNamespace {
-  upsert(data: unknown): Promise<unknown>
-  query(data: unknown): Promise<UpstashQueryResult[]>
-  delete(ids: unknown): Promise<unknown>
-}
+export { upstashVectorStore }
+export type { UpstashIndex, UpstashVectorStoreConfig }
 
 /**
  * Minimal Convex context shape. Convex's strongly-typed
@@ -104,63 +68,6 @@ export interface UpstashMemoryStoreConfig {
   /** Declare this store namespace is dedicated to semantic cache entries. */
   semanticCache?: {
     isolatedVectorNamespace?: boolean
-  }
-}
-
-export interface UpstashVectorStoreConfig {
-  /** Upstash Vector index instance. */
-  index: UpstashIndex
-  /** Namespace for this vector store. */
-  namespace: string
-}
-
-export function upstashVectorStore(config: UpstashVectorStoreConfig): VectorStore {
-  const ns = config.index.namespace(config.namespace)
-
-  return {
-    _tag: 'VectorStore',
-    async upsert(records: readonly VectorRecord[]): Promise<void> {
-      if (records.length === 0) return
-      await ns.upsert(records.map((record) => ({
-        id: record.key,
-        ...(record.dense ? { vector: record.dense } : {}),
-        ...(record.sparse ? { sparseVector: record.sparse } : {}),
-        ...(record.metadata ? { metadata: { ...record.metadata, _key: record.key } } : { metadata: { _key: record.key } }),
-      } satisfies UpstashUpsertData)))
-    },
-
-    async delete(keys: readonly string[]): Promise<void> {
-      if (keys.length === 0) return
-      await ns.delete([...keys])
-    },
-
-    async search(query: VectorSearchQuery): Promise<readonly VectorHit[]> {
-      if (!query.dense && !query.sparse) {
-        throw new Error('upstashVectorStore.search() requires a dense or sparse query vector.')
-      }
-
-      const filter = upstashFilter(query.filter)
-      const results = await ns.query({
-        ...(query.dense ? { vector: query.dense } : {}),
-        ...(query.sparse ? { sparseVector: query.sparse } : {}),
-        ...(query.fusion ? { fusion: query.fusion } : {}),
-        ...(filter ? { filter } : {}),
-        topK: query.limit ?? 10,
-        includeMetadata: true,
-      } satisfies UpstashQueryData)
-
-      return results
-        .filter((result) => query.threshold === undefined || result.score >= query.threshold)
-        .map((result) => ({
-          key: (result.metadata?._key as string | undefined) ?? String(result.id),
-          score: result.score,
-          ...(result.metadata ? { metadata: result.metadata } : {}),
-        }))
-    },
-
-    capabilities() {
-      return { dense: true, sparse: true, hybrid: true, fusion: ['rrf', 'dbsf'] as const }
-    },
   }
 }
 
@@ -248,20 +155,31 @@ export function cruxUpstashStore(config: UpstashMemoryStoreConfig): CruxStore {
     },
 
     async list(prefix: string, options?: ListOptions): Promise<ListResult> {
-      const docs: RawMemoryDocument[] = await ctx.runQuery(fns.list, {
-        prefix,
-        limit: options?.limit,
-        cursor: options?.cursor,
-        filter: options?.filter,
-      })
+      if (options?.limit !== undefined && options.limit <= 0) {
+        return { entries: [] }
+      }
 
-      const now = Date.now()
-      const entries: StoreEntry[] = (docs ?? [])
-        .map((doc) => ({
-          key: doc.key,
-          value: decodeStoredValue(doc),
-        }))
-        .filter((entry) => {
+      const target = options?.limit
+      const entries: StoreEntry[] = []
+      let cursor = options?.cursor
+      let nextCursor: string | undefined
+
+      do {
+        const remaining = target === undefined ? undefined : target - entries.length
+        const page = normalizeListPage(
+          await ctx.runQuery(fns.list, {
+            prefix,
+            ...(remaining === undefined ? {} : { limit: remaining }),
+            ...(cursor === undefined ? {} : { cursor }),
+          }),
+        )
+
+        const now = Date.now()
+        for (const doc of page.docs) {
+          const entry = {
+            key: doc.key,
+            value: decodeStoredValue(doc),
+          }
           const expiresAt =
             typeof entry.value._expiresAt === 'number'
               ? entry.value._expiresAt
@@ -270,12 +188,23 @@ export function cruxUpstashStore(config: UpstashMemoryStoreConfig): CruxStore {
             Promise.all([ctx.runMutation(fns.delete, { key: entry.key }), ns.delete(entry.key).catch(() => {})]).catch(
               () => {},
             )
-            return false
+            continue
           }
-          return true
-        })
+          if (matchesFilter(entry.value, options?.filter ?? {})) {
+            entries.push(entry)
+          }
+        }
 
-      return { entries }
+        nextCursor = page.cursor
+        if (target === undefined || entries.length >= target || nextCursor === undefined) {
+          return {
+            entries: target === undefined ? entries : entries.slice(0, target),
+            ...(nextCursor === undefined ? {} : { cursor: nextCursor }),
+          }
+        }
+
+        cursor = nextCursor
+      } while (true)
     },
 
     vectorSearch(embedding: number[], options?: VectorSearchOptions): Promise<ScoredEntry[]> {
@@ -323,7 +252,7 @@ export function cruxUpstashStore(config: UpstashMemoryStoreConfig): CruxStore {
           await Promise.all([ctx.runMutation(fns.delete, { key }), ns.delete(key).catch(() => {})])
           continue
         }
-        if (query.filter && !matchesTopLevelFilter(value, query.filter)) {
+        if (query.filter && !matchesFilter(value, query.filter)) {
           continue
         }
 
@@ -358,22 +287,6 @@ function decodeStoredValue(doc: RawMemoryDocument): JsonObject {
   return toStoreValue(doc)
 }
 
-function matchesTopLevelFilter(value: JsonObject, filter: Record<string, unknown>): boolean {
-  for (const [key, expected] of Object.entries(filter)) {
-    const actual = value[key]
-    if (expected === null) {
-      if (actual !== null && actual !== undefined) {
-        return false
-      }
-      continue
-    }
-    if (actual !== expected) {
-      return false
-    }
-  }
-  return true
-}
-
 function vectorMetadata(key: string, value: JsonObject): Record<string, unknown> {
   const metadata = { ...((value.metadata as Record<string, unknown>) ?? {}) }
   return {
@@ -381,36 +294,11 @@ function vectorMetadata(key: string, value: JsonObject): Record<string, unknown>
     _key: key,
     ...(typeof value._cruxRecordType === 'string' ? { _cruxRecordType: value._cruxRecordType } : {}),
     ...(typeof value.namespace === 'string' ? { namespace: value.namespace } : {}),
+    ...(typeof value.blockId === 'string' ? { blockId: value.blockId } : {}),
     ...(typeof value.sourceId === 'string' ? { sourceId: value.sourceId } : {}),
     ...(typeof value.chunkId === 'string' ? { chunkId: value.chunkId } : {}),
     ...(typeof value.parentId === 'string' ? { parentId: value.parentId } : {}),
     ...(typeof value.generationId === 'string' ? { generationId: value.generationId } : {}),
     ...(typeof value.active === 'boolean' ? { active: value.active } : {}),
   }
-}
-
-function upstashFilter(filter: Record<string, unknown> | undefined): string | undefined {
-  if (!filter) return undefined
-  const clauses = Object.entries(filter).flatMap(([key, value]) => {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return []
-    const encoded = encodeFilterValue(value)
-    return encoded ? [`${key} = ${encoded}`] : []
-  })
-  return clauses.length > 0 ? clauses.join(' and ') : undefined
-}
-
-function encodeFilterValue(value: unknown): string | undefined {
-  if (typeof value === 'string') {
-    return `'${value.replace(/'/g, "''")}'`
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return String(value)
-  }
-  if (typeof value === 'boolean') {
-    return value ? 'true' : 'false'
-  }
-  if (value === null) {
-    return 'null'
-  }
-  return undefined
 }

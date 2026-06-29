@@ -128,6 +128,11 @@
       "import": "./store/index.ts",
       "require": "./store/index.ts"
     },
+    "./store/testing/vitest": {
+      "types": "./store/testing/vitest.ts",
+      "import": "./store/testing/vitest.ts",
+      "require": "./store/testing/vitest.ts"
+    },
     "./storage": {
       "types": "./storage/index.ts",
       "import": "./storage/index.ts",
@@ -251,6 +256,9 @@
       ],
       "store": [
         "store/index.ts"
+      ],
+      "store/testing/vitest": [
+        "store/testing/vitest.ts"
       ],
       "storage": [
         "storage/index.ts"

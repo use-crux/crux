@@ -58,6 +58,7 @@ import {
   emitToolRequestArtifacts,
 } from './emission'
 import { captureMemoryTurn, readSkillActivationSession } from './resolved'
+import { enrichToolCallsFromMessages, enrichToolCallsWithResults } from './memory-capture'
 import type { SkillActivationSession } from '../../skill/session'
 import { LOAD_SKILL_TOOL_NAME } from '../../skill/tools'
 import {
@@ -460,6 +461,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
 
   let memoryCaptured = false
   let lastMessages: readonly Message[] | undefined
+  const settledToolResults = new Map<string, ToolResultEntry>()
   const announcedSkills = new Set<string>()
 
   // Snapshot runtime hooks once — a mid-call setRuntime() cannot
@@ -504,7 +506,14 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       content: renderToolModelOutput(modelOutput),
       outputSize: 0,
       modelOutputSize,
+      modelOutputError: `Tool "${toolCall.name}" not found`,
       isError: true,
+    }
+  }
+
+  function rememberToolResults(results: readonly ToolResultEntry[]): void {
+    for (const result of results) {
+      settledToolResults.set(result.toolCallId, result)
     }
   }
 
@@ -595,6 +604,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
         content: renderToolModelOutput(modelOutput),
         outputSize: 0,
         modelOutputSize,
+        modelOutputError: err instanceof Error ? err.message : String(err),
         isError: true,
       }
     }
@@ -669,6 +679,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
             content: renderToolModelOutput(modelOutput),
             outputSize: 0,
             modelOutputSize,
+            modelOutputError: decision.reason ?? 'Tool execution was denied.',
             isError: true,
           },
         }
@@ -747,6 +758,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
         if (verdict.kind === 'execute') results.push(await verdict.run())
         else if (verdict.kind !== 'suspend') results.push(verdict.settled)
       }
+      rememberToolResults(results)
       const synthetic = createSyntheticToolCallResponse(replayCalls)
       return { messages: appendRound([...messages], synthetic, results), replayed: replayCalls.length }
     },
@@ -770,6 +782,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       for (const toolCall of toolCalls) {
         const verdict = await gate(toolCall, messages, 'live')
         if (verdict.kind === 'suspend') {
+          rememberToolResults(results)
           transcript.push({ t: 'round', settled: results.length, suspended: 1 })
           // Settled siblings already executed — persist their results after
           // the approval-request message (which carries the assistant turn
@@ -790,6 +803,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
         results.push(verdict.kind === 'execute' ? await verdict.run() : verdict.settled)
       }
       transcript.push({ t: 'round', settled: results.length, suspended: 0 })
+      rememberToolResults(results)
       return { kind: 'completed', results, messages: appendRound([...messages], response, results) }
     },
 
@@ -858,16 +872,16 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       const bindings = options.resolved.memoryBindings?.length ?? 0
       if (bindings === 0) return
       transcript.push({ t: 'memory.capture', bindings })
+      const toolCalls = enrichToolCallsFromMessages(
+        enrichToolCallsWithResults(args.toolCalls, [...settledToolResults.values()]),
+        args.messages,
+      )
       await captureMemoryTurn(options.resolved, {
         promptId: options.promptId,
         input: options.input ?? {},
         messages: [...args.messages],
         assistantText: args.assistantText,
-        toolCalls: args.toolCalls?.map((toolCall) => ({
-          id: toolCall.id,
-          name: toolCall.name,
-          args: toolCall.args,
-        })),
+        toolCalls,
       })
     },
 

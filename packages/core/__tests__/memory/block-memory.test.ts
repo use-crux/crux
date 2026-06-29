@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { adapter as makeAdapter } from '../../adapter/define-adapter'
 import type { AdapterResponse } from '../../adapter/types'
 import { prompt as makePrompt } from '../../prompt/prompt'
+import { defaultTokenizer, setTokenizer } from '../../shared/tokenizer'
 import { inMemoryCruxStore } from '../../store/memory'
 import {
   episodes,
@@ -19,6 +20,10 @@ const mockEmbed = async (text: string) => {
   while (values.length < 8) values.push(0)
   return values
 }
+
+afterEach(() => {
+  setTokenizer(defaultTokenizer)
+})
 
 function mockResponse(text: string, toolCalls?: AdapterResponse['toolCalls']): AdapterResponse {
   return {
@@ -86,7 +91,146 @@ describe('memory block system', () => {
     await expect(second.asContext().systemFn({})).resolves.toContain('Namespace: agent:reviewer')
   })
 
-    it('allows memory() directly in prompt use and merges block tools', async () => {
+  it('uses one dynamic namespace across context, capture, direct block reads, and proposals', async () => {
+    const store = inMemoryCruxStore()
+    const recent = recentMessages({ id: 'recent', maxMessages: 5 })
+    const factBlock = facts({
+      id: 'facts',
+      extract: async (_turn, ctx) => [{ content: `Captured in ${ctx.namespace}` }],
+    })
+    const inspector = memoryBlock({
+      id: 'inspector',
+      kind: 'custom',
+      render: async (ctx) => `Resolved namespace: ${ctx.namespace}`,
+    })
+    const mem = memory({
+      id: 'dynamic-contract',
+      store,
+      namespace: ({ input }) => `tenant:${input.tenantId}:thread:${input.threadId}`,
+      blocks: [inspector, recent, factBlock],
+    })
+    const input = { tenantId: 'acme', threadId: 'support-1' }
+    const namespace = 'tenant:acme:thread:support-1'
+
+    await expect(mem.asContext().systemFn(input)).resolves.toContain(`Resolved namespace: ${namespace}`)
+
+    await mem.captureTurn(
+      {
+        messages: [{ role: 'user', content: 'Remember my billing preference' }],
+        source: { promptId: 'support' },
+      },
+      { input },
+    )
+    await mem.flush({ input })
+
+    const turns = await recent.list({ store, namespace, memoryId: 'dynamic-contract' })
+    expect(turns.map((turn) => turn.content)).toContain('Remember my billing preference')
+
+    const proposals = await mem.proposals.list({ input })
+    expect(proposals).toHaveLength(1)
+    expect(proposals[0].namespace).toBe(namespace)
+
+    await mem.proposals.approve(proposals[0].id, { input })
+    const factsInNamespace = await factBlock.list({ store, namespace, memoryId: 'dynamic-contract' })
+    expect(factsInNamespace.map((entry) => entry.content)).toEqual([`Captured in ${namespace}`])
+  })
+
+  it('throws clear errors for async namespace and async block tools on synchronous tool surfaces', () => {
+    const renderOnlyMemory = memory({
+      id: 'async-render-only',
+      namespace: async ({ input }) => `thread:${input.threadId}`,
+      blocks: [
+        memoryBlock({
+          id: 'render-only',
+          kind: 'custom',
+          render: async (ctx) => `rendered ${ctx.namespace}`,
+        }),
+      ],
+    })
+
+    expect(renderOnlyMemory.asTools({ input: { threadId: 't1' } })).toEqual({})
+
+    const asyncNamespaceMemory = memory({
+      id: 'async-namespace-tools',
+      namespace: async ({ input }) => `thread:${input.threadId}`,
+      blocks: [
+        memoryBlock({
+          id: 'notes',
+          kind: 'custom',
+          tools: () => ({
+            rememberNote: {
+              description: 'Remember a note.',
+              parameters: z.object({ note: z.string() }),
+              execute: async () => 'remembered',
+            },
+          }),
+        }),
+      ],
+    })
+
+    expect(() => asyncNamespaceMemory.asTools({ input: { threadId: 't1' } })).toThrow(
+      /resolved asynchronously.*asTools\(\) is synchronous/,
+    )
+
+    const asyncToolsMemory = memory({
+      id: 'async-block-tools',
+      namespace: 'thread:t1',
+      blocks: [
+        memoryBlock({
+          id: 'notes',
+          kind: 'custom',
+          tools: async () => ({
+            rememberNote: {
+              description: 'Remember a note.',
+              parameters: z.object({ note: z.string() }),
+              execute: async () => 'remembered',
+            },
+          }),
+        }),
+      ],
+    })
+
+    expect(() => asyncToolsMemory.asTools()).toThrow(/returned async tools.*tool collection is synchronous/)
+  })
+
+  it('awaits block capture work when capture mode is inline', async () => {
+    let releaseCapture!: () => void
+    const captureCanFinish = new Promise<void>((resolve) => {
+      releaseCapture = resolve
+    })
+    const capturedNamespaces: string[] = []
+    const mem = memory({
+      id: 'inline-capture',
+      namespace: ({ input }) => `thread:${input.threadId}`,
+      capture: { mode: 'inline' },
+      blocks: [
+        memoryBlock({
+          id: 'capture',
+          kind: 'custom',
+          captureTurn: async (_turn, ctx) => {
+            await captureCanFinish
+            capturedNamespaces.push(ctx.namespace)
+          },
+        }),
+      ],
+    })
+
+    let resolved = false
+    const capture = mem
+      .captureTurn({ messages: [{ role: 'user', content: 'hi' }] }, { input: { threadId: 't1' } })
+      .then(() => {
+        resolved = true
+      })
+
+    await Promise.resolve()
+    expect(resolved).toBe(false)
+
+    releaseCapture()
+    await capture
+    expect(capturedNamespaces).toEqual(['thread:t1'])
+  })
+
+  it('allows memory() directly in prompt use and merges block tools', async () => {
     const mem = memory({
       id: 'prompt-memory',
       namespace: 'thread:1',
@@ -120,7 +264,38 @@ describe('memory block system', () => {
     expect(resolved.memoryBindings).toHaveLength(1)
   })
 
-    it('captures completed adapter turns after generation and flushes deferred work', async () => {
+  it('enforces internal memory and block budgets before resolver composition', async () => {
+    setTokenizer((text) => (text.trim() ? text.trim().split(/\s+/).length : 0))
+    const mem = memory({
+      id: 'budgeted',
+      namespace: 'thread:1',
+      budget: { maxTokens: 6 },
+      blocks: [
+        memoryBlock({
+          id: 'important',
+          kind: 'custom',
+          priority: 90,
+          budget: { maxTokens: 2 },
+          render: () => 'alpha beta gamma',
+        }),
+        memoryBlock({
+          id: 'noisy',
+          kind: 'custom',
+          priority: 10,
+          render: () => 'low priority detail',
+        }),
+      ],
+    })
+
+    const rendered = await mem.asContext().systemFn({})
+
+    expect(rendered).toContain('## Memory: important')
+    expect(rendered).toContain('alpha beta')
+    expect(rendered).not.toContain('gamma')
+    expect(rendered).not.toContain('low priority detail')
+  })
+
+  it('captures completed adapter turns after generation and flushes deferred work', async () => {
     const store = inMemoryCruxStore()
     const recent = recentMessages({ id: 'recent', maxMessages: 5 })
     const mem = memory({
@@ -149,7 +324,7 @@ describe('memory block system', () => {
     expect(turns[1].content).toBe('stored answer')
   })
 
-    it('supports standalone working state blocks', async () => {
+  it('supports standalone working state blocks', async () => {
     const store = inMemoryCruxStore()
     const state = workingState({
       id: 'state',
@@ -165,7 +340,7 @@ describe('memory block system', () => {
     })
   })
 
-    it('supports standalone episodes with dense recall', async () => {
+  it('supports standalone episodes with dense recall', async () => {
     const store = inMemoryCruxStore()
     const ep = episodes({ id: 'episodes', embed: mockEmbed })
 
@@ -177,7 +352,7 @@ describe('memory block system', () => {
     expect(results[0].score).toBeDefined()
   })
 
-    it('creates fact proposals by default and approves them through memory()', async () => {
+  it('creates fact proposals by default and approves them through memory()', async () => {
     const store = inMemoryCruxStore()
     const factBlock = facts({
       id: 'facts',
@@ -206,7 +381,49 @@ describe('memory block system', () => {
     expect(stored[0].content).toBe('User prefers concise answers')
   })
 
-    it('allows extractive blocks to customize prompt rendering', async () => {
+  it('keeps proposal approval, rejection, and editing pending-only', async () => {
+    const store = inMemoryCruxStore()
+    let content = 'User prefers concise answers'
+    const factBlock = facts({
+      id: 'facts',
+      extract: async () => [{ content, confidence: 0.9 }],
+    })
+    const mem = memory({
+      id: 'proposal-lifecycle',
+      store,
+      namespace: 'user:1',
+      blocks: [factBlock],
+      capture: { mode: 'inline' },
+    })
+
+    await mem.captureTurn({ messages: [{ role: 'user', content: 'Please be concise' }] })
+    const [approvedProposal] = await mem.proposals.list({ namespace: 'user:1', status: 'pending' })
+    expect(approvedProposal).toBeDefined()
+
+    await mem.proposals.approve(approvedProposal.id)
+    await expect(mem.proposals.approve(approvedProposal.id)).rejects.toThrow(/pending/i)
+    await expect(mem.proposals.edit(approvedProposal.id, { content: 'Changed' })).rejects.toThrow(/pending/i)
+    await expect(mem.proposals.reject(approvedProposal.id)).rejects.toThrow(/pending/i)
+
+    let stored = await factBlock.list({ store, namespace: 'user:1', memoryId: 'proposal-lifecycle' })
+    expect(stored.map((entry) => entry.content)).toEqual(['User prefers concise answers'])
+
+    content = 'User likes short bullet lists'
+    await mem.captureTurn({ messages: [{ role: 'user', content: 'Use bullets' }] })
+    const [rejectedProposal] = await mem.proposals.list({ namespace: 'user:1', status: 'pending' })
+    expect(rejectedProposal).toBeDefined()
+
+    await mem.proposals.edit(rejectedProposal.id, { content: 'User likes edited bullet lists' })
+    await mem.proposals.reject(rejectedProposal.id, { reason: 'not enough evidence' })
+    await expect(mem.proposals.approve(rejectedProposal.id)).rejects.toThrow(/pending/i)
+    await expect(mem.proposals.reject(rejectedProposal.id)).rejects.toThrow(/pending/i)
+    await expect(mem.proposals.edit(rejectedProposal.id, { content: 'Changed again' })).rejects.toThrow(/pending/i)
+
+    stored = await factBlock.list({ store, namespace: 'user:1', memoryId: 'proposal-lifecycle' })
+    expect(stored.map((entry) => entry.content)).toEqual(['User prefers concise answers'])
+  })
+
+  it('allows extractive blocks to customize prompt rendering', async () => {
     const store = inMemoryCruxStore()
     const factBlock = facts({
       id: 'facts',
@@ -229,7 +446,51 @@ describe('memory block system', () => {
     )
   })
 
-    it('supports procedural memories without mutating prompt definitions', async () => {
+  it('renders extractive blocks with an explicit semantic strategy scoped to namespace and block id', async () => {
+    const store = inMemoryCruxStore()
+    const semanticEmbed = async (text: string) => (text.includes('billing') ? [1, 0] : [0, 1])
+    const factBlock = facts({
+      id: 'facts',
+      embed: semanticEmbed,
+      render: {
+        strategy: 'semantic',
+        query: ({ input }) => String(input?.query ?? ''),
+        limit: 1,
+      },
+      write: { mode: 'auto' },
+    })
+    const otherBlock = facts({
+      id: 'other-facts',
+      embed: semanticEmbed,
+      write: { mode: 'auto' },
+    })
+    const mem = memory({
+      id: 'semantic-render',
+      store,
+      namespace: 'user:1',
+      blocks: [factBlock],
+    })
+
+    await factBlock.add(
+      { content: 'Billing contact is finance@example.com.' },
+      { store, namespace: 'user:1', memoryId: mem.id },
+    )
+    await factBlock.add({ content: 'Billing contact is someone else.' }, { store, namespace: 'user:2', memoryId: mem.id })
+    await otherBlock.add(
+      { content: 'Billing contact in another block.' },
+      { store, namespace: 'user:1', memoryId: mem.id },
+    )
+    await factBlock.add({ content: 'Shipping address is Amsterdam.' }, { store, namespace: 'user:1', memoryId: mem.id })
+
+    const rendered = await mem.asContext().systemFn({ query: 'billing' })
+
+    expect(rendered).toContain('Billing contact is finance@example.com.')
+    expect(rendered).not.toContain('someone else')
+    expect(rendered).not.toContain('another block')
+    expect(rendered).not.toContain('Shipping address')
+  })
+
+  it('supports procedural memories without mutating prompt definitions', async () => {
     const store = inMemoryCruxStore()
     const proc = procedures({ id: 'procedures' })
     await proc.add(

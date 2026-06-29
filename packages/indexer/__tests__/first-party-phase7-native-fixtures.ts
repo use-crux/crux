@@ -17,17 +17,20 @@ describe('first-party Phase 7 native fixtures', () => {
         '',
         'export const sessionMemory = memory({',
         '  id: memoryId,',
+        "  capture: { mode: 'afterResponse' },",
+        '  budget: { maxTokens: 1200 },',
         "  evictionPolicy: 'ttl-30d',",
         '  store: memoryStore,',
         '  blocks: [',
-        "    workingState({ id: 'state', schema: stateSchema, priority: 10, write: { mode: 'merge' } }),",
-        "    episodes({ id: 'history', embed: embedEpisode, priority: 5 }),",
+        "    workingState({ id: 'state', schema: stateSchema, priority: 10, budget: { maxTokens: 300 }, write: { mode: 'merge' } }),",
+        "    episodes({ id: 'history', embed: embedEpisode, priority: 5, retention: '30d', render: { strategy: 'recent', limit: 4 } }),",
+        "    memoryBlock({ id: 'scratch', kind: 'custom', render: false }),",
         '  ],',
         '})',
       ].join('\n')
       const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
         source,
-        callNames: ['memory', 'createMemoryId', 'workingState', 'episodes', 'durableStore'],
+        callNames: ['memory', 'createMemoryId', 'workingState', 'episodes', 'memoryBlock', 'durableStore'],
       })
 
       expect(nativeFactCount(record, 'memory')).toBe(1)
