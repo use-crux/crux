@@ -685,9 +685,13 @@ The plugin system supersedes the previous manual chaining approach. `withDevtool
 
 ### Instrumentation Standard
 
-All primitives emit events through `InstrumentationHooks` only. No primitive should reference `collector`, `getRuntime().collector`, or any reporter directly.
+Detailed tracing uses canonical `@use-crux/core/observability` graph records emitted through
+`observe.*` / `emit()`. Runtime integrations must not introduce ad hoc collectors or reporters at
+primitive call sites. The transitional hook path still exists for hook-based integrations until the
+event-spine migration removes it; no primitive should reference `collector`, `getRuntime().collector`,
+or any reporter directly.
 
-**Event flow for hook-based integrations:**
+**Event flow for transitional hook-based integrations:**
 
 ```
 Primitive (memory, swarm, flow, etc.)
@@ -1470,6 +1474,14 @@ Use `upstashVectorStore()` for new retrieval/indexing code. Key/value memory blo
 ## Canonical Observability Runtime
 
 `@use-crux/core/observability` is the only TypeScript write contract for detailed traces. Runtime primitives emit append-only graph records and the Go backend owns all graph complexity: validation, idempotent ingestion, placeholder reconciliation, read-model building, filtering, search, retention, and subscriptions.
+
+`emit()` is the in-process event spine for those records. It validates each graph record once, then
+fans out synchronously to `subscribeObservability()` subscribers, publishes `{ schemaVersion,
+record }` on the Node diagnostics channel `crux:observability` when that channel has subscribers,
+and queues the same record for the async transport when a transport is configured. In-process
+subscriber failures are counted in `observabilityDiagnostics().subscriberErrors` and never interrupt
+user code, sibling subscribers, or transport delivery. The diagnostics channel is a Node tee for
+external observers and degrades to no-op when `node:diagnostics_channel` is unavailable.
 
 `observe.run()` creates user-facing execution roots. `observe.span()` creates inspectable operations and automatically opens an implicit run when called outside an active run, so compositions such as `pipeline`, `consensus`, `parallel`, and `swarm` remain traceable when used directly. `observe.event()`, `observe.artifact()`, and `observe.edge()` attach timestamped detail, payloads, and relations to the active graph context.
 

@@ -5,12 +5,15 @@ description: Canonical graph record contract shared by Crux runtimes, devtools, 
 
 ```ts
 import {
+  CRUX_OBSERVABILITY_CHANNEL,
   CruxGraphRecordBatchSchema,
   createHttpObservabilityTransport,
   createCruxRunId,
   createCruxSpanId,
   normalizeObservedError,
   observe,
+  observabilityDiagnostics,
+  subscribeObservability,
 } from '@use-crux/core/observability'
 ```
 
@@ -58,9 +61,12 @@ Runtime bridge and eval-runner failures can happen outside a normal span. Those 
 | `CruxGraphRecordSchema`             | Zod schema for one graph record                                        |
 | `CruxGraphRecordBatchSchema`        | Zod schema for a batch of records                                      |
 | `CRUX_OBSERVABILITY_SCHEMA_VERSION` | Current graph schema version                                           |
+| `CRUX_OBSERVABILITY_CHANNEL`        | Node diagnostics channel name for graph-record messages                |
 | `createCruxRunId()`                 | Create a branded run id                                                |
 | `createCruxSpanId()`                | Create a branded span id                                               |
 | `createCruxArtifactId()`            | Create a branded artifact id                                           |
+| `subscribeObservability()`          | Register a synchronous in-process graph-record subscriber              |
+| `observabilityDiagnostics()`        | Inspect delivery counters, transport errors, and subscriber errors     |
 | `normalizeObservedError()`          | Normalize an unknown thrown value into safe inspectable error evidence |
 | `observedErrorSummary()`            | Produce the compact terminal span/run error summary                    |
 | `toSafeJsonValue()`                 | Convert unknown values into bounded, redacted JSON-safe previews       |
@@ -135,6 +141,46 @@ queueMicrotask(() => {
 ```
 
 ## Delivery
+
+`emit()` is the event spine for the TypeScript runtime. Every record is born once, then delivered to
+three downstream sinks:
+
+- Synchronous in-process subscribers registered with `subscribeObservability()`.
+- The Node diagnostics channel named by `CRUX_OBSERVABILITY_CHANNEL`, when that channel has
+  subscribers.
+- The async observability transport, when a transport is configured.
+
+Use an in-process subscriber when your code runs in the same runtime and wants the canonical graph
+records directly:
+
+```ts
+const unsubscribe = subscribeObservability((record) => {
+  if (record.type === 'span:end') {
+    console.log(record.primitive, record.status)
+  }
+})
+
+unsubscribe()
+```
+
+Use the diagnostics channel when an external Node integration wants to subscribe without depending on
+Crux plugin wiring:
+
+```ts
+import { channel } from 'node:diagnostics_channel'
+import {
+  CRUX_OBSERVABILITY_CHANNEL,
+  type CruxObservabilityChannelMessage,
+} from '@use-crux/core/observability'
+
+channel(CRUX_OBSERVABILITY_CHANNEL).subscribe((message) => {
+  const { record } = message as CruxObservabilityChannelMessage
+  // map record to your tracing backend
+})
+```
+
+In-process subscriber errors are isolated from user code and counted in
+`observabilityDiagnostics().subscriberErrors`.
 
 The default runtime path is non-blocking: transport failures are captured as diagnostics and never throw into user code. In serverless runtimes, await a bounded flush before returning so queued records are not killed with the request:
 

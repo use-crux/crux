@@ -15,6 +15,7 @@ import {
   type CruxSpanId,
   type CruxTraceId,
 } from './contract'
+import { publishObservabilityChannel } from './channel'
 import {
   createCruxArtifactId,
   createCruxEdgeId,
@@ -26,7 +27,14 @@ import {
 } from './ids'
 import { normalizeObservedError, observedErrorSummary } from './errors'
 import { CruxGraphRecordSchema } from './schema'
+import {
+  observabilitySubscriberErrorCount,
+  publishObservabilitySubscribers,
+  resetObservabilitySubscribers,
+} from './subscribers'
 import type { CruxObservabilityTransport } from './transport'
+
+export { subscribeObservability, type CruxObservabilitySubscriber } from './subscribers'
 
 export interface ObservabilityDeliveryOptions {
   /**
@@ -46,6 +54,7 @@ export interface ObservabilityDiagnostics {
   readonly pendingDeliveries: number
   readonly droppedRecords: number
   readonly deliveryErrors: readonly unknown[]
+  readonly subscriberErrors: number
 }
 
 export interface ObservabilityFlushOptions {
@@ -218,6 +227,8 @@ function durationSince(startedAtMs: number): number {
 
 function emit(record: CruxGraphRecord): void {
   CruxGraphRecordSchema.parse(record)
+  publishObservabilitySubscribers(record)
+  publishObservabilityChannel(record)
   if (!activeTransport) return
   queuedRecords.push(record)
   if (pendingDeliveries.size === 0) {
@@ -420,6 +431,7 @@ export function currentObservabilityTransport(): CruxObservabilityTransport | un
 export function resetObservabilityRuntime(): void {
   activeTransport = undefined
   configureDelivery(undefined)
+  resetObservabilitySubscribers()
   queuedRecords.length = 0
   dispatchScheduled = false
   pendingDeliveries.clear()
@@ -437,6 +449,7 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
     pendingDeliveries: pendingDeliveries.size,
     droppedRecords,
     deliveryErrors,
+    subscriberErrors: observabilitySubscriberErrorCount(),
   }
 }
 

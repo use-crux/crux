@@ -47,6 +47,26 @@ Plugins are processed in order. Each plugin's `install()` receives the cumulativ
 | `withDevtools()`  | `@use-crux/core/observability` | Visual tracing UI for development                |
 | `withTelemetry()` | `@use-crux/otel`               | OpenTelemetry spans for production observability |
 
+## Subscribing to graph records
+
+You do not need a full plugin when you only want to consume the canonical graph record stream inside
+the same process. Use `subscribeObservability()` and clean it up when your integration stops:
+
+```ts title="my-record-subscriber.ts"
+import { subscribeObservability } from '@use-crux/core/observability'
+
+const unsubscribe = subscribeObservability((record) => {
+  if (record.type === 'artifact' && record.kind === 'output') {
+    queueAuditWrite(record)
+  }
+})
+
+unsubscribe()
+```
+
+Node-native vendor integrations can also subscribe to the `crux:observability` diagnostics channel
+without installing a Crux plugin.
+
 ## Writing a custom plugin
 
 Implement the `CruxPlugin` interface:
