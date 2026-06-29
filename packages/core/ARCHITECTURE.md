@@ -112,6 +112,7 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── runtime/            Process runtime, config, plugins, middleware hooks, execution context
 │   ├── index.ts        Curated barrel: config(), runtime store, plugins, hook types, execution context
 │   ├── config.ts / config-types.ts   config() + CruxConfig shape
+│   ├── config-transaction/   Internal runtime config transaction: plan, ports, install, Crux object factory
 │   ├── configure.ts / configure-registry.ts   configure() registry build + global security flags
 │   ├── runtime.ts      CruxRuntime — global hooks/reporters (getRuntime/setRuntime/updateRuntime/resetRuntime)
 │   ├── plugin.ts / merge-runtime.ts   CruxPlugin, applyPlugins(), mergeRuntime() layered composition
@@ -671,14 +672,19 @@ The plugin system enables composable hook installation. Three key functions:
 
 **Layered middleware**: When two plugins install middleware, the later plugin wraps the earlier one. Calling `next()` in the outer middleware invokes the inner middleware.
 
-**Plugin processing in `configure()`**:
+**Plugin processing in `config()` / `configure()`**:
 
-1. If `devtools.serverUrl` is explicitly set, auto-prepend `withDevtools()` to the plugins array
-   unless the `observability` domain owns the transport
-2. Append user-provided `plugins`
-3. Call `applyPlugins()` with the accumulated runtime
-4. Set final runtime via `setRuntime()`
-5. Plugin `dispose()` functions called in reverse order during `registry.dispose()`
+1. `config()` creates a runtime config transaction and exits early in `CRUX_INDEX=1` mode.
+2. The transaction applies config-owned runtime state first: persistence store, explicit
+   observability ownership, capture policy, generation middleware, and tokenizer.
+3. If the `observability` domain owns the transport (`enabled: false`, custom `transport`, or
+   `serverUrl`), the transaction applies user plugins after those runtime fields so plugins see the
+   owned transport/store state.
+4. If observability does not own the transport, `configure()` keeps devtools fallback ownership:
+   it auto-prepends `withDevtools()` for explicit `devtools.serverUrl`, then appends user plugins so
+   local devtools instrumentation installs before custom plugins.
+5. Plugin `dispose()` functions run before config-owned observability restore. Runtime Bridge
+   disposal runs before registry/plugin disposal.
 
 ### Chaining (Legacy)
 
@@ -724,6 +730,26 @@ graph in the same backend whenever quality runs are executed with devtools attac
 3. Transport metadata (sessionId, traceId, timestamp) is added by handlers at call time from the active observability context.
 4. The `RuntimeFlowSessionReporter` remains a public API for users who want manual flow reporting with rich metadata.
 
+## Runtime Config Transaction
+
+`config()` remains the only public project configuration API. Internally it delegates lifecycle work
+to `runtime/config-transaction/`, a deep module with a pure planner and effectful installer:
+
+- `planRuntimeConfig()` reads only `CruxConfig` plus optional environment data. It decides index
+  mode, observability ownership, runtime patches, bridge inputs, tokenizer policy, and whether user
+  plugins belong to the transaction or to `configure()` behind devtools fallback.
+- `installRuntimeConfigPlan()` takes the plan plus narrow ports for runtime state, observability,
+  bridge connection, tokenizer, plugins, diagnostics, and Crux object creation. Tests use fake ports
+  to verify ordering without inspecting global state.
+- Production ports call the existing domain owners: `updateRuntime()` / `setRuntime()`,
+  `configureObservability()`, `createHttpObservabilityTransport()`, `connectRuntimeBridge()`,
+  `setTokenizer()`, and `applyPlugins()`.
+
+The transaction boundary owns application and teardown order. It must not duplicate observability
+protocols, bridge protocols, plugin merge semantics, or prompt registry construction; those stay in
+their existing domains. `configure()` remains available for lower-level prompt registry tests and
+direct legacy use.
+
 ## configure() Internals
 
 `configure(options)` does the following in order:
@@ -733,7 +759,7 @@ graph in the same backend whenever quality runs are executed with devtools attac
 3. **Auto-collect contexts** — Deduplicate contexts from prompts' `use` arrays with explicitly passed contexts
 4. **Validate** — All prompts must have an `id`, no duplicate IDs allowed
 5. **Build indexes** — `byId: Map<string, Prompt>`, `tagIndex: Map<string, Prompt[]>`
-6. **Apply globals** — `setTokenizer()`, `setRuntime()` for middleware if provided
+6. **Apply globals for direct use** — `setTokenizer()`, `setRuntime()` for middleware if provided
 7. **Build plugins array** — Auto-prepend `withDevtools()` only for explicit `devtools.serverUrl`
    local/tunnel config when `observability` has not already claimed the transport, then append user
    `plugins`

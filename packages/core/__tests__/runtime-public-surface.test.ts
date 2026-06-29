@@ -75,6 +75,32 @@ describe('@use-crux/core config()', () => {
       crux.dispose()
     }
   })
+
+  it('installs generation middleware and plugins through the public config surface', () => {
+    resetRuntime()
+    const events: string[] = []
+    const middleware: NonNullable<CruxRuntime['middleware']> = (args, next) => next(args)
+    const plugin: CruxPlugin = {
+      name: 'public-config-plugin',
+      install(runtime) {
+        events.push(runtime.middleware === middleware ? 'saw-middleware' : 'missing-middleware')
+        return { semanticCacheInstalled: true }
+      },
+    }
+
+    const crux = config({
+      generation: { middleware },
+      plugins: [plugin],
+    })
+
+    try {
+      expect(events).toEqual(['saw-middleware'])
+      expect(getRuntime().middleware).toBe(middleware)
+      expect(getRuntime().semanticCacheInstalled).toBe(true)
+    } finally {
+      crux.dispose()
+    }
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────

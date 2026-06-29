@@ -31,10 +31,8 @@
 
 import type { PromptRegistry } from './configure'
 import type { CruxConfig } from './config-types'
-import { connectRuntimeBridge } from '../runtime-bridge'
 import { configure } from './configure'
-import { updateRuntime } from './runtime'
-import { configureObservability, createHttpObservabilityTransport } from '../observability'
+import { createRuntimeConfigTransaction } from './config-transaction'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -98,109 +96,12 @@ export interface Crux extends PromptRegistry {
  * ```
  */
 export function config(config: CruxConfig): Crux {
-  const indexMode = typeof process !== 'undefined' && typeof process.env === 'object' && process.env.CRUX_INDEX === '1'
-  if (indexMode) return createInertCrux(config)
+  const transaction = createRuntimeConfigTransaction({ config })
+  if (transaction.inert) return transaction.createCrux()
 
-  const store = config.persistence?.store
-  const observabilityTransport =
-    config.observability?.enabled !== false
-      ? (config.observability?.transport ??
-        (config.observability?.serverUrl
-          ? createHttpObservabilityTransport({
-              serverUrl: config.observability.serverUrl,
-              token: config.observability.token,
-            })
-          : undefined))
-      : undefined
-  const observabilityDelivery = config.observability?.enabled !== false ? config.observability?.delivery : undefined
-  const observabilityCapture = observabilityCapturePolicy(config.observability)
-  const ownsObservability = config.observability?.enabled === false || observabilityTransport !== undefined
-  const restoreObservability = ownsObservability
-    ? configureObservability({
-        transport: observabilityTransport,
-        delivery: observabilityDelivery,
-      })
-    : undefined
+  const installation = transaction.apply()
+  const registry = configure(transaction.configureOptions)
+  const bridgeConnection = installation.connectBridge(registry)
 
-  updateRuntime({
-    ...(store ? { store } : {}),
-    ...(ownsObservability
-      ? {
-          observabilityTransport,
-          observabilityDelivery,
-        }
-      : {}),
-    ...(observabilityCapture ? { observabilityCapture } : {}),
-  })
-
-  // Delegate to internal configure() for all the heavy lifting
-  const registry = configure({
-    prompts: [],
-    devtools: ownsObservability ? undefined : config.devtools,
-    middleware: config.generation?.middleware,
-    tokenizer: config.generation?.tokenizer,
-    autoEscape: config.generation?.autoEscape,
-    securityWarnings: config.generation?.securityWarnings,
-    plugins: config.plugins ? [...config.plugins] : undefined,
-  })
-
-  const bridgeConnection = connectRuntimeBridge(
-    {
-      devtools: config.devtools,
-      quality: config.quality,
-      store,
-    },
-    {
-      logger: typeof console !== 'undefined' ? console : undefined,
-    },
-  )
-
-  // Extend registry with config access
-  return Object.freeze({
-    ...registry,
-    config: Object.freeze({ ...config }),
-    dispose() {
-      bridgeConnection?.dispose()
-      registry.dispose()
-      restoreObservability?.()
-    },
-  }) as Crux
-}
-
-function observabilityCapturePolicy(
-  observability: CruxConfig['observability'],
-): NonNullable<CruxConfig['observability']> | undefined {
-  if (!observability) return undefined
-  if (observability.recordInputs === undefined && observability.recordOutputs === undefined) return undefined
-  return {
-    ...(observability.recordInputs !== undefined ? { recordInputs: observability.recordInputs } : {}),
-    ...(observability.recordOutputs !== undefined ? { recordOutputs: observability.recordOutputs } : {}),
-  }
-}
-
-function createInertCrux(config: CruxConfig): Crux {
-  return Object.freeze({
-    prompts: Object.freeze([]),
-    contexts: Object.freeze([]),
-    get(id: string) {
-      throw new Error(`configure: prompt "${id}" not found`)
-    },
-    find() {
-      return undefined
-    },
-    list() {
-      return []
-    },
-    byTag() {
-      return []
-    },
-    byTags() {
-      return []
-    },
-    tags() {
-      return []
-    },
-    config: Object.freeze({ ...config }),
-    dispose() {},
-  }) as Crux
+  return installation.createCrux(registry, bridgeConnection)
 }
