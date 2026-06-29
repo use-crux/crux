@@ -30,9 +30,12 @@ export type {
   WorkspaceListResult,
   WorkspaceMount,
   WorkspaceMountAccess,
+  WorkspaceNamespaceOption,
   WorkspaceOperation,
+  WorkspaceJsonContent,
   WorkspaceReadOptions,
   WorkspaceReadResult,
+  WorkspaceTools,
   WorkspaceToolNames,
   WorkspaceToolOptions,
 } from './types'

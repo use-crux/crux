@@ -142,12 +142,15 @@ export type {
   WorkspaceBlobStore,
   WorkspaceConfig,
   WorkspaceContent,
+  WorkspaceJsonContent,
   WorkspaceFile,
   WorkspaceListEntry,
   WorkspaceListResult,
   WorkspaceMount,
   WorkspaceMountAccess,
+  WorkspaceNamespaceOption,
   WorkspaceReadResult,
+  WorkspaceTools,
   WorkspaceToolNames,
 } from './workspace'
 export type {

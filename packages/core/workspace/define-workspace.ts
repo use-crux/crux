@@ -12,9 +12,7 @@
 import { z } from 'zod'
 import { context } from '../prompt/context'
 import { inMemoryBlobStore, inMemoryDataStore } from '../store/memory'
-import type { AnyToolSet } from '../types'
 import type { Context, PromptInjection } from '../prompt/context-types'
-import type { ToolDef } from '../types/tool'
 import { analyzeContent, createFileRecord, findOccurrences, recordToFile } from './content'
 import { renderWorkspaceManifest } from './manifest'
 import { mountForPath, normalizeMounts, normalizePath, defaultMounts } from './path'
@@ -36,9 +34,13 @@ import {
   type WorkspaceListOptions,
   type WorkspaceListResult,
   type WorkspaceBlobStore,
+  type WorkspaceNamespaceOption,
   type WorkspaceReadOptions,
   type WorkspaceReadResult,
+  type WorkspaceToolDelete,
   type WorkspaceToolOptions,
+  type WorkspaceToolPrefix,
+  type WorkspaceTools,
   type WorkspaceWriteOptions,
 } from './types'
 
@@ -66,7 +68,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
   }
 
   async function list(path = '/', options?: WorkspaceListOptions): Promise<WorkspaceListResult> {
-    const namespace = await resolveNamespace()
+    const namespace = options?.namespace ?? (await resolveNamespace())
     return listForNamespace(namespace, path, options)
   }
 
@@ -94,7 +96,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
   }
 
   async function read(path: string, options?: WorkspaceReadOptions): Promise<WorkspaceReadResult> {
-    const namespace = await resolveNamespace()
+    const namespace = options?.namespace ?? (await resolveNamespace())
     return readForNamespace(namespace, path, options)
   }
 
@@ -116,7 +118,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
     content: WorkspaceContent,
     options?: WorkspaceWriteOptions,
   ): Promise<WorkspaceFile> {
-    const namespace = await resolveNamespace()
+    const namespace = options?.namespace ?? (await resolveNamespace())
     return writeForNamespace(namespace, path, content, options)
   }
 
@@ -150,7 +152,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
   }
 
   async function edit(path: string, patch: WorkspaceEditPatch, options?: WorkspaceEditOptions): Promise<WorkspaceFile> {
-    const namespace = await resolveNamespace()
+    const namespace = options?.namespace ?? (await resolveNamespace())
     return editForNamespace(namespace, path, patch, options)
   }
 
@@ -189,7 +191,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
   }
 
   async function remove(path: string, options?: WorkspaceDeleteOptions): Promise<void> {
-    const namespace = await resolveNamespace()
+    const namespace = options?.namespace ?? (await resolveNamespace())
     await removeForNamespace(namespace, path, options)
   }
 
@@ -213,16 +215,11 @@ export function workspace(config: WorkspaceConfig): Workspace {
       read,
       write,
       edit,
-      remove: (path) => remove(path),
-      listForNamespace,
-      readForNamespace,
-      writeForNamespace,
-      editForNamespace,
-      removeForNamespace: (namespace, path) => removeForNamespace(namespace, path),
+      remove,
     },
   })
 
-  function asContext(options?: WorkspaceContextOptions): Context<z.ZodType<{}>> {
+  function asContext(options?: WorkspaceContextOptions): Context<z.ZodObject<{}>> {
     return context({
       id: `workspace:${config.id}`,
       description: `Workspace: ${config.id}`,
@@ -250,7 +247,9 @@ export function workspace(config: WorkspaceConfig): Workspace {
     edit,
     delete: remove,
     asContext,
-    asTools: (options?: WorkspaceToolOptions): Record<string, ToolDef> => asTools(options),
+    asTools: <const Options extends WorkspaceToolOptions & WorkspaceNamespaceOption = {}>(
+      options?: Options,
+    ): WorkspaceTools<WorkspaceToolPrefix<Options>, WorkspaceToolDelete<Options>> => asTools(options),
     async inject(args): Promise<PromptInjection> {
       const namespace = await resolveNamespace(args.input, args.promptId)
       return {
@@ -263,7 +262,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
             system: () => renderWorkspaceManifest({ store, blobs, workspaceId: config.id, mounts, namespace }),
           }),
         ],
-        tools: asTools(undefined, namespace) as AnyToolSet,
+        tools: asTools({ namespace }),
         metadata: {
           workspace: {
             id: config.id,

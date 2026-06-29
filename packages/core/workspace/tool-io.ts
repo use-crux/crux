@@ -9,10 +9,18 @@
  */
 
 import type { JsonValue, ToolModelOutput } from '../types/tool'
-import type { WorkspaceFile, WorkspaceReadResult, WorkspaceToolNames, WorkspaceToolOptions } from './types'
+import type {
+  WorkspaceFile,
+  WorkspaceReadResult,
+  WorkspaceToolNames,
+  WorkspaceToolOptions,
+  WorkspaceToolPrefix,
+} from './types'
 
 /** Resolve the generated workspace tool names from an optional prefix. */
-export function workspaceToolNames(options?: Pick<WorkspaceToolOptions, 'prefix'>): WorkspaceToolNames {
+export function workspaceToolNames<const Options extends Pick<WorkspaceToolOptions, 'prefix'> = {}>(
+  options?: Options,
+): WorkspaceToolNames<WorkspaceToolPrefix<Options>> {
   const prefix = options?.prefix ? toPascalCase(options.prefix) : ''
   return {
     list: prefix ? `list${prefix}Workspace` : 'listWorkspace',
@@ -20,7 +28,7 @@ export function workspaceToolNames(options?: Pick<WorkspaceToolOptions, 'prefix'
     writeFile: prefix ? `write${prefix}WorkspaceFile` : 'writeWorkspaceFile',
     editFile: prefix ? `edit${prefix}WorkspaceFile` : 'editWorkspaceFile',
     deleteFile: prefix ? `delete${prefix}WorkspaceFile` : 'deleteWorkspaceFile',
-  }
+  } as WorkspaceToolNames<WorkspaceToolPrefix<Options>>
 }
 
 function toPascalCase(value: string): string {
