@@ -8,7 +8,6 @@ import {
   CruxProvider,
   useCruxTransport,
   usePlan,
-  useTaskList,
   useTasks,
   useBlackboard,
   useWorkingMemory,
@@ -73,18 +72,6 @@ Subscribe to a plan by ID.
 | `planId`  | `string \| undefined` | The plan ID, or `undefined` to skip |
 
 **Returns:** `Plan | undefined` -- the plan, or `undefined` if loading/skipped/not found.
-
-### `useTaskList(filter)`
-
-Subscribe to a task list by ID or by filter.
-
-| Parameter | Type                                             | Description                                                                                                      |
-| --------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `filter`  | `string \| Record<string, unknown> \| undefined` | A task list ID, a filter object (e.g., `{ planId }` or `{ 'metadata.threadId': 'abc' }`), or `undefined` to skip |
-
-**Returns:** `TaskList | undefined`
-
-When `filter` is a string, performs a direct lookup by ID. When it is an object, queries all task lists matching the filter and returns the first match.
 
 ### `useTasks(taskListId)`
 
