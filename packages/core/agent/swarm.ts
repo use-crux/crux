@@ -456,13 +456,6 @@ export function createSwarm(executor: AgentExecutor) {
       },
       async () => {
         // Emit composition:start
-        runtime.instrumentationHooks?.onCompositionStart?.({
-          compositionId,
-          kind: 'swarm',
-          agentIds,
-          startAgent,
-          maxHandoffs,
-        })
 
         // Main loop
         while (true) {
@@ -551,28 +544,8 @@ export function createSwarm(executor: AgentExecutor) {
             const errorMsg = err instanceof Error ? err.message : String(err)
 
             // Emit composition:agent (error)
-            runtime.instrumentationHooks?.onCompositionAgent?.({
-              compositionId,
-              agentId: currentAgentId,
-              index: agentIndex,
-              status: 'error',
-              durationMs: Date.now() - agentStart,
-              error: errorMsg,
-              ...(previousAgentId ? { handoffFrom: previousAgentId } : {}),
-              ...(previousHandoffReason ? { handoffReason: previousHandoffReason } : {}),
-              ...(handoffCount > 0 ? { hopNumber: handoffCount } : {}),
-            })
 
             // Emit composition:end (error)
-            runtime.instrumentationHooks?.onCompositionEnd?.({
-              compositionId,
-              kind: 'swarm',
-              status: 'error',
-              durationMs: Date.now() - start,
-              agentCount: agentIndex + 1,
-              handoffPath: [...handoffPath],
-              handoffCount,
-            })
 
             throw err
           }
@@ -595,31 +568,11 @@ export function createSwarm(executor: AgentExecutor) {
           }
 
           // Emit composition:agent (success)
-          runtime.instrumentationHooks?.onCompositionAgent?.({
-            compositionId,
-            agentId: currentAgentId,
-            index: agentIndex,
-            status: 'success',
-            durationMs: result.durationMs,
-            ...(previousAgentId ? { handoffFrom: previousAgentId } : {}),
-            ...(previousHandoffReason ? { handoffReason: previousHandoffReason } : {}),
-            ...(handoffCount > 0 ? { hopNumber: handoffCount } : {}),
-          })
           agentIndex++
 
           // Check if aborted via onCost
           if (aborted) {
             const durationMs = Date.now() - start
-            runtime.instrumentationHooks?.onCompositionEnd?.({
-              compositionId,
-              kind: 'swarm',
-              status: 'success',
-              durationMs,
-              agentCount: agentIndex,
-              handoffPath: [...handoffPath],
-              handoffCount,
-              finalAgentId: currentAgentId,
-            })
             emitSwarmCompositionReport({
               compositionId,
               durationMs,
@@ -656,15 +609,6 @@ export function createSwarm(executor: AgentExecutor) {
               handoffPath.push(handoffTarget)
 
               // Emit composition:end (error)
-              runtime.instrumentationHooks?.onCompositionEnd?.({
-                compositionId,
-                kind: 'swarm',
-                status: 'error',
-                durationMs: Date.now() - start,
-                agentCount: agentIndex,
-                handoffPath: [...handoffPath],
-                handoffCount,
-              })
 
               throw new SwarmError(
                 `swarm: maxHandoffs (${maxHandoffs}) reached. ` + `Path: ${handoffPath.join(' → ')}`,
@@ -771,16 +715,6 @@ export function createSwarm(executor: AgentExecutor) {
           const durationMs = Date.now() - start
 
           // Emit composition:end (success)
-          runtime.instrumentationHooks?.onCompositionEnd?.({
-            compositionId,
-            kind: 'swarm',
-            status: 'success',
-            durationMs,
-            agentCount: agentIndex,
-            handoffPath: [...handoffPath],
-            handoffCount,
-            finalAgentId: currentAgentId,
-          })
           emitSwarmCompositionReport({
             compositionId,
             durationMs,

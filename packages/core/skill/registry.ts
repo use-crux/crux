@@ -184,12 +184,10 @@ export async function resolveRegistrySkill(
       ttlMs: ttl,
     },
   })
-  const hooks = getRuntime().instrumentationHooks
   try {
     // Check cache
     const cached = getCached(identifier)
     if (cached) {
-      hooks?.onSkillCacheHit?.({ skillId: identifier })
       const result = {
         instructions: cached.instructions,
         references: cached.references,
@@ -216,7 +214,6 @@ export async function resolveRegistrySkill(
       return result
     }
 
-    hooks?.onSkillCacheMiss?.({ skillId: identifier })
 
     const { registryName, path } = parseIdentifier(identifier)
 

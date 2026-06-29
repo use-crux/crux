@@ -136,11 +136,6 @@ export function createConsensus(executor: AgentExecutor) {
       },
       async () => {
         // Emit consensus composition:start
-        runtime.instrumentationHooks?.onCompositionStart?.({
-          compositionId,
-          kind: 'consensus',
-          agentIds,
-        })
         // Convert array to named map for parallel()
         const agentMap: Record<string, AgentLike> = {}
         for (let i = 0; i < agents.length; i++) {
@@ -183,14 +178,6 @@ export function createConsensus(executor: AgentExecutor) {
 
         // Validate quorum
         const emitEnd = (status: 'success' | 'error') => {
-          runtime.instrumentationHooks?.onCompositionEnd?.({
-            compositionId,
-            kind: 'consensus',
-            status,
-            durationMs: Date.now() - start,
-            agentCount: allResults.length,
-            agreement,
-          })
         }
 
         const votesByVote = votes as Record<TVote, number>

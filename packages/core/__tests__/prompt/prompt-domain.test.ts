@@ -35,7 +35,7 @@ describe('prompt domain barrel (../prompt)', () => {
     }
   })
 
-  it('prompt() composes context system text through the domain barrel', async () => {
+    it('prompt() composes context system text through the domain barrel', async () => {
     const brand = context({
       id: 'brand',
       input: z.object({ brand: z.string() }),
@@ -55,7 +55,7 @@ describe('prompt domain barrel (../prompt)', () => {
     expect(resolved.prompt).toBe('Hi?')
   })
 
-  it('when()/match() gate context contributions', async () => {
+    it('when()/match() gate context contributions', async () => {
     const onlyEn = when(
       (input: { locale: string }) => input.locale === 'en',
       context({ id: 'en', system: 'Answer in English.' }),
@@ -75,7 +75,7 @@ describe('prompt domain barrel (../prompt)', () => {
     expect(fr.system).toBe('Base.\n\nBe verbose.')
   })
 
-  it('createPrompts()/createContexts() build addressable trees', () => {
+    it('createPrompts()/createContexts() build addressable trees', () => {
     const ctxTree = createContexts({ tone: context({ id: 'tone', system: 'Friendly.' }) })
     expect(ctxTree.tone.id).toBe('tone')
 
@@ -83,7 +83,7 @@ describe('prompt domain barrel (../prompt)', () => {
     expect(promptTree.greet.id).toBe('greet')
   })
 
-  it('injectable()/contributor() produce recognizable use-entries', () => {
+    it('injectable()/contributor() produce recognizable use-entries', () => {
     const inj = injectable({ id: 'inj', inject: () => ({ metadata: { from: 'inj' } }) })
     expect(isInjectableEntry(inj)).toBe(true)
 

@@ -73,7 +73,7 @@ describe('quality redaction contract', () => {
     })
   })
 
-  it('applies configured dot paths relative to each evaluation cell snapshot value', async () => {
+    it('applies configured dot paths relative to each evaluation cell snapshot value', async () => {
     const evaluation = evaluate({
       task: async (input: { customer: { email: string; id: string } }) => ({
         customer: { email: input.customer.email, id: input.customer.id },
@@ -94,7 +94,7 @@ describe('quality redaction contract', () => {
     expect(cell.expected).toEqual({ customer: { email: '[redacted]', id: 'cust_123' } })
   })
 
-  it('scopes configured feedback redaction paths by metadata, expected, and proposal roots', async () => {
+    it('scopes configured feedback redaction paths by metadata, expected, and proposal roots', async () => {
     const store = await makeFeedbackStore([
       'metadata.customer.email',
       'expected.answer.privateNote',

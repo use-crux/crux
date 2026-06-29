@@ -50,24 +50,24 @@ describe('handoff', () => {
     expect(h.id).toBe('research-to-writer')
   })
 
-  it('exposes inputSchema and outputSchema', () => {
+    it('exposes inputSchema and outputSchema', () => {
     const h = makeHandoff()
     expect(h.inputSchema).toBe(inputSchema)
     expect(h.outputSchema).toBe(outputSchema)
   })
 
-  it('prepare validates input against inputSchema', async () => {
+    it('prepare validates input against inputSchema', async () => {
     const h = makeHandoff()
     const payload = await h.prepare(sampleInput)
     expect(payload.data.query).toBe('AI safety')
   })
 
-  it('prepare rejects invalid input', async () => {
+    it('prepare rejects invalid input', async () => {
     const h = makeHandoff()
     await expect(h.prepare({ bad: 'data' } as any)).rejects.toThrow()
   })
 
-  it('prepare runs transform function', async () => {
+    it('prepare runs transform function', async () => {
     const h = makeHandoff()
     const payload = await h.prepare(sampleInput)
     expect(payload.data.topResults).toHaveLength(2)
@@ -76,7 +76,7 @@ describe('handoff', () => {
     expect((payload.data as any).metadata).toBeUndefined()
   })
 
-  it('prepare validates transform output against outputSchema', async () => {
+    it('prepare validates transform output against outputSchema', async () => {
     const badHandoff = makeHandoff({
       id: 'bad',
       inputSchema: z.object({ x: z.string() }),
@@ -86,7 +86,7 @@ describe('handoff', () => {
     await expect(badHandoff.prepare({ x: 'test' })).rejects.toThrow()
   })
 
-  it('prepare returns payload with correct shape', async () => {
+    it('prepare returns payload with correct shape', async () => {
     const h = makeHandoff()
     const payload = await h.prepare(sampleInput)
     expect(payload.handoffId).toBe('research-to-writer')
@@ -94,7 +94,7 @@ describe('handoff', () => {
     expect(payload.data).toBeDefined()
   })
 
-  describe('without summarize', () => {
+describe('without summarize', () => {
     it('payload has no summary', async () => {
       const h = makeHandoff()
       const payload = await h.prepare(sampleInput)
@@ -102,7 +102,7 @@ describe('handoff', () => {
     })
   })
 
-  describe('with summarize', () => {
+describe('with summarize', () => {
     const mockGenerate: GenerateTextFn = vi.fn(async () => ({
       text: 'Summary: research results about AI safety',
     }))
@@ -138,7 +138,7 @@ describe('handoff', () => {
     })
   })
 
-  describe('onPrepare', () => {
+describe('onPrepare', () => {
     it('fires with handoffId and sizes', async () => {
       const onPrepare = vi.fn()
       const h = makeHandoff({ onPrepare })
@@ -150,7 +150,7 @@ describe('handoff', () => {
     })
   })
 
-  describe('asContext', () => {
+describe('asContext', () => {
     it('returns a Context instance', async () => {
       const h = makeHandoff()
       const payload = await h.prepare(sampleInput)
@@ -206,7 +206,7 @@ describe('handoff', () => {
     })
   })
 
-  it('handles async transform function', async () => {
+    it('handles async transform function', async () => {
     const h = makeHandoff({
       id: 'async-test',
       inputSchema,
@@ -228,7 +228,7 @@ describe('handoff', () => {
     expect(payload.data.topResults).toHaveLength(2)
   })
 
-  it('filters fields via transform (schema contract)', async () => {
+    it('filters fields via transform (schema contract)', async () => {
     const h = makeHandoff()
     const payload = await h.prepare(sampleInput)
     // Input had: query, results (with snippets), metadata

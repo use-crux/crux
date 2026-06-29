@@ -55,7 +55,7 @@ describe('@use-crux/core/tools — tool()', () => {
     expect(await search.execute({ query: 'crux' })).toBe('results for crux')
   })
 
-  it('defaults to an empty input schema when none is provided', async () => {
+    it('defaults to an empty input schema when none is provided', async () => {
     const ping = tool({ description: 'no input', execute: () => 'pong' })
     expect(await ping.execute({})).toBe('pong')
   })
@@ -85,7 +85,7 @@ describe('@use-crux/core/tool-middleware — middleware', () => {
     expect(seen).toEqual(['echo'])
   })
 
-  it('approvalMiddleware forces approval for matched tools', async () => {
+    it('approvalMiddleware forces approval for matched tools', async () => {
     const mw = approvalMiddleware({ id: 'gate', match: ['danger'] })
     const wrapped = mw.wrapTool('danger', { execute: async () => 'ok' })
     expect(await wrapped.needsApproval?.({}, {})).toBe(true)
@@ -113,7 +113,7 @@ describe('@use-crux/core/tool-middleware — approval protocol helpers', () => {
     expect(decision?.approved).toBe(true)
   })
 
-  it('toolApprovalResponse + deniedToolModelOutput build canonical parts', () => {
+    it('toolApprovalResponse + deniedToolModelOutput build canonical parts', () => {
     expect(toolApprovalResponse({ approvalId: 'a1', approved: false, reason: 'no' })).toEqual({
       type: 'tool-approval-response',
       approvalId: 'a1',

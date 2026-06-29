@@ -15,18 +15,18 @@ describe('tokenizer', () => {
     expect(defaultTokenizer('abcde')).toBe(2)
   })
 
-  it('countTokens uses the default tokenizer', () => {
+    it('countTokens uses the default tokenizer', () => {
     expect(countTokens('hello world')).toBe(Math.ceil(11 / 4)) // 3
   })
 
-  it('setTokenizer swaps implementation', () => {
+    it('setTokenizer swaps implementation', () => {
     setTokenizer((text) => text.split(' ').length)
 
     expect(countTokens('hello world')).toBe(2)
     expect(countTokens('one two three four')).toBe(4)
   })
 
-  it('countTokens uses the swapped tokenizer', () => {
+    it('countTokens uses the swapped tokenizer', () => {
     const custom = (text: string) => text.length // 1 token per char
     setTokenizer(custom)
 

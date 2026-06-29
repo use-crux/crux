@@ -16,9 +16,8 @@
  *   shape, decision discovery, and idempotent resume replay.
  * - The per-call gate → execute → settle state machine that both
  *   inversion-of-control regimes drive.
- * - Instrumentation emission for both regime profiles (spans, artifacts,
- *   `onToolStart`/`onToolEnd` hook payloads), preserved from the
- *   pre-session dialects.
+ * - Observability emission for both regime profiles: spans, artifacts,
+ *   events, and edges from the canonical graph-record spine.
  * - Output normalization (`toModelOutput`, default shaping, rendering) —
  *   identical in live, resumed, and denied paths.
  * - The `LoadSkill` side effect: detection, re-resolution via the injected
@@ -465,7 +464,6 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
 
   // Snapshot runtime hooks once — a mid-call setRuntime() cannot
   // half-instrument this run (same rule as createSafety).
-  const hooks = getRuntime().instrumentationHooks
   const now = options.now ?? (() => Date.now())
   const mintToken = options.createApprovalToken ?? defaultCreateApprovalToken
   const appendRound: AppendToolRound = options.appendToolRound ?? canonicalAppendToolRound
@@ -477,13 +475,6 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
   function settleNotFound(toolCall: SessionToolCall, traceId: string | undefined): ToolResultEntry {
     const startedAt = now()
     const span = openToolCallSpan(toolCall.name, toolCall.id, toolCall.args)
-    hooks?.onToolStart?.({
-      toolCallId: toolCall.id,
-      toolName: toolCall.name,
-      args: toolCall.args,
-      traceId,
-      spanId: span.spanId,
-    })
     const modelOutput: ToolModelOutput = {
       type: 'error-json',
       value: { error: `Tool "${toolCall.name}" not found` },
@@ -498,19 +489,6 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
         isError: true,
         errorKind: 'tool_not_found',
       })
-    })
-    hooks?.onToolEnd?.({
-      toolCallId: toolCall.id,
-      toolName: toolCall.name,
-      durationMs: now() - startedAt,
-      modelOutput,
-      modelOutputType: modelOutput.type,
-      outputSize: 0,
-      modelOutputSize,
-      tokenSavingsEstimate: 0,
-      error: `Tool "${toolCall.name}" not found`,
-      traceId,
-      spanId: span.spanId,
     })
     span.error(new Error(`Tool "${toolCall.name}" not found`), {
       isError: true,
@@ -538,13 +516,6 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
   ): Promise<ToolResultEntry> {
     const startedAt = now()
     const span = openToolCallSpan(toolCall.name, toolCall.id, toolCall.args)
-    hooks?.onToolStart?.({
-      toolCallId: toolCall.id,
-      toolName: toolCall.name,
-      args: toolCall.args,
-      traceId,
-      spanId: span.spanId,
-    })
     try {
       span.withContext(() => emitToolArgsArtifact(span.spanId, toolCall.name, toolCall.id, toolCall.args))
       const execute = tool.execute ?? (() => undefined)
@@ -573,19 +544,6 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
           tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
           isError: false,
         })
-      })
-      hooks?.onToolEnd?.({
-        toolCallId: toolCall.id,
-        toolName: toolCall.name,
-        durationMs: now() - startedAt,
-        result,
-        modelOutput,
-        modelOutputType: modelOutput.type,
-        outputSize,
-        modelOutputSize,
-        tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
-        traceId,
-        spanId: span.spanId,
       })
       span.end({
         isError: false,
@@ -619,19 +577,6 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
           isError: true,
           errorKind: 'execute_error',
         })
-      })
-      hooks?.onToolEnd?.({
-        toolCallId: toolCall.id,
-        toolName: toolCall.name,
-        durationMs: now() - startedAt,
-        modelOutput,
-        modelOutputType: modelOutput.type,
-        outputSize: 0,
-        modelOutputSize,
-        tokenSavingsEstimate: 0,
-        error: err instanceof Error ? err.message : String(err),
-        traceId,
-        spanId: span.spanId,
       })
       span.error(err, {
         isError: true,
@@ -746,13 +691,6 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
         input: toJsonValue(toolCall.args),
         approvalToken: mintToken(),
       }
-      hooks?.onToolApprovalRequest?.({
-        approvalId,
-        toolCallId: toolCall.id,
-        toolName: toolCall.name,
-        input: toolCall.args,
-        traceId,
-      })
       emitToolApprovalObservation('request', {
         approvalId,
         toolCallId: toolCall.id,
@@ -865,7 +803,6 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       for (const loadedSkill of newSkills) {
         if (announcedSkills.has(loadedSkill.id)) continue
         announcedSkills.add(loadedSkill.id)
-        hooks?.onSkillLoad?.({ skillId: loadedSkill.id, source: 'inline' })
         transcript.push({ t: 'skill.load', skillId: loadedSkill.id })
       }
 
@@ -873,7 +810,6 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       const reResolved = await options.reresolve(skillSession)
       const updatedSystem = reResolved.system ?? ''
       for (const loadedSkill of newSkills) {
-        hooks?.onSkillResolve?.({ skillId: loadedSkill.id })
       }
       skillSession.markInjected(newSkills.map((entry) => entry.id))
 
@@ -902,13 +838,6 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
 
       let sealedMessages = [...messages]
       for (const request of requests) {
-        hooks?.onToolApprovalRequest?.({
-          approvalId: request.approvalId,
-          toolCallId: request.toolCallId,
-          toolName: request.toolName,
-          input: request.input,
-          traceId,
-        })
         emitToolApprovalObservation('request', {
           approvalId: request.approvalId,
           toolCallId: request.toolCallId,

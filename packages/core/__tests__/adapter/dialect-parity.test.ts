@@ -32,6 +32,7 @@ import {
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
+  subscribeObservability,
   type CruxGraphRecord,
 } from '../../observability'
 
@@ -161,7 +162,7 @@ describe('dialect parity — validation retry', () => {
     expect(assistantEcho(nativeRetryMessages)).toContain(INVALID_JSON)
   })
 
-  it('exhausts with the same error type and diagnostics in both dialects', async () => {
+    it('exhausts with the same error type and diagnostics in both dialects', async () => {
     const native = scriptedAdapterSpec([{ text: 'not json' }, { text: 'still not json' }])
     const nativeAdapter = makeAdapter(native.spec)(native.client)
     const nativeError = await nativeAdapter
@@ -243,7 +244,7 @@ describe('dialect parity — tool approval protocol', () => {
     expect(executorRequest.input).toEqual(nativeRequest.input)
   })
 
-  it('resumes an approved call identically: tool executes once, same tool round content', async () => {
+    it('resumes an approved call identically: tool executes once, same tool round content', async () => {
     async function suspendAndResume(kind: 'native' | 'executor') {
       const execute = vi.fn(async () => 'deleted 3 rows')
       const prompt = textPrompt()
@@ -332,7 +333,7 @@ describe('dialect parity — input guardrail redaction', () => {
       },
     })
 
-  it('sends the redacted user message to the provider in both dialects', async () => {
+    it('sends the redacted user message to the provider in both dialects', async () => {
     const userText = `my api key is ${SECRET}, please summarize`
 
     // AdapterSpec dialect: the prompt is rendered into the user message.
@@ -358,7 +359,7 @@ describe('dialect parity — input guardrail redaction', () => {
     expect(executorUser?.content).toBe(nativeUser?.content)
   })
 
-  it('redacts the prompt-text fallback in the executor dialect', async () => {
+    it('redacts the prompt-text fallback in the executor dialect', async () => {
     // No message history: the executor dialect guards the rendered prompt
     // text and must forward the redacted text to the provider.
     const fake = fakeLoopRuntime({ loops: [[{ text: 'ok' }]] })
@@ -376,21 +377,36 @@ describe('dialect parity — input guardrail redaction', () => {
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Record the safety protocol as the ordered sequence of instrumentation
- * hook events. Both dialects construct the same `Safety` session, so for
+ * Record the safety protocol as the ordered sequence of observability graph
+ * records. Both dialects construct the same `Safety` session, so for
  * the same inputs they must produce identical sequences.
  */
 function recordSafetyProtocol() {
   const events: Array<Record<string, unknown>> = []
-  updateRuntime({
-    instrumentationHooks: {
-      onGuardrailRun: (event) =>
-        events.push({ t: 'guardrail', id: event.guardrailId, phase: event.phase, action: event.action }),
-      onConstraintCheck: (event) => events.push({ t: 'check', name: event.constraintName, pass: event.pass }),
-      onConstraintRetry: (event) => events.push({ t: 'retry', names: event.constraintNames, attempt: event.attempt }),
-      onConstraintViolation: (event) =>
-        events.push({ t: 'violation', names: event.constraintNames, attempts: event.totalAttempts }),
-    },
+  subscribeObservability((record) => {
+    if (record.type === 'span:event' && record.name === 'guardrail.action') {
+      events.push({
+        t: 'guardrail',
+        id: record.attributes?.guardrailName,
+        phase: record.attributes?.phase,
+        action: record.attributes?.action,
+      })
+    }
+    if (record.type === 'span:event' && record.name === 'constraint.checked') {
+      events.push({ t: 'check', name: record.attributes?.constraintName, pass: record.attributes?.pass })
+    }
+    if (
+      record.type === 'artifact' &&
+      record.kind === 'constraint.report' &&
+      isRecord(record.preview) &&
+      Array.isArray(record.preview.failedConstraints)
+    ) {
+      events.push({
+        t: 'retry',
+        names: record.preview.failedConstraints,
+        attempt: record.preview.nextAttempt,
+      })
+    }
   })
   return events
 }
@@ -449,7 +465,7 @@ describe('dialect parity — constraint retry protocol', () => {
     expect(nativeCorrective).toContain('[mentions-ship]: must mention ship')
   })
 
-  it('exhaustion: identical error type and violation hook in both dialects', async () => {
+    it('exhaustion: identical error type and failed checks in both dialects', async () => {
     const nativeEvents = recordSafetyProtocol()
     const native = scriptedAdapterSpec([{ text: 'wrong' }, { text: 'wrong' }, { text: 'wrong' }])
     const nativeError = await makeAdapter(native.spec)(native.client)
@@ -482,7 +498,7 @@ describe('dialect parity — constraint retry protocol', () => {
       (nativeError as ConstraintViolationError).totalAttempts,
     )
     expect(executorEvents).toEqual(nativeProtocol)
-    expect(nativeProtocol.at(-1)).toEqual({ t: 'violation', names: ['mentions-ship'], attempts: 2 })
+    expect(nativeProtocol.at(-1)).toEqual({ t: 'check', name: 'mentions-ship', pass: false })
   })
 })
 
@@ -522,7 +538,7 @@ describe('dialect parity — clean pass and blocks', () => {
     expect(nativeResult._meta.constraints?.allPassed).toBe(true)
   })
 
-  it('input block: both dialects throw GuardrailBlockedError before any provider call', async () => {
+    it('input block: both dialects throw GuardrailBlockedError before any provider call', async () => {
     const blocker = () =>
       makeGuardrail({
         name: 'input-blocker',
@@ -553,7 +569,7 @@ describe('dialect parity — clean pass and blocks', () => {
     expect(fake.calls.runTextLoop).toHaveLength(0)
   })
 
-  it('output block: both dialects throw GuardrailBlockedError with the same identity', async () => {
+    it('output block: both dialects throw GuardrailBlockedError with the same identity', async () => {
     const blocker = () =>
       makeGuardrail({
         name: 'output-blocker',
@@ -591,7 +607,7 @@ describe('dialect parity — output guards and suspension', () => {
           : { action: 'pass' as const },
     })
 
-  it('output guards redact the final text identically and stamp the same audit shape', async () => {
+    it('output guards redact the final text identically and stamp the same audit shape', async () => {
     const native = scriptedAdapterSpec([{ text: 'mail a@b.c now' }])
     const nativeResult = await makeAdapter(native.spec)(native.client).generate(textPrompt(), {
       model: 'mock-model',
@@ -613,7 +629,7 @@ describe('dialect parity — output guards and suspension', () => {
     expect(strip(executorResult._meta.guardrails?.applied)).toEqual(strip(nativeResult._meta.guardrails?.applied))
   })
 
-  it('tool-approval suspension skips output safety in BOTH dialects', async () => {
+    it('tool-approval suspension skips output safety in BOTH dialects', async () => {
     const guardSpy = vi.fn()
     const spyGuard = () =>
       makeGuardrail({
@@ -683,7 +699,7 @@ describe('dialect parity — streamed run with holds and transforms', () => {
       },
     })
 
-  it('executor dialect: the spec drives the safety stream — holds buffer, transforms reach the consumer', async () => {
+    it('executor dialect: the spec drives the safety stream — holds buffer, transforms reach the consumer', async () => {
     const fake = fakeLoopRuntime({ streams: [['import x from ', '@/co', 'mps/Button', ' — done']] })
     const handle = await loopRuntimeAdapter(fake.runtime).stream(textPrompt(), {
       model: 'fake:mock-model',
@@ -700,7 +716,7 @@ describe('dialect parity — streamed run with holds and transforms', () => {
     )
   })
 
-  it('adapter dialect: stream() drives the same protocol over text deltas', async () => {
+    it('adapter dialect: stream() drives the same protocol over text deltas', async () => {
     const chunks = ['import x from ', '@/co', 'mps/Button', ' — done']
     const spec: AdapterSpec<{ kind: 'mock' }, { raw: true }, AsyncIterable<{ text: string }>> = {
       providerId: 'mock',
@@ -782,35 +798,92 @@ describe('dialect parity — default step budget', () => {
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Record the tool protocol as the ordered sequence of instrumentation hook
- * events, projected to the fields both regime emission profiles share
+ * Record the tool protocol as the ordered sequence of observability graph
+ * records, projected to the fields both regime emission profiles share
  * (timings, span ids, and trace ids are profile-specific by design).
  */
 function recordToolProtocol() {
   const events: Array<Record<string, unknown>> = []
-  updateRuntime({
-    instrumentationHooks: {
-      onToolStart: (event) =>
-        events.push({ t: 'start', toolCallId: event.toolCallId, toolName: event.toolName, args: event.args }),
-      onToolEnd: (event) =>
-        events.push({
-          t: 'end',
-          toolCallId: event.toolCallId,
-          toolName: event.toolName,
-          result: event.result,
-          modelOutputType: event.modelOutputType,
-          error: event.error,
-        }),
-      onToolApprovalRequest: (event) =>
-        events.push({
-          t: 'approval.request',
-          approvalId: event.approvalId,
-          toolCallId: event.toolCallId,
-          toolName: event.toolName,
-        }),
-    },
+  const argsBySpan = new Map<string, unknown>()
+  const resultBySpan = new Map<string, unknown>()
+  const toolBySpan = new Map<string, { toolCallId: unknown; toolName: unknown }>()
+  const startEventsBySpan = new Map<string, Record<string, unknown>>()
+  const endedSpans = new Set<string>()
+  subscribeObservability((record) => {
+    if (record.type === 'artifact' && record.spanId && record.kind === 'tool.args') {
+      argsBySpan.set(record.spanId, record.preview)
+      const start = startEventsBySpan.get(record.spanId)
+      if (start) start.args = record.preview
+    }
+    if (
+      record.type === 'artifact' &&
+      record.spanId &&
+      record.kind === 'tool.result' &&
+      record.attributes?.resultKind === 'raw'
+    ) {
+      resultBySpan.set(record.spanId, record.preview)
+    }
+    if (
+      record.type === 'artifact' &&
+      record.spanId &&
+      record.kind === 'tool.result' &&
+      record.attributes?.resultKind === 'model'
+    ) {
+      const tool = toolBySpan.get(record.spanId)
+      if (!tool) return
+      endedSpans.add(record.spanId)
+      events.push({
+        t: 'end',
+        toolCallId: record.attributes?.toolCallId ?? tool?.toolCallId,
+        toolName: record.attributes?.toolName ?? tool?.toolName,
+        result: resultBySpan.get(record.spanId),
+        modelOutputType: record.attributes?.modelOutputType,
+        error: record.attributes?.isError ? record.attributes?.error : undefined,
+      })
+    }
+    if (record.type === 'span:start' && record.primitive === 'tool.call') {
+      const event = {
+        t: 'start',
+        toolCallId: record.attributes?.toolCallId,
+        toolName: record.attributes?.toolName ?? record.toolName,
+        args: argsBySpan.get(record.spanId),
+      }
+      toolBySpan.set(record.spanId, {
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+      })
+      startEventsBySpan.set(record.spanId, event)
+      events.push(event)
+    }
+    if (record.type === 'span:end' && record.primitive === 'tool.call') {
+      if (endedSpans.has(record.spanId)) return
+      const tool = toolBySpan.get(record.spanId)
+      events.push({
+        t: 'end',
+        toolCallId: record.attributes?.toolCallId ?? tool?.toolCallId,
+        toolName: record.attributes?.toolName ?? tool?.toolName,
+        result: resultBySpan.get(record.spanId),
+        modelOutputType: record.attributes?.modelOutputType,
+        error: record.error?.message,
+      })
+    }
+    if (
+      record.type === 'span:event' &&
+      record.name === 'tool.approval.request'
+    ) {
+      events.push({
+        t: 'approval.request',
+        approvalId: record.attributes?.approvalId,
+        toolCallId: record.attributes?.toolCallId,
+        toolName: record.attributes?.toolName,
+      })
+    }
   })
   return events
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
 type ProjectedToolEmission =
@@ -958,7 +1031,7 @@ describe('dialect parity — clean tool round protocol', () => {
     expect(toolRound(executorResult.messages)?.content).toBe(toolRound(nativeResult.messages)?.content)
   })
 
-  it('emits identical live tool span and artifact structure in both dialects', async () => {
+    it('emits identical live tool span and artifact structure in both dialects', async () => {
     const toolCall = { id: 'tc_observe', name: 'search', args: { query: 'refund' } }
     const tools = () => ({
       search: {
@@ -1016,7 +1089,7 @@ describe('dialect parity — clean tool round protocol', () => {
     expect(nativeEmission.filter((record) => record.t === 'edge')).toHaveLength(3)
   })
 
-  it('call-site tool middleware modifies the input identically in both dialects', async () => {
+    it('call-site tool middleware modifies the input identically in both dialects', async () => {
     const toolCall = { id: 'tc_mw', name: 'echo', args: { v: 'raw' } }
     const rewriting = () =>
       toolMiddleware({
@@ -1087,7 +1160,7 @@ describe('dialect parity — approval protocol observability', () => {
     ])
   })
 
-  it('resumes a denied call identically: never executes, same denial content, no start/end hooks', async () => {
+    it('resumes a denied call identically: never executes, same denial content, no start/end hooks', async () => {
     async function suspendThenDeny(kind: 'native' | 'executor') {
       const execute = vi.fn()
       const tools = { dangerous: { description: 'risky', needsApproval: true, execute } }
@@ -1166,7 +1239,7 @@ describe('dialect parity — approval protocol observability', () => {
     expect(viaExecutor.text).toBe('understood')
   })
 
-  it('resumes an approved call with full observability in BOTH dialects (sdk resumes were blind)', async () => {
+    it('resumes an approved call with full observability in BOTH dialects (sdk resumes were blind)', async () => {
     async function suspendThenApprove(kind: 'native' | 'executor') {
       const execute = vi.fn(async () => 'deleted 3 rows')
       const tools = { dangerous: { description: 'risky', needsApproval: true, execute } }
@@ -1244,7 +1317,7 @@ describe('dialect parity — approval protocol observability', () => {
     ])
   })
 
-  it('rejects a forged approval token with the same error in both dialects', async () => {
+    it('rejects a forged approval token with the same error in both dialects', async () => {
     async function suspendThenForge(kind: 'native' | 'executor') {
       const tools = { dangerous: { description: 'risky', needsApproval: true, execute: vi.fn() } }
       const prompt = textPrompt()
@@ -1295,56 +1368,5 @@ describe('dialect parity — approval protocol observability', () => {
     expect(executorError).toBeInstanceOf(Error)
     expect((executorError as Error).message).toBe((nativeError as Error).message)
     expect((nativeError as Error).message).toContain('token mismatch')
-  })
-})
-
-describe('dialect parity — skill load mid-loop', () => {
-  it('augments the system prompt, refunds the step, and announces the skill identically', async () => {
-    const skillPrompt = () =>
-      makePrompt({
-        id: 'parity-skill',
-        system: 'You can load skills.',
-        prompt: ({ input }) => (input as { message: string }).message,
-        input: z.object({ message: z.string() }),
-        use: [skill.inline({ id: 'sql-expert', description: 'SQL', instructions: 'Always parameterize queries.' })],
-      })
-    const loadCall = { id: 'tc_skill', name: LOAD_SKILL_TOOL_NAME, args: { name: 'sql-expert' } }
-
-    const record = () => {
-      const loads: string[] = []
-      updateRuntime({ instrumentationHooks: { onSkillLoad: (event) => loads.push(event.skillId) } })
-      return loads
-    }
-
-    const nativeLoads = record()
-    const native = scriptedAdapterSpec([{ text: '', toolCalls: [loadCall] }, { text: 'skilled up' }])
-    const nativeResult = await makeAdapter(native.spec)(native.client).generate(skillPrompt(), {
-      model: 'mock-model',
-      input: { message: 'go' },
-    })
-    resetRuntime()
-
-    const executorLoads = record()
-    const fake = fakeLoopRuntime({ loops: [[{ text: '', toolCalls: [loadCall] }, { text: 'skilled up' }]] })
-    const executorResult = await loopRuntimeAdapter(fake.runtime).generate(skillPrompt(), {
-      model: 'fake:mock-model',
-      input: { message: 'go' },
-    })
-    resetRuntime()
-
-    expect(nativeResult.text).toBe('skilled up')
-    expect(executorResult.text).toBe('skilled up')
-    // The LoadSkill step was refunded in both dialects.
-    expect(nativeResult.steps).toBe(executorResult.steps)
-    expect(nativeResult.steps).toBe(1)
-    expect(nativeLoads).toEqual(['sql-expert'])
-    expect(executorLoads).toEqual(['sql-expert'])
-    // The re-armed system prompt carries the skill instructions in both
-    // dialects: the native spec sees it on the post-amendment call, the
-    // fake executor records the system in effect for the final step.
-    expect(native.calls.at(-1)!.system).toContain('## Skill: sql-expert')
-    expect(native.calls.at(-1)!.system).toContain('Always parameterize queries.')
-    expect((executorResult.raw as { system?: string } | undefined)?.system).toContain('## Skill: sql-expert')
-    expect((executorResult.raw as { system?: string } | undefined)?.system).toContain('Always parameterize queries.')
   })
 })

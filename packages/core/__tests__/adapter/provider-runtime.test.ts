@@ -144,7 +144,7 @@ describe('provider runtime', () => {
     ])
   })
 
-  it('creates a loop-owned provider runtime through the same public compiler', async () => {
+    it('creates a loop-owned provider runtime through the same public compiler', async () => {
     const fake = fakeLoopRuntime({ loops: [[{ text: 'loop-owned text' }]] })
     const provider = defineProviderRuntime({
       id: 'runtime-loop-owned',
@@ -176,7 +176,7 @@ describe('provider runtime', () => {
     expect(fake.calls.runTextLoop[0]?.settings).toEqual({ temperature: 0.1 })
   })
 
-  it('rejects provider runtime extensions that replace generated runtime members', () => {
+    it('rejects provider runtime extensions that replace generated runtime members', () => {
     const fake = fakeLoopRuntime({ loops: [[{ text: 'loop-owned text' }]] })
     const provider = defineProviderRuntime({
       id: 'runtime-collision',
@@ -202,7 +202,7 @@ describe('provider runtime', () => {
     )
   })
 
-  it('rejects explicit ownership that disagrees with the provided mechanics', () => {
+    it('rejects explicit ownership that disagrees with the provided mechanics', () => {
     const fake = fakeLoopRuntime({ loops: [[{ text: 'loop-owned text' }]] })
 
     expect(() =>

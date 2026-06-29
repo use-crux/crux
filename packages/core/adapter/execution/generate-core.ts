@@ -152,16 +152,6 @@ export async function generateCore<TClient, TRawResponse, TRawStream, TExtra ext
           if (validationRetries < maxValidationRetries && step < maxSteps - 1) {
             validationRetries++
             validationRetry.onRetry?.(validationRetries, validationResult.error!)
-            const hooks = getRuntime().instrumentationHooks
-            hooks?.onValidationRetryAttempt?.({
-              retryId,
-              attemptNumber: validationRetries,
-              maxAttempts: maxValidationRetries,
-              error: validationResult.error!.message,
-              rawOutput: extracted.text.slice(0, 500),
-              repairAttempted: validationResult.repairedText !== extracted.text,
-              repairSucceeded: false,
-            })
             messages = dialect.appendToolRound(messages, extracted, [])
             messages = [
               ...messages,
@@ -172,13 +162,6 @@ export async function generateCore<TClient, TRawResponse, TRawStream, TExtra ext
             ]
             continue
           }
-          const hooks = getRuntime().instrumentationHooks
-          hooks?.onValidationRetryExhausted?.({
-            retryId,
-            totalAttempts: validationRetries,
-            lastError: validationResult.error!.message,
-            promptId: prompt.id ?? 'unknown',
-          })
           validationRetry.onExhausted?.(validationRetries, validationResult.error!)
           throw new ValidationExhaustedError({
             lastRawOutput: extracted.text,

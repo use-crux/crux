@@ -41,7 +41,7 @@ describe('context() with when field', () => {
     expect(typeof ctx.when).toBe('function')
   })
 
-  it('when predicate receives input correctly', () => {
+    it('when predicate receives input correctly', () => {
     const ctx = context({
       input: z.object({ lang: z.string().optional() }),
       when: ({ input }) => input.lang === 'French',
@@ -53,12 +53,12 @@ describe('context() with when field', () => {
     expect(ctx.when!({})).toBe(false)
   })
 
-  it('context without when has when = undefined', () => {
+    it('context without when has when = undefined', () => {
     const ctx = context({ system: 'text' })
     expect(ctx.when).toBeUndefined()
   })
 
-  it('static context supports when field', () => {
+    it('static context supports when field', () => {
     let flag = true
     const ctx = context({
       system: 'Rules text',
@@ -69,7 +69,7 @@ describe('context() with when field', () => {
     expect(ctx.when!({})).toBe(false)
   })
 
-  it('context with when is still frozen', () => {
+    it('context with when is still frozen', () => {
     const ctx = context({
       input: z.object({ x: z.string() }),
       when: ({ input }) => !!input.x,
@@ -93,7 +93,7 @@ describe('when() wrapper', () => {
     expect(typeof cond.predicate).toBe('function')
   })
 
-  it('wraps the context and stores the predicate', () => {
+    it('wraps the context and stores the predicate', () => {
     const ctx = context({
       id: 'brand',
       input: z.object({ brandVoice: z.string().optional() }),
@@ -107,13 +107,13 @@ describe('when() wrapper', () => {
     expect(cond.predicate({})).toBe(false)
   })
 
-  it('is frozen', () => {
+    it('is frozen', () => {
     const ctx = context({ system: 'text' })
     const cond = when(() => true, ctx)
     expect(Object.isFrozen(cond)).toBe(true)
   })
 
-  it('works with explicit generic for prompt-level fields', () => {
+    it('works with explicit generic for prompt-level fields', () => {
     const ctx = context({ id: 'research', system: 'Research mode' })
     const cond = when<{ mode: string }>((input) => input.mode === 'research', ctx)
 
@@ -131,7 +131,7 @@ describe('match()', () => {
   const createCtx = context({ id: 'create', system: 'Create mode' })
   const optimizeCtx = context({ id: 'optimize', system: 'Optimize mode' })
 
-  it('creates a MatchSpec with correct tag', () => {
+    it('creates a MatchSpec with correct tag', () => {
     const spec = match({
       on: (input) => input.mode as string,
       cases: { research: researchCtx, create: createCtx },
@@ -143,7 +143,7 @@ describe('match()', () => {
     expect(spec.cases).toHaveProperty('create')
   })
 
-  it('is frozen', () => {
+    it('is frozen', () => {
     const spec = match({
       on: (input) => input.mode as string,
       cases: { research: researchCtx },
@@ -152,7 +152,7 @@ describe('match()', () => {
     expect(Object.isFrozen(spec.cases)).toBe(true)
   })
 
-  it('supports default fallback', () => {
+    it('supports default fallback', () => {
     const spec = match({
       on: (input) => input.mode as string,
       cases: { research: researchCtx },
@@ -161,7 +161,7 @@ describe('match()', () => {
     expect(spec.default).toBe(createCtx)
   })
 
-  it('supports array of contexts per case', () => {
+    it('supports array of contexts per case', () => {
     const spec = match({
       on: (input) => input.mode as string,
       cases: {
@@ -192,11 +192,11 @@ describe('entry gating through resolution', () => {
     expect(await activeSources([ctx1, ctx2])).toEqual(['context:a', 'context:b'])
   })
 
-  it('filters out falsy entries', async () => {
+    it('filters out falsy entries', async () => {
     expect(await activeSources([ctx1, false, null, undefined, ctx2])).toEqual(['context:a', 'context:b'])
   })
 
-  it('excludes contexts with context-level when returning false', async () => {
+    it('excludes contexts with context-level when returning false', async () => {
     const conditional = context({
       id: 'cond',
       input: z.object({ flag: z.boolean() }),
@@ -211,7 +211,7 @@ describe('entry gating through resolution', () => {
     expect(result.excludedContexts[0].reason).toContain('context-level when')
   })
 
-  it('includes contexts with context-level when returning true', async () => {
+    it('includes contexts with context-level when returning true', async () => {
     const conditional = context({
       id: 'cond',
       input: z.object({ flag: z.boolean() }),
@@ -222,7 +222,7 @@ describe('entry gating through resolution', () => {
     expect(await activeSources([ctx1, conditional], { flag: true })).toEqual(['context:a', 'context:cond'])
   })
 
-  it('evaluates when() wrapper predicates', async () => {
+    it('evaluates when() wrapper predicates', async () => {
     const cond = when<{ mode: string }>((input) => input.mode === 'research', ctx2)
 
     expect(await activeSources([ctx1, cond], { mode: 'research' })).toEqual(['context:a', 'context:b'])
@@ -233,7 +233,7 @@ describe('entry gating through resolution', () => {
     expect(excludedRun.excludedContexts[0].source).toBe('context:b')
   })
 
-  it('evaluates match() and selects correct branch', async () => {
+    it('evaluates match() and selects correct branch', async () => {
     const spec = match({
       on: (input) => input.mode as string,
       cases: {
@@ -248,7 +248,7 @@ describe('entry gating through resolution', () => {
     expect(await activeSources([spec], { mode: 'optimize' })).toEqual(['context:c'])
   })
 
-  it('match() uses default when no case matches', async () => {
+    it('match() uses default when no case matches', async () => {
     const spec = match({
       on: (input) => input.mode as string,
       cases: { research: ctx1 },
@@ -258,7 +258,7 @@ describe('entry gating through resolution', () => {
     expect(await activeSources([spec], { mode: 'unknown' })).toEqual(['context:b'])
   })
 
-  it('match() excludes when no case matches and no default', async () => {
+    it('match() excludes when no case matches and no default', async () => {
     const spec = match({
       on: (input) => input.mode as string,
       cases: { research: ctx1 },
@@ -270,7 +270,7 @@ describe('entry gating through resolution', () => {
     expect(result.excludedContexts[0].reason).toContain('no case for "unknown"')
   })
 
-  it('match() with array branch includes all contexts', async () => {
+    it('match() with array branch includes all contexts', async () => {
     const spec = match({
       on: (input) => input.mode as string,
       cases: {
@@ -281,7 +281,7 @@ describe('entry gating through resolution', () => {
     expect(await activeSources([spec], { mode: 'optimize' })).toEqual(['context:b', 'context:c'])
   })
 
-  it('excluded context tools are NOT collected', async () => {
+    it('excluded context tools are NOT collected', async () => {
     const toolCtx = context({
       id: 'with-tools',
       input: z.object({ active: z.boolean() }),
@@ -321,7 +321,7 @@ describe('compilePrompt().inputSchema with ContextEntry', () => {
     expect(result.success).toBe(true)
   })
 
-  it('filters falsy entries', () => {
+    it('filters falsy entries', () => {
     const ctx = context({
       id: 'a',
       input: z.object({ x: z.string() }),
@@ -335,7 +335,7 @@ describe('compilePrompt().inputSchema with ContextEntry', () => {
     expect(result.success).toBe(true)
   })
 
-  it('makes ConditionalContext input keys optional', () => {
+    it('makes ConditionalContext input keys optional', () => {
     const ctx = context({
       id: 'brand',
       input: z.object({ brandVoice: z.string() }),
@@ -354,7 +354,7 @@ describe('compilePrompt().inputSchema with ContextEntry', () => {
     expect(withoutKey.success).toBe(true) // optional — should pass without key
   })
 
-  it('makes context-level when input keys optional', () => {
+    it('makes context-level when input keys optional', () => {
     const ctx = context({
       id: 'lang',
       input: z.object({ lang: z.string() }),
@@ -370,7 +370,7 @@ describe('compilePrompt().inputSchema with ContextEntry', () => {
     expect(withoutKey.success).toBe(true)
   })
 
-  it('still detects key conflicts', () => {
+    it('still detects key conflicts', () => {
     const ctx1 = context({
       id: 'a',
       input: z.object({ x: z.string() }),
@@ -385,7 +385,7 @@ describe('compilePrompt().inputSchema with ContextEntry', () => {
     expect(() => inputSchemaFor([ctx1, ctx2])).toThrow(/Input key "x" is defined by both/)
   })
 
-  it('extracts contexts from match branches for schema merging', () => {
+    it('extracts contexts from match branches for schema merging', () => {
     const ctxA = context({
       id: 'a',
       input: z.object({ research: z.string() }),
@@ -435,7 +435,7 @@ describe('prompt with conditional contexts', () => {
     expect(resolved.system).toContain('Base system.')
   })
 
-  it('resolves with context-level when (excluded)', async () => {
+    it('resolves with context-level when (excluded)', async () => {
     const langCtx = context({
       id: 'lang',
       input: z.object({ lang: z.string().optional() }),
@@ -454,7 +454,7 @@ describe('prompt with conditional contexts', () => {
     expect(resolved.system).not.toContain('Respond in')
   })
 
-  it('resolves with when() wrapper', async () => {
+    it('resolves with when() wrapper', async () => {
     const brandCtx = context({
       id: 'brand',
       input: z.object({ brandVoice: z.string().optional() }),
@@ -474,7 +474,7 @@ describe('prompt with conditional contexts', () => {
     expect(without.system).toBe('Base.')
   })
 
-  it('resolves with match()', async () => {
+    it('resolves with match()', async () => {
     const researchCtx = context({
       id: 'research',
       system: 'Research instructions',
@@ -502,7 +502,7 @@ describe('prompt with conditional contexts', () => {
     expect(r2.system).not.toContain('Research instructions')
   })
 
-  it('resolves with falsy entries in use array', async () => {
+    it('resolves with falsy entries in use array', async () => {
     const ctx = context({ id: 'always', system: 'Always here' })
 
     const p = makePrompt({
@@ -515,7 +515,7 @@ describe('prompt with conditional contexts', () => {
     expect(resolved.system).toContain('Always here')
   })
 
-  it('excluded contexts do not contribute tools', async () => {
+    it('excluded contexts do not contribute tools', async () => {
     const toolCtx = context({
       id: 'tools',
       input: z.object({ enabled: z.boolean() }),
@@ -538,7 +538,7 @@ describe('prompt with conditional contexts', () => {
     expect(included.tools).toHaveProperty('searchWeb')
   })
 
-  it('inspect() reports excluded contexts', async () => {
+    it('inspect() reports excluded contexts', async () => {
     const alwaysCtx = context({ id: 'always', system: 'Always here' })
     const condCtx = context({
       id: 'conditional',
@@ -559,7 +559,7 @@ describe('prompt with conditional contexts', () => {
     expect(inspection.excludedContexts[0].reason).toContain('when')
   })
 
-  it('inspect() reports no excluded contexts when all active', async () => {
+    it('inspect() reports no excluded contexts when all active', async () => {
     const ctx = context({
       id: 'cond',
       input: z.object({ flag: z.boolean() }),
@@ -577,7 +577,7 @@ describe('prompt with conditional contexts', () => {
     expect(inspection.excludedContexts).toHaveLength(0)
   })
 
-  it('plain use array resolves in order', async () => {
+    it('plain use array resolves in order', async () => {
     const ctx1 = context({ id: 'a', system: 'A' })
     const ctx2 = context({ id: 'b', system: 'B' })
 

@@ -20,7 +20,7 @@ describe('prompt', () => {
     expect(Object.isFrozen(p.tags)).toBe(true)
   })
 
-  it('throws when messages combined with system', () => {
+    it('throws when messages combined with system', () => {
     expect(() =>
       makePrompt({
         system: 'sys',
@@ -29,7 +29,7 @@ describe('prompt', () => {
     ).toThrow(/mutually exclusive/)
   })
 
-  it('throws when messages combined with prompt', () => {
+    it('throws when messages combined with prompt', () => {
     expect(() =>
       makePrompt({
         prompt: 'hi',
@@ -38,7 +38,7 @@ describe('prompt', () => {
     ).toThrow(/mutually exclusive/)
   })
 
-  it('.resolve() returns ResolvedPrompt with correct fields', async () => {
+    it('.resolve() returns ResolvedPrompt with correct fields', async () => {
     const p = makePrompt({
       system: 'You are a bot.',
       prompt: 'Do something.',
@@ -51,7 +51,7 @@ describe('prompt', () => {
     expect(resolved.settings.temperature).toBe(0.5)
   })
 
-  it('.inspect() returns InspectResult with token counts', async () => {
+    it('.inspect() returns InspectResult with token counts', async () => {
     const p = makePrompt({
       system: 'You are a bot.',
       prompt: 'Do something.',
@@ -63,7 +63,7 @@ describe('prompt', () => {
     expect(result.totalTokens).toBeGreaterThan(0)
   })
 
-  it('onPrepare hook fires on .resolve() with correct args', async () => {
+    it('onPrepare hook fires on .resolve() with correct args', async () => {
     const onPrepare = vi.fn()
 
     const p = makePrompt({
@@ -84,7 +84,7 @@ describe('prompt', () => {
     expect(args.droppedContexts).toEqual([])
   })
 
-  it('onPrepare hook reuses the resolved pass for inspection facts', async () => {
+    it('onPrepare hook reuses the resolved pass for inspection facts', async () => {
     const onPrepare = vi.fn()
     const system = vi.fn(() => 'Context text.')
     const ctx = context({ id: 'prepare-context', system })
@@ -106,7 +106,7 @@ describe('prompt', () => {
     })
   })
 
-  it('merges context input schemas at definition time', async () => {
+    it('merges context input schemas at definition time', async () => {
     const ctx = context({
       id: 'lang',
       input: z.object({ lang: z.string() }),
@@ -130,18 +130,18 @@ describe('prompt', () => {
     expect(resolved.prompt).toBe('edit')
   })
 
-  it('defaults tags to empty array', () => {
+    it('defaults tags to empty array', () => {
     const p = makePrompt({ system: 'test' })
     expect(p.tags).toEqual([])
   })
 
-  it('has hasOutput=false for text mode', () => {
+    it('has hasOutput=false for text mode', () => {
     const p = makePrompt({ system: 'test' })
     expect(p.hasOutput).toBe(false)
     expect(p.outputSchema).toBeUndefined()
   })
 
-  it('has hasOutput=true for structured mode', () => {
+    it('has hasOutput=true for structured mode', () => {
     const p = makePrompt({
       system: 'test',
       output: z.object({ result: z.string() }),
@@ -150,7 +150,7 @@ describe('prompt', () => {
     expect(p.outputSchema).toBeDefined()
   })
 
-  it('supports async context system functions', async () => {
+    it('supports async context system functions', async () => {
     const asyncCtx = context({
       id: 'async-ctx',
       system: async () => {

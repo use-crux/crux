@@ -48,13 +48,13 @@ describe('delegate', () => {
     expect(d.id).toBe('delegate-research')
   })
 
-  it('exposes argsSchema and handoff', () => {
+    it('exposes argsSchema and handoff', () => {
     const d = makeDelegate()
     expect(d.argsSchema).toBe(argsSchema)
     expect(d.handoff).toBe(handoff)
   })
 
-  describe('run()', () => {
+describe('run()', () => {
     it('executes subagent and returns transformed result', async () => {
       const d = makeDelegate()
       const result = await d.run({ query: 'AI safety' })
@@ -82,39 +82,9 @@ describe('delegate', () => {
         execute: async () => ({ y: 'not-a-number' }) as any,
       })
       await expect(d.run({ x: 'test' })).rejects.toThrow()
-    })
+    })  })
 
-    it('emits delegate instrumentation events', async () => {
-      const onDelegateStart = vi.fn()
-      const onDelegateComplete = vi.fn()
-      updateRuntime({
-        instrumentationHooks: { onDelegateStart, onDelegateComplete },
-      })
-
-      try {
-        const d = makeDelegate()
-        await d.run({ query: 'test' })
-
-        expect(onDelegateStart).toHaveBeenCalledWith(
-          expect.objectContaining({
-            delegateId: 'delegate-research',
-            handoffId: 'research-to-writer',
-          }),
-        )
-        expect(onDelegateComplete).toHaveBeenCalledWith(
-          expect.objectContaining({
-            delegateId: 'delegate-research',
-            handoffId: 'research-to-writer',
-            durationMs: expect.any(Number),
-          }),
-        )
-      } finally {
-        resetRuntime()
-      }
-    })
-  })
-
-  describe('asTools()', () => {
+describe('asTools()', () => {
     it('returns object with delegate tool', () => {
       const d = makeDelegate()
       const tools = d.asTools()

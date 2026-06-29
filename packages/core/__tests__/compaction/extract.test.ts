@@ -49,7 +49,7 @@ describe('extractKeyFacts', () => {
     expect(result.facts[0].category).toBe('preference')
   })
 
-  it('passes model through to generate', async () => {
+    it('passes model through to generate', async () => {
     let capturedModel: unknown
     const mockGenerate: GenerateObjectFn = async (opts) => {
       capturedModel = opts.model
@@ -68,7 +68,7 @@ describe('extractKeyFacts', () => {
     expect(capturedModel).toBe('special-model')
   })
 
-  it('passes schema through to generate', async () => {
+    it('passes schema through to generate', async () => {
     let capturedSchema: unknown
     const mockGenerate: GenerateObjectFn = async (opts) => {
       capturedSchema = opts.schema
@@ -87,7 +87,7 @@ describe('extractKeyFacts', () => {
     expect(capturedSchema).toBe(schema)
   })
 
-  it('includes conversation transcript in prompt', async () => {
+    it('includes conversation transcript in prompt', async () => {
     let capturedPrompt = ''
     const mockGenerate: GenerateObjectFn = async (opts) => {
       capturedPrompt = opts.prompt
@@ -107,7 +107,7 @@ describe('extractKeyFacts', () => {
     expect(capturedPrompt).toContain('enterprise CTOs')
   })
 
-  it('sets system prompt for extraction', async () => {
+    it('sets system prompt for extraction', async () => {
     let capturedSystem = ''
     const mockGenerate: GenerateObjectFn = async (opts) => {
       capturedSystem = opts.system ?? ''
@@ -126,7 +126,7 @@ describe('extractKeyFacts', () => {
     expect(capturedSystem).toContain('extraction')
   })
 
-  it('works with simple schema', async () => {
+    it('works with simple schema', async () => {
     const schema = z.object({
       summary: z.string(),
       keyPoints: z.array(z.string()),

@@ -27,14 +27,14 @@ describe('evaluate() — definition', () => {
     expect(evaluation.id).toBeUndefined()
   })
 
-  it('carries an explicit id through the id-first form', () => {
+    it('carries an explicit id through the id-first form', () => {
     const evaluation = evaluate('support.refunds', { task: supportPrompt, data: baseCases })
     expect(evaluation.id).toBe('support.refunds')
     expect(evaluation.manifest.id).toBe('support.refunds')
     expect(evaluation.manifest.explicitId).toBe(true)
   })
 
-  it('carries explicit coverage targets into the manifest', () => {
+    it('carries explicit coverage targets into the manifest', () => {
     const evaluation = evaluate('support.refunds', {
       task: supportPrompt,
       covers: ['prompt:support'],
@@ -44,12 +44,12 @@ describe('evaluate() — definition', () => {
     expect(evaluation.manifest.covers).toEqual(['prompt:support'])
   })
 
-  it('run() executes through the Phase 2 engine (rejects: prompt task without a generate fn)', async () => {
+    it('run() executes through the Phase 2 engine (rejects: prompt task without a generate fn)', async () => {
     const evaluation = evaluate({ task: supportPrompt, data: baseCases })
     await expect(evaluation.run()).rejects.toThrowError(/generate/)
   })
 
-  it('rejects missing task/data and malformed cases', () => {
+    it('rejects missing task/data and malformed cases', () => {
     // @ts-expect-error — runtime guard for untyped callers
     expect(() => evaluate({ data: baseCases })).toThrowError(/`task` is required/)
     // @ts-expect-error — runtime guard for untyped callers
@@ -63,7 +63,7 @@ describe('evaluate() — definition', () => {
     ).toThrowError(/needs `input`/)
   })
 
-  it('rejects unknown gates.scores keys at definition time when all scorer names are static', () => {
+    it('rejects unknown gates.scores keys at definition time when all scorer names are static', () => {
     expect(() =>
       evaluate({
         task: supportPrompt,
@@ -88,7 +88,7 @@ describe('evaluate() — definition', () => {
     })
   })
 
-  it('rejects a baseline that names no declared variant (runtime guard)', () => {
+    it('rejects a baseline that names no declared variant (runtime guard)', () => {
     expect(() =>
       evaluate({
         task: supportPrompt,
@@ -166,7 +166,7 @@ describe('evaluation.manifest — spec 02 §2 shape for inline-case definitions'
     expect(Object.isFrozen(manifest.cases)).toBe(true)
   })
 
-  it('derives stable content-hash case ids independent of key order', () => {
+    it('derives stable content-hash case ids independent of key order', () => {
     const a = evaluate({
       task: supportPrompt,
       data: [{ input: { question: 'q', locale: 'en' } }],
@@ -180,7 +180,7 @@ describe('evaluation.manifest — spec 02 §2 shape for inline-case definitions'
     expect(b.manifest.cases[0]!.caseId).toBe(idA)
   })
 
-  it('marks unnamed scorer functions as (dynamic)', () => {
+    it('marks unnamed scorer functions as (dynamic)', () => {
     const evaluation = evaluate({
       task: supportPrompt,
       data: baseCases,
@@ -189,7 +189,7 @@ describe('evaluation.manifest — spec 02 §2 shape for inline-case definitions'
     expect(evaluation.manifest.scorers).toEqual([{ name: '(dynamic)', costClass: 'code' }])
   })
 
-  it('summarizes datasets without loading them', () => {
+    it('summarizes datasets without loading them', () => {
     const goldenSet = dataset('golden/support.jsonl', {
       input: z.object({ question: z.string(), locale: z.enum(['en', 'nl']) }),
     })
@@ -198,7 +198,7 @@ describe('evaluation.manifest — spec 02 §2 shape for inline-case definitions'
     expect(evaluation.manifest.cases).toEqual([])
   })
 
-  it('detects task kinds for flows, agents, targets, and plain fns', () => {
+    it('detects task kinds for flows, agents, targets, and plain fns', () => {
     const flowEval = evaluate({ task: summarizeFlow, data: [{ input: { topic: 't' } }] })
     expect(flowEval.manifest.task).toMatchObject({ kind: 'flow', ref: 'summarize' })
     expect(flowEval.manifest.task.capabilities).toContain('steps')
@@ -217,7 +217,7 @@ describe('evaluation.manifest — spec 02 §2 shape for inline-case definitions'
     expect(fnEval.manifest.task).toMatchObject({ kind: 'fn', capabilities: [] })
   })
 
-  it('records evaluate.only / evaluate.skip flags', () => {
+    it('records evaluate.only / evaluate.skip flags', () => {
     expect(evaluate.only({ task: supportPrompt, data: baseCases }).manifest.flags).toEqual({
       only: true,
       skip: false,
@@ -237,13 +237,13 @@ describe('target.*', () => {
     expect(Object.isFrozen(t)).toBe(true)
   })
 
-  it('rejects mismatched primitives', () => {
+    it('rejects mismatched primitives', () => {
     expect(() => target.prompt(summarizeFlow as never)).toThrowError(/expected a Crux prompt/)
     expect(() => target.agent(supportPrompt as never)).toThrowError(/expected a Crux agent/)
     expect(() => target.flow(supportPrompt as never)).toThrowError(/expected a Crux flow handle/)
   })
 
-  it('builds custom fn targets via the callable form', () => {
+    it('builds custom fn targets via the callable form', () => {
     const t = target({ id: 'harness', run: (input: { q: string }) => input.q })
     expect(t).toMatchObject({ _tag: 'QualityTarget', kind: 'fn', id: 'harness', capabilities: [] })
   })
@@ -252,7 +252,7 @@ describe('target.*', () => {
 describe('code-class scorers', () => {
   const args = <O, E>(output: O, expected?: E) => ({ input: {}, output, expected })
 
-  it('exact: canonical-JSON equality, null without expected', async () => {
+    it('exact: canonical-JSON equality, null without expected', async () => {
     const s = scorers.exact()
     expect(await s(args({ b: 2, a: 1 }, { a: 1, b: 2 }))).toMatchObject({ name: 'exact', score: 1 })
     expect(await s(args('x', 'y'))).toMatchObject({ score: 0 })
@@ -261,20 +261,20 @@ describe('code-class scorers', () => {
     expect(s.costClass).toBe('code')
   })
 
-  it('contains: explicit needle or string expected', async () => {
+    it('contains: explicit needle or string expected', async () => {
     expect(await scorers.contains()(args('the refund window is 14 days', 'refund'))).toMatchObject({ score: 1 })
     expect(await scorers.contains({ value: 'days' })(args('14 days'))).toMatchObject({ score: 1 })
     expect(await scorers.contains()(args('nothing here'))).toMatchObject({ score: null })
   })
 
-  it('regex: tests output text, statelessly for global patterns', async () => {
+    it('regex: tests output text, statelessly for global patterns', async () => {
     const s = scorers.regex({ pattern: /refund/g })
     expect(await s(args('refund refund'))).toMatchObject({ score: 1 })
     expect(await s(args('refund refund'))).toMatchObject({ score: 1 })
     expect(await s(args('credit'))).toMatchObject({ score: 0 })
   })
 
-  it('levenshtein: normalized similarity for string pairs, null otherwise', async () => {
+    it('levenshtein: normalized similarity for string pairs, null otherwise', async () => {
     const s = scorers.levenshtein()
     expect(await s(args('kitten', 'kitten'))).toMatchObject({ score: 1 })
     const result = await s(args('kitten', 'sitting'))
@@ -282,14 +282,14 @@ describe('code-class scorers', () => {
     expect(await s(args({ a: 1 }, 'x'))).toMatchObject({ score: null })
   })
 
-  it('jsonValid: parses string outputs, passes structured outputs', async () => {
+    it('jsonValid: parses string outputs, passes structured outputs', async () => {
     const s = scorers.jsonValid()
     expect(await s(args('{"a":1}'))).toMatchObject({ score: 1 })
     expect(await s(args('{nope'))).toMatchObject({ score: 0 })
     expect(await s(args({ a: 1 }))).toMatchObject({ score: 1 })
   })
 
-  it('jsonDiff: partial structural credit', async () => {
+    it('jsonDiff: partial structural credit', async () => {
     const s = scorers.jsonDiff()
     expect(await s(args({ a: 1, b: 'x' }, { a: 1, b: 'x' }))).toMatchObject({ score: 1 })
     const half = await s(args({ a: 1, b: 'x' }, { a: 1, b: 'y' }))
@@ -298,7 +298,7 @@ describe('code-class scorers', () => {
     expect(await s(args({ a: 1 }))).toMatchObject({ score: null })
   })
 
-  it('judge: validates rubric XOR choiceScores at factory time, needs explicit providers at scoring time', () => {
+    it('judge: validates rubric XOR choiceScores at factory time, needs explicit providers at scoring time', () => {
     expect(() => scorers.judge({ name: 'x' })).toThrowError(/exactly one of/)
     expect(() => scorers.judge({ name: 'x', rubric: 'r', choiceScores: { a: 1 } })).toThrowError(/exactly one of/)
     const s = scorers.judge({ name: 'helpful', rubric: 'Helpful?' })
@@ -317,7 +317,7 @@ describe('dataset() and cassette()', () => {
     expect(() => dataset('x.json', { input: {} as never })).toThrowError(/Standard Schema/)
   })
 
-  it('cassette validates its name and freezes the reference', () => {
+    it('cassette validates its name and freezes the reference', () => {
     const c = cassette('support', { mode: 'replay-strict' })
     expect(c).toMatchObject({ _tag: 'CruxCassette', name: 'support', mode: 'replay-strict' })
     expect(Object.isFrozen(c)).toBe(true)

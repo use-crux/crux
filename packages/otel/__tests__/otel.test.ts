@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { resetRuntime, getRuntime, prompt as cruxPrompt } from '@use-crux/core'
+import { resetRuntime, prompt as cruxPrompt } from '@use-crux/core'
+import { observe, resetObservabilityRuntime, subscribeObservability } from '@use-crux/core/observability'
 import { configure } from '../../core/runtime/configure'
 import { withTelemetry } from '../index'
 import { createCallbackExporter, createUrlExporter } from '../exporter'
@@ -26,6 +27,7 @@ function makeSpan(overrides?: Partial<TraceSpan>): TraceSpan {
 describe('withTelemetry', () => {
   beforeEach(() => {
     resetRuntime()
+    resetObservabilityRuntime()
   })
 
   it('returns a CruxPlugin with name crux:otel', () => {
@@ -45,11 +47,11 @@ describe('withTelemetry', () => {
     reg.dispose()
   })
 
-  it('can coexist with other plugins', () => {
-    const hook = vi.fn()
+  it('can coexist with other subscriber plugins', async () => {
+    const subscriber = vi.fn()
     const otherPlugin = {
       name: 'other',
-      install: () => ({ instrumentationHooks: { onToolStart: hook } }),
+      install: () => ({ dispose: subscribeObservability(subscriber) }),
     }
 
     const reg = configure({
@@ -57,13 +59,9 @@ describe('withTelemetry', () => {
       plugins: [withTelemetry(), otherPlugin],
     })
 
-    // Other plugin's hook should still work
-    getRuntime().instrumentationHooks?.onToolStart?.({
-      toolCallId: 'tc1',
-      toolName: 'test',
-      args: {},
-    })
-    expect(hook).toHaveBeenCalled()
+    await observe.span({ name: 'test', family: 'tool', primitive: 'tool.call' }, async () => {})
+
+    expect(subscriber).toHaveBeenCalledWith(expect.objectContaining({ type: 'span:start', primitive: 'tool.call' }))
 
     reg.dispose()
   })

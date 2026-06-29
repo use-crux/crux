@@ -11,13 +11,15 @@ describe('OTel record subscriber', () => {
   it('exports spans from canonical observability records and unsubscribes on dispose', async () => {
     const spans: TraceSpan[] = []
     const plugin = withTelemetry({
-      mode: 'records',
       exporter: (batch) => {
         spans.push(...batch)
       },
     })
 
     const installed = plugin.install({})
+
+    expect(installed).not.toHaveProperty('instrumentationHooks')
+    expect(installed).not.toHaveProperty('middleware')
 
     await observe.span(
       {
@@ -79,7 +81,6 @@ describe('OTel record subscriber', () => {
   it('preserves parentage and maps artifact, edge, and error records onto spans', async () => {
     const spans: TraceSpan[] = []
     const plugin = withTelemetry({
-      mode: 'records',
       attributes: { 'deployment.environment': 'test' },
       exporter: (batch) => {
         spans.push(...batch)
@@ -159,33 +160,9 @@ describe('OTel record subscriber', () => {
     )
   })
 
-  it('matches the existing hooks path for tool span names and key attributes', async () => {
-    const hookSpans: TraceSpan[] = []
+  it('maps tool span names and key attributes from canonical records', async () => {
     const recordSpans: TraceSpan[] = []
-    const hookInstall = withTelemetry({
-      exporter: (batch) => {
-        hookSpans.push(...batch)
-      },
-    }).install({})
-
-    hookInstall.instrumentationHooks!.onToolStart!({
-      toolCallId: 'tc-parity',
-      toolName: 'lookup',
-      args: { query: 'refund' },
-    })
-    hookInstall.instrumentationHooks!.onToolEnd!({
-      toolCallId: 'tc-parity',
-      toolName: 'lookup',
-      durationMs: 25,
-      modelOutputType: 'text',
-      outputSize: 120,
-      modelOutputSize: 48,
-      tokenSavingsEstimate: 72,
-    })
-    hookInstall.dispose?.()
-
     const recordInstall = withTelemetry({
-      mode: 'records',
       exporter: (batch) => {
         recordSpans.push(...batch)
       },
@@ -205,14 +182,12 @@ describe('OTel record subscriber', () => {
     )
     recordInstall.dispose?.()
 
-    const hookSpan = hookSpans.find((span) => span.name === 'crux.tool.lookup')
     const recordSpan = recordSpans.find((span) => span.name === 'crux.tool.lookup')
 
     expect(recordSpan).toBeDefined()
-    expect(recordSpan?.name).toBe(hookSpan?.name)
     expect(recordSpan?.attributes).toMatchObject({
-      'crux.tool.name': hookSpan?.attributes['crux.tool.name'],
-      'crux.tool.call_id': hookSpan?.attributes['crux.tool.call_id'],
+      'crux.tool.name': 'lookup',
+      'crux.tool.call_id': 'tc-parity',
     })
   })
 })

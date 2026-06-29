@@ -73,7 +73,7 @@ describe('engine replay — record-new then replay-strict', () => {
     expect(replayRun.replay).toMatchObject({ mode: 'replay-strict', cassette: 'replay.smoke' })
   })
 
-  it('quality.defaults.replay fills when nothing else is declared; --replay live opts out', async () => {
+    it('quality.defaults.replay fills when nothing else is declared; --replay live opts out', async () => {
     const dir = await tempQualityDir()
     const { generate } = executorSetup({ loops: repeat([{ text: 'a' }], 4) })
     const evaluation = evaluate('replay.defaults', {
@@ -93,7 +93,7 @@ describe('engine replay — record-new then replay-strict', () => {
     expect(existsSync(join(liveDir, 'cassettes'))).toBe(false)
   })
 
-  it('fails a replay-strict miss closed: cell errored, phase replay, key + re-record hint', async () => {
+    it('fails a replay-strict miss closed: cell errored, phase replay, key + re-record hint', async () => {
     const dir = await tempQualityDir()
     const { generate, liveCalls } = executorSetup({ loops: repeat([{ text: 'never' }], 2) })
     const evaluation = evaluate('replay.miss', {
@@ -203,7 +203,7 @@ describe('engine replay — named cassette and custom match', () => {
     expect(existsSync(join(dir, 'cassettes', 'shared-support.json'))).toBe(true)
   })
 
-  it('refresh re-records entries in place', async () => {
+    it('refresh re-records entries in place', async () => {
     const dir = await tempQualityDir()
     const first = executorSetup({ loops: [[{ text: 'old' }]] })
     const evaluation = evaluate('replay.refresh', {

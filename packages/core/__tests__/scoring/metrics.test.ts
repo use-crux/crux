@@ -14,32 +14,32 @@ describe('metrics', () => {
     expect(judge.id).toBe('relevance')
   })
 
-  it('faithfulness creates a judge with id "faithfulness"', () => {
+    it('faithfulness creates a judge with id "faithfulness"', () => {
     const judge = metrics.faithfulness(defaults)
     expect(judge.id).toBe('faithfulness')
   })
 
-  it('coherence creates a judge with id "coherence"', () => {
+    it('coherence creates a judge with id "coherence"', () => {
     const judge = metrics.coherence(defaults)
     expect(judge.id).toBe('coherence')
   })
 
-  it('completeness creates a judge with id "completeness"', () => {
+    it('completeness creates a judge with id "completeness"', () => {
     const judge = metrics.completeness(defaults)
     expect(judge.id).toBe('completeness')
   })
 
-  it('toxicity creates a judge with id "toxicity"', () => {
+    it('toxicity creates a judge with id "toxicity"', () => {
     const judge = metrics.toxicity(defaults)
     expect(judge.id).toBe('toxicity')
   })
 
-  it('conciseness creates a judge with id "conciseness"', () => {
+    it('conciseness creates a judge with id "conciseness"', () => {
     const judge = metrics.conciseness(defaults)
     expect(judge.id).toBe('conciseness')
   })
 
-  it('all metrics return valid JudgeInstance objects', () => {
+    it('all metrics return valid JudgeInstance objects', () => {
     const metricNames = ['relevance', 'faithfulness', 'coherence', 'completeness', 'toxicity', 'conciseness'] as const
     for (const name of metricNames) {
       const judge = metrics[name](defaults)
@@ -48,7 +48,7 @@ describe('metrics', () => {
     }
   })
 
-  it('metric judges can score', async () => {
+    it('metric judges can score', async () => {
     const judge = metrics.relevance(defaults)
     const result = await judge.score({ input: 'query', output: 'response' })
 
@@ -57,7 +57,7 @@ describe('metrics', () => {
     expect(result.metricId).toBe('relevance')
   })
 
-  it('metric judges pass model through', async () => {
+    it('metric judges pass model through', async () => {
     let capturedModel: unknown
     const gen: GenerateObjectFn = (async (opts: any) => {
       capturedModel = opts.model

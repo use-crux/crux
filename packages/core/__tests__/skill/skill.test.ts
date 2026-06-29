@@ -35,7 +35,7 @@ describe('skill.inline()', () => {
     expect(Object.isFrozen(s)).toBe(true)
   })
 
-  it('dump() returns the raw instruction text', () => {
+    it('dump() returns the raw instruction text', () => {
     const s = skill.inline({
       id: 'test',
       description: 'Test',
@@ -45,7 +45,7 @@ describe('skill.inline()', () => {
     expect(s.dump()).toBe('These are the instructions.')
   })
 
-  it('supports inline references', () => {
+    it('supports inline references', () => {
     const s = skill.inline({
       id: 'test',
       description: 'Test',
@@ -63,15 +63,15 @@ describe('skill.inline()', () => {
     expect(s.references[1]!.content).toBe('Example reference content')
   })
 
-  it('throws SkillLoadError for missing id', () => {
+    it('throws SkillLoadError for missing id', () => {
     expect(() => skill.inline({ id: '', description: 'Test', instructions: 'Content' })).toThrow(SkillLoadError)
   })
 
-  it('throws SkillLoadError for missing description', () => {
+    it('throws SkillLoadError for missing description', () => {
     expect(() => skill.inline({ id: 'test', description: '', instructions: 'Content' })).toThrow(SkillLoadError)
   })
 
-  it('throws SkillLoadError for missing instructions', () => {
+    it('throws SkillLoadError for missing instructions', () => {
     expect(() => skill.inline({ id: 'test', description: 'Test', instructions: '' })).toThrow(SkillLoadError)
   })
 })
@@ -94,11 +94,11 @@ describe('generateIndex()', () => {
     expect(index).toContain('LoadReference(skillName, referenceName)')
   })
 
-  it('returns empty string for no skills', () => {
+    it('returns empty string for no skills', () => {
     expect(generateIndex([])).toBe('')
   })
 
-  it('includes reference names when skill has references', () => {
+    it('includes reference names when skill has references', () => {
     const s = skill.inline({
       id: 'research',
       description: 'Research skills',
@@ -129,7 +129,7 @@ describe('LoadSkill tool', () => {
     expect(result).toContain('loaded successfully')
   })
 
-  it('returns error for unknown skill', async () => {
+    it('returns error for unknown skill', async () => {
     const s = skill.inline({ id: 'seo', description: 'SEO', instructions: '...' })
     const session = createSkillActivationSession({ skills: [s] })
     const tool = session.tools()[LOAD_SKILL_TOOL_NAME] as {
@@ -159,7 +159,7 @@ describe('LoadReference tool', () => {
     expect(result).toBe('Keyword research guide')
   })
 
-  it('returns error for unknown skill', async () => {
+    it('returns error for unknown skill', async () => {
     const session = createSkillActivationSession({ skills: [] })
     const tool = session.tools()[LOAD_REFERENCE_TOOL_NAME] as {
       execute: (args: Record<string, unknown>) => Promise<string>
@@ -169,7 +169,7 @@ describe('LoadReference tool', () => {
     expect(result).toContain('not found')
   })
 
-  it('returns error for unknown reference', async () => {
+    it('returns error for unknown reference', async () => {
     const s = skill.inline({
       id: 'seo',
       description: 'SEO',
@@ -195,7 +195,7 @@ describe('skill entries through the resolution pipeline', () => {
   const inspect = (use: readonly ContextEntry[], input: Record<string, unknown> = {}) =>
     compilePrompt({ system: 'S', use } as AnyPromptConfig).inspect({ input })
 
-  it('skills produce the index context and loader tools', async () => {
+    it('skills produce the index context and loader tools', async () => {
     const s = skill.inline({ id: 'test', description: 'Test', instructions: 'Do something.' })
     const ctx = context({ id: 'regular', system: 'Regular context' })
 
@@ -208,7 +208,7 @@ describe('skill entries through the resolution pipeline', () => {
     expect(result.tools).toEqual(expect.arrayContaining([LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME]))
   })
 
-  it('the generated index lists every skill', async () => {
+    it('the generated index lists every skill', async () => {
     const s1 = skill.inline({ id: 'skill1', description: 'First skill', instructions: '...' })
     const s2 = skill.inline({ id: 'skill2', description: 'Second skill', instructions: '...' })
 
@@ -218,13 +218,13 @@ describe('skill entries through the resolution pipeline', () => {
     expect(index?.text).toContain('skill2')
   })
 
-  it('no index context or loader tools when no skills are present', async () => {
+    it('no index context or loader tools when no skills are present', async () => {
     const result = await inspect([context({ id: 'regular', system: 'Regular' })])
     expect(result.system.parts.map((p) => p.source)).toEqual(['prompt', 'context:regular'])
     expect(result.tools).toBeUndefined()
   })
 
-  it('handles falsy entries alongside skills', async () => {
+    it('handles falsy entries alongside skills', async () => {
     const s = skill.inline({ id: 'test', description: 'Test', instructions: '...' })
     const result = await inspect([null, s, false, undefined])
     expect(result.system.parts.map((p) => p.source)).toEqual(['prompt', 'context:__crux_skill_index'])

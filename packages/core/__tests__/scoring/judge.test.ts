@@ -23,7 +23,7 @@ describe('llmJudge', () => {
     expect(judge.id).toBe('test-judge')
   })
 
-  it('score() returns JudgeResult with metricId', async () => {
+    it('score() returns JudgeResult with metricId', async () => {
     const judge = llmJudge({
       id: 'relevance',
       criteria: 'Is the output relevant?',
@@ -38,7 +38,7 @@ describe('llmJudge', () => {
     expect(result.metricId).toBe('relevance')
   })
 
-  it('clamps score to scale range (above max)', async () => {
+    it('clamps score to scale range (above max)', async () => {
     const judge = llmJudge({
       id: 'test',
       criteria: 'test',
@@ -51,7 +51,7 @@ describe('llmJudge', () => {
     expect(result.score).toBe(5)
   })
 
-  it('clamps score to scale range (below min)', async () => {
+    it('clamps score to scale range (below min)', async () => {
     const judge = llmJudge({
       id: 'test',
       criteria: 'test',
@@ -64,7 +64,7 @@ describe('llmJudge', () => {
     expect(result.score).toBe(1)
   })
 
-  it('passes criteria to system prompt', async () => {
+    it('passes criteria to system prompt', async () => {
     let capturedSystem = ''
     const generate: GenerateObjectFn = (async (opts: any) => {
       capturedSystem = opts.system ?? ''
@@ -83,7 +83,7 @@ describe('llmJudge', () => {
     expect(capturedSystem).toContain('actionable advice')
   })
 
-  it('includes rubric in system prompt', async () => {
+    it('includes rubric in system prompt', async () => {
     let capturedSystem = ''
     const generate: GenerateObjectFn = (async (opts: any) => {
       capturedSystem = opts.system ?? ''
@@ -109,7 +109,7 @@ describe('llmJudge', () => {
     expect(capturedSystem).toContain('Excellent')
   })
 
-  it('includes few-shot examples in system prompt', async () => {
+    it('includes few-shot examples in system prompt', async () => {
     let capturedSystem = ''
     const generate: GenerateObjectFn = (async (opts: any) => {
       capturedSystem = opts.system ?? ''
@@ -137,7 +137,7 @@ describe('llmJudge', () => {
     expect(capturedSystem).toContain('Too vague')
   })
 
-  it('passes input and output in user prompt', async () => {
+    it('passes input and output in user prompt', async () => {
     let capturedPrompt = ''
     const generate: GenerateObjectFn = (async (opts: any) => {
       capturedPrompt = opts.prompt ?? ''
@@ -157,7 +157,7 @@ describe('llmJudge', () => {
     expect(capturedPrompt).toContain('my answer')
   })
 
-  it('includes reference in user prompt when provided', async () => {
+    it('includes reference in user prompt when provided', async () => {
     let capturedPrompt = ''
     const generate: GenerateObjectFn = (async (opts: any) => {
       capturedPrompt = opts.prompt ?? ''
@@ -177,7 +177,7 @@ describe('llmJudge', () => {
     expect(capturedPrompt).toContain('Reference')
   })
 
-  it('allows overriding model at score time', async () => {
+    it('allows overriding model at score time', async () => {
     let capturedModel: unknown
     const generate: GenerateObjectFn = (async (opts: any) => {
       capturedModel = opts.model
@@ -196,7 +196,7 @@ describe('llmJudge', () => {
     expect(capturedModel).toBe('override-model')
   })
 
-  it('allows overriding generate at score time', async () => {
+    it('allows overriding generate at score time', async () => {
     let called = false
     const overrideGenerate: GenerateObjectFn = (async () => {
       called = true
@@ -215,7 +215,7 @@ describe('llmJudge', () => {
     expect(called).toBe(true)
   })
 
-  it('throws if no generate function provided', async () => {
+    it('throws if no generate function provided', async () => {
     const judge = llmJudge({
       id: 'test',
       criteria: 'test',
@@ -226,7 +226,7 @@ describe('llmJudge', () => {
     await expect(judge.score({ input: 'q', output: 'a' })).rejects.toThrow('no generate function')
   })
 
-  it('throws if no model provided', async () => {
+    it('throws if no model provided', async () => {
     const judge = llmJudge({
       id: 'test',
       criteria: 'test',
@@ -237,7 +237,7 @@ describe('llmJudge', () => {
     await expect(judge.score({ input: 'q', output: 'a' })).rejects.toThrow('no model provided')
   })
 
-  it('includes context in system prompt when provided', async () => {
+    it('includes context in system prompt when provided', async () => {
     let capturedSystem = ''
     const generate: GenerateObjectFn = (async (opts: any) => {
       capturedSystem = opts.system ?? ''
@@ -259,7 +259,7 @@ describe('llmJudge', () => {
     expect(capturedSystem).toContain('B2B executives')
   })
 
-  it('omits context section when not provided', async () => {
+    it('omits context section when not provided', async () => {
     let capturedSystem = ''
     const generate: GenerateObjectFn = (async (opts: any) => {
       capturedSystem = opts.system ?? ''
@@ -278,7 +278,7 @@ describe('llmJudge', () => {
     expect(capturedSystem).not.toContain('## Context')
   })
 
-  describe('detailSchema', () => {
+describe('detailSchema', () => {
     it('returns detail when detailSchema is configured', async () => {
       const generate: GenerateObjectFn = (async () => ({
         object: {

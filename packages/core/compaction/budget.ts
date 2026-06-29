@@ -54,12 +54,6 @@ export function createBudgetManager(config: BudgetConfig): BudgetManager {
         pressure >= criticalThreshold ? 'critical' : pressure >= warningThreshold ? 'warning' : 'normal'
 
       const available = Math.max(0, limit - used)
-      getRuntime().instrumentationHooks?.onBudgetCheck?.({
-        used,
-        available,
-        level,
-        breakdown,
-      })
 
       span.withContext(() => {
         observe.event({

@@ -30,7 +30,7 @@ describe('flow', () => {
     expect(Object.isFrozen(handle)).toBe(true)
   })
 
-  it('infers handler return type through to FlowResult<T>.output', async () => {
+    it('infers handler return type through to FlowResult<T>.output', async () => {
     const handle = makeFlow('typed-flow', async () => ({
       count: 42,
       label: 'test',
@@ -45,7 +45,7 @@ describe('flow', () => {
     }
   })
 
-  it('.run() executes the flow and returns FlowResult with completed status', async () => {
+    it('.run() executes the flow and returns FlowResult with completed status', async () => {
     const handle = makeFlow('basic', async (flow) => {
       return flow.step('compute', () => 'hello')
     })
@@ -58,7 +58,7 @@ describe('flow', () => {
     }
   })
 
-  it('.run() passes input to the flow scope', async () => {
+    it('.run() passes input to the flow scope', async () => {
     const handle = makeFlow<string, { name: string }>('input-flow', async (flow) => {
       return `Hello, ${flow.input.name}`
     })
@@ -70,7 +70,7 @@ describe('flow', () => {
     }
   })
 
-  it('.run() passes options through to flow internals', async () => {
+    it('.run() passes options through to flow internals', async () => {
     const handle = makeFlow('options-flow', async (flow) => {
       return flow.flowId
     })
@@ -82,7 +82,7 @@ describe('flow', () => {
     }
   })
 
-  it('error in step propagates correctly', async () => {
+    it('error in step propagates correctly', async () => {
     const handle = makeFlow('error-flow', async (flow) => {
       return flow.step('fail', () => {
         throw new Error('step failed')
@@ -292,7 +292,7 @@ describe('flow', () => {
     expect(snapshot?.cancelReason).toBe('User rejected')
   })
 
-  it('cancellation from within a flow handler returns cancelled status', async () => {
+    it('cancellation from within a flow handler returns cancelled status', async () => {
     setupStore()
     const stepsExecuted: string[] = []
 
@@ -347,7 +347,7 @@ describe('flow', () => {
     }
   })
 
-  it('expiry fires onExpired callback through flow', async () => {
+    it('expiry fires onExpired callback through flow', async () => {
     setupStore()
     let expiredCalled = false
     let expiredFlowId: string | undefined

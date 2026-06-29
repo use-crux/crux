@@ -20,7 +20,7 @@ describe('blackboard asTools()', () => {
     expect(tools.clearBlackboard).toBeDefined()
   })
 
-  it('each tool has description, parameters, and execute', () => {
+    it('each tool has description, parameters, and execute', () => {
     const board = makeBlackboard({ id: 'test', schema: testSchema })
     const tools = board.asTools()
 
@@ -32,7 +32,7 @@ describe('blackboard asTools()', () => {
     }
   })
 
-  describe('readBlackboard', () => {
+describe('readBlackboard', () => {
     it('without field returns full board', async () => {
       const board = makeBlackboard({ id: 'test', schema: testSchema })
       await board.set('goal', 'Build feature')
@@ -74,7 +74,7 @@ describe('blackboard asTools()', () => {
     })
   })
 
-  describe('writeBlackboard', () => {
+describe('writeBlackboard', () => {
     it('sets a field', async () => {
       const board = makeBlackboard({ id: 'test', schema: testSchema })
       const tools = board.asTools()
@@ -104,7 +104,7 @@ describe('blackboard asTools()', () => {
     })
   })
 
-  describe('patchBlackboard', () => {
+describe('patchBlackboard', () => {
     it('merges multiple fields', async () => {
       const board = makeBlackboard({ id: 'test', schema: testSchema })
       await board.set('goal', 'Keep this')
@@ -127,7 +127,7 @@ describe('blackboard asTools()', () => {
     })
   })
 
-  describe('clearBlackboard', () => {
+describe('clearBlackboard', () => {
     it('removes all state', async () => {
       const board = makeBlackboard({ id: 'test', schema: testSchema })
       await board.set('goal', 'Something')
@@ -140,7 +140,7 @@ describe('blackboard asTools()', () => {
     })
   })
 
-  describe('subscriber notifications', () => {
+describe('subscriber notifications', () => {
     it('writeBlackboard triggers subscriber', async () => {
       const board = makeBlackboard({ id: 'test', schema: testSchema })
       const listener = vi.fn()

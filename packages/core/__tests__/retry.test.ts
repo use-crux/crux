@@ -22,7 +22,7 @@ describe('executeWithRetry', () => {
     expect(calls).toBe(2)
   })
 
-  it('uses fallback after retryable errors exhaust all attempts', async () => {
+    it('uses fallback after retryable errors exhaust all attempts', async () => {
     let calls = 0
 
     const result = await executeWithRetry(
@@ -92,7 +92,7 @@ describe('executeWithRetry', () => {
     expect(fallbackCalls).toBe(0)
   })
 
-  it('allows callers to override retry eligibility intentionally', async () => {
+    it('allows callers to override retry eligibility intentionally', async () => {
     let calls = 0
 
     const result = await executeWithRetry(

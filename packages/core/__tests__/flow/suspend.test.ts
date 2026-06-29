@@ -143,7 +143,7 @@ describe('flow signal + resume', () => {
     expect(recordsAfterResume).not.toContainEqual(expect.objectContaining({ type: 'run:start' }))
   })
 
-  it('resumes a suspended flow, skips cached steps, and continues to completion', async () => {
+    it('resumes a suspended flow, skips cached steps, and continues to completion', async () => {
     setupStore()
     const stepsExecuted: string[] = []
     const flowFn = pipelineFlow(stepsExecuted)
@@ -169,7 +169,7 @@ describe('flow signal + resume', () => {
     expect(stepsExecuted).toEqual(['execute'])
   })
 
-  it('uses the same flowId across suspend/resume cycles', async () => {
+    it('uses the same flowId across suspend/resume cycles', async () => {
     setupStore()
     const stepsExecuted: string[] = []
     const flowFn = pipelineFlow(stepsExecuted)
@@ -253,7 +253,7 @@ describe('flow suspend error handling', () => {
     ).rejects.toThrow('CruxStore')
   })
 
-  it('throws when resuming a non-existent flow', async () => {
+    it('throws when resuming a non-existent flow', async () => {
     setupStore()
 
     await expect(
@@ -336,7 +336,7 @@ describe('flow cancel', () => {
     expect(stepsExecuted).toEqual(['plan'])
   })
 
-  it('cancels a suspended flow externally', async () => {
+    it('cancels a suspended flow externally', async () => {
     setupStore()
 
     // Suspend
@@ -385,7 +385,7 @@ describe('flow timeout/expiration', () => {
     }
   })
 
-  it('calls onExpired callback when flow expires', async () => {
+    it('calls onExpired callback when flow expires', async () => {
     setupStore()
     let expiredCalled = false
     let expiredFlowId: string | undefined
@@ -478,7 +478,7 @@ describe('multi-suspend lifecycle', () => {
     expect(stepsExecuted).toEqual(['publish'])
   })
 
-  it('each suspend point has independent signals', async () => {
+    it('each suspend point has independent signals', async () => {
     setupStore()
 
     const flowFn = async (flow: { flowId: string; step: any; suspend: any }) => {
@@ -503,7 +503,7 @@ describe('multi-suspend lifecycle', () => {
     if (run2.status === 'suspended') expect(run2.suspendedAt).toBe('gate-1')
   })
 
-  it('accumulates cached step outputs across suspend cycles', async () => {
+    it('accumulates cached step outputs across suspend cycles', async () => {
     setupStore()
 
     const flowFn = async (flow: { flowId: string; step: any; suspend: any }) => {
@@ -556,7 +556,7 @@ describe('flow.waitUntil', () => {
     if (run2.status === 'completed') expect(run2.output).toBe('processed')
   })
 
-  it('re-suspends when condition is still false on resume', async () => {
+    it('re-suspends when condition is still false on resume', async () => {
     setupStore()
     const conditionValue = false
 
@@ -577,7 +577,7 @@ describe('flow.waitUntil', () => {
     if (run2.status === 'suspended') expect(run2.suspendedAt).toBe('data-ready')
   })
 
-  it('supports timeout like suspend', async () => {
+    it('supports timeout like suspend', async () => {
     setupStore()
 
     const flowFn = async (flow: { flowId: string; step: any; suspend: any; waitUntil: any }) => {
@@ -620,13 +620,13 @@ describe('listFlows', () => {
     expect(suspended.every((f) => f.flowId && f.name && f.suspendedAt)).toBe(true)
   })
 
-  it('returns empty array when no flows match', async () => {
+    it('returns empty array when no flows match', async () => {
     setupStore()
     const result = await listFlows({ status: 'expired' })
     expect(result).toEqual([])
   })
 
-  it('includes flow metadata in results', async () => {
+    it('includes flow metadata in results', async () => {
     setupStore()
 
     const run = await makeFlow('metadata-test', async (flow) => {
@@ -652,137 +652,7 @@ describe('suspend/resume instrumentation hooks', () => {
     resetRuntime()
   })
 
-  it('fires onFlowSuspend hook when flow suspends', async () => {
-    setupStore()
-    const events: any[] = []
-    updateRuntime({
-      instrumentationHooks: {
-        onFlowSuspend: (e) => {
-          events.push(e)
-        },
-      },
-    })
-
-    const run = await makeFlow('hook-test', async (flow) => {
-      await flow.step('plan', async () => 'planned')
-      await flow.suspend('approval')
-    }).run()
-
-    expect(run.status).toBe('suspended')
-    expect(events).toHaveLength(1)
-    expect(events[0].flowId).toBe(run.flowId)
-    expect(events[0].name).toBe('hook-test')
-    expect(events[0].suspendPoint).toBe('approval')
-  })
-
-  it('fires onFlowResume hook when flow is resumed', async () => {
-    setupStore()
-    const events: any[] = []
-    updateRuntime({
-      instrumentationHooks: {
-        onFlowResume: (e) => {
-          events.push(e)
-        },
-      },
-    })
-
-    const flowFn = async (flow: { flowId: string; step: any; suspend: any }) => {
-      await flow.step('plan', async () => 'planned')
-      await flow.suspend('approval')
-      return 'done'
-    }
-
-    const resumeHookFlow = makeFlow('resume-hook', flowFn)
-
-    const run = await resumeHookFlow.run()
-    await signalFlow(run.flowId, 'approval')
-
-    const resumed = await resumeHookFlow.run({ resume: run.flowId })
-    expect(resumed.status).toBe('completed')
-    expect(events).toHaveLength(1)
-    expect(events[0].flowId).toBe(run.flowId)
-    expect(events[0].name).toBe('resume-hook')
-  })
-
-  it('fires onFlowSignal hook when a signal is delivered', async () => {
-    setupStore()
-    const events: any[] = []
-    updateRuntime({
-      instrumentationHooks: {
-        onFlowSignal: (e) => {
-          events.push(e)
-        },
-      },
-    })
-
-    const flowFn = async (flow: { flowId: string; step: any; suspend: any }) => {
-      await flow.step('plan', async () => 'planned')
-      const signal = await flow.suspend('approval')
-      return signal
-    }
-
-    const signalHookFlow = makeFlow('signal-hook', flowFn)
-
-    const run = await signalHookFlow.run()
-    await signalFlow(run.flowId, 'approval', { approvedBy: 'henri' })
-
-    await signalHookFlow.run({ resume: run.flowId })
-
-    expect(events).toHaveLength(1)
-    expect(events[0].flowId).toBe(run.flowId)
-    expect(events[0].signalName).toBe('approval')
-    expect(events[0].payload).toEqual({ approvedBy: 'henri' })
-  })
-
-  it('fires onFlowCancel hook when flow is cancelled', async () => {
-    setupStore()
-    const events: any[] = []
-    updateRuntime({
-      instrumentationHooks: {
-        onFlowCancel: (e) => {
-          events.push(e)
-        },
-      },
-    })
-
-    await makeFlow('cancel-hook', async (flow) => {
-      await flow.step('plan', async () => 'planned')
-      flow.cancel('rejected')
-    }).run()
-
-    expect(events).toHaveLength(1)
-    expect(events[0].reason).toBe('rejected')
-  })
-
-  it('fires onFlowExpired hook when flow has expired', async () => {
-    setupStore()
-    const events: any[] = []
-    updateRuntime({
-      instrumentationHooks: {
-        onFlowExpired: (e) => {
-          events.push(e)
-        },
-      },
-    })
-
-    const flowFn = async (flow: { flowId: string; step: any; suspend: any }) => {
-      await flow.step('plan', async () => 'planned')
-      await flow.suspend('approval', { timeout: '0ms' })
-    }
-
-    const expireFlow = makeFlow('expire-hook', flowFn)
-
-    const run = await expireFlow.run()
-    await new Promise((r) => setTimeout(r, 5))
-
-    await expireFlow.run({ resume: run.flowId })
-
-    expect(events).toHaveLength(1)
-    expect(events[0].flowId).toBe(run.flowId)
-    expect(events[0].suspendPoint).toBe('approval')
-  })
-
-  it('preserves trace context (sessionId, parentFlowId) across resume', async () => {
+    it('preserves trace context (sessionId, parentFlowId) across resume', async () => {
     setupStore()
     let resumedSessionId: string | undefined
     let resumedParentFlowId: string | undefined

@@ -139,7 +139,7 @@ describe('adapter', () => {
     expect(typeof factory).toBe('function')
   })
 
-  it('factory returns an adapter with expected methods', () => {
+    it('factory returns an adapter with expected methods', () => {
     const factory = makeAdapter(createMockSpec())
     const adapter = factory(mockClient)
 
@@ -152,14 +152,14 @@ describe('adapter', () => {
     expect(typeof adapter.swarm).toBe('function')
   })
 
-  it('adapter is frozen (immutable)', () => {
+    it('adapter is frozen (immutable)', () => {
     const factory = makeAdapter(createMockSpec())
     const adapter = factory(mockClient)
 
     expect(Object.isFrozen(adapter)).toBe(true)
   })
 
-  describe('generate()', () => {
+describe('generate()', () => {
     it('resolves prompt and calls spec.call()', async () => {
       const callSpy = vi.fn().mockResolvedValue({
         raw: { id: 'raw_123', content: 'hello' },
@@ -253,7 +253,7 @@ describe('adapter', () => {
     })
   })
 
-  describe('tool loop', () => {
+describe('tool loop', () => {
     it('executes tools and loops until no more tool calls', async () => {
       let callCount = 0
       const callSpy = vi.fn().mockImplementation(async () => {
@@ -472,7 +472,7 @@ describe('adapter', () => {
     })
   })
 
-  describe('settings mapping', () => {
+describe('settings mapping', () => {
     it('calls mapSettings with generation settings', async () => {
       const mapSettingsSpy = vi.fn().mockReturnValue({ temperature: 0.5 })
 
@@ -514,7 +514,7 @@ describe('adapter', () => {
     })
   })
 
-  describe('sanitizeToolSchema', () => {
+describe('sanitizeToolSchema', () => {
     it('is called when provided', async () => {
       const sanitizeSpy = vi.fn().mockImplementation((schema: Record<string, unknown>) => {
         // Remove 'maxItems' like Anthropic adapter would
@@ -592,7 +592,7 @@ describe('adapter', () => {
     })
   })
 
-  describe('stream()', () => {
+describe('stream()', () => {
     it('resolves prompt and calls spec.stream()', async () => {
       const streamSpy = vi.fn().mockResolvedValue({
         rawStream: {
@@ -648,7 +648,7 @@ describe('adapter', () => {
     })
   })
 
-  describe('provider defaults', () => {
+describe('provider defaults', () => {
     it('uses spec.providerId as default provider in resolve', async () => {
       const callSpy = vi.fn().mockResolvedValue({
         raw: { id: 'raw', content: 'ok' },
@@ -708,7 +708,7 @@ describe('adapter', () => {
     })
   })
 
-  describe('validation retry', () => {
+describe('validation retry', () => {
     const outputSchema = z.object({ name: z.string(), age: z.number() })
 
     function createSchemaPrompt() {
@@ -945,7 +945,7 @@ describe('adapter', () => {
     })
   })
 
-  describe('extra options', () => {
+describe('extra options', () => {
     it('passes extra to call args', async () => {
       const callSpy = vi.fn().mockResolvedValue({
         raw: { id: 'raw', content: 'ok' },

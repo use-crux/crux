@@ -208,7 +208,7 @@ describe('native-chat compiler', () => {
     expect(violations).toEqual([])
   })
 
-  it('creates lightweight helpers from the same profile request path', async () => {
+    it('creates lightweight helpers from the same profile request path', async () => {
     const helpers = nativeTestProfile.helpers(bindNativeTest)
     const textClient: NativeTestClient = {
       script: { emissions: [{ text: 'helper text' }] },
@@ -251,7 +251,7 @@ describe('native-chat compiler', () => {
     expect(objectClient.calls[0]?.schemaParams).toHaveProperty('response_schema')
   })
 
-  it('lets helper provider errors surface unchanged', async () => {
+    it('lets helper provider errors surface unchanged', async () => {
     const providerError = new Error('provider unavailable')
     const helpers = nativeTestProfile.helpers<NativeTestClient>(() => ({
       call: async () => {
@@ -264,7 +264,7 @@ describe('native-chat compiler', () => {
     await expect(generateText({ model: 'ignored', prompt: 'Write text' })).rejects.toBe(providerError)
   })
 
-  it('lets object helpers consume provider-native parsed structured output', async () => {
+    it('lets object helpers consume provider-native parsed structured output', async () => {
     const helpers = nativeTestProfile.helpers<NativeTestClient>(() => ({
       call: async () => ({
         id: 'native_resp_structured',

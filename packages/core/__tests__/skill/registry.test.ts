@@ -15,12 +15,12 @@ describe('skill.fromRegistry()', () => {
     expect(s.id).toBe('skills.sh:mattpocock/skills/seo')
   })
 
-  it('has a placeholder description until loaded', () => {
+    it('has a placeholder description until loaded', () => {
     const s = skill.fromRegistry(skillsSh, 'mattpocock/skills/seo')
     expect(s.description).toContain('registry')
   })
 
-  it('accepts a registry object so custom registries are code-bound, not config-bound', async () => {
+    it('accepts a registry object so custom registries are code-bound, not config-bound', async () => {
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (url.includes('SKILL.md')) {
         return Promise.resolve({
@@ -78,7 +78,7 @@ describe('identifier parsing', () => {
     }
   })
 
-  it('custom prefix routes to custom registry', async () => {
+    it('custom prefix routes to custom registry', async () => {
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (url.includes('SKILL.md')) {
         return Promise.resolve({
@@ -110,12 +110,12 @@ describe('identifier parsing', () => {
     }
   })
 
-  it('throws SkillLoadError for unknown internal registry identifiers', async () => {
+    it('throws SkillLoadError for unknown internal registry identifiers', async () => {
     await expect(resolveRegistrySkill('unknown:skill')).rejects.toThrow(SkillLoadError)
     await expect(resolveRegistrySkill('unknown:skill')).rejects.toThrow('unknown registry')
   })
 
-  it('throws SkillLoadError for malformed internal registry identifiers', async () => {
+    it('throws SkillLoadError for malformed internal registry identifiers', async () => {
     await expect(resolveRegistrySkill('mattpocock/skills/seo')).rejects.toThrow(SkillLoadError)
     await expect(resolveRegistrySkill('mattpocock/skills/seo')).rejects.toThrow('must be prefixed')
   })
@@ -153,7 +153,7 @@ describe('caching', () => {
     }
   })
 
-  it('expires cached entries after TTL', async () => {
+    it('expires cached entries after TTL', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () =>
@@ -194,7 +194,7 @@ describe('error handling', () => {
     }
   })
 
-  it('throws SkillLoadError on non-200 response', async () => {
+    it('throws SkillLoadError on non-200 response', async () => {
     const original = globalThis.fetch
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
@@ -210,7 +210,7 @@ describe('error handling', () => {
     }
   })
 
-  it('throws SkillLoadError on invalid JSON', async () => {
+    it('throws SkillLoadError on invalid JSON', async () => {
     const original = globalThis.fetch
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -224,7 +224,7 @@ describe('error handling', () => {
     }
   })
 
-  it('throws SkillLoadError when skills.sh identifier is too short', async () => {
+    it('throws SkillLoadError when skills.sh identifier is too short', async () => {
     await expect(resolveRegistrySkill('skills.sh:tooshort')).rejects.toThrow(SkillLoadError)
     await expect(resolveRegistrySkill('skills.sh:tooshort')).rejects.toThrow('owner/repo')
   })

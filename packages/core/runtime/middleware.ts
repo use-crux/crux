@@ -2,9 +2,7 @@
  * Hook and middleware type definitions for prompt execution.
  *
  * This module owns the per-call hook *function* types (resolve, execution,
- * stream-progress, stream-start). The large {@link InstrumentationHooks} bag of
- * primitive-operation callbacks lives in `./instrumentation-hooks` and is
- * re-exported here so `from './middleware'` import sites keep resolving it.
+ * stream-progress, stream-start).
  *
  * Types are defined here; runtime state lives in `./runtime`.
  * Consumers read hooks via `getRuntime()` from `./runtime`.
@@ -13,8 +11,6 @@
  */
 
 import type { InspectResult } from '../resolver/types'
-
-export type { InstrumentationHooks } from './instrumentation-hooks'
 
 // ─────────────────────────────────────────────────────────────────
 // Resolve Hook (for agent adapters)

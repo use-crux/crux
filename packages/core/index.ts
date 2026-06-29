@@ -216,8 +216,6 @@ export { setTokenizer, countTokens } from './shared/tokenizer'
 export { mergeRuntime, applyPlugins } from './runtime'
 export type { CruxPlugin, CruxPluginResult, ApplyPluginsResult } from './runtime'
 
-// Hook types — needed by plugin authors
-export type { InstrumentationHooks } from './runtime'
 export { toolMiddleware, approvalMiddleware } from './tools/middleware'
 export {
   toolApprovalResponse,

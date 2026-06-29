@@ -55,7 +55,6 @@ export async function runPipelineStage<
     },
   })
 
-  getRuntime().instrumentationHooks?.onRetrievalStageStart?.(eventBase)
 
   try {
     const result = await span.withContext(args.run)
@@ -77,15 +76,6 @@ export async function runPipelineStage<
       ...(result.warnings?.length ? { warnings: result.warnings } : {}),
       preview,
     }
-    getRuntime().instrumentationHooks?.onRetrievalStageEnd?.({
-      ...eventBase,
-      status: 'success',
-      ...(outputQueryCount !== undefined ? { outputQueryCount } : {}),
-      ...(outputHitCount !== undefined ? { outputHitCount } : {}),
-      durationMs,
-      warningCount: result.warnings?.length ?? 0,
-      preview,
-    })
     span.withContext(() => {
       emitStageOutputArtifact(span.spanId, eventBase, preview, {
         ...(outputQueryCount !== undefined ? { outputQueryCount } : {}),
@@ -104,13 +94,6 @@ export async function runPipelineStage<
   } catch (error) {
     const durationMs = Date.now() - startedAt
     const message = error instanceof Error ? error.message : String(error)
-    getRuntime().instrumentationHooks?.onRetrievalStageEnd?.({
-      ...eventBase,
-      status: 'error',
-      durationMs,
-      warningCount: 0,
-      error: message,
-    })
     span.error(error, { status: 'error', warningCount: 0 })
     throw error
   }

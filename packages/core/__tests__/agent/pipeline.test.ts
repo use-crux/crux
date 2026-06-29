@@ -71,7 +71,7 @@ describe('pipeline: context accumulation', () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0)
   })
 
-  it('passes seed context as input to first step when no input callback', async () => {
+    it('passes seed context as input to first step when no input callback', async () => {
     const executor = createMockExecutor()
     const pipeline = createPipeline(executor)
 
@@ -88,7 +88,7 @@ describe('pipeline: context accumulation', () => {
     expect(researchInput).toEqual({ query: 'AI safety' })
   })
 
-  it('supports plain fn steps alongside agent steps', async () => {
+    it('supports plain fn steps alongside agent steps', async () => {
     const executor = createMockExecutor()
     const pipeline = createPipeline(executor)
 
@@ -111,7 +111,7 @@ describe('pipeline: context accumulation', () => {
     expect(result.context.format).toEqual({ html: '<p>formatted</p>' })
   })
 
-  it('accumulates across 3 steps', async () => {
+    it('accumulates across 3 steps', async () => {
     const executor = createMockExecutor()
     const pipeline = createPipeline(executor)
 
@@ -144,7 +144,7 @@ describe('pipeline: context accumulation', () => {
     expect(result.context.edit).toBeDefined()
   })
 
-  it('stops on error and reports step name', async () => {
+    it('stops on error and reports step name', async () => {
     const executor = createFakeAgentExecutor({
       agents: { writer: { throws: 'LLM failed' } },
       fallback: { output: {} },
@@ -160,40 +160,7 @@ describe('pipeline: context accumulation', () => {
         ],
       }),
     ).rejects.toThrow('Pipeline step "write" failed')
-  })
-
-  it('emits composition events to instrumentation hooks', async () => {
-    const events: Array<{ type: string; data: unknown }> = []
-    const { setRuntime, resetRuntime } = await import('../../runtime/runtime')
-
-    setRuntime({
-      instrumentationHooks: {
-        onCompositionStart: (e) => events.push({ type: 'start', data: e }),
-        onCompositionAgent: (e) => events.push({ type: 'agent', data: e }),
-        onCompositionEnd: (e) => events.push({ type: 'end', data: e }),
-      },
-    })
-
-    try {
-      const executor = createMockExecutor()
-      const pipeline = createPipeline(executor)
-
-      await pipeline({
-        context: {},
-        steps: [
-          { name: 'research', agent: researcher },
-          { name: 'write', agent: writer },
-        ],
-      })
-
-      expect(events.filter((e) => e.type === 'start')).toHaveLength(1)
-      expect(events.filter((e) => e.type === 'agent')).toHaveLength(2)
-      expect(events.filter((e) => e.type === 'end')).toHaveLength(1)
-    } finally {
-      resetRuntime()
-    }
-  })
-})
+  })})
 
 describe('pipeline: .created capture', () => {
   it('captures CreationTool .created values into context._created', async () => {
@@ -241,7 +208,7 @@ describe('pipeline: .created capture', () => {
     }
   })
 
-  it('omits _created when no creation tools have .created values', async () => {
+    it('omits _created when no creation tools have .created values', async () => {
     const executor = createMockExecutor()
     const pipeline = createPipeline(executor)
 

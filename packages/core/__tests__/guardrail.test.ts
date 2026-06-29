@@ -30,7 +30,7 @@ describe('guardrail', () => {
     expect(Object.isFrozen(guard)).toBe(true)
   })
 
-  it('infers phase from config — input guard cannot return reask', () => {
+    it('infers phase from config — input guard cannot return reask', () => {
     // This test verifies the runtime shape. TypeScript compile-time enforcement
     // is tested by the type system itself (reask not in InputGuardrailResult).
     const guard = makeGuardrail({
@@ -42,7 +42,7 @@ describe('guardrail', () => {
     expect(guard.phase).toBe('input')
   })
 
-  it('creates output guard with all action types except reask', () => {
+    it('creates output guard with all action types except reask', () => {
     const guard = makeGuardrail({
       name: 'output-filter',
       phase: 'output',
@@ -56,7 +56,7 @@ describe('guardrail', () => {
     expect(Object.isFrozen(guard)).toBe(true)
   })
 
-  it('supports stream config on output guards', () => {
+    it('supports stream config on output guards', () => {
     const guard = makeGuardrail({
       name: 'streaming-guard',
       phase: 'output',
@@ -67,7 +67,7 @@ describe('guardrail', () => {
     expect(guard.stream).toEqual({ buffer: 'full' })
   })
 
-  it('supports onChunk handler for streaming', () => {
+    it('supports onChunk handler for streaming', () => {
     const guard = makeGuardrail({
       name: 'chunk-guard',
       phase: 'output',
@@ -79,7 +79,7 @@ describe('guardrail', () => {
     expect(typeof guard.onChunk).toBe('function')
   })
 
-  it('carries an optional risk category', () => {
+    it('carries an optional risk category', () => {
     const guard = makeGuardrail({
       name: 'pii-guard',
       category: 'pii',
@@ -105,7 +105,7 @@ describe('isGuardrail', () => {
     expect(isGuardrail(guard)).toBe(true)
   })
 
-  it('returns false for non-guardrail objects', () => {
+    it('returns false for non-guardrail objects', () => {
     expect(isGuardrail(null)).toBe(false)
     expect(isGuardrail(undefined)).toBe(false)
     expect(isGuardrail({})).toBe(false)
@@ -137,7 +137,7 @@ describe('context-level guardrails', () => {
     expect(Object.isFrozen(ctx.guardrails)).toBe(true)
   })
 
-  it('context() defaults to empty guardrails array', async () => {
+    it('context() defaults to empty guardrails array', async () => {
     const { context } = await import('../prompt/context')
 
     const ctx = context({
@@ -180,7 +180,7 @@ describe('evaluateGuardrail', () => {
     expect(report.summary.failed).toBe(0)
   })
 
-  it('reports failures when action does not match expectation', async () => {
+    it('reports failures when action does not match expectation', async () => {
     const guard = makeGuardrail({
       name: 'always-pass',
       phase: 'output',
@@ -196,7 +196,7 @@ describe('evaluateGuardrail', () => {
     expect(report.summary.failed).toBe(1)
   })
 
-  it('handles guard errors gracefully', async () => {
+    it('handles guard errors gracefully', async () => {
     const guard = makeGuardrail({
       name: 'broken',
       phase: 'output',

@@ -56,14 +56,6 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
       const dense = await config.embedding.embed(queryText)
       queryHash = hashStable(queryText)
 
-      getRuntime().instrumentationHooks?.onSemanticCacheLookupStart?.({
-        cacheId,
-        promptId,
-        operation,
-        scopeHash,
-        version,
-        threshold: effectiveThreshold,
-      })
 
       const hit = await lookupEntry(config.store, {
         namespace,
@@ -75,29 +67,10 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
         threshold: effectiveThreshold,
       })
 
-      getRuntime().instrumentationHooks?.onSemanticCacheLookupEnd?.({
-        cacheId,
-        promptId,
-        operation,
-        scopeHash,
-        version,
-        durationMs: Date.now() - lookupStarted,
-        hit: Boolean(hit),
-        score: hit?.score,
-      })
 
       if (hit) {
         const entry = hit.value as SemanticCacheEntry
         const ageMs = Date.now() - entry.createdAt
-        getRuntime().instrumentationHooks?.onSemanticCacheHit?.({
-          cacheId,
-          promptId,
-          operation,
-          scopeHash,
-          version,
-          score: hit.score,
-          ageMs,
-        })
         observe.event({
           name: 'semantic-cache.hit',
           attributes: {
@@ -141,24 +114,11 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
           durationMs: Date.now() - lookupStarted,
         })
         if (operation === 'stream') {
-          getRuntime().instrumentationHooks?.onSemanticCacheReplayStart?.({
-            cacheId,
-            promptId,
-            scopeHash,
-            version,
-          })
           const replayStarted = Date.now()
           const replay = args.createCachedStreamResult?.({
             text: entry.result.text,
             object: entry.result.object,
             meta: buildHitMeta(entry, hit.score),
-          })
-          getRuntime().instrumentationHooks?.onSemanticCacheReplayEnd?.({
-            cacheId,
-            promptId,
-            scopeHash,
-            version,
-            durationMs: Date.now() - replayStarted,
           })
           if (replay !== undefined) return replay
         }
@@ -178,13 +138,6 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
           queryHash,
         },
       })
-      getRuntime().instrumentationHooks?.onSemanticCacheMiss?.({
-        cacheId,
-        promptId,
-        operation,
-        scopeHash,
-        version,
-      })
       lookupSpan.end({
         cacheKind: 'semantic',
         cacheOperation: 'lookup',
@@ -199,16 +152,6 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
       })
       return undefined
     } catch (error) {
-      getRuntime().instrumentationHooks?.onSemanticCacheLookupEnd?.({
-        cacheId,
-        promptId,
-        operation,
-        scopeHash,
-        version,
-        durationMs: Date.now() - lookupStarted,
-        hit: false,
-        error: error instanceof Error ? error.message : String(error),
-      })
       lookupSpan.error(error, {
         cacheKind: 'semantic',
         cacheOperation: 'lookup',

@@ -32,7 +32,7 @@ describe('canonical workspace, plan-task, skill, and security observability', ()
     vi.restoreAllMocks()
   })
 
-  it('records workspace operations as workspace.operation spans with bounded artifacts', async () => {
+    it('records workspace operations as workspace.operation spans with bounded artifacts', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const ws = workspace({ id: 'research', namespace: 'thread:1', data: inMemoryDataStore() })
@@ -71,7 +71,7 @@ describe('canonical workspace, plan-task, skill, and security observability', ()
     )
   })
 
-  it('records plan and task mutations as plan/task spans', async () => {
+    it('records plan and task mutations as plan/task spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     updateRuntime({ store: inMemoryCruxStore() })
@@ -141,7 +141,7 @@ describe('canonical workspace, plan-task, skill, and security observability', ()
     )
   })
 
-  it('records file skill loading as skill.load spans with reference counts', async () => {
+    it('records file skill loading as skill.load spans with reference counts', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const skillDir = join(fixtureRoot, 'writer')
@@ -180,7 +180,7 @@ description: Write clearly
     )
   })
 
-  it('records registry skill loading and cache hits as skill.load spans', async () => {
+    it('records registry skill loading and cache hits as skill.load spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const mockFetch = vi.fn().mockImplementation((url: string) => {
@@ -233,7 +233,7 @@ description: Write clearly
     )
   })
 
-  it('records prompt security warnings as security.warning spans', async () => {
+    it('records prompt security warnings as security.warning spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)

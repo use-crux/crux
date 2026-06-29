@@ -56,7 +56,7 @@ describe('fileSkill()', () => {
     expect(s.meta.tags).toEqual(['testing', 'unit'])
   })
 
-  it('parses the instruction body correctly (without frontmatter)', () => {
+    it('parses the instruction body correctly (without frontmatter)', () => {
     const s = fileSkill(SKILL_FILE)
 
     expect(s.instructions).toContain('# Test Skill')
@@ -65,14 +65,14 @@ describe('fileSkill()', () => {
     expect(s.instructions).not.toContain('name: test-skill')
   })
 
-  it('dump() returns the instruction body only', () => {
+    it('dump() returns the instruction body only', () => {
     const s = fileSkill(SKILL_FILE)
 
     expect(s.dump()).toBe(s.instructions)
     expect(s.dump()).not.toContain('---')
   })
 
-  it('discovers reference files from references/ directory', () => {
+    it('discovers reference files from references/ directory', () => {
     const s = fileSkill(SKILL_FILE)
 
     expect(s.references).toHaveLength(2)
@@ -80,7 +80,7 @@ describe('fileSkill()', () => {
     expect(refNames).toEqual(['examples', 'patterns'])
   })
 
-  it('loads reference content correctly', () => {
+    it('loads reference content correctly', () => {
     const s = fileSkill(SKILL_FILE)
 
     const patterns = s.references.find((r) => r.name === 'patterns')
@@ -88,24 +88,24 @@ describe('fileSkill()', () => {
     expect(patterns!.content).toContain('# Common Patterns')
   })
 
-  it('ignores non-.md files in references/', () => {
+    it('ignores non-.md files in references/', () => {
     const s = fileSkill(SKILL_FILE)
 
     const names = s.references.map((r) => r.name)
     expect(names).not.toContain('not-markdown')
   })
 
-  it('returns frozen object', () => {
+    it('returns frozen object', () => {
     const s = fileSkill(SKILL_FILE)
     expect(Object.isFrozen(s)).toBe(true)
   })
 
-  it('throws SkillLoadError for missing file', () => {
+    it('throws SkillLoadError for missing file', () => {
     expect(() => fileSkill('/nonexistent/path/SKILL.md')).toThrow(SkillLoadError)
     expect(() => fileSkill('/nonexistent/path/SKILL.md')).toThrow('could not read file')
   })
 
-  it('works with skills that have no references/ directory', () => {
+    it('works with skills that have no references/ directory', () => {
     const noRefsDir = join(TEST_DIR, 'no-refs-skill')
     mkdirSync(noRefsDir, { recursive: true })
     writeFileSync(

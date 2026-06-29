@@ -2,8 +2,8 @@
  * Plugin system for composable runtime hook installation.
  *
  * Plugins receive the current runtime state and return a partial patch that is
- * merged using fan-out semantics (all handlers called) for hooks and layered
- * chaining for middleware (new wraps old). The merge mechanics live in
+ * merged using fan-out semantics for per-call hooks and layered chaining for
+ * middleware (new wraps old). The merge mechanics live in
  * `./merge-runtime`; this module owns the plugin contract and the ordered
  * `applyPlugins()` orchestration.
  *
@@ -46,12 +46,8 @@ export interface CruxPluginResult extends Partial<CruxRuntime> {
  * const myPlugin: CruxPlugin = {
  *   name: 'my-tracer',
  *   install(runtime) {
- *     return {
- *       instrumentationHooks: {
- *         onToolStart: (e) => console.log('tool:', e.toolName),
- *       },
- *       dispose: () => console.log('cleanup'),
- *     }
+ *     const unsubscribe = subscribeObservability((record) => console.log(record.type))
+ *     return { dispose: unsubscribe }
  *   },
  * }
  * ```
@@ -60,8 +56,8 @@ export interface CruxPlugin {
   /** Unique plugin name for debugging and error messages. */
   readonly name: string
   /**
-   * Install the plugin. Receives the cumulative runtime (including
-   * hooks from prior plugins). Returns runtime fields to merge.
+   * Install the plugin. Receives the cumulative runtime. Returns runtime
+   * fields to merge.
    *
    * @param runtime - Frozen snapshot of the current cumulative runtime.
    * @returns Partial runtime patch with optional dispose function.

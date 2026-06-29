@@ -50,7 +50,7 @@ describe('providerRuntimeConformance', () => {
     expect(violations).toEqual([])
   })
 
-  it('reports public runtime behavior that does not match the conformance script', async () => {
+    it('reports public runtime behavior that does not match the conformance script', async () => {
     const violations = await providerRuntimeConformance(createSingleTurnTestRuntime('conformance-violating'), {
       capabilities: {
         ownership: 'single-turn',

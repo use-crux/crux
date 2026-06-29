@@ -35,7 +35,7 @@ describe('openStream — hold and release', () => {
     expect(await stream.feed('lo ')).toEqual({ kind: 'emit', content: 'Hello ' })
   })
 
-  it('an async onChunk fix round-trips: hold, then release corrected content', async () => {
+    it('an async onChunk fix round-trips: hold, then release corrected content', async () => {
     // The v0 LLM Suspense pattern: hold a suspicious import line, look up
     // the real path "asynchronously", release the corrected content.
     const importFixer = guardrail({
@@ -67,7 +67,7 @@ describe('openStream — hold and release', () => {
     expect(seal.pending).toBe('')
   })
 
-  it('flushes held content unchanged at finish when the stream ends mid-hold', async () => {
+    it('flushes held content unchanged at finish when the stream ends mid-hold', async () => {
     const holdAll = guardrail({
       name: 'hold-all',
       phase: 'output',
@@ -132,7 +132,7 @@ describe("openStream — buffer: 'full'", () => {
     expect(seal.pending).toBe('HELLO WORLD')
   })
 
-  it('a full-buffer block at finish throws GuardrailBlockedError', async () => {
+    it('a full-buffer block at finish throws GuardrailBlockedError', async () => {
     const blocker = guardrail({
       name: 'final-block',
       phase: 'output',
@@ -188,7 +188,7 @@ describe('openStream — constraints', () => {
     })
   })
 
-  it('a constraint onChunk abort stops the stream early with ConstraintViolationError', async () => {
+    it('a constraint onChunk abort stops the stream early with ConstraintViolationError', async () => {
     const abortOnRamble = constraint({
       name: 'no-ramble',
       check: async () => ({ pass: true as const }),
@@ -227,7 +227,7 @@ describe('openStream — transcript and transform()', () => {
     ])
   })
 
-  it('transform() pipes chunks through the protocol, releasing pending content at flush', async () => {
+    it('transform() pipes chunks through the protocol, releasing pending content at flush', async () => {
     const upper = guardrail({
       name: 'upper',
       phase: 'output',
@@ -254,7 +254,7 @@ describe('openStream — transcript and transform()', () => {
     expect(out).toEqual(['ONE TWO'])
   })
 
-  it('passthrough when no streaming guards or constraints are configured', async () => {
+    it('passthrough when no streaming guards or constraints are configured', async () => {
     const inputOnly = guardrail({ name: 'in', phase: 'input', validate: async () => ({ action: 'pass' as const }) })
     const stream = session({ call: { guardrails: [inputOnly] } }).openStream()
 

@@ -12,7 +12,7 @@ describe('createBudgetManager', () => {
     expect(state.level).toBe('normal')
   })
 
-  it('tracks reported sources', () => {
+    it('tracks reported sources', () => {
     const budget = createBudgetManager({ limit: 100_000 })
     budget.report('system', 5_000)
     budget.report('messages', 20_000)
@@ -23,7 +23,7 @@ describe('createBudgetManager', () => {
     expect(state.breakdown).toEqual({ system: 5_000, messages: 20_000 })
   })
 
-  it('replaces previous value for same source', () => {
+    it('replaces previous value for same source', () => {
     const budget = createBudgetManager({ limit: 100_000 })
     budget.report('messages', 10_000)
     budget.report('messages', 30_000)
@@ -33,14 +33,14 @@ describe('createBudgetManager', () => {
     expect(state.breakdown.messages).toBe(30_000)
   })
 
-  it('computes pressure correctly', () => {
+    it('computes pressure correctly', () => {
     const budget = createBudgetManager({ limit: 100_000 })
     budget.report('messages', 50_000)
 
     expect(budget.check().pressure).toBeCloseTo(0.5)
   })
 
-  it('reports normal level below warning threshold', () => {
+    it('reports normal level below warning threshold', () => {
     const budget = createBudgetManager({
       limit: 100_000,
       warningThreshold: 0.8,
@@ -50,7 +50,7 @@ describe('createBudgetManager', () => {
     expect(budget.check().level).toBe('normal')
   })
 
-  it('reports warning level at warning threshold', () => {
+    it('reports warning level at warning threshold', () => {
     const budget = createBudgetManager({
       limit: 100_000,
       warningThreshold: 0.8,
@@ -60,14 +60,14 @@ describe('createBudgetManager', () => {
     expect(budget.check().level).toBe('warning')
   })
 
-  it('reports warning level between thresholds', () => {
+    it('reports warning level between thresholds', () => {
     const budget = createBudgetManager({ limit: 100_000 })
     budget.report('messages', 90_000)
 
     expect(budget.check().level).toBe('warning')
   })
 
-  it('reports critical level at critical threshold', () => {
+    it('reports critical level at critical threshold', () => {
     const budget = createBudgetManager({
       limit: 100_000,
       criticalThreshold: 0.95,
@@ -77,7 +77,7 @@ describe('createBudgetManager', () => {
     expect(budget.check().level).toBe('critical')
   })
 
-  it('reports critical level above limit', () => {
+    it('reports critical level above limit', () => {
     const budget = createBudgetManager({ limit: 100_000 })
     budget.report('messages', 110_000)
 
@@ -87,7 +87,7 @@ describe('createBudgetManager', () => {
     expect(state.pressure).toBeCloseTo(1.1)
   })
 
-  it('uses default thresholds (0.8 warning, 0.95 critical)', () => {
+    it('uses default thresholds (0.8 warning, 0.95 critical)', () => {
     const budget = createBudgetManager({ limit: 100 })
 
     budget.report('a', 79)
@@ -100,7 +100,7 @@ describe('createBudgetManager', () => {
     expect(budget.check().level).toBe('critical')
   })
 
-  it('supports custom thresholds', () => {
+    it('supports custom thresholds', () => {
     const budget = createBudgetManager({
       limit: 100,
       warningThreshold: 0.5,
@@ -117,7 +117,7 @@ describe('createBudgetManager', () => {
     expect(budget.check().level).toBe('critical')
   })
 
-  it('reset clears all sources', () => {
+    it('reset clears all sources', () => {
     const budget = createBudgetManager({ limit: 100_000 })
     budget.report('system', 5_000)
     budget.report('messages', 20_000)
@@ -128,7 +128,7 @@ describe('createBudgetManager', () => {
     expect(state.breakdown).toEqual({})
   })
 
-  it('handles zero limit gracefully', () => {
+    it('handles zero limit gracefully', () => {
     const budget = createBudgetManager({ limit: 0 })
     budget.report('a', 100)
 
@@ -137,7 +137,7 @@ describe('createBudgetManager', () => {
     expect(state.available).toBe(0)
   })
 
-  it('tracks many sources independently', () => {
+    it('tracks many sources independently', () => {
     const budget = createBudgetManager({ limit: 100_000 })
     budget.report('system', 1_000)
     budget.report('messages', 2_000)

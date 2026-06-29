@@ -12,8 +12,6 @@ import { subscribeObservability } from '@use-crux/core/observability'
 import type { TraceSpan } from './types'
 import { createCallbackExporter, createUrlExporter, type SpanExporter } from './exporter'
 import { createLightweightSpanManager, type SpanManager } from './span-manager'
-import { createOtelMiddleware } from './middleware'
-import { createOtelInstrumentationHooks } from './hooks'
 import { createOtelRecordSubscriber } from './record-mapper'
 
 // ─────────────────────────────────────────────────────────────────
@@ -53,17 +51,6 @@ export type CallbackExporter = (spans: ReadonlyArray<TraceSpan>) => void | Promi
  * ```
  */
 export interface TelemetryOptions {
-  /**
-   * Instrumentation source for this plugin.
-   *
-   * `hooks` keeps the pre-spine instrumentation path for Phase 3 parity
-   * checks. `records` subscribes to the canonical observability graph stream
-   * and is the path that becomes the default once the hook bus is removed.
-   *
-   * @default 'hooks'
-   */
-  mode?: 'hooks' | 'records'
-
   /**
    * Service name for span identification.
    * Used as the OTel tracer name or included in lightweight span metadata.
@@ -123,23 +110,11 @@ export function withTelemetry(options?: TelemetryOptions): CruxPlugin {
     name: 'crux:otel',
     install(runtime) {
       const spanManager = createSpanManager(opts)
-      if (opts.mode === 'records') {
-        const unsubscribe = subscribeObservability(createOtelRecordSubscriber(spanManager, opts))
-        return {
-          dispose() {
-            unsubscribe()
-            spanManager.shutdown()
-          },
-        }
-      }
-
-      const middleware = createOtelMiddleware(spanManager, opts)
-      const instrumentationHooks = createOtelInstrumentationHooks(spanManager, opts)
+      const unsubscribe = subscribeObservability(createOtelRecordSubscriber(spanManager, opts))
 
       return {
-        middleware,
-        instrumentationHooks,
         dispose() {
+          unsubscribe()
           spanManager.shutdown()
         },
       }

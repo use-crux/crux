@@ -44,14 +44,14 @@ describe('composeTools', () => {
     expect(merged.bar.description).toBe('bar')
   })
 
-  it('throws on duplicate tool names', () => {
+    it('throws on duplicate tool names', () => {
     const a = stubEntity('a', { overlap: stubTool('from a') })
     const b = stubEntity('b', { overlap: stubTool('from b') })
 
     expect(() => composeTools(a, b)).toThrow('Tool name collision: "overlap" is defined by multiple entities')
   })
 
-  it('accepts a mix of entities and plain tool records', () => {
+    it('accepts a mix of entities and plain tool records', () => {
     const entity = stubEntity('e', { alpha: stubTool('alpha') })
     const plain: Record<string, ToolDef> = { beta: stubTool('beta') }
 
@@ -60,12 +60,12 @@ describe('composeTools', () => {
     expect(Object.keys(merged)).toEqual(['alpha', 'beta'])
   })
 
-  it('returns an empty record when given no sources', () => {
+    it('returns an empty record when given no sources', () => {
     const merged = composeTools()
     expect(merged).toEqual({})
   })
 
-  it('passes through a single source unchanged', () => {
+    it('passes through a single source unchanged', () => {
     const tools = { solo: stubTool('solo') }
     const entity = stubEntity('s', tools)
 
@@ -75,7 +75,7 @@ describe('composeTools', () => {
     expect(merged.solo.description).toBe('solo')
   })
 
-  it('handles entities with empty tool sets', () => {
+    it('handles entities with empty tool sets', () => {
     const empty = stubEntity('empty', {})
     const full = stubEntity('full', { x: stubTool('x') })
 

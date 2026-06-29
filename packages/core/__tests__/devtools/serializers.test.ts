@@ -32,7 +32,7 @@ describe('serializePrompt', () => {
     expect(meta.systemTemplate).toBe('You greet people.')
   })
 
-  it('serializes a prompt without schemas', () => {
+    it('serializes a prompt without schemas', () => {
     const prompt = makePrompt({
       id: 'bare',
       system: 'A simple prompt.',
@@ -47,7 +47,7 @@ describe('serializePrompt', () => {
     expect(meta.systemTemplate).toBe('A simple prompt.')
   })
 
-  it('includes context IDs from composed contexts', () => {
+    it('includes context IDs from composed contexts', () => {
     const ctx = context({ id: 'tone', system: 'Be formal.' })
     const prompt = makePrompt({
       id: 'with-ctx',
@@ -60,7 +60,7 @@ describe('serializePrompt', () => {
     expect(meta.contextIds).toEqual(['tone'])
   })
 
-  it('extracts prompt template from function', () => {
+    it('extracts prompt template from function', () => {
     const prompt = makePrompt({
       id: 'fn-prompt',
       system: 'You are a bot.',
@@ -74,7 +74,7 @@ describe('serializePrompt', () => {
     expect(typeof meta.promptTemplate).toBe('string')
   })
 
-  it('includes settings from prompt config', () => {
+    it('includes settings from prompt config', () => {
     const prompt = makePrompt({
       id: 'with-settings',
       system: 'Test.',
@@ -108,7 +108,7 @@ describe('serializeContext', () => {
     expect(meta.systemTemplate).toBe('Always use a professional tone.')
   })
 
-  it('computes usedBy from prompt associations', () => {
+    it('computes usedBy from prompt associations', () => {
     const ctx = context({ id: 'tone', system: 'Be formal.' })
     const promptA = makePrompt({ id: 'a', system: 'A', use: [ctx] })
     const promptB = makePrompt({ id: 'b', system: 'B', use: [ctx] })
@@ -119,7 +119,7 @@ describe('serializeContext', () => {
     expect(meta.usedBy).toEqual(['a', 'b'])
   })
 
-  it('serializes a context with input schema as non-static', () => {
+    it('serializes a context with input schema as non-static', () => {
     const ctx = context({
       id: 'dynamic',
       input: z.object({ topic: z.string() }),
@@ -132,7 +132,7 @@ describe('serializeContext', () => {
     expect(meta.inputSchema).toBeDefined()
   })
 
-  it('uses default priority of 50', () => {
+    it('uses default priority of 50', () => {
     const ctx = context({ id: 'default-pri', system: 'Test.' })
 
     const meta = serializeContext(ctx, [])
@@ -140,7 +140,7 @@ describe('serializeContext', () => {
     expect(meta.priority).toBe(50)
   })
 
-  it('uses custom priority', () => {
+    it('uses custom priority', () => {
     const ctx = context({ id: 'high-pri', system: 'Important.', priority: 90 })
 
     const meta = serializeContext(ctx, [])
@@ -171,7 +171,7 @@ describe('serializeIndex', () => {
     expect(index.tools).toBeUndefined()
   })
 
-  it('serializes an empty index', () => {
+    it('serializes an empty index', () => {
     const index = serializeIndex([], [])
 
     expect(index.prompts).toEqual([])
@@ -179,7 +179,7 @@ describe('serializeIndex', () => {
     expect(index.tools).toBeUndefined()
   })
 
-  it('deduplicates contexts from prompts and explicit list', () => {
+    it('deduplicates contexts from prompts and explicit list', () => {
     const ctx = context({ id: 'shared', system: 'Shared context.' })
     const prompt = makePrompt({ id: 'p1', system: 'P1', use: [ctx] })
 
@@ -189,7 +189,7 @@ describe('serializeIndex', () => {
     expect(index.contexts).toHaveLength(1)
   })
 
-  it('collects contexts from prompts not in explicit list', () => {
+    it('collects contexts from prompts not in explicit list', () => {
     const implicitCtx = context({ id: 'implicit', system: 'Implicit.' })
     const prompt = makePrompt({ id: 'p1', system: 'P1', use: [implicitCtx] })
 
@@ -200,7 +200,7 @@ describe('serializeIndex', () => {
     expect(index.contexts[0].id).toBe('implicit')
   })
 
-  it('includes tools when provided', () => {
+    it('includes tools when provided', () => {
     const index = serializeIndex([], [], undefined, [
       { name: 'search', description: 'Search the web', parameters: z.object({ query: z.string() }) },
     ])
@@ -210,7 +210,7 @@ describe('serializeIndex', () => {
     expect(index.tools![0].description).toBe('Search the web')
   })
 
-  it('applies namespace paths to prompts and contexts', () => {
+    it('applies namespace paths to prompts and contexts', () => {
     const ctx = context({ id: 'tone', system: 'Be formal.' })
     const prompt = makePrompt({ id: 'greet', system: 'Hello.', use: [ctx] })
     const paths = new Map([
@@ -297,7 +297,7 @@ describe('serializeProjectIndex', () => {
     )
   })
 
-  it('accepts and normalizes rule descriptor metadata', () => {
+    it('accepts and normalizes rule descriptor metadata', () => {
     const index = serializeProjectIndex({
       project: { root: '/repo' },
       prompts: [],
@@ -329,7 +329,7 @@ describe('serializeProjectIndex', () => {
     expect(ProjectIndexSnapshotSchema.parse(legacy).ruleDescriptors).toEqual([])
   })
 
-  it('accepts project shard metadata on source graph and source rows', () => {
+    it('accepts project shard metadata on source graph and source rows', () => {
     const index = serializeProjectIndex({
       project: { root: '/repo' },
       prompts: [],
@@ -372,7 +372,7 @@ describe('serializeProjectIndex', () => {
     )
   })
 
-  it('marks anonymous definitions as partial with diagnostics', () => {
+    it('marks anonymous definitions as partial with diagnostics', () => {
     const prompt = makePrompt({
       system: 'Anonymous prompt.',
     })

@@ -14,7 +14,7 @@ describe('generation observability', () => {
     resetObservabilityRuntime()
   })
 
-  it('emits an implicit run, generation span, artifacts, edges, and usage for generate', async () => {
+    it('emits an implicit run, generation span, artifacts, edges, and usage for generate', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -56,7 +56,7 @@ describe('generation observability', () => {
     })
   })
 
-  it('records operation deadlines on timed generation spans', async () => {
+    it('records operation deadlines on timed generation spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -92,7 +92,7 @@ describe('generation observability', () => {
     })
   })
 
-  it('ends timed generation spans when the provider call never settles', async () => {
+    it('ends timed generation spans when the provider call never settles', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -117,7 +117,7 @@ describe('generation observability', () => {
     })
   })
 
-  it('records structured generation objects in the output artifact preview', async () => {
+    it('records structured generation objects in the output artifact preview', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -143,7 +143,7 @@ describe('generation observability', () => {
     })
   })
 
-  it('links resolved context artifacts to the generation span that consumes them', async () => {
+    it('links resolved context artifacts to the generation span that consumes them', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const contextArtifactId = createCruxArtifactId('context_profile')
@@ -192,7 +192,7 @@ describe('generation observability', () => {
     )
   })
 
-  it('includes prepared request tool names in the messages artifact preview', async () => {
+    it('includes prepared request tool names in the messages artifact preview', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -223,7 +223,7 @@ describe('generation observability', () => {
     })
   })
 
-  it('ends stream spans when the raw stream completes before completion is read', async () => {
+    it('ends stream spans when the raw stream completes before completion is read', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -291,7 +291,7 @@ describe('generation observability', () => {
     })
   })
 
-  it('emits canonical usage and streaming metrics when stream completion is read', async () => {
+    it('emits canonical usage and streaming metrics when stream completion is read', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -331,7 +331,7 @@ describe('generation observability', () => {
     })
   })
 
-  it('ends stream spans as errors when the raw stream throws', async () => {
+    it('ends stream spans as errors when the raw stream throws', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 

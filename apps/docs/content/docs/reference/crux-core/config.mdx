@@ -342,8 +342,8 @@ export default config({
       name: 'my-plugin',
       install(runtime) {
         return {
-          instrumentationHooks: {
-            onToolStart(event) {
+          observability subscribers: {
+            tool.call start records(event) {
               console.log(event.toolName)
             },
           },

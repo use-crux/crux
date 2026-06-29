@@ -214,10 +214,6 @@ function namespaceHash(namespace: string): string {
   return hash.toString(16)
 }
 
-type InstrumentationHooks = NonNullable<ReturnType<typeof getRuntime>['instrumentationHooks']>
-type MemoryWriteEvent = Parameters<NonNullable<InstrumentationHooks['onMemoryWrite']>>[0]
-type MemoryReadEvent = Parameters<NonNullable<InstrumentationHooks['onMemoryRead']>>[0]
-
 function omitSnapshot(extra: Record<string, unknown>): Record<string, unknown> {
   const { snapshot: _snapshot, recall: _recall, diff: _diff, ...attributes } = extra
   void _snapshot
@@ -530,20 +526,7 @@ function emitBlockWrite(
   operation: string,
   extra: Record<string, unknown> = {},
 ) {
-  const observed = emitMemoryObservation('write', ctx, block, operation, extra)
-  getRuntime().instrumentationHooks?.onMemoryWrite?.({
-    spanId: observed.spanId,
-    runId: observed.runId,
-    memoryId: ctx.memoryId ?? 'standalone',
-    operation,
-    memoryType: 'block',
-    blockId: block.id,
-    blockKind: block.kind,
-    namespaceHash: namespaceHash(ctx.namespace),
-    traceId: ctx.traceId,
-    ...extra,
-    metadata: memoryMetadata(ctx, block, extra),
-  } as MemoryWriteEvent)
+  emitMemoryObservation('write', ctx, block, operation, extra)
 }
 
 function emitBlockRead(
@@ -555,26 +538,11 @@ function emitBlockRead(
   extra: Record<string, unknown> = {},
 ) {
   const durationMs = now() - startedAt
-  const observed = emitMemoryObservation('read', ctx, block, operation, {
+  emitMemoryObservation('read', ctx, block, operation, {
     resultCount,
     durationMs,
     ...extra,
   })
-  getRuntime().instrumentationHooks?.onMemoryRead?.({
-    spanId: observed.spanId,
-    runId: observed.runId,
-    memoryId: ctx.memoryId ?? 'standalone',
-    operation,
-    resultCount,
-    durationMs,
-    memoryType: 'block',
-    blockId: block.id,
-    blockKind: block.kind,
-    namespaceHash: namespaceHash(ctx.namespace),
-    traceId: ctx.traceId,
-    ...extra,
-    metadata: memoryMetadata(ctx, block, extra),
-  } as MemoryReadEvent)
 }
 
 async function applyPolicy<T>(

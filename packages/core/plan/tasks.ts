@@ -25,7 +25,7 @@ import type {
 } from './types'
 import { TASKLIST_PREFIX, isCancellable, metadataFilter, taskKey, taskListKey } from './helpers'
 import { emptyCounts, rebuildCounts } from './status'
-import { getRuntime, resolveStore } from '../runtime/runtime'
+import { resolveStore } from '../runtime/runtime'
 import { observe } from '../observability'
 import { getExecutionContext } from '../runtime/execution-context'
 import { taskListAgent, taskWorker } from './agent'
@@ -192,11 +192,6 @@ async function createTaskList(
       emitTaskArtifact(span.spanId, 'tasklist.create', list)
     })
     const ctx = getExecutionContext()
-    getRuntime().instrumentationHooks?.onTaskListCreated?.({
-      taskListId: id,
-      planId: input.planId,
-      traceId: ctx?.traceId,
-    })
     span.end({
       operation: 'tasklist.create',
       taskListId: id,
@@ -306,14 +301,7 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
           emitTaskArtifact(span.spanId, 'add', task)
         })
         const ctx = getExecutionContext()
-        getRuntime().instrumentationHooks?.onTaskAdded?.({
-          taskListId,
-          taskId: task.id,
-          label: task.label,
-          assignee: task.assignee,
-          traceId: ctx?.traceId,
-        })
-        await repairTaskListState(store, taskListId, { emitCompletionHook: true })
+        await repairTaskListState(store, taskListId)
         span.end({
           operation: 'add',
           taskListId,
@@ -390,19 +378,7 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
           emitTaskArtifact(span.spanId, 'update', updated)
         })
         const ctx = getExecutionContext()
-        getRuntime().instrumentationHooks?.onTaskUpdated?.({
-          taskListId,
-          taskId,
-          status: updated.status,
-          progress: updated.progress,
-          durationMs: updated.durationMs,
-          traceId: ctx?.traceId,
-        })
-        if (update.status !== undefined && update.status !== task.status) {
-          await repairTaskListState(store, taskListId, { emitCompletionHook: true })
-        } else {
-          await repairTaskListState(store, taskListId)
-        }
+        await repairTaskListState(store, taskListId)
         span.end({
           operation: 'update',
           taskListId,
@@ -455,12 +431,7 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
           emitTaskArtifact(span.spanId, 'remove', task)
         })
         const ctx = getExecutionContext()
-        getRuntime().instrumentationHooks?.onTaskRemoved?.({
-          taskListId,
-          taskId,
-          traceId: ctx?.traceId,
-        })
-        await repairTaskListState(store, taskListId, { emitCompletionHook: true })
+        await repairTaskListState(store, taskListId)
         span.end({
           operation: 'remove',
           taskListId,
@@ -537,13 +508,6 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
         })
 
         const ctx = getExecutionContext()
-        getRuntime().instrumentationHooks?.onTaskListDiscarded?.({
-          taskListId,
-          reason,
-          completedCount,
-          remainingCount,
-          traceId: ctx?.traceId,
-        })
         span.end({
           operation: 'tasklist.discard',
           taskListId,

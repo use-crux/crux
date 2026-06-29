@@ -37,7 +37,7 @@ describe('canonical embedding and cache observability', () => {
     vi.restoreAllMocks()
   })
 
-  it('records embedding calls with bounded output artifacts and embedding cache hit/miss spans', async () => {
+    it('records embedding calls with bounded output artifacts and embedding cache hit/miss spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const provider = vi.fn(async (texts: string[]) => ({
@@ -134,7 +134,7 @@ describe('canonical embedding and cache observability', () => {
     expect(provider).toHaveBeenCalledTimes(1)
   })
 
-  it('records semantic cache lookup, miss, write, and hit decisions as cache.lookup spans', async () => {
+    it('records semantic cache lookup, miss, write, and hit decisions as cache.lookup spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const store = inMemoryCruxStore()

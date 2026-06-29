@@ -22,7 +22,7 @@ describe('canonical quality, scoring, and citation observability', () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
   })
 
-  it('records LLM judge scoring as scoring.judge spans with bounded score artifacts', async () => {
+    it('records LLM judge scoring as scoring.judge spans with bounded score artifacts', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const generate = vi.fn(async () => ({ object: { reasoning: 'Strong answer.', score: 9, detail: { issueCount: 0 } } }))
@@ -71,7 +71,7 @@ describe('canonical quality, scoring, and citation observability', () => {
     )
   })
 
-  it('records citation validation as citation.check spans and report artifacts', async () => {
+    it('records citation validation as citation.check spans and report artifacts', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const hits: RetrieverHit[] = [
@@ -138,7 +138,7 @@ describe('canonical quality, scoring, and citation observability', () => {
     )
   })
 
-  it('records feedback writes as feedback.record spans', async () => {
+    it('records feedback writes as feedback.record spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const dir = await mkdtemp(join(tmpdir(), 'crux-quality-feedback-'))

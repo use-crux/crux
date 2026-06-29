@@ -87,16 +87,6 @@ export function corpus(config: CorpusConfig): Corpus {
     })
     try {
       return await span.withContext(async () => {
-        getRuntime().instrumentationHooks?.onCorpusSyncStart?.({
-          syncId,
-          corpusId: config.id,
-          namespace: config.namespace,
-          mode,
-          stalePolicy: stale,
-          sourceSet,
-          dryRun,
-          sourceCount: inputs.length,
-        })
         const seenSourceIds = new Set<string>()
         const sourceResults: CorpusSourceResult[] = []
         let added = 0
@@ -380,24 +370,6 @@ export function corpus(config: CorpusConfig): Corpus {
           sources: sourceResults,
         }
 
-        getRuntime().instrumentationHooks?.onCorpusSyncEnd?.({
-          syncId: result.syncId,
-          corpusId: result.corpusId,
-          namespace: result.namespace,
-          mode: result.mode,
-          stalePolicy: result.stalePolicy,
-          sourceSet: result.sourceSet,
-          dryRun: result.dryRun,
-          added: result.added,
-          changed: result.changed,
-          unchanged: result.unchanged,
-          stale: result.stale,
-          skipped: result.skipped,
-          deleted: result.deleted,
-          failed: result.failed,
-          chunkCount: result.chunkCount,
-          durationMs: result.durationMs,
-        })
         emitCorpusSyncArtifact(span.spanId, result)
         span.end({
           added: result.added,

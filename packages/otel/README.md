@@ -22,18 +22,9 @@ config({
 })
 ```
 
-To opt into the event-spine subscriber path during migration:
-
-```ts
-config({
-  prompts,
-  plugins: [withTelemetry({ serviceName: 'my-app', mode: 'records' })],
-})
-```
-
-Records mode projects spans from the canonical `@use-crux/core/observability`
-graph stream. It is useful when you want OTel to consume the same event spine
-as devtools and `subscribeObservability()` consumers.
+`withTelemetry()` projects spans from the canonical
+`@use-crux/core/observability` graph stream. OTel, devtools, user subscribers,
+and diagnostics-channel consumers all observe the same event spine.
 
 ## Export Paths
 
@@ -106,9 +97,6 @@ Tool spans intentionally record only shape and size metadata for `toModelOutput(
 
 ```ts
 interface TelemetryOptions {
-  /** Instrumentation source. @default 'hooks' */
-  mode?: 'hooks' | 'records'
-
   /** Service name for span identification. @default '@use-crux/otel' */
   serviceName?: string
 
@@ -139,12 +127,10 @@ config({
 
 ## Architecture
 
-`@use-crux/otel` is a pure consumer of `@use-crux/core`'s plugin system:
+`@use-crux/otel` is a pure subscriber to `@use-crux/core`'s observability graph:
 
 - **`withTelemetry()`** returns a `CruxPlugin` with name `'crux:otel'`
-- **`withTelemetry({ mode: 'records' })`** subscribes to the canonical observability graph stream
+- **`withTelemetry()`** subscribes to the canonical observability graph stream
 - **`createOtelRecordSubscriber()`** maps graph records to span lifecycle calls
 - **`SpanManager`** abstracts span lifecycle over both OTel tracer and lightweight `TraceSpan` tracking
-- **`createOtelMiddleware()`** wraps generate/stream calls (GenAI attributes, streaming deferred end)
-- **`createOtelInstrumentationHooks()`** maps all `InstrumentationHooks` to spans
 - **Exporters**: `createUrlExporter()` (HTTP POST) and `createCallbackExporter()` (user function)

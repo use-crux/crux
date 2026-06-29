@@ -79,8 +79,8 @@ export function createMyPlugin(options: { endpoint: string }): CruxPlugin {
     name: 'my-tracer',
     install(runtime) {
       return {
-        instrumentationHooks: {
-          onToolStart: (e) => {
+        observability subscribers: {
+          tool.call start records: (e) => {
             fetch(options.endpoint, {
               method: 'POST',
               body: JSON.stringify({ event: 'tool.start', tool: e.toolName }),
@@ -107,7 +107,7 @@ Return a `CruxPluginResult` — any subset of `CruxRuntime` fields plus an optio
 | Field                    | Type                           | Description                                      |
 | ------------------------ | ------------------------------ | ------------------------------------------------ |
 | `middleware`             | `PromptMiddleware`             | Wraps every `generate()`/`stream()` call         |
-| `instrumentationHooks`   | `InstrumentationHooks`         | Observe memory, tools, flows, compositions, etc. |
+| `observability subscribers`   | `graph-record subscribers`         | Observe memory, tools, flows, compositions, etc. |
 | `resolveHook`            | `ResolveHook`                  | Observe prompt `.resolve()` calls                |
 | `executionHook`          | `ExecutionHook`                | Observe model calls from agent adapters          |
 | `streamProgressHook`     | `StreamProgressHook`           | Live streaming metrics                           |
@@ -122,11 +122,11 @@ Return a `CruxPluginResult` — any subset of `CruxRuntime` fields plus an optio
 
 ### Hook fan-out
 
-When two plugins install the same instrumentation hook (e.g., `onToolStart`), both handlers are called for every event. Neither can suppress the other.
+When two plugins install the same instrumentation hook (e.g., `tool.call start records`), both handlers are called for every event. Neither can suppress the other.
 
 ```
-Plugin A installs onToolStart → logs to console
-Plugin B installs onToolStart → sends to PostHog
+Plugin A installs tool.call start records → logs to console
+Plugin B installs tool.call start records → sends to PostHog
                                 ↓
 Every tool call → both handlers fire
 ```

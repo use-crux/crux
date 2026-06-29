@@ -277,7 +277,7 @@ function mergeScopes<TPolicy extends { readonly name: string }>(
 /**
  * Create the per-call safety session.
  *
- * Reads runtime globals and instrumentation hooks once at creation and
+ * Reads runtime globals once at creation and
  * snapshots them, so a mid-call `setRuntime()` cannot half-instrument a
  * run.
  *
@@ -309,7 +309,6 @@ export function createSafety(options: SafetyCallOptions): Safety {
   // Snapshot runtime state once — a mid-call setRuntime() cannot
   // half-instrument this run.
   const runtime = getRuntime()
-  const hooks = runtime.instrumentationHooks
 
   const constraintBindings = mergeScopes(
     options.call?.constraints,
@@ -377,19 +376,6 @@ export function createSafety(options: SafetyCallOptions): Safety {
     }
   }
 
-  const emitGuardrailHooks = (audit: GuardrailAudit): void => {
-    if (!hooks?.onGuardrailRun) return
-    for (const entry of audit.applied) {
-      hooks.onGuardrailRun({
-        guardrailId: entry.guard,
-        phase: entry.phase,
-        action: entry.action as 'pass' | 'block' | 'redact' | 'transform' | 'warn',
-        durationMs: entry.durationMs,
-        traceId,
-      })
-    }
-  }
-
   const toCorrectiveMessages = (formatted: string | readonly Message[]): readonly Message[] =>
     typeof formatted === 'string' ? [{ role: 'user', content: formatted }] : formatted
 
@@ -412,32 +398,12 @@ export function createSafety(options: SafetyCallOptions): Safety {
       {
         constraintMaxRetries: options.call?.constraintMaxRetries,
         onCheck: (_constraint, entry) => {
-          hooks?.onConstraintCheck?.({
-            constraintName: entry.constraint,
-            severity: entry.severity,
-            pass: entry.pass,
-            feedback: entry.feedback,
-            durationMs: entry.durationMs,
-            attempt: entry.attempts,
-            traceId,
-          })
         },
         onRetry: (failed, attempt, feedbacks) => {
           rounds = attempt
           transcript.push({ t: 'constraint.round', attempt, verdict: 'retry' })
-          hooks?.onConstraintRetry?.({
-            constraintNames: failed.map((c) => c.name),
-            attempt,
-            combinedFeedback: feedbacks.join('\n'),
-            traceId,
-          })
         },
         onViolation: (failed, totalAttempts) => {
-          hooks?.onConstraintViolation?.({
-            constraintNames: failed.map((c) => c.name),
-            totalAttempts,
-            traceId,
-          })
         },
       },
     )
@@ -451,7 +417,6 @@ export function createSafety(options: SafetyCallOptions): Safety {
     const pipeline = createGuardrailPipeline(outputGuards)
     const result = await pipeline.runOutput(text, guardContext('output', messages))
     appendGuardrailAudit(result.audit)
-    emitGuardrailHooks(result.audit)
     transcript.push({
       t: 'output.guard',
       guards: outputGuards.length,
@@ -579,7 +544,6 @@ export function createSafety(options: SafetyCallOptions): Safety {
         const pipeline = createGuardrailPipeline(fullGuards)
         const result = await pipeline.runOutput(accumulated, streamCtx())
         appendGuardrailAudit(result.audit)
-        emitGuardrailHooks(result.audit)
         text = result.content
       }
 
@@ -653,7 +617,6 @@ export function createSafety(options: SafetyCallOptions): Safety {
       const pipeline = createGuardrailPipeline(inputGuards)
       const result = await pipeline.runInput(guarded, guardContext('input', input.messages))
       appendGuardrailAudit(result.audit)
-      emitGuardrailHooks(result.audit)
       transcript.push({
         t: 'input.guard',
         guards: inputGuards.length,

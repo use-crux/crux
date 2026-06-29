@@ -52,7 +52,7 @@ describe('@use-crux/core (generation surface)', () => {
     expect(typeof isValidationExhaustedError).toBe('function')
   })
 
-  it('exposes the internal orchestration helpers', () => {
+    it('exposes the internal orchestration helpers', () => {
     expect(typeof orchestrateGenerate).toBe('function')
     expect(typeof orchestrateStream).toBe('function')
     expect(typeof executeFallbackLoop).toBe('function')
@@ -75,7 +75,7 @@ describe('@use-crux/core fallback()', () => {
     expect(isFallback('model-a')).toBe(false)
   })
 
-  it('classifies retryable errors and gates fallback by category', () => {
+    it('classifies retryable errors and gates fallback by category', () => {
     const rateLimited = Object.assign(new Error('429'), { status: 429 })
     expect(classifyError(rateLimited)).toBe('rate_limit')
     expect(shouldAttemptFallback(rateLimited, { on: ['rate_limit'] })).toBe(true)
@@ -97,7 +97,7 @@ describe('@use-crux/core repairJsonText()', () => {
     expect(JSON.parse(repaired!)).toEqual({ a: 1 })
   })
 
-  it('returns null for unrepairable text', () => {
+    it('returns null for unrepairable text', () => {
     expect(repairJsonText('not json at all')).toBeNull()
   })
 })

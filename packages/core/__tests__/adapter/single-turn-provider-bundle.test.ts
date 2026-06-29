@@ -97,7 +97,7 @@ describe('defineSingleTurnProviderBundle', () => {
     ])
   })
 
-  it('preserves generated runtime extension collision checks', () => {
+    it('preserves generated runtime extension collision checks', () => {
     const replaceGeneratedKey = (() => ({
       generate() {
         return 'extension generate'

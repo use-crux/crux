@@ -13,7 +13,7 @@ describe('cascade()', () => {
     expect(c.config.tiers[1].model).toBe('model-expensive')
   })
 
-  it('accepts budget configuration', () => {
+    it('accepts budget configuration', () => {
     const c = cascade({
       tiers: [{ model: 'model-a' }],
       budget: { maxCost: 0.05, maxLatencyMs: 5000 },
@@ -22,7 +22,7 @@ describe('cascade()', () => {
     expect(c.config.budget).toEqual({ maxCost: 0.05, maxLatencyMs: 5000 })
   })
 
-  it('accepts stable index metadata', () => {
+    it('accepts stable index metadata', () => {
     const c = cascade({
       id: 'quality-cascade',
       description: 'Escalate when cheap output is not good enough',
@@ -33,7 +33,7 @@ describe('cascade()', () => {
     expect(c.config.description).toBe('Escalate when cheap output is not good enough')
   })
 
-  it('returns a frozen immutable object', () => {
+    it('returns a frozen immutable object', () => {
     const c = cascade({
       tiers: [{ model: 'model-a' }],
     })
@@ -48,11 +48,11 @@ describe('isCascade()', () => {
     expect(isCascade(c)).toBe(true)
   })
 
-  it('returns false for regular objects', () => {
+    it('returns false for regular objects', () => {
     expect(isCascade({ provider: 'openai', modelId: 'gpt-4o' })).toBe(false)
   })
 
-  it('returns false for null/undefined/strings', () => {
+    it('returns false for null/undefined/strings', () => {
     expect(isCascade(null)).toBe(false)
     expect(isCascade(undefined)).toBe(false)
     expect(isCascade('gpt-4o')).toBe(false)

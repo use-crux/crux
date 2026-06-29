@@ -59,7 +59,7 @@ describe('runEvaluation — cell event callbacks (runner stream)', () => {
     }
   })
 
-  it('emits onCellDone (without onCellStart) for skipped cells', async () => {
+    it('emits onCellDone (without onCellStart) for skipped cells', async () => {
     const evaluation = evaluate('events.skip', {
       task: upperTask,
       data: [
@@ -81,7 +81,7 @@ describe('runEvaluation — cell event callbacks (runner stream)', () => {
     expect(done.some((entry) => entry.endsWith(':skipped'))).toBe(true)
   })
 
-  it('passes the trial index on multi-trial cells', async () => {
+    it('passes the trial index on multi-trial cells', async () => {
     const evaluation = evaluate('events.trials', {
       task: upperTask,
       data: [{ name: 'tri', input: { q: 'a' } }],
@@ -138,7 +138,7 @@ describe('runEvaluation — config defaults channel (quality.defaults)', () => {
     expect(experiment.perCase).toHaveLength(3)
   })
 
-  it('declared trials win over defaults.trials', async () => {
+    it('declared trials win over defaults.trials', async () => {
     const evaluation = evaluate('defaults.trials-declared', {
       task: upperTask,
       data: [{ input: { q: 'a' } }],
@@ -149,7 +149,7 @@ describe('runEvaluation — config defaults channel (quality.defaults)', () => {
     expect(experiment.perCase).toHaveLength(2)
   })
 
-  it('applies defaults.timeoutMs when the evaluation does not declare a timeout', async () => {
+    it('applies defaults.timeoutMs when the evaluation does not declare a timeout', async () => {
     const evaluation = evaluate('defaults.timeout', {
       task: async () => new Promise((resolveOutput) => setTimeout(() => resolveOutput('late'), 250)),
       data: [{ input: { q: 'a' } }],
@@ -209,7 +209,7 @@ describe('runEvaluation — forced filtered-run demotion (evaluate.only / CLI id
     expect(experiment.passed).toBe(true)
   })
 
-  it('forceFilteredRun still fails the run when a cell errored', async () => {
+    it('forceFilteredRun still fails the run when a cell errored', async () => {
     const erroring = evaluate('events.forced-error', {
       task: async () => {
         throw new Error('boom')

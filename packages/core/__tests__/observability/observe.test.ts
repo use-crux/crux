@@ -20,7 +20,7 @@ describe('observe runtime', () => {
     resetObservabilityRuntime()
   })
 
-  it('emits run and span lifecycle records through the configured transport', async () => {
+    it('emits run and span lifecycle records through the configured transport', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -52,7 +52,7 @@ describe('observe runtime', () => {
     expect(runEnd).toMatchObject({ type: 'run:end', runId: runStart.runId, traceId: runStart.traceId, status: 'ok' })
   })
 
-  it('delivers records to subscribers without a configured transport', async () => {
+    it('delivers records to subscribers without a configured transport', async () => {
     const records: string[] = []
     subscribeObservability((record) => {
       records.push(record.type)
@@ -68,7 +68,7 @@ describe('observe runtime', () => {
     })
   })
 
-  it('delivers every graph record type to subscribers in emission order', async () => {
+    it('delivers every graph record type to subscribers in emission order', async () => {
     const recordTypes: string[] = []
     subscribeObservability((record) => {
       recordTypes.push(record.type)
@@ -102,7 +102,7 @@ describe('observe runtime', () => {
     ])
   })
 
-  it('removes subscribers through the returned unsubscribe function', async () => {
+    it('removes subscribers through the returned unsubscribe function', async () => {
     const records: string[] = []
     const unsubscribe = subscribeObservability((record) => {
       records.push(record.type)
@@ -115,7 +115,7 @@ describe('observe runtime', () => {
     expect(records).toEqual([])
   })
 
-  it('clears subscribers when the observability runtime resets', async () => {
+    it('clears subscribers when the observability runtime resets', async () => {
     const records: string[] = []
     subscribeObservability((record) => {
       records.push(record.type)
@@ -128,7 +128,7 @@ describe('observe runtime', () => {
     expect(observabilityDiagnostics().subscriberErrors).toBe(0)
   })
 
-  it('isolates throwing subscribers from sibling subscribers and transport delivery', async () => {
+    it('isolates throwing subscribers from sibling subscribers and transport delivery', async () => {
     const transport = createInMemoryObservabilityTransport()
     const siblingRecords: string[] = []
     setObservabilityTransport(transport)
@@ -150,7 +150,7 @@ describe('observe runtime', () => {
     })
   })
 
-  it('publishes records to the diagnostics channel with the public message shape', async () => {
+    it('publishes records to the diagnostics channel with the public message shape', async () => {
     const messages: CruxObservabilityChannelMessage[] = []
     const diagnosticsChannel = channel(CRUX_OBSERVABILITY_CHANNEL)
     const onMessage = (message: unknown) => {
@@ -179,7 +179,7 @@ describe('observe runtime', () => {
     })
   })
 
-  it('preserves parent span across async work and captured context handoff', async () => {
+    it('preserves parent span across async work and captured context handoff', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -199,7 +199,7 @@ describe('observe runtime', () => {
     expect(spanStarts[1].parentSpanId).toBe(spanStarts[0].spanId)
   })
 
-  it('creates an implicit run for standalone spans', async () => {
+    it('creates an implicit run for standalone spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -210,7 +210,7 @@ describe('observe runtime', () => {
     expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'custom.operation' })
   })
 
-  it('can run standalone detail spans without creating a visible run', async () => {
+    it('can run standalone detail spans without creating a visible run', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -233,7 +233,7 @@ describe('observe runtime', () => {
     expect(transport.records).toEqual([])
   })
 
-  it('supports manual run lifecycles for serverless resumes', async () => {
+    it('supports manual run lifecycles for serverless resumes', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -269,7 +269,7 @@ describe('observe runtime', () => {
     expect(runEnd).toMatchObject({ type: 'run:end', runId: runStart.runId, status: 'ok' })
   })
 
-  it('emits events, artifacts, and edges inside the active span', async () => {
+    it('emits events, artifacts, and edges inside the active span', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -307,7 +307,7 @@ describe('observe runtime', () => {
     expect(transport.records[4]).toMatchObject({ type: 'edge', edgeType: 'produced' })
   })
 
-  it('records transport failures without throwing user code', async () => {
+    it('records transport failures without throwing user code', async () => {
     setObservabilityTransport({
       async send() {
         throw new Error('collector offline')
@@ -322,7 +322,7 @@ describe('observe runtime', () => {
     expect(observabilityDeliveryErrors().length).toBeGreaterThanOrEqual(2)
   })
 
-  it('emits terminal error records and rethrows user errors', async () => {
+    it('emits terminal error records and rethrows user errors', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const error = new Error('bad plan')
@@ -386,7 +386,7 @@ describe('observe runtime', () => {
     })
   })
 
-  it('emits rich error evidence for manually errored open spans', async () => {
+    it('emits rich error evidence for manually errored open spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const error = new Error('manual failure')
@@ -428,7 +428,7 @@ describe('observe runtime', () => {
     })
   })
 
-  it('flushes pending background deliveries for serverless shutdown paths', async () => {
+    it('flushes pending background deliveries for serverless shutdown paths', async () => {
     const delivered: string[] = []
     setObservabilityTransport({
       async send(records) {
@@ -444,7 +444,7 @@ describe('observe runtime', () => {
     expect(delivered).toEqual(['run:start', 'run:end'])
   })
 
-  it('starts the first delivery immediately for live devtools updates', () => {
+    it('starts the first delivery immediately for live devtools updates', () => {
     const send = vi.fn()
     setObservabilityTransport({ send })
 
@@ -454,7 +454,7 @@ describe('observe runtime', () => {
     expect(send.mock.calls[0][0]).toEqual([expect.objectContaining({ type: 'run:start', name: 'live run' })])
   })
 
-  it('dispatches queued live deliveries while an earlier send is still in flight', async () => {
+    it('dispatches queued live deliveries while an earlier send is still in flight', async () => {
     let resolveFirstSend!: () => void
     const sentBatches: string[][] = []
     setObservabilityTransport({
@@ -481,7 +481,7 @@ describe('observe runtime', () => {
     expect(sentBatches.flat()).toEqual(['run:start', 'span:start', 'span:end'])
   })
 
-  it('flushes queued deliveries when queueMicrotask is unavailable', async () => {
+    it('flushes queued deliveries when queueMicrotask is unavailable', async () => {
     const queueMicrotaskDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'queueMicrotask')
     Object.defineProperty(globalThis, 'queueMicrotask', { value: undefined, configurable: true })
 
@@ -516,7 +516,7 @@ describe('observe runtime', () => {
     }
   })
 
-  it('keeps live delivery concurrency bounded while allowing progress behind slow sends', async () => {
+    it('keeps live delivery concurrency bounded while allowing progress behind slow sends', async () => {
     let activeSends = 0
     let maxActiveSends = 0
     const delivered: string[] = []
@@ -550,7 +550,7 @@ describe('observe runtime', () => {
     expect(delivered).toContain('run:end')
   })
 
-  it('bounds flush waits so collector hangs never hang user code', async () => {
+    it('bounds flush waits so collector hangs never hang user code', async () => {
     setObservabilityTransport({
       async send() {
         await new Promise(() => undefined)
@@ -563,7 +563,7 @@ describe('observe runtime', () => {
     expect(observabilityDiagnostics().pendingDeliveries).toBeGreaterThan(0)
   })
 
-  it('retries failed delivery batches during flush instead of dropping them', async () => {
+    it('retries failed delivery batches during flush instead of dropping them', async () => {
     let failNextSend = true
     const delivered: string[] = []
     setObservabilityTransport(
@@ -586,7 +586,7 @@ describe('observe runtime', () => {
     expect(observabilityDiagnostics().deliveryErrors).toHaveLength(1)
   })
 
-  it('cancels bounded flush timers when delivery completes before the deadline', async () => {
+    it('cancels bounded flush timers when delivery completes before the deadline', async () => {
     vi.useFakeTimers()
     try {
       let resolveSend!: () => void
@@ -610,7 +610,7 @@ describe('observe runtime', () => {
     }
   })
 
-  it('drops records instead of growing an unbounded delivery queue', async () => {
+    it('drops records instead of growing an unbounded delivery queue', async () => {
     setObservabilityTransport(
       {
         async send() {
@@ -630,7 +630,7 @@ describe('observe runtime', () => {
     })
   })
 
-  it('posts canonical batches through the HTTP transport', async () => {
+    it('posts canonical batches through the HTTP transport', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
     const transport = createHttpObservabilityTransport({
       serverUrl: 'ws://localhost:4400/',
@@ -658,7 +658,7 @@ describe('observe runtime', () => {
     })
   })
 
-  it('preserves tokenized tunnel query params on HTTP transport endpoints', async () => {
+    it('preserves tokenized tunnel query params on HTTP transport endpoints', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
     const transport = createHttpObservabilityTransport({
       serverUrl: 'https://example.ngrok.app?t=session-token',
@@ -674,7 +674,7 @@ describe('observe runtime', () => {
     expect(fetchImpl.mock.calls[0][0]).toBe('https://example.ngrok.app/api/observability/records?t=session-token')
   })
 
-  it('sends bearer auth from an HTTP transport token option', async () => {
+    it('sends bearer auth from an HTTP transport token option', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
     const transport = createHttpObservabilityTransport({
       serverUrl: 'https://example.ngrok.app',
@@ -693,7 +693,7 @@ describe('observe runtime', () => {
     })
   })
 
-  it('uses CRUX_DEVTOOLS_TOKEN as the default HTTP transport bearer token', async () => {
+    it('uses CRUX_DEVTOOLS_TOKEN as the default HTTP transport bearer token', async () => {
     const previous = process.env.CRUX_DEVTOOLS_TOKEN
     process.env.CRUX_DEVTOOLS_TOKEN = 'env-ingest-token'
     try {
@@ -721,7 +721,7 @@ describe('observe runtime', () => {
     }
   })
 
-  it('retries transient HTTP ingest failures before dropping observability batches', async () => {
+    it('retries transient HTTP ingest failures before dropping observability batches', async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
       .mockResolvedValue(new Response('{}', { status: 202 }))
@@ -747,7 +747,7 @@ describe('observe runtime', () => {
     expect(deliveredRecordTypes).toContain('run:end')
   })
 
-  it('keeps terminal lifecycle records deliverable when late previews contain JSON-hostile values', async () => {
+    it('keeps terminal lifecycle records deliverable when late previews contain JSON-hostile values', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
     const transport = createHttpObservabilityTransport({
       serverUrl: 'http://localhost:4400',
@@ -784,7 +784,7 @@ describe('observe runtime', () => {
     expect(observabilityDeliveryErrors()).toHaveLength(0)
   })
 
-  it('isolates rejected HTTP records so one bad detail cannot strand terminal records', async () => {
+    it('isolates rejected HTTP records so one bad detail cannot strand terminal records', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (_url, init) => {
       const records = JSON.parse(String(init?.body)).records as Array<{ type: string; name?: string }>
       if (records.length > 1 && records.some((record) => record.type === 'artifact')) {
@@ -824,7 +824,7 @@ describe('observe runtime', () => {
     expect(observabilityDeliveryErrors()).toHaveLength(0)
   })
 
-  it('chunks large HTTP deliveries without treating the record list as a preview array', async () => {
+    it('chunks large HTTP deliveries without treating the record list as a preview array', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
     const transport = createHttpObservabilityTransport({
       serverUrl: 'http://localhost:4400',
@@ -853,7 +853,7 @@ describe('observe runtime', () => {
     expect(deliveredCount).toBe(205)
   })
 
-  it('shutdown flushes bounded deliveries and disables later sends', async () => {
+    it('shutdown flushes bounded deliveries and disables later sends', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 

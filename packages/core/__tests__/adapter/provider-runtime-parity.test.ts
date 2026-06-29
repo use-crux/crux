@@ -194,7 +194,7 @@ describe('provider-runtime parity — streaming safety', () => {
       },
     })
 
-  it('preserves completion metadata and applies stream transforms through both runtime branches', async () => {
+    it('preserves completion metadata and applies stream transforms through both runtime branches', async () => {
     const singleClient = createRuntimeClient({ streamChunks: [chunks] })
     const singleHandle = await createSingleTurnTestRuntime()
       .create(singleClient)

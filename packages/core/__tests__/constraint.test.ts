@@ -39,7 +39,7 @@ describe('constraint', () => {
     expect(Object.isFrozen(constraint)).toBe(true)
   })
 
-  it('respects severity and maxRetries overrides', () => {
+    it('respects severity and maxRetries overrides', () => {
     const constraint = makeConstraint({
       name: 'soft',
       severity: 'suggest',
@@ -51,7 +51,7 @@ describe('constraint', () => {
     expect(constraint.maxRetries).toBe(5)
   })
 
-  it('includes onChunk when provided', () => {
+    it('includes onChunk when provided', () => {
     const constraint = makeConstraint({
       name: 'streaming',
       check: async () => ({ pass: true }),
@@ -61,7 +61,7 @@ describe('constraint', () => {
     expect(constraint.onChunk).toBeDefined()
   })
 
-  it('carries an optional risk category', () => {
+    it('carries an optional risk category', () => {
     const constraint = makeConstraint({
       name: 'grounded',
       category: 'grounding',
@@ -84,7 +84,7 @@ describe('isConstraint', () => {
     expect(isConstraint(constraint)).toBe(true)
   })
 
-  it('returns false for non-constraint objects', () => {
+    it('returns false for non-constraint objects', () => {
     expect(isConstraint(null)).toBe(false)
     expect(isConstraint(undefined)).toBe(false)
     expect(isConstraint({})).toBe(false)
@@ -116,7 +116,7 @@ describe('evaluateConstraint', () => {
     expect(report.summary.failed).toBe(1) // third doesn't match
   })
 
-  it('handles errors in check function', async () => {
+    it('handles errors in check function', async () => {
     const c = makeConstraint({
       name: 'buggy',
       check: async () => {
@@ -173,7 +173,7 @@ describe('discriminated union check results', () => {
     expect(result.pass).toBe(true)
   })
 
-  it('onChunk returning abort:true requires feedback', async () => {
+    it('onChunk returning abort:true requires feedback', async () => {
     const c = makeConstraint({
       name: 'stream-check',
       check: async () => ({ pass: true }),

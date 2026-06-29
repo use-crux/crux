@@ -15,7 +15,7 @@ describe('canonical memory observability', () => {
     resetObservabilityRuntime()
   })
 
-  it('records standalone memory writes and reads with snapshot artifacts and relation edges', async () => {
+    it('records standalone memory writes and reads with snapshot artifacts and relation edges', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const store = inMemoryCruxStore()
@@ -60,7 +60,7 @@ describe('canonical memory observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.read' }))
   })
 
-  it('records working-state writes with before and after diff artifacts', async () => {
+    it('records working-state writes with before and after diff artifacts', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const store = inMemoryCruxStore()
@@ -90,7 +90,7 @@ describe('canonical memory observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.write' }))
   })
 
-  it('records recalled memory blocks with key, preview, score, and query', async () => {
+    it('records recalled memory blocks with key, preview, score, and query', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const store = inMemoryCruxStore()
@@ -132,7 +132,7 @@ describe('canonical memory observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.read' }))
   })
 
-  it('does not emit recalled-block artifacts for empty memory reads', async () => {
+    it('does not emit recalled-block artifacts for empty memory reads', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const store = inMemoryCruxStore()
@@ -149,7 +149,7 @@ describe('canonical memory observability', () => {
     expect(transport.records).not.toContainEqual(expect.objectContaining({ type: 'artifact', kind: 'memory.recall' }))
   })
 
-  it('records blackboard reads and writes as memory activity', async () => {
+    it('records blackboard reads and writes as memory activity', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const board = blackboard({
@@ -197,7 +197,7 @@ describe('canonical memory observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.read' }))
   })
 
-  it('records memory context hydration as child memory.read spans', async () => {
+    it('records memory context hydration as child memory.read spans', async () => {
     const store = inMemoryCruxStore()
     const recent = recentMessages({ id: 'recent' })
     await recent.addTurn(
@@ -231,7 +231,7 @@ describe('canonical memory observability', () => {
     expect(readSpan?.parentSpanId).toBeTruthy()
   })
 
-  it('records proposals and approvals as memory writes', async () => {
+    it('records proposals and approvals as memory writes', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const store = inMemoryCruxStore()

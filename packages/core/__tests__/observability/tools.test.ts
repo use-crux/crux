@@ -85,7 +85,7 @@ describe('canonical tool observability', () => {
     resetObservabilityRuntime()
   })
 
-  it('records tool calls with args, raw result, model output, and relation edges', async () => {
+    it('records tool calls with args, raw result, model output, and relation edges', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const execute = vi.fn(async ({ query }: { query: string }) => ({ rows: [`result:${query}`], internalId: 42 }))
@@ -161,7 +161,7 @@ describe('canonical tool observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'produced' }))
   })
 
-  it('records thrown tool execute errors as rich tool.call error evidence while preserving model output', async () => {
+    it('records thrown tool execute errors as rich tool.call error evidence while preserving model output', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const execute = vi.fn(async () => {
@@ -259,7 +259,7 @@ describe('canonical tool observability', () => {
     )
   })
 
-  it('records approval requests and denied resume decisions as tool.approval spans', async () => {
+    it('records approval requests and denied resume decisions as tool.approval spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const model = testAdapter([response('', [{ id: 'call_delete', name: 'deletePost', args: { id: 'post_1' } }])])
@@ -314,7 +314,7 @@ describe('canonical tool observability', () => {
     )
   })
 
-  it('records approved resume decisions before executing the approved tool', async () => {
+    it('records approved resume decisions before executing the approved tool', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const execute = vi.fn(async () => 'deleted')
@@ -366,7 +366,7 @@ describe('canonical tool observability', () => {
     )
   })
 
-  it('records approval token mismatches as errored tool.approval spans', async () => {
+    it('records approval token mismatches as errored tool.approval spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const model = testAdapter([response('', [{ id: 'call_delete', name: 'deletePost', args: { id: 'post_1' } }])])
@@ -415,7 +415,7 @@ describe('canonical tool observability', () => {
     )
   })
 
-  it('records missing tools as errored tool.call spans instead of hiding the failure in message history', async () => {
+    it('records missing tools as errored tool.call spans instead of hiding the failure in message history', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const model = testAdapter([

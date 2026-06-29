@@ -16,7 +16,7 @@
  *   config;
  * - a `CruxPlugin.install()` returns a `CruxPluginResult` (partial runtime +
  *   optional dispose);
- * - the runtime hook store is typed by `CruxRuntime`;
+ * - the runtime store is typed by `CruxRuntime`;
  * - public runtime types stay strongly typed (no `any` leak);
  * - the surface uses TypeScript 5.5-compatible syntax.
  */
@@ -55,7 +55,6 @@ const tracer: CruxPlugin = {
   install(runtime) {
     expectTypeOf(runtime).toEqualTypeOf<Readonly<CruxRuntime>>()
     return {
-      instrumentationHooks: { onToolStart: (e) => void e.toolName },
       dispose: () => {},
     }
   },

@@ -88,12 +88,6 @@ async function createPlan(input: CreatePlanInput): Promise<PlanHandle> {
       emitPlanArtifact(span.spanId, 'create', data)
     })
     const ctx = getExecutionContext()
-    getRuntime().instrumentationHooks?.onPlanCreated?.({
-      planId: data.id,
-      title: data.title,
-      contentPreview: data.content.slice(0, 200),
-      traceId: ctx?.traceId,
-    })
     span.end({
       operation: 'create',
       planId: data.id,
@@ -225,12 +219,6 @@ export async function updatePlan(planId: string, update: PlanUpdate): Promise<Pl
 
     const changes = planUpdateChanges(update)
     const ctx = getExecutionContext()
-    getRuntime().instrumentationHooks?.onPlanUpdated?.({
-      planId,
-      version: updated.version,
-      changes,
-      traceId: ctx?.traceId,
-    })
 
     span.end({
       operation: 'update',

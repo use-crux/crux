@@ -42,7 +42,7 @@ describe('handoff send/receive (store-backed)', () => {
     store = inMemoryCruxStore()
   })
 
-  describe('send()', () => {
+describe('send()', () => {
     it('persists payload to store', async () => {
       const h = makeHandoff({ store })
       await h.send(sampleInput)
@@ -88,7 +88,7 @@ describe('handoff send/receive (store-backed)', () => {
     })
   })
 
-  describe('receive()', () => {
+describe('receive()', () => {
     it('retrieves persisted payload', async () => {
       const h = makeHandoff({ store })
       await h.send(sampleInput)
@@ -120,7 +120,7 @@ describe('handoff send/receive (store-backed)', () => {
     })
   })
 
-  describe('round-trip', () => {
+describe('round-trip', () => {
     it('send then receive returns correct data', async () => {
       const h = makeHandoff({ store })
 

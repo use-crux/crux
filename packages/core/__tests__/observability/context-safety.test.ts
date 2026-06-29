@@ -64,7 +64,7 @@ describe('canonical context and safety observability', () => {
     resetObservabilityRuntime()
   })
 
-  it('records prompt resolution, context predicate decisions, and resolved context artifacts', async () => {
+    it('records prompt resolution, context predicate decisions, and resolved context artifacts', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -129,7 +129,7 @@ describe('canonical context and safety observability', () => {
     )
   })
 
-  it('records structured context contribution and prompt budget previews', async () => {
+    it('records structured context contribution and prompt budget previews', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -229,7 +229,7 @@ describe('canonical context and safety observability', () => {
     )
   })
 
-  it('records redacted prompt input key summaries without input values', async () => {
+    it('records redacted prompt input key summaries without input values', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -259,7 +259,7 @@ describe('canonical context and safety observability', () => {
     expect(JSON.stringify(preview)).not.toContain('do not record')
   })
 
-  it('records failed prompt input validation before throwing', async () => {
+    it('records failed prompt input validation before throwing', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -288,7 +288,7 @@ describe('canonical context and safety observability', () => {
     expect(JSON.stringify(preview)).not.toContain('still redacted')
   })
 
-  it('records direct tool producers with source kind and injected tool names', async () => {
+    it('records direct tool producers with source kind and injected tool names', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -354,7 +354,7 @@ describe('canonical context and safety observability', () => {
     )
   })
 
-  it('records constraint checks, retries, and reports', async () => {
+    it('records constraint checks, retries, and reports', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     let attempt = 0
@@ -408,7 +408,7 @@ describe('canonical context and safety observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'constraint.retry' }))
   })
 
-  it('records guardrail actions and blocked relations', async () => {
+    it('records guardrail actions and blocked relations', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const warn = guardrail({

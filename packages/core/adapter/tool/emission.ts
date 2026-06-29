@@ -2,17 +2,16 @@
  * Shared tool instrumentation policy for adapter factories.
  *
  * Owns the wrapping of tool `execute`/`needsApproval`/`toModelOutput`
- * with runtime instrumentation hooks, plus the canonical helpers for
+ * with canonical observability graph records, plus the helpers for
  * shaping, rendering, and measuring tool model output. Used by both
  * `adapter()` (core-driven loop) and `loopRuntimeAdapter()` (SDK-driven
- * loop) so hook ordering and payload shapes never diverge.
+ * loop) so tool timing and payload shapes never diverge.
  *
  * @module
  */
 
 import { getRuntime } from '../../runtime/runtime'
-import { currentObservabilityTransport, observe } from '../../observability'
-import { getExecutionContext } from '../../runtime/execution-context'
+import { currentObservabilityTransport, hasObservabilitySubscribers, observe } from '../../observability'
 import type { JsonValue, ToolContentPart, ToolModelOutput } from '../../types/tool'
 
 // ─────────────────────────────────────────────────────────────────
@@ -289,7 +288,6 @@ interface PendingToolCall {
   output: unknown
   outputSize: number
   span: ReturnType<typeof openToolCallSpan>
-  traceId: string | undefined
 }
 
 /** Options for {@link instrumentToolSet}. */
@@ -307,8 +305,8 @@ export interface InstrumentToolSetOptions {
 const DEFAULT_MAX_PENDING = 1000
 
 /**
- * Wrap every tool in a tool map with timing and instrumentation hooks so
- * devtools and OTel see each call — without the tool author writing any
+ * Wrap every tool in a tool map with timing and observability records so
+ * devtools, subscribers, and OTel see each call — without the tool author writing any
  * instrumentation code.
  *
  * Adapters call this once on the merged tool map right before handing tools
@@ -316,34 +314,30 @@ const DEFAULT_MAX_PENDING = 1000
  * appear in devtools.
  *
  * @remarks
- * Hook semantics, in order:
+ * Record semantics, in order:
  * - A canonical `tool.call` span opens and consumes a `tool.args`
  *   artifact before `execute` runs.
- * - `onToolStart` fires before `execute` runs, with the raw args.
- * - For tools **without** `toModelOutput`, `onToolEnd` fires as soon as
- *   `execute` settles, carrying the result, a default-shaped model output,
- *   payload sizes, and a token-savings estimate. The span produces raw
+ * - For tools **without** `toModelOutput`, the span produces raw
  *   and model-facing `tool.result` artifacts and closes.
- * - For tools **with** `toModelOutput`, `onToolEnd` is deferred until
- *   `toModelOutput` settles so the hook sees both the raw result *and* the
- *   shaped output in one event. The in-flight result is parked in a bounded
+ * - For tools **with** `toModelOutput`, span closure is deferred until
+ *   `toModelOutput` settles so the graph captures both the raw result *and*
+ *   the shaped output. The in-flight result is parked in a bounded
  *   pending map keyed by `toolCallId`; the same span is closed when the
  *   model-facing output is known.
- * - `needsApproval` is NOT wrapped: `onToolApprovalRequest` is the
- *   lifecycle session's to emit (at gate suspension or `suspend()` sealing),
- *   so the hook fires exactly once per request in both regimes.
+ * - `needsApproval` is NOT wrapped here: approval lifecycle records are
+ *   emitted by the tool session at gate suspension or `suspend()` sealing.
  *
  * Pending state cannot leak: entries are deleted when `toModelOutput`
  * settles (including throws), and the map is capped by
  * {@link InstrumentToolSetOptions.maxPending} with oldest-first eviction
  * for the pathological case where an SDK never invokes `toModelOutput`.
- * An evicted call still completes correctly — the hook falls back to the
- * payload `toModelOutput` received, losing only the timing data.
+ * An evicted call still completes correctly from the payload
+ * `toModelOutput` received, losing only the timing data.
  *
  * @param tools - The tool map (AI SDK `ToolSet`-shaped or core tool records).
  *   `undefined` passes through untouched.
  * @param options - See {@link InstrumentToolSetOptions}.
- * @returns The same reference when neither tool hooks nor an observability
+ * @returns The same reference when no observability
  *   transport are registered (zero overhead in production); otherwise a new
  *   map of wrapped tools.
  */
@@ -353,16 +347,14 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
 ): TTools | undefined {
   if (!tools) return tools
   const runtime = getRuntime()
-  const hooks = runtime.instrumentationHooks
   const shouldInstrument =
-    Boolean(hooks?.onToolStart || hooks?.onToolEnd) ||
+    hasObservabilitySubscribers() ||
     currentObservabilityTransport() !== undefined ||
     runtime.observabilityTransport !== undefined
   if (!shouldInstrument) return tools
 
   const maxPending = options?.maxPending ?? DEFAULT_MAX_PENDING
   const wrapped: Record<string, unknown> = {}
-  const currentTraceId = (): string | undefined => getExecutionContext()?.traceId ?? observe.captureContext()?.traceId
   for (const [name, tool] of Object.entries(tools)) {
     const toolLike = tool as {
       execute?: ToolExecute
@@ -404,15 +396,13 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
       ) {
         const toolCallId = options?.toolCallId ?? `tc_${Date.now()}`
         const start = Date.now()
-        const traceId = currentTraceId()
         const span = openToolCallSpan(name, toolCallId, input)
-        hooks?.onToolStart?.({ toolCallId, toolName: name, args: input, traceId, spanId: span.spanId })
         try {
           span.withContext(() => emitToolArgsArtifact(span.spanId, name, toolCallId, input))
           const result = await span.withContext(() => originalExecute.call(this, input, options))
           const outputSize = measureUnknown(result)
           if (originalToModelOutput) {
-            rememberPending(toolCallId, { start, input, output: result, outputSize, span, traceId })
+            rememberPending(toolCallId, { start, input, output: result, outputSize, span })
           } else {
             const modelOutput = defaultToolModelOutput(result)
             const modelOutputSize = measureUnknown(modelOutput)
@@ -429,19 +419,6 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
                 tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
                 isError: false,
               })
-            })
-            hooks?.onToolEnd?.({
-              toolCallId,
-              toolName: name,
-              durationMs: Date.now() - start,
-              result,
-              modelOutput,
-              modelOutputType: modelOutput.type,
-              outputSize,
-              modelOutputSize,
-              tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
-              traceId,
-              spanId: span.spanId,
             })
             span.end({
               isError: false,
@@ -468,19 +445,6 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
               errorKind: 'execute_error',
             })
           })
-          hooks?.onToolEnd?.({
-            toolCallId,
-            toolName: name,
-            durationMs: Date.now() - start,
-            modelOutput,
-            modelOutputType: modelOutput.type,
-            outputSize: 0,
-            modelOutputSize,
-            tokenSavingsEstimate: 0,
-            error: err instanceof Error ? err.message : String(err),
-            traceId,
-            spanId: span.spanId,
-          })
           span.error(err, {
             isError: true,
             phase: 'tool.execute',
@@ -504,7 +468,6 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
               },
             ) {
               const pendingTool = pending.get(args.toolCallId)
-              const traceId = pendingTool?.traceId ?? currentTraceId()
               try {
                 const modelOutput = pendingTool
                   ? await pendingTool.span.withContext(() => originalToModelOutput.call(this, args))
@@ -524,19 +487,6 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
                     tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
                     isError: false,
                   })
-                })
-                hooks?.onToolEnd?.({
-                  toolCallId: args.toolCallId,
-                  toolName: name,
-                  durationMs: Date.now() - (pendingTool?.start ?? Date.now()),
-                  result: pendingTool?.output ?? args.output,
-                  modelOutput,
-                  modelOutputType: modelOutput.type,
-                  outputSize,
-                  modelOutputSize,
-                  tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
-                  traceId,
-                  spanId: pendingTool?.span.spanId,
                 })
                 pendingTool?.span.end({
                   isError: false,
@@ -561,21 +511,6 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
                     isError: true,
                     errorKind: 'model_output_error',
                   })
-                })
-                hooks?.onToolEnd?.({
-                  toolCallId: args.toolCallId,
-                  toolName: name,
-                  durationMs: Date.now() - (pendingTool?.start ?? Date.now()),
-                  result: pendingTool?.output ?? args.output,
-                  outputSize: pendingTool?.outputSize ?? measureUnknown(args.output),
-                  modelOutput,
-                  modelOutputType: modelOutput.type,
-                  modelOutputSize,
-                  tokenSavingsEstimate: 0,
-                  modelOutputError: err instanceof Error ? err.message : String(err),
-                  error: err instanceof Error ? err.message : String(err),
-                  traceId,
-                  spanId: pendingTool?.span.spanId,
                 })
                 pendingTool?.span.error(err, {
                   isError: true,

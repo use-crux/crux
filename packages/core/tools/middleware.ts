@@ -227,14 +227,6 @@ export async function notifyToolApprovalResponses(
     if (!(await matchesAny(metadata.match, event))) continue
     handledApprovals.add(key)
 
-    getRuntime().instrumentationHooks?.onToolApprovalDecision?.({
-      approvalId: approval.approvalId,
-      toolCallId: approval.toolCallId,
-      toolName: approval.toolName,
-      approved: approval.approved,
-      ...(approval.reason ? { reason: approval.reason } : {}),
-      traceId: getExecutionContext()?.traceId,
-    })
 
     if (approval.approved) await metadata.onApproved?.(event)
     else await metadata.onDenied?.(event)

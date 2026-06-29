@@ -45,7 +45,7 @@ describe('scorers.rag.faithfulness', () => {
     expect(stub.calls[0]!.user).toContain('Refunds land in 5 days.')
   })
 
-  it('skips with score null when no retrieved context is available', async () => {
+    it('skips with score null when no retrieved context is available', async () => {
     const stub = judgeStub({ reasoning: 'r', score: 1 })
     const score = await invokeScorer(
       scorers.rag.faithfulness(),
@@ -57,7 +57,7 @@ describe('scorers.rag.faithfulness', () => {
     expect(stub.calls).toHaveLength(0)
   })
 
-  it('falls back to a `context` field on the case input', async () => {
+    it('falls back to a `context` field on the case input', async () => {
     const stub = judgeStub({ reasoning: 'r', score: 0.5 })
     const score = await invokeScorer(
       scorers.rag.faithfulness(),
@@ -87,7 +87,7 @@ describe('scorers.rag.answerRelevancy / contextPrecision / contextRecall', () =>
     expect(stub.calls[0]!.user).toContain('in five days')
   })
 
-  it('contextPrecision judges the retrieved chunks against the question', async () => {
+    it('contextPrecision judges the retrieved chunks against the question', async () => {
     const stub = judgeStub({ reasoning: 'mostly relevant', score: 0.6 })
     const score = await invokeScorer(
       scorers.rag.contextPrecision(),
@@ -98,7 +98,7 @@ describe('scorers.rag.answerRelevancy / contextPrecision / contextRecall', () =>
     expect(stub.calls[0]!.user).toContain('refund chunk')
   })
 
-  it('contextRecall needs an expected reference and skips honestly without one', async () => {
+    it('contextRecall needs an expected reference and skips honestly without one', async () => {
     const stub = judgeStub({ reasoning: 'covers it', score: 1 })
     const withReference = await invokeScorer(
       scorers.rag.contextRecall(),
@@ -117,7 +117,7 @@ describe('scorers.rag.answerRelevancy / contextPrecision / contextRecall', () =>
     expect(withoutReference.metadata?.reason).toMatch(/expected/i)
   })
 
-  it('honors a name override and the judge model resolution chain', async () => {
+    it('honors a name override and the judge model resolution chain', async () => {
     const stub = judgeStub({ reasoning: 'r', score: 1 })
     const score = await invokeScorer(
       scorers.rag.faithfulness({ name: 'grounded' }),

@@ -29,7 +29,7 @@ describe('Plan CRUD', () => {
     expect(data!.createdAt).toBeLessThanOrEqual(Date.now())
   })
 
-  it('plan() with explicit content and metadata', async () => {
+    it('plan() with explicit content and metadata', async () => {
     const store = setup()
     const p = await plan({
       title: 'Migration Guide',
@@ -43,7 +43,7 @@ describe('Plan CRUD', () => {
     expect(data!.metadata).toEqual({ threadId: 'thread-123' })
   })
 
-  it('plan() persists to store', async () => {
+    it('plan() persists to store', async () => {
     const store = setup()
     const p = await plan({ title: 'Persisted' })
 
@@ -52,13 +52,13 @@ describe('Plan CRUD', () => {
     expect(stored!.title).toBe('Persisted')
   })
 
-  it('getPlan returns null for missing plan', async () => {
+    it('getPlan returns null for missing plan', async () => {
     const store = setup()
     const result = await getPlan('nonexistent')
     expect(result).toBeNull()
   })
 
-  it('getPlan returns typed Plan', async () => {
+    it('getPlan returns typed Plan', async () => {
     const store = setup()
     const created = await plan({ title: 'Fetch Me' })
     const fetched = await getPlan(created.id)
@@ -69,7 +69,7 @@ describe('Plan CRUD', () => {
     expect(fetched!.version).toBe(1)
   })
 
-  it('updatePlan increments version on content change', async () => {
+    it('updatePlan increments version on content change', async () => {
     const store = setup()
     const p = await plan({ title: 'V1', content: 'Original' })
     await expect(p.get()).resolves.toMatchObject({ version: 1 })
@@ -80,7 +80,7 @@ describe('Plan CRUD', () => {
     expect(updated.title).toBe('V1') // unchanged
   })
 
-  it('updatePlan increments version on title change', async () => {
+    it('updatePlan increments version on title change', async () => {
     const store = setup()
     const p = await plan({ title: 'Old Title' })
 
@@ -89,7 +89,7 @@ describe('Plan CRUD', () => {
     expect(updated.title).toBe('New Title')
   })
 
-  it('updatePlan does NOT increment version on metadata-only change', async () => {
+    it('updatePlan does NOT increment version on metadata-only change', async () => {
     const store = setup()
     const p = await plan({ title: 'Meta Test' })
 
@@ -98,7 +98,7 @@ describe('Plan CRUD', () => {
     expect(updated.metadata).toEqual({ key: 'val' })
   })
 
-  it('updatePlan updates updatedAt timestamp', async () => {
+    it('updatePlan updates updatedAt timestamp', async () => {
     const store = setup()
     const p = await plan({ title: 'Timestamp Test' })
     const original = await p.get()
@@ -112,12 +112,12 @@ describe('Plan CRUD', () => {
     expect(updated.createdAt).toBe(original!.createdAt) // unchanged
   })
 
-  it('updatePlan throws for missing plan', async () => {
+    it('updatePlan throws for missing plan', async () => {
     const store = setup()
     await expect(updatePlan('nonexistent', { title: 'Nope' })).rejects.toThrow()
   })
 
-  it('updatePlan merges metadata', async () => {
+    it('updatePlan merges metadata', async () => {
     const store = setup()
     const p = await plan({
       title: 'Meta Test',
@@ -180,7 +180,7 @@ describe('PlanHandle', () => {
     })
   })
 
-  it('handle.update() persists changes and returns updated plan', async () => {
+    it('handle.update() persists changes and returns updated plan', async () => {
     const store = setup()
     const p = await plan({ title: 'V1', content: 'Original' })
 
@@ -193,7 +193,7 @@ describe('PlanHandle', () => {
     expect(latest!.content).toBe('Revised')
   })
 
-  it('handle.get() re-reads latest from store', async () => {
+    it('handle.get() re-reads latest from store', async () => {
     const store = setup()
     const p = await plan({ title: 'Test' })
 
@@ -205,7 +205,7 @@ describe('PlanHandle', () => {
     expect(latest!.title).toBe('Changed Externally')
   })
 
-  it('handle.asContext() injects plan content', async () => {
+    it('handle.asContext() injects plan content', async () => {
     const store = setup()
     const p = await plan({ title: 'Context Test', content: '## Step 1' })
 
@@ -215,7 +215,7 @@ describe('PlanHandle', () => {
     expect(system).toContain('## Step 1')
   })
 
-  it('handle.asTools() returns focused tools', async () => {
+    it('handle.asTools() returns focused tools', async () => {
     const store = setup()
     const p = await plan({ title: 'Tools Test' })
 

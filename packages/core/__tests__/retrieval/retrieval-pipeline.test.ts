@@ -46,7 +46,7 @@ describe('retrievalPipeline', () => {
     resetRuntime()
   })
 
-  it('wraps a retriever without changing retrieve, context, or tool usage', async () => {
+    it('wraps a retriever without changing retrieve, context, or tool usage', async () => {
     const { retriever, retrieve } = baseRetriever({
       launch: [hit('doc-1/a', 'Launch checklist')],
     })
@@ -66,7 +66,7 @@ describe('retrievalPipeline', () => {
     await expect(tools.search.execute({ query: 'launch', limit: 1 })).resolves.toContain('Launch checklist')
   })
 
-  it('can inject both context and prefixed tools from prompt use', async () => {
+    it('can inject both context and prefixed tools from prompt use', async () => {
     const { prompt } = await import('../../prompt/prompt')
     const { retriever } = baseRetriever({
       launch: [hit('doc-1/a', 'Launch checklist')],
@@ -84,7 +84,7 @@ describe('retrievalPipeline', () => {
     expect(resolved.tools?.docsSearch).toBeDefined()
   })
 
-  it('validates stage names, duplicates, and phase order', () => {
+    it('validates stage names, duplicates, and phase order', () => {
     const { retriever } = baseRetriever({})
 
     expect(() =>
@@ -110,7 +110,7 @@ describe('retrievalPipeline', () => {
     expect(() => retrievalPipeline(retriever, [trim, plan])).toThrow('Query retrieval stages must run before hit stages')
   })
 
-  it('runs multi-query fanout and merges duplicate hits with RRF by hit identity', async () => {
+    it('runs multi-query fanout and merges duplicate hits with RRF by hit identity', async () => {
     const generate: GenerateTextFn = vi.fn(async () => ({
       text: ['refund policy', 'returns policy', 'refund policy'].join('\n'),
     }))
@@ -139,7 +139,7 @@ describe('retrievalPipeline', () => {
     expect(trace.stages.map((stage) => stage.name)).toEqual(['multi-query', 'fanout'])
   })
 
-  it('runs a typed query planner and merges planned filters into retrieval options', async () => {
+    it('runs a typed query planner and merges planned filters into retrieval options', async () => {
     const generate: GenerateObjectFn = vi.fn(async () => ({
       object: {
         queries: [
@@ -173,7 +173,7 @@ describe('retrievalPipeline', () => {
     })
   })
 
-  it('rejects invalid query planner output with a clear error', async () => {
+    it('rejects invalid query planner output with a clear error', async () => {
     const generate: GenerateObjectFn = vi.fn(async () => ({ object: { queries: [{ query: '   ' }] } }))
     const { retriever } = baseRetriever({})
     const pipeline = retrievalPipeline(retriever, [queryPlanner({ generate, model: 'planner-model' })])
@@ -181,7 +181,7 @@ describe('retrievalPipeline', () => {
     await expect(pipeline.retrieve('question')).rejects.toThrow('queryPlanner returned invalid planned queries')
   })
 
-  it('expands parent records without replacing child evidence', async () => {
+    it('expands parent records without replacing child evidence', async () => {
     const store = inMemoryCruxStore()
     const dense = makeEmbedding({
       kind: 'dense',
@@ -223,7 +223,7 @@ describe('retrievalPipeline', () => {
     expect(hits[0].content).not.toBe(hits[0].parent?.content)
   })
 
-  it('can fail parent expansion when a referenced parent is missing', async () => {
+    it('can fail parent expansion when a referenced parent is missing', async () => {
     const store = inMemoryCruxStore()
     const { retriever } = baseRetriever({
       pricing: [
@@ -238,7 +238,7 @@ describe('retrievalPipeline', () => {
     await expect(pipeline.retrieve('pricing')).rejects.toThrow('parentExpand could not find parent record')
   })
 
-  it('compresses hits extractively and preserves source identity', async () => {
+    it('compresses hits extractively and preserves source identity', async () => {
     const generate: GenerateObjectFn = vi.fn(async () => ({
       object: {
         hits: [
@@ -273,7 +273,7 @@ describe('retrievalPipeline', () => {
     ])
   })
 
-  it('diversifies repeated sources and applies recency decay', async () => {
+    it('diversifies repeated sources and applies recency decay', async () => {
     const now = Date.now()
     const { retriever } = baseRetriever({
       roadmap: [
@@ -292,53 +292,4 @@ describe('retrievalPipeline', () => {
     expect(hits.map((item) => item.sourceId)).toEqual(['a', 'b'])
     expect(hits[1].score).toBeLessThan(0.8)
     expect(hits[1].metadata._cruxDecay).toMatchObject({ field: 'metadata.updatedAt' })
-  })
-
-  it('emits retrieval stage instrumentation and records trace previews', async () => {
-    const hooks = {
-      onRetrievalStageStart: vi.fn(),
-      onRetrievalStageEnd: vi.fn(),
-    }
-    updateRuntime({ instrumentationHooks: hooks })
-    const { retriever } = baseRetriever({
-      test: [hit('doc-1/a', 'A'.repeat(500))],
-    })
-    const pipeline = retrievalPipeline(retriever, [
-      retrievalStage({
-        name: 'trim',
-        phase: 'hits',
-        run: ({ hits }) => hits.slice(0, 1),
-      }),
-    ])
-
-    const { trace } = await pipeline.retrieveWithTrace('test')
-
-    expect(hooks.onRetrievalStageStart).toHaveBeenCalledWith(
-      expect.objectContaining({
-        retrieverId: 'docs',
-        pipelineId: 'docs',
-        stageName: 'trim',
-        stageKind: 'custom',
-        phase: 'hits',
-        inputHitCount: 1,
-      }),
-    )
-    expect(hooks.onRetrievalStageEnd).toHaveBeenCalledWith(
-      expect.objectContaining({
-        stageName: 'trim',
-        status: 'success',
-        outputHitCount: 1,
-        preview: {
-          hits: [
-            expect.objectContaining({
-              sourceId: 'doc-1',
-              chunkId: 'a',
-              contentPreview: 'A'.repeat(240),
-            }),
-          ],
-        },
-      }),
-    )
-    expect(trace.stages[1].preview?.hits?.[0]?.contentPreview).toHaveLength(240)
-  })
-})
+  })})

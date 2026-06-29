@@ -169,13 +169,6 @@ export function delegate<
             attributes: { delegateId: id, handoffId: handoff.id },
           })
         }
-        getRuntime().instrumentationHooks?.onDelegateStart?.({
-          delegateId: id,
-          handoffId: handoff.id,
-          inputSize,
-          input: validatedArgs,
-          ...(observedContext?.currentSpanId ? { spanId: observedContext.currentSpanId } : {}),
-        })
         const rawResult = await execute(validatedArgs, ctx)
 
         const payload = await handoff.prepare(rawResult)
@@ -238,15 +231,6 @@ export function delegate<
           })
         }
 
-        getRuntime().instrumentationHooks?.onDelegateComplete?.({
-          delegateId: id,
-          handoffId: handoff.id,
-          inputSize,
-          outputSize,
-          durationMs,
-          output: payload.data,
-          ...(observedContext?.currentSpanId ? { spanId: observedContext.currentSpanId } : {}),
-        })
 
         return {
           delegateId: id,

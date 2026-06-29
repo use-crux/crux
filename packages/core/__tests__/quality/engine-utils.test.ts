@@ -8,13 +8,13 @@ describe('ulid()', () => {
     expect(id).toMatch(/^[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$/)
   })
 
-  it('is monotonically sortable by creation time', () => {
+    it('is monotonically sortable by creation time', () => {
     const a = ulid(1_000_000)
     const b = ulid(2_000_000)
     expect(a < b).toBe(true)
   })
 
-  it('never collides across same-millisecond calls', () => {
+    it('never collides across same-millisecond calls', () => {
     const seen = new Set(Array.from({ length: 200 }, () => ulid(42)))
     expect(seen.size).toBe(200)
   })
@@ -26,7 +26,7 @@ describe('applyRedaction()', () => {
     expect(applyRedaction(value, ['user.email'])).toEqual({ user: { email: '[redacted]' }, keep: 1 })
   })
 
-  it('applies always-on defaults for authorization headers and api keys at any depth', () => {
+    it('applies always-on defaults for authorization headers and api keys at any depth', () => {
     const value = {
       headers: { Authorization: 'Bearer xyz' },
       nested: { apiKey: 'k', api_key: 'k2', 'x-api-key': 'k3' },
@@ -39,7 +39,7 @@ describe('applyRedaction()', () => {
     expect(redacted.nested['x-api-key']).toBe('[redacted]')
   })
 
-  it('does not mutate the input and passes primitives through', () => {
+    it('does not mutate the input and passes primitives through', () => {
     const value = { a: { apiKey: 'k' } }
     applyRedaction(value, [])
     expect(value.a.apiKey).toBe('k')
@@ -47,7 +47,7 @@ describe('applyRedaction()', () => {
     expect(applyRedaction(7, [])).toBe(7)
   })
 
-  it('redacts dot-paths through arrays', () => {
+    it('redacts dot-paths through arrays', () => {
     const value = { items: [{ secretValue: 1, keep: 2 }] }
     expect(applyRedaction(value, ['items.secretValue'])).toEqual({
       items: [{ secretValue: '[redacted]', keep: 2 }],
@@ -61,7 +61,7 @@ describe('truncateOutput()', () => {
     expect(truncateOutput('short')).toEqual({ value: 'short', truncated: false })
   })
 
-  it('truncates oversized string outputs at the 32 KiB limit with a marker', () => {
+    it('truncates oversized string outputs at the 32 KiB limit with a marker', () => {
     const big = 'x'.repeat(OUTPUT_TRUNCATION_LIMIT + 1000)
     const result = truncateOutput(big)
     expect(result.truncated).toBe(true)
@@ -70,7 +70,7 @@ describe('truncateOutput()', () => {
     expect(text.length).toBeLessThanOrEqual(OUTPUT_TRUNCATION_LIMIT + '…[truncated]'.length)
   })
 
-  it('truncates oversized structured outputs via their JSON rendering', () => {
+    it('truncates oversized structured outputs via their JSON rendering', () => {
     const big = { text: 'y'.repeat(OUTPUT_TRUNCATION_LIMIT + 1000) }
     const result = truncateOutput(big)
     expect(result.truncated).toBe(true)

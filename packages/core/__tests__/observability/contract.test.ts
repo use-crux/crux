@@ -50,7 +50,7 @@ describe('Crux observability graph contract', () => {
     )
   })
 
-  it('validates the golden Node run fixture for RunDetail builders', () => {
+    it('validates the golden Node run fixture for RunDetail builders', () => {
     const parsed = CruxGraphRecordBatchSchema.parse(goldenNodeRun)
 
     expect(parsed.records.some((record) => record.type === 'span:event' && record.name === 'token.delta')).toBe(true)
@@ -82,7 +82,7 @@ describe('Crux observability graph contract', () => {
     )
   })
 
-  it('keeps generation span fields inspectable without opening artifact payloads', () => {
+    it('keeps generation span fields inspectable without opening artifact payloads', () => {
     const parsed = CruxGraphRecordBatchSchema.parse(fixture)
     const spanStart = parsed.records.find((record) => record.type === 'span:start')
 
@@ -97,7 +97,7 @@ describe('Crux observability graph contract', () => {
     })
   })
 
-  it('accepts custom edge and artifact names only through the custom namespace', () => {
+    it('accepts custom edge and artifact names only through the custom namespace', () => {
     const parsed = CruxGraphRecordBatchSchema.parse(fixture)
     const edge = parsed.records.find((record) => record.type === 'edge')
     const artifact = parsed.records.find((record) => record.type === 'artifact')
@@ -116,7 +116,7 @@ describe('Crux observability graph contract', () => {
     )
   })
 
-  it('exports the canonical taxonomy required by the observability ADRs', () => {
+    it('exports the canonical taxonomy required by the observability ADRs', () => {
     expect(CRUX_PRIMITIVE_FAMILIES).toEqual(
       expect.arrayContaining([
         'generation',
@@ -201,7 +201,7 @@ describe('Crux observability graph contract', () => {
     )
   })
 
-  it('accepts blocked terminal status and flow suspension records', () => {
+    it('accepts blocked terminal status and flow suspension records', () => {
     expect(CruxGraphRecordSchema.safeParse({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: 'rec_blocked',
@@ -232,7 +232,7 @@ describe('Crux observability graph contract', () => {
     }).success).toBe(true)
   })
 
-  it('keeps primitive names mapped to their canonical families', () => {
+    it('keeps primitive names mapped to their canonical families', () => {
     for (const primitive of CRUX_PRIMITIVE_NAMES) {
       expect(CRUX_PRIMITIVE_FAMILIES).toContain(CRUX_PRIMITIVE_FAMILY_BY_NAME[primitive])
     }

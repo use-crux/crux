@@ -20,29 +20,29 @@ describe('toStoreValue', () => {
     expect(value.updatedAt).toBe(now)
   })
 
-  it('defaults metadata to empty object when undefined', () => {
+    it('defaults metadata to empty object when undefined', () => {
     const doc: RawMemoryDocument = { ...baseDoc, metadata: undefined }
     const value = toStoreValue(doc)
     expect(value.metadata).toEqual({})
   })
 
-  it('preserves metadata when provided', () => {
+    it('preserves metadata when provided', () => {
     const value = toStoreValue(baseDoc)
     expect(value.metadata).toEqual({ tag: 'important' })
   })
 
-  it('preserves optional embedding field', () => {
+    it('preserves optional embedding field', () => {
     const value = toStoreValue(baseDoc)
     expect(value.embedding).toEqual([0.1, 0.2, 0.3])
   })
 
-  it('handles missing embedding (undefined)', () => {
+    it('handles missing embedding (undefined)', () => {
     const doc: RawMemoryDocument = { ...baseDoc, embedding: undefined }
     const value = toStoreValue(doc)
     expect(value.embedding).toBeUndefined()
   })
 
-  it('toMemoryEntry is an alias for toStoreValue', () => {
+    it('toMemoryEntry is an alias for toStoreValue', () => {
     expect(toMemoryEntry).toBe(toStoreValue)
   })
 })

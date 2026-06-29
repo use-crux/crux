@@ -94,7 +94,7 @@ describe('compilePrompt boundary', () => {
     expect(resolveScopes).toHaveLength(1)
   })
 
-  it('rejects config and schema conflicts at compile time', () => {
+    it('rejects config and schema conflicts at compile time', () => {
     const first = context({ id: 'first', input: z.object({ name: z.string() }), system: 'A' })
     const second = context({ id: 'second', input: z.object({ name: z.string() }), system: 'B' })
 
@@ -130,7 +130,7 @@ describe('gating through fake ports', () => {
     expect(excludedPreviews.map((p) => p.injectableKind)).toEqual(['conditional', 'context', 'match'])
   })
 
-  it('records predicate scopes nested under the resolution, with attributes', async () => {
+    it('records predicate scopes nested under the resolution, with attributes', async () => {
     const f = fakePorts()
     const resolver = compiledResolver(f.ports)
     const config: AnyConfig = { id: 'gated', system: 'S', use: [context({ id: 'c', when: () => true, system: 'C' })] }
@@ -163,7 +163,7 @@ describe('error paths (previously uncovered)', () => {
     await expect(resolver.resolve(config, {})).rejects.toThrow('predicate exploded')
   })
 
-  it('a throwing inject() propagates out of resolution', async () => {
+    it('a throwing inject() propagates out of resolution', async () => {
     const resolver = compiledResolver(fakePorts().ports)
     const inj = injectable({
       id: 'bad',
@@ -174,7 +174,7 @@ describe('error paths (previously uncovered)', () => {
     await expect(resolver.resolve({ system: 'S', use: [inj] } as AnyConfig, {})).rejects.toThrow('inject exploded')
   })
 
-  it('tool collisions across entries throw with the colliding entry attributed', async () => {
+    it('tool collisions across entries throw with the colliding entry attributed', async () => {
     const resolver = compiledResolver(fakePorts().ports)
     const a = injectable({ id: 'alpha', inject: () => ({ tools: { shared: 1 } }) })
     const b = injectable({ id: 'beta', inject: () => ({ tools: { shared: 2 } }) })
@@ -183,7 +183,7 @@ describe('error paths (previously uncovered)', () => {
     )
   })
 
-  it('cyclic pipeline re-entry fails with a depth error instead of hanging', async () => {
+    it('cyclic pipeline re-entry fails with a depth error instead of hanging', async () => {
     const resolver = compiledResolver(fakePorts().ports)
     // A contributor whose contribution re-enters itself — without the depth
     // cap this would recurse forever.
@@ -215,7 +215,7 @@ describe('context cache with fixed clock', () => {
     ])
   })
 
-  it('expires entries after TTL on the fake clock', async () => {
+    it('expires entries after TTL on the fake clock', async () => {
     const f = fakePorts()
     const resolver = compiledResolver(f.ports)
     const cached = context({ id: 'c-ttl', system: () => 'cached', cache: 1_000 })
@@ -228,7 +228,7 @@ describe('context cache with fixed clock', () => {
     expect(f.instrumentation.events.map((e) => e.kind)).toEqual(['miss', 'miss'])
   })
 
-  it('isolates caches between resolvers (no module-level bleed)', async () => {
+    it('isolates caches between resolvers (no module-level bleed)', async () => {
     const a = fakePorts()
     const b = fakePorts()
     const cached = context({ id: 'c-iso', system: () => 'x', cache: 60_000 })
@@ -253,7 +253,7 @@ describe('skill surface through the skill source port', () => {
     dump: () => '',
   })
 
-  it('resolves lazy registry skills from the in-memory source', async () => {
+    it('resolves lazy registry skills from the in-memory source', async () => {
     const f = fakePorts()
     f.skills.register('acme/seo', {
       instructions: 'Optimize ruthlessly.',
@@ -268,7 +268,7 @@ describe('skill surface through the skill source port', () => {
     expect((result as { _skillSession?: unknown })._skillSession).toBeDefined()
   })
 
-  it('degrades a failed fetch to the placeholder with a diagnostics warning', async () => {
+    it('degrades a failed fetch to the placeholder with a diagnostics warning', async () => {
     const f = fakePorts()
     const resolver = compiledResolver(f.ports)
 
@@ -282,7 +282,7 @@ describe('skill surface through the skill source port', () => {
     ])
   })
 
-  it('resolve and inspect projections share one skill code path (regression: no drift)', async () => {
+    it('resolve and inspect projections share one skill code path (regression: no drift)', async () => {
     const f = fakePorts()
     const resolver = compiledResolver(f.ports)
     // Lazy detection by INSTRUCTIONS placeholder only — the case the old
@@ -347,7 +347,7 @@ describe('contributor() entries', () => {
     expect(facts).toMatchObject({ injectableKind: 'injectable', injectedTools: ['open_ticket'] })
   })
 
-  it('when gate excludes with reason and skips contribute entirely', async () => {
+    it('when gate excludes with reason and skips contribute entirely', async () => {
     const f = fakePorts()
     const resolver = compiledResolver(f.ports)
     let contributed = false
@@ -367,7 +367,7 @@ describe('contributor() entries', () => {
     ])
   })
 
-  it('nested use entries resolve before the contribution itself', async () => {
+    it('nested use entries resolve before the contribution itself', async () => {
     const resolver = compiledResolver(fakePorts().ports)
     const entry = contributor({
       id: 'bundle',
@@ -379,7 +379,7 @@ describe('contributor() entries', () => {
     expect(result.system).toBe('S\n\nFIRST\n\nSECOND')
   })
 
-  it('declared input schemas merge into the prompt schema as required keys', () => {
+    it('declared input schemas merge into the prompt schema as required keys', () => {
     const entry = contributor({
       id: 'schema-owner',
       input: z.object({ region: z.string() }),
@@ -390,7 +390,7 @@ describe('contributor() entries', () => {
     expect(merged.safeParse({}).success).toBe(false)
   })
 
-  it('rejects empty ids at construction time', () => {
+    it('rejects empty ids at construction time', () => {
     expect(() => contributor({ id: '  ', contribute: () => ({}) })).toThrow('contributor(): id must be non-empty.')
   })
 })
@@ -410,7 +410,7 @@ describe('family classification', () => {
     expect(facts).toMatchObject({ injectableKind: 'retriever', injectedTools: ['search_docs'] })
   })
 
-  it('composition artifacts carry the family declared on the context', async () => {
+    it('composition artifacts carry the family declared on the context', async () => {
     const f = fakePorts()
     const resolver = compiledResolver(f.ports)
     const retrieved = context({ id: 'retriever:docs', family: 'retriever', system: 'Doc snippets.' })
@@ -420,7 +420,7 @@ describe('family classification', () => {
     expect(composed).toMatchObject({ injectableKind: 'retriever', text: 'Doc snippets.' })
   })
 
-  it('handoff contexts declare the handoff family', async () => {
+    it('handoff contexts declare the handoff family', async () => {
     const f = fakePorts()
     const resolver = compiledResolver(f.ports)
     const contract = handoff({
@@ -438,7 +438,7 @@ describe('family classification', () => {
     expect(composed).toMatchObject({ injectableKind: 'handoff' })
   })
 
-  it('contexts without a declared family classify as plain contexts regardless of id', async () => {
+    it('contexts without a declared family classify as plain contexts regardless of id', async () => {
     const f = fakePorts()
     const resolver = compiledResolver(f.ports)
     // An id that LOOKS like a memory id no longer changes classification.

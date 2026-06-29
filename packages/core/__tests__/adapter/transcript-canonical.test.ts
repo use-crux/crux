@@ -29,7 +29,7 @@ describe('messagesToTranscriptUnits', () => {
     ])
   })
 
-  it('reads assistant tool calls from metadata into an assistant unit', () => {
+    it('reads assistant tool calls from metadata into an assistant unit', () => {
     const units = messagesToTranscriptUnits([
       {
         role: 'assistant',
@@ -49,13 +49,13 @@ describe('messagesToTranscriptUnits', () => {
     ])
   })
 
-  it('omits the toolCalls key for assistant messages without tool calls', () => {
+    it('omits the toolCalls key for assistant messages without tool calls', () => {
     const units = messagesToTranscriptUnits([{ role: 'assistant', content: 'Done.' }])
 
     expect(units).toEqual([{ kind: 'assistant', text: 'Done.' }])
   })
 
-  it('groups adjacent tool messages into a single tool-results unit', () => {
+    it('groups adjacent tool messages into a single tool-results unit', () => {
     const units = messagesToTranscriptUnits([
       toolMessage('tc_1', 'weather', '18C', {
         type: 'json',
@@ -88,7 +88,7 @@ describe('messagesToTranscriptUnits', () => {
     ])
   })
 
-  it('skips tool messages without a usable toolCallId instead of fabricating one', () => {
+    it('skips tool messages without a usable toolCallId instead of fabricating one', () => {
     const units = messagesToTranscriptUnits([
       { role: 'tool', content: 'orphan', metadata: { toolName: 'weather' } },
       { role: 'tool', content: 'empty id', metadata: { toolCallId: '' } },
@@ -103,7 +103,7 @@ describe('messagesToTranscriptUnits', () => {
     ])
   })
 
-  it('emits no tool-results unit when every tool message is malformed', () => {
+    it('emits no tool-results unit when every tool message is malformed', () => {
     const units = messagesToTranscriptUnits([
       { role: 'user', content: 'hi' },
       { role: 'tool', content: 'orphan', metadata: {} },
@@ -152,7 +152,7 @@ describe('transcriptUnitsToMessages', () => {
     ])
   })
 
-  it('round-trips canonical messages through units', () => {
+    it('round-trips canonical messages through units', () => {
     const messages: Message[] = [
       { role: 'system', content: 'Be terse.' },
       { role: 'user', content: 'Weather?' },
@@ -220,7 +220,7 @@ describe('appendCanonicalToolRound', () => {
     ])
   })
 
-  it('preserves error metadata on appended tool messages', () => {
+    it('preserves error metadata on appended tool messages', () => {
     const result: ToolResultEntry = {
       toolCallId: 'tc_1',
       name: 'publish',
@@ -258,7 +258,7 @@ describe('createToolResultEncodingHelpers', () => {
     expect(helpers.plainText(result({ text: 'hello' }))).toBe('hello')
   })
 
-  it('exposes content parts only for content model output', () => {
+    it('exposes content parts only for content model output', () => {
     expect(
       helpers.contentParts(
         result({
@@ -273,7 +273,7 @@ describe('createToolResultEncodingHelpers', () => {
     expect(helpers.contentParts(result({}))).toBeUndefined()
   })
 
-  it('flags errors from error model outputs or the explicit error flag', () => {
+    it('flags errors from error model outputs or the explicit error flag', () => {
     expect(helpers.errorFlag(result({ modelOutput: { type: 'error-text', value: 'x' } }))).toBe(true)
     expect(helpers.errorFlag(result({ modelOutput: { type: 'error-json', value: { e: 1 } } }))).toBe(true)
     expect(helpers.errorFlag(result({ isError: true }))).toBe(true)

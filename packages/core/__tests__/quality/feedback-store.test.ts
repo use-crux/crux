@@ -30,7 +30,7 @@ describe('quality internal feedback store', () => {
     expect(raw.trim().split('\n')).toHaveLength(2)
   })
 
-  it('annotates existing feedback and rejects unknown ids', async () => {
+    it('annotates existing feedback and rejects unknown ids', async () => {
     const { store } = await makeStore()
     const record = await store.record({ caseId: 'case-1' })
 
@@ -41,7 +41,7 @@ describe('quality internal feedback store', () => {
     await expect(store.annotate({ feedbackId: 'feedback-nope' })).rejects.toThrow('was not found')
   })
 
-  it('stores memory proposals linked to feedback', async () => {
+    it('stores memory proposals linked to feedback', async () => {
     const { store } = await makeStore()
     const record = await store.record({ caseId: 'case-1' })
 
@@ -54,7 +54,7 @@ describe('quality internal feedback store', () => {
     expect(await store.listMemoryProposals(record.id)).toHaveLength(1)
   })
 
-  it('exports a portable suite from selected feedback with provided inputs', async () => {
+    it('exports a portable suite from selected feedback with provided inputs', async () => {
     const { store } = await makeStore()
     const record = await store.record({ caseId: 'refund-answer', expected: { answer: 'yes' }, tags: ['citation'] })
 
@@ -78,7 +78,7 @@ describe('quality internal feedback store', () => {
     await expect(store.exportSuite({ id: 'missing-input', feedbackIds: [record.id] })).rejects.toThrow('has no input')
   })
 
-  it('applies dot-path redaction at write time', async () => {
+    it('applies dot-path redaction at write time', async () => {
     const { store } = await makeStore(['metadata.apiKey'])
     const record = await store.record({ caseId: 'case-1', metadata: { apiKey: 'secret', model: 'gpt' } })
     expect(record.metadata).toEqual({ apiKey: '[redacted]', model: 'gpt' })

@@ -330,7 +330,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
     expect(seen[0]).toMatchObject({ input: { question: 'q1' }, model: 'fast-model', temperature: 0 })
   })
 
-  it('resolves generate and named models from setup when params omit them', async () => {
+    it('resolves generate and named models from setup when params omit them', async () => {
     const seen: Array<Record<string, unknown>> = []
     const generate = (async (_prompt: never, opts: never) => {
       seen.push(opts as Record<string, unknown>)
@@ -351,7 +351,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
     expect(seen[0]!.model).toEqual({ id: 'resolved-cheap-model' })
   })
 
-  it('target.prompt defaults feed the params floor', async () => {
+    it('target.prompt defaults feed the params floor', async () => {
     const seen: Array<Record<string, unknown>> = []
     const generate = (async (_prompt: never, opts: never) => {
       seen.push(opts as Record<string, unknown>)
@@ -367,7 +367,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
     expect(seen[0]!.model).toBe('override-model')
   })
 
-  it('executes a flow task end-to-end with trace-backed step signals', async () => {
+    it('executes a flow task end-to-end with trace-backed step signals', async () => {
     const researchFlow = flow<{ summary: string }, { topic: string }>('research', async (scope) => {
       const plan = await scope.step('plan', () => ({ angle: `${scope.input.topic} basics` }))
       const draft = await scope.step('draft', () => ({ summary: `About ${plan.angle}` }))
@@ -390,7 +390,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
     expect(experiment.perCase[0]!.capturedSignals).toContain('steps')
   })
 
-  it('ctx.step throws a helpful error for unknown steps and schema mismatches', async () => {
+    it('ctx.step throws a helpful error for unknown steps and schema mismatches', async () => {
     const tinyFlow = flow<{ ok: boolean }, { q: string }>('tiny', async (scope) => {
       await scope.step('only-step', () => ({ value: 42 }))
       return { ok: true }
@@ -421,7 +421,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
     expect(experiment.perCase[0]!.status).toBe('passed')
   })
 
-  it('executes a retriever task via the query mapper and records output hits', async () => {
+    it('executes a retriever task via the query mapper and records output hits', async () => {
     const stubRetriever = {
       _tag: 'Retriever' as const,
       id: 'docs',
@@ -440,7 +440,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
     expect(output[0]!.sourceId).toBe('docs/refunds')
   })
 
-  it('agent tasks resolve tool mocks into executable tools for the adapter', async () => {
+    it('agent tasks resolve tool mocks into executable tools for the adapter', async () => {
     const toolAgent = agent({
       id: 'tool-agent',
       prompt: supportPrompt,
@@ -492,7 +492,7 @@ describe('persistence, redaction, truncation', () => {
     expect(cell.output).toEqual({ echoed: 'hello', apiKey: '[redacted]' })
   })
 
-  it('truncates oversized outputs at 32 KiB and flags metadata.truncated', async () => {
+    it('truncates oversized outputs at 32 KiB and flags metadata.truncated', async () => {
     const evaluation = evaluate({
       task: async (_input: { q: string }) => 'y'.repeat(64 * 1024),
       data: [{ input: { q: 'big' } }],
@@ -505,7 +505,7 @@ describe('persistence, redaction, truncation', () => {
     expect(cell.status).toBe('passed')
   })
 
-  it('evaluation.run() persists under cwd/.crux/quality by default', async () => {
+    it('evaluation.run() persists under cwd/.crux/quality by default', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'crux-quality-run-'))
     const previousCwd = process.cwd()
     process.chdir(dir)
@@ -552,7 +552,7 @@ describe('datasets', () => {
     expect(datasetCell!.status).toBe('passed')
   })
 
-  it('rejects rows that fail the dataset schema as a definition error', async () => {
+    it('rejects rows that fail the dataset schema as a definition error', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'crux-quality-ds-'))
     const { writeFile } = await import('node:fs/promises')
     await writeFile(join(dir, 'bad.jsonl'), JSON.stringify({ input: { q: 42 } }), 'utf8')
@@ -578,12 +578,12 @@ describe('prompt({ tests }) lowering — rung 0', () => {
     ],
   })
 
-  it('detects prompts with colocated tests', () => {
+    it('detects prompts with colocated tests', () => {
     expect(hasPromptTests(testedPrompt)).toBe(true)
     expect(hasPromptTests(supportPrompt)).toBe(false)
   })
 
-  it('lowers tests into a prompt:<id> evaluation with source prompt-tests', () => {
+    it('lowers tests into a prompt:<id> evaluation with source prompt-tests', () => {
     const evaluation = lowerPromptTests(testedPrompt)
     expect(evaluation.id).toBe('prompt:tested')
     expect(evaluation.manifest.source).toBe('prompt-tests')
@@ -594,7 +594,7 @@ describe('prompt({ tests }) lowering — rung 0', () => {
     expect(evaluation.manifest.hasEvaluationExpect).toBe(true)
   })
 
-  it('the lowered evaluation gates on output-schema validation', async () => {
+    it('the lowered evaluation gates on output-schema validation', async () => {
     const generate = (async (_prompt: never, opts: never) => {
       const question = (opts as { input: { question: string } }).input.question
       // Valid for the first case, schema-breaking for the second.
@@ -612,7 +612,7 @@ describe('prompt({ tests }) lowering — rung 0', () => {
     expect(second!.expected).toBe('14 dagen')
   })
 
-  it('refuses prompts without an id', () => {
+    it('refuses prompts without an id', () => {
     const anonymous = prompt({
       input: z.object({ q: z.string() }),
       system: 's',

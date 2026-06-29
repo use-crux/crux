@@ -70,7 +70,7 @@ describe('grounding()', () => {
     })
   })
 
-  it('supports tool-only grounding and validates citations against searched hits', async () => {
+    it('supports tool-only grounding and validates citations against searched hits', async () => {
     const docs = retriever({
       id: 'docs',
       namespace: 'docs',

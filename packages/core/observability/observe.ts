@@ -35,6 +35,7 @@ import {
 import type { CruxObservabilityTransport } from './transport'
 
 export { subscribeObservability, type CruxObservabilitySubscriber } from './subscribers'
+export { hasObservabilitySubscribers } from './subscribers'
 
 export interface ObservabilityDeliveryOptions {
   /**

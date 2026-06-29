@@ -71,7 +71,7 @@ describe('paired-difference comparison (variant baseline)', () => {
     expect(comparison.deltas.some((delta) => delta.scoreName === 'pass')).toBe(true)
   })
 
-  it('trips a minDeltaVsBaseline gate per candidate variant and reds the run', async () => {
+    it('trips a minDeltaVsBaseline gate per candidate variant and reds the run', async () => {
     const experiment = await run(
       bakeoff({
         id: 'baselines.gate-trip',
@@ -92,7 +92,7 @@ describe('paired-difference comparison (variant baseline)', () => {
     expect(experiment.passed).toBe(false)
   })
 
-  it('passes a minDeltaVsBaseline gate when the candidate holds the line', async () => {
+    it('passes a minDeltaVsBaseline gate when the candidate holds the line', async () => {
     const experiment = await run(
       bakeoff({
         id: 'baselines.gate-pass',
@@ -129,7 +129,7 @@ describe('promotion (Experiment.promote)', () => {
     })
   })
 
-  it('defaults the promoted variant to the declared baseline variant', async () => {
+    it('defaults the promoted variant to the declared baseline variant', async () => {
     const dir = await qualityDir()
     const experiment = await run(bakeoff({ id: 'baselines.promote-default', delta: 0.1 }), undefined, { dir })
     await experiment.promote()
@@ -137,14 +137,14 @@ describe('promotion (Experiment.promote)', () => {
     expect(record!.variantName).toBe('current')
   })
 
-  it('refuses to promote a filtered run', async () => {
+    it('refuses to promote a filtered run', async () => {
     const dir = await qualityDir()
     const experiment = await run(bakeoff({ id: 'baselines.promote-filtered', delta: 0.1 }), { cases: ['easy'] }, { dir })
     expect(experiment.filteredRun).toBe(true)
     await expect(experiment.promote({ variant: 'current' })).rejects.toThrowError(/filtered/)
   })
 
-  it('promoting a derived-id experiment with a pin id writes under the pinned id', async () => {
+    it('promoting a derived-id experiment with a pin id writes under the pinned id', async () => {
     const dir = await qualityDir()
     const evaluation = evaluate({ task: (input: { q: string }) => input, data: [{ input: { q: 'a' } }] })
     const experiment = await run(evaluation, undefined, { dir })
@@ -211,7 +211,7 @@ describe('auto-compare against a committed baseline', () => {
     expect(second.passed).toBe(false)
   })
 
-  it('changing a case demotes the comparison to informational with the documented reason', async () => {
+    it('changing a case demotes the comparison to informational with the documented reason', async () => {
     const dir = await qualityDir()
     const makeEvaluation = (cases: ReadonlyArray<{ name: string; input: { name: string } }>) =>
       evaluate('auto.drift', {
@@ -255,7 +255,7 @@ describe('auto-compare against a committed baseline', () => {
     expect(second.passed).toBe(true)
   })
 
-  it('a promoted-then-renamed evaluation errors with the pin hint (id drift guard)', async () => {
+    it('a promoted-then-renamed evaluation errors with the pin hint (id drift guard)', async () => {
     const dir = await qualityDir()
     const makeEvaluation = (id: string) =>
       evaluate(id, {

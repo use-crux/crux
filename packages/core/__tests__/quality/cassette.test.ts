@@ -64,7 +64,7 @@ describe('normalizedCallKey', () => {
     expect(a).toMatch(/^[0-9a-f]{64}$/)
   })
 
-  it('changes when prompt content, model, or settings change', () => {
+    it('changes when prompt content, model, or settings change', () => {
     const base = normalizedCallKey(call())
     expect(normalizedCallKey(call({ prompt: 'different question' }))).not.toBe(base)
     expect(normalizedCallKey(call({ modelInfo: { provider: 'fake', modelId: 'm2' } }))).not.toBe(base)
@@ -97,7 +97,7 @@ describe('cassette session — record-new', () => {
     expect(replaySession.stats).toMatchObject({ hits: 1, misses: 0 })
   })
 
-  it('writes metadata (recordedAt, sdkVersion, models) into the cassette file', async () => {
+    it('writes metadata (recordedAt, sdkVersion, models) into the cassette file', async () => {
     const path = await tempCassette()
     const session = await openCassetteSession({ path, mode: 'record-new' })
     await session.intercept(call(), async () => loopOutcome('x'))
@@ -177,7 +177,7 @@ describe('cassette session — projection and redaction', () => {
     expect(replayed.raw).toBeUndefined()
   })
 
-  it('redacts api keys and authorization material at write time, always', async () => {
+    it('redacts api keys and authorization material at write time, always', async () => {
     const path = await tempCassette()
     const session = await openCassetteSession({ path, mode: 'record-new' })
     await session.intercept(
@@ -191,7 +191,7 @@ describe('cassette session — projection and redaction', () => {
     expect(text).not.toContain('Bearer tok')
   })
 
-  it('records invalid structured attempts and revives them as ZodError-carrying attempts', async () => {
+    it('records invalid structured attempts and revives them as ZodError-carrying attempts', async () => {
     const path = await tempCassette()
     const schema = z.object({ a: z.string() })
     const parsed = schema.safeParse({ a: 1 })
@@ -216,7 +216,7 @@ describe('cassette session — projection and redaction', () => {
     expect(replayed.error.issues.length).toBeGreaterThan(0)
   })
 
-  it('does not record suspended outcomes — they pass through and miss next time', async () => {
+    it('does not record suspended outcomes — they pass through and miss next time', async () => {
     const path = await tempCassette()
     const suspended = {
       status: 'suspended' as const,

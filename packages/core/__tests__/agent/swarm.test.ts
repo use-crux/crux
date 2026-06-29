@@ -108,7 +108,7 @@ describe('swarm', () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0)
   })
 
-  it('returns immediately when agent completes without handoff', async () => {
+    it('returns immediately when agent completes without handoff', async () => {
     const executor = createSwarmExecutor({
       triage: { output: 'I can help you directly.' },
     })
@@ -127,7 +127,7 @@ describe('swarm', () => {
     expect(result.agentResults).toHaveLength(1)
   })
 
-  it('supports a 3-hop chain: triage → billing → refunds → done', async () => {
+    it('supports a 3-hop chain: triage → billing → refunds → done', async () => {
     const executor = createSwarmExecutor({
       triage: { transfer: 'billing', reason: 'billing issue' },
       billing: { transfer: 'refunds', reason: 'needs refund' },
@@ -150,7 +150,7 @@ describe('swarm', () => {
     expect(result.handoffCount).toBe(2)
   })
 
-  it('throws SwarmError when maxHandoffs is exceeded', async () => {
+    it('throws SwarmError when maxHandoffs is exceeded', async () => {
     // triage and billing keep handing off to each other
     const executor = createSwarmExecutor({
       triage: { transfer: 'billing', reason: 'billing issue' },
@@ -168,7 +168,7 @@ describe('swarm', () => {
     ).rejects.toThrow(/maxHandoffs.*3/)
   })
 
-  it('throws when startAgent does not exist', async () => {
+    it('throws when startAgent does not exist', async () => {
     const executor = createSwarmExecutor({})
     const swarm = createSwarm(executor)
 
@@ -181,7 +181,7 @@ describe('swarm', () => {
     ).rejects.toThrow(/nonexistent/)
   })
 
-  it('throws when a handoff target does not exist in the agents map', async () => {
+    it('throws when a handoff target does not exist in the agents map', async () => {
     const agentWithBadHandoff = makeAgent({
       id: 'bad',
       prompt: triagePrompt,
@@ -199,7 +199,7 @@ describe('swarm', () => {
     ).rejects.toThrow(/missing-agent/)
   })
 
-  it('generates transfer_to_<id> tools with target description', async () => {
+    it('generates transfer_to_<id> tools with target description', async () => {
     const executor = createSwarmExecutor({ triage: { output: 'done' } })
     const swarm = createSwarm(executor)
 
@@ -222,7 +222,7 @@ describe('swarm', () => {
     expect(capturedTools!['transfer_to_triage']).toBeUndefined()
   })
 
-  describe('conditional handoffs', () => {
+describe('conditional handoffs', () => {
     it('injects when condition into transfer tool description', async () => {
       const conditionalAgent = makeAgent({
         id: 'triage',
@@ -312,7 +312,7 @@ describe('swarm', () => {
     })
   })
 
-  it('calls onHandoff callback for each handoff', async () => {
+    it('calls onHandoff callback for each handoff', async () => {
     const onHandoff = vi.fn()
     const executor = createSwarmExecutor({
       triage: { transfer: 'billing', reason: 'billing issue' },
@@ -337,7 +337,7 @@ describe('swarm', () => {
     )
   })
 
-  describe('history modes', () => {
+describe('history modes', () => {
     it('transfer-only: next agent gets original input + handoff context', async () => {
       const executor = createSwarmExecutor({
         triage: { transfer: 'billing', reason: 'billing', output: 'transferring' },
@@ -413,7 +413,7 @@ describe('swarm', () => {
     })
   })
 
-  describe('context summarization', () => {
+describe('context summarization', () => {
     it('summarizes previous output after threshold in accumulate mode', async () => {
       const generateFn = vi.fn().mockResolvedValue({ text: 'Summarized: customer needs refund' })
 
@@ -511,7 +511,7 @@ describe('swarm', () => {
     })
   })
 
-  describe('tool filtering', () => {
+describe('tool filtering', () => {
     it('agent with swarmTools only gets those tools plus transfer tools', async () => {
       const agent = makeAgent({
         id: 'filtered',
@@ -619,7 +619,7 @@ describe('swarm', () => {
     })
   })
 
-  describe('cost tracking and abort', () => {
+describe('cost tracking and abort', () => {
     it('calls onCost with accumulated usage after each agent', async () => {
       const onCost = vi.fn()
       const executor = createSwarmExecutor({
@@ -702,7 +702,7 @@ describe('swarm', () => {
     })
   })
 
-  it('propagates agent execution errors and emits composition:end', async () => {
+    it('propagates agent execution errors and emits composition:end', async () => {
     const executor = createSwarmExecutor({ triage: { throws: 'Agent crashed' } })
     const swarm = createSwarm(executor)
 
@@ -713,184 +713,4 @@ describe('swarm', () => {
         input: {},
       }),
     ).rejects.toThrow('Agent crashed')
-  })
-
-  describe('instrumentation', () => {
-    let originalRuntime: any
-    let mockHooks: Record<string, ReturnType<typeof vi.fn>>
-
-    beforeEach(() => {
-      originalRuntime = { ...getRuntime() }
-      mockHooks = {
-        onCompositionStart: vi.fn(),
-        onCompositionAgent: vi.fn(),
-        onCompositionEnd: vi.fn(),
-      }
-      setRuntime({
-        instrumentationHooks: mockHooks as any,
-      })
-    })
-
-    afterEach(() => {
-      setRuntime(originalRuntime)
-    })
-
-    it('emits composition:start with kind swarm and metadata', async () => {
-      const executor = createSwarmExecutor({
-        triage: { output: 'done' },
-      })
-      const swarm = createSwarm(executor)
-
-      await swarm({
-        agents: { triage: triageAgent2, billing: billingAgent2 },
-        startAgent: 'triage',
-        input: {},
-        maxHandoffs: 5,
-      })
-
-      expect(mockHooks.onCompositionStart).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kind: 'swarm',
-          agentIds: expect.arrayContaining(['triage', 'billing']),
-          startAgent: 'triage',
-          maxHandoffs: 5,
-        }),
-      )
-
-      // Composition events now flow only through hooks, not collector
-      expect(mockHooks.onCompositionStart).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kind: 'swarm',
-          startAgent: 'triage',
-        }),
-      )
-    })
-
-    it('emits composition:agent for each agent execution with handoff metadata', async () => {
-      const executor = createSwarmExecutor({
-        triage: { transfer: 'billing', reason: 'billing issue' },
-        billing: { output: 'resolved' },
-      })
-      const swarm = createSwarm(executor)
-
-      await swarm({
-        agents: { triage: triageAgent2, billing: billingAgent2 },
-        startAgent: 'triage',
-        input: {},
-      })
-
-      expect(mockHooks.onCompositionAgent).toHaveBeenCalledTimes(2)
-
-      // First agent: triage (no handoffFrom since it's the entry)
-      expect(mockHooks.onCompositionAgent).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({
-          agentId: 'triage',
-          index: 0,
-          status: 'success',
-        }),
-      )
-
-      // Second agent: billing (handoffFrom triage)
-      expect(mockHooks.onCompositionAgent).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({
-          agentId: 'billing',
-          index: 1,
-          status: 'success',
-          handoffFrom: 'triage',
-          handoffReason: 'billing issue',
-          hopNumber: 1,
-        }),
-      )
-    })
-
-    it('emits composition:end with swarm metadata on success', async () => {
-      const executor = createSwarmExecutor({
-        triage: { transfer: 'billing', reason: 'billing' },
-        billing: { output: 'done' },
-      })
-      const swarm = createSwarm(executor)
-
-      await swarm({
-        agents: { triage: triageAgent2, billing: billingAgent2 },
-        startAgent: 'triage',
-        input: {},
-      })
-
-      expect(mockHooks.onCompositionEnd).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kind: 'swarm',
-          status: 'success',
-          agentCount: 2,
-          handoffPath: ['triage', 'billing'],
-          handoffCount: 1,
-          finalAgentId: 'billing',
-        }),
-      )
-
-      // Composition events now flow only through hooks, not collector
-      expect(mockHooks.onCompositionEnd).toHaveBeenCalledWith(
-        expect.objectContaining({
-          handoffPath: ['triage', 'billing'],
-          finalAgentId: 'billing',
-        }),
-      )
-    })
-
-    it('emits composition:end with status error when maxHandoffs exceeded', async () => {
-      const executor = createSwarmExecutor({
-        triage: { transfer: 'billing', reason: 'loop' },
-        billing: { transfer: 'triage', reason: 'loop' },
-      })
-      const swarm = createSwarm(executor)
-
-      try {
-        await swarm({
-          agents: { triage: triageAgent2, billing: billingAgent2 },
-          startAgent: 'triage',
-          input: {},
-          maxHandoffs: 2,
-        })
-      } catch {
-        // Expected SwarmError
-      }
-
-      expect(mockHooks.onCompositionEnd).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kind: 'swarm',
-          status: 'error',
-        }),
-      )
-    })
-
-    it('emits composition:end with error when agent executor throws', async () => {
-      const executor = createSwarmExecutor({ triage: { throws: 'LLM API failed' } })
-      const swarm = createSwarm(executor)
-
-      try {
-        await swarm({
-          agents: { triage: triageAgent2, billing: billingAgent2 },
-          startAgent: 'triage',
-          input: {},
-        })
-      } catch {
-        // Expected
-      }
-
-      expect(mockHooks.onCompositionAgent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          agentId: 'triage',
-          status: 'error',
-          error: 'LLM API failed',
-        }),
-      )
-      expect(mockHooks.onCompositionEnd).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kind: 'swarm',
-          status: 'error',
-        }),
-      )
-    })
-  })
-})
+  })})

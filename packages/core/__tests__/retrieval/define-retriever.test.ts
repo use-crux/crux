@@ -105,7 +105,7 @@ describe('retriever', () => {
     expect(hits[0]?.score).toBeCloseTo(1)
   })
 
-  it('retrieves chunks indexed into explicit data and vector stores', async () => {
+    it('retrieves chunks indexed into explicit data and vector stores', async () => {
     const data = inMemoryDataStore()
     const vectors = inMemoryVectorStore()
     const dense = createDenseEmbedding()
@@ -144,7 +144,7 @@ describe('retriever', () => {
     ])
   })
 
-  it('applies rerankers after retrieval', async () => {
+    it('applies rerankers after retrieval', async () => {
     const reranker = makeReranker({
       name: 'reverse-top-1',
       rerank: async ({ query, hits }) => {
@@ -191,7 +191,7 @@ describe('retriever', () => {
     ])
   })
 
-  it('applies multiple rerankers sequentially', async () => {
+    it('applies multiple rerankers sequentially', async () => {
     const addMarker = makeReranker({
       name: 'add-marker',
       rerank: ({ hits }) =>
@@ -243,7 +243,7 @@ describe('retriever', () => {
     ])
   })
 
-  it('reranker requires a non-empty name', () => {
+    it('reranker requires a non-empty name', () => {
     expect(() =>
       makeReranker({
         name: '   ',
@@ -252,7 +252,7 @@ describe('retriever', () => {
     ).toThrow('Reranker name must be non-empty')
   })
 
-  it('retrieves dense hits via vectorSearch and enforces namespace filter', async () => {
+    it('retrieves dense hits via vectorSearch and enforces namespace filter', async () => {
     const dense = createDenseEmbedding()
     const vectorSearch = vi.fn(async (_embedding: number[], options?: { limit?: number; threshold?: number; filter?: Record<string, unknown> }) => {
       expect(options?.limit).toBe(3)
@@ -307,7 +307,7 @@ describe('retriever', () => {
     ])
   })
 
-  it('falls back to searchVectors for dense retrieval when vectorSearch is absent', async () => {
+    it('falls back to searchVectors for dense retrieval when vectorSearch is absent', async () => {
     const dense = createDenseEmbedding()
     const searchVectors = vi.fn(async (query: VectorSearchQuery) => {
       expect(query.dense).toEqual([13, 6.5])
@@ -342,7 +342,7 @@ describe('retriever', () => {
     expect(hits[0].sourceId).toBe('doc-2')
   })
 
-  it('asContext renders retrieved hits from a static query', async () => {
+    it('asContext renders retrieved hits from a static query', async () => {
     const retriever = makeRetriever({
       id: 'r1',
       namespace: 'docs',
@@ -368,7 +368,7 @@ describe('retriever', () => {
     expect(system).toContain('Release notes')
   })
 
-  it('injects search tools by default when used directly in a prompt', async () => {
+    it('injects search tools by default when used directly in a prompt', async () => {
     const { prompt } = await import('../../prompt/prompt')
     const retriever = makeRetriever({
       id: 'docs',
@@ -393,7 +393,7 @@ describe('retriever', () => {
     expect(await (resolved.tools?.search as any).execute({ query: 'release', limit: 1 })).toContain('Release notes')
   })
 
-  it('injects context by default when context query is configured', async () => {
+    it('injects context by default when context query is configured', async () => {
     const { prompt } = await import('../../prompt/prompt')
     const retriever = makeRetriever({
       id: 'docs',
@@ -424,7 +424,7 @@ describe('retriever', () => {
     expect(resolved.tools).toBeUndefined()
   })
 
-  it('asContext supports a dynamic query function', async () => {
+    it('asContext supports a dynamic query function', async () => {
     const retrieve = vi.fn(async (query: string) => [
       {
         namespace: 'docs',
@@ -453,7 +453,7 @@ describe('retriever', () => {
     expect(system).toContain('Result for pricing')
   })
 
-  it('throws when asContext has no query source', async () => {
+    it('throws when asContext has no query source', async () => {
     const retriever = makeRetriever({
       id: 'r1',
       namespace: 'docs',
@@ -463,7 +463,7 @@ describe('retriever', () => {
     await expect(retriever.asContext().systemFn({})).rejects.toThrow('requires a query')
   })
 
-  it('exposes query and source tools', async () => {
+    it('exposes query and source tools', async () => {
     const retriever = makeRetriever({
       id: 'r1',
       namespace: 'docs',
@@ -497,7 +497,7 @@ describe('retriever', () => {
     await expect(tools.getSource.execute({ sourceId: 'doc-4', chunkId: '1' })).resolves.toContain('ops:2')
   })
 
-  it('supports a fully custom retriever', async () => {
+    it('supports a fully custom retriever', async () => {
     const retriever = makeRetriever({
       id: 'r1',
       namespace: 'docs',
@@ -519,7 +519,7 @@ describe('retriever', () => {
     expect(hits[0].content).toBe('custom:alpha')
   })
 
-  it('retrieves sparse hits through searchVectors', async () => {
+    it('retrieves sparse hits through searchVectors', async () => {
     const sparse = createSparseEmbedding()
     const searchVectors = vi.fn(async (query: VectorSearchQuery) => {
       expect(query.sparse).toEqual({
@@ -558,7 +558,7 @@ describe('retriever', () => {
     expect(hits[0].metadata).toEqual({ mode: 'sparse' })
   })
 
-  it('retrieves hybrid hits through searchVectors with fusion', async () => {
+    it('retrieves hybrid hits through searchVectors with fusion', async () => {
     const dense = createDenseEmbedding()
     const sparse = createSparseEmbedding()
     const searchVectors = vi.fn(async (query: VectorSearchQuery) => {
@@ -600,7 +600,7 @@ describe('retriever', () => {
     expect(hits[0].content).toBe('Hybrid hit')
   })
 
-  it('retrieves chunks that were indexed through indexer', async () => {
+    it('retrieves chunks that were indexed through indexer', async () => {
     const store = inMemoryCruxStore()
     const dense = makeEmbedding({
       kind: 'dense',
@@ -651,7 +651,7 @@ describe('retriever', () => {
     expect(hits[0].parent).toEqual({ title: 'Pricing' })
   })
 
-  it('excludes inactive generations and parent records from indexed retrieval', async () => {
+    it('excludes inactive generations and parent records from indexed retrieval', async () => {
     const store = inMemoryCruxStore()
     const dense = makeEmbedding({
       kind: 'dense',
@@ -694,7 +694,7 @@ describe('retriever', () => {
     expect(hits[0].content).toBe('new pricing details')
   })
 
-  it('defaults to hybrid mode when both dense and sparse embeddings are configured', async () => {
+    it('defaults to hybrid mode when both dense and sparse embeddings are configured', async () => {
     const dense = createDenseEmbedding()
     const sparse = createSparseEmbedding()
     const searchVectors = vi.fn(async () => [])
@@ -713,7 +713,7 @@ describe('retriever', () => {
     expect(searchVectors).toHaveBeenCalledTimes(1)
   })
 
-  it('throws when a store-backed retriever is missing a dense embedding', () => {
+    it('throws when a store-backed retriever is missing a dense embedding', () => {
     const store = createBaseStore({
       vectorSearch: async () => [],
     })
@@ -727,7 +727,7 @@ describe('retriever', () => {
     ).toThrow('requires a dense embedding')
   })
 
-  it('throws when a dense store-backed retriever has no search capability', () => {
+    it('throws when a dense store-backed retriever has no search capability', () => {
     const dense = createDenseEmbedding()
     const store = createBaseStore()
 
@@ -741,7 +741,7 @@ describe('retriever', () => {
     ).toThrow('requires vectors.search(), store.vectorSearch(), or store.searchVectors()')
   })
 
-  it('throws when sparse retrieval is configured without searchVectors', () => {
+    it('throws when sparse retrieval is configured without searchVectors', () => {
     const sparse = createSparseEmbedding()
     const store = createBaseStore({
       vectorSearch: async () => [],
@@ -758,7 +758,7 @@ describe('retriever', () => {
     ).toThrow('requires vectors.search() or store.searchVectors()')
   })
 
-  it('throws when hybrid retrieval is configured without both embeddings', () => {
+    it('throws when hybrid retrieval is configured without both embeddings', () => {
     const dense = createDenseEmbedding()
     const store = createBaseStore({
       searchVectors: async () => [],

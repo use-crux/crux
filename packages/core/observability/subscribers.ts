@@ -46,6 +46,10 @@ export function publishObservabilitySubscribers(record: CruxGraphRecord): void {
   }
 }
 
+export function hasObservabilitySubscribers(): boolean {
+  return subscribers.size > 0
+}
+
 export function observabilitySubscriberErrorCount(): number {
   return subscriberErrors
 }
