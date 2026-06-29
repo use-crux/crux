@@ -1,4 +1,4 @@
-# @use-crux/devtools
+# @use-crux/local-workers
 
 ## 0.3.0
 
@@ -12,11 +12,4 @@
 - Updated dependencies [fd4b17f]
 - Updated dependencies [5a164be]
   - @use-crux/core@0.3.0
-
-## 0.2.0
-
-### Patch Changes
-
-- Updated dependencies [96fb6b7]
-  - @use-crux/core@0.2.0
-  - @use-crux/indexer@0.2.0
+  - @use-crux/indexer@0.3.0
