@@ -184,7 +184,21 @@ export interface DataAccessFact {
   targetVariable?: string
   targetKind?: 'memory' | 'blackboard' | 'workspace' | 'store' | 'block'
   key?: string
-  operation?: 'read' | 'write' | 'append' | 'update' | 'delete' | 'query'
+  operation?:
+    | 'read'
+    | 'write'
+    | 'append'
+    | 'update'
+    | 'delete'
+    | 'query'
+    | 'exists'
+    | 'stat'
+    | 'grep'
+    | 'artifacts'
+    | 'rename'
+    | 'move'
+    | 'copy'
+    | 'finalize'
   source?: SourceLocation
 }
 
@@ -1203,7 +1217,24 @@ export const DataAccessFactSchema = z.object({
   targetVariable: z.string().optional(),
   targetKind: z.enum(['memory', 'blackboard', 'workspace', 'store', 'block']).optional(),
   key: z.string().optional(),
-  operation: z.enum(['read', 'write', 'append', 'update', 'delete', 'query']).optional(),
+  operation: z
+    .enum([
+      'read',
+      'write',
+      'append',
+      'update',
+      'delete',
+      'query',
+      'exists',
+      'stat',
+      'grep',
+      'artifacts',
+      'rename',
+      'move',
+      'copy',
+      'finalize',
+    ])
+    .optional(),
   source: SourceLocationSchema.optional(),
 }) satisfies z.ZodType<DataAccessFact>
 

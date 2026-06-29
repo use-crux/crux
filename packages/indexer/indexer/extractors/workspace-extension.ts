@@ -18,6 +18,9 @@ export const workspaceIndexExtractor: IndexExtractor = {
     const id = `workspace:${safeId(localId)}`
     const toolRefs = ctx.config?.objectMapIdentifiers('tools') ?? []
     const mounts = workspaceMountsMetadata(ctx.config?.objectArray('mounts') ?? [])
+    const tools = workspaceToolsMetadata(ctx.config?.object('tools'))
+    const limits = workspaceLimitsMetadata(ctx.config?.object('limits'))
+    const retention = workspaceRetentionMetadata(ctx.config?.object('retention'))
     return facts({
       definitions: [
         ctx.define.definition({
@@ -30,9 +33,12 @@ export const workspaceIndexExtractor: IndexExtractor = {
             namespace: ctx.config?.string('namespace'),
             mounts,
             hasTools: ctx.config?.has('tools'),
+            tools,
             toolRefs: toolRefs.length > 0 ? toolRefs : undefined,
+            limits,
+            retention,
             hasBlobStorage: ctx.config ? ctx.config.has('blobs') || ctx.config.has('storage') : undefined,
-            intelligence: workspaceIntelligence(mounts, toolRefs),
+            intelligence: workspaceIntelligence(mounts, toolRefs, { limits, retention }),
           },
         }),
       ],
@@ -67,6 +73,61 @@ function workspaceMountsMetadata(
   return metadata.length > 0 ? metadata : undefined
 }
 
+/** Reads the public `limits` workspace config into operator-facing metadata. */
+function workspaceLimitsMetadata(
+  limits: { readonly number: (property: string) => number | undefined } | undefined,
+): Record<string, number> | undefined {
+  if (!limits) return undefined
+  const metadata = {
+    maxFileBytes: limits.number('maxFileBytes'),
+    maxNamespaceBytes: limits.number('maxNamespaceBytes'),
+  }
+  return compactNumberMetadata(metadata)
+}
+
+/** Reads the public `retention` workspace config into operator-facing metadata. */
+function workspaceRetentionMetadata(
+  retention: { readonly number: (property: string) => number | undefined } | undefined,
+): Record<string, number> | undefined {
+  if (!retention) return undefined
+  return compactNumberMetadata({ ttlMs: retention.number('ttlMs') })
+}
+
+function compactNumberMetadata(metadata: Record<string, number | undefined>): Record<string, number> | undefined {
+  const entries = Object.entries(metadata).filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+/** Projects generated workspace tool names from the authored `tools` config. */
+function workspaceToolsMetadata(
+  tools: {
+    readonly string: (property: string) => string | undefined
+    readonly boolean: (property: string) => boolean | undefined
+  } | undefined,
+): Record<string, unknown> | undefined {
+  if (!tools) return undefined
+  const prefix = tools.string('prefix')
+  const deleteEnabled = tools.boolean('delete') === true
+  return {
+    ...(prefix ? { prefix } : {}),
+    ...(deleteEnabled ? { delete: true } : {}),
+    generated: workspaceGeneratedToolNames(prefix, deleteEnabled),
+  }
+}
+
+function workspaceGeneratedToolNames(prefix: string | undefined, deleteEnabled: boolean): Record<string, string> {
+  const part = prefix ? `${prefix[0]?.toUpperCase() ?? ''}${prefix.slice(1)}` : ''
+  return {
+    list: `list${part}Workspace`,
+    readFile: `read${part}WorkspaceFile`,
+    writeFile: `write${part}WorkspaceFile`,
+    editFile: `edit${part}WorkspaceFile`,
+    renameFile: `rename${part}WorkspaceFile`,
+    grep: `grep${part}Workspace`,
+    ...(deleteEnabled ? { deleteFile: `delete${part}WorkspaceFile` } : {}),
+  }
+}
+
 /**
  * Builds structured workspace intelligence for detail views and lints.
  *
@@ -76,8 +137,13 @@ function workspaceMountsMetadata(
 function workspaceIntelligence(
   mounts: Array<Record<string, unknown>> | undefined,
   toolRefs: readonly string[],
+  operator: {
+    readonly limits?: Record<string, number>
+    readonly retention?: Record<string, number>
+  },
 ): Record<string, unknown> | undefined {
-  if ((!mounts || mounts.length === 0) && toolRefs.length === 0) return undefined
+  const hasOperator = operator.limits !== undefined || operator.retention !== undefined
+  if ((!mounts || mounts.length === 0) && toolRefs.length === 0 && !hasOperator) return undefined
   return {
     confidence: 'static',
     data: {
@@ -90,5 +156,6 @@ function workspaceIntelligence(
         : {}),
     },
     ...(toolRefs.length > 0 ? { tools: [...toolRefs] } : {}),
+    ...(hasOperator ? { operator } : {}),
   }
 }

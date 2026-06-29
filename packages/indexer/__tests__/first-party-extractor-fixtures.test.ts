@@ -209,6 +209,89 @@ describe('first-party extractor fixtures', () => {
     )
   })
 
+  it('extracts workspace operator config and generated tool posture', async () => {
+    const out = await extractFixtureSource(
+      cruxFixture,
+      `
+        const searchDocs = createTool({ name: 'searchDocs' })
+
+        export const scratch = workspace({
+          id: 'scratch',
+          namespace: 'tenant-a',
+          mounts: [{ path: '/workspace', access: 'readwrite', description: 'Working files' }],
+          tools: { prefix: 'research', delete: true, searchDocs },
+          limits: { maxFileBytes: 1000, maxNamespaceBytes: 5000 },
+          retention: { ttlMs: 60000 },
+          storage: blobStore,
+        })
+
+        export const writer = tool({
+          name: 'writer',
+          execute: async () => {
+            await scratch.grep('alpha')
+            await scratch.artifacts({ status: 'final' })
+            await scratch.rename('/workspace/a.md', '/workspace/b.md')
+            await scratch.finalize('/outputs/report.md')
+            return 'done'
+          },
+        })
+      `,
+    )
+
+    expect(definition(out.definitions, 'workspace:scratch')?.metadata).toEqual(
+      expect.objectContaining({
+        namespace: 'tenant-a',
+        hasBlobStorage: true,
+        hasTools: true,
+        toolRefs: ['searchDocs'],
+        tools: expect.objectContaining({
+          prefix: 'research',
+          delete: true,
+          generated: expect.objectContaining({
+            list: 'listResearchWorkspace',
+            readFile: 'readResearchWorkspaceFile',
+            writeFile: 'writeResearchWorkspaceFile',
+            editFile: 'editResearchWorkspaceFile',
+            renameFile: 'renameResearchWorkspaceFile',
+            grep: 'grepResearchWorkspace',
+            deleteFile: 'deleteResearchWorkspaceFile',
+          }),
+        }),
+        limits: { maxFileBytes: 1000, maxNamespaceBytes: 5000 },
+        retention: { ttlMs: 60000 },
+        mounts: [expect.objectContaining({ path: '/workspace', access: 'readwrite' })],
+        intelligence: expect.objectContaining({
+          confidence: 'static',
+          tools: ['searchDocs'],
+          operator: expect.objectContaining({
+            retention: { ttlMs: 60000 },
+            limits: { maxFileBytes: 1000, maxNamespaceBytes: 5000 },
+          }),
+        }),
+      }),
+    )
+    expect(definition(out.definitions, 'tool:writer')?.metadata?.intelligence).toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          reads: expect.arrayContaining([
+            expect.objectContaining({ targetVariable: 'scratch', operation: 'grep' }),
+            expect.objectContaining({ targetVariable: 'scratch', operation: 'artifacts' }),
+          ]),
+          writes: expect.arrayContaining([
+            expect.objectContaining({ targetVariable: 'scratch', operation: 'rename' }),
+            expect.objectContaining({ targetVariable: 'scratch', operation: 'finalize' }),
+          ]),
+        }),
+      }),
+    )
+    expect(out.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'tool.reads_workspace', from: 'tool:writer', to: 'workspace:scratch' }),
+        expect.objectContaining({ type: 'tool.writes_workspace', from: 'tool:writer', to: 'workspace:scratch' }),
+      ]),
+    )
+  })
+
   it('extracts routing routers as folded child graphs', async () => {
     const out = await extractFixtureSource(
       cruxFixture,

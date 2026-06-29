@@ -2173,13 +2173,32 @@ export interface WorkspaceOperationEvent {
   type: 'workspace:operation'
   workspaceId: string
   namespace: string
-  operation: 'list' | 'read' | 'write' | 'edit' | 'delete'
+  operation:
+    | 'list'
+    | 'read'
+    | 'write'
+    | 'edit'
+    | 'delete'
+    | 'exists'
+    | 'stat'
+    | 'append'
+    | 'rename'
+    | 'move'
+    | 'copy'
+    | 'grep'
+    | 'artifacts'
+    | 'finalize'
+    | string
   path: string
+  pathHash?: string
   status: 'success' | 'error'
   durationMs: number
   mount?: string
   mimeType?: string
   size?: number
+  artifactStatus?: string
+  artifactKind?: string
+  uri?: string
   error?: string
   traceId?: string
   sessionId?: string
@@ -3349,6 +3368,9 @@ export interface WorkspaceFileSummary {
   status?: 'ok' | 'err' | 'denied' | string
   size?: number
   mime?: string
+  artifactStatus?: string
+  artifactKind?: string
+  uri?: string
   lastOpAt?: number
   lastOpDurationMs?: number
   lastError?: string
@@ -3362,6 +3384,10 @@ export interface WorkspaceOpRecord {
   durationMs?: number
   status?: 'ok' | 'err' | 'denied' | string
   bytes?: number
+  mime?: string
+  artifactStatus?: string
+  artifactKind?: string
+  uri?: string
   traceId?: string
   spanId?: string
   actor?: string

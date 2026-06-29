@@ -307,6 +307,9 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           await writeOnlyMemory.write('draft', 'done')
           await notes.update('decision', 'publish')
           await scratch.writeFile('/drafts/article.md', 'done')
+          await scratch.rename('/drafts/article.md', '/drafts/article-final.md')
+          await scratch.copy('/drafts/article-final.md', '/outputs/article.md')
+          await scratch.finalize('/outputs/article.md')
         }
         export async function persistAndReadBack() {
           await readBackMemory.write('draft', 'done')
@@ -314,6 +317,10 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         }
         export async function hydrateDraft() {
           await notes.write('status', 'ready')
+          await scratch.exists('/drafts/article.md')
+          await scratch.stat('/drafts/article.md')
+          await scratch.grep('ready')
+          await scratch.artifacts({ status: 'final' })
           await scratch.writeFile('/draft.md', 'done')
           await docsRetriever.retrieve('query')
           await factuality.score({ answer: 'done' })

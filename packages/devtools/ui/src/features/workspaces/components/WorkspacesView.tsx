@@ -366,6 +366,17 @@ function WorkspaceFileRow({ file, last, onClick }: { file: WorkspaceFileSummary;
             ✕ {file.lastError}
           </div>
         )}
+        {(file.artifactStatus || file.artifactKind || file.uri) && (
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1 font-mono text-[10px]">
+            {file.artifactStatus && <ArtifactTag label={file.artifactStatus} />}
+            {file.artifactKind && <ArtifactTag label={file.artifactKind} />}
+            {file.uri && (
+              <span className="truncate" style={{ color: 'var(--qw-crux)' }} title={file.uri}>
+                ref
+              </span>
+            )}
+          </div>
+        )}
       </div>
       {file.op ? (
         <OpPill op={file.op} />
@@ -395,6 +406,17 @@ function WorkspaceFileRow({ file, last, onClick }: { file: WorkspaceFileSummary;
         </span>
       )}
     </button>
+  )
+}
+
+function ArtifactTag({ label }: { label: string }) {
+  return (
+    <span
+      className="rounded-[4px] px-1.5 py-0.5"
+      style={{ background: 'var(--qw-bg-muted)', color: 'var(--qw-fg-muted)' }}
+    >
+      {label}
+    </span>
   )
 }
 
@@ -461,9 +483,17 @@ function AuditTrailTable({
             <span className="truncate" style={{ color: 'var(--qw-fg-muted)' }} title={o.workspaceId}>
               {o.workspaceId}
             </span>
-            <span className="truncate" style={{ color: 'var(--qw-fg)' }} title={o.path}>
-              {o.path}
-            </span>
+            <div className="min-w-0">
+              <span className="block truncate" style={{ color: 'var(--qw-fg)' }} title={o.path}>
+                {o.path}
+              </span>
+              {(o.artifactStatus || o.artifactKind || o.uri) && (
+                <span className="block truncate text-[10px]" style={{ color: 'var(--qw-fg-faint)' }} title={o.uri}>
+                  {[o.artifactStatus, o.artifactKind].filter(Boolean).join(' · ')}
+                  {o.uri ? ' · ref' : ''}
+                </span>
+              )}
+            </div>
             {hasDur && (
               <span className="text-right" style={{ color: 'var(--qw-fg-faint)' }}>
                 {fmtDuration(o.durationMs) ?? '—'}

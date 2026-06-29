@@ -32,7 +32,7 @@ describe('canonical workspace, plan-task, skill, and security observability', ()
     vi.restoreAllMocks()
   })
 
-    it('records workspace operations as workspace.operation spans with bounded artifacts', async () => {
+  it('records workspace operations as workspace.operation spans with bounded artifacts', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const ws = workspace({ id: 'research', namespace: 'thread:1', data: inMemoryDataStore() })
@@ -73,6 +73,52 @@ describe('canonical workspace, plan-task, skill, and security observability', ()
         type: 'span:end',
         status: 'ok',
         attributes: expect.objectContaining({ operation: 'read', resultKind: 'text', size: 13 }),
+      }),
+    )
+  })
+
+  it('records workspace artifact lifecycle metadata for local read models', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const ws = workspace({ id: 'research', namespace: 'thread:1', data: inMemoryDataStore() })
+
+    await ws.write('/outputs/report.md', '# Report', { status: 'draft', kind: 'report', mimeType: 'text/markdown' })
+    await ws.finalize('/outputs/report.md')
+    await observe.flush()
+
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'span:end',
+        status: 'ok',
+        attributes: expect.objectContaining({
+          primitive: 'workspace.operation',
+          operation: 'finalize',
+          status: 'success',
+          resultKind: 'artifact',
+          artifactStatus: 'final',
+          artifactKind: 'report',
+          uri: 'workspace-inline://research/thread%3A1/outputs/report.md',
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'artifact',
+        kind: 'output',
+        attributes: expect.objectContaining({
+          primitive: 'workspace.operation',
+          operation: 'finalize',
+          pathHash: expect.stringMatching(/^fnv1a:/),
+          artifactStatus: 'final',
+          artifactKind: 'report',
+          uri: 'workspace-inline://research/thread%3A1/outputs/report.md',
+        }),
+        preview: expect.objectContaining({
+          resultKind: 'artifact',
+          contentStored: false,
+          mimeType: 'text/markdown',
+          size: 8,
+        }),
       }),
     )
   })

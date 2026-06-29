@@ -48,7 +48,9 @@ Default mounts are `/workspace` and `/outputs`. Optional `/sources` mounts are c
 
 Retention and limits are enforced at the workspace write boundary. `retention.ttlMs` is passed through to `DataStore.set({ ttl })` only when the store reports TTL support; stores without TTL support keep records normally. `limits.maxFileBytes` and `limits.maxNamespaceBytes` reject writes before metadata persistence. Namespace quotas intentionally scan the namespace's current file records in V0 instead of maintaining counters, keeping adapter requirements small and behavior easy to verify.
 
-Instrumentation emits `workspace:operation` protocol events and `workspace.operation records` hooks. Devtools can show workspace ids, namespaces, paths, operations, and file metadata from the protocol stream; OTel receives only privacy-safe attributes such as workspace id, operation, MIME type, size, status, and path hash.
+Instrumentation emits `workspace.operation` spans, output artifacts, and produced edges for all workspace methods. Devtools can show workspace ids, hashed namespaces, operations, file labels, MIME type, size, artifact status/kind, and download refs from local resource activity. When a raw path is not available from a local-only source, devtools use the stable `hash:<pathHash>` label instead of collapsing files to `/`. OTel receives only privacy-safe attributes such as workspace id, operation, MIME type, size, status, and `crux.workspace.path_hash`; raw paths are dropped from workspace-shaped OTel records.
+
+Project Index workspace facts include mounts, generated tool names, blob-storage posture, retention TTL, and quota limits. Authored workspace method calls inside indexed owners are visible as workspace read/write relations, and V0 workspace-specific data-access facts preserve exact operations such as `grep`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.
 
 ## Package Structure Policy
 

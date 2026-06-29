@@ -220,8 +220,11 @@ function semanticInvocationKind(method: string, targetKind: ProjectDefinitionKin
  * Maps state-resource method names to read/write direction.
  */
 function semanticDataAccessKind(method: string): 'read' | 'write' | undefined {
-  if (['get', 'read', 'query', 'find', 'search', 'list', 'readFile', 'load'].includes(method)) return 'read'
-  if (['set', 'write', 'update', 'append', 'delete', 'put', 'writeFile', 'edit', 'deleteFile', 'save'].includes(method))
+  if (['get', 'read', 'query', 'find', 'search', 'list', 'readFile', 'load', 'grep', 'artifacts', 'stat', 'exists'].includes(method))
+    return 'read'
+  if (
+    ['set', 'write', 'update', 'append', 'delete', 'put', 'writeFile', 'edit', 'deleteFile', 'save', 'rename', 'move', 'copy', 'finalize'].includes(method)
+  )
     return 'write'
   return undefined
 }

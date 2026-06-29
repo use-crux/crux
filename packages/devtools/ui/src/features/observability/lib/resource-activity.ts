@@ -17,6 +17,10 @@ function artifactPreview(activity: ObservabilityResourceActivity): unknown {
   return activity.artifacts?.[0]?.preview
 }
 
+function artifactAttrs(activity: ObservabilityResourceActivity): Record<string, unknown> {
+  return activity.artifacts?.[0]?.attributes ?? {}
+}
+
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
@@ -89,18 +93,25 @@ export function workspaceEventsFromResourceActivity(activity: ObservabilityResou
     .filter((item) => item.family === 'workspace')
     .map((item): WorkspaceOperationEvent => {
       const a = attrs(item)
+      const artifact = item.artifacts?.[0]
+      const aa = artifactAttrs(item)
       const operation = operationFromName(item) as WorkspaceOperationEvent['operation']
+      const pathHash = stringValue(a.pathHash) ?? stringValue(aa.pathHash)
       return {
         type: 'workspace:operation',
         workspaceId: stringValue(a.workspaceId) ?? item.resourceId ?? 'workspace',
         namespace: stringValue(a.namespaceHash) ?? '',
         operation,
-        path: stringValue(a.path) ?? '/',
+        path: stringValue(a.path) ?? (pathHash ? `hash:${pathHash}` : '/'),
+        pathHash,
         status: status(item),
         durationMs: item.durationMs,
         mount: stringValue(a.mount),
-        mimeType: stringValue(a.mimeType),
-        size: numberValue(a.size) ?? numberValue(a.sizeBytes),
+        mimeType: stringValue(a.mimeType) ?? stringValue(aa.mimeType) ?? stringValue(artifact?.contentType),
+        size: numberValue(a.size) ?? numberValue(a.sizeBytes) ?? numberValue(aa.size) ?? numberValue(aa.sizeBytes) ?? artifact?.sizeBytes,
+        artifactStatus: stringValue(a.status) ?? stringValue(aa.status),
+        artifactKind: stringValue(a.artifactKind) ?? stringValue(aa.artifactKind),
+        uri: stringValue(a.uri) ?? stringValue(aa.uri) ?? stringValue(artifact?.uri),
         error: stringValue(item.error?.message),
         traceId: item.traceId || undefined,
         timestamp: timeMs(item.startedAt),

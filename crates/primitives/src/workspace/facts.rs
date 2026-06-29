@@ -3,9 +3,10 @@ use serde_json::{Map, Value, json};
 use crate::{
     context::{CallParts, PrimitiveContext},
     definition::{NativeDefinitionInput, safe_id, static_index_definition},
+    protocol::{LiteralValue, StaticSyntaxValue},
     record_values::{
-        direct_string_property, has_property, object_array_value, object_map_identifier_entries,
-        object_value, property_value,
+        direct_string_property, has_property, number_property, object_array_value,
+        object_map_identifier_entries, object_value, property_value,
     },
     routing::output::extracted_facts,
 };
@@ -34,6 +35,9 @@ pub(crate) fn workspace_facts(
     let mounts = config
         .map(|config| workspace_mounts(config, context))
         .unwrap_or_default();
+    let tools = config.and_then(workspace_tools);
+    let limits = config.and_then(|config| workspace_limits(config, context));
+    let retention = config.and_then(|config| workspace_retention(config, context));
 
     let mut metadata = Map::new();
     metadata.insert(
@@ -52,8 +56,17 @@ pub(crate) fn workspace_facts(
             Value::Bool(has_property(config, "tools")),
         );
     }
+    if let Some(tools) = tools.clone() {
+        metadata.insert("tools".to_string(), tools);
+    }
     if !tool_refs.is_empty() {
         metadata.insert("toolRefs".to_string(), json!(tool_refs));
+    }
+    if let Some(limits) = limits.clone() {
+        metadata.insert("limits".to_string(), limits);
+    }
+    if let Some(retention) = retention.clone() {
+        metadata.insert("retention".to_string(), retention);
     }
     if let Some(config) = config {
         metadata.insert(
@@ -61,7 +74,7 @@ pub(crate) fn workspace_facts(
             Value::Bool(has_property(config, "blobs") || has_property(config, "storage")),
         );
     }
-    if let Some(intelligence) = workspace_intelligence(&mounts, &tool_refs) {
+    if let Some(intelligence) = workspace_intelligence(&mounts, &tool_refs, limits, retention) {
         metadata.insert("intelligence".to_string(), intelligence);
     }
 
@@ -117,8 +130,120 @@ fn workspace_mounts(
         .collect()
 }
 
-fn workspace_intelligence(mounts: &[Value], tool_refs: &[String]) -> Option<Value> {
-    if mounts.is_empty() && tool_refs.is_empty() {
+fn workspace_limits(config: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -> Option<Value> {
+    let limits = object_value(property_value(config, "limits")?)?;
+    compact_number_metadata([
+        (
+            "maxFileBytes",
+            number_property(limits, "maxFileBytes", &context.initializers),
+        ),
+        (
+            "maxNamespaceBytes",
+            number_property(limits, "maxNamespaceBytes", &context.initializers),
+        ),
+    ])
+}
+
+fn workspace_retention(
+    config: &StaticSyntaxValue,
+    context: &PrimitiveContext<'_>,
+) -> Option<Value> {
+    let retention = object_value(property_value(config, "retention")?)?;
+    compact_number_metadata([(
+        "ttlMs",
+        number_property(retention, "ttlMs", &context.initializers),
+    )])
+}
+
+fn compact_number_metadata<const N: usize>(entries: [(&str, Option<f64>); N]) -> Option<Value> {
+    let mut metadata = Map::new();
+    for (key, value) in entries {
+        if let Some(value) = value {
+            metadata.insert(key.to_string(), json!(value));
+        }
+    }
+    (!metadata.is_empty()).then_some(Value::Object(metadata))
+}
+
+fn workspace_tools(config: &StaticSyntaxValue) -> Option<Value> {
+    let tools = object_value(property_value(config, "tools")?)?;
+    let prefix = direct_string_property(tools, "prefix");
+    let delete = direct_boolean_property(tools, "delete").unwrap_or(false);
+    let mut metadata = Map::new();
+    if let Some(prefix) = prefix.clone() {
+        metadata.insert("prefix".to_string(), Value::String(prefix));
+    }
+    if delete {
+        metadata.insert("delete".to_string(), Value::Bool(true));
+    }
+    metadata.insert(
+        "generated".to_string(),
+        workspace_generated_tool_names(prefix.as_deref(), delete),
+    );
+    Some(Value::Object(metadata))
+}
+
+fn workspace_generated_tool_names(prefix: Option<&str>, delete: bool) -> Value {
+    let part = prefix.map(capitalize_ascii).unwrap_or_default();
+    let mut generated = Map::new();
+    generated.insert(
+        "list".to_string(),
+        Value::String(format!("list{part}Workspace")),
+    );
+    generated.insert(
+        "readFile".to_string(),
+        Value::String(format!("read{part}WorkspaceFile")),
+    );
+    generated.insert(
+        "writeFile".to_string(),
+        Value::String(format!("write{part}WorkspaceFile")),
+    );
+    generated.insert(
+        "editFile".to_string(),
+        Value::String(format!("edit{part}WorkspaceFile")),
+    );
+    generated.insert(
+        "renameFile".to_string(),
+        Value::String(format!("rename{part}WorkspaceFile")),
+    );
+    generated.insert(
+        "grep".to_string(),
+        Value::String(format!("grep{part}Workspace")),
+    );
+    if delete {
+        generated.insert(
+            "deleteFile".to_string(),
+            Value::String(format!("delete{part}WorkspaceFile")),
+        );
+    }
+    Value::Object(generated)
+}
+
+fn capitalize_ascii(value: &str) -> String {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return String::new();
+    };
+    format!("{}{}", first.to_ascii_uppercase(), chars.as_str())
+}
+
+fn direct_boolean_property(object: &StaticSyntaxValue, name: &str) -> Option<bool> {
+    match property_value(object, name) {
+        Some(StaticSyntaxValue::Literal {
+            value: LiteralValue::Boolean(value),
+        }) => Some(*value),
+        _ => None,
+    }
+}
+
+fn workspace_intelligence(
+    mounts: &[Value],
+    tool_refs: &[String],
+    limits: Option<Value>,
+    retention: Option<Value>,
+) -> Option<Value> {
+    let has_operator = limits.is_some() || retention.is_some();
+    if mounts.is_empty() && tool_refs.is_empty() && !has_operator {
         return None;
     }
     let artifacts = mounts
@@ -140,6 +265,16 @@ fn workspace_intelligence(mounts: &[Value], tool_refs: &[String]) -> Option<Valu
     intelligence.insert("data".to_string(), Value::Object(data));
     if !tool_refs.is_empty() {
         intelligence.insert("tools".to_string(), json!(tool_refs));
+    }
+    if has_operator {
+        let mut operator = Map::new();
+        if let Some(limits) = limits {
+            operator.insert("limits".to_string(), limits);
+        }
+        if let Some(retention) = retention {
+            operator.insert("retention".to_string(), retention);
+        }
+        intelligence.insert("operator".to_string(), Value::Object(operator));
     }
     Some(Value::Object(intelligence))
 }

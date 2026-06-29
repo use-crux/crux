@@ -159,6 +159,15 @@ read back as text/JSON; binary files return a URI for app-side fetching. Every
 operation accepts a `{ namespace }` override for direct calls and manually created
 tools.
 
+Workspace operations are visible in devtools, OTel, and Project Index without
+exporting raw paths to OTel. OTel receives `crux.workspace.operation` and
+`crux.workspace.path_hash`; devtools use a stable `hash:<pathHash>` label when
+no local-only raw path is available. Project Index records mounts, generated
+tool names, blob-storage posture, retention TTL, quota limits, and workspace
+read/write relations from indexed owners. Workspace-specific Project Index
+data-access facts preserve exact V0 operations such as `grep`, `artifacts`,
+`rename`, `move`, `copy`, and `finalize`.
+
 ## What Core Gives You
 
 | Capability         | What it is for                                                                                                              |

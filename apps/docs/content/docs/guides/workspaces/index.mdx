@@ -324,4 +324,4 @@ research
    └─ report.pdf
 ```
 
-OTel receives privacy-safe operation metadata only. Raw file contents and full paths are not emitted to OTel.
+OTel receives privacy-safe operation metadata only. Raw file contents and full paths are not emitted to OTel. Workspace OTel spans use `crux.workspace.operation` and `crux.workspace.path_hash`; devtools use the same path hash as a stable file label when no local-only raw path is available. Finalized artifacts expose bounded metadata such as status, artifact kind, MIME type, size, and download ref. Project Index data-access facts preserve exact workspace operations, including `grep`, `artifacts`, `rename`, and `finalize`.

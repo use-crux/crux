@@ -139,13 +139,18 @@ function accessToMetadata(access: PrimitiveDataAccessRef): DataAccessFact {
 }
 
 function dataAccessKind(method: string): 'read' | 'write' | undefined {
-  if (['get', 'read', 'query', 'find', 'search', 'list', 'readFile', 'load'].includes(method)) return 'read'
-  if (['set', 'write', 'update', 'append', 'delete', 'put', 'writeFile', 'edit', 'deleteFile', 'save'].includes(method))
+  if (['get', 'read', 'query', 'find', 'search', 'list', 'readFile', 'load', 'grep', 'artifacts', 'stat', 'exists'].includes(method))
+    return 'read'
+  if (
+    ['set', 'write', 'update', 'append', 'delete', 'put', 'writeFile', 'edit', 'deleteFile', 'save', 'rename', 'move', 'copy', 'finalize'].includes(method)
+  )
     return 'write'
   return undefined
 }
 
 function dataAccessOperation(method: string, kind: 'read' | 'write'): NonNullable<DataAccessFact['operation']> {
+  if (['grep', 'artifacts', 'stat', 'exists', 'rename', 'move', 'copy', 'finalize'].includes(method))
+    return method as NonNullable<DataAccessFact['operation']>
   if (['query', 'find', 'search', 'list'].includes(method)) return 'query'
   if (['append', 'put', 'save'].includes(method)) return 'append'
   if (['update', 'edit'].includes(method)) return 'update'

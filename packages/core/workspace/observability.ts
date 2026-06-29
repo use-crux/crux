@@ -49,6 +49,7 @@ export async function instrument<T>(event: WorkspaceEvent, run: () => Promise<T>
     const resultAttributes = workspaceResultAttributes(result)
     span.end({
       attributes: {
+        primitive: 'workspace.operation',
         workspaceId: event.workspaceId,
         operation: event.operation,
         namespaceHash: hashString(event.namespace),
@@ -60,6 +61,7 @@ export async function instrument<T>(event: WorkspaceEvent, run: () => Promise<T>
     return result
   } catch (error) {
     span.error(error, {
+      primitive: 'workspace.operation',
       workspaceId: event.workspaceId,
       operation: event.operation,
       namespaceHash: hashString(event.namespace),
@@ -131,6 +133,19 @@ function workspaceResultPreview(result: unknown): Record<string, unknown> | unde
       contentStored: false,
     }
   }
+  if (isWorkspaceArtifactRecord(record)) {
+    return {
+      resultKind: 'artifact',
+      path: record.path,
+      mimeType: record.mimeType,
+      size: record.size,
+      status: record.status,
+      artifactKind: record.kind,
+      uri: record.uri,
+      metadata: record.metadata,
+      contentStored: false,
+    }
+  }
   return undefined
 }
 
@@ -150,15 +165,46 @@ function workspaceResultAttributes(result: unknown): Record<string, unknown> {
   if (!result || typeof result !== 'object') return {}
   const record = result as Record<string, unknown>
   if (Array.isArray(record.entries)) return { resultKind: 'list', entryCount: record.entries.length }
+  if (isWorkspaceArtifactRecord(record)) {
+    return {
+      resultKind: 'artifact',
+      artifactStatus: record.status,
+      ...(typeof record.kind === 'string' ? { artifactKind: record.kind } : {}),
+      mimeType: record.mimeType,
+      size: record.size,
+      ...(typeof record.uri === 'string' ? { uri: record.uri } : {}),
+    }
+  }
   if (typeof record.kind === 'string') {
     return {
       resultKind: record.kind,
       ...(typeof record.mimeType === 'string' ? { mimeType: record.mimeType } : {}),
       ...(typeof record.size === 'number' ? { size: record.size } : {}),
       ...(typeof record.storage === 'string' ? { storage: record.storage } : {}),
+      ...(typeof record.status === 'string' ? { artifactStatus: record.status } : {}),
+      ...(typeof record.artifactKind === 'string' ? { artifactKind: record.artifactKind } : {}),
+      ...(typeof record.uri === 'string' ? { uri: record.uri } : {}),
     }
   }
   return {}
+}
+
+/** True for the public WorkspaceArtifact projection returned by `finalize()` and `artifacts()`. */
+function isWorkspaceArtifactRecord(record: Record<string, unknown>): record is Record<string, unknown> & {
+  readonly path: string
+  readonly status: string
+  readonly mimeType: string
+  readonly size: number
+} {
+  return (
+    typeof record.path === 'string' &&
+    typeof record.status === 'string' &&
+    typeof record.mimeType === 'string' &&
+    typeof record.size === 'number' &&
+    typeof record.createdAt === 'number' &&
+    typeof record.updatedAt === 'number' &&
+    record.kind !== 'file'
+  )
 }
 
 function hashString(value: string): string {

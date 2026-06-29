@@ -174,3 +174,9 @@ names.grep // grepResearchWorkspace
 ```
 
 Use this helper when matching workspace tools in middleware.
+
+## Observability and Project Index
+
+Workspace operations emit `workspace.operation` spans with privacy-safe OTel attributes, including `crux.workspace.operation` and `crux.workspace.path_hash`. Raw paths and file contents are not exported to OTel. Local devtools can show artifact metadata and use a stable `hash:<pathHash>` file label when no local-only raw path is available.
+
+Project Index workspace metadata includes mounts, generated tool names, blob-storage posture, `retention.ttlMs`, and quota limits. Workspace method calls inside indexed owners are represented through workspace read/write relations, and workspace-specific data-access facts preserve exact V0 operations such as `grep`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.
