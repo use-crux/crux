@@ -149,6 +149,25 @@ define -> resolve -> adapt -> observe
 
 This separation lets you inspect what the model will see, run the same prompt through multiple providers, and keep quality checks tied to the definitions they protect.
 
+## Observability Privacy
+
+Generation, streaming, and tool spans emit canonical graph records with latency and throughput metrics such as `gen.duration_ms`, `gen.time_to_first_token_ms`, `gen.output_tokens_per_second`, and `gen.time_per_output_chunk_ms`.
+
+By default, request and response artifacts include bounded previews for local inspection. Disable payload previews centrally when traces leave a trusted environment:
+
+```ts
+import { config } from '@use-crux/core'
+
+config({
+  observability: {
+    recordInputs: false,
+    recordOutputs: false,
+  },
+})
+```
+
+Disabled input/output artifacts are still emitted as references with `sizeBytes` and `hash`, so devtools, subscribers, diagnostics-channel consumers, and OTel all see the same privacy policy.
+
 ## Import Paths
 
 `@use-crux/core` exposes SDK-agnostic primitives through focused subpaths:

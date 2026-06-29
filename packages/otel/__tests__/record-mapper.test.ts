@@ -190,4 +190,45 @@ describe('OTel record subscriber', () => {
       'crux.tool.call_id': 'tc-parity',
     })
   })
+
+  it('maps generation performance metrics to GenAI client attributes', async () => {
+    const spans: TraceSpan[] = []
+    const installed = withTelemetry({
+      exporter: (batch) => {
+        spans.push(...batch)
+      },
+    }).install({})
+
+    await observe.span(
+      {
+        name: 'generate',
+        family: 'generation',
+        primitive: 'generation.call',
+      },
+      async () => {},
+    )
+
+    observe.openSpan({
+      name: 'generate with metrics',
+      family: 'generation',
+      primitive: 'generation.call',
+    }).end({
+      metrics: {
+        'gen.duration_ms': 42,
+        'gen.time_to_first_token_ms': 12,
+        'gen.output_tokens_per_second': 18,
+        'gen.time_per_output_chunk_ms': 5,
+      },
+    })
+    installed.dispose?.()
+
+    const span = spans.find((candidate) => candidate.name === 'crux.generate' && candidate.attributes['gen_ai.client.duration_ms'] === 42)
+
+    expect(span?.attributes).toMatchObject({
+      'gen_ai.client.duration_ms': 42,
+      'gen_ai.client.time_to_first_token_ms': 12,
+      'gen_ai.client.output_tokens_per_second': 18,
+      'gen_ai.client.time_per_output_chunk_ms': 5,
+    })
+  })
 })

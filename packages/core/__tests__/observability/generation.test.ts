@@ -8,10 +8,12 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
+import { resetRuntime, updateRuntime } from '../../runtime/runtime'
 
 describe('generation observability', () => {
   afterEach(() => {
     resetObservabilityRuntime()
+    resetRuntime()
   })
 
     it('emits an implicit run, generation span, artifacts, edges, and usage for generate', async () => {
@@ -54,6 +56,51 @@ describe('generation observability', () => {
     expect(transport.records[4]).not.toMatchObject({
       attributes: expect.objectContaining({ cost: expect.any(Number) }),
     })
+    const generationEnd = transport.records.find((record) => record.type === 'span:end')
+    expect(generationEnd).toMatchObject({
+      type: 'span:end',
+      metrics: expect.objectContaining({
+        'gen.duration_ms': expect.any(Number),
+        'gen.output_tokens_per_second': expect.any(Number),
+      }),
+    })
+    expect(generationEnd && 'metrics' in generationEnd ? generationEnd.metrics?.['gen.duration_ms'] : undefined)
+      .toBeGreaterThanOrEqual(0)
+  })
+
+    it('omits generation input and output previews when capture policy disables them', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    updateRuntime({
+      observabilityCapture: {
+        recordInputs: false,
+        recordOutputs: false,
+      },
+    })
+
+    await orchestrateGenerate(generationSpec('generate'), async () => ({
+      text: 'hello',
+      _meta: {
+        usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },
+      },
+    }))
+    await observe.flush()
+
+    const inputArtifact = transport.records.find((record) => record.type === 'artifact' && record.kind === 'messages')
+    const outputArtifact = transport.records.find((record) => record.type === 'artifact' && record.kind === 'output')
+
+    expect(inputArtifact).toMatchObject({
+      encoding: 'reference',
+      sizeBytes: expect.any(Number),
+      hash: expect.any(String),
+    })
+    expect(inputArtifact).not.toHaveProperty('preview')
+    expect(outputArtifact).toMatchObject({
+      encoding: 'reference',
+      sizeBytes: expect.any(Number),
+      hash: expect.any(String),
+    })
+    expect(outputArtifact).not.toHaveProperty('preview')
   })
 
     it('records operation deadlines on timed generation spans', async () => {
@@ -328,6 +375,16 @@ describe('generation observability', () => {
     })
     expect(usageEvent).not.toMatchObject({
       attributes: expect.objectContaining({ cost: expect.any(Number) }),
+    })
+    const generationEnd = transport.records.find((record) => record.type === 'span:end')
+    expect(generationEnd).toMatchObject({
+      type: 'span:end',
+      metrics: expect.objectContaining({
+        'gen.duration_ms': expect.any(Number),
+        'gen.time_to_first_token_ms': expect.any(Number),
+        'gen.output_tokens_per_second': expect.any(Number),
+        'gen.time_per_output_chunk_ms': expect.any(Number),
+      }),
     })
   })
 

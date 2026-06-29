@@ -100,6 +100,17 @@ Crux's built-in orchestration helpers emit these records automatically. `paralle
 
 Generation and streaming orchestration record operation deadlines when a timeout is configured. `@use-crux/ai` passes `timeoutMs` into core orchestration, which records `timeoutMs` / `deadlineAt` and emits `operation.deadline` before the provider call begins.
 
+Generation terminal span records also carry client-side performance metrics in the existing `metrics` field:
+
+| Metric key                         | Meaning                                                    |
+| ---------------------------------- | ---------------------------------------------------------- |
+| `gen.duration_ms`                  | End-to-end generation or stream span duration              |
+| `gen.time_to_first_token_ms`       | Time from stream start to the first observed output chunk  |
+| `gen.output_tokens_per_second`     | Provider token throughput when usage is available, or an observed stream-unit fallback |
+| `gen.time_per_output_chunk_ms`     | Mean interval between observed streamed output chunks      |
+
+These metrics are additive and do not change the graph schema version.
+
 Prompt and safety helpers emit the same graph contract automatically:
 
 - `prompt.resolve()` opens `prompt.resolve`, records conditional context inclusion/exclusion as `context.predicate`, and records resolved context text as `context.resolve` spans with `context.contribution` artifacts. Contributions that provide tools include `injectedTools`, including dropped text contributions whose tools still participate in the request. Direct injectables, retrievers/grounding, memory, and blackboards emit tool-only `context.contribution` previews when they contribute tools without resolved text. Segmented system content preserves `segments: { text, dynamic, source? }[]`, `staticTokens`, and `dynamicTokens` on context previews, inspect parts, and budget-dropped previews. Generation spans that consume the resolved prompt link back to included context artifacts and prompt-budget artifacts, and their `messages` artifact includes request `toolNames`; the Go read model projects those records into `RunDetailNode.request`. Token-budget decisions emit `prompt.budget` artifacts with dropped contribution previews.
@@ -217,6 +228,21 @@ config({
   },
 })
 ```
+
+### Capture policy
+
+Input/output artifact previews are enabled by default for local inspection. Disable them centrally when traces leave a trusted boundary:
+
+```ts
+config({
+  observability: {
+    recordInputs: false,
+    recordOutputs: false,
+  },
+})
+```
+
+When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, `tool.args`, `tool.request`) and output-family artifacts (`output`, `stream.timeline`, `tool.result`) are still emitted, but as `encoding: 'reference'` with `sizeBytes` and `hash` instead of `preview`.
 
 The `observability` domain is explicit export configuration. `config()` with no `observability`
 block does not install telemetry, cloud upload, or raw-content capture. Use `devtools` only for local

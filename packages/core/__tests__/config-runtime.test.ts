@@ -26,11 +26,30 @@ describe('config — runtime domain mapping', () => {
     setTokenizer(defaultTokenizer)
   })
 
-    it('does not install observability transport from config defaults', () => {
+  it('does not install observability transport from config defaults', () => {
     const crux = config({})
 
     expect(getRuntime().observabilityTransport).toBeUndefined()
     expect(getRuntime().observabilityDelivery).toBeUndefined()
+    expect(getRuntime().observabilityCapture).toBeUndefined()
+    expect(currentObservabilityTransport()).toBeUndefined()
+
+    crux.dispose()
+  })
+
+    it('installs observability capture policy without requiring a transport', () => {
+    const crux = config({
+      observability: {
+        recordInputs: false,
+        recordOutputs: false,
+      },
+    })
+
+    expect(getRuntime().observabilityCapture).toEqual({
+      recordInputs: false,
+      recordOutputs: false,
+    })
+    expect(getRuntime().observabilityTransport).toBeUndefined()
     expect(currentObservabilityTransport()).toBeUndefined()
 
     crux.dispose()

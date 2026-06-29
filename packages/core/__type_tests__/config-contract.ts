@@ -54,6 +54,20 @@ const explicitObservabilityExport = {
   },
 } satisfies CruxConfig
 
+const observabilityCapturePolicy = {
+  observability: {
+    recordInputs: false,
+    recordOutputs: false,
+  },
+} satisfies CruxConfig
+
+const observabilityRedactIsDeferred = {
+  observability: {
+    // @ts-expect-error Observability redaction transforms are deferred; use recordInputs/recordOutputs for now.
+    redact: (value: unknown) => value,
+  },
+} satisfies CruxConfig
+
 const experimentalNativeIndexer = {
   experimental: {
     indexer: {
@@ -195,6 +209,8 @@ void crux.config.generation?.middleware
 void crux.config.generation?.tokenizer
 void crux
 void explicitObservabilityExport
+void observabilityCapturePolicy
+void observabilityRedactIsDeferred
 void experimentalNativeIndexer
 void experimentalNativeIndexerWithPath
 void experimentalNativeAstIndexer

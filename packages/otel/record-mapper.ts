@@ -21,6 +21,10 @@ import {
   CRUX_TOOL_NAME,
   CRUX_TOOL_OUTPUT_SIZE,
   CRUX_TOOL_TOKEN_SAVINGS_ESTIMATE,
+  GEN_AI_CLIENT_DURATION_MS,
+  GEN_AI_CLIENT_OUTPUT_TOKENS_PER_SECOND,
+  GEN_AI_CLIENT_TIME_PER_OUTPUT_CHUNK_MS,
+  GEN_AI_CLIENT_TIME_TO_FIRST_TOKEN_MS,
   GEN_AI_REQUEST_MODEL,
   GEN_AI_RESPONSE_FINISH_REASONS,
   GEN_AI_RESPONSE_MODEL,
@@ -239,6 +243,14 @@ function attributeKeyFor(key: string): string {
       return GEN_AI_RESPONSE_MODEL
     case 'finishReason':
       return GEN_AI_RESPONSE_FINISH_REASONS
+    case 'gen.duration_ms':
+      return GEN_AI_CLIENT_DURATION_MS
+    case 'gen.time_to_first_token_ms':
+      return GEN_AI_CLIENT_TIME_TO_FIRST_TOKEN_MS
+    case 'gen.output_tokens_per_second':
+      return GEN_AI_CLIENT_OUTPUT_TOKENS_PER_SECOND
+    case 'gen.time_per_output_chunk_ms':
+      return GEN_AI_CLIENT_TIME_PER_OUTPUT_CHUNK_MS
     case 'inputTokens':
       return GEN_AI_USAGE_INPUT_TOKENS
     case 'outputTokens':

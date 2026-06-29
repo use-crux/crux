@@ -687,17 +687,20 @@ The plugin system supersedes the previous manual chaining approach. `withDevtool
 
 Detailed tracing uses canonical `@use-crux/core/observability` graph records emitted through
 `observe.*` / `emit()`. Runtime integrations must not introduce ad hoc collectors or reporters at
-primitive call sites. The transitional hook path still exists for hook-based integrations until the
-event-spine migration removes it; no primitive should reference `collector`, `getRuntime().collector`,
-or any reporter directly.
+primitive call sites. `emit()` is the event spine: records are delivered to in-process subscribers,
+the Node diagnostics channel, and the async devtools transport from the same validated graph record.
+Generation and streaming spans also carry `gen.*` performance metrics on terminal span records, and
+`observability.recordInputs` / `observability.recordOutputs` controls whether input/output artifacts
+carry previews or only reference metadata.
 
-**Event flow for transitional hook-based integrations:**
+**Event flow for integrations:**
 
 ```
-Primitive (memory, swarm, flow, etc.)
-    → Fan-out to all installed plugin handlers
-      → OTel handler: create spans
-      → Custom handler: user-defined logic
+Primitive (generation, tools, memory, swarm, flow, etc.)
+    → observe.* → emit(record)
+      → subscribeObservability() consumers such as @use-crux/otel
+      → node:diagnostics_channel consumers
+      → configured observability transport for devtools
 ```
 
 Devtools tracing itself uses the canonical `@use-crux/core/observability` graph runtime. Built-in primitives write `run:start`, `span:start`, `span:event`, `artifact`, `edge`, `span:end`, and `run:end` records; the Go backend validates and persists those records, builds read models, and pushes subscription updates to the web UI and TUI.
@@ -715,10 +718,10 @@ graph in the same backend whenever quality runs are executed with devtools attac
 
 **Rules:**
 
-1. Primitives call `observability subscribers?.onXxx()` — never `collector.send()`
-2. Hook events carry domain data only (flowId, status, durationMs, etc.)
+1. Primitives emit canonical graph records once through `observe.*`.
+2. Subscribers, diagnostics-channel consumers, and transports only read those records.
 3. Transport metadata (sessionId, traceId, timestamp) is added by handlers at call time from the active observability context.
-4. The `RuntimeFlowSessionReporter` remains a public API for users who want manual flow reporting with rich metadata
+4. The `RuntimeFlowSessionReporter` remains a public API for users who want manual flow reporting with rich metadata.
 
 ## configure() Internals
 

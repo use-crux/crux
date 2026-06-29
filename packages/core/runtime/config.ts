@@ -113,6 +113,7 @@ export function config(config: CruxConfig): Crux {
           : undefined))
       : undefined
   const observabilityDelivery = config.observability?.enabled !== false ? config.observability?.delivery : undefined
+  const observabilityCapture = observabilityCapturePolicy(config.observability)
   const ownsObservability = config.observability?.enabled === false || observabilityTransport !== undefined
   const restoreObservability = ownsObservability
     ? configureObservability({
@@ -129,6 +130,7 @@ export function config(config: CruxConfig): Crux {
           observabilityDelivery,
         }
       : {}),
+    ...(observabilityCapture ? { observabilityCapture } : {}),
   })
 
   // Delegate to internal configure() for all the heavy lifting
@@ -163,6 +165,17 @@ export function config(config: CruxConfig): Crux {
       restoreObservability?.()
     },
   }) as Crux
+}
+
+function observabilityCapturePolicy(
+  observability: CruxConfig['observability'],
+): NonNullable<CruxConfig['observability']> | undefined {
+  if (!observability) return undefined
+  if (observability.recordInputs === undefined && observability.recordOutputs === undefined) return undefined
+  return {
+    ...(observability.recordInputs !== undefined ? { recordInputs: observability.recordInputs } : {}),
+    ...(observability.recordOutputs !== undefined ? { recordOutputs: observability.recordOutputs } : {}),
+  }
 }
 
 function createInertCrux(config: CruxConfig): Crux {

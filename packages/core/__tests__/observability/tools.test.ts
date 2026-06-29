@@ -10,6 +10,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
+import { resetRuntime, updateRuntime } from '../../runtime/runtime'
 import { appendToolApprovalResponse } from '../../tools/approvals'
 import type { ToolModelOutput } from '../../types/tool'
 
@@ -83,6 +84,7 @@ function testAdapter(responses: AdapterResponse[]) {
 describe('canonical tool observability', () => {
   afterEach(() => {
     resetObservabilityRuntime()
+    resetRuntime()
   })
 
     it('records tool calls with args, raw result, model output, and relation edges', async () => {
@@ -159,6 +161,54 @@ describe('canonical tool observability', () => {
     )
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'consumed' }))
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'produced' }))
+  })
+
+    it('omits tool input and output previews when capture policy disables them', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    updateRuntime({
+      observabilityCapture: {
+        recordInputs: false,
+        recordOutputs: false,
+      },
+    })
+    const model = testAdapter([
+      response('', [{ id: 'call_search', name: 'search', args: { query: 'refund' } }]),
+      response('done'),
+    ])
+
+    await model.generate(
+      testPrompt({
+        search: {
+          description: 'Search docs',
+          parameters: z.object({ query: z.string() }),
+          execute: async ({ query }: { query: string }) => ({ rows: [`result:${query}`], internalId: 42 }),
+        },
+      }),
+      {
+        model: 'mock-model',
+        input: { instruction: 'Find refund policy' },
+      },
+    )
+    await observe.flush()
+
+    const requestArtifact = transport.records.find(
+      (record) => record.type === 'artifact' && record.kind === 'tool.request',
+    )
+    const argsArtifact = transport.records.find((record) => record.type === 'artifact' && record.kind === 'tool.args')
+    const resultArtifacts = transport.records.filter(
+      (record) => record.type === 'artifact' && record.kind === 'tool.result',
+    )
+
+    expect(requestArtifact).toMatchObject({ encoding: 'reference', sizeBytes: expect.any(Number), hash: expect.any(String) })
+    expect(requestArtifact).not.toHaveProperty('preview')
+    expect(argsArtifact).toMatchObject({ encoding: 'reference', sizeBytes: expect.any(Number), hash: expect.any(String) })
+    expect(argsArtifact).not.toHaveProperty('preview')
+    expect(resultArtifacts).toHaveLength(2)
+    for (const artifact of resultArtifacts) {
+      expect(artifact).toMatchObject({ encoding: 'reference', sizeBytes: expect.any(Number), hash: expect.any(String) })
+      expect(artifact).not.toHaveProperty('preview')
+    }
   })
 
     it('records thrown tool execute errors as rich tool.call error evidence while preserving model output', async () => {

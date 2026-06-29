@@ -27,6 +27,7 @@ import {
 } from './ids'
 import { normalizeObservedError, observedErrorSummary } from './errors'
 import { CruxGraphRecordSchema } from './schema'
+import { applyConfiguredObservabilityCapturePolicy } from './capture-policy'
 import {
   observabilitySubscriberErrorCount,
   publishObservabilitySubscribers,
@@ -827,7 +828,8 @@ export const observe = {
     const context = currentContext()
     if (!context) return undefined
 
-    const artifactId = options.artifactId ?? createCruxArtifactId()
+    const artifact = applyConfiguredObservabilityCapturePolicy(options)
+    const artifactId = artifact.artifactId ?? createCruxArtifactId()
     const spanId = context.spanStack[context.spanStack.length - 1]
     emit({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -837,15 +839,15 @@ export const observe = {
       traceId: context.traceId,
       artifactId,
       ...(spanId ? { spanId } : {}),
-      kind: options.kind,
+      kind: artifact.kind,
       createdAt: now(),
-      contentType: options.contentType,
-      encoding: options.encoding,
-      ...(options.sizeBytes !== undefined ? { sizeBytes: options.sizeBytes } : {}),
-      ...(options.hash ? { hash: options.hash } : {}),
-      ...(options.preview !== undefined ? { preview: options.preview } : {}),
-      ...(options.uri ? { uri: options.uri } : {}),
-      ...(options.attributes ? { attributes: options.attributes } : {}),
+      contentType: artifact.contentType,
+      encoding: artifact.encoding,
+      ...(artifact.sizeBytes !== undefined ? { sizeBytes: artifact.sizeBytes } : {}),
+      ...(artifact.hash ? { hash: artifact.hash } : {}),
+      ...(artifact.preview !== undefined ? { preview: artifact.preview } : {}),
+      ...(artifact.uri ? { uri: artifact.uri } : {}),
+      ...(artifact.attributes ? { attributes: artifact.attributes } : {}),
     })
     return artifactId
   },

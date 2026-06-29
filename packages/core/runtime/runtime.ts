@@ -18,6 +18,7 @@ import type {
   StreamStartHook,
 } from './middleware'
 import type { CruxObservabilityTransport, ObservabilityDeliveryOptions } from '../observability'
+import type { CruxObservabilityCapturePolicy } from '../observability/capture-policy'
 import type { CruxStore } from '../store/types'
 
 /**
@@ -53,6 +54,8 @@ export interface CruxRuntime {
   /** Canonical observability graph transport and delivery bounds. */
   observabilityTransport?: CruxObservabilityTransport
   observabilityDelivery?: ObservabilityDeliveryOptions
+  /** Central policy for whether canonical observability artifacts include payload previews. */
+  observabilityCapture?: CruxObservabilityCapturePolicy
   /** Global CruxStore for flow state persistence (suspend/resume). */
   store?: CruxStore
   /** Global constraints registered via createConstraintPlugin(). */

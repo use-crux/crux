@@ -27,6 +27,18 @@ export const GEN_AI_USAGE_OUTPUT_TOKENS = 'gen_ai.usage.output_tokens'
 /** Finish reason(s) for the generation. */
 export const GEN_AI_RESPONSE_FINISH_REASONS = 'gen_ai.response.finish_reasons'
 
+/** End-to-end client-side generation operation duration in milliseconds. */
+export const GEN_AI_CLIENT_DURATION_MS = 'gen_ai.client.duration_ms'
+
+/** Client-observed time to the first streamed output token in milliseconds. */
+export const GEN_AI_CLIENT_TIME_TO_FIRST_TOKEN_MS = 'gen_ai.client.time_to_first_token_ms'
+
+/** Client-observed output token throughput. */
+export const GEN_AI_CLIENT_OUTPUT_TOKENS_PER_SECOND = 'gen_ai.client.output_tokens_per_second'
+
+/** Mean client-observed interval between streamed output chunks in milliseconds. */
+export const GEN_AI_CLIENT_TIME_PER_OUTPUT_CHUNK_MS = 'gen_ai.client.time_per_output_chunk_ms'
+
 // ─────────────────────────────────────────────────────────────────
 // Crux-specific attributes
 // ─────────────────────────────────────────────────────────────────

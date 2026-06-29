@@ -13,6 +13,7 @@
 import { observe } from '../observability'
 import type { ResolvedPrompt } from '../resolver/types'
 import type { OrchestrationSpec } from './orchestrate-types'
+import type { GenerationPerformanceTracker } from './performance-metrics'
 import { generationUsageAttributes } from './result-meta'
 
 export function generationAttributes(
@@ -136,9 +137,13 @@ export function linkActiveSpanToArtifact(
   })
 }
 
-export function attachStreamObservability(result: unknown, span: ReturnType<typeof observe.openSpan>): void {
+export function attachStreamObservability(
+  result: unknown,
+  span: ReturnType<typeof observe.openSpan>,
+  performance: GenerationPerformanceTracker,
+): void {
   if (!result || typeof result !== 'object') {
-    span.end({ attributes: { streamCompleted: true, streamObservable: false } })
+    span.end({ attributes: { streamCompleted: true, streamObservable: false }, metrics: performance.metrics() })
     return
   }
   const record = result as Record<string, unknown>
@@ -146,13 +151,21 @@ export function attachStreamObservability(result: unknown, span: ReturnType<type
   const extractTextDelta = record.extractTextDelta
   const observesRawStream = isAsyncIterable(rawStream) && typeof extractTextDelta === 'function'
   if (observesRawStream) {
-    record.rawStream = observedStream(rawStream, extractTextDelta as (chunk: unknown) => string | undefined, span)
+    record.rawStream = observedStream(
+      rawStream,
+      extractTextDelta as (chunk: unknown) => string | undefined,
+      span,
+      performance,
+    )
   }
 
   const completion = record.completion
   if (typeof completion !== 'function') {
     if (!observesRawStream) {
-      span.end({ attributes: { streamCompleted: true, completionAvailable: false } })
+      span.end({
+        attributes: { streamCompleted: true, completionAvailable: false },
+        metrics: performance.metrics(),
+      })
     }
     return
   }
@@ -176,7 +189,9 @@ export function attachStreamObservability(result: unknown, span: ReturnType<type
           linkActiveSpanToArtifact('produced', outputArtifactId)
         }
       })
-      span.end()
+      span.end({
+        metrics: performance.metrics(meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : undefined),
+      })
       return meta
     } catch (error) {
       span.error(error)
@@ -189,12 +204,14 @@ async function* observedStream(
   rawStream: AsyncIterable<unknown>,
   extractTextDelta: (chunk: unknown) => string | undefined,
   span: ReturnType<typeof observe.openSpan>,
+  performance: GenerationPerformanceTracker,
 ): AsyncIterable<unknown> {
   let index = 0
   try {
     for await (const chunk of rawStream) {
       const delta = extractTextDelta(chunk)
       if (delta) {
+        performance.recordOutputChunk()
         await span.withContext(() => {
           observe.event({
             name: 'token.delta',
@@ -209,7 +226,10 @@ async function* observedStream(
       }
       yield chunk
     }
-    span.end({ attributes: { streamCompleted: true, tokenDeltaCount: index } })
+    span.end({
+      attributes: { streamCompleted: true, tokenDeltaCount: index },
+      metrics: performance.metrics(),
+    })
   } catch (error) {
     span.error(error)
     throw error
