@@ -12,7 +12,8 @@ function createMockRedis(): RedisClient & { data: Map<string, string> } {
       const val = data.get(key)
       return val !== undefined ? (val as T) : null
     },
-    async set(key: string, value: string) {
+    async set(key: string, value: string, opts?: { nx?: true }) {
+      if (opts?.nx && data.has(key)) return null
       data.set(key, value)
       return 'OK'
     },
@@ -33,7 +34,9 @@ function createMockRedis(): RedisClient & { data: Map<string, string> } {
   }
 }
 
-function createObjectReturningMockRedis(): RedisClient & { data: Map<string, string> } {
+function createObjectReturningMockRedis(): RedisClient & {
+  data: Map<string, string>
+} {
   const redis = createMockRedis()
   return {
     ...redis,
@@ -82,6 +85,15 @@ describe('cruxRedisStore', () => {
 
     const value = await store.get('k1')
     expect(value!.v).toBe(2)
+  })
+
+  it('setIfAbsent inserts once using Redis NX semantics', async () => {
+    const store = cruxRedisStore({ redis })
+
+    await expect(store.setIfAbsent('k1', { v: 1 })).resolves.toBe(true)
+    await expect(store.setIfAbsent('k1', { v: 2 })).resolves.toBe(false)
+
+    await expect(store.get('k1')).resolves.toEqual({ v: 1 })
   })
 
   it('delete removes entry', async () => {
@@ -295,7 +307,10 @@ describe('cruxRedisStore', () => {
         /do not support sparse/i,
       )
       await expect(
-        store.searchVectors!({ dense: [1], sparse: { indices: [1], values: [1] } }),
+        store.searchVectors!({
+          dense: [1],
+          sparse: { indices: [1], values: [1] },
+        }),
       ).rejects.toThrow(/do not support hybrid/i)
     })
   })

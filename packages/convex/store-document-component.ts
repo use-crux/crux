@@ -82,6 +82,7 @@ export function createInMemoryConvexStoreDocumentComponent(
       get: Symbol('memory.get'),
       list: Symbol('memory.list'),
       set: Symbol('memory.set'),
+      insert: Symbol('memory.insert'),
       remove: Symbol('memory.remove'),
     },
   }
@@ -99,6 +100,11 @@ export function createInMemoryConvexStoreDocumentComponent(
     },
     async put(doc) {
       docs.set(doc.key, doc)
+    },
+    async insert(doc) {
+      if (docs.has(doc.key)) return false
+      docs.set(doc.key, doc)
+      return true
     },
     async delete(key) {
       docs.delete(key)
@@ -125,6 +131,9 @@ export function createInMemoryConvexStoreDocumentComponent(
       if (ref === refs.memory.set) {
         await port.put(args as StoreDocWrite)
         return null as TResult
+      }
+      if (ref === refs.memory.insert) {
+        return (await port.insert(args as StoreDocWrite)) as TResult
       }
       if (ref === refs.memory.remove) {
         await port.delete(String(args.key))

@@ -25,6 +25,19 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
   {
     memory: {
       get: FunctionReference<"query", "internal", { key: string }, any, Name>;
+      insert: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          content: string;
+          embedding?: Array<number>;
+          key: string;
+          metadata?: any;
+          updatedAt: number;
+        },
+        boolean,
+        Name
+      >;
       list: FunctionReference<
         "query",
         "internal",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { list as memoryList } from '../src/component/memory'
+import { insert as memoryInsert, list as memoryList } from '../src/component/memory'
 import { STORE_DOC_COMPONENT_SPEC, type StoreDocRecord } from '../store-doc'
 
 interface TestMemoryListArgs {
@@ -17,9 +17,20 @@ interface TestRegisteredQuery<TArgs, TResult> {
   _handler(ctx: TestQueryCtx, args: TArgs): Promise<TResult>
 }
 
+interface TestRegisteredMutation<TArgs, TResult> {
+  _handler(ctx: TestMutationCtx, args: TArgs): Promise<TResult>
+}
+
 interface TestQueryCtx {
   db: {
     query(table: typeof STORE_DOC_COMPONENT_SPEC.table): TestQueryInitializer
+  }
+}
+
+interface TestMutationCtx {
+  db: {
+    query(table: typeof STORE_DOC_COMPONENT_SPEC.table): TestFirstQueryInitializer
+    insert(table: typeof STORE_DOC_COMPONENT_SPEC.table, doc: StoreDocRecord): Promise<string>
   }
 }
 
@@ -30,13 +41,28 @@ interface TestQueryInitializer {
   ): TestOrderedQuery
 }
 
+interface TestFirstQueryInitializer {
+  withIndex(
+    indexName: typeof STORE_DOC_COMPONENT_SPEC.indexes.byKey,
+    range?: (q: TestEqIndexRangeBuilder) => unknown,
+  ): TestFirstQuery
+}
+
 interface TestIndexRangeBuilder {
   gte(field: typeof STORE_DOC_COMPONENT_SPEC.fields.key, value: string): TestUpperBoundRangeBuilder
   gt(field: typeof STORE_DOC_COMPONENT_SPEC.fields.key, value: string): TestUpperBoundRangeBuilder
 }
 
+interface TestEqIndexRangeBuilder {
+  eq(field: typeof STORE_DOC_COMPONENT_SPEC.fields.key, value: string): unknown
+}
+
 interface TestUpperBoundRangeBuilder {
   lt(field: typeof STORE_DOC_COMPONENT_SPEC.fields.key, value: string): unknown
+}
+
+interface TestFirstQuery {
+  first(): Promise<StoreDocRecord | null>
 }
 
 interface TestOrderedQuery {
@@ -70,10 +96,36 @@ describe('component memory list contract', () => {
     expect(calls).toEqual([
       { type: 'query', table: STORE_DOC_COMPONENT_SPEC.table },
       { type: 'withIndex', indexName: STORE_DOC_COMPONENT_SPEC.indexes.byKey },
-      { type: 'gt', field: STORE_DOC_COMPONENT_SPEC.fields.key, value: 'memory:aardvark' },
-      { type: 'lt', field: STORE_DOC_COMPONENT_SPEC.fields.key, value: 'memory;' },
+      {
+        type: 'gt',
+        field: STORE_DOC_COMPONENT_SPEC.fields.key,
+        value: 'memory:aardvark',
+      },
+      {
+        type: 'lt',
+        field: STORE_DOC_COMPONENT_SPEC.fields.key,
+        value: 'memory;',
+      },
       { type: 'order', direction: 'asc' },
       { type: 'take', limit: 3 },
+    ])
+  })
+
+  it('inserts a memory document only when the key is absent', async () => {
+    const insertedDocs: StoreDocRecord[] = []
+    const query = memoryInsert as unknown as TestRegisteredMutation<StoreDocRecord, boolean>
+
+    await expect(
+      query._handler(createInsertCtx(cruxDoc('memory:existing'), insertedDocs), cruxDoc('memory:existing')),
+    ).resolves.toBe(false)
+    await expect(query._handler(createInsertCtx(null, insertedDocs), cruxDoc('memory:new'))).resolves.toBe(true)
+
+    expect(insertedDocs).toEqual([
+      {
+        ...cruxDoc('memory:new'),
+        createdAt: 2,
+        embedding: undefined,
+      },
     ])
   })
 })
@@ -91,7 +143,11 @@ function createCtx(calls: Array<Record<string, unknown>>, docs: StoreDocRecord[]
                 calls.push({ type: 'gte', field, value })
                 return {
                   lt(upperField, upperValue) {
-                    calls.push({ type: 'lt', field: upperField, value: upperValue })
+                    calls.push({
+                      type: 'lt',
+                      field: upperField,
+                      value: upperValue,
+                    })
                     return {}
                   },
                 }
@@ -100,7 +156,11 @@ function createCtx(calls: Array<Record<string, unknown>>, docs: StoreDocRecord[]
                 calls.push({ type: 'gt', field, value })
                 return {
                   lt(upperField, upperValue) {
-                    calls.push({ type: 'lt', field: upperField, value: upperValue })
+                    calls.push({
+                      type: 'lt',
+                      field: upperField,
+                      value: upperValue,
+                    })
                     return {}
                   },
                 }
@@ -119,6 +179,33 @@ function createCtx(calls: Array<Record<string, unknown>>, docs: StoreDocRecord[]
             }
           },
         }
+      },
+    },
+  }
+}
+
+function createInsertCtx(existing: StoreDocRecord | null, insertedDocs: StoreDocRecord[]): TestMutationCtx {
+  return {
+    db: {
+      query() {
+        return {
+          withIndex(_indexName, range) {
+            range?.({
+              eq() {
+                return {}
+              },
+            })
+            return {
+              async first() {
+                return existing
+              },
+            }
+          },
+        }
+      },
+      async insert(_table, doc) {
+        insertedDocs.push(doc)
+        return 'doc-id'
       },
     },
   }

@@ -22,6 +22,8 @@ export interface ConvexCruxStoreMemoryComponent {
   readonly list: unknown
   /** Mutation reference for inserting or replacing one memory document. */
   readonly set: unknown
+  /** Mutation reference for inserting one memory document only when absent. */
+  readonly insert: unknown
   /** Mutation reference for deleting one memory document by key. */
   readonly remove: unknown
 }

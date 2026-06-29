@@ -151,6 +151,10 @@ export function createStoreDocStore<TDoc extends StoreDocRecord>(config: StoreDo
       await config.io.put(codec.encode(key, value, options))
     },
 
+    async setIfAbsent(key: string, value: JsonObject, options?: SetOptions): Promise<boolean> {
+      return config.io.insert(codec.encode(key, value, options))
+    },
+
     async delete(key: string): Promise<void> {
       await config.io.delete(key)
     },

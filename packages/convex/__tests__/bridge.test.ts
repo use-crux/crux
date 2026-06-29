@@ -230,6 +230,7 @@ describe('@use-crux/convex bridge setup', () => {
         get: 'memory.get',
         list: 'memory.list',
         set: 'memory.set',
+        insert: 'memory.insert',
         remove: 'memory.remove',
       },
     }

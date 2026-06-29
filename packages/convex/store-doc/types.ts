@@ -73,6 +73,8 @@ export interface ComponentDocumentPort<TDoc extends StoreDocRecord = StoreDocRec
   list(query: StoreDocPageQuery): Promise<StoreDocPage<TDoc>>
   /** Insert or update one canonical document write. */
   put(doc: StoreDocWrite): Promise<void>
+  /** Insert one canonical document write only if the key has no existing document. */
+  insert(doc: StoreDocWrite): Promise<boolean>
   /** Delete one document by key. */
   delete(key: string): Promise<void>
   /** Optional dense vector search over raw documents. */

@@ -24,6 +24,7 @@ Use [`@use-crux/core/storage`](/docs/reference/crux-core/storage) for new applic
 |--------|-----------|-------------|
 | `get` | `(key: string) => Promise<JsonObject \| null>` | Get a value by key. Returns `null` if not found. |
 | `set` | `(key: string, value: JsonObject, options?) => Promise<void>` | Set a value. Creates or overwrites. |
+| `setIfAbsent` | `(key: string, value: JsonObject, options?) => Promise<boolean>` | Atomically insert a value only when the key has no active entry. |
 | `delete` | `(key: string) => Promise<void>` | Delete a key. No-op if not found. |
 | `list` | `(prefix: string, options?) => Promise<ListResult>` | List entries whose keys start with `prefix`. Sorted by `updatedAt` descending. |
 | `vectorSearch?` | `(embedding: number[], options?) => Promise<ScoredEntry[]>` | Optional. Search by vector similarity. |
@@ -38,6 +39,12 @@ The optional `options` parameter accepts:
 | Field | Type | Description |
 |-------|------|-------------|
 | `ttl` | `number?` | Time-to-live in milliseconds. After this duration, `get()` returns `null`. Check `supportsTtl()` first. |
+
+### `setIfAbsent(key, value, options?)`
+
+`setIfAbsent()` is a conditional insert. It returns `true` when the value was inserted and `false` when an active entry already exists for the key.
+
+Adapters must make the existence check and write atomic. Crux uses this for task creation so concurrent writers cannot both create the same task ID.
 
 ### `list(prefix, options?)`
 

@@ -33,6 +33,9 @@ describe('store document list contract', () => {
           return pages.get(query.cursor ?? 'start') ?? { docs: [] }
         },
         async put() {},
+        async insert() {
+          return true
+        },
         async delete() {},
       } satisfies StoreDocComponentPort,
     })

@@ -66,6 +66,7 @@ Create a combined compatibility store — vectors in Upstash Vector, data in Con
 | `convex.ctx` | `ActionCtx` | Convex action context |
 | `convex.fns.get` | `FunctionReference` | Convex query for get |
 | `convex.fns.set` | `FunctionReference` | Convex mutation for set |
+| `convex.fns.insert` | `FunctionReference` | Convex mutation for atomic insert-if-absent |
 | `convex.fns.delete` | `FunctionReference` | Convex mutation for delete |
 | `convex.fns.list` | `FunctionReference` | Convex query for list |
 | `sparseEmbed` | `(text: string) => { indices: number[]; values: number[] }?` | Optional sparse embeddings for hybrid search |
@@ -76,6 +77,7 @@ Create a combined compatibility store — vectors in Upstash Vector, data in Con
 |--------|-------------|
 | `.get(key)` | Retrieve entry by key |
 | `.set(key, entry)` | Store or update an entry |
+| `.setIfAbsent(key, entry)` | Atomically store an entry only if the key is absent |
 | `.delete(key)` | Remove an entry |
 | `.list(options?)` | List entries with pagination |
 | `.vectorSearch(embedding, options?)` | Similarity search via Upstash Vector |
@@ -99,6 +101,7 @@ const store = cruxUpstashStore({
     fns: {
       get: api.memory.get,
       set: api.memory.set,
+      insert: api.memory.insert,
       delete: api.memory.delete,
       list: api.memory.list,
     },
@@ -206,6 +209,7 @@ import { cruxRedisStore } from '@use-crux/upstash/redis'
 |--------|-------------|
 | `.get(key)` | Retrieve document by key |
 | `.set(key, value)` | Store or update a document. Publishes a `set` event. |
+| `.setIfAbsent(key, value)` | Atomically store a document only if the key is absent. Publishes a `set` event when inserted. |
 | `.delete(key)` | Remove a document. Publishes a `delete` event. |
 | `.list(prefix, options?)` | List documents matching prefix with pagination and filtering |
 | `.subscribe(callback)` | Listen for change events (only available with `subscriber` config) |

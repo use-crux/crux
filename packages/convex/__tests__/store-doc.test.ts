@@ -65,12 +65,20 @@ describe('store document store', () => {
   it('suppresses expired documents, deletes them lazily, filters consistently, and reports capabilities', async () => {
     const expired = cruxDoc(
       'memory:expired',
-      { content: 'Old', namespace: 'kb', [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 900 },
+      {
+        content: 'Old',
+        namespace: 'kb',
+        [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 900,
+      },
       0.99,
     )
     const fresh = cruxDoc(
       'memory:fresh',
-      { content: 'Fresh', namespace: 'kb', [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 2_000 },
+      {
+        content: 'Fresh',
+        namespace: 'kb',
+        [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 2_000,
+      },
       0.88,
     )
     const other = cruxDoc('memory:other', { content: 'Other', namespace: 'other' }, 0.95)
@@ -83,6 +91,8 @@ describe('store document store', () => {
     })
 
     await store.set('memory:new', { content: 'New', embedding: [0.1, 0.2], namespace: 'kb' }, { ttl: 250 })
+    await expect(store.setIfAbsent('memory:new', { content: 'Replacement' })).resolves.toBe(false)
+    await expect(store.setIfAbsent('memory:inserted', { content: 'Inserted' })).resolves.toBe(true)
 
     expect(writes).toEqual([
       {
@@ -95,6 +105,12 @@ describe('store document store', () => {
         }),
         metadata: { [STORE_DOC_COMPONENT_SPEC.fields.marker]: true },
         embedding: [0.1, 0.2],
+        updatedAt: 1_000,
+      },
+      {
+        key: 'memory:inserted',
+        content: JSON.stringify({ content: 'Inserted' }),
+        metadata: { [STORE_DOC_COMPONENT_SPEC.fields.marker]: true },
         updatedAt: 1_000,
       },
     ])
@@ -110,7 +126,11 @@ describe('store document store', () => {
       entries: [
         {
           key: 'memory:fresh',
-          value: { content: 'Fresh', namespace: 'kb', [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 2_000 },
+          value: {
+            content: 'Fresh',
+            namespace: 'kb',
+            [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 2_000,
+          },
         },
         {
           key: 'memory:new',
@@ -133,7 +153,11 @@ describe('store document store', () => {
     ).resolves.toEqual([
       {
         key: 'memory:fresh',
-        value: { content: 'Fresh', namespace: 'kb', [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 2_000 },
+        value: {
+          content: 'Fresh',
+          namespace: 'kb',
+          [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: 2_000,
+        },
         score: 0.88,
       },
     ])
@@ -200,6 +224,12 @@ function mapStoreDocIo(
     async put(doc) {
       writes.push(doc)
       docs.set(doc.key, doc)
+    },
+    async insert(doc) {
+      if (docs.has(doc.key)) return false
+      writes.push(doc)
+      docs.set(doc.key, doc)
+      return true
     },
     async delete(key) {
       deletes.push(key)

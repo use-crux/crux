@@ -143,6 +143,9 @@ export const convexRuntimeStore: CruxStore = {
   set(key: string, value: JsonObject, options?: SetOptions): Promise<void> {
     return resolveRuntimeStore().set(key, value, options)
   },
+  setIfAbsent(key: string, value: JsonObject, options?: SetOptions): Promise<boolean> {
+    return resolveRuntimeStore().setIfAbsent(key, value, options)
+  },
   delete(key: string): Promise<void> {
     return resolveRuntimeStore().delete(key)
   },

@@ -65,6 +65,40 @@ export const set = mutation({
 })
 
 /**
+ * Insert a memory entry by key only when no entry exists.
+ */
+export const insert = mutation({
+  args: {
+    key: v.string(),
+    content: v.string(),
+    metadata: v.optional(v.any()),
+    embedding: v.optional(v.array(v.float64())),
+    updatedAt: v.number(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query(STORE_DOC_COMPONENT_SPEC.table)
+      .withIndex(STORE_DOC_COMPONENT_SPEC.indexes.byKey, (q) => q.eq(STORE_DOC_COMPONENT_SPEC.fields.key, args.key))
+      .first()
+
+    if (existing) {
+      return false
+    }
+
+    await ctx.db.insert(STORE_DOC_COMPONENT_SPEC.table, {
+      key: args.key,
+      content: args.content,
+      metadata: args.metadata,
+      embedding: args.embedding,
+      createdAt: args.updatedAt,
+      updatedAt: args.updatedAt,
+    })
+    return true
+  },
+})
+
+/**
  * Delete a memory entry by key.
  */
 export const remove = mutation({
