@@ -84,6 +84,7 @@ type FnRef = ((...args: any[]) => any) | { _type?: string; _args?: unknown; _ret
 interface ConvexMemoryFns {
   get: FnRef
   set: FnRef
+  insert: FnRef
   delete: FnRef
   list: FnRef
 }
@@ -206,6 +207,37 @@ export function cruxUpstashStore(config: UpstashMemoryStoreConfig): CruxStore {
           metadata: vectorMetadata(key, value),
         })
       }
+    },
+
+    async setIfAbsent(key: string, value: JsonObject, options?: SetOptions): Promise<boolean> {
+      const now = Date.now()
+      const stored = options?.ttl !== undefined && options.ttl > 0 ? { ...value, _expiresAt: now + options.ttl } : value
+      const inserted = await ctx.runMutation(fns.insert, {
+        key,
+        content: JSON.stringify(stored),
+        metadata: { _cruxDoc: true },
+        updatedAt: now,
+      })
+
+      if (!inserted) {
+        return false
+      }
+
+      const denseVector = value.embedding as number[] | undefined
+      const content = (value.content as string) ?? ''
+      const sparseVector =
+        (value.sparseEmbedding as SparseVector | undefined) ?? (sparseEmbed ? sparseEmbed(content) : undefined)
+
+      if (denseVector || sparseVector) {
+        await ns.upsert({
+          id: key,
+          ...(denseVector ? { vector: denseVector } : {}),
+          ...(sparseVector ? { sparseVector } : {}),
+          metadata: vectorMetadata(key, value),
+        })
+      }
+
+      return true
     },
 
     async delete(key: string): Promise<void> {

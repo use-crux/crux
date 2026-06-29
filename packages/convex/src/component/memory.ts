@@ -65,6 +65,51 @@ export const set = mutation({
 })
 
 /**
+ * Insert a memory entry by key only when no active entry exists.
+ */
+export const insert = mutation({
+  args: {
+    key: v.string(),
+    content: v.string(),
+    metadata: v.optional(v.any()),
+    embedding: v.optional(v.array(v.float64())),
+    updatedAt: v.number(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query(STORE_DOC_COMPONENT_SPEC.table)
+      .withIndex(STORE_DOC_COMPONENT_SPEC.indexes.byKey, (q) => q.eq(STORE_DOC_COMPONENT_SPEC.fields.key, args.key))
+      .first()
+
+    if (existing && !isExpiredStoreDoc(existing)) {
+      return false
+    }
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        content: args.content,
+        metadata: args.metadata,
+        embedding: args.embedding,
+        createdAt: args.updatedAt,
+        updatedAt: args.updatedAt,
+      })
+      return true
+    }
+
+    await ctx.db.insert(STORE_DOC_COMPONENT_SPEC.table, {
+      key: args.key,
+      content: args.content,
+      metadata: args.metadata,
+      embedding: args.embedding,
+      createdAt: args.updatedAt,
+      updatedAt: args.updatedAt,
+    })
+    return true
+  },
+})
+
+/**
  * Delete a memory entry by key.
  */
 export const remove = mutation({
@@ -146,4 +191,19 @@ function prefixUpperBound(prefix: string): string | undefined {
     }
   }
   return undefined
+}
+
+function isExpiredStoreDoc(doc: Record<string, unknown>): boolean {
+  const metadata = doc.metadata as Record<string, unknown> | undefined
+  if (metadata?.[STORE_DOC_COMPONENT_SPEC.fields.marker] !== true || typeof doc.content !== 'string') {
+    return false
+  }
+
+  try {
+    const value = JSON.parse(doc.content) as Record<string, unknown>
+    const expiresAt = value[STORE_DOC_COMPONENT_SPEC.fields.expiresAt]
+    return typeof expiresAt === 'number' && Date.now() >= expiresAt
+  } catch {
+    return false
+  }
 }

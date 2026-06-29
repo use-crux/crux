@@ -106,6 +106,7 @@ export function convexComponentDocumentPort<TCtx extends ConvexCtxPort = ConvexC
     async put(doc) {
       await ctx.runMutation(fns.set, doc)
     },
+    insert: (doc) => ctx.runMutation<boolean>(fns.insert, doc),
     async delete(key) {
       await ctx.runMutation(fns.remove, { key })
     },

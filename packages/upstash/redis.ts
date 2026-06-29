@@ -27,7 +27,7 @@ import { matchesFilter } from '@use-crux/core/store'
  */
 export interface RedisClient {
   get<T = string | JsonObject>(key: string): Promise<T | null>
-  set(key: string, value: string, opts?: { px?: number }): Promise<unknown>
+  set(key: string, value: string, opts?: { px?: number; nx?: true }): Promise<'OK' | null>
   del(...keys: string[]): Promise<number>
   keys(pattern: string): Promise<string[]>
   publish(channel: string, message: string): Promise<number>
@@ -161,6 +161,18 @@ export function cruxRedisStore(config: CruxRedisStoreConfig): CruxStore {
       await redis.set(redisKey(key), JSON.stringify(value), opts)
       await vector?.upsert?.({ key, redisKey: redisKey(key), value })
       await publishEvent({ key, type: 'set', value })
+    },
+
+    async setIfAbsent(key: string, value: JsonObject, options?: SetOptions): Promise<boolean> {
+      const opts = {
+        ...(options?.ttl !== undefined && options.ttl > 0 ? { px: options.ttl } : {}),
+        nx: true as const,
+      }
+      const result = await redis.set(redisKey(key), JSON.stringify(value), opts)
+      if (result === null) return false
+      await vector?.upsert?.({ key, redisKey: redisKey(key), value })
+      await publishEvent({ key, type: 'set', value })
+      return true
     },
 
     async delete(key: string): Promise<void> {
@@ -297,10 +309,19 @@ export function cruxRedisStore(config: CruxRedisStoreConfig): CruxStore {
         subscriber
           .subscribe<string>(channel, (message) => {
             try {
-              const parsed = JSON.parse(message) as { key: string; type: 'set' | 'delete'; value?: JsonObject }
+              const parsed = JSON.parse(message) as {
+                key: string
+                type: 'set' | 'delete'
+                value?: JsonObject
+              }
               const event: StoreEvent =
                 parsed.type === 'set'
-                  ? { type: 'set', key: parsed.key, value: parsed.value!, timestamp: Date.now() }
+                  ? {
+                      type: 'set',
+                      key: parsed.key,
+                      value: parsed.value!,
+                      timestamp: Date.now(),
+                    }
                   : { type: 'delete', key: parsed.key, timestamp: Date.now() }
               for (const listener of listeners) {
                 listener(event)

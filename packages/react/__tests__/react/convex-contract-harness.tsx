@@ -18,6 +18,7 @@ export function createMockConvexBackend() {
       get: Symbol('memory.get'),
       list: Symbol('memory.list'),
       set: Symbol('memory.set'),
+      insert: Symbol('memory.insert'),
       remove: Symbol('memory.remove'),
     },
   }
@@ -76,7 +77,9 @@ export function createMockConvexBackend() {
 
 /** Create a `CruxProvider` wrapper from the Convex store contract transport. */
 export function createConvexWrapper(backend: ReturnType<typeof createMockConvexBackend>) {
-  const transport = defineConvexStoreContract({ component: backend.api }).transport({ useQuery: backend.useQuery })
+  const transport = defineConvexStoreContract({
+    component: backend.api,
+  }).transport({ useQuery: backend.useQuery })
   return function Wrapper({ children }: { children: ReactNode }) {
     return <CruxProvider transport={transport}>{children}</CruxProvider>
   }
@@ -84,5 +87,7 @@ export function createConvexWrapper(backend: ReturnType<typeof createMockConvexB
 
 /** Create the contract transport used by app-provider tests. */
 export function createConvexContractTransport(backend: ReturnType<typeof createMockConvexBackend>) {
-  return defineConvexStoreContract({ component: backend.api }).transport({ useQuery: backend.useQuery })
+  return defineConvexStoreContract({ component: backend.api }).transport({
+    useQuery: backend.useQuery,
+  })
 }

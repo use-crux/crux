@@ -175,6 +175,7 @@ describe('createComponentSwarm', () => {
       memory: {
         get: 'mock:mem:get',
         set: 'mock:mem:set',
+        insert: 'mock:mem:insert',
         remove: 'mock:mem:remove',
         list: 'mock:mem:list',
       },

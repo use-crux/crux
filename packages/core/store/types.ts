@@ -256,6 +256,14 @@ export function storage(config: Storage): Storage {
  * explicit `DataStore`/`VectorStore`/`BlobStore` split.
  */
 export interface CruxStore extends DataStore {
+  /**
+   * Set a value only when the key has no active entry.
+   *
+   * Returns `true` when the value was inserted and `false` when the key already
+   * exists. Adapters must perform the existence check and write atomically so
+   * concurrent callers cannot both insert the same key.
+   */
+  setIfAbsent(key: string, value: JsonObject, options?: SetOptions): Promise<boolean>
   vectorSearch?(embedding: number[], options?: VectorSearchOptions): Promise<ScoredEntry[]>
   searchVectors?(query: VectorSearchQuery): Promise<ScoredEntry[]>
   capabilities?(): DataStoreCapabilities & {

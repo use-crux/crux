@@ -20,6 +20,7 @@ const component = {
     get: 'memory:get',
     list: 'memory:list',
     set: 'memory:set',
+    insert: 'memory:insert',
     remove: 'memory:remove',
   },
 } satisfies ConvexCruxStoreComponent

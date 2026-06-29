@@ -82,6 +82,7 @@ export function createInMemoryConvexStoreDocumentComponent(
       get: Symbol('memory.get'),
       list: Symbol('memory.list'),
       set: Symbol('memory.set'),
+      insert: Symbol('memory.insert'),
       remove: Symbol('memory.remove'),
     },
   }
@@ -99,6 +100,12 @@ export function createInMemoryConvexStoreDocumentComponent(
     },
     async put(doc) {
       docs.set(doc.key, doc)
+    },
+    async insert(doc) {
+      const existing = docs.get(doc.key)
+      if (existing && !isExpiredStoreDoc(existing)) return false
+      docs.set(doc.key, doc)
+      return true
     },
     async delete(key) {
       docs.delete(key)
@@ -125,6 +132,9 @@ export function createInMemoryConvexStoreDocumentComponent(
       if (ref === refs.memory.set) {
         await port.put(args as StoreDocWrite)
         return null as TResult
+      }
+      if (ref === refs.memory.insert) {
+        return (await port.insert(args as StoreDocWrite)) as TResult
       }
       if (ref === refs.memory.remove) {
         await port.delete(String(args.key))
@@ -199,5 +209,20 @@ function pageQueryFromArgs(args: Record<string, unknown>): StoreDocPageQuery {
     prefix: typeof args.prefix === 'string' ? args.prefix : '',
     ...(typeof args.limit === 'number' ? { limit: args.limit } : {}),
     ...(typeof args.cursor === 'string' ? { cursor: args.cursor } : {}),
+  }
+}
+
+function isExpiredStoreDoc(doc: StoreDocRecord): boolean {
+  const metadata = doc.metadata as Record<string, unknown> | undefined
+  if (metadata?.[STORE_DOC_COMPONENT_SPEC.fields.marker] !== true || typeof doc.content !== 'string') {
+    return false
+  }
+
+  try {
+    const value = JSON.parse(doc.content) as Record<string, unknown>
+    const expiresAt = value[STORE_DOC_COMPONENT_SPEC.fields.expiresAt]
+    return typeof expiresAt === 'number' && Date.now() >= expiresAt
+  } catch {
+    return false
   }
 }

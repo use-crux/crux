@@ -130,7 +130,7 @@ Define the shared Convex store document contract for a crux Convex component.
 
 The contract's server store is intentionally dense-only today. It throws explicit errors for sparse or hybrid `searchVectors()` queries instead of silently degrading.
 
-Store values are written as `_cruxDoc` records with JSON `content`, optional top-level `embedding`, `updatedAt`, and an `_expiresAt` value inside the JSON payload when `ttl` is provided. The component list query is a narrow Convex I/O contract: `components.crux.memory.list` accepts `prefix`, `limit`, and `cursor`, reads the `by_key` index, and returns `{ docs, cursor }`.
+Store values are written as `_cruxDoc` records with JSON `content`, optional top-level `embedding`, `updatedAt`, and an `_expiresAt` value inside the JSON payload when `ttl` is provided. The component I/O contract stays narrow: `components.crux.memory.insert` atomically inserts a document only when the key is absent, and `components.crux.memory.list` accepts `prefix`, `limit`, and `cursor`, reads the `by_key` index, and returns `{ docs, cursor }`.
 
 The same document contract is used by server stores, the HTTP bridge, and React transport: imperative reads suppress expired entries and lazily delete them, vector hits map Convex `_score` to `ScoredEntry.score`, and list/vector filters use top-level exact-match semantics. Filtered `list()` calls with a `limit` fill from additional component pages so `limit` means "up to N matching entries." Server and React reads are strict about current `_cruxDoc` records so malformed documents fail clearly.
 
@@ -177,6 +177,11 @@ const io: ComponentDocumentPort = {
   }),
   put: async (doc) => {
     rawDocs.set(doc.key, doc)
+  },
+  insert: async (doc) => {
+    if (rawDocs.has(doc.key)) return false
+    rawDocs.set(doc.key, doc)
+    return true
   },
   delete: async (key) => {
     rawDocs.delete(key)

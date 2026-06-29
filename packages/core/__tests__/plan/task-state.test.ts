@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { taskListKey } from '../../plan/helpers'
 import { getTaskList, tasks } from '../../plan/tasks'
 import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import type { CruxStore, JsonObject, ListOptions, ListResult, SetOptions } from '../../store'
 import { inMemoryCruxStore } from '../../store/memory'
 
 /** Create a fresh store and register it in the runtime. */
@@ -40,6 +41,30 @@ describe('TaskList state correctness', () => {
     expect(items).toHaveLength(1)
     expect(items[0].label).toBe('Research cloud migration')
     expect((await handle.get())!.status).toBe('completed')
+  })
+
+  it('rejects concurrent duplicate task IDs atomically', async () => {
+    const store = createDuplicateInsertRaceStore()
+    updateRuntime({ store })
+    const handle = await tasks()
+
+    const results = await Promise.allSettled([
+      handle.add({ id: 'research', label: 'Research cloud migration' }),
+      handle.add({ id: 'research', label: 'Different task' }),
+    ])
+
+    const fulfilled = results.filter((result) => result.status === 'fulfilled')
+    const rejected = results.filter((result) => result.status === 'rejected')
+    expect(fulfilled).toHaveLength(1)
+    expect(rejected).toHaveLength(1)
+    expect(rejected[0]).toMatchObject({
+      reason: {
+        name: 'DuplicateTaskIdError',
+        taskListId: handle.id,
+        taskId: 'research',
+      },
+    })
+    await expect(handle.list()).resolves.toEqual([expect.objectContaining({ id: 'research' })])
   })
 
   it('rejects updates to removed tasks without changing the removed row', async () => {
@@ -126,16 +151,12 @@ describe('TaskList state correctness', () => {
     await handle.add({ id: 't1', label: 'Task 1' })
     await handle.complete('t1')
 
-    await expectTaskError(
-      handle.fail('t1', 'Too late'),
-      'InvalidTaskTransitionError',
-      {
-        taskListId: handle.id,
-        taskId: 't1',
-        from: 'completed',
-        to: 'failed',
-      },
-    )
+    await expectTaskError(handle.fail('t1', 'Too late'), 'InvalidTaskTransitionError', {
+      taskListId: handle.id,
+      taskId: 't1',
+      from: 'completed',
+      to: 'failed',
+    })
 
     const edited = await handle.progress('t1', 'Final notes recorded')
     expect(edited.status).toBe('completed')
@@ -151,7 +172,9 @@ describe('TaskList state correctness', () => {
     expect(updateTask.parameters.safeParse({ taskId: 't1', status: 'cancelled' }).success).toBe(true)
 
     await updateTask.execute({ taskId: 't1', status: 'cancelled' })
-    await expect(handle.getTask('t1')).resolves.toMatchObject({ status: 'cancelled' })
+    await expect(handle.getTask('t1')).resolves.toMatchObject({
+      status: 'cancelled',
+    })
   })
 
   it('get() repairs stale counts from task rows', async () => {
@@ -210,3 +233,42 @@ describe('TaskList state correctness', () => {
     expect(repaired).not.toHaveProperty('completedAt')
   })
 })
+
+function createDuplicateInsertRaceStore(): CruxStore {
+  const base = inMemoryCruxStore()
+  let taskKey: string | undefined
+  let waitingTaskInserts = 0
+  let releaseInserts: (() => void) | undefined
+  const releasePromise = new Promise<void>((resolve) => {
+    releaseInserts = resolve
+  })
+
+  return {
+    async get(key: string): Promise<JsonObject | null> {
+      return base.get(key)
+    },
+    set(key: string, value: JsonObject, options?: SetOptions): Promise<void> {
+      return base.set(key, value, options)
+    },
+    async setIfAbsent(key: string, value: JsonObject, options?: SetOptions): Promise<boolean> {
+      if (key.startsWith('task:') && !taskKey) {
+        taskKey = key
+      }
+      if (key === taskKey) {
+        waitingTaskInserts += 1
+        if (waitingTaskInserts === 2) releaseInserts?.()
+        await releasePromise
+      }
+      return base.setIfAbsent(key, value, options)
+    },
+    delete(key: string): Promise<void> {
+      return base.delete(key)
+    },
+    list(prefix: string, options?: ListOptions): Promise<ListResult> {
+      return base.list(prefix, options)
+    },
+    subscribe: base.subscribe?.bind(base),
+    supportsTtl: base.supportsTtl?.bind(base),
+    capabilities: base.capabilities?.bind(base),
+  }
+}

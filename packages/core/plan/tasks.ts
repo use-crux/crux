@@ -288,16 +288,13 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
       }
 
       try {
-        const [rawList, rawExistingTask] = await Promise.all([
-          store.get(taskListKey(taskListId)),
-          store.get(taskKey(taskListId, input.id)),
-        ])
+        const rawList = await store.get(taskListKey(taskListId))
         const list = rawList as unknown as TaskList
         assertMutableTaskList(list, taskListId)
-        if (rawExistingTask) throw DuplicateTaskIdError(taskListId, input.id)
 
         await span.withContext(async () => {
-          await store.set(taskKey(taskListId, input.id), task as unknown as JsonObject)
+          const inserted = await store.setIfAbsent(taskKey(taskListId, input.id), task as unknown as JsonObject)
+          if (!inserted) throw DuplicateTaskIdError(taskListId, input.id)
           emitTaskArtifact(span.spanId, 'add', task)
         })
         const ctx = getExecutionContext()

@@ -85,14 +85,25 @@ export function inMemoryVectorStore(): VectorStore {
           query.sparse && record.sparse ? sparseCosineSimilarity(query.sparse, record.sparse) : undefined
         const score = combineScores(denseScore, sparseScore)
         if (score === undefined || score < threshold) return []
-        return [{ key: record.key, score, ...(record.metadata ? { metadata: record.metadata } : {}) }]
+        return [
+          {
+            key: record.key,
+            score,
+            ...(record.metadata ? { metadata: record.metadata } : {}),
+          },
+        ]
       })
 
       hits.sort((a, b) => b.score - a.score)
       return hits.slice(0, query.limit ?? 10)
     },
     capabilities() {
-      return { dense: true, sparse: true, hybrid: true, fusion: ['rrf', 'dbsf'] as const }
+      return {
+        dense: true,
+        sparse: true,
+        hybrid: true,
+        fusion: ['rrf', 'dbsf'] as const,
+      }
     },
   }
 }
@@ -191,6 +202,25 @@ function createCombinedMemoryStore(): CruxStore {
         expiry.delete(key)
       }
       emit({ type: 'set', key, value: deepCopy(value), timestamp: Date.now() })
+    },
+
+    async setIfAbsent(key: string, value: JsonObject, options?: SetOptions): Promise<boolean> {
+      const expiresAt = expiry.get(key)
+      if (expiresAt !== undefined && Date.now() >= expiresAt) {
+        data.delete(key)
+        expiry.delete(key)
+      } else if (data.has(key)) {
+        return false
+      }
+
+      data.set(key, deepCopy(value))
+      if (options?.ttl !== undefined && options.ttl > 0) {
+        expiry.set(key, Date.now() + options.ttl)
+      } else {
+        expiry.delete(key)
+      }
+      emit({ type: 'set', key, value: deepCopy(value), timestamp: Date.now() })
+      return true
     },
 
     async delete(key: string): Promise<void> {
@@ -414,7 +444,12 @@ function cloneVectorRecord(record: VectorRecord): VectorRecord {
   return {
     key: record.key,
     dense: record.dense ? [...record.dense] : undefined,
-    sparse: record.sparse ? { indices: [...record.sparse.indices], values: [...record.sparse.values] } : undefined,
+    sparse: record.sparse
+      ? {
+          indices: [...record.sparse.indices],
+          values: [...record.sparse.values],
+        }
+      : undefined,
     metadata: record.metadata ? { ...record.metadata } : undefined,
   }
 }

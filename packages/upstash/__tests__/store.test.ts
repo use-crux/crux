@@ -21,6 +21,7 @@ function createStore() {
   const fns = {
     get: fnRef('get'),
     set: fnRef('set'),
+    insert: fnRef('insert'),
     delete: fnRef('delete'),
     list: fnRef('list'),
   }
@@ -39,6 +40,18 @@ function createStore() {
           createdAt: Date.now(),
           updatedAt: args.updatedAt,
         })
+      }
+      if (fn === fns.insert) {
+        const existing = docs.get(args.key)
+        if (existing && !isExpiredStoreDoc(existing)) return false
+        docs.set(args.key, {
+          key: args.key,
+          content: args.content,
+          metadata: args.metadata,
+          createdAt: Date.now(),
+          updatedAt: args.updatedAt,
+        })
+        return true
       }
       if (fn === fns.delete) docs.delete(args.key)
     }),
@@ -73,6 +86,29 @@ describe('cruxUpstashStore', () => {
 
     await store.set('cache:1', value, { ttl: 60_000 })
     await expect(store.get('cache:1')).resolves.toMatchObject(value)
+  })
+
+  it('setIfAbsent inserts once through the Convex insert mutation', async () => {
+    const { store } = createStore()
+
+    await expect(store.setIfAbsent('cache:1', { value: 1 })).resolves.toBe(true)
+    await expect(store.setIfAbsent('cache:1', { value: 2 })).resolves.toBe(false)
+
+    await expect(store.get('cache:1')).resolves.toMatchObject({ value: 1 })
+  })
+
+  it('setIfAbsent treats expired Convex documents as absent', async () => {
+    const { store, docs } = createStore()
+    docs.set('cache:expired', {
+      key: 'cache:expired',
+      content: JSON.stringify({ value: 'old', _expiresAt: Date.now() - 1 }),
+      metadata: { _cruxDoc: true },
+      createdAt: Date.now() - 10,
+      updatedAt: Date.now() - 10,
+    })
+
+    await expect(store.setIfAbsent('cache:expired', { value: 'new' })).resolves.toBe(true)
+    await expect(store.get('cache:expired')).resolves.toMatchObject({ value: 'new' })
   })
 
   it('returns decoded semantic-cache entries from vector search', async () => {
@@ -172,16 +208,37 @@ describe('cruxUpstashStore', () => {
     const { store } = createStore()
     expect(store.capabilities?.().semanticCache?.isolatedVectorNamespace).toBe(true)
 
-    const index = { namespace: () => ({ upsert: vi.fn(), query: vi.fn(), delete: vi.fn() }) }
+    const index = {
+      namespace: () => ({ upsert: vi.fn(), query: vi.fn(), delete: vi.fn() }),
+    }
     const ctx = { runQuery: vi.fn(), runMutation: vi.fn() }
     const fns = {
       get: fnRef('get'),
       set: fnRef('set'),
+      insert: fnRef('insert'),
       delete: fnRef('delete'),
       list: fnRef('list'),
     }
-    const shared = cruxUpstashStore({ index: index as any, namespace: 'docs', convex: { ctx, fns } })
+    const shared = cruxUpstashStore({
+      index: index as any,
+      namespace: 'docs',
+      convex: { ctx, fns },
+    })
 
     expect(shared.capabilities?.().semanticCache?.isolatedVectorNamespace).toBe(false)
   })
 })
+
+function isExpiredStoreDoc(doc: { content?: unknown; metadata?: unknown }): boolean {
+  const metadata = doc.metadata as Record<string, unknown> | undefined
+  if (metadata?._cruxDoc !== true || typeof doc.content !== 'string') {
+    return false
+  }
+
+  try {
+    const value = JSON.parse(doc.content) as Record<string, unknown>
+    return typeof value._expiresAt === 'number' && Date.now() >= value._expiresAt
+  } catch {
+    return false
+  }
+}

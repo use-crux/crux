@@ -8,6 +8,7 @@ describe('cruxConvexStore', () => {
       memory: {
         get: 'memory:get',
         set: 'memory:set',
+        insert: 'memory:insert',
         remove: 'memory:remove',
         list: 'memory:list',
       },
@@ -30,7 +31,9 @@ describe('cruxConvexStore', () => {
   }
 
   it('wires dense vector search through the configured Convex vector index', async () => {
-    const { store, ctx } = createStore({ vectorIndexName: 'by_custom_embedding' })
+    const { store, ctx } = createStore({
+      vectorIndexName: 'by_custom_embedding',
+    })
 
     ctx.vectorSearch.mockResolvedValue([
       {

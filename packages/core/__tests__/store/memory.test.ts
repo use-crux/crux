@@ -10,7 +10,7 @@ describe('inMemoryCruxStore', () => {
     expect(await store.get('missing')).toBeNull()
   })
 
-    it('set + get round-trips a JsonObject', async () => {
+  it('set + get round-trips a JsonObject', async () => {
     const store = inMemoryCruxStore()
     await store.set('k1', { title: 'hello', count: 42, nested: { a: 1 } })
 
@@ -21,7 +21,7 @@ describe('inMemoryCruxStore', () => {
     expect(value!.nested).toEqual({ a: 1 })
   })
 
-    it('set overwrites existing value', async () => {
+  it('set overwrites existing value', async () => {
     const store = inMemoryCruxStore()
     await store.set('k1', { version: 1 })
     await store.set('k1', { version: 2, extra: true })
@@ -31,7 +31,16 @@ describe('inMemoryCruxStore', () => {
     expect(value!.extra).toBe(true)
   })
 
-    it('stores a defensive copy — mutations to original do not affect stored value', async () => {
+  it('setIfAbsent inserts once without overwriting an existing value', async () => {
+    const store = inMemoryCruxStore()
+
+    await expect(store.setIfAbsent('k1', { version: 1 })).resolves.toBe(true)
+    await expect(store.setIfAbsent('k1', { version: 2 })).resolves.toBe(false)
+
+    await expect(store.get('k1')).resolves.toMatchObject({ version: 1 })
+  })
+
+  it('stores a defensive copy — mutations to original do not affect stored value', async () => {
     const store = inMemoryCruxStore()
     const obj = { data: 'original' }
     await store.set('k1', obj)
@@ -41,7 +50,7 @@ describe('inMemoryCruxStore', () => {
     expect(value!.data).toBe('original')
   })
 
-    it('returns a defensive copy — mutations to returned value do not affect store', async () => {
+  it('returns a defensive copy — mutations to returned value do not affect store', async () => {
     const store = inMemoryCruxStore()
     await store.set('k1', { data: 'original' })
 
@@ -52,14 +61,14 @@ describe('inMemoryCruxStore', () => {
     expect(fresh!.data).toBe('original')
   })
 
-    it('delete removes entry', async () => {
+  it('delete removes entry', async () => {
     const store = inMemoryCruxStore()
     await store.set('k1', { v: 1 })
     await store.delete('k1')
     expect(await store.get('k1')).toBeNull()
   })
 
-    it('delete is no-op for missing key', async () => {
+  it('delete is no-op for missing key', async () => {
     const store = inMemoryCruxStore()
     await store.delete('missing') // should not throw
   })
@@ -224,7 +233,9 @@ describe('inMemoryCruxStore', () => {
       await store.set('k1', { type: 'note', embedding: [1, 0] })
       await store.set('k2', { type: 'task', embedding: [0.9, 0.1] })
 
-      const result = await store.vectorSearch!([1, 0], { filter: { type: 'task' } })
+      const result = await store.vectorSearch!([1, 0], {
+        filter: { type: 'task' },
+      })
       expect(result).toHaveLength(1)
       expect(result[0].key).toBe('k2')
     })

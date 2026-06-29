@@ -31,7 +31,7 @@ await work.progress('extract', 'Parsed 1,200 rows')
 await work.complete('extract', { rows: 1200 })
 ```
 
-Results and metadata must be JSON-safe.
+Task IDs must be unique within the ledger. A duplicate `add()` rejects with `DuplicateTaskIdError`, including when concurrent writers race to add the same ID. Results and metadata must be JSON-safe.
 
 ## Defined Ledgers
 
