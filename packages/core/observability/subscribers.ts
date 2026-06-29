@@ -46,6 +46,13 @@ export function publishObservabilitySubscribers(record: CruxGraphRecord): void {
   }
 }
 
+/**
+ * Returns whether any in-process observability subscriber is currently
+ * registered.
+ *
+ * This is intended for Crux internals that need to decide whether to preserve
+ * observable execution boundaries when no devtools transport is configured.
+ */
 export function hasObservabilitySubscribers(): boolean {
   return subscribers.size > 0
 }

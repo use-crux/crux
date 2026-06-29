@@ -355,9 +355,6 @@ export async function withFlow<T, TInput = void>(
       }
 
 
-      // Note: onFlowEnd is NOT fired for suspend — the flow isn't terminal.
-      // onFlowSuspend signals the pause; onFlowResume will signal continuation.
-
       await flowSpan.withContext(async () => {
         await emitFlowSuspensionMarker(error.suspendPoint, {
           flowId,

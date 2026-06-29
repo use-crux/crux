@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { resetRuntime, prompt as cruxPrompt } from '@use-crux/core'
 import { observe, resetObservabilityRuntime, subscribeObservability } from '@use-crux/core/observability'
+import { SpanStatusCode, trace } from '@opentelemetry/api'
+import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import { configure } from '../../core/runtime/configure'
 import { withTelemetry } from '../index'
 import { createCallbackExporter, createUrlExporter } from '../exporter'
@@ -28,6 +30,7 @@ describe('withTelemetry', () => {
   beforeEach(() => {
     resetRuntime()
     resetObservabilityRuntime()
+    trace.disable()
   })
 
   it('returns a CruxPlugin with name crux:otel', () => {
@@ -45,6 +48,37 @@ describe('withTelemetry', () => {
 
     expect(reg.get('a')).toBeDefined()
     reg.dispose()
+  })
+
+  it('uses the globally registered OTel tracer when no lightweight exporter is configured', async () => {
+    const exporter = new InMemorySpanExporter()
+    const provider = new BasicTracerProvider()
+    provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
+    trace.setGlobalTracerProvider(provider)
+
+    const installed = withTelemetry({ serviceName: 'test-app' }).install({})
+
+    await observe.span(
+      {
+        name: 'generate',
+        family: 'generation',
+        primitive: 'generation.call',
+        attributes: { provider: 'openai', model: 'gpt-4o' },
+      },
+      async () => {},
+    )
+    installed.dispose?.()
+
+    const spans = exporter.getFinishedSpans()
+    expect(spans.map((span) => span.name)).toContain('crux.generate')
+    expect(spans.find((span) => span.name === 'crux.generate')?.attributes).toMatchObject({
+      'gen_ai.system': 'openai',
+      'gen_ai.request.model': 'gpt-4o',
+    })
+    expect(spans.find((span) => span.name === 'crux.generate')?.status.code).toBe(SpanStatusCode.OK)
+
+    trace.disable()
+    await provider.shutdown()
   })
 
   it('can coexist with other subscriber plugins', async () => {

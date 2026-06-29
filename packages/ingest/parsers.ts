@@ -6,9 +6,9 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { gfm } from 'micromark-extension-gfm'
 import { toString as mdastToString } from 'mdast-util-to-string'
-import { observe } from '@use-crux/core/observability'
 import { deriveContent } from './document'
 import { normalizeDocument } from './document'
+import { openIngestParseObservation } from './observability'
 import { parsePdf } from './pdf'
 import type {
   IngestDocument,
@@ -24,8 +24,6 @@ import type {
   ParserOptions,
 } from './types'
 
-let ingestCounter = 0
-
 export async function parseDocument(input: {
   namespace: string
   sourceId: string
@@ -39,25 +37,16 @@ export async function parseDocument(input: {
   const parser = resolveParser(input.format, input.options)
   const warnings: IngestWarning[] = []
   const text = isTextLike(input.format) ? new TextDecoder('utf-8').decode(input.bytes) : undefined
-  const ingestId = `ingest_${Date.now().toString(36)}_${++ingestCounter}`
-  const startedAt = Date.now()
-  const baseEvent = {
-    ingestId,
+  const parseObservation = openIngestParseObservation({
     parser: parser.name,
     format: input.format,
     namespace: input.namespace,
     sourceId: input.sourceId,
     byteLength: input.bytes.byteLength,
     ...(input.contentType ? { contentType: input.contentType } : {}),
-  }
-  const span = observe.openSpan({
-    name: `parse ${input.format}`,
-    family: 'ingest',
-    primitive: 'ingest.parse',
-    attributes: baseEvent,
   })
 
-  return await span.withContext(async () => {
+  return await parseObservation.withContext(async () => {
     try {
       const parsed = await parser.parse(
         {
@@ -89,20 +78,14 @@ export async function parseDocument(input: {
         },
         warnings,
       })
-      span.end({
-        attributes: {
-          ...baseEvent,
-          durationMs: Date.now() - startedAt,
-          partCount: document.parts.length,
-          warningCount: warnings.length,
-        },
+      parseObservation.end({
+        partCount: document.parts.length,
+        warningCount: warnings.length,
       })
       return document
     } catch (error) {
       const parsedError = toParseError(error, parser.name)
-      span.error(parsedError, {
-        ...baseEvent,
-        durationMs: Date.now() - startedAt,
+      parseObservation.error(parsedError, {
         partCount: 0,
         warningCount: warnings.length,
         phase: 'ingest.parse',

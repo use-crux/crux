@@ -12,6 +12,7 @@ import { subscribeObservability } from '@use-crux/core/observability'
 import type { TraceSpan } from './types'
 import { createCallbackExporter, createUrlExporter, type SpanExporter } from './exporter'
 import { createLightweightSpanManager, type SpanManager } from './span-manager'
+import { createOpenTelemetrySpanManager } from './otel-span-manager'
 import { createOtelRecordSubscriber } from './record-mapper'
 
 // ─────────────────────────────────────────────────────────────────
@@ -120,7 +121,7 @@ export function withTelemetry(options?: TelemetryOptions): CruxPlugin {
  *
  * - Callback exporter: lightweight span manager with callback exporter
  * - URL exporter: lightweight span manager with URL exporter
- * - No exporter: lightweight span manager with no-op exporter (OTel path TBD)
+ * - No exporter: standard OTel tracer when `@opentelemetry/api` is available
  */
 function createSpanManager(options: TelemetryOptions): SpanManager {
   let exporter: SpanExporter
@@ -131,14 +132,12 @@ function createSpanManager(options: TelemetryOptions): SpanManager {
     } else {
       exporter = createUrlExporter(options.exporter)
     }
-  } else {
-    // No exporter configured — for now, use a no-op exporter.
-    // OTel TracerProvider integration will be added when needed.
-    exporter = {
-      export: () => {},
-      shutdown: async () => {},
-    }
+    return createLightweightSpanManager(exporter)
   }
 
-  return createLightweightSpanManager(exporter)
+  return createOpenTelemetrySpanManager(options.serviceName) ??
+    createLightweightSpanManager({
+      export: () => {},
+      shutdown: async () => {},
+    })
 }
