@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { pickHeroVariant } from './hero-variants'
 import { CodePanel, type CodeLine, CruxFooter, SectionHead, Tile } from './_components'
+import { TrackedLink } from '@/components/tracked-link'
 
 export const dynamic = 'force-dynamic'
 
@@ -168,8 +169,10 @@ export default function HomePage() {
 
             {/* CTAs */}
             <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
-              <Link
+              <TrackedLink
                 href="/docs/getting-started"
+                event="get_started_clicked"
+                properties={{ location: 'hero' }}
                 className="group relative inline-flex items-center gap-2 rounded-lg bg-fd-primary px-6 py-2.5 text-sm font-semibold text-fd-primary-foreground transition-all hover:opacity-90"
               >
                 Get Started
@@ -182,13 +185,15 @@ export default function HomePage() {
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                 </svg>
-              </Link>
-              <Link
+              </TrackedLink>
+              <TrackedLink
                 href="/docs"
+                event="docs_cta_clicked"
+                properties={{ location: 'hero' }}
                 className="inline-flex items-center gap-2 rounded-lg border border-fd-border px-6 py-2.5 text-sm font-semibold transition-colors hover:bg-fd-accent"
               >
                 Read the Docs
-              </Link>
+              </TrackedLink>
             </div>
 
             {/* Install */}
@@ -220,9 +225,7 @@ export default function HomePage() {
               />
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <code className="font-mono text-[14px] font-semibold text-crux">
-                    {'prompt({ use: [ ... ] })'}
-                  </code>
+                  <code className="font-mono text-[14px] font-semibold text-crux">{'prompt({ use: [ ... ] })'}</code>
                   <p className="mt-1 text-[12.5px] text-fd-muted-foreground">
                     One place for everything the model is allowed to see.
                   </p>
@@ -272,8 +275,9 @@ export default function HomePage() {
               Bad LLM output is rarely a model problem.
             </h2>
             <p className="mt-5 max-w-md text-[0.95rem] leading-relaxed text-fd-muted-foreground">
-              The fix usually isn&apos;t the prompt and isn&apos;t the model. It&apos;s the missing memory, stale retrieval,
-              dropped instruction, or test that should have caught the regression. Crux makes those parts explicit.
+              The fix usually isn&apos;t the prompt and isn&apos;t the model. It&apos;s the missing memory, stale
+              retrieval, dropped instruction, or test that should have caught the regression. Crux makes those parts
+              explicit.
             </p>
             <Link
               href="/why"
@@ -287,7 +291,10 @@ export default function HomePage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {[
               { k: 'Steerability', v: 'Guardrails, constraints, and fallbacks are declared before the call.' },
-              { k: 'Composable context', v: 'Brand voice, memory, and retrieval stay reusable instead of pasted together.' },
+              {
+                k: 'Composable context',
+                v: 'Brand voice, memory, and retrieval stay reusable instead of pasted together.',
+              },
               { k: 'Type safety', v: 'Zod schemas in. Typed objects out. Refactors stay real.' },
               { k: 'Observable by default', v: 'See what the model saw before you start guessing.' },
             ].map((p) => (
@@ -313,7 +320,7 @@ export default function HomePage() {
               {
                 k: 'START SMALL',
                 title: 'Use one block first.',
-                body: "Replace a prompt string, add memory, or wrap retrieval. Each piece is its own import, and the rest stays out of your bundle.",
+                body: 'Replace a prompt string, add memory, or wrap retrieval. Each piece is its own import, and the rest stays out of your bundle.',
               },
               {
                 k: 'ADD WHAT HURTS',
@@ -347,9 +354,9 @@ export default function HomePage() {
               </h2>
               <p className="mt-5 text-[0.95rem] leading-relaxed text-fd-muted-foreground">
                 Memory, retrieval, guardrails. One prompt. A Crux prompt has a single{' '}
-                <code className="rounded bg-fd-card/80 px-1 font-mono text-[0.9em]">use:</code> array. Drop any combination
-                of blocks into it; they add context, tools, and checks without scattering logic across the app. The SDK
-                still makes the call.
+                <code className="rounded bg-fd-card/80 px-1 font-mono text-[0.9em]">use:</code> array. Drop any
+                combination of blocks into it; they add context, tools, and checks without scattering logic across the
+                app. The SDK still makes the call.
               </p>
               <div className="mt-8 space-y-3.5">
                 {[
@@ -454,7 +461,13 @@ export default function HomePage() {
             >
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-crux/10">
-                  <svg className="h-4 w-4 text-crux" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg
+                    className="h-4 w-4 text-crux"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -488,7 +501,13 @@ export default function HomePage() {
             >
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-crux/10">
-                  <svg className="h-4 w-4 text-crux" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg
+                    className="h-4 w-4 text-crux"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -500,8 +519,8 @@ export default function HomePage() {
               </div>
               <h3 className="text-lg font-semibold">OpenTelemetry</h3>
               <p className="mt-2 text-[13px] leading-relaxed text-fd-muted-foreground">
-                Send spans to Datadog, Honeycomb, Grafana, or any OTel-compatible platform. Works in Lambda, Convex,
-                and Cloudflare Workers.
+                Send spans to Datadog, Honeycomb, Grafana, or any OTel-compatible platform. Works in Lambda, Convex, and
+                Cloudflare Workers.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {['Datadog', 'Honeycomb', 'Grafana', 'New Relic'].map((platform) => (
@@ -630,8 +649,10 @@ export default function HomePage() {
             Add the rest when you need them. Bring your SDK. No runtime to adopt. Nothing to migrate away from.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Link
+            <TrackedLink
               href="/docs/getting-started"
+              event="get_started_clicked"
+              properties={{ location: 'cta_bottom' }}
               className="group inline-flex items-center gap-2 rounded-lg bg-fd-primary px-6 py-2.5 text-sm font-semibold text-fd-primary-foreground transition-all hover:opacity-90"
             >
               Get Started
@@ -644,13 +665,15 @@ export default function HomePage() {
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
               </svg>
-            </Link>
-            <Link
+            </TrackedLink>
+            <TrackedLink
               href="/docs"
+              event="docs_cta_clicked"
+              properties={{ location: 'cta_bottom' }}
               className="inline-flex items-center gap-2 rounded-lg border border-fd-border px-6 py-2.5 text-sm font-semibold transition-colors hover:bg-fd-accent"
             >
               Read the Docs
-            </Link>
+            </TrackedLink>
           </div>
           <div className="mt-10 inline-flex items-center gap-3 rounded-lg border border-fd-border bg-fd-card/50 px-5 py-2.5 font-mono text-[13px]">
             <span className="select-none text-crux/50">$</span>

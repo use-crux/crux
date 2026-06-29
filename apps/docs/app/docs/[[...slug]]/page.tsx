@@ -10,6 +10,9 @@ import {
 import { notFound } from 'next/navigation'
 import { getMDXComponents } from '@/mdx-components'
 import { createRelativeLink } from 'fumadocs-ui/mdx'
+import { buttonVariants } from 'fumadocs-ui/components/ui/button'
+import { TrackedLink } from '@/components/tracked-link'
+import { GitHubIcon } from '@/components/brand-icons'
 import type { Metadata } from 'next'
 
 const REPO_BASE = 'https://github.com/use-crux/crux/blob/main/apps/docs/content/docs'
@@ -34,7 +37,18 @@ export default async function Page(props: { params: Promise<{ slug?: string[] }>
         header: (
           <div className="not-prose flex flex-row items-center gap-2 mb-2">
             <MarkdownCopyButton markdownUrl={markdownUrl} />
-            <ViewOptionsPopover markdownUrl={markdownUrl} githubUrl={githubUrl} />
+            <ViewOptionsPopover markdownUrl={markdownUrl} />
+            <TrackedLink
+              href={githubUrl}
+              event="github_link_clicked"
+              properties={{ location: 'docs_page', slug: slugPath || 'index' }}
+              aria-label="View source on GitHub"
+              target="_blank"
+              rel="noreferrer noopener"
+              className={buttonVariants({ size: 'icon-sm', color: 'ghost' })}
+            >
+              <GitHubIcon />
+            </TrackedLink>
           </div>
         ),
       }}

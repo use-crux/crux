@@ -1,6 +1,13 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared'
+import { buttonVariants } from 'fumadocs-ui/components/ui/button'
+import { TrackedLink } from '@/components/tracked-link'
+import { GitHubIcon, NpmIcon } from '@/components/brand-icons'
+
+export const GITHUB_URL = 'https://github.com/use-crux/crux'
+export const NPM_URL = 'https://www.npmjs.com/package/@use-crux/core'
 
 export function baseOptions(): BaseLayoutProps {
+  const iconClass = buttonVariants({ size: 'icon-sm', color: 'ghost' })
   return {
     nav: {
       title: (
@@ -14,7 +21,6 @@ export function baseOptions(): BaseLayoutProps {
         </div>
       ),
     },
-    githubUrl: 'https://github.com/use-crux/crux',
     links: [
       {
         text: 'Why Crux',
@@ -32,6 +38,40 @@ export function baseOptions(): BaseLayoutProps {
       {
         text: 'Compare',
         url: '/compare',
+      },
+      {
+        type: 'custom',
+        secondary: true,
+        children: (
+          <TrackedLink
+            href={GITHUB_URL}
+            event="github_link_clicked"
+            properties={{ location: 'navbar' }}
+            aria-label="GitHub repository"
+            target="_blank"
+            rel="noreferrer noopener"
+            className={iconClass}
+          >
+            <GitHubIcon />
+          </TrackedLink>
+        ),
+      },
+      {
+        type: 'custom',
+        secondary: true,
+        children: (
+          <TrackedLink
+            href={NPM_URL}
+            event="npm_link_clicked"
+            properties={{ location: 'navbar' }}
+            aria-label="npm package"
+            target="_blank"
+            rel="noreferrer noopener"
+            className={iconClass}
+          >
+            <NpmIcon />
+          </TrackedLink>
+        ),
       },
     ],
   }

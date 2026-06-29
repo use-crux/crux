@@ -3,6 +3,7 @@
 
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { TrackedLink } from '@/components/tracked-link'
 
 // ─────────────────────────────────────────────────────────────────────
 // Snap-notch tile — the primary visual motif across all three landings.
@@ -27,21 +28,13 @@ export function Tile({
   strong?: boolean
 }) {
   const isEmpty = state === 'empty'
-  const baseBorder = isEmpty
-    ? 'border-dashed border-fd-border'
-    : strong
-      ? 'border-crux/60'
-      : 'border-fd-border'
-  const baseBg = isEmpty
-    ? 'bg-transparent'
-    : strong
-      ? 'bg-crux-soft'
-      : soft
-        ? 'bg-crux-soft/40'
-        : 'bg-fd-card/50'
+  const baseBorder = isEmpty ? 'border-dashed border-fd-border' : strong ? 'border-crux/60' : 'border-fd-border'
+  const baseBg = isEmpty ? 'bg-transparent' : strong ? 'bg-crux-soft' : soft ? 'bg-crux-soft/40' : 'bg-fd-card/50'
 
   return (
-    <div className={`group relative h-full rounded-lg border ${baseBorder} ${baseBg} px-3.5 py-3 flex flex-col gap-1 ${strong ? 'border-[1.5px]' : ''}`}>
+    <div
+      className={`group relative h-full rounded-lg border ${baseBorder} ${baseBg} px-3.5 py-3 flex flex-col gap-1 ${strong ? 'border-[1.5px]' : ''}`}
+    >
       {/* Snap-notch — top-left */}
       <div
         className={`absolute -top-[3px] left-3.5 h-1.5 w-3.5 rounded-b-[5px] ${strong ? 'border-x-[1.5px] border-b-[1.5px] border-crux/60' : 'border-x border-b border-fd-border'} ${isEmpty ? 'border-dashed' : ''}`}
@@ -98,12 +91,12 @@ export function SectionHead({
   const alignCls = align === 'center' ? 'text-center mx-auto' : 'text-left'
   return (
     <div className={`mb-14 ${alignCls}`} style={{ maxWidth: align === 'center' ? maxWidth : undefined }}>
-      {kicker && (
-        <p className="mb-3 text-xs font-medium tracking-[0.2em] uppercase text-crux">{kicker}</p>
-      )}
+      {kicker && <p className="mb-3 text-xs font-medium tracking-[0.2em] uppercase text-crux">{kicker}</p>}
       <h2 className="text-3xl font-[700] tracking-[-0.025em] sm:text-4xl">{title}</h2>
       {subtitle && (
-        <p className={`mt-4 text-[0.95rem] text-fd-muted-foreground ${align === 'center' ? 'mx-auto max-w-xl' : 'max-w-2xl'}`}>
+        <p
+          className={`mt-4 text-[0.95rem] text-fd-muted-foreground ${align === 'center' ? 'mx-auto max-w-xl' : 'max-w-2xl'}`}
+        >
           {subtitle}
         </p>
       )}
@@ -216,7 +209,9 @@ export function CodePanel({
             </div>
           )}
           {filename && (
-            <span className={`ml-auto font-mono text-[11px] ${borderAccent ? 'text-fd-muted-foreground' : 'text-fd-muted-foreground/60'}`}>
+            <span
+              className={`ml-auto font-mono text-[11px] ${borderAccent ? 'text-fd-muted-foreground' : 'text-fd-muted-foreground/60'}`}
+            >
               {filename}
             </span>
           )}
@@ -251,6 +246,19 @@ export function CodePanel({
 
 // ─────────────────────────────────────────────────────────────────────
 // Site footer — 5-column. Shared across all landings.
+
+type FooterLink = {
+  label: string
+  href: string
+  event?: string
+  properties?: Record<string, unknown>
+  external?: boolean
+}
+
+type FooterColumn = {
+  heading: string
+  links: FooterLink[]
+}
 
 export function CruxFooter() {
   const columns = [
@@ -289,11 +297,24 @@ export function CruxFooter() {
         { label: 'Cookbook', href: '/docs/cookbook' },
         { label: 'Compare', href: '/compare' },
         { label: 'Examples', href: '/docs/cookbook' },
-        { label: 'GitHub', href: 'https://github.com/use-crux/crux' },
+        {
+          label: 'GitHub',
+          href: 'https://github.com/use-crux/crux',
+          event: 'github_link_clicked',
+          properties: { location: 'footer' },
+          external: true,
+        },
+        {
+          label: 'npm',
+          href: 'https://www.npmjs.com/package/@use-crux/core',
+          event: 'npm_link_clicked',
+          properties: { location: 'footer' },
+          external: true,
+        },
         { label: 'Reference', href: '/docs/reference' },
       ],
     },
-  ]
+  ] satisfies FooterColumn[]
 
   return (
     <footer className="border-t border-fd-border bg-fd-background px-6 pb-10 pt-16">
@@ -301,12 +322,7 @@ export function CruxFooter() {
         <div>
           <div className="flex items-center gap-2">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-fd-foreground">
-              <path
-                d="M12 2L2 7v10l10 5 10-5V7L12 2z"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-              />
+              <path d="M12 2L2 7v10l10 5 10-5V7L12 2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
               <path d="M12 22V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               <path d="M2 7l10 5 10-5" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
             </svg>
@@ -326,16 +342,32 @@ export function CruxFooter() {
               {col.heading}
             </p>
             <ul className="space-y-2.5">
-              {col.links.map((link) => (
-                <li key={link.label}>
-                  <Link
-                    href={link.href}
-                    className="text-[13px] text-fd-muted-foreground transition-colors hover:text-fd-foreground"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
+              {col.links.map((link) => {
+                const className =
+                  'text-[13px] text-fd-muted-foreground transition-colors hover:text-fd-foreground'
+                const externalProps = link.external
+                  ? { target: '_blank', rel: 'noreferrer noopener' }
+                  : {}
+                return (
+                  <li key={link.label}>
+                    {link.event ? (
+                      <TrackedLink
+                        href={link.href}
+                        event={link.event}
+                        properties={link.properties}
+                        className={className}
+                        {...externalProps}
+                      >
+                        {link.label}
+                      </TrackedLink>
+                    ) : (
+                      <Link href={link.href} className={className}>
+                        {link.label}
+                      </Link>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           </div>
         ))}
