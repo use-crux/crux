@@ -1,26 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { evaluate } from '../../quality'
-import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
-import { runEvaluation } from '../../quality/internal/engine'
-import type { RunOverrides } from '../../quality/experiment'
 import type { QualitySourceFrameRequest, QualitySourceFrameResolver } from '../../quality/source-frame'
-
-/** Run an evaluation through the internal engine without touching the repo. */
-function run(
-  evaluation: Evaluation<never, never, string, string>,
-  overrides?: RunOverrides<string>,
-  options?: Parameters<typeof runEvaluation>[2],
-) {
-  return runEvaluation(getEvaluationDefinition(evaluation), overrides, {
-    persist: false,
-    qualityId: 'test',
-    ...options,
-  })
-}
+import { runEvaluationWithRunner as run } from './runner-harness'
 
 const upperTask = async (input: { q: string }) => ({ answer: input.q.toUpperCase() })
 
-describe('runEvaluation - source frame snapshots', () => {
+describe('Quality runner - source frame snapshots', () => {
   it('captures authored source-frame snapshots for direct programmatic runs', async () => {
     const evaluation = evaluate({
       task: upperTask,
@@ -53,7 +38,7 @@ describe('runEvaluation - source frame snapshots', () => {
     )
   })
 
-    it('records authored source-frame snapshots from a supplied resolver', async () => {
+  it('records authored source-frame snapshots from a supplied resolver', async () => {
     const requests: QualitySourceFrameRequest[] = []
     const resolver: QualitySourceFrameResolver = {
       async resolveSourceFrame(request) {
@@ -119,7 +104,7 @@ describe('runEvaluation - source frame snapshots', () => {
     expect(requests[0]!.sourceRef).toMatch(/engine-source-frames\.test\.ts:\d+:\d+$/)
   })
 
-    it('records source-frame snapshots for expect callback errors', async () => {
+  it('records source-frame snapshots for expect callback errors', async () => {
     const requests: QualitySourceFrameRequest[] = []
     const resolver: QualitySourceFrameResolver = {
       async resolveSourceFrame(request) {

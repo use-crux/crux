@@ -2,24 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { flow } from '../../flow/scope'
 import { observe } from '../../observability'
 import { evaluate } from '../../quality'
-import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
-import type { RunOverrides } from '../../quality/experiment'
-import { runEvaluation } from '../../quality/internal/engine'
+import { runEvaluationWithRunner as run } from './runner-harness'
 
-/** Run an evaluation through the internal engine without persisting fixtures. */
-function run(
-  evaluation: Evaluation<never, never, string, string>,
-  overrides?: RunOverrides<string>,
-  options?: Parameters<typeof runEvaluation>[2],
-) {
-  return runEvaluation(getEvaluationDefinition(evaluation), overrides, {
-    persist: false,
-    qualityId: 'test',
-    ...options,
-  })
-}
-
-describe('runEvaluation - trace-backed signal span evidence', () => {
+describe('Quality runner - trace-backed signal span evidence', () => {
   it('records the producing span id on failed signal assertion outcomes', async () => {
     const draftFlow = flow<{ ok: boolean }, { topic: string }>('draft-check', async () => {
       try {

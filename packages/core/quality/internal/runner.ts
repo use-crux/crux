@@ -1,42 +1,76 @@
 /**
- * The runner tooling contract — the single entry point the first-party
- * `crux quality` worker (packages/local-workers) uses to drive the engine.
+ * Internal Quality runner facade.
  *
- * This is NOT a public API. It is exported as the `@use-crux/core/quality/internal/runner`
- * subpath solely so the local quality worker can import the engine across the
- * package boundary; it carries no stability guarantees, is excluded from the
- * docs, and may change in any release. Application code must import
+ * This is NOT a public API. It is exported as the
+ * `@use-crux/core/quality/internal/runner` subpath solely so first-party
+ * tooling can collect, run, and promote Quality evaluations through one
+ * operation-level contract. Application code must import
  * `@use-crux/core/quality` instead.
  *
  * @internal
  * @module
  */
 
-export { runEvaluation, QualityDefinitionError } from './engine'
-export type { EngineOptions, EngineSetup } from './engine'
-export { getEvaluationDefinition, EVALUATION_INTERNAL } from '../evaluate'
-export type { Evaluation } from '../evaluate'
-export { lowerPromptTests, hasPromptTests } from './prompt-tests'
-export { buildManifest, resolveCaseId } from '../manifest'
-export type { EvaluationManifest } from '../manifest'
-export { toExperimentRecord, persistExperiment, experimentRecordPath } from './persist'
-export {
-  baselineRecordPath,
-  readBaselineRecord,
-  writeBaselineRecord,
-  listBaselineRecords,
-  buildBaselineReference,
-  gitUserName,
-} from './baseline'
-export type { BaselineRecord } from './baseline'
-export { ulid } from './ulid'
+import { collectQualityEvaluations } from './runner-collect'
+import { promoteQualityExperiment } from './runner-promote'
+import { runQualityEvaluations } from './runner-run'
+import type {
+  QualityCollectInput,
+  QualityPromoteInput,
+  QualityRunInput,
+  QualityRunner,
+  QualityRunnerEnv,
+} from './runner-types'
+
+export type {
+  QualityCollectedEvaluation,
+  QualityCollectError,
+  QualityCollectInput,
+  QualityCollectResult,
+  QualityEvaluationHandle,
+  QualityEvaluationModule,
+  QualityEventSink,
+  QualityPromoteInput,
+  QualityPromoteResult,
+  QualityPromotedBaseline,
+  QualityRunInput,
+  QualityRunner,
+  QualityRunnerEnv,
+  QualityRunnerEvent,
+  QualityRunResult,
+} from './runner-types'
 export type { Comparison, Experiment, ExperimentCell, RunOverrides } from '../experiment'
-export { NotImplementedError } from './errors'
-export type { EvaluationDefinition } from './definition'
-export {
-  createHttpObservabilityTransport,
-  currentObservabilityTransport,
-  observe,
-  setObservabilityTransport,
-} from '../../observability'
+export type { EvaluationManifest } from '../manifest'
 export type { QualityConfig } from '../config'
+
+/**
+ * Create the first-party Quality runner facade.
+ *
+ * The returned object is the supported internal tooling boundary for the local
+ * worker and devtools. It hides engine definitions, persistence paths,
+ * baseline helpers, prompt-test lowering, and observability plumbing behind
+ * three operations: collect, run, and promote.
+ *
+ * @param env - Runner environment shared by all operations.
+ * @returns A frozen Quality runner facade.
+ *
+ * @example
+ * ```ts
+ * const runner = createQualityRunner({
+ *   rootDir,
+ *   dir: qualityDir,
+ *   qualityId: config.quality?.id,
+ *   events: (event) => process.stdout.write(`${JSON.stringify(event)}\n`),
+ * })
+ *
+ * const collected = await runner.collect({ modules, promptCandidates })
+ * const result = await runner.run({ evaluations: collected.evaluations, ids })
+ * ```
+ */
+export function createQualityRunner(env: QualityRunnerEnv = {}): QualityRunner {
+  return Object.freeze({
+    collect: (input: QualityCollectInput) => collectQualityEvaluations(input, env.events),
+    run: (input: QualityRunInput) => runQualityEvaluations(env, input),
+    promote: (input: QualityPromoteInput) => promoteQualityExperiment(env, input),
+  })
+}

@@ -8,9 +8,8 @@ import { prompt } from '../../prompt/prompt'
 import { loopRuntimeAdapter } from '../../adapter'
 import { fakeLoopRuntime, type FakeLoopRuntimeConfig } from '../../adapter/testing'
 import { evaluate, scorers } from '../../quality'
-import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
-import { runEvaluation, type EngineOptions } from '../../quality/internal/engine'
 import type { RunOverrides } from '../../quality/experiment'
+import { runEvaluationWithRunner, type QualityRunnerHarnessOptions } from './runner-harness'
 
 const tempDirs: string[] = []
 async function tempQualityDir(): Promise<string> {
@@ -36,15 +35,11 @@ function executorSetup(config: FakeLoopRuntimeConfig) {
 }
 
 function run(
-  evaluation: Evaluation<never, never, string, string>,
-  options: EngineOptions,
+  evaluation: Parameters<typeof runEvaluationWithRunner>[0],
+  options: QualityRunnerHarnessOptions,
   overrides?: RunOverrides<string>,
 ) {
-  return runEvaluation(getEvaluationDefinition(evaluation), overrides, {
-    persist: false,
-    qualityId: 'test',
-    ...options,
-  })
+  return runEvaluationWithRunner(evaluation, overrides, options)
 }
 
 const repeat = <T>(value: T, times: number): T[] => Array.from({ length: times }, () => value)
@@ -66,14 +61,18 @@ describe('engine replay — record-new then replay-strict', () => {
     const cassetteFile = join(dir, 'cassettes', 'replay.smoke.json')
     expect(existsSync(cassetteFile)).toBe(true)
 
-    const replayRun = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } }, { replayMode: 'replay-strict' })
+    const replayRun = await run(
+      evaluation,
+      { dir, setup: { generate, model: 'fake:m1' } },
+      { replayMode: 'replay-strict' },
+    )
     expect(liveCalls()).toBe(1) // zero new live calls
     expect(replayRun.perCase[0]!.status).toBe('passed')
     expect(replayRun.perCase[0]!.output).toBe('recorded answer')
     expect(replayRun.replay).toMatchObject({ mode: 'replay-strict', cassette: 'replay.smoke' })
   })
 
-    it('quality.defaults.replay fills when nothing else is declared; --replay live opts out', async () => {
+  it('quality.defaults.replay fills when nothing else is declared; --replay live opts out', async () => {
     const dir = await tempQualityDir()
     const { generate } = executorSetup({ loops: repeat([{ text: 'a' }], 4) })
     const evaluation = evaluate('replay.defaults', {
@@ -93,7 +92,7 @@ describe('engine replay — record-new then replay-strict', () => {
     expect(existsSync(join(liveDir, 'cassettes'))).toBe(false)
   })
 
-    it('fails a replay-strict miss closed: cell errored, phase replay, key + re-record hint', async () => {
+  it('fails a replay-strict miss closed: cell errored, phase replay, key + re-record hint', async () => {
     const dir = await tempQualityDir()
     const { generate, liveCalls } = executorSetup({ loops: repeat([{ text: 'never' }], 2) })
     const evaluation = evaluate('replay.miss', {
@@ -127,7 +126,11 @@ describe('engine replay — trials collapse under replay-strict', () => {
     const recordRun = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } })
     expect(recordRun.perCase).toHaveLength(3) // trials run live under record-new
 
-    const replayRun = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } }, { replayMode: 'replay-strict' })
+    const replayRun = await run(
+      evaluation,
+      { dir, setup: { generate, model: 'fake:m1' } },
+      { replayMode: 'replay-strict' },
+    )
     expect(replayRun.perCase).toHaveLength(1)
     expect(replayRun.replay).toMatchObject({ mode: 'replay-strict', trialsCollapsed: true })
   })
@@ -152,7 +155,11 @@ describe('engine replay — variants share one cassette', () => {
     const files = await readdir(join(dir, 'cassettes'))
     expect(files).toEqual(['replay.variants.json'])
 
-    const replayRun = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } }, { replayMode: 'replay-strict' })
+    const replayRun = await run(
+      evaluation,
+      { dir, setup: { generate, model: 'fake:m1' } },
+      { replayMode: 'replay-strict' },
+    )
     expect(liveCalls()).toBe(2)
     const outputs = replayRun.perCase.map((cell) => cell.output).sort()
     expect(outputs).toEqual(['from m1', 'from m2'])
@@ -203,7 +210,7 @@ describe('engine replay — named cassette and custom match', () => {
     expect(existsSync(join(dir, 'cassettes', 'shared-support.json'))).toBe(true)
   })
 
-    it('refresh re-records entries in place', async () => {
+  it('refresh re-records entries in place', async () => {
     const dir = await tempQualityDir()
     const first = executorSetup({ loops: [[{ text: 'old' }]] })
     const evaluation = evaluate('replay.refresh', {

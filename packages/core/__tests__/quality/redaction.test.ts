@@ -3,22 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { evaluate } from '../../quality'
-import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
-import type { RunOverrides } from '../../quality/experiment'
 import { createFeedbackStore } from '../../quality/internal/feedback'
-import { runEvaluation } from '../../quality/internal/engine'
-
-function run(
-  evaluation: Evaluation<never, never, string, string>,
-  overrides?: RunOverrides<string>,
-  options?: Parameters<typeof runEvaluation>[2],
-) {
-  return runEvaluation(getEvaluationDefinition(evaluation), overrides, {
-    persist: false,
-    qualityId: 'test',
-    ...options,
-  })
-}
+import { runEvaluationWithRunner as run } from './runner-harness'
 
 describe('quality redaction contract', () => {
   const tempDirs: string[] = []
@@ -73,7 +59,7 @@ describe('quality redaction contract', () => {
     })
   })
 
-    it('applies configured dot paths relative to each evaluation cell snapshot value', async () => {
+  it('applies configured dot paths relative to each evaluation cell snapshot value', async () => {
     const evaluation = evaluate({
       task: async (input: { customer: { email: string; id: string } }) => ({
         customer: { email: input.customer.email, id: input.customer.id },
@@ -94,7 +80,7 @@ describe('quality redaction contract', () => {
     expect(cell.expected).toEqual({ customer: { email: '[redacted]', id: 'cust_123' } })
   })
 
-    it('scopes configured feedback redaction paths by metadata, expected, and proposal roots', async () => {
+  it('scopes configured feedback redaction paths by metadata, expected, and proposal roots', async () => {
     const store = await makeFeedbackStore([
       'metadata.customer.email',
       'expected.answer.privateNote',

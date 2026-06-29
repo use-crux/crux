@@ -4,8 +4,8 @@
  * Five values: `evaluate`, `target`, `scorers`, `dataset`, `cassette`.
  * Everything else is types. The internal engine (normalization, matrix
  * execution, statistics, persistence) lives under `quality/internal/` and is
- * never exported, except the `@internal` tooling contract at
- * `@use-crux/core/quality/internal/runner` (no stability guarantees).
+ * never exported. First-party tooling uses the separate `@internal`
+ * `@use-crux/core/quality/internal/runner` facade (no stability guarantees).
  *
  * @module
  */

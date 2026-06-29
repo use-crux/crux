@@ -1,25 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { evaluate } from '../../quality'
-import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
-import { runEvaluation } from '../../quality/internal/engine'
-import type { ExperimentCell, RunOverrides } from '../../quality/experiment'
-
-/** Run an evaluation through the internal engine without touching the repo. */
-function run(
-  evaluation: Evaluation<never, never, string, string>,
-  overrides?: RunOverrides<string>,
-  options?: Parameters<typeof runEvaluation>[2],
-) {
-  return runEvaluation(getEvaluationDefinition(evaluation), overrides, {
-    persist: false,
-    qualityId: 'test',
-    ...options,
-  })
-}
+import type { ExperimentCell } from '../../quality/experiment'
+import { runEvaluationWithRunner as run } from './runner-harness'
 
 const upperTask = async (input: { q: string }) => ({ answer: input.q.toUpperCase() })
 
-describe('runEvaluation — assertion outcome ledger', () => {
+describe('Quality runner — assertion outcome ledger', () => {
   it('preserves passed, failed, and not-evaluated assertion outcomes in order', async () => {
     const evaluation = evaluate({
       task: upperTask,
@@ -37,14 +23,16 @@ describe('runEvaluation — assertion outcome ledger', () => {
     expect(cell.status).toBe('failed')
     expect(cell.assertions.ran).toBe(2)
     expect(cell.assertions.notEvaluated).toBe(2)
-    expect(cell.assertions.outcomes?.map(({ level, phase, index, status, matcher, soft }) => ({
-      level,
-      phase,
-      index,
-      status,
-      matcher,
-      soft,
-    }))).toEqual([
+    expect(
+      cell.assertions.outcomes?.map(({ level, phase, index, status, matcher, soft }) => ({
+        level,
+        phase,
+        index,
+        status,
+        matcher,
+        soft,
+      })),
+    ).toEqual([
       { level: 'evaluation', phase: 'expect', index: 0, status: 'passed', matcher: 'toBe', soft: false },
       { level: 'evaluation', phase: 'expect', index: 1, status: 'failed', matcher: 'toBe', soft: false },
       {
@@ -89,7 +77,7 @@ describe('runEvaluation — assertion outcome ledger', () => {
     ])
   })
 
-    it('records soft failures and later passing assertions in the same ledger', async () => {
+  it('records soft failures and later passing assertions in the same ledger', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],
@@ -104,21 +92,21 @@ describe('runEvaluation — assertion outcome ledger', () => {
     expect(cell.status).toBe('failed')
     expect(cell.assertions.ran).toBe(2)
     expect(cell.assertions.notEvaluated).toBe(0)
-    expect(cell.assertions.failures).toEqual([
-      expect.objectContaining({ matcher: 'soft.toBe', soft: true, index: 0 }),
-    ])
-    expect(cell.assertions.outcomes?.map(({ index, status, matcher, soft }) => ({
-      index,
-      status,
-      matcher,
-      soft,
-    }))).toEqual([
+    expect(cell.assertions.failures).toEqual([expect.objectContaining({ matcher: 'soft.toBe', soft: true, index: 0 })])
+    expect(
+      cell.assertions.outcomes?.map(({ index, status, matcher, soft }) => ({
+        index,
+        status,
+        matcher,
+        soft,
+      })),
+    ).toEqual([
       { index: 0, status: 'failed', matcher: 'soft.toBe', soft: true },
       { index: 1, status: 'passed', matcher: 'toBe', soft: false },
     ])
   })
 
-    it('keeps old experiment cells assignable when assertion outcomes are absent', () => {
+  it('keeps old experiment cells assignable when assertion outcomes are absent', () => {
     const oldCell: ExperimentCell<{ q: string }, { answer: string }> = {
       caseId: 'legacy',
       variantName: 'default',
@@ -150,7 +138,7 @@ describe('runEvaluation — assertion outcome ledger', () => {
     expect(oldCell.assertions.failures[0]!.matcher).toBe('toBe')
   })
 
-    it('redacts assertion outcome values before exposing experiment cells', async () => {
+  it('redacts assertion outcome values before exposing experiment cells', async () => {
     const evaluation = evaluate({
       task: async (input: { user: { email: string }; token: string }) => input,
       data: [{ input: { user: { email: 'secret@example.com' }, token: 'safe-token' } }],

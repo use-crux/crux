@@ -1,22 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetObservabilityRuntime, setObservabilityTransport } from '../../observability/observe'
 import { evaluate, scorers } from '../../quality'
-import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
-import { runEvaluation } from '../../quality/internal/engine'
-import type { RunOverrides } from '../../quality/experiment'
-
-/** Run an evaluation through the internal engine without touching the repo. */
-function run(
-  evaluation: Evaluation<never, never, string, string>,
-  overrides?: RunOverrides<string>,
-  options?: Parameters<typeof runEvaluation>[2],
-) {
-  return runEvaluation(getEvaluationDefinition(evaluation), overrides, {
-    persist: false,
-    qualityId: 'test',
-    ...options,
-  })
-}
+import { runEvaluationWithRunner as run } from './runner-harness'
 
 const upperTask = async (input: { q: string }) => input.q.toUpperCase()
 
@@ -33,7 +18,7 @@ afterEach(() => {
   else process.env.DEVTOOLS_URL = originalDevtoolsURL
 })
 
-describe('runEvaluation — cell event callbacks (runner stream)', () => {
+describe('Quality runner — cell event callbacks (runner stream)', () => {
   it('fires onCellStart and onCellDone for every executed cell, start before done', async () => {
     const evaluation = evaluate('events.basic', {
       task: upperTask,
@@ -59,7 +44,7 @@ describe('runEvaluation — cell event callbacks (runner stream)', () => {
     }
   })
 
-    it('emits onCellDone (without onCellStart) for skipped cells', async () => {
+  it('emits onCellDone (without onCellStart) for skipped cells', async () => {
     const evaluation = evaluate('events.skip', {
       task: upperTask,
       data: [
@@ -81,7 +66,7 @@ describe('runEvaluation — cell event callbacks (runner stream)', () => {
     expect(done.some((entry) => entry.endsWith(':skipped'))).toBe(true)
   })
 
-    it('passes the trial index on multi-trial cells', async () => {
+  it('passes the trial index on multi-trial cells', async () => {
     const evaluation = evaluate('events.trials', {
       task: upperTask,
       data: [{ name: 'tri', input: { q: 'a' } }],
@@ -96,7 +81,7 @@ describe('runEvaluation — cell event callbacks (runner stream)', () => {
   })
 })
 
-describe('runEvaluation - programmatic observability', () => {
+describe('Quality runner - programmatic observability', () => {
   it('forwards direct evaluation.run() traces to the configured devtools endpoint', async () => {
     const posted: Array<{ readonly input: string; readonly body: string }> = []
     process.env.CRUX_DEVTOOLS_URL = 'http://devtools.test'
@@ -127,7 +112,7 @@ describe('runEvaluation - programmatic observability', () => {
   })
 })
 
-describe('runEvaluation — config defaults channel (quality.defaults)', () => {
+describe('Quality runner — config defaults channel (quality.defaults)', () => {
   it('applies defaults.trials when the evaluation does not declare trials', async () => {
     const evaluation = evaluate('defaults.trials', {
       task: upperTask,
@@ -138,7 +123,7 @@ describe('runEvaluation — config defaults channel (quality.defaults)', () => {
     expect(experiment.perCase).toHaveLength(3)
   })
 
-    it('declared trials win over defaults.trials', async () => {
+  it('declared trials win over defaults.trials', async () => {
     const evaluation = evaluate('defaults.trials-declared', {
       task: upperTask,
       data: [{ input: { q: 'a' } }],
@@ -149,7 +134,7 @@ describe('runEvaluation — config defaults channel (quality.defaults)', () => {
     expect(experiment.perCase).toHaveLength(2)
   })
 
-    it('applies defaults.timeoutMs when the evaluation does not declare a timeout', async () => {
+  it('applies defaults.timeoutMs when the evaluation does not declare a timeout', async () => {
     const evaluation = evaluate('defaults.timeout', {
       task: async () => new Promise((resolveOutput) => setTimeout(() => resolveOutput('late'), 250)),
       data: [{ input: { q: 'a' } }],
@@ -161,7 +146,7 @@ describe('runEvaluation — config defaults channel (quality.defaults)', () => {
   })
 })
 
-describe('runEvaluation — capture settling must not hold cells hostage', () => {
+describe('Quality runner — capture settling must not hold cells hostage', () => {
   it('a hanging project transport neither inflates cell durations nor stalls the run (Karyla dogfood regression)', async () => {
     // A previously configured transport whose deliveries never resolve —
     // e.g. a devtools forwarder pointed at a dead server.
@@ -192,7 +177,7 @@ describe('runEvaluation — capture settling must not hold cells hostage', () =>
   }, 15_000)
 })
 
-describe('runEvaluation — forced filtered-run demotion (evaluate.only / CLI id filters)', () => {
+describe('Quality runner — forced filtered-run demotion (evaluate.only / CLI id filters)', () => {
   it('forceFilteredRun marks the record filtered and demotes gates to informational', async () => {
     const failing = evaluate('events.forced', {
       task: upperTask,
@@ -209,7 +194,7 @@ describe('runEvaluation — forced filtered-run demotion (evaluate.only / CLI id
     expect(experiment.passed).toBe(true)
   })
 
-    it('forceFilteredRun still fails the run when a cell errored', async () => {
+  it('forceFilteredRun still fails the run when a cell errored', async () => {
     const erroring = evaluate('events.forced-error', {
       task: async () => {
         throw new Error('boom')
