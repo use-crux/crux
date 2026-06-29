@@ -1,22 +1,21 @@
 /**
- * `ExecutorSpec` — the lower-level execution IR for SDKs that own their own tool loop.
+ * `LoopRuntimePort` — the deep, gateway-closed execution boundary for SDKs
+ * that own their own multi-step model/tool loop.
  *
  * Crux has two adapter dialects:
  *
  * - {@link AdapterSpec} (`adapter()`): for raw provider SDKs (Anthropic,
  *   OpenAI, Google). Core drives the tool loop one `call()` at a time and
  *   the spec formats tool rounds.
- * - `ExecutorSpec` (`executorAdapter()`): for orchestrating SDKs like the
- *   Vercel AI SDK that run their own multi-step loop. The spec hands the
+ * - `LoopRuntimePort` (`loopRuntimeAdapter()`): for orchestrating SDKs like
+ *   the Vercel AI SDK that run their own multi-step loop. The port hands the
  *   loop to the SDK and core steers per step through a `StepObserver`.
  *
- * Provider packages should normally author
- * `defineProviderRuntime({ ownership: 'loop-owned', loop })`; core compiles
- * that public runtime contract into this IR. In either dialect, core owns the
- * policy layer: prompt resolution, routing
- * (`fallback()`/`router()`/`cascade()`), validation retry, constraints,
- * guardrails, the approval protocol, tool instrumentation, timeouts, and
- * observability. A spec implements mechanics only.
+ * The port is **already bound to its SDK client/gateway** — the run methods
+ * take only a prepared {@link ExecutorRequest}, never a client. Provider
+ * packages author `defineProviderRuntime({ ownership: 'loop-owned', loop })`
+ * and core compiles that contract into a `LoopRuntimePort`; `@use-crux/ai` is
+ * the only package that translates a `LoopRuntimePort` to AI SDK calls.
  *
  * @module
  */
@@ -35,19 +34,34 @@ import type {
 } from './executor-types'
 
 /**
- * The loop-owning adapter contract.
+ * A cached generation payload captured from a prior run, used to recreate a
+ * stream handle for semantic-cache replay without re-calling the provider.
+ */
+export interface CachedStreamPayload {
+  /** Cached final text, for text streams. */
+  readonly text?: string
+  /** Cached parsed object, for structured streams. */
+  readonly object?: unknown
+  /** Cached trace metadata to surface on the replayed completion. */
+  readonly meta?: Record<string, unknown>
+}
+
+/**
+ * The loop-owning adapter contract, bound to one SDK client.
  *
- * An `ExecutorSpec` translates fully prepared {@link ExecutorRequest}s into
+ * A `LoopRuntimePort` translates fully prepared {@link ExecutorRequest}s into
  * its SDK's native calls. It never resolves prompts, never unwraps routing
  * wrappers, never decides retry policy — by the time a request reaches the
- * spec, `executorAdapter()` has done all of that.
+ * port, `loopRuntimeAdapter()` has done all of that. The SDK client (or a
+ * small gateway object owning the SDK's module-level calls) is closed over
+ * when the port is created, so each run method takes only the request.
  *
  * The three run methods divide the work by output mode:
  *
- * - {@link runLoop} — multi-step text + tools. The SDK owns the loop
+ * - {@link runTextLoop} — multi-step text + tools. The SDK owns the loop
  *   (e.g. `generateText` with `stopWhen`); core steers per step via
  *   `request.observer` and receives a complete-or-suspended outcome.
- * - {@link attemptStructured} — exactly ONE structured-output attempt.
+ * - {@link runStructuredAttempt} — exactly ONE structured-output attempt.
  *   Schema failures come back as the `invalid` variant instead of throwing,
  *   which is what lets core own the corrective-retry loop. Cheap SDK-side
  *   text repair (e.g. `experimental_repairText`) belongs inside the attempt.
@@ -57,33 +71,21 @@ import type {
  * Provider/transport errors always throw — core's fallback and routing
  * policy classifies and retries them.
  *
- * @typeParam TClient - The SDK's client/configuration type. For SDKs with
- *   module-level entry points (like the AI SDK), this is typically a small
- *   gateway object owning those calls — which is also the test seam.
  * @typeParam TModel - The SDK's model type (e.g. AI SDK `LanguageModel`).
  * @typeParam TRawResponse - The SDK's result type for non-streaming calls.
  * @typeParam TRawStream - The SDK's result type for streaming calls.
  *
  * @example
  * ```ts
- * import { executorAdapter } from '@use-crux/core/adapter'
+ * import { loopRuntimeAdapter } from '@use-crux/core/adapter'
  *
- * const createMyExecutor = executorAdapter({
- *   executorId: 'my-sdk',
- *   describeModel: (model) => ({ provider: model.provider, modelId: model.id }),
- *   mapSettings: (settings) => ({ temperature: settings.temperature }),
- *   runLoop: async (client, request) => { ... },
- *   attemptStructured: async (client, request) => { ... },
- *   runStream: async (client, request) => { ... },
- * })
- *
- * const executor = createMyExecutor(client)
+ * const executor = loopRuntimeAdapter(myLoopRuntimePort)
  * const result = await executor.generate(myPrompt, { model, input: { ... } })
  * ```
  */
-export interface ExecutorSpec<TClient, TModel, TRawResponse = unknown, TRawStream = unknown> {
-  /** Executor identifier used in observability and provider matching (e.g. `'ai-sdk'`). */
-  readonly executorId: string
+export interface LoopRuntimePort<TModel, TRawResponse = unknown, TRawStream = unknown> {
+  /** Runtime identifier used in observability and provider matching (e.g. `'ai-sdk'`). */
+  readonly id: string
 
   /**
    * Extract provider/model identity from an SDK model reference.
@@ -104,7 +106,7 @@ export interface ExecutorSpec<TClient, TModel, TRawResponse = unknown, TRawStrea
   /**
    * Run a multi-step text + tools generation. The SDK owns the loop.
    *
-   * Contract highlights (verified by `executorSpecConformance()`):
+   * Contract highlights (verified by `loopRuntimePortConformance()`):
    * - Stop at `request.maxSteps`, plus any steps refunded via directives.
    * - After every step, await `request.observer?.onStepFinish(step)` and
    *   apply the directive *before* the next step starts (`stop` ends the
@@ -114,7 +116,7 @@ export interface ExecutorSpec<TClient, TModel, TRawResponse = unknown, TRawStrea
    *   `suspended` outcome instead.
    * - Pass `request.abortSignal` to the SDK for cooperative timeout.
    */
-  runLoop(client: TClient, request: ExecutorRequest<TModel>): Promise<ExecutorOutcome<TRawResponse>>
+  runTextLoop(request: ExecutorRequest<TModel>): Promise<ExecutorOutcome<TRawResponse>>
 
   /**
    * Make exactly one structured-output attempt against the schema.
@@ -124,7 +126,7 @@ export interface ExecutorSpec<TClient, TModel, TRawResponse = unknown, TRawStrea
    * in corrective feedback. Run the SDK's cheap text-repair tier inside
    * the attempt before declaring it invalid.
    */
-  attemptStructured(client: TClient, request: StructuredRequest<TModel>): Promise<StructuredAttempt<TRawResponse>>
+  runStructuredAttempt(request: StructuredRequest<TModel>): Promise<StructuredAttempt<TRawResponse>>
 
   /**
    * Run a streaming generation (text, or structured when `schema` is set).
@@ -134,25 +136,33 @@ export interface ExecutorSpec<TClient, TModel, TRawResponse = unknown, TRawStrea
    * from SDK finish callbacks, never by consuming the stream itself.
    */
   runStream(
-    client: TClient,
     request: ExecutorRequest<TModel> & { readonly schema?: z.ZodType },
   ): Promise<ExecutorStreamHandle<TRawStream>>
 
   /**
    * Recreate a stream handle from a cached (semantic-cache) result, when
-   * the executor supports cached replay. Optional: without it, cache
+   * the runtime supports cached replay. Optional: without it, cache
    * middleware falls back to live generation for streams.
    *
    * @param cached - The cached payload captured from a prior run.
    */
-  replayStream?(cached: {
-    readonly text?: string
-    readonly object?: unknown
-    readonly meta?: Record<string, unknown>
-  }): ExecutorStreamHandle<TRawStream>
+  replayStream?(cached: CachedStreamPayload): ExecutorStreamHandle<TRawStream>
 }
 
-/** Convenience re-exports so spec implementations import from one place. */
+/**
+ * The client-dependent operations of a {@link LoopRuntimePort}: everything a
+ * provider's `bind(client)` must supply, minus the static identity/settings
+ * hooks that core already holds on the loop contract.
+ *
+ * Authoring `defineProviderRuntime({ loop })` returns this from `bind`; core
+ * combines it with `describeModel`/`settings`/`id` to assemble the full port.
+ */
+export type BoundLoopRuntime<TModel, TRawResponse = unknown, TRawStream = unknown> = Omit<
+  LoopRuntimePort<TModel, TRawResponse, TRawStream>,
+  'id' | 'describeModel' | 'mapSettings'
+>
+
+/** Convenience re-exports so port implementations import from one place. */
 export type {
   ExecutorOutcome,
   ExecutorRequest,

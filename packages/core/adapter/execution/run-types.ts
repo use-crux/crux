@@ -149,7 +149,7 @@ export interface AdapterExecutionGenerateResult<TRawResponse> {
 export type AdapterExecutionStreamResult<TRawStream> = StreamHandle<TRawStream> | ExecutorStreamHandle<TRawStream>
 
 /**
- * Shared execution facade used by `adapter()` and `executorAdapter()`.
+ * Shared execution facade used by `adapter()` and `loopRuntimeAdapter()`.
  *
  * A single facade instance is bound to one dialect/client pair and can execute
  * many prompts. It contains no routing policy; fallback/router/cascade wrappers

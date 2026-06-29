@@ -33,11 +33,11 @@ import {
  * stamps/captures completion metadata when the SDK reports final usage.
  *
  * @param dialect - Normalized SDK-loop dialect for one bound SDK client.
- * @param args - Prepared streaming arguments from `executorAdapter()`.
+ * @param args - Prepared streaming arguments from `loopRuntimeAdapter()`.
  * @returns The SDK's executor stream handle with wrapped completion.
  */
-export async function streamSdk<TClient, TModel, TRawResponse, TRawStream>(
-  dialect: SdkLoopDialect<TClient, TModel, TRawResponse, TRawStream>,
+export async function streamSdk<TModel, TRawResponse, TRawStream>(
+  dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>,
   args: AdapterExecutionStreamArgs<TModel, Record<string, unknown>>,
 ): Promise<ExecutorStreamHandle<TRawStream>> {
   const prompt = args.prompt
@@ -125,7 +125,7 @@ export async function streamSdk<TClient, TModel, TRawResponse, TRawStream>(
           }
         : {}),
     },
-    async () => dialect.runStream(dialect.client, request),
+    async () => dialect.runStream(request),
   )
 
   const innerCompletion = handle.completion.bind(handle)

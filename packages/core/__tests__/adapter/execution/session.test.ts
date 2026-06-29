@@ -6,7 +6,7 @@ import type { Message } from '../../../generation/messages'
 import type { ModelInfo } from '../../../types'
 import type { AdapterResponse, CallArgs, StreamHandle } from '../../../adapter/types'
 import type { AdapterSpec } from '../../../adapter/spec'
-import type { ExecutorSpec } from '../../../adapter/executor-spec'
+import type { LoopRuntimePort } from '../../../adapter/loop-runtime-port'
 import type { ExecutorRequest } from '../../../adapter/executor-types'
 import type { AdapterExecutionDialect } from '../../../adapter/execution/session'
 import { coreStepDialect, createAdapterExecution, sdkLoopDialect } from '../../../adapter/execution/session'
@@ -74,17 +74,15 @@ function scriptedCoreStep(texts: readonly string[]) {
 function scriptedSdkLoop(texts: readonly string[]) {
   const calls: Array<{ readonly messages: readonly Message[] | undefined }> = []
   const queue = [...texts]
-  const client = { kind: 'sdk' as const }
-  const dialect: AdapterExecutionDialect<typeof client, string, { readonly text: string }, never> = {
+  const dialect: AdapterExecutionDialect<unknown, string, { readonly text: string }, never> = {
     kind: 'sdk-loop',
     id: 'mock-sdk',
-    client,
     describeModel: (model): ModelInfo => ({ provider: 'mock-sdk', modelId: model }),
     mapSettings: (settings) => ({ ...settings }),
-    runLoop: async () => {
+    runTextLoop: async () => {
       throw new Error('not used')
     },
-    attemptStructured: async (_client, request) => {
+    runStructuredAttempt: async (request) => {
       calls.push({ messages: request.messages })
       const text = queue.shift() ?? ''
       const validation = validateStructuredOutput(text, request.schema)
@@ -194,10 +192,9 @@ describe('adapter execution session', () => {
     ])
   })
 
-  it('adapts ExecutorSpec hooks into an sdk-loop dialect without changing their contract', async () => {
-    const client = { gateway: 'fake' }
+  it('tags a LoopRuntimePort as an sdk-loop dialect without changing its contract', async () => {
     const modelInfo: ModelInfo = { provider: 'sdk-provider', modelId: 'sdk-model' }
-    const runLoop = vi.fn(async (_client: typeof client, request: ExecutorRequest<string>) => ({
+    const runTextLoop = vi.fn(async (request: ExecutorRequest<string>) => ({
       status: 'complete' as const,
       raw: { raw: request.model },
       response: adapterResponse('done'),
@@ -205,12 +202,12 @@ describe('adapter execution session', () => {
       steps: 1,
       meta: { costUsd: 0.01 },
     }))
-    const spec: ExecutorSpec<typeof client, string, { readonly raw: string }, { readonly stream: true }> = {
-      executorId: 'sdk-executor',
+    const port: LoopRuntimePort<string, { readonly raw: string }, { readonly stream: true }> = {
+      id: 'sdk-executor',
       describeModel: (model) => ({ ...modelInfo, modelId: model }),
       mapSettings: (settings, info) => ({ ...settings, provider: info.provider }),
-      runLoop,
-      attemptStructured: async () => ({
+      runTextLoop,
+      runStructuredAttempt: async () => ({
         status: 'ok' as const,
         raw: { raw: 'structured' },
         response: adapterResponse('{"ok":true}'),
@@ -226,7 +223,7 @@ describe('adapter execution session', () => {
       }),
     }
 
-    const dialect = sdkLoopDialect(spec, client)
+    const dialect = sdkLoopDialect(port)
     const request: ExecutorRequest<string> = {
       model: 'sdk-model',
       modelInfo,
@@ -243,13 +240,12 @@ describe('adapter execution session', () => {
       extra: undefined,
     }
 
-    const outcome = await dialect.runLoop(client, request)
-    const streamHandle = await dialect.runStream(client, request)
+    const outcome = await dialect.runTextLoop(request)
+    const streamHandle = await dialect.runStream(request)
     const replayed = await dialect.replayStream?.({ text: 'cached' }).completion()
 
     expect(dialect.kind).toBe('sdk-loop')
     expect(dialect.id).toBe('sdk-executor')
-    expect(dialect.client).toBe(client)
     expect(dialect.describeModel('model-2')).toEqual({ provider: 'sdk-provider', modelId: 'model-2' })
     expect(dialect.mapSettings({ temperature: 0.5 }, modelInfo)).toEqual({
       temperature: 0.5,

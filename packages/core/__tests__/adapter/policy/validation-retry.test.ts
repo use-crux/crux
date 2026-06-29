@@ -1,6 +1,6 @@
 /**
  * Tests for `adapter/policy/validation-retry` — shared structured-output
- * validation policy used by both `adapter()` and `executorAdapter()`.
+ * validation policy used by both `adapter()` and `loopRuntimeAdapter()`.
  *
  * Boundary tests: assert on observable validation outcomes, not internals.
  */

@@ -1,7 +1,7 @@
 /**
  * Cross-dialect parity suite — the contract that switching a prompt between
  * an `AdapterSpec` adapter (core-driven loop, e.g. @use-crux/openai) and an
- * `ExecutorSpec` adapter (SDK-driven loop, e.g. @use-crux/ai) changes NOTHING
+ * `LoopRuntimePort` adapter (SDK-driven loop, e.g. @use-crux/ai) changes NOTHING
  * observable except model behavior itself.
  *
  * Each scenario runs the same script through both factories and asserts the
@@ -12,8 +12,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { z } from 'zod'
 import { adapter as makeAdapter } from '../../adapter/define-adapter'
-import { executorAdapter } from '../../adapter/define-executor'
-import { fakeExecutor } from '../../adapter/testing'
+import { loopRuntimeAdapter } from '../../adapter/define-executor'
+import { fakeLoopRuntime } from '../../adapter/testing'
 import type { AdapterSpec } from '../../adapter/spec'
 import type { AdapterResponse } from '../../adapter/types'
 import { prompt as makePrompt } from '../../prompt/prompt'
@@ -133,9 +133,9 @@ describe('dialect parity — validation retry', () => {
       validationRetry: { maxRetries: 2 },
     })
 
-    // ExecutorSpec dialect: same script.
-    const fake = fakeExecutor({ structured: [INVALID_JSON, VALID_JSON] })
-    const executor = executorAdapter(fake.spec)(fake.client)
+    // LoopRuntimePort dialect: same script.
+    const fake = fakeLoopRuntime({ structured: [INVALID_JSON, VALID_JSON] })
+    const executor = loopRuntimeAdapter(fake.runtime)
     await executor.generate(structuredPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'make json' },
@@ -145,7 +145,7 @@ describe('dialect parity — validation retry', () => {
     // Both made exactly one retry call; extract the corrective exchange
     // each dialect sent to the model on that retry.
     const nativeRetryMessages = native.calls[1]!.messages
-    const executorRetryMessages = fake.calls.attemptStructured[1]!.messages ?? []
+    const executorRetryMessages = fake.calls.runStructuredAttempt[1]!.messages ?? []
 
     const lastUser = (messages: readonly Message[]) =>
       [...messages].reverse().find((m) => m.role === 'user' && m.content !== 'make json')?.content
@@ -173,8 +173,8 @@ describe('dialect parity — validation retry', () => {
       .then(() => undefined)
       .catch((error: unknown) => error)
 
-    const fake = fakeExecutor({ structured: ['not json', 'still not json'] })
-    const executor = executorAdapter(fake.spec)(fake.client)
+    const fake = fakeLoopRuntime({ structured: ['not json', 'still not json'] })
+    const executor = loopRuntimeAdapter(fake.runtime)
     const executorError = await executor
       .generate(structuredPrompt(), {
         model: 'fake:mock-model',
@@ -216,8 +216,8 @@ describe('dialect parity — tool approval protocol', () => {
     })
 
     const executorExecute = vi.fn()
-    const fake = fakeExecutor({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
-    const executor = executorAdapter(fake.spec)(fake.client)
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
+    const executor = loopRuntimeAdapter(fake.runtime)
     const executorResult = await executor.generate(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'do it' },
@@ -278,15 +278,15 @@ describe('dialect parity — tool approval protocol', () => {
         return { execute, text: resumed.text, toolRound }
       }
 
-      const first = fakeExecutor({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
-      const suspended = await executorAdapter(first.spec)(first.client).generate(prompt, {
+      const first = fakeLoopRuntime({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
+      const suspended = await loopRuntimeAdapter(first.runtime).generate(prompt, {
         model: 'fake:mock-model',
         input: { message: 'do it' },
         tools,
       })
       const approval = suspended.pendingApprovals![0]!
-      const second = fakeExecutor({ loops: [[{ text: 'all done' }]] })
-      const resumed = await executorAdapter(second.spec)(second.client).generate(prompt, {
+      const second = fakeLoopRuntime({ loops: [[{ text: 'all done' }]] })
+      const resumed = await loopRuntimeAdapter(second.runtime).generate(prompt, {
         model: 'fake:mock-model',
         input: { message: 'do it' },
         tools,
@@ -296,7 +296,7 @@ describe('dialect parity — tool approval protocol', () => {
           approvalToken: approval.approvalToken,
         }) as Message[],
       })
-      const toolRound = (second.calls.runLoop[0]!.messages ?? []).find(
+      const toolRound = (second.calls.runTextLoop[0]!.messages ?? []).find(
         (m) => m.role === 'tool' && m.metadata?.toolCallId === toolCall.id,
       )
       return { execute, text: resumed.text, toolRound }
@@ -345,15 +345,15 @@ describe('dialect parity — input guardrail redaction', () => {
     const nativeUser = native.calls[0]!.messages.find((m) => m.role === 'user')
     expect(nativeUser?.content).toBe('my api key is [REDACTED], please summarize')
 
-    // ExecutorSpec dialect: explicit message history.
-    const fake = fakeExecutor({ loops: [[{ text: 'ok' }]] })
-    await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+    // LoopRuntimePort dialect: explicit message history.
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'ok' }]] })
+    await loopRuntimeAdapter(fake.runtime).generate(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: userText },
       messages: [{ role: 'user', content: userText }],
       guardrails: [redactor()],
     })
-    const executorUser = [...(fake.calls.runLoop[0]!.messages ?? [])].reverse().find((m) => m.role === 'user')
+    const executorUser = [...(fake.calls.runTextLoop[0]!.messages ?? [])].reverse().find((m) => m.role === 'user')
     expect(executorUser?.content).toBe('my api key is [REDACTED], please summarize')
     expect(executorUser?.content).toBe(nativeUser?.content)
   })
@@ -361,13 +361,13 @@ describe('dialect parity — input guardrail redaction', () => {
   it('redacts the prompt-text fallback in the executor dialect', async () => {
     // No message history: the executor dialect guards the rendered prompt
     // text and must forward the redacted text to the provider.
-    const fake = fakeExecutor({ loops: [[{ text: 'ok' }]] })
-    await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'ok' }]] })
+    await loopRuntimeAdapter(fake.runtime).generate(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: `key: ${SECRET}` },
       guardrails: [redactor()],
     })
-    expect(fake.calls.runLoop[0]!.prompt).toBe('key: [REDACTED]')
+    expect(fake.calls.runTextLoop[0]!.prompt).toBe('key: [REDACTED]')
   })
 })
 
@@ -416,10 +416,10 @@ describe('dialect parity — constraint retry protocol', () => {
     const nativeProtocol = [...nativeEvents]
     resetRuntime()
 
-    // ExecutorSpec dialect: same script.
+    // LoopRuntimePort dialect: same script.
     const executorEvents = recordSafetyProtocol()
-    const fake = fakeExecutor({ loops: [[{ text: 'no boats' }], [{ text: 'a ship!' }]] })
-    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'no boats' }], [{ text: 'a ship!' }]] })
+    const executorResult = await loopRuntimeAdapter(fake.runtime).generate(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'write' },
       constraints: [needsShip()],
@@ -443,7 +443,7 @@ describe('dialect parity — constraint retry protocol', () => {
     const lastUser = (messages: readonly Message[] | undefined) =>
       [...(messages ?? [])].reverse().find((m) => m.role === 'user' && m.content !== 'write')?.content
     const nativeCorrective = lastUser(native.calls[1]!.messages)
-    const executorCorrective = lastUser(fake.calls.runLoop[1]!.messages)
+    const executorCorrective = lastUser(fake.calls.runTextLoop[1]!.messages)
     expect(executorCorrective).toBe(nativeCorrective)
     expect(nativeCorrective).toContain('did not satisfy the following quality constraints')
     expect(nativeCorrective).toContain('[mentions-ship]: must mention ship')
@@ -465,8 +465,8 @@ describe('dialect parity — constraint retry protocol', () => {
     resetRuntime()
 
     const executorEvents = recordSafetyProtocol()
-    const fake = fakeExecutor({ loops: [[{ text: 'wrong' }], [{ text: 'wrong' }], [{ text: 'wrong' }]] })
-    const executorError = await executorAdapter(fake.spec)(fake.client)
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'wrong' }], [{ text: 'wrong' }], [{ text: 'wrong' }]] })
+    const executorError = await loopRuntimeAdapter(fake.runtime)
       .generate(textPrompt(), {
         model: 'fake:mock-model',
         input: { message: 'write' },
@@ -504,8 +504,8 @@ describe('dialect parity — clean pass and blocks', () => {
     resetRuntime()
 
     const executorEvents = recordSafetyProtocol()
-    const fake = fakeExecutor({ loops: [[{ text: 'a ship!' }]] })
-    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'a ship!' }]] })
+    const executorResult = await loopRuntimeAdapter(fake.runtime).generate(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'write' },
       guardrails: [passGuard()],
@@ -536,8 +536,8 @@ describe('dialect parity — clean pass and blocks', () => {
       .then(() => undefined)
       .catch((error: unknown) => error)
 
-    const fake = fakeExecutor({ loops: [[{ text: 'never reached' }]] })
-    const executorError = await executorAdapter(fake.spec)(fake.client)
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'never reached' }]] })
+    const executorError = await loopRuntimeAdapter(fake.runtime)
       .generate(textPrompt(), { model: 'fake:mock-model', input: { message: 'bad' }, guardrails: [blocker()] })
       .then(() => undefined)
       .catch((error: unknown) => error)
@@ -550,7 +550,7 @@ describe('dialect parity — clean pass and blocks', () => {
     )
     // The provider was never called in either dialect.
     expect(native.calls).toHaveLength(0)
-    expect(fake.calls.runLoop).toHaveLength(0)
+    expect(fake.calls.runTextLoop).toHaveLength(0)
   })
 
   it('output block: both dialects throw GuardrailBlockedError with the same identity', async () => {
@@ -567,8 +567,8 @@ describe('dialect parity — clean pass and blocks', () => {
       .then(() => undefined)
       .catch((error: unknown) => error)
 
-    const fake = fakeExecutor({ loops: [[{ text: 'toxic output' }]] })
-    const executorError = await executorAdapter(fake.spec)(fake.client)
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'toxic output' }]] })
+    const executorError = await loopRuntimeAdapter(fake.runtime)
       .generate(textPrompt(), { model: 'fake:mock-model', input: { message: 'go' }, guardrails: [blocker()] })
       .then(() => undefined)
       .catch((error: unknown) => error)
@@ -599,8 +599,8 @@ describe('dialect parity — output guards and suspension', () => {
       guardrails: [outputRedactor()],
     })
 
-    const fake = fakeExecutor({ loops: [[{ text: 'mail a@b.c now' }]] })
-    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'mail a@b.c now' }]] })
+    const executorResult = await loopRuntimeAdapter(fake.runtime).generate(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'write' },
       guardrails: [outputRedactor()],
@@ -645,8 +645,8 @@ describe('dialect parity — output guards and suspension', () => {
       constraints: [spyConstraint()],
     })
 
-    const fake = fakeExecutor({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
-    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
+    const executorResult = await loopRuntimeAdapter(fake.runtime).generate(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'go' },
       tools,
@@ -684,8 +684,8 @@ describe('dialect parity — streamed run with holds and transforms', () => {
     })
 
   it('executor dialect: the spec drives the safety stream — holds buffer, transforms reach the consumer', async () => {
-    const fake = fakeExecutor({ streams: [['import x from ', '@/co', 'mps/Button', ' — done']] })
-    const handle = await executorAdapter(fake.spec)(fake.client).stream(textPrompt(), {
+    const fake = fakeLoopRuntime({ streams: [['import x from ', '@/co', 'mps/Button', ' — done']] })
+    const handle = await loopRuntimeAdapter(fake.runtime).stream(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'code' },
       guardrails: [importFixer()],
@@ -765,8 +765,8 @@ describe('dialect parity — default step budget', () => {
       tools,
     })
 
-    const fake = fakeExecutor({ loops: [script.map((s) => ({ text: s.text, toolCalls: s.toolCalls }))] })
-    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+    const fake = fakeLoopRuntime({ loops: [script.map((s) => ({ text: s.text, toolCalls: s.toolCalls }))] })
+    const executorResult = await loopRuntimeAdapter(fake.runtime).generate(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'loop' },
       tools,
@@ -928,8 +928,8 @@ describe('dialect parity — clean tool round protocol', () => {
     resetRuntime()
 
     const executorEvents = recordToolProtocol()
-    const fake = fakeExecutor({ loops: [[{ text: 'calling', toolCalls: [toolCall] }, { text: 'done' }]] })
-    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'calling', toolCalls: [toolCall] }, { text: 'done' }]] })
+    const executorResult = await loopRuntimeAdapter(fake.runtime).generate(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'go' },
       tools: tools(),
@@ -985,8 +985,8 @@ describe('dialect parity — clean tool round protocol', () => {
 
     const executorTransport = createInMemoryObservabilityTransport()
     setObservabilityTransport(executorTransport)
-    const fake = fakeExecutor({ loops: [[{ text: 'calling', toolCalls: [toolCall] }, { text: 'done' }]] })
-    await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'calling', toolCalls: [toolCall] }, { text: 'done' }]] })
+    await loopRuntimeAdapter(fake.runtime).generate(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'go' },
       tools: tools(),
@@ -1037,8 +1037,8 @@ describe('dialect parity — clean tool round protocol', () => {
         })
         return { execute, result }
       }
-      const fake = fakeExecutor({ loops: [[{ text: '', toolCalls: [toolCall] }, { text: 'done' }]] })
-      const result = await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+      const fake = fakeLoopRuntime({ loops: [[{ text: '', toolCalls: [toolCall] }, { text: 'done' }]] })
+      const result = await loopRuntimeAdapter(fake.runtime).generate(textPrompt(), {
         model: 'fake:mock-model',
         input: { message: 'go' },
         tools,
@@ -1074,8 +1074,8 @@ describe('dialect parity — approval protocol observability', () => {
     resetRuntime()
 
     const executorEvents = recordToolProtocol()
-    const fake = fakeExecutor({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
-    await executorAdapter(fake.spec)(fake.client).generate(textPrompt(), {
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
+    await loopRuntimeAdapter(fake.runtime).generate(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'go' },
       tools: { dangerous: { description: 'risky', needsApproval: true, execute: vi.fn() } },
@@ -1104,8 +1104,8 @@ describe('dialect parity — approval protocol observability', () => {
               })
             })()
           : await (async () => {
-              const first = fakeExecutor({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
-              return executorAdapter(first.spec)(first.client).generate(prompt, {
+              const first = fakeLoopRuntime({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
+              return loopRuntimeAdapter(first.runtime).generate(prompt, {
                 model: 'fake:mock-model',
                 input: { message: 'go' },
                 tools,
@@ -1137,8 +1137,8 @@ describe('dialect parity — approval protocol observability', () => {
               })
             })()
           : await (async () => {
-              const second = fakeExecutor({ loops: [[{ text: 'understood' }]] })
-              return executorAdapter(second.spec)(second.client).generate(prompt, {
+              const second = fakeLoopRuntime({ loops: [[{ text: 'understood' }]] })
+              return loopRuntimeAdapter(second.runtime).generate(prompt, {
                 model: 'fake:mock-model',
                 input: { message: 'go' },
                 tools,
@@ -1183,8 +1183,8 @@ describe('dialect parity — approval protocol observability', () => {
               })
             })()
           : await (async () => {
-              const first = fakeExecutor({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
-              return executorAdapter(first.spec)(first.client).generate(prompt, {
+              const first = fakeLoopRuntime({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
+              return loopRuntimeAdapter(first.runtime).generate(prompt, {
                 model: 'fake:mock-model',
                 input: { message: 'go' },
                 tools,
@@ -1212,8 +1212,8 @@ describe('dialect parity — approval protocol observability', () => {
           messages,
         })
       } else {
-        const second = fakeExecutor({ loops: [[{ text: 'all done' }]] })
-        await executorAdapter(second.spec)(second.client).generate(prompt, {
+        const second = fakeLoopRuntime({ loops: [[{ text: 'all done' }]] })
+        await loopRuntimeAdapter(second.runtime).generate(prompt, {
           model: 'fake:mock-model',
           input: { message: 'go' },
           tools,
@@ -1255,8 +1255,8 @@ describe('dialect parity — approval protocol observability', () => {
               kind: 'mock',
             }).generate(prompt, { model: 'mock-model', input: { message: 'go' }, tools })
           : await (async () => {
-              const first = fakeExecutor({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
-              return executorAdapter(first.spec)(first.client).generate(prompt, {
+              const first = fakeLoopRuntime({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
+              return loopRuntimeAdapter(first.runtime).generate(prompt, {
                 model: 'fake:mock-model',
                 input: { message: 'go' },
                 tools,
@@ -1281,8 +1281,8 @@ describe('dialect parity — approval protocol observability', () => {
           .then(() => undefined)
           .catch((error: unknown) => error)
       }
-      const second = fakeExecutor({ loops: [[{ text: 'never' }]] })
-      return executorAdapter(second.spec)(second.client)
+      const second = fakeLoopRuntime({ loops: [[{ text: 'never' }]] })
+      return loopRuntimeAdapter(second.runtime)
         .generate(prompt, { model: 'fake:mock-model', input: { message: 'go' }, tools, messages })
         .then(() => undefined)
         .catch((error: unknown) => error)
@@ -1325,8 +1325,8 @@ describe('dialect parity — skill load mid-loop', () => {
     resetRuntime()
 
     const executorLoads = record()
-    const fake = fakeExecutor({ loops: [[{ text: '', toolCalls: [loadCall] }, { text: 'skilled up' }]] })
-    const executorResult = await executorAdapter(fake.spec)(fake.client).generate(skillPrompt(), {
+    const fake = fakeLoopRuntime({ loops: [[{ text: '', toolCalls: [loadCall] }, { text: 'skilled up' }]] })
+    const executorResult = await loopRuntimeAdapter(fake.runtime).generate(skillPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'go' },
     })

@@ -225,7 +225,7 @@ Use `toolApprovalResponseMessage()` when you want to construct the response mess
 
 ## The ToolLifecycle session (adapter authors)
 
-Apps never call this — both built-in dialect factories (`adapter()` for core-driven loops, `executorAdapter()` for SDK-driven loops) construct one session per `generate()`/`stream()` call. You only need it when building a custom adapter outside the factories.
+Apps never call this — both built-in dialect factories (`adapter()` for core-driven loops, `loopRuntimeAdapter()` for SDK-driven loops) construct one session per `generate()`/`stream()` call. You only need it when building a custom adapter outside the factories.
 
 ```ts
 import { createToolLifecycle } from '@use-crux/core/adapter/tool'
@@ -253,7 +253,7 @@ if (round.kind === 'suspended') {
 }
 
 // SDK regime — hand the armed map to the SDK instead:
-const outcome = await sdk.runLoop({ tools: lifecycle.tools /* … */ })
+const outcome = await sdk.runTextLoop({ tools: lifecycle.tools /* … */ })
 if (outcome.status === 'suspended') {
   const sealed = lifecycle.suspend(outcome.pendingApprovals, outcome.assistantResponse, outcome.messages)
 }

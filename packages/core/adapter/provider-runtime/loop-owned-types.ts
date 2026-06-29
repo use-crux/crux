@@ -4,16 +4,9 @@
  * @module
  */
 
-import type { z } from 'zod'
 import type { ModelInfo } from '../../types'
 import type { GenerationSettings } from '../../generation/types'
-import type {
-  ExecutorOutcome,
-  ExecutorRequest,
-  ExecutorStreamHandle,
-  StructuredAttempt,
-  StructuredRequest,
-} from '../executor-types'
+import type { BoundLoopRuntime } from '../loop-runtime-port'
 import type { ProviderRuntimeExtender } from './extension-types'
 import type { LoopOwnedProviderRuntime } from './runtime-types'
 
@@ -23,28 +16,14 @@ export interface LoopOwnedRuntimeBindContext {
   readonly id: string
 }
 
-/** Loop-owned operations after a provider client has been bound. */
-export interface BoundLoopOwnedRuntime<TModel, TRawResponse = unknown, TRawStream = unknown> {
-  /** Run the SDK-owned text/tool loop. */
-  run(request: ExecutorRequest<TModel>): Promise<ExecutorOutcome<TRawResponse>>
-  /** Make one structured-output attempt; invalid schema results return in-band. */
-  attemptStructured(request: StructuredRequest<TModel>): Promise<StructuredAttempt<TRawResponse>>
-  /** Start a streaming generation and return the SDK stream handle. */
-  stream(request: ExecutorRequest<TModel> & { readonly schema?: z.ZodType }): Promise<ExecutorStreamHandle<TRawStream>>
-  /** Recreate a stream handle from cached semantic-cache payloads when supported. */
-  replayStream?(cached: {
-    readonly text?: string
-    readonly object?: unknown
-    readonly meta?: Record<string, unknown>
-  }): ExecutorStreamHandle<TRawStream>
-}
-
 /**
  * Loop-owned runtime contract accepted by `defineProviderRuntime()`.
  *
  * Use this branch for SDKs that own the multi-step generation loop while
  * Crux steers policy around that loop boundary. The Vercel AI SDK adapter
- * is the canonical example.
+ * is the canonical example. `bind` returns the client-dependent operations
+ * ({@link BoundLoopRuntime}); core assembles them with `describeModel` and
+ * `settings` into the full {@link LoopRuntimePort}.
  */
 export interface LoopOwnedRuntimeContract<TClient, TModel, TRawResponse = unknown, TRawStream = unknown> {
   /** Extract provider/model identity from an SDK model reference. */
@@ -52,7 +31,7 @@ export interface LoopOwnedRuntimeContract<TClient, TModel, TRawResponse = unknow
   /** Map canonical generation settings to SDK-native option names. */
   settings?: (settings: GenerationSettings, model: ModelInfo) => Record<string, unknown>
   /** Bind a concrete SDK client to the SDK-owned generation loop. */
-  bind(client: TClient, ctx: LoopOwnedRuntimeBindContext): BoundLoopOwnedRuntime<TModel, TRawResponse, TRawStream>
+  bind(client: TClient, ctx: LoopOwnedRuntimeBindContext): BoundLoopRuntime<TModel, TRawResponse, TRawStream>
 }
 
 /** Provider runtime spec for the loop-owned branch. */

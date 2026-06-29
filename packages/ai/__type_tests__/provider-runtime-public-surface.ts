@@ -20,7 +20,7 @@ type AiGenerateOptions = Parameters<AiRuntime['generate']>[1]
 
 expectTypeOf<Parameters<typeof aiSdkProviderRuntime.create>[0]>().toEqualTypeOf<SdkGateway>()
 expectTypeOf<AiRuntime>().toMatchTypeOf<
-  CruxExecutor<SdkGateway, LanguageModel, SdkLoopResultLike, SdkStreamResultLike> & AiSdkRuntimeExtensions
+  CruxExecutor<LanguageModel, SdkLoopResultLike, SdkStreamResultLike> & AiSdkRuntimeExtensions
 >()
 expectTypeOf<Awaited<ReturnType<AiRuntime['generate']>>>().toEqualTypeOf<
   ExecutorGenerateResult<SdkLoopResultLike>

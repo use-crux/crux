@@ -29,7 +29,6 @@ export type {
   SingleTurnProviderBundleSpec,
 } from './single-turn-bundle-types'
 export type {
-  BoundLoopOwnedRuntime,
   LoopOwnedProviderRuntimeSpec,
   LoopOwnedRuntimeBindContext,
   LoopOwnedRuntimeContract,

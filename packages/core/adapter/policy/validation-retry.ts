@@ -2,7 +2,7 @@
  * Shared validation-retry policy for adapter factories.
  *
  * Owns the structured-output validation step used by both `adapter()`
- * (core-driven tool loop) and `executorAdapter()` (SDK-driven loop):
+ * (core-driven tool loop) and `loopRuntimeAdapter()` (SDK-driven loop):
  * text repair, JSON parsing, Zod validation, and corrective-message
  * formatting. The retry *loop* lives in the factories; the policy of
  * what counts as valid and how to phrase feedback lives here, once.
@@ -95,7 +95,7 @@ export function validateStructuredOutput(text: string, schema: z.ZodType): Valid
  * what makes self-correction reliable: the model sees exactly which fields
  * to fix rather than a generic "invalid JSON" complaint.
  *
- * Both `adapter()` and `executorAdapter()` inject this message on each
+ * Both `adapter()` and `loopRuntimeAdapter()` inject this message on each
  * validation retry, so the corrective phrasing models are tuned against
  * stays identical across every Crux adapter.
  *

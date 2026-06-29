@@ -1,17 +1,17 @@
 /**
- * `executorAdapter()` — lower-level factory for loop-owned execution IR.
+ * `loopRuntimeAdapter()` — lower-level factory for loop-owned execution IR.
  *
  * The counterpart of `adapter()` for SDKs that drive their own multi-step
- * tool loop (e.g. the Vercel AI SDK). Accepts an `ExecutorSpec` and returns
- * a factory `(client: TClient) => CruxExecutor`.
+ * tool loop (e.g. the Vercel AI SDK). Accepts a {@link LoopRuntimePort} —
+ * already bound to its SDK client — and returns a {@link CruxExecutor}.
  *
  * Provider packages should normally use
  * `defineProviderRuntime({ ownership: 'loop-owned', loop })`, which compiles
  * into this IR.
  *
- * The factory owns the entire policy layer so specs stay mechanical:
+ * The factory owns the entire policy layer so the port stays mechanical:
  * prompt resolution, routing dispatch (`fallback()`/`router()`/`cascade()`
- * are unwrapped *before* the spec ever sees a model), validation retry,
+ * are unwrapped *before* the port ever sees a model), validation retry,
  * constraints, guardrails, the tool-approval protocol, tool
  * instrumentation, timeouts, orchestration middleware/observability,
  * memory capture, and agent compositions.
@@ -22,7 +22,7 @@
 import type { AnyPrompt } from '../prompt/prompt-types'
 import type { GenerationSettings, TraceMeta } from '../generation/types'
 import type { Message } from '../generation/messages'
-import type { ExecutorSpec } from './executor-spec'
+import type { LoopRuntimePort } from './loop-runtime-port'
 import type { ExecutorStreamHandle, StepObserver } from './executor-types'
 import type { ApprovalRequestInfo } from './tool/approval'
 import type { ValidationRetryOptions } from '../generation/validation-retry'
@@ -132,8 +132,8 @@ export interface ExecutorGenerateResult<TRawResponse> {
 }
 
 /** The executor interface returned by the factory. */
-export interface CruxExecutor<TClient, TModel, TRawResponse = unknown, TRawStream = unknown> {
-  /** Executor identifier from the spec. */
+export interface CruxExecutor<TModel, TRawResponse = unknown, TRawStream = unknown> {
+  /** Executor identifier from the port. */
   readonly executorId: string
 
   /** Execute a prompt (non-streaming) through the SDK-owned loop. */
@@ -157,17 +157,18 @@ export interface CruxExecutor<TClient, TModel, TRawResponse = unknown, TRawStrea
 }
 
 // ─────────────────────────────────────────────────────────────────
-// executorAdapter
+// loopRuntimeAdapter
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Create a loop-owning adapter from an `ExecutorSpec`.
+ * Create a loop-owning executor from a {@link LoopRuntimePort}.
  *
- * Returns a factory `(client: TClient) => CruxExecutor` — the mirror image
- * of `adapter()` for SDKs that run their own tool loop. Implement
- * `AdapterSpec` when your SDK exposes single-turn provider calls; implement
- * `ExecutorSpec` when it drives multi-step generation itself (the Vercel
- * AI SDK's `generateText` with `stopWhen`, for example).
+ * Returns a {@link CruxExecutor} — the mirror image of `adapter()` for SDKs
+ * that run their own tool loop. Implement `AdapterSpec` when your SDK exposes
+ * single-turn provider calls; implement `LoopRuntimePort` when it drives
+ * multi-step generation itself (the Vercel AI SDK's `generateText` with
+ * `stopWhen`, for example). The port is already bound to its SDK client, so
+ * there is no separate client argument.
  *
  * Everything above the SDK call is handled here, identically to
  * `adapter()` and backed by the same `adapter/policy/*` modules: prompt
@@ -176,15 +177,15 @@ export interface CruxExecutor<TClient, TModel, TRawResponse = unknown, TRawStrea
  * timeouts, middleware, observability, memory capture, and the agent
  * compositions (`parallel`/`pipeline`/`consensus`/`swarm`).
  *
- * @param spec - The executor specification. See {@link ExecutorSpec}.
- * @returns A factory that binds the spec to a client.
+ * @param port - The loop runtime port. See {@link LoopRuntimePort}.
+ * @returns A bound executor.
  *
  * @example
  * ```ts
- * import { executorAdapter, fakeExecutor } from '@use-crux/core/adapter'
+ * import { loopRuntimeAdapter, fakeLoopRuntime } from '@use-crux/core/adapter'
  *
- * const fake = fakeExecutor({ loops: [[{ text: 'hello' }]] })
- * const executor = executorAdapter(fake.spec)(fake.client)
+ * const fake = fakeLoopRuntime({ loops: [[{ text: 'hello' }]] })
+ * const executor = loopRuntimeAdapter(fake.runtime)
  *
  * const result = await executor.generate(myPrompt, {
  *   model: 'fake:m-1',
@@ -194,162 +195,159 @@ export interface CruxExecutor<TClient, TModel, TRawResponse = unknown, TRawStrea
  * })
  * ```
  */
-export function executorAdapter<TClient, TModel, TRawResponse = unknown, TRawStream = unknown>(
-  spec: ExecutorSpec<TClient, TModel, TRawResponse, TRawStream>,
-): (client: TClient) => CruxExecutor<TClient, TModel, TRawResponse, TRawStream> {
-  return (client: TClient): CruxExecutor<TClient, TModel, TRawResponse, TRawStream> => {
-    type GenerateResult = ExecutorGenerateResult<TRawResponse>
-    const execution = createAdapterExecution(sdkLoopDialect(spec, client))
+export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = unknown>(
+  port: LoopRuntimePort<TModel, TRawResponse, TRawStream>,
+): CruxExecutor<TModel, TRawResponse, TRawStream> {
+  type GenerateResult = ExecutorGenerateResult<TRawResponse>
+  const execution = createAdapterExecution(sdkLoopDialect(port))
 
-    const modelLabel = (model: TModel): string => {
-      const info = spec.describeModel(model)
-      return info.modelId || info.provider
-    }
-
-    // ── generate() ──────────────────────────────────────────────
-
-    async function generate(prompt: AnyPrompt, opts: ExecutorGenerateOptions<TModel>): Promise<GenerateResult> {
-      const runWithModel = (model: TModel): Promise<GenerateResult> => generateSingle(prompt, opts, model)
-
-      const dispatch = (model: TModel | FallbackModel<TModel>): Promise<GenerateResult> =>
-        isFallback(model) ? executeFallbackLoop(model, runWithModel, modelLabel) : runWithModel(model)
-
-      if (isRouter(opts.model) || isCascade(opts.model)) {
-        return resolveModel<TModel | FallbackModel<TModel>, GenerateResult>(
-          opts.model as TModel | FallbackModel<TModel>,
-          opts.input ?? {},
-          dispatch,
-          (model) => (isFallback(model) ? 'fallback' : modelLabel(model)),
-        )
-      }
-      if (isFallback(opts.model)) {
-        return executeFallbackLoop(opts.model, runWithModel, modelLabel)
-      }
-      return runWithModel(opts.model as TModel)
-    }
-
-    async function generateSingle(
-      prompt: AnyPrompt,
-      opts: ExecutorGenerateOptions<TModel>,
-      model: TModel,
-    ): Promise<GenerateResult> {
-      return (await execution.generate({
-        prompt,
-        model,
-        input: opts.input,
-        tools: opts.tools,
-        toolMiddleware: opts.toolMiddleware,
-        messages: opts.messages,
-        maxSteps: opts.maxSteps,
-        settings: opts.settings,
-        tokenBudget: opts.tokenBudget,
-        timeoutMs: opts.timeoutMs,
-        validationRetry: opts.validationRetry,
-        constraints: opts.constraints,
-        constraintMaxRetries: opts.constraintMaxRetries,
-        guardrails: opts.guardrails,
-        observer: opts.observer,
-        activeTools: opts.activeTools,
-        extra: opts.extra,
-      })) as GenerateResult
-    }
-
-    // ── stream() ────────────────────────────────────────────────
-
-    async function streamFn(
-      prompt: AnyPrompt,
-      opts: ExecutorStreamOptions<TModel>,
-    ): Promise<ExecutorStreamHandle<TRawStream>> {
-      if (isCascade(opts.model)) {
-        throw new Error(
-          'cascade() does not support stream(). Use generate() instead — cascade needs full results for tier evaluation.',
-        )
-      }
-
-      const runWithModel = (model: TModel): Promise<ExecutorStreamHandle<TRawStream>> =>
-        streamSingle(prompt, opts, model)
-
-      if (isRouter(opts.model)) {
-        return resolveModel<TModel | FallbackModel<TModel>, ExecutorStreamHandle<TRawStream>>(
-          opts.model as TModel | FallbackModel<TModel>,
-          opts.input ?? {},
-          (model) => (isFallback(model) ? executeFallbackLoop(model, runWithModel, modelLabel) : runWithModel(model)),
-          (model) => (isFallback(model) ? 'fallback' : modelLabel(model)),
-        )
-      }
-      if (isFallback(opts.model)) {
-        return executeFallbackLoop(opts.model, runWithModel, modelLabel)
-      }
-      return runWithModel(opts.model as TModel)
-    }
-
-    async function streamSingle(
-      prompt: AnyPrompt,
-      opts: ExecutorStreamOptions<TModel>,
-      model: TModel,
-    ): Promise<ExecutorStreamHandle<TRawStream>> {
-      return (await execution.stream({
-        prompt,
-        model,
-        input: opts.input,
-        tools: opts.tools,
-        toolMiddleware: opts.toolMiddleware,
-        messages: opts.messages,
-        maxSteps: opts.maxSteps,
-        settings: opts.settings,
-        tokenBudget: opts.tokenBudget,
-        timeoutMs: opts.timeoutMs,
-        validationRetry: opts.validationRetry,
-        constraints: opts.constraints,
-        constraintMaxRetries: opts.constraintMaxRetries,
-        guardrails: opts.guardrails,
-        observer: opts.observer,
-        activeTools: opts.activeTools,
-        extra: opts.extra,
-      })) as ExecutorStreamHandle<TRawStream>
-    }
-
-    // ── Agent executor + compositions ───────────────────────────
-
-    const agentExecutor: AgentExecutor = async (agent, options) => {
-      const model = (agent.model ?? options.model) as TModel
-      const start = Date.now()
-
-      const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) }
-      const generateOpts: ExecutorGenerateOptions<TModel> = {
-        model,
-        input: options.input as Record<string, unknown>,
-        maxSteps: options.maxSteps,
-        validationRetry: options.validationRetry,
-        ...(Object.keys(mergedTools).length > 0 ? { tools: mergedTools } : {}),
-      }
-
-      const result = await generate(agent.prompt, generateOpts)
-
-      return {
-        agentId: agent.id,
-        output: result.object ?? result.text,
-        durationMs: Date.now() - start,
-        usage: result._meta.usage
-          ? {
-              inputTokens: result._meta.usage.inputTokens,
-              outputTokens: result._meta.usage.outputTokens,
-              totalTokens: result._meta.usage.totalTokens,
-            }
-          : undefined,
-      }
-    }
-
-    const compositions = createCompositions(agentExecutor)
-
-    return Object.freeze({
-      executorId: spec.executorId,
-      generate,
-      stream: streamFn,
-      parallel: compositions.parallel,
-      pipeline: compositions.pipeline,
-      consensus: compositions.consensus,
-      swarm: compositions.swarm,
-    })
+  const modelLabel = (model: TModel): string => {
+    const info = port.describeModel(model)
+    return info.modelId || info.provider
   }
+
+  // ── generate() ──────────────────────────────────────────────
+
+  async function generate(prompt: AnyPrompt, opts: ExecutorGenerateOptions<TModel>): Promise<GenerateResult> {
+    const runWithModel = (model: TModel): Promise<GenerateResult> => generateSingle(prompt, opts, model)
+
+    const dispatch = (model: TModel | FallbackModel<TModel>): Promise<GenerateResult> =>
+      isFallback(model) ? executeFallbackLoop(model, runWithModel, modelLabel) : runWithModel(model)
+
+    if (isRouter(opts.model) || isCascade(opts.model)) {
+      return resolveModel<TModel | FallbackModel<TModel>, GenerateResult>(
+        opts.model as TModel | FallbackModel<TModel>,
+        opts.input ?? {},
+        dispatch,
+        (model) => (isFallback(model) ? 'fallback' : modelLabel(model)),
+      )
+    }
+    if (isFallback(opts.model)) {
+      return executeFallbackLoop(opts.model, runWithModel, modelLabel)
+    }
+    return runWithModel(opts.model as TModel)
+  }
+
+  async function generateSingle(
+    prompt: AnyPrompt,
+    opts: ExecutorGenerateOptions<TModel>,
+    model: TModel,
+  ): Promise<GenerateResult> {
+    return (await execution.generate({
+      prompt,
+      model,
+      input: opts.input,
+      tools: opts.tools,
+      toolMiddleware: opts.toolMiddleware,
+      messages: opts.messages,
+      maxSteps: opts.maxSteps,
+      settings: opts.settings,
+      tokenBudget: opts.tokenBudget,
+      timeoutMs: opts.timeoutMs,
+      validationRetry: opts.validationRetry,
+      constraints: opts.constraints,
+      constraintMaxRetries: opts.constraintMaxRetries,
+      guardrails: opts.guardrails,
+      observer: opts.observer,
+      activeTools: opts.activeTools,
+      extra: opts.extra,
+    })) as GenerateResult
+  }
+
+  // ── stream() ────────────────────────────────────────────────
+
+  async function streamFn(
+    prompt: AnyPrompt,
+    opts: ExecutorStreamOptions<TModel>,
+  ): Promise<ExecutorStreamHandle<TRawStream>> {
+    if (isCascade(opts.model)) {
+      throw new Error(
+        'cascade() does not support stream(). Use generate() instead — cascade needs full results for tier evaluation.',
+      )
+    }
+
+    const runWithModel = (model: TModel): Promise<ExecutorStreamHandle<TRawStream>> => streamSingle(prompt, opts, model)
+
+    if (isRouter(opts.model)) {
+      return resolveModel<TModel | FallbackModel<TModel>, ExecutorStreamHandle<TRawStream>>(
+        opts.model as TModel | FallbackModel<TModel>,
+        opts.input ?? {},
+        (model) => (isFallback(model) ? executeFallbackLoop(model, runWithModel, modelLabel) : runWithModel(model)),
+        (model) => (isFallback(model) ? 'fallback' : modelLabel(model)),
+      )
+    }
+    if (isFallback(opts.model)) {
+      return executeFallbackLoop(opts.model, runWithModel, modelLabel)
+    }
+    return runWithModel(opts.model as TModel)
+  }
+
+  async function streamSingle(
+    prompt: AnyPrompt,
+    opts: ExecutorStreamOptions<TModel>,
+    model: TModel,
+  ): Promise<ExecutorStreamHandle<TRawStream>> {
+    return (await execution.stream({
+      prompt,
+      model,
+      input: opts.input,
+      tools: opts.tools,
+      toolMiddleware: opts.toolMiddleware,
+      messages: opts.messages,
+      maxSteps: opts.maxSteps,
+      settings: opts.settings,
+      tokenBudget: opts.tokenBudget,
+      timeoutMs: opts.timeoutMs,
+      validationRetry: opts.validationRetry,
+      constraints: opts.constraints,
+      constraintMaxRetries: opts.constraintMaxRetries,
+      guardrails: opts.guardrails,
+      observer: opts.observer,
+      activeTools: opts.activeTools,
+      extra: opts.extra,
+    })) as ExecutorStreamHandle<TRawStream>
+  }
+
+  // ── Agent executor + compositions ───────────────────────────
+
+  const agentExecutor: AgentExecutor = async (agent, options) => {
+    const model = (agent.model ?? options.model) as TModel
+    const start = Date.now()
+
+    const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) }
+    const generateOpts: ExecutorGenerateOptions<TModel> = {
+      model,
+      input: options.input as Record<string, unknown>,
+      maxSteps: options.maxSteps,
+      validationRetry: options.validationRetry,
+      ...(Object.keys(mergedTools).length > 0 ? { tools: mergedTools } : {}),
+    }
+
+    const result = await generate(agent.prompt, generateOpts)
+
+    return {
+      agentId: agent.id,
+      output: result.object ?? result.text,
+      durationMs: Date.now() - start,
+      usage: result._meta.usage
+        ? {
+            inputTokens: result._meta.usage.inputTokens,
+            outputTokens: result._meta.usage.outputTokens,
+            totalTokens: result._meta.usage.totalTokens,
+          }
+        : undefined,
+    }
+  }
+
+  const compositions = createCompositions(agentExecutor)
+
+  return Object.freeze({
+    executorId: port.id,
+    generate,
+    stream: streamFn,
+    parallel: compositions.parallel,
+    pipeline: compositions.pipeline,
+    consensus: compositions.consensus,
+    swarm: compositions.swarm,
+  })
 }

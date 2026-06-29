@@ -9,7 +9,7 @@
  */
 
 import type { AdapterSpec } from '../spec'
-import type { ExecutorSpec } from '../executor-spec'
+import type { LoopRuntimePort } from '../loop-runtime-port'
 import type { CoreStepDialect, SdkLoopDialect } from './types'
 
 /**
@@ -46,28 +46,31 @@ export function coreStepDialect<
 }
 
 /**
- * Convert an `ExecutorSpec` and bound client into the SDK-loop dialect.
+ * Tag a bound {@link LoopRuntimePort} as the SDK-loop dialect.
  *
- * The returned dialect lets the shared session apply Crux policy around an
- * SDK-owned loop without reimplementing the SDK's native orchestration model.
+ * The port already closes over its SDK client, so this only adds the
+ * discriminant the shared session dispatches on. All orchestration stays in
+ * `createAdapterExecution()`; every provider-specific hook stays on the port.
  *
- * @param spec - Loop-owning executor specification.
- * @param client - SDK client or gateway bound by the public factory.
+ * @param port - Loop-owning runtime port (already bound to its SDK client).
  * @returns A normalized dialect for the shared execution session.
  */
-export function sdkLoopDialect<TClient, TModel, TRawResponse, TRawStream>(
-  spec: ExecutorSpec<TClient, TModel, TRawResponse, TRawStream>,
-  client: TClient,
-): SdkLoopDialect<TClient, TModel, TRawResponse, TRawStream> {
-  return {
+export function sdkLoopDialect<TModel, TRawResponse, TRawStream>(
+  port: LoopRuntimePort<TModel, TRawResponse, TRawStream>,
+): SdkLoopDialect<TModel, TRawResponse, TRawStream> {
+  // Forward each member explicitly (not via spread) so class-based ports keep
+  // their prototype methods and receiver, and `kind` cannot be overridden.
+  const dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream> = {
     kind: 'sdk-loop',
-    id: spec.executorId,
-    client,
-    describeModel: spec.describeModel,
-    mapSettings: spec.mapSettings,
-    runLoop: spec.runLoop,
-    attemptStructured: spec.attemptStructured,
-    runStream: spec.runStream,
-    replayStream: spec.replayStream,
+    id: port.id,
+    describeModel: (model) => port.describeModel(model),
+    mapSettings: (settings, model) => port.mapSettings(settings, model),
+    runTextLoop: (request) => port.runTextLoop(request),
+    runStructuredAttempt: (request) => port.runStructuredAttempt(request),
+    runStream: (request) => port.runStream(request),
   }
+  if (port.replayStream) {
+    dialect.replayStream = (cached) => port.replayStream!(cached)
+  }
+  return dialect
 }

@@ -326,7 +326,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       constraintMaxRetries,
       guardrails,
       activeTools,
-      // The Crux-wide default budget (10, from executorAdapter) — identical
+      // The Crux-wide default budget (10, from loopRuntimeAdapter) — identical
       // across every adapter, enforced natively via the AI SDK's stopWhen.
       // A custom `stopWhen` replaces the budget entirely.
       maxSteps,
@@ -563,7 +563,8 @@ export function reranker(config: AIRerankerConfig): RetrieverReranker {
 
 export { liveSdkGateway } from './src/gateway'
 export type { SdkGateway } from './src/gateway'
-export type { SdkLoopResultLike, SdkStreamResultLike } from './src/executor'
+export { createAiSdkLoopRuntime } from './src/executor'
+export type { AiSdkLoopRuntime, SdkLoopResultLike, SdkStreamResultLike } from './src/executor'
 export type { AIEmbeddingConfig, AIRerankerConfig, AiSdkRuntimeExtensions } from './src/extensions'
 export { aiSdkProviderRuntime } from './src/profile'
 

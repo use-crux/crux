@@ -4,7 +4,7 @@
  * Owns the wrapping of tool `execute`/`needsApproval`/`toModelOutput`
  * with runtime instrumentation hooks, plus the canonical helpers for
  * shaping, rendering, and measuring tool model output. Used by both
- * `adapter()` (core-driven loop) and `executorAdapter()` (SDK-driven
+ * `adapter()` (core-driven loop) and `loopRuntimeAdapter()` (SDK-driven
  * loop) so hook ordering and payload shapes never diverge.
  *
  * @module
