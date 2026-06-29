@@ -13,6 +13,16 @@ export { plan, getPlan, updatePlan } from './plans'
 
 // TaskList lifecycle
 export { tasklist, getTaskList, getTaskListByPlan, createHandle } from './tasks'
+export {
+  DuplicateTaskIdError,
+  InvalidTaskTransitionError,
+  TaskJsonValueError,
+  TaskListDiscardedError,
+  TaskListNotFoundError,
+  TaskNotFoundError,
+  TaskRemovedError,
+  TaskResultValidationError,
+} from './errors'
 
 // Agent integration
 export { planAgent, taskListAgent, taskWorker, createPlanTool, createTaskListTool } from './agent'
@@ -40,3 +50,4 @@ export type {
   TerminalTaskStatus,
   CancellableTaskStatus,
 } from './types'
+export type { TaskLifecycleError, TaskLifecycleErrorDetails, TaskLifecycleErrorName } from './errors'

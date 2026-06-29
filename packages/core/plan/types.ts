@@ -13,7 +13,7 @@
 // ─────────────────────────────────────────────────────────────────
 
 /** Status of a task list. */
-export type TaskListStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'discarded'
+export type TaskListStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled' | 'discarded'
 
 /** Status of an individual task. */
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped' | 'cancelled'

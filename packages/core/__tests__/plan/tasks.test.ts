@@ -54,7 +54,7 @@ describe('TaskList lifecycle', () => {
     expect(task.assignee).toEqual({ agent: 'researcher', model: 'gpt-4o' })
   })
 
-  it('addTask transitions list from pending to in_progress', async () => {
+  it('addTask keeps an all-pending list pending', async () => {
     const store = setup()
     const handle = await tasklist({})
 
@@ -65,7 +65,7 @@ describe('TaskList lifecycle', () => {
     await handle.addTask({ id: 't1', label: 'First task' })
 
     const statusAfter = await handle.getStatus()
-    expect(statusAfter).toBe('in_progress')
+    expect(statusAfter).toBe('pending')
   })
 
   it('updateTask to completed on all tasks triggers auto-completion', async () => {
