@@ -179,6 +179,7 @@ const docsRetriever = retriever({
 | Field | Type | Description |
 |---|---|---|
 | `id` | `string` | Stable retriever identifier |
+| `indexerId` | `string?` | Writer indexer id to use when it differs from the retriever id |
 | `namespace` | `string` | Required corpus boundary |
 | `data` | `DataStore` | JSON record hydration for retrieved chunks and sources |
 | `vectors` | `VectorStore` | Dense, sparse, or hybrid vector search |
@@ -307,7 +308,7 @@ Crux ships these retrieval pipeline stages:
 | `queryPlanner()` | `query` | Uses structured generation to turn one user query into one or more typed planned queries with optional filters, weights, and reasons. | The user asks a broad or ambiguous question that should search multiple focused parts of the corpus. |
 | `multiQuery()` | `query` | Uses text generation to create alternate phrasings for each planned query, dedupes them, and keeps the original by default. | Recall is weak because users and docs use different wording. |
 | Fanout + RRF merge | internal | Runs the base retriever once per planned query and merges duplicate hits by `namespace/sourceId/chunkId` with reciprocal-rank fusion. | This always happens after query stages when there is at least one planned query. |
-| `parentExpand()` | `hits` | Loads parent records through `hit.parent.key` and adds parent content/metadata while preserving child hit identity and score. | You indexed small child chunks but want larger surrounding context for prompting or compression. |
+| `parentExpand()` | `hits` | Resolves parent refs through the indexed read model and adds parent content/metadata while preserving child hit identity and score. | You indexed small child chunks but want larger surrounding context for prompting or compression. |
 | `compress()` | `hits` | Uses structured generation to keep extractive excerpts from each hit and drop empty hits by default. | Retrieved chunks are too long or noisy for the prompt budget. |
 | `diversify()` | `hits` | Applies MMR-style diversity using token/shingle similarity and optional same-source penalty. | Top results repeat the same source or near-duplicate content. |
 | `decay()` | `hits` | Applies exponential score decay from a timestamp field such as `metadata.updatedAt`. | Freshness should influence rank, but missing dates should not require a custom retriever. |
@@ -349,17 +350,18 @@ The pipeline fans out to the base retriever for every planned query and merges d
 
 ### Hit stages
 
-`parentExpand()` follows `hit.parent.key` to load parent context while preserving the child hit identity.
+`parentExpand()` resolves the hit's parent ref through the indexed read model while preserving the child hit identity.
 
 ```ts
 const parents = parentExpand({
   store: data,
+  indexerId: 'docs',
   maxParentChars: 4000,
   missing: 'warn',
 })
 ```
 
-When using parent/child indexing, Crux writes `parent.key` onto child chunks. Missing parent records warn by default, can be ignored, or can fail the pipeline with `missing: 'error'`.
+When using parent/child indexing, Crux writes parent refs onto child chunks and resolves them through the indexed read model. Missing parent records warn by default, can be ignored, or can fail the pipeline with `missing: 'error'`.
 
 `compress()` keeps only extractive excerpts from each hit.
 

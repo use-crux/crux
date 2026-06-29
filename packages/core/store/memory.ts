@@ -79,6 +79,7 @@ export function inMemoryVectorStore(): VectorStore {
 
       const threshold = query.threshold ?? 0
       const hits: VectorHit[] = Array.from(records.values()).flatMap((record) => {
+        if (query.filter && record.metadata && !matchesFilter(record.metadata, query.filter)) return []
         const denseScore = query.dense && record.dense ? cosineSimilarity(query.dense, record.dense) : undefined
         const sparseScore =
           query.sparse && record.sparse ? sparseCosineSimilarity(query.sparse, record.sparse) : undefined

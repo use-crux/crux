@@ -15,12 +15,10 @@ import {
   deriveStoreBackedMode,
   getRetrieverDataStore,
   getRetrieverVectorStore,
-  mapScoredEntryToHit,
-  runDenseSearch,
-  runHybridSearch,
-  runSparseSearch,
 } from './search'
-import type { CustomRetrieverConfig, DenseStoreBackedRetrieverConfig, Retriever } from './types'
+import { createIndexedKnowledgeStore } from '../indexed-knowledge'
+import type { IndexedChunkSearchQuery } from '../indexed-knowledge'
+import type { CustomRetrieverConfig, DenseStoreBackedRetrieverConfig, RetrieveOptions, Retriever } from './types'
 
 /**
  * Create a retriever from a store-backed or custom configuration.
@@ -102,17 +100,22 @@ function validateDenseStoreBackedConfig(
 function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig): Retriever {
   const defaultMode = deriveStoreBackedMode(config)
   const rerankers = normalizeRerankers(config.rerank)
+  const data = getRetrieverDataStore(config)
+  const records = createIndexedKnowledgeStore({
+    indexerId: config.indexerId ?? config.id,
+    namespace: config.namespace,
+    data: data ?? config.store!,
+    vectors: getRetrieverVectorStore(config),
+    legacyStore: config.store,
+  })
 
   const retrieve: Retriever['retrieve'] = async (query, options = {}) => {
-    const mode = options.mode ?? config.search?.mode ?? defaultMode
+    const mode: IndexedChunkSearchQuery['mode'] = options.mode ?? config.search?.mode ?? defaultMode
     const limit = options.limit ?? config.search?.limit
     const threshold = options.threshold ?? config.search?.threshold
     const filter = {
       ...(config.search?.filter ?? {}),
       ...(options.filter ?? {}),
-      namespace: config.namespace,
-      _cruxRecordType: 'chunk',
-      active: true,
     }
     const fusion = options.fusion ?? config.search?.fusion
 
@@ -126,14 +129,7 @@ function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig
       filter,
       fusion,
       run: async () => {
-        const results =
-          mode === 'dense'
-            ? await runDenseSearch(config, query, { limit, threshold, filter })
-            : mode === 'sparse'
-              ? await runSparseSearch(config, query, { limit, threshold, filter })
-              : await runHybridSearch(config, query, { limit, threshold, filter, fusion })
-
-        const hits = results.map(mapScoredEntryToHit)
+        const hits = [...(await records.searchChunks(await prepareIndexedChunkSearch(config, query, options, mode)))]
         return applyRerankers(rerankers, {
           retrieverId: config.id,
           namespace: config.namespace,
@@ -154,6 +150,52 @@ function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig
     defaultInject: config.inject,
     defaultTools: config.tools,
   })
+}
+
+async function prepareIndexedChunkSearch(
+  config: DenseStoreBackedRetrieverConfig,
+  query: string,
+  options: RetrieveOptions,
+  mode: IndexedChunkSearchQuery['mode'],
+): Promise<IndexedChunkSearchQuery> {
+  const limit = options.limit ?? config.search?.limit
+  const threshold = options.threshold ?? config.search?.threshold
+  const filter = {
+    ...(config.search?.filter ?? {}),
+    ...(options.filter ?? {}),
+  }
+  const fusion = options.fusion ?? config.search?.fusion
+
+  if (mode === 'dense') {
+    return {
+      mode,
+      dense: await config.dense!.embed(query),
+      limit,
+      threshold,
+      filter,
+    }
+  }
+
+  if (mode === 'sparse') {
+    return {
+      mode,
+      sparse: await config.sparse!.embed(query),
+      limit,
+      threshold,
+      filter,
+    }
+  }
+
+  const [dense, sparse] = await Promise.all([config.dense!.embed(query), config.sparse!.embed(query)])
+  return {
+    mode,
+    dense,
+    sparse,
+    limit,
+    threshold,
+    filter,
+    fusion,
+  }
 }
 
 function createCustomRetriever(config: CustomRetrieverConfig): Retriever {

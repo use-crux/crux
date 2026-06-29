@@ -146,7 +146,7 @@ const docs = retriever({
 const hits = await docs.retrieve('billing credits')
 ```
 
-If you call the store directly, Crux maps dense, sparse, and hybrid queries to Upstash's native shape:
+Most applications should call `retriever()` instead of copying internal filters. If you are building adapter-level tooling and call the store directly, Crux maps dense, sparse, and hybrid queries to Upstash's native shape:
 
 ```ts
 const results = await store.searchVectors?.({
@@ -154,11 +154,7 @@ const results = await store.searchVectors?.({
   sparse: await sparse.embed('latest roadmap'),
   fusion: 'dbsf',
   limit: 10,
-  filter: {
-    namespace: 'product-docs',
-    _cruxRecordType: 'chunk',
-    active: true,
-  },
+  filter: { namespace: 'product-docs' },
 })
 ```
 
@@ -166,17 +162,14 @@ Sparse-only queries also work through `searchVectors({ sparse })`. Dense-only ca
 
 ### Metadata filtering
 
-When Crux indexers write chunks, the Upstash adapter mirrors retrieval-critical fields into vector metadata:
+When Crux indexers write chunks, the Upstash adapter mirrors read-model fields into vector metadata for internal filtering and hydration:
 
 ```ts
 {
   _key,
-  _cruxRecordType: 'chunk',
-  namespace,
-  sourceId,
-  chunkId,
-  generationId,
-  active: true,
+  // Crux read-model fields for namespace, source, chunk identity,
+  // generation state, and active child-chunk filtering.
+  ...readModelMetadata,
   ...chunk.metadata,
 }
 ```

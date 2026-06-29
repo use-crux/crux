@@ -23,7 +23,7 @@ custom Chunker         // your domain already has explicit boundaries
 | --- | --- | --- |
 | `chunker.text()` | Splits plain text by paragraphs, sentences, then hard character windows. | Simple prose or already-normalized text. |
 | `chunker.structured()` | Splits by ingest part and preserves page/table/sheet/JSON provenance. | Most file and URL ingestion. This is the default. |
-| `chunker.parentChild()` | Writes large parent records and smaller searchable child chunks with `parent.key`. | Long documents where citations should point to small chunks but prompts need surrounding context. |
+| `chunker.parentChild()` | Writes large parent records and smaller searchable child chunks with parent refs. | Long documents where citations should point to small chunks but prompts need surrounding context. |
 | `chunker.semantic()` | Uses embedding, custom/model boundaries, or hybrid fallback to split by meaning. | Docs where size-based chunking cuts through concepts or sections. |
 | Custom `Chunker` | Returns your own chunks and optional parent records. | Markdown sections, legal clauses, transcripts, tickets, CMS blocks, or domain-specific boundaries. |
 
@@ -70,7 +70,7 @@ indexingPipeline({
 })
 ```
 
-The retriever searches child chunks. Each child stores `parent.parentId` and `parent.key`; `parentExpand({ store: data })` can follow that key at query time and add parent content while keeping the child chunk as the citation.
+The retriever searches child chunks. Each child stores a parent reference; `parentExpand({ store: data })` resolves that reference through the indexed read model at query time and adds parent content while keeping the child chunk as the citation.
 
 ```ts
 import { parentExpand, retrievalPipeline } from '@use-crux/core/retrieval'

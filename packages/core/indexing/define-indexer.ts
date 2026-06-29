@@ -12,17 +12,17 @@
 import { normalizePipelineCache, resolveCacheMode, runCachedStage } from './cache'
 import { collect, unique } from './collections'
 import { normalizeChunkingOptions } from './chunking-options'
-import { createGenerationId, stableHash } from './hash'
-import { chunkKey, listAll, namespacePrefix, parentKey, sourcePrefix } from './keys'
+import { stableHash } from './hash'
 import {
   emitIndexingOutputArtifact,
   runIndexOperation,
 } from './observability'
-import { normalizeChunk, normalizeParentChunk, validateChunks, validateDocuments, vectorMetadata } from './normalize'
+import { normalizeChunk, normalizeParentChunk, validateChunks, validateDocuments } from './normalize'
 import { applyParentProvenanceConfidence, applyProvenanceConfidence } from './provenance'
 import { indexingPipeline, stageFingerprint } from './pipeline'
+import { createIndexedKnowledgeStore } from '../indexed-knowledge'
 import { observe } from '../observability'
-import type { DataStore, JsonObject, SparseVector } from '../store/types'
+import type { DataStore, SparseVector } from '../store/types'
 import type {
   ChunkingOptions,
   ChunkingResult,
@@ -54,6 +54,13 @@ export function indexer(config: IndexerConfig): Indexer {
   const pipeline = config.pipeline ?? indexingPipeline()
   const dataStore = getIndexerDataStore(config)
   const vectorStore = config.vectors ?? config.storage?.vectors
+  const records = createIndexedKnowledgeStore({
+    indexerId: config.id,
+    namespace: config.namespace,
+    data: dataStore,
+    vectors: vectorStore,
+    legacyStore: config.store,
+  })
   const cacheConfig = normalizePipelineCache(config.cache, dataStore, config.id)
 
   async function chunk(
@@ -375,73 +382,13 @@ export function indexer(config: IndexerConfig): Indexer {
       }
     }
 
-    const generationId = createGenerationId()
-    const now = Date.now()
-    for (let index = 0; index < chunks.length; index++) {
-      const chunkItem = chunks[index]
-      const parent =
-        chunkItem.parent?.parentId !== undefined
-          ? {
-              ...chunkItem.parent,
-              key:
-                chunkItem.parent.key ??
-                parentKey(config.id, chunkItem.namespace, chunkItem.sourceId, chunkItem.parent.parentId),
-            }
-          : chunkItem.parent
-      const storedValue: JsonObject = {
-        _cruxRecordType: 'chunk',
-        namespace: chunkItem.namespace,
-        sourceId: chunkItem.sourceId,
-        chunkId: chunkItem.chunkId,
-        generationId,
-        active: true,
-        ordinal: chunkItem.ordinal,
-        content: chunkItem.content,
-        metadata: chunkItem.metadata,
-        ...(parent ? { parent } : {}),
-        ...(chunkItem.provenance ? { provenance: chunkItem.provenance } : {}),
-        ...(embeddings.dense ? { embedding: embeddings.dense[index] } : {}),
-        ...(embeddings.sparse ? { sparseEmbedding: embeddings.sparse[index] } : {}),
-        createdAt: now,
-        updatedAt: now,
-      }
-
-      const key = chunkKey(config.id, chunkItem.namespace, chunkItem.sourceId, chunkItem.chunkId)
-      await dataStore.set(key, storedValue)
-      if (vectorStore && (embeddings.dense?.[index] || embeddings.sparse?.[index])) {
-        await vectorStore.upsert([
-          {
-            key,
-            ...(embeddings.dense?.[index] ? { dense: embeddings.dense[index] } : {}),
-            ...(embeddings.sparse?.[index] ? { sparse: embeddings.sparse[index] } : {}),
-            metadata: vectorMetadata(storedValue),
-          },
-        ])
-      }
-    }
-
-    for (const parentItem of parents) {
-      await dataStore.set(parentKey(config.id, parentItem.namespace, parentItem.sourceId, parentItem.parentId), {
-        _cruxRecordType: 'parent',
-        namespace: parentItem.namespace,
-        sourceId: parentItem.sourceId,
-        parentId: parentItem.parentId,
-        generationId,
-        active: true,
-        ordinal: parentItem.ordinal,
-        content: parentItem.content,
-        metadata: parentItem.metadata,
-        ...(parentItem.provenance ? { provenance: parentItem.provenance } : {}),
-        createdAt: now,
-        updatedAt: now,
-      })
-    }
-
-    if (options.replaceSources) {
-      for (const sourceId of sourceIds) {
-        await deactivatePreviousGenerations(sourceId, generationId)
-      }
-    }
+    await records.persistGeneration({
+      chunks,
+      parents,
+      dense: embeddings.dense,
+      sparse: embeddings.sparse,
+      replaceSources: options.replaceSources,
+    })
 
     return {
       namespace: config.namespace,
@@ -478,20 +425,6 @@ export function indexer(config: IndexerConfig): Indexer {
     })
   }
 
-  async function deactivatePreviousGenerations(sourceId: string, activeGenerationId: string): Promise<void> {
-    const prefix = sourcePrefix(config.id, config.namespace, sourceId)
-    const entries = await listAll(dataStore, prefix)
-    for (const entry of entries) {
-      if (
-        entry.value._cruxRecordType &&
-        entry.value.generationId !== activeGenerationId &&
-        entry.value.active === true
-      ) {
-        await dataStore.set(entry.key, { ...entry.value, active: false, updatedAt: Date.now() })
-      }
-    }
-  }
-
   async function deleteSource(sourceId: string): Promise<number> {
     return runIndexOperation({
       indexerId: config.id,
@@ -500,15 +433,7 @@ export function indexer(config: IndexerConfig): Indexer {
       sourceCount: 1,
       chunkCount: 0,
       sourceId,
-      run: async () => {
-        const prefix = sourcePrefix(config.id, config.namespace, sourceId)
-        const entries = await listAll(dataStore, prefix)
-        for (const entry of entries) {
-          await dataStore.delete(entry.key)
-          await vectorStore?.delete([entry.key])
-        }
-        return entries.length
-      },
+      run: () => records.deleteSource(sourceId),
     })
   }
 
@@ -519,15 +444,7 @@ export function indexer(config: IndexerConfig): Indexer {
       operation: 'clear',
       sourceCount: 0,
       chunkCount: 0,
-      run: async () => {
-        const prefix = namespacePrefix(config.id, config.namespace)
-        const entries = await listAll(dataStore, prefix)
-        for (const entry of entries) {
-          await dataStore.delete(entry.key)
-          await vectorStore?.delete([entry.key])
-        }
-        return entries.length
-      },
+      run: () => records.clearNamespace(),
     })
   }
 
