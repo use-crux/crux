@@ -42,6 +42,19 @@ When local tooling imports the config with `CRUX_INDEX=1`, Crux returns an inert
 observability transport, Runtime Bridge, store, middleware, tokenizer, or plugin side effects are
 installed. This is what `crux config inspect` uses.
 
+Outside index mode, config application is transactional: persistence and explicit observability are
+installed before user plugins, the Runtime Bridge connects after the prompt registry exists, and
+`dispose()` tears down the bridge before plugins and observability restore. This keeps plugin setup
+predictable without adding another public setup API.
+
+`devtools` and `observability` have different ownership:
+
+- `devtools.serverUrl` is the local development fallback. When no explicit `observability` transport
+  is configured, Crux installs the devtools transport before user plugins.
+- `observability.enabled: false`, `observability.transport`, or `observability.serverUrl` makes the
+  observability domain own the transport. In that case devtools does not install its fallback
+  transport, and user plugins see the explicit observability state.
+
 ## Shape
 
 ```ts

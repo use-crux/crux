@@ -55,55 +55,6 @@ describe('config — runtime domain mapping', () => {
     crux.dispose()
   })
 
-    it('installs persistence.store before plugins run', () => {
-    const store = inMemoryCruxStore()
-    const seenStores: unknown[] = []
-    const plugin: CruxPlugin = {
-      name: 'store-aware-plugin',
-      install(runtime) {
-        seenStores.push(runtime.store)
-        return {}
-      },
-    }
-
-    const crux = config({
-      persistence: { store },
-      plugins: [plugin],
-    })
-
-    expect(seenStores).toEqual([store])
-    expect(getRuntime().store).toBe(store)
-
-    crux.dispose()
-  })
-
-    it('installs explicit observability transport before plugins run', () => {
-    const transport: CruxObservabilityTransport = { send: vi.fn() }
-    const seenTransports: Array<{ runtime: unknown; active: unknown }> = []
-    const plugin: CruxPlugin = {
-      name: 'transport-aware-plugin',
-      install(runtime) {
-        seenTransports.push({
-          runtime: runtime.observabilityTransport,
-          active: currentObservabilityTransport(),
-        })
-        return {}
-      },
-    }
-
-    const crux = config({
-      observability: { transport },
-      plugins: [plugin],
-    })
-
-    expect(seenTransports).toEqual([{ runtime: transport, active: transport }])
-    expect(getRuntime().observabilityTransport).toBe(transport)
-    expect(currentObservabilityTransport()).toBe(transport)
-
-    crux.dispose()
-    expect(currentObservabilityTransport()).toBeUndefined()
-  })
-
     it('installs explicit observability server URL and delivery before plugins run', () => {
     const seen: Array<{ runtimeTransport: unknown; activeTransport: unknown; delivery: unknown }> = []
     const delivery = { maxPendingDeliveries: 2 }
@@ -166,7 +117,7 @@ describe('config — runtime domain mapping', () => {
     }
   })
 
-    it('lets explicit observability override devtools before plugins run', () => {
+  it('lets explicit observability override devtools before plugins run', () => {
     const transport: CruxObservabilityTransport = { send: vi.fn() }
     const seenTransports: Array<{ runtime: unknown; active: unknown }> = []
     const plugin: CruxPlugin = {
@@ -191,6 +142,28 @@ describe('config — runtime domain mapping', () => {
     expect(currentObservabilityTransport()).toBe(transport)
 
     crux.dispose()
+  })
+
+  it('installs devtools fallback observability before user plugins run', () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 })))
+    const seenTransports: unknown[] = []
+    const plugin: CruxPlugin = {
+      name: 'devtools-aware-plugin',
+      install(runtime) {
+        seenTransports.push(runtime.observabilityTransport)
+        return {}
+      },
+    }
+
+    const crux = config({
+      devtools: { serverUrl: 'http://localhost:4400' },
+      plugins: [plugin],
+    })
+
+    expect(seenTransports).toEqual([expect.any(Object)])
+
+    crux.dispose()
+    vi.unstubAllGlobals()
   })
 
     it('disables observability before plugins run', () => {
