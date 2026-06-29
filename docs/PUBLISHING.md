@@ -72,6 +72,7 @@ pnpm --filter @use-crux/convex pack --pack-destination /tmp/crux-pack
 pnpm --filter @use-crux/upstash pack --pack-destination /tmp/crux-pack
 pnpm --filter @use-crux/otel pack --pack-destination /tmp/crux-pack
 pnpm --filter @use-crux/ingest pack --pack-destination /tmp/crux-pack
+pnpm --filter @use-crux/indexer pack --pack-destination /tmp/crux-pack
 pnpm --filter @use-crux/react pack --pack-destination /tmp/crux-pack
 pnpm --filter @use-crux/local pack --pack-destination /tmp/crux-pack
 ```
