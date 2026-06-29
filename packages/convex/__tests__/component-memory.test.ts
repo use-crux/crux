@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { list as memoryList } from '../src/component/memory'
-import type { StoreDocRecord } from '../store-doc'
+import { STORE_DOC_COMPONENT_SPEC, type StoreDocRecord } from '../store-doc'
 
 interface TestMemoryListArgs {
   prefix?: string
@@ -19,21 +19,24 @@ interface TestRegisteredQuery<TArgs, TResult> {
 
 interface TestQueryCtx {
   db: {
-    query(table: 'memories'): TestQueryInitializer
+    query(table: typeof STORE_DOC_COMPONENT_SPEC.table): TestQueryInitializer
   }
 }
 
 interface TestQueryInitializer {
-  withIndex(indexName: 'by_key', range?: (q: TestIndexRangeBuilder) => unknown): TestOrderedQuery
+  withIndex(
+    indexName: typeof STORE_DOC_COMPONENT_SPEC.indexes.byKey,
+    range?: (q: TestIndexRangeBuilder) => unknown,
+  ): TestOrderedQuery
 }
 
 interface TestIndexRangeBuilder {
-  gte(field: 'key', value: string): TestUpperBoundRangeBuilder
-  gt(field: 'key', value: string): TestUpperBoundRangeBuilder
+  gte(field: typeof STORE_DOC_COMPONENT_SPEC.fields.key, value: string): TestUpperBoundRangeBuilder
+  gt(field: typeof STORE_DOC_COMPONENT_SPEC.fields.key, value: string): TestUpperBoundRangeBuilder
 }
 
 interface TestUpperBoundRangeBuilder {
-  lt(field: 'key', value: string): unknown
+  lt(field: typeof STORE_DOC_COMPONENT_SPEC.fields.key, value: string): unknown
 }
 
 interface TestOrderedQuery {
@@ -65,10 +68,10 @@ describe('component memory list contract', () => {
 
     expect(result).toEqual({ docs: docs.slice(0, 2), cursor: 'memory:beta' })
     expect(calls).toEqual([
-      { type: 'query', table: 'memories' },
-      { type: 'withIndex', indexName: 'by_key' },
-      { type: 'gt', field: 'key', value: 'memory:aardvark' },
-      { type: 'lt', field: 'key', value: 'memory;' },
+      { type: 'query', table: STORE_DOC_COMPONENT_SPEC.table },
+      { type: 'withIndex', indexName: STORE_DOC_COMPONENT_SPEC.indexes.byKey },
+      { type: 'gt', field: STORE_DOC_COMPONENT_SPEC.fields.key, value: 'memory:aardvark' },
+      { type: 'lt', field: STORE_DOC_COMPONENT_SPEC.fields.key, value: 'memory;' },
       { type: 'order', direction: 'asc' },
       { type: 'take', limit: 3 },
     ])
@@ -125,7 +128,7 @@ function cruxDoc(key: string): StoreDocRecord {
   return {
     key,
     content: JSON.stringify({ text: key }),
-    metadata: { _cruxDoc: true },
+    metadata: { [STORE_DOC_COMPONENT_SPEC.fields.marker]: true },
     createdAt: 1,
     updatedAt: 2,
   }

@@ -2,10 +2,13 @@ import { expectTypeOf } from 'vitest'
 import type { CruxStore } from '@use-crux/core/store'
 import type { CruxTransport } from '@use-crux/react'
 import {
+  createInMemoryConvexStoreDocumentComponent,
   defineConvexStoreContract,
+  type ComponentDocumentPort,
   type ConvexCruxStoreComponent,
   type ConvexCtxPort,
   type ConvexStoreContract,
+  type StoreDocRecord,
 } from '../index'
 
 interface TenantCtx extends ConvexCtxPort {
@@ -34,3 +37,15 @@ expectTypeOf(
 
 // @ts-expect-error Store creation preserves the caller's required ctx fields.
 contract.store({ runQuery: async () => null, runMutation: async () => null })
+
+const inMemoryComponent = createInMemoryConvexStoreDocumentComponent()
+const inMemoryContract = defineConvexStoreContract({
+  component: inMemoryComponent,
+})
+
+expectTypeOf(inMemoryContract).toEqualTypeOf<ConvexStoreContract<ConvexCtxPort>>()
+expectTypeOf(
+  inMemoryComponent.io(inMemoryComponent.ctx, {
+    vectorIndexName: 'by_embedding',
+  }),
+).toEqualTypeOf<ComponentDocumentPort<StoreDocRecord>>()

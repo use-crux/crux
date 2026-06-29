@@ -66,7 +66,7 @@ export interface StoreDocDenseSearchQuery {
 }
 
 /** Small component-facing I/O port used by the deep store implementation. */
-export interface StoreDocComponentPort<TDoc extends StoreDocRecord = StoreDocRecord> {
+export interface ComponentDocumentPort<TDoc extends StoreDocRecord = StoreDocRecord> {
   /** Read one raw document by key. */
   get(key: string): Promise<TDoc | null>
   /** List one page of raw documents by prefix. */
@@ -78,6 +78,14 @@ export interface StoreDocComponentPort<TDoc extends StoreDocRecord = StoreDocRec
   /** Optional dense vector search over raw documents. */
   searchDense?(query: StoreDocDenseSearchQuery): Promise<readonly TDoc[]>
 }
+
+/**
+ * @deprecated Use `ComponentDocumentPort`.
+ *
+ * Kept as a compatibility alias for callers that adopted the earlier internal
+ * name before the document component contract was formalized.
+ */
+export type StoreDocComponentPort<TDoc extends StoreDocRecord = StoreDocRecord> = ComponentDocumentPort<TDoc>
 
 /** Decoded store document with policy metadata surfaced for callers. */
 export interface DecodedStoreDoc {
@@ -118,7 +126,7 @@ export interface StoreDocCodecOptions {
 /** Configuration for a `CruxStore` built on top of document I/O ports. */
 export interface StoreDocStoreConfig<TDoc extends StoreDocRecord = StoreDocRecord> {
   /** Adapter-local document I/O port. */
-  io: StoreDocComponentPort<TDoc>
+  io: ComponentDocumentPort<TDoc>
   /** Clock used for writes and TTL checks. Defaults to `Date.now`. */
   now?: () => number
   /** Semantic-cache capability metadata for stores with isolated vector namespaces. */

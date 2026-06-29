@@ -8,9 +8,8 @@
  */
 
 import { v } from 'convex/values'
+import { STORE_DOC_COMPONENT_SPEC } from '../../store-doc/manifest'
 import { mutation, query } from './_generated/server.js'
-
-const DEFAULT_LIST_LIMIT = 100
 
 /**
  * Get a memory entry by key.
@@ -20,8 +19,8 @@ export const get = query({
   returns: v.any(),
   handler: async (ctx, { key }) => {
     return ctx.db
-      .query('memories')
-      .withIndex('by_key', (q) => q.eq('key', key))
+      .query(STORE_DOC_COMPONENT_SPEC.table)
+      .withIndex(STORE_DOC_COMPONENT_SPEC.indexes.byKey, (q) => q.eq(STORE_DOC_COMPONENT_SPEC.fields.key, key))
       .first()
   },
 })
@@ -40,8 +39,8 @@ export const set = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const existing = await ctx.db
-      .query('memories')
-      .withIndex('by_key', (q) => q.eq('key', args.key))
+      .query(STORE_DOC_COMPONENT_SPEC.table)
+      .withIndex(STORE_DOC_COMPONENT_SPEC.indexes.byKey, (q) => q.eq(STORE_DOC_COMPONENT_SPEC.fields.key, args.key))
       .first()
 
     if (existing) {
@@ -52,7 +51,7 @@ export const set = mutation({
         updatedAt: args.updatedAt,
       })
     } else {
-      await ctx.db.insert('memories', {
+      await ctx.db.insert(STORE_DOC_COMPONENT_SPEC.table, {
         key: args.key,
         content: args.content,
         metadata: args.metadata,
@@ -73,8 +72,8 @@ export const remove = mutation({
   returns: v.null(),
   handler: async (ctx, { key }) => {
     const existing = await ctx.db
-      .query('memories')
-      .withIndex('by_key', (q) => q.eq('key', key))
+      .query(STORE_DOC_COMPONENT_SPEC.table)
+      .withIndex(STORE_DOC_COMPONENT_SPEC.indexes.byKey, (q) => q.eq(STORE_DOC_COMPONENT_SPEC.fields.key, key))
       .first()
     if (existing) {
       await ctx.db.delete(existing._id)
@@ -108,14 +107,16 @@ export const list = query({
 
     const lowerBound = cursor ?? prefix
     const query = ctx.db
-      .query('memories')
+      .query(STORE_DOC_COMPONENT_SPEC.table)
       .withIndex(
-        'by_key',
+        STORE_DOC_COMPONENT_SPEC.indexes.byKey,
         lowerBound || prefix
           ? (q) => {
               const upper = prefixUpperBound(prefix)
-              const lower = cursor ? q.gt('key', cursor) : q.gte('key', prefix)
-              return upper === undefined ? lower : lower.lt('key', upper)
+              const lower = cursor
+                ? q.gt(STORE_DOC_COMPONENT_SPEC.fields.key, cursor)
+                : q.gte(STORE_DOC_COMPONENT_SPEC.fields.key, prefix)
+              return upper === undefined ? lower : lower.lt(STORE_DOC_COMPONENT_SPEC.fields.key, upper)
             }
           : undefined,
       )
@@ -134,7 +135,7 @@ export const list = query({
 })
 
 function normalizeListLimit(limit: number | undefined): number {
-  return Math.max(0, Math.floor(limit ?? DEFAULT_LIST_LIMIT))
+  return Math.max(0, Math.floor(limit ?? STORE_DOC_COMPONENT_SPEC.defaultListLimit))
 }
 
 function prefixUpperBound(prefix: string): string | undefined {

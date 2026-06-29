@@ -39,8 +39,21 @@ export type {
   CruxConvexRunScope,
 } from './profile'
 export { defineConvexStoreContract } from './store-contract'
-export { cruxConvexStore } from './store'
-export type { ConvexContext, ConvexCtxPort, ConvexMemoryStoreConfig } from './store'
+export { convexComponentDocumentPort, cruxConvexStore } from './store'
+export type {
+  ConvexComponentDocumentPortConfig,
+  ConvexContext,
+  ConvexCtxPort,
+  ConvexMemoryStoreConfig,
+} from './store'
+export {
+  createInMemoryConvexStoreDocumentComponent,
+  isConvexStoreDocumentComponent,
+} from './store-document-component'
+export type {
+  InMemoryConvexStoreDocumentComponent,
+  InMemoryConvexStoreDocumentComponentOptions,
+} from './store-document-component'
 export type {
   ConvexStoreContract,
   ConvexStoreContractTransportOptions,
@@ -51,7 +64,18 @@ export type {
   ConvexCruxStoreComponent,
   ConvexCruxStoreMemoryComponent,
   ConvexCruxStoreTransportComponent,
+  ConvexStoreDocumentComponent,
+  ConvexStoreDocumentComponentIoOptions,
+  ConvexStoreDocumentComponentReadOptions,
 } from './store-component'
+export type {
+  ComponentDocumentPort,
+  StoreDocDenseSearchQuery,
+  StoreDocPage,
+  StoreDocPageQuery,
+  StoreDocRecord,
+  StoreDocWrite,
+} from './store-doc'
 export {
   context,
   contributor,

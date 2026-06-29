@@ -11,7 +11,14 @@
 
 import type { CruxStore } from '@use-crux/core/store'
 import type { ConvexCruxStoreComponent } from './store-component'
-import { createStoreDocStore, type StoreDocPage, type StoreDocPageQuery, type StoreDocRecord } from './store-doc'
+import {
+  STORE_DOC_COMPONENT_SPEC,
+  createStoreDocStore,
+  type ComponentDocumentPort,
+  type StoreDocPage,
+  type StoreDocPageQuery,
+  type StoreDocRecord,
+} from './store-doc'
 
 /**
  * Minimal Convex ctx port used by the Crux Convex runtime profile.
@@ -65,6 +72,49 @@ export interface ConvexMemoryStoreConfig<TCtx extends ConvexCtxPort = ConvexCtxP
   now?: () => number
 }
 
+/** Configuration for `convexComponentDocumentPort()`. */
+export interface ConvexComponentDocumentPortConfig<TCtx extends ConvexCtxPort = ConvexCtxPort> {
+  /** Convex action or mutation ctx with query/mutation runners. */
+  readonly ctx: TCtx
+  /** The Crux persistence component ref from `components.crux`. */
+  readonly component: ConvexCruxStoreComponent
+  /**
+   * Vector index name for dense vector search via `ctx.vectorSearch`.
+   *
+   * @default 'by_embedding'
+   */
+  readonly vectorIndexName?: string
+}
+
+/**
+ * Create the raw document I/O port for a Convex component.
+ *
+ * This is the local-substitutable boundary below the `CruxStore` policy. The
+ * port forwards raw document reads/writes to the generated component refs and
+ * delegates dense vector search to Convex action contexts when available.
+ */
+export function convexComponentDocumentPort<TCtx extends ConvexCtxPort = ConvexCtxPort>(
+  config: ConvexComponentDocumentPortConfig<TCtx>,
+): ComponentDocumentPort {
+  const { component, ctx, vectorIndexName = STORE_DOC_COMPONENT_SPEC.defaultVectorIndexName } = config
+  const fns = component.memory
+  const vectorSearch = ctx.vectorSearch
+
+  return {
+    get: (key) => ctx.runQuery<StoreDocRecord | null>(fns.get, { key }),
+    list: (query) => ctx.runQuery<StoreDocPage<StoreDocRecord>>(fns.list, storeDocPageArgs(query)),
+    async put(doc) {
+      await ctx.runMutation(fns.set, doc)
+    },
+    async delete(key) {
+      await ctx.runMutation(fns.remove, { key })
+    },
+    searchDense: vectorSearch
+      ? ({ vector, limit }) => vectorSearch(STORE_DOC_COMPONENT_SPEC.table, vectorIndexName, { vector, limit })
+      : undefined,
+  }
+}
+
 /**
  * Create a `CruxStore` backed by the Crux Convex component.
  *
@@ -87,27 +137,11 @@ export interface ConvexMemoryStoreConfig<TCtx extends ConvexCtxPort = ConvexCtxP
 export function cruxConvexStore<TCtx extends ConvexCtxPort = ConvexCtxPort>(
   config: ConvexMemoryStoreConfig<TCtx>,
 ): CruxStore {
-  const { component, ctx, vectorIndexName = 'by_embedding' } = config
-  const fns = component.memory
-  const vectorSearch = ctx.vectorSearch
-
   return createStoreDocStore({
     now: config.now,
     semanticCache: config.semanticCache,
     denseVectorSearch: true,
-    io: {
-      get: (key) => ctx.runQuery<StoreDocRecord | null>(fns.get, { key }),
-      list: (query) => ctx.runQuery<StoreDocPage<StoreDocRecord>>(fns.list, storeDocPageArgs(query)),
-      async put(doc) {
-        await ctx.runMutation(fns.set, doc)
-      },
-      async delete(key) {
-        await ctx.runMutation(fns.remove, { key })
-      },
-      searchDense: vectorSearch
-        ? ({ vector, limit }) => vectorSearch('memories', vectorIndexName, { vector, limit })
-        : undefined,
-    },
+    io: convexComponentDocumentPort(config),
   })
 }
 

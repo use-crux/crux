@@ -37,10 +37,10 @@ The mirrored subpaths intentionally stay close to `@use-crux/core`:
 
 | Import                        | Classification       | Notes                                                                                                            |
 | ----------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `@use-crux/convex/context`        | Identical re-export  | Re-exports core context helpers.                                                                                 |
-| `@use-crux/convex/skill`          | Identical re-export  | Re-exports core skill helpers.                                                                                   |
-| `@use-crux/convex/memory`         | Convex-bound drop-in | Same block API; `memory()` late-binds the active Convex Crux store and defaults to the current thread namespace. |
-| `@use-crux/convex/tools`          | Convex-bound drop-in | Same tool authoring shape; `execute()` receives Convex runtime metadata.                                         |
+| `@use-crux/convex/context`    | Identical re-export  | Re-exports core context helpers.                                                                                 |
+| `@use-crux/convex/skill`      | Identical re-export  | Re-exports core skill helpers.                                                                                   |
+| `@use-crux/convex/memory`     | Convex-bound drop-in | Same block API; `memory()` late-binds the active Convex Crux store and defaults to the current thread namespace. |
+| `@use-crux/convex/tools`      | Convex-bound drop-in | Same tool authoring shape; `execute()` receives Convex runtime metadata.                                         |
 | `convexAgent()`               | Convex-only API      | Profile-backed helper that resolves a Crux prompt per Convex Agent turn.                                         |
 | `createCruxConvex()`          | Convex-only API      | Creates a reusable Convex runtime profile from `components.crux` and `components.agent`.                         |
 | `createConvexRuntimeBridge()` | Convex-only API      | Creates the Crux-in-Convex runtime bridge without the Convex Agent profile helper.                               |
@@ -155,6 +155,27 @@ The component boundary is page-shaped. `components.crux.memory.list` accepts
 suppression and lazy cleanup, top-level decoded-value filters, and dense vector
 hit shaping. When a filtered `list()` call has a `limit`, the store reads
 additional component pages until it can return up to that many matching entries.
+
+Advanced tests and alternate runtimes can substitute the component boundary
+without running Convex. Use `createInMemoryConvexStoreDocumentComponent()` when
+server writes and React reads should share one local backing record set:
+
+```ts
+import { createInMemoryConvexStoreDocumentComponent, defineConvexStoreContract } from '@use-crux/convex'
+
+const component = createInMemoryConvexStoreDocumentComponent()
+const cruxDocuments = defineConvexStoreContract({ component })
+const store = cruxDocuments.store(component.ctx)
+const transport = cruxDocuments.transport({ useQuery: component.useQuery })
+
+await store.set('memory:alpha', { content: 'Alpha', namespace: 'kb' })
+
+transport.useDocument('memory:alpha')
+```
+
+Use `ComponentDocumentPort` or `convexComponentDocumentPort()` only when you need
+to test or replace the raw document I/O layer directly. App code should usually
+stay at `defineConvexStoreContract({ component: components.crux })`.
 
 For semantic response caching, use a dedicated Convex table/index or component instance and opt into the capability explicitly:
 
@@ -501,12 +522,16 @@ const metadataAgent = crux.convexAgent({
   languageModel: model,
 })
 
-const result = await metadataAgent.generateObject(ctx, { threadId, userId }, {
-  input: {
-    projectId,
-    instruction: 'Suggest a title.',
+const result = await metadataAgent.generateObject(
+  ctx,
+  { threadId, userId },
+  {
+    input: {
+      projectId,
+      instruction: 'Suggest a title.',
+    },
   },
-})
+)
 ```
 
 Use `crux.prepare` when input or runtime `use[]` entries depend on the Convex Agent thread context. If `crux.prepare()` returns a prompt override and runtime `use[]`, the runtime entries are composed onto that prompt for the turn. If `memory()` does not receive an explicit namespace, `convexAgent()` defaults it to `thread:${threadId}`. Pass `crux.runtime.namespace` when a memory block should be scoped to a project, organization, user, or another durable boundary. Use `crux.observe` to customize or disable the profile `agent.run` span, and `crux.persistence` to disable best-effort skill or memory persistence for specialized agents.

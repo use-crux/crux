@@ -52,6 +52,8 @@ export interface ConvexTransportConfig {
    * ```
    */
   useQuery: UseQueryFn
+  /** Clock used for TTL checks. Defaults to `Date.now`. */
+  now?: StoreDocCodecOptions['now']
 }
 
 // Re-export the transport type for convenience
@@ -59,7 +61,13 @@ export type { CruxTransport } from '@use-crux/react'
 import type { CruxTransport } from '@use-crux/react'
 import type { JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
 import type { ConvexCruxStoreTransportComponent } from './store-component'
-import { createStoreDocCodec, type StoreDocPage, type StoreDocPageQuery, type StoreDocRecord } from './store-doc'
+import {
+  createStoreDocCodec,
+  type StoreDocCodecOptions,
+  type StoreDocPage,
+  type StoreDocPageQuery,
+  type StoreDocRecord,
+} from './store-doc'
 
 /**
  * Create a `CruxTransport` backed by Convex's reactive queries.
@@ -88,8 +96,8 @@ import { createStoreDocCodec, type StoreDocPage, type StoreDocPageQuery, type St
  * ```
  */
 export function createConvexTransport(config: ConvexTransportConfig): CruxTransport {
-  const { api, useQuery } = config
-  const docs = createStoreDocCodec()
+  const { api, now, useQuery } = config
+  const docs = createStoreDocCodec({ now })
 
   return {
     useDocument(key: string | undefined): JsonObject | null | undefined {
