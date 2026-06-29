@@ -10,7 +10,7 @@
  * packages; this pins the core-side wiring without one.
  */
 
-import { afterEach, describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect } from 'vitest'
 import { z } from 'zod'
 import { prompt as makePrompt } from '../../prompt/prompt'
 import { agent as makeAgent } from '../../agent/agent'
@@ -21,7 +21,7 @@ import { createSwarm } from '../../agent/swarm'
 import { createFakeAgentExecutor } from '../../agent/fakes'
 import { createFakeAgentExecutor as fromAgentBarrel } from '../../agent'
 import { createFakeAgentExecutor as fromPackageRoot } from '../../index'
-import { setRuntime, resetRuntime } from '../../runtime/runtime'
+import { resetRuntime } from '../../runtime/runtime'
 
 afterEach(() => {
   resetRuntime()
@@ -81,7 +81,7 @@ describe('option threading', () => {
     })
   })
 
-    it('parallel passes every agent the same seed context and model as input', async () => {
+  it('parallel passes every agent the same seed context and model as input', async () => {
     const executor = createFakeAgentExecutor({
       agents: { scorer: { output: { score: 1 } }, tagger: { output: { tags: [] } } },
     })
@@ -115,7 +115,7 @@ describe('error bubbling', () => {
     )
   })
 
-    it('parallel continue mode reports the failure in its settled slot', async () => {
+  it('parallel continue mode reports the failure in its settled slot', async () => {
     const executor = createFakeAgentExecutor({
       agents: { scorer: { output: { score: 1 } }, tagger: { throws: 'tagger failed' } },
     })
@@ -132,7 +132,7 @@ describe('error bubbling', () => {
     expect(result.settled?.tagger.error?.message).toBe('tagger failed')
   })
 
-    it('pipeline aborts the chain at the failing step — later steps never run', async () => {
+  it('pipeline aborts the chain at the failing step — later steps never run', async () => {
     const executor = createFakeAgentExecutor({
       agents: { scorer: { output: {} }, tagger: { throws: 'boom' }, editor: { output: {} } },
     })
@@ -153,7 +153,7 @@ describe('error bubbling', () => {
     expect(executor.calls.map((c) => c.agent.id)).toEqual(['scorer', 'tagger'])
   })
 
-    it('consensus inherits parallel fail-fast and rejects', async () => {
+  it('consensus inherits parallel fail-fast and rejects', async () => {
     const executor = createFakeAgentExecutor({ agents: { classifier: { throws: 'classifier down' } } })
     const consensus = createConsensus(executor)
 
@@ -166,7 +166,7 @@ describe('error bubbling', () => {
     ).rejects.toThrow('classifier down')
   })
 
-    it('swarm surfaces an executor error from the active agent', async () => {
+  it('swarm surfaces an executor error from the active agent', async () => {
     const executor = createFakeAgentExecutor({ agents: { triage: { throws: 'swarm crash' } } })
     const swarm = createSwarm(executor)
 
@@ -199,7 +199,7 @@ describe('result accumulation', () => {
     expect(result.results).toHaveLength(2)
   })
 
-    it('parallel returns a record keyed by composition key, each carrying its agent output', async () => {
+  it('parallel returns a record keyed by composition key, each carrying its agent output', async () => {
     const executor = createFakeAgentExecutor({
       agents: { scorer: { output: { score: 0.5 } }, tagger: { output: { tags: ['a'] } } },
     })
@@ -237,7 +237,7 @@ describe('execution-context threading', () => {
     expect(byId('tagger')?.executionContext?.stepLabel).toBe('checker')
   })
 
-    it('a parallel nested in a pipeline step sees a child context under the parent session', async () => {
+  it('a parallel nested in a pipeline step sees a child context under the parent session', async () => {
     const executor = createFakeAgentExecutor({ fallback: 'echo' })
     const parallel = createParallel(executor)
     const pipeline = createPipeline(executor)
@@ -262,6 +262,7 @@ describe('execution-context threading', () => {
     expect(inner?.executionContext?.sessionId).toBe('sess-1')
   })
 })
+
 // ── Export surface ─────────────────────────────────────────────────
 
 describe('shared fake export surface', () => {

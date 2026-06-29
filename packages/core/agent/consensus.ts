@@ -1,19 +1,21 @@
 /**
  * Consensus composition — run multiple agents and determine a winner via voting.
  *
- * Built on top of `parallel()` — runs all agents concurrently, extracts a
- * vote value from each result, and picks the most frequent value. Supports
- * quorum validation (majority, unanimous, or specific count).
+ * Runs all agents concurrently through the shared composition runtime,
+ * extracts a vote value from each result, and picks the most frequent value.
+ * Supports quorum validation (majority, unanimous, or specific count).
  *
  * @module
  */
 
-import { createParallel } from './parallel'
 import { isAgent } from './agent'
-import type { AgentLike, InferAgentLikeInput, InferAgentLikeOutput } from './agent'
+import type {
+  AgentLike,
+  InferAgentLikeInput,
+  InferAgentLikeOutput,
+} from './agent'
 import type { AgentExecutor, AgentResult } from './executor'
-import { getRuntime } from '../runtime/runtime'
-import { observe } from '../observability'
+import { createCompositionRuntime } from './composition-runtime'
 import type { RetryOptions } from '../generation/retry'
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -29,7 +31,8 @@ type ConsensusInput<TAgents extends readonly AgentLike[]> = {
   : unknown
 
 /** Union of every voter agent's output type — used to type the `extract` callback. */
-type ConsensusOutput<TAgents extends readonly AgentLike[]> = InferAgentLikeOutput<TAgents[number]>
+type ConsensusOutput<TAgents extends readonly AgentLike[]> =
+  InferAgentLikeOutput<TAgents[number]>
 
 /** Options for `consensus()`. */
 export interface ConsensusOptions<
@@ -98,8 +101,6 @@ export class ConsensusError<TVote extends string = string> extends Error {
  * @returns A `consensus()` function.
  */
 export function createConsensus(executor: AgentExecutor) {
-  const parallel = createParallel(executor)
-
   /**
    * Run multiple agents and determine a winner via voting.
    *
@@ -118,156 +119,130 @@ export function createConsensus(executor: AgentExecutor) {
    * // decision.votes = { billing: 2, shipping: 1 }
    * ```
    */
-  return async function consensus<TAgents extends readonly AgentLike[], TVote extends string = string>(
+  return async function consensus<
+    TAgents extends readonly AgentLike[],
+    TVote extends string = string,
+  >(
     options: ConsensusOptions<TAgents, TVote>,
   ): Promise<ConsensusResult<TVote>> {
-    const { agents, input, model, extract, quorum = 'majority', sessionId, retry, validationRetry } = options
+    const {
+      agents,
+      input,
+      model,
+      extract,
+      quorum = 'majority',
+      sessionId,
+      retry,
+      validationRetry,
+    } = options
     const start = Date.now()
-    const compositionId = `comp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    const runtime = getRuntime()
     const agentIds = agents.map((a, i) => (isAgent(a) ? a.id : `voter-${i}`))
+    const runtime = createCompositionRuntime({
+      kind: 'consensus',
+      agentIds,
+      sessionId,
+      attributes: { quorum },
+    })
 
-    return observe.span(
-      {
-        name: 'consensus',
-        family: 'composition',
-        primitive: 'composition.consensus',
-        attributes: { compositionId, agentIds, quorum },
-      },
-      async () => {
-        // Emit consensus composition:start
-        // Convert array to named map for parallel()
-        const agentMap: Record<string, AgentLike> = {}
-        for (let i = 0; i < agents.length; i++) {
-          agentMap[`voter-${i}`] = agents[i]
+    return runtime.run(async (scope) => {
+      const voterInput =
+        typeof input === 'object' && input !== null
+          ? (input as Record<string, unknown>)
+          : { _input: input }
+      const allResults = (await Promise.all(
+        agents.map((agent, index) =>
+          scope.executeAgent({
+            agent,
+            executor,
+            label: `voter-${index}`,
+            index,
+            input: voterInput,
+            model,
+            retry,
+            validationRetry,
+          }),
+        ),
+      )) as AgentResult<ConsensusOutput<TAgents>>[]
+
+      // Count votes
+      const votes: Record<string, number> = {}
+      const extractedVotes: TVote[] = []
+      for (const result of allResults) {
+        const vote = extract(result)
+        extractedVotes.push(vote)
+        votes[vote] = (votes[vote] ?? 0) + 1
+      }
+
+      // Find winner (most frequent; first for ties)
+      let winner = '' as TVote
+      let winnerCount = 0
+      for (const [value, count] of Object.entries(votes)) {
+        if (count > winnerCount) {
+          winner = value as TVote
+          winnerCount = count
         }
+      }
 
-        // Run all agents via parallel (inherits error handling)
-        const parallelResult = await parallel({
-          context: (typeof input === 'object' && input !== null
-            ? (input as Record<string, unknown>)
-            : { _input: input }) as never,
-          agents: agentMap,
-          model,
-          sessionId,
-          retry,
-          validationRetry,
-        })
-        const allResults = Object.values(parallelResult.results) as AgentResult<ConsensusOutput<TAgents>>[]
+      const agreement =
+        allResults.length > 0 ? winnerCount / allResults.length : 0
 
-        // Count votes
-        const votes: Record<string, number> = {}
-        const extractedVotes: TVote[] = []
-        for (const result of allResults) {
-          const vote = extract(result)
-          extractedVotes.push(vote)
-          votes[vote] = (votes[vote] ?? 0) + 1
-        }
+      // Validate quorum
+      const votesByVote = votes as Record<TVote, number>
 
-        // Find winner (most frequent; first for ties)
-        let winner = '' as TVote
-        let winnerCount = 0
-        for (const [value, count] of Object.entries(votes)) {
-          if (count > winnerCount) {
-            winner = value as TVote
-            winnerCount = count
-          }
-        }
+      if (quorum === 'unanimous' && agreement < 1) {
+        throw new ConsensusError<TVote>(
+          `Consensus quorum not met: unanimous required but agreement is ${(agreement * 100).toFixed(0)}%`,
+          votesByVote,
+          quorum,
+        )
+      }
+      if (quorum === 'majority' && winnerCount <= allResults.length / 2) {
+        throw new ConsensusError<TVote>(
+          `Consensus quorum not met: majority required but winner "${winner}" has ${winnerCount}/${allResults.length} votes`,
+          votesByVote,
+          quorum,
+        )
+      }
+      if (typeof quorum === 'number' && winnerCount < quorum) {
+        throw new ConsensusError<TVote>(
+          `Consensus quorum not met: ${quorum} votes required but winner "${winner}" has ${winnerCount}`,
+          votesByVote,
+          quorum,
+        )
+      }
 
-        const agreement = allResults.length > 0 ? winnerCount / allResults.length : 0
-
-        // Validate quorum
-        const emitEnd = (status: 'success' | 'error') => {
-        }
-
-        const votesByVote = votes as Record<TVote, number>
-
-        if (quorum === 'unanimous' && agreement < 1) {
-          emitEnd('error')
-          throw new ConsensusError<TVote>(
-            `Consensus quorum not met: unanimous required but agreement is ${(agreement * 100).toFixed(0)}%`,
-            votesByVote,
-            quorum,
-          )
-        }
-        if (quorum === 'majority' && winnerCount <= allResults.length / 2) {
-          emitEnd('error')
-          throw new ConsensusError<TVote>(
-            `Consensus quorum not met: majority required but winner "${winner}" has ${winnerCount}/${allResults.length} votes`,
-            votesByVote,
-            quorum,
-          )
-        }
-        if (typeof quorum === 'number' && winnerCount < quorum) {
-          emitEnd('error')
-          throw new ConsensusError<TVote>(
-            `Consensus quorum not met: ${quorum} votes required but winner "${winner}" has ${winnerCount}`,
-            votesByVote,
-            quorum,
-          )
-        }
-
-        emitEnd('success')
-        emitConsensusCompositionReport({
-          compositionId,
+      const voteDetails = allResults.map((result, index) => ({
+        agent: agentIds[index] ?? `voter-${index}`,
+        answer: extractedVotes[index],
+        resultPreview: result.output,
+        durationMs: result.durationMs,
+      }))
+      scope.report({
+        preview: {
+          kind: 'composition.report',
+          compositionType: 'consensus',
+          compositionId: runtime.compositionId,
+          status: 'success',
           agreement,
           quorum,
-          votes: allResults.map((result, index) => ({
-            agent: agentIds[index] ?? `voter-${index}`,
-            answer: extractedVotes[index],
-            resultPreview: result.output,
-            durationMs: result.durationMs,
-          })),
-          durationMs: Date.now() - start,
-        })
-
-        return {
-          result: winner,
-          votes: votesByVote,
-          details: allResults,
+          votes: voteDetails,
+          wallTimeMs: Date.now() - start,
+        },
+        attributes: {
+          primitive: 'composition.consensus',
+          compositionId: runtime.compositionId,
           agreement,
-          durationMs: Date.now() - start,
-        }
-      },
-    )
-  }
-}
+          voterCount: voteDetails.length,
+        },
+      })
 
-function emitConsensusCompositionReport(args: {
-  compositionId: string
-  agreement: number
-  quorum: 'majority' | 'unanimous' | number
-  votes: readonly Record<string, unknown>[]
-  durationMs: number
-}): void {
-  const spanId = observe.captureContext()?.currentSpanId
-  if (!spanId) return
-  const artifactId = observe.artifact({
-    kind: 'composition.report',
-    contentType: 'application/json',
-    encoding: 'json',
-    preview: {
-      kind: 'composition.report',
-      compositionType: 'consensus',
-      compositionId: args.compositionId,
-      status: 'success',
-      agreement: args.agreement,
-      quorum: args.quorum,
-      votes: args.votes,
-      wallTimeMs: args.durationMs,
-    },
-    attributes: {
-      primitive: 'composition.consensus',
-      compositionId: args.compositionId,
-      agreement: args.agreement,
-      voterCount: args.votes.length,
-    },
-  })
-  if (!artifactId) return
-  observe.edge({
-    edgeType: 'produced',
-    from: { kind: 'span', id: spanId },
-    to: { kind: 'artifact', id: artifactId },
-    attributes: { primitive: 'composition.consensus', compositionId: args.compositionId },
-  })
+      return {
+        result: winner,
+        votes: votesByVote,
+        details: allResults,
+        agreement,
+        durationMs: Date.now() - start,
+      }
+    })
+  }
 }

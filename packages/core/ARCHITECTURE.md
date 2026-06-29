@@ -219,7 +219,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── executor.ts     AgentExecutor interface — SDK-agnostic agent execution contract (includes maxSteps)
 │   ├── parallel.ts     createParallel() — concurrent named agents with typed result record
 │   ├── pipeline.ts     createPipeline() — sequential chaining with typed context accumulation (PipelineResult, StepName, StepOutput)
-│   ├── consensus.ts    createConsensus() — voting with quorum validation (built on parallel)
+│   ├── consensus.ts    createConsensus() — concurrent voting with quorum validation
 │   ├── swarm.ts        createSwarm() — peer-to-peer routing via LLM-decided transfer tools
 │   ├── create-compositions.ts  createCompositions(executor) — factory for adapter-bound utilities
 │   ├── blackboard.ts   blackboard() — shared typed scratchpad, per-field validation
@@ -941,29 +941,9 @@ interface graph-record subscribers {
   onJudgeResult?: (event: { metricId; score; reasoning?; evalId? }) => void
   onSecurityWarning?: (event: { promptId; field; pattern; message; inputPreview }) => void
   // Compositions
-  onCompositionStart?: (event: { compositionId; kind; agentIds; startAgent?; maxHandoffs? }) => void
-  onCompositionAgent?: (event: {
-    compositionId
-    agentId
-    index
-    status
-    durationMs
-    error?
-    handoffFrom?
-    handoffReason?
-    hopNumber?
-  }) => void
-  onCompositionEnd?: (event: {
-    compositionId
-    kind
-    status
-    durationMs
-    agentCount
-    agreement?
-    handoffPath?
-    handoffCount?
-    finalAgentId?
-  }) => void
+  composition.* span records?: (event: { compositionId; kind; agentIds; status?; error? }) => void
+  agent.run span records?: (event: { compositionId; agentId; index; stepLabel; status?; error? }) => void
+  composition.report artifacts?: (event: { compositionId; compositionType; status; summary }) => void
   // Flows
   flow.run start records?: (event: { flowId; name; parentFlowId?; goal? }) => void
   flow.run end records?: (event: { flowId; name; status; durationMs; totalSteps; error? }) => void
@@ -1259,6 +1239,8 @@ The delegate emits `onDelegateStart` (with input snapshot) and `onDelegateComple
 
 All composition utilities follow the same factory pattern: `createX(executor)` returns a bound function. `createCompositions(executor)` bundles all four: `{ parallel, pipeline, consensus, swarm }`. Each SDK adapter creates an executor and re-exports the bound compositions.
 
+Internally, all four composition utilities route shared lifecycle through `agent/composition-runtime`: composition id creation, root `composition.*` spans, child `agent.run`/`flow.step` spans, child execution-context labels and session propagation, retry wrapping, duration accounting, and `composition.report` artifacts. Mode files own only their algorithm and public result shaping: fanout/settlement for `parallel`, context accumulation for `pipeline`, voting/quorum for `consensus`, and handoff routing/cost/path handling for `swarm`.
+
 **Agent definition**: `agent()` bundles prompt + optional model + tools + handoffs into a frozen data object. The `handoffs: string[]` field declares peer routing targets for `swarm()` (validated at runtime, not at definition time). Defaults to `[]`. The `AnyAgent` type alias (`Agent<z.ZodType, z.ZodType | undefined, readonly Context<any>[]>`) provides a non-generic handle for collections and runtime checks. `isAgent(value): value is AnyAgent` is the type guard.
 
 **Type utilities**: `InferAgentInput<T>` and `InferAgentOutput<T>` extract the input/output Zod inferred types from an `Agent` instance. `StepName<S>` and `StepOutput<S>` extract name and output types from pipeline step definitions. `AnyPrompt` (from `@use-crux/core`) is the non-generic prompt equivalent.
@@ -1485,7 +1467,7 @@ external observers and degrades to no-op when `node:diagnostics_channel` is unav
 
 `observe.run()` creates user-facing execution roots. `observe.span()` creates inspectable operations and automatically opens an implicit run when called outside an active run, so compositions such as `pipeline`, `consensus`, `parallel`, and `swarm` remain traceable when used directly. `observe.event()`, `observe.artifact()`, and `observe.edge()` attach timestamped detail, payloads, and relations to the active graph context.
 
-Built-in orchestration primitives write the graph contract directly. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` / `withFlow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. Successful `flow.step` spans also record the step result as an `output` artifact, so step outputs are inspectable from the trace (and back Quality `ctx.step()` access) without re-running the flow. `consensus()` nests its voter fanout under `composition.consensus`; `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
+Built-in orchestration primitives write the graph contract through the shared agent composition runtime. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` / `withFlow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. Successful `flow.step` spans also record the step result as an `output` artifact, so step outputs are inspectable from the trace (and back Quality `ctx.step()` access) without re-running the flow. `consensus()` opens `composition.consensus` with voter `agent.run` children directly under that composition span. `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
 
 Prompt/context and safety primitives also write the graph contract directly. `prompt.resolve()` opens `prompt.resolve`; conditional context evaluation emits `context.predicate` spans with `included`, `predicate`, discriminator/branch, and exclusion reason attributes; context text resolution emits `context.resolve` spans plus `context.contribution` artifacts and `produced` edges. Context contributions that provide tools carry `injectedTools` so readers can explain which contribution supplied each request tool; direct injectable, memory, blackboard, and retriever tool producers emit the same preview shape even when they have no resolved text. Included context artifacts are carried through `systemBlocks` and linked to each generation span with `consumed` edges, so the backend can expose the exact context for a call in `inspection.context`. Token-budget drops are recorded in `prompt.budget` artifacts. Generation orchestration emits consumed `messages` artifacts for the prepared request payload. The Safety session's constraint phase opens a grouped `constraint.check` span, runs each constraint check as a child span with pass/fail attributes, records `constraint.report` artifacts, and emits `constraint.retry` spans/edges for combined-feedback regeneration. Its guardrail phases open grouped and per-guard `guardrail.run` spans, record each action as span attributes plus `guardrail.report` artifacts with before/after previews when content changes, and emit `guardrail.blocked` edges for blocking decisions.
 

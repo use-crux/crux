@@ -50,7 +50,7 @@ describe('parallel: named results with seed context', () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0)
   })
 
-    it('passes seed context to all agents as input', async () => {
+  it('passes seed context to all agents as input', async () => {
     const executor = createMockExecutor({})
     const parallel = createParallel(executor)
 
@@ -64,7 +64,7 @@ describe('parallel: named results with seed context', () => {
     expect(inputFor('agent-b')).toEqual({ content: 'test article' })
   })
 
-    it('runs agents concurrently', async () => {
+  it('runs agents concurrently', async () => {
     const callOrder: string[] = []
     let started = 0
     let releaseBothStarted: () => void = () => {}
@@ -106,7 +106,7 @@ describe('parallel: named results with seed context', () => {
     expect(callOrder).toContain('end:agent-b')
   })
 
-    it('returns empty results for empty agents', async () => {
+  it('returns empty results for empty agents', async () => {
     const executor = createMockExecutor({})
     const parallel = createParallel(executor)
 
@@ -118,7 +118,7 @@ describe('parallel: named results with seed context', () => {
     expect(result.results).toEqual({})
   })
 
-    it('fail-fast: rejects when any agent fails', async () => {
+  it('fail-fast: rejects when any agent fails', async () => {
     const executor = createFakeAgentExecutor({
       agents: { 'agent-a': { output: {} }, 'agent-b': { throws: 'agent-b failed' } },
     })
@@ -127,7 +127,7 @@ describe('parallel: named results with seed context', () => {
     await expect(parallel({ context: {}, agents: { a: agentA, b: agentB } })).rejects.toThrow('agent-b failed')
   })
 
-    it('continue mode: returns settled results with errors', async () => {
+  it('continue mode: returns settled results with errors', async () => {
     const executor = createFakeAgentExecutor({
       agents: { 'agent-a': { output: { ok: true } }, 'agent-b': { throws: 'agent-b failed' } },
     })
@@ -144,7 +144,7 @@ describe('parallel: named results with seed context', () => {
     expect((result.settled!.b as { error: Error }).error.message).toBe('agent-b failed')
   })
 
-    it('plain fn agents work alongside Agent instances', async () => {
+  it('plain fn agents work alongside Agent instances', async () => {
     const executor = createMockExecutor({ 'agent-a': { score: 0.9 } })
     const parallel = createParallel(executor)
 
@@ -160,7 +160,7 @@ describe('parallel: named results with seed context', () => {
     expect(result.results.custom.output).toEqual({ custom: true })
   })
 
-    it('sets trace context with agent key as step label', async () => {
+  it('sets trace context with agent key as step label', async () => {
     const executor = createMockExecutor({})
     const parallel = createParallel(executor)
 
@@ -172,4 +172,5 @@ describe('parallel: named results with seed context', () => {
     const ctxFor = (id: string) => executor.calls.find((c) => c.agent.id === id)?.executionContext
     expect(ctxFor('agent-a')?.stepLabel).toBe('reviewer')
     expect(ctxFor('agent-b')?.stepLabel).toBe('checker')
-  })})
+  })
+})

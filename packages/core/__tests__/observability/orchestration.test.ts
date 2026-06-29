@@ -31,15 +31,21 @@ const critiquePrompt = makePrompt({
   system: 'Critique',
 })
 
-const researchAgent = makeAgent({ id: 'research-agent', prompt: researchPrompt })
-const critiqueAgent = makeAgent({ id: 'critique-agent', prompt: critiquePrompt })
+const researchAgent = makeAgent({
+  id: 'research-agent',
+  prompt: researchPrompt,
+})
+const critiqueAgent = makeAgent({
+  id: 'critique-agent',
+  prompt: critiquePrompt,
+})
 
 describe('canonical orchestration observability', () => {
   afterEach(() => {
     resetObservabilityRuntime()
   })
 
-    it('records standalone parallel runs with sibling agent spans and nested generation spans', async () => {
+  it('records standalone parallel runs with sibling agent spans and nested generation spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -65,16 +71,33 @@ describe('canonical orchestration observability', () => {
     })
     await observe.flush()
 
-    const spanStarts = transport.records.filter((record) => record.type === 'span:start')
-    const composition = spanStarts.find((record) => record.primitive === 'composition.parallel')
-    expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'composition.parallel' })
-    expect(composition).toMatchObject({ family: 'composition', primitive: 'composition.parallel' })
+    const spanStarts = transport.records.filter(
+      (record) => record.type === 'span:start',
+    )
+    const composition = spanStarts.find(
+      (record) => record.primitive === 'composition.parallel',
+    )
+    expect(transport.records[0]).toMatchObject({
+      type: 'run:start',
+      rootPrimitive: 'composition.parallel',
+    })
+    expect(composition).toMatchObject({
+      family: 'composition',
+      primitive: 'composition.parallel',
+    })
 
-    const agentSpans = spanStarts.filter((record) => record.primitive === 'agent.run')
+    const agentSpans = spanStarts.filter(
+      (record) => record.primitive === 'agent.run',
+    )
     expect(agentSpans).toHaveLength(2)
-    expect(agentSpans.map((record) => record.parentSpanId)).toEqual([composition?.spanId, composition?.spanId])
+    expect(agentSpans.map((record) => record.parentSpanId)).toEqual([
+      composition?.spanId,
+      composition?.spanId,
+    ])
 
-    const generationSpans = spanStarts.filter((record) => record.primitive === 'generation.call')
+    const generationSpans = spanStarts.filter(
+      (record) => record.primitive === 'generation.call',
+    )
     expect(generationSpans).toHaveLength(2)
     expect(generationSpans.map((record) => record.parentSpanId).sort()).toEqual(
       agentSpans.map((record) => record.spanId).sort(),
@@ -88,15 +111,23 @@ describe('canonical orchestration observability', () => {
           compositionType: 'parallel',
           status: 'success',
           branches: expect.arrayContaining([
-            expect.objectContaining({ id: 'research', agentId: 'research-agent', status: 'success' }),
-            expect.objectContaining({ id: 'critique', agentId: 'critique-agent', status: 'success' }),
+            expect.objectContaining({
+              id: 'research',
+              agentId: 'research-agent',
+              status: 'success',
+            }),
+            expect.objectContaining({
+              id: 'critique',
+              agentId: 'critique-agent',
+              status: 'success',
+            }),
           ]),
         }),
       }),
     )
   })
 
-    it('records pipeline steps as canonical flow.step children', async () => {
+  it('records pipeline steps as canonical flow.step children', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const pipeline = createPipeline(async (agent) => ({
@@ -114,16 +145,33 @@ describe('canonical orchestration observability', () => {
     })
     await observe.flush()
 
-    const spanStarts = transport.records.filter((record) => record.type === 'span:start')
-    const pipelineSpan = spanStarts.find((record) => record.primitive === 'composition.pipeline')
-    expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'composition.pipeline' })
+    const spanStarts = transport.records.filter(
+      (record) => record.type === 'span:start',
+    )
+    const pipelineSpan = spanStarts.find(
+      (record) => record.primitive === 'composition.pipeline',
+    )
+    expect(transport.records[0]).toMatchObject({
+      type: 'run:start',
+      rootPrimitive: 'composition.pipeline',
+    })
     expect(pipelineSpan).toBeTruthy()
 
-    const stepSpans = spanStarts.filter((record) => record.primitive === 'flow.step')
-    expect(stepSpans.map((record) => record.name)).toEqual(['research', 'critique'])
-    expect(stepSpans.map((record) => record.parentSpanId)).toEqual([pipelineSpan?.spanId, pipelineSpan?.spanId])
+    const stepSpans = spanStarts.filter(
+      (record) => record.primitive === 'flow.step',
+    )
+    expect(stepSpans.map((record) => record.name)).toEqual([
+      'research',
+      'critique',
+    ])
+    expect(stepSpans.map((record) => record.parentSpanId)).toEqual([
+      pipelineSpan?.spanId,
+      pipelineSpan?.spanId,
+    ])
 
-    const agentSpan = spanStarts.find((record) => record.primitive === 'agent.run')
+    const agentSpan = spanStarts.find(
+      (record) => record.primitive === 'agent.run',
+    )
     expect(agentSpan?.parentSpanId).toBe(stepSpans[0]?.spanId)
     expect(transport.records).toContainEqual(
       expect.objectContaining({
@@ -142,27 +190,44 @@ describe('canonical orchestration observability', () => {
     )
   })
 
-    it('records runtime flows as flow.run with canonical flow.step children', async () => {
+  it('records runtime flows as flow.run with canonical flow.step children', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
     await withFlow('research flow', async (flow) => {
       const plan = await flow.step('plan', async () => ({ planId: 'p1' }))
-      return flow.step('publish', async () => ({ planId: plan.planId, ok: true }))
+      return flow.step('publish', async () => ({
+        planId: plan.planId,
+        ok: true,
+      }))
     })
     await observe.flush()
 
-    const spanStarts = transport.records.filter((record) => record.type === 'span:start')
+    const spanStarts = transport.records.filter(
+      (record) => record.type === 'span:start',
+    )
     const flowRun = spanStarts.find((record) => record.primitive === 'flow.run')
-    expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'flow.run' })
-    expect(flowRun).toMatchObject({ family: 'flow', primitive: 'flow.run', name: 'research flow' })
+    expect(transport.records[0]).toMatchObject({
+      type: 'run:start',
+      rootPrimitive: 'flow.run',
+    })
+    expect(flowRun).toMatchObject({
+      family: 'flow',
+      primitive: 'flow.run',
+      name: 'research flow',
+    })
 
-    const stepSpans = spanStarts.filter((record) => record.primitive === 'flow.step')
+    const stepSpans = spanStarts.filter(
+      (record) => record.primitive === 'flow.step',
+    )
     expect(stepSpans.map((record) => record.name)).toEqual(['plan', 'publish'])
-    expect(stepSpans.map((record) => record.parentSpanId)).toEqual([flowRun?.spanId, flowRun?.spanId])
+    expect(stepSpans.map((record) => record.parentSpanId)).toEqual([
+      flowRun?.spanId,
+      flowRun?.spanId,
+    ])
   })
 
-    it('records delegates and handoff payload relations canonically', async () => {
+  it('records delegates and handoff payload relations canonically', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const contract = handoff({
@@ -181,29 +246,47 @@ describe('canonical orchestration observability', () => {
     await researchDelegate.run({ topic: 'observability' }, undefined)
     await observe.flush()
 
-    const spanStarts = transport.records.filter((record) => record.type === 'span:start')
-    expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'delegate.invoke' })
-    expect(spanStarts.map((record) => record.primitive)).toContain('delegate.invoke')
-    expect(spanStarts.map((record) => record.primitive)).toContain('handoff.prepare')
+    const spanStarts = transport.records.filter(
+      (record) => record.type === 'span:start',
+    )
+    expect(transport.records[0]).toMatchObject({
+      type: 'run:start',
+      rootPrimitive: 'delegate.invoke',
+    })
+    expect(spanStarts.map((record) => record.primitive)).toContain(
+      'delegate.invoke',
+    )
+    expect(spanStarts.map((record) => record.primitive)).toContain(
+      'handoff.prepare',
+    )
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
         kind: 'input',
-        attributes: expect.objectContaining({ delegateId: 'delegate-research', role: 'delegate.input' }),
+        attributes: expect.objectContaining({
+          delegateId: 'delegate-research',
+          role: 'delegate.input',
+        }),
       }),
     )
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
         kind: 'input',
-        attributes: expect.objectContaining({ handoffId: 'research-to-writer', role: 'handoff.input' }),
+        attributes: expect.objectContaining({
+          handoffId: 'research-to-writer',
+          role: 'handoff.input',
+        }),
       }),
     )
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
         kind: 'output',
-        attributes: expect.objectContaining({ delegateId: 'delegate-research', role: 'delegate.output' }),
+        attributes: expect.objectContaining({
+          delegateId: 'delegate-research',
+          role: 'delegate.output',
+        }),
       }),
     )
     expect(transport.records).toContainEqual(
@@ -216,18 +299,30 @@ describe('canonical orchestration observability', () => {
           handoffId: 'research-to-writer',
           inputSize: expect.any(Number),
           outputSize: expect.any(Number),
-          resultPreview: expect.objectContaining({ notes: 'notes:observability' }),
+          resultPreview: expect.objectContaining({
+            notes: 'notes:observability',
+          }),
         }),
       }),
     )
-    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'artifact', kind: 'handoff.payload' }))
-    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'consumed' }))
-    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'produced' }))
-    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'handoff.payload' }))
-    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'delegate.invoked' }))
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'artifact', kind: 'handoff.payload' }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'edge', edgeType: 'consumed' }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'edge', edgeType: 'produced' }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'edge', edgeType: 'handoff.payload' }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'edge', edgeType: 'delegate.invoked' }),
+    )
   })
 
-    it('records consensus and its nested parallel voters canonically', async () => {
+  it('records consensus voters under one composition runtime boundary', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const consensus = createConsensus(async (agent) => ({
@@ -244,12 +339,31 @@ describe('canonical orchestration observability', () => {
     })
     await observe.flush()
 
-    const spanStarts = transport.records.filter((record) => record.type === 'span:start')
-    const consensusSpan = spanStarts.find((record) => record.primitive === 'composition.consensus')
-    const parallelSpan = spanStarts.find((record) => record.primitive === 'composition.parallel')
-    expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'composition.consensus' })
-    expect(parallelSpan?.parentSpanId).toBe(consensusSpan?.spanId)
-    expect(spanStarts.filter((record) => record.primitive === 'agent.run')).toHaveLength(2)
+    const spanStarts = transport.records.filter(
+      (record) => record.type === 'span:start',
+    )
+    const consensusSpan = spanStarts.find(
+      (record) => record.primitive === 'composition.consensus',
+    )
+    expect(transport.records[0]).toMatchObject({
+      type: 'run:start',
+      rootPrimitive: 'composition.consensus',
+    })
+    expect(
+      spanStarts.find((record) => record.primitive === 'composition.parallel'),
+    ).toBeUndefined()
+    expect(
+      spanStarts.filter((record) => record.primitive === 'agent.run'),
+    ).toEqual([
+      expect.objectContaining({
+        parentSpanId: consensusSpan?.spanId,
+        attributes: expect.objectContaining({ index: 0 }),
+      }),
+      expect.objectContaining({
+        parentSpanId: consensusSpan?.spanId,
+        attributes: expect.objectContaining({ index: 1 }),
+      }),
+    ])
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
@@ -261,15 +375,21 @@ describe('canonical orchestration observability', () => {
           agreement: 1,
           quorum: 'majority',
           votes: expect.arrayContaining([
-            expect.objectContaining({ agent: 'research-agent', answer: 'ship' }),
-            expect.objectContaining({ agent: 'critique-agent', answer: 'ship' }),
+            expect.objectContaining({
+              agent: 'research-agent',
+              answer: 'ship',
+            }),
+            expect.objectContaining({
+              agent: 'critique-agent',
+              answer: 'ship',
+            }),
           ]),
         }),
       }),
     )
   })
 
-    it('records swarm agent turns and handoffs canonically', async () => {
+  it('records swarm agent turns and handoffs canonically', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const triage = makeAgent({
@@ -285,9 +405,20 @@ describe('canonical orchestration observability', () => {
     const swarm = createSwarm(async (agent, options) => {
       if (agent.id === 'triage') {
         const transfer = (
-          options.tools as Record<string, { execute: (args: { reason: string; context: string }) => Promise<string> }>
+          options.tools as Record<
+            string,
+            {
+              execute: (args: {
+                reason: string
+                context: string
+              }) => Promise<string>
+            }
+          >
         ).transfer_to_billing
-        await transfer.execute({ reason: 'billing issue', context: 'invoice context' })
+        await transfer.execute({
+          reason: 'billing issue',
+          context: 'invoice context',
+        })
         return { agentId: agent.id, output: 'transfer', durationMs: 1 }
       }
       return { agentId: agent.id, output: 'done', durationMs: 1 }
@@ -301,11 +432,22 @@ describe('canonical orchestration observability', () => {
     })
     await observe.flush()
 
-    const spanStarts = transport.records.filter((record) => record.type === 'span:start')
-    expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'composition.swarm' })
-    expect(spanStarts.filter((record) => record.primitive === 'composition.swarm')).toHaveLength(1)
-    expect(spanStarts.filter((record) => record.primitive === 'agent.run')).toHaveLength(2)
-    expect(spanStarts.filter((record) => record.primitive === 'handoff.prepare')).toHaveLength(1)
+    const spanStarts = transport.records.filter(
+      (record) => record.type === 'span:start',
+    )
+    expect(transport.records[0]).toMatchObject({
+      type: 'run:start',
+      rootPrimitive: 'composition.swarm',
+    })
+    expect(
+      spanStarts.filter((record) => record.primitive === 'composition.swarm'),
+    ).toHaveLength(1)
+    expect(
+      spanStarts.filter((record) => record.primitive === 'agent.run'),
+    ).toHaveLength(2)
+    expect(
+      spanStarts.filter((record) => record.primitive === 'handoff.prepare'),
+    ).toHaveLength(1)
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
@@ -345,8 +487,14 @@ describe('canonical orchestration observability', () => {
         }),
       }),
     )
-    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'consumed' }))
-    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'handoff.payload' }))
-    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'triggered' }))
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'edge', edgeType: 'consumed' }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'edge', edgeType: 'handoff.payload' }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'edge', edgeType: 'triggered' }),
+    )
   })
 })

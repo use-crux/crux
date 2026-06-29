@@ -10,14 +10,18 @@
  */
 
 import { z } from 'zod'
-import type { Agent, AnyAgent, InferAgentInput, InferAgentOutput } from './agent'
+import type {
+  Agent,
+  AnyAgent,
+  InferAgentInput,
+  InferAgentOutput,
+} from './agent'
 import type { AgentExecutor, AgentResult } from './executor'
-import { getRuntime } from '../runtime/runtime'
-import { runWithExecutionContext, getExecutionContext } from '../runtime/execution-context'
+import { createCompositionRuntime } from './composition-runtime'
+import type { CompositionScope } from './composition-runtime'
 import type { GenerateTextFn } from '../compaction/types'
 import { observe } from '../observability'
 import type { CruxSpanId } from '../observability'
-import { executeWithRetry } from '../generation/retry'
 import type { RetryOptions } from '../generation/retry'
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -57,7 +61,10 @@ export interface SwarmHandoffEvent {
 /** Options for `swarm()`. */
 export interface SwarmOptions<
   TAgents extends Record<string, AnyAgent> = Record<string, AnyAgent>,
-  TStart extends Extract<keyof TAgents, string> = Extract<keyof TAgents, string>,
+  TStart extends Extract<keyof TAgents, string> = Extract<
+    keyof TAgents,
+    string
+  >,
 > {
   /** Named map of agents in the swarm. Keys must match agent IDs. */
   agents: TAgents
@@ -89,7 +96,10 @@ export interface SwarmOptions<
    * - `'accumulate'`: original input + previous output + handoff path
    * - Custom function: receives full context, returns input for next agent
    */
-  history?: 'transfer-only' | 'accumulate' | ((ctx: SwarmHandoffContext) => unknown)
+  history?:
+    | 'transfer-only'
+    | 'accumulate'
+    | ((ctx: SwarmHandoffContext) => unknown)
   /** Called for each handoff. */
   onHandoff?: (event: SwarmHandoffEvent) => void
   /** Session ID for grouping related composition runs in devtools. */
@@ -159,7 +169,9 @@ export interface SwarmOptions<
 }
 
 /** Result of a swarm run. */
-export interface SwarmResult<TAgents extends Record<string, AnyAgent> = Record<string, AnyAgent>> {
+export interface SwarmResult<
+  TAgents extends Record<string, AnyAgent> = Record<string, AnyAgent>,
+> {
   /** The final agent's output — union of every possible agent output. */
   output: InferAgentOutput<TAgents[Extract<keyof TAgents, string>]>
   /** ID of the agent that produced the final output. */
@@ -200,12 +212,6 @@ export class SwarmError extends Error {
     super(message)
     this.name = 'SwarmError'
   }
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────
-
-function generateCompositionId(): string {
-  return `comp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 /** A transfer tool injected into swarm agents for handoff routing. */
@@ -277,7 +283,10 @@ async function buildNextInput(
         const result = await summarizeConfig.generate({
           model: summarizeConfig.model,
           system: summarizeConfig.system ?? DEFAULT_SUMMARIZE_SYSTEM,
-          prompt: typeof previousOutput === 'string' ? previousOutput : JSON.stringify(previousOutput, null, 2),
+          prompt:
+            typeof previousOutput === 'string'
+              ? previousOutput
+              : JSON.stringify(previousOutput, null, 2),
         })
         previousOutput = result.text
       }
@@ -431,10 +440,14 @@ export function createSwarm(executor: AgentExecutor) {
       }
     }
 
-    const compositionId = generateCompositionId()
     const start = Date.now()
-    const runtime = getRuntime()
     const agentIds = Object.keys(agents)
+    const runtime = createCompositionRuntime({
+      kind: 'swarm',
+      agentIds,
+      sessionId,
+      attributes: { startAgent, maxHandoffs },
+    })
     const handoffPath: SwarmAgentKey[] = [startAgent]
     const agentResults: AgentResult[] = []
     let accumulatedUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
@@ -447,276 +460,107 @@ export function createSwarm(executor: AgentExecutor) {
     let previousHandoffReason: string | undefined
     let previousHandoffSpanId: CruxSpanId | undefined
 
-    return observe.span(
-      {
-        name: 'swarm',
-        family: 'composition',
-        primitive: 'composition.swarm',
-        attributes: { compositionId, agentIds, startAgent, maxHandoffs },
-      },
-      async () => {
-        // Emit composition:start
+    return runtime.run(async (scope) => {
+      // Main loop
+      while (true) {
+        const agent = agents[currentAgentId]
 
-        // Main loop
-        while (true) {
-          const agent = agents[currentAgentId]
-
-          // Build transfer tools from agent's handoffs
-          let pendingHandoff: {
-            target: string
-            reason: string
-            context: string
-          } | null = null
-          const transferTools = buildTransferTools(agent, agents, (target, reason, context) => {
+        // Build transfer tools from agent's handoffs
+        let pendingHandoff: {
+          target: string
+          reason: string
+          context: string
+        } | null = null
+        const transferTools = buildTransferTools(
+          agent,
+          agents,
+          (target, reason, context) => {
             pendingHandoff = { target, reason, context }
-          })
+          },
+        )
 
-          // Build merged tools: filtered agent tools + transfer tools
-          const allowedToolNames =
-            options.activeTools?.[currentAgentId] ?? (agent.swarmTools as readonly string[] | undefined)
-          const agentTools = (agent.tools ?? {}) as Record<string, unknown>
-          let mergedTools: Record<string, unknown>
-          if (allowedToolNames) {
-            // Filter: only include allowed agent tools
-            const filteredAgentTools: Record<string, unknown> = {}
-            for (const name of allowedToolNames) {
-              if (agentTools[name]) {
-                filteredAgentTools[name] = agentTools[name]
-              }
+        // Build merged tools: filtered agent tools + transfer tools
+        const allowedToolNames =
+          options.activeTools?.[currentAgentId] ??
+          (agent.swarmTools as readonly string[] | undefined)
+        const agentTools = (agent.tools ?? {}) as Record<string, unknown>
+        let mergedTools: Record<string, unknown>
+        if (allowedToolNames) {
+          // Filter: only include allowed agent tools
+          const filteredAgentTools: Record<string, unknown> = {}
+          for (const name of allowedToolNames) {
+            if (agentTools[name]) {
+              filteredAgentTools[name] = agentTools[name]
             }
-            mergedTools = { ...filteredAgentTools, ...transferTools }
-          } else {
-            // No filtering: include all agent tools + transfer tools
-            mergedTools = { ...agentTools, ...transferTools }
           }
+          mergedTools = { ...filteredAgentTools, ...transferTools }
+        } else {
+          // No filtering: include all agent tools + transfer tools
+          mergedTools = { ...agentTools, ...transferTools }
+        }
 
-          // Execute agent with merged tools
-          const agentStart = Date.now()
-          const parentCtx = getExecutionContext()
-          const stepCtx = {
-            ...parentCtx,
-            stepId: `${compositionId}-${currentAgentId}-${agentIndex}`,
-            stepLabel: currentAgentId,
-            ...(sessionId ? { sessionId } : {}),
-          }
+        let result: AgentResult
+        const attributes = {
+          ...(previousAgentId ? { handoffFrom: previousAgentId } : {}),
+          ...(previousHandoffReason
+            ? { handoffReason: previousHandoffReason }
+            : {}),
+          ...(handoffCount > 0 ? { hopNumber: handoffCount } : {}),
+        }
+        try {
+          result = await scope.executeAgent({
+            agent,
+            executor,
+            label: currentAgentId,
+            index: agentIndex,
+            input: currentInput,
+            model,
+            tools: mergedTools,
+            maxSteps,
+            retry,
+            validationRetry,
+            attributes,
+            stepId: `${runtime.compositionId}-${currentAgentId}-${agentIndex}`,
+            ...(previousHandoffSpanId
+              ? {
+                  triggeredBy: {
+                    spanId: previousHandoffSpanId,
+                    attributes: {
+                      fromAgent: previousAgentId ?? '',
+                      toAgent: currentAgentId,
+                    },
+                  },
+                }
+              : {}),
+          })
+          previousHandoffSpanId = undefined
+        } catch (err) {
+          throw err
+        }
+        agentResults.push(result)
 
-          let result: AgentResult
-          const agentSpan = observe.openSpan({
-            name: currentAgentId,
-            family: 'agent',
-            primitive: 'agent.run',
-            attributes: {
-              compositionId,
-              agentId: currentAgentId,
-              index: agentIndex,
-              ...(previousAgentId ? { handoffFrom: previousAgentId } : {}),
-              ...(previousHandoffReason ? { handoffReason: previousHandoffReason } : {}),
-              ...(handoffCount > 0 ? { hopNumber: handoffCount } : {}),
+        // Accumulate usage and call onCost
+        if (result.usage) {
+          accumulatedUsage.inputTokens += result.usage.inputTokens ?? 0
+          accumulatedUsage.outputTokens += result.usage.outputTokens ?? 0
+          accumulatedUsage.totalTokens += result.usage.totalTokens ?? 0
+        }
+        if (onCost) {
+          onCost({
+            ...accumulatedUsage,
+            abort: () => {
+              aborted = true
             },
           })
-          if (previousHandoffSpanId) {
-            observe.edge({
-              edgeType: 'triggered',
-              from: { kind: 'span', id: previousHandoffSpanId },
-              to: { kind: 'span', id: agentSpan.spanId },
-              attributes: { fromAgent: previousAgentId ?? '', toAgent: currentAgentId },
-            })
-            previousHandoffSpanId = undefined
-          }
-          try {
-            result = await agentSpan.withContext(() =>
-              runWithExecutionContext(stepCtx, () =>
-                executeWithRetry(
-                  () =>
-                    executor(agent, {
-                      input: currentInput,
-                      model,
-                      tools: mergedTools,
-                      maxSteps,
-                      validationRetry,
-                    }),
-                  retry,
-                ),
-              ),
-            )
-          } catch (err) {
-            agentSpan.error(err)
-            const errorMsg = err instanceof Error ? err.message : String(err)
+        }
 
-            // Emit composition:agent (error)
+        agentIndex++
 
-            // Emit composition:end (error)
-
-            throw err
-          }
-          agentResults.push(result)
-          agentSpan.end({ agentId: result.agentId })
-
-          // Accumulate usage and call onCost
-          if (result.usage) {
-            accumulatedUsage.inputTokens += result.usage.inputTokens ?? 0
-            accumulatedUsage.outputTokens += result.usage.outputTokens ?? 0
-            accumulatedUsage.totalTokens += result.usage.totalTokens ?? 0
-          }
-          if (onCost) {
-            onCost({
-              ...accumulatedUsage,
-              abort: () => {
-                aborted = true
-              },
-            })
-          }
-
-          // Emit composition:agent (success)
-          agentIndex++
-
-          // Check if aborted via onCost
-          if (aborted) {
-            const durationMs = Date.now() - start
-            emitSwarmCompositionReport({
-              compositionId,
-              durationMs,
-              handoffPath: [...handoffPath],
-              handoffCount,
-              finalAgentId: currentAgentId,
-              agentResults,
-              agentIds,
-            })
-            return {
-              output: result.output as SwarmOutput,
-              finalAgentId: currentAgentId as SwarmAgentKey,
-              handoffPath,
-              handoffCount,
-              durationMs,
-              agentResults,
-            }
-          }
-
-          // Check if a handoff occurred
-          // (pendingHandoff is set by the transfer tool's execute closure — TypeScript
-          // can't narrow closure-captured let variables, so we use a non-null assertion)
-          if (pendingHandoff !== null) {
-            const handoff = pendingHandoff as {
-              target: string
-              reason: string
-              context: string
-            }
-            handoffCount++
-
-            // Check maxHandoffs
-            const handoffTarget = handoff.target as SwarmAgentKey
-            if (handoffCount >= maxHandoffs) {
-              handoffPath.push(handoffTarget)
-
-              // Emit composition:end (error)
-
-              throw new SwarmError(
-                `swarm: maxHandoffs (${maxHandoffs}) reached. ` + `Path: ${handoffPath.join(' → ')}`,
-                handoffPath,
-                maxHandoffs,
-              )
-            }
-
-            // Emit onHandoff callback
-            onHandoff?.({
-              fromAgent: currentAgentId,
-              toAgent: handoffTarget,
-              reason: handoff.reason,
-              context: handoff.context,
-              hopNumber: handoffCount,
-            })
-            await observe.span(
-              {
-                name: `${currentAgentId} -> ${handoffTarget}`,
-                family: 'handoff',
-                primitive: 'handoff.prepare',
-                attributes: {
-                  compositionId,
-                  fromAgent: currentAgentId,
-                  toAgent: handoffTarget,
-                  reason: handoff.reason,
-                  hopNumber: handoffCount,
-                },
-              },
-              async () => {
-                const handoffInput = {
-                  fromAgent: currentAgentId,
-                  toAgent: handoffTarget,
-                  reason: handoff.reason,
-                  context: handoff.context,
-                  hopNumber: handoffCount,
-                }
-                const inputArtifactId = observe.artifact({
-                  kind: 'input',
-                  contentType: 'application/json',
-                  encoding: 'json',
-                  preview: handoffInput,
-                  attributes: { compositionId, hopNumber: handoffCount, role: 'handoff.input' },
-                })
-                const artifactId = observe.artifact({
-                  kind: 'handoff.payload',
-                  contentType: 'application/json',
-                  encoding: 'json',
-                  preview: {
-                    kind: 'handoff.payload',
-                    ...handoffInput,
-                    hop: handoffCount,
-                    beforeSize: jsonSize(result.output),
-                    afterSize: jsonSize(handoffInput),
-                  },
-                  attributes: { compositionId, hopNumber: handoffCount },
-                })
-                const observedContext = observe.captureContext()
-                if (observedContext?.currentSpanId) {
-                  previousHandoffSpanId = observedContext.currentSpanId
-                  if (inputArtifactId) {
-                    observe.edge({
-                      edgeType: 'consumed',
-                      from: { kind: 'artifact', id: inputArtifactId },
-                      to: { kind: 'span', id: observedContext.currentSpanId },
-                      attributes: { fromAgent: currentAgentId, toAgent: handoffTarget },
-                    })
-                  }
-                  if (artifactId) {
-                    observe.edge({
-                      edgeType: 'handoff.payload',
-                      from: { kind: 'span', id: observedContext.currentSpanId },
-                      to: { kind: 'artifact', id: artifactId },
-                      attributes: { fromAgent: currentAgentId, toAgent: handoffTarget },
-                    })
-                  }
-                }
-              },
-            )
-
-            // Build input for next agent
-            handoffPath.push(handoffTarget)
-            previousAgentId = currentAgentId
-            previousHandoffReason = handoff.reason
-            currentInput = await buildNextInput(
-              history,
-              {
-                originalInput,
-                previousOutput: result.output,
-                handoffPath: [...handoffPath],
-                fromAgent: currentAgentId,
-                toAgent: handoffTarget,
-                reason: handoff.reason,
-                context: handoff.context,
-              },
-              summarize,
-              handoffCount,
-            )
-            currentAgentId = handoffTarget
-            continue
-          }
-
-          // No handoff — we're done
+        // Check if aborted via onCost
+        if (aborted) {
           const durationMs = Date.now() - start
-
-          // Emit composition:end (success)
-          emitSwarmCompositionReport({
-            compositionId,
+          reportSwarmComposition(scope, {
+            compositionId: runtime.compositionId,
             durationMs,
             handoffPath: [...handoffPath],
             handoffCount,
@@ -724,7 +568,6 @@ export function createSwarm(executor: AgentExecutor) {
             agentResults,
             agentIds,
           })
-
           return {
             output: result.output as SwarmOutput,
             finalAgentId: currentAgentId as SwarmAgentKey,
@@ -734,8 +577,161 @@ export function createSwarm(executor: AgentExecutor) {
             agentResults,
           }
         }
-      },
-    )
+
+        // Check if a handoff occurred
+        // (pendingHandoff is set by the transfer tool's execute closure — TypeScript
+        // can't narrow closure-captured let variables, so we use a non-null assertion)
+        if (pendingHandoff !== null) {
+          const handoff = pendingHandoff as {
+            target: string
+            reason: string
+            context: string
+          }
+          handoffCount++
+
+          // Check maxHandoffs
+          const handoffTarget = handoff.target as SwarmAgentKey
+          if (handoffCount >= maxHandoffs) {
+            handoffPath.push(handoffTarget)
+
+            throw new SwarmError(
+              `swarm: maxHandoffs (${maxHandoffs}) reached. ` +
+                `Path: ${handoffPath.join(' → ')}`,
+              handoffPath,
+              maxHandoffs,
+            )
+          }
+
+          // Emit onHandoff callback
+          onHandoff?.({
+            fromAgent: currentAgentId,
+            toAgent: handoffTarget,
+            reason: handoff.reason,
+            context: handoff.context,
+            hopNumber: handoffCount,
+          })
+          await observe.span(
+            {
+              name: `${currentAgentId} -> ${handoffTarget}`,
+              family: 'handoff',
+              primitive: 'handoff.prepare',
+              attributes: {
+                compositionId: runtime.compositionId,
+                fromAgent: currentAgentId,
+                toAgent: handoffTarget,
+                reason: handoff.reason,
+                hopNumber: handoffCount,
+              },
+            },
+            async () => {
+              const handoffInput = {
+                fromAgent: currentAgentId,
+                toAgent: handoffTarget,
+                reason: handoff.reason,
+                context: handoff.context,
+                hopNumber: handoffCount,
+              }
+              const inputArtifactId = observe.artifact({
+                kind: 'input',
+                contentType: 'application/json',
+                encoding: 'json',
+                preview: handoffInput,
+                attributes: {
+                  compositionId: runtime.compositionId,
+                  hopNumber: handoffCount,
+                  role: 'handoff.input',
+                },
+              })
+              const artifactId = observe.artifact({
+                kind: 'handoff.payload',
+                contentType: 'application/json',
+                encoding: 'json',
+                preview: {
+                  kind: 'handoff.payload',
+                  ...handoffInput,
+                  hop: handoffCount,
+                  beforeSize: jsonSize(result.output),
+                  afterSize: jsonSize(handoffInput),
+                },
+                attributes: {
+                  compositionId: runtime.compositionId,
+                  hopNumber: handoffCount,
+                },
+              })
+              const observedContext = observe.captureContext()
+              if (observedContext?.currentSpanId) {
+                previousHandoffSpanId = observedContext.currentSpanId
+                if (inputArtifactId) {
+                  observe.edge({
+                    edgeType: 'consumed',
+                    from: { kind: 'artifact', id: inputArtifactId },
+                    to: { kind: 'span', id: observedContext.currentSpanId },
+                    attributes: {
+                      fromAgent: currentAgentId,
+                      toAgent: handoffTarget,
+                    },
+                  })
+                }
+                if (artifactId) {
+                  observe.edge({
+                    edgeType: 'handoff.payload',
+                    from: { kind: 'span', id: observedContext.currentSpanId },
+                    to: { kind: 'artifact', id: artifactId },
+                    attributes: {
+                      fromAgent: currentAgentId,
+                      toAgent: handoffTarget,
+                    },
+                  })
+                }
+              }
+            },
+          )
+
+          // Build input for next agent
+          handoffPath.push(handoffTarget)
+          previousAgentId = currentAgentId
+          previousHandoffReason = handoff.reason
+          currentInput = await buildNextInput(
+            history,
+            {
+              originalInput,
+              previousOutput: result.output,
+              handoffPath: [...handoffPath],
+              fromAgent: currentAgentId,
+              toAgent: handoffTarget,
+              reason: handoff.reason,
+              context: handoff.context,
+            },
+            summarize,
+            handoffCount,
+          )
+          currentAgentId = handoffTarget
+          continue
+        }
+
+        // No handoff — we're done
+        const durationMs = Date.now() - start
+
+        reportSwarmComposition(scope, {
+          compositionId: runtime.compositionId,
+          durationMs,
+          handoffPath: [...handoffPath],
+          handoffCount,
+          finalAgentId: currentAgentId,
+          agentResults,
+          agentIds,
+        })
+
+        return {
+          output: result.output as SwarmOutput,
+          finalAgentId: currentAgentId as SwarmAgentKey,
+          handoffPath,
+          handoffCount,
+          durationMs,
+          agentResults,
+        }
+      }
+    })
   }
 }
 
@@ -743,21 +739,19 @@ function jsonSize(value: unknown): number {
   return JSON.stringify(value)?.length ?? 0
 }
 
-function emitSwarmCompositionReport(args: {
-  compositionId: string
-  durationMs: number
-  handoffPath: readonly string[]
-  handoffCount: number
-  finalAgentId: string
-  agentResults: readonly AgentResult[]
-  agentIds: readonly string[]
-}): void {
-  const spanId = observe.captureContext()?.currentSpanId
-  if (!spanId) return
-  const artifactId = observe.artifact({
-    kind: 'composition.report',
-    contentType: 'application/json',
-    encoding: 'json',
+function reportSwarmComposition(
+  scope: CompositionScope,
+  args: {
+    compositionId: string
+    durationMs: number
+    handoffPath: readonly string[]
+    handoffCount: number
+    finalAgentId: string
+    agentResults: readonly AgentResult[]
+    agentIds: readonly string[]
+  },
+): void {
+  scope.report({
     preview: {
       kind: 'composition.report',
       compositionType: 'swarm',
@@ -769,7 +763,8 @@ function emitSwarmCompositionReport(args: {
       wallTimeMs: args.durationMs,
       roster: args.agentIds.map((id) => ({
         id,
-        turns: args.agentResults.filter((result) => result.agentId === id).length,
+        turns: args.agentResults.filter((result) => result.agentId === id)
+          .length,
         durationMs: args.agentResults
           .filter((result) => result.agentId === id)
           .reduce((total, result) => total + result.durationMs, 0),
@@ -781,12 +776,5 @@ function emitSwarmCompositionReport(args: {
       handoffCount: args.handoffCount,
       finalAgentId: args.finalAgentId,
     },
-  })
-  if (!artifactId) return
-  observe.edge({
-    edgeType: 'produced',
-    from: { kind: 'span', id: spanId },
-    to: { kind: 'artifact', id: artifactId },
-    attributes: { primitive: 'composition.swarm', compositionId: args.compositionId },
   })
 }
