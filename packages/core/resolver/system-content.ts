@@ -8,9 +8,11 @@
  * @module
  */
 
-import { countTokens } from '../shared/tokenizer'
 import type { ContextSystemContent, ContextSystemResult, ContextTextSegment } from '../prompt/context-types'
 import type { ResolvedSystemContent } from './contract'
+
+/** Token estimator injected by the caller — the resolver passes `ports.tokenizer.count`. */
+type CountTokens = (text: string) => number
 
 /** Render a prompt/system string or callback against the resolved input. */
 export async function renderPromptText<T>(
@@ -33,10 +35,17 @@ function isContextSystemContent(value: unknown): value is ContextSystemContent {
   return typeof value === 'object' && value !== null && Array.isArray((value as { segments?: unknown }).segments)
 }
 
-/** Normalize a prompt or context system contribution into text plus segments. */
+/**
+ * Normalize a prompt or context system contribution into text plus segments.
+ *
+ * `count` estimates the static/dynamic token split — the caller threads the
+ * resolver's `TokenizerPort.count` so segment token attribution follows the
+ * same estimator as every other budget decision.
+ */
 export function normalizeSystemContent(
   value: ContextSystemResult | null | undefined,
   fallbackDynamic: boolean,
+  count: CountTokens,
   errorLabel = 'Prompt system/context function',
   inferenceInput?: unknown,
 ): ResolvedSystemContent {
@@ -45,9 +54,9 @@ export function normalizeSystemContent(
     if (!value) return { text: '' }
     if (fallbackDynamic) {
       const inferredSegments = inferInputValueSegments(value, inferenceInput)
-      if (inferredSegments.length > 0) return segmentsToSystemContent(inferredSegments)
+      if (inferredSegments.length > 0) return segmentsToSystemContent(inferredSegments, count)
     }
-    return segmentsToSystemContent([{ text: value, dynamic: fallbackDynamic }])
+    return segmentsToSystemContent([{ text: value, dynamic: fallbackDynamic }], count)
   }
   if (!isContextSystemContent(value)) {
     throw new Error(
@@ -55,7 +64,7 @@ export function normalizeSystemContent(
         `Value: ${JSON.stringify(value).slice(0, 200)}`,
     )
   }
-  return segmentsToSystemContent(value.segments)
+  return segmentsToSystemContent(value.segments, count)
 }
 
 /** Resolve and normalize a prompt-owned system contribution. */
@@ -66,12 +75,28 @@ export async function resolveSystemContent<T>(
     | ((arg: { input: T }) => ContextSystemResult | Promise<ContextSystemResult>)
     | undefined,
   input: T,
+  count: CountTokens,
 ): Promise<ResolvedSystemContent> {
   if (value === undefined) return { text: '' }
-  if (typeof value === 'string') return normalizeSystemContent(value, false)
-  if (isContextSystemContent(value)) return normalizeSystemContent(value, false)
+  if (typeof value === 'string') return normalizeSystemContent(value, false, count)
+  if (isContextSystemContent(value)) return normalizeSystemContent(value, false, count)
   const result = await value({ input })
-  return normalizeSystemContent(result, true, 'Prompt system/context function', input)
+  return normalizeSystemContent(result, true, count, 'Prompt system/context function', input)
+}
+
+/**
+ * Re-estimate a cached content's static/dynamic token split with `count`.
+ *
+ * Segments (text + dynamic flags) come from the system function and are
+ * tokenizer-independent, so they are safe to cache — but their token counts are
+ * not. A context-cache hit under a different `TokenizerPort` must refresh the
+ * split so `staticTokens` / `dynamicTokens` stay aligned with the active
+ * tokenizer for inspect attribution. Content without segments has no split to
+ * refresh and is returned unchanged.
+ */
+export function recountSystemContent(content: ResolvedSystemContent, count: CountTokens): ResolvedSystemContent {
+  if (!content.segments || content.segments.length === 0) return content
+  return segmentsToSystemContent(content.segments, count)
 }
 
 /** Select only the input fields a context declared for segment inference. */
@@ -172,7 +197,7 @@ function collectPrimitiveInputValues(
   return out
 }
 
-function segmentsToSystemContent(segments: readonly ContextTextSegment[]): ResolvedSystemContent {
+function segmentsToSystemContent(segments: readonly ContextTextSegment[], count: CountTokens): ResolvedSystemContent {
   const normalized = segments
     .filter((segment) => segment.text.length > 0)
     .map((segment) => ({
@@ -183,10 +208,10 @@ function segmentsToSystemContent(segments: readonly ContextTextSegment[]): Resol
   const text = normalized.map((segment) => segment.text).join('')
   const staticTokens = normalized
     .filter((segment) => !segment.dynamic)
-    .reduce((total, segment) => total + countTokens(segment.text), 0)
+    .reduce((total, segment) => total + count(segment.text), 0)
   const dynamicTokens = normalized
     .filter((segment) => segment.dynamic)
-    .reduce((total, segment) => total + countTokens(segment.text), 0)
+    .reduce((total, segment) => total + count(segment.text), 0)
   return {
     text,
     ...(normalized.length > 0 ? { segments: normalized } : {}),

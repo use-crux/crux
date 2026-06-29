@@ -22,24 +22,25 @@
  * their dependencies explicitly (`memory({ store })`, `retriever({ store })`),
  * and that is the right seam for them.
  *
- * In-memory fakes for every port live in `./fakes.ts` and are exported from
- * `@use-crux/core`.
+ * The production adapters that back these contracts live in `./default-ports`
+ * (wired in by {@link withDefaultResolverPorts}); in-memory fakes for every
+ * port live in `./fakes`, exported from `@use-crux/core`.
  *
  * @module
  */
 
-import { observe } from '../observability'
 import type {
   CruxArtifactId,
   CruxArtifactKind,
   CruxPrimitiveFamily,
   CruxPrimitiveName,
 } from '../observability/contract'
-import { getRuntime } from '../runtime/runtime'
-import { isAutoEscapeEnabled, isSecurityWarningsEnabled } from '../runtime/configure'
-import { resolveRegistrySkill } from '../skill/registry'
+import type { SkillActivationSession } from '../skill/session'
+import type { SkillEntry } from '../prompt/context-types'
 import type { SkillMeta, SkillReference } from '../skill/types'
 import type { ResolvedSystemContent } from './contract'
+
+export { withDefaultResolverPorts } from './default-ports'
 
 /** A tracing scope for one unit of resolution work (predicate check, context resolve, the whole prompt). */
 export interface ResolveTraceScope {
@@ -88,15 +89,26 @@ export interface ResolvedRegistrySkill {
 }
 
 /**
- * Where lazy registry skills come from.
+ * The pipeline's whole skill surface: registry fetch, index generation, and
+ * activation-session creation.
  *
- * Registry fetch is the only skill-related network I/O in the pipeline.
- * Skill activation state is carried explicitly by `SkillActivationSession`
- * snapshots in resolve input.
+ * These three are grouped because they are the skill pipeline's only ambient
+ * dependencies — the cross-entry skill collector and the resolve-mode loader
+ * tooling reach the skill domain exclusively through this port, so tests can
+ * substitute a custom index, observe session creation, or fail a registry
+ * fetch without touching the skill module internals.
+ *
+ * Registry fetch is the only skill-related network I/O; index and session
+ * creation are pure/local. Skill activation state is carried explicitly by
+ * `_crux_activeSkills` in resolve input.
  */
 export interface SkillSourcePort {
   /** Fetch a registry skill's full content. Rejections degrade to the placeholder skill with a diagnostic warning. */
   resolveRegistrySkill(id: string): Promise<ResolvedRegistrySkill>
+  /** Generate the auto-index text that leads a prompt's skill contributions. */
+  index(skills: readonly SkillEntry[]): string
+  /** Open an activation session over `skills`, seeded from the input's active-skill ids. */
+  createActivationSession(args: { skills: readonly SkillEntry[]; input: unknown }): SkillActivationSession
 }
 
 /** A context-cache lookup result: the cached content plus its age, for instrumentation. */
@@ -123,6 +135,21 @@ export interface ContextCachePort {
 /** Time source for cache ages and resolution timings. Substitute a fixed clock for deterministic tests. */
 export interface ClockPort {
   now(): number
+}
+
+/**
+ * Token estimation for system-budget decisions and inspect token attribution.
+ *
+ * Every token count the pipeline reports — system parts, prompt text, dropped
+ * contexts — flows through this port, so the same composition resolves
+ * identically under any estimator. The default adapter wraps the pluggable
+ * global `countTokens` (`setTokenizer()` / `configure({ tokenizer })`); tests
+ * substitute a deterministic counter (e.g. word count) to pin budget behavior
+ * without depending on the production chars/4 estimate.
+ */
+export interface TokenizerPort {
+  /** Estimate the token count of `text`. */
+  count(text: string): number
 }
 
 /** Sanitization policy snapshot, read lazily once per resolution step. */
@@ -166,109 +193,9 @@ export interface ResolverPorts {
   skills: SkillSourcePort
   cache: ContextCachePort
   clock: ClockPort
+  tokenizer: TokenizerPort
   /** Read the current policy. Called lazily so `configure()` changes apply immediately. */
   policy: () => ResolvePolicy
   diagnostics: DiagnosticsPort
   instrumentation: InstrumentationPort
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Default adapters (wrap the pre-existing globals)
-// ─────────────────────────────────────────────────────────────────
-
-const runtimeObservability: ObservabilityPort = {
-  scope(scope, fn) {
-    return observe.span(scope, async () => fn())
-  },
-  artifact(record, edgeAttributes) {
-    const activeSpanId = observe.captureContext()?.currentSpanId
-    const artifactId = observe.artifact(record)
-    if (activeSpanId && artifactId) {
-      observe.edge({
-        edgeType: 'produced',
-        from: { kind: 'span', id: activeSpanId },
-        to: { kind: 'artifact', id: artifactId },
-        ...(edgeAttributes ? { attributes: edgeAttributes } : {}),
-      })
-    }
-    return artifactId
-  },
-}
-
-const runtimeSkillSource: SkillSourcePort = {
-  resolveRegistrySkill: (id) => resolveRegistrySkill(id),
-}
-
-/** Internal cache entry for a resolved context system contribution. */
-interface ContextCacheEntry {
-  content: ResolvedSystemContent
-  expiresAt: number
-  storedAtMs: number
-}
-
-/**
- * Module-level cache for context resolver outputs, shared by every resolver
- * that uses default ports (matching the pre-port behavior where this map was
- * a `resolve.ts` module singleton).
- */
-const contextResolverCache = new Map<string, ContextCacheEntry>()
-
-const moduleContextCache: ContextCachePort = {
-  get(key) {
-    const entry = contextResolverCache.get(key)
-    if (!entry) return null
-    const now = Date.now()
-    if (now >= entry.expiresAt) {
-      contextResolverCache.delete(key)
-      return null
-    }
-    return { content: entry.content, ageMs: now - entry.storedAtMs }
-  },
-  set(key, content, ttlMs) {
-    const now = Date.now()
-    contextResolverCache.set(key, { content, expiresAt: now + ttlMs, storedAtMs: now })
-  },
-}
-
-const systemClock: ClockPort = { now: () => Date.now() }
-
-const consoleDiagnostics: DiagnosticsPort = {
-  warn(message, detail) {
-    if (detail === undefined) console.warn(message)
-    else console.warn(message, detail)
-  },
-}
-
-const runtimeInstrumentation: InstrumentationPort = {
-  contextCacheHit(event) {
-  },
-  contextCacheMiss(event) {
-  },
-}
-
-function configuredPolicy(): ResolvePolicy {
-  return {
-    autoEscape: isAutoEscapeEnabled(),
-    securityWarnings: isSecurityWarningsEnabled(),
-  }
-}
-
-/**
- * Fill missing ports with the production runtime adapters.
- *
- * With no argument this returns the exact ambient behavior the pipeline has
- * always had (global `observe`, skill registry, module cache, `Date.now`,
- * `configure()` policy, `console.warn`). Pass a
- * partial object to substitute individual ports — everything else stays real.
- */
-export function withDefaultResolverPorts(overrides?: Partial<ResolverPorts>): ResolverPorts {
-  return {
-    observability: overrides?.observability ?? runtimeObservability,
-    skills: overrides?.skills ?? runtimeSkillSource,
-    cache: overrides?.cache ?? moduleContextCache,
-    clock: overrides?.clock ?? systemClock,
-    policy: overrides?.policy ?? configuredPolicy,
-    diagnostics: overrides?.diagnostics ?? consoleDiagnostics,
-    instrumentation: overrides?.instrumentation ?? runtimeInstrumentation,
-  }
 }

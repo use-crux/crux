@@ -49,8 +49,15 @@ export interface PromptResolution {
 /** @deprecated Use {@link PromptResolution}. */
 export type Resolution = PromptResolution
 
-/** A prompt config compiled once: schema merge, validation, and ports binding. */
-export interface CompiledPrompt {
+/**
+ * The public resolution boundary returned by {@link compilePrompt}.
+ *
+ * A prompt config compiled once (schema merge, validation, ports binding) into
+ * a reusable pipeline. `resolve()` and `inspect()` each run one ordered pass
+ * and are the primary tested contract — boundary tests assert through them
+ * rather than the pass internals.
+ */
+export interface PromptResolutionPipeline {
   /** Merged input schema (own + context contributions), or undefined when no fields exist. */
   readonly inputSchema: z.ZodType | undefined
   /** Hot path: one full pipeline pass with normal observability emission. */
@@ -58,6 +65,9 @@ export interface CompiledPrompt {
   /** Debug path: one quiet pipeline pass with today's inspect semantics. */
   inspect(opts?: ResolveCallOptions): Promise<InspectResult>
 }
+
+/** @deprecated Use {@link PromptResolutionPipeline}. */
+export type CompiledPrompt = PromptResolutionPipeline
 
 /** Options for compiling a prompt config into a reusable compiler boundary. */
 export interface CompilePromptOptions {
@@ -71,8 +81,14 @@ export interface CompilePromptOptions {
   readonly ports?: Partial<ResolverPorts>
 }
 
-/** Whether a pass emits normal resolve artifacts or quiet inspect output. */
-export type ResolutionEmissionMode = 'resolve' | 'inspect'
+/**
+ * Which projection a pass runs for.
+ *
+ * `'resolve'` emits the full prompt-resolution observability scope and resolve
+ * artifacts; `'inspect'` runs the identical ordered pass quietly for debug
+ * inspection. Both return the same {@link PromptResolutionPass} shape.
+ */
+export type ProjectionMode = 'resolve' | 'inspect'
 
 /** Internal full pass result before it is wrapped as {@link PromptResolution}. */
 export interface PromptResolutionPass {

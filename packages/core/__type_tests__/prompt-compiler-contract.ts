@@ -4,8 +4,15 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { compilePrompt, prompt } from '@use-crux/core'
-import type { CompiledPrompt, PromptResolution, ResolveCallOptions, ResolvedPrompt, InspectResult } from '@use-crux/core'
+import { compilePrompt, createResolverFakes, prompt } from '@use-crux/core'
+import type {
+  CompiledPrompt,
+  InspectResult,
+  PromptResolution,
+  PromptResolutionPipeline,
+  ResolveCallOptions,
+  ResolvedPrompt,
+} from '@use-crux/core'
 
 const answer = prompt({
   id: 'typed-compiler-boundary',
@@ -14,8 +21,10 @@ const answer = prompt({
   prompt: ({ input }) => input.question,
 })
 
-const compiled = compilePrompt(answer.config)
+const compiled = compilePrompt(answer.config, { ports: createResolverFakes().ports })
 
+// `PromptResolutionPipeline` is the canonical name; `CompiledPrompt` is its alias.
+expectTypeOf(compiled).toEqualTypeOf<PromptResolutionPipeline>()
 expectTypeOf(compiled).toEqualTypeOf<CompiledPrompt>()
 expectTypeOf(compiled.inputSchema).toEqualTypeOf<z.ZodType | undefined>()
 

@@ -16,13 +16,11 @@ import { injectable } from '../../prompt/injectable'
 import { contributor } from '../../prompt/contributor'
 import { handoff } from '../../agent/handoff'
 import {
-  recordingObservability,
-  inMemorySkillSource,
-  inMemoryContextCache,
+  createResolverFakes,
   fixedClock,
-  collectingDiagnostics,
+  inMemoryContextCache,
   staticPolicy,
-  recordingInstrumentation,
+  staticTokenizer,
 } from '../../resolver/fakes'
 import type { ResolverPorts } from '../../resolver/ports'
 import type { InspectResult, ResolvedPrompt } from '../../resolver/types'
@@ -31,38 +29,8 @@ import type { SkillEntry } from '../../prompt/context-types'
 
 type AnyConfig = PromptConfig<z.ZodType, z.ZodType | undefined, readonly never[]>
 
-interface FakePorts {
-  ports: Partial<ResolverPorts>
-  observability: ReturnType<typeof recordingObservability>
-  skills: ReturnType<typeof inMemorySkillSource>
-  clock: ReturnType<typeof fixedClock>
-  diagnostics: ReturnType<typeof collectingDiagnostics>
-  instrumentation: ReturnType<typeof recordingInstrumentation>
-}
-
-function fakePorts(): FakePorts {
-  const observability = recordingObservability()
-  const skills = inMemorySkillSource()
-  const clock = fixedClock(1_000)
-  const diagnostics = collectingDiagnostics()
-  const instrumentation = recordingInstrumentation()
-  return {
-    observability,
-    skills,
-    clock,
-    diagnostics,
-    instrumentation,
-    ports: {
-      observability,
-      skills,
-      clock,
-      diagnostics,
-      instrumentation,
-      cache: inMemoryContextCache(clock),
-      policy: staticPolicy(),
-    },
-  }
-}
+// The shared bundle of deterministic ports for every boundary scenario below.
+const fakePorts = createResolverFakes
 
 function compiledResolver(ports?: Partial<ResolverPorts>): {
   resolve(config: AnyConfig, opts?: ResolveCallOptions): Promise<ResolvedPrompt>
@@ -253,7 +221,46 @@ describe('skill surface through the skill source port', () => {
     dump: () => '',
   })
 
-    it('resolves lazy registry skills from the in-memory source', async () => {
+  const inline = (id: string): SkillEntry => ({
+    _tag: 'Skill',
+    id,
+    description: `${id} skill`,
+    instructions: `Do ${id}.`,
+    references: [],
+    meta: { name: id, description: `${id} skill` },
+    dump: () => `Do ${id}.`,
+  })
+
+  it('builds the skill index through the skills port', async () => {
+    const f = fakePorts()
+    // Override only `index` on the skills port; the index it returns must be
+    // the one composed into the system message — proving indexing is a port,
+    // not a direct `generateIndex` import inside the pass.
+    f.ports.skills = { ...f.skills, index: () => 'CUSTOM_SKILL_INDEX' }
+    const resolver = compiledResolver(f.ports)
+
+    const result = await resolver.resolve({ system: 'S', use: [inline('writing')] } as AnyConfig, {})
+    expect(result.system).toContain('CUSTOM_SKILL_INDEX')
+  })
+
+  it('creates the activation session through the skills port', async () => {
+    const f = fakePorts()
+    let sessionCalls = 0
+    f.ports.skills = {
+      ...f.skills,
+      createActivationSession: (args) => {
+        sessionCalls++
+        return f.skills.createActivationSession(args)
+      },
+    }
+    const resolver = compiledResolver(f.ports)
+
+    const result = await resolver.resolve({ system: 'S', use: [inline('writing')] } as AnyConfig, {})
+    expect(sessionCalls).toBeGreaterThan(0)
+    expect((result as { _skillSession?: unknown })._skillSession).toBeDefined()
+  })
+
+  it('resolves lazy registry skills from the in-memory source', async () => {
     const f = fakePorts()
     f.skills.register('acme/seo', {
       instructions: 'Optimize ruthlessly.',
@@ -305,6 +312,62 @@ describe('skill surface through the skill source port', () => {
     expect(f.diagnostics.warnings).toHaveLength(2)
     expect(f.diagnostics.warnings[0]).toEqual(f.diagnostics.warnings[1])
     expect(inspect.system.parts.map((p) => p.source)).toContain('context:__crux_skill_index')
+  })
+})
+
+describe('tokenizer port', () => {
+  // A deterministic word-count tokenizer makes budget decisions predictable
+  // regardless of the production chars/4 estimate — the seam the port exists
+  // for. With the real tokenizer these exact byte counts would not line up.
+  const wordCount = (text: string): number => (text.trim() ? text.trim().split(/\s+/).length : 0)
+
+  it('counts system tokens through the injected tokenizer', async () => {
+    const f = fakePorts()
+    f.ports.tokenizer = staticTokenizer(wordCount)
+    const resolver = compiledResolver(f.ports)
+
+    const inspect = await resolver.inspect({ id: 'tok', system: 'one two three' } as AnyConfig, {})
+    expect(inspect.system.totalTokens).toBe(3)
+  })
+
+  it('drops the lowest-priority context by the injected tokenizer budget', async () => {
+    const f = fakePorts()
+    f.ports.tokenizer = staticTokenizer(wordCount)
+    const resolver = compiledResolver(f.ports)
+    const config: AnyConfig = {
+      system: 'sys',
+      use: [
+        context({ id: 'keep', priority: 80, system: 'a a a' }),
+        context({ id: 'drop', priority: 10, system: 'b b b b b' }),
+      ],
+    }
+
+    const inspect = await resolver.inspect(config, { tokenBudget: 8 })
+    expect(inspect.droppedContexts.map((d) => d.source)).toEqual(['context:drop'])
+    expect(inspect.droppedContexts[0]).toMatchObject({ tokens: 5, priority: 10 })
+  })
+
+  it('refreshes a cached context split for the active tokenizer on a cache hit', async () => {
+    // Cached segments are tokenizer-independent, but the static/dynamic token
+    // split is not — a hit under a different tokenizer must re-estimate it.
+    const clock = fixedClock(1_000)
+    const cache = inMemoryContextCache(clock)
+    const base = createResolverFakes()
+    const withTokenizer = (count: (t: string) => number): Partial<ResolverPorts> => ({
+      ...base.ports,
+      clock,
+      cache,
+      tokenizer: staticTokenizer(count),
+    })
+    const config: AnyConfig = { system: 'S', use: [context({ id: 'c', system: () => 'one two three', cache: 60_000 })] }
+
+    // Word count populates the shared cache (3 dynamic tokens)...
+    await compiledResolver(withTokenizer(wordCount)).resolve(config, {})
+    // ...then a char counter reads it back from the same cache (hit → 13).
+    const inspect = await compiledResolver(withTokenizer((t) => t.length)).inspect(config, {})
+
+    const part = inspect.system.parts.find((p) => p.source === 'context:c')
+    expect(part?.dynamicTokens).toBe(13)
   })
 })
 

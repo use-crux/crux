@@ -406,29 +406,24 @@ Use this when a prompt has many `use` entries and you need to understand what wa
 Compile a prompt config once: config validation, input-schema merge/conflict detection, and resolver port binding. Each `resolve()` call runs one pipeline pass and returns a `PromptResolution` with SDK-ready `args` plus an inspection view derived from the same pass.
 
 ```ts
-import { compilePrompt, recordingObservability, fixedClock, inMemoryContextCache } from '@use-crux/core'
+import { compilePrompt, createResolverFakes } from '@use-crux/core'
 
-const observability = recordingObservability()
-const clock = fixedClock(1_000)
-const compiled = compilePrompt(config, {
-  ports: {
-    observability,
-    clock,
-    cache: inMemoryContextCache(clock),
-  },
-})
+const fakes = createResolverFakes()
+const compiled = compilePrompt(config, { ports: fakes.ports })
 
 const pass = await compiled.resolve({ input })
 const resolved = pass.args
 const inspection = pass.inspect()
-observability.contributionPreviews('checked-not-included') // exclusions, no transport needed
+fakes.observability.contributionPreviews('checked-not-included') // exclusions, no transport needed
 ```
 
-Ports: `observability`, `skills`, `cache`, `clock`, `policy`, `diagnostics`, `instrumentation`. Omitted ports use the production runtime adapters, so `compilePrompt(config)` uses the same ambient pipeline as `prompt(config)`. In-memory fakes for every port (`recordingObservability`, `inMemorySkillSource`, `inMemoryContextCache`, `fixedClock`, `collectingDiagnostics`, `staticPolicy`, `recordingInstrumentation`) ship from `@use-crux/core`.
+Ports: `observability`, `skills`, `cache`, `clock`, `tokenizer`, `policy`, `diagnostics`, `instrumentation`. Omitted ports use the production runtime adapters, so `compilePrompt(config)` uses the same ambient pipeline as `prompt(config)`. `createResolverFakes()` builds a complete, deterministic set in one call (with each port also exposed as a named handle for assertions); the individual fakes — `recordingObservability`, `inMemorySkillSource`, `inMemoryContextCache`, `fixedClock`, `staticTokenizer`, `collectingDiagnostics`, `staticPolicy`, `recordingInstrumentation` — also ship from `@use-crux/core` when you want to substitute just one.
+
+The `tokenizer` port estimates every token count the pipeline reports (system parts, prompt text, dropped contexts), so a deterministic counter pins token-budget behavior without depending on the production chars/4 estimate. The `skills` port owns registry fetch, skill-index generation, and activation-session creation behind one seam.
 
 `compiled.inspect()` runs the same pipeline in quiet inspection mode. `pass.inspect()` is free and never re-runs the pipeline, which means lifecycle hooks and debuggers observe facts from the exact resolution sent to the adapter.
 
-`PromptResolution` is exported from `@use-crux/core`. The older `Resolution` type name remains as a deprecated compatibility alias.
+`compilePrompt()` returns a `PromptResolutionPipeline` (the older `CompiledPrompt` name remains as a deprecated alias). `PromptResolution` is exported from `@use-crux/core`; the older `Resolution` type name remains as a deprecated compatibility alias.
 
 For adapter and primitive authors, the lowered contributor contract types behind the pipeline are also exported: `LoweredContributor`, `Contribution`, `GateResult`, `MergedResolution`, and related types. The lowering, driver, and schema-collection functions are internal to the compiled prompt boundary. Application code never needs these.
 

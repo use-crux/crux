@@ -20,17 +20,8 @@
 import type { z } from 'zod'
 import type { AnyToolSet } from '../types'
 import type { Context, SkillEntry } from '../prompt/context-types'
-import { generateIndex } from '../skill/project-index'
-import { createSkillActivationSession, type SkillActivationSession } from '../skill/session'
+import type { SkillActivationSession } from '../skill/session'
 import type { ResolverPorts } from './ports'
-
-/** Read activated skill identifiers passed in via the `_crux_activeSkills` input field. */
-export function readActiveSkillIds(input: unknown): readonly string[] {
-  if (!input || typeof input !== 'object') return []
-  const value = (input as Record<string, unknown>)._crux_activeSkills
-  if (!Array.isArray(value)) return []
-  return value.filter((id): id is string => typeof id === 'string')
-}
 
 /** Build one of the pipeline's internal static contexts (skill index, loaded skills). */
 function staticSkillContext(options: {
@@ -123,7 +114,7 @@ export async function resolveSkillSurface(
     }
   }
 
-  const indexText = generateIndex(resolvedSkills)
+  const indexText = ports.skills.index(resolvedSkills)
   const indexContext = staticSkillContext({
     id: '__crux_skill_index',
     description: 'Auto-generated skill index',
@@ -131,11 +122,7 @@ export async function resolveSkillSurface(
     priority: 90,
   })
 
-  const inputActiveSkills = readActiveSkillIds(input)
-  const session = createSkillActivationSession({
-    skills: resolvedSkills,
-    initial: { activeSkillIds: inputActiveSkills },
-  })
+  const session = ports.skills.createActivationSession({ skills: resolvedSkills, input })
   const loadedContexts = [...session.loadedContexts()]
 
   return { skills: resolvedSkills, indexContext, loadedContexts }
@@ -145,8 +132,9 @@ export async function resolveSkillSurface(
  * Create the loader toolset and activation session for a resolved prompt.
  *
  * Carries previously activated skill ids forward only from explicit
- * `input._crux_activeSkills`. Adapter loops that re-resolve after `LoadSkill`
- * pass the active session ids into input via `session.resolveInput()`.
+ * `input._crux_activeSkills` (the skills port seeds the session from it).
+ * Adapter loops that re-resolve after `LoadSkill` pass the active session ids
+ * into input via `session.resolveInput()`.
  *
  * Only the resolve projection calls this. The inspect projection reports the
  * loader tool names without instantiating tools or registering state.
@@ -154,10 +142,8 @@ export async function resolveSkillSurface(
 export function createSkillToolSurface(
   skills: readonly SkillEntry[],
   input: unknown,
+  ports: ResolverPorts,
 ): { tools: AnyToolSet; session: SkillActivationSession } {
-  const session = createSkillActivationSession({
-    skills,
-    initial: { activeSkillIds: readActiveSkillIds(input) },
-  })
+  const session = ports.skills.createActivationSession({ skills, input })
   return { tools: session.tools(), session }
 }

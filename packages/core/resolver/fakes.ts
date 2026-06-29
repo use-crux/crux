@@ -41,6 +41,8 @@
 
 import { createCruxArtifactId } from '../observability'
 import type { CruxArtifactId, CruxContextContributionPreview } from '../observability/contract'
+import { generateIndex } from '../skill/project-index'
+import { createSkillActivationSession, readActiveSkillIds } from '../skill/session'
 import type { ResolvedSystemContent } from './contract'
 import type {
   ClockPort,
@@ -52,8 +54,10 @@ import type {
   ResolveArtifact,
   ResolvedRegistrySkill,
   ResolvePolicy,
+  ResolverPorts,
   ResolveTraceScope,
   SkillSourcePort,
+  TokenizerPort,
 } from './ports'
 
 // ─────────────────────────────────────────────────────────────────
@@ -148,6 +152,9 @@ export function inMemorySkillSource(skills: Record<string, ResolvedRegistrySkill
       if (!skill) throw new Error(`Skill "${id}" not found in in-memory registry`)
       return skill
     },
+    index: (entries) => generateIndex(entries),
+    createActivationSession: ({ skills: entries, input }) =>
+      createSkillActivationSession({ skills: entries, initial: { activeSkillIds: readActiveSkillIds(input) } }),
   }
 }
 
@@ -178,6 +185,26 @@ export function fixedClock(start = 0): FixedClock {
       now = ms
     },
   }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Tokenizer
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * A deterministic {@link TokenizerPort} for budget and token-attribution tests.
+ *
+ * Pass any counter; a word counter (`text.trim().split(/\s+/).length`) makes
+ * dropped-context and token-total assertions predictable without depending on
+ * the production chars/4 estimate. Defaults to word counting.
+ */
+export function staticTokenizer(count: (text: string) => number = wordCount): TokenizerPort {
+  return { count }
+}
+
+function wordCount(text: string): number {
+  const trimmed = text.trim()
+  return trimmed ? trimmed.split(/\s+/).length : 0
 }
 
 /** A {@link ContextCachePort} with inspectable entries, expired by the provided clock. */
@@ -258,5 +285,85 @@ export function recordingInstrumentation(): RecordingInstrumentation {
     contextCacheMiss(event) {
       events.push({ kind: 'miss', ...event })
     },
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Bundle
+// ─────────────────────────────────────────────────────────────────
+
+/** Options for {@link createResolverFakes}. Every field has a deterministic default. */
+export interface ResolverFakesOptions {
+  /** Starting timestamp for the {@link fixedClock}. Defaults to `1_000`. */
+  clockStart?: number
+  /** Sanitization policy overrides (auto-escape / security warnings). Both default off. */
+  policy?: Partial<ResolvePolicy>
+  /** Token estimator. Defaults to a deterministic word counter ({@link staticTokenizer}). */
+  tokenizer?: TokenizerPort
+  /** Registry skills served by the in-memory skill source. */
+  skills?: Record<string, ResolvedRegistrySkill>
+}
+
+/**
+ * The assembled fake ports plus their typed handles, for boundary assertions.
+ *
+ * `ports` plugs straight into `compilePrompt(config, { ports })`; the named
+ * handles (`observability`, `skills`, `clock`, …) are the same instances inside
+ * `ports`, exposed so a test can advance the clock, register a registry skill,
+ * or read recorded scopes without re-deriving them from `ports`.
+ */
+export interface ResolverFakes {
+  /** A complete, deterministic {@link ResolverPorts} for `compilePrompt`. */
+  ports: ResolverPorts
+  observability: RecordingObservability
+  skills: InMemorySkillSource
+  cache: InMemoryContextCache
+  clock: FixedClock
+  tokenizer: TokenizerPort
+  policy: () => ResolvePolicy
+  diagnostics: CollectingDiagnostics
+  instrumentation: RecordingInstrumentation
+}
+
+/**
+ * Build a complete set of in-memory resolver ports in one call.
+ *
+ * This is the canonical test seam for the `compilePrompt()` boundary: every
+ * ambient dependency (observability, skill source, context cache, clock,
+ * tokenizer, policy, diagnostics, instrumentation) is a deterministic fake with
+ * no `setRuntime()` setup and no global cleanup between tests. The clock and
+ * the cache share one instance, so TTL expiry follows the clock you advance.
+ *
+ * @example
+ * ```ts
+ * const fakes = createResolverFakes()
+ * const compiled = compilePrompt(config, { ports: fakes.ports })
+ *
+ * const resolution = await compiled.resolve({ input: { topic: 'billing' } })
+ * expect(resolution.args.tools).toHaveProperty('LoadSkill')
+ * expect(resolution.inspect().excludedContexts).toEqual([])
+ * expect(fakes.diagnostics.warnings).toHaveLength(0)
+ * ```
+ */
+export function createResolverFakes(options: ResolverFakesOptions = {}): ResolverFakes {
+  const observability = recordingObservability()
+  const skills = inMemorySkillSource(options.skills)
+  const clock = fixedClock(options.clockStart ?? 1_000)
+  const cache = inMemoryContextCache(clock)
+  const tokenizer = options.tokenizer ?? staticTokenizer()
+  const diagnostics = collectingDiagnostics()
+  const instrumentation = recordingInstrumentation()
+  const policy = staticPolicy(options.policy)
+
+  return {
+    observability,
+    skills,
+    cache,
+    clock,
+    tokenizer,
+    policy,
+    diagnostics,
+    instrumentation,
+    ports: { observability, skills, cache, clock, tokenizer, policy, diagnostics, instrumentation },
   }
 }
