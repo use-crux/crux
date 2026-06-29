@@ -135,8 +135,8 @@ describe('canonical workspace, plan-task, skill, and security observability', ()
       expect.objectContaining({
         type: 'span:start',
         primitive: 'task.operation',
-        name: expect.stringContaining('discard'),
-        attributes: expect.objectContaining({ taskListId: work.id, operation: expect.stringContaining('discard'), hasReason: true }),
+        name: 'tasklist.discard',
+        attributes: expect.objectContaining({ taskListId: work.id, operation: 'tasklist.discard', hasReason: true }),
       }),
     )
   })

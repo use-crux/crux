@@ -10,6 +10,7 @@ import { z } from 'zod'
 import { plan, task, tasks } from '../plan'
 import { task as taskFromTasks, tasks as tasksFromTasks } from '../tasks'
 import { plan as planFromRoot, task as taskFromRoot, tasks as tasksFromRoot } from '..'
+import { TaskListDiscardedError } from '..'
 import type { Plan, PlanHandle, TaskSpec, TasksHandle } from '../plan'
 
 // @ts-expect-error — `tasklist` was removed from the public beta API.
@@ -42,6 +43,9 @@ expectTypeOf(planHandle).toEqualTypeOf<PlanHandle>()
 plan.list({ metadata: { threadId: 'thread-1', nested: { phase: 1 } } })
 // @ts-expect-error — plan list metadata filters must be JSON-safe.
 plan.list({ metadata: { fn: () => undefined } })
+// @ts-expect-error — plan listing does not expose cursor pagination.
+plan.list({ cursor: 'plan_123' })
+expectTypeOf(TaskListDiscardedError).toEqualTypeOf<typeof import('../plan').TaskListDiscardedError>()
 
 // @ts-expect-error — PlanHandle is a command handle, not a stale Plan snapshot.
 const snapshot: Plan = planHandle
@@ -88,6 +92,19 @@ declare const dynamicWork: DynamicWork
 
 dynamicWork.worker('any-id')
 dynamicWork.complete('any-id', { anything: 'json-safe' })
+
+const transformedWorkPromise = tasks({
+  items: {
+    draft: task('Draft announcement', {
+      result: z.string().transform((markdown) => ({ markdown })),
+    }),
+  },
+})
+type TransformedWork = Awaited<typeof transformedWorkPromise>
+declare const transformedWork: TransformedWork
+transformedWork.complete('draft', 'Draft copy')
+// @ts-expect-error — complete() accepts schema input, not the transformed output shape.
+transformedWork.complete('draft', { markdown: 'Draft copy' })
 
 // @ts-expect-error — dynamic task results must still be JSON-safe.
 dynamicWork.complete('any-id', 1n)

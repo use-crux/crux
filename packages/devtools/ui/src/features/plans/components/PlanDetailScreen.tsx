@@ -396,14 +396,20 @@ function PlanTasksTab({ plan }: { plan: PlanDetail }) {
     let done = 0,
       inProgress = 0,
       pending = 0,
+      failed = 0,
+      skipped = 0,
+      cancelled = 0,
       removed = 0
     for (const t of tasks) {
       if (t.status === 'completed') done++
       else if (t.status === 'in_progress') inProgress++
       else if (t.status === 'pending') pending++
+      else if (t.status === 'failed') failed++
+      else if (t.status === 'skipped') skipped++
+      else if (t.status === 'cancelled') cancelled++
       else if (t.status === 'removed') removed++
     }
-    return { done, inProgress, pending, removed }
+    return { done, inProgress, pending, failed, skipped, cancelled, removed }
   }, [tasks])
   const hasSpan = tasks.some((t) => t.spanId)
   const hasTrace = tasks.some((t) => t.traceId)
@@ -417,6 +423,9 @@ function PlanTasksTab({ plan }: { plan: PlanDetail }) {
               counts.done > 0 ? `${counts.done} done` : null,
               counts.inProgress > 0 ? `${counts.inProgress} in progress` : null,
               counts.pending > 0 ? `${counts.pending} pending` : null,
+              counts.failed > 0 ? `${counts.failed} failed` : null,
+              counts.skipped > 0 ? `${counts.skipped} skipped` : null,
+              counts.cancelled > 0 ? `${counts.cancelled} cancelled` : null,
               counts.removed > 0 ? `${counts.removed} removed` : null,
             ]
               .filter(Boolean)

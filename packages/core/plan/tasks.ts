@@ -569,12 +569,12 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
     asContext(options?: { priority?: number; renderContext?: (tasks: Task[]) => string }) {
       const agent = taskListAgent(taskListId, {
         renderContext: options?.renderContext,
-      })
+      }, taskSpecs)
       return agent.asContext({ priority: options?.priority })
     },
 
     asTools() {
-      const agent = taskListAgent(taskListId)
+      const agent = taskListAgent(taskListId, undefined, taskSpecs)
       return agent.asTools()
     },
 
@@ -585,7 +585,7 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
         renderContext?: (task: Task, allTasks: Task[]) => string
       },
     ) {
-      return taskWorker(taskListId, taskId, options)
+      return taskWorker(taskListId, taskId, options, taskSpecs)
     },
   }
 

@@ -1323,6 +1323,14 @@ func (s *Service) planDetails(ctx context.Context) []planDetail {
 	taskListToPlan := map[string]string{}
 	taskByPlan := map[string]map[string]*planTask{}
 
+	for _, event := range taskListEvents {
+		planID := stringValue(event.Data, "planId", "")
+		if planID == "" {
+			planID = "unassigned"
+		}
+		taskListToPlan[event.TaskListID] = planID
+	}
+
 	if s.observability != nil {
 		if activity, err := s.observability.ResourceActivity(ctx, "plan"); err == nil {
 			applyObservedPlanActivity(plans, activity)
@@ -1374,10 +1382,7 @@ func (s *Service) planDetails(ctx context.Context) []planDetail {
 	}
 
 	for _, event := range taskListEvents {
-		planID := stringValue(event.Data, "planId", "")
-		if planID == "" {
-			planID = "unassigned"
-		}
+		planID := nonEmpty(taskListToPlan[event.TaskListID], "unassigned")
 		taskListToPlan[event.TaskListID] = planID
 		detail := ensurePlan(plans, planID)
 		detail.LastUpdatedAt = maxInt64(detail.LastUpdatedAt, event.Timestamp)

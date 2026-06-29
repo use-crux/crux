@@ -95,18 +95,34 @@ function findJsonObjectFailure(value: object, path: string, seen: WeakSet<object
       const failure = findJsonFailure(item, `${path}[${index}]`, seen)
       if (failure) return failure
     }
+    for (const key of Reflect.ownKeys(value)) {
+      if (key === 'length' || isArrayIndexKey(key)) continue
+      if (typeof key === 'symbol') return `${path} has symbol-keyed property`
+      return `${path}.${key} is not serialized by JSON arrays`
+    }
     seen.delete(value)
     return null
   }
 
   if (!isPlainObject(value)) return `${path} is not a plain object`
 
-  for (const [key, item] of Object.entries(value)) {
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key === 'symbol') return `${path} has symbol-keyed property`
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (!descriptor?.enumerable) return `${path}.${key} is not enumerable`
+    const item = (value as Record<string, unknown>)[key]
     const failure = findJsonFailure(item, `${path}.${key}`, seen)
     if (failure) return failure
   }
   seen.delete(value)
   return null
+}
+
+function isArrayIndexKey(key: string | symbol): boolean {
+  if (typeof key === 'symbol') return false
+  if (key === '') return false
+  const index = Number(key)
+  return Number.isInteger(index) && index >= 0 && index < 2 ** 32 - 1 && String(index) === key
 }
 
 function isPlainObject(value: object): value is Record<string, unknown> {

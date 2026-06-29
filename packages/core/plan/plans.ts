@@ -22,8 +22,6 @@ export interface PlanListOptions {
   metadata?: Record<string, JsonValue>
   /** Maximum number of plans to return. */
   limit?: number
-  /** Store cursor returned by a previous paginated list call. */
-  cursor?: string
 }
 
 /** Callable plan factory plus static plan helpers. */
@@ -169,7 +167,6 @@ export async function getPlan(planId: string): Promise<Plan | null> {
 /** List persisted plans, optionally filtered by metadata. */
 export async function listPlans(options?: PlanListOptions): Promise<Plan[]> {
   const result = await resolveStore().list(PLAN_PREFIX, {
-    cursor: options?.cursor,
     limit: options?.limit,
     filter: metadataFilter(options?.metadata),
   })

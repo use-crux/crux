@@ -10,10 +10,14 @@ import type {
   AddTaskInput,
   JsonObject,
   JsonValue,
+  PlanHandle,
   Task,
+  TaskCompleteArgs,
   TaskEdit,
+  TaskId,
   TaskList,
   TaskListStatus,
+  TaskSpecRecord,
   TaskStatus,
   TasksHandle,
   TasksInput,
@@ -134,11 +138,14 @@ interface TasksHandle<TItems = undefined> {
   get(): Promise<TaskList | null>
   list(options?: { includeRemoved?: boolean }): Promise<Task[]>
   getTask(id: TaskId<TItems>): Promise<Task | null>
-  add(input: AddTaskInput): Promise<Task>
+  add(input: TItems extends TaskSpecRecord ? never : AddTaskInput): Promise<Task>
   edit(id: TaskId<TItems>, patch: TaskEdit): Promise<Task>
   start(id: TaskId<TItems>): Promise<Task>
   progress(id: TaskId<TItems>, message: string): Promise<Task>
-  complete(id: TaskId<TItems>, result?: JsonValue): Promise<Task>
+  complete<TTaskId extends TaskId<TItems>>(
+    id: TTaskId,
+    ...args: TaskCompleteArgs<TItems, TTaskId>
+  ): Promise<Task>
   fail(id: TaskId<TItems>, error: string): Promise<Task>
   skip(id: TaskId<TItems>, reason?: string): Promise<Task>
   cancel(id: TaskId<TItems>, reason?: string): Promise<Task>
@@ -150,7 +157,7 @@ interface TasksHandle<TItems = undefined> {
 }
 ```
 
-Defined ledgers narrow `TaskId<TItems>` to the keys in `items`. Dynamic ledgers accept arbitrary string IDs.
+Defined ledgers narrow `TaskId<TItems>` to the keys in `items`, disable dynamic `add()`, and infer `complete()` arguments from each task's result schema. Dynamic ledgers accept arbitrary string IDs and JSON-safe completion results.
 
 ## Lifecycle
 

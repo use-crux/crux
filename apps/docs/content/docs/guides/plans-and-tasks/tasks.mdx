@@ -62,11 +62,15 @@ Use lifecycle methods instead of editing status fields directly:
 await work.start('draft')
 await work.progress('draft', 'Writing intro and offer')
 await work.complete('draft', { markdown: '# Launch\n\n...' })
+```
 
-await work.fail('draft', 'Model returned invalid markdown')
-await work.skip('draft', 'Covered by existing announcement')
-await work.cancel('draft', 'Launch paused')
-await work.remove('draft')
+Each terminal transition applies to a separate active task:
+
+```ts
+await work.fail('fact-check', 'Source data was unavailable')
+await work.skip('legal-review', 'Covered by existing review')
+await work.cancel('publish', 'Launch paused')
+await work.remove('cleanup')
 ```
 
 Terminal tasks are immutable through lifecycle methods. Removed tasks do not count toward the ledger status.

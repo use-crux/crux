@@ -66,17 +66,11 @@ export async function repairTaskListState(
   const tasks = await getAllTasks(store, taskListId)
   const counts = rebuildCounts(tasks)
   const status = deriveStatusFromTaskRows(list, tasks, counts)
-  const completedAt = status === 'completed' ? (list.completedAt ?? Date.now()) : list.completedAt
+  const completedAt = status === 'completed' ? (list.completedAt ?? Date.now()) : undefined
   const shouldPersist = status !== list.status || countsChanged(list.counts, counts) || completedAt !== list.completedAt
 
   const nextList: TaskList = shouldPersist
-    ? {
-        ...list,
-        status,
-        counts,
-        completedAt,
-        updatedAt: Date.now(),
-      }
+    ? taskListWithDerivedState(list, status, counts, completedAt)
     : list
 
   if (shouldPersist) {
@@ -96,4 +90,20 @@ export async function repairTaskListState(
   }
 
   return nextList
+}
+
+function taskListWithDerivedState(
+  list: TaskList,
+  status: TaskListStatus,
+  counts: StatusCounts,
+  completedAt: number | undefined,
+): TaskList {
+  const { completedAt: _previousCompletedAt, ...rest } = list
+  return {
+    ...rest,
+    status,
+    counts,
+    ...(completedAt !== undefined ? { completedAt } : {}),
+    updatedAt: Date.now(),
+  }
 }

@@ -45,26 +45,31 @@ const reviewer = work.worker('review', {
 })
 ```
 
-## Worker Pool
+## Bounded Worker Pool
 
 Workers are handles, not a scheduler. You can run a small pool in user code:
 
 ```ts
 const active = (await work.list()).filter((item) => item.status === 'pending')
+const poolSize = 3
 
-await Promise.all(
-  active.map((item) => {
-    const worker = work.worker(item.id)
-    return generate(
-      prompt({
-        use: [launchPlan.asContext(), worker.asContext()],
-        tools: worker.asTools(),
-        system: 'Complete this task.',
-      }),
-      { model, input: {} },
-    )
-  }),
-)
+for (let index = 0; index < active.length; index += poolSize) {
+  const batch = active.slice(index, index + poolSize)
+
+  await Promise.all(
+    batch.map((item) => {
+      const worker = work.worker(item.id)
+      return generate(
+        prompt({
+          use: [launchPlan.asContext(), worker.asContext()],
+          tools: worker.asTools(),
+          system: 'Complete this task.',
+        }),
+        { model, input: {} },
+      )
+    }),
+  )
+}
 ```
 
 Use a durable runner when you need retries, scheduling, backpressure, or cross-process queue semantics.

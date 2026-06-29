@@ -13,13 +13,14 @@ function WorkPanel({ planId, taskListId }: { planId?: string; taskListId?: strin
   const tasksState = useTasks(taskListId)
 
   if (!planId || !taskListId) return null
-  if (planState.status === 'loading' || tasksState.status === 'loading') return <p>Loading...</p>
+  if (planState === undefined || tasksState === undefined) return <p>Loading...</p>
+  if (planState === null) return <p>Plan not found.</p>
 
   return (
     <section>
-      <h2>{planState.data?.title}</h2>
+      <h2>{planState.title}</h2>
       <ul>
-        {tasksState.data.map((item) => (
+        {tasksState.map((item) => (
           <li key={item.id}>
             <span>{item.label}</span>
             <span>{item.status}</span>

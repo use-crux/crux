@@ -32,9 +32,13 @@ await work.add({ id: generatedId, label })
 Use defined ledgers when IDs and result schemas are part of your program contract.
 
 ```ts
+import { z } from 'zod'
+
 const work = await tasks({
   items: {
-    review: task('Review output'),
+    review: task('Review output', {
+      result: z.object({ approved: z.boolean() }),
+    }),
   },
 })
 ```

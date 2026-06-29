@@ -185,4 +185,28 @@ describe('TaskList state correctness', () => {
       completed: 1,
     })
   })
+
+  it('clears completedAt when repaired status moves away from completed', async () => {
+    const store = setup()
+    const handle = await tasks()
+
+    await handle.add({ id: 't1', label: 'Task 1' })
+    await handle.complete('t1')
+
+    const key = taskListKey(handle.id)
+    const rawList = await store.get(key)
+    await store.set(`task:${handle.id}:t2`, {
+      id: 't2',
+      taskListId: handle.id,
+      label: 'Task 2',
+      status: 'pending',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+
+    expect(rawList!.completedAt).toBeTypeOf('number')
+    const repaired = await handle.get()
+    expect(repaired!.status).toBe('in_progress')
+    expect(repaired).not.toHaveProperty('completedAt')
+  })
 })

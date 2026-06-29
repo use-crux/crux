@@ -116,7 +116,7 @@ const result = await store.list(keySpace.plan.prefix)  // 'plan:'
 | Namespace | Key Format | Example |
 |-----------|------------|---------|
 | `keySpace.plan` | `plan:{id}` | `plan:abc` |
-| `keySpace.taskList` | task ledger key prefix | task ledger key |
+| `keySpace.taskList` | `tasklist:{taskListId}` | `tasklist:abc` |
 | `keySpace.task` | `task:{listId}:{taskId}` | `task:abc:task-1` |
 | `keySpace.flow` | `crux:flow:{id}` | `crux:flow:flow-123` |
 | `keySpace.signal` | `crux:signal:{flowId}:{name}` | `crux:signal:flow-123:approve` |

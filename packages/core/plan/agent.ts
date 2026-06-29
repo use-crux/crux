@@ -18,7 +18,7 @@ import { z } from 'zod'
 import type { JsonValue } from '../types/tool'
 import type { Context } from '../prompt/context-types'
 import type { ToolDef, CreationTool } from '../types/tool'
-import type { Plan, PlanHandle, Task, TaskStatus, TaskListHandle } from './types'
+import type { Plan, PlanHandle, Task, TaskStatus, TaskListHandle, TaskSpecRecord } from './types'
 import { context } from '../prompt/context'
 import { plan as createPlanFn, getPlan, updatePlan, createPlanHandle } from './plans'
 import { tasks as createTasksFn } from './tasks'
@@ -186,8 +186,8 @@ const STATUS_ICON: Record<TaskStatus, string> = {
  * prompt({ tools })
  * ```
  */
-export function taskListAgent(taskListId: string, options?: TaskListAgentOptions): TaskListAgent {
-  const handle = createHandle(taskListId)
+export function taskListAgent(taskListId: string, options?: TaskListAgentOptions, taskSpecs?: TaskSpecRecord): TaskListAgent {
+  const handle = createHandle(taskListId, taskSpecs)
 
   return {
     taskListId,
@@ -251,7 +251,7 @@ export function taskListAgent(taskListId: string, options?: TaskListAgentOptions
           parameters: z.object({
             taskId: z.string().describe('ID of the task to update.'),
             status: z
-              .enum(['pending', 'in_progress', 'completed', 'failed', 'skipped', 'cancelled'])
+              .enum(['in_progress', 'completed', 'failed', 'skipped', 'cancelled'])
               .optional()
               .describe(
                 'New task status. Use "in_progress" when starting, "completed" when done, "failed" on error, "skipped" when intentionally omitted, or "cancelled" when no longer needed.',
@@ -378,8 +378,13 @@ const DEFAULT_GUIDELINES = [
  * })
  * ```
  */
-export function taskWorker(taskListId: string, taskId: string, options?: TaskWorkerOptions): TaskWorker {
-  const handle = createHandle(taskListId)
+export function taskWorker(
+  taskListId: string,
+  taskId: string,
+  options?: TaskWorkerOptions,
+  taskSpecs?: TaskSpecRecord,
+): TaskWorker {
+  const handle = createHandle(taskListId, taskSpecs)
 
   return {
     taskListId,

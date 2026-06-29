@@ -399,14 +399,20 @@ function TaskListCard({ plan, onOpen }: { plan: PlanDetail; onOpen: () => void }
     let done = 0
     let inProgress = 0
     let pending = 0
+    let failed = 0
+    let skipped = 0
+    let cancelled = 0
     let removed = 0
     for (const t of tasks) {
       if (t.status === 'completed') done++
       else if (t.status === 'in_progress') inProgress++
       else if (t.status === 'pending') pending++
+      else if (t.status === 'failed') failed++
+      else if (t.status === 'skipped') skipped++
+      else if (t.status === 'cancelled') cancelled++
       else if (t.status === 'removed') removed++
     }
-    return { done, inProgress, pending, removed }
+    return { done, inProgress, pending, failed, skipped, cancelled, removed }
   }, [tasks])
 
   // Build parent → children map.
@@ -426,6 +432,9 @@ function TaskListCard({ plan, onOpen }: { plan: PlanDetail; onOpen: () => void }
     counts.done > 0 ? `${counts.done} done` : null,
     counts.inProgress > 0 ? `${counts.inProgress} in progress` : null,
     counts.pending > 0 ? `${counts.pending} pending` : null,
+    counts.failed > 0 ? `${counts.failed} failed` : null,
+    counts.skipped > 0 ? `${counts.skipped} skipped` : null,
+    counts.cancelled > 0 ? `${counts.cancelled} cancelled` : null,
     counts.removed > 0 ? `${counts.removed} removed` : null,
   ]
     .filter(Boolean)

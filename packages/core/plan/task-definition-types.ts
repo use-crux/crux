@@ -64,7 +64,7 @@ export type TaskCompleteArgs<
   ? TTaskId extends keyof TItems
     ? TItems[TTaskId] extends TaskSpec<infer TResultSchema>
       ? TResultSchema extends TaskResultSchema
-        ? [result: z.infer<TResultSchema>]
+        ? [result: z.input<TResultSchema>]
         : [result?: JsonValue]
       : [result?: JsonValue]
     : never

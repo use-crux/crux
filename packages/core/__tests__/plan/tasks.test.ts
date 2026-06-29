@@ -130,7 +130,52 @@ describe('Task ledger lifecycle', () => {
       taskListId: handle.id,
       taskId: 'result',
     })
+    const symbolKeyed = { ok: true } as Record<PropertyKey, unknown>
+    symbolKeyed[Symbol('hidden')] = 'dropped'
+    await expect(unsafeHandle.complete('result', symbolKeyed as JsonValue)).rejects.toMatchObject({
+      name: 'TaskJsonValueError',
+      taskListId: handle.id,
+      taskId: 'result',
+    })
+    const nonEnumerable = { ok: true }
+    Object.defineProperty(nonEnumerable, 'hidden', {
+      enumerable: false,
+      value: 'dropped',
+    })
+    await expect(unsafeHandle.complete('result', nonEnumerable as JsonValue)).rejects.toMatchObject({
+      name: 'TaskJsonValueError',
+      taskListId: handle.id,
+      taskId: 'result',
+    })
     await expect(handle.getTask('result')).resolves.toMatchObject({ status: 'pending' })
+  })
+
+  it('preserves schema validation through task tools and workers', async () => {
+    setup()
+    const handle = await tasks({
+      items: {
+        research: task('Research', {
+          result: z.object({ sources: z.array(z.string()) }),
+        }),
+      },
+    })
+
+    const { updateTask } = handle.asTools()
+    expect(updateTask.parameters.safeParse({ taskId: 'research', status: 'pending' }).success).toBe(false)
+    await expect(
+      updateTask.execute({ taskId: 'research', status: 'completed', result: { markdown: 'wrong' } }),
+    ).rejects.toMatchObject({
+      name: 'TaskResultValidationError',
+      taskListId: handle.id,
+      taskId: 'research',
+    })
+
+    const { completeTask } = handle.worker('research').asTools()
+    await expect(completeTask.execute({ result: { markdown: 'wrong' } })).rejects.toMatchObject({
+      name: 'TaskResultValidationError',
+      taskListId: handle.id,
+      taskId: 'research',
+    })
   })
 
   it('add() stores user-provided task IDs and keeps all-pending lists pending', async () => {

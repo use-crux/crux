@@ -97,7 +97,11 @@ func applyObservedTaskOperation(
 	switch operation {
 	case "add":
 		task.Status = normalizeTaskStatus(nonEmpty(stringValue(preview, "status", ""), stringValue(attrs, "status", task.Status)))
-		task.Assignee = assigneeLabel(preview["assignee"])
+		assignee := preview["assignee"]
+		if assignee == nil {
+			assignee = attrs["assignee"]
+		}
+		task.Assignee = assigneeLabel(assignee)
 	case "update":
 		task.Status = normalizeTaskStatus(nonEmpty(stringValue(preview, "status", ""), stringValue(attrs, "status", task.Status)))
 		task.ProgressMessage = nonEmpty(stringValue(preview, "progress", ""), stringValue(attrs, "progress", task.ProgressMessage))

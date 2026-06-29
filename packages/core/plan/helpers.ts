@@ -6,7 +6,7 @@
  * @module
  */
 
-import type { Task, TaskListStatus, CancellableTaskStatus } from './types'
+import type { Task, TaskListStatus, CancellableTaskStatus, JsonValue } from './types'
 import { deriveStatus, rebuildCounts } from './status'
 
 // ─────────────────────────────────────────────────────────────────
@@ -38,9 +38,16 @@ export const taskPrefix = (listId: string) => `${TASK_PREFIX}${listId}:`
  *
  * @internal
  */
-export function metadataFilter(metadata?: Record<string, unknown>): Record<string, unknown> | undefined {
+export function metadataFilter(metadata?: Record<string, JsonValue>): Record<string, unknown> | undefined {
   if (!metadata) return undefined
-  return Object.fromEntries(Object.entries(metadata).map(([key, value]) => [`metadata.${key}`, value]))
+  return Object.fromEntries(
+    Object.entries(metadata).map(([key, value]) => {
+      if (key.includes('.')) {
+        throw new Error(`Metadata filter keys cannot contain ".": ${key}`)
+      }
+      return [`metadata.${key}`, value]
+    }),
+  )
 }
 
 // ─────────────────────────────────────────────────────────────────

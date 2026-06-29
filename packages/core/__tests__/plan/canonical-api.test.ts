@@ -85,7 +85,13 @@ describe('canonical Plans & Tasks API', () => {
     await expect(plan.list({ metadata: { threadId: 'thread-1' } })).resolves.toEqual([
       expect.objectContaining({ id: p.id }),
     ])
+    await expect(plan.list({ metadata: { 'thread.id': 'thread-1' } })).rejects.toThrow(
+      'Metadata filter keys cannot contain "."',
+    )
     await expect(tasks.list({ plan: p })).resolves.toEqual([expect.objectContaining({ id: work.id })])
+    await expect(tasks.list({ metadata: { 'thread.id': 'thread-1' } })).rejects.toThrow(
+      'Metadata filter keys cannot contain "."',
+    )
   })
 
   it('canonical creation tools expose safe created() accessors', async () => {

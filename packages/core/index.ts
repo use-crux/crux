@@ -493,12 +493,23 @@ export type {
 export { plan } from './plan/plans'
 export { tasks } from './plan/tasks'
 export { task } from './plan/task-spec'
+export {
+  DuplicateTaskIdError,
+  InvalidTaskTransitionError,
+  TaskJsonValueError,
+  TaskListDiscardedError,
+  TaskListNotFoundError,
+  TaskNotFoundError,
+  TaskRemovedError,
+  TaskResultValidationError,
+} from './plan/errors'
 export { deriveTaskListStatus } from './plan/helpers'
 export { CreationToolNotCreatedError, isCreationToolNotCreatedError } from './types/tool'
 export type { ToolDef, CreationTool, CreationToolNotCreatedError as CreationToolNotCreatedErrorType } from './types/tool'
 export type { PlanFactory, PlanListOptions } from './plan/plans'
 export type { TaskListListOptions, TasksFactory } from './plan/tasks'
 export type { PlanToolOptions, TasksToolOptions } from './plan/creation-tools'
+export type { TaskLifecycleError, TaskLifecycleErrorDetails, TaskLifecycleErrorName } from './plan/errors'
 export type {
   AddTaskInput,
   CancellableTaskStatus,
