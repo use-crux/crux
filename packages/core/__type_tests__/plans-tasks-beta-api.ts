@@ -39,12 +39,20 @@ expectTypeOf(spec).toEqualTypeOf<TaskSpec>()
 const planHandle = plan.ref('plan_123')
 expectTypeOf(planHandle).toEqualTypeOf<PlanHandle>()
 
+plan.list({ metadata: { threadId: 'thread-1', nested: { phase: 1 } } })
+// @ts-expect-error — plan list metadata filters must be JSON-safe.
+plan.list({ metadata: { fn: () => undefined } })
+
 // @ts-expect-error — PlanHandle is a command handle, not a stale Plan snapshot.
 const snapshot: Plan = planHandle
 void snapshot
 
 const taskHandle = tasks.ref('tasks_123')
 expectTypeOf(taskHandle).toEqualTypeOf<TasksHandle>()
+
+tasks.list({ metadata: { threadId: 'thread-1' } })
+// @ts-expect-error — task list metadata filters must be JSON-safe.
+tasks.list({ metadata: { big: 1n } })
 
 const definedWorkPromise = tasks({
   items: {

@@ -2,8 +2,9 @@
  * Task definition helper for canonical Plans & Tasks.
  *
  * `task()` is pure: it describes an initial task item for `tasks({ items })`
- * and never writes to storage by itself. Phase 3 deepens its schema inference;
- * this phase establishes the canonical public name and data shape.
+ * and never writes to storage by itself. When a result schema is provided,
+ * completion payloads are inferred from that schema and validated before they
+ * are persisted.
  *
  * @module
  */
@@ -12,6 +13,9 @@ import type { TaskResultSchema, TaskSpec, TaskSpecOptions } from './types'
 
 /**
  * Define a task item for a task ledger.
+ *
+ * Use `task()` when task IDs are known ahead of time and callers should get
+ * type-safe IDs plus schema-backed completion results from `tasks({ items })`.
  *
  * @param label - Human-readable task label.
  * @param options - Optional description, assignment, result schema, and metadata.

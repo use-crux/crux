@@ -1,13 +1,13 @@
 /**
- * Plan CRUD functions.
+ * Plan lifecycle and command-handle functions.
  *
- * Plans are freeform documents (title + content) that describe agent intent.
- * Version increments automatically on content/title changes.
+ * The public `plan()` factory persists a freeform intent document and returns
+ * a command handle for reading, updating, context, and tools.
  *
  * @module
  */
 
-import type { Plan, PlanHandle, CreatePlanInput, PlanUpdate } from './types'
+import type { Plan, PlanHandle, CreatePlanInput, PlanUpdate, JsonValue } from './types'
 import { PLAN_PREFIX, metadataFilter, planKey } from './helpers'
 import { getRuntime, resolveStore } from '../runtime/runtime'
 import { observe } from '../observability'
@@ -19,7 +19,7 @@ import { assertTaskJsonValue } from './task-values'
 /** Options for listing plans. */
 export interface PlanListOptions {
   /** Match plans by exact metadata fields. */
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, JsonValue>
   /** Maximum number of plans to return. */
   limit?: number
   /** Store cursor returned by a previous paginated list call. */
@@ -44,13 +44,13 @@ export interface PlanFactory {
    */
   (input: CreatePlanInput): Promise<PlanHandle>
 
-  /** Create a command handle for an existing plan ID without reading it. */
+  /** Create a command handle for an existing plan ID without reading storage. */
   ref(planId: string): PlanHandle
 
-  /** List plans from the configured store, newest first. */
+  /** List plans from the configured store. */
   list(options?: PlanListOptions): Promise<Plan[]>
 
-  /** Create a focused tool that creates a plan and exposes `created()` afterward. */
+  /** Create a focused tool; call `created()` after execution to access the handle. */
   tool(options?: PlanToolOptions): import('../types/tool').CreationTool<PlanHandle>
 }
 

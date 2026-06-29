@@ -110,6 +110,15 @@ describe('TaskList state correctness', () => {
     })
   })
 
+  it('rejects discard() when the task list does not exist', async () => {
+    setup()
+    const handle = tasks.ref('missing-list')
+
+    await expectTaskError(handle.discard('No longer needed'), 'TaskListNotFoundError', {
+      taskListId: 'missing-list',
+    })
+  })
+
   it('rejects status changes from terminal tasks but allows display-field edits', async () => {
     setup()
     const handle = await tasks()
@@ -131,6 +140,18 @@ describe('TaskList state correctness', () => {
     const edited = await handle.progress('t1', 'Final notes recorded')
     expect(edited.status).toBe('completed')
     expect(edited.progress).toBe('Final notes recorded')
+  })
+
+  it('allows task-list management tools to cancel tasks', async () => {
+    setup()
+    const handle = await tasks()
+    await handle.add({ id: 't1', label: 'Task 1' })
+
+    const { updateTask } = handle.asTools()
+    expect(updateTask.parameters.safeParse({ taskId: 't1', status: 'cancelled' }).success).toBe(true)
+
+    await updateTask.execute({ taskId: 't1', status: 'cancelled' })
+    await expect(handle.getTask('t1')).resolves.toMatchObject({ status: 'cancelled' })
   })
 
   it('get() repairs stale counts from task rows', async () => {

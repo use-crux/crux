@@ -98,7 +98,7 @@ const ledgers = await tasks.list({
 ```ts
 interface TaskListListOptions {
   plan?: PlanHandle | string
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, JsonValue>
   limit?: number
   cursor?: string
 }

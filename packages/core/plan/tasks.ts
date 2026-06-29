@@ -1,9 +1,10 @@
 /**
- * TaskList lifecycle and task management functions.
+ * Task-ledger lifecycle and task management functions.
  *
  * Task lists track structured work items with live status updates.
- * Auto-completion evaluates list status after every task mutation.
- * Self-healing corrects stale status on read.
+ * The public `tasks()` factory returns a command handle for reading current
+ * state, mutating individual tasks, exposing focused tools, or binding a
+ * worker to a specific task.
  *
  * @module
  */
@@ -30,7 +31,7 @@ import { getExecutionContext } from '../runtime/execution-context'
 import { taskListAgent, taskWorker } from './agent'
 import { createTasksCreationTool, type TasksToolOptions } from './creation-tools'
 import { addInitialTasks } from './defined-tasks'
-import { DuplicateTaskIdError } from './errors'
+import { DuplicateTaskIdError, TaskListNotFoundError } from './errors'
 import { assertMutableTask, assertMutableTaskList, assertValidTaskStatusUpdate } from './lifecycle'
 import { getActiveTasks, getAllTasks, repairTaskListState } from './task-list-state'
 import { assertTaskJsonValue, parseTaskCompletionResult } from './task-values'
@@ -51,7 +52,7 @@ export interface TaskListListOptions {
   /** Match task ledgers associated with this plan handle or plan ID. */
   plan?: import('./types').PlanHandle | string
   /** Match task ledgers by exact metadata fields. */
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, JsonValue>
   /** Maximum number of task ledgers to return. */
   limit?: number
   /** Store cursor returned by a previous paginated list call. */
@@ -79,13 +80,23 @@ export interface TasksFactory {
    */
   <const TItems extends TaskSpecRecord | undefined = undefined>(input?: TasksInput<TItems>): Promise<TasksHandle<TItems>>
 
-  /** Create a command handle for an existing task ledger ID without reading it. */
+  /**
+   * Create a command handle for an existing task ledger ID.
+   *
+   * `tasks.ref()` does not read storage. It is useful for rebinding handles
+   * across server requests, background jobs, and UI actions.
+   */
   ref(taskListId: string): TaskListHandle
 
-  /** List task ledgers from the configured store, newest first. */
+  /** List task ledgers from the configured store. */
   list(options?: TaskListListOptions): Promise<TaskList[]>
 
-  /** Create a focused tool that creates a task ledger and exposes `created()` afterward. */
+  /**
+   * Create a focused tool that creates a task ledger.
+   *
+   * After the tool executes successfully, call `created()` to access the
+   * resulting handle.
+   */
   tool(options?: TasksToolOptions): import('../types/tool').CreationTool<TaskListHandle>
 }
 
@@ -480,13 +491,7 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
       try {
         const rawList = await store.get(taskListKey(taskListId))
         if (!rawList) {
-          span.end({
-            operation: 'tasklist.discard',
-            taskListId,
-            discarded: false,
-            reason: 'not_found',
-          })
-          return
+          throw TaskListNotFoundError(taskListId)
         }
 
         const list = rawList as unknown as TaskList

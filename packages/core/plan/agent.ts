@@ -251,9 +251,11 @@ export function taskListAgent(taskListId: string, options?: TaskListAgentOptions
           parameters: z.object({
             taskId: z.string().describe('ID of the task to update.'),
             status: z
-              .enum(['pending', 'in_progress', 'completed', 'failed', 'skipped'])
+              .enum(['pending', 'in_progress', 'completed', 'failed', 'skipped', 'cancelled'])
               .optional()
-              .describe('New task status. Use "in_progress" when starting, "completed" when done, "failed" on error.'),
+              .describe(
+                'New task status. Use "in_progress" when starting, "completed" when done, "failed" on error, "skipped" when intentionally omitted, or "cancelled" when no longer needed.',
+              ),
             progress: z
               .string()
               .optional()

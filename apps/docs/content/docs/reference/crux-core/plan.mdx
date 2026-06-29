@@ -8,6 +8,8 @@ import { plan } from '@use-crux/core/plan'
 
 import type {
   CreatePlanInput,
+  JsonObject,
+  JsonValue,
   Plan,
   PlanHandle,
   PlanUpdate,
@@ -71,7 +73,7 @@ const plans = await plan.list({
 
 ```ts
 interface PlanListOptions {
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, JsonValue>
   limit?: number
   cursor?: string
 }
