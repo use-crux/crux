@@ -15,10 +15,11 @@ import {
 } from './namespace'
 import {
   isMemoryEntryRenderStrategy,
-  renderBudgetedMemoryBlocks,
+  renderBudgetedMemoryBlocksWithDecision,
   renderMemoryEntries,
   type MemoryBudget,
   type MemoryEntryRenderStrategy,
+  type MemoryRenderBudgetDecision,
 } from './rendering'
 
 export type MemoryBlockKind = 'recent' | 'working' | 'episodes' | 'facts' | 'procedures' | 'reflections' | 'custom'
@@ -627,6 +628,72 @@ function emitBlockRead(
   })
 }
 
+function emitMemoryRenderObservation(
+  ctx: MemoryRuntimeOptions,
+  memoryId: string,
+  decision: MemoryRenderBudgetDecision,
+) {
+  const attributes = {
+    memoryId,
+    operation: 'render',
+    memoryType: 'memory',
+    namespaceHash: namespaceHash(ctx.namespace),
+    budgetMaxTokens: decision.maxTokens,
+    budgetUsedTokens: decision.usedTokens,
+    budgetCandidateBlocks: decision.candidateBlocks,
+    budgetIncludedBlocks: decision.includedBlocks,
+    budgetTrimmedBlocks: decision.trimmedBlocks,
+    budgetDroppedBlocks: decision.droppedBlocks,
+  }
+  const span = observe.openSpan({
+    name: `${memoryId}.render`,
+    family: 'memory',
+    primitive: 'memory.read',
+    attributes,
+  })
+
+  try {
+    span.withContext(() => {
+      const artifactId = observe.artifact({
+        kind: 'memory.snapshot',
+        contentType: 'application/json',
+        encoding: 'json',
+        preview: {
+          kind: 'memory.snapshot',
+          memoryType: 'memory',
+          operation: 'render',
+          budget: {
+            maxTokens: decision.maxTokens,
+            usedTokens: decision.usedTokens,
+            candidateBlocks: decision.candidateBlocks,
+            includedBlocks: decision.includedBlocks,
+            trimmedBlocks: decision.trimmedBlocks,
+            droppedBlocks: decision.droppedBlocks,
+          },
+        },
+        attributes: {
+          memoryId,
+          operation: 'render',
+          memoryType: 'memory',
+          namespaceHash: namespaceHash(ctx.namespace),
+        },
+      })
+      if (artifactId) {
+        observe.edge({
+          edgeType: 'memory.read',
+          from: { kind: 'artifact', id: artifactId },
+          to: { kind: 'span', id: span.spanId },
+          attributes: { memoryId, operation: 'render' },
+        })
+      }
+      observe.event({ name: 'memory.read', attributes })
+    })
+    span.end(attributes)
+  } catch (error) {
+    span.error(error)
+  }
+}
+
 async function applyPolicy<T>(
   candidate: T,
   policy: MemoryPolicy<T> | undefined,
@@ -822,7 +889,11 @@ export function memory(config: MemoryConfig): Memory {
             if (text) rendered.push({ block, text })
           }
           if (rendered.length === 0) return ''
-          return renderBudgetedMemoryBlocks(rendered, config.budget)
+          const budgeted = renderBudgetedMemoryBlocksWithDecision(rendered, config.budget)
+          if (budgeted.budgetDecision) {
+            emitMemoryRenderObservation(ctx, config.id, budgeted.budgetDecision)
+          }
+          return budgeted.text
         },
         tools: ({ input }) => {
           return api.asTools({ input: input as Record<string, unknown> })

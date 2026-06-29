@@ -310,6 +310,49 @@ func TestMemoryStoreDetailIndexHealthIsEmbedderAware(t *testing.T) {
 	})
 }
 
+func TestMemoryStoreDetailUsesIndexedBlockRetention(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewStore()
+	st.SetIndexData(store.IndexData{
+		Definitions: []store.ProjectDefinition{
+			{
+				ID:       "memory:user-episodes",
+				Kind:     "memory",
+				Name:     "user-episodes:*",
+				Fidelity: "partial",
+				Metadata: json.RawMessage(`{
+					"runtimeIdPrefix": "user-episodes:",
+					"blocks": [
+						{"id":"episodes","kind":"episodes","retentionPolicy":"90d"}
+					]
+				}`),
+			},
+		},
+	})
+	st.MemoryWrite(store.MemoryWriteEvent{
+		MemoryID:   "user-episodes:user:project",
+		MemoryType: "episodic",
+		Operation:  "record",
+		EntryKey:   "episode_1",
+		Content:    "hello",
+		TraceID:    "trace_a",
+		Timestamp:  2000,
+		Snapshot:   json.RawMessage(`{"key":"episode_1","content":"hello"}`),
+	})
+
+	service := NewService(st, quality.NewService(st, t.TempDir()))
+	value, found, err := service.MemoryStoreDetail(ctx, "user-episodes:user:project")
+	if err != nil || !found {
+		t.Fatalf("memory detail found=%v err=%v", found, err)
+	}
+	detail := value.(memoryStoreDetail)
+	state := detail.State.(map[string]any)
+	retention, ok := state["retention"].(map[string]any)
+	if !ok || retention["policy"] != "90d" {
+		t.Fatalf("retention = %#v", state["retention"])
+	}
+}
+
 // In the live devtools the in-memory instance index is never populated (it is
 // only written by the in-process MemoryWrite/MemoryRead path used in tests), so
 // episodic/semantic state must reconstruct entries from observability-derived

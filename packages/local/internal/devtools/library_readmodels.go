@@ -855,6 +855,7 @@ func enrichMemoryStoreDetail(detail *memoryStoreDetail, inst *store.MemoryInstan
 	}
 	if detail.Type == "episodic" {
 		hasEmbed := episodicHasEmbed(def)
+		indexedRetentionPolicy := episodicRetentionPolicyFromDefinition(def)
 		if detail.Schema == nil {
 			detail.Schema = canonicalEpisodicSchema(hasEmbed)
 		}
@@ -866,7 +867,7 @@ func enrichMemoryStoreDetail(detail *memoryStoreDetail, inst *store.MemoryInstan
 					state["index"] = index
 				}
 			}
-			if retention := episodicRetention(meta, events); retention != nil {
+			if retention := episodicRetention(meta, events, indexedRetentionPolicy); retention != nil {
 				state["retention"] = retention
 			}
 		}
@@ -891,6 +892,23 @@ func episodicHasEmbed(def *store.ProjectDefinition) bool {
 		}
 	}
 	return false
+}
+
+func episodicRetentionPolicyFromDefinition(def *store.ProjectDefinition) string {
+	if def == nil {
+		return ""
+	}
+	blocks, ok := rawMap(def.Metadata)["blocks"].([]any)
+	if !ok {
+		return ""
+	}
+	for _, blockValue := range blocks {
+		block := anyMap(blockValue)
+		if stringValue(block, "kind", "") == "episodes" {
+			return stringValue(block, "retentionPolicy", "")
+		}
+	}
+	return ""
 }
 
 // canonicalEpisodicSchema returns the fixed EpisodicEntry shape as an authored
@@ -927,8 +945,11 @@ func canonicalEpisodicSchema(hasEmbed bool) map[string]any {
 // The policy comes from event metadata (every episodic event carries it when a
 // retention is configured); lastGcAt/lastGcEvicted come from the most recent
 // `evict` sweep so the card reports real eviction activity, not a guess.
-func episodicRetention(meta map[string]any, events []store.MemoryEventData) map[string]any {
+func episodicRetention(meta map[string]any, events []store.MemoryEventData, indexedPolicy string) map[string]any {
 	policy := stringValue(meta, "retentionPolicy", "")
+	if policy == "" {
+		policy = indexedPolicy
+	}
 	var lastGcAt, lastGcEvicted float64
 	hasGc := false
 	for _, event := range events {

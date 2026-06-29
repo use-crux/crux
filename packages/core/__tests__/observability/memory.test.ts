@@ -197,7 +197,7 @@ describe('canonical memory observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.read' }))
   })
 
-    it('records memory context hydration as child memory.read spans', async () => {
+  it('records memory context hydration as child memory.read spans', async () => {
     const store = inMemoryCruxStore()
     const recent = recentMessages({ id: 'recent' })
     await recent.addTurn(

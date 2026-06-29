@@ -18,6 +18,28 @@ export interface RenderedMemoryBlock {
   text: string
 }
 
+/** Inspectable outcome of applying block and memory render budgets. */
+export interface MemoryRenderBudgetDecision {
+  /** Memory-level maximum token budget, when configured. */
+  maxTokens?: number
+  /** Tokens in the final rendered memory text after budget selection. */
+  usedTokens: number
+  /** Blocks that rendered text before budget selection. */
+  candidateBlocks: string[]
+  /** Blocks retained in the final memory text. */
+  includedBlocks: string[]
+  /** Blocks shortened by either a block-level or memory-level budget. */
+  trimmedBlocks: string[]
+  /** Blocks omitted because a block-level or memory-level budget had no room. */
+  droppedBlocks: string[]
+}
+
+/** Rendered memory text plus optional budget decision metadata for observability. */
+export interface RenderedBudgetedMemory {
+  text: string
+  budgetDecision?: MemoryRenderBudgetDecision
+}
+
 /** Query text, or a query factory that can derive text from render input. */
 export type MemoryRenderQuery =
   | string
@@ -96,21 +118,64 @@ export function renderBudgetedMemoryBlocks(
   blocks: readonly RenderedMemoryBlock[],
   budget?: MemoryBudget,
 ): string {
-  const candidates = blocks
-    .map((candidate) => ({
-      ...candidate,
-      text: trimToBudget(candidate.text, candidate.block.budget?.maxTokens),
-    }))
-    .filter((candidate) => candidate.text.length > 0)
+  return renderBudgetedMemoryBlocksWithDecision(blocks, budget).text
+}
+
+/**
+ * Apply block-level and memory-level budgets and return structured selection metadata.
+ *
+ * The plain `renderBudgetedMemoryBlocks()` wrapper preserves the existing public
+ * behavior, while this deeper helper gives observability/devtools a stable
+ * contract for explaining why lower-priority memory disappeared.
+ */
+export function renderBudgetedMemoryBlocksWithDecision(
+  blocks: readonly RenderedMemoryBlock[],
+  budget?: MemoryBudget,
+): RenderedBudgetedMemory {
+  const candidateBlocks = blocks.map(({ block }) => block.id)
+  const trimmedBlocks: string[] = []
+  const droppedBlocks: string[] = []
+  const candidates = blocks.flatMap((candidate) => {
+    const trimmed = trimToBudget(candidate.text, candidate.block.budget?.maxTokens)
+    if (trimmed !== candidate.text) trimmedBlocks.push(candidate.block.id)
+    if (!trimmed) {
+      droppedBlocks.push(candidate.block.id)
+      return []
+    }
+    return [{ ...candidate, text: trimmed }]
+  })
 
   if (budget?.maxTokens === undefined || !Number.isFinite(budget.maxTokens)) {
-    return formatMemorySections(candidates)
+    const text = formatMemorySections(candidates)
+    return {
+      text,
+      budgetDecision: budgetDecisionIfNeeded(blocks, budget, {
+        usedTokens: countTokens(text),
+        candidateBlocks,
+        includedBlocks: candidates.map(({ block }) => block.id),
+        trimmedBlocks,
+        droppedBlocks,
+      }),
+    }
   }
 
-  if (budget.maxTokens <= 0) return ''
+  if (budget.maxTokens <= 0) {
+    return {
+      text: '',
+      budgetDecision: budgetDecision({
+        maxTokens: budget.maxTokens,
+        usedTokens: 0,
+        candidateBlocks,
+        includedBlocks: [],
+        trimmedBlocks,
+        droppedBlocks: unique([...droppedBlocks, ...candidates.map(({ block }) => block.id)]),
+      }),
+    }
+  }
 
   const included: RenderedMemoryBlock[] = []
-  for (const candidate of candidates) {
+  let stoppedAt = candidates.length
+  for (const [index, candidate] of candidates.entries()) {
     const next = [...included, candidate]
     if (countTokens(formatMemorySections(next)) <= budget.maxTokens) {
       included.push(candidate)
@@ -118,11 +183,49 @@ export function renderBudgetedMemoryBlocks(
     }
 
     const trimmedText = trimSectionToRemainingBudget(candidate, included, budget.maxTokens)
-    if (trimmedText) included.push({ ...candidate, text: trimmedText })
+    if (trimmedText) {
+      trimmedBlocks.push(candidate.block.id)
+      included.push({ ...candidate, text: trimmedText })
+    }
+    stoppedAt = index
     break
   }
 
-  return formatMemorySections(included)
+  const includedIds = included.map(({ block }) => block.id)
+  const droppedIds = unique([
+    ...droppedBlocks,
+    ...candidates.slice(stoppedAt).map(({ block }) => block.id).filter((blockId) => !includedIds.includes(blockId)),
+  ])
+  const text = formatMemorySections(included)
+  return {
+    text,
+    budgetDecision: budgetDecision({
+      maxTokens: budget.maxTokens,
+      usedTokens: countTokens(text),
+      candidateBlocks,
+      includedBlocks: includedIds,
+      trimmedBlocks,
+      droppedBlocks: droppedIds,
+    }),
+  }
+}
+
+function budgetDecisionIfNeeded(
+  blocks: readonly RenderedMemoryBlock[],
+  budget: MemoryBudget | undefined,
+  decision: Omit<MemoryRenderBudgetDecision, 'maxTokens'>,
+): MemoryRenderBudgetDecision | undefined {
+  const hasBlockBudget = blocks.some(({ block }) => block.budget?.maxTokens !== undefined)
+  if (!hasBlockBudget && budget?.maxTokens === undefined) return undefined
+  return budgetDecision({ ...decision, maxTokens: budget?.maxTokens })
+}
+
+function budgetDecision(decision: MemoryRenderBudgetDecision): MemoryRenderBudgetDecision {
+  return {
+    ...decision,
+    trimmedBlocks: unique(decision.trimmedBlocks),
+    droppedBlocks: unique(decision.droppedBlocks),
+  }
 }
 
 function trimSectionToRemainingBudget(
@@ -172,6 +275,10 @@ function trimToBudget(text: string, maxTokens: number | undefined): string {
 
 function formatMemorySections(blocks: readonly RenderedMemoryBlock[]): string {
   return blocks.map(({ block, text }) => `## Memory: ${block.id}\n${text}`).join('\n\n')
+}
+
+function unique(values: readonly string[]): string[] {
+  return [...new Set(values)]
 }
 
 async function findEntries(
