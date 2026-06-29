@@ -15,7 +15,13 @@ import { context, when, match } from '../../prompt/context'
 import { injectable } from '../../prompt/injectable'
 import { contributor } from '../../prompt/contributor'
 import { handoff } from '../../agent/handoff'
-import { createResolverFakes, staticPolicy, staticTokenizer } from '../../resolver/fakes'
+import {
+  createResolverFakes,
+  fixedClock,
+  inMemoryContextCache,
+  staticPolicy,
+  staticTokenizer,
+} from '../../resolver/fakes'
 import type { ResolverPorts } from '../../resolver/ports'
 import type { InspectResult, ResolvedPrompt } from '../../resolver/types'
 import type { PromptConfig } from '../../prompt/prompt-types'
@@ -339,6 +345,29 @@ describe('tokenizer port', () => {
     const inspect = await resolver.inspect(config, { tokenBudget: 8 })
     expect(inspect.droppedContexts.map((d) => d.source)).toEqual(['context:drop'])
     expect(inspect.droppedContexts[0]).toMatchObject({ tokens: 5, priority: 10 })
+  })
+
+  it('refreshes a cached context split for the active tokenizer on a cache hit', async () => {
+    // Cached segments are tokenizer-independent, but the static/dynamic token
+    // split is not — a hit under a different tokenizer must re-estimate it.
+    const clock = fixedClock(1_000)
+    const cache = inMemoryContextCache(clock)
+    const base = createResolverFakes()
+    const withTokenizer = (count: (t: string) => number): Partial<ResolverPorts> => ({
+      ...base.ports,
+      clock,
+      cache,
+      tokenizer: staticTokenizer(count),
+    })
+    const config: AnyConfig = { system: 'S', use: [context({ id: 'c', system: () => 'one two three', cache: 60_000 })] }
+
+    // Word count populates the shared cache (3 dynamic tokens)...
+    await compiledResolver(withTokenizer(wordCount)).resolve(config, {})
+    // ...then a char counter reads it back from the same cache (hit → 13).
+    const inspect = await compiledResolver(withTokenizer((t) => t.length)).inspect(config, {})
+
+    const part = inspect.system.parts.find((p) => p.source === 'context:c')
+    expect(part?.dynamicTokens).toBe(13)
   })
 })
 

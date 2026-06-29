@@ -358,7 +358,7 @@ The source ledger stores the emitted `SourceStageRecord[]` for indexed sources. 
 
 `compilePrompt(config, { ports? })` is the resolution module boundary. It validates the prompt config, binds resolver ports, and creates a `PromptResolverPlan` (`createPromptResolverPlan`) that merges prompt-owned and `use:` input schemas once. `compilePrompt()` is a thin wrapper: `resolve()` and `inspect()` are projections over the plan's single `run(opts, mode)` primitive, so they can never drift. When an adapter calls `prompt.resolve(options)`, the plan runs one pass that produces both the SDK-ready `ResolvedPrompt` and an inspection view over the same intermediates:
 
-```
+```text
 Compile prompt config (compile.ts → createPromptResolverPlan)
   ├── messages/system mutual exclusion check
   ├── input schema merge + conflict detection

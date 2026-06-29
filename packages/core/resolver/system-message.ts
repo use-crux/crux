@@ -18,7 +18,7 @@ import type { ResolvedSystemContent } from './contract'
 import { contextContributionKind, contextInjectedToolNames, contextInjects } from './lower'
 import type { ResolverPorts } from './ports'
 import { emitBudgetArtifact, includeByBudget, type BudgetContextPart } from './system-budget'
-import { inputForSourceKeys, normalizeSystemContent } from './system-content'
+import { inputForSourceKeys, normalizeSystemContent, recountSystemContent } from './system-content'
 
 /** Result returned by {@link buildSystemMessage}. */
 export interface BuiltSystemMessage {
@@ -106,7 +106,9 @@ export async function buildSystemMessage(
           const cacheKey = computeCacheKey(ctx.id, input, ctx.inputKeys)
           const cached = ports.cache.get(cacheKey)
           if (cached !== null) {
-            resolvedContent = cached.content
+            // Segments are cached tokenizer-independently; refresh the token
+            // split so it matches the active tokenizer on this hit.
+            resolvedContent = recountSystemContent(cached.content, count)
             cacheStatus = 'hit'
             ports.instrumentation.contextCacheHit({
               contextId: ctx.id,

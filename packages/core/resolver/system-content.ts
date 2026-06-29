@@ -84,6 +84,21 @@ export async function resolveSystemContent<T>(
   return normalizeSystemContent(result, true, count, 'Prompt system/context function', input)
 }
 
+/**
+ * Re-estimate a cached content's static/dynamic token split with `count`.
+ *
+ * Segments (text + dynamic flags) come from the system function and are
+ * tokenizer-independent, so they are safe to cache — but their token counts are
+ * not. A context-cache hit under a different `TokenizerPort` must refresh the
+ * split so `staticTokens` / `dynamicTokens` stay aligned with the active
+ * tokenizer for inspect attribution. Content without segments has no split to
+ * refresh and is returned unchanged.
+ */
+export function recountSystemContent(content: ResolvedSystemContent, count: CountTokens): ResolvedSystemContent {
+  if (!content.segments || content.segments.length === 0) return content
+  return segmentsToSystemContent(content.segments, count)
+}
+
 /** Select only the input fields a context declared for segment inference. */
 export function inputForSourceKeys(
   input: Record<string, unknown>,

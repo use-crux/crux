@@ -320,6 +320,7 @@ export interface ResolverFakes {
   cache: InMemoryContextCache
   clock: FixedClock
   tokenizer: TokenizerPort
+  policy: () => ResolvePolicy
   diagnostics: CollectingDiagnostics
   instrumentation: RecordingInstrumentation
 }
@@ -360,6 +361,7 @@ export function createResolverFakes(options: ResolverFakesOptions = {}): Resolve
     cache,
     clock,
     tokenizer,
+    policy,
     diagnostics,
     instrumentation,
     ports: { observability, skills, cache, clock, tokenizer, policy, diagnostics, instrumentation },
