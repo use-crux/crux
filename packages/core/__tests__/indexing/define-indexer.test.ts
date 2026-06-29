@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { embedding as makeEmbedding } from '../../embedding'
 import { chunker, indexer as makeIndexer, indexingPipeline, transform } from '../../indexing'
+import { parentExpand, retrievalPipeline, retriever as makeRetriever } from '../../retrieval'
 import { inMemoryCruxStore } from '../../store/memory'
 import type { CruxStore, JsonObject, ListResult } from '../../store/types'
 
@@ -127,15 +128,16 @@ describe('indexer', () => {
       },
     ])
 
-    const entries = await listAll(store, 'indexer:docs:namespace:kb:source:doc-parent:')
-    const parents = entries.entries.filter((entry) => entry.value._cruxRecordType === 'parent')
-    const chunks = entries.entries.filter((entry) => entry.value._cruxRecordType === 'chunk')
+    const docs = makeRetriever({ id: 'docs', namespace: 'kb', store, dense })
+    const expandedDocs = retrievalPipeline(docs, [parentExpand({ store })])
+    const hits = await expandedDocs.retrieve('Alpha beta')
 
-    expect(parents.length).toBeGreaterThan(0)
-    expect(chunks.length).toBeGreaterThan(0)
-    expect(chunks.every((entry) => entry.value.active === true)).toBe(true)
-    expect(chunks[0].value.parent).toMatchObject({ parentId: parents[0].value.parentId })
-    expect(chunks[0].value.embedding).toBeDefined()
+    expect(hits.length).toBeGreaterThan(0)
+    expect(hits[0].content).not.toBe(hits[0].parent?.content)
+    expect(hits[0].parent).toMatchObject({
+      content: expect.stringContaining('Alpha beta'),
+      metadata: {},
+    })
   })
 
     it('stage-level cache reuses document transform output and supports bypass', async () => {
@@ -161,10 +163,19 @@ describe('indexer', () => {
     it('generation-aware replacement keeps the previous generation active if a later pipeline fails', async () => {
     const store = inMemoryCruxStore()
     let shouldFail = false
+    const dense = makeEmbedding({
+      kind: 'dense',
+      name: 'dense-test',
+      dimensions: 2,
+      maxInputTokens: 100,
+      batch: { maxSize: 8 },
+      embed: async (texts) => texts.map((text) => (text.includes('First') ? [1, 0] : [0, 1])),
+    })
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
       store,
+      dense,
       pipeline: indexingPipeline({
         documents: [
           transform.document({
@@ -180,23 +191,15 @@ describe('indexer', () => {
     })
 
     await indexer.indexDocuments([{ namespace: 'kb', sourceId: 'doc-gen', content: 'First version' }])
-    const firstEntries = await listAll(store, 'indexer:docs:namespace:kb:source:doc-gen:')
-    const firstActiveChunks = firstEntries.entries.filter(
-      (entry) => entry.value._cruxRecordType === 'chunk' && entry.value.active === true,
-    )
     shouldFail = true
 
     await expect(
       indexer.indexDocuments([{ namespace: 'kb', sourceId: 'doc-gen', content: 'Second version' }]),
     ).rejects.toThrow('pipeline failed')
 
-    const afterFailure = await listAll(store, 'indexer:docs:namespace:kb:source:doc-gen:')
-    const activeChunks = afterFailure.entries.filter(
-      (entry) => entry.value._cruxRecordType === 'chunk' && entry.value.active === true,
-    )
-    expect(activeChunks.map((entry) => entry.value.generationId)).toEqual(
-      firstActiveChunks.map((entry) => entry.value.generationId),
-    )
+    const docs = makeRetriever({ id: 'docs', namespace: 'kb', store, dense })
+    const hits = await docs.retrieve('First version', { threshold: 0.5 })
+    expect(hits.map((hit) => hit.content)).toEqual(['First version'])
   })
 
     it('chunks documents with stable source and chunk metadata', async () => {
@@ -365,7 +368,10 @@ describe('indexer', () => {
 
     const firstPass = await listAll(store, 'indexer:docs:namespace:kb:source:doc-1:')
     expect(firstPass.entries).toHaveLength(1)
-    expect(firstPass.entries[0].value.embedding).toEqual([13, 1])
+    const docs = makeRetriever({ id: 'docs', namespace: 'kb', store, dense })
+    await expect(docs.retrieve('first version', { threshold: 0.5 })).resolves.toEqual([
+      expect.objectContaining({ sourceId: 'doc-1', content: 'first version' }),
+    ])
 
     await indexer.indexDocuments(
       [
@@ -415,7 +421,10 @@ describe('indexer', () => {
 
     expect(result.sourceCount).toBe(1)
     expect(entries.entries).toHaveLength(1)
-    expect(entries.entries[0].value.embedding).toEqual([25, 1])
+    const docs = makeRetriever({ id: 'docs', namespace: 'kb', store, dense })
+    await expect(docs.retrieve('hello from async iterable', { threshold: 0.5 })).resolves.toEqual([
+      expect.objectContaining({ sourceId: 'doc-async', content: 'hello from async iterable' }),
+    ])
   })
 
     it('dry-runs document indexing without mutating the store', async () => {
@@ -494,11 +503,16 @@ describe('indexer', () => {
     ])
 
     expect(result.chunkCount).toBe(1)
-    const stored = await store.get('indexer:docs:namespace:kb:source:doc-1:chunk:a')
-    expect(stored?.sparseEmbedding).toEqual({
-      indices: [0, 1, 2, 3, 4],
-      values: [1, 1, 1, 1, 1],
+    const docs = makeRetriever({
+      id: 'docs',
+      namespace: 'kb',
+      store,
+      sparse,
+      search: { mode: 'sparse' },
     })
+    await expect(docs.retrieve('hello', { threshold: 0.5 })).resolves.toEqual([
+      expect.objectContaining({ sourceId: 'doc-1', chunkId: 'a', content: 'hello' }),
+    ])
   })
 
     it('indexes chunks with dense and sparse embeddings together', async () => {
@@ -541,9 +555,17 @@ describe('indexer', () => {
       },
     ])
 
-    const stored = await store.get('indexer:docs:namespace:kb:source:doc-1:chunk:a')
-    expect(stored?.embedding).toEqual([5, 1])
-    expect(stored?.sparseEmbedding).toBeDefined()
+    const docs = makeRetriever({
+      id: 'docs',
+      namespace: 'kb',
+      store,
+      dense,
+      sparse,
+      search: { mode: 'hybrid' },
+    })
+    await expect(docs.retrieve('hello', { threshold: 0.5 })).resolves.toEqual([
+      expect.objectContaining({ sourceId: 'doc-1', chunkId: 'a', content: 'hello' }),
+    ])
   })
 
     it('deleteSource removes only matching namespace/source entries', async () => {

@@ -57,7 +57,7 @@ The pipeline has two phases. Query stages run before Crux calls the base retriev
 | `queryPlanner()` | `query` | Turns one question into typed planned queries with optional filters, weights, and reasons. | A broad or ambiguous question should search multiple focused parts of the corpus. |
 | `multiQuery()` | `query` | Generates alternate phrasings, dedupes them, and keeps the original by default. | Recall is weak because users and docs use different wording. |
 | Fanout + RRF merge | internal | Calls the base retriever once per planned query and merges duplicate hits by `namespace/sourceId/chunkId`. | This always happens after query stages. |
-| `parentExpand()` | `hits` | Follows `hit.parent.key` and attaches larger parent context without changing the child citation. | You indexed small child chunks but want surrounding context. |
+| `parentExpand()` | `hits` | Resolves the hit's parent ref through the indexed read model and attaches larger parent context without changing the child citation. | You indexed small child chunks but want surrounding context. |
 | `compress()` | `hits` | Keeps extractive excerpts from each hit and drops empty hits by default. | Retrieved chunks are too long or noisy. |
 | `diversify()` | `hits` | Applies MMR-style diversity with optional same-source penalty. | Top results repeat the same source or near-duplicate content. |
 | `decay()` | `hits` | Applies exponential score decay from a timestamp field. | Freshness should influence rank. |
@@ -123,6 +123,12 @@ const advancedDocs = retrievalPipeline(docs, [
 ```
 
 Child hits keep their `sourceId`, `chunkId`, score, and provenance. Parent content is added to `hit.parent.content`.
+
+If the retriever id differs from the indexer id that wrote the parent records, pass the writer id:
+
+```ts
+parentExpand({ store: data, indexerId: 'docs' })
+```
 
 ## Compression, Diversity, And Decay
 

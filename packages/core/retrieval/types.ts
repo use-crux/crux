@@ -258,6 +258,8 @@ export interface RetrievalInjectionConfig {
 /** Configuration for a store-backed dense/sparse/hybrid retriever. Internal. */
 export interface DenseStoreBackedRetrieverConfig {
   id: string
+  /** Indexer id used to derive parent/chunk record keys. Defaults to `id`. */
+  indexerId?: string
   namespace: string
   data?: DataStore
   vectors?: VectorStore

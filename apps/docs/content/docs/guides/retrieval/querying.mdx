@@ -20,6 +20,19 @@ const docs = retriever({
 const hits = await docs.retrieve('how do refunds work?')
 ```
 
+Store-backed retrievers read the indexed chunk/parent records written by `indexer()`. If the retriever id differs from the writer id, pass `indexerId`:
+
+```ts
+const docs = retriever({
+  id: 'docs-search',
+  indexerId: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+})
+```
+
 Use the same retriever in prompt composition:
 
 ```ts

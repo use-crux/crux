@@ -363,11 +363,11 @@ indexingPipeline({
 Behavior:
 
 - Builds parent records from structured chunks.
-- Writes parent records as `_cruxRecordType: 'parent'`.
-- Writes child chunks as `_cruxRecordType: 'chunk'`.
-- Child chunks include `parent.parentId`, `parent.key`, and optional parent title.
-- Store-backed retrievers search active child chunks only.
-- `parentExpand({ store })` follows `parent.key` to enrich hits with parent content while preserving child identity and score.
+- Persists non-searchable parent records through the indexed read model.
+- Persists active searchable child chunks through the same read model.
+- Child chunks include parent refs and optional parent title.
+- Store-backed retrievers search active child chunks only through the read-model boundary.
+- `parentExpand({ store })` resolves parent refs through the indexed read model to enrich hits with parent content while preserving child identity and score.
 
 ### `chunker.semantic(options)`
 
@@ -666,7 +666,7 @@ type SourceStageRecord = {
 
 `indexDocuments()` uses generation-aware replacement. New chunks and parent records are written with a fresh `generationId` and `active: true`. Only after the new generation succeeds does Crux mark previous records for that source inactive.
 
-Retrievers add `_cruxRecordType: 'chunk'` and `active: true` filters for store-backed retrieval. That keeps old generations and parent records out of normal query results while preserving enough history for debugging and rollback-oriented tooling.
+Store-backed retrievers query through the indexed read model, which applies the active child-chunk contract and keeps old generations and parent records out of normal query results while preserving enough history for debugging and rollback-oriented tooling.
 
 ## Chunking invariants
 

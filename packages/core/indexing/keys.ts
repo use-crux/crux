@@ -1,33 +1,13 @@
 /**
- * Data-store key derivation and paginated listing for indexing.
+ * Data-store key derivation and paginated listing for corpus source records.
  *
- * Indexer records are keyed by indexer id + namespace + source + chunk/parent;
- * corpus source records by corpus id + namespace + source.
+ * Indexed chunk and parent record keys are owned by the internal indexed
+ * knowledge read-model boundary.
  *
  * @module
  */
 
 import type { DataStore, StoreEntry } from '../store/types'
-
-/** Prefix for all records in an indexer namespace. */
-export function namespacePrefix(indexerId: string, namespace: string): string {
-  return `indexer:${indexerId}:namespace:${namespace}:`
-}
-
-/** Prefix for all records of a single source. */
-export function sourcePrefix(indexerId: string, namespace: string, sourceId: string): string {
-  return `${namespacePrefix(indexerId, namespace)}source:${sourceId}:`
-}
-
-/** Key for a single chunk record. */
-export function chunkKey(indexerId: string, namespace: string, sourceId: string, chunkId: string): string {
-  return `${sourcePrefix(indexerId, namespace, sourceId)}chunk:${chunkId}`
-}
-
-/** Key for a single parent-chunk record. */
-export function parentKey(indexerId: string, namespace: string, sourceId: string, parentId: string): string {
-  return `${sourcePrefix(indexerId, namespace, sourceId)}parent:${parentId}`
-}
 
 /** Prefix for all corpus source records in a namespace. */
 export function sourcePrefixKey(corpusId: string, namespace: string): string {

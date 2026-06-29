@@ -250,6 +250,19 @@ const docs = retriever({
 const hits = await docs.retrieve('how do billing credits work?')
 ```
 
+If your retriever uses a different `id` from the indexer that wrote the records, set `indexerId` so parent refs, chunk hydration, and cleanup all use the same indexed read model:
+
+```ts
+const docs = retriever({
+  id: 'docs-search',
+  indexerId: 'docs',
+  namespace: 'product-docs',
+  data,
+  vectors,
+  dense,
+})
+```
+
 Use it as prompt context:
 
 ```ts

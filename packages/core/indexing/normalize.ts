@@ -8,7 +8,6 @@
  * @module
  */
 
-import type { JsonObject } from '../store/types'
 import type { CruxChunk, CruxDocument, CruxParentChunk } from './types'
 
 /** Validate every document belongs to the namespace and has a source id. */
@@ -79,19 +78,6 @@ export function normalizeParentChunk(parent: CruxParentChunk, namespace: string)
     content: parent.content,
     metadata: parent.metadata ?? {},
     ...(parent.provenance ? { provenance: parent.provenance } : {}),
-  }
-}
-
-/** Project the fields persisted as vector metadata for a chunk record. */
-export function vectorMetadata(value: JsonObject): Record<string, unknown> {
-  return {
-    _cruxRecordType: value._cruxRecordType,
-    namespace: value.namespace,
-    sourceId: value.sourceId,
-    chunkId: value.chunkId,
-    generationId: value.generationId,
-    active: value.active,
-    ...(isRecord(value.metadata) ? value.metadata : {}),
   }
 }
 

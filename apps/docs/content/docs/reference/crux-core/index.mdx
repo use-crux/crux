@@ -480,6 +480,7 @@ const answer = prompt({
 | Field       | Type                                           | Description                                      |
 | ----------- | ---------------------------------------------- | ------------------------------------------------ |
 | `id`        | `string`                                       | Stable retriever identifier                      |
+| `indexerId` | `string?`                                      | Writer indexer id when it differs from `id`      |
 | `namespace` | `string`                                       | Required corpus boundary                         |
 | `data`      | `DataStore?`                                   | JSON record hydration for store-backed retrieval |
 | `vectors`   | `VectorStore?`                                 | Dense, sparse, or hybrid vector search           |

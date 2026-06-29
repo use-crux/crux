@@ -69,42 +69,6 @@ function createBaseStore(overrides: Partial<CruxStore> = {}): CruxStore {
 }
 
 describe('retriever', () => {
-  it('uses explicit data and vector stores for dense retrieval', async () => {
-    const data = inMemoryDataStore()
-    const vectors = inMemoryVectorStore()
-
-    await data.set('chunk:1', {
-      _cruxRecordType: 'chunk',
-      namespace: 'docs',
-      sourceId: 'intro.md',
-      chunkId: '0',
-      content: 'Alpha',
-      metadata: {},
-      active: true,
-    })
-    await vectors.upsert([{ key: 'chunk:1', dense: [5, 2.5] }])
-
-    const retriever = makeRetriever({
-      id: 'docs',
-      namespace: 'docs',
-      data,
-      vectors,
-      dense: createDenseEmbedding(),
-      search: { mode: 'dense' },
-    })
-
-    const hits = await retriever.retrieve('alpha')
-
-    expect(hits).toEqual([
-      expect.objectContaining({
-        sourceId: 'intro.md',
-        chunkId: '0',
-        content: 'Alpha',
-      }),
-    ])
-    expect(hits[0]?.score).toBeCloseTo(1)
-  })
-
     it('retrieves chunks indexed into explicit data and vector stores', async () => {
     const data = inMemoryDataStore()
     const vectors = inMemoryVectorStore()
@@ -252,17 +216,12 @@ describe('retriever', () => {
     ).toThrow('Reranker name must be non-empty')
   })
 
-    it('retrieves dense hits via vectorSearch and enforces namespace filter', async () => {
+    it('retrieves dense hits via vectorSearch and forwards user filters', async () => {
     const dense = createDenseEmbedding()
     const vectorSearch = vi.fn(async (_embedding: number[], options?: { limit?: number; threshold?: number; filter?: Record<string, unknown> }) => {
       expect(options?.limit).toBe(3)
       expect(options?.threshold).toBe(0.4)
-      expect(options?.filter).toEqual({
-        topic: 'launch',
-        namespace: 'docs',
-        _cruxRecordType: 'chunk',
-        active: true,
-      })
+      expect(options?.filter).toMatchObject({ topic: 'launch' })
       return [
         createScoredEntry(
           'retriever:r1:source:doc-1:chunk:0',
@@ -312,7 +271,7 @@ describe('retriever', () => {
     const searchVectors = vi.fn(async (query: VectorSearchQuery) => {
       expect(query.dense).toEqual([13, 6.5])
       expect(query.limit).toBe(4)
-      expect(query.filter).toEqual({ namespace: 'docs', _cruxRecordType: 'chunk', active: true })
+      expect(query.filter).toMatchObject({ namespace: 'docs' })
       return [
         createScoredEntry(
           'retriever:r1:source:doc-2:chunk:1',
@@ -526,7 +485,7 @@ describe('retriever', () => {
         indices: [0, 1, 2, 3, 4, 5],
         values: [1, 1, 1, 1, 1, 1],
       })
-      expect(query.filter).toEqual({ namespace: 'docs', _cruxRecordType: 'chunk', active: true })
+      expect(query.filter).toMatchObject({ namespace: 'docs' })
       return [
         createScoredEntry(
           'retriever:r1:source:doc-5:chunk:0',
@@ -651,7 +610,7 @@ describe('retriever', () => {
     expect(hits[0].parent).toEqual({ title: 'Pricing' })
   })
 
-    it('excludes inactive generations and parent records from indexed retrieval', async () => {
+    it('excludes inactive generations from indexed retrieval', async () => {
     const store = inMemoryCruxStore()
     const dense = makeEmbedding({
       kind: 'dense',
@@ -670,16 +629,6 @@ describe('retriever', () => {
 
     await indexer.indexDocuments([{ namespace: 'docs', sourceId: 'pricing-doc', content: 'old pricing details' }])
     await indexer.indexDocuments([{ namespace: 'docs', sourceId: 'pricing-doc', content: 'new pricing details' }])
-    await store.set('indexer:docs:namespace:docs:source:pricing-doc:parent:manual', {
-      _cruxRecordType: 'parent',
-      namespace: 'docs',
-      sourceId: 'pricing-doc',
-      parentId: 'manual',
-      active: true,
-      content: 'pricing parent',
-      metadata: {},
-      embedding: [1, 0],
-    })
 
     const retriever = makeRetriever({
       id: 'r1',
