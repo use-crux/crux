@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { config } from '../config'
+import { config } from '../runtime/config'
 import {
   configureObservability,
   currentObservabilityTransport,
@@ -7,11 +7,11 @@ import {
   resetObservabilityRuntime,
   type CruxObservabilityTransport,
 } from '../observability'
-import type { CruxPlugin } from '../plugin'
-import { getRuntime, resetRuntime, updateRuntime } from '../runtime'
+import type { CruxPlugin } from '../runtime/plugin'
+import { getRuntime, resetRuntime, updateRuntime } from '../runtime/runtime'
 import { inMemoryCruxStore } from '../store'
-import { countTokens, defaultTokenizer, setTokenizer } from '../tokenizer'
-import type { PromptMiddleware } from '../types'
+import { countTokens, defaultTokenizer, setTokenizer } from '../shared/tokenizer'
+import type { PromptMiddleware } from '../runtime/types'
 
 describe('config — runtime domain mapping', () => {
   beforeEach(() => {

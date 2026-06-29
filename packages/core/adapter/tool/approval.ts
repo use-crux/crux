@@ -10,8 +10,8 @@
  */
 
 import { observe } from '../../observability'
-import { findToolApprovalDecision, findToolApprovalRequests } from '../../tool-middleware'
-import type { Message } from '../../messages'
+import { findToolApprovalDecision, findToolApprovalRequests } from '../../tools/approvals'
+import type { Message } from '../../generation/messages'
 import type { JsonValue, ToolModelOutput } from '../../types/tool'
 import type { AdapterResponse } from '../types'
 import { emitToolArgsArtifact, emitToolResultArtifact, measureModelOutput } from './emission'

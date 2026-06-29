@@ -10,10 +10,10 @@
  */
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { compilePrompt, type ResolveCallOptions } from '../../resolve'
-import { context, when, match } from '../../context'
-import { injectable } from '../../injectable'
-import { contributor } from '../../contributor'
+import { compilePrompt, type ResolveCallOptions } from '../../resolver/compile'
+import { context, when, match } from '../../prompt/context'
+import { injectable } from '../../prompt/injectable'
+import { contributor } from '../../prompt/contributor'
 import { handoff } from '../../agent/handoff'
 import {
   recordingObservability,
@@ -25,7 +25,9 @@ import {
   recordingInstrumentation,
 } from '../../resolver/fakes'
 import type { ResolverPorts } from '../../resolver/ports'
-import type { InspectResult, PromptConfig, ResolvedPrompt, SkillEntry } from '../../types'
+import type { InspectResult, ResolvedPrompt } from '../../resolver/types'
+import type { PromptConfig } from '../../prompt/prompt-types'
+import type { SkillEntry } from '../../prompt/context-types'
 
 type AnyConfig = PromptConfig<z.ZodType, z.ZodType | undefined, readonly never[]>
 

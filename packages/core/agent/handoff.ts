@@ -15,10 +15,10 @@
 
 import { z } from 'zod'
 import type { CruxStore } from '../store/types'
-import type { Context } from '../types'
+import type { Context } from '../prompt/context-types'
 import type { GenerateTextFn } from '../compaction/types'
-import { context } from '../context'
-import { getRuntime } from '../runtime'
+import { context } from '../prompt/context'
+import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
 
 // ── Types ───────────────────────────────────────────────────────────

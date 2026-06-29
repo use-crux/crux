@@ -27,4 +27,4 @@ export type {
 export type { GenerateObjectAdapterGenerateFn, GenerateObjectBridgeOptions } from './generate-object'
 
 // Re-export CompactionResult from messages for convenience
-export type { CompactionResult } from '../messages'
+export type { CompactionResult } from '../generation/messages'

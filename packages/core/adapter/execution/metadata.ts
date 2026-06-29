@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { TraceMeta } from '../../types'
+import type { TraceMeta } from '../../generation/types'
 import type { AdapterResponse, StreamHandle } from '../types'
 
 /**

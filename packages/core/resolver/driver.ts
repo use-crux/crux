@@ -29,7 +29,7 @@
 import type { CruxArtifactId } from '../observability/contract'
 import type { CruxContextContributionPreview } from '../observability/contract'
 import type { AnyToolSet } from '../types'
-import type { ContextEntry } from '../types'
+import type { ContextEntry } from '../prompt/context-types'
 import {
   emptyMergedResolution,
   type ContributionFacts,

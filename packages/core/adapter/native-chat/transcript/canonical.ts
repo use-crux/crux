@@ -10,7 +10,7 @@
  * @module
  */
 
-import type { Message } from '../../../messages'
+import type { Message } from '../../../generation/messages'
 import type { ToolContentPart, ToolModelOutput } from '../../../types/tool'
 import { toolModelOutputFromMetadata } from '../../tool/emission'
 import type { ToolResultEntry } from '../../types'

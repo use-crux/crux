@@ -11,10 +11,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { defineProviderRuntime } from '../../adapter'
 import { fakeExecutor, type FakeExecutor } from '../../adapter/testing'
-import { prompt as makePrompt } from '../../define'
-import type { Message } from '../../messages'
+import { prompt as makePrompt } from '../../prompt/prompt'
+import type { Message } from '../../generation/messages'
 import { guardrail as makeGuardrail } from '../../safety/guardrail'
-import { appendToolApprovalResponse } from '../../tool-middleware'
+import { appendToolApprovalResponse } from '../../tools/approvals'
 import {
   createRuntimeClient,
   createSingleTurnTestRuntime,

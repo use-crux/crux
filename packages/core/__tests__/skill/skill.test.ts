@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createSkillActivationSession, skill, SkillLoadError } from '../../skill/index'
 import { generateIndex } from '../../skill/project-index'
 import { LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME } from '../../skill/tools'
-import { compilePrompt } from '../../resolve'
-import type { AnyPromptConfig, ContextEntry } from '../../types'
-import { context } from '../../context'
-import { setTokenizer } from '../../tokenizer'
+import { compilePrompt } from '../../resolver/compile'
+import type { AnyPromptConfig } from '../../prompt/prompt-types'
+import type { ContextEntry } from '../../prompt/context-types'
+import { context } from '../../prompt/context'
+import { setTokenizer } from '../../shared/tokenizer'
 
 // Use a simple 1-char-per-token tokenizer for deterministic tests
 beforeEach(() => {

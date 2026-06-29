@@ -11,7 +11,7 @@ import { z } from 'zod'
 import type { JudgeConfig, JudgeInstance, JudgeInput, JudgeResult, JudgeScoreOptions } from './types'
 import type { GenerateObjectFn } from '../compaction/types'
 import { observe } from '../observability'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 
 /** Schema for structured judge output. Reasoning comes first for chain-of-thought. */
 const baseJudgeOutputSchema = z.object({

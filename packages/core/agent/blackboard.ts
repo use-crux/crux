@@ -10,11 +10,11 @@
 
 import { z } from 'zod'
 import type { CruxStore, ToolConfig } from '../store/types'
-import type { Context } from '../types'
+import type { Context } from '../prompt/context-types'
 import type { ToolDef } from '../types/tool'
 import { inMemoryCruxStore } from '../store/memory'
-import { context } from '../context'
-import { getRuntime } from '../runtime'
+import { context } from '../prompt/context'
+import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
 import { registerInspectableResource } from '../runtime-bridge/resources'
 

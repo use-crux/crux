@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { prompt } from '../../define'
+import { prompt } from '../../prompt/prompt'
 import {
   createInMemoryObservabilityTransport,
   observe,
@@ -10,8 +10,8 @@ import {
 } from '../../observability'
 import { plan, updatePlan } from '../../plan/plans'
 import { tasklist } from '../../plan/tasks'
-import { configure } from '../../configure'
-import { resetRuntime, updateRuntime } from '../../runtime'
+import { configure } from '../../runtime/configure'
+import { resetRuntime, updateRuntime } from '../../runtime/runtime'
 import { fileSkill } from '../../skill/file-loader'
 import { clearCache, registry as skillRegistry, resolveRegistrySkill, skill } from '../../skill'
 import { inMemoryCruxStore, inMemoryDataStore } from '../../store/memory'

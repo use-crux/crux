@@ -3,8 +3,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { prompt as makePrompt } from '../../define'
-import type { Message } from '../../messages'
+import { prompt as makePrompt } from '../../prompt/prompt'
+import type { Message } from '../../generation/messages'
 import {
   defineSingleTurnProviderBundle,
   type NativeResponseMetadata,

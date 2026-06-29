@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod'
-import { prompt } from '../define'
+import { prompt } from '../prompt/prompt'
 import type { GenerateObjectFn } from './types'
 
 const DEFAULT_PROMPT_ID = 'crux.generateObject'

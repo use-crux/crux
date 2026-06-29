@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { router, cascade } from '../../routing'
 import { resolveModel } from '../../routing/resolve'
-import { fallback } from '../../fallback'
+import { fallback } from '../../generation/fallback'
 import { CascadeExhaustedError } from '../../routing/errors'
 
 // ─────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { config, inMemoryCruxStore, type CruxConfig, type CruxPlugin } from '..'
 import type { CruxObservabilityTransport } from '../observability'
-import type { TokenizerFn } from '../tokenizer'
-import type { PromptMiddleware } from '../types'
+import type { TokenizerFn } from '../shared/tokenizer'
+import type { PromptMiddleware } from '../runtime/types'
 
 const middleware: PromptMiddleware = async (args, next) => next(args)
 const tokenizer: TokenizerFn = (text) => text.length

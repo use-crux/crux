@@ -4,8 +4,8 @@
 
 import { z } from 'zod'
 import { defineProviderRuntime, type NativeAssistantTurn, type NativeResponseMetadata } from '../../adapter'
-import type { Message } from '../../messages'
-import type { GenerationSettings, TraceMeta } from '../../types'
+import type { Message } from '../../generation/messages'
+import type { GenerationSettings, TraceMeta } from '../../generation/types'
 
 const RUNTIME_USAGE = { inputTokens: 10, outputTokens: 20, totalTokens: 30 } as const
 

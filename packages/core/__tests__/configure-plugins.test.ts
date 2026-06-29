@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { configure } from '../configure'
-import { prompt as cruxPrompt } from '../define'
+import { configure } from '../runtime/configure'
+import { prompt as cruxPrompt } from '../prompt/prompt'
 import { resetObservabilityRuntime } from '../observability'
-import { getRuntime, resetRuntime } from '../runtime'
-import { defaultTokenizer, setTokenizer } from '../tokenizer'
-import type { CruxPlugin } from '../plugin'
+import { getRuntime, resetRuntime } from '../runtime/runtime'
+import { defaultTokenizer, setTokenizer } from '../shared/tokenizer'
+import type { CruxPlugin } from '../runtime/plugin'
 
 function makePrompt(id: string) {
   return cruxPrompt({ id, system: `Prompt ${id}` })

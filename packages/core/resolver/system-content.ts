@@ -8,8 +8,8 @@
  * @module
  */
 
-import { countTokens } from '../tokenizer'
-import type { ContextSystemContent, ContextSystemResult, ContextTextSegment } from '../types'
+import { countTokens } from '../shared/tokenizer'
+import type { ContextSystemContent, ContextSystemResult, ContextTextSegment } from '../prompt/context-types'
 import type { ResolvedSystemContent } from './contract'
 
 /** Render a prompt/system string or callback against the resolved input. */

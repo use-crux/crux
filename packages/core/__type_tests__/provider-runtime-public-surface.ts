@@ -19,8 +19,9 @@ import type {
   SingleTurnRuntimeContract,
   StructuredAttempt,
 } from '@use-crux/core/adapter'
-import type { Message } from '../messages'
-import type { AnyPrompt, ModelInfo } from '../types'
+import type { Message } from '../generation/messages'
+import type { ModelInfo } from '../types'
+import type { AnyPrompt } from '../prompt/prompt-types'
 
 interface SingleRequest {
   readonly model: string

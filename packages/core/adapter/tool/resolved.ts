@@ -8,8 +8,8 @@
  * @module
  */
 
-import type { ResolvedPrompt } from '../../types'
-import type { Message } from '../../messages'
+import type { ResolvedPrompt } from '../../resolver/types'
+import type { Message } from '../../generation/messages'
 import type { SkillActivationSession } from '../../skill/session'
 
 /**

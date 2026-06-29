@@ -145,7 +145,7 @@ export interface PlanHandle extends Plan {
     priority?: number
     mode?: 'full' | 'reference'
     renderContext?: (plan: Plan) => string
-  }): import('../types').Context<import('zod').ZodType<{}>>
+  }): import('../prompt/context-types').Context<import('zod').ZodType<{}>>
   /** Returns focused tools for plan interaction. */
   asTools(): Record<string, import('./agent').ToolDef>
 }
@@ -170,7 +170,7 @@ export interface TaskListHandle {
   asContext(options?: {
     priority?: number
     renderContext?: (tasks: Task[]) => string
-  }): import('../types').Context<import('zod').ZodType<{}>>
+  }): import('../prompt/context-types').Context<import('zod').ZodType<{}>>
   /** Returns focused tools for task list management. */
   asTools(): Record<string, import('./agent').ToolDef>
   /** Create a TaskWorker handle scoped to a specific task. */

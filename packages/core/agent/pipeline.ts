@@ -11,10 +11,10 @@
 import { isAgent } from './agent'
 import type { AnyAgent, InferAgentOutput } from './agent'
 import type { AgentExecutor, AgentResult } from './executor'
-import { getRuntime } from '../runtime'
-import { runWithExecutionContext, getExecutionContext } from '../execution-context'
-import { executeWithRetry } from '../retry'
-import type { RetryOptions } from '../retry'
+import { getRuntime } from '../runtime/runtime'
+import { runWithExecutionContext, getExecutionContext } from '../runtime/execution-context'
+import { executeWithRetry } from '../generation/retry'
+import type { RetryOptions } from '../generation/retry'
 import { observe } from '../observability'
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ export function createPipeline(executor: AgentExecutor) {
     context: TCtx
     model?: unknown
     sessionId?: string
-    validationRetry?: import('../validation-retry').ValidationRetryOptions
+    validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
     steps: [S1 & StepAt<Acc0<TCtx>>]
   }): Promise<PipelineResult<Acc1<TCtx, S1>>>
 
@@ -153,7 +153,7 @@ export function createPipeline(executor: AgentExecutor) {
     context: TCtx
     model?: unknown
     sessionId?: string
-    validationRetry?: import('../validation-retry').ValidationRetryOptions
+    validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
     steps: [S1 & StepAt<Acc0<TCtx>>, S2 & StepAt<Acc1<TCtx, S1>>]
   }): Promise<PipelineResult<Acc2<TCtx, S1, S2>>>
 
@@ -167,7 +167,7 @@ export function createPipeline(executor: AgentExecutor) {
     context: TCtx
     model?: unknown
     sessionId?: string
-    validationRetry?: import('../validation-retry').ValidationRetryOptions
+    validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
     steps: [S1 & StepAt<Acc0<TCtx>>, S2 & StepAt<Acc1<TCtx, S1>>, S3 & StepAt<Acc2<TCtx, S1, S2>>]
   }): Promise<PipelineResult<Acc3<TCtx, S1, S2, S3>>>
 
@@ -182,7 +182,7 @@ export function createPipeline(executor: AgentExecutor) {
     context: TCtx
     model?: unknown
     sessionId?: string
-    validationRetry?: import('../validation-retry').ValidationRetryOptions
+    validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
     steps: [
       S1 & StepAt<Acc0<TCtx>>,
       S2 & StepAt<Acc1<TCtx, S1>>,
@@ -203,7 +203,7 @@ export function createPipeline(executor: AgentExecutor) {
     context: TCtx
     model?: unknown
     sessionId?: string
-    validationRetry?: import('../validation-retry').ValidationRetryOptions
+    validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
     steps: [
       S1 & StepAt<Acc0<TCtx>>,
       S2 & StepAt<Acc1<TCtx, S1>>,
@@ -226,7 +226,7 @@ export function createPipeline(executor: AgentExecutor) {
     context: TCtx
     model?: unknown
     sessionId?: string
-    validationRetry?: import('../validation-retry').ValidationRetryOptions
+    validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
     steps: [
       S1 & StepAt<Acc0<TCtx>>,
       S2 & StepAt<Acc1<TCtx, S1>>,
@@ -251,7 +251,7 @@ export function createPipeline(executor: AgentExecutor) {
     context: TCtx
     model?: unknown
     sessionId?: string
-    validationRetry?: import('../validation-retry').ValidationRetryOptions
+    validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
     steps: [
       S1 & StepAt<Acc0<TCtx>>,
       S2 & StepAt<Acc1<TCtx, S1>>,
@@ -278,7 +278,7 @@ export function createPipeline(executor: AgentExecutor) {
     context: TCtx
     model?: unknown
     sessionId?: string
-    validationRetry?: import('../validation-retry').ValidationRetryOptions
+    validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
     steps: [
       S1 & StepAt<Acc0<TCtx>>,
       S2 & StepAt<Acc1<TCtx, S1>>,
@@ -307,7 +307,7 @@ export function createPipeline(executor: AgentExecutor) {
     context: TCtx
     model?: unknown
     sessionId?: string
-    validationRetry?: import('../validation-retry').ValidationRetryOptions
+    validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
     steps: [
       S1 & StepAt<Acc0<TCtx>>,
       S2 & StepAt<Acc1<TCtx, S1>>,
@@ -338,7 +338,7 @@ export function createPipeline(executor: AgentExecutor) {
     context: TCtx
     model?: unknown
     sessionId?: string
-    validationRetry?: import('../validation-retry').ValidationRetryOptions
+    validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
     steps: [
       S1 & StepAt<Acc0<TCtx>>,
       S2 & StepAt<Acc1<TCtx, S1>>,
@@ -358,7 +358,7 @@ export function createPipeline(executor: AgentExecutor) {
     context: Record<string, unknown>
     model?: unknown
     sessionId?: string
-    validationRetry?: import('../validation-retry').ValidationRetryOptions
+    validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
     steps: StepAt<Record<string, unknown>>[]
   }): Promise<PipelineResult<Record<string, unknown>>>
 
@@ -369,7 +369,7 @@ export function createPipeline(executor: AgentExecutor) {
     model?: unknown
     steps: RuntimeStep[]
     sessionId?: string
-    validationRetry?: import('../validation-retry').ValidationRetryOptions
+    validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
   }): Promise<PipelineResult<Record<string, unknown>>> {
     const { context, model, steps, sessionId, validationRetry } = options
     const runtime = getRuntime()

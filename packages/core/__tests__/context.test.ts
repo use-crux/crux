@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { context, createContexts } from '../context'
+import { context, createContexts } from '../prompt/context'
 
 describe('context()', () => {
   it('static context: systemFn returns the string', () => {

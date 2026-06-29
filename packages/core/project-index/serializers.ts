@@ -8,7 +8,9 @@
  */
 
 import { z } from 'zod'
-import type { AnyPrompt, Context, FlowToolDef } from '../types'
+import type { FlowToolDef } from '../types'
+import type { AnyPrompt } from '../prompt/prompt-types'
+import type { Context } from '../prompt/context-types'
 import type {
   PromptMeta,
   ContextMeta,
@@ -24,8 +26,8 @@ import type {
   IndexRuleDescriptor,
   IndexSourceFile,
 } from './index'
-import { getPromptDefinitionSource } from '../define'
-import { getContextDefinitionSource } from '../context'
+import { getPromptDefinitionSource } from '../prompt/prompt'
+import { getContextDefinitionSource } from '../prompt/context'
 
 /**
  * Convert a Zod schema to JSON Schema using Zod v4's static `z.toJSONSchema()`.

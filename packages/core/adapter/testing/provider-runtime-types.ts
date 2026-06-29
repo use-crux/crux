@@ -9,12 +9,13 @@
  * @module
  */
 
-import type { AnyPrompt, GenerationSettings, TraceMeta } from '../../types'
-import type { Message } from '../../messages'
+import type { AnyPrompt } from '../../prompt/prompt-types'
+import type { GenerationSettings, TraceMeta } from '../../generation/types'
+import type { Message } from '../../generation/messages'
 import type { ProviderOwnership } from '../provider-runtime'
 import type { StepObserver } from '../executor-types'
 import type { AdapterConformanceInspector } from './native-types'
-import type { ValidationRetryOptions } from '../../validation-retry'
+import type { ValidationRetryOptions } from '../../generation/validation-retry'
 
 /** Feature flags that calibrate a provider-runtime conformance run. */
 export interface ProviderRuntimeConformanceCapabilities {

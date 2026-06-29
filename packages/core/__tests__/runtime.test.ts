@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { getRuntime, setRuntime, updateRuntime, resetRuntime, type CruxRuntime } from '../runtime'
+import { getRuntime, setRuntime, updateRuntime, resetRuntime, type CruxRuntime } from '../runtime/runtime'
 
 describe('CruxRuntime', () => {
   beforeEach(() => {

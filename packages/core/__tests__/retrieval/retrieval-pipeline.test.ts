@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest'
 import { z } from 'zod'
 import type { GenerateObjectFn, GenerateTextFn } from '../../compaction/types'
 import { indexer as makeIndexer, chunker, indexingPipeline } from '../../indexing'
-import { resetRuntime, updateRuntime } from '../../runtime'
+import { resetRuntime, updateRuntime } from '../../runtime/runtime'
 import { embedding as makeEmbedding } from '../../embedding'
 import {
   compress,
@@ -67,7 +67,7 @@ describe('retrievalPipeline', () => {
   })
 
   it('can inject both context and prefixed tools from prompt use', async () => {
-    const { prompt } = await import('../../define')
+    const { prompt } = await import('../../prompt/prompt')
     const { retriever } = baseRetriever({
       launch: [hit('doc-1/a', 'Launch checklist')],
     })

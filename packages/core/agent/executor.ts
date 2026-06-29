@@ -11,7 +11,7 @@
 
 import type { AnyAgent } from './agent'
 import type { AnyModel, AnyToolSet } from '../types'
-import type { ValidationRetryOptions } from '../validation-retry'
+import type { ValidationRetryOptions } from '../generation/validation-retry'
 
 // ── Types ───────────────────────────────────────────────────────────
 

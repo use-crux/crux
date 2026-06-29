@@ -1,5 +1,5 @@
-import type { CruxPlugin, CruxPluginResult } from '../plugin'
-import type { CruxRuntime } from '../runtime'
+import type { CruxPlugin, CruxPluginResult } from '../runtime/plugin'
+import type { CruxRuntime } from '../runtime/runtime'
 import type { Constraint } from './constraint/types'
 import type { Guardrail } from './guardrail/types'
 

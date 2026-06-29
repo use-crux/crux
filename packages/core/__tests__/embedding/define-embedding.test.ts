@@ -5,7 +5,7 @@ import {
   normalizeText,
   type SparseVector,
 } from '../../embedding'
-import { resetRuntime, updateRuntime } from '../../runtime'
+import { resetRuntime, updateRuntime } from '../../runtime/runtime'
 import { inMemoryCruxStore } from '../../store'
 
 describe('embedding', () => {

@@ -14,7 +14,7 @@
  */
 
 import type { z } from 'zod'
-import type { AnyPrompt } from '../../types'
+import type { AnyPrompt } from '../../prompt/prompt-types'
 import type { Evaluation } from '../evaluate'
 import { createEvaluationInternal } from '../evaluate'
 import type { CaseContext } from '../expect'
@@ -55,10 +55,12 @@ export function lowerPromptTests(candidate: AnyPrompt): Evaluation {
   // schema (text-mode prompts validate that the output is a string).
   const validateOutput = (ctx: CaseContext<unknown, unknown, unknown, Capability>): void => {
     if (outputSchema !== undefined) {
-      ctx.expect(ctx.output).toSatisfy(
-        (output) => outputSchema.safeParse(output).success,
-        'output does not satisfy the prompt output schema',
-      )
+      ctx
+        .expect(ctx.output)
+        .toSatisfy(
+          (output) => outputSchema.safeParse(output).success,
+          'output does not satisfy the prompt output schema',
+        )
     } else {
       ctx.expect(ctx.output).toBeTypeOf('string')
     }

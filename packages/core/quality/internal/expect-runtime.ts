@@ -34,7 +34,7 @@ import type {
   CellAssertionValue,
 } from '../experiment'
 import type { StandardSchemaV1 } from '../standard-schema'
-import type { TokenUsage } from '../../types'
+import type { TokenUsage } from '../../generation/types'
 import type { CellSignals } from './signals'
 import {
   assertionValue,

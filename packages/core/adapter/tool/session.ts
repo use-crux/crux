@@ -34,21 +34,16 @@
  */
 
 import { z } from 'zod'
-import type { ResolvedPrompt } from '../../types'
-import type { Message } from '../../messages'
+import type { ResolvedPrompt } from '../../resolver/types'
+import type { Message } from '../../generation/messages'
 import type { JsonValue, ToolModelOutput } from '../../types/tool'
-import type { SystemBlock } from '../../types'
+import type { SystemBlock } from '../../resolver/types'
 import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'
-import {
-  applyToolMiddleware,
-  notifyToolApprovalResponses,
-  findToolApprovalRequests,
-  findToolApprovalDecision,
-  deniedToolModelOutput,
-} from '../../tool-middleware'
-import type { ToolMiddleware } from '../../tool-middleware'
-import { getRuntime } from '../../runtime'
-import { getExecutionContext } from '../../execution-context'
+import { applyToolMiddleware, notifyToolApprovalResponses } from '../../tools/middleware'
+import { findToolApprovalRequests, findToolApprovalDecision, deniedToolModelOutput } from '../../tools/approvals'
+import type { ToolMiddleware } from '../../tools/types'
+import { getRuntime } from '../../runtime/runtime'
+import { getExecutionContext } from '../../runtime/execution-context'
 import { observe } from '../../observability'
 import {
   instrumentToolSet,

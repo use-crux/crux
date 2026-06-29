@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { composeTools } from '../entity'
-import type { CruxEntity } from '../entity'
+import { composeTools } from '../tools/entity'
+import type { CruxEntity } from '../tools/entity'
 import type { ToolDef } from '../types/tool'
-import { context } from '../context'
+import { context } from '../prompt/context'
 
 /** Create a minimal CruxEntity stub for testing. */
 function stubEntity(id: string, tools: Record<string, ToolDef>): CruxEntity {

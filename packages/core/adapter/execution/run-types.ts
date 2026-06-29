@@ -9,12 +9,14 @@
  * @module
  */
 
-import type { AnyPrompt, GenerationSettings, ModelInfo, TraceMeta } from '../../types'
-import type { Message } from '../../messages'
-import type { ValidationRetryOptions } from '../../validation-retry'
+import type { ModelInfo } from '../../types'
+import type { AnyPrompt } from '../../prompt/prompt-types'
+import type { GenerationSettings, TraceMeta } from '../../generation/types'
+import type { Message } from '../../generation/messages'
+import type { ValidationRetryOptions } from '../../generation/validation-retry'
 import type { Constraint } from '../../safety/constraint/types'
 import type { Guardrail } from '../../safety/guardrail/types'
-import type { ToolMiddleware } from '../../tool-middleware'
+import type { ToolMiddleware } from '../../tools/types'
 import type { StreamHandle } from '../types'
 import type { ExecutorStreamHandle, StepObserver } from '../executor-types'
 import type { ApprovalRequestInfo } from '../tool/approval'

@@ -35,8 +35,8 @@ import type {
   CruxPrimitiveFamily,
   CruxPrimitiveName,
 } from '../observability/contract'
-import { getRuntime } from '../runtime'
-import { isAutoEscapeEnabled, isSecurityWarningsEnabled } from '../configure'
+import { getRuntime } from '../runtime/runtime'
+import { isAutoEscapeEnabled, isSecurityWarningsEnabled } from '../runtime/configure'
 import { resolveRegistrySkill } from '../skill/registry'
 import type { SkillMeta, SkillReference } from '../skill/types'
 import type { ResolvedSystemContent } from './contract'

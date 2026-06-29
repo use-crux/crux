@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../../define'
+import { prompt } from '../../prompt/prompt'
 import { executorAdapter } from '../../adapter'
 import { fakeExecutor } from '../../adapter/testing'
 import {

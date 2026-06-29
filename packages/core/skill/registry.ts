@@ -12,7 +12,7 @@
 import type { Skill, SkillMeta, SkillReference } from './types'
 import { SkillLoadError } from './types'
 import { getCached, setCached, DEFAULT_CACHE_TTL } from './cache'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
 import { SKILLS_SH_BASE, fetchFromCustomRegistry, fetchFromSkillsSh, type FetchedRegistrySkill } from './registry-fetch'
 import { emitRegistrySkillArtifact } from './registry-observability'

@@ -9,13 +9,14 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createToolLifecycle } from '../../../adapter/tool/session'
-import { toolMiddleware, approvalMiddleware, appendToolApprovalResponse } from '../../../tool-middleware'
+import { toolMiddleware, approvalMiddleware } from '../../../tools/middleware'
+import { appendToolApprovalResponse } from '../../../tools/approvals'
 import { createSkillActivationSession } from '../../../skill'
 import { LOAD_SKILL_TOOL_NAME } from '../../../skill/tools'
-import { updateRuntime, resetRuntime } from '../../../runtime'
+import { updateRuntime, resetRuntime } from '../../../runtime/runtime'
 import type { AdapterResponse } from '../../../adapter/types'
-import type { Message } from '../../../messages'
-import type { ResolvedPrompt } from '../../../types'
+import type { Message } from '../../../generation/messages'
+import type { ResolvedPrompt } from '../../../resolver/types'
 
 function resolvedWith(partial: Partial<ResolvedPrompt>): ResolvedPrompt {
   return { settings: {}, ...partial } as ResolvedPrompt

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createSemanticCache } from '../../cache'
-import { prompt as makePrompt } from '../../define'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import { embedding, embeddingCache } from '../../embedding'
 import {
   createInMemoryObservabilityTransport,
@@ -9,9 +9,9 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { orchestrateGenerate } from '../../orchestrate'
-import { applyPlugins } from '../../plugin'
-import { getRuntime, resetRuntime, setRuntime } from '../../runtime'
+import { orchestrateGenerate } from '../../generation/orchestrate'
+import { applyPlugins } from '../../runtime/plugin'
+import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
 import { inMemoryCruxStore } from '../../store'
 
 function install(plugin: ReturnType<typeof createSemanticCache>) {

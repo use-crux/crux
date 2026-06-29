@@ -10,7 +10,7 @@
  */
 
 import { z } from 'zod'
-import type { ContextEntry } from '../types'
+import type { ContextEntry } from '../prompt/context-types'
 import { collectSchemaContributions } from './lower'
 
 /** Result shape returned by Zod's `safeParse` for resolve-time validation. */

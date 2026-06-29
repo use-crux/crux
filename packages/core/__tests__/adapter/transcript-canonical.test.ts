@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import {
   appendCanonicalToolRound,
   createToolResultEncodingHelpers,

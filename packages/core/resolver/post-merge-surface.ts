@@ -10,7 +10,9 @@
  */
 
 import type { z } from 'zod'
-import type { AnyToolSet, BlackboardEntry, Context, ExcludedContext, MemoryEntry, SkillEntry } from '../types'
+import type { AnyToolSet } from '../types'
+import type { BlackboardEntry, Context, MemoryEntry, SkillEntry } from '../prompt/context-types'
+import type { ExcludedContext } from './types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { MergedResolution } from './contract'

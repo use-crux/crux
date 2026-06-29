@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { resetRuntime, updateRuntime } from '../runtime'
+import { resetRuntime, updateRuntime } from '../runtime/runtime'
 import { flow as makeFlow } from '../flow/scope'
 
 describe('flow instrumentation hooks', () => {

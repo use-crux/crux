@@ -12,9 +12,9 @@
  */
 
 import { z } from 'zod'
-import { prompt } from '../define'
-import { context } from '../context'
-import { config } from '../config'
+import { prompt } from '../prompt/prompt'
+import { context } from '../prompt/context'
+import { config } from '../runtime/config'
 import { agent } from '../agent/agent'
 import { flow } from '../flow/scope'
 import { retriever } from '../retrieval'

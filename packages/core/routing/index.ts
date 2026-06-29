@@ -22,8 +22,8 @@ export type {
   CascadeTierDetail,
 } from './cascade'
 
-export { fallback, isFallback } from '../fallback'
-export type { FallbackModel, FallbackOptions, FallbackMeta, FallbackAttemptDetail } from '../fallback'
+export { fallback, isFallback } from '../generation/fallback'
+export type { FallbackModel, FallbackOptions, FallbackMeta, FallbackAttemptDetail } from '../generation/fallback'
 
 export { resolveModel } from './resolve'
 export type { RouterMeta } from './resolve'

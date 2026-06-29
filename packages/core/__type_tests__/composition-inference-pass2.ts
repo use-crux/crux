@@ -8,8 +8,8 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../define'
-import { context } from '../context'
+import { prompt } from '../prompt/prompt'
+import { context } from '../prompt/context'
 import { agent } from '../agent/agent'
 import type { AnyAgent } from '../agent/agent'
 import { createParallel } from '../agent/parallel'

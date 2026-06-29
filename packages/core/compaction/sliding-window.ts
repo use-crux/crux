@@ -8,12 +8,12 @@
  * @module
  */
 
-import type { Message } from '../messages'
+import type { Message } from '../generation/messages'
 import type { SlidingWindowConfig, SlidingWindow, SlidingWindowStats } from './types'
 import { inMemoryCruxStore } from '../store/memory'
-import { countTokens } from '../tokenizer'
+import { countTokens } from '../shared/tokenizer'
 import { summarizeMessages } from './summarize'
-import { getRuntime } from '../runtime'
+import { getRuntime } from '../runtime/runtime'
 
 /**
  * Create a stateful sliding window compaction manager.

@@ -12,20 +12,22 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { z } from 'zod'
-import { compilePrompt, type ResolveCallOptions } from '../resolve'
-import { context, when, match } from '../context'
-import { injectable } from '../injectable'
+import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
+import { context, when, match } from '../prompt/context'
+import { injectable } from '../prompt/injectable'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../observability'
-import { updateRuntime, resetRuntime } from '../runtime'
-import { setTokenizer, defaultTokenizer } from '../tokenizer'
+import { updateRuntime, resetRuntime } from '../runtime/runtime'
+import { setTokenizer, defaultTokenizer } from '../shared/tokenizer'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
-import type { MemoryEntry, BlackboardEntry, SkillEntry, PromptConfig, AnyToolSet, ContextEntry } from '../types'
+import type { AnyToolSet } from '../types'
+import type { MemoryEntry, BlackboardEntry, SkillEntry, ContextEntry } from '../prompt/context-types'
+import type { PromptConfig } from '../prompt/prompt-types'
 
 afterEach(() => {
   setTokenizer(defaultTokenizer)

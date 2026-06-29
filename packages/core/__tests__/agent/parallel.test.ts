@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../define'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import { agent as makeAgent } from '../../agent/agent'
 import { createParallel } from '../../agent/parallel'
 import { createFakeAgentExecutor } from '../../agent/fakes'
@@ -176,7 +176,7 @@ describe('parallel: named results with seed context', () => {
 
   it('emits composition events', async () => {
     const events: Array<{ type: string }> = []
-    const { setRuntime, resetRuntime } = await import('../../runtime')
+    const { setRuntime, resetRuntime } = await import('../../runtime/runtime')
     setRuntime({
       instrumentationHooks: {
         onCompositionStart: () => events.push({ type: 'start' }),

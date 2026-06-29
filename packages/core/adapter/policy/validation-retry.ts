@@ -11,7 +11,7 @@
  */
 
 import { z } from 'zod'
-import { repairJsonText } from '../../repair-json'
+import { repairJsonText } from '../../generation/repair-json'
 
 /** Result of validating structured output against a Zod schema. */
 export interface ValidationResult {

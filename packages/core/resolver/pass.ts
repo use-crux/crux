@@ -9,10 +9,13 @@
  */
 
 import type { z } from 'zod'
-import type { AnyToolSet, AnyMessage, AnyPromptConfig, ContextEntry, ModelInfo, ResolvedPrompt } from '../types'
+import type { AnyToolSet, AnyMessage, ModelInfo } from '../types'
+import type { AnyPromptConfig } from '../prompt/prompt-types'
+import type { ContextEntry } from '../prompt/context-types'
+import type { ResolvedPrompt } from './types'
 import { LOAD_REFERENCE_TOOL_NAME, LOAD_SKILL_TOOL_NAME } from '../skill/tools'
-import { countTokens } from '../tokenizer'
-import { detectSuspiciousPatterns, escapeXml } from '../sanitize'
+import { countTokens } from '../shared/tokenizer'
+import { detectSuspiciousPatterns, escapeXml } from '../shared/sanitize'
 import { resolveUse } from './driver'
 import { guardInputs } from './input-guard'
 import { assertNoObjectMessageContent, assertNoObjectPromptText } from './pass-guards'

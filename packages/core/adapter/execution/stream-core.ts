@@ -9,9 +9,9 @@
  * @module
  */
 
-import type { MiddlewareResult } from '../../types'
+import type { MiddlewareResult } from '../../runtime/types'
 import { createSafety } from '../../safety/session'
-import { orchestrateStream } from '../../orchestrate'
+import { orchestrateStream } from '../../generation/orchestrate'
 import type { CallArgs, StreamHandle } from '../types'
 import { createToolLifecycle } from '../tool/session'
 import type { AdapterExecutionStreamArgs, CoreStepDialect } from './types'

@@ -9,7 +9,8 @@
  */
 
 import type { z } from 'zod'
-import type { AnyToolSet, BlackboardEntry, Context } from '../types'
+import type { AnyToolSet } from '../types'
+import type { BlackboardEntry, Context } from '../prompt/context-types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 

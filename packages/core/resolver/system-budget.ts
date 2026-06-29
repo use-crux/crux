@@ -8,7 +8,8 @@
  * @module
  */
 
-import type { ContextTextSegment, DroppedContext, InspectPart } from '../types'
+import type { ContextTextSegment } from '../prompt/context-types'
+import type { DroppedContext, InspectPart } from './types'
 import type {
   CruxArtifactId,
   CruxContextContributionPreview,

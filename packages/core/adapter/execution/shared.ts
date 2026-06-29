@@ -9,7 +9,8 @@
  * @module
  */
 
-import type { AnyPrompt, GenerationSettings } from '../../types'
+import type { AnyPrompt } from '../../prompt/prompt-types'
+import type { GenerationSettings } from '../../generation/types'
 import type { SkillActivationSession } from '../../skill/session'
 import type { StepDirective } from '../executor-types'
 import type { ExecutionResolveOpts } from './types'

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { getRuntime, updateRuntime, resetRuntime } from '../runtime'
+import { getRuntime, updateRuntime, resetRuntime } from '../runtime/runtime'
 
 // Clean up all global state after each test
 afterEach(() => {

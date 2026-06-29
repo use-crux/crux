@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
 import { delegate as cruxDelegate } from '../../agent/delegate'
 import { handoff as makeHandoff } from '../../agent/handoff'
-import { updateRuntime, resetRuntime } from '../../runtime'
+import { updateRuntime, resetRuntime } from '../../runtime/runtime'
 
 const inputSchema = z.object({
   synthesis: z.string(),

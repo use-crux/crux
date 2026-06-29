@@ -48,21 +48,92 @@ Default mounts are `/workspace` and `/outputs`. Optional `/sources` mounts are c
 
 Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOperation` hooks. Devtools can show workspace ids, namespaces, paths, operations, and file metadata from the protocol stream; OTel receives only privacy-safe attributes such as workspace id, operation, MIME type, size, status, and path hash.
 
+## Package Structure Policy
+
+`@use-crux/core` is a **package-root source package**: the package root is the public source
+root, and domain folders own implementation depth. Core is not migrating to a `src/` layout —
+most Crux TypeScript packages publish from package root, and `scripts/stage-npm-packages.mjs`
+maps Core with `sourceRoot: '.'`.
+
+The rules:
+
+- **Package root = public source root.** Keep only public entrypoints/shims and project files at
+  `packages/core/`: `index.ts` (the main barrel), `package.json`, `tsconfig.json`,
+  `vitest.config.ts`, docs/legal files, and root compatibility shims that exist solely to preserve
+  an existing `package.json` subpath (for example `./tools` and `./tool-middleware`).
+- **Domain folders own implementation.** Product domains — `prompt/`, `resolver/`, `runtime/`,
+  `generation/`, `tools/`, `shared/`, plus the existing `adapter/`, `agent/`, `safety/`,
+  `quality/`, `observability/`, `retrieval/`, `indexing/`, `memory/`, and the rest — hold the real
+  code behind curated domain barrels. New root *implementation* files are not added.
+- **Curated barrels, not dumping grounds.** Each domain `index.ts` is a curated barrel or public
+  entrypoint, never substantial implementation. Avoid broad `export *` over internals, and put
+  implementation that is not a stable intra-package contract under a domain-local `internal/`
+  folder. Do not add a package-wide `packages/core/internal/`.
+- **Provider-agnostic.** Core must not depend on provider SDKs, React, Convex, or app packages;
+  provider packages depend on Core, never the reverse.
+- **Public contract is verified through imports, not file paths.** Behavior and inference are
+  pinned through the published `@use-crux/core` barrel and its subpaths
+  (`__tests__/public-import-surface.test.ts` at runtime, `__type_tests__/public-root-imports.ts`
+  under `tsc`). Implementation files stay free to move between domains as long as those public
+  imports keep resolving and keep their documented shape.
+
+The Module Map below reflects the completed package structure: the package root holds only
+`index.ts`, the base `types.ts`, project/config files, and the two `./tools` / `./tool-middleware`
+compatibility shims, while every implementation lives in a domain folder.
+
 ## Module Map
 
 ```
 @use-crux/core
-├── define.ts           prompt() — public .resolve()/.inspect() wrapper over compilePrompt()
-├── context.ts          Context class, createContexts()
-├── prompts-tree.ts     createPrompts() — tree builder
-├── plugin.ts           CruxPlugin interface, mergeRuntime(), applyPlugins()
-├── configure.ts        configure() — registry, globals, plugin processing
-├── resolve.ts          compilePrompt() — public prompt compiler entrypoint
-├── resolver/           prompt-resolution pass internals — schema, ports, system composition, token dropping
-├── tools.ts            SDK-agnostic tool() helper and ToolDef re-exports
-├── tokenizer.ts        Pluggable token counter (default: chars/4)
-├── runtime.ts          CruxRuntime — single object for all global hooks/reporters (getRuntime/setRuntime)
-├── middleware.ts        Hook type definitions (PromptMiddleware, InstrumentationHooks, etc.)
+├── index.ts            Main public barrel — curated re-exports of every domain's public surface
+├── types.ts            SDK-agnostic base contracts only: AnyModel/AnyToolSet/AnyMessage, FlowToolDef, ModelInfo
+├── tools.ts            Compatibility shim for the ./tools subpath (re-exports tools/define-tool + tool types)
+├── tool-middleware.ts  Compatibility shim for the ./tool-middleware subpath (re-exports tools/middleware + tools/approvals)
+├── prompt/             Prompt + context authoring domain
+│   ├── index.ts        Curated barrel: prompt(), context(), createPrompts(), createContexts(), when(), match(), contributor(), injectable() + authoring types
+│   ├── prompt.ts       prompt() — public .resolve()/.inspect() wrapper over compilePrompt(); prompt definition-source capture
+│   ├── context.ts      context(), createContexts(), when(), match(); Context definition-source capture
+│   ├── prompts-tree.ts createPrompts() — nested prompt tree builder
+│   ├── contributor.ts  contributor() authoring + lowering-facing contract
+│   ├── injectable.ts   injectable() authoring primitive
+│   ├── context-types.ts  Context/use-entry authoring types (Context, ContextEntry, PromptInjection, InjectableEntry, MemoryEntry, …)
+│   ├── prompt-types.ts   prompt() config/instance/hooks/result + semantic-cache intent types
+│   ├── type-utils.ts     Prompt/context inference helpers (Simplify, DeepReadonly, MergeContextInputs, MergedInput)
+│   └── types.ts          Curated type barrel over context-types + prompt-types
+├── resolver/           Prompt compilation + resolution internals (single compile boundary)
+│   ├── compile.ts      compilePrompt() — THE public prompt compiler entrypoint
+│   ├── types.ts        Resolution/inspection output contracts (ResolvedPrompt, ResolveOptions, SystemBlock, InspectResult, DroppedContext, …)
+│   ├── ports.ts / fakes.ts   Resolver ports + in-memory fakes (deterministic test seams)
+│   ├── contract.ts     CONTRIBUTOR contract + lowered contributor contract types
+│   └── pass / lower / driver / schema / system-* / budget   resolution pass, system composition, token dropping
+├── runtime/            Process runtime, config, plugins, middleware hooks, execution context
+│   ├── index.ts        Curated barrel: config(), runtime store, plugins, hook types, execution context
+│   ├── config.ts / config-types.ts   config() + CruxConfig shape
+│   ├── configure.ts / configure-registry.ts   configure() registry build + global security flags
+│   ├── runtime.ts      CruxRuntime — global hooks/reporters (getRuntime/setRuntime/updateRuntime/resetRuntime)
+│   ├── plugin.ts / merge-runtime.ts   CruxPlugin, applyPlugins(), mergeRuntime() layered composition
+│   ├── middleware.ts / instrumentation-hooks.ts   per-call hook function types + the InstrumentationHooks contract
+│   ├── execution-context.ts   session/execution context helpers
+│   └── types.ts        Runtime middleware contracts (PromptMiddleware, PromptMiddlewareArgs, MiddlewareResult)
+├── generation/         Provider-neutral generation lifecycle policy
+│   ├── index.ts        Curated barrel: messages, fallback, retry, validation-retry, JSON repair + @internal orchestration
+│   ├── orchestrate.ts  Shared adapter orchestration (generic OrchestrationSpec<T>) split across observability/result-meta/fallback-loop/attempt-timeout/stream-interception concern files
+│   ├── fallback.ts / retry.ts / validation-retry.ts   fallback policy, retry-with-backoff, validation-feedback retry types
+│   ├── repair-json.ts  repairJsonText() — zero-cost JSON text repair (markdown fences, trailing commas, bracket extraction)
+│   ├── messages.ts     canonical Message type + helpers
+│   └── types.ts        Generation policy types (GenerationSettings, PromptAdaptation, AdapterMap, TokenUsage, TraceMeta)
+├── tools/              SDK-agnostic tool authoring, tool middleware, approval helpers
+│   ├── index.ts        Curated barrel (leaf-consumer entrypoint; domains import specific tools/<file> to stay cycle-free)
+│   ├── define-tool.ts  tool() — SDK-agnostic tool factory
+│   ├── middleware.ts   toolMiddleware(), approvalMiddleware(), applyToolMiddleware() + module-level approval registry state
+│   ├── approvals.ts    resumable approval message protocol helpers
+│   ├── entity.ts       composeTools(), CruxEntity (asTools()/asContext())
+│   ├── types.ts        tool + middleware/approval public types
+│   └── internal/       private message parsers + stateless middleware helpers
+├── shared/             Genuinely cross-domain, provider-agnostic utilities (kept small)
+│   ├── sanitize.ts     Injection-defense helpers (escapeXml, safe, raw, limit, wrap, userContent, truncate)
+│   ├── tokenizer.ts    Pluggable token counter (countTokens/setTokenizer; default chars/4)
+│   └── schema-compat.ts  sanitizeJsonSchema() — provider JSON-schema sanitization (@internal)
 ├── observability/
 │   ├── index.ts        Barrel: canonical graph contract, schemas, ID helpers, observe runtime, transports
 │   ├── contract.ts     Run, Span, SpanEvent, Edge, Artifact, RunDetail, and realtime notification types; branded IDs; taxonomies
@@ -73,9 +144,6 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │   ├── transport.ts    Transport interface plus in-memory and HTTP graph transports
 │   ├── devtools.ts     withDevtools() plugin + enableDevtools() — installs the canonical observability transport
 │   └── fixtures/       Shared TS/Go contract fixtures
-├── tool-middleware.ts   ToolMiddleware, approvalMiddleware(), resumable approval helpers
-├── orchestrate.ts      Shared adapter orchestration — generic OrchestrationSpec<T>, typed generate/stream/fallback/stream-wrap
-├── messages.ts         Message type + helpers
 ├── routing/
 │   ├── index.ts        Barrel: router(), cascade(), resolveModel(), error types
 │   ├── router.ts       router() — classifier-based model selection with .select()/.with()
@@ -154,9 +222,6 @@ Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOper
 │   ├── consensus.ts    createConsensus() — voting with quorum validation (built on parallel)
 │   ├── swarm.ts        createSwarm() — peer-to-peer routing via LLM-decided transfer tools
 │   ├── create-compositions.ts  createCompositions(executor) — factory for adapter-bound utilities
-├── retry.ts           executeWithRetry() — shared retry with backoff + fallback (used by flows + compositions)
-├── validation-retry.ts  ValidationExhaustedError, ValidationRetryOptions — validation-feedback retry types
-├── repair-json.ts     repairJsonText() — zero-cost JSON text repair (markdown fences, trailing commas, bracket extraction)
 │   ├── blackboard.ts   blackboard() — shared typed scratchpad, per-field validation
 │   ├── handoff.ts      handoff() — schema-validated inter-agent context transfer
 │   └── delegate.ts     delegate() — handoff + subagent execution as callable tool
@@ -575,7 +640,7 @@ Return result to caller
 
 ### Hook Types
 
-All global hooks live in the `CruxRuntime` object (`runtime.ts`). Use `setRuntime()` to install atomically, `getRuntime()` to read:
+All global hooks live in the `CruxRuntime` object (`runtime/runtime.ts`). Use `setRuntime()` to install atomically, `getRuntime()` to read:
 
 | Hook                   | Scope          | Runtime field                       | Purpose                                               |
 | ---------------------- | -------------- | ----------------------------------- | ----------------------------------------------------- |
@@ -589,7 +654,7 @@ All global hooks live in the `CruxRuntime` object (`runtime.ts`). Use `setRuntim
 | `onGenerate`           | Single prompt  | `prompt({ hooks: { onGenerate } })` | After successful generation                           |
 | `onError`              | Single prompt  | `prompt({ hooks: { onError } })`    | After failed generation                               |
 
-### Plugin System (`plugin.ts`)
+### Plugin System (`runtime/plugin.ts`)
 
 The plugin system enables composable hook installation. Three key functions:
 
@@ -1338,7 +1403,7 @@ The indexer treats model-routing definitions as authored architecture, separate 
 
 This keeps adapters type-honest across router/fallback dispatch without resorting to `any` at composition boundaries. Where the SDK's own types are intentionally inaccessible (Convex `FunctionReference` triggering `TS2589`, AI SDK alt-form discriminated unions that reject `Record<string, unknown>` spreads), each `any` carries an `eslint-disable-next-line` with a one-line rationale.
 
-### Shared Orchestration (`orchestrate.ts`)
+### Shared Orchestration (`generation/orchestrate.ts`)
 
 Five functions extracted from adapter duplication, exported as `@internal`. `OrchestrationSpec<TPreparedArgs>` is generic over the prepared args type, enabling typed `generate`/`stream` signatures per adapter:
 

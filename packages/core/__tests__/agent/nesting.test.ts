@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../define'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import { agent as makeAgent } from '../../agent/agent'
 import { createParallel } from '../../agent/parallel'
 import { createPipeline } from '../../agent/pipeline'
@@ -11,8 +11,8 @@ import { createFakeAgentExecutor } from '../../agent/fakes'
 // one-off shape the shared fake can't model (see SCRATCHPAD); it keeps a
 // bespoke inline executor and reads the ambient context directly.
 import type { AgentExecutor } from '../../agent/executor'
-import { getExecutionContext } from '../../execution-context'
-import type { ExecutionContext } from '../../execution-context'
+import { getExecutionContext } from '../../runtime/execution-context'
+import type { ExecutionContext } from '../../runtime/execution-context'
 
 // ── Test helpers ──────────────────────────────────────────────────
 

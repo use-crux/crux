@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { resetRuntime, getRuntime } from '../runtime'
+import { resetRuntime, getRuntime } from '../runtime/runtime'
 import { withDevtools, enableDevtools } from '../observability'
-import { configure } from '../configure'
-import { prompt as cruxPrompt } from '../define'
+import { configure } from '../runtime/configure'
+import { prompt as cruxPrompt } from '../prompt/prompt'
 import { observe, resetObservabilityRuntime } from '../observability'
-import type { CruxPlugin } from '../plugin'
+import type { CruxPlugin } from '../runtime/plugin'
 
 function makePrompt(id: string) {
   return cruxPrompt({ id, system: `Prompt ${id}` })

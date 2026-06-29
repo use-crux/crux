@@ -10,9 +10,9 @@ import { createSafety, ConstraintViolationError, GuardrailBlockedError, createSa
 import type { SafetyCallOptions, SafetyOutput } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
-import { updateRuntime, resetRuntime, getRuntime } from '../../runtime'
-import { applyPlugins } from '../../plugin'
-import type { Message } from '../../messages'
+import { updateRuntime, resetRuntime, getRuntime } from '../../runtime/runtime'
+import { applyPlugins } from '../../runtime/plugin'
+import type { Message } from '../../generation/messages'
 
 afterEach(() => {
   resetRuntime()

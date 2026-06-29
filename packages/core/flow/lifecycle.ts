@@ -8,7 +8,7 @@
  * @module
  */
 
-import { getRuntime, resolveStore } from '../runtime'
+import { getRuntime, resolveStore } from '../runtime/runtime'
 import type { JsonObject } from '../store/types'
 import type { FlowSnapshot, ListFlowsOptions, FlowSummary } from './types'
 

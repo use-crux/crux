@@ -15,7 +15,7 @@ import type { ConstraintContext } from '../../safety/constraint'
 import { constraint } from '../../safety/constraint'
 import { createSafety } from '../../safety/session'
 import type { SafetyOutput } from '../../safety/session'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import type { GenerateObjectFn } from '../../compaction/types'
 
 // ── Helpers ────────────────────────────────────────────────────────

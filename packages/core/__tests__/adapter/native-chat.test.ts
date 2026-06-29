@@ -15,7 +15,7 @@ import type {
 import { defineNativeChatProvider } from '../../adapter/native-chat'
 import type { NativeAssistantTurn, NativeProviderPort, NativeResponseMetadata } from '../../adapter/native-chat'
 import type { CallArgs } from '../../adapter/types'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 
 interface NativeTestProviderMessage {
   readonly role: Message['role']

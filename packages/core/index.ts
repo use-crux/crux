@@ -53,15 +53,18 @@
  * @module
  */
 
-// Core definition API
-export { prompt } from './define'
-export { context, createContexts, when, match } from './context'
-export { injectable } from './injectable'
-export { contributor, isContributorEntry } from './contributor'
-export type { ContributorConfig } from './contributor'
-export type { ContributorContribution, ContributorEntry } from './types'
-export { compilePrompt } from './resolve'
-export type { CompiledPrompt, CompilePromptOptions, PromptResolution, Resolution, ResolveCallOptions } from './resolve'
+// Core definition API (prompt authoring domain)
+export { prompt, context, createContexts, when, match, injectable, contributor, isContributorEntry } from './prompt'
+export type { ContributorConfig } from './prompt'
+export type { ContributorContribution, ContributorEntry } from './prompt'
+export { compilePrompt } from './resolver/compile'
+export type {
+  CompiledPrompt,
+  CompilePromptOptions,
+  PromptResolution,
+  Resolution,
+  ResolveCallOptions,
+} from './resolver/compile'
 // In-memory fakes for every resolver port — the same deterministic seams the
 // core test suite uses, for SDK consumers testing resolution without global
 // runtime/observability setup.
@@ -125,7 +128,7 @@ export type {
 } from './resolver/contract'
 export { workspace, memoryWorkspaceBlobStore, workspaceToolNames } from './workspace'
 export { inMemoryBlobStore, inMemoryDataStore, inMemoryStorage, inMemoryVectorStore, storage } from './storage'
-export type { ContextTreeResult } from './context'
+export type { ContextTreeResult } from './prompt'
 export type {
   Workspace,
   WorkspaceBlobReadResult,
@@ -151,13 +154,13 @@ export type {
   VectorRecord,
   VectorStore,
 } from './storage'
-export { createPrompts } from './prompts-tree'
-export type { PromptTree, PromptTreeResult } from './prompts-tree'
-export { tool } from './tools'
-export type { NamedToolDef, ToolConfig } from './tools'
+export { createPrompts } from './prompt'
+export type { PromptTree, PromptTreeResult } from './prompt'
+export { tool } from './tools/define-tool'
+export type { NamedToolDef, ToolConfig } from './tools/types'
 
-// Configuration
-export { config } from './config'
+// Configuration + runtime domain (runtime/config/plugin/hook surface)
+export { config } from './runtime'
 export type {
   CruxConfig,
   Crux,
@@ -177,12 +180,12 @@ export type {
   CruxLintSelectedProfile,
   CruxObservabilityConfig,
   CruxPersistenceConfig,
-} from './config'
+} from './runtime'
 export type { QualityConfig } from './quality/config'
-export type { PromptRegistry } from './configure'
+export type { PromptRegistry } from './runtime'
 
-export { withSession, createSessionId, getExecutionContext, runWithExecutionContext } from './execution-context'
-export type { ExecutionContext } from './execution-context'
+export { withSession, createSessionId, getExecutionContext, runWithExecutionContext } from './runtime'
+export type { ExecutionContext } from './runtime'
 export {
   flow,
   createFlowId,
@@ -207,24 +210,23 @@ export type {
 } from './flow/scope'
 
 // Tokenizer
-export { setTokenizer, countTokens } from './tokenizer'
+export { setTokenizer, countTokens } from './shared/tokenizer'
 
 // Plugin system
-export { mergeRuntime, applyPlugins } from './plugin'
-export type { CruxPlugin, CruxPluginResult, ApplyPluginsResult } from './plugin'
+export { mergeRuntime, applyPlugins } from './runtime'
+export type { CruxPlugin, CruxPluginResult, ApplyPluginsResult } from './runtime'
 
 // Hook types — needed by plugin authors
-export type { InstrumentationHooks } from './middleware'
+export type { InstrumentationHooks } from './runtime'
+export { toolMiddleware, approvalMiddleware } from './tools/middleware'
 export {
-  toolMiddleware,
-  approvalMiddleware,
   toolApprovalResponse,
   toolApprovalResponseMessage,
   appendToolApprovalResponse,
   findToolApprovalRequests,
   findToolApprovalDecision,
   deniedToolModelOutput,
-} from './tool-middleware'
+} from './tools/approvals'
 export type {
   ToolApprovalDecision,
   ToolApprovalDecisionEvent,
@@ -244,30 +246,31 @@ export type {
   ToolMiddlewareNext,
   ToolResultContext,
   ApprovalMiddlewareConfig,
-} from './tool-middleware'
+} from './tools/types'
 
 // Runtime hooks — prefer `config()` for centralized setup
 export { getRuntime, setRuntime, updateRuntime, resetRuntime, resolveStore } from './runtime'
 export type { CruxRuntime } from './runtime'
+export type { PromptMiddleware, PromptMiddlewareArgs } from './runtime'
 
 // Canonical observability graph contract.
 export * from './observability'
 
-// Canonical message type
-export type { Message, CompactionResult } from './messages'
+// Canonical message type (generation lifecycle domain)
+export type { Message, CompactionResult } from './generation'
 
-// Fallback
-export { fallback, isFallback, classifyError, shouldAttemptFallback } from './fallback'
-export type { FallbackModel, FallbackOptions, FallbackMeta, FallbackAttemptDetail, ErrorCategory } from './fallback'
+// Fallback (generation lifecycle domain)
+export { fallback, isFallback, classifyError, shouldAttemptFallback } from './generation'
+export type { FallbackModel, FallbackOptions, FallbackMeta, FallbackAttemptDetail, ErrorCategory } from './generation'
 
-// Validation Retry
-export { ValidationExhaustedError, isValidationExhaustedError } from './validation-retry'
-export type { ValidationRetryOptions, ValidationExhaustedErrorInit } from './validation-retry'
-export { repairJsonText } from './repair-json'
+// Validation Retry (generation lifecycle domain)
+export { ValidationExhaustedError, isValidationExhaustedError } from './generation'
+export type { ValidationRetryOptions, ValidationExhaustedErrorInit } from './generation'
+export { repairJsonText } from './generation'
 
 // Sanitization
-export { escapeXml, truncate, userContent, safe, raw, limit, wrap } from './sanitize'
-export type { SuspiciousPatternWarning } from './sanitize'
+export { escapeXml, truncate, userContent, safe, raw, limit, wrap } from './shared/sanitize'
+export type { SuspiciousPatternWarning } from './shared/sanitize'
 
 // Guardrail
 export { guardrail, isGuardrail, GuardrailBlockedError } from './safety/guardrail'
@@ -291,12 +294,8 @@ export type { Safety, SafetyCallOptions, SafetyOutput, SafetyStream, SafetyProto
 export { createSafetyPlugin } from './safety/plugin'
 export type { SafetyPolicy } from './safety/plugin'
 
-// Type exports
+// Type exports — prompt authoring domain
 export type {
-  // Base types
-  AnyModel,
-  AnyToolSet,
-  AnyMessage,
   PromptInjection,
   InjectableEntry,
   // Context
@@ -316,38 +315,43 @@ export type {
   AnyPrompt,
   PromptConfig,
   PromptInputArg,
-  // Resolution
-  ResolvedPrompt,
-  ResolveOptions,
-  SystemBlock,
-  // Settings & adaptation
-  GenerationSettings,
-  PromptAdaptation,
-  AdapterMap,
   // Input merging
   MergedInput,
   MergeContextInputs,
   Simplify,
-  // Hooks & middleware
+  // Hooks
   PromptHooks,
   PrepareHookArgs,
   GenerateHookArgs,
   ErrorHookArgs,
-  PromptMiddlewareArgs,
-  PromptMiddleware,
-  // Inspection
+} from './prompt'
+
+// Type exports — provider-neutral base surface (owned by the root type module)
+export type {
+  // Base types
+  AnyModel,
+  AnyToolSet,
+  AnyMessage,
+  // Model info
+  ModelInfo,
+  // Project tool catalog
+  FlowToolDef,
+} from './types'
+
+// Type exports — prompt resolution + inspection output (resolver domain)
+export type {
+  ResolvedPrompt,
+  ResolveOptions,
+  SystemBlock,
   InspectResult,
   InspectPart,
   DroppedContext,
   ExcludedContext,
-  // Model info
-  ModelInfo,
-  TokenUsage,
-  TraceMeta,
-  // Project tool catalog
-  FlowToolDef,
-} from './types'
-export type { TokenizerFn } from './tokenizer'
+} from './resolver/types'
+
+// Type exports — generation lifecycle domain (settings, adaptation, usage)
+export type { GenerationSettings, PromptAdaptation, AdapterMap, TokenUsage, TraceMeta } from './generation'
+export type { TokenizerFn } from './shared/tokenizer'
 
 // Store
 export { inMemoryCruxStore } from './store/memory'
@@ -389,8 +393,8 @@ export type {
 } from './memory'
 
 // Entity interface
-export { composeTools } from './entity'
-export type { CruxEntity, QueryableCruxEntity } from './entity'
+export { composeTools } from './tools/entity'
+export type { CruxEntity, QueryableCruxEntity } from './tools/entity'
 
 // Retrieval
 export {
@@ -461,13 +465,13 @@ export type {
   SourceStatus,
 } from './indexing'
 
-// Semantic response cache
+// Semantic response cache (prompt-level cache intent)
 export type {
   SemanticCacheMode,
   SemanticCachePromptOptions,
   PromptCacheOptions,
   SemanticCacheQueryContext,
-} from './types'
+} from './prompt'
 
 // Cost tracking
 export { CostLimitError, modelPricing, withCostTracking } from './cost'
@@ -512,15 +516,15 @@ export type {
 } from './plan/types'
 
 // Adapter internals — used by @use-crux/ai, @use-crux/openai, @use-crux/google, @use-crux/convex
-/** @internal */ export { sanitizeJsonSchema } from './schema-compat'
+/** @internal */ export { sanitizeJsonSchema } from './shared/schema-compat'
 /** @internal */ export {
   orchestrateGenerate,
   orchestrateStream,
   executeFallbackLoop,
   withAttemptTimeout,
   wrapStreamIterable,
-} from './orchestrate'
-/** @internal */ export type { OrchestrationSpec, TextDeltaExtractor } from './orchestrate'
+} from './generation'
+/** @internal */ export type { OrchestrationSpec, TextDeltaExtractor } from './generation'
 
 // Provider adapter abstraction (also available as @use-crux/core/adapter subpath)
 export { adapter } from './adapter/define-adapter'

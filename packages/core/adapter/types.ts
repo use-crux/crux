@@ -8,8 +8,9 @@
  */
 
 import type { z } from 'zod'
-import type { TraceMeta, GenerationSettings, SystemBlock } from '../types'
-import type { Message } from '../messages'
+import type { TraceMeta, GenerationSettings } from '../generation/types'
+import type { SystemBlock } from '../resolver/types'
+import type { Message } from '../generation/messages'
 import type { ToolModelOutput } from '../types/tool'
 
 // ─────────────────────────────────────────────────────────────────

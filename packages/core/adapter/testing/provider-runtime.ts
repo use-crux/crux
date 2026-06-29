@@ -11,8 +11,8 @@
  */
 
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../define'
-import { appendToolApprovalResponse } from '../../tool-middleware'
+import { prompt as makePrompt } from '../../prompt/prompt'
+import { appendToolApprovalResponse } from '../../tools/approvals'
 import type { DefinedProviderRuntime, ProviderRuntimeDepsArg } from '../provider-runtime'
 import type { ConformanceViolation } from '../testing'
 import type {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { summarizeMessages, formatTranscript } from '../../compaction/summarize'
-import type { Message } from '../../messages'
+import type { Message } from '../../generation/messages'
 import type { GenerateTextFn } from '../../compaction/types'
 
 const sampleMessages: Message[] = [

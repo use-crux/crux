@@ -12,7 +12,7 @@
 
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../define'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import { agent as makeAgent } from '../../agent/agent'
 import { createParallel } from '../../agent/parallel'
 import { createPipeline } from '../../agent/pipeline'
@@ -21,7 +21,7 @@ import { createSwarm } from '../../agent/swarm'
 import { createFakeAgentExecutor } from '../../agent/fakes'
 import { createFakeAgentExecutor as fromAgentBarrel } from '../../agent'
 import { createFakeAgentExecutor as fromPackageRoot } from '../../index'
-import { setRuntime, resetRuntime } from '../../runtime'
+import { setRuntime, resetRuntime } from '../../runtime/runtime'
 
 afterEach(() => {
   resetRuntime()

@@ -20,7 +20,7 @@
  */
 
 import type { ModelInfo } from '../types'
-import type { Message } from '../messages'
+import type { Message } from '../generation/messages'
 
 /**
  * A normalized, serializable description of one model call at the executor
@@ -53,10 +53,7 @@ export interface InterceptedGeneration {
  * the spec method's return type — a replayed result must be shaped like the
  * live one (minus raw SDK objects, which replay cannot reproduce).
  */
-export type GenerationInterceptor = (
-  call: InterceptedGeneration,
-  execute: () => Promise<unknown>,
-) => Promise<unknown>
+export type GenerationInterceptor = (call: InterceptedGeneration, execute: () => Promise<unknown>) => Promise<unknown>
 
 let current: GenerationInterceptor | undefined
 

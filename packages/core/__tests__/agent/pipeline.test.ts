@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../define'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import { agent as makeAgent } from '../../agent/agent'
 import { createPipeline } from '../../agent/pipeline'
 import { createFakeAgentExecutor } from '../../agent/fakes'
@@ -164,7 +164,7 @@ describe('pipeline: context accumulation', () => {
 
   it('emits composition events to instrumentation hooks', async () => {
     const events: Array<{ type: string; data: unknown }> = []
-    const { setRuntime, resetRuntime } = await import('../../runtime')
+    const { setRuntime, resetRuntime } = await import('../../runtime/runtime')
 
     setRuntime({
       instrumentationHooks: {

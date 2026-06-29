@@ -28,6 +28,7 @@
  */
 
 import type { z } from 'zod'
+import type { AnyToolSet } from '../types'
 import type {
   BlackboardEntry,
   ConditionalContext,
@@ -39,11 +40,10 @@ import type {
   MemoryEntry,
   PromptInjection,
   SkillEntry,
-  AnyToolSet,
-} from '../types'
+} from '../prompt/context-types'
 import type { CruxContextInjectableKind, CruxContextInjects } from '../observability/contract'
-import { isInjectableEntry } from '../injectable'
-import { isContributorEntry } from '../contributor'
+import { isInjectableEntry } from '../prompt/injectable'
+import { isContributorEntry } from '../prompt/contributor'
 import {
   CONTRIBUTOR,
   type GateResult,

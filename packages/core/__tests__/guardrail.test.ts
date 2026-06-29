@@ -119,7 +119,7 @@ describe('isGuardrail', () => {
 describe('context-level guardrails', () => {
   it('context() stores guardrails on frozen object', async () => {
     // Dynamic import to avoid circular issues in test
-    const { context } = await import('../context')
+    const { context } = await import('../prompt/context')
 
     const guard = makeGuardrail({
       name: 'ctx-guard',
@@ -138,7 +138,7 @@ describe('context-level guardrails', () => {
   })
 
   it('context() defaults to empty guardrails array', async () => {
-    const { context } = await import('../context')
+    const { context } = await import('../prompt/context')
 
     const ctx = context({
       system: 'No guards',

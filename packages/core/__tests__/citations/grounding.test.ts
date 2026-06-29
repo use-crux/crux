@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { grounding, citationSchema } from '../../citations'
-import { prompt } from '../../define'
+import { prompt } from '../../prompt/prompt'
 import { retriever } from '../../retrieval'
 import type { RetrieverHit } from '../../retrieval'
 

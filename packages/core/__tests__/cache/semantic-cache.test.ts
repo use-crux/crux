@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../define'
+import { prompt as makePrompt } from '../../prompt/prompt'
 import { createSemanticCache, semanticCachePolicies } from '../../cache'
 import { embedding } from '../../embedding'
 import { inMemoryCruxStore } from '../../store'
-import { applyPlugins } from '../../plugin'
-import { getRuntime, resetRuntime, setRuntime } from '../../runtime'
-import { orchestrateGenerate, orchestrateStream } from '../../orchestrate'
+import { applyPlugins } from '../../runtime/plugin'
+import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
+import { orchestrateGenerate, orchestrateStream } from '../../generation/orchestrate'
 
 function denseEmbedding() {
   return embedding({

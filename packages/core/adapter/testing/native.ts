@@ -10,8 +10,8 @@
  */
 
 import { z } from 'zod'
-import type { GenerationSettings } from '../../types'
-import type { Message } from '../../messages'
+import type { GenerationSettings } from '../../generation/types'
+import type { Message } from '../../generation/messages'
 import type { AdapterSpec } from '../spec'
 import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'
 import type { ConformanceViolation } from '../testing'

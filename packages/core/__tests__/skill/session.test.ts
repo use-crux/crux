@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createSkillActivationSession, skill } from '../../skill'
-import { compilePrompt } from '../../resolve'
+import { compilePrompt } from '../../resolver/compile'
 
 describe('SkillActivationSession', () => {
   it('keeps injected-skill tracking isolated per activation session', () => {

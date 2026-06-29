@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { fallback, isFallback, classifyError, shouldAttemptFallback } from '../fallback'
-import { ValidationExhaustedError } from '../validation-retry'
+import { fallback, isFallback, classifyError, shouldAttemptFallback } from '../generation/fallback'
+import { ValidationExhaustedError } from '../generation/validation-retry'
 
 describe('fallback()', () => {
   it('returns a FallbackModel with correct _tag and models', () => {

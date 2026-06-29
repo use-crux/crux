@@ -20,7 +20,7 @@
 import type { StandardSchemaV1 } from './standard-schema'
 import type { Capability } from './target'
 import type { RetrieverHit } from '../retrieval'
-import type { TokenUsage } from '../types'
+import type { TokenUsage } from '../generation/types'
 import type { CellScore } from './experiment'
 
 // ─────────────────────────────────────────────────────────────────

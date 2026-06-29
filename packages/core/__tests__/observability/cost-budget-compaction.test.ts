@@ -3,17 +3,17 @@ import { z } from 'zod'
 import { createBudgetManager } from '../../compaction/budget'
 import { summarizeMessages } from '../../compaction/summarize'
 import { CostLimitError, modelPricing, withCostTracking } from '../../cost'
-import { prompt } from '../../define'
+import { prompt } from '../../prompt/prompt'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { orchestrateGenerate } from '../../orchestrate'
-import { applyPlugins } from '../../plugin'
-import { getRuntime, resetRuntime, setRuntime } from '../../runtime'
-import { runWithExecutionContext } from '../../execution-context'
+import { orchestrateGenerate } from '../../generation/orchestrate'
+import { applyPlugins } from '../../runtime/plugin'
+import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
+import { runWithExecutionContext } from '../../runtime/execution-context'
 
 function install(plugin: ReturnType<ReturnType<typeof withCostTracking>['asPlugin']>) {
   const applied = applyPlugins([plugin], getRuntime())

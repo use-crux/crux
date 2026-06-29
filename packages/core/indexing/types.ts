@@ -1,0 +1,531 @@
+/**
+ * Type contracts for the indexing domain.
+ *
+ * Covers ingest documents/parts, chunks and parent chunks, provenance, the
+ * chunking + transform pipeline, the {@link Indexer} and its results, and the
+ * {@link Corpus} sync model (source records, hashing options, sync results).
+ * {@link IndexerConfig} is internal.
+ *
+ * @module
+ */
+
+import type { DenseEmbedding, SparseEmbedding } from '../embedding'
+import type { CruxStore, DataStore, JsonObject, Storage, VectorStore } from '../store/types'
+
+/** A loaded source document, optionally split into typed parts. */
+export interface CruxDocument {
+  namespace: string
+  sourceId: string
+  content: string
+  title?: string
+  metadata?: Record<string, unknown>
+  parts?: CruxIngestPart[]
+  warnings?: CruxIngestWarning[]
+}
+
+/** An indexed content chunk. */
+export interface CruxChunk {
+  namespace: string
+  sourceId: string
+  chunkId: string
+  generationId?: string
+  active?: boolean
+  ordinal: number
+  content: string
+  metadata: Record<string, unknown>
+  parent?: {
+    parentId?: string
+    key?: string
+    title?: string
+    summary?: string
+  }
+  provenance?: ChunkProvenance
+}
+
+/** A parent chunk grouping several child chunks (parent-child chunking). */
+export interface CruxParentChunk {
+  namespace: string
+  sourceId: string
+  parentId: string
+  generationId?: string
+  active?: boolean
+  ordinal: number
+  content: string
+  metadata: Record<string, unknown>
+  provenance?: ChunkProvenance
+}
+
+/** A non-fatal warning emitted while ingesting a document. */
+export interface CruxIngestWarning {
+  code: string
+  message: string
+  partId?: string
+  metadata?: Record<string, unknown>
+}
+
+/** A typed segment of an ingested document. */
+export type CruxIngestPart =
+  | {
+      id: string
+      kind: 'text'
+      content: string
+      role?: string
+      headingPath?: string[]
+      metadata?: Record<string, unknown>
+    }
+  | {
+      id: string
+      kind: 'page'
+      content: string
+      pageNumber: number
+      headingPath?: string[]
+      metadata?: Record<string, unknown>
+    }
+  | {
+      id: string
+      kind: 'table'
+      content: string
+      rows?: string[][]
+      caption?: string
+      columns?: string[]
+      pageNumber?: number
+      sheetName?: string
+      rowStart?: number
+      rowEnd?: number
+      metadata?: Record<string, unknown>
+    }
+  | {
+      id: string
+      kind: 'sheet'
+      content: string
+      sheetName: string
+      index: number
+      metadata?: Record<string, unknown>
+    }
+  | {
+      id: string
+      kind: 'json'
+      content: string
+      path: string
+      valueType?: string
+      metadata?: Record<string, unknown>
+    }
+
+/** Where a chunk's content came from in its source document. */
+export interface ChunkProvenance {
+  partIds?: string[]
+  pages?: number[]
+  sheets?: string[]
+  tables?: string[]
+  jsonPaths?: string[]
+  sourceSpans?: Array<{
+    start: number
+    end: number
+    partId?: string
+  }>
+  confidence?: 'exact' | 'derived'
+}
+
+/** A load result that may have succeeded (document) or failed (error). */
+export type CruxIngestLoadResultLike =
+  | { ok: true; document: CruxDocument }
+  | {
+      ok: false
+      namespace: string
+      sourceId: string
+      error: { message: string; stack?: string; code?: string; parser?: string }
+      metadata?: Record<string, unknown>
+    }
+
+/** Character-based chunking sizes. */
+export interface ChunkingOptions {
+  maxChars?: number
+  overlapChars?: number
+}
+
+/** Pipeline stage cache behavior. */
+export type PipelineCacheMode = 'readwrite' | 'refresh' | 'bypass'
+
+/** Pipeline cache configuration: off, on, or a store/scope override. */
+export type PipelineCacheConfig =
+  | false
+  | true
+  | {
+      store?: DataStore
+      scope?: string
+    }
+
+/** The output of running a chunker over a document. */
+export interface ChunkingResult {
+  chunks: CruxChunk[]
+  parents?: CruxParentChunk[]
+  stages?: SourceStageRecord[]
+}
+
+/** Runtime context passed to a chunker. */
+export interface ChunkerContext {
+  chunking: Required<ChunkingOptions>
+}
+
+/** A chunker: splits a document into chunks. */
+export interface Chunker {
+  readonly _tag: 'Chunker'
+  readonly name: string
+  readonly version: string
+  fingerprint(): string
+  chunkDocument(document: CruxDocument, ctx: ChunkerContext): Promise<ChunkingResult> | ChunkingResult
+}
+
+/** Context passed to a document transform. */
+export interface DocumentTransformContext {
+  sourceHash: string
+  markDerived(): void
+}
+
+/** A document-phase pipeline transform. */
+export interface DocumentTransform {
+  readonly _tag: 'DocumentTransform'
+  readonly name: string
+  readonly version: string
+  readonly options?: JsonObject
+  readonly fingerprint?: unknown
+  run(document: CruxDocument, ctx: DocumentTransformContext): Promise<CruxDocument> | CruxDocument
+}
+
+/** Context passed to a chunk transform. */
+export interface ChunkTransformContext {
+  sourceHash: string
+}
+
+/** A chunk-phase pipeline transform. */
+export interface ChunkTransform {
+  readonly _tag: 'ChunkTransform'
+  readonly name: string
+  readonly version: string
+  readonly options?: JsonObject
+  readonly fingerprint?: unknown
+  run(chunks: CruxChunk[], ctx: ChunkTransformContext): Promise<CruxChunk[]> | CruxChunk[]
+}
+
+/** A composed indexing pipeline: document transforms, a chunker, chunk transforms. */
+export interface IndexingPipeline {
+  readonly _tag: 'IndexingPipeline'
+  readonly documents: readonly DocumentTransform[]
+  readonly chunker: Chunker
+  readonly chunks: readonly ChunkTransform[]
+  fingerprint(): string
+}
+
+/** Configuration for {@link indexingPipeline}. */
+export interface IndexingPipelineConfig {
+  documents?: DocumentTransform[]
+  chunker?: Chunker
+  chunks?: ChunkTransform[]
+}
+
+/** Options for the structured chunker. */
+export interface StructuredChunkerOptions extends ChunkingOptions {
+  tableRowsPerChunk?: number
+}
+
+/** Options for the parent-child chunker. */
+export interface ParentChildChunkerOptions {
+  parentMaxChars?: number
+  childMaxChars?: number
+  childOverlapChars?: number
+}
+
+/** Options for the semantic chunker, per strategy. */
+export type SemanticChunkerOptions =
+  | ({
+      strategy: 'embedding'
+      dense: DenseEmbedding
+      minChars?: number
+      maxChars?: number
+      similarityThreshold?: number
+    } & ChunkingOptions)
+  | ({
+      strategy: 'model' | 'custom'
+      segment: SemanticSegmentFn
+      minChars?: number
+      maxChars?: number
+    } & ChunkingOptions)
+  | ({
+      strategy: 'hybrid'
+      dense: DenseEmbedding
+      segment: SemanticSegmentFn
+      minChars?: number
+      maxChars?: number
+      similarityThreshold?: number
+    } & ChunkingOptions)
+
+/** A semantic chunk boundary. */
+export interface SemanticBoundary {
+  start: number
+  end: number
+  reason?: string
+  confidence?: number
+}
+
+/** A custom semantic segmentation function. */
+export type SemanticSegmentFn = (
+  input: { document: CruxDocument; segments: Array<{ text: string; start: number; end: number }> },
+  ctx: { maxChars: number; minChars: number },
+) => Promise<SemanticBoundary[]> | SemanticBoundary[]
+
+/** The result of indexing documents/chunks. */
+export interface IndexResult {
+  namespace: string
+  sourceCount: number
+  chunkCount: number
+  stages?: SourceStageRecord[]
+  dryRun?: false
+}
+
+/** The result of a dry-run index: chunks/parents without persistence. */
+export interface IndexDryRunResult {
+  namespace: string
+  sourceCount: number
+  chunkCount: number
+  dryRun: true
+  chunks: CruxChunk[]
+  parents?: CruxParentChunk[]
+  stages?: SourceStageRecord[]
+  embeddings: {
+    dense: boolean
+    sparse: boolean
+  }
+}
+
+/** Options affecting the indexer fingerprint. */
+export interface IndexFingerprintOptions {
+  chunking?: ChunkingOptions
+  indexVersion?: string
+}
+
+/** An indexer: turns documents/chunks into stored, optionally embedded records. */
+export interface Indexer {
+  readonly id: string
+  readonly namespace: string
+  chunk(
+    documents: AsyncIterable<CruxDocument> | CruxDocument[],
+    options?: { chunking?: ChunkingOptions; cache?: PipelineCacheMode },
+  ): Promise<CruxChunk[]>
+  indexDocuments(
+    documents: AsyncIterable<CruxDocument> | CruxDocument[],
+    options: { dryRun: true; replaceSources?: boolean; chunking?: ChunkingOptions; cache?: PipelineCacheMode },
+  ): Promise<IndexDryRunResult>
+  indexDocuments(
+    documents: AsyncIterable<CruxDocument> | CruxDocument[],
+    options?: { dryRun?: false; replaceSources?: boolean; chunking?: ChunkingOptions; cache?: PipelineCacheMode },
+  ): Promise<IndexResult>
+  indexChunks(
+    chunks: AsyncIterable<CruxChunk> | CruxChunk[],
+    options: { dryRun: true; replaceSources?: boolean },
+  ): Promise<IndexDryRunResult>
+  indexChunks(
+    chunks: AsyncIterable<CruxChunk> | CruxChunk[],
+    options?: { dryRun?: false; replaceSources?: boolean },
+  ): Promise<IndexResult>
+  fingerprint(options?: IndexFingerprintOptions): string
+  deleteSource(sourceId: string): Promise<number>
+  clear(): Promise<number>
+}
+
+/** Configuration for {@link indexer}. Internal. */
+export interface IndexerConfig {
+  id: string
+  namespace: string
+  data?: DataStore
+  vectors?: VectorStore
+  storage?: Storage
+  store?: CruxStore
+  dense?: DenseEmbedding
+  sparse?: SparseEmbedding
+  pipeline?: IndexingPipeline
+  cache?: PipelineCacheConfig
+}
+
+/** The lifecycle status of a corpus source. */
+export type SourceStatus = 'indexed' | 'failed' | 'deleted'
+/** How a corpus sync handles changed sources. */
+export type CorpusSyncMode = 'replaceChanged' | 'appendOnly'
+/** How a corpus sync handles stale (unseen) sources. */
+export type CorpusStalePolicy = 'keep' | 'delete'
+/** Whether a sync's input is the partial or complete source set. */
+export type CorpusSourceSet = 'partial' | 'complete'
+
+/** A captured error for a source. */
+export interface SourceError {
+  message: string
+  stack?: string
+}
+
+/** A trace record for one pipeline stage applied to a source. */
+export interface SourceStageRecord {
+  name: string
+  kind?: 'parser' | 'document-transform' | 'chunker' | 'chunk-transform' | 'embedding' | 'promotion' | 'sync'
+  version?: string
+  status: 'pending' | 'success' | 'failed' | 'skipped'
+  cache?: 'hit' | 'miss' | 'write' | 'refresh' | 'bypass'
+  hash?: string
+  inputHash?: string
+  outputHash?: string
+  durationMs?: number
+  chunkCount?: number
+  parentCount?: number
+  error?: SourceError
+  updatedAt: number
+}
+
+/** The persisted state of a corpus source. */
+export interface SourceRecord extends JsonObject {
+  readonly _tag: 'SourceRecord'
+  corpusId: string
+  namespace: string
+  sourceId: string
+  contentHash: string
+  metadataHash: string
+  sourceHash: string
+  indexHash: string
+  status: SourceStatus
+  chunkCount: number
+  title?: string
+  metadata?: Record<string, unknown>
+  createdAt: number
+  updatedAt: number
+  firstSeenAt: number
+  lastSeenAt?: number
+  indexedAt?: number
+  failedAt?: number
+  deletedAt?: number
+  lastSyncRunId?: string
+  lastError?: SourceError
+  errors: SourceError[]
+  stages?: SourceStageRecord[]
+  parser?: SourceStageRecord
+  transform?: SourceStageRecord
+  sync?: SourceStageRecord
+}
+
+/** Options controlling how a source's content/metadata hashes are computed. */
+export interface SourceHashOptions {
+  normalizeContent?: (content: string) => string
+  metadata?: 'stable' | 'none' | 'all'
+  includeMetadata?: string[]
+  excludeMetadata?: string[]
+  hashDocument?: (document: CruxDocument, defaults: SourceHashDefaults) => SourceHashInput
+}
+
+/** Default inputs available to a custom {@link SourceHashOptions.hashDocument}. */
+export interface SourceHashDefaults {
+  normalizedContent: string
+  stableMetadata: Record<string, unknown>
+}
+
+/** The content/metadata used to compute a source hash. */
+export interface SourceHashInput {
+  content: unknown
+  metadata?: unknown
+}
+
+/** Configuration for {@link corpus}. */
+export interface CorpusConfig {
+  id: string
+  namespace: string
+  data?: DataStore
+  store?: CruxStore
+  indexer: Indexer
+  hash?: SourceHashOptions
+  indexVersion?: string
+}
+
+/** Options for {@link Corpus.sync}. */
+export interface CorpusSyncOptions {
+  mode?: CorpusSyncMode
+  stale?: CorpusStalePolicy
+  sourceSet?: CorpusSourceSet
+  dryRun?: boolean
+  chunking?: ChunkingOptions
+  cache?: PipelineCacheMode
+  indexVersion?: string
+  onProgress?: (event: CorpusProgressEvent) => void
+}
+
+/** Options for {@link Corpus.listSources}. */
+export interface SourceListOptions {
+  status?: SourceStatus | SourceStatus[]
+  includeDeleted?: boolean
+  limit?: number
+  cursor?: string
+}
+
+/** The per-source outcome of a sync. */
+export interface CorpusSourceResult {
+  sourceId: string
+  action: 'added' | 'changed' | 'unchanged' | 'skipped' | 'failed' | 'stale' | 'deleted'
+  reason?: 'new' | 'contentChanged' | 'metadataChanged' | 'indexChanged' | 'appendOnly' | 'stale' | 'dryRun' | 'error'
+  previousHash?: string
+  nextHash?: string
+  previousIndexHash?: string
+  nextIndexHash?: string
+  chunkCount?: number
+  stages?: SourceStageRecord[]
+  error?: SourceError
+}
+
+/** The aggregate result of a {@link Corpus.sync}. */
+export interface CorpusSyncResult {
+  syncId: string
+  corpusId: string
+  namespace: string
+  mode: CorpusSyncMode
+  stalePolicy: CorpusStalePolicy
+  sourceSet: CorpusSourceSet
+  dryRun: boolean
+  added: number
+  changed: number
+  unchanged: number
+  stale: number
+  skipped: number
+  deleted: number
+  failed: number
+  chunkCount: number
+  durationMs: number
+  sources: CorpusSourceResult[]
+}
+
+/** A per-source progress event emitted during a sync. */
+export type CorpusProgressEvent = CorpusSourceResult & {
+  syncId: string
+  corpusId: string
+  namespace: string
+  dryRun: boolean
+}
+
+/** The result of deleting a single source. */
+export interface SourceDeleteResult {
+  sourceId: string
+  deletedCount: number
+}
+
+/** The result of clearing all sources. */
+export interface SourceClearResult {
+  deletedCount: number
+  sourceCount: number
+}
+
+/** A corpus: tracks sources and syncs them through an {@link Indexer}. */
+export interface Corpus {
+  readonly _tag: 'Corpus'
+  readonly id: string
+  readonly namespace: string
+  sync(
+    documents: AsyncIterable<CruxDocument | CruxIngestLoadResultLike> | Array<CruxDocument | CruxIngestLoadResultLike>,
+    options?: CorpusSyncOptions,
+  ): Promise<CorpusSyncResult>
+  getSource(sourceId: string): Promise<SourceRecord | null>
+  listSources(options?: SourceListOptions): Promise<SourceRecord[]>
+  deleteSource(sourceId: string): Promise<SourceDeleteResult>
+  clearSources(): Promise<SourceClearResult>
+}
