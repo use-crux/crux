@@ -71,7 +71,7 @@ describe('pipeline: context accumulation', () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0)
   })
 
-    it('passes seed context as input to first step when no input callback', async () => {
+  it('passes seed context as input to first step when no input callback', async () => {
     const executor = createMockExecutor()
     const pipeline = createPipeline(executor)
 
@@ -88,7 +88,7 @@ describe('pipeline: context accumulation', () => {
     expect(researchInput).toEqual({ query: 'AI safety' })
   })
 
-    it('supports plain fn steps alongside agent steps', async () => {
+  it('supports plain fn steps alongside agent steps', async () => {
     const executor = createMockExecutor()
     const pipeline = createPipeline(executor)
 
@@ -111,7 +111,7 @@ describe('pipeline: context accumulation', () => {
     expect(result.context.format).toEqual({ html: '<p>formatted</p>' })
   })
 
-    it('accumulates across 3 steps', async () => {
+  it('accumulates across 3 steps', async () => {
     const executor = createMockExecutor()
     const pipeline = createPipeline(executor)
 
@@ -144,7 +144,7 @@ describe('pipeline: context accumulation', () => {
     expect(result.context.edit).toBeDefined()
   })
 
-    it('stops on error and reports step name', async () => {
+  it('stops on error and reports step name', async () => {
     const executor = createFakeAgentExecutor({
       agents: { writer: { throws: 'LLM failed' } },
       fallback: { output: {} },
@@ -160,7 +160,8 @@ describe('pipeline: context accumulation', () => {
         ],
       }),
     ).rejects.toThrow('Pipeline step "write" failed')
-  })})
+  })
+})
 
 describe('pipeline: .created capture', () => {
   it('captures CreationTool .created values into context._created', async () => {
@@ -208,7 +209,7 @@ describe('pipeline: .created capture', () => {
     }
   })
 
-    it('omits _created when no creation tools have .created values', async () => {
+  it('omits _created when no creation tools have .created values', async () => {
     const executor = createMockExecutor()
     const pipeline = createPipeline(executor)
 

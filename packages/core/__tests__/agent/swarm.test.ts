@@ -1,11 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
 import { prompt as makePrompt } from '../../prompt/prompt'
 import { agent as makeAgent } from '../../agent/agent'
 import { createSwarm } from '../../agent/swarm'
 import { createFakeAgentExecutor } from '../../agent/fakes'
 import type { FakeAgentBehavior } from '../../agent/fakes'
-import { setRuntime, getRuntime } from '../../runtime/runtime'
 
 // ── Test helpers ──────────────────────────────────────────────────
 
@@ -108,7 +107,7 @@ describe('swarm', () => {
     expect(result.durationMs).toBeGreaterThanOrEqual(0)
   })
 
-    it('returns immediately when agent completes without handoff', async () => {
+  it('returns immediately when agent completes without handoff', async () => {
     const executor = createSwarmExecutor({
       triage: { output: 'I can help you directly.' },
     })
@@ -127,7 +126,7 @@ describe('swarm', () => {
     expect(result.agentResults).toHaveLength(1)
   })
 
-    it('supports a 3-hop chain: triage → billing → refunds → done', async () => {
+  it('supports a 3-hop chain: triage → billing → refunds → done', async () => {
     const executor = createSwarmExecutor({
       triage: { transfer: 'billing', reason: 'billing issue' },
       billing: { transfer: 'refunds', reason: 'needs refund' },
@@ -150,7 +149,7 @@ describe('swarm', () => {
     expect(result.handoffCount).toBe(2)
   })
 
-    it('throws SwarmError when maxHandoffs is exceeded', async () => {
+  it('throws SwarmError when maxHandoffs is exceeded', async () => {
     // triage and billing keep handing off to each other
     const executor = createSwarmExecutor({
       triage: { transfer: 'billing', reason: 'billing issue' },
@@ -168,7 +167,7 @@ describe('swarm', () => {
     ).rejects.toThrow(/maxHandoffs.*3/)
   })
 
-    it('throws when startAgent does not exist', async () => {
+  it('throws when startAgent does not exist', async () => {
     const executor = createSwarmExecutor({})
     const swarm = createSwarm(executor)
 
@@ -181,7 +180,7 @@ describe('swarm', () => {
     ).rejects.toThrow(/nonexistent/)
   })
 
-    it('throws when a handoff target does not exist in the agents map', async () => {
+  it('throws when a handoff target does not exist in the agents map', async () => {
     const agentWithBadHandoff = makeAgent({
       id: 'bad',
       prompt: triagePrompt,
@@ -199,7 +198,7 @@ describe('swarm', () => {
     ).rejects.toThrow(/missing-agent/)
   })
 
-    it('generates transfer_to_<id> tools with target description', async () => {
+  it('generates transfer_to_<id> tools with target description', async () => {
     const executor = createSwarmExecutor({ triage: { output: 'done' } })
     const swarm = createSwarm(executor)
 
@@ -222,7 +221,7 @@ describe('swarm', () => {
     expect(capturedTools!['transfer_to_triage']).toBeUndefined()
   })
 
-describe('conditional handoffs', () => {
+  describe('conditional handoffs', () => {
     it('injects when condition into transfer tool description', async () => {
       const conditionalAgent = makeAgent({
         id: 'triage',
@@ -312,7 +311,7 @@ describe('conditional handoffs', () => {
     })
   })
 
-    it('calls onHandoff callback for each handoff', async () => {
+  it('calls onHandoff callback for each handoff', async () => {
     const onHandoff = vi.fn()
     const executor = createSwarmExecutor({
       triage: { transfer: 'billing', reason: 'billing issue' },
@@ -337,7 +336,7 @@ describe('conditional handoffs', () => {
     )
   })
 
-describe('history modes', () => {
+  describe('history modes', () => {
     it('transfer-only: next agent gets original input + handoff context', async () => {
       const executor = createSwarmExecutor({
         triage: { transfer: 'billing', reason: 'billing', output: 'transferring' },
@@ -413,7 +412,7 @@ describe('history modes', () => {
     })
   })
 
-describe('context summarization', () => {
+  describe('context summarization', () => {
     it('summarizes previous output after threshold in accumulate mode', async () => {
       const generateFn = vi.fn().mockResolvedValue({ text: 'Summarized: customer needs refund' })
 
@@ -511,7 +510,7 @@ describe('context summarization', () => {
     })
   })
 
-describe('tool filtering', () => {
+  describe('tool filtering', () => {
     it('agent with swarmTools only gets those tools plus transfer tools', async () => {
       const agent = makeAgent({
         id: 'filtered',
@@ -619,7 +618,7 @@ describe('tool filtering', () => {
     })
   })
 
-describe('cost tracking and abort', () => {
+  describe('cost tracking and abort', () => {
     it('calls onCost with accumulated usage after each agent', async () => {
       const onCost = vi.fn()
       const executor = createSwarmExecutor({
@@ -702,7 +701,7 @@ describe('cost tracking and abort', () => {
     })
   })
 
-    it('propagates agent execution errors and emits composition:end', async () => {
+  it('propagates agent execution errors', async () => {
     const executor = createSwarmExecutor({ triage: { throws: 'Agent crashed' } })
     const swarm = createSwarm(executor)
 
@@ -713,4 +712,6 @@ describe('cost tracking and abort', () => {
         input: {},
       }),
     ).rejects.toThrow('Agent crashed')
-  })})
+  })
+
+})

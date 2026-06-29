@@ -73,6 +73,8 @@ Runtime bridge and eval-runner failures can happen outside a normal span. Those 
 
 Built-in primitives use canonical names such as `generation.call`, `generation.stream`, `prompt.resolve`, `prompt.budget`, `context.predicate`, `context.resolve`, `memory.read`, `memory.write`, `retrieval.pipeline`, `retrieval.query`, `retrieval.stage`, `indexing.pipeline`, `ingest.parse`, `corpus.sync`, `embedding.call`, `cache.lookup`, `cost.record`, `compaction.run`, `eval.run`, `eval.case`, `scoring.judge`, `citation.check`, `feedback.record`, `workspace.operation`, `plan.operation`, `task.operation`, `skill.load`, `security.warning`, `routing.router`, `routing.cascade`, `fallback.attempt`, `constraint.check`, `constraint.retry`, `guardrail.run`, `agent.run`, `flow.run`, `flow.step`, `flow.suspension`, `composition.parallel`, `composition.pipeline`, `composition.consensus`, `composition.swarm`, `handoff.prepare`, `delegate.invoke`, and `tool.call`.
 
+Agent compositions share one runtime lifecycle contract. `parallel()` creates a `composition.parallel` span with sibling `agent.run` children. `pipeline()` creates a `composition.pipeline` span with one `flow.step` per executable step and nested `agent.run` spans for agent steps. `consensus()` creates a `composition.consensus` span with voter `agent.run` children directly under that span. `swarm()` creates a `composition.swarm` span with agent turns, `handoff.prepare` spans, `handoff.payload` artifacts, and `triggered` edges between turns.
+
 Custom edge types and artifact kinds must use the `custom.*` namespace. Unknown custom values are preserved and can be displayed generically, but specialized indexing and layouts are reserved for canonical values.
 
 Common detail artifacts use stable kinds so `RunDetail.inspection` can route them without UI-specific parsing:
@@ -96,7 +98,7 @@ Common detail artifacts use stable kinds so `RunDetail.inspection` can route the
 
 Use `observe.run()` for user-facing execution roots and `observe.span()` for inspectable work inside a run. Standalone spans automatically create an implicit run, so helpers like `pipeline`, `consensus`, or `swarm` can be called directly and still produce a complete trace.
 
-Crux's built-in orchestration helpers emit these records automatically. `parallel()` creates sibling `agent.run` spans, `pipeline()` records `flow.step` plus nested `agent.run` spans, `flow()` / `withFlow()` records `flow.run`, step children, and `flow.suspension` timeline markers for intentional waits, `consensus()` nests its voter fanout, and `swarm` / `delegate` handoffs create `handoff.prepare` spans, canonical input/output artifacts, `handoff.payload` artifacts, and relation edges.
+Crux's built-in orchestration helpers emit these records automatically. `parallel()` creates sibling `agent.run` spans, `pipeline()` records `flow.step` plus nested `agent.run` spans, `flow()` / `withFlow()` records `flow.run`, step children, and `flow.suspension` timeline markers for intentional waits, `consensus()` records voter `agent.run` spans directly under `composition.consensus`, and `swarm` / `delegate` handoffs create `handoff.prepare` spans, canonical input/output artifacts, `handoff.payload` artifacts, and relation edges.
 
 Generation and streaming orchestration record operation deadlines when a timeout is configured. `@use-crux/ai` passes `timeoutMs` into core orchestration, which records `timeoutMs` / `deadlineAt` and emits `operation.deadline` before the provider call begins.
 
