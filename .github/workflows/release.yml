@@ -3,6 +3,15 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish_nightly:
+        description: Publish a nightly npm release from main.
+        required: true
+        type: boolean
+        default: true
+  schedule:
+    - cron: '17 3 * * *'
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -17,6 +26,7 @@ env:
 jobs:
   changesets:
     name: Changesets
+    if: github.event_name == 'push'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
@@ -47,7 +57,7 @@ jobs:
   build-embed-assets:
     name: Build Embed Assets
     needs: changesets
-    if: needs.changesets.outputs.hasChangesets == 'false'
+    if: github.event_name == 'push' && needs.changesets.outputs.hasChangesets == 'false'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
@@ -80,7 +90,7 @@ jobs:
   build-local-binary:
     name: Build ${{ matrix.target }}
     needs: [changesets, build-embed-assets]
-    if: needs.changesets.outputs.hasChangesets == 'false'
+    if: github.event_name == 'push' && needs.changesets.outputs.hasChangesets == 'false'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -173,7 +183,7 @@ jobs:
   publish:
     name: Publish
     needs: [changesets, build-local-binary]
-    if: needs.changesets.outputs.hasChangesets == 'false'
+    if: github.event_name == 'push' && needs.changesets.outputs.hasChangesets == 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -238,3 +248,225 @@ jobs:
           else
             gh release create "$RELEASE_TAG" --title "$RELEASE_TITLE" --notes-file "$RELEASE_NOTES" --target "$GITHUB_SHA"
           fi
+
+  nightly:
+    name: Nightly
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.publish_nightly))
+    runs-on: ubuntu-latest
+    outputs:
+      shouldPublish: ${{ steps.should-publish.outputs.should_publish }}
+      version: ${{ steps.version.outputs.version }}
+      sha: ${{ steps.version.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Create nightly version
+        id: version
+        run: node ./scripts/create-nightly-version.mjs
+
+      - name: Decide whether to publish
+        id: should-publish
+        env:
+          NIGHTLY_SHA: ${{ steps.version.outputs.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          should_publish=true
+          latest_nightly=''
+
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            latest_nightly="$(npm view @use-crux/core@nightly version --json 2>/dev/null | tr -d '"' || true)"
+            if [[ "$latest_nightly" == *"sha${NIGHTLY_SHA}"* ]]; then
+              should_publish=false
+            fi
+          fi
+
+          echo "should_publish=$should_publish" >> "$GITHUB_OUTPUT"
+          echo "latest_nightly=$latest_nightly" >> "$GITHUB_OUTPUT"
+          {
+            echo "Nightly version: ${{ steps.version.outputs.version }}"
+            echo "Latest published nightly: ${latest_nightly:-none}"
+            echo "Should publish: $should_publish"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  nightly-build-embed-assets:
+    name: Nightly Build Embed Assets
+    needs: nightly
+    if: needs.nightly.outputs.shouldPublish == 'true'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and embed devtools assets
+        run: make -C packages/local build-devtools embed
+
+      - name: Upload embed assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-embed-assets
+          path: |
+            packages/local/internal/assets/embed/**
+            packages/local/internal/assets/ui-embed/**
+          if-no-files-found: error
+
+  nightly-build-local-binary:
+    name: Nightly Build ${{ matrix.target }}
+    needs: [nightly, nightly-build-embed-assets]
+    if: needs.nightly.outputs.shouldPublish == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: blacksmith-4vcpu-ubuntu-2404
+            rust_target: x86_64-unknown-linux-gnu
+            apt_packages: ''
+          - target: linux-arm64
+            runner: blacksmith-4vcpu-ubuntu-2404
+            rust_target: aarch64-unknown-linux-gnu
+            apt_packages: gcc-aarch64-linux-gnu
+          - target: darwin-x64
+            runner: macos-latest
+            rust_target: x86_64-apple-darwin
+            apt_packages: ''
+          - target: darwin-arm64
+            runner: macos-latest
+            rust_target: aarch64-apple-darwin
+            apt_packages: ''
+          - target: win32-x64
+            runner: blacksmith-4vcpu-ubuntu-2404
+            rust_target: x86_64-pc-windows-gnu
+            apt_packages: gcc-mingw-w64-x86-64
+          - target: win32-arm64
+            runner: blacksmith-4vcpu-ubuntu-2404
+            rust_target: aarch64-pc-windows-gnullvm
+            apt_packages: xz-utils
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download embed assets
+        uses: actions/download-artifact@v7
+        with:
+          name: nightly-embed-assets
+          path: packages/local/internal/assets
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/local/go.mod
+          cache-dependency-path: packages/local/go.sum
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install 1.93.0 --profile minimal
+          rustup default 1.93.0
+          rustup target add ${{ matrix.rust_target }}
+          rustc --version
+
+      - name: Install cross-compilation packages
+        if: matrix.apt_packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt_packages }}
+
+      - name: Install llvm-mingw for Windows arm64
+        if: matrix.target == 'win32-arm64'
+        env:
+          LLVM_MINGW_VERSION: '20260616'
+        run: |
+          mkdir -p .tmp/toolchains
+          curl -fsSL \
+            -o .tmp/toolchains/llvm-mingw.tar.xz \
+            "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-x86_64.tar.xz"
+          tar -xJf .tmp/toolchains/llvm-mingw.tar.xz -C .tmp/toolchains
+          root="$PWD/.tmp/toolchains/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-x86_64"
+          echo "LLVM_MINGW_ROOT=$root" >> "$GITHUB_ENV"
+          echo "$root/bin" >> "$GITHUB_PATH"
+
+      - name: Configure Windows arm64 linker
+        if: matrix.target == 'win32-arm64'
+        run: |
+          echo "CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER=$LLVM_MINGW_ROOT/bin/aarch64-w64-mingw32-clang" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_AR=$LLVM_MINGW_ROOT/bin/llvm-ar" >> "$GITHUB_ENV"
+
+      - name: Build local binary bundle
+        run: make -C packages/local ${{ matrix.target }}
+
+      - name: Upload local binary bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-local-${{ matrix.target }}
+          path: packages/local/dist/crux-${{ matrix.target }}/bin/*
+          if-no-files-found: error
+          compression-level: 0
+
+  nightly-publish:
+    name: Nightly Publish
+    needs: [nightly, nightly-build-local-binary]
+    if: needs.nightly.outputs.shouldPublish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Download local binary bundles
+        uses: actions/download-artifact@v7
+        with:
+          pattern: nightly-local-*
+          path: .tmp/local-artifacts
+
+      - name: Restore local binary bundles
+        run: |
+          mkdir -p packages/local/dist
+          for artifact in .tmp/local-artifacts/nightly-local-*; do
+            target="${artifact##*/nightly-local-}"
+            mkdir -p "packages/local/dist/crux-${target}/bin"
+            cp -R "${artifact}/." "packages/local/dist/crux-${target}/bin/"
+          done
+
+      - name: Stage and validate nightly npm packages
+        env:
+          NIGHTLY_VERSION: ${{ needs.nightly.outputs.version }}
+        run: pnpm release:stage -- --version "$NIGHTLY_VERSION" && pnpm release:validate
+
+      - name: Publish nightly npm packages
+        run: pnpm release:publish-staged -- --npm-tag nightly
+
+      - name: Summary
+        run: echo "Published @use-crux packages at ${{ needs.nightly.outputs.version }} with npm tag nightly." >> "$GITHUB_STEP_SUMMARY"

@@ -31,6 +31,7 @@
     "release:validate": "node ./scripts/validate-staged-npm-packages.mjs",
     "release:publish-staged": "node ./scripts/publish-staged-npm-packages.mjs",
     "release:notes": "node ./scripts/write-github-release-notes.mjs",
+    "release:nightly-version": "node ./scripts/create-nightly-version.mjs",
     "release": "pnpm release:stage && pnpm release:validate && pnpm release:publish-staged"
   },
   "devDependencies": {

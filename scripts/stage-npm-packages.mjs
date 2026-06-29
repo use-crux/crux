@@ -42,6 +42,9 @@ await rm(stageRoot, { recursive: true, force: true })
 await mkdir(stageRoot, { recursive: true })
 
 const versionByPackage = await readWorkspaceVersions()
+if (options.version) {
+  for (const name of versionByPackage.keys()) versionByPackage.set(name, options.version)
+}
 const stagedPackages = []
 
 if (!options.skipTs) {
@@ -72,6 +75,7 @@ function parseArgs(args) {
     skipTs: false,
     skipLocal: false,
     allowMissingPlatforms: false,
+    version: undefined,
   }
 
   for (let index = 0; index < args.length; index += 1) {
@@ -84,6 +88,8 @@ function parseArgs(args) {
       parsed.skipLocal = true
     } else if (arg === '--allow-missing-platforms') {
       parsed.allowMissingPlatforms = true
+    } else if (arg === '--version') {
+      parsed.version = args[++index]
     } else if (arg === '--') {
       continue
     } else if (arg === '--help' || arg === '-h') {
@@ -104,6 +110,7 @@ Options:
   --skip-ts                    Do not stage TypeScript library packages.
   --skip-local                 Do not stage Crux Local and platform binary packages.
   --allow-missing-platforms    Stage available platform binary packages instead of failing.
+  --version <version>          Override every staged package version.
 `)
   process.exit(0)
 }
@@ -210,6 +217,7 @@ function packageBuildOutput(pkg) {
 function transformTypeScriptManifest(sourceManifest, pkg) {
   const manifest = pickPackageManifestFields(sourceManifest)
   manifest.name = toPublishedPackageName(sourceManifest.name)
+  manifest.version = packageVersion(sourceManifest.name)
   manifest.private = undefined
   manifest.type = sourceManifest.type ?? 'module'
   manifest.main = './dist/index.js'
@@ -285,6 +293,7 @@ async function stageLocalWrapper() {
 
   const manifest = await readJson(join(stageDir, 'package.json'))
   manifest.name = toPublishedPackageName(manifest.name)
+  manifest.version = packageVersion('@use-crux/local')
   manifest.optionalDependencies = Object.fromEntries(
     localPlatforms.map((platform) => [toPublishedPackageName(`@use-crux/local-${platform.id}`), manifest.version]),
   )
@@ -318,9 +327,7 @@ async function stageLocalPlatform(platform) {
   await copyIfExists(join(repoRoot, 'packages/local/npm/local/LICENSE'), join(stageDir, 'LICENSE'))
   await copyIfExists(join(repoRoot, 'packages/local/npm/local/README.md'), join(stageDir, 'README.md'))
 
-  const localVersion =
-    versionByPackage.get('@use-crux/local') ??
-    (await readJson(join(repoRoot, 'packages/local/npm/local/package.json'))).version
+  const localVersion = packageVersion('@use-crux/local')
   const manifest = {
     name: packageName,
     version: localVersion,
@@ -380,10 +387,17 @@ function rewriteWorkspaceRange(name, range) {
   if (typeof range !== 'string' || !range.startsWith('workspace:')) return range
   const version = versionByPackage.get(name)
   if (!version) throw new Error(`Cannot rewrite ${name}@${range}; package version not found in workspace.`)
+  if (options.version) return version
   const spec = range.slice('workspace:'.length)
   if (spec === '' || spec === '*') return version
   if (spec === '^' || spec === '~') return `${spec}${version}`
   if (spec.startsWith('^') || spec.startsWith('~')) return spec
+  return version
+}
+
+function packageVersion(name) {
+  const version = versionByPackage.get(name)
+  if (!version) throw new Error(`Cannot resolve staged version for ${name}.`)
   return version
 }
 
