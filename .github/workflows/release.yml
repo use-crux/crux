@@ -221,8 +221,6 @@ jobs:
 
       - name: Publish staged npm packages
         run: pnpm release:publish-staged -- --git-tag --git-push-tags
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Prepare GitHub release notes
         id: release-notes
