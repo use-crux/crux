@@ -59,7 +59,7 @@ export default evaluate({
         include: settings.include,
         exclude: settings.exclude,
       })
-      const fromPrompts = collectPromptTests(project.prompts, runnerCore)
+      const fromPrompts = await collectPromptTests(project.prompts, runnerCore)
 
       expect(project.configPath).toBeUndefined()
       expect(project.prompts).toEqual([])
@@ -103,7 +103,10 @@ export default evaluate({
   })
 
   it('discovers a default-export evaluation and fills its manifest collect fields', async () => {
-    const result = await collectEvaluationFiles({ rootDir: FIXTURE_ROOT, include: 'evals/greeting.eval.ts' })
+    const result = await collectEvaluationFiles({
+      rootDir: FIXTURE_ROOT,
+      include: 'evals/greeting.eval.ts',
+    })
 
     expect(result.errors).toEqual([])
     expect(result.evaluations).toHaveLength(1)
@@ -121,7 +124,10 @@ export default evaluate({
   })
 
   it('collects named exports with #suffix ids, keeps explicit ids, and ignores non-evaluations', async () => {
-    const result = await collectEvaluationFiles({ rootDir: FIXTURE_ROOT, include: 'evals/multi.eval.ts' })
+    const result = await collectEvaluationFiles({
+      rootDir: FIXTURE_ROOT,
+      include: 'evals/multi.eval.ts',
+    })
 
     expect(result.errors).toEqual([])
     const byId = new Map(result.evaluations.map((entry) => [entry.id, entry]))
@@ -134,7 +140,10 @@ export default evaluate({
   })
 
   it('reports a thenable export as an async-at-collect definition error', async () => {
-    const result = await collectEvaluationFiles({ rootDir: FIXTURE_ROOT, include: 'bad/async.eval.ts' })
+    const result = await collectEvaluationFiles({
+      rootDir: FIXTURE_ROOT,
+      include: 'bad/async.eval.ts',
+    })
 
     expect(result.evaluations).toEqual([])
     expect(result.errors).toHaveLength(1)
@@ -156,11 +165,15 @@ export default evaluate({
 })
 
 describe('collectPromptTests', () => {
-  it('lowers prompts with colocated tests into prompt:<id> evaluations', () => {
-    const tested = prompt({ id: 'support.greet', system: 'greet', tests: [{ input: { q: 'hi' } }] })
+  it('lowers prompts with colocated tests into prompt:<id> evaluations', async () => {
+    const tested = prompt({
+      id: 'support.greet',
+      system: 'greet',
+      tests: [{ input: { q: 'hi' } }],
+    })
     const untested = prompt({ id: 'support.plain', system: 'plain' })
 
-    const result = collectPromptTests([tested, untested], runnerCore)
+    const result = await collectPromptTests([tested, untested], runnerCore)
 
     expect(result.errors).toEqual([])
     expect(result.evaluations).toHaveLength(1)
@@ -174,10 +187,13 @@ describe('collectPromptTests', () => {
     expect(lowered!.manifest.source).toBe('prompt-tests')
   })
 
-  it('reports a lowering failure (prompt without id) as a collect error', () => {
-    const anonymous = prompt({ system: 'anon', tests: [{ input: { q: 'x' } }] })
+  it('reports a lowering failure (prompt without id) as a collect error', async () => {
+    const anonymous = prompt({
+      system: 'anon',
+      tests: [{ input: { q: 'x' } }],
+    })
 
-    const result = collectPromptTests([anonymous], runnerCore)
+    const result = await collectPromptTests([anonymous], runnerCore)
 
     expect(result.evaluations).toEqual([])
     expect(result.errors).toHaveLength(1)
@@ -187,9 +203,13 @@ describe('collectPromptTests', () => {
 
 describe('findDuplicateIdErrors', () => {
   it('flags the same resolved id appearing in two files', async () => {
-    const result = await collectEvaluationFiles({ rootDir: FIXTURE_ROOT, include: 'dups/*.eval.ts' })
+    const result = await collectEvaluationFiles({
+      rootDir: FIXTURE_ROOT,
+      include: 'dups/*.eval.ts',
+    })
 
-    expect(result.errors).toEqual([])
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]!.message).toContain('dup.id')
     const duplicates = findDuplicateIdErrors(result.evaluations)
     expect(duplicates).toHaveLength(1)
     expect(duplicates[0]!.message).toContain('dup.id')
@@ -198,7 +218,10 @@ describe('findDuplicateIdErrors', () => {
   })
 
   it('reports nothing for unique ids', async () => {
-    const result = await collectEvaluationFiles({ rootDir: FIXTURE_ROOT, include: 'evals/*.eval.ts' })
+    const result = await collectEvaluationFiles({
+      rootDir: FIXTURE_ROOT,
+      include: 'evals/*.eval.ts',
+    })
 
     expect(findDuplicateIdErrors(result.evaluations)).toEqual([])
   })

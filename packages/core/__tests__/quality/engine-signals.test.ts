@@ -8,23 +8,9 @@ import { agent } from '../../agent/agent'
 import { flow } from '../../flow/scope'
 import { observe } from '../../observability'
 import { evaluate, target } from '../../quality'
-import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
 import type { GenerateFn } from '../../quality/target'
-import type { RunOverrides } from '../../quality/experiment'
-import { runEvaluation } from '../../quality/internal/engine'
-import { hasPromptTests, lowerPromptTests } from '../../quality/internal/prompt-tests'
-
-function run(
-  evaluation: Evaluation<never, never, string, string>,
-  overrides?: RunOverrides<string>,
-  options?: Parameters<typeof runEvaluation>[2],
-) {
-  return runEvaluation(getEvaluationDefinition(evaluation), overrides, {
-    persist: false,
-    qualityId: 'test',
-    ...options,
-  })
-}
+import { createQualityRunner } from '../../quality/internal/runner'
+import { runEvaluationWithRunner as run } from './runner-harness'
 
 const supportPrompt = prompt({
   id: 'support',
@@ -204,7 +190,11 @@ describe('trace-backed signals — captured-pass for every namespace', () => {
         ctx.expect.toolCalls.toHaveCalledAll(['search', 'lookupOrder'])
         ctx.expect.toolCalls.toHaveCalledBefore('search', 'lookupOrder')
         ctx.expect.toolCalls.toMatchTrajectory('superset', [{ tool: 'search' }])
-        ctx.expect.toolCalls.toMatchTrajectory('subset', [{ tool: 'search' }, { tool: 'lookupOrder' }, { tool: 'other' }])
+        ctx.expect.toolCalls.toMatchTrajectory('subset', [
+          { tool: 'search' },
+          { tool: 'lookupOrder' },
+          { tool: 'other' },
+        ])
         ctx.expect.toolCalls.toHaveAllSucceeded()
         ctx.expect.toolCalls.not.toHaveCalled('deleteAccount')
         ctx.expect.toolCalls.count().toBe(2)
@@ -272,15 +262,33 @@ describe('trace-backed signals — uncaptured assertions fail loudly (never vacu
     name: string
     assert: (ctx: { expect: Record<string, never> }) => void
   }> = [
-    { name: 'modelCalls', assert: (ctx) => (ctx.expect.modelCalls as { count(): { toBe(n: number): void } }).count().toBe(0) },
-    { name: 'toolCalls', assert: (ctx) => (ctx.expect.toolCalls as { toHaveCalled(t: string): void }).toHaveCalled('search') },
+    {
+      name: 'modelCalls',
+      assert: (ctx) => (ctx.expect.modelCalls as { count(): { toBe(n: number): void } }).count().toBe(0),
+    },
+    {
+      name: 'toolCalls',
+      assert: (ctx) => (ctx.expect.toolCalls as { toHaveCalled(t: string): void }).toHaveCalled('search'),
+    },
     { name: 'steps', assert: (ctx) => (ctx.expect.steps as { toHaveRun(n: string): void }).toHaveRun('plan') },
-    { name: 'handoffs', assert: (ctx) => (ctx.expect.handoffs as { count(): { toBe(n: number): void } }).count().toBe(0) },
-    { name: 'retrieval', assert: (ctx) => (ctx.expect.retrieval as { count(): { toBe(n: number): void } }).count().toBe(0) },
+    {
+      name: 'handoffs',
+      assert: (ctx) => (ctx.expect.handoffs as { count(): { toBe(n: number): void } }).count().toBe(0),
+    },
+    {
+      name: 'retrieval',
+      assert: (ctx) => (ctx.expect.retrieval as { count(): { toBe(n: number): void } }).count().toBe(0),
+    },
     { name: 'citations', assert: (ctx) => (ctx.expect.citations as { toAllResolve(): void }).toAllResolve() },
-    { name: 'safety', assert: (ctx) => (ctx.expect.safety as { toHavePassedGuardrails(): void }).toHavePassedGuardrails() },
+    {
+      name: 'safety',
+      assert: (ctx) => (ctx.expect.safety as { toHavePassedGuardrails(): void }).toHavePassedGuardrails(),
+    },
     { name: 'memory', assert: (ctx) => (ctx.expect.memory as { toHaveRead(): void }).toHaveRead() },
-    { name: 'routing', assert: (ctx) => (ctx.expect.routing as { toHaveSelected(r: string): void }).toHaveSelected('x') },
+    {
+      name: 'routing',
+      assert: (ctx) => (ctx.expect.routing as { toHaveSelected(r: string): void }).toHaveSelected('x'),
+    },
   ]
 
   for (const namespace of namespaces) {
@@ -300,14 +308,16 @@ describe('trace-backed signals — uncaptured assertions fail loudly (never vacu
       expect(failure.matcher).toBe(`${namespace.name} (uncaptured)`)
       expect(failure.message).toContain(`no ${namespace.name} signal was captured`)
       expect(failure.message).toContain(namespace.name)
-      expect(cell.assertions.outcomes).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          status: 'uncaptured',
-          matcher: `${namespace.name} (uncaptured)`,
-          soft: false,
-          message: expect.stringContaining(`no ${namespace.name} signal was captured`),
-        }),
-      ]))
+      expect(cell.assertions.outcomes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            status: 'uncaptured',
+            matcher: `${namespace.name} (uncaptured)`,
+            soft: false,
+            message: expect.stringContaining(`no ${namespace.name} signal was captured`),
+          }),
+        ]),
+      )
     })
   }
 })
@@ -330,7 +340,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
     expect(seen[0]).toMatchObject({ input: { question: 'q1' }, model: 'fast-model', temperature: 0 })
   })
 
-    it('resolves generate and named models from setup when params omit them', async () => {
+  it('resolves generate and named models from setup when params omit them', async () => {
     const seen: Array<Record<string, unknown>> = []
     const generate = (async (_prompt: never, opts: never) => {
       seen.push(opts as Record<string, unknown>)
@@ -351,7 +361,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
     expect(seen[0]!.model).toEqual({ id: 'resolved-cheap-model' })
   })
 
-    it('target.prompt defaults feed the params floor', async () => {
+  it('target.prompt defaults feed the params floor', async () => {
     const seen: Array<Record<string, unknown>> = []
     const generate = (async (_prompt: never, opts: never) => {
       seen.push(opts as Record<string, unknown>)
@@ -367,7 +377,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
     expect(seen[0]!.model).toBe('override-model')
   })
 
-    it('executes a flow task end-to-end with trace-backed step signals', async () => {
+  it('executes a flow task end-to-end with trace-backed step signals', async () => {
     const researchFlow = flow<{ summary: string }, { topic: string }>('research', async (scope) => {
       const plan = await scope.step('plan', () => ({ angle: `${scope.input.topic} basics` }))
       const draft = await scope.step('draft', () => ({ summary: `About ${plan.angle}` }))
@@ -390,7 +400,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
     expect(experiment.perCase[0]!.capturedSignals).toContain('steps')
   })
 
-    it('ctx.step throws a helpful error for unknown steps and schema mismatches', async () => {
+  it('ctx.step throws a helpful error for unknown steps and schema mismatches', async () => {
     const tinyFlow = flow<{ ok: boolean }, { q: string }>('tiny', async (scope) => {
       await scope.step('only-step', () => ({ value: 42 }))
       return { ok: true }
@@ -399,29 +409,33 @@ describe('task execution — prompt, flow, retriever, agent', () => {
       task: tinyFlow,
       data: [{ input: { q: 'x' } }],
       expect: (ctx) => {
-        ctx.expect(() => ctx.step('missing')).toSatisfy((fn) => {
-          try {
-            ;(fn as () => unknown)()
-            return false
-          } catch (error) {
-            return error instanceof Error && error.message.includes("no step with this name")
-          }
-        })
-        ctx.expect(() => ctx.step('only-step', z.object({ value: z.string() }))).toSatisfy((fn) => {
-          try {
-            ;(fn as () => unknown)()
-            return false
-          } catch (error) {
-            return error instanceof Error && error.message.includes('failed schema validation')
-          }
-        })
+        ctx
+          .expect(() => ctx.step('missing'))
+          .toSatisfy((fn) => {
+            try {
+              ;(fn as () => unknown)()
+              return false
+            } catch (error) {
+              return error instanceof Error && error.message.includes('no step with this name')
+            }
+          })
+        ctx
+          .expect(() => ctx.step('only-step', z.object({ value: z.string() })))
+          .toSatisfy((fn) => {
+            try {
+              ;(fn as () => unknown)()
+              return false
+            } catch (error) {
+              return error instanceof Error && error.message.includes('failed schema validation')
+            }
+          })
       },
     })
     const experiment = await run(evaluation)
     expect(experiment.perCase[0]!.status).toBe('passed')
   })
 
-    it('executes a retriever task via the query mapper and records output hits', async () => {
+  it('executes a retriever task via the query mapper and records output hits', async () => {
     const stubRetriever = {
       _tag: 'Retriever' as const,
       id: 'docs',
@@ -440,7 +454,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
     expect(output[0]!.sourceId).toBe('docs/refunds')
   })
 
-    it('agent tasks resolve tool mocks into executable tools for the adapter', async () => {
+  it('agent tasks resolve tool mocks into executable tools for the adapter', async () => {
     const toolAgent = agent({
       id: 'tool-agent',
       prompt: supportPrompt,
@@ -492,7 +506,7 @@ describe('persistence, redaction, truncation', () => {
     expect(cell.output).toEqual({ echoed: 'hello', apiKey: '[redacted]' })
   })
 
-    it('truncates oversized outputs at 32 KiB and flags metadata.truncated', async () => {
+  it('truncates oversized outputs at 32 KiB and flags metadata.truncated', async () => {
     const evaluation = evaluate({
       task: async (_input: { q: string }) => 'y'.repeat(64 * 1024),
       data: [{ input: { q: 'big' } }],
@@ -505,7 +519,7 @@ describe('persistence, redaction, truncation', () => {
     expect(cell.status).toBe('passed')
   })
 
-    it('evaluation.run() persists under cwd/.crux/quality by default', async () => {
+  it('evaluation.run() persists under cwd/.crux/quality by default', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'crux-quality-run-'))
     const previousCwd = process.cwd()
     process.chdir(dir)
@@ -552,7 +566,7 @@ describe('datasets', () => {
     expect(datasetCell!.status).toBe('passed')
   })
 
-    it('rejects rows that fail the dataset schema as a definition error', async () => {
+  it('rejects rows that fail the dataset schema as a definition error', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'crux-quality-ds-'))
     const { writeFile } = await import('node:fs/promises')
     await writeFile(join(dir, 'bad.jsonl'), JSON.stringify({ input: { q: 42 } }), 'utf8')
@@ -578,13 +592,17 @@ describe('prompt({ tests }) lowering — rung 0', () => {
     ],
   })
 
-    it('detects prompts with colocated tests', () => {
-    expect(hasPromptTests(testedPrompt)).toBe(true)
-    expect(hasPromptTests(supportPrompt)).toBe(false)
+  it('collects only prompts with colocated tests', async () => {
+    const runner = createQualityRunner({ persist: false, qualityId: 'test' })
+    const collected = await runner.collect({ promptCandidates: [testedPrompt, supportPrompt] })
+    expect(collected.errors).toEqual([])
+    expect(collected.evaluations.map((evaluation) => evaluation.id)).toEqual(['prompt:tested'])
   })
 
-    it('lowers tests into a prompt:<id> evaluation with source prompt-tests', () => {
-    const evaluation = lowerPromptTests(testedPrompt)
+  it('collects tests into a prompt:<id> evaluation with source prompt-tests', async () => {
+    const runner = createQualityRunner({ persist: false, qualityId: 'test' })
+    const collected = await runner.collect({ promptCandidates: [testedPrompt] })
+    const evaluation = collected.evaluations[0]!
     expect(evaluation.id).toBe('prompt:tested')
     expect(evaluation.manifest.source).toBe('prompt-tests')
     expect(evaluation.manifest.task).toMatchObject({ kind: 'prompt', ref: 'tested' })
@@ -594,17 +612,17 @@ describe('prompt({ tests }) lowering — rung 0', () => {
     expect(evaluation.manifest.hasEvaluationExpect).toBe(true)
   })
 
-    it('the lowered evaluation gates on output-schema validation', async () => {
+  it('the lowered evaluation gates on output-schema validation', async () => {
     const generate = (async (_prompt: never, opts: never) => {
       const question = (opts as { input: { question: string } }).input.question
       // Valid for the first case, schema-breaking for the second.
-      return question.startsWith('How')
-        ? { object: { answer: 'within 14 days' } }
-        : { object: { answer: 42 } }
+      return question.startsWith('How') ? { object: { answer: 'within 14 days' } } : { object: { answer: 42 } }
     }) as GenerateFn
 
-    const evaluation = lowerPromptTests(testedPrompt)
-    const experiment = await run(evaluation as never, undefined, { setup: { generate } })
+    const runner = createQualityRunner({ persist: false, qualityId: 'test', setup: { generate } })
+    const collected = await runner.collect({ promptCandidates: [testedPrompt] })
+    const result = await runner.run({ evaluations: collected.evaluations })
+    const experiment = result.experiments[0]!
     const [first, second] = experiment.perCase
     expect(first!.status).toBe('passed')
     expect(second!.status).toBe('failed')
@@ -612,12 +630,15 @@ describe('prompt({ tests }) lowering — rung 0', () => {
     expect(second!.expected).toBe('14 dagen')
   })
 
-    it('refuses prompts without an id', () => {
+  it('reports prompts without an id as collect errors', async () => {
     const anonymous = prompt({
       input: z.object({ q: z.string() }),
       system: 's',
       tests: [{ input: { q: 'x' } }],
     })
-    expect(() => lowerPromptTests(anonymous)).toThrowError(/explicit `id`/)
+    const runner = createQualityRunner({ persist: false, qualityId: 'test' })
+    const collected = await runner.collect({ promptCandidates: [anonymous] })
+    expect(collected.evaluations).toEqual([])
+    expect(collected.errors[0]!.message).toMatch(/explicit `id`/)
   })
 })

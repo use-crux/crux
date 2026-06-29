@@ -1,25 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { evaluate } from '../../quality'
-import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
-import { runEvaluation, QualityDefinitionError } from '../../quality/internal/engine'
-import type { RunOverrides } from '../../quality/experiment'
-
-/** Run an evaluation through the internal engine without touching the repo. */
-function run(
-  evaluation: Evaluation<never, never, string, string>,
-  overrides?: RunOverrides<string>,
-  options?: Parameters<typeof runEvaluation>[2],
-) {
-  return runEvaluation(getEvaluationDefinition(evaluation), overrides, {
-    persist: false,
-    qualityId: 'test',
-    ...options,
-  })
-}
+import { QualityRunnerHarnessError, runEvaluationWithRunner as run } from './runner-harness'
 
 const upperTask = async (input: { q: string }) => ({ answer: input.q.toUpperCase() })
 
-describe('runEvaluation — plain fn task end-to-end', () => {
+describe('Quality runner — plain fn task end-to-end', () => {
   it('produces the full Experiment record shape for a passing run', async () => {
     const evaluation = evaluate('engine.smoke', {
       task: upperTask,
@@ -72,7 +57,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(experiment.passed).toBe(true)
   })
 
-    it('runs evaluation-level expect for every case and lowers failures into the pass score', async () => {
+  it('runs evaluation-level expect for every case and lowers failures into the pass score', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'good' } }, { input: { q: 'bad' } }],
@@ -103,7 +88,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(experiment.passed).toBe(false)
   })
 
-    it('records assertion position: a hard failure stops the callback and counts notEvaluated', async () => {
+  it('records assertion position: a hard failure stops the callback and counts notEvaluated', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],
@@ -122,7 +107,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(cell.assertions.failures).toHaveLength(1)
   })
 
-    it('expect.soft records the failure and continues the callback', async () => {
+  it('expect.soft records the failure and continues the callback', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],
@@ -139,7 +124,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(cell.assertions.failures).toEqual([expect.objectContaining({ matcher: 'soft.toBe', soft: true, index: 0 })])
   })
 
-    it('runs evaluation-level and case-level expect callbacks independently', async () => {
+  it('runs evaluation-level and case-level expect callbacks independently', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [
@@ -160,7 +145,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(cell.assertions.failures.map((failure) => failure.level)).toEqual(['evaluation', 'case'])
   })
 
-    it('marks task-thrown cells errored with phase execute (false-safe gates)', async () => {
+  it('marks task-thrown cells errored with phase execute (false-safe gates)', async () => {
     const evaluation = evaluate({
       task: async (_input: { q: string }) => {
         throw new Error('boom')
@@ -191,7 +176,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(experiment.passed).toBe(false)
   })
 
-    it('treats non-assertion expect callback crashes as errored cells (phase expect)', async () => {
+  it('treats non-assertion expect callback crashes as errored cells (phase expect)', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],
@@ -205,7 +190,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(cell.error).toMatchObject({ message: 'user bug', phase: 'expect' })
   })
 
-    it('records ctx.score values alongside scorer scores', async () => {
+  it('records ctx.score values alongside scorer scores', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'hello' } }],
@@ -219,7 +204,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(experiment.aggregates.perVariant.default!.scores['answer-length']).toEqual({ mean: 0.5, sem: 0, n: 1 })
   })
 
-    it('a throwing scorer marks the cell errored with phase score', async () => {
+  it('a throwing scorer marks the cell errored with phase score', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],
@@ -237,7 +222,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
   })
 })
 
-describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
+describe('Quality runner — trials, skip/only, filters, timeouts', () => {
   it('fans out trials per cell and aggregates pass@k / pass^k', async () => {
     let calls = 0
     const evaluation = evaluate({
@@ -259,7 +244,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(aggregate.consistency).toEqual({ passAtK: 1, passAllTrials: 0 })
   })
 
-    it('per-case trials win over the evaluation default', async () => {
+  it('per-case trials win over the evaluation default', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [
@@ -272,7 +257,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(experiment.perCase.filter((cell) => cell.caseName === 'once')).toHaveLength(1)
   })
 
-    it('respects the concurrency bound', async () => {
+  it('respects the concurrency bound', async () => {
     let active = 0
     let peak = 0
     const evaluation = evaluate({
@@ -291,7 +276,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(peak).toBeGreaterThan(1)
   })
 
-    it('times out slow cells with phase timeout', async () => {
+  it('times out slow cells with phase timeout', async () => {
     const evaluation = evaluate({
       task: async (_input: { q: string }) => {
         await new Promise((resolve) => setTimeout(resolve, 5_000))
@@ -306,7 +291,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(cell.error).toMatchObject({ phase: 'timeout' })
   })
 
-    it('reports skipped cases with their reason and excludes them from passRate', async () => {
+  it('reports skipped cases with their reason and excludes them from passRate', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'run' } }, { name: 'flaky upstream', input: { q: 'skip' }, skip: 'broken fixture' }],
@@ -320,13 +305,13 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(aggregate).toMatchObject({ cells: 2, skipped: 1, passRate: 1 })
   })
 
-    it('evaluate.skip skips every cell', async () => {
+  it('evaluate.skip skips every cell', async () => {
     const evaluation = evaluate.skip({ task: upperTask, data: [{ input: { q: 'x' } }] })
     const experiment = await run(evaluation)
     expect(experiment.perCase.every((cell) => cell.status === 'skipped')).toBe(true)
   })
 
-    it('case-level only filters the run and demotes gates to informational', async () => {
+  it('case-level only filters the run and demotes gates to informational', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [
@@ -346,7 +331,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(experiment.gates.passed).toBe(true)
   })
 
-    it('RunOverrides.cases filters by name, id, and glob', async () => {
+  it('RunOverrides.cases filters by name, id, and glob', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [
@@ -360,7 +345,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(experiment.perCase.map((cell) => cell.caseName).sort()).toEqual(['smoke en', 'smoke nl'])
   })
 
-    it('aborts remaining cells when the signal fires', async () => {
+  it('aborts remaining cells when the signal fires', async () => {
     const controller = new AbortController()
     controller.abort()
     const evaluation = evaluate({ task: upperTask, data: [{ input: { q: 'x' } }] })
@@ -370,22 +355,22 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
   })
 })
 
-describe('runEvaluation — phase boundaries', () => {
+describe('Quality runner — phase boundaries', () => {
   const fnCases = [{ input: { q: 'x' } }]
 
   it('non-live replay without an id or cassette name is a definition error', async () => {
     const evaluation = evaluate({ task: upperTask, data: fnCases, replay: 'replay-strict' })
-    await expect(run(evaluation)).rejects.toThrowError(QualityDefinitionError)
+    await expect(run(evaluation)).rejects.toThrowError(QualityRunnerHarnessError)
     await expect(run(evaluation)).rejects.toThrowError(/cassette name/)
   })
 
-    it('promote() on a derived-id experiment rejects with the id pin guidance', async () => {
+  it('promote() on a derived-id experiment rejects with the id pin guidance', async () => {
     const evaluation = evaluate({ task: upperTask, data: fnCases })
     const experiment = await run(evaluation)
     await expect(experiment.promote()).rejects.toThrowError(/explicit evaluation id/)
   })
 
-    it('multi-turn cases error with a clear message', async () => {
+  it('multi-turn cases error with a clear message', async () => {
     const flowTask = (await import('../../flow/scope')).flow<{ ok: boolean }, { topic: string }>('turny', async () => ({
       ok: true,
     }))
@@ -400,7 +385,7 @@ describe('runEvaluation — phase boundaries', () => {
   })
 })
 
-describe('runEvaluation — declared gates', () => {
+describe('Quality runner — declared gates', () => {
   it('evaluates passRate and score gates against aggregates', async () => {
     const evaluation = evaluate({
       task: upperTask,
@@ -427,7 +412,7 @@ describe('runEvaluation — declared gates', () => {
     expect(experiment.passed).toBe(false)
   })
 
-    it('minDeltaVsBaseline with no baseline yet is informational, never blocking', async () => {
+  it('minDeltaVsBaseline with no baseline yet is informational, never blocking', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],
@@ -449,7 +434,7 @@ describe('runEvaluation — declared gates', () => {
   })
 })
 
-describe('runEvaluation — definition errors', () => {
+describe('Quality runner — definition errors', () => {
   it('a prompt task without a generate fn is a definition error', async () => {
     const { prompt } = await import('../../prompt/prompt')
     const { z } = await import('zod')
@@ -460,7 +445,10 @@ describe('runEvaluation — definition errors', () => {
       system: 'answer',
     })
     const evaluation = evaluate({ task: supportPrompt, data: [{ input: { question: 'q' } }] })
-    await expect(run(evaluation)).rejects.toThrowError(QualityDefinitionError)
-    await expect(run(evaluation)).rejects.toThrowError(/generate/)
+    await expect(run(evaluation)).rejects.toMatchObject({
+      name: 'QualityRunnerHarnessError',
+      code: 'project_model.model_executor_missing',
+      message: expect.stringContaining('prompt tasks need an explicit adapter generate fn'),
+    } satisfies Partial<QualityRunnerHarnessError>)
   })
 })

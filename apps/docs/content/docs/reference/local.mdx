@@ -374,7 +374,7 @@ Run `crux completion <shell> --help` for shell-specific installation steps.
 
 ## Configuration
 
-The CLI discovers the devtools server by connecting to `localhost` on the configured port (default 4400). Quality auto-attach accepts `CRUX_DEVTOOLS_URL` only when it points at a loopback devtools origin such as `localhost`, `127.0.0.1`, or `[::1]`; remote observability and cloud upload targets must be configured explicitly by project code. The Quality runner resolves a project root from `--cwd`, `--config`, the nearest config file, the nearest package root, or the current working directory.
+The CLI discovers the devtools server by connecting to `localhost` on the configured port (default 4400). Quality auto-attach accepts `CRUX_DEVTOOLS_URL` only when it points at a loopback devtools origin such as `localhost`, `127.0.0.1`, or `[::1]`; remote observability and cloud upload targets must be configured explicitly by project code. The Quality runner resolves a project root from `--cwd`, `--config`, the nearest config file, the nearest package root, or the current working directory, then runs against that project's installed `@use-crux/core` so evaluations and observability use the same runtime instance as user code.
 
 Set the `CRUX_STARTUP_DEBUG=1` environment variable to show startup timing diagnostics without the `--startup-debug` flag.
 

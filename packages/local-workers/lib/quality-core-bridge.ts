@@ -20,7 +20,11 @@ import { pathToFileURL } from 'node:url'
 /** The runner tooling contract, typed as a module instance. */
 export type RunnerCore = typeof import('@use-crux/core/quality/internal/runner')
 
+/** The observability contract, loaded from the same project-local core package. */
+export type ObservabilityCore = typeof import('@use-crux/core/observability')
+
 let cachedCore: RunnerCore | undefined
+let cachedObservabilityCore: ObservabilityCore | undefined
 
 /**
  * Resolve and import the project's own `@use-crux/core` runner contract.
@@ -42,4 +46,26 @@ export async function loadRunnerCore(projectDir: string): Promise<RunnerCore> {
   }
   cachedCore = (await import(pathToFileURL(resolved).href)) as RunnerCore
   return cachedCore
+}
+
+/**
+ * Resolve and import the project's own observability facade.
+ *
+ * Kept separate from the Quality runner facade so runner exports remain
+ * operation-level while devtools auto-attach still shares the project's core
+ * observability globals.
+ */
+export async function loadObservabilityCore(projectDir: string): Promise<ObservabilityCore> {
+  if (cachedObservabilityCore !== undefined) return cachedObservabilityCore
+  const projectRequire = createRequire(join(projectDir, 'package.json'))
+  let resolved: string
+  try {
+    resolved = projectRequire.resolve('@use-crux/core/observability')
+  } catch {
+    throw new Error(
+      `@use-crux/core is not resolvable from ${projectDir} — the quality runner needs the project to depend on @use-crux/core.`,
+    )
+  }
+  cachedObservabilityCore = (await import(pathToFileURL(resolved).href)) as ObservabilityCore
+  return cachedObservabilityCore
 }

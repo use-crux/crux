@@ -3,24 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { evaluate } from '../../quality'
-import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
-import { runEvaluation } from '../../quality/internal/engine'
-import type { RunOverrides } from '../../quality/experiment'
 import type { Score } from '../../quality/scorers'
+import { runEvaluationWithRunner as run } from './runner-harness'
 
-function run(
-  evaluation: Evaluation<never, never, string, string>,
-  overrides?: RunOverrides<string>,
-  options?: Parameters<typeof runEvaluation>[2],
-) {
-  return runEvaluation(getEvaluationDefinition(evaluation), overrides, {
-    persist: false,
-    qualityId: 'test',
-    ...options,
-  })
-}
-
-describe('runEvaluation — output cache and reuseOutputs (spec 03 §5)', () => {
+describe('Quality runner — output cache and reuseOutputs (spec 03 §5)', () => {
   it('reuses cached outputs under reuseOutputs without re-executing the task, re-running scorers fresh', async () => {
     const cacheDir = await mkdtemp(join(tmpdir(), 'crux-quality-cache-'))
     let taskCalls = 0
@@ -31,7 +17,10 @@ describe('runEvaluation — output cache and reuseOutputs (spec 03 §5)', () => 
           taskCalls++
           return input.q.toUpperCase()
         },
-        data: [{ name: 'a', input: { q: 'aa' } }, { name: 'b', input: { q: 'bb' } }],
+        data: [
+          { name: 'a', input: { q: 'aa' } },
+          { name: 'b', input: { q: 'bb' } },
+        ],
         scorers: [
           ({ output }): Score => {
             scorerCalls++
@@ -57,7 +46,7 @@ describe('runEvaluation — output cache and reuseOutputs (spec 03 §5)', () => 
     }
   })
 
-    it('a changed task misses the cache (taskFingerprint differs) and executes live', async () => {
+  it('a changed task misses the cache (taskFingerprint differs) and executes live', async () => {
     const cacheDir = await mkdtemp(join(tmpdir(), 'crux-quality-cache-'))
     let calls = 0
     const original = evaluate('cache.miss', {
@@ -83,7 +72,7 @@ describe('runEvaluation — output cache and reuseOutputs (spec 03 §5)', () => 
     expect(experiment.perCase[0]!.output).toBe('aa')
   })
 
-    it('reuseOutputs without any cache executes live (miss = live, never an error)', async () => {
+  it('reuseOutputs without any cache executes live (miss = live, never an error)', async () => {
     const cacheDir = await mkdtemp(join(tmpdir(), 'crux-quality-cache-'))
     let calls = 0
     const evaluation = evaluate('cache.cold', {
@@ -99,7 +88,7 @@ describe('runEvaluation — output cache and reuseOutputs (spec 03 §5)', () => 
     expect(experiment.perCase[0]!.status).toBe('passed')
   })
 
-    it('does not reuse the cache when reuseOutputs is not set, but keeps it warm', async () => {
+  it('does not reuse the cache when reuseOutputs is not set, but keeps it warm', async () => {
     const cacheDir = await mkdtemp(join(tmpdir(), 'crux-quality-cache-'))
     let calls = 0
     const makeEvaluation = () =>

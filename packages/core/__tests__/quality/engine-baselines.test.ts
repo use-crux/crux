@@ -3,21 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { evaluate } from '../../quality'
-import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
-import type { RunOverrides } from '../../quality/experiment'
-import { runEvaluation, QualityDefinitionError } from '../../quality/internal/engine'
-import { baselineRecordPath, readBaselineRecord, type BaselineRecord } from '../../quality/internal/baseline'
+import { QualityRunnerHarnessError, runEvaluationWithRunner as run } from './runner-harness'
 
-function run(
-  evaluation: Evaluation<never, never, string, string>,
-  overrides?: RunOverrides<string>,
-  options?: Parameters<typeof runEvaluation>[2],
-) {
-  return runEvaluation(getEvaluationDefinition(evaluation), overrides, {
-    persist: false,
-    qualityId: 'test',
-    ...options,
-  })
+interface BaselineRecordJson {
+  schemaVersion: number
+  baselineId: string
+  evaluationId: string
+  experimentId: string
+  variantName?: string
+  promotedAt: string
+  configFingerprint: string
+  reference: Record<string, Record<string, number>>
 }
 
 const qualityDir = () => mkdtemp(join(tmpdir(), 'crux-quality-baselines-'))
@@ -71,7 +67,7 @@ describe('paired-difference comparison (variant baseline)', () => {
     expect(comparison.deltas.some((delta) => delta.scoreName === 'pass')).toBe(true)
   })
 
-    it('trips a minDeltaVsBaseline gate per candidate variant and reds the run', async () => {
+  it('trips a minDeltaVsBaseline gate per candidate variant and reds the run', async () => {
     const experiment = await run(
       bakeoff({
         id: 'baselines.gate-trip',
@@ -92,7 +88,7 @@ describe('paired-difference comparison (variant baseline)', () => {
     expect(experiment.passed).toBe(false)
   })
 
-    it('passes a minDeltaVsBaseline gate when the candidate holds the line', async () => {
+  it('passes a minDeltaVsBaseline gate when the candidate holds the line', async () => {
     const experiment = await run(
       bakeoff({
         id: 'baselines.gate-pass',
@@ -111,8 +107,7 @@ describe('promotion (Experiment.promote)', () => {
     const experiment = await run(bakeoff({ id: 'baselines.promote', delta: 0.1 }), undefined, { dir })
     const { baselineId, path } = await experiment.promote({ variant: 'current' })
 
-    expect(path).toBe(baselineRecordPath(dir, 'baselines.promote'))
-    const record = JSON.parse(await readFile(path, 'utf8')) as BaselineRecord
+    const record = JSON.parse(await readFile(path, 'utf8')) as BaselineRecordJson
     expect(record).toMatchObject({
       schemaVersion: 1,
       baselineId,
@@ -129,27 +124,32 @@ describe('promotion (Experiment.promote)', () => {
     })
   })
 
-    it('defaults the promoted variant to the declared baseline variant', async () => {
+  it('defaults the promoted variant to the declared baseline variant', async () => {
     const dir = await qualityDir()
     const experiment = await run(bakeoff({ id: 'baselines.promote-default', delta: 0.1 }), undefined, { dir })
-    await experiment.promote()
-    const record = await readBaselineRecord(dir, 'baselines.promote-default')
-    expect(record!.variantName).toBe('current')
+    const { path } = await experiment.promote()
+    const record = JSON.parse(await readFile(path, 'utf8')) as BaselineRecordJson
+    expect(record.variantName).toBe('current')
   })
 
-    it('refuses to promote a filtered run', async () => {
+  it('refuses to promote a filtered run', async () => {
     const dir = await qualityDir()
-    const experiment = await run(bakeoff({ id: 'baselines.promote-filtered', delta: 0.1 }), { cases: ['easy'] }, { dir })
+    const experiment = await run(
+      bakeoff({ id: 'baselines.promote-filtered', delta: 0.1 }),
+      { cases: ['easy'] },
+      { dir },
+    )
     expect(experiment.filteredRun).toBe(true)
     await expect(experiment.promote({ variant: 'current' })).rejects.toThrowError(/filtered/)
   })
 
-    it('promoting a derived-id experiment with a pin id writes under the pinned id', async () => {
+  it('promoting a derived-id experiment with a pin id writes under the pinned id', async () => {
     const dir = await qualityDir()
     const evaluation = evaluate({ task: (input: { q: string }) => input, data: [{ input: { q: 'a' } }] })
     const experiment = await run(evaluation, undefined, { dir })
     const { path } = await experiment.promote({ id: 'pinned.id' })
-    expect(path).toBe(baselineRecordPath(dir, 'pinned.id'))
+    const record = JSON.parse(await readFile(path, 'utf8')) as BaselineRecordJson
+    expect(record.evaluationId).toBe('pinned.id')
   })
 })
 
@@ -211,7 +211,7 @@ describe('auto-compare against a committed baseline', () => {
     expect(second.passed).toBe(false)
   })
 
-    it('changing a case demotes the comparison to informational with the documented reason', async () => {
+  it('changing a case demotes the comparison to informational with the documented reason', async () => {
     const dir = await qualityDir()
     const makeEvaluation = (cases: ReadonlyArray<{ name: string; input: { name: string } }>) =>
       evaluate('auto.drift', {
@@ -255,7 +255,7 @@ describe('auto-compare against a committed baseline', () => {
     expect(second.passed).toBe(true)
   })
 
-    it('a promoted-then-renamed evaluation errors with the pin hint (id drift guard)', async () => {
+  it('a promoted-then-renamed evaluation errors with the pin hint (id drift guard)', async () => {
     const dir = await qualityDir()
     const makeEvaluation = (id: string) =>
       evaluate(id, {
@@ -267,13 +267,15 @@ describe('auto-compare against a committed baseline', () => {
 
     // The same definition resolving to a DIFFERENT id (file renamed without
     // pinning): the run is refused with the exact pin line.
-    const definition = getEvaluationDefinition(makeEvaluation('drift.original'))
-    const renamed = { ...definition, id: undefined }
-    await expect(
-      runEvaluation(renamed, undefined, { persist: false, qualityId: 'test', dir, evaluationId: 'drift.renamed' }),
-    ).rejects.toThrowError(QualityDefinitionError)
-    await expect(
-      runEvaluation(renamed, undefined, { persist: false, qualityId: 'test', dir, evaluationId: 'drift.renamed' }),
-    ).rejects.toThrowError(/drift\.original/)
+    const renamed = evaluate({
+      task: (input: { q: string }) => input,
+      data: [{ name: 'one', input: { q: 'a' } }],
+    })
+    await expect(run(renamed, undefined, { dir, evaluationId: 'drift.renamed' })).rejects.toThrowError(
+      QualityRunnerHarnessError,
+    )
+    await expect(run(renamed, undefined, { dir, evaluationId: 'drift.renamed' })).rejects.toThrowError(
+      /drift\.original/,
+    )
   })
 })

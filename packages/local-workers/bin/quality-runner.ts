@@ -30,7 +30,7 @@ import type { ProjectModelDiagnostic } from '@use-crux/core/project-index'
 import type { ReplayMode } from '@use-crux/core/quality'
 import { SourceResolver } from '@use-crux/indexer/source-resolver'
 import { loadEnv } from '../lib/env'
-import { loadRunnerCore } from '../lib/quality-core-bridge'
+import { loadObservabilityCore, loadRunnerCore } from '../lib/quality-core-bridge'
 import { loadQualityProject, resolveQualityRunnerSettings, ensureQualityGitignore } from '../lib/quality-config'
 import {
   collectEvaluationFiles,
@@ -82,13 +82,15 @@ async function main(): Promise<number> {
   // ── Collect ────────────────────────────────────────────────────
   let project
   let core
+  let observabilityCore
   let restoreObservability: (() => void) | undefined
   try {
     project = await loadQualityProject(configPath)
     // The project's own @use-crux/core instance — never the bundled one (see
     // quality-core-bridge for the dual-package-hazard rationale).
     core = await loadRunnerCore(project.configDir)
-    restoreObservability = enableQualityRunnerObservability(core, process.env.CRUX_DEVTOOLS_URL)
+    observabilityCore = await loadObservabilityCore(project.configDir)
+    restoreObservability = enableQualityRunnerObservability(observabilityCore, process.env.CRUX_DEVTOOLS_URL)
   } catch (error) {
     emit({ type: 'error', scope: 'collect', message: describeError(error) })
     emit({ type: 'run:done', experiments: [], exitCode: 2 })
@@ -100,8 +102,10 @@ async function main(): Promise<number> {
     rootDir: project.configDir,
     include: settings.include,
     exclude: settings.exclude,
+    core,
+    validateDuplicateIds: false,
   })
-  const fromPrompts = collectPromptTests(project.prompts, core)
+  const fromPrompts = await collectPromptTests(project.prompts, core, { validateDuplicateIds: false })
   const promptDiagnosticErrors = project.promptDiagnostics.map(collectErrorFromProjectModelDiagnostic)
   const collected = [...fromFiles.evaluations, ...fromPrompts.evaluations]
   const errors = [
@@ -111,7 +115,11 @@ async function main(): Promise<number> {
     ...findDuplicateIdErrors(collected),
   ]
 
-  emit({ type: 'collect:done', evaluations: collected.map((entry) => entry.manifest), errors })
+  emit({
+    type: 'collect:done',
+    evaluations: collected.map((entry) => entry.manifest),
+    errors,
+  })
 
   if (errors.length > 0) {
     for (const error of errors) {
@@ -187,7 +195,7 @@ async function main(): Promise<number> {
     })
     return result.exitCode
   } finally {
-    await flushQualityRunnerObservability(core)
+    await flushQualityRunnerObservability(observabilityCore)
     restoreObservability?.()
   }
 }

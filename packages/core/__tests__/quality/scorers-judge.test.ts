@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { evaluate } from '../../quality'
 import { scorers } from '../../quality/scorers'
-import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
-import { runEvaluation, type EngineSetup } from '../../quality/internal/engine'
+import type { Evaluation } from '../../quality/evaluate'
 import type { RunOverrides } from '../../quality/experiment'
+import type { GenerateFn } from '../../quality/target'
+import { runEvaluationWithRunner, type QualityRunnerHarnessOptions } from './runner-harness'
 
 function run(
   evaluation: Evaluation<never, never, string, string>,
-  setup: EngineSetup,
+  setup: QualityRunnerHarnessOptions['setup'],
   overrides?: RunOverrides<string>,
 ) {
-  return runEvaluation(getEvaluationDefinition(evaluation), overrides, { persist: false, qualityId: 'test', setup })
+  return runEvaluationWithRunner(evaluation, overrides, { setup })
 }
 
 /**
@@ -19,9 +20,9 @@ function run(
  */
 function judgeGenerateStub(object: Record<string, unknown>) {
   const calls: Array<{ promptId: string; system?: string; user?: string; model: unknown }> = []
-  const generate = async (prompt: unknown, opts: unknown) => {
-    const promptRecord = prompt as { id: string; config: { system?: unknown; prompt?: unknown } }
-    const optsRecord = opts as { model?: unknown }
+  const generate: GenerateFn = async (prompt, opts) => {
+    const promptRecord = prompt as unknown as { id: string; config: { system?: unknown; prompt?: unknown } }
+    const optsRecord = opts as unknown as { model?: unknown }
     calls.push({
       promptId: promptRecord.id,
       system: typeof promptRecord.config.system === 'string' ? promptRecord.config.system : undefined,
@@ -30,7 +31,7 @@ function judgeGenerateStub(object: Record<string, unknown>) {
     })
     return { object }
   }
-  return { generate: generate as EngineSetup['generate'], calls }
+  return { generate, calls }
 }
 
 describe('scorers.judge — rubric mode', () => {
@@ -58,7 +59,7 @@ describe('scorers.judge — rubric mode', () => {
     expect(stub.calls[0]!.user).toContain('answer to refunds')
   })
 
-    it('falls back to runner model when no judgeModel is configured, resolving string refs via runner models', async () => {
+  it('falls back to runner model when no judgeModel is configured, resolving string refs via runner models', async () => {
     const stub = judgeGenerateStub({ reasoning: 'ok', score: 1 })
     const evaluation = evaluate('judge.model-fallback', {
       task: async () => 'out',
@@ -75,7 +76,7 @@ describe('scorers.judge — rubric mode', () => {
     expect(stub.calls[0]!.model).toBe('resolved-cheap-model')
   })
 
-    it('scores through explicit judge generate and model bindings on the scorer', async () => {
+  it('scores through explicit judge generate and model bindings on the scorer', async () => {
     const stub = judgeGenerateStub({ reasoning: 'explicit scorer runtime', score: 0.8 })
     const evaluation = evaluate('judge.explicit-runtime', {
       task: async () => 'out',
@@ -96,7 +97,7 @@ describe('scorers.judge — rubric mode', () => {
     expect(stub.calls[0]!.model).toBe('explicit-judge-model')
   })
 
-    it('raises a definition error when no judge generate fn is available', async () => {
+  it('raises a definition error when no judge generate fn is available', async () => {
     const evaluation = evaluate('judge.no-setup', {
       task: async () => 'out',
       data: [{ input: { q: 'x' } }],
@@ -109,7 +110,7 @@ describe('scorers.judge — rubric mode', () => {
     })
   })
 
-    it('throws an explicit binding error when invoked standalone (autoevals call shape)', () => {
+  it('throws an explicit binding error when invoked standalone (autoevals call shape)', () => {
     const scorer = scorers.judge({ name: 'j', rubric: 'r' })
     expect(() => scorer({ input: 'q', output: 'a', expected: undefined })).toThrow(/eval-local helper/)
   })
@@ -132,7 +133,7 @@ describe('scorers.judge — choiceScores mode', () => {
     expect(stub.calls[0]!.system).toMatch(/formal, casual, rude/)
   })
 
-    it('errors the cell when the judge returns an unknown choice', async () => {
+  it('errors the cell when the judge returns an unknown choice', async () => {
     const stub = judgeGenerateStub({ reasoning: 'r', score: 1, detail: { choice: 'formal' } })
     const evaluation = evaluate('judge.choices-unknown', {
       task: async () => 'out',
@@ -146,7 +147,7 @@ describe('scorers.judge — choiceScores mode', () => {
     expect(cell.error?.message).toMatch(/unknown choice/)
   })
 
-    it('rejects rubric + choiceScores together and an empty choiceScores at construction', () => {
+  it('rejects rubric + choiceScores together and an empty choiceScores at construction', () => {
     expect(() => scorers.judge({ name: 'x', rubric: 'r', choiceScores: { a: 1 } })).toThrow(/exactly one/)
     expect(() => scorers.judge({ name: 'x', choiceScores: {} })).toThrow(/at least one choice/)
   })
@@ -204,10 +205,7 @@ describe('scorers via the factory-lambda form', () => {
       data: [{ input: { q: 'refunds' }, expected: { answer: 're: refunds' } }],
       // The factory receives the library pre-bound to this evaluation's types:
       // `select` sees the structured output without annotation.
-      scorers: (s) => [
-        s.judge({ name: 'helpful', rubric: 'Helpful?', select: (output) => output.answer }),
-        s.exact(),
-      ],
+      scorers: (s) => [s.judge({ name: 'helpful', rubric: 'Helpful?', select: (output) => output.answer }), s.exact()],
       gates: { scores: { helpful: { min: 0.5 } } },
     })
 
@@ -241,7 +239,7 @@ describe('scorers.judge — select enforcement', () => {
     expect(stub.calls[0]!.user).not.toContain('confidence')
   })
 
-    it('errors with a select-pointing message when a structured output has no select', async () => {
+  it('errors with a select-pointing message when a structured output has no select', async () => {
     const stub = judgeGenerateStub({ reasoning: 'r', score: 1 })
     const evaluation = evaluate('judge.select-missing', {
       task: async () => ({ structured: true }),

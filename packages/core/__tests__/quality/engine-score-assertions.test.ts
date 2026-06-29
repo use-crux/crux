@@ -1,32 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { evaluate } from '../../quality'
-import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
-import { runEvaluation } from '../../quality/internal/engine'
-import type { RunOverrides } from '../../quality/experiment'
 import type { Scorer } from '../../quality/scorers'
 import type { QualitySourceFrameRequest, QualitySourceFrameResolver } from '../../quality/source-frame'
-
-/** Run an evaluation through the internal engine without touching the repo. */
-function run(
-  evaluation: Evaluation<never, never, string, string>,
-  overrides?: RunOverrides<string>,
-  options?: Parameters<typeof runEvaluation>[2],
-) {
-  return runEvaluation(getEvaluationDefinition(evaluation), overrides, {
-    persist: false,
-    qualityId: 'test',
-    ...options,
-  })
-}
+import { runEvaluationWithRunner as run } from './runner-harness'
 
 const answerTask = async (input: { q: string }) => ({ answer: `cited answer for ${input.q}` })
 
-const citationValidScorer = Object.assign(
-  () => ({ name: 'citation_valid', score: 0.58 }),
-  { scorerName: 'citation_valid' as const, costClass: 'code' as const },
-) satisfies Scorer<{ q: string }, { answer: string }, unknown, 'citation_valid'>
+const citationValidScorer = Object.assign(() => ({ name: 'citation_valid', score: 0.58 }), {
+  scorerName: 'citation_valid' as const,
+  costClass: 'code' as const,
+}) satisfies Scorer<{ q: string }, { answer: string }, unknown, 'citation_valid'>
 
-describe('runEvaluation - score-aware assertions', () => {
+describe('Quality runner - score-aware assertions', () => {
   it('runs post-score assertions with typed scores and records threshold evidence', async () => {
     const requests: QualitySourceFrameRequest[] = []
     const resolver: QualitySourceFrameResolver = {
@@ -102,14 +87,12 @@ describe('runEvaluation - score-aware assertions', () => {
     })
     expect(failed?.expression?.left.value).toBe(0.58)
     expect(failed?.expression?.right?.value).toBe(0.7)
-    expect(failed?.sourceFrame?.kind === 'source-frame' ? failed.sourceFrame.lines[2]?.role : undefined).toBe(
-      'failed',
-    )
+    expect(failed?.sourceFrame?.kind === 'source-frame' ? failed.sourceFrame.lines[2]?.role : undefined).toBe('failed')
     expect(requests).toHaveLength(1)
     expect(requests[0]).toMatchObject({ role: 'failed', frameRadius: 4 })
   })
 
-    it('keeps expect pre-score semantics and runs case-level asserts after scorers', async () => {
+  it('keeps expect pre-score semantics and runs case-level asserts after scorers', async () => {
     const order: string[] = []
     let scorerCalls = 0
     const evaluation = evaluate({
@@ -157,12 +140,13 @@ describe('runEvaluation - score-aware assertions', () => {
         expect.objectContaining({ name: 'pass', score: 1 }),
       ]),
     )
-    expect(cell.assertions.outcomes?.map(({ level, phase, status, matcher }) => ({ level, phase, status, matcher })))
-      .toEqual([
-        { level: 'evaluation', phase: 'expect', status: 'passed', matcher: 'toContain' },
-        { level: 'evaluation', phase: 'assert', status: 'passed', matcher: 'toBeGreaterThanOrEqual' },
-        { level: 'evaluation', phase: 'assert', status: 'passed', matcher: 'toContain' },
-        { level: 'case', phase: 'assert', status: 'passed', matcher: 'toBeGreaterThanOrEqual' },
-      ])
+    expect(
+      cell.assertions.outcomes?.map(({ level, phase, status, matcher }) => ({ level, phase, status, matcher })),
+    ).toEqual([
+      { level: 'evaluation', phase: 'expect', status: 'passed', matcher: 'toContain' },
+      { level: 'evaluation', phase: 'assert', status: 'passed', matcher: 'toBeGreaterThanOrEqual' },
+      { level: 'evaluation', phase: 'assert', status: 'passed', matcher: 'toContain' },
+      { level: 'case', phase: 'assert', status: 'passed', matcher: 'toBeGreaterThanOrEqual' },
+    ])
   })
 })
