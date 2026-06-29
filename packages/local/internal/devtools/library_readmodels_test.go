@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/observability"
@@ -423,4 +424,99 @@ func TestPlansEndpointProjectsObservedPlanArtifacts(t *testing.T) {
 	if detail.Content != "Full plan body" || len(detail.Versions) != 1 || len(detail.Events) != 1 {
 		t.Fatalf("plan detail = %#v", detail)
 	}
+}
+
+func TestPlanDetailProjectsObservedTaskActivity(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewStore()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	obs, err := observability.NewService(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(`{
+		"records": [
+			{"schemaVersion":1,"recordId":"rec_plan_span","type":"span","runId":"run_tasks","traceId":"trace_tasks","spanId":"span_plan","family":"plan","primitive":"plan.operation","name":"plan.create","startedAt":"2026-05-21T10:00:00.000Z","endedAt":"2026-05-21T10:00:00.010Z","durationMs":10,"status":"ok","attributes":{"operation":"create","planId":"plan_tasks","title":"Task plan"}},
+			{"schemaVersion":1,"recordId":"rec_plan_artifact","type":"artifact","runId":"run_tasks","traceId":"trace_tasks","artifactId":"artifact_plan","spanId":"span_plan","kind":"output","createdAt":"2026-05-21T10:00:00.010Z","contentType":"application/json","encoding":"json","preview":{"primitive":"plan.operation","operation":"create","planId":"plan_tasks","title":"Task plan","version":1,"content":"Plan body"}},
+
+			{"schemaVersion":1,"recordId":"rec_list_span","type":"span","runId":"run_tasks","traceId":"trace_tasks","spanId":"span_list","family":"task","primitive":"task.operation","name":"tasklist.create","startedAt":"2026-05-21T10:00:01.000Z","endedAt":"2026-05-21T10:00:01.010Z","durationMs":10,"status":"ok","attributes":{"operation":"tasklist.create","taskListId":"list_1","planId":"plan_tasks"}},
+			{"schemaVersion":1,"recordId":"rec_list_artifact","type":"artifact","runId":"run_tasks","traceId":"trace_tasks","artifactId":"artifact_list","spanId":"span_list","kind":"output","createdAt":"2026-05-21T10:00:01.010Z","contentType":"application/json","encoding":"json","preview":{"primitive":"task.operation","operation":"tasklist.create","taskListId":"list_1","planId":"plan_tasks","status":"in_progress"}},
+
+			{"schemaVersion":1,"recordId":"rec_add_completed_span","type":"span","runId":"run_tasks","traceId":"trace_tasks","spanId":"span_add_completed","family":"task","primitive":"task.operation","name":"task.add","startedAt":"2026-05-21T10:00:02.000Z","endedAt":"2026-05-21T10:00:02.010Z","durationMs":10,"status":"ok","attributes":{"operation":"add","taskListId":"list_1","taskId":"completed_task"}},
+			{"schemaVersion":1,"recordId":"rec_add_completed_artifact","type":"artifact","runId":"run_tasks","traceId":"trace_tasks","artifactId":"artifact_add_completed","spanId":"span_add_completed","kind":"output","createdAt":"2026-05-21T10:00:02.010Z","contentType":"application/json","encoding":"json","preview":{"primitive":"task.operation","operation":"add","taskListId":"list_1","taskId":"completed_task","label":"Completed task","status":"pending"}},
+			{"schemaVersion":1,"recordId":"rec_update_completed_span","type":"span","runId":"run_tasks","traceId":"trace_tasks","spanId":"span_update_completed","family":"task","primitive":"task.operation","name":"task.update","startedAt":"2026-05-21T10:00:03.000Z","endedAt":"2026-05-21T10:00:03.010Z","durationMs":10,"status":"ok","attributes":{"operation":"update","taskListId":"list_1","taskId":"completed_task","status":"completed"}},
+			{"schemaVersion":1,"recordId":"rec_update_completed_artifact","type":"artifact","runId":"run_tasks","traceId":"trace_tasks","artifactId":"artifact_update_completed","spanId":"span_update_completed","kind":"output","createdAt":"2026-05-21T10:00:03.010Z","contentType":"application/json","encoding":"json","preview":{"primitive":"task.operation","operation":"update","taskListId":"list_1","taskId":"completed_task","label":"Completed task","status":"completed","durationMs":42}},
+
+			{"schemaVersion":1,"recordId":"rec_update_failed_span","type":"span","runId":"run_tasks","traceId":"trace_tasks","spanId":"span_update_failed","family":"task","primitive":"task.operation","name":"task.update","startedAt":"2026-05-21T10:00:04.000Z","endedAt":"2026-05-21T10:00:04.010Z","durationMs":10,"status":"ok","attributes":{"operation":"update","taskListId":"list_1","taskId":"failed_task","status":"failed"}},
+			{"schemaVersion":1,"recordId":"rec_update_failed_artifact","type":"artifact","runId":"run_tasks","traceId":"trace_tasks","artifactId":"artifact_update_failed","spanId":"span_update_failed","kind":"output","createdAt":"2026-05-21T10:00:04.010Z","contentType":"application/json","encoding":"json","preview":{"primitive":"task.operation","operation":"update","taskListId":"list_1","taskId":"failed_task","label":"Failed task","status":"failed","progress":"Errored while drafting"}},
+
+			{"schemaVersion":1,"recordId":"rec_update_skipped_span","type":"span","runId":"run_tasks","traceId":"trace_tasks","spanId":"span_update_skipped","family":"task","primitive":"task.operation","name":"task.update","startedAt":"2026-05-21T10:00:05.000Z","endedAt":"2026-05-21T10:00:05.010Z","durationMs":10,"status":"ok","attributes":{"operation":"update","taskListId":"list_1","taskId":"skipped_task","status":"skipped"}},
+			{"schemaVersion":1,"recordId":"rec_update_skipped_artifact","type":"artifact","runId":"run_tasks","traceId":"trace_tasks","artifactId":"artifact_update_skipped","spanId":"span_update_skipped","kind":"output","createdAt":"2026-05-21T10:00:05.010Z","contentType":"application/json","encoding":"json","preview":{"primitive":"task.operation","operation":"update","taskListId":"list_1","taskId":"skipped_task","label":"Skipped task","status":"skipped"}},
+
+			{"schemaVersion":1,"recordId":"rec_update_cancelled_span","type":"span","runId":"run_tasks","traceId":"trace_tasks","spanId":"span_update_cancelled","family":"task","primitive":"task.operation","name":"task.update","startedAt":"2026-05-21T10:00:06.000Z","endedAt":"2026-05-21T10:00:06.010Z","durationMs":10,"status":"ok","attributes":{"operation":"update","taskListId":"list_1","taskId":"cancelled_task","status":"cancelled"}},
+			{"schemaVersion":1,"recordId":"rec_update_cancelled_artifact","type":"artifact","runId":"run_tasks","traceId":"trace_tasks","artifactId":"artifact_update_cancelled","spanId":"span_update_cancelled","kind":"output","createdAt":"2026-05-21T10:00:06.010Z","contentType":"application/json","encoding":"json","preview":{"primitive":"task.operation","operation":"update","taskListId":"list_1","taskId":"cancelled_task","label":"Cancelled task","status":"cancelled"}},
+
+			{"schemaVersion":1,"recordId":"rec_add_removed_span","type":"span","runId":"run_tasks","traceId":"trace_tasks","spanId":"span_add_removed","family":"task","primitive":"task.operation","name":"task.add","startedAt":"2026-05-21T10:00:07.000Z","endedAt":"2026-05-21T10:00:07.010Z","durationMs":10,"status":"ok","attributes":{"operation":"add","taskListId":"list_1","taskId":"removed_task"}},
+			{"schemaVersion":1,"recordId":"rec_add_removed_artifact","type":"artifact","runId":"run_tasks","traceId":"trace_tasks","artifactId":"artifact_add_removed","spanId":"span_add_removed","kind":"output","createdAt":"2026-05-21T10:00:07.010Z","contentType":"application/json","encoding":"json","preview":{"primitive":"task.operation","operation":"add","taskListId":"list_1","taskId":"removed_task","label":"Removed task","status":"pending"}},
+			{"schemaVersion":1,"recordId":"rec_remove_span","type":"span","runId":"run_tasks","traceId":"trace_tasks","spanId":"span_remove","family":"task","primitive":"task.operation","name":"task.remove","startedAt":"2026-05-21T10:00:08.000Z","endedAt":"2026-05-21T10:00:08.010Z","durationMs":10,"status":"ok","attributes":{"operation":"remove","taskListId":"list_1","taskId":"removed_task"}},
+			{"schemaVersion":1,"recordId":"rec_remove_artifact","type":"artifact","runId":"run_tasks","traceId":"trace_tasks","artifactId":"artifact_remove","spanId":"span_remove","kind":"output","createdAt":"2026-05-21T10:00:08.010Z","contentType":"application/json","encoding":"json","preview":{"primitive":"task.operation","operation":"remove","taskListId":"list_1","taskId":"removed_task","label":"Removed task","status":"cancelled"}},
+
+			{"schemaVersion":1,"recordId":"rec_discard_span","type":"span","runId":"run_tasks","traceId":"trace_tasks","spanId":"span_discard","family":"task","primitive":"task.operation","name":"tasklist.discard","startedAt":"2026-05-21T10:00:09.000Z","endedAt":"2026-05-21T10:00:09.010Z","durationMs":10,"status":"ok","attributes":{"operation":"tasklist.discard","taskListId":"list_1","planId":"plan_tasks"}},
+			{"schemaVersion":1,"recordId":"rec_discard_artifact","type":"artifact","runId":"run_tasks","traceId":"trace_tasks","artifactId":"artifact_discard","spanId":"span_discard","kind":"output","createdAt":"2026-05-21T10:00:09.010Z","contentType":"application/json","encoding":"json","preview":{"primitive":"task.operation","operation":"tasklist.discard","taskListId":"list_1","planId":"plan_tasks","status":"discarded"}}
+		]
+	}`), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	service := NewService(st, quality.NewService(st, t.TempDir())).WithObservability(obs)
+	value, found, err := service.PlanDetail(ctx, "plan_tasks")
+	if err != nil || !found {
+		t.Fatalf("plan detail found=%v err=%v", found, err)
+	}
+	detail := value.(planDetail)
+	statuses := map[string]string{}
+	progressMessages := map[string]string{}
+	for _, task := range detail.Tasks {
+		statuses[task.ID] = task.Status
+		progressMessages[task.ID] = task.ProgressMessage
+		if task.ParentID != nil {
+			t.Fatalf("task %s parentId = %q, want nil", task.ID, *task.ParentID)
+		}
+	}
+	wantStatuses := map[string]string{
+		"completed_task": "completed",
+		"failed_task":    "failed",
+		"skipped_task":   "skipped",
+		"cancelled_task": "cancelled",
+		"removed_task":   "removed",
+	}
+	if !reflect.DeepEqual(statuses, wantStatuses) {
+		t.Fatalf("statuses = %#v, want %#v", statuses, wantStatuses)
+	}
+	if progressMessages["failed_task"] != "Errored while drafting" {
+		t.Fatalf("progress message = %q", progressMessages["failed_task"])
+	}
+	if detail.TaskCounts.Done != 1 || detail.TaskCounts.Pending != 3 || detail.TaskCounts.Removed != 1 {
+		t.Fatalf("task counts = %#v", detail.TaskCounts)
+	}
+	if len(detail.Events) == 0 || !containsPlanEventKind(detail.Events, "tasklist.discarded") {
+		t.Fatalf("events missing tasklist.discarded: %#v", detail.Events)
+	}
+}
+
+func containsPlanEventKind(events []planEvent, kind string) bool {
+	for _, event := range events {
+		if event.Kind == kind {
+			return true
+		}
+	}
+	return false
 }

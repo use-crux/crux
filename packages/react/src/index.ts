@@ -1,12 +1,12 @@
 /**
- * `@use-crux/react` — Reactive hooks for plans and task lists.
+ * `@use-crux/react` — Reactive hooks for plans and tasks.
  *
  * Transport-agnostic: works with Convex, SSE, polling, or any custom transport.
  * Wrap your app with `<CruxProvider transport={...}>` and use the domain hooks.
  *
  * @example
  * ```tsx
- * import { CruxProvider, usePlan, useTaskList, useTasks } from '@use-crux/react'
+ * import { CruxProvider, usePlan, useTasks } from '@use-crux/react'
  * import { defineConvexStoreContract } from '@use-crux/convex'
  * import { useQuery } from 'convex/react'
  * import { components } from '../convex/_generated/api'
@@ -18,10 +18,9 @@
  * </CruxProvider>
  *
  * // In components
- * function PlanView({ planId }: { planId: string }) {
+ * function PlanView({ planId, taskListId }: { planId: string; taskListId: string }) {
  *   const plan = usePlan(planId)
- *   const taskList = useTaskList({ planId })
- *   const tasks = useTasks(taskList?.id)
+ *   const taskItems = useTasks(taskListId)
  *   // ...
  * }
  * ```
@@ -33,7 +32,7 @@
 export { CruxProvider, useCruxTransport } from './provider'
 
 // Domain hooks
-export { usePlan, useTaskList, useTasks, useBlackboard, useWorkingMemory } from './hooks'
+export { usePlan, useTasks, useBlackboard, useWorkingMemory } from './hooks'
 
 // Transports
 export { createPollingTransport } from './polling'

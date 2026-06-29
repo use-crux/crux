@@ -401,7 +401,7 @@ function TaskListCard({ plan, onOpen }: { plan: PlanDetail; onOpen: () => void }
     let pending = 0
     let removed = 0
     for (const t of tasks) {
-      if (t.status === 'done') done++
+      if (t.status === 'completed') done++
       else if (t.status === 'in_progress') inProgress++
       else if (t.status === 'pending') pending++
       else if (t.status === 'removed') removed++
@@ -466,7 +466,7 @@ function TaskListCard({ plan, onOpen }: { plan: PlanDetail; onOpen: () => void }
             No tasks captured yet
           </div>
           Tasks appear here when this plan's
-          <span className="font-mono"> tasklist() </span>
+          <span className="font-mono"> tasks() </span>
           starts emitting <span className="font-mono">task.added</span> events at runtime.
         </div>
       ) : (
@@ -527,7 +527,12 @@ function TaskRow({ task, depth }: { task: PlanTask; depth: number }) {
   const removed = task.status === 'removed'
   const pct = task.progress != null ? Math.round(task.progress * 100) : null
   const progressColor =
-    task.status === 'done' ? 'var(--qw-ok)' : task.status === 'in_progress' ? 'var(--qw-crux)' : 'var(--qw-fg-faint)'
+    task.status === 'completed'
+      ? 'var(--qw-ok)'
+      : task.status === 'in_progress'
+        ? 'var(--qw-crux)'
+        : 'var(--qw-fg-faint)'
+  const progressLabel = task.progressMessage ?? (pct != null ? `${pct}%` : '—')
   return (
     <div
       className="grid items-center gap-2.5 px-4 py-2.5 text-[12.5px]"
@@ -538,7 +543,7 @@ function TaskRow({ task, depth }: { task: PlanTask; depth: number }) {
         opacity: removed ? 0.5 : 1,
       }}
     >
-      <Checkbox done={task.status === 'done'} />
+      <Checkbox done={task.status === 'completed'} />
       <Chip tone={m} dot>
         {task.status === 'in_progress' ? 'in progress' : task.status}
       </Chip>
@@ -553,10 +558,10 @@ function TaskRow({ task, depth }: { task: PlanTask; depth: number }) {
       >
         {task.label}
       </span>
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2" title={task.progressMessage}>
         <ProgressBar percent={pct ?? 0} color={progressColor} />
-        <span className="min-w-[26px] text-right font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
-          {pct != null ? `${pct}%` : '—'}
+        <span className="min-w-[26px] truncate text-right font-mono text-[10.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+          {progressLabel}
         </span>
       </div>
       <div className="flex min-w-0 flex-col">

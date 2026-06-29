@@ -61,10 +61,15 @@ export function planStatusTone(status: string): ChipTone {
 
 export function taskStatusTone(status: string): ChipTone {
   switch (status) {
-    case 'done':
+    case 'completed':
       return 'ok'
     case 'in_progress':
       return 'crux'
+    case 'failed':
+      return 'danger'
+    case 'skipped':
+      return 'warn'
+    case 'cancelled':
     case 'pending':
       return 'muted'
     case 'removed':

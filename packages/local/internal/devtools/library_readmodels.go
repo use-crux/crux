@@ -219,6 +219,7 @@ type planTask struct {
 	Label            string   `json:"label"`
 	Status           string   `json:"status"`
 	Progress         float64  `json:"progress"`
+	ProgressMessage  string   `json:"progressMessage,omitempty"`
 	Assignee         string   `json:"assignee,omitempty"`
 	Model            string   `json:"model,omitempty"`
 	DurationMs       *float64 `json:"durationMs"`
@@ -1320,10 +1321,14 @@ func (s *Service) planDetails(ctx context.Context) []planDetail {
 	taskEvents := s.store.GetTaskEvents()
 	plans := map[string]*planDetail{}
 	taskListToPlan := map[string]string{}
+	taskByPlan := map[string]map[string]*planTask{}
 
 	if s.observability != nil {
 		if activity, err := s.observability.ResourceActivity(ctx, "plan"); err == nil {
 			applyObservedPlanActivity(plans, activity)
+		}
+		if activity, err := s.observability.ResourceActivity(ctx, "task"); err == nil {
+			applyObservedTaskActivity(plans, taskListToPlan, taskByPlan, activity)
 		}
 	}
 
@@ -1387,7 +1392,6 @@ func (s *Service) planDetails(ctx context.Context) []planDetail {
 		}
 	}
 
-	taskByPlan := map[string]map[string]*planTask{}
 	for _, event := range taskEvents {
 		planID := nonEmpty(taskListToPlan[event.TaskListID], "unassigned")
 		detail := ensurePlan(plans, planID)
@@ -1410,6 +1414,7 @@ func (s *Service) planDetails(ctx context.Context) []planDetail {
 			task.TraceID = event.TraceID
 		case "updated":
 			task.Status = normalizeTaskStatus(stringValue(event.Data, "status", task.Status))
+			task.ProgressMessage = stringValue(event.Data, "progress", task.ProgressMessage)
 			task.Progress = progressValue(event.Data["progress"], task.Status)
 			task.DurationMs = floatPointer(event.Data["durationMs"])
 			task.TraceID = event.TraceID
@@ -1440,7 +1445,7 @@ func (s *Service) planDetails(ctx context.Context) []planDetail {
 		for _, task := range taskByPlan[planID] {
 			detail.Tasks = append(detail.Tasks, *task)
 			switch task.Status {
-			case "done":
+			case "completed":
 				detail.TaskCounts.Done++
 			case "in_progress":
 				detail.TaskCounts.InProgress++
@@ -1836,11 +1841,13 @@ func normalizePlanStatus(status string) string {
 func normalizeTaskStatus(status string) string {
 	switch strings.ToLower(status) {
 	case "completed", "complete", "done", "ok":
-		return "done"
+		return "completed"
 	case "running", "active", "in-progress":
 		return "in_progress"
-	case "removed":
-		return "removed"
+	case "failed", "skipped", "cancelled", "removed":
+		return strings.ToLower(status)
+	case "canceled":
+		return "cancelled"
 	default:
 		return "pending"
 	}
@@ -1853,7 +1860,7 @@ func progressValue(value any, status string) float64 {
 		}
 		return f
 	}
-	if status == "done" {
+	if status == "completed" {
 		return 1
 	}
 	if status == "in_progress" {
