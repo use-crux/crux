@@ -85,7 +85,7 @@ void entries
 // ─────────────────────────────────────────────────────────────────
 
 const answer = prompt({
-  id: 'answer',
+  id: 'public-barrel-answer',
   use: [localeCtx, brandCtx, tone],
   input: z.object({ question: z.string() }),
   system: ({ input }) => `${input.brand} answering in ${input.locale}: ${input.question}`,
@@ -109,7 +109,7 @@ expectTypeOf(answer.resolve).returns.resolves.toMatchTypeOf<ResolvedPrompt>()
 // ─────────────────────────────────────────────────────────────────
 
 const optional = prompt({
-  id: 'optional',
+  id: 'public-barrel-optional',
   use: [when(({ locale }) => locale === 'nl', localeCtx), brandCtx],
   input: z.object({ question: z.string() }),
   system: ({ input }) => `${input.brand}: ${input.question}`,
@@ -126,7 +126,7 @@ void optional.resolve({ input: { question: 'q', brand: 'Acme', locale: 'en' } })
 const ScoreSchema = z.object({ score: z.number(), label: z.enum(['ok', 'bad']) })
 
 prompt({
-  id: 'structured',
+  id: 'public-barrel-structured',
   input: z.object({ q: z.string() }),
   output: ScoreSchema,
   prompt: ({ input }) => input.q,
