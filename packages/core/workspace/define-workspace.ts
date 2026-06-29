@@ -15,13 +15,14 @@ import { inMemoryBlobStore, inMemoryDataStore } from '../store/memory'
 import type { AnyToolSet } from '../types'
 import type { Context, PromptInjection } from '../prompt/context-types'
 import type { ToolDef } from '../types/tool'
-import { analyzeContent, createFileRecord, findOccurrences, recordToFile, recordToReadResult } from './content'
+import { analyzeContent, createFileRecord, findOccurrences, recordToFile } from './content'
 import { renderWorkspaceManifest } from './manifest'
 import { mountForPath, normalizeMounts, normalizePath, defaultMounts } from './path'
 import { instrument } from './observability'
 import { fileKey, getRecord, getRequiredRecord, listEntries } from './store'
 import { createWorkspaceTools } from './tools'
 import { hasGlob } from './glob'
+import { recordToReadResult } from './read-result'
 import {
   DEFAULT_INLINE_TEXT_BYTES,
   type Workspace,
@@ -78,7 +79,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
       const normalized = normalizePath(path)
       const isGlob = hasGlob(normalized)
       const matchedMount = isGlob || normalized === '/' ? undefined : mountForPath(normalized, mounts, 'read')
-      const entries = await listEntries({
+      return listEntries({
         store,
         workspaceId: config.id,
         namespace,
@@ -86,9 +87,9 @@ export function workspace(config: WorkspaceConfig): Workspace {
         queryPath: normalized,
         isGlob,
         limit: options?.limit,
+        cursor: options?.cursor,
         matchedMount,
       })
-      return { entries }
     })
   }
 
@@ -106,7 +107,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
       const normalized = normalizePath(path)
       mountForPath(normalized, mounts, 'read')
       const record = await getRequiredRecord(store, config.id, namespace, normalized)
-      return recordToReadResult(record, options?.maxInlineBytes)
+      return recordToReadResult(record, { blobs, maxInlineBytes: options?.maxInlineBytes, offset: options?.offset })
     })
   }
 
@@ -230,6 +231,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
       system: async ({ input }) =>
         renderWorkspaceManifest({
           store,
+          blobs,
           workspaceId: config.id,
           mounts,
           namespace: await resolveNamespace(input),
@@ -258,7 +260,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
             description: `Workspace: ${config.id}`,
             input: z.object({}).passthrough(),
             priority: 65,
-            system: () => renderWorkspaceManifest({ store, workspaceId: config.id, mounts, namespace }),
+            system: () => renderWorkspaceManifest({ store, blobs, workspaceId: config.id, mounts, namespace }),
           }),
         ],
         tools: asTools(undefined, namespace) as AnyToolSet,

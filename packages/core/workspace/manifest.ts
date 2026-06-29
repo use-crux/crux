@@ -8,32 +8,33 @@
  * @module
  */
 
-import type { DataStore } from '../store/types'
-import { recordToReadResult } from './content'
+import type { BlobStore, DataStore } from '../store/types'
 import { mountForPath, normalizePath } from './path'
+import { recordToReadResult } from './read-result'
 import { getRequiredRecord, listAllFileEntries, listEntries } from './store'
 import type { NormalizedMount, WorkspaceContextOptions, WorkspaceListResult } from './types'
+
+const MANIFEST_FILE_LIMIT = 100
 
 /** Render the markdown manifest for a workspace namespace. */
 export async function renderWorkspaceManifest(args: {
   readonly store: DataStore
+  readonly blobs?: BlobStore
   readonly workspaceId: string
   readonly mounts: readonly NormalizedMount[]
   readonly namespace: string
   readonly options?: WorkspaceContextOptions
 }): Promise<string> {
-  const { store, workspaceId, mounts, namespace, options } = args
-  const rootListing: WorkspaceListResult = {
-    entries: await listEntries({
-      store,
-      workspaceId,
-      namespace,
-      mounts,
-      queryPath: normalizePath('/'),
-      isGlob: false,
-    }),
-  }
-  const files = await listAllFileEntries(store, workspaceId, namespace)
+  const { store, blobs, workspaceId, mounts, namespace, options } = args
+  const rootListing: WorkspaceListResult = await listEntries({
+    store,
+    workspaceId,
+    namespace,
+    mounts,
+    queryPath: normalizePath('/'),
+    isGlob: false,
+  })
+  const files = await listAllFileEntries(store, workspaceId, namespace, { limit: MANIFEST_FILE_LIMIT })
   const lines = [
     `## Workspace (${workspaceId})`,
     `Namespace: ${namespace}`,
@@ -50,8 +51,11 @@ export async function renderWorkspaceManifest(args: {
         lines.push(`- ${entry.path} (${entry.mimeType}, ${entry.size} bytes)`)
       }
     }
-    for (const file of files) {
+    for (const file of files.entries) {
       lines.push(`- ${file.path} (${file.mimeType}, ${file.size} bytes)`)
+    }
+    if (files.cursor) {
+      lines.push(`- ...more files omitted; use workspace tools to list additional entries.`)
     }
   }
   lines.push(
@@ -66,7 +70,7 @@ export async function renderWorkspaceManifest(args: {
       const normalized = normalizePath(include)
       mountForPath(normalized, mounts, 'read')
       const record = await getRequiredRecord(store, workspaceId, namespace, normalized)
-      const result = recordToReadResult(record, options?.maxInlineBytes)
+      const result = await recordToReadResult(record, { blobs, maxInlineBytes: options?.maxInlineBytes })
       if (result.kind === 'text') {
         lines.push(`### ${result.path}`, result.content)
       } else if (result.kind === 'json') {

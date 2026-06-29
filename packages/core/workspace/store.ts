@@ -61,19 +61,24 @@ export async function listEntries(input: {
   readonly queryPath: WorkspacePath
   readonly isGlob: boolean
   readonly limit?: number
+  readonly cursor?: string
   readonly matchedMount?: NormalizedMount
-}): Promise<WorkspaceListEntry[]> {
+}): Promise<{ readonly entries: WorkspaceListEntry[]; readonly cursor?: string }> {
   if (input.queryPath === '/') {
-    return input.mounts.map((mount) => ({ kind: 'directory', path: mount.path, mount: mount.path }))
+    return { entries: input.mounts.map((mount) => ({ kind: 'directory', path: mount.path, mount: mount.path })) }
   }
 
   const prefix = filePrefix(input.workspaceId, input.namespace)
-  const listed = await input.store.list(prefix)
+  const listed = await input.store.list(prefix, { limit: input.limit, cursor: input.cursor })
   const records = listed.entries.flatMap((entry) => (isFileRecord(entry.value) ? [entry.value] : []))
+  const glob = input.isGlob ? globToRegExp(input.queryPath) : undefined
   const entries = input.isGlob
-    ? records.filter((record) => globToRegExp(input.queryPath).test(record.path)).map(recordToFile)
+    ? records.filter((record) => (glob ? glob.test(record.path) : false)).map(recordToFile)
     : directoryEntries(records, input.queryPath, input.matchedMount)
-  return entries.slice(0, input.limit ?? entries.length)
+  return {
+    entries: entries.slice(0, input.limit ?? entries.length),
+    ...(listed.cursor ? { cursor: listed.cursor } : {}),
+  }
 }
 
 /** List every file record in a namespace as {@link WorkspaceFile} entries. */
@@ -81,9 +86,13 @@ export async function listAllFileEntries(
   store: DataStore,
   workspaceId: string,
   namespace: string,
-): Promise<WorkspaceFile[]> {
-  const listed = await store.list(filePrefix(workspaceId, namespace))
-  return listed.entries.flatMap((entry) => (isFileRecord(entry.value) ? [recordToFile(entry.value)] : []))
+  options: { readonly limit?: number } = {},
+): Promise<{ readonly entries: WorkspaceFile[]; readonly cursor?: string }> {
+  const listed = await store.list(filePrefix(workspaceId, namespace), { limit: options.limit })
+  return {
+    entries: listed.entries.flatMap((entry) => (isFileRecord(entry.value) ? [recordToFile(entry.value)] : [])),
+    ...(listed.cursor ? { cursor: listed.cursor } : {}),
+  }
 }
 
 function directoryEntries(

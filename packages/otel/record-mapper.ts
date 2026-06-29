@@ -21,6 +21,7 @@ import {
   CRUX_TOOL_NAME,
   CRUX_TOOL_OUTPUT_SIZE,
   CRUX_TOOL_TOKEN_SAVINGS_ESTIMATE,
+  CRUX_WORKSPACE_PATH_HASH,
   GEN_AI_CLIENT_DURATION_MS,
   GEN_AI_CLIENT_OUTPUT_TOKENS_PER_SECOND,
   GEN_AI_CLIENT_TIME_PER_OUTPUT_CHUNK_MS,
@@ -271,6 +272,8 @@ function attributeKeyFor(key: string): string {
       return CRUX_TOOL_MODEL_OUTPUT_SIZE
     case 'tokenSavingsEstimate':
       return CRUX_TOOL_TOKEN_SAVINGS_ESTIMATE
+    case 'pathHash':
+      return CRUX_WORKSPACE_PATH_HASH
     default:
       return key.includes('.') ? key : `crux.${key}`
   }

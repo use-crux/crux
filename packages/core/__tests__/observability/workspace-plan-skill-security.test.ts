@@ -50,10 +50,16 @@ describe('canonical workspace, plan-task, skill, and security observability', ()
           workspaceId: 'research',
           operation: 'write',
           namespaceHash: expect.any(String),
-          path: '/workspace/notes.md',
+          pathHash: expect.stringMatching(/^fnv1a:/),
         }),
       }),
     )
+    const workspaceAttributeValues = transport.records.flatMap((record) =>
+      record.attributes?.primitive === 'workspace.operation' || record.attributes?.operation === 'write'
+        ? Object.values(record.attributes)
+        : [],
+    )
+    expect(workspaceAttributeValues).not.toContain('/workspace/notes.md')
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',

@@ -72,11 +72,13 @@ export interface WorkspaceWriteOptions {
 /** Options for {@link Workspace.read}. */
 export interface WorkspaceReadOptions {
   readonly maxInlineBytes?: number
+  readonly offset?: number
 }
 
 /** Options for {@link Workspace.list}. */
 export interface WorkspaceListOptions {
   readonly limit?: number
+  readonly cursor?: string
 }
 
 /** A find/replace patch for {@link Workspace.edit}. */
@@ -124,6 +126,7 @@ export type WorkspaceListEntry = WorkspaceFile | WorkspaceDirectory
 /** The result of {@link Workspace.list}. */
 export interface WorkspaceListResult {
   readonly entries: readonly WorkspaceListEntry[]
+  readonly cursor?: string
 }
 
 /** The result of {@link Workspace.read}: inline text/JSON or a binary reference. */
@@ -134,6 +137,8 @@ export type WorkspaceReadResult =
       readonly mimeType: string
       readonly content: string
       readonly size: number
+      readonly truncated?: boolean
+      readonly offset?: number
       readonly metadata?: Record<string, JsonValue>
     }
   | {

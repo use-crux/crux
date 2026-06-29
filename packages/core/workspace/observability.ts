@@ -30,7 +30,7 @@ export async function instrument<T>(event: WorkspaceEvent, run: () => Promise<T>
       workspaceId: event.workspaceId,
       operation: event.operation,
       namespaceHash: hashString(event.namespace),
-      path: event.path,
+      pathHash: hashString(event.path),
     },
   })
   try {
@@ -42,7 +42,7 @@ export async function instrument<T>(event: WorkspaceEvent, run: () => Promise<T>
         workspaceId: event.workspaceId,
         operation: event.operation,
         namespaceHash: hashString(event.namespace),
-        path: event.path,
+        pathHash: hashString(event.path),
         status: 'success',
         ...resultAttributes,
       },
@@ -53,7 +53,7 @@ export async function instrument<T>(event: WorkspaceEvent, run: () => Promise<T>
       workspaceId: event.workspaceId,
       operation: event.operation,
       namespaceHash: hashString(event.namespace),
-      path: event.path,
+      pathHash: hashString(event.path),
       status: 'error',
     })
     throw error
@@ -77,7 +77,7 @@ function emitWorkspaceArtifact(
       workspaceId: event.workspaceId,
       operation: event.operation,
       namespaceHash: hashString(event.namespace),
-      path: event.path,
+      pathHash: hashString(event.path),
       ...workspaceResultAttributes(result),
     },
   })

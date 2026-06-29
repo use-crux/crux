@@ -3,14 +3,13 @@
  *
  * Turns raw {@link WorkspaceContent} into a {@link ContentAnalysis}, builds the
  * persisted {@link WorkspaceFileRecord} (inline or blob-backed), and converts
- * records back into {@link WorkspaceFile} / {@link WorkspaceReadResult} shapes.
+ * records into {@link WorkspaceFile} listing shapes.
  *
  * @module
  */
 
 import type { JsonValue } from '../types/tool'
 import {
-  DEFAULT_INLINE_TEXT_BYTES,
   FILE_RECORD_VERSION,
   type ContentAnalysis,
   type WorkspaceBlobStore,
@@ -18,7 +17,6 @@ import {
   type WorkspaceFile,
   type WorkspaceFileRecord,
   type WorkspacePath,
-  type WorkspaceReadResult,
 } from './types'
 
 /** Analyze raw content into its kind, mime type, size, and decoded payload. */
@@ -146,52 +144,6 @@ export function recordToFile(record: WorkspaceFileRecord): WorkspaceFile {
     ...(record.metadata ? { metadata: record.metadata } : {}),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
-  }
-}
-
-/** Convert a stored record into a {@link WorkspaceReadResult}, honoring the inline cap. */
-export function recordToReadResult(
-  record: WorkspaceFileRecord,
-  maxInlineBytes = DEFAULT_INLINE_TEXT_BYTES,
-): WorkspaceReadResult {
-  if (record.storage === 'inline' && record.inlineText !== undefined) {
-    if (record.size > maxInlineBytes) {
-      return binaryReference(record)
-    }
-    return {
-      kind: 'text',
-      path: record.path,
-      mimeType: record.mimeType,
-      content: record.inlineText,
-      size: record.size,
-      ...(record.metadata ? { metadata: record.metadata } : {}),
-    }
-  }
-  if (record.storage === 'inline' && record.inlineJson !== undefined) {
-    return {
-      kind: 'json',
-      path: record.path,
-      mimeType: 'application/json',
-      content: record.inlineJson,
-      size: record.size,
-      ...(record.metadata ? { metadata: record.metadata } : {}),
-    }
-  }
-  return binaryReference(record)
-}
-
-function binaryReference(record: WorkspaceFileRecord): Extract<WorkspaceReadResult, { kind: 'binary' }> {
-  if (!record.uri) {
-    throw new Error(`workspace file "${record.path}" has blob storage but no URI.`)
-  }
-  return {
-    kind: 'binary',
-    path: record.path,
-    mimeType: record.mimeType,
-    uri: record.uri,
-    size: record.size,
-    ...(record.preview ? { preview: record.preview } : {}),
-    ...(record.metadata ? { metadata: record.metadata } : {}),
   }
 }
 

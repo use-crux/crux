@@ -62,9 +62,11 @@ describe('workspace()', () => {
     await expect(ws.list('/workspace')).resolves.toMatchObject({
       entries: [{ path: '/workspace/nested' }, { path: '/workspace/notes.md' }],
     })
-    await expect(ws.list('/workspace/**/*.md')).resolves.toMatchObject({
-      entries: [{ path: '/workspace/nested/brief.md' }],
-    })
+    const markdownListing = await ws.list('/workspace/**/*.md')
+    expect(markdownListing.entries.map((entry) => entry.path).sort()).toEqual([
+      '/workspace/nested/brief.md',
+      '/workspace/notes.md',
+    ])
     await expect(ws.list('/outputs/*.pdf')).resolves.toMatchObject({
       entries: [{ path: '/outputs/report.pdf' }],
     })
