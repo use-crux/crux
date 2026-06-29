@@ -1,212 +1,71 @@
 ---
-title: Server-Side Integration
-description: SSE handlers and AI SDK stream writers for delivering plan and task updates to clients.
+title: Server Usage
+description: Use plan and task handles from server functions, route handlers, and durable workers.
 ---
 
-## The Problem
-
-Plan and task updates happen on the server — inside agent tool calls, pipeline steps, and background jobs. The client needs to receive these updates in real time for reactive UI. You need a transport layer between server-side `CruxStore` mutations and client-side hooks.
-
-<Callout type="info">
-See the [Quick Start](/docs/guides/plans-and-tasks) for `CruxStore` setup (`inMemoryCruxStore()` for dev, `defineConvexStoreContract().store(ctx)` for Convex production).
-</Callout>
-
-## SSE Handler
-
-`cruxSSEHandler()` creates a Server-Sent Events endpoint that subscribes to `CruxStore` changes and streams them to connected clients. Works with any framework that handles `(request: Request) => Response`.
-
-```ts title="app/api/crux/sse/route.ts"
-import { cruxSSEHandler } from '@use-crux/react/server'
-
-const handler = cruxSSEHandler({
-  store,
-  prefix: '', // filter by key prefix, or '' for all events
-})
-
-export async function GET(request: Request) {
-  return handler(request)
-}
-```
-
-The handler sends `data-crux` events matching the wire format:
-
-```
-event: data-crux
-data: {"entity":"plan","key":"plan-123","value":{"title":"My Plan","version":2},"event":"updated"}
-```
-
-### Prefix Filtering
-
-Use the `prefix` option to scope which events are sent to a given client:
+Plans and task ledgers persist through the configured `CruxStore`. Server code should pass IDs across process boundaries and rebind handles where work runs.
 
 ```ts
-// Only send events for a specific session
-cruxSSEHandler({ store, prefix: `session:${sessionId}:` })
-```
+import { plan } from '@use-crux/core/plan'
+import { tasks } from '@use-crux/core/tasks'
 
-### Client Setup
-
-Connect with `createSSETransport`:
-
-```tsx
-import { CruxProvider, createSSETransport } from '@use-crux/react'
-
-const transport = createSSETransport('/api/crux/sse')
-
-function App() {
-  return (
-    <CruxProvider transport={transport}>
-      <YourApp />
-    </CruxProvider>
-  )
-}
-```
-
-## AI SDK Stream Writer
-
-`createCruxStreamWriter()` injects plan and task updates into an active AI SDK `UIMessageStream`. Updates are sent as `data-crux` data parts alongside the LLM's text output.
-
-```ts title="app/api/chat/route.ts"
-import { createCruxStreamWriter } from '@use-crux/ai/stream'
-
-export async function POST(request: Request) {
-  return createUIMessageStreamResponse({
-    execute: async (writer) => {
-      const cruxWriter = createCruxStreamWriter(writer, store)
-
-      // cruxWriter subscribes to store changes and writes data parts
-      // Run your agent — any plan/task mutations will be streamed to the client
-      await generate(prompt, { model, input })
-
-      cruxWriter.close()
-    },
-  })
-}
-```
-
-### Client Setup
-
-On the client, use `createStreamTransport()` to consume `data-crux` parts from the stream:
-
-```tsx title="chat-with-tasks.tsx"
-import { CruxProvider } from '@use-crux/react'
-import { createStreamTransport } from '@use-crux/ai/stream'
-import { useChat } from 'ai/react'
-
-function ChatWithTasks() {
-  const transport = createStreamTransport()
-
-  const { messages } = useChat({
-    api: '/api/chat',
-    onData: (part) => transport.ingest(part), // connects stream to transport
+export async function createWork(request: string) {
+  const roadmap = await plan({
+    title: 'User request',
+    content: request,
   })
 
-  return (
-    <CruxProvider transport={transport}>
-      <Messages messages={messages} />
-      <TaskProgress taskListId={currentTaskListId} />
-    </CruxProvider>
-  )
+  const work = await tasks({
+    plan: roadmap,
+    title: 'Request tasks',
+  })
+
+  return { planId: roadmap.id, taskListId: work.id }
 }
 ```
 
-### Wire Format
-
-Both SSE and stream transports use the same `data-crux` wire format:
+## Rebind In Handlers
 
 ```ts
-interface CruxDataPart {
-  entity: 'plan' | 'tasklist' | 'task'
-  key: string
-  value: Record<string, unknown>
-  event: 'created' | 'updated' | 'completed' | 'discarded' | 'added' | 'removed'
-}
-```
+export async function POST(req: Request) {
+  const { planId, taskListId, taskId } = await req.json()
 
-### Debouncing
+  const roadmap = plan.ref(planId)
+  const work = tasks.ref(taskListId)
+  const worker = work.worker(taskId)
 
-Progress updates (`reportProgress`) are rate-limited to avoid flooding the transport with high-frequency updates. The default debounce window is transport-specific — SSE uses a 100ms window, stream writer uses the stream's own buffering.
-
-<Callout type="info">
-When using the AI SDK stream transport, `data-crux` parts are only available during an active stream. For persistent reactivity between streams, use SSE or Convex transport instead.
-</Callout>
-
-## Full Stream Example
-
-Server and client wired together for a content writing pipeline:
-
-```ts title="app/api/write/route.ts"
-import { createCruxStreamWriter } from '@use-crux/ai/stream'
-import { createPlanTool, planAgent } from '@use-crux/core/plan'
-import { tasklist, taskWorker } from '@use-crux/core/tasks'
-
-export async function POST(request: Request) {
-  const { topic } = await request.json()
-
-  return createUIMessageStreamResponse({
-    execute: async (writer) => {
-      const cruxWriter = createCruxStreamWriter(writer, store)
-
-      // Phase 1: Create plan
-      const planTool = createPlanTool()
-      await generate(
-        prompt({ system: 'Create a plan.', tools: { createPlan: planTool } }),
-        { model, input: { topic } },
-      )
-
-      // Phase 2: Create tasks and execute
-      const handle = await tasklist({ planId: planTool.created!.id })
-      await handle.addTask({ id: 'intro', label: 'Write intro' })
-      await handle.addTask({ id: 'body', label: 'Write body' })
-
-      const planAgent = planAgent(planTool.created!.id)
-      for (const task of await handle.getTasks()) {
-        const worker = taskWorker(handle.id, task.id)
-        await generate(
-          prompt({
-            use: [planAgent.asContext(), worker.asContext()],
-            tools: worker.asTools(),
-            system: 'Write the section.',
-          }),
-          { model, input: {} },
-        )
-      }
-
-      cruxWriter.close()
-    },
-  })
-}
-```
-
-```tsx title="write-page.tsx"
-import { CruxProvider } from '@use-crux/react'
-import { createStreamTransport } from '@use-crux/ai/stream'
-import { usePlan, useTaskList, useTasks } from '@use-crux/react'
-
-function WritePage() {
-  const transport = createStreamTransport()
-
-  // Start the writing process — response stream feeds the transport
-  const startWriting = async (topic: string) => {
-    const response = await fetch('/api/write', {
-      method: 'POST',
-      body: JSON.stringify({ topic }),
-    })
-    // Feed stream data into transport for reactive hooks
-    const reader = response.body?.getReader()
-    if (reader) {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        transport.ingest(new TextDecoder().decode(value))
-      }
-    }
-  }
-
-  return (
-    <CruxProvider transport={transport}>
-      <WriteProgress />
-    </CruxProvider>
+  await generate(
+    prompt({
+      use: [roadmap.asContext(), worker.asContext()],
+      tools: worker.asTools(),
+      system: 'Complete the assigned task.',
+    }),
+    { model, input: {} },
   )
+
+  return Response.json({ ok: true })
 }
 ```
+
+## Creation Tools
+
+Creation tools work on the server as normal prompt tools. Read their result with `created()` after the model uses the tool.
+
+```ts
+const makePlan = plan.tool()
+
+await generate(
+  prompt({
+    system: 'Create a short plan.',
+    tools: { makePlan },
+  }),
+  { model, input: { request } },
+)
+
+const roadmap = makePlan.created()
+const work = await tasks({ plan: roadmap, title: 'Execution' })
+```
+
+## Observability
+
+Core emits canonical plan and task operation spans with JSON artifacts. Local devtools uses those artifacts to build the Plans views even when the backing store lives behind a server boundary.

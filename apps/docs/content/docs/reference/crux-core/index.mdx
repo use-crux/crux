@@ -74,8 +74,8 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     href="/docs/reference/crux-core/agent"
   />
   <Card title="Flow" description="flow, signalFlow, cancelFlow, listFlows." href="/docs/reference/crux-core/flow" />
-  <Card title="Plan" description="plan, getPlan, updatePlan, planAgent." href="/docs/reference/crux-core/plan" />
-  <Card title="Tasks" description="tasklist, taskListAgent, taskWorker." href="/docs/reference/crux-core/tasks" />
+  <Card title="Plan" description="plan, plan handles, list, ref, and creation tools." href="/docs/reference/crux-core/plan" />
+  <Card title="Tasks" description="tasks, task, task-ledger handles, and workers." href="/docs/reference/crux-core/tasks" />
   <Card
     title="Skill"
     description="skill.inline, skill.fromFile, skill.fromRegistry."
@@ -136,8 +136,8 @@ import { memory, workingState, episodes, facts, procedures } from '@use-crux/cor
 import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@use-crux/core/compaction'
 import { agent, blackboard, handoff, delegate } from '@use-crux/core/agent'
 import { flow, signalFlow, cancelFlow, listFlows, createFlowId } from '@use-crux/core/flow'
-import { plan, getPlan, updatePlan, planAgent, createPlanTool } from '@use-crux/core/plan'
-import { tasklist, taskListAgent, taskWorker, createTaskListTool } from '@use-crux/core/tasks'
+import { plan } from '@use-crux/core/plan'
+import { task, tasks } from '@use-crux/core/tasks'
 import { skill } from '@use-crux/core/skill'
 import { guardrail } from '@use-crux/core/safety'
 import { constraint } from '@use-crux/core/safety'
@@ -148,7 +148,7 @@ import { embedding } from '@use-crux/core/embedding'
 import { retriever, reranker } from '@use-crux/core/retrieval'
 import { grounding, citationSchema } from '@use-crux/core/citations'
 import { corpus, indexer } from '@use-crux/core/indexing'
-import { CruxProvider, usePlan, useTaskList, useTasks, createSSETransport, createPollingTransport } from '@use-crux/react'
+import { CruxProvider, usePlan, useTasks, createSSETransport, createPollingTransport } from '@use-crux/react'
 import { cruxSSEHandler } from '@use-crux/react/server'
 import { withDevtools } from '@use-crux/core/observability'
 import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'

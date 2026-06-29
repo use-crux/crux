@@ -1,117 +1,82 @@
 ---
-title: Best practices
-description: Heuristics for building maintainable plan and task workflows — naming, scoping, tool selection, and lifecycle management.
+title: Best Practices
+description: Keep Plans & Tasks simple, visible, and easy to compose.
 ---
 
-These rules of thumb come from running plans and task lists in production. They are guidance, not enforcement — break them when your domain demands it, but understand the cost first.
+## Keep The Plan Reviewable
 
-## Use Meaningful Task IDs
-
-IDs like `'research'`, `'write-intro'`, `'review'` are self-documenting. They make logs, devtools output, and worker bindings readable.
+Plans should explain the objective, constraints, and intended approach. Avoid storing raw conversation history in a plan.
 
 ```ts
-// Good
-await handle.addTask({ id: 'research', label: 'Research sources' })
-await handle.addTask({ id: 'write-intro', label: 'Write introduction' })
-
-// Bad — unreadable in logs and devtools
-await handle.addTask({ id: crypto.randomUUID(), label: 'Research sources' })
-```
-
-A random UUID forces you to cross-reference the task list every time you see one in a trace. A meaningful ID lets you read the trace top-to-bottom.
-
-## Keep Plans Concise
-
-Plans are intent documents, not implementation details. Keep them focused on what and why, not how:
-
-```ts
-// Good — concise intent
-const p = await plan({
-  title: 'Cloud Migration Guide',
-  content: `## Goal
-Help teams migrate from AWS to GCP.
-
-## Audience
-Platform engineers with AWS experience.
-
-## Key Sections
-1. Assessment checklist
-2. Service mapping (AWS → GCP)
-3. Migration patterns
-4. Testing strategy`,
-})
-
-// Bad — too detailed, includes implementation
-// content: '## Step 1\nOpen terminal. Run `gcloud init`...'
-```
-
-When a plan starts including command-line invocations and code snippets, it has stopped being a plan and started being a task. Move that detail into the task description or the worker prompt.
-
-## Use Templates to Guide LLMs
-
-Templates produce consistent plan structures without constraining the LLM:
-
-```ts
-const planTool = createPlanTool({
-  template: `## Goal\n[What we want to achieve]\n\n## Constraints\n[Budget, timeline, tech stack]\n\n## Success Criteria\n[How we know it's done]`,
+await roadmap.update({
+  content: [
+    '## Objective',
+    'Prepare the launch announcement.',
+    '',
+    '## Constraints',
+    '- Use approved positioning.',
+    '- Cite source material.',
+  ].join('\n'),
 })
 ```
 
-The bracketed placeholders signal which sections the LLM should fill, while leaving phrasing to the model.
+## Choose Dynamic Or Defined Early
 
-## Pick Focused Tools Per Role
-
-Give each agent the minimum tools it needs:
-
-| Role | Tools |
-|------|-------|
-| Planner | `createPlanTool` |
-| Orchestrator | `taskListAgent().asTools()` (full management) |
-| Monitor | `{ listTasks }` from `taskListAgent().asTools()` |
-| Worker | `taskWorker().asTools()` (lifecycle only) |
-| Reviewer | `planAgent().asTools()` with `{ getPlan }` only |
+Use dynamic ledgers when task IDs are discovered at runtime.
 
 ```ts
-// Orchestrator — full task management
-const tools = taskListAgent(handle.id).asTools()
-
-// Worker — lifecycle only, taskId bound
-const tools = taskWorker(handle.id, 'research').asTools()
-
-// Monitor — read-only
-const { listTasks } = taskListAgent(handle.id).asTools()
+const work = await tasks({ title: 'Runtime checklist' })
+await work.add({ id: generatedId, label })
 ```
 
-A worker that has access to `addTask` will eventually create tasks. A reviewer with `updatePlan` will eventually edit. Scope the tools to the role and you scope the failure modes.
-
-## Monitor via Devtools During Development
-
-Plan and task events appear in the devtools dashboard with full trace correlation. Use `crux dev` during development to see:
-
-- Plan creation and updates with content diffs
-- Task status transitions and progress updates
-- Worker tool calls and results
-- Flow step hierarchy with timing
-
-See the [Devtools reference](/docs/reference/crux-core/devtools) for setup.
-
-## Let Auto-Completion Work
-
-Don't manually set task list status. Update individual task statuses and let `deriveTaskListStatus()` handle the rest:
+Use defined ledgers when IDs and result schemas are part of your program contract.
 
 ```ts
-// Good — update tasks, let list status derive
-await handle.updateTask('research', { status: 'completed' })
-await handle.updateTask('write', { status: 'completed' })
-// List status auto-derives to 'completed'
+import { z } from 'zod'
 
-// The only manual override is discard()
-await handle.discard('User changed direction')
+const work = await tasks({
+  items: {
+    review: task('Review output', {
+      result: z.object({ approved: z.boolean() }),
+    }),
+  },
+})
 ```
 
-Manually setting list status invites drift between the list view and the underlying tasks. The derived status is always consistent because it's a function of the tasks themselves.
+## Use Lifecycle Methods
 
-## Related
+Prefer `start()`, `progress()`, `complete()`, `fail()`, `skip()`, `cancel()`, and `remove()` over generic status mutation.
 
-- [Recipes](/docs/guides/plans-and-tasks/recipes) — end-to-end examples that put these rules into practice
-- [Plans](/docs/guides/plans-and-tasks/plans), [Tasks](/docs/guides/plans-and-tasks/tasks), [Workers](/docs/guides/plans-and-tasks/workers) — the underlying primitives
+```ts
+await work.start('review')
+await work.progress('review', 'Checking facts')
+await work.complete('review', { approved: true })
+```
+
+## Keep Results JSON-Safe
+
+Task metadata, progress details, and results are persisted. Store JSON-safe values only.
+
+```ts
+await work.complete('extract', {
+  rows: 1200,
+  warnings: ['Missing phone number on row 42'],
+})
+```
+
+## Scope Tools Narrowly
+
+Give planners plan tools, coordinators ledger tools, and workers task-scoped tools.
+
+```ts
+const worker = work.worker('draft')
+
+prompt({
+  use: [roadmap.asContext(), worker.asContext()],
+  tools: worker.asTools(),
+})
+```
+
+## Do Not Treat Ledgers As Queues
+
+Task ledgers record state. They do not provide retries, schedules, locks, or concurrency limits. Use `flow()` or a durable runner for those guarantees, and store the plan ID plus task-ledger ID in that orchestration layer.

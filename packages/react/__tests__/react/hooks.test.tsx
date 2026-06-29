@@ -2,13 +2,20 @@
 import { describe, it, expect, vi } from 'vitest'
 import React from 'react'
 import { renderHook, act } from '@testing-library/react'
-import { usePlan, useTaskList, useTasks } from '../../src/hooks'
+import * as ReactBindings from '../../src'
+import { usePlan, useTasks } from '../../src/hooks'
 import { CruxProvider, useCruxTransport } from '../../src/provider'
 import { createMockTransport } from '../../src/testing'
-import type { Plan, TaskList, Task } from '@use-crux/core/plan'
+import type { Plan, PlanHandle, Task, TasksHandle } from '@use-crux/core/plan'
 import type { JsonObject } from '@use-crux/core/store'
 
 // ── Test Helpers ──
+
+describe('@use-crux/react public hook exports', () => {
+  it('does not export legacy task-list hook aliases', () => {
+    expect('useTaskList' in ReactBindings).toBe(false)
+  })
+})
 
 function createTestPlan(overrides?: Partial<Plan>): Plan {
   return {
@@ -16,16 +23,6 @@ function createTestPlan(overrides?: Partial<Plan>): Plan {
     title: 'Test Plan',
     content: 'Plan content',
     version: 1,
-    createdAt: 1000,
-    updatedAt: 1000,
-    ...overrides,
-  }
-}
-
-function createTestTaskList(overrides?: Partial<TaskList>): TaskList {
-  return {
-    id: 'list-1',
-    status: 'in_progress',
     createdAt: 1000,
     updatedAt: 1000,
     ...overrides,
@@ -86,6 +83,19 @@ describe('usePlan', () => {
     })
 
     expect(result.current).toBeUndefined()
+  })
+
+  it('accepts a canonical plan handle', () => {
+    const plan = createTestPlan()
+    const transport = createMockTransport()
+    transport.set(`plan:${plan.id}`, plan as unknown as JsonObject)
+    const handle = { id: plan.id } as PlanHandle
+
+    const { result } = renderHook(() => usePlan(handle), {
+      wrapper: createWrapper(transport),
+    })
+
+    expect(result.current?.id).toBe('plan-1')
   })
 
   it('re-renders when the plan changes', () => {
@@ -220,99 +230,6 @@ describe('usePlan — metadata', () => {
   })
 })
 
-// ── useTaskList ──
-
-describe('useTaskList', () => {
-  it('returns TaskList by direct ID', () => {
-    const transport = createMockTransport()
-    const list = createTestTaskList()
-    transport.set(`tasklist:${list.id}`, list as unknown as JsonObject)
-
-    const { result } = renderHook(() => useTaskList('list-1'), {
-      wrapper: createWrapper(transport),
-    })
-
-    expect(result.current).not.toBeUndefined()
-    expect(result.current!.id).toBe('list-1')
-    expect(result.current!.status).toBe('in_progress')
-  })
-
-  it('returns TaskList by planId association', () => {
-    const transport = createMockTransport()
-    const list = createTestTaskList({ planId: 'plan-1' })
-    transport.set(`tasklist:${list.id}`, list as unknown as JsonObject)
-
-    const { result } = renderHook(() => useTaskList({ planId: 'plan-1' }), {
-      wrapper: createWrapper(transport),
-    })
-
-    expect(result.current).not.toBeUndefined()
-    expect(result.current!.id).toBe('list-1')
-    expect(result.current!.planId).toBe('plan-1')
-  })
-
-  it('returns undefined when filter is undefined (skip)', () => {
-    const transport = createMockTransport()
-
-    const { result } = renderHook(() => useTaskList(undefined), {
-      wrapper: createWrapper(transport),
-    })
-
-    expect(result.current).toBeUndefined()
-  })
-
-  it('returns undefined when no task list matches planId filter', () => {
-    const transport = createMockTransport()
-    const list = createTestTaskList({ planId: 'other-plan' })
-    transport.set(`tasklist:${list.id}`, list as unknown as JsonObject)
-
-    const { result } = renderHook(() => useTaskList({ planId: 'nonexistent' }), {
-      wrapper: createWrapper(transport),
-    })
-
-    expect(result.current).toBeUndefined()
-  })
-
-  it('reflects status changes reactively', () => {
-    const transport = createMockTransport()
-    const list = createTestTaskList({ status: 'pending' })
-    transport.set(`tasklist:${list.id}`, list as unknown as JsonObject)
-
-    const { result, rerender } = renderHook(() => useTaskList('list-1'), {
-      wrapper: createWrapper(transport),
-    })
-
-    expect(result.current!.status).toBe('pending')
-
-    act(() => {
-      transport.set(`tasklist:${list.id}`, {
-        ...list,
-        status: 'in_progress',
-        updatedAt: 2000,
-      } as unknown as JsonObject)
-    })
-
-    rerender()
-    expect(result.current!.status).toBe('in_progress')
-  })
-
-  it('supports metadata dot-path filter', () => {
-    const transport = createMockTransport()
-    const list = createTestTaskList({
-      id: 'list-with-thread',
-      metadata: { threadId: 'thread-abc' },
-    })
-    transport.set(`tasklist:${list.id}`, list as unknown as JsonObject)
-
-    const { result } = renderHook(() => useTaskList({ 'metadata.threadId': 'thread-abc' }), {
-      wrapper: createWrapper(transport),
-    })
-
-    expect(result.current).not.toBeUndefined()
-    expect(result.current!.id).toBe('list-with-thread')
-  })
-})
-
 // ── useTasks ──
 
 describe('useTasks', () => {
@@ -339,6 +256,19 @@ describe('useTasks', () => {
     })
 
     expect(result.current).toBeUndefined()
+  })
+
+  it('accepts a canonical tasks handle', () => {
+    const transport = createMockTransport()
+    const t1 = createTestTask({ id: 'from-handle' })
+    transport.set(`task:list-1:from-handle`, t1 as unknown as JsonObject)
+    const handle = { id: 'list-1' } as TasksHandle
+
+    const { result } = renderHook(() => useTasks(handle), {
+      wrapper: createWrapper(transport),
+    })
+
+    expect(result.current?.map((task) => task.id)).toEqual(['from-handle'])
   })
 
   it('excludes removed tasks (removedAt set)', () => {

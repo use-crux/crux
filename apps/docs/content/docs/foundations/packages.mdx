@@ -39,8 +39,8 @@ The base package. Contains all SDK-agnostic primitives, organized into subpath e
 | `@use-crux/core/scoring`        | `llmJudge`, `metrics`                                                                |
 | `@use-crux/core/agent`          | `agent`, `blackboard`, `handoff`, `delegate`, composition factories                  |
 | `@use-crux/core/flow`           | `flow`, `signalFlow`, `cancelFlow`, `createFlowId`                                   |
-| `@use-crux/core/plan`           | `plan`, `getPlan`, `updatePlan`, `planAgent`, `createPlanTool`                       |
-| `@use-crux/core/tasks`          | `tasklist`, `taskListAgent`, `taskWorker`, `createTaskListTool`                      |
+| `@use-crux/core/plan`           | `plan`, plan handles, plan listing, plan creation tools                              |
+| `@use-crux/core/tasks`          | `tasks`, `task`, task-ledger handles, task workers, task creation tools              |
 | `@use-crux/core/skill`          | `skill.inline`, `skill.fromFile`, `skill.fromRegistry`                               |
 | `@use-crux/core/safety`         | `guardrail`, `constraint`, safety plugins                                            |
 | `@use-crux/core/project-index`  | Project Index contracts and serializers                                              |

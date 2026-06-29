@@ -1,14 +1,16 @@
 /**
- * TaskList lifecycle and task management functions.
+ * Task-ledger lifecycle and task management functions.
  *
  * Task lists track structured work items with live status updates.
- * Auto-completion evaluates list status after every task mutation.
- * Self-healing corrects stale status on read.
+ * The public `tasks()` factory returns a command handle for reading current
+ * state, mutating individual tasks, exposing focused tools, or binding a
+ * worker to a specific task.
  *
  * @module
  */
 
 import type { JsonObject } from '../store/types'
+import type { JsonValue } from '../types/tool'
 import type {
   Task,
   TaskList,
@@ -16,33 +18,143 @@ import type {
   TaskListStatus,
   CreateTaskInput,
   CreateTaskListInput,
+  TasksInput,
   TaskUpdate,
+  TaskSpecRecord,
+  TasksHandle,
 } from './types'
-import { taskListKey, taskKey, taskPrefix, deriveTaskListStatus, isCancellable } from './helpers'
-import { emptyCounts, applyCounts, deriveStatus, rebuildCounts } from './status'
-import type { StatusCounts } from './status'
+import { TASKLIST_PREFIX, isCancellable, metadataFilter, taskKey, taskListKey } from './helpers'
+import { emptyCounts, rebuildCounts } from './status'
 import { getRuntime, resolveStore } from '../runtime/runtime'
 import { observe } from '../observability'
 import { getExecutionContext } from '../runtime/execution-context'
 import { taskListAgent, taskWorker } from './agent'
+import { createTasksCreationTool, type TasksToolOptions } from './creation-tools'
+import { addInitialTasks } from './defined-tasks'
+import { DuplicateTaskIdError, TaskListNotFoundError } from './errors'
+import { assertMutableTask, assertMutableTaskList, assertValidTaskStatusUpdate } from './lifecycle'
+import { getActiveTasks, getAllTasks, repairTaskListState } from './task-list-state'
+import { assertTaskJsonValue, parseTaskCompletionResult } from './task-values'
+
+export {
+  DuplicateTaskIdError,
+  InvalidTaskTransitionError,
+  TaskJsonValueError,
+  TaskListDiscardedError,
+  TaskListNotFoundError,
+  TaskNotFoundError,
+  TaskRemovedError,
+  TaskResultValidationError,
+} from './errors'
+
+/** Options for listing task ledgers. */
+export interface TaskListListOptions {
+  /** Match task ledgers associated with this plan handle or plan ID. */
+  plan?: import('./types').PlanHandle | string
+  /** Match task ledgers by exact metadata fields. */
+  metadata?: Record<string, JsonValue>
+  /** Maximum number of task ledgers to return. */
+  limit?: number
+  /** Store cursor returned by a previous paginated list call. */
+  cursor?: string
+}
+
+/** Callable task-ledger factory plus static task-ledger helpers. */
+export interface TasksFactory {
+  /**
+   * Create a task ledger and return a canonical command handle.
+   *
+   * `tasks()` is the public factory for Plans & Tasks work ledgers. Pass a plan
+   * handle or plan ID to associate the ledger with an existing plan, or omit
+   * `plan` to use tasks independently.
+   *
+   * @param input - Optional plan association, title, and metadata.
+   * @returns A `TasksHandle` for task lifecycle commands.
+   *
+   * @example
+   * ```ts
+   * const work = await tasks({ plan: p, title: 'Launch tasks' })
+   * await work.add({ id: 'research', label: 'Research launch channels' })
+   * await work.complete('research', { channels: ['partners'] })
+   * ```
+   */
+  <const TItems extends TaskSpecRecord | undefined = undefined>(input?: TasksInput<TItems>): Promise<TasksHandle<TItems>>
+
+  /**
+   * Create a command handle for an existing task ledger ID.
+   *
+   * `tasks.ref()` does not read storage. It is useful for rebinding handles
+   * across server requests, background jobs, and UI actions.
+   */
+  ref(taskListId: string): TaskListHandle
+
+  /** List task ledgers from the configured store. */
+  list(options?: TaskListListOptions): Promise<TaskList[]>
+
+  /**
+   * Create a focused tool that creates a task ledger.
+   *
+   * After the tool executes successfully, call `created()` to access the
+   * resulting handle.
+   */
+  tool(options?: TasksToolOptions): import('../types/tool').CreationTool<TaskListHandle>
+}
 
 /**
- * Create a task list and return a handle for managing tasks.
+ * Create a task ledger and return a canonical command handle.
  *
- * The list is persisted immediately with status `'pending'`.
- * No lazy creation — avoids race conditions from concurrent `addTask()` calls.
+ * `tasks()` is the public factory for Plans & Tasks work ledgers. Pass a plan
+ * handle or plan ID to associate the ledger with an existing plan, or omit
+ * `plan` to use tasks independently.
  *
- * @param input - Optional planId association and metadata.
- * @returns A `TaskListHandle` for fluent task management.
+ * @param input - Optional plan association, title, and metadata.
+ * @returns A `TasksHandle` for task lifecycle commands.
  *
  * @example
  * ```ts
- * const taskList = await tasklist({ planId: plan.id })
- * await taskList.addTask({ id: 'research', label: 'Research sources' })
- * await taskList.updateTask('research', { status: 'completed' })
+ * const work = await tasks({ plan: p, title: 'Launch tasks' })
+ * await work.add({ id: 'research', label: 'Research launch channels' })
+ * await work.complete('research', { channels: ['partners'] })
  * ```
  */
+async function createTasks<const TItems extends TaskSpecRecord | undefined = undefined>(
+  input: TasksInput<TItems> = {} as TasksInput<TItems>,
+): Promise<TasksHandle<TItems>> {
+  const handle = await createTaskList({
+    planId: typeof input.plan === 'string' ? input.plan : input.plan?.id,
+    title: input.title,
+    metadata: input.metadata,
+  }, input.items)
+  await addInitialTasks(handle, input.items)
+  return handle as TasksHandle<TItems>
+}
+
+/** Canonical task-ledger primitive. */
+export const tasks: TasksFactory = Object.assign(createTasks, {
+  ref: createHandle,
+  list: listTaskLists,
+  tool: (options?: TasksToolOptions) => createTasksCreationTool(createTasks, options),
+})
+
+/** @internal */
 export async function tasklist(input: CreateTaskListInput): Promise<TaskListHandle> {
+  return createTaskList(input)
+}
+
+/**
+ * Create the persisted task-ledger row behind `tasks()`.
+ *
+ * The ledger is persisted immediately with status `pending`; eager creation
+ * avoids races between concurrent task additions.
+ *
+ * @param input - Internal plan ID association, title, and metadata.
+ * @param taskSpecs - Optional typed task definitions carried by the returned handle.
+ * @returns A command handle for the created task ledger.
+ */
+async function createTaskList(
+  input: CreateTaskListInput,
+  taskSpecs?: TaskSpecRecord,
+): Promise<TaskListHandle> {
   const span = observe.openSpan({
     name: 'tasklist.create',
     family: 'task',
@@ -60,11 +172,18 @@ export async function tasklist(input: CreateTaskListInput): Promise<TaskListHand
   const list: TaskList = {
     id,
     planId: input.planId,
+    title: input.title,
     status: 'pending',
     counts: emptyCounts(),
     metadata: input.metadata,
     createdAt: now,
     updatedAt: now,
+  }
+  if (input.metadata !== undefined) {
+    assertTaskJsonValue(input.metadata, {
+      taskListId: id,
+      field: 'task list metadata',
+    })
   }
 
   try {
@@ -85,7 +204,7 @@ export async function tasklist(input: CreateTaskListInput): Promise<TaskListHand
       status: list.status,
       traceId: ctx?.traceId,
     })
-    return createHandle(id)
+    return createHandle(id, taskSpecs)
   } catch (error) {
     span.error(error, { operation: 'tasklist.create', planId: input.planId })
     throw error
@@ -99,33 +218,24 @@ export async function tasklist(input: CreateTaskListInput): Promise<TaskListHand
  * @returns The task list with correct derived status, or `null` if not found.
  */
 export async function getTaskList(taskListId: string): Promise<TaskList | null> {
-  const store = resolveStore()
-  const raw = await store.get(taskListKey(taskListId))
-  if (!raw) return null
+  return repairTaskListState(resolveStore(), taskListId)
+}
 
-  const list = raw as unknown as TaskList
-
-  // Self-heal: if status is not 'discarded', verify it matches derived status
-  if (list.status !== 'discarded') {
-    // Lazy-migrate counters if missing
-    if (!list.counts) {
-      const tasks = await getAllTasks(taskListId)
-      if (tasks.length > 0) {
-        list.counts = rebuildCounts(tasks)
-        const derived = deriveStatus(list.counts)
-        if (derived !== list.status) {
-          list.status = derived
-          if (derived === 'completed' && !list.completedAt) {
-            list.completedAt = Date.now()
-          }
-        }
-        list.updatedAt = Date.now()
-        await store.set(taskListKey(taskListId), list as unknown as JsonObject)
-      }
-    }
-  }
-
-  return list
+/** List persisted task ledgers, optionally filtered by plan and metadata. */
+export async function listTaskLists(options?: TaskListListOptions): Promise<TaskList[]> {
+  const planId = typeof options?.plan === 'string' ? options.plan : options?.plan?.id
+  const result = await resolveStore().list(TASKLIST_PREFIX, {
+    cursor: options?.cursor,
+    limit: options?.limit,
+    filter: {
+      ...(planId !== undefined ? { planId } : {}),
+      ...(metadataFilter(options?.metadata) ?? {}),
+    },
+  })
+  const repaired = await Promise.all(
+    result.entries.map((entry) => repairTaskListState(resolveStore(), (entry.value as unknown as TaskList).id)),
+  )
+  return repaired.filter((list): list is TaskList => list !== null)
 }
 
 /**
@@ -140,100 +250,12 @@ export async function getTaskListByPlan(planId: string): Promise<TaskList | null
   if (result.entries.length === 0) return null
 
   const list = result.entries[0].value as unknown as TaskList
-  return list
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Internal Helpers
-// ─────────────────────────────────────────────────────────────────
-
-/** Get all tasks (including removed) for a task list. */
-async function getAllTasks(taskListId: string): Promise<Task[]> {
-  const store = resolveStore()
-  const result = await store.list(taskPrefix(taskListId))
-  return result.entries.map((e) => e.value as unknown as Task)
-}
-
-/** Get active (non-removed) tasks for a task list. */
-async function getActiveTasks(taskListId: string): Promise<Task[]> {
-  const all = await getAllTasks(taskListId)
-  return all.filter((t) => !t.removedAt)
-}
-
-/**
- * Ensure counts exist on a task list (lazy migration for pre-counter data).
- * Returns the counts, rebuilding from a full scan if needed.
- */
-async function ensureCounts(taskListId: string, list: TaskList): Promise<StatusCounts> {
-  if (list.counts) return list.counts
-  // Lazy migration: rebuild from full scan (one-time O(n) per list)
-  const tasks = await getAllTasks(taskListId)
-  const counts = rebuildCounts(tasks)
-  list.counts = counts
-  return counts
-}
-
-/**
- * Apply a counter delta and update the task list status.
- * O(1) — no full task scan. Verifies terminal transitions with a full scan.
- */
-async function applyStatusDelta(taskListId: string, delta: Parameters<typeof applyCounts>[1]): Promise<void> {
-  const store = resolveStore()
-  const rawList = await store.get(taskListKey(taskListId))
-  if (!rawList) return
-
-  const list = rawList as unknown as TaskList
-  if (list.status === 'discarded') return
-
-  const currentCounts = await ensureCounts(taskListId, list)
-  let newCounts = applyCounts(currentCounts, delta)
-  const derived = deriveStatus(newCounts)
-
-  // Terminal transitions (completed/failed): verify with full scan
-  if ((derived === 'completed' || derived === 'failed') && derived !== list.status) {
-    const tasks = await getAllTasks(taskListId)
-    newCounts = rebuildCounts(tasks)
-  }
-
-  list.counts = newCounts
-  const newStatus = deriveStatus(newCounts)
-
-  if (newStatus !== list.status) {
-    const previousStatus = list.status
-    list.status = newStatus
-    if (newStatus === 'completed' && !list.completedAt) {
-      list.completedAt = Date.now()
-    }
-    list.updatedAt = Date.now()
-    await store.set(taskListKey(taskListId), list as unknown as JsonObject)
-
-    if (newStatus === 'completed' && previousStatus !== 'completed') {
-      const total =
-        newCounts.pending +
-        newCounts.in_progress +
-        newCounts.completed +
-        newCounts.failed +
-        newCounts.skipped +
-        newCounts.cancelled
-      const ctx = getExecutionContext()
-      getRuntime().instrumentationHooks?.onTaskListCompleted?.({
-        taskListId,
-        totalTasks: total,
-        durationMs: list.completedAt! - list.createdAt,
-        traceId: ctx?.traceId,
-      })
-    }
-  } else {
-    // Counts changed but status didn't — still persist counts
-    list.counts = newCounts
-    list.updatedAt = Date.now()
-    await store.set(taskListKey(taskListId), list as unknown as JsonObject)
-  }
+  return repairTaskListState(store, list.id)
 }
 
 /** Create a TaskListHandle for a given task list ID. @internal */
-export function createHandle(taskListId: string): TaskListHandle {
-  return {
+export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): TaskListHandle {
+  const legacy = {
     id: taskListId,
 
     async addTask(input: CreateTaskInput): Promise<Task> {
@@ -258,11 +280,27 @@ export function createHandle(taskListId: string): TaskListHandle {
         description: input.description,
         status: 'pending',
         assignee: input.assignee,
+        metadata: input.metadata,
         createdAt: now,
         updatedAt: now,
       }
+      if (input.metadata !== undefined) {
+        assertTaskJsonValue(input.metadata, {
+          taskListId,
+          taskId: input.id,
+          field: 'task metadata',
+        })
+      }
 
       try {
+        const [rawList, rawExistingTask] = await Promise.all([
+          store.get(taskListKey(taskListId)),
+          store.get(taskKey(taskListId, input.id)),
+        ])
+        const list = rawList as unknown as TaskList
+        assertMutableTaskList(list, taskListId)
+        if (rawExistingTask) throw DuplicateTaskIdError(taskListId, input.id)
+
         await span.withContext(async () => {
           await store.set(taskKey(taskListId, input.id), task as unknown as JsonObject)
           emitTaskArtifact(span.spanId, 'add', task)
@@ -275,8 +313,14 @@ export function createHandle(taskListId: string): TaskListHandle {
           assignee: task.assignee,
           traceId: ctx?.traceId,
         })
-        await applyStatusDelta(taskListId, { type: 'add' })
-        span.end({ operation: 'add', taskListId, taskId: task.id, status: task.status, traceId: ctx?.traceId })
+        await repairTaskListState(store, taskListId, { emitCompletionHook: true })
+        span.end({
+          operation: 'add',
+          taskListId,
+          taskId: task.id,
+          status: task.status,
+          traceId: ctx?.traceId,
+        })
         return task
       } catch (error) {
         span.error(error, { operation: 'add', taskListId, taskId: input.id })
@@ -300,17 +344,39 @@ export function createHandle(taskListId: string): TaskListHandle {
       })
       const store = resolveStore()
       try {
-        const raw = await store.get(taskKey(taskListId, taskId))
-        if (!raw) {
-          throw new Error(`Task not found: ${taskId} in list ${taskListId}`)
+        const [rawList, raw] = await Promise.all([
+          store.get(taskListKey(taskListId)),
+          store.get(taskKey(taskListId, taskId)),
+        ])
+        const list = rawList as unknown as TaskList | null
+        assertMutableTaskList(list, taskListId)
+
+        const task = raw as unknown as Task | null
+        assertMutableTask(task, taskListId, taskId)
+        assertValidTaskStatusUpdate(task, update.status)
+        if (update.metadata !== undefined) {
+          assertTaskJsonValue(update.metadata, {
+            taskListId,
+            taskId,
+            field: 'task metadata',
+          })
+        }
+        if (update.result !== undefined) {
+          assertTaskJsonValue(update.result, {
+            taskListId,
+            taskId,
+            field: 'result',
+          })
         }
 
-        const task = raw as unknown as Task
         const updated: Task = {
           ...task,
           ...(update.status !== undefined && { status: update.status }),
+          ...(update.label !== undefined && { label: update.label }),
+          ...(update.description !== undefined && { description: update.description }),
           ...(update.progress !== undefined && { progress: update.progress }),
           ...(update.assignee !== undefined && { assignee: update.assignee }),
+          ...(update.metadata !== undefined && { metadata: update.metadata }),
           ...(update.result !== undefined && { result: update.result }),
           ...(update.error !== undefined && { error: update.error }),
           ...(update.durationMs !== undefined && {
@@ -333,11 +399,9 @@ export function createHandle(taskListId: string): TaskListHandle {
           traceId: ctx?.traceId,
         })
         if (update.status !== undefined && update.status !== task.status) {
-          await applyStatusDelta(taskListId, {
-            type: 'update',
-            from: task.status,
-            to: update.status,
-          })
+          await repairTaskListState(store, taskListId, { emitCompletionHook: true })
+        } else {
+          await repairTaskListState(store, taskListId)
         }
         span.end({
           operation: 'update',
@@ -350,7 +414,12 @@ export function createHandle(taskListId: string): TaskListHandle {
         })
         return updated
       } catch (error) {
-        span.error(error, { operation: 'update', taskListId, taskId, nextStatus: update.status })
+        span.error(error, {
+          operation: 'update',
+          taskListId,
+          taskId,
+          nextStatus: update.status,
+        })
         throw error
       }
     },
@@ -368,24 +437,16 @@ export function createHandle(taskListId: string): TaskListHandle {
       })
       const store = resolveStore()
       try {
-        const raw = await store.get(taskKey(taskListId, taskId))
-        if (!raw) {
-          span.end({ operation: 'remove', taskListId, taskId, removed: false, reason: 'not_found' })
-          return
-        }
+        const [rawList, raw] = await Promise.all([
+          store.get(taskListKey(taskListId)),
+          store.get(taskKey(taskListId, taskId)),
+        ])
+        const list = rawList as unknown as TaskList | null
+        assertMutableTaskList(list, taskListId)
 
-        const task = raw as unknown as Task
-        if (task.removedAt) {
-          span.end({
-            operation: 'remove',
-            taskListId,
-            taskId,
-            removed: false,
-            reason: 'already_removed',
-            previousStatus: task.status,
-          })
-          return
-        }
+        const task = raw as unknown as Task | null
+        assertMutableTask(task, taskListId, taskId)
+
         const previousStatus = task.status
         task.removedAt = Date.now()
         task.updatedAt = Date.now()
@@ -399,7 +460,7 @@ export function createHandle(taskListId: string): TaskListHandle {
           taskId,
           traceId: ctx?.traceId,
         })
-        await applyStatusDelta(taskListId, { type: 'remove', status: previousStatus })
+        await repairTaskListState(store, taskListId, { emitCompletionHook: true })
         span.end({
           operation: 'remove',
           taskListId,
@@ -430,34 +491,50 @@ export function createHandle(taskListId: string): TaskListHandle {
       try {
         const rawList = await store.get(taskListKey(taskListId))
         if (!rawList) {
-          span.end({ operation: 'tasklist.discard', taskListId, discarded: false, reason: 'not_found' })
+          throw TaskListNotFoundError(taskListId)
+        }
+
+        const list = rawList as unknown as TaskList
+        if (list.status === 'discarded') {
+          span.end({
+            operation: 'tasklist.discard',
+            taskListId,
+            discarded: true,
+            alreadyDiscarded: true,
+          })
           return
         }
 
         const now = Date.now()
-        const list = rawList as unknown as TaskList
-        list.status = 'discarded'
-        list.discardedAt = now
-        list.discardReason = reason
-        list.updatedAt = now
-        await span.withContext(async () => {
-          await store.set(taskListKey(taskListId), list as unknown as JsonObject)
-          emitTaskArtifact(span.spanId, 'tasklist.discard', list)
-        })
-
-        // Cancel pending/in_progress tasks
-        const tasks = await getAllTasks(taskListId)
+        const tasks = await getAllTasks(store, taskListId)
         const activeTasks = tasks.filter((t) => !t.removedAt)
         const completedCount = activeTasks.filter((t) => t.status === 'completed').length
         const remainingCount = activeTasks.filter((t) => isCancellable(t.status)).length
-
-        for (const task of tasks) {
-          if (!task.removedAt && isCancellable(task.status)) {
-            task.status = 'cancelled'
-            task.updatedAt = now
-            await store.set(taskKey(taskListId, task.id), task as unknown as JsonObject)
-          }
+        const nextTasks = tasks.map((task) =>
+          !task.removedAt && isCancellable(task.status)
+            ? {
+                ...task,
+                status: 'cancelled' as const,
+                updatedAt: now,
+              }
+            : task,
+        )
+        const nextList: TaskList = {
+          ...list,
+          status: 'discarded',
+          counts: rebuildCounts(nextTasks),
+          discardedAt: now,
+          discardReason: reason,
+          updatedAt: now,
         }
+
+        await span.withContext(async () => {
+          await store.set(taskListKey(taskListId), nextList as unknown as JsonObject)
+          await Promise.all(
+            nextTasks.map((task) => store.set(taskKey(taskListId, task.id), task as unknown as JsonObject)),
+          )
+          emitTaskArtifact(span.spanId, 'tasklist.discard', nextList)
+        })
 
         const ctx = getExecutionContext()
         getRuntime().instrumentationHooks?.onTaskListDiscarded?.({
@@ -482,73 +559,22 @@ export function createHandle(taskListId: string): TaskListHandle {
     },
 
     async getTasks(): Promise<Task[]> {
-      return getActiveTasks(taskListId)
+      return getActiveTasks(resolveStore(), taskListId)
     },
 
     async getStatus(): Promise<TaskListStatus> {
-      const store = resolveStore()
-      const rawList = await store.get(taskListKey(taskListId))
-      if (!rawList) return 'pending'
-
-      const list = rawList as unknown as TaskList
-
-      // Discarded is explicit — don't override
-      if (list.status === 'discarded') return 'discarded'
-
-      // Use counters if available (O(1))
-      if (list.counts) {
-        const total =
-          list.counts.pending +
-          list.counts.in_progress +
-          list.counts.completed +
-          list.counts.failed +
-          list.counts.skipped +
-          list.counts.cancelled
-        // Empty list with pending status is valid (no tasks added yet)
-        if (total === 0) return list.status
-
-        const derived = deriveStatus(list.counts)
-        // Self-heal if stored status is stale
-        if (derived !== list.status) {
-          list.status = derived
-          if (derived === 'completed' && !list.completedAt) {
-            list.completedAt = Date.now()
-          }
-          list.updatedAt = Date.now()
-          await store.set(taskListKey(taskListId), list as unknown as JsonObject)
-        }
-        return derived
-      }
-
-      // Fallback for pre-counter data: full scan + lazy migration
-      const tasks = await getAllTasks(taskListId)
-      if (tasks.length === 0) return list.status
-
-      const derived = deriveTaskListStatus(tasks)
-
-      // Self-heal and migrate to counters
-      list.counts = rebuildCounts(tasks)
-      if (derived !== list.status) {
-        list.status = derived
-        if (derived === 'completed' && !list.completedAt) {
-          list.completedAt = Date.now()
-        }
-      }
-      list.updatedAt = Date.now()
-      await store.set(taskListKey(taskListId), list as unknown as JsonObject)
-
-      return derived
+      return (await repairTaskListState(resolveStore(), taskListId))?.status ?? 'pending'
     },
 
     asContext(options?: { priority?: number; renderContext?: (tasks: Task[]) => string }) {
       const agent = taskListAgent(taskListId, {
         renderContext: options?.renderContext,
-      })
+      }, taskSpecs)
       return agent.asContext({ priority: options?.priority })
     },
 
     asTools() {
-      const agent = taskListAgent(taskListId)
+      const agent = taskListAgent(taskListId, undefined, taskSpecs)
       return agent.asTools()
     },
 
@@ -559,8 +585,77 @@ export function createHandle(taskListId: string): TaskListHandle {
         renderContext?: (task: Task, allTasks: Task[]) => string
       },
     ) {
-      return taskWorker(taskListId, taskId, options)
+      return taskWorker(taskListId, taskId, options, taskSpecs)
     },
+  }
+
+  return {
+    id: taskListId,
+
+    async get() {
+      return getTaskList(taskListId)
+    },
+
+    async list(options?: { includeRemoved?: boolean }) {
+      return options?.includeRemoved ? getAllTasks(resolveStore(), taskListId) : getActiveTasks(resolveStore(), taskListId)
+    },
+
+    async getTask(taskId: string) {
+      const raw = await resolveStore().get(taskKey(taskListId, taskId))
+      const task = raw as unknown as Task | null
+      if (!task || task.removedAt) return null
+      return task
+    },
+
+    add(input: CreateTaskInput) {
+      return legacy.addTask(input)
+    },
+
+    edit(taskId: string, patch: import('./types').TaskEdit) {
+      return legacy.updateTask(taskId, patch)
+    },
+
+    start(taskId: string) {
+      return legacy.updateTask(taskId, { status: 'in_progress' })
+    },
+
+    progress(taskId: string, message: string) {
+      return legacy.updateTask(taskId, { progress: message })
+    },
+
+    async complete(taskId: string, result?: JsonValue) {
+      const parsedResult = parseTaskCompletionResult({
+        taskListId,
+        taskId,
+        spec: taskSpecs?.[taskId],
+        result,
+      })
+      return legacy.updateTask(taskId, { status: 'completed', result: parsedResult })
+    },
+
+    fail(taskId: string, error: string) {
+      return legacy.updateTask(taskId, { status: 'failed', error })
+    },
+
+    skip(taskId: string, reason?: string) {
+      return legacy.updateTask(taskId, { status: 'skipped', progress: reason })
+    },
+
+    cancel(taskId: string, reason?: string) {
+      return legacy.updateTask(taskId, { status: 'cancelled', progress: reason })
+    },
+
+    remove(taskId: string) {
+      return legacy.removeTask(taskId)
+    },
+
+    discard(reason?: string) {
+      return legacy.discard(reason)
+    },
+
+    asContext: legacy.asContext,
+    asTools: legacy.asTools,
+    worker: legacy.worker,
   }
 }
 

@@ -3,7 +3,7 @@
  * Tests for the CruxClientProvider pattern used in apps/web.
  *
  * Verifies that wrapping components in CruxProvider with a memoized
- * Convex store contract transport provides stable, reactive access to plans, task lists,
+ * Convex store contract transport provides stable, reactive access to plans
  * and tasks through the domain hooks.
  *
  * These tests mirror the exact pattern used in
@@ -13,9 +13,9 @@ import { describe, it, expect } from 'vitest'
 import React, { useMemo, type ReactNode } from 'react'
 import { renderHook } from '@testing-library/react'
 import { CruxProvider, useCruxTransport } from '../../src/provider'
-import { usePlan, useTaskList, useTasks } from '../../src/hooks'
+import { usePlan, useTasks } from '../../src/hooks'
 import { createConvexContractTransport, createMockConvexBackend } from './convex-contract-harness'
-import type { Plan, TaskList, Task } from '@use-crux/core/plan'
+import type { Plan, Task } from '@use-crux/core/plan'
 import type { JsonObject } from '@use-crux/core/store'
 
 // ── Memoized Provider (mirrors CruxClientProvider from apps/web) ──
@@ -76,27 +76,6 @@ describe('CruxClientProvider pattern — memoized Convex store contract transpor
     expect(result.current!.title).toBe('Blog Post Plan')
     expect(result.current!.metadata!.status).toBe('draft')
     expect(result.current!.metadata!.draftId).toBe('draft-123')
-  })
-
-  it('useTaskList resolves task list by planId through memoized transport', () => {
-    const backend = createMockConvexBackend()
-    const taskList: TaskList = {
-      id: 'tl-writer-1',
-      planId: 'plan-writer-1',
-      status: 'in_progress',
-      createdAt: 1000,
-      updatedAt: 2000,
-    }
-    backend.setDoc('tasklist:tl-writer-1', taskList as unknown as JsonObject)
-
-    const { result } = renderHook(() => useTaskList({ planId: 'plan-writer-1' }), {
-      wrapper: ({ children }) => <MemoizedCruxClientProvider backend={backend}>{children}</MemoizedCruxClientProvider>,
-    })
-
-    expect(result.current).toBeDefined()
-    expect(result.current!.id).toBe('tl-writer-1')
-    expect(result.current!.planId).toBe('plan-writer-1')
-    expect(result.current!.status).toBe('in_progress')
   })
 
   it('useTasks resolves section tasks with assignee info through memoized transport', () => {
@@ -161,16 +140,6 @@ describe('CruxClientProvider pattern — memoized Convex store contract transpor
     const backend = createMockConvexBackend()
 
     const { result } = renderHook(() => usePlan(undefined), {
-      wrapper: ({ children }) => <MemoizedCruxClientProvider backend={backend}>{children}</MemoizedCruxClientProvider>,
-    })
-
-    expect(result.current).toBeUndefined()
-  })
-
-  it('useTaskList returns undefined when filter is undefined (skip pattern)', () => {
-    const backend = createMockConvexBackend()
-
-    const { result } = renderHook(() => useTaskList(undefined), {
       wrapper: ({ children }) => <MemoizedCruxClientProvider backend={backend}>{children}</MemoizedCruxClientProvider>,
     })
 

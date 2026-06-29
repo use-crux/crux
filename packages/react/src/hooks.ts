@@ -7,71 +7,46 @@
  * @module
  */
 
-import type { Plan, TaskList, Task } from '@use-crux/core/plan'
+import type { Plan, PlanHandle, Task, TasksHandle } from '@use-crux/core/plan'
 import type { StoreEntry } from '@use-crux/core/store'
 import { useCruxTransport } from './provider'
 
 /** Key prefix helpers (must match plan/helpers.ts conventions) */
 const planKey = (id: string) => `plan:${id}`
-const taskListKey = (id: string) => `tasklist:${id}`
 const taskPrefix = (listId: string) => `task:${listId}:`
 
+type EntityRef<THandle extends { readonly id: string }> = string | THandle | undefined
+
+function refId<THandle extends { readonly id: string }>(ref: EntityRef<THandle>): string | undefined {
+  if (ref === undefined) return undefined
+  return typeof ref === 'string' ? ref : ref.id
+}
+
 /**
- * Subscribe to a plan by ID.
+ * Subscribe to a plan by ID or canonical `PlanHandle`.
  *
- * @param planId - The plan ID, or `undefined` to skip.
+ * @param plan - The plan ID, a `PlanHandle`, or `undefined` to skip.
  * @returns The plan, or `undefined` if loading/skipped/not found.
  */
-export function usePlan(planId: string | undefined): Plan | undefined {
+export function usePlan(plan: EntityRef<PlanHandle>): Plan | undefined {
   const { useDocument } = useCruxTransport()
+  const planId = refId(plan)
   const raw = useDocument(planId !== undefined ? planKey(planId) : undefined)
   if (raw == null) return undefined
   return raw as unknown as Plan
 }
 
 /**
- * Subscribe to a task list by ID or by association (e.g. planId).
- *
- * @param filter - A task list ID (string), a filter object (e.g. `{ planId }` or `{ 'metadata.threadId': 'abc' }`), or `undefined` to skip.
- * @returns The task list, or `undefined` if loading/skipped/not found.
- */
-export function useTaskList(filter: string | Record<string, unknown> | undefined): TaskList | undefined {
-  const { useDocument, useDocumentList } = useCruxTransport()
-
-  // Direct ID lookup
-  const isString = typeof filter === 'string'
-  const directKey = isString ? taskListKey(filter) : undefined
-  const directResult = useDocument(directKey)
-
-  // Filter-based lookup (e.g. by planId)
-  const isFilter = filter !== undefined && typeof filter === 'object'
-  const filterPrefix = isFilter ? 'tasklist:' : undefined
-  const filterOptions = isFilter ? { filter: filter as Record<string, unknown> } : undefined
-  const listResult = useDocumentList(filterPrefix, filterOptions)
-
-  if (isString) {
-    if (directResult == null) return undefined
-    return directResult as unknown as TaskList
-  }
-
-  if (isFilter) {
-    if (!listResult || listResult.length === 0) return undefined
-    return listResult[0].value as unknown as TaskList
-  }
-
-  return undefined
-}
-
-/**
- * Subscribe to tasks for a task list.
+ * Subscribe to tasks for a canonical tasks ledger by ID or `TasksHandle`.
  *
  * Automatically excludes removed tasks (those with `removedAt` set).
  *
- * @param taskListId - The task list ID, or `undefined` to skip.
+ * @param tasks - The task-list ID, a `TasksHandle`, or `undefined` to skip.
  * @returns Tasks array, or `undefined` if loading/skipped.
  */
-export function useTasks(taskListId: string | undefined): Task[] | undefined {
+export function useTasks(tasks: EntityRef<TasksHandle>): Task[] | undefined {
   const { useDocumentList } = useCruxTransport()
+  const taskListId = refId(tasks)
   const prefix = taskListId !== undefined ? taskPrefix(taskListId) : undefined
   const raw = useDocumentList(prefix)
 

@@ -16,6 +16,7 @@ import { runWithExecutionContext, getExecutionContext } from '../runtime/executi
 import { executeWithRetry } from '../generation/retry'
 import type { RetryOptions } from '../generation/retry'
 import { observe } from '../observability'
+import { isCreationToolNotCreatedError } from '../types/tool'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -468,13 +469,13 @@ export function createPipeline(executor: AgentExecutor) {
 
             results.push(result)
 
-            // Capture .created values from agent creation tools
+            // Capture created values from agent creation tools.
             let stepOutput = result.output
             if (isAgentStep(step) && step.agent.tools) {
               const created: Record<string, unknown> = {}
               for (const [toolName, tool] of Object.entries(step.agent.tools)) {
                 if (tool && typeof tool === 'object' && 'created' in tool) {
-                  const value = (tool as { created?: unknown }).created
+                  const value = readCreatedToolValue(tool)
                   if (value !== undefined) created[toolName] = value
                 }
               }
@@ -556,6 +557,18 @@ export function createPipeline(executor: AgentExecutor) {
   }
 
   return pipeline
+}
+
+function readCreatedToolValue(tool: object): unknown {
+  const created = (tool as { created?: unknown }).created
+  if (typeof created !== 'function') return created
+
+  try {
+    return created.call(tool)
+  } catch (error) {
+    if (isCreationToolNotCreatedError(error)) return undefined
+    throw error
+  }
 }
 
 function emitPipelineCompositionReport(args: {

@@ -3418,8 +3418,9 @@ export interface PlanTask {
   id: string
   parentId?: string | null
   label: string
-  status: 'done' | 'in_progress' | 'pending' | 'removed' | string
+  status: 'completed' | 'in_progress' | 'pending' | 'failed' | 'skipped' | 'cancelled' | 'removed' | string
   progress?: number
+  progressMessage?: string
   assignee?: string
   model?: string
   durationMs?: number | null

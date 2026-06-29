@@ -489,30 +489,45 @@ export type {
   ModelPricing,
 } from './cost'
 
-// Plan & TaskList primitives
-export { plan, getPlan, updatePlan } from './plan/plans'
-export { tasklist, getTaskList, getTaskListByPlan } from './plan/tasks'
+// Plan & Tasks primitives
+export { plan } from './plan/plans'
+export { tasks } from './plan/tasks'
+export { task } from './plan/task-spec'
+export {
+  DuplicateTaskIdError,
+  InvalidTaskTransitionError,
+  TaskJsonValueError,
+  TaskListDiscardedError,
+  TaskListNotFoundError,
+  TaskNotFoundError,
+  TaskRemovedError,
+  TaskResultValidationError,
+} from './plan/errors'
 export { deriveTaskListStatus } from './plan/helpers'
-export { planAgent, taskListAgent, taskWorker, createPlanTool, createTaskListTool } from './plan/agent'
-export type { ToolDef, CreationTool, PlanAgent, PlanAgentOptions, PlanContextMode } from './plan/agent'
-export type { TaskListAgent, TaskListAgentOptions } from './plan/agent'
-export type { TaskWorker, TaskWorkerOptions } from './plan/agent'
-export { createPlanHandle } from './plan/plans'
+export { CreationToolNotCreatedError, isCreationToolNotCreatedError } from './types/tool'
+export type { ToolDef, CreationTool, CreationToolNotCreatedError as CreationToolNotCreatedErrorType } from './types/tool'
+export type { PlanFactory, PlanListOptions } from './plan/plans'
+export type { TaskListListOptions, TasksFactory } from './plan/tasks'
+export type { PlanToolOptions, TasksToolOptions } from './plan/creation-tools'
+export type { TaskLifecycleError, TaskLifecycleErrorDetails, TaskLifecycleErrorName } from './plan/errors'
 export type {
+  AddTaskInput,
+  CancellableTaskStatus,
   Plan,
   PlanHandle,
   PlanUpdate,
   CreatePlanInput,
+  Task,
+  TaskEdit,
   TaskList,
   TaskListStatus,
   TaskListHandle,
-  CreateTaskListInput,
-  Task,
+  TaskSpec,
+  TaskSpecOptions,
   TaskStatus,
-  TaskUpdate,
-  CreateTaskInput,
+  TasksHandle,
+  TasksInput,
   TerminalTaskStatus,
-  CancellableTaskStatus,
 } from './plan/types'
 
 // Adapter internals — used by @use-crux/ai, @use-crux/openai, @use-crux/google, @use-crux/convex

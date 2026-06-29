@@ -42,7 +42,7 @@ export interface SSETransportOptions {
  * Create a `CruxTransport` backed by Server-Sent Events.
  *
  * Connects to a `cruxSSEHandler` endpoint and automatically accumulates
- * `data-crux` events. Hooks (`usePlan`, `useTaskList`, `useTasks`) read
+ * `data-crux` events. Hooks (`usePlan`, `useTasks`) read
  * from the accumulated cache.
  *
  * @param url - The SSE endpoint URL (e.g., '/api/crux/events').

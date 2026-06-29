@@ -51,13 +51,17 @@ describe('deriveStatus', () => {
   })
 
   it('returns in_progress when tasks are failed but some still in progress', () => {
-    const counts: StatusCounts = { ...emptyCounts(), in_progress: 1, failed: 1 }
+    const counts: StatusCounts = {
+      ...emptyCounts(),
+      in_progress: 1,
+      failed: 1,
+    }
     expect(deriveStatus(counts)).toBe('in_progress')
   })
 
-  it('returns in_progress when tasks are pending', () => {
+  it('returns pending when all active tasks are pending', () => {
     const counts: StatusCounts = { ...emptyCounts(), pending: 3 }
-    expect(deriveStatus(counts)).toBe('in_progress')
+    expect(deriveStatus(counts)).toBe('pending')
   })
 
   it('returns in_progress for mixed active statuses', () => {
@@ -75,6 +79,21 @@ describe('deriveStatus', () => {
   it('returns in_progress when only cancelled tasks remain with pending', () => {
     const counts: StatusCounts = { ...emptyCounts(), pending: 1, cancelled: 2 }
     expect(deriveStatus(counts)).toBe('in_progress')
+  })
+
+  it('returns cancelled when all active tasks are cancelled', () => {
+    const counts: StatusCounts = { ...emptyCounts(), cancelled: 2 }
+    expect(deriveStatus(counts)).toBe('cancelled')
+  })
+
+  it('returns cancelled when terminal active tasks include cancelled and no failures', () => {
+    const counts: StatusCounts = {
+      ...emptyCounts(),
+      completed: 1,
+      skipped: 1,
+      cancelled: 1,
+    }
+    expect(deriveStatus(counts)).toBe('cancelled')
   })
 })
 
@@ -97,31 +116,49 @@ describe('applyCounts', () => {
 
   it('swaps counts on status update', () => {
     const start: StatusCounts = { ...emptyCounts(), pending: 3 }
-    const result = applyCounts(start, { type: 'update', from: 'pending', to: 'in_progress' })
+    const result = applyCounts(start, {
+      type: 'update',
+      from: 'pending',
+      to: 'in_progress',
+    })
     expect(result.pending).toBe(2)
     expect(result.in_progress).toBe(1)
   })
 
   it('decrements on remove', () => {
     const start: StatusCounts = { ...emptyCounts(), in_progress: 2 }
-    const result = applyCounts(start, { type: 'remove', status: 'in_progress' })
+    const result = applyCounts(start, {
+      type: 'remove',
+      status: 'in_progress',
+    })
     expect(result.in_progress).toBe(1)
   })
 
   it('does not go below zero on remove', () => {
-    const result = applyCounts(emptyCounts(), { type: 'remove', status: 'pending' })
+    const result = applyCounts(emptyCounts(), {
+      type: 'remove',
+      status: 'pending',
+    })
     expect(result.pending).toBe(0)
   })
 
   it('does not go below zero on update from', () => {
-    const result = applyCounts(emptyCounts(), { type: 'update', from: 'pending', to: 'completed' })
+    const result = applyCounts(emptyCounts(), {
+      type: 'update',
+      from: 'pending',
+      to: 'completed',
+    })
     expect(result.pending).toBe(0)
     expect(result.completed).toBe(1)
   })
 
   it('handles update where from === to (no-op on counts)', () => {
     const start: StatusCounts = { ...emptyCounts(), pending: 3 }
-    const result = applyCounts(start, { type: 'update', from: 'pending', to: 'pending' })
+    const result = applyCounts(start, {
+      type: 'update',
+      from: 'pending',
+      to: 'pending',
+    })
     expect(result.pending).toBe(3)
   })
 })

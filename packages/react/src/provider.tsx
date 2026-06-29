@@ -2,7 +2,7 @@
  * CruxProvider — React context for transport injection.
  *
  * Wrap your app with `<CruxProvider transport={...}>` to make domain hooks
- * (`usePlan`, `useTaskList`, `useTasks`) available to all child components.
+ * (`usePlan`, `useTasks`) available to all child components.
  *
  * @module
  */

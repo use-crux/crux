@@ -1,34 +1,58 @@
 /**
- * Plan CRUD functions.
+ * Plan lifecycle and command-handle functions.
  *
- * Plans are freeform documents (title + content) that describe agent intent.
- * Version increments automatically on content/title changes.
+ * The public `plan()` factory persists a freeform intent document and returns
+ * a command handle for reading, updating, context, and tools.
  *
  * @module
  */
 
-import type { Plan, PlanHandle, CreatePlanInput, PlanUpdate } from './types'
-import { planKey } from './helpers'
+import type { Plan, PlanHandle, CreatePlanInput, PlanUpdate, JsonValue } from './types'
+import { PLAN_PREFIX, metadataFilter, planKey } from './helpers'
 import { getRuntime, resolveStore } from '../runtime/runtime'
 import { observe } from '../observability'
 import { getExecutionContext } from '../runtime/execution-context'
 import { planAgent } from './agent'
+import { createPlanCreationTool, type PlanToolOptions } from './creation-tools'
+import { assertTaskJsonValue } from './task-values'
 
-/**
- * Create a new plan.
- *
- * @param input - Plan title, content, and metadata.
- * @returns The created plan with generated ID, version=1, and timestamps.
- *
- * @example
- * ```ts
- * const p = await plan({
- *   title: 'Cloud Migration Guide',
- *   content: '## Objective\nWrite a comprehensive guide...',
- * })
- * ```
- */
-export async function plan(input: CreatePlanInput): Promise<PlanHandle> {
+/** Options for listing plans. */
+export interface PlanListOptions {
+  /** Match plans by exact metadata fields. */
+  metadata?: Record<string, JsonValue>
+  /** Maximum number of plans to return. */
+  limit?: number
+}
+
+/** Callable plan factory plus static plan helpers. */
+export interface PlanFactory {
+  /**
+   * Create a new plan and return a command handle.
+   *
+   * @param input - Plan title, content, and metadata.
+   * @returns A handle for reading and updating the created plan.
+   *
+   * @example
+   * ```ts
+   * const p = await plan({
+   *   title: 'Cloud Migration Guide',
+   *   content: '## Objective\nWrite a comprehensive guide...',
+   * })
+   * ```
+   */
+  (input: CreatePlanInput): Promise<PlanHandle>
+
+  /** Create a command handle for an existing plan ID without reading storage. */
+  ref(planId: string): PlanHandle
+
+  /** List plans from the configured store. */
+  list(options?: PlanListOptions): Promise<Plan[]>
+
+  /** Create a focused tool; call `created()` after execution to access the handle. */
+  tool(options?: PlanToolOptions): import('../types/tool').CreationTool<PlanHandle>
+}
+
+async function createPlan(input: CreatePlanInput): Promise<PlanHandle> {
   const span = observe.openSpan({
     name: 'plan.create',
     family: 'plan',
@@ -51,6 +75,12 @@ export async function plan(input: CreatePlanInput): Promise<PlanHandle> {
     createdAt: now,
     updatedAt: now,
   }
+  if (input.metadata !== undefined) {
+    assertTaskJsonValue(input.metadata, {
+      taskListId: `plan:${data.id}`,
+      field: 'plan metadata',
+    })
+  }
 
   try {
     await span.withContext(async () => {
@@ -72,32 +102,42 @@ export async function plan(input: CreatePlanInput): Promise<PlanHandle> {
       hasContent: data.content.length > 0,
       traceId: ctx?.traceId,
     })
-    return createPlanHandle(data)
+    return createPlanHandle(data.id)
   } catch (error) {
     span.error(error, { operation: 'create', title: input.title })
     throw error
   }
 }
 
+/** Canonical plan primitive. */
+export const plan: PlanFactory = Object.assign(createPlan, {
+  ref: createPlanHandle,
+  list: listPlans,
+  tool: (options?: PlanToolOptions) => createPlanCreationTool(createPlan, options),
+})
+
 /**
- * Create a PlanHandle wrapping plan data and store reference.
+ * Create a command handle for an existing plan.
+ *
+ * The handle is intentionally not a data snapshot. It carries only the plan ID
+ * plus commands that read or mutate the current store state.
+ *
  * @internal
  */
-export function createPlanHandle(data: Plan): PlanHandle {
+export function createPlanHandle(planId: string): PlanHandle {
   return {
-    // Data snapshot properties
-    ...data,
+    id: planId,
 
     async update(update: PlanUpdate): Promise<Plan> {
-      return updatePlan(data.id, update)
+      return updatePlan(planId, update)
     },
 
     async get(): Promise<Plan | null> {
-      return getPlan(data.id)
+      return getPlan(planId)
     },
 
     asContext(options?: { priority?: number; mode?: 'full' | 'reference'; renderContext?: (plan: Plan) => string }) {
-      const agent = planAgent(data.id, {
+      const agent = planAgent(planId, {
         context: options?.mode,
         renderContext: options?.renderContext,
       })
@@ -105,7 +145,7 @@ export function createPlanHandle(data: Plan): PlanHandle {
     },
 
     asTools() {
-      const agent = planAgent(data.id)
+      const agent = planAgent(planId)
       return agent.asTools()
     },
   }
@@ -122,6 +162,15 @@ export async function getPlan(planId: string): Promise<Plan | null> {
   const raw = await store.get(planKey(planId))
   if (!raw) return null
   return raw as unknown as Plan
+}
+
+/** List persisted plans, optionally filtered by metadata. */
+export async function listPlans(options?: PlanListOptions): Promise<Plan[]> {
+  const result = await resolveStore().list(PLAN_PREFIX, {
+    limit: options?.limit,
+    filter: metadataFilter(options?.metadata),
+  })
+  return result.entries.map((entry) => entry.value as unknown as Plan)
 }
 
 /**
@@ -153,6 +202,12 @@ export async function updatePlan(planId: string, update: PlanUpdate): Promise<Pl
     }
 
     const contentChanged = update.title !== undefined || update.content !== undefined
+    if (update.metadata !== undefined) {
+      assertTaskJsonValue(update.metadata, {
+        taskListId: `plan:${planId}`,
+        field: 'plan metadata',
+      })
+    }
 
     const updated: Plan = {
       ...existing,

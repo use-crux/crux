@@ -1,8 +1,7 @@
 /**
  * Pure-function status machine for task lists.
  *
- * Derives TaskListStatus from counter sets in O(1)
- * instead of scanning all tasks on every mutation.
+ * Derives `TaskListStatus` from active task counters.
  *
  * @module
  */
@@ -26,7 +25,11 @@ export interface StatusCounts {
 /** Describes a task mutation's effect on status counts. */
 export type StatusDelta =
   | { readonly type: 'add' }
-  | { readonly type: 'update'; readonly from: TaskStatus; readonly to: TaskStatus }
+  | {
+      readonly type: 'update'
+      readonly from: TaskStatus
+      readonly to: TaskStatus
+    }
   | { readonly type: 'remove'; readonly status: TaskStatus }
 
 // ─────────────────────────────────────────────────────────────────
@@ -46,23 +49,29 @@ export function emptyCounts(): StatusCounts {
 }
 
 /**
- * Derive TaskListStatus from counters. Pure, O(1).
+ * Derive `TaskListStatus` from active task counters.
  *
- * Rules (identical to the previous `deriveTaskListStatus` but on integers):
- * - All counts zero → 'completed' (no active work remaining)
- * - completed + skipped === total → 'completed'
- * - failed > 0 AND in_progress === 0 → 'failed'
- * - Otherwise → 'in_progress'
+ * Rules:
+ * - No active tasks -> `completed`
+ * - All active tasks pending -> `pending`
+ * - Any in-progress task -> `in_progress`
+ * - Any failed task and none in progress -> `failed`
+ * - All completed or skipped -> `completed`
+ * - Terminal active tasks include cancelled and no failures -> `cancelled`
+ * - Otherwise -> `in_progress`
  *
- * Note: 'discarded' and 'pending' are never derived — set explicitly.
+ * `discarded` is explicit whole-list state and is never derived here.
  */
 export function deriveStatus(counts: StatusCounts): TaskListStatus {
   const total =
     counts.pending + counts.in_progress + counts.completed + counts.failed + counts.skipped + counts.cancelled
 
   if (total === 0) return 'completed'
+  if (counts.pending === total) return 'pending'
+  if (counts.in_progress > 0) return 'in_progress'
+  if (counts.failed > 0) return 'failed'
   if (counts.completed + counts.skipped === total) return 'completed'
-  if (counts.failed > 0 && counts.in_progress === 0) return 'failed'
+  if (counts.cancelled > 0 && counts.pending === 0) return 'cancelled'
 
   return 'in_progress'
 }

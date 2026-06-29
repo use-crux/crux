@@ -8,9 +8,9 @@
  */
 import { describe, it, expect } from 'vitest'
 import { renderHook } from '@testing-library/react'
-import { usePlan, useTaskList, useTasks } from '../../src/hooks'
+import { usePlan, useTasks } from '../../src/hooks'
 import { createConvexWrapper, createMockConvexBackend } from './convex-contract-harness'
-import type { Plan, TaskList, Task } from '@use-crux/core/plan'
+import type { Plan, Task } from '@use-crux/core/plan'
 import type { JsonObject } from '@use-crux/core/store'
 
 // ── plan:* key resolution ──
@@ -71,51 +71,6 @@ describe('Convex store contract transport — plan:* keys', () => {
 
     expect(result.current!.metadata!.status).toBe('approved')
     expect(result.current!.metadata!.instructions).toEqual([{ type: 'add' }])
-  })
-})
-
-// ── tasklist:* key resolution ──
-
-describe('Convex store contract transport — tasklist:* keys', () => {
-  it('resolves tasklist:* key to a deserialized TaskList object', () => {
-    const backend = createMockConvexBackend()
-    const list: TaskList = {
-      id: 'tl-1',
-      planId: 'plan-abc',
-      status: 'in_progress',
-      metadata: { threadId: 'thread-123' },
-      createdAt: 1000,
-      updatedAt: 2000,
-    }
-    backend.setDoc('tasklist:tl-1', list as unknown as JsonObject)
-
-    const { result } = renderHook(() => useTaskList('tl-1'), {
-      wrapper: createConvexWrapper(backend),
-    })
-
-    expect(result.current).not.toBeUndefined()
-    expect(result.current!.id).toBe('tl-1')
-    expect(result.current!.planId).toBe('plan-abc')
-    expect(result.current!.status).toBe('in_progress')
-  })
-
-  it('resolves tasklist by planId filter', () => {
-    const backend = createMockConvexBackend()
-    const list: TaskList = {
-      id: 'tl-1',
-      planId: 'plan-abc',
-      status: 'pending',
-      createdAt: 1000,
-      updatedAt: 1000,
-    }
-    backend.setDoc('tasklist:tl-1', list as unknown as JsonObject)
-
-    const { result } = renderHook(() => useTaskList({ planId: 'plan-abc' }), {
-      wrapper: createConvexWrapper(backend),
-    })
-
-    expect(result.current).not.toBeUndefined()
-    expect(result.current!.id).toBe('tl-1')
   })
 })
 
