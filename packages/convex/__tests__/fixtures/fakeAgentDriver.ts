@@ -21,12 +21,26 @@ export class FakeConvexAgentDriver implements ConvexAgentDriver {
     args: Record<string, unknown>
     options: Record<string, unknown> | undefined
   }> = []
+  readonly generatedObjectCalls: Array<{
+    ctx: unknown
+    target: Record<string, unknown>
+    args: Record<string, unknown>
+    options: Record<string, unknown> | undefined
+  }> = []
+  readonly streamedObjectCalls: Array<{
+    ctx: unknown
+    target: Record<string, unknown>
+    args: Record<string, unknown>
+    options: Record<string, unknown> | undefined
+  }> = []
   readonly contextRequests: ConvexAgentContextRequest[] = []
   readonly createdTools: ConvexAgentToolDefinition[] = []
   readonly wrappedTools: Array<{ tool: unknown; name?: string }> = []
   contextSnapshot?: ConvexAgentContextSnapshot
   textResult: unknown = { text: 'generated text' }
   streamResult: unknown = { textStream: 'streamed text' }
+  objectResult: unknown = { object: { ok: true } }
+  objectStreamResult: unknown = { partialObjectStream: 'streamed object' }
   onGenerateText?: (call: {
     readonly definition: ConvexAgentDriverDefinition
     readonly ctx: unknown
@@ -35,6 +49,20 @@ export class FakeConvexAgentDriver implements ConvexAgentDriver {
     readonly options: Record<string, unknown> | undefined
   }) => Promise<void> | void
   onStreamText?: (call: {
+    readonly definition: ConvexAgentDriverDefinition
+    readonly ctx: unknown
+    readonly target: Record<string, unknown>
+    readonly args: Record<string, unknown>
+    readonly options: Record<string, unknown> | undefined
+  }) => Promise<void> | void
+  onGenerateObject?: (call: {
+    readonly definition: ConvexAgentDriverDefinition
+    readonly ctx: unknown
+    readonly target: Record<string, unknown>
+    readonly args: Record<string, unknown>
+    readonly options: Record<string, unknown> | undefined
+  }) => Promise<void> | void
+  onStreamObject?: (call: {
     readonly definition: ConvexAgentDriverDefinition
     readonly ctx: unknown
     readonly target: Record<string, unknown>
@@ -54,6 +82,16 @@ export class FakeConvexAgentDriver implements ConvexAgentDriver {
         this.streamedTextCalls.push({ ctx, target, args, options })
         await this.onStreamText?.({ definition, ctx, target, args, options })
         return this.streamResult
+      },
+      generateObject: async (ctx, target, args, options) => {
+        this.generatedObjectCalls.push({ ctx, target, args, options })
+        await this.onGenerateObject?.({ definition, ctx, target, args, options })
+        return this.objectResult
+      },
+      streamObject: async (ctx, target, args, options) => {
+        this.streamedObjectCalls.push({ ctx, target, args, options })
+        await this.onStreamObject?.({ definition, ctx, target, args, options })
+        return this.objectStreamResult
       },
       continueThread: async (_ctx, target) => ({
         thread: {

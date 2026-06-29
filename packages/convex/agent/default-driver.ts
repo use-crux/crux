@@ -55,6 +55,10 @@ function createDefaultConvexAgentSession(
       await agent.generateText(ctx as never, target as never, args as never, options as never),
     streamText: async (ctx, target, args, options) =>
       await agent.streamText(ctx as never, target as never, args as never, options as never),
+    generateObject: async (ctx, target, args, options) =>
+      await agent.generateObject(ctx as never, target as never, args as never, options as never),
+    streamObject: async (ctx, target, args, options) =>
+      await agent.streamObject(ctx as never, target as never, args as never, options as never),
     continueThread: async (ctx, target) => {
       const { thread } = await agent.continueThread(ctx as never, target as never)
       return { thread: thread as ConvexAgentThreadSession }

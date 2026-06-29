@@ -164,7 +164,7 @@ crux.convexAgent({
   prompt: editPrompt,
 })
 
-profileLanguageModelAgent.resolve(
+profileLanguageModelAgent.crux.resolve(
   {},
   { threadId: 'thread-1' },
   {
@@ -188,17 +188,24 @@ profileAgent.resolve(
   },
 )
 
-profileAgent.continueThread(
-  {},
-  { threadId: 'thread-1', userId: 'user-1' },
-  {
+profileAgent.continueThread({}, { threadId: 'thread-1', userId: 'user-1' }).then(({ thread }) => {
+  thread.streamText({
     input: {
       instruction: 'Improve this.',
       projectId: 'project-1',
       locale: 'nl',
     },
-  },
-)
+    temperature: 0.2,
+  })
+
+  // @ts-expect-error thread turns require Crux prompt input.
+  thread.generateText({
+    temperature: 0.2,
+  })
+})
+
+// @ts-expect-error continueThread mirrors Convex Agent and does not accept per-turn input.
+profileAgent.continueThread({}, { threadId: 'thread-1', userId: 'user-1' }, { input: {} })
 
 profileAgent.streamText(
   {},

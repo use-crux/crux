@@ -66,10 +66,9 @@ describe('profile-backed Convex Agent thread and tool lifecycle', () => {
     const { thread } = await lifecycle.continueThread({
       ctx: { marker: 'ctx' },
       target: { threadId: 'thread-original', userId: 'user-original' },
-      args: { input: {} },
-    })
-    const stopWhen = Symbol('stopWhen')
-    await thread.streamText({ promptMessageId: 'message-1', stopWhen }, { saveStreamDeltas: true })
+    } as never)
+    const stopWhen = Symbol('stopWhen') as never
+    await thread.streamText({ input: {}, promptMessageId: 'message-1', stopWhen }, { saveStreamDeltas: true })
 
     expect(driver.contextRequests).toEqual([
       expect.objectContaining({
@@ -97,6 +96,7 @@ describe('profile-backed Convex Agent thread and tool lifecycle', () => {
     const contextHandler = driver.streamedTextCalls[0]?.options?.contextHandler as
       | (() => Promise<readonly unknown[]>)
       | undefined
+    expect(driver.streamedTextCalls[0]?.args).not.toHaveProperty('input')
     await expect(contextHandler?.()).resolves.toEqual([
       { role: 'system', content: 'search result' },
       { role: 'assistant', content: 'previous reply' },

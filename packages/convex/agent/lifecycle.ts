@@ -1,16 +1,16 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
 import { prompt as definePrompt } from '@use-crux/core'
 import type { ContextEntry, ResolveOptions } from '@use-crux/core'
-import type { CruxStore } from '@use-crux/core/store'
 import type { z } from 'zod'
-import { assertConvexCtxPort, createDefaultConvexCruxStore } from '../profile-store'
 import { runWithConvexCruxRuntime, type ConvexRuntimeTarget } from '../runtime'
-import type { ComponentApi } from '../src/component/_generated/component'
 import { afterPreparedAgentCall, readPersistedSkillIds } from './lifecycle-persistence'
 import { observeAgentRun } from './lifecycle-observability'
+import { defaultConvexAgentStore } from './lifecycle-store'
+import { agentOptionsFromConfig } from './lifecycle-config'
 import {
   prepareMessagesFromSnapshot,
   targetFromContextSnapshot,
+  convexCallArgsFromTurnArgs,
   withThreadCallArgs,
   withThreadContextOptions,
   wrapCruxConvexThread,
@@ -22,11 +22,12 @@ import type {
   AnyConvexPrompt,
   AnyConvexPromptConfig,
   ConvexAgentCallArgs,
+  ConvexAgentOperation,
   PreparedAgentCall,
   ProfileBackedAgentLifecycle,
   ProfileBackedAgentLifecycleConfig,
 } from './lifecycle-types'
-import type { ConvexAgentPassthroughOptions } from './driver'
+import type { ConvexGenerateObjectArgs, ConvexStreamObjectArgs } from './convex-agent-method-types'
 import { isFinishCallback, toInputRecord } from './lifecycle-utils'
 
 /** Create the internal lifecycle used by the public `convexAgent()` facade. */
@@ -59,7 +60,7 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
   async function prepareAgentCall(
     ctx: unknown,
     target: ConvexRuntimeTarget,
-    args: ConvexAgentCallArgs<TPrompt>,
+    args: ConvexAgentCallArgs<TPrompt, object>,
     messages?: Parameters<NonNullable<ProfileBackedAgentLifecycleConfig<TPrompt>['prepare']>>[0]['messages'],
   ): Promise<PreparedAgentCall> {
     const prepared = config.prepare
@@ -99,15 +100,64 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
       resolved,
       convexTools: convexToolSet,
       input,
+      persistence: config.persistence,
       captureMessages: prepared?.captureMessages,
       callArgs: {
         ...rest,
         ...(resolved.system ? { system: resolved.system } : {}),
         ...(resolved.prompt ? { prompt: resolved.prompt } : {}),
         ...(resolved.messages ? { messages: resolved.messages } : {}),
+        ...(resolved.schema ? { schema: resolved.schema } : {}),
         tools: convexToolSet,
       },
     }
+  }
+
+  async function invokePreparedTurn(
+    request: AgentTurnRequest<TPrompt, object>,
+    operation: Exclude<ConvexAgentOperation, 'resolve'>,
+    mode: 'afterCall' | 'onFinish',
+    call: (prepared: PreparedAgentCall) => Promise<unknown>,
+  ): Promise<unknown> {
+    return await withPreparedRuntime(
+      request.ctx,
+      request.target,
+      async () =>
+        await observeAgentRun(
+          name,
+          config.prompt.id,
+          operation,
+          request.target,
+          config.observe,
+          async (recordPrepared) => {
+            const prepared = await prepareAgentCall(request.ctx, request.target, request.args)
+            await recordPrepared(prepared)
+            if (mode === 'onFinish') patchOnFinishPersistence(prepared)
+            const result = await call(prepared)
+            if (mode === 'afterCall') await persistPreparedResult(prepared, result)
+            return result
+          },
+        ),
+    )
+  }
+
+  function patchOnFinishPersistence(prepared: PreparedAgentCall): void {
+    const userOnFinish = isFinishCallback(prepared.callArgs.onFinish) ? prepared.callArgs.onFinish : undefined
+    prepared.callArgs.onFinish = async (result: unknown) => {
+      await persistPreparedResult(prepared, result)
+      if (userOnFinish) return await userOnFinish(result)
+      return undefined
+    }
+  }
+
+  async function persistPreparedResult(prepared: PreparedAgentCall, result: unknown): Promise<void> {
+    await afterPreparedAgentCall({
+      resolved: prepared.resolved,
+      input: prepared.input,
+      result,
+      persistence: prepared.persistence,
+      captureMessages: prepared.captureMessages,
+    })
   }
 
   return {
@@ -117,58 +167,38 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
         request.ctx,
         request.target,
         async () =>
-          await observeAgentRun(name, config.prompt.id, 'resolve', request.target, async (recordPrepared) => {
-            const prepared = await prepareAgentCall(request.ctx, request.target, request.args)
-            await recordPrepared(prepared)
-            return prepared.resolved
-          }),
+          await observeAgentRun(
+            name,
+            config.prompt.id,
+            'resolve',
+            request.target,
+            config.observe,
+            async (recordPrepared) => {
+              const prepared = await prepareAgentCall(request.ctx, request.target, request.args)
+              await recordPrepared(prepared)
+              return prepared.resolved
+            },
+          ),
       )
     },
     async invokeText(request: AgentTurnRequest<TPrompt>) {
-      return await withPreparedRuntime(
-        request.ctx,
-        request.target,
-        async () =>
-          await observeAgentRun(name, config.prompt.id, 'generateText', request.target, async (recordPrepared) => {
-            const prepared = await prepareAgentCall(request.ctx, request.target, request.args)
-            await recordPrepared(prepared)
-            const result = await prepared.session.generateText(
-              request.ctx,
-              request.target,
-              prepared.callArgs,
-              request.options,
-            )
-            await afterPreparedAgentCall({
-              resolved: prepared.resolved,
-              input: prepared.input,
-              result,
-              captureMessages: prepared.captureMessages,
-            })
-            return result
-          }),
+      return await invokePreparedTurn(request, 'generateText', 'afterCall', async (prepared) =>
+        await prepared.session.generateText(request.ctx, request.target, prepared.callArgs, request.options),
       )
     },
     async invokeStream(request: AgentTurnRequest<TPrompt>) {
-      return await withPreparedRuntime(
-        request.ctx,
-        request.target,
-        async () =>
-          await observeAgentRun(name, config.prompt.id, 'streamText', request.target, async (recordPrepared) => {
-            const prepared = await prepareAgentCall(request.ctx, request.target, request.args)
-            await recordPrepared(prepared)
-            const userOnFinish = isFinishCallback(prepared.callArgs.onFinish) ? prepared.callArgs.onFinish : undefined
-            prepared.callArgs.onFinish = async (result: unknown) => {
-              await afterPreparedAgentCall({
-                resolved: prepared.resolved,
-                input: prepared.input,
-                result,
-                captureMessages: prepared.captureMessages,
-              })
-              if (userOnFinish) return await userOnFinish(result)
-              return undefined
-            }
-            return await prepared.session.streamText(request.ctx, request.target, prepared.callArgs, request.options)
-          }),
+      return await invokePreparedTurn(request, 'streamText', 'onFinish', async (prepared) =>
+        await prepared.session.streamText(request.ctx, request.target, prepared.callArgs, request.options),
+      )
+    },
+    async invokeObject(request: AgentTurnRequest<TPrompt, ConvexGenerateObjectArgs>) {
+      return await invokePreparedTurn(request, 'generateObject', 'afterCall', async (prepared) =>
+        await prepared.session.generateObject(request.ctx, request.target, prepared.callArgs, request.options),
+      )
+    },
+    async invokeObjectStream(request: AgentTurnRequest<TPrompt, ConvexStreamObjectArgs>) {
+      return await invokePreparedTurn(request, 'streamObject', 'onFinish', async (prepared) =>
+        await prepared.session.streamObject(request.ctx, request.target, prepared.callArgs, request.options),
       )
     },
     async continueThread(request: AgentThreadRequest<TPrompt>) {
@@ -187,13 +217,14 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
       return {
         thread: wrapCruxConvexThread(thread, {
           run: async (callArgs, options, fn) => {
+            const convexCallArgs = convexCallArgsFromTurnArgs(callArgs as Record<string, unknown>)
             const snapshot = await config.driver.fetchContext({
               ctx: request.ctx,
               component: config.components.agent,
               agentName: name,
               agentOptions,
               target: request.target,
-              callArgs,
+              callArgs: convexCallArgs,
               options,
             })
             const preparedTarget = targetFromContextSnapshot(request.target, snapshot)
@@ -201,61 +232,37 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
               request.ctx,
               preparedTarget,
               async () =>
-                await observeAgentRun(name, config.prompt.id, fn.operation, preparedTarget, async (recordPrepared) => {
-                  const prepared = withThreadCallArgs(
-                    await prepareAgentCall(
-                      request.ctx,
-                      preparedTarget,
-                      request.args,
-                      prepareMessagesFromSnapshot(snapshot),
-                    ),
-                    callArgs,
-                  )
-                  await recordPrepared(prepared, preparedTarget)
-                  return await fn({
-                    ctx: request.ctx,
-                    target: preparedTarget,
-                    prepared,
-                    options: withThreadContextOptions(options, snapshot, prepared.callArgs),
-                  })
-                }),
+                await observeAgentRun(
+                  name,
+                  config.prompt.id,
+                  fn.operation,
+                  preparedTarget,
+                  config.observe,
+                  async (recordPrepared) => {
+                    const prepared = withThreadCallArgs(
+                      await prepareAgentCall(
+                        request.ctx,
+                        preparedTarget,
+                        callArgs as ConvexAgentCallArgs<TPrompt, object>,
+                        prepareMessagesFromSnapshot(snapshot),
+                      ),
+                      convexCallArgs,
+                    )
+                    await recordPrepared(prepared, preparedTarget)
+                    return await fn({
+                      ctx: request.ctx,
+                      target: preparedTarget,
+                      prepared,
+                      options: withThreadContextOptions(options, snapshot, prepared.callArgs),
+                    })
+                  },
+                ),
             )
           },
         }),
       }
     },
   }
-}
-
-function agentOptionsFromConfig<TPrompt extends AnyConvexPrompt>(
-  config: ProfileBackedAgentLifecycleConfig<TPrompt>,
-): ConvexAgentPassthroughOptions {
-  const {
-    components: _components,
-    driver: _driver,
-    languageModel: _languageModel,
-    model: _model,
-    namespace: _namespace,
-    name: _name,
-    prepare: _prepare,
-    prompt: _prompt,
-    store: _store,
-    tokenBudget: _tokenBudget,
-    tools: _tools,
-    ...agentOptions
-  } = config
-  void _components
-  void _driver
-  void _languageModel
-  void _model
-  void _namespace
-  void _name
-  void _prepare
-  void _prompt
-  void _store
-  void _tokenBudget
-  void _tools
-  return agentOptions
 }
 
 async function inputWithPersistedSkills(input: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -288,12 +295,4 @@ async function resolvePreparedPrompt(
     input,
     tokenBudget,
   } as unknown as ResolveOptions<z.ZodType, readonly ContextEntry[]>)
-}
-
-async function defaultConvexAgentStore(component: ComponentApi, ctx: unknown): Promise<CruxStore> {
-  if (!component) {
-    throw new Error('convexAgent() requires components.crux or a custom store to bind Crux runtime state.')
-  }
-  assertConvexCtxPort(ctx)
-  return createDefaultConvexCruxStore(ctx, { component })
 }

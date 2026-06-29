@@ -115,23 +115,19 @@ export const reply = action({
     message: v.string(),
   },
   handler: async (ctx, args) => {
-    const { thread } = await supportAgent.continueThread(
-      ctx,
-      {
-        threadId: args.threadId,
-        userId: args.userId,
-        accountId: args.accountId,
-      },
-      {
-        input: {
-          accountId: args.accountId,
-          accountTier: args.accountTier,
-          message: args.message,
-        },
-      },
-    )
+    const { thread } = await supportAgent.continueThread(ctx, {
+      threadId: args.threadId,
+      userId: args.userId,
+      accountId: args.accountId,
+    })
 
-    return thread.streamText()
+    return thread.streamText({
+      input: {
+        accountId: args.accountId,
+        accountTier: args.accountTier,
+        message: args.message,
+      },
+    })
   },
 })
 ```
@@ -140,32 +136,34 @@ TypeScript infers the `input` object from the prompt and its `use` entries. If `
 
 ## Context-Aware Preparation
 
-Use `prepare` when prompt input or runtime `use[]` entries must be derived from Convex Agent thread context:
+Use `crux.prepare` when prompt input or runtime `use[]` entries must be derived from Convex Agent thread context:
 
 ```ts
 export const supportAgent = crux.convexAgent({
   name: 'Support',
   prompt: supportPrompt,
   languageModel,
-  prepare: async ({ ctx, target, input, messages }) => {
-    const account = await loadAccount(ctx, {
-      userId: String(target.userId ?? ''),
-      lastMessage: String(messages?.recent.at(-1)?.content ?? ''),
-    })
+  crux: {
+    prepare: async ({ ctx, target, input, messages }) => {
+      const account = await loadAccount(ctx, {
+        userId: String(target.userId ?? ''),
+        lastMessage: String(messages?.recent.at(-1)?.content ?? ''),
+      })
 
-    return {
-      input: {
-        ...input,
-        accountTier: account.tier,
-      },
-      use: [threadMemory],
-      captureMessages: messages?.recent,
-    }
+      return {
+        input: {
+          ...input,
+          accountTier: account.tier,
+        },
+        use: [threadMemory],
+        captureMessages: messages?.recent,
+      }
+    },
   },
 })
 ```
 
-The wrapper runs `prepare` inside the active Convex Crux runtime. Returned `use[]` entries are added to the prompt for that turn, including when `prepare` returns a prompt override. Returned tools are merged with resolved prompt tools, and `captureMessages` gives memory blocks the real user message when Convex Agent owns the thread history.
+The wrapper runs `crux.prepare` inside the active Convex Crux runtime. Returned `use[]` entries are added to the prompt for that turn, including when `crux.prepare` returns a prompt override. Returned tools are merged with resolved prompt tools, and `captureMessages` gives memory blocks the real user message when Convex Agent owns the thread history. Use `crux.runtime.store` and `crux.runtime.namespace` for request-scoped Crux store and namespace overrides, `crux.observe` to customize or disable the profile `agent.run` span, and `crux.persistence` to disable best-effort skill or memory persistence for specialized agents.
 
 ## Runtime Behavior
 
@@ -173,11 +171,11 @@ The wrapper runs `prepare` inside the active Convex Crux runtime. Returned `use[
 
 1. Installs the Convex Crux runtime store from `components.crux`.
 2. Opens the `agent.run` span before prompt resolution so memory, retrieval, tools, and generation appear under the agent turn.
-3. Runs `prepare`, when configured, with call input and Convex Agent message context.
+3. Runs `crux.prepare`, when configured, with call input and Convex Agent message context.
 4. Loads persisted active skill ids for the thread or user.
 5. Resolves the prompt with user input, active skills, contexts, runtime `use[]`, memory, and tools.
 6. Builds the Convex Agent tool registry from the resolved Crux tools.
-7. Runs `generateText()`, `streamText()`, or `continueThread()` through the low-level Crux-aware `Agent`.
+7. Runs `generateText()`, `streamText()`, `generateObject()`, `streamObject()`, or `continueThread()` through the low-level Crux-aware `Agent`.
 8. Persists newly activated skills after the turn.
 9. Captures memory and tool-call events for resolved memory blocks.
 

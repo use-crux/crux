@@ -1,9 +1,28 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
 import type { ContextEntry, MergedInput, Prompt, PromptConfig, ResolvedPrompt } from '@use-crux/core'
+import type { CruxAttributes } from '@use-crux/core/observability'
 import type { CruxStore } from '@use-crux/core/store'
 import type { z } from 'zod'
 import type { ComponentApi } from '../src/component/_generated/component'
 import type { ConvexRuntimeTarget } from '../runtime'
+import type {
+  ConvexGenerateObjectArgs,
+  ConvexGenerateTextArgs,
+  ConvexStreamObjectArgs,
+  ConvexStreamTextArgs,
+  ConvexThreadGenerateObjectArgs,
+  ConvexThreadGenerateObjectOptions,
+  ConvexThreadGenerateObjectResult,
+  ConvexThreadGenerateTextArgs,
+  ConvexThreadGenerateTextOptions,
+  ConvexThreadGenerateTextResult,
+  ConvexThreadStreamObjectArgs,
+  ConvexThreadStreamObjectOptions,
+  ConvexThreadStreamObjectResult,
+  ConvexThreadStreamTextArgs,
+  ConvexThreadStreamTextOptions,
+  ConvexThreadStreamTextResult,
+} from './convex-agent-method-types'
 import type {
   ConvexAgentContextMessage,
   ConvexAgentContextSnapshot,
@@ -22,18 +41,28 @@ export type PromptInput<TPrompt> =
     : never
 
 /** Operations emitted by the profile-backed lifecycle. */
-export type ConvexAgentOperation = 'resolve' | 'generateText' | 'streamText'
+export type ConvexAgentOperation = 'resolve' | 'generateText' | 'streamText' | 'generateObject' | 'streamObject'
 
 /** Target for continuing a persisted Convex Agent thread. */
 export type ConvexAgentThreadTarget = ConvexRuntimeTarget & {
   readonly threadId: string
 }
 
-/** Arguments accepted by `generateText()`, `streamText()`, and `resolve()`. */
-export type ConvexAgentCallArgs<TPrompt extends AnyConvexPrompt> = {
-  readonly input: PromptInput<TPrompt>
-  readonly tokenBudget?: number
-} & Record<string, unknown>
+type CruxOwnedConvexArgKey = 'model' | 'system' | 'prompt' | 'messages' | 'tools'
+
+/**
+ * Convex-Agent-shaped turn arguments with Crux prompt input added.
+ *
+ * Crux owns `system`, resolved `prompt`/`messages`, and resolved `tools`, so
+ * those upstream fields are intentionally omitted from the public call shape.
+ * Callers provide prompt `input` alongside normal generation settings such as
+ * `temperature`, `stopWhen`, `promptMessageId`, or provider options.
+ */
+export type ConvexAgentCallArgs<TPrompt extends AnyConvexPrompt, TConvexArgs extends object = ConvexGenerateTextArgs> =
+  Omit<TConvexArgs, CruxOwnedConvexArgKey> & {
+    readonly input: PromptInput<TPrompt>
+    readonly tokenBudget?: number
+  }
 
 /** Messages exposed to a profile-backed agent `prepare()` callback. */
 export interface ConvexAgentPrepareMessages {
@@ -64,6 +93,38 @@ export interface ConvexAgentPrepareResult<TPrompt extends AnyConvexPrompt> {
   readonly captureMessages?: readonly ConvexAgentContextMessage[]
 }
 
+/** Best-effort post-turn persistence controls for profile-backed agent calls. */
+export interface ConvexAgentPersistenceConfig {
+  /** Persist active skill snapshots after each successful turn. Defaults to true. */
+  readonly skills?: boolean
+  /** Capture resolved memory blocks after each successful turn. Defaults to true. */
+  readonly memory?: boolean
+}
+
+/** Context available when customizing profile-backed Convex Agent observability. */
+export interface ConvexAgentObserveArgs {
+  /** Public agent name configured for the span. */
+  readonly agentName: string
+  /** Stable prompt id, when the configured prompt has one. */
+  readonly promptId?: string
+  /** Lifecycle operation currently being observed. */
+  readonly operation: ConvexAgentOperation
+  /** Convex Agent target for the current operation. */
+  readonly target: ConvexRuntimeTarget
+}
+
+/** Controls for the profile-backed `agent.run` observability span. */
+export interface ConvexAgentObserveConfig {
+  /** Enable or disable the profile `agent.run` span. Defaults to true. */
+  readonly enabled?: boolean
+  /** Override the profile `agent.run` span name. Defaults to the public agent name. */
+  readonly name?: string | ((args: ConvexAgentObserveArgs) => string | Promise<string>)
+  /** Add attributes to the profile `agent.run` span start and end records. */
+  readonly attributes?:
+    | CruxAttributes
+    | ((args: ConvexAgentObserveArgs) => CruxAttributes | Promise<CruxAttributes>)
+}
+
 /**
  * Model field accepted by the profile-backed lifecycle.
  *
@@ -81,16 +142,33 @@ export type ProfileBackedAgentModelConfig =
     }
 
 /** Configuration for the internal profile-backed lifecycle, before model binding. */
-export interface ProfileBackedAgentLifecycleBaseConfig<
-  TPrompt extends AnyConvexPrompt,
-> extends ConvexAgentPassthroughOptions {
+export type ProfileBackedAgentLifecycleBaseConfig<TPrompt extends AnyConvexPrompt> =
+  ProfileBackedAgentLifecycleCommonConfig<TPrompt> &
+    (
+      | {
+          /** Convex components used by the Crux and Convex Agent runtimes. */
+          readonly components: {
+            readonly crux: ComponentApi
+            readonly agent: unknown
+          }
+          /** Request-scoped store factory. */
+          readonly store?: (ctx: unknown) => CruxStore | Promise<CruxStore>
+        }
+      | {
+          /** Convex Agent component plus an optional Crux component when a custom store is supplied. */
+          readonly components: {
+            readonly crux?: ComponentApi
+            readonly agent: unknown
+          }
+          /** Request-scoped store factory. */
+          readonly store: (ctx: unknown) => CruxStore | Promise<CruxStore>
+        }
+    )
+
+interface ProfileBackedAgentLifecycleCommonConfig<TPrompt extends AnyConvexPrompt>
+  extends ConvexAgentPassthroughOptions {
   /** Driver that adapts the lifecycle to `@convex-dev/agent`. */
   readonly driver: ConvexAgentDriver
-  /** Convex components used by the Crux and Convex Agent runtimes. */
-  readonly components: {
-    readonly crux: ComponentApi
-    readonly agent: unknown
-  }
   /** Public agent name. Defaults to the prompt id. */
   readonly name?: string
   /** Crux prompt resolved for each turn. */
@@ -103,8 +181,6 @@ export interface ProfileBackedAgentLifecycleBaseConfig<
   readonly prepare?: (
     args: ConvexAgentPrepareArgs<TPrompt>,
   ) => ConvexAgentPrepareResult<TPrompt> | Promise<ConvexAgentPrepareResult<TPrompt>>
-  /** Request-scoped store factory. */
-  readonly store?: (ctx: unknown) => CruxStore | Promise<CruxStore>
   /** Namespace override for Convex-profile memory and skill state. */
   readonly namespace?:
     | string
@@ -113,6 +189,10 @@ export interface ProfileBackedAgentLifecycleBaseConfig<
         readonly promptId?: string
         readonly target?: ConvexRuntimeTarget
       }) => string | Promise<string>)
+  /** Profile `agent.run` observability controls. */
+  readonly observe?: ConvexAgentObserveConfig
+  /** Best-effort post-turn persistence controls. */
+  readonly persistence?: ConvexAgentPersistenceConfig
 }
 
 /** Configuration for the internal profile-backed lifecycle. */
@@ -120,10 +200,10 @@ export type ProfileBackedAgentLifecycleConfig<TPrompt extends AnyConvexPrompt> =
   ProfileBackedAgentLifecycleBaseConfig<TPrompt> & ProfileBackedAgentModelConfig
 
 /** Request passed to one lifecycle turn. */
-export interface AgentTurnRequest<TPrompt extends AnyConvexPrompt> {
+export interface AgentTurnRequest<TPrompt extends AnyConvexPrompt, TArgs extends object = ConvexGenerateTextArgs> {
   readonly ctx: unknown
   readonly target: ConvexRuntimeTarget
-  readonly args: ConvexAgentCallArgs<TPrompt>
+  readonly args: ConvexAgentCallArgs<TPrompt, TArgs>
   readonly options?: Record<string, unknown>
 }
 
@@ -131,7 +211,6 @@ export interface AgentTurnRequest<TPrompt extends AnyConvexPrompt> {
 export interface AgentThreadRequest<TPrompt extends AnyConvexPrompt> {
   readonly ctx: unknown
   readonly target: ConvexAgentThreadTarget
-  readonly args: ConvexAgentCallArgs<TPrompt>
 }
 
 /** Prepared state passed from Crux prompt resolution to the driver. */
@@ -141,25 +220,42 @@ export interface PreparedAgentCall {
   readonly callArgs: Record<string, unknown>
   readonly convexTools: Record<string, unknown>
   readonly input: Record<string, unknown>
+  readonly persistence?: ConvexAgentPersistenceConfig
   readonly captureMessages?: readonly ConvexAgentContextMessage[]
 }
 
 /** Convex-Agent-shaped thread returned by `continueThread()`. */
-export interface CruxConvexThread {
+export interface CruxConvexThread<TPrompt extends AnyConvexPrompt> {
   readonly threadId: string
   getMetadata(): Promise<unknown>
   updateMetadata(patch: Record<string, unknown>): Promise<unknown>
-  generateText(args?: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown>
-  streamText(args?: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown>
+  generateText(
+    args: ConvexAgentCallArgs<TPrompt, ConvexThreadGenerateTextArgs>,
+    options?: ConvexThreadGenerateTextOptions,
+  ): ConvexThreadGenerateTextResult
+  streamText(
+    args: ConvexAgentCallArgs<TPrompt, ConvexThreadStreamTextArgs>,
+    options?: ConvexThreadStreamTextOptions,
+  ): ConvexThreadStreamTextResult
+  generateObject(
+    args: ConvexAgentCallArgs<TPrompt, ConvexThreadGenerateObjectArgs>,
+    options?: ConvexThreadGenerateObjectOptions,
+  ): ConvexThreadGenerateObjectResult
+  streamObject(
+    args: ConvexAgentCallArgs<TPrompt, ConvexThreadStreamObjectArgs>,
+    options?: ConvexThreadStreamObjectOptions,
+  ): ConvexThreadStreamObjectResult
 }
 
 /** Internal lifecycle facade used by the public `convexAgent()` wrapper. */
 export interface ProfileBackedAgentLifecycle<TPrompt extends AnyConvexPrompt> {
   readonly name: string
   resolveOnly(request: AgentTurnRequest<TPrompt>): Promise<ResolvedPrompt>
-  invokeText(request: AgentTurnRequest<TPrompt>): Promise<unknown>
-  invokeStream(request: AgentTurnRequest<TPrompt>): Promise<unknown>
-  continueThread(request: AgentThreadRequest<TPrompt>): Promise<{ thread: CruxConvexThread }>
+  invokeText(request: AgentTurnRequest<TPrompt, ConvexGenerateTextArgs>): Promise<unknown>
+  invokeStream(request: AgentTurnRequest<TPrompt, ConvexStreamTextArgs>): Promise<unknown>
+  invokeObject(request: AgentTurnRequest<TPrompt, ConvexGenerateObjectArgs>): Promise<unknown>
+  invokeObjectStream(request: AgentTurnRequest<TPrompt, ConvexStreamObjectArgs>): Promise<unknown>
+  continueThread(request: AgentThreadRequest<TPrompt>): Promise<{ thread: CruxConvexThread<TPrompt> }>
 }
 
 /** Type alias for prompt config reuse when adding runtime contexts. */

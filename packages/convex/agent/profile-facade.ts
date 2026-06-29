@@ -5,6 +5,12 @@ import { createProfileBackedAgentLifecycle } from './lifecycle'
 import { createDefaultConvexAgentDriver } from './default-driver'
 import { Agent, type ConvexAgentComponent } from './facade'
 import type { ConvexAgentConfig, CreateAgentOptions, CruxConvexAgent } from './sdk-types'
+import type {
+  ConvexGenerateObjectResult,
+  ConvexGenerateTextResult,
+  ConvexStreamObjectResult,
+  ConvexStreamTextResult,
+} from './convex-agent-method-types'
 import { convexTools, wrapToolRecord } from './sdk-tools'
 
 /**
@@ -19,17 +25,54 @@ import { convexTools, wrapToolRecord } from './sdk-tools'
 export function convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
   config: ConvexAgentConfig<TPrompt>,
 ): CruxConvexAgent<TPrompt> {
+  const { crux, prepare, store, namespace, ...agentConfig } = config
   const lifecycle = createProfileBackedAgentLifecycle({
-    ...config,
-    driver: createDefaultConvexAgentDriver(),
+    ...agentConfig,
+    prepare: crux?.prepare ?? prepare,
+    store: crux?.runtime?.store ?? store,
+    namespace: crux?.runtime?.namespace ?? namespace,
+    observe: crux?.observe,
+    persistence: crux?.persistence,
+    driver: crux?.driver ?? createDefaultConvexAgentDriver(),
   })
+  const resolve: CruxConvexAgent<TPrompt>['resolve'] = async (ctx, target, args) =>
+    await lifecycle.resolveOnly({ ctx, target, args })
   return {
     name: lifecycle.name,
     prompt: config.prompt,
-    generateText: async (ctx, target, args, options) => await lifecycle.invokeText({ ctx, target, args, options }),
-    streamText: async (ctx, target, args, options) => await lifecycle.invokeStream({ ctx, target, args, options }),
-    resolve: async (ctx, target, args) => await lifecycle.resolveOnly({ ctx, target, args }),
-    continueThread: async (ctx, target, args) => await lifecycle.continueThread({ ctx, target, args }),
+    crux: {
+      resolve,
+    },
+    generateText: (async (ctx, target, args, options) =>
+      (await lifecycle.invokeText({
+        ctx,
+        target,
+        args,
+        options: options as Record<string, unknown> | undefined,
+      })) as Awaited<ConvexGenerateTextResult>) as CruxConvexAgent<TPrompt>['generateText'],
+    streamText: (async (ctx, target, args, options) =>
+      (await lifecycle.invokeStream({
+        ctx,
+        target,
+        args,
+        options: options as Record<string, unknown> | undefined,
+      })) as Awaited<ConvexStreamTextResult>) as CruxConvexAgent<TPrompt>['streamText'],
+    generateObject: (async (ctx, target, args, options) =>
+      (await lifecycle.invokeObject({
+        ctx,
+        target,
+        args,
+        options: options as Record<string, unknown> | undefined,
+      })) as Awaited<ConvexGenerateObjectResult>) as CruxConvexAgent<TPrompt>['generateObject'],
+    streamObject: (async (ctx, target, args, options) =>
+      (await lifecycle.invokeObjectStream({
+        ctx,
+        target,
+        args,
+        options: options as Record<string, unknown> | undefined,
+      })) as Awaited<ConvexStreamObjectResult>) as CruxConvexAgent<TPrompt>['streamObject'],
+    resolve,
+    continueThread: async (ctx, target) => await lifecycle.continueThread({ ctx, target }),
   }
 }
 
