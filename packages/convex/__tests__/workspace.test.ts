@@ -17,14 +17,15 @@ describe('convexWorkspaceBlobStore', () => {
 
     const blobs = convexWorkspaceBlobStore({ ctx: { storage } })
     const ref = await blobs.put({
-      workspaceId: 'research',
-      namespace: 'thread:1',
-      path: '/outputs/report.pdf',
+      key: 'research/thread:1/outputs/report.pdf',
       content: new Uint8Array([1, 2, 3]),
       mimeType: 'application/pdf',
-    } as Parameters<typeof blobs.put>[0] & { workspaceId: string; namespace: string; path: string })
+      metadata: { workspaceId: 'research' },
+    })
 
     expect(ref).toEqual({ uri: 'convex://blob-1', size: 3 })
+    expect(storage.store).toHaveBeenCalledWith(expect.any(Blob))
+    await expect(stored.get('blob-1')?.arrayBuffer()).resolves.toEqual(new Uint8Array([1, 2, 3]).buffer)
     await expect(blobs.get(ref.uri)).resolves.toMatchObject({
       mimeType: 'application/pdf',
       size: 3,

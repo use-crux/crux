@@ -16,8 +16,13 @@ import type { BlobStore } from '@use-crux/core/storage'
 ```ts
 const ws = workspace({
   id: 'research',
-  namespace: `thread:${threadId}`,
+  namespace: ({ input }) => `thread:${input.threadId}`,
   storage,
+  retention: { ttlMs: 1000 * 60 * 60 * 24 },
+  limits: {
+    maxFileBytes: 1_000_000,
+    maxNamespaceBytes: 25_000_000,
+  },
 })
 ```
 
@@ -35,7 +40,24 @@ await ws.list('/workspace/**/*.md')
 await ws.read('/workspace/notes.md')
 await ws.write('/outputs/report.md', '# Report')
 await ws.edit('/outputs/report.md', { find: 'draft', replace: 'final' })
+await ws.exists('/outputs/report.md')
+await ws.stat('/outputs/report.md')
+await ws.append('/outputs/report.md', '\nAppendix')
+await ws.rename('/outputs/report.md', '/outputs/final-report.md')
+await ws.copy('/outputs/final-report.md', '/workspace/report-copy.md')
+await ws.grep('revenue', { path: '/workspace/**/*.md', ignoreCase: true })
+await ws.finalize('/outputs/final-report.md', { kind: 'report' })
+await ws.artifacts({ status: 'final' })
 await ws.delete('/outputs/report.md')
+```
+
+Every method accepts a `{ namespace }` option. Use it for direct calls or manually
+created tools when the workspace namespace is normally resolved from prompt input:
+
+```ts
+await ws.write('/workspace/notes.md', '# Notes', { namespace: 'thread:123' })
+
+const tools = ws.asTools({ namespace: 'thread:123', prefix: 'research' })
 ```
 
 `deleteWorkspaceFile` is not auto-injected unless `tools.delete` is enabled.
@@ -57,9 +79,41 @@ use: [ws.asContext()]
 tools: ws.asTools({ prefix: 'research' })
 ```
 
+Injected tools include:
+
+```txt
+listWorkspace
+readWorkspaceFile
+writeWorkspaceFile
+editWorkspaceFile
+renameWorkspaceFile
+grepWorkspace
+```
+
+`exists`, `stat`, `append`, and `copy` are programmatic methods by default.
+
+## Artifacts
+
+Artifacts are file records with lifecycle metadata. They are not stored in a
+separate table.
+
+```ts
+await ws.write('/outputs/report.md', '# Report', {
+  status: 'draft',
+  kind: 'report',
+})
+
+const artifact = await ws.finalize('/outputs/report.md')
+const finals = await ws.artifacts({ status: 'final' })
+```
+
+Small inline artifacts expose a `workspace-inline://...` reference. Blob-backed
+artifacts expose the blob URI.
+
 ## Blob Stores
 
-Use `BlobStore` for binary and oversized workspace files.
+Use `BlobStore` for binary and oversized workspace files. Blob-backed text and
+JSON read back as `text` or `json`; binary files return a URI.
 
 Custom stores implement:
 
@@ -89,6 +143,25 @@ const ws = workspace({
 
 See [Storage](/docs/guides/storage) for the difference between `DataStore`, `VectorStore`, and `BlobStore`, and [BlobStore](/docs/guides/storage/blob-storage) for custom S3/R2/GCS-style blob stores.
 
+## Retention And Limits
+
+```ts
+workspace({
+  id: 'research',
+  namespace,
+  storage,
+  retention: { ttlMs: 86_400_000 },
+  limits: {
+    maxFileBytes: 1_000_000,
+    maxNamespaceBytes: 25_000_000,
+  },
+})
+```
+
+`retention.ttlMs` is passed to `DataStore.set({ ttl })` only when the store
+supports TTL. `maxFileBytes` rejects a single oversized write, and
+`maxNamespaceBytes` rejects writes that would push the namespace over its cap.
+
 ## Tool Names
 
 ```ts
@@ -96,6 +169,8 @@ const names = workspaceToolNames({ prefix: 'research' })
 
 names.list // listResearchWorkspace
 names.writeFile // writeResearchWorkspaceFile
+names.renameFile // renameResearchWorkspaceFile
+names.grep // grepResearchWorkspace
 ```
 
 Use this helper when matching workspace tools in middleware.

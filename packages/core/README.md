@@ -117,12 +117,55 @@ const result = await generate(reply, {
 
 Now the call has memory, retrieval, input screening, structured output, retryable quality checks, adapter execution, and traceable events.
 
+## Give Agents A Workspace
+
+Use `workspace()` when an agent needs durable scratch files and generated outputs.
+Workspaces are namespace-scoped, path-addressed file trees backed by a `DataStore`
+for metadata and small text/JSON, plus an optional `BlobStore` for binary and
+oversized payloads.
+
+```ts
+import { prompt } from '@use-crux/core'
+import { inMemoryStorage } from '@use-crux/core/storage'
+import { workspace } from '@use-crux/core/workspace'
+
+const ws = workspace({
+  id: 'research',
+  namespace: ({ input }) => `thread:${input.threadId}`,
+  storage: inMemoryStorage(),
+  retention: { ttlMs: 1000 * 60 * 60 * 24 },
+  limits: {
+    maxFileBytes: 1_000_000,
+    maxNamespaceBytes: 25_000_000,
+  },
+})
+
+const analyst = prompt({
+  id: 'analyst',
+  use: [ws],
+  system: 'Use /workspace for notes and write final files to /outputs.',
+})
+
+await ws.write('/workspace/notes.md', '# Notes', { namespace: 'thread:123' })
+await ws.append('/workspace/notes.md', '\nMore notes.', { namespace: 'thread:123' })
+await ws.rename('/workspace/notes.md', '/outputs/report.md', { namespace: 'thread:123' })
+await ws.finalize('/outputs/report.md', { namespace: 'thread:123', kind: 'report' })
+```
+
+Injected workspaces add a bounded manifest plus file tools for list, read, write,
+edit, rename, and grep. Programmatic methods also include `exists`, `stat`,
+`append`, `copy`, `delete`, `artifacts`, and `finalize`. Blob-backed text and JSON
+read back as text/JSON; binary files return a URI for app-side fetching. Every
+operation accepts a `{ namespace }` override for direct calls and manually created
+tools.
+
 ## What Core Gives You
 
 | Capability         | What it is for                                                                                                              |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
 | Prompt definitions | Typed `prompt()` objects with input/output schemas, settings, tags, tests, and provider overrides.                          |
 | Composable context | `context()` blocks for brand voice, policies, retrieved docs, formatting rules, and shared tools.                           |
+| Workspaces         | Durable namespace-scoped files, generated artifacts, blob-backed outputs, and model-safe file tools.                        |
 | Memory             | Recent messages, working state, episodes, facts, procedures, proposals, policies, and pluggable stores.                     |
 | Retrieval          | Indexers, corpora, retrievers, rerankers, grounding, citations, and custom RAG pipelines.                                   |
 | Tools              | Prompt tools, context tools, middleware, approval flows, and audit events.                                                  |

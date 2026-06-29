@@ -31,7 +31,8 @@ const analyst = prompt({
 
 ```txt
 1. A compact workspace manifest in the system prompt.
-2. File tools: listWorkspace, readWorkspaceFile, writeWorkspaceFile, editWorkspaceFile.
+2. File tools: listWorkspace, readWorkspaceFile, writeWorkspaceFile, editWorkspaceFile,
+   renameWorkspaceFile, grepWorkspace.
 ```
 
 The manifest shows paths and metadata, not file contents. The model calls read tools when it needs contents.
@@ -51,7 +52,17 @@ await ws.write('/workspace/notes.md', '# Research notes')
 await ws.write('/outputs/report.md', '# Final report')
 ```
 
-There is no separate public `artifact()` API in V1. Outputs are regular files under `/outputs`.
+Outputs are regular files under `/outputs`. Mark generated deliverables with
+`status` and `kind` when the app needs an artifacts view.
+
+```ts
+await ws.write('/outputs/report.md', '# Final report', {
+  status: 'draft',
+  kind: 'report',
+})
+
+const artifact = await ws.finalize('/outputs/report.md')
+```
 
 ## Listing Files
 
@@ -63,12 +74,28 @@ await ws.list('/workspace/**/*.md')
 await ws.list('/outputs/*.pdf')
 ```
 
-Supported in V1:
+Supported in V0:
 
 - `*` within one path segment.
 - `**` across path segments.
 - extension patterns such as `/**/*.md`.
 - `limit`.
+
+## File Operations
+
+The model gets rename and grep tools by default. Apps also get direct methods for
+common filesystem checks and mutations:
+
+```ts
+await ws.exists('/workspace/notes.md')
+await ws.stat('/workspace/notes.md')
+await ws.append('/workspace/notes.md', '\nMore notes.')
+await ws.rename('/workspace/notes.md', '/outputs/report.md')
+await ws.copy('/outputs/report.md', '/workspace/report-copy.md')
+await ws.grep('launch', { path: '/workspace/**/*.md', ignoreCase: true })
+```
+
+`rename` and `copy` preserve metadata, including artifact status and kind.
 
 ## Reading Files
 
@@ -93,6 +120,10 @@ if (file.kind === 'binary') {
 ```
 
 Models see paths, metadata, previews when available, and blob URIs. Apps and devtools can fetch full bytes through the blob store.
+
+Blob-backed text and JSON still read back as `text` and `json`; the workspace
+fetches their payload from the blob store. `maxInlineBytes` windows text reads
+instead of throwing when a caller asks for a smaller preview.
 
 ## Storage Rules
 
@@ -120,6 +151,65 @@ Rules:
 - Writing binary or oversized content without `blobs` throws clearly.
 
 For bundled storage options and custom S3/R2/GCS-style blob stores, see [Storage](/docs/guides/storage) and [BlobStore](/docs/guides/storage/blob-storage).
+
+## Namespaces
+
+Namespaces isolate files for tenants, users, threads, or runs. Static namespaces
+work directly. Dynamic namespaces resolve during prompt injection, and direct
+calls can pass an override:
+
+```ts
+const ws = workspace({
+  id: 'research',
+  namespace: ({ input }) => `thread:${input.threadId}`,
+  storage: storage({ data, blobs }),
+})
+
+await ws.write('/workspace/notes.md', '# Notes', { namespace: 'thread:123' })
+
+const tools = ws.asTools({ namespace: 'thread:123' })
+```
+
+The override is also useful when running workspace operations outside a prompt
+resolution.
+
+## Retention And Quotas
+
+Operator controls live on the workspace config:
+
+```ts
+const ws = workspace({
+  id: 'research',
+  namespace,
+  storage: storage({ data, blobs }),
+  retention: { ttlMs: 1000 * 60 * 60 * 24 },
+  limits: {
+    maxFileBytes: 1_000_000,
+    maxNamespaceBytes: 25_000_000,
+  },
+})
+```
+
+`retention.ttlMs` is passed to the data store only when the store supports TTL.
+`maxFileBytes` rejects one oversized write, and `maxNamespaceBytes` rejects writes
+that would push the namespace total over its cap.
+
+## Artifacts
+
+Artifacts are a view over normal workspace files:
+
+```ts
+await ws.write('/outputs/chart.png', imageBytes, {
+  mimeType: 'image/png',
+  status: 'final',
+  kind: 'chart',
+})
+
+const charts = await ws.artifacts({ status: 'final', kind: 'chart' })
+```
+
+Inline artifacts expose a `workspace-inline://...` reference. Blob-backed
+artifacts expose the blob URI.
 
 ## Source Files
 

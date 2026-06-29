@@ -20,6 +20,7 @@ import { recordToReadResult } from './read-result'
 import { createWorkspaceFilesystemOps } from './fs-ops'
 import { createWorkspaceArtifactOps } from './artifacts'
 import { createWorkspaceContextAdapters } from './context-adapters'
+import { assertWorkspaceWriteAllowed, workspaceSetOptions } from './limits'
 import {
   DEFAULT_INLINE_TEXT_BYTES,
   type Workspace,
@@ -132,6 +133,15 @@ export function workspace(config: WorkspaceConfig): Workspace {
       const mount = mountForPath(normalized, mounts, 'write')
       const analysis = await analyzeContent(content, options?.mimeType)
       const existing = await getRecord(store, config.id, namespace, normalized)
+      await assertWorkspaceWriteAllowed({
+        store,
+        workspaceId: config.id,
+        namespace,
+        path: normalized,
+        nextSize: analysis.size,
+        existing,
+        limits: config.limits,
+      })
       const now = Date.now()
       const record = await createFileRecord({
         workspaceId: config.id,
@@ -148,7 +158,7 @@ export function workspace(config: WorkspaceConfig): Workspace {
         inlineTextBelowBytes,
         blobs,
       })
-      await store.set(fileKey(config.id, namespace, normalized), record)
+      await store.set(fileKey(config.id, namespace, normalized), record, workspaceSetOptions(store, config.retention))
       return recordToFile(record)
     })
   }

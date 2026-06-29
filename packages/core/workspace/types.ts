@@ -20,6 +20,7 @@ import type {
   WorkspaceGrepResult,
   WorkspaceMoveOptions,
 } from './fs-types'
+import type { WorkspaceLimits, WorkspaceRetention } from './limits'
 import type {
   WorkspaceArtifact,
   WorkspaceArtifactsQuery,
@@ -37,6 +38,7 @@ export type {
   WorkspaceMoveOptions,
 } from './fs-types'
 export type { WorkspaceToolDelete, WorkspaceToolNames, WorkspaceToolPrefix, WorkspaceTools } from './tool-types'
+export type { WorkspaceLimits, WorkspaceRetention } from './limits'
 
 /** Default inline storage cutoff: text/JSON at or below this size is stored inline. */
 export const DEFAULT_INLINE_TEXT_BYTES = 64_000
@@ -50,19 +52,8 @@ export type WorkspacePath = string & { readonly __brand: 'WorkspacePath' }
 export type WorkspaceMountAccess = 'read' | 'readwrite'
 /** A workspace file operation. */
 export type WorkspaceOperation =
-  | 'list'
-  | 'read'
-  | 'write'
-  | 'edit'
-  | 'delete'
-  | 'exists'
-  | 'stat'
-  | 'append'
-  | 'rename'
-  | 'copy'
-  | 'grep'
-  | 'artifacts'
-  | 'finalize'
+  | 'list' | 'read' | 'write' | 'edit' | 'delete' | 'exists' | 'stat'
+  | 'append' | 'rename' | 'copy' | 'grep' | 'artifacts' | 'finalize'
 
 /** A mounted root within a workspace. */
 export interface WorkspaceMount {
@@ -99,6 +90,10 @@ export interface WorkspaceConfig {
   readonly mounts?: readonly WorkspaceMount[]
   readonly content?: WorkspaceContentOptions
   readonly tools?: WorkspaceToolOptions
+  /** Optional write-time byte limits for files and namespace totals. */
+  readonly limits?: WorkspaceLimits
+  /** Optional metadata retention policy, applied only when the data store supports TTL. */
+  readonly retention?: WorkspaceRetention
 }
 
 /** JSON values accepted by {@link Workspace.write}; strings are handled as text content. */

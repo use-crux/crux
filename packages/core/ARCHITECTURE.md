@@ -44,7 +44,9 @@ Workspace records use explicit storage capabilities:
 
 `VectorStore` is separate and only used by retrieval/search features. Core includes in-memory `DataStore`, `VectorStore`, and `BlobStore` implementations for tests and demos. Durable blob stores belong in adapters or userland implementations; object storage backends such as S3, R2, GCS, local disk, and app-owned file services should implement `BlobStore` instead of overloading `DataStore` with raw bytes.
 
-Default mounts are `/workspace` and `/outputs`. Optional `/sources` mounts are configured explicitly by the app because source ownership can come from uploads, ingestion, MCP, retrieval, or app storage. Generated deliverables remain normal files under `/outputs`; there is no public artifact primitive in V1.
+Default mounts are `/workspace` and `/outputs`. Optional `/sources` mounts are configured explicitly by the app because source ownership can come from uploads, ingestion, MCP, retrieval, or app storage. Generated deliverables remain normal files under `/outputs`; the artifacts facet is a typed view over those same file records (`status`, artifact `kind`, provenance, and download references), not a second store or keyspace.
+
+Retention and limits are enforced at the workspace write boundary. `retention.ttlMs` is passed through to `DataStore.set({ ttl })` only when the store reports TTL support; stores without TTL support keep records normally. `limits.maxFileBytes` and `limits.maxNamespaceBytes` reject writes before metadata persistence. Namespace quotas intentionally scan the namespace's current file records in V0 instead of maintaining counters, keeping adapter requirements small and behavior easy to verify.
 
 Instrumentation emits `workspace:operation` protocol events and `workspace.operation records` hooks. Devtools can show workspace ids, namespaces, paths, operations, and file metadata from the protocol stream; OTel receives only privacy-safe attributes such as workspace id, operation, MIME type, size, status, and path hash.
 
@@ -184,7 +186,7 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── storage/
 │   └── index.ts        DataStore, VectorStore, BlobStore, storage(), and in-memory implementations
 ├── workspace/
-│   └── index.ts        workspace(), workspaceToolNames() — durable mounted file tree, prompt injection, file tools, blob-backed binary/large payloads, canonical operation spans
+│   └── index.ts        workspace(), workspaceToolNames() — durable mounted file tree, prompt injection, file tools, artifacts view, TTL/quota guards, blob-backed payloads, canonical operation spans
 ├── indexing/
 │   └── index.ts        indexer() + corpus() + indexingPipeline() — document transforms, structured/parent-child/semantic chunkers, stage cache, generation-aware promotion, source ledger sync, dry runs, and store writes
 ├── cost/
