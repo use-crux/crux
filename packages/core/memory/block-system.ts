@@ -8,14 +8,31 @@ import type { DenseEmbedding } from '../embedding'
 import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
 import { registerInspectableResource } from '../runtime-bridge/resources'
+import {
+  resolveMemoryNamespace,
+  resolveMemoryNamespaceSync,
+  type MemoryNamespace,
+} from './namespace'
 
 export type MemoryBlockKind = 'recent' | 'working' | 'episodes' | 'facts' | 'procedures' | 'reflections' | 'custom'
 export type MemoryWriteMode = 'propose' | 'auto' | 'manual'
 export type MemoryProposalStatus = 'pending' | 'approved' | 'rejected'
+export type MemoryCaptureMode = 'inline' | 'afterResponse' | 'detached'
+export type { MemoryNamespace } from './namespace'
 
-export type MemoryNamespace =
-  | string
-  | ((ctx: { input: Record<string, unknown>; promptId?: string }) => string | Promise<string>)
+/** Capture scheduling options for memory turn and tool-event writes. */
+export interface MemoryCaptureConfig {
+  /**
+   * Capture scheduling mode.
+   *
+   * - `inline`: await block capture before `captureTurn()`/`captureToolEvent()` resolves.
+   * - `afterResponse`: start capture after generation and hand it to `waitUntil` when provided.
+   * - `detached`: start capture in the background; `flush()` can still await pending work.
+   */
+  mode?: MemoryCaptureMode
+  /** Runtime hook for environments that keep background work alive after a response. */
+  waitUntil?: (promise: Promise<unknown>) => void
+}
 
 export interface MemoryRuntimeOptions {
   store: CruxStore
@@ -108,14 +125,34 @@ export interface MemoryBlockConfig {
 }
 
 export interface MemoryConfig {
+  /** Stable identifier used in store keys, traces, and devtools resources. */
   id: string
+  /** Store backing this memory instance. Defaults to an in-memory store. */
   store?: CruxStore
+  /** Namespace scope for all reads, writes, tools, capture, and proposals. */
   namespace: MemoryNamespace
+  /** Ordered memory blocks composed by this memory instance. */
   blocks: readonly MemoryBlock[]
+  /**
+   * Capture scheduling behavior for turn and tool-event writes.
+   *
+   * - `inline`: `captureTurn()` and `captureToolEvent()` await block capture before resolving.
+   * - `afterResponse`: capture is started after generation and passed to `waitUntil` when provided.
+   * - `detached`: capture starts in the background and can still be awaited with `flush()`.
+   *
+   * Defaults to `afterResponse`.
+   */
+  capture?: MemoryCaptureConfig
+  /**
+   * @deprecated Use `capture` instead. Legacy `deferred` maps to
+   * `capture.mode: "afterResponse"` and legacy `manual` maps to
+   * `capture.mode: "detached"` because capture still starts immediately.
+   */
   processing?: {
     mode?: 'deferred' | 'inline' | 'manual'
     waitUntil?: (promise: Promise<unknown>) => void
   }
+  /** @deprecated Memory budgets are characterized in a later beta phase. */
   budget?: { maxTokens?: number }
 }
 
@@ -136,10 +173,28 @@ export interface Memory {
   ): Promise<void>
   flush(options?: Partial<MemoryRuntimeOptions> & { input?: Record<string, unknown> }): Promise<void>
   proposals: {
-    list(options?: { namespace?: string; blockId?: string; status?: MemoryProposalStatus }): Promise<MemoryProposal[]>
-    approve(id: string, options?: { namespace?: string; edit?: unknown }): Promise<void>
-    reject(id: string, options?: { namespace?: string; reason?: string }): Promise<void>
-    edit(id: string, patch: unknown, options?: { namespace?: string }): Promise<void>
+    list(
+      options?: {
+        namespace?: string
+        input?: Record<string, unknown>
+        promptId?: string
+        blockId?: string
+        status?: MemoryProposalStatus
+      },
+    ): Promise<MemoryProposal[]>
+    approve(
+      id: string,
+      options?: { namespace?: string; input?: Record<string, unknown>; promptId?: string; edit?: unknown },
+    ): Promise<void>
+    reject(
+      id: string,
+      options?: { namespace?: string; input?: Record<string, unknown>; promptId?: string; reason?: string },
+    ): Promise<void>
+    edit(
+      id: string,
+      patch: unknown,
+      options?: { namespace?: string; input?: Record<string, unknown>; promptId?: string },
+    ): Promise<void>
   }
 }
 
@@ -151,6 +206,11 @@ export interface MemoryEntryApi {
   score?: number
   createdAt: number
   updatedAt: number
+}
+
+interface ResolvedCaptureConfig {
+  mode: MemoryCaptureMode
+  waitUntil?: (promise: Promise<unknown>) => void
 }
 
 type EmbedLike = ((text: string) => Promise<number[]>) | DenseEmbedding
@@ -626,8 +686,7 @@ export function memory(config: MemoryConfig): Memory {
   })
 
   async function resolveNamespace(input: Record<string, unknown> = {}, promptId?: string, override?: string) {
-    if (override) return override
-    return typeof config.namespace === 'function' ? await config.namespace({ input, promptId }) : config.namespace
+    return resolveMemoryNamespace(config.namespace, { input, promptId, override })
   }
 
   async function createContext(
@@ -678,12 +737,19 @@ export function memory(config: MemoryConfig): Memory {
     return proposalId
   }
 
+  function captureConfig(): ResolvedCaptureConfig {
+    return {
+      mode: config.capture?.mode ?? legacyCaptureMode(config.processing?.mode),
+      waitUntil: config.capture?.waitUntil ?? config.processing?.waitUntil,
+    }
+  }
+
   function schedule(task: Promise<unknown>) {
     const tracked = task.finally(() => pending.delete(tracked))
     pending.add(tracked)
-    if (config.processing?.mode === 'manual') return tracked
-    if (config.processing?.waitUntil) {
-      config.processing.waitUntil(tracked)
+    const capture = captureConfig()
+    if (capture.mode === 'afterResponse' && capture.waitUntil) {
+      capture.waitUntil(tracked)
       return tracked
     }
     return tracked
@@ -737,31 +803,38 @@ export function memory(config: MemoryConfig): Memory {
     },
     asTools(options) {
       const tools: AnyToolSet = {}
+      const blocksWithTools = config.blocks.filter(
+        (block): block is MemoryBlock & { tools: NonNullable<MemoryBlock['tools']> } => !!block.tools,
+      )
+      if (blocksWithTools.length === 0) return tools
       const input = options?.input ?? {}
-      let namespace =
-        typeof config.namespace === 'string' ? (options?.namespace ?? config.namespace) : options?.namespace
-      if (!namespace && typeof config.namespace === 'function') {
-        const maybeNamespace = config.namespace({ input })
-        if (!isPromiseLike(maybeNamespace)) namespace = maybeNamespace
-      }
-      for (const block of config.blocks) {
-        if (!block.tools) continue
+      const namespace = resolveMemoryNamespaceSync(config.namespace, {
+        input,
+        override: options?.namespace,
+        boundary: `memory("${config.id}").asTools()`,
+      })
+      for (const block of blocksWithTools) {
         const maybeTools = block.tools({
           store,
-          namespace: namespace ?? '',
+          namespace,
           memoryId: config.id,
           input,
           propose: async (candidate, proposalOptions) =>
-            createProposal(store, namespace ?? '', proposalOptions.block, candidate, proposalOptions.source),
+            createProposal(store, namespace, proposalOptions.block, candidate, proposalOptions.source),
         })
-        if (isPromiseLike(maybeTools)) continue
+        if (isPromiseLike(maybeTools)) {
+          throw new Error(
+            `Memory block "${block.id}" returned async tools from memory("${config.id}").asTools(), ` +
+              'but tool collection is synchronous. Return tools synchronously or expose them through an async-capable surface.',
+          )
+        }
         Object.assign(tools, maybeTools)
       }
       return tools
     },
     async captureTurn(turn, options = {}) {
       const task = runCaptureTurn(turn, options)
-      if (config.processing?.mode === 'inline') {
+      if (captureConfig().mode === 'inline') {
         await task
       } else {
         schedule(task)
@@ -769,7 +842,7 @@ export function memory(config: MemoryConfig): Memory {
     },
     async captureToolEvent(event, options = {}) {
       const task = runCaptureToolEvent(event, options)
-      if (config.processing?.mode === 'inline') {
+      if (captureConfig().mode === 'inline') {
         await task
       } else {
         schedule(task)
@@ -784,7 +857,7 @@ export function memory(config: MemoryConfig): Memory {
     },
     proposals: {
       async list(options = {}) {
-        const namespace = options.namespace ?? (typeof config.namespace === 'string' ? config.namespace : '')
+        const namespace = await resolveNamespace(options.input, options.promptId, options.namespace)
         const result = await store.list(proposalPrefix(config.id, namespace), {
           filter: {
             ...(options.blockId ? { blockId: options.blockId } : {}),
@@ -794,7 +867,8 @@ export function memory(config: MemoryConfig): Memory {
         return result.entries.map((entry) => entry.value as unknown as MemoryProposal)
       },
       async approve(proposalId, options = {}) {
-        const proposal = await findProposal(store, config.id, proposalId, options.namespace)
+        const namespace = await resolveNamespace(options.input, options.promptId, options.namespace)
+        const proposal = await findProposal(store, config.id, proposalId, namespace)
         if (!proposal) throw new Error(`Memory proposal "${proposalId}" was not found.`)
         const block = config.blocks.find((candidate) => candidate.id === proposal.blockId)
         if (!block) throw new Error(`Memory proposal "${proposalId}" references unknown block "${proposal.blockId}".`)
@@ -810,7 +884,8 @@ export function memory(config: MemoryConfig): Memory {
         })
       },
       async reject(proposalId, options = {}) {
-        const proposal = await findProposal(store, config.id, proposalId, options.namespace)
+        const namespace = await resolveNamespace(options.input, options.promptId, options.namespace)
+        const proposal = await findProposal(store, config.id, proposalId, namespace)
         if (!proposal) throw new Error(`Memory proposal "${proposalId}" was not found.`)
         proposal.status = 'rejected'
         proposal.reason = options.reason
@@ -824,7 +899,8 @@ export function memory(config: MemoryConfig): Memory {
         )
       },
       async edit(proposalId, patch, options = {}) {
-        const proposal = await findProposal(store, config.id, proposalId, options.namespace)
+        const namespace = await resolveNamespace(options.input, options.promptId, options.namespace)
+        const proposal = await findProposal(store, config.id, proposalId, namespace)
         if (!proposal) throw new Error(`Memory proposal "${proposalId}" was not found.`)
         proposal.candidate =
           isRecord(proposal.candidate) && isRecord(patch) ? { ...proposal.candidate, ...patch } : patch
@@ -835,6 +911,18 @@ export function memory(config: MemoryConfig): Memory {
   }
 
   return Object.freeze(api)
+}
+
+function legacyCaptureMode(mode: NonNullable<MemoryConfig['processing']>['mode']): MemoryCaptureMode {
+  switch (mode) {
+    case 'inline':
+      return 'inline'
+    case 'manual':
+      return 'detached'
+    case 'deferred':
+    default:
+      return 'afterResponse'
+  }
 }
 
 function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {

@@ -383,6 +383,8 @@ export type {
   MemoryBlockConfig,
   MemoryBlockContext,
   MemoryBlockKind,
+  MemoryCaptureConfig,
+  MemoryCaptureMode,
   MemoryConfig,
   MemoryEntryApi,
   MemoryMessage,

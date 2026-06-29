@@ -86,6 +86,145 @@ describe('memory block system', () => {
     await expect(second.asContext().systemFn({})).resolves.toContain('Namespace: agent:reviewer')
   })
 
+  it('uses one dynamic namespace across context, capture, direct block reads, and proposals', async () => {
+    const store = inMemoryCruxStore()
+    const recent = recentMessages({ id: 'recent', maxMessages: 5 })
+    const factBlock = facts({
+      id: 'facts',
+      extract: async (_turn, ctx) => [{ content: `Captured in ${ctx.namespace}` }],
+    })
+    const inspector = memoryBlock({
+      id: 'inspector',
+      kind: 'custom',
+      render: async (ctx) => `Resolved namespace: ${ctx.namespace}`,
+    })
+    const mem = memory({
+      id: 'dynamic-contract',
+      store,
+      namespace: ({ input }) => `tenant:${input.tenantId}:thread:${input.threadId}`,
+      blocks: [inspector, recent, factBlock],
+    })
+    const input = { tenantId: 'acme', threadId: 'support-1' }
+    const namespace = 'tenant:acme:thread:support-1'
+
+    await expect(mem.asContext().systemFn(input)).resolves.toContain(`Resolved namespace: ${namespace}`)
+
+    await mem.captureTurn(
+      {
+        messages: [{ role: 'user', content: 'Remember my billing preference' }],
+        source: { promptId: 'support' },
+      },
+      { input },
+    )
+    await mem.flush({ input })
+
+    const turns = await recent.list({ store, namespace, memoryId: 'dynamic-contract' })
+    expect(turns.map((turn) => turn.content)).toContain('Remember my billing preference')
+
+    const proposals = await mem.proposals.list({ input })
+    expect(proposals).toHaveLength(1)
+    expect(proposals[0].namespace).toBe(namespace)
+
+    await mem.proposals.approve(proposals[0].id, { input })
+    const factsInNamespace = await factBlock.list({ store, namespace, memoryId: 'dynamic-contract' })
+    expect(factsInNamespace.map((entry) => entry.content)).toEqual([`Captured in ${namespace}`])
+  })
+
+  it('throws clear errors for async namespace and async block tools on synchronous tool surfaces', () => {
+    const renderOnlyMemory = memory({
+      id: 'async-render-only',
+      namespace: async ({ input }) => `thread:${input.threadId}`,
+      blocks: [
+        memoryBlock({
+          id: 'render-only',
+          kind: 'custom',
+          render: async (ctx) => `rendered ${ctx.namespace}`,
+        }),
+      ],
+    })
+
+    expect(renderOnlyMemory.asTools({ input: { threadId: 't1' } })).toEqual({})
+
+    const asyncNamespaceMemory = memory({
+      id: 'async-namespace-tools',
+      namespace: async ({ input }) => `thread:${input.threadId}`,
+      blocks: [
+        memoryBlock({
+          id: 'notes',
+          kind: 'custom',
+          tools: () => ({
+            rememberNote: {
+              description: 'Remember a note.',
+              parameters: z.object({ note: z.string() }),
+              execute: async () => 'remembered',
+            },
+          }),
+        }),
+      ],
+    })
+
+    expect(() => asyncNamespaceMemory.asTools({ input: { threadId: 't1' } })).toThrow(
+      /resolved asynchronously.*asTools\(\) is synchronous/,
+    )
+
+    const asyncToolsMemory = memory({
+      id: 'async-block-tools',
+      namespace: 'thread:t1',
+      blocks: [
+        memoryBlock({
+          id: 'notes',
+          kind: 'custom',
+          tools: async () => ({
+            rememberNote: {
+              description: 'Remember a note.',
+              parameters: z.object({ note: z.string() }),
+              execute: async () => 'remembered',
+            },
+          }),
+        }),
+      ],
+    })
+
+    expect(() => asyncToolsMemory.asTools()).toThrow(/returned async tools.*tool collection is synchronous/)
+  })
+
+  it('awaits block capture work when capture mode is inline', async () => {
+    let releaseCapture!: () => void
+    const captureCanFinish = new Promise<void>((resolve) => {
+      releaseCapture = resolve
+    })
+    const capturedNamespaces: string[] = []
+    const mem = memory({
+      id: 'inline-capture',
+      namespace: ({ input }) => `thread:${input.threadId}`,
+      capture: { mode: 'inline' },
+      blocks: [
+        memoryBlock({
+          id: 'capture',
+          kind: 'custom',
+          captureTurn: async (_turn, ctx) => {
+            await captureCanFinish
+            capturedNamespaces.push(ctx.namespace)
+          },
+        }),
+      ],
+    })
+
+    let resolved = false
+    const capture = mem
+      .captureTurn({ messages: [{ role: 'user', content: 'hi' }] }, { input: { threadId: 't1' } })
+      .then(() => {
+        resolved = true
+      })
+
+    await Promise.resolve()
+    expect(resolved).toBe(false)
+
+    releaseCapture()
+    await capture
+    expect(capturedNamespaces).toEqual(['thread:t1'])
+  })
+
     it('allows memory() directly in prompt use and merges block tools', async () => {
     const mem = memory({
       id: 'prompt-memory',
