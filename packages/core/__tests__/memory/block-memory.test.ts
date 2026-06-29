@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { adapter as makeAdapter } from '../../adapter/define-adapter'
 import type { AdapterResponse } from '../../adapter/types'
 import { prompt as makePrompt } from '../../prompt/prompt'
+import { defaultTokenizer, setTokenizer } from '../../shared/tokenizer'
 import { inMemoryCruxStore } from '../../store/memory'
 import {
   episodes,
@@ -19,6 +20,10 @@ const mockEmbed = async (text: string) => {
   while (values.length < 8) values.push(0)
   return values
 }
+
+afterEach(() => {
+  setTokenizer(defaultTokenizer)
+})
 
 function mockResponse(text: string, toolCalls?: AdapterResponse['toolCalls']): AdapterResponse {
   return {
@@ -225,7 +230,7 @@ describe('memory block system', () => {
     expect(capturedNamespaces).toEqual(['thread:t1'])
   })
 
-    it('allows memory() directly in prompt use and merges block tools', async () => {
+  it('allows memory() directly in prompt use and merges block tools', async () => {
     const mem = memory({
       id: 'prompt-memory',
       namespace: 'thread:1',
@@ -259,7 +264,38 @@ describe('memory block system', () => {
     expect(resolved.memoryBindings).toHaveLength(1)
   })
 
-    it('captures completed adapter turns after generation and flushes deferred work', async () => {
+  it('enforces internal memory and block budgets before resolver composition', async () => {
+    setTokenizer((text) => (text.trim() ? text.trim().split(/\s+/).length : 0))
+    const mem = memory({
+      id: 'budgeted',
+      namespace: 'thread:1',
+      budget: { maxTokens: 6 },
+      blocks: [
+        memoryBlock({
+          id: 'important',
+          kind: 'custom',
+          priority: 90,
+          budget: { maxTokens: 2 },
+          render: () => 'alpha beta gamma',
+        }),
+        memoryBlock({
+          id: 'noisy',
+          kind: 'custom',
+          priority: 10,
+          render: () => 'low priority detail',
+        }),
+      ],
+    })
+
+    const rendered = await mem.asContext().systemFn({})
+
+    expect(rendered).toContain('## Memory: important')
+    expect(rendered).toContain('alpha beta')
+    expect(rendered).not.toContain('gamma')
+    expect(rendered).not.toContain('low priority detail')
+  })
+
+  it('captures completed adapter turns after generation and flushes deferred work', async () => {
     const store = inMemoryCruxStore()
     const recent = recentMessages({ id: 'recent', maxMessages: 5 })
     const mem = memory({
@@ -288,7 +324,7 @@ describe('memory block system', () => {
     expect(turns[1].content).toBe('stored answer')
   })
 
-    it('supports standalone working state blocks', async () => {
+  it('supports standalone working state blocks', async () => {
     const store = inMemoryCruxStore()
     const state = workingState({
       id: 'state',
@@ -304,7 +340,7 @@ describe('memory block system', () => {
     })
   })
 
-    it('supports standalone episodes with dense recall', async () => {
+  it('supports standalone episodes with dense recall', async () => {
     const store = inMemoryCruxStore()
     const ep = episodes({ id: 'episodes', embed: mockEmbed })
 
@@ -316,7 +352,7 @@ describe('memory block system', () => {
     expect(results[0].score).toBeDefined()
   })
 
-    it('creates fact proposals by default and approves them through memory()', async () => {
+  it('creates fact proposals by default and approves them through memory()', async () => {
     const store = inMemoryCruxStore()
     const factBlock = facts({
       id: 'facts',
@@ -345,7 +381,49 @@ describe('memory block system', () => {
     expect(stored[0].content).toBe('User prefers concise answers')
   })
 
-    it('allows extractive blocks to customize prompt rendering', async () => {
+  it('keeps proposal approval, rejection, and editing pending-only', async () => {
+    const store = inMemoryCruxStore()
+    let content = 'User prefers concise answers'
+    const factBlock = facts({
+      id: 'facts',
+      extract: async () => [{ content, confidence: 0.9 }],
+    })
+    const mem = memory({
+      id: 'proposal-lifecycle',
+      store,
+      namespace: 'user:1',
+      blocks: [factBlock],
+      capture: { mode: 'inline' },
+    })
+
+    await mem.captureTurn({ messages: [{ role: 'user', content: 'Please be concise' }] })
+    const [approvedProposal] = await mem.proposals.list({ namespace: 'user:1', status: 'pending' })
+    expect(approvedProposal).toBeDefined()
+
+    await mem.proposals.approve(approvedProposal.id)
+    await expect(mem.proposals.approve(approvedProposal.id)).rejects.toThrow(/pending/i)
+    await expect(mem.proposals.edit(approvedProposal.id, { content: 'Changed' })).rejects.toThrow(/pending/i)
+    await expect(mem.proposals.reject(approvedProposal.id)).rejects.toThrow(/pending/i)
+
+    let stored = await factBlock.list({ store, namespace: 'user:1', memoryId: 'proposal-lifecycle' })
+    expect(stored.map((entry) => entry.content)).toEqual(['User prefers concise answers'])
+
+    content = 'User likes short bullet lists'
+    await mem.captureTurn({ messages: [{ role: 'user', content: 'Use bullets' }] })
+    const [rejectedProposal] = await mem.proposals.list({ namespace: 'user:1', status: 'pending' })
+    expect(rejectedProposal).toBeDefined()
+
+    await mem.proposals.edit(rejectedProposal.id, { content: 'User likes edited bullet lists' })
+    await mem.proposals.reject(rejectedProposal.id, { reason: 'not enough evidence' })
+    await expect(mem.proposals.approve(rejectedProposal.id)).rejects.toThrow(/pending/i)
+    await expect(mem.proposals.reject(rejectedProposal.id)).rejects.toThrow(/pending/i)
+    await expect(mem.proposals.edit(rejectedProposal.id, { content: 'Changed again' })).rejects.toThrow(/pending/i)
+
+    stored = await factBlock.list({ store, namespace: 'user:1', memoryId: 'proposal-lifecycle' })
+    expect(stored.map((entry) => entry.content)).toEqual(['User prefers concise answers'])
+  })
+
+  it('allows extractive blocks to customize prompt rendering', async () => {
     const store = inMemoryCruxStore()
     const factBlock = facts({
       id: 'facts',
@@ -368,7 +446,51 @@ describe('memory block system', () => {
     )
   })
 
-    it('supports procedural memories without mutating prompt definitions', async () => {
+  it('renders extractive blocks with an explicit semantic strategy scoped to namespace and block id', async () => {
+    const store = inMemoryCruxStore()
+    const semanticEmbed = async (text: string) => (text.includes('billing') ? [1, 0] : [0, 1])
+    const factBlock = facts({
+      id: 'facts',
+      embed: semanticEmbed,
+      render: {
+        strategy: 'semantic',
+        query: ({ input }) => String(input?.query ?? ''),
+        limit: 1,
+      },
+      write: { mode: 'auto' },
+    })
+    const otherBlock = facts({
+      id: 'other-facts',
+      embed: semanticEmbed,
+      write: { mode: 'auto' },
+    })
+    const mem = memory({
+      id: 'semantic-render',
+      store,
+      namespace: 'user:1',
+      blocks: [factBlock],
+    })
+
+    await factBlock.add(
+      { content: 'Billing contact is finance@example.com.' },
+      { store, namespace: 'user:1', memoryId: mem.id },
+    )
+    await factBlock.add({ content: 'Billing contact is someone else.' }, { store, namespace: 'user:2', memoryId: mem.id })
+    await otherBlock.add(
+      { content: 'Billing contact in another block.' },
+      { store, namespace: 'user:1', memoryId: mem.id },
+    )
+    await factBlock.add({ content: 'Shipping address is Amsterdam.' }, { store, namespace: 'user:1', memoryId: mem.id })
+
+    const rendered = await mem.asContext().systemFn({ query: 'billing' })
+
+    expect(rendered).toContain('Billing contact is finance@example.com.')
+    expect(rendered).not.toContain('someone else')
+    expect(rendered).not.toContain('another block')
+    expect(rendered).not.toContain('Shipping address')
+  })
+
+  it('supports procedural memories without mutating prompt definitions', async () => {
     const store = inMemoryCruxStore()
     const proc = procedures({ id: 'procedures' })
     await proc.add(

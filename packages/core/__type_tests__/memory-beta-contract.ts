@@ -1,10 +1,14 @@
 import { expectTypeOf } from "vitest";
 import {
+  facts,
   memory,
   memoryBlock,
+  type MemoryBudget,
   type MemoryCaptureConfig,
   type MemoryCaptureMode,
   type MemoryConfig,
+  type MemoryEntryRenderStrategy,
+  type MemorySemanticRenderStrategy,
 } from "../memory";
 
 const block = memoryBlock({ id: "custom", kind: "custom" });
@@ -24,6 +28,25 @@ const config: MemoryConfig = {
 };
 
 expectTypeOf(config.capture).toMatchTypeOf<MemoryCaptureConfig | undefined>();
+expectTypeOf(config.budget).toMatchTypeOf<MemoryBudget | undefined>();
+
+const semanticRender: MemorySemanticRenderStrategy = {
+  strategy: "semantic",
+  query: ({ input }) => String(input?.message ?? ""),
+  limit: 3,
+};
+
+expectTypeOf(semanticRender).toMatchTypeOf<MemoryEntryRenderStrategy>();
+
+facts({
+  id: "semantic-facts",
+  render: semanticRender,
+});
+
+facts({
+  id: "latest-facts",
+  render: { strategy: "list", limit: 5 },
+});
 
 const dynamicMemory = memory(config);
 
@@ -45,4 +68,8 @@ dynamicMemory.proposals.edit(
 // @ts-expect-error — capture mode names are constrained to the beta contract.
 const invalidCaptureConfig: MemoryCaptureConfig = { mode: "deferred" };
 
+// @ts-expect-error — semantic rendering requires an explicit query.
+const invalidSemanticRender: MemoryEntryRenderStrategy = { strategy: "semantic" };
+
 void invalidCaptureConfig;
+void invalidSemanticRender;

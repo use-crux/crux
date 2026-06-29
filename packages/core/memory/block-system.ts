@@ -13,12 +13,26 @@ import {
   resolveMemoryNamespaceSync,
   type MemoryNamespace,
 } from './namespace'
+import {
+  isMemoryEntryRenderStrategy,
+  renderBudgetedMemoryBlocks,
+  renderMemoryEntries,
+  type MemoryBudget,
+  type MemoryEntryRenderStrategy,
+} from './rendering'
 
 export type MemoryBlockKind = 'recent' | 'working' | 'episodes' | 'facts' | 'procedures' | 'reflections' | 'custom'
 export type MemoryWriteMode = 'propose' | 'auto' | 'manual'
 export type MemoryProposalStatus = 'pending' | 'approved' | 'rejected'
 export type MemoryCaptureMode = 'inline' | 'afterResponse' | 'detached'
 export type { MemoryNamespace } from './namespace'
+export type {
+  MemoryBudget,
+  MemoryEntryRenderStrategy,
+  MemoryListRenderStrategy,
+  MemoryRenderQuery,
+  MemorySemanticRenderStrategy,
+} from './rendering'
 
 /** Capture scheduling options for memory turn and tool-event writes. */
 export interface MemoryCaptureConfig {
@@ -102,7 +116,7 @@ export interface MemoryBlock {
   readonly id: string
   readonly kind: MemoryBlockKind
   readonly priority: number
-  readonly budget?: { maxTokens?: number }
+  readonly budget?: MemoryBudget
   render?(ctx: MemoryBlockContext): Promise<string> | string
   tools?(ctx: MemoryBlockContext): AnyToolSet | Promise<AnyToolSet>
   captureTurn?(turn: MemoryTurn, ctx: MemoryBlockContext): Promise<void>
@@ -115,7 +129,8 @@ export interface MemoryBlockConfig {
   id: string
   kind?: MemoryBlockKind
   priority?: number
-  budget?: { maxTokens?: number }
+  /** Approximate token budget for this block's rendered body. */
+  budget?: MemoryBudget
   render?: (ctx: MemoryBlockContext) => Promise<string> | string
   tools?: (ctx: MemoryBlockContext) => AnyToolSet | Promise<AnyToolSet>
   captureTurn?: (turn: MemoryTurn, ctx: MemoryBlockContext) => Promise<void>
@@ -152,8 +167,15 @@ export interface MemoryConfig {
     mode?: 'deferred' | 'inline' | 'manual'
     waitUntil?: (promise: Promise<unknown>) => void
   }
-  /** @deprecated Memory budgets are characterized in a later beta phase. */
-  budget?: { maxTokens?: number }
+  /**
+   * Approximate token budget for the composed memory context.
+   *
+   * Blocks are rendered in priority order. Block-level budgets trim individual
+   * block bodies first, then this memory-level budget keeps higher-priority
+   * sections before lower-priority sections. Counting uses the configured Crux
+   * tokenizer.
+   */
+  budget?: MemoryBudget
 }
 
 export interface Memory {
@@ -732,7 +754,13 @@ export function memory(config: MemoryConfig): Memory {
       { store: activeStore, namespace, memoryId: config.id, traceId: source?.traceId, promptId: source?.promptId },
       block,
       'propose',
-      { entryKey: proposalId, writeMode: 'propose', proposalStatus: 'pending', snapshot: proposal },
+      {
+        entryKey: proposalId,
+        writeMode: 'propose',
+        proposalStatus: 'pending',
+        ...proposalSourceAttributes(source),
+        snapshot: proposal,
+      },
     )
     return proposalId
   }
@@ -794,7 +822,7 @@ export function memory(config: MemoryConfig): Memory {
             if (text) rendered.push({ block, text })
           }
           if (rendered.length === 0) return ''
-          return rendered.map(({ block, text }) => `## Memory: ${block.id}\n${text}`).join('\n\n')
+          return renderBudgetedMemoryBlocks(rendered, config.budget)
         },
         tools: ({ input }) => {
           return api.asTools({ input: input as Record<string, unknown> })
@@ -870,9 +898,13 @@ export function memory(config: MemoryConfig): Memory {
         const namespace = await resolveNamespace(options.input, options.promptId, options.namespace)
         const proposal = await findProposal(store, config.id, proposalId, namespace)
         if (!proposal) throw new Error(`Memory proposal "${proposalId}" was not found.`)
+        assertPendingProposal(proposal, 'approved')
         const block = config.blocks.find((candidate) => candidate.id === proposal.blockId)
         if (!block) throw new Error(`Memory proposal "${proposalId}" references unknown block "${proposal.blockId}".`)
-        const ctx = await createContext({}, { namespace: proposal.namespace })
+        const ctx = await createContext(
+          {},
+          { namespace: proposal.namespace, promptId: proposal.source?.promptId, traceId: proposal.source?.traceId },
+        )
         await block.approveProposal?.(proposal, ctx, options.edit)
         proposal.status = 'approved'
         proposal.updatedAt = now()
@@ -880,6 +912,7 @@ export function memory(config: MemoryConfig): Memory {
         emitBlockWrite(ctx, block, 'approveProposal', {
           entryKey: proposal.id,
           proposalStatus: 'approved',
+          ...proposalSourceAttributes(proposal.source),
           snapshot: proposal,
         })
       },
@@ -887,21 +920,34 @@ export function memory(config: MemoryConfig): Memory {
         const namespace = await resolveNamespace(options.input, options.promptId, options.namespace)
         const proposal = await findProposal(store, config.id, proposalId, namespace)
         if (!proposal) throw new Error(`Memory proposal "${proposalId}" was not found.`)
+        assertPendingProposal(proposal, 'rejected')
         proposal.status = 'rejected'
         proposal.reason = options.reason
         proposal.updatedAt = now()
         await store.set(`${proposalPrefix(config.id, proposal.namespace)}${proposal.id}`, toJsonObject({ ...proposal }))
         emitBlockWrite(
-          { store, namespace: proposal.namespace, memoryId: config.id },
+          {
+            store,
+            namespace: proposal.namespace,
+            memoryId: config.id,
+            promptId: proposal.source?.promptId,
+            traceId: proposal.source?.traceId,
+          },
           { id: proposal.blockId, kind: proposal.blockKind },
           'rejectProposal',
-          { entryKey: proposal.id, proposalStatus: 'rejected', snapshot: proposal },
+          {
+            entryKey: proposal.id,
+            proposalStatus: 'rejected',
+            ...proposalSourceAttributes(proposal.source),
+            snapshot: proposal,
+          },
         )
       },
       async edit(proposalId, patch, options = {}) {
         const namespace = await resolveNamespace(options.input, options.promptId, options.namespace)
         const proposal = await findProposal(store, config.id, proposalId, namespace)
         if (!proposal) throw new Error(`Memory proposal "${proposalId}" was not found.`)
+        assertPendingProposal(proposal, 'edited')
         proposal.candidate =
           isRecord(proposal.candidate) && isRecord(patch) ? { ...proposal.candidate, ...patch } : patch
         proposal.updatedAt = now()
@@ -911,6 +957,29 @@ export function memory(config: MemoryConfig): Memory {
   }
 
   return Object.freeze(api)
+}
+
+/**
+ * Enforce the beta proposal lifecycle: only pending proposals may transition.
+ */
+function assertPendingProposal(proposal: MemoryProposal, operation: 'approved' | 'rejected' | 'edited'): void {
+  if (proposal.status === 'pending') return
+  throw new Error(
+    `Memory proposal "${proposal.id}" is ${proposal.status} and cannot be ${operation}. ` +
+      'Only pending proposals can be changed.',
+  )
+}
+
+/**
+ * Flatten proposal provenance into stable span/event attributes.
+ */
+function proposalSourceAttributes(source: MemoryProposal['source'] | undefined): Record<string, string> {
+  return {
+    ...(source?.turnId ? { proposalSourceTurnId: source.turnId } : {}),
+    ...(source?.traceId ? { proposalSourceTraceId: source.traceId } : {}),
+    ...(source?.promptId ? { proposalSourcePromptId: source.promptId } : {}),
+    ...(source?.toolCallId ? { proposalSourceToolCallId: source.toolCallId } : {}),
+  }
 }
 
 function legacyCaptureMode(mode: NonNullable<MemoryConfig['processing']>['mode']): MemoryCaptureMode {
@@ -1121,6 +1190,14 @@ export function episodes(config: {
   embed?: EmbedLike
   priority?: number
   /**
+   * Built-in rendering strategy for episode memory.
+   *
+   * `list`/`recent` renders latest entries. `semantic` uses `recall()` with
+   * the provided query and keeps namespace/block filters applied by the block.
+   * Set `false` to disable prompt rendering for this block.
+   */
+  render?: false | MemoryEntryRenderStrategy
+  /**
    * Optional retention policy descriptor (e.g. `"90d"`). When set, it rides on
    * every read/write event's metadata so devtools can surface the real policy
    * instead of inferring one. Purely descriptive — enforcement is the caller's
@@ -1269,8 +1346,12 @@ export function episodes(config: {
       await record({ content: `tool:${event.toolName}: ${JSON.stringify(event.result ?? event.error ?? null)}` }, ctx)
     },
     render: async (ctx) => {
-      const entries = await list({ ...ctx, limit: 5 })
-      return entries.length ? ['Relevant episodes:', ...entries.map((entry) => `- ${entry.content}`)].join('\n') : ''
+      if (config.render === false) return ''
+      return renderMemoryEntries(ctx, { list, find: recall }, {
+        heading: 'Relevant episodes:',
+        defaultLimit: 5,
+        strategy: config.render,
+      })
     },
   })
 
@@ -1294,6 +1375,11 @@ type ExtractiveBlockApi = {
   delete(key: string, options: MemoryRuntimeOptions): Promise<void>
 }
 
+type ExtractiveRenderConfig =
+  | false
+  | MemoryEntryRenderStrategy
+  | ((ctx: MemoryBlockContext, api: ExtractiveBlockApi) => Promise<string> | string)
+
 function extractiveBlock(
   kind: 'facts' | 'procedures',
   config: {
@@ -1308,7 +1394,14 @@ function extractiveBlock(
     write?: { mode?: MemoryWriteMode }
     policy?: MemoryPolicy<ExtractiveCandidate>
     priority?: number
-    render?: false | ((ctx: MemoryBlockContext, api: ExtractiveBlockApi) => Promise<string> | string)
+    /**
+     * Prompt rendering for this extractive block.
+     *
+     * Pass a function for full control, `false` to disable rendering, or a
+     * strategy object. `semantic` calls `find()` with the supplied query;
+     * `list`/`recent` renders latest entries.
+     */
+    render?: ExtractiveRenderConfig
   },
 ): MemoryBlock & {
   add(entry: ExtractiveCandidate, options: MemoryRuntimeOptions): Promise<string>
@@ -1451,11 +1544,22 @@ function extractiveBlock(
     }
   }
 
-  const customRender = config.render
+  const configuredRender = config.render
   const blockRender =
-    customRender === false
+    configuredRender === false
       ? undefined
-      : async (ctx: MemoryBlockContext) => (customRender ? customRender(ctx, api) : render(ctx))
+      : async (ctx: MemoryBlockContext) => {
+          if (!configuredRender) return render(ctx)
+          if (isMemoryEntryRenderStrategy(configuredRender)) {
+            const heading = kind === 'procedures' ? 'Operating Memory' : 'Facts'
+            return renderMemoryEntries(ctx, api, {
+              heading,
+              defaultLimit: 8,
+              strategy: configuredRender,
+            })
+          }
+          return configuredRender(ctx, api)
+        }
 
   const block = memoryBlock({
     id: config.id,

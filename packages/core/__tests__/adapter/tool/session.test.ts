@@ -582,4 +582,58 @@ describe('createToolLifecycle — captureTurn', () => {
     })
     expect(lifecycle.transcript.filter((e) => e.t === 'memory.capture')).toEqual([{ t: 'memory.capture', bindings: 2 }])
   })
+
+  it('preserves settled tool results and errors when capturing adapter turns', async () => {
+    const capture = vi.fn(async () => {})
+    const flush = vi.fn(async () => {})
+    const lifecycle = createToolLifecycle({
+      regime: 'core',
+      resolved: resolvedWith({
+        tools: {
+          echo: { execute: async (input: { value: string }) => ({ echoed: input.value }) },
+          fail: { execute: async () => {
+            throw new Error('boom')
+          } },
+        },
+        memoryBindings: [{ memory: { captureTurn: capture, flush } }] as never,
+      }),
+      promptId: 'p1',
+      input: { topic: 'tools' },
+    })
+
+    await lifecycle.executeRound(
+      adapterResponse({
+        text: 'using tools',
+        toolCalls: [
+          { id: 'tc1', name: 'echo', args: { value: 'ok' } },
+          { id: 'tc2', name: 'fail', args: {} },
+        ],
+      }),
+      [{ role: 'user', content: 'run tools' }],
+    )
+
+    await lifecycle.captureTurn({
+      messages: [{ role: 'user', content: 'run tools' }],
+      assistantText: 'done',
+      toolCalls: [
+        { id: 'tc1', name: 'echo', args: { value: 'ok' } },
+        { id: 'tc2', name: 'fail', args: {} },
+      ],
+    })
+
+    expect(capture.mock.calls[0]![0].toolEvents).toEqual([
+      {
+        toolCallId: 'tc1',
+        toolName: 'echo',
+        args: { value: 'ok' },
+        result: { echoed: 'ok' },
+      },
+      {
+        toolCallId: 'tc2',
+        toolName: 'fail',
+        args: {},
+        error: 'boom',
+      },
+    ])
+  })
 })

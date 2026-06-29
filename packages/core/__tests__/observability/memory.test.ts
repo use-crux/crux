@@ -260,14 +260,18 @@ describe('canonical memory observability', () => {
       expect.objectContaining({
         primitive: 'memory.write',
         name: 'facts.propose',
-        attributes: expect.objectContaining({ writeMode: 'propose', proposalStatus: 'pending' }),
+        attributes: expect.objectContaining({
+          writeMode: 'propose',
+          proposalStatus: 'pending',
+          proposalSourcePromptId: 'p1',
+        }),
       }),
     )
     expect(spanStarts).toContainEqual(
       expect.objectContaining({
         primitive: 'memory.write',
         name: 'facts.approveProposal',
-        attributes: expect.objectContaining({ proposalStatus: 'approved' }),
+        attributes: expect.objectContaining({ proposalStatus: 'approved', proposalSourcePromptId: 'p1' }),
       }),
     )
     expect(transport.records).toContainEqual(

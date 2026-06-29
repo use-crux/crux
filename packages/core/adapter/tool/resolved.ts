@@ -11,6 +11,7 @@
 import type { ResolvedPrompt } from '../../resolver/types'
 import type { Message } from '../../generation/messages'
 import type { SkillActivationSession } from '../../skill/session'
+import type { MemoryCaptureToolCall } from './memory-capture'
 
 /**
  * Read the explicit skill activation session set by prompt resolution.
@@ -37,7 +38,7 @@ export async function captureMemoryTurn(
     input: Record<string, unknown>
     messages: readonly Message[]
     assistantText?: string
-    toolCalls?: Array<{ id?: string; name: string; args: unknown }>
+    toolCalls?: readonly MemoryCaptureToolCall[]
   },
 ): Promise<void> {
   if (!resolved.memoryBindings || resolved.memoryBindings.length === 0) return
@@ -56,6 +57,8 @@ export async function captureMemoryTurn(
             toolCallId: toolCall.id,
             toolName: toolCall.name,
             args: toolCall.args,
+            result: toolCall.result,
+            error: toolCall.error,
           })),
           source: { promptId: binding.promptId ?? args.promptId },
         },
