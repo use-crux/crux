@@ -1,6 +1,6 @@
 {
   "name": "@use-crux/ingest",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Source loaders for Crux — turn text, files, and URLs into IngestDocument streams for indexing.",
   "keywords": [
     "ai",

@@ -1,6 +1,6 @@
 {
   "name": "@use-crux/indexer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Project Index and source-intelligence workers for Crux — indexing, extensions, and source resolution.",
   "keywords": [
     "ai",
