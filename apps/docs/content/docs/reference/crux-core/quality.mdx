@@ -325,7 +325,7 @@ type ReplayMode = 'live' | 'record-new' | 'replay-strict' | 'refresh'
 cassette('support-agent', { mode?, match? })   // match: override the normalized key (advanced)
 ```
 
-Interception at the ExecutorSpec/SdkGateway boundary; entry key = hash of
+Interception at the LoopRuntimePort/SdkGateway boundary; entry key = hash of
 (call kind, target id, prompt hash, model, canonicalized settings,
 tool-schema hash, input) — volatile fields excluded, so one cassette covers
 all variants and judge calls. Storage:

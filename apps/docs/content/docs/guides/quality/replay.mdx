@@ -43,7 +43,7 @@ crux quality run --replay refresh              # refresh exercised entries
 
 ## How matching works
 
-Interception happens at the ExecutorSpec/SdkGateway boundary — below
+Interception happens at the LoopRuntimePort/SdkGateway boundary — below
 prompts, flows, agents, tool loops, and judge scorers, so all of them replay
 transparently. Each call gets a normalized identity: a hash of (call kind,
 target id, prompt hash, model, canonicalized settings, tool-schema hash,

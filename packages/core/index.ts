@@ -542,9 +542,11 @@ export type {
 } from './adapter/index'
 
 // Loop-owning adapter abstraction (also available as @use-crux/core/adapter subpath)
-export { executorAdapter } from './adapter/define-executor'
+export { loopRuntimeAdapter } from './adapter/define-executor'
 export type {
-  ExecutorSpec,
+  LoopRuntimePort,
+  BoundLoopRuntime,
+  CachedStreamPayload,
   ExecutorRequest,
   StructuredRequest,
   ExecutorStep,

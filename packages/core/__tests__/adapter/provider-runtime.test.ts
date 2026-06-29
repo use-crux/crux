@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { defineProviderRuntime } from '../../adapter'
-import { fakeExecutor } from '../../adapter/testing'
+import { fakeLoopRuntime } from '../../adapter/testing'
 import { prompt as makePrompt } from '../../prompt/prompt'
 import type { Message } from '../../generation/messages'
 import type { GenerationSettings } from '../../generation/types'
@@ -145,23 +145,23 @@ describe('provider runtime', () => {
   })
 
   it('creates a loop-owned provider runtime through the same public compiler', async () => {
-    const fake = fakeExecutor({ loops: [[{ text: 'loop-owned text' }]] })
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'loop-owned text' }]] })
     const provider = defineProviderRuntime({
       id: 'runtime-loop-owned',
       ownership: 'loop-owned',
       loop: {
-        describeModel: fake.spec.describeModel,
-        settings: fake.spec.mapSettings,
-        bind: (client) => ({
-          run: (request) => fake.spec.runLoop(client, request),
-          attemptStructured: (request) => fake.spec.attemptStructured(client, request),
-          stream: (request) => fake.spec.runStream(client, request),
-          ...(fake.spec.replayStream ? { replayStream: fake.spec.replayStream } : {}),
+        describeModel: fake.runtime.describeModel,
+        settings: fake.runtime.mapSettings,
+        bind: () => ({
+          runTextLoop: fake.runtime.runTextLoop,
+          runStructuredAttempt: fake.runtime.runStructuredAttempt,
+          runStream: fake.runtime.runStream,
+          ...(fake.runtime.replayStream ? { replayStream: fake.runtime.replayStream } : {}),
         }),
       },
     })
 
-    const runtime = provider.create(fake.client)
+    const runtime = provider.create({})
     const result = await runtime.generate(textPrompt(), {
       model: 'fake:runtime-model',
       input: { instruction: 'Write through the loop-owned runtime' },
@@ -172,22 +172,22 @@ describe('provider runtime', () => {
     expect(provider.ownership).toBe('loop-owned')
     expect(runtime.executorId).toBe('runtime-loop-owned')
     expect(result.text).toBe('loop-owned text')
-    expect(fake.calls.runLoop[0]?.modelInfo).toEqual({ provider: 'fake', modelId: 'runtime-model' })
-    expect(fake.calls.runLoop[0]?.settings).toEqual({ temperature: 0.1 })
+    expect(fake.calls.runTextLoop[0]?.modelInfo).toEqual({ provider: 'fake', modelId: 'runtime-model' })
+    expect(fake.calls.runTextLoop[0]?.settings).toEqual({ temperature: 0.1 })
   })
 
   it('rejects provider runtime extensions that replace generated runtime members', () => {
-    const fake = fakeExecutor({ loops: [[{ text: 'loop-owned text' }]] })
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'loop-owned text' }]] })
     const provider = defineProviderRuntime({
       id: 'runtime-collision',
       loop: {
-        describeModel: fake.spec.describeModel,
-        settings: fake.spec.mapSettings,
-        bind: (client) => ({
-          run: (request) => fake.spec.runLoop(client, request),
-          attemptStructured: (request) => fake.spec.attemptStructured(client, request),
-          stream: (request) => fake.spec.runStream(client, request),
-          ...(fake.spec.replayStream ? { replayStream: fake.spec.replayStream } : {}),
+        describeModel: fake.runtime.describeModel,
+        settings: fake.runtime.mapSettings,
+        bind: () => ({
+          runTextLoop: fake.runtime.runTextLoop,
+          runStructuredAttempt: fake.runtime.runStructuredAttempt,
+          runStream: fake.runtime.runStream,
+          ...(fake.runtime.replayStream ? { replayStream: fake.runtime.replayStream } : {}),
         }),
       },
       extend: () => ({
@@ -197,25 +197,25 @@ describe('provider runtime', () => {
       }),
     })
 
-    expect(() => provider.create(fake.client)).toThrowError(
+    expect(() => provider.create({})).toThrowError(
       'Provider runtime "runtime-collision" extension cannot replace generated runtime key "generate".',
     )
   })
 
   it('rejects explicit ownership that disagrees with the provided mechanics', () => {
-    const fake = fakeExecutor({ loops: [[{ text: 'loop-owned text' }]] })
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'loop-owned text' }]] })
 
     expect(() =>
       defineProviderRuntime({
         id: 'runtime-ownership-mismatch',
         ownership: 'single-turn',
         loop: {
-          describeModel: fake.spec.describeModel,
-          settings: fake.spec.mapSettings,
-          bind: (client) => ({
-            run: (request) => fake.spec.runLoop(client, request),
-            attemptStructured: (request) => fake.spec.attemptStructured(client, request),
-            stream: (request) => fake.spec.runStream(client, request),
+          describeModel: fake.runtime.describeModel,
+          settings: fake.runtime.mapSettings,
+          bind: () => ({
+            runTextLoop: fake.runtime.runTextLoop,
+            runStructuredAttempt: fake.runtime.runStructuredAttempt,
+            runStream: fake.runtime.runStream,
           }),
         },
       } as never),

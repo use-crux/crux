@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { prompt } from '../../prompt/prompt'
-import { executorAdapter } from '../../adapter'
-import { fakeExecutor, type FakeExecutorConfig } from '../../adapter/testing'
+import { loopRuntimeAdapter } from '../../adapter'
+import { fakeLoopRuntime, type FakeLoopRuntimeConfig } from '../../adapter/testing'
 import { evaluate, scorers } from '../../quality'
 import { getEvaluationDefinition, type Evaluation } from '../../quality/evaluate'
 import { runEvaluation, type EngineOptions } from '../../quality/internal/engine'
@@ -28,11 +28,11 @@ const answerPrompt = prompt({
   prompt: ({ input }) => input.q,
 })
 
-/** A real executor boundary: fakeExecutor behind executorAdapter. */
-function executorSetup(config: FakeExecutorConfig) {
-  const fake = fakeExecutor(config)
-  const executor = executorAdapter(fake.spec)(fake.client)
-  return { fake, generate: executor.generate.bind(executor) as never, liveCalls: () => fake.calls.runLoop.length }
+/** A real executor boundary: fakeLoopRuntime behind loopRuntimeAdapter. */
+function executorSetup(config: FakeLoopRuntimeConfig) {
+  const fake = fakeLoopRuntime(config)
+  const executor = loopRuntimeAdapter(fake.runtime)
+  return { fake, generate: executor.generate.bind(executor) as never, liveCalls: () => fake.calls.runTextLoop.length }
 }
 
 function run(
@@ -182,8 +182,8 @@ describe('engine replay — judge scorers replay through the same cassette', () 
       { dir, setup: { generate: replayer.generate, model: 'fake:m1' } },
       { replayMode: 'replay-strict' },
     )
-    expect(replayer.fake.calls.runLoop).toHaveLength(0)
-    expect(replayer.fake.calls.attemptStructured).toHaveLength(0)
+    expect(replayer.fake.calls.runTextLoop).toHaveLength(0)
+    expect(replayer.fake.calls.runStructuredAttempt).toHaveLength(0)
     const judged = replayRun.perCase[0]!.scores.find((score) => score.name === 'quality')
     expect(judged).toMatchObject({ score: 0.9 })
   })

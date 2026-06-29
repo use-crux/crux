@@ -28,7 +28,6 @@ export type SingleTurnProviderRuntime<
 
 /** Runtime produced by a loop-owned provider spec. */
 export type LoopOwnedProviderRuntime<TClient, TModel, TRawResponse, TRawStream> = CruxExecutor<
-  TClient,
   TModel,
   TRawResponse,
   TRawStream

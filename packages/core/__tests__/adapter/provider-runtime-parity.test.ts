@@ -10,7 +10,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { defineProviderRuntime } from '../../adapter'
-import { fakeExecutor, type FakeExecutor } from '../../adapter/testing'
+import { fakeLoopRuntime, type FakeLoopRuntime } from '../../adapter/testing'
 import { prompt as makePrompt } from '../../prompt/prompt'
 import type { Message } from '../../generation/messages'
 import { guardrail as makeGuardrail } from '../../safety/guardrail'
@@ -45,20 +45,20 @@ function textPrompt() {
   })
 }
 
-function createLoopRuntime(fake: FakeExecutor, id = 'provider-runtime-loop-owned') {
+function createLoopRuntime(fake: FakeLoopRuntime, id = 'provider-runtime-loop-owned') {
   return defineProviderRuntime({
     id,
     loop: {
-      describeModel: fake.spec.describeModel,
-      settings: fake.spec.mapSettings,
-      bind: (client) => ({
-        run: (request) => fake.spec.runLoop(client, request),
-        attemptStructured: (request) => fake.spec.attemptStructured(client, request),
-        stream: (request) => fake.spec.runStream(client, request),
-        ...(fake.spec.replayStream ? { replayStream: fake.spec.replayStream } : {}),
+      describeModel: fake.runtime.describeModel,
+      settings: fake.runtime.mapSettings,
+      bind: () => ({
+        runTextLoop: fake.runtime.runTextLoop,
+        runStructuredAttempt: fake.runtime.runStructuredAttempt,
+        runStream: fake.runtime.runStream,
+        ...(fake.runtime.replayStream ? { replayStream: fake.runtime.replayStream } : {}),
       }),
     },
-  }).create(fake.client)
+  }).create({})
 }
 
 describe('provider-runtime parity — validation retry', () => {
@@ -74,7 +74,7 @@ describe('provider-runtime parity — validation retry', () => {
         validationRetry: { maxRetries: 2 },
       })
 
-    const fake = fakeExecutor({ structured: [INVALID_JSON, VALID_JSON] })
+    const fake = fakeLoopRuntime({ structured: [INVALID_JSON, VALID_JSON] })
     const loopResult = await createLoopRuntime(fake).generate(structuredPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'make json' },
@@ -85,7 +85,7 @@ describe('provider-runtime parity — validation retry', () => {
     expect(loopResult.object).toEqual(singleResult.object)
 
     const singleRetry = singleClient.calls[1]!.messages
-    const loopRetry = fake.calls.attemptStructured[1]!.messages ?? []
+    const loopRetry = fake.calls.runStructuredAttempt[1]!.messages ?? []
     expect(lastUserText(loopRetry, 'make json')).toBe(lastProviderUserText(singleRetry, 'make json'))
     expect(lastProviderUserText(singleRetry, 'make json')).toContain('Validation failed for your previous output')
     expect(lastAssistantText(loopRetry)).toContain(INVALID_JSON)
@@ -146,7 +146,7 @@ describe('provider-runtime parity — tool approval resume', () => {
 
   async function suspendAndResumeLoop() {
     const execute = vi.fn(async () => 'deleted 3 rows')
-    const fake = fakeExecutor({
+    const fake = fakeLoopRuntime({
       loops: [[{ text: 'need approval', toolCalls: [toolCall] }], [{ text: 'all done' }]],
     })
     const runtime = createLoopRuntime(fake)
@@ -168,7 +168,7 @@ describe('provider-runtime parity — tool approval resume', () => {
         approvalToken: approval.approvalToken,
       }) as Message[],
     })
-    const toolRound = (fake.calls.runLoop[1]!.messages ?? []).find(
+    const toolRound = (fake.calls.runTextLoop[1]!.messages ?? []).find(
       (message) => message.role === 'tool' && message.metadata?.toolCallId === toolCall.id,
     )
     return { execute, suspended, resumed, toolRound }
@@ -206,7 +206,7 @@ describe('provider-runtime parity — streaming safety', () => {
     const singleText = await drainSingleTurnText(singleHandle)
     const singleMeta = await singleHandle.completion()
 
-    const fake = fakeExecutor({ streams: [chunks] })
+    const fake = fakeLoopRuntime({ streams: [chunks] })
     const loopHandle = await createLoopRuntime(fake).stream(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'code' },

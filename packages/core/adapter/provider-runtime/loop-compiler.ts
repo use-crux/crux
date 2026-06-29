@@ -6,16 +6,21 @@
  */
 
 import type { ModelInfo } from '../../types'
-import { executorAdapter } from '../define-executor'
-import type { ExecutorSpec } from '../executor-spec'
-import type { BoundLoopOwnedRuntime, DefinedProviderRuntime, LoopOwnedProviderRuntimeSpec } from './types'
+import { loopRuntimeAdapter } from '../define-executor'
+import type { BoundLoopRuntime, LoopRuntimePort } from '../loop-runtime-port'
+import type { DefinedProviderRuntime, LoopOwnedProviderRuntimeSpec } from './types'
 import { createDefinedProviderRuntime } from './runtime-factory'
 
 type AnyLoopOwnedRuntimeSpec = LoopOwnedProviderRuntimeSpec<unknown, unknown, unknown, unknown, object>
 
 /**
- * Compile a public loop-owned provider runtime into the existing executor
- * runtime used by core policy.
+ * Compile a public loop-owned provider runtime into the executor runtime used
+ * by core policy.
+ *
+ * For each bound client, the compiler assembles a {@link LoopRuntimePort} from
+ * the contract's identity/settings hooks plus the client-dependent operations
+ * returned by `loop.bind()`, then hands it straight to `loopRuntimeAdapter()`.
+ * No intermediate per-call client threading remains.
  */
 export function createLoopOwnedProviderRuntime(
   spec: AnyLoopOwnedRuntimeSpec,
@@ -35,30 +40,27 @@ export function createLoopOwnedProviderRuntime(
   return createDefinedProviderRuntime(
     spec.id,
     'loop-owned',
-    (client: unknown) => {
-      const bound = loop.bind(client, { id: spec.id })
-      return executorAdapter(executorSpecForBoundLoop(spec.id, loop, bound))(client)
-    },
+    (client: unknown) => loopRuntimeAdapter(portForBoundLoop(spec.id, loop, loop.bind(client, { id: spec.id }))),
     spec.extend,
   )
 }
 
-function executorSpecForBoundLoop(
+function portForBoundLoop(
   id: string,
   loop: AnyLoopOwnedRuntimeSpec['loop'],
-  bound: BoundLoopOwnedRuntime<unknown, unknown, unknown>,
-): ExecutorSpec<unknown, unknown, unknown, unknown> {
-  const executorSpec: ExecutorSpec<unknown, unknown, unknown, unknown> = {
-    executorId: id,
+  bound: BoundLoopRuntime<unknown, unknown, unknown>,
+): LoopRuntimePort<unknown, unknown, unknown> {
+  const port: LoopRuntimePort<unknown, unknown, unknown> = {
+    id,
     describeModel: loop.describeModel ?? ((model) => describeModelFallback(id, model)),
     mapSettings: loop.settings ?? (() => ({})),
-    runLoop: async (_client, request) => bound.run(request),
-    attemptStructured: async (_client, request) => bound.attemptStructured(request),
-    runStream: async (_client, request) => bound.stream(request),
+    runTextLoop: (request) => bound.runTextLoop(request),
+    runStructuredAttempt: (request) => bound.runStructuredAttempt(request),
+    runStream: (request) => bound.runStream(request),
   }
 
-  if (bound.replayStream) executorSpec.replayStream = bound.replayStream
-  return executorSpec
+  if (bound.replayStream) port.replayStream = (cached) => bound.replayStream!(cached)
+  return port
 }
 
 function describeModelFallback<TModel>(runtimeId: string, model: TModel): ModelInfo {

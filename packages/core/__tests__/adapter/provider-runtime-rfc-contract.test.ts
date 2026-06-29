@@ -79,7 +79,7 @@ describe('provider runtime RFC contract', () => {
               usage: { inputTokens: 4, outputTokens: 6, totalTokens: 10 },
             }
           },
-          async stream() {
+          async runStream() {
             return streamFrom(['turn'])
           },
         }),
@@ -156,7 +156,7 @@ describe('provider runtime RFC contract', () => {
           ...(settings.temperature !== undefined ? { temperature: settings.temperature } : {}),
         }),
         bind: (client: BoundLoopClient) => ({
-          async run(request: ExecutorRequest<string>) {
+          async runTextLoop(request: ExecutorRequest<string>) {
             client.requests.push(request)
             return {
               status: 'complete' as const,
@@ -171,7 +171,7 @@ describe('provider runtime RFC contract', () => {
               meta: { finishReason: 'stop' },
             }
           },
-          async attemptStructured(_request: StructuredRequest<string>) {
+          async runStructuredAttempt(_request: StructuredRequest<string>) {
             return {
               status: 'ok' as const,
               raw: { text: 'structured raw' },
@@ -183,7 +183,7 @@ describe('provider runtime RFC contract', () => {
               object: { ok: true },
             }
           },
-          async stream() {
+          async runStream() {
             return {
               raw: { stream: true },
               completion: async () => ({ finishReason: 'stop' as const, text: 'streamed' }),

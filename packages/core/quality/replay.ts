@@ -1,7 +1,7 @@
 /**
  * Replay — deterministic cassettes for model calls.
  *
- * Cassettes intercept at the ExecutorSpec/SdkGateway boundary and replay
+ * Cassettes intercept at the LoopRuntimePort/SdkGateway boundary and replay
  * recorded model calls by a normalized match key, making evaluations
  * deterministic and free. Storage lives under `.crux/quality/cassettes/`;
  * cassette files are fixtures — committed, redacted at write time, and

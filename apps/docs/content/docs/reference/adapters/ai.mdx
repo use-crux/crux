@@ -19,7 +19,7 @@ import { resolve } from '@use-crux/ai/agent'
 
 The only module that calls AI SDK functions is the `SdkGateway` — inject a scripted one via [`createCruxAi`](#createcruxaioptions) to test without module mocks.
 
-Internally, `@use-crux/ai` keeps AI SDK request planning and result projection in a private call-plan codec. The executor asks the codec for a `generateText`, `generateObject`, `streamText`, `streamObject`, or replay plan, invokes the selected `SdkGateway` method, then decodes or attaches the raw SDK result. This is not a public extension API; it exists to keep the gateway seam stable and the adapter behavior testable.
+Internally, `@use-crux/ai` keeps AI SDK request planning and result projection in a private call-plan codec. The loop runtime asks the codec for a `generateText`, `generateObject`, `streamText`, `streamObject`, or replay plan, invokes the selected `SdkGateway` method, then decodes or attaches the raw SDK result. This is not a public extension API; it exists to keep the gateway seam stable and the adapter behavior testable.
 
 **Cross-adapter parity:** switching a prompt between `@use-crux/ai` and a native adapter (`@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google`) changes nothing observable except model behavior itself — same default tool-loop budget (`maxSteps: 10`), same corrective-retry messages, same approval suspend/resume protocol, same canonical `tool.call` / `tool.args` / raw and model-facing `tool.result` telemetry, same routing and audit metadata. This is enforced by a cross-dialect parity suite in `@use-crux/core`. Note this differs from the raw AI SDK's own `generateText` default (`stopWhen: stepCountIs(1)`): Crux adapters loop tools by default; pass `maxSteps: 1` for single-step behavior.
 
@@ -128,6 +128,16 @@ const ai = createCruxAi({ gateway: myScriptedGateway })
 const result = await ai.generate(myPrompt, { model, input })
 ```
 
+### `createAiSdkLoopRuntime(gateway)`
+
+The low-level adapter from a `SdkGateway` to core's [`LoopRuntimePort`](/docs/reference/adapters#loopruntimeport) — the gateway-closed runtime that `aiSdkProviderRuntime` binds and `createCruxAi` drives. Reach for it only when you build a bespoke runtime compiler or run the `loopRuntimePortConformance()` suite directly; most callers use `createCruxAi` or `aiSdkProviderRuntime`.
+
+| Field     | Type         | Description                                |
+| --------- | ------------ | ------------------------------------------ |
+| `gateway` | `SdkGateway` | The AI SDK gateway the runtime closes over |
+
+**Returns:** `AiSdkLoopRuntime` — a `LoopRuntimePort<LanguageModel>` with `runTextLoop`/`runStructuredAttempt`/`runStream`/`replayStream`.
+
 ### `CruxAIError`
 
 Coded error wrapper. `generate()`/`stream()` propagate underlying errors unchanged (existing `ValidationExhaustedError`/`AggregateError` handling keeps working); use `CruxAIError.classify(error)` at your boundary for a stable, machine-readable code.
@@ -235,7 +245,7 @@ The approved tool executes during resume, its result is replayed into the loop a
 
 ### What is not exported
 
-AI SDK helpers (`tool`, `stepCountIs`, `hasToolCall`) and AI SDK types are no longer re-exported — import them from `'ai'` directly. Agent compositions come from `@use-crux/core/agent` or from `executorAdapter()`. The legacy `toMessages`/`fromMessages`/`createAIExecutor` exports were removed (RFC [use-crux/crux#28](https://github.com/use-crux/crux/issues/28)).
+AI SDK helpers (`tool`, `stepCountIs`, `hasToolCall`) and AI SDK types are no longer re-exported — import them from `'ai'` directly. Agent compositions come from `@use-crux/core/agent` or from `loopRuntimeAdapter()`. The legacy `toMessages`/`fromMessages`/`createAIExecutor` exports were removed (RFC [use-crux/crux#28](https://github.com/use-crux/crux/issues/28)).
 
 ### Types
 
@@ -244,6 +254,7 @@ import type {
   AIGenerateOptions,
   AIEmbeddingConfig,
   AIRerankerConfig,
+  AiSdkLoopRuntime,
   CruxAi,
   CruxAiOptions,
   CruxAIErrorCode,

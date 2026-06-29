@@ -41,10 +41,10 @@ Built-in adapters are built on this abstraction: `@use-crux/openai`, `@use-crux/
 
 Never implement more than one generation runtime for one SDK. In either branch, core owns the policy layer — prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, timeouts, and observability. A provider runtime implements mechanics only, and should delegate to SDK-native capabilities wherever one exists.
 
-Under the hood, `turn` compiles to `AdapterSpec`: core calls `call()` once per loop turn and `appendToolRound()` formats results. `loop.bind()` compiles to `ExecutorSpec`: the SDK owns the loop and core steers each step through a `StepObserver`:
+Under the hood, `turn` compiles to `AdapterSpec`: core calls `call()` once per loop turn and `appendToolRound()` formats results. `loop.bind()` compiles to a `LoopRuntimePort`: the SDK owns the loop and core steers each step through a `StepObserver`. `bind(client)` returns the client-dependent operations (`BoundLoopRuntime`), which core assembles with `id`, `describeModel`, and `mapSettings(settings, model)` into a gateway-closed `LoopRuntimePort`:
 
-- `run()` runs the SDK loop, awaiting `observer.onStepFinish(step)` after every step and applying the returned `StepDirective` before the next one — `continue`, `stop`, or `amend` (swap system prompt/active tools mid-loop, optionally `refundStep` so bookkeeping steps like `LoadSkill` don't consume budget).
-- `attemptStructured()` makes exactly ONE structured-output attempt and returns `invalid` as a value instead of throwing — core owns the corrective-retry loop.
+- `runTextLoop()` runs the SDK loop, awaiting `observer.onStepFinish(step)` after every step and applying the returned `StepDirective` before the next one — `continue`, `stop`, or `amend` (swap system prompt/active tools mid-loop, optionally `refundStep` so bookkeeping steps like `LoadSkill` don't consume budget).
+- `runStructuredAttempt()` makes exactly ONE structured-output attempt and returns `invalid` as a value instead of throwing — core owns the corrective-retry loop.
 - `stream()` returns the SDK's stream result untouched plus a typed `completion()`. When `request.safety` is set (a [`SafetyStream`](/docs/reference/crux-core/safety) — text streams with streaming guardrails or constraints), the spec must drive it: feed every outgoing text delta, forward `emit` content, swallow `hold`s, surface a thrown `GuardrailBlockedError` as a stream error, and call `finish()` at end-of-stream, emitting the seal's `pending` tail. With the AI SDK this is one `experimental_transform`.
 - Tool-approval needs surface as the `suspended` outcome; core mints approval ids/tokens and owns resume.
 
@@ -70,7 +70,7 @@ describeCruxAdapterConformance({
 })
 ```
 
-Use `adapterSpecConformance()` and `executorSpecConformance()` only when you are testing lower-level compiler output or core execution IR directly. `fakeExecutor()` remains the in-memory reference implementation for policy tests that need a loop-owned runtime without loading an SDK.
+Use `adapterSpecConformance()` and `loopRuntimePortConformance()` only when you are testing lower-level compiler output or core execution IR directly. `fakeLoopRuntime()` remains the in-memory reference implementation for policy tests that need a loop-owned runtime without loading an SDK.
 
 ## `defineSingleTurnProviderBundle(spec)`
 
@@ -331,29 +331,29 @@ Tool result to feed back into the next tool loop turn.
 | `content`    | `string`   | Serialized result content                   |
 | `isError`    | `boolean?` | Whether this result represents an error     |
 
-## Internal IR: `executorAdapter(spec)`
+## Internal IR: `loopRuntimeAdapter(port)`
 
-Create an SDK-loop adapter from a compiled `ExecutorSpec`. Provider packages should implement `defineProviderRuntime({ ownership: 'loop-owned', loop })`; use this only when testing executor internals or building a bespoke runtime compiler.
+Create an SDK-loop executor from a `LoopRuntimePort`. Provider packages should implement `defineProviderRuntime({ ownership: 'loop-owned', loop })`; use this only when testing runtime internals or building a bespoke runtime compiler. The port is already bound to its SDK client, so there is no separate client argument.
 
-| Parameter | Type                                                      | Description            |
-| --------- | --------------------------------------------------------- | ---------------------- |
-| `spec`    | `ExecutorSpec<TClient, TModel, TRawResponse, TRawStream>` | Executor specification |
+| Parameter | Type                                                  | Description       |
+| --------- | ----------------------------------------------------- | ----------------- |
+| `port`    | `LoopRuntimePort<TModel, TRawResponse, TRawStream>`   | Loop runtime port |
 
-`generate()` accepts `ExecutorGenerateOptions`: `model` (plain or routing wrapper), `input`, `tools`, `toolMiddleware`, `messages`, `maxSteps`, `settings`, `tokenBudget`, `timeoutMs`, `validationRetry`, `constraints`, `guardrails`, `observer`, `activeTools`, and a spec-specific `extra` passthrough. The result carries `raw` (the SDK's own result object), `text`, `object`, `_meta`, `steps`, `messages`, and `pendingApprovals` when suspended on tool approval.
+`generate()` accepts `ExecutorGenerateOptions`: `model` (plain or routing wrapper), `input`, `tools`, `toolMiddleware`, `messages`, `maxSteps`, `settings`, `tokenBudget`, `timeoutMs`, `validationRetry`, `constraints`, `guardrails`, `observer`, `activeTools`, and a port-specific `extra` passthrough. The result carries `raw` (the SDK's own result object), `text`, `object`, `_meta`, `steps`, `messages`, and `pendingApprovals` when suspended on tool approval.
 
-## `ExecutorSpec`
+## `LoopRuntimePort`
 
-The SDK-loop execution IR produced by the `loop` provider-runtime branch.
+The SDK-loop execution IR produced by the `loop` provider-runtime branch. The SDK client/gateway is closed over when the port is created, so each run method takes only the request.
 
-| Method                               | Description                                                                                                                                |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `executorId`                         | Executor identifier for observability (e.g. `'ai-sdk'`)                                                                                    |
-| `describeModel(model)`               | Extract `ModelInfo` from an SDK model reference                                                                                            |
-| `mapSettings(settings, model)`       | Map canonical settings to SDK option names                                                                                                 |
-| `runLoop(client, request)`           | Multi-step text + tools; SDK owns the loop, core steers via `request.observer`                                                             |
-| `attemptStructured(client, request)` | ONE structured attempt; returns `invalid` as a value, never throws on schema failure                                                       |
-| `runStream(client, request)`         | Streaming; returns the SDK stream result untouched + typed `completion()`. Must drive `request.safety` when present (streaming guardrails) |
-| `replayStream?(cached)`              | Optional semantic-cache stream replay                                                                                                      |
+| Method                            | Description                                                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                              | Runtime identifier for observability (e.g. `'ai-sdk'`)                                                                                     |
+| `describeModel(model)`            | Extract `ModelInfo` from an SDK model reference                                                                                            |
+| `mapSettings(settings, model)`    | Map canonical settings to SDK option names                                                                                                 |
+| `runTextLoop(request)`            | Multi-step text + tools; SDK owns the loop, core steers via `request.observer`                                                             |
+| `runStructuredAttempt(request)`   | ONE structured attempt; returns `invalid` as a value, never throws on schema failure                                                       |
+| `runStream(request)`              | Streaming; returns the SDK stream result untouched + typed `completion()`. Must drive `request.safety` when present (streaming guardrails) |
+| `replayStream?(cached)`           | Optional semantic-cache stream replay                                                                                                      |
 
 ## Types
 
@@ -366,7 +366,7 @@ import type {
   AdapterGenerateResult,
   // Spec interfaces
   AdapterSpec,
-  ExecutorSpec,
+  LoopRuntimePort,
   // Executor contract types (SDK-driven loop)
   ExecutorRequest,
   StructuredRequest,

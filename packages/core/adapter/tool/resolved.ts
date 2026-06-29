@@ -2,7 +2,7 @@
  * Shared resolved-prompt plumbing for adapter factories.
  *
  * Small policies that read or react to a `ResolvedPrompt` identically in
- * both `adapter()` and `executorAdapter()`: skill-activation session access
+ * both `adapter()` and `loopRuntimeAdapter()`: skill-activation session access
  * and post-generation memory capture.
  *
  * @module

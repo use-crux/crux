@@ -7,10 +7,10 @@ import { createStreamCallPlan } from './stream'
 import type { AiSdkCodec, AiSdkCodecDeps } from './types'
 
 /**
- * Create the internal AI SDK codec used by {@link import('../executor').aiSdkExecutor}.
+ * Create the internal AI SDK codec used by `createAiSdkLoopRuntime()`.
  *
  * The returned object owns SDK-shaped request planning and raw-result
- * projection while the executor remains responsible only for invoking the
+ * projection while the loop runtime remains responsible only for invoking the
  * selected gateway method.
  *
  * @internal

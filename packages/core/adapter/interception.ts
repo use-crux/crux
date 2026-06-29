@@ -2,7 +2,7 @@
  * Generation interception — the seam deterministic replay (quality
  * cassettes) hooks into at the executor boundary.
  *
- * `executorAdapter()` routes every `runLoop`/`attemptStructured` spec call
+ * `loopRuntimeAdapter()` routes every `runTextLoop`/`runStructuredAttempt` port call
  * through {@link interceptGeneration}. With no interceptor installed the
  * call executes directly — zero overhead, zero behavior change. An installed
  * interceptor receives a normalized, serializable description of the call

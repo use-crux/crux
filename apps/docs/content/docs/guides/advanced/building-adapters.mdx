@@ -194,15 +194,15 @@ export const acmeSdkRuntime = defineProviderRuntime({
     describeModel: (model: AcmeModel) => ({ provider: model.provider, modelId: model.id }),
     settings: acmeSdkSettings,
     bind: (client: AcmeGateway) => ({
-      run: (request) => runAcmeLoop(client, request),
-      attemptStructured: (request) => runAcmeStructuredAttempt(client, request),
-      stream: (request) => runAcmeStream(client, request),
+      runTextLoop: (request) => runAcmeLoop(client, request),
+      runStructuredAttempt: (request) => runAcmeStructuredAttempt(client, request),
+      runStream: (request) => runAcmeStream(client, request),
     }),
   },
 })
 ```
 
-`run()` should return completed text/object/messages metadata or a suspended approval outcome. `attemptStructured()` makes one provider attempt and returns invalid schema results in-band; Crux owns the retry loop.
+`bind(client)` returns the client-dependent operations; Crux assembles them with `describeModel`/`settings`/`id` into a gateway-closed `LoopRuntimePort`. `runTextLoop()` should return completed text/object/messages metadata or a suspended approval outcome. `runStructuredAttempt()` makes one provider attempt and returns invalid schema results in-band; Crux owns the retry loop.
 
 ## What your adapter doesn't need
 

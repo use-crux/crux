@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { prompt } from '../../prompt/prompt'
-import { executorAdapter } from '../../adapter'
-import { fakeExecutor } from '../../adapter/testing'
+import { loopRuntimeAdapter } from '../../adapter'
+import { fakeLoopRuntime } from '../../adapter/testing'
 import {
   clearGenerationInterceptor,
   setGenerationInterceptor,
@@ -29,8 +29,8 @@ afterEach(() => {
 
 describe('generation interception at the executor boundary', () => {
   it('is transparent when no interceptor is installed', async () => {
-    const fake = fakeExecutor({ loops: [[{ text: 'live answer' }]] })
-    const executor = executorAdapter(fake.spec)(fake.client)
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'live answer' }]] })
+    const executor = loopRuntimeAdapter(fake.runtime)
     const result = await executor.generate(textPrompt, { model: 'fake:m1', input: { q: 'hi' } })
     expect(result.text).toBe('live answer')
   })
@@ -42,8 +42,8 @@ describe('generation interception at the executor boundary', () => {
       return execute()
     })
 
-    const fake = fakeExecutor({ loops: [[{ text: 'ok' }]] })
-    const executor = executorAdapter(fake.spec)(fake.client)
+    const fake = fakeLoopRuntime({ loops: [[{ text: 'ok' }]] })
+    const executor = loopRuntimeAdapter(fake.runtime)
     await executor.generate(textPrompt, {
       model: 'fake:m1',
       input: { q: 'question text' },
@@ -78,12 +78,12 @@ describe('generation interception at the executor boundary', () => {
       }
     })
 
-    const fake = fakeExecutor({ structured: ['{"answer":"live"}'] })
-    const executor = executorAdapter(fake.spec)(fake.client)
+    const fake = fakeLoopRuntime({ structured: ['{"answer":"live"}'] })
+    const executor = loopRuntimeAdapter(fake.runtime)
     const result = await executor.generate(structuredPrompt, { model: 'fake:m1', input: { q: 'x' } })
 
     expect(result.object).toEqual({ answer: 'replayed' })
-    expect(fake.calls.attemptStructured).toHaveLength(0)
+    expect(fake.calls.runStructuredAttempt).toHaveLength(0)
   })
 
   it('intercepts each model call separately during validation retry (distinct messages)', async () => {
@@ -93,8 +93,8 @@ describe('generation interception at the executor boundary', () => {
       return execute()
     })
 
-    const fake = fakeExecutor({ structured: ['not json', '{"answer":"ok"}'] })
-    const executor = executorAdapter(fake.spec)(fake.client)
+    const fake = fakeLoopRuntime({ structured: ['not json', '{"answer":"ok"}'] })
+    const executor = loopRuntimeAdapter(fake.runtime)
     await executor.generate(structuredPrompt, {
       model: 'fake:m1',
       input: { q: 'x' },

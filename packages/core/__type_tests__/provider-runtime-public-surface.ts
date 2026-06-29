@@ -169,12 +169,12 @@ const loopContract = {
   bind(client: LoopClient) {
     expectTypeOf(client).toEqualTypeOf<LoopClient>()
     return {
-      run: async (request: ExecutorRequest<LoopModel>) => {
+      runTextLoop: async (request: ExecutorRequest<LoopModel>) => {
         expectTypeOf(request.model).toEqualTypeOf<LoopModel>()
         return loopOutcome
       },
-      attemptStructured: async () => loopStructured,
-      stream: async () => loopStream,
+      runStructuredAttempt: async () => loopStructured,
+      runStream: async () => loopStream,
     }
   },
 } satisfies LoopOwnedRuntimeContract<LoopClient, LoopModel, LoopRawResponse, LoopRawStream>
@@ -244,9 +244,9 @@ defineProviderRuntime({
     },
     settings: () => ({}),
     bind: () => ({
-      run: async () => loopOutcome,
-      attemptStructured: async () => loopStructured,
-      stream: async () => loopStream,
+      runTextLoop: async () => loopOutcome,
+      runStructuredAttempt: async () => loopStructured,
+      runStream: async () => loopStream,
     }),
   },
   // @ts-expect-error - provider runtime extensions cannot replace generated runtime members.
@@ -258,7 +258,7 @@ defineProviderRuntime({
 })
 
 const loopRuntime = loopProvider.create(loopClient)
-expectTypeOf(loopRuntime).toMatchTypeOf<CruxExecutor<LoopClient, LoopModel, LoopRawResponse, LoopRawStream>>()
+expectTypeOf(loopRuntime).toMatchTypeOf<CruxExecutor<LoopModel, LoopRawResponse, LoopRawStream>>()
 
 void loopRuntime.generate(prompt, {
   model: loopModel,

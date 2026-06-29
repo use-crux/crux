@@ -3,7 +3,7 @@
  * `ModelMessage[]` shapes — pure functions, no SDK calls.
  *
  * Canonical messages are the persistence/resume format (what
- * `executorAdapter()` reads and writes); model messages are what
+ * `loopRuntimeAdapter()` reads and writes); model messages are what
  * `generateText`/`streamText` consume. Tool rounds are the interesting
  * part: canonical keeps tool calls in assistant `metadata.toolCalls` and
  * results as `tool`-role messages with `metadata.toolCallId`, while the

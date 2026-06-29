@@ -16,8 +16,8 @@
  * skill loads, memory capture) and the `Safety` session from
  * `@use-crux/core/safety` — so policy semantics never diverge between dialects.
  * Test public provider runtimes with {@link providerRuntimeConformance}. Use
- * {@link fakeExecutor}, {@link adapterSpecConformance}, and
- * {@link executorSpecConformance} for lower-level execution IR tests.
+ * {@link fakeLoopRuntime}, {@link adapterSpecConformance}, and
+ * {@link loopRuntimePortConformance} for lower-level execution IR tests.
  *
  * @module
  */
@@ -64,7 +64,6 @@ export type {
 export { defineProviderRuntime } from './provider-runtime'
 export { defineSingleTurnProviderBundle } from './provider-runtime'
 export type {
-  BoundLoopOwnedRuntime,
   DefinedProviderRuntime,
   DefinedSingleTurnProviderRuntime,
   DefinedSingleTurnProviderBundle,
@@ -86,8 +85,8 @@ export type {
   SingleTurnProviderRuntimeSpec,
 } from './provider-runtime'
 
-// Executor specification interface (SDK-driven loop)
-export type { ExecutorSpec } from './executor-spec'
+// Loop runtime port (SDK-driven loop)
+export type { LoopRuntimePort, BoundLoopRuntime, CachedStreamPayload } from './loop-runtime-port'
 export type {
   ExecutorRequest,
   StructuredRequest,
@@ -103,7 +102,7 @@ export type {
 } from './executor-types'
 
 // Factory + result/option types (SDK-driven loop)
-export { executorAdapter } from './define-executor'
+export { loopRuntimeAdapter } from './define-executor'
 export type {
   CruxExecutor,
   ExecutorModelArg,
@@ -155,8 +154,8 @@ export type { GenerationInterceptor, InterceptedGeneration } from './interceptio
 // Testing utilities for public provider runtimes and lower-level execution IR.
 export {
   adapterSpecConformance,
-  fakeExecutor,
-  executorSpecConformance,
+  fakeLoopRuntime,
+  loopRuntimePortConformance,
   providerRuntimeConformance,
   transcriptCodecConformance,
 } from './testing'
@@ -167,13 +166,12 @@ export type {
   AdapterConformanceInspector,
   AdapterConformancePrepared,
   AdapterConformanceScript,
-  FakeExecutor,
-  FakeExecutorConfig,
-  FakeExecutorEmission,
-  FakeExecutorClient,
+  FakeLoopRuntime,
+  FakeLoopRuntimeConfig,
+  FakeLoopEmission,
   FakeRawResponse,
   FakeRawStream,
-  ExecutorConformanceHarness,
+  LoopRuntimeConformanceHarness,
   ConformanceViolation,
   ProviderConformanceEmission,
   ProviderConformancePrepared,

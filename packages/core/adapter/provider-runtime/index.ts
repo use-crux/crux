@@ -18,7 +18,6 @@ export type {
   SingleTurnProviderBundleSpec,
 } from './single-turn-bundle-types'
 export type {
-  BoundLoopOwnedRuntime,
   DefinedProviderRuntime,
   DefinedSingleTurnProviderRuntime,
   LoopOwnedProviderRuntime,

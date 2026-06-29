@@ -23,9 +23,9 @@ import { appendCorrectiveExchange, appendCorrectiveMessages } from './messages'
 import { buildTraceMeta } from './metadata'
 
 /** Inputs shared by the SDK-loop structured retry helper. */
-interface GenerateSdkStructuredContext<TClient, TModel, TRawResponse, TRawStream> {
+interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
   /** Normalized SDK-loop dialect for one bound SDK client. */
-  readonly dialect: SdkLoopDialect<TClient, TModel, TRawResponse, TRawStream>
+  readonly dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>
   /** Original prepared execution arguments, including retry hooks. */
   readonly args: AdapterExecutionGenerateArgs<TModel, Record<string, unknown>>
   /** Fully prepared executor request for the current model attempt. */
@@ -52,8 +52,8 @@ interface GenerateSdkStructuredContext<TClient, TModel, TRawResponse, TRawStream
  * @param ctx - Structured retry context prepared by `generateSdk()`.
  * @returns The normalized structured generation result.
  */
-export async function generateSdkStructured<TClient, TModel, TRawResponse, TRawStream>(
-  ctx: GenerateSdkStructuredContext<TClient, TModel, TRawResponse, TRawStream>,
+export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
+  ctx: GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream>,
 ): Promise<AdapterExecutionGenerateResult<TRawResponse>> {
   const { dialect, args, request, schema, safety, retryId, promptId, describeCall } = ctx
   const validationRetry = args.validationRetry
@@ -70,7 +70,7 @@ export async function generateSdkStructured<TClient, TModel, TRawResponse, TRawS
       schema,
     }
     const attempt = await interceptGeneration(describeCall('structured', attemptRequest), () =>
-      dialect.attemptStructured(dialect.client, attemptRequest),
+      dialect.runStructuredAttempt(attemptRequest),
     )
 
     if (attempt.status === 'ok') {
@@ -90,7 +90,7 @@ export async function generateSdkStructured<TClient, TModel, TRawResponse, TRawS
             schema,
           }
           const regen = await interceptGeneration(describeCall('structured', regenRequest), () =>
-            dialect.attemptStructured(dialect.client, regenRequest),
+            dialect.runStructuredAttempt(regenRequest),
           )
           steps++
           if (regen.status === 'ok') {

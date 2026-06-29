@@ -2,7 +2,7 @@
  * Shared tool-approval policy for adapter factories.
  *
  * Owns the approval protocol used by both `adapter()` (core-driven loop)
- * and `executorAdapter()` (SDK-driven loop): approval id/token creation,
+ * and `loopRuntimeAdapter()` (SDK-driven loop): approval id/token creation,
  * the approval-request message shape, decision validation (including
  * token verification), resume detection, and approval observability.
  *

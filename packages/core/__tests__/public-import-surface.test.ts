@@ -34,7 +34,7 @@ import { z } from 'zod'
 import { prompt, context, createPrompts, createContexts, when, match, config } from '@use-crux/core'
 import { tool } from '@use-crux/core/tools'
 import { toolMiddleware, approvalMiddleware } from '@use-crux/core/tool-middleware'
-import { adapter, executorAdapter, defineProviderRuntime, defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
+import { adapter, loopRuntimeAdapter, defineProviderRuntime, defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
 import { guardrail, constraint, isGuardrail, isConstraint, createSafety, createSafetyPlugin } from '@use-crux/core/safety'
 import { evaluate, target, scorers, dataset, cassette } from '@use-crux/core/quality'
 
@@ -153,7 +153,7 @@ describe('@use-crux/core/tool-middleware', () => {
 describe('@use-crux/core/adapter', () => {
   it('exposes the documented adapter/provider-runtime factories', () => {
     expect(typeof adapter).toBe('function')
-    expect(typeof executorAdapter).toBe('function')
+    expect(typeof loopRuntimeAdapter).toBe('function')
     expect(typeof defineProviderRuntime).toBe('function')
     expect(typeof defineSingleTurnProviderBundle).toBe('function')
   })

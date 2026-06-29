@@ -4,7 +4,7 @@
  * Provider packages normally author `defineSingleTurnProviderBundle()` for raw
  * chat SDKs or `defineProviderRuntime()` for loop-owned SDKs. The public
  * compilers lower those specs into two execution IR contracts: `AdapterSpec`
- * for raw SDK calls where Crux owns each step, and `ExecutorSpec` for SDKs
+ * for raw SDK calls where Crux owns each step, and `LoopRuntimePort` for SDKs
  * that own their own loop. This module normalizes both contracts behind one
  * session so prompt resolution, tool lifecycle, validation retry, safety,
  * orchestration, timeout cleanup, metadata stamping, and memory capture stay
@@ -70,8 +70,8 @@ export function createAdapterExecution<
  *
  * @internal
  */
-export function createAdapterExecution<TClient, TModel, TRawResponse, TRawStream>(
-  dialect: SdkLoopDialect<TClient, TModel, TRawResponse, TRawStream>,
+export function createAdapterExecution<TModel, TRawResponse, TRawStream>(
+  dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>,
 ): AdapterExecution<TModel, TRawResponse, TRawStream, Record<string, unknown>>
 
 export function createAdapterExecution<

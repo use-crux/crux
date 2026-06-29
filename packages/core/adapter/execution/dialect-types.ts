@@ -1,27 +1,19 @@
 /**
  * Internal dialect contracts for adapter execution.
  *
- * Dialects normalize the public `AdapterSpec` and `ExecutorSpec` shapes before
- * they enter the shared execution session. They describe provider mechanics,
- * not Crux policy.
+ * Dialects normalize the public `AdapterSpec` and `LoopRuntimePort` shapes
+ * before they enter the shared execution session. They describe provider
+ * mechanics, not Crux policy.
  *
  * @internal
  * @module
  */
 
 import type { z } from 'zod'
-import type { ModelInfo } from '../../types'
 import type { GenerationSettings } from '../../generation/types'
 import type { Message } from '../../generation/messages'
-import type { ExecutorSpec } from '../executor-spec'
+import type { LoopRuntimePort } from '../loop-runtime-port'
 import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '../types'
-import type {
-  ExecutorOutcome,
-  ExecutorRequest,
-  ExecutorStreamHandle,
-  StructuredAttempt,
-  StructuredRequest,
-} from '../executor-types'
 
 /**
  * Append an assistant/tool result round in the format expected by a provider.
@@ -83,48 +75,22 @@ export interface CoreStepDialect<
 }
 
 /**
- * Normalized dialect for `ExecutorSpec` implementations.
+ * Normalized dialect for `LoopRuntimePort` implementations.
  *
  * Use this dialect when an SDK owns the multi-step loop, such as the Vercel AI
- * SDK. Crux still owns policy around the loop: prompt resolution, tool
- * approval, validation retry, safety, cache/orchestration middleware, and
- * trace metadata.
+ * SDK. It is the bound {@link LoopRuntimePort} tagged with a discriminant: the
+ * SDK client is already closed over, so the run methods take only requests.
+ * Crux still owns policy around the loop: prompt resolution, tool approval,
+ * validation retry, safety, cache/orchestration middleware, and trace metadata.
  *
- * @typeParam TClient - SDK client or gateway object.
  * @typeParam TModel - SDK-native model reference.
  * @typeParam TRawResponse - SDK result returned from non-streaming calls.
  * @typeParam TRawStream - SDK stream result returned from streaming calls.
  */
-export interface SdkLoopDialect<TClient, TModel, TRawResponse, TRawStream> {
+export interface SdkLoopDialect<TModel, TRawResponse, TRawStream>
+  extends LoopRuntimePort<TModel, TRawResponse, TRawStream> {
   /** Discriminant for the SDK-owned loop. */
   readonly kind: 'sdk-loop'
-
-  /** Executor identifier used for tracing and fallback classification. */
-  readonly id: string
-
-  /** Client bound by the public executor factory. */
-  readonly client: TClient
-
-  /** Extract provider/model identity from the SDK-native model reference. */
-  describeModel(model: TModel): ModelInfo
-
-  /** Convert canonical generation settings to SDK-native parameters. */
-  mapSettings(settings: GenerationSettings, model: ModelInfo): Record<string, unknown>
-
-  /** Run the SDK's text/tool loop with Crux-provided step observation. */
-  runLoop(client: TClient, request: ExecutorRequest<TModel>): Promise<ExecutorOutcome<TRawResponse>>
-
-  /** Make exactly one structured-output attempt; schema failures return `invalid`. */
-  attemptStructured(client: TClient, request: StructuredRequest<TModel>): Promise<StructuredAttempt<TRawResponse>>
-
-  /** Start the SDK's streaming flow with a fully prepared request. */
-  runStream(
-    client: TClient,
-    request: ExecutorRequest<TModel> & { readonly schema?: z.ZodType },
-  ): Promise<ExecutorStreamHandle<TRawStream>>
-
-  /** Recreate a stream from cached middleware output when the SDK supports replay. */
-  replayStream?: ExecutorSpec<TClient, TModel, TRawResponse, TRawStream>['replayStream']
 }
 
 /**
@@ -141,4 +107,4 @@ export type AdapterExecutionDialect<
   TExtra extends Record<string, unknown> = Record<string, unknown>,
 > =
   | CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra>
-  | SdkLoopDialect<TClient, TModel, TRawResponse, TRawStream>
+  | SdkLoopDialect<TModel, TRawResponse, TRawStream>

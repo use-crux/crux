@@ -44,11 +44,11 @@ const unreachableRegenerate = (): Promise<never> => {
  * safety, validation retry, trace metadata, and memory capture.
  *
  * @param dialect - Normalized SDK-loop dialect for one bound SDK client.
- * @param args - Prepared execution arguments from `executorAdapter()`.
+ * @param args - Prepared execution arguments from `loopRuntimeAdapter()`.
  * @returns The normalized non-streaming executor result.
  */
-export async function generateSdk<TClient, TModel, TRawResponse, TRawStream>(
-  dialect: SdkLoopDialect<TClient, TModel, TRawResponse, TRawStream>,
+export async function generateSdk<TModel, TRawResponse, TRawStream>(
+  dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>,
   args: AdapterExecutionGenerateArgs<TModel, Record<string, unknown>>,
 ): Promise<AdapterExecutionGenerateResult<TRawResponse>> {
   const prompt = args.prompt
@@ -201,7 +201,7 @@ export async function generateSdk<TClient, TModel, TRawResponse, TRawStream>(
   /** Run the SDK text/tool loop and apply final-output safety regeneration. */
   async function generateLoop(request: ExecutorRequest<TModel>): Promise<AdapterExecutionGenerateResult<TRawResponse>> {
     const outcome = await interceptGeneration(describeCall('loop', request), () =>
-      dialect.runLoop(dialect.client, request),
+      dialect.runTextLoop(request),
     )
 
     if (outcome.status === 'suspended') {
@@ -228,7 +228,7 @@ export async function generateSdk<TClient, TModel, TRawResponse, TRawStream>(
           observer: undefined,
         }
         const regen = await interceptGeneration(describeCall('loop', regenRequest), () =>
-          dialect.runLoop(dialect.client, regenRequest),
+          dialect.runTextLoop(regenRequest),
         )
         steps++
         if (regen.status === 'complete') {

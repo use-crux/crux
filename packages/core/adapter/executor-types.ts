@@ -1,5 +1,5 @@
 /**
- * Types for the `ExecutorSpec` contract — the adapter port for SDKs that
+ * Types for the `LoopRuntimePort` contract — the adapter port for SDKs that
  * own their own tool loop (e.g. the Vercel AI SDK).
  *
  * Where `AdapterSpec` assumes core drives the loop one provider call at a
@@ -24,8 +24,8 @@ import type { AdapterResponse } from './types'
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * A fully prepared generation request handed from `executorAdapter()` to an
- * `ExecutorSpec`.
+ * A fully prepared generation request handed from `loopRuntimeAdapter()` to an
+ * `LoopRuntimePort`.
  *
  * Everything policy-shaped has already happened by the time a spec sees
  * this object: the prompt is resolved, routing wrappers (`fallback()`,
@@ -136,7 +136,7 @@ export interface ExecutorStep {
 }
 
 /**
- * Core's answer to a completed step — how `executorAdapter()` steers a
+ * Core's answer to a completed step — how `loopRuntimeAdapter()` steers a
  * loop it does not run.
  *
  * The contract is *observe step N, apply before step N+1*: an executor
