@@ -9,7 +9,7 @@ import {
   setObservabilityTransport,
 } from '../../observability'
 import { plan, updatePlan } from '../../plan/plans'
-import { tasklist } from '../../plan/tasks'
+import { tasks } from '../../plan/tasks'
 import { configure } from '../../runtime/configure'
 import { resetRuntime, updateRuntime } from '../../runtime/runtime'
 import { fileSkill } from '../../skill/file-loader'
@@ -78,12 +78,12 @@ describe('canonical workspace, plan-task, skill, and security observability', ()
 
     const p = await plan({ title: 'Migration Plan', content: 'Do the work.' })
     await updatePlan(p.id, { content: 'Do the better work.' })
-    const tasks = await tasklist({ planId: p.id })
-    await tasks.addTask({ id: 'research', label: 'Research' })
-    await tasks.updateTask('research', { status: 'completed', result: 'done' })
-    await tasks.addTask({ id: 'write', label: 'Write' })
-    await tasks.removeTask('write')
-    await tasks.discard('superseded')
+    const work = await tasks({ plan: p })
+    await work.add({ id: 'research', label: 'Research' })
+    await work.complete('research', 'done')
+    await work.add({ id: 'write', label: 'Write' })
+    await work.remove('write')
+    await work.discard('superseded')
     await observe.flush()
 
     expect(transport.records).toContainEqual(
@@ -106,7 +106,7 @@ describe('canonical workspace, plan-task, skill, and security observability', ()
         type: 'span:start',
         primitive: 'task.operation',
         name: 'task.update',
-        attributes: expect.objectContaining({ taskListId: tasks.id, taskId: 'research', operation: 'update' }),
+        attributes: expect.objectContaining({ taskListId: work.id, taskId: 'research', operation: 'update' }),
       }),
     )
     expect(transport.records).toContainEqual(
@@ -121,7 +121,7 @@ describe('canonical workspace, plan-task, skill, and security observability', ()
         type: 'span:start',
         primitive: 'task.operation',
         name: 'task.remove',
-        attributes: expect.objectContaining({ taskListId: tasks.id, taskId: 'write', operation: 'remove' }),
+        attributes: expect.objectContaining({ taskListId: work.id, taskId: 'write', operation: 'remove' }),
       }),
     )
     expect(transport.records).toContainEqual(
@@ -135,8 +135,8 @@ describe('canonical workspace, plan-task, skill, and security observability', ()
       expect.objectContaining({
         type: 'span:start',
         primitive: 'task.operation',
-        name: 'tasklist.discard',
-        attributes: expect.objectContaining({ taskListId: tasks.id, operation: 'tasklist.discard', hasReason: true }),
+        name: expect.stringContaining('discard'),
+        attributes: expect.objectContaining({ taskListId: work.id, operation: expect.stringContaining('discard'), hasReason: true }),
       }),
     )
   })

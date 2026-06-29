@@ -20,13 +20,15 @@
  */
 
 import { z } from 'zod'
+import type { JsonValue } from '../types/tool'
 import type { Context } from '../prompt/context-types'
 import type { ToolDef, CreationTool } from '../types/tool'
 import type { Plan, PlanHandle, Task, TaskStatus, TaskListHandle } from './types'
 import { context } from '../prompt/context'
 import { plan as createPlanFn, getPlan, updatePlan, createPlanHandle } from './plans'
-import { tasklist as createTaskListFn } from './tasks'
+import { tasks as createTasksFn } from './tasks'
 import { createHandle } from './tasks'
+import { createPlanCreationTool, createTasksCreationTool } from './creation-tools'
 
 export type { ToolDef, CreationTool } from '../types/tool'
 
@@ -201,7 +203,7 @@ export function taskListAgent(taskListId: string, options?: TaskListAgentOptions
         description: `Task list context for ${taskListId}`,
         priority: ctxOptions?.priority ?? 80,
         system: async () => {
-          const tasks = await handle.getTasks()
+          const tasks = await handle.list()
           if (tasks.length === 0) return ''
 
           if (options?.renderContext) return options.renderContext(tasks)
@@ -219,7 +221,7 @@ export function taskListAgent(taskListId: string, options?: TaskListAgentOptions
           description: `List all active tasks in task list "${taskListId}". Returns an array of tasks with id, label, status, progress, assignee, and timestamps. Removed tasks are excluded.`,
           parameters: z.object({}),
           async execute(): Promise<string> {
-            const tasks = await handle.getTasks()
+            const tasks = await handle.list()
             return JSON.stringify(tasks)
           },
         },
@@ -239,7 +241,7 @@ export function taskListAgent(taskListId: string, options?: TaskListAgentOptions
               .describe('Agent and model assignment for this task.'),
           }),
           async execute(args: Record<string, unknown>): Promise<string> {
-            const task = await handle.addTask({
+            const task = await handle.add({
               id: args.taskId as string,
               label: args.label as string,
               description: args.description as string | undefined,
@@ -272,13 +274,25 @@ export function taskListAgent(taskListId: string, options?: TaskListAgentOptions
             error: z.string().optional().describe('Error message when task fails.'),
           }),
           async execute(args: Record<string, unknown>): Promise<string> {
-            const update: Record<string, unknown> = {}
-            if (args.status !== undefined) update.status = args.status
-            if (args.progress !== undefined) update.progress = args.progress
-            if (args.assignee !== undefined) update.assignee = args.assignee
-            if (args.result !== undefined) update.result = args.result
-            if (args.error !== undefined) update.error = args.error
-            const task = await handle.updateTask(args.taskId as string, update)
+            const taskId = args.taskId as string
+            let task: Task | null = null
+            if (args.assignee !== undefined) {
+              task = await handle.edit(taskId, { assignee: args.assignee as { agent?: string; model?: string } })
+            }
+            if (args.progress !== undefined) {
+              task = await handle.progress(taskId, args.progress as string)
+            }
+            if (args.status !== undefined) {
+              const status = args.status as TaskStatus
+              if (status === 'in_progress') task = await handle.start(taskId)
+              else if (status === 'completed') task = await handle.complete(taskId, args.result as JsonValue | undefined)
+              else if (status === 'failed') task = await handle.fail(taskId, (args.error as string | undefined) ?? '')
+              else if (status === 'skipped') task = await handle.skip(taskId)
+              else if (status === 'cancelled') task = await handle.cancel(taskId)
+              else task = await handle.getTask(taskId)
+            }
+            task ??= await handle.getTask(taskId)
+            if (!task) return JSON.stringify({ ok: false, error: 'Task not found' })
             return JSON.stringify({ ok: true, status: task.status })
           },
         },
@@ -289,7 +303,7 @@ export function taskListAgent(taskListId: string, options?: TaskListAgentOptions
             taskId: z.string().describe('ID of the task to remove.'),
           }),
           async execute(args: Record<string, unknown>): Promise<string> {
-            await handle.removeTask(args.taskId as string)
+            await handle.remove(args.taskId as string)
             return JSON.stringify({ ok: true })
           },
         },
@@ -380,7 +394,7 @@ export function taskWorker(taskListId: string, taskId: string, options?: TaskWor
         description: `Task assignment for ${taskId}`,
         priority: ctxOptions?.priority ?? 95,
         system: async () => {
-          const tasks = await handle.getTasks()
+          const tasks = await handle.list()
           const task = tasks.find((t) => t.id === taskId)
           if (!task) return ''
 
@@ -414,7 +428,7 @@ export function taskWorker(taskListId: string, taskId: string, options?: TaskWor
           description: `Mark your assigned task "${taskId}" as in-progress. Call this when you begin working.`,
           parameters: z.object({}),
           async execute(): Promise<string> {
-            await handle.updateTask(taskId, { status: 'in_progress' })
+            await handle.start(taskId)
             return JSON.stringify({ ok: true, status: 'in_progress' })
           },
         },
@@ -429,9 +443,7 @@ export function taskWorker(taskListId: string, taskId: string, options?: TaskWor
               ),
           }),
           async execute(args: Record<string, unknown>): Promise<string> {
-            await handle.updateTask(taskId, {
-              progress: args.message as string,
-            })
+            await handle.progress(taskId, args.message as string)
             return JSON.stringify({ ok: true })
           },
         },
@@ -445,10 +457,7 @@ export function taskWorker(taskListId: string, taskId: string, options?: TaskWor
               .describe('Structured result data, e.g. { sourceCount: 12, summary: "..." }.'),
           }),
           async execute(args: Record<string, unknown>): Promise<string> {
-            await handle.updateTask(taskId, {
-              status: 'completed',
-              result: args.result,
-            })
+            await handle.complete(taskId, args.result as JsonValue | undefined)
             return JSON.stringify({ ok: true, status: 'completed' })
           },
         },
@@ -461,10 +470,7 @@ export function taskWorker(taskListId: string, taskId: string, options?: TaskWor
               .describe('What went wrong, e.g. "API rate limited after 3 retries" or "Source data not available".'),
           }),
           async execute(args: Record<string, unknown>): Promise<string> {
-            await handle.updateTask(taskId, {
-              status: 'failed',
-              error: args.error as string,
-            })
+            await handle.fail(taskId, args.error as string)
             return JSON.stringify({ ok: true, status: 'failed' })
           },
         },
@@ -490,38 +496,7 @@ export function createPlanTool(options?: {
   template?: string
   onCreated?: (handle: PlanHandle) => void
 }): CreationTool<PlanHandle> {
-  const templateStr = options?.template ? `\n\nThe plan should follow this structure:\n${options.template}` : ''
-
-  const tool: CreationTool<PlanHandle> = {
-    created: undefined,
-    description: `Create a new plan document. A plan describes the intent and approach for a piece of work.${templateStr}\n\nReturns the created plan with a generated ID and version 1.`,
-    parameters: z.object({
-      title: z.string().describe('Plan title, e.g. "Cloud Migration Guide".'),
-      content: z
-        .string()
-        .optional()
-        .describe('Plan content in markdown. Describe the objective, approach, and key considerations.'),
-      metadata: z
-        .record(z.string(), z.unknown())
-        .optional()
-        .describe('Key-value metadata, e.g. { threadId: "abc", priority: "high" }.'),
-    }),
-    async execute(args: Record<string, unknown>): Promise<string> {
-      const handle = await createPlanFn({
-        title: args.title as string,
-        content: args.content as string | undefined,
-        metadata: args.metadata as Record<string, unknown> | undefined,
-      })
-      tool.created = handle
-      options?.onCreated?.(handle)
-      return JSON.stringify({
-        id: handle.id,
-        title: handle.title,
-        version: handle.version,
-      })
-    },
-  }
-  return tool
+  return createPlanCreationTool(createPlanFn, options)
 }
 
 /**
@@ -537,30 +512,7 @@ export function createTaskListTool(options?: {
   template?: string
   onCreated?: (handle: TaskListHandle) => void
 }): CreationTool<TaskListHandle> {
-  const templateStr = options?.template ? `\n\nWhen creating tasks:\n${options.template}` : ''
-
-  const tool: CreationTool<TaskListHandle> = {
-    created: undefined,
-    description: `Create a new task list for tracking work items.${templateStr}\n\nReturns the task list ID.`,
-    parameters: z.object({
-      planId: z
-        .string()
-        .optional()
-        .describe('Associate with a plan by its ID. Optional — task lists can exist independently.'),
-      metadata: z.record(z.string(), z.unknown()).optional().describe('Key-value metadata, e.g. { threadId: "abc" }.'),
-    }),
-    async execute(args: Record<string, unknown>): Promise<string> {
-      const handle = await createTaskListFn({
-        planId: args.planId as string | undefined,
-        metadata: args.metadata as Record<string, unknown> | undefined,
-      })
-      tool.created = handle
-      options?.onCreated?.(handle)
-      const status = await handle.getStatus()
-      return JSON.stringify({ id: handle.id, status, planId: args.planId })
-    },
-  }
-  return tool
+  return createTasksCreationTool(createTasksFn, options)
 }
 
 // ─────────────────────────────────────────────────────────────────

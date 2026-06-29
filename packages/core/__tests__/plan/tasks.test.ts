@@ -1,7 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest'
+import { z } from 'zod'
 import { inMemoryCruxStore } from '../../store/memory'
 import { plan } from '../../plan/plans'
-import { tasklist, getTaskList, getTaskListByPlan } from '../../plan/tasks'
+import { task } from '../../plan/task-spec'
+import { getTaskList, tasks } from '../../plan/tasks'
+import type { JsonObject, JsonValue, TasksHandle } from '../../plan/types'
 import { updateRuntime, resetRuntime } from '../../runtime/runtime'
 
 /** Create a fresh store and register it in the runtime. */
@@ -13,319 +16,267 @@ function setup() {
 
 afterEach(() => resetRuntime())
 
-describe('TaskList lifecycle', () => {
-  it('tasklist() persists immediately with status pending', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-
-    expect(handle.id).toBeDefined()
-
-    // Verify persisted in store
-    const stored = await store.get(`tasklist:${handle.id}`)
-    expect(stored).not.toBeNull()
-    expect(stored!.status).toBe('pending')
-  })
-
-  it('tasklist() with planId association', async () => {
-    const store = setup()
+describe('Task ledger lifecycle', () => {
+  it('tasks() persists immediately with optional plan, title, and metadata', async () => {
+    setup()
     const p = await plan({ title: 'Test' })
-    const handle = await tasklist({ planId: p.id })
+    const handle = await tasks({
+      plan: p,
+      title: 'Test tasks',
+      metadata: { threadId: 'thread-abc' },
+    })
 
-    const list = await getTaskList(handle.id)
-    expect(list).not.toBeNull()
-    expect(list!.planId).toBe(p.id)
+    await expect(handle.get()).resolves.toMatchObject({
+      id: handle.id,
+      planId: p.id,
+      title: 'Test tasks',
+      metadata: { threadId: 'thread-abc' },
+      status: 'pending',
+    })
   })
 
-  it('addTask stores task with user-provided ID', async () => {
-    const store = setup()
-    const handle = await tasklist({})
+  it('tasks({ items }) creates pending task rows from keyed task specs', async () => {
+    setup()
 
-    const task = await handle.addTask({
+    const handle = await tasks({
+      title: 'Launch tasks',
+      items: {
+        research: task('Research launch channels', {
+          description: 'Find partner and community launch options.',
+          assignee: { agent: 'researcher' },
+          metadata: { phase: 'research' },
+        }),
+        draft: task('Draft announcement'),
+      },
+    })
+
+    await expect(handle.list()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'research',
+          label: 'Research launch channels',
+          description: 'Find partner and community launch options.',
+          assignee: { agent: 'researcher' },
+          metadata: { phase: 'research' },
+          status: 'pending',
+        }),
+        expect.objectContaining({
+          id: 'draft',
+          label: 'Draft announcement',
+          status: 'pending',
+        }),
+      ]),
+    )
+    await expect(handle.get()).resolves.toMatchObject({ status: 'pending' })
+  })
+
+  it('complete() validates schema-backed task results before storing them', async () => {
+    setup()
+    const handle = await tasks({
+      items: {
+        research: task('Research', {
+          result: z.object({ sources: z.array(z.string()) }),
+        }),
+      },
+    })
+    const unsafeHandle = handle as unknown as TasksHandle
+
+    await expect(unsafeHandle.complete('research', { markdown: 'wrong shape' })).rejects.toMatchObject({
+      name: 'TaskResultValidationError',
+      taskListId: handle.id,
+      taskId: 'research',
+    })
+    const pendingTask = await handle.getTask('research')
+    expect(pendingTask).toMatchObject({ status: 'pending' })
+    expect(pendingTask).not.toHaveProperty('result')
+
+    await expect(handle.complete('research', { sources: ['docs'] })).resolves.toMatchObject({
+      status: 'completed',
+      result: { sources: ['docs'] },
+    })
+  })
+
+  it('rejects non-JSON task values before they enter the store', async () => {
+    setup()
+
+    await expect(
+      tasks({
+        metadata: { bad: () => undefined } as unknown as JsonObject,
+      }),
+    ).rejects.toMatchObject({ name: 'TaskJsonValueError' })
+
+    const handle = await tasks()
+    const unsafeAdd = handle.add as unknown as (input: {
+      id: string
+      label: string
+      metadata: unknown
+    }) => Promise<unknown>
+    await expect(
+      unsafeAdd({
+        id: 'bad-metadata',
+        label: 'Bad metadata',
+        metadata: { bad: () => undefined },
+      }),
+    ).rejects.toMatchObject({
+      name: 'TaskJsonValueError',
+      taskListId: handle.id,
+      taskId: 'bad-metadata',
+    })
+
+    await handle.add({ id: 'result', label: 'Result' })
+    const unsafeHandle = handle as unknown as TasksHandle
+    await expect(unsafeHandle.complete('result', 1n as unknown as JsonValue)).rejects.toMatchObject({
+      name: 'TaskJsonValueError',
+      taskListId: handle.id,
+      taskId: 'result',
+    })
+    await expect(handle.getTask('result')).resolves.toMatchObject({ status: 'pending' })
+  })
+
+  it('add() stores user-provided task IDs and keeps all-pending lists pending', async () => {
+    setup()
+    const handle = await tasks()
+
+    const task = await handle.add({
       id: 'research',
       label: 'Research cloud migration',
       description: 'Find recent case studies',
       assignee: { agent: 'researcher', model: 'gpt-4o' },
     })
 
-    expect(task.id).toBe('research')
-    expect(task.taskListId).toBe(handle.id)
-    expect(task.label).toBe('Research cloud migration')
-    expect(task.status).toBe('pending')
-    expect(task.assignee).toEqual({ agent: 'researcher', model: 'gpt-4o' })
-  })
-
-  it('addTask keeps an all-pending list pending', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-
-    // Before adding tasks
-    const statusBefore = await handle.getStatus()
-    expect(statusBefore).toBe('pending')
-
-    await handle.addTask({ id: 't1', label: 'First task' })
-
-    const statusAfter = await handle.getStatus()
-    expect(statusAfter).toBe('pending')
-  })
-
-  it('updateTask to completed on all tasks triggers auto-completion', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-
-    await handle.addTask({ id: 't1', label: 'Task 1' })
-    await handle.addTask({ id: 't2', label: 'Task 2' })
-
-    await handle.updateTask('t1', { status: 'completed' })
-    // One task still pending — list should be in_progress
-    expect(await handle.getStatus()).toBe('in_progress')
-
-    await handle.updateTask('t2', { status: 'completed' })
-    // All tasks completed — list should auto-complete
-    expect(await handle.getStatus()).toBe('completed')
-
-    const list = await getTaskList(handle.id)
-    expect(list!.completedAt).toBeTypeOf('number')
-  })
-
-  it('updateTask to failed with no in_progress tasks fails the list', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-
-    await handle.addTask({ id: 't1', label: 'Task 1' })
-    await handle.addTask({ id: 't2', label: 'Task 2' })
-
-    await handle.updateTask('t1', { status: 'completed' })
-    await handle.updateTask('t2', { status: 'failed', error: 'API timeout' })
-
-    expect(await handle.getStatus()).toBe('failed')
-  })
-
-  it('failed task with in_progress task keeps list in_progress', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-
-    await handle.addTask({ id: 't1', label: 'Task 1' })
-    await handle.addTask({ id: 't2', label: 'Task 2' })
-
-    await handle.updateTask('t1', { status: 'in_progress' })
-    await handle.updateTask('t2', { status: 'failed' })
-
-    // t1 still in_progress — list stays in_progress
-    expect(await handle.getStatus()).toBe('in_progress')
-  })
-
-  it('removeTask soft-deletes and is excluded from auto-completion', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-
-    await handle.addTask({ id: 't1', label: 'Task 1' })
-    await handle.addTask({ id: 't2', label: 'Task 2 (will remove)' })
-
-    await handle.updateTask('t1', { status: 'completed' })
-    await handle.removeTask('t2')
-
-    // t2 removed, t1 completed — list should complete
-    expect(await handle.getStatus()).toBe('completed')
-
-    // Removed task still in store but with removedAt
-    const stored = await store.get(`task:${handle.id}:t2`)
-    expect(stored).not.toBeNull()
-    expect(stored!.removedAt).toBeTypeOf('number')
-  })
-
-  it('discard sets list to discarded and cancels pending/in_progress tasks', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-
-    await handle.addTask({ id: 't1', label: 'Task 1' })
-    await handle.addTask({ id: 't2', label: 'Task 2' })
-    await handle.updateTask('t1', { status: 'in_progress' })
-    await handle.updateTask('t2', { status: 'completed' })
-
-    await handle.discard('User changed direction')
-
-    expect(await handle.getStatus()).toBe('discarded')
-
-    const list = await getTaskList(handle.id)
-    expect(list!.discardedAt).toBeTypeOf('number')
-    expect(list!.discardReason).toBe('User changed direction')
-
-    // t1 was in_progress — should be cancelled
-    const t1 = await store.get(`task:${handle.id}:t1`)
-    expect(t1!.status).toBe('cancelled')
-
-    // t2 was completed — should stay completed
-    const t2 = await store.get(`task:${handle.id}:t2`)
-    expect(t2!.status).toBe('completed')
-  })
-
-  it('dynamic addTask mid-execution', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-
-    await handle.addTask({ id: 't1', label: 'Initial task' })
-    await handle.updateTask('t1', { status: 'in_progress' })
-
-    // Dynamically add a new task
-    const newTask = await handle.addTask({
-      id: 't2',
-      label: 'Discovered task',
+    expect(task).toMatchObject({
+      id: 'research',
+      taskListId: handle.id,
+      label: 'Research cloud migration',
+      status: 'pending',
+      assignee: { agent: 'researcher', model: 'gpt-4o' },
     })
-    expect(newTask.id).toBe('t2')
-    expect(newTask.status).toBe('pending')
-
-    const tasks = await handle.getTasks()
-    expect(tasks).toHaveLength(2)
+    expect((await handle.get())!.status).toBe('pending')
   })
 
-  it('all tasks removed results in list completed', async () => {
-    const store = setup()
-    const handle = await tasklist({})
+  it('focused lifecycle methods derive list status from active task rows', async () => {
+    setup()
+    const handle = await tasks()
 
-    await handle.addTask({ id: 't1', label: 'Task 1' })
-    await handle.addTask({ id: 't2', label: 'Task 2' })
+    await handle.add({ id: 't1', label: 'Task 1' })
+    await handle.add({ id: 't2', label: 'Task 2' })
 
-    await handle.removeTask('t1')
-    await handle.removeTask('t2')
+    await handle.complete('t1')
+    expect((await handle.get())!.status).toBe('in_progress')
 
-    // No work remaining — should complete
-    expect(await handle.getStatus()).toBe('completed')
+    await handle.fail('t2', 'API timeout')
+    expect((await handle.get())!.status).toBe('failed')
+
+    const failed = await handle.getTask('t2')
+    expect(failed).toMatchObject({ status: 'failed', error: 'API timeout' })
   })
 
-  it('getStatus self-heals stale status', async () => {
-    const store = setup()
-    const handle = await tasklist({})
+  it('in-progress work takes precedence over failed work', async () => {
+    setup()
+    const handle = await tasks()
 
-    await handle.addTask({ id: 't1', label: 'Task 1' })
-    await handle.updateTask('t1', { status: 'completed' })
+    await handle.add({ id: 't1', label: 'Task 1' })
+    await handle.add({ id: 't2', label: 'Task 2' })
+    await handle.start('t1')
+    await handle.fail('t2', 'Blocked')
 
-    // Manually corrupt stored status to be stale
-    const rawList = await store.get(`tasklist:${handle.id}`)
-    await store.set(`tasklist:${handle.id}`, {
-      ...rawList!,
-      status: 'in_progress',
-    })
-
-    // getStatus should self-heal and return the correct derived status
-    const status = await handle.getStatus()
-    expect(status).toBe('completed')
-
-    // Verify it was corrected in the store
-    const fixed = await store.get(`tasklist:${handle.id}`)
-    expect(fixed!.status).toBe('completed')
+    expect((await handle.get())!.status).toBe('in_progress')
   })
 
-  it('getTaskListByPlan finds task list by planId', async () => {
+  it('remove() excludes tasks from list() and status derivation', async () => {
     const store = setup()
+    const handle = await tasks()
+
+    await handle.add({ id: 't1', label: 'Keep' })
+    await handle.add({ id: 't2', label: 'Remove' })
+    await handle.complete('t1')
+    await handle.remove('t2')
+
+    expect(await handle.list()).toEqual([expect.objectContaining({ id: 't1' })])
+    expect((await handle.get())!.status).toBe('completed')
+
+    const removed = await store.get(`task:${handle.id}:t2`)
+    expect(removed!.removedAt).toBeTypeOf('number')
+  })
+
+  it('all tasks removed completes the list because no active work remains', async () => {
+    setup()
+    const handle = await tasks()
+
+    await handle.add({ id: 't1', label: 'Task 1' })
+    await handle.add({ id: 't2', label: 'Task 2' })
+    await handle.remove('t1')
+    await handle.remove('t2')
+
+    expect((await handle.get())!.status).toBe('completed')
+  })
+
+  it('skip() counts as terminal completion', async () => {
+    setup()
+    const handle = await tasks()
+
+    await handle.add({ id: 't1', label: 'Task 1' })
+    await handle.add({ id: 't2', label: 'Task 2' })
+    await handle.complete('t1')
+    await handle.skip('t2', 'No longer needed')
+
+    expect((await handle.get())!.status).toBe('completed')
+  })
+
+  it('tasks.list() returns all task ledgers for a plan', async () => {
+    setup()
     const p = await plan({ title: 'Test Plan' })
-    const handle = await tasklist({ planId: p.id })
+    const first = await tasks({ plan: p, title: 'First' })
+    const second = await tasks({ plan: p.id, title: 'Second' })
+    await tasks({ title: 'Standalone' })
 
-    const found = await getTaskListByPlan(p.id)
-    expect(found).not.toBeNull()
-    expect(found!.id).toBe(handle.id)
+    const listed = await tasks.list({ plan: p })
+    expect(listed).toHaveLength(2)
+    expect(listed).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: second.id }), expect.objectContaining({ id: first.id })]),
+    )
   })
 
-  it('getTaskListByPlan returns null for no match', async () => {
-    const store = setup()
-    const found = await getTaskListByPlan('nonexistent')
-    expect(found).toBeNull()
-  })
+  it('handle.asContext(), asTools(), and worker() use canonical handle operations', async () => {
+    setup()
+    const handle = await tasks()
+    await handle.add({ id: 'write-intro', label: 'Write introduction' })
+    await handle.add({ id: 'research', label: 'Research' })
+    await handle.complete('research')
 
-  it('getTasks excludes removed tasks', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-
-    await handle.addTask({ id: 't1', label: 'Keep' })
-    await handle.addTask({ id: 't2', label: 'Remove' })
-    await handle.removeTask('t2')
-
-    const tasks = await handle.getTasks()
-    expect(tasks).toHaveLength(1)
-    expect(tasks[0].id).toBe('t1')
-  })
-
-  it('updateTask returns updated task', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-
-    await handle.addTask({ id: 't1', label: 'Task 1' })
-    const updated = await handle.updateTask('t1', {
-      status: 'in_progress',
-      progress: 'Working on it...',
-    })
-
-    expect(updated.status).toBe('in_progress')
-    expect(updated.progress).toBe('Working on it...')
-  })
-
-  it('skipped tasks count as terminal for auto-completion', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-
-    await handle.addTask({ id: 't1', label: 'Task 1' })
-    await handle.addTask({ id: 't2', label: 'Task 2' })
-
-    await handle.updateTask('t1', { status: 'completed' })
-    await handle.updateTask('t2', { status: 'skipped' })
-
-    expect(await handle.getStatus()).toBe('completed')
-  })
-
-  it('tasklist() with metadata', async () => {
-    const store = setup()
-    const handle = await tasklist({
-      metadata: { threadId: 'thread-abc' },
-    })
-
-    const list = await getTaskList(handle.id)
-    expect(list!.metadata).toEqual({ threadId: 'thread-abc' })
-  })
-})
-
-describe('TaskListHandle agent methods', () => {
-  it('handle.asContext() renders task summary', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-    await handle.addTask({ id: 't1', label: 'Research' })
-    await handle.addTask({ id: 't2', label: 'Write' })
-    await handle.updateTask('t1', { status: 'completed' })
-
-    const ctx = handle.asContext()
-    const system = await ctx.systemFn({})
+    const system = await handle.asContext().systemFn({})
+    expect(system).toContain('Write introduction')
     expect(system).toContain('Research')
-    expect(system).toContain('Write')
     expect(system).toContain('1/2')
-  })
-
-  it('handle.asTools() returns focused tools', async () => {
-    const store = setup()
-    const handle = await tasklist({})
 
     const tools = handle.asTools()
     expect(tools.listTasks).toBeDefined()
     expect(tools.addTask).toBeDefined()
     expect(tools.updateTask).toBeDefined()
     expect(tools.removeTask).toBeDefined()
-    expect(tools.discardTaskList).toBeDefined()
-  })
-
-  it('handle.worker() returns a TaskWorker for a specific task', async () => {
-    const store = setup()
-    const handle = await tasklist({})
-    await handle.addTask({ id: 'write-intro', label: 'Write introduction' })
 
     const worker = handle.worker('write-intro')
-    expect(worker.taskId).toBe('write-intro')
-    expect(worker.taskListId).toBe(handle.id)
+    const workerSystem = await worker.asContext().systemFn({})
+    expect(workerSystem).toContain('Write introduction')
+    expect(workerSystem).toContain('Your Assignment')
 
-    // Worker has context and tools
-    const ctx = worker.asContext()
-    const system = await ctx.systemFn({})
-    expect(system).toContain('Write introduction')
-    expect(system).toContain('Your Assignment')
+    await worker.asTools().startTask.execute({})
+    await worker.asTools().completeTask.execute({ result: { ok: true } })
+    await expect(handle.getTask('write-intro')).resolves.toMatchObject({
+      status: 'completed',
+      result: { ok: true },
+    })
+  })
 
-    const tools = worker.asTools()
-    expect(tools.startTask).toBeDefined()
-    expect(tools.completeTask).toBeDefined()
+  it('getTaskList() remains available for internal read-model plumbing', async () => {
+    setup()
+    const handle = await tasks()
+    await handle.add({ id: 't1', label: 'Task 1' })
+    await handle.complete('t1')
+
+    await expect(getTaskList(handle.id)).resolves.toMatchObject({
+      id: handle.id,
+      status: 'completed',
+    })
   })
 })

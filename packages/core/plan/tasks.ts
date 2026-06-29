@@ -9,6 +9,7 @@
  */
 
 import type { JsonObject } from '../store/types'
+import type { JsonValue } from '../types/tool'
 import type {
   Task,
   TaskList,
@@ -16,17 +17,23 @@ import type {
   TaskListStatus,
   CreateTaskInput,
   CreateTaskListInput,
+  TasksInput,
   TaskUpdate,
+  TaskSpecRecord,
+  TasksHandle,
 } from './types'
-import { taskListKey, taskKey, isCancellable } from './helpers'
+import { TASKLIST_PREFIX, isCancellable, metadataFilter, taskKey, taskListKey } from './helpers'
 import { emptyCounts, rebuildCounts } from './status'
 import { getRuntime, resolveStore } from '../runtime/runtime'
 import { observe } from '../observability'
 import { getExecutionContext } from '../runtime/execution-context'
 import { taskListAgent, taskWorker } from './agent'
+import { createTasksCreationTool, type TasksToolOptions } from './creation-tools'
+import { addInitialTasks } from './defined-tasks'
 import { DuplicateTaskIdError } from './errors'
 import { assertMutableTask, assertMutableTaskList, assertValidTaskStatusUpdate } from './lifecycle'
 import { getActiveTasks, getAllTasks, repairTaskListState } from './task-list-state'
+import { assertTaskJsonValue, parseTaskCompletionResult } from './task-values'
 
 export {
   DuplicateTaskIdError,
@@ -38,6 +45,90 @@ export {
   TaskRemovedError,
   TaskResultValidationError,
 } from './errors'
+
+/** Options for listing task ledgers. */
+export interface TaskListListOptions {
+  /** Match task ledgers associated with this plan handle or plan ID. */
+  plan?: import('./types').PlanHandle | string
+  /** Match task ledgers by exact metadata fields. */
+  metadata?: Record<string, unknown>
+  /** Maximum number of task ledgers to return. */
+  limit?: number
+  /** Store cursor returned by a previous paginated list call. */
+  cursor?: string
+}
+
+/** Callable task-ledger factory plus static task-ledger helpers. */
+export interface TasksFactory {
+  /**
+   * Create a task ledger and return a canonical command handle.
+   *
+   * `tasks()` is the public factory for Plans & Tasks work ledgers. Pass a plan
+   * handle or plan ID to associate the ledger with an existing plan, or omit
+   * `plan` to use tasks independently.
+   *
+   * @param input - Optional plan association, title, and metadata.
+   * @returns A `TasksHandle` for task lifecycle commands.
+   *
+   * @example
+   * ```ts
+   * const work = await tasks({ plan: p, title: 'Launch tasks' })
+   * await work.add({ id: 'research', label: 'Research launch channels' })
+   * await work.complete('research', { channels: ['partners'] })
+   * ```
+   */
+  <const TItems extends TaskSpecRecord | undefined = undefined>(input?: TasksInput<TItems>): Promise<TasksHandle<TItems>>
+
+  /** Create a command handle for an existing task ledger ID without reading it. */
+  ref(taskListId: string): TaskListHandle
+
+  /** List task ledgers from the configured store, newest first. */
+  list(options?: TaskListListOptions): Promise<TaskList[]>
+
+  /** Create a focused tool that creates a task ledger and exposes `created()` afterward. */
+  tool(options?: TasksToolOptions): import('../types/tool').CreationTool<TaskListHandle>
+}
+
+/**
+ * Create a task ledger and return a canonical command handle.
+ *
+ * `tasks()` is the public factory for Plans & Tasks work ledgers. Pass a plan
+ * handle or plan ID to associate the ledger with an existing plan, or omit
+ * `plan` to use tasks independently.
+ *
+ * @param input - Optional plan association, title, and metadata.
+ * @returns A `TasksHandle` for task lifecycle commands.
+ *
+ * @example
+ * ```ts
+ * const work = await tasks({ plan: p, title: 'Launch tasks' })
+ * await work.add({ id: 'research', label: 'Research launch channels' })
+ * await work.complete('research', { channels: ['partners'] })
+ * ```
+ */
+async function createTasks<const TItems extends TaskSpecRecord | undefined = undefined>(
+  input: TasksInput<TItems> = {} as TasksInput<TItems>,
+): Promise<TasksHandle<TItems>> {
+  const handle = await createTaskList({
+    planId: typeof input.plan === 'string' ? input.plan : input.plan?.id,
+    title: input.title,
+    metadata: input.metadata,
+  }, input.items)
+  await addInitialTasks(handle, input.items)
+  return handle as TasksHandle<TItems>
+}
+
+/** Canonical task-ledger primitive. */
+export const tasks: TasksFactory = Object.assign(createTasks, {
+  ref: createHandle,
+  list: listTaskLists,
+  tool: (options?: TasksToolOptions) => createTasksCreationTool(createTasks, options),
+})
+
+/** @internal */
+export async function tasklist(input: CreateTaskListInput): Promise<TaskListHandle> {
+  return createTaskList(input)
+}
 
 /**
  * Create a task list and return a handle for managing tasks.
@@ -55,7 +146,10 @@ export {
  * await taskList.updateTask('research', { status: 'completed' })
  * ```
  */
-export async function tasklist(input: CreateTaskListInput): Promise<TaskListHandle> {
+async function createTaskList(
+  input: CreateTaskListInput,
+  taskSpecs?: TaskSpecRecord,
+): Promise<TaskListHandle> {
   const span = observe.openSpan({
     name: 'tasklist.create',
     family: 'task',
@@ -73,11 +167,18 @@ export async function tasklist(input: CreateTaskListInput): Promise<TaskListHand
   const list: TaskList = {
     id,
     planId: input.planId,
+    title: input.title,
     status: 'pending',
     counts: emptyCounts(),
     metadata: input.metadata,
     createdAt: now,
     updatedAt: now,
+  }
+  if (input.metadata !== undefined) {
+    assertTaskJsonValue(input.metadata, {
+      taskListId: id,
+      field: 'task list metadata',
+    })
   }
 
   try {
@@ -98,7 +199,7 @@ export async function tasklist(input: CreateTaskListInput): Promise<TaskListHand
       status: list.status,
       traceId: ctx?.traceId,
     })
-    return createHandle(id)
+    return createHandle(id, taskSpecs)
   } catch (error) {
     span.error(error, { operation: 'tasklist.create', planId: input.planId })
     throw error
@@ -113,6 +214,23 @@ export async function tasklist(input: CreateTaskListInput): Promise<TaskListHand
  */
 export async function getTaskList(taskListId: string): Promise<TaskList | null> {
   return repairTaskListState(resolveStore(), taskListId)
+}
+
+/** List persisted task ledgers, optionally filtered by plan and metadata. */
+export async function listTaskLists(options?: TaskListListOptions): Promise<TaskList[]> {
+  const planId = typeof options?.plan === 'string' ? options.plan : options?.plan?.id
+  const result = await resolveStore().list(TASKLIST_PREFIX, {
+    cursor: options?.cursor,
+    limit: options?.limit,
+    filter: {
+      ...(planId !== undefined ? { planId } : {}),
+      ...(metadataFilter(options?.metadata) ?? {}),
+    },
+  })
+  const repaired = await Promise.all(
+    result.entries.map((entry) => repairTaskListState(resolveStore(), (entry.value as unknown as TaskList).id)),
+  )
+  return repaired.filter((list): list is TaskList => list !== null)
 }
 
 /**
@@ -131,8 +249,8 @@ export async function getTaskListByPlan(planId: string): Promise<TaskList | null
 }
 
 /** Create a TaskListHandle for a given task list ID. @internal */
-export function createHandle(taskListId: string): TaskListHandle {
-  return {
+export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): TaskListHandle {
+  const legacy = {
     id: taskListId,
 
     async addTask(input: CreateTaskInput): Promise<Task> {
@@ -157,8 +275,16 @@ export function createHandle(taskListId: string): TaskListHandle {
         description: input.description,
         status: 'pending',
         assignee: input.assignee,
+        metadata: input.metadata,
         createdAt: now,
         updatedAt: now,
+      }
+      if (input.metadata !== undefined) {
+        assertTaskJsonValue(input.metadata, {
+          taskListId,
+          taskId: input.id,
+          field: 'task metadata',
+        })
       }
 
       try {
@@ -223,12 +349,29 @@ export function createHandle(taskListId: string): TaskListHandle {
         const task = raw as unknown as Task | null
         assertMutableTask(task, taskListId, taskId)
         assertValidTaskStatusUpdate(task, update.status)
+        if (update.metadata !== undefined) {
+          assertTaskJsonValue(update.metadata, {
+            taskListId,
+            taskId,
+            field: 'task metadata',
+          })
+        }
+        if (update.result !== undefined) {
+          assertTaskJsonValue(update.result, {
+            taskListId,
+            taskId,
+            field: 'result',
+          })
+        }
 
         const updated: Task = {
           ...task,
           ...(update.status !== undefined && { status: update.status }),
+          ...(update.label !== undefined && { label: update.label }),
+          ...(update.description !== undefined && { description: update.description }),
           ...(update.progress !== undefined && { progress: update.progress }),
           ...(update.assignee !== undefined && { assignee: update.assignee }),
+          ...(update.metadata !== undefined && { metadata: update.metadata }),
           ...(update.result !== undefined && { result: update.result }),
           ...(update.error !== undefined && { error: update.error }),
           ...(update.durationMs !== undefined && {
@@ -445,6 +588,75 @@ export function createHandle(taskListId: string): TaskListHandle {
     ) {
       return taskWorker(taskListId, taskId, options)
     },
+  }
+
+  return {
+    id: taskListId,
+
+    async get() {
+      return getTaskList(taskListId)
+    },
+
+    async list(options?: { includeRemoved?: boolean }) {
+      return options?.includeRemoved ? getAllTasks(resolveStore(), taskListId) : getActiveTasks(resolveStore(), taskListId)
+    },
+
+    async getTask(taskId: string) {
+      const raw = await resolveStore().get(taskKey(taskListId, taskId))
+      const task = raw as unknown as Task | null
+      if (!task || task.removedAt) return null
+      return task
+    },
+
+    add(input: CreateTaskInput) {
+      return legacy.addTask(input)
+    },
+
+    edit(taskId: string, patch: import('./types').TaskEdit) {
+      return legacy.updateTask(taskId, patch)
+    },
+
+    start(taskId: string) {
+      return legacy.updateTask(taskId, { status: 'in_progress' })
+    },
+
+    progress(taskId: string, message: string) {
+      return legacy.updateTask(taskId, { progress: message })
+    },
+
+    async complete(taskId: string, result?: JsonValue) {
+      const parsedResult = parseTaskCompletionResult({
+        taskListId,
+        taskId,
+        spec: taskSpecs?.[taskId],
+        result,
+      })
+      return legacy.updateTask(taskId, { status: 'completed', result: parsedResult })
+    },
+
+    fail(taskId: string, error: string) {
+      return legacy.updateTask(taskId, { status: 'failed', error })
+    },
+
+    skip(taskId: string, reason?: string) {
+      return legacy.updateTask(taskId, { status: 'skipped', progress: reason })
+    },
+
+    cancel(taskId: string, reason?: string) {
+      return legacy.updateTask(taskId, { status: 'cancelled', progress: reason })
+    },
+
+    remove(taskId: string) {
+      return legacy.removeTask(taskId)
+    },
+
+    discard(reason?: string) {
+      return legacy.discard(reason)
+    },
+
+    asContext: legacy.asContext,
+    asTools: legacy.asTools,
+    worker: legacy.worker,
   }
 }
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { createHandle, getTaskList, tasklist } from '../../plan/tasks'
+import { taskListKey } from '../../plan/helpers'
+import { getTaskList, tasks } from '../../plan/tasks'
 import { resetRuntime, updateRuntime } from '../../runtime/runtime'
 import { inMemoryCruxStore } from '../../store/memory'
 
@@ -24,31 +25,31 @@ afterEach(() => resetRuntime())
 describe('TaskList state correctness', () => {
   it('rejects duplicate task IDs without corrupting visible state', async () => {
     setup()
-    const handle = await tasklist({})
+    const handle = await tasks()
 
-    await handle.addTask({ id: 'research', label: 'Research cloud migration' })
+    await handle.add({ id: 'research', label: 'Research cloud migration' })
 
-    await expectTaskError(handle.addTask({ id: 'research', label: 'Different task' }), 'DuplicateTaskIdError', {
+    await expectTaskError(handle.add({ id: 'research', label: 'Different task' }), 'DuplicateTaskIdError', {
       taskListId: handle.id,
       taskId: 'research',
     })
 
-    await handle.updateTask('research', { status: 'completed' })
+    await handle.complete('research')
 
-    const tasks = await handle.getTasks()
-    expect(tasks).toHaveLength(1)
-    expect(tasks[0].label).toBe('Research cloud migration')
-    expect(await handle.getStatus()).toBe('completed')
+    const items = await handle.list()
+    expect(items).toHaveLength(1)
+    expect(items[0].label).toBe('Research cloud migration')
+    expect((await handle.get())!.status).toBe('completed')
   })
 
   it('rejects updates to removed tasks without changing the removed row', async () => {
     const store = setup()
-    const handle = await tasklist({})
+    const handle = await tasks()
 
-    await handle.addTask({ id: 't1', label: 'Task 1' })
-    await handle.removeTask('t1')
+    await handle.add({ id: 't1', label: 'Task 1' })
+    await handle.remove('t1')
 
-    await expectTaskError(handle.updateTask('t1', { status: 'completed' }), 'TaskRemovedError', {
+    await expectTaskError(handle.complete('t1'), 'TaskRemovedError', {
       taskListId: handle.id,
       taskId: 't1',
     })
@@ -56,28 +57,28 @@ describe('TaskList state correctness', () => {
     const stored = await store.get(`task:${handle.id}:t1`)
     expect(stored!.removedAt).toBeTypeOf('number')
     expect(stored!.status).toBe('pending')
-    expect(await handle.getTasks()).toEqual([])
+    expect(await handle.list()).toEqual([])
   })
 
   it('rejects task mutations after discard while preserving discarded state', async () => {
     const store = setup()
-    const handle = await tasklist({})
+    const handle = await tasks()
 
-    await handle.addTask({ id: 't1', label: 'Task 1' })
+    await handle.add({ id: 't1', label: 'Task 1' })
     await handle.discard('No longer needed')
 
-    await expectTaskError(handle.updateTask('t1', { status: 'completed' }), 'TaskListDiscardedError', {
+    await expectTaskError(handle.complete('t1'), 'TaskListDiscardedError', {
       taskListId: handle.id,
     })
-    await expectTaskError(handle.addTask({ id: 't2', label: 'New task' }), 'TaskListDiscardedError', {
+    await expectTaskError(handle.add({ id: 't2', label: 'New task' }), 'TaskListDiscardedError', {
       taskListId: handle.id,
     })
-    await expectTaskError(handle.removeTask('t1'), 'TaskListDiscardedError', {
+    await expectTaskError(handle.remove('t1'), 'TaskListDiscardedError', {
       taskListId: handle.id,
     })
 
-    expect(await handle.getStatus()).toBe('discarded')
-    expect(await handle.getTasks()).toHaveLength(1)
+    expect((await handle.get())!.status).toBe('discarded')
+    expect(await handle.list()).toHaveLength(1)
 
     const t1 = await store.get(`task:${handle.id}:t1`)
     expect(t1!.status).toBe('cancelled')
@@ -86,9 +87,9 @@ describe('TaskList state correctness', () => {
 
   it('keeps discard idempotent without rewriting the original reason', async () => {
     const store = setup()
-    const handle = await tasklist({})
+    const handle = await tasks()
 
-    await handle.addTask({ id: 't1', label: 'Task 1' })
+    await handle.add({ id: 't1', label: 'Task 1' })
     await handle.discard('Original reason')
     await handle.discard('Second reason')
 
@@ -100,24 +101,24 @@ describe('TaskList state correctness', () => {
     expect(task!.status).toBe('cancelled')
   })
 
-  it('rejects removeTask when the task list does not exist', async () => {
+  it('rejects remove() when the task list does not exist', async () => {
     setup()
-    const handle = createHandle('missing-list')
+    const handle = tasks.ref('missing-list')
 
-    await expectTaskError(handle.removeTask('t1'), 'TaskListNotFoundError', {
+    await expectTaskError(handle.remove('t1'), 'TaskListNotFoundError', {
       taskListId: 'missing-list',
     })
   })
 
   it('rejects status changes from terminal tasks but allows display-field edits', async () => {
     setup()
-    const handle = await tasklist({})
+    const handle = await tasks()
 
-    await handle.addTask({ id: 't1', label: 'Task 1' })
-    await handle.updateTask('t1', { status: 'completed' })
+    await handle.add({ id: 't1', label: 'Task 1' })
+    await handle.complete('t1')
 
     await expectTaskError(
-      handle.updateTask('t1', { status: 'failed', error: 'Too late' }),
+      handle.fail('t1', 'Too late'),
       'InvalidTaskTransitionError',
       {
         taskListId: handle.id,
@@ -127,22 +128,21 @@ describe('TaskList state correctness', () => {
       },
     )
 
-    const edited = await handle.updateTask('t1', {
-      progress: 'Final notes recorded',
-    })
+    const edited = await handle.progress('t1', 'Final notes recorded')
     expect(edited.status).toBe('completed')
     expect(edited.progress).toBe('Final notes recorded')
   })
 
-  it('getStatus repairs stale counts from task rows', async () => {
+  it('get() repairs stale counts from task rows', async () => {
     const store = setup()
-    const handle = await tasklist({})
+    const handle = await tasks()
 
-    await handle.addTask({ id: 't1', label: 'Task 1' })
-    await handle.updateTask('t1', { status: 'completed' })
+    await handle.add({ id: 't1', label: 'Task 1' })
+    await handle.complete('t1')
 
-    const rawList = await store.get(`tasklist:${handle.id}`)
-    await store.set(`tasklist:${handle.id}`, {
+    const key = taskListKey(handle.id)
+    const rawList = await store.get(key)
+    await store.set(key, {
       ...rawList!,
       status: 'pending',
       counts: {
@@ -155,9 +155,9 @@ describe('TaskList state correctness', () => {
       },
     })
 
-    expect(await handle.getStatus()).toBe('completed')
+    expect((await handle.get())!.status).toBe('completed')
 
-    const repaired = await store.get(`tasklist:${handle.id}`)
+    const repaired = await store.get(key)
     expect(repaired!.status).toBe('completed')
     expect(repaired!.counts).toMatchObject({
       pending: 0,

@@ -12,6 +12,20 @@
 // Status Types
 // ─────────────────────────────────────────────────────────────────
 
+import type { JsonObject, JsonValue } from '../types/tool'
+import type { TaskCompleteArgs, TaskId, TaskSpecRecord } from './task-definition-types'
+
+export type { JsonObject, JsonPrimitive, JsonValue } from '../types/tool'
+export type {
+  TaskCompleteArgs,
+  TaskId,
+  TaskResult,
+  TaskResultSchema,
+  TaskSpec,
+  TaskSpecOptions,
+  TaskSpecRecord,
+} from './task-definition-types'
+
 /** Status of a task list. */
 export type TaskListStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled' | 'discarded'
 
@@ -36,7 +50,7 @@ export interface Plan {
   content: string
   /** Increments on title/content changes. */
   version: number
-  metadata?: Record<string, unknown>
+  metadata?: JsonObject
   createdAt: number
   updatedAt: number
 }
@@ -46,6 +60,8 @@ export interface TaskList {
   id: string
   /** Optional association with a plan. */
   planId?: string
+  /** Optional human-readable task ledger title. */
+  title?: string
   status: TaskListStatus
   /**
    * Inline status counters for O(1) status derivation.
@@ -53,7 +69,7 @@ export interface TaskList {
    * @since 0.20.0
    */
   counts?: import('./status').StatusCounts
-  metadata?: Record<string, unknown>
+  metadata?: JsonObject
   createdAt: number
   updatedAt: number
   /** Set when all tasks complete. */
@@ -75,8 +91,10 @@ export interface Task {
   progress?: string
   /** Which agent/model is assigned to this task. */
   assignee?: { agent?: string; model?: string }
+  /** User metadata stored with this task. */
+  metadata?: JsonObject
   /** Structured result data from the completed task. */
-  result?: unknown
+  result?: JsonValue
   /** Error message if the task failed. */
   error?: string
   /** How long the task took in milliseconds. */
@@ -95,37 +113,64 @@ export interface Task {
 export interface CreatePlanInput {
   title: string
   content?: string
-  metadata?: Record<string, unknown>
+  metadata?: JsonObject
 }
 
 /** Input for `updatePlan()`. All fields optional. */
 export interface PlanUpdate {
   title?: string
   content?: string
-  metadata?: Record<string, unknown>
+  metadata?: JsonObject
 }
 
-/** Input for `tasklist()`. */
+/** Input for the canonical `tasks()` task-ledger factory. */
+export interface TasksInput<TItems extends TaskSpecRecord | undefined = undefined> {
+  /** Associate this task ledger with a plan handle or plan ID. */
+  plan?: PlanHandle | string
+  /** Human-readable task ledger title. */
+  title?: string
+  /** Initial task definitions keyed by their stable task ID. */
+  items?: TItems
+  metadata?: JsonObject
+}
+
+/** Input for the internal task-list creation path. */
 export interface CreateTaskListInput {
   planId?: string
-  metadata?: Record<string, unknown>
+  title?: string
+  metadata?: JsonObject
 }
 
-/** Input for `addTask()`. Task ID is user-provided (meaningful strings like 'research'). */
-export interface CreateTaskInput {
+/** Input for `TasksHandle.add()`. Task ID is user-provided (meaningful strings like 'research'). */
+export interface AddTaskInput {
   /** User-provided meaningful ID (e.g., 'research', 'write-intro'). */
   id: string
   label: string
   description?: string
   assignee?: { agent?: string; model?: string }
+  metadata?: JsonObject
+}
+
+/** @internal */
+export type CreateTaskInput = AddTaskInput
+
+/** Non-status task fields that can be edited after creation. */
+export interface TaskEdit {
+  label?: string
+  description?: string
+  assignee?: { agent?: string; model?: string }
+  metadata?: JsonObject
 }
 
 /** Input for `updateTask()`. */
 export interface TaskUpdate {
   status?: TaskStatus
+  label?: string
+  description?: string
   progress?: string
   assignee?: { agent?: string; model?: string }
-  result?: unknown
+  metadata?: JsonObject
+  result?: JsonValue
   error?: string
   durationMs?: number
 }
@@ -134,8 +179,16 @@ export interface TaskUpdate {
 // Handle Types
 // ─────────────────────────────────────────────────────────────────
 
-/** Handle for managing a plan. Returned by `plan()`. Has data snapshot + methods. */
-export interface PlanHandle extends Plan {
+/**
+ * Command handle for an existing plan.
+ *
+ * A plan handle intentionally contains only the stable entity ID and commands.
+ * It does not embed a stale `Plan` snapshot; call `get()` when current plan
+ * data is needed.
+ */
+export interface PlanHandle {
+  /** The plan's stable ID. */
+  readonly id: string
   /** Update the plan in the store. Returns the updated Plan data. */
   update(update: PlanUpdate): Promise<Plan>
   /** Re-read the latest plan from the store. */
@@ -150,22 +203,44 @@ export interface PlanHandle extends Plan {
   asTools(): Record<string, import('./agent').ToolDef>
 }
 
-/** Fluent handle for managing a task list. Returned by `tasklist()`. */
-export interface TaskListHandle {
+/**
+ * Command handle for a task ledger.
+ *
+ * Returned by `tasks()` or `tasks.ref()`. The handle carries only the stable
+ * task-list ID plus commands; call `get()` or `list()` to read current data.
+ */
+export interface TasksHandle<TItems extends TaskSpecRecord | undefined = undefined> {
   /** The task list's ID. */
   readonly id: string
+  /** Read the current task-list entity. */
+  get(): Promise<TaskList | null>
+  /** List tasks, excluding removed rows unless explicitly requested. */
+  list(options?: { includeRemoved?: boolean }): Promise<Task[]>
+  /** Read one active task by ID. Removed tasks return `null`. */
+  getTask(taskId: TaskId<TItems>): Promise<Task | null>
   /** Add a new task. */
-  addTask(input: CreateTaskInput): Promise<Task>
-  /** Update a task's status/progress/result. Triggers auto-completion evaluation. */
-  updateTask(taskId: string, update: TaskUpdate): Promise<Task>
+  add(input: TItems extends TaskSpecRecord ? never : AddTaskInput): Promise<Task>
+  /** Edit non-status task fields. */
+  edit(taskId: TaskId<TItems>, patch: TaskEdit): Promise<Task>
+  /** Mark a pending task as in progress. */
+  start(taskId: TaskId<TItems>): Promise<Task>
+  /** Store a human-readable progress message without changing status. */
+  progress(taskId: TaskId<TItems>, message: string): Promise<Task>
+  /** Mark a task completed, optionally storing a result. */
+  complete<TTaskId extends TaskId<TItems>>(
+    taskId: TTaskId,
+    ...args: TaskCompleteArgs<TItems, TTaskId>
+  ): Promise<Task>
+  /** Mark a task failed with an error message. */
+  fail(taskId: TaskId<TItems>, error: string): Promise<Task>
+  /** Mark a task skipped. */
+  skip(taskId: TaskId<TItems>, reason?: string): Promise<Task>
+  /** Mark a task cancelled. */
+  cancel(taskId: TaskId<TItems>, reason?: string): Promise<Task>
   /** Soft-delete a task. Removed tasks don't count for auto-completion. */
-  removeTask(taskId: string): Promise<void>
+  remove(taskId: TaskId<TItems>): Promise<void>
   /** Discard the entire list. Cancels pending/in_progress tasks. */
   discard(reason?: string): Promise<void>
-  /** Get all non-removed tasks. */
-  getTasks(): Promise<Task[]>
-  /** Get the current list status (self-heals if stale). */
-  getStatus(): Promise<TaskListStatus>
   /** Create a Context that injects the task list summary into the system message. */
   asContext(options?: {
     priority?: number
@@ -175,10 +250,13 @@ export interface TaskListHandle {
   asTools(): Record<string, import('./agent').ToolDef>
   /** Create a TaskWorker handle scoped to a specific task. */
   worker(
-    taskId: string,
+    taskId: TaskId<TItems>,
     options?: {
       guidelines?: string
       renderContext?: (task: Task, allTasks: Task[]) => string
     },
   ): import('./agent').TaskWorker
 }
+
+/** @internal */
+export type TaskListHandle = TasksHandle

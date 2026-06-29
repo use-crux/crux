@@ -29,6 +29,20 @@ export const taskKey = (listId: string, taskId: string) => `${TASK_PREFIX}${list
 /** @internal */
 export const taskPrefix = (listId: string) => `${TASK_PREFIX}${listId}:`
 
+/**
+ * Convert public metadata filters into store dot-path filters.
+ *
+ * The store filter contract supports exact matches on nested paths such as
+ * `metadata.threadId`, which keeps plan/task list filtering on structured
+ * fields rather than serialized string matching.
+ *
+ * @internal
+ */
+export function metadataFilter(metadata?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!metadata) return undefined
+  return Object.fromEntries(Object.entries(metadata).map(([key, value]) => [`metadata.${key}`, value]))
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Auto-Completion
 // ─────────────────────────────────────────────────────────────────
