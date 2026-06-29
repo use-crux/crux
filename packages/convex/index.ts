@@ -131,7 +131,8 @@ import type { z } from 'zod'
 import type { CompactionResult, Message, Context, ContextEntry, Prompt } from '@use-crux/core'
 import type { GenerateTextFn } from '@use-crux/core/compaction'
 import { summarizeMessages } from '@use-crux/core/compaction'
-import { getRuntime, countTokens } from '@use-crux/core'
+import { countTokens } from '@use-crux/core'
+import { observeConversationCompaction } from './compaction-observability'
 import type { ConvexContext } from './store'
 
 // ─────────────────────────────────────────────────────────────────
@@ -189,29 +190,18 @@ export async function compactConversation(args: CompactConversationArgs): Promis
     evictedMessages.reduce((sum, m) => sum + countTokens(m.content), 0) +
     (existingSummary ? countTokens(existingSummary) : 0)
 
-  getRuntime().instrumentationHooks?.onCompactStart?.({
-    reason: 'conversation-compaction',
+  return await observeConversationCompaction({
     inputMessageCount: evictedMessages.length,
     inputTokens,
+    run: () =>
+      summarizeMessages({
+        messages: messagesToSummarize,
+        generate,
+        model,
+        maxTokens: summaryBudget,
+        focus: ['decisions', 'key_facts', 'user_preferences'],
+      }),
   })
-  const start = Date.now()
-
-  const result = await summarizeMessages({
-    messages: messagesToSummarize,
-    generate,
-    model,
-    maxTokens: summaryBudget,
-    focus: ['decisions', 'key_facts', 'user_preferences'],
-  })
-
-  getRuntime().instrumentationHooks?.onCompactEnd?.({
-    outputTokens: result.tokensAfter,
-    compressionRatio: result.ratio,
-    summaryPreview: result.summary.slice(0, 100),
-    durationMs: Date.now() - start,
-  })
-
-  return result
 }
 
 // ─────────────────────────────────────────────────────────────────

@@ -1,46 +1,41 @@
 /**
  * Internal-module tests for `adapter/tool/emission` — the leak-free
  * instrumentation wrappers the ToolLifecycle session arms sdk-regime tools
- * with. `instrumentToolSet` is a session internal (not exported from any
- * public barrel); these tests pin the deferred-`onToolEnd` bookkeeping the
- * session hides: hook ordering, toModelOutput chaining, and pending-state
- * cleanup (the historical `@use-crux/ai` leak).
+ * with. `instrumentToolSet` is a session internal; these tests pin wrapper
+ * behavior that must remain true when the canonical graph spine is active.
  */
 
-import { describe, it, expect, vi, afterEach } from 'vitest'
-import { updateRuntime, resetRuntime } from '../../../runtime/runtime'
+import { describe, it, expect, afterEach } from 'vitest'
+import { resetRuntime } from '../../../runtime/runtime'
+import { resetObservabilityRuntime, subscribeObservability } from '../../../observability'
 import { instrumentToolSet, renderToolModelOutput } from '../../../adapter/tool/emission'
 import type { ToolModelOutput } from '../../../types/tool'
 
-function registerHooks() {
-  const hooks = {
-    onToolStart: vi.fn(),
-    onToolEnd: vi.fn(),
-    onToolApprovalRequest: vi.fn(),
-  }
-  updateRuntime({ instrumentationHooks: hooks })
-  return hooks
-}
-
 afterEach(() => {
   resetRuntime()
+  resetObservabilityRuntime()
 })
 
 describe('instrumentToolSet', () => {
-  it('returns tools unchanged when no instrumentation hooks are registered', () => {
+  it('returns tools unchanged when no observability sink is registered', () => {
     const tools = { echo: { description: 'echo', execute: async (input: unknown) => input } }
     expect(instrumentToolSet(tools)).toBe(tools)
   })
 
-    it("leaves needsApproval unwrapped — approval hooks are the lifecycle session's to emit", async () => {
-    registerHooks()
+  it("leaves needsApproval unwrapped — approval records are the lifecycle session's to emit", async () => {
+    const unsubscribe = subscribeObservability(() => {})
     const needsApproval = async () => true
-    const tools = instrumentToolSet({
-      guarded: { execute: async () => 'ok', needsApproval },
-    })!
+    try {
+      const tools = instrumentToolSet({
+        guarded: { execute: async () => 'ok', needsApproval },
+      })!
 
-    expect((tools.guarded as { needsApproval: unknown }).needsApproval).toBe(needsApproval)
-  })})
+      expect((tools.guarded as { needsApproval: unknown }).needsApproval).toBe(needsApproval)
+    } finally {
+      unsubscribe()
+    }
+  })
+})
 
 describe('renderToolModelOutput', () => {
   it('renders text, json, and denial outputs', () => {

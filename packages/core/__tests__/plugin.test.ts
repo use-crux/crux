@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { resetRuntime } from '../runtime/runtime'
 import type { CruxRuntime } from '../runtime/runtime'
-import type { InstrumentationHooks } from '../runtime/middleware'
 import { mergeRuntime, applyPlugins } from '../runtime/plugin'
 import type { CruxPlugin } from '../runtime/plugin'
 

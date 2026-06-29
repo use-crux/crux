@@ -58,13 +58,6 @@ export interface TelemetryOptions {
    */
   serviceName?: string
 
-  /**
-   * Whether to record prompt/input content as span attributes.
-   * Disable in production to avoid logging sensitive data.
-   * @default false
-   */
-  recordContent?: boolean
-
   /** Custom attributes added to every span. */
   attributes?: Record<string, string>
 

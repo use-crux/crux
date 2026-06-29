@@ -102,9 +102,6 @@ interface TelemetryOptions {
   /** Service name for span identification. @default '@use-crux/otel' */
   serviceName?: string
 
-  /** Record prompt content as span attributes. @default false */
-  recordContent?: boolean
-
   /** Custom attributes added to every span. */
   attributes?: Record<string, string>
 
@@ -112,6 +109,11 @@ interface TelemetryOptions {
   exporter?: UrlExporter | CallbackExporter
 }
 ```
+
+Payload capture is configured centrally on the canonical graph stream with
+`config({ observability: { recordInputs, recordOutputs } })`. `@use-crux/otel`
+projects metadata from those graph records and does not expose a separate
+content-recording switch.
 
 ## Coexistence with Devtools
 

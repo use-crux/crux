@@ -6,7 +6,7 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { gfm } from 'micromark-extension-gfm'
 import { toString as mdastToString } from 'mdast-util-to-string'
-import { getRuntime } from '@use-crux/core'
+import { observe } from '@use-crux/core/observability'
 import { deriveContent } from './document'
 import { normalizeDocument } from './document'
 import { parsePdf } from './pdf'
@@ -50,58 +50,66 @@ export async function parseDocument(input: {
     byteLength: input.bytes.byteLength,
     ...(input.contentType ? { contentType: input.contentType } : {}),
   }
+  const span = observe.openSpan({
+    name: `parse ${input.format}`,
+    family: 'ingest',
+    primitive: 'ingest.parse',
+    attributes: baseEvent,
+  })
 
-  getRuntime().instrumentationHooks?.onIngestParseStart?.(baseEvent)
+  return await span.withContext(async () => {
+    try {
+      const parsed = await parser.parse(
+        {
+          bytes: input.bytes,
+          ...(text !== undefined ? { text } : {}),
+          format: input.format,
+          sourceId: input.sourceId,
+          namespace: input.namespace,
+          title: input.title,
+          metadata: input.metadata,
+        },
+        {
+          ocr: input.options?.ocr,
+          warn: (warning) => warnings.push(warning),
+        },
+      )
+      warnings.push(...(parsed.warnings ?? []))
 
-  try {
-    const parsed = await parser.parse(
-      {
-        bytes: input.bytes,
-        ...(text !== undefined ? { text } : {}),
-        format: input.format,
-        sourceId: input.sourceId,
+      const document = normalizeDocument({
         namespace: input.namespace,
-        title: input.title,
-        metadata: input.metadata,
-      },
-      {
-        ocr: input.options?.ocr,
-        warn: (warning) => warnings.push(warning),
-      },
-    )
-    warnings.push(...(parsed.warnings ?? []))
-
-    const document = normalizeDocument({
-      namespace: input.namespace,
-      sourceId: input.sourceId,
-      title: parsed.title ?? input.title,
-      parts: parsed.parts,
-      metadata: {
-        ...(input.metadata ?? {}),
-        ...(parsed.metadata ?? {}),
-        format: input.format,
-        parser: parser.name,
-      },
-      warnings,
-    })
-    getRuntime().instrumentationHooks?.onIngestParseEnd?.({
-      ...baseEvent,
-      durationMs: Date.now() - startedAt,
-      partCount: document.parts.length,
-      warningCount: warnings.length,
-    })
-    return document
-  } catch (error) {
-    const parsedError = toParseError(error, parser.name)
-    getRuntime().instrumentationHooks?.onIngestParseEnd?.({
-      ...baseEvent,
-      durationMs: Date.now() - startedAt,
-      partCount: 0,
-      warningCount: warnings.length,
-      error: parsedError.message,
-    })
-    throw parsedError
-  }
+        sourceId: input.sourceId,
+        title: parsed.title ?? input.title,
+        parts: parsed.parts,
+        metadata: {
+          ...(input.metadata ?? {}),
+          ...(parsed.metadata ?? {}),
+          format: input.format,
+          parser: parser.name,
+        },
+        warnings,
+      })
+      span.end({
+        attributes: {
+          ...baseEvent,
+          durationMs: Date.now() - startedAt,
+          partCount: document.parts.length,
+          warningCount: warnings.length,
+        },
+      })
+      return document
+    } catch (error) {
+      const parsedError = toParseError(error, parser.name)
+      span.error(parsedError, {
+        ...baseEvent,
+        durationMs: Date.now() - startedAt,
+        partCount: 0,
+        warningCount: warnings.length,
+        phase: 'ingest.parse',
+      })
+      throw parsedError
+    }
+  })
 }
 
 export function resolveParser(format: IngestFormat, options?: ParserOptions): IngestParser {

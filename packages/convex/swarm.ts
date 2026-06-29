@@ -9,12 +9,12 @@
  * @module
  */
 
-import { createFlowId, getExecutionContext, getRuntime } from '@use-crux/core'
-import type { CruxRuntime } from '@use-crux/core'
+import { createFlowId, getExecutionContext } from '@use-crux/core'
 import type { AnyAgent } from '@use-crux/core/agent'
 import { observe, type CapturedObservabilityContext } from '@use-crux/core/observability'
 import type { ComponentApi } from './src/component/_generated/component'
 import { flushObservability } from './observability'
+import { observeConvexSwarmAgent, observeConvexSwarmEnd, observeConvexSwarmStart } from './swarm-observability'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -547,15 +547,13 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
             },
             async () => {
               const state = inner.createInitialState(options)
-              const runtime: SwarmRuntime = getRuntime()
               const agentIds = Object.keys(options.agents)
 
               // Keep the base run context for scheduled resumes instead of
               // the short-lived turn span, so resumed turns remain siblings.
               state.observability = openedRun?.captureContext() ?? captureBaseObservabilityContext()
 
-              // Emit composition:start
-              runtime.instrumentationHooks?.onCompositionStart?.({
+              observeConvexSwarmStart({
                 compositionId: state.swarmRunId,
                 kind: 'swarm',
                 agentIds,
@@ -571,14 +569,14 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
               const turn = await inner.runTurn(state, options.agents as Record<string, AnyAgent>)
 
               // Emit composition:agent
-              emitAgentEvent(runtime, state.swarmRunId, state.currentAgentId, 0, Date.now() - agentStart)
+              observeConvexSwarmAgent(state.swarmRunId, state.currentAgentId, 0, Date.now() - agentStart)
 
               // Persist updated state
               await ctx.runMutation(component.swarm.saveState, toSaveArgs(turn.state))
 
               // If completed (no handoff), emit composition:end
               if (!turn.handedOff) {
-                emitEndEvent(runtime, state.swarmRunId, turn.state, Date.now() - agentStart)
+                observeConvexSwarmEnd(state.swarmRunId, turn.state, Date.now() - agentStart)
                 openedRun?.end({ status: turn.state.status === 'error' ? 'error' : 'ok' })
               }
 
@@ -626,7 +624,6 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
         const activeState = state
 
         return await observe.withContext(activeState.observability, async () => {
-          const runtime: SwarmRuntime = getRuntime()
           const agentStart = Date.now()
           const turn = await observe.span(
             {
@@ -643,8 +640,7 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
           )
 
           // Emit composition:agent
-          emitAgentEvent(
-            runtime,
+          observeConvexSwarmAgent(
             swarmRunId,
             activeState.currentAgentId,
             activeState.handoffCount,
@@ -656,7 +652,7 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
 
           // If completed or errored, emit composition:end
           if (!turn.handedOff) {
-            emitEndEvent(runtime, swarmRunId, turn.state, Date.now() - agentStart)
+            observeConvexSwarmEnd(swarmRunId, turn.state, Date.now() - agentStart)
             if (activeState.observability) {
               observe.endRun(activeState.observability, { status: turn.state.status === 'error' ? 'error' : 'ok' })
             }
@@ -694,41 +690,4 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
 function toSaveArgs(state: ConvexSwarmState): Omit<ConvexSwarmState, 'createdAt' | 'updatedAt'> {
   const { createdAt, updatedAt, ...args } = state
   return args
-}
-
-// ── Instrumentation helpers ─────────────────────────────────────
-
-/** Subset of CruxRuntime used for swarm instrumentation. */
-type SwarmRuntime = Pick<CruxRuntime, 'instrumentationHooks'>
-
-function emitAgentEvent(
-  runtime: SwarmRuntime,
-  compositionId: string,
-  agentId: string,
-  index: number,
-  durationMs: number,
-  handoffFrom?: string,
-) {
-  runtime.instrumentationHooks?.onCompositionAgent?.({
-    compositionId,
-    agentId,
-    index,
-    status: 'success',
-    durationMs,
-    ...(handoffFrom ? { handoffFrom } : {}),
-    ...(index > 0 ? { hopNumber: index } : {}),
-  })
-}
-
-function emitEndEvent(runtime: SwarmRuntime, compositionId: string, state: ConvexSwarmState, durationMs: number) {
-  runtime.instrumentationHooks?.onCompositionEnd?.({
-    compositionId,
-    kind: 'swarm',
-    status: state.status === 'error' ? 'error' : 'success',
-    durationMs,
-    agentCount: state.handoffPath.length,
-    handoffPath: state.handoffPath,
-    handoffCount: state.handoffCount,
-    finalAgentId: state.currentAgentId,
-  })
 }

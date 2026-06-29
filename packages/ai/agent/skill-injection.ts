@@ -1,7 +1,7 @@
 import type { LanguageModelV3CallOptions } from '@ai-sdk/provider'
-import type { CruxRuntime } from '@use-crux/core'
 import type { SkillActivationSession } from '@use-crux/core/skill'
 import type { PromptMessage } from './message-shapes'
+import { observeSkillInstructionInjected } from './observability'
 
 function appendText(content: string | import('./message-shapes').MessagePart[], text: string): void {
   if (typeof content === 'string') return
@@ -17,7 +17,6 @@ function appendText(content: string | import('./message-shapes').MessagePart[], 
  */
 export function injectNewlyActivatedSkills(
   params: LanguageModelV3CallOptions,
-  instrumentationHooks: CruxRuntime['instrumentationHooks'],
   session?: SkillActivationSession,
 ): void {
   if (!session) return
@@ -42,6 +41,6 @@ export function injectNewlyActivatedSkills(
 
   session.markInjected(newSkills.map((entry) => entry.id))
   for (const skill of newSkills) {
-    instrumentationHooks?.onSkillResolve?.({ skillId: skill.id })
+    observeSkillInstructionInjected(skill.id)
   }
 }

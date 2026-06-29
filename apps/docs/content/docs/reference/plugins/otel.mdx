@@ -24,12 +24,14 @@ config({
 
 **Options:**
 
-| Field           | Type                              | Default        | Description                                                 |
-| --------------- | --------------------------------- | -------------- | ----------------------------------------------------------- |
-| `serviceName`   | `string`                          | `'@use-crux/otel'` | Tracer name for span identification                         |
-| `recordContent` | `boolean`                         | `false`        | Include prompt/input content as span attributes             |
-| `attributes`    | `Record<string, string>`          | —              | Custom attributes added to every span                       |
-| `exporter`      | `UrlExporter \| CallbackExporter` | —              | Export strategy. Omit for standard OTel TracerProvider path |
+| Field         | Type                              | Default            | Description                                                 |
+| ------------- | --------------------------------- | ------------------ | ----------------------------------------------------------- |
+| `serviceName` | `string`                          | `'@use-crux/otel'` | Tracer name for span identification                         |
+| `attributes`  | `Record<string, string>`          | —                  | Custom attributes added to every span                       |
+| `exporter`    | `UrlExporter \| CallbackExporter` | —                  | Export strategy. Omit for standard OTel TracerProvider path |
+
+Payload capture is controlled by the core observability policy:
+`config({ observability: { recordInputs, recordOutputs } })`.
 
 **Returns:** `CruxPlugin` with name `'crux:otel'`.
 
