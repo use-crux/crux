@@ -1,5 +1,5 @@
 ---
-'@use-crux/convex': major
+'@use-crux/convex': minor
 ---
 
 Complete the profile-backed `convexAgent()` lifecycle around the Convex Agent method surface.

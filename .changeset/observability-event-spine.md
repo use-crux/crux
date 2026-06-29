@@ -1,9 +1,9 @@
 ---
-'@use-crux/core': major
+'@use-crux/core': minor
 '@use-crux/ai': patch
 '@use-crux/convex': patch
 '@use-crux/ingest': patch
-'@use-crux/otel': major
+'@use-crux/otel': minor
 ---
 
 Add the public observability event spine APIs: `subscribeObservability()` for in-process graph-record subscribers and `CRUX_OBSERVABILITY_CHANNEL` / `CruxObservabilityChannelMessage` for Node diagnostics-channel consumers.
