@@ -67,7 +67,7 @@ describe('createSafety — enabled', () => {
     expect(safety.transcript).toEqual([])
   })
 
-  it('is enabled when a guardrail or constraint applies from any scope', () => {
+    it('is enabled when a guardrail or constraint applies from any scope', () => {
     expect(identity({ call: { guardrails: [passGuard('g', 'input')] } }).enabled).toBe(true)
     expect(identity({ resolved: { constraints: [passingConstraint('c')] } }).enabled).toBe(true)
 
@@ -97,7 +97,7 @@ describe('createSafety — scope precedence', () => {
     expect(globalSpy).not.toHaveBeenCalled()
   })
 
-  it('differently named policies from all scopes all run', async () => {
+    it('differently named policies from all scopes all run', async () => {
     const spies = { a: vi.fn(), b: vi.fn(), c: vi.fn() }
     updateRuntime({ globalConstraints: [passingConstraint('a', spies.a)] })
     const safety = identity({
@@ -112,7 +112,7 @@ describe('createSafety — scope precedence', () => {
     expect(spies.c).toHaveBeenCalledTimes(1)
   })
 
-  it('per-prompt constraint overrides same-named global constraint', async () => {
+    it('per-prompt constraint overrides same-named global constraint', async () => {
     const globalSpy = vi.fn()
     const promptSpy = vi.fn()
     updateRuntime({ globalConstraints: [passingConstraint('shared', globalSpy)] })
@@ -141,7 +141,7 @@ describe('createSafety — guardInput', () => {
     )
   })
 
-  it('writes redacted content back into the returned messages', async () => {
+    it('writes redacted content back into the returned messages', async () => {
     const redactor = guardrail({
       name: 'pii',
       phase: 'input',
@@ -165,7 +165,7 @@ describe('createSafety — guardInput', () => {
     })
   })
 
-  it('falls back to prompt text when history has no user message', async () => {
+    it('falls back to prompt text when history has no user message', async () => {
     const redactor = guardrail({
       name: 'pii',
       phase: 'input',
@@ -179,7 +179,7 @@ describe('createSafety — guardInput', () => {
     expect(result.messages).toEqual([])
   })
 
-  it('only runs input-phase guards', async () => {
+    it('only runs input-phase guards', async () => {
     const inputSpy = vi.fn()
     const outputSpy = vi.fn()
     const safety = identity({
@@ -192,7 +192,7 @@ describe('createSafety — guardInput', () => {
     expect(outputSpy).not.toHaveBeenCalled()
   })
 
-  it('records an input.guard transcript event with applied actions', async () => {
+    it('records an input.guard transcript event with applied actions', async () => {
     const safety = identity({ call: { guardrails: [passGuard('in', 'input')] } })
     await safety.guardInput({ messages: [userMessage('hi')] })
 

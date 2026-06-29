@@ -72,7 +72,7 @@ describe('corpus', () => {
     expect(source?.indexedAt).toEqual(expect.any(Number))
   })
 
-  it('accepts explicit DataStore and VectorStore capabilities', async () => {
+    it('accepts explicit DataStore and VectorStore capabilities', async () => {
     const data = inMemoryDataStore()
     const vectors = inMemoryVectorStore()
     const dense = embedding({
@@ -97,7 +97,7 @@ describe('corpus', () => {
     expect(await docs.getSource('intro')).toMatchObject({ sourceId: 'intro', status: 'indexed' })
   })
 
-  it('records the indexing pipeline stages on source records', async () => {
+    it('records the indexing pipeline stages on source records', async () => {
     const store = inMemoryCruxStore()
     const docsIndexer = indexer({
       id: 'docs',
@@ -143,7 +143,7 @@ describe('corpus', () => {
     )
   })
 
-  it('skips unchanged sources and reindexes changed sources', async () => {
+    it('skips unchanged sources and reindexes changed sources', async () => {
     const { docs } = setup()
     await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
 
@@ -156,7 +156,7 @@ describe('corpus', () => {
     expect(changed.sources[0]).toMatchObject({ sourceId: 'intro', action: 'changed', reason: 'contentChanged' })
   })
 
-  it('ignores excluded volatile metadata when hashing sources', async () => {
+    it('ignores excluded volatile metadata when hashing sources', async () => {
     const store = inMemoryCruxStore()
     const docsIndexer = indexer({ id: 'docs', namespace: 'kb', store })
     const docs = corpus({
@@ -173,7 +173,7 @@ describe('corpus', () => {
     expect(result.unchanged).toBe(1)
   })
 
-  it('skips changed existing sources in append-only mode', async () => {
+    it('skips changed existing sources in append-only mode', async () => {
     const { docs } = setup()
     await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
 
@@ -186,14 +186,14 @@ describe('corpus', () => {
     expect(result.sources[0]).toMatchObject({ action: 'skipped', reason: 'appendOnly' })
   })
 
-  it('requires a complete source set before deleting stale sources', async () => {
+    it('requires a complete source set before deleting stale sources', async () => {
     const { docs } = setup()
     await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
 
     await expect(docs.sync([], { stale: 'delete' })).rejects.toThrow(/sourceSet: 'complete'/)
   })
 
-  it('deletes stale sources only for complete source sets', async () => {
+    it('deletes stale sources only for complete source sets', async () => {
     const { docs, store } = setup()
     await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
 
@@ -206,7 +206,7 @@ describe('corpus', () => {
     expect((await store.list('indexer:docs:namespace:kb:source:intro:')).entries).toHaveLength(0)
   })
 
-  it('dry-runs a full sync simulation without writing chunks or ledger records', async () => {
+    it('dry-runs a full sync simulation without writing chunks or ledger records', async () => {
     const { docs, store, embed } = setup()
 
     const result = await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }], {
@@ -221,7 +221,7 @@ describe('corpus', () => {
     expect((await store.list('indexer:docs:namespace:kb:source:intro:')).entries).toHaveLength(0)
   })
 
-  it('records failed sources while continuing the sync', async () => {
+    it('records failed sources while continuing the sync', async () => {
     const store = inMemoryCruxStore()
     const docsIndexer = indexer({
       id: 'docs',
@@ -253,7 +253,7 @@ describe('corpus', () => {
     expect(await docs.getSource('good')).toMatchObject({ status: 'indexed' })
   })
 
-  it('records failed ingest load results while continuing the sync', async () => {
+    it('records failed ingest load results while continuing the sync', async () => {
     const { docs } = setup()
 
     const result = await docs.sync([

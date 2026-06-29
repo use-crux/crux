@@ -77,7 +77,7 @@ describe('defineProviderTranscriptCodec', () => {
     ])
   })
 
-  it('decodes provider messages back into canonical messages', () => {
+    it('decodes provider messages back into canonical messages', () => {
     const messages = codec.toMessages([
       { role: 'user', text: 'hi' },
       { role: 'tool', text: 'result' },
@@ -89,14 +89,14 @@ describe('defineProviderTranscriptCodec', () => {
     ])
   })
 
-  it('reads an assistant turn from the raw response', () => {
+    it('reads an assistant turn from the raw response', () => {
     expect(codec.readAssistant({ text: 'answer' })).toEqual({
       text: 'answer',
       toolCalls: undefined,
     })
   })
 
-  it('exposes the canonical tool-round append', () => {
+    it('exposes the canonical tool-round append', () => {
     const result: ToolResultEntry = {
       toolCallId: 'tc_1',
       name: 'search',

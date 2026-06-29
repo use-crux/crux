@@ -115,7 +115,6 @@ export function withCostTracking(options: CostTrackingOptions = {}): CostTracker
 
   function emitCostRecord(entry: CostEntry): void {
     const report = buildReport(entries)
-    const hooks = getRuntime().instrumentationHooks
     const span = observe.openSpan({
       name: 'cost.record',
       family: 'cost',
@@ -128,7 +127,6 @@ export function withCostTracking(options: CostTrackingOptions = {}): CostTracker
     })
 
     span.withContext(() => {
-      hooks?.onCostReport?.({ timestamp: Date.now(), entry, report })
       observe.event({
         name: 'cost.recorded',
         attributes: {
@@ -146,7 +144,6 @@ export function withCostTracking(options: CostTrackingOptions = {}): CostTracker
       warned = true
       warning = true
       options.budget?.onWarn?.(report)
-      hooks?.onCostWarn?.({ timestamp: Date.now(), entry, report, threshold: warn, actual: report.total.cost })
       span.withContext(() => {
         observe.event({
           name: 'cost.warn',
@@ -164,7 +161,6 @@ export function withCostTracking(options: CostTrackingOptions = {}): CostTracker
     if (limit !== undefined && !limited && report.total.cost >= limit) {
       limited = true
       options.budget?.onLimit?.(report)
-      hooks?.onCostLimit?.({ timestamp: Date.now(), entry, report, threshold: limit, actual: report.total.cost })
       const error = new CostLimitError(report, limit)
       span.withContext(() => {
         observe.event({

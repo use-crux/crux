@@ -130,7 +130,7 @@ Now the call has memory, retrieval, input screening, structured output, retryabl
 | Routing and cost   | Model routers, fallback, semantic cache, pricing tables, budgets, and cost spans.                                           |
 | Evaluation         | Quality suites, prompt tests, judges, variants, cassettes, baselines, and CI-friendly runs.                                 |
 | Agents and flows   | Agents, pipelines, parallel runs, consensus, swarms, blackboards, handoffs, delegates, suspendable flows, plans, and tasks. |
-| Observability      | Trace events, local devtools, event graphs, source catalog, lint findings, and OpenTelemetry export.                        |
+| Observability      | Trace records, local devtools, subscribers, diagnostics channel export, source catalog, and OpenTelemetry export.            |
 
 ## How It Works
 
@@ -145,9 +145,28 @@ define -> resolve -> adapt -> observe
 | Define  | Author pure TypeScript definitions: prompts, contexts, memory blocks, tools, agents, flows, tests, and settings.                                  |
 | Resolve | Crux validates input, filters conditional blocks, merges tools/settings, applies token budgets, and produces a provider-agnostic resolved prompt. |
 | Adapt   | An adapter maps that resolved prompt to Vercel AI SDK, OpenAI, Anthropic, Google GenAI, Convex Agent, or another runner.                          |
-| Observe | Hooks emit structured events for generations, context resolution, memory, retrieval, tools, evals, artifacts, errors, and cost.                   |
+| Observe | Graph records emit once, then feed subscribers, the diagnostics channel, devtools transport, and telemetry sinks.                                |
 
 This separation lets you inspect what the model will see, run the same prompt through multiple providers, and keep quality checks tied to the definitions they protect.
+
+## Observability Privacy
+
+Generation, streaming, and tool spans emit canonical graph records with latency and throughput metrics such as `gen.duration_ms`, `gen.time_to_first_token_ms`, `gen.output_tokens_per_second`, and `gen.time_per_output_chunk_ms`.
+
+By default, request and response artifacts include bounded previews for local inspection. Disable payload previews centrally when traces leave a trusted environment:
+
+```ts
+import { config } from '@use-crux/core'
+
+config({
+  observability: {
+    recordInputs: false,
+    recordOutputs: false,
+  },
+})
+```
+
+Disabled input/output artifacts are still emitted as references with `sizeBytes` and `hash`, so devtools, subscribers, diagnostics-channel consumers, and OTel all see the same privacy policy.
 
 ## Import Paths
 
@@ -162,7 +181,7 @@ This separation lets you inspect what the model will see, run the same prompt th
 | `@use-crux/core/quality`       | Evaluations, suites, assertions, scorers, gates, variants, and baselines.           |
 | `@use-crux/core/agent`         | Agents, blackboards, handoffs, delegates, parallel, pipeline, consensus, and swarm. |
 | `@use-crux/core/flow`          | Suspendable typed workflows.                                                        |
-| `@use-crux/core/observability` | Devtools hooks and canonical observability events.                                  |
+| `@use-crux/core/observability` | Canonical graph records, devtools transport, subscribers, and diagnostics channel.   |
 | `@use-crux/core/project-index` | Public Project Index contracts for local devtools and source intelligence.          |
 
 See the full [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) for every subpath and API.

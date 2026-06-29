@@ -19,21 +19,21 @@ describe('validateStructuredOutput', () => {
     expect(result.error).toBeUndefined()
   })
 
-  it('repairs markdown-fenced JSON before validating', () => {
+    it('repairs markdown-fenced JSON before validating', () => {
     const fenced = '```json\n{"title":"hi","count":2}\n```'
     const result = validateStructuredOutput(fenced, schema)
     expect(result.valid).toBe(true)
     expect(JSON.parse(result.repairedText)).toEqual({ title: 'hi', count: 2 })
   })
 
-  it('reports unparseable output as a synthetic ZodError', () => {
+    it('reports unparseable output as a synthetic ZodError', () => {
     const result = validateStructuredOutput('not json at all', schema)
     expect(result.valid).toBe(false)
     expect(result.error).toBeInstanceOf(z.ZodError)
     expect(result.error?.issues[0]?.message).toContain('Invalid JSON')
   })
 
-  it('reports schema mismatches with issue paths', () => {
+    it('reports schema mismatches with issue paths', () => {
     const result = validateStructuredOutput('{"title":"hi","count":"two"}', schema)
     expect(result.valid).toBe(false)
     expect(result.error?.issues.some((issue) => issue.path.includes('count'))).toBe(true)

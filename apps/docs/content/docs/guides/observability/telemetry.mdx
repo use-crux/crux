@@ -131,12 +131,16 @@ events, deliberately configured destinations.
 
 ## Options
 
-| Option          | Type                              | Default            | Description                                   |
-| --------------- | --------------------------------- | ------------------ | --------------------------------------------- |
-| `serviceName`   | `string`                          | `'@use-crux/otel'` | Tracer name / service identifier              |
-| `recordContent` | `boolean`                         | `false`            | Include prompt content in span attributes     |
-| `attributes`    | `Record<string, string>`          | —                  | Custom attributes on every span               |
-| `exporter`      | `UrlExporter \| CallbackExporter` | —                  | Export strategy (omit for standard OTel path) |
+| Option        | Type                              | Default            | Description                                   |
+| ------------- | --------------------------------- | ------------------ | --------------------------------------------- |
+| `serviceName` | `string`                          | `'@use-crux/otel'` | Tracer name / service identifier              |
+| `attributes`  | `Record<string, string>`          | —                  | Custom attributes on every span               |
+| `exporter`    | `UrlExporter \| CallbackExporter` | —                  | Export strategy (omit for standard OTel path) |
+
+Payload capture is configured centrally with
+`config({ observability: { recordInputs, recordOutputs } })`, so devtools,
+subscribers, diagnostics-channel listeners, and OTel all observe the same
+redacted or full graph records.
 
 ## Next steps
 

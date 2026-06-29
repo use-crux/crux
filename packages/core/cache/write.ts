@@ -45,12 +45,6 @@ export async function performWrite(call: SemanticCacheCall, result: MiddlewareRe
   }
 
   if (!(await shouldCache(config, writeCtx))) {
-    getRuntime().instrumentationHooks?.onSemanticCacheSkip?.({
-      cacheId,
-      promptId,
-      operation,
-      reason: 'shouldCache returned false',
-    })
     emitSemanticCacheSkipSpan({
       cacheId,
       namespace,
@@ -131,15 +125,6 @@ export async function performWrite(call: SemanticCacheCall, result: MiddlewareRe
         ttl,
         resultKind,
         written: true,
-      })
-      getRuntime().instrumentationHooks?.onSemanticCacheWrite?.({
-        cacheId,
-        promptId,
-        operation,
-        scopeHash,
-        version,
-        ttl,
-        resultKind,
       })
 
       writeSpan.end({

@@ -23,7 +23,7 @@ const structuredPrompt = prompt({
   prompt: ({ input }) => input.q,
 })
 
-afterEach(() => {
+  afterEach(() => {
   clearGenerationInterceptor()
 })
 
@@ -35,7 +35,7 @@ describe('generation interception at the executor boundary', () => {
     expect(result.text).toBe('live answer')
   })
 
-  it('sees loop calls with prompt identity, content, model, and settings', async () => {
+    it('sees loop calls with prompt identity, content, model, and settings', async () => {
     const seen: InterceptedGeneration[] = []
     setGenerationInterceptor((call, execute) => {
       seen.push(call)
@@ -60,7 +60,7 @@ describe('generation interception at the executor boundary', () => {
     expect(call.settings).toMatchObject({ temperature: 0 })
   })
 
-  it('sees structured calls and can short-circuit them without touching the spec', async () => {
+    it('sees structured calls and can short-circuit them without touching the spec', async () => {
     setGenerationInterceptor(async (call) => {
       expect(call.kind).toBe('structured')
       return {
@@ -86,7 +86,7 @@ describe('generation interception at the executor boundary', () => {
     expect(fake.calls.runStructuredAttempt).toHaveLength(0)
   })
 
-  it('intercepts each model call separately during validation retry (distinct messages)', async () => {
+    it('intercepts each model call separately during validation retry (distinct messages)', async () => {
     const seen: InterceptedGeneration[] = []
     setGenerationInterceptor((call, execute) => {
       seen.push(call)

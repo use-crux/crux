@@ -63,7 +63,7 @@ describe('loopRuntimeAdapter — text generation', () => {
     expect(request.maxSteps).toBe(10)
   })
 
-  it('runs the tool loop and surfaces tool rounds in canonical messages', async () => {
+    it('runs the tool loop and surfaces tool rounds in canonical messages', async () => {
     const lookup = vi.fn(async (args: unknown) => ({ found: (args as { q: string }).q }))
     const fake = fakeLoopRuntime({
       loops: [[{ text: '', toolCalls: [{ name: 'lookup', args: { q: 'x' } }] }, { text: 'answer' }]],
@@ -82,7 +82,7 @@ describe('loopRuntimeAdapter — text generation', () => {
     expect(result.messages.some((m) => m.role === 'tool')).toBe(true)
   })
 
-  it('lets a caller observer stop the loop after a step', async () => {
+    it('lets a caller observer stop the loop after a step', async () => {
     const fake = fakeLoopRuntime({
       loops: [
         [
@@ -122,7 +122,7 @@ describe('loopRuntimeAdapter — structured output + validation retry', () => {
     expect(fake.calls.runStructuredAttempt).toHaveLength(1)
   })
 
-  it('retries with corrective feedback on invalid output, then succeeds', async () => {
+    it('retries with corrective feedback on invalid output, then succeeds', async () => {
     const onRetry = vi.fn()
     const fake = fakeLoopRuntime({
       structured: ['{"title":"hi","count":"two"}', '{"title":"hi","count":2}'],
@@ -146,7 +146,7 @@ describe('loopRuntimeAdapter — structured output + validation retry', () => {
     expect(contents.some((c) => typeof c === 'string' && c.includes('Validation failed'))).toBe(true)
   })
 
-  it('throws ValidationExhaustedError when retries run out', async () => {
+    it('throws ValidationExhaustedError when retries run out', async () => {
     const onExhausted = vi.fn()
     const fake = fakeLoopRuntime({
       structured: ['not json', 'still not json'],
@@ -191,7 +191,7 @@ describe('loopRuntimeAdapter — tool approval protocol', () => {
     dangerous: { description: 'risky', needsApproval: true, execute },
   })
 
-  it('suspends on approval-needing tools with a minted token and request message', async () => {
+    it('suspends on approval-needing tools with a minted token and request message', async () => {
     const execute = vi.fn()
     const fake = fakeLoopRuntime({
       loops: [[{ text: 'I need approval', toolCalls: [{ name: 'dangerous', args: { target: 'db' } }] }]],
@@ -218,7 +218,7 @@ describe('loopRuntimeAdapter — tool approval protocol', () => {
     ).toHaveLength(1)
   })
 
-  it('resumes an approved tool call: executes it and feeds the round back to the loop', async () => {
+    it('resumes an approved tool call: executes it and feeds the round back to the loop', async () => {
     const execute = vi.fn(async () => 'deleted 3 rows')
     const fake = fakeLoopRuntime({
       loops: [

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { resetRuntime } from '../runtime/runtime'
 import type { CruxRuntime } from '../runtime/runtime'
-import type { InstrumentationHooks } from '../runtime/middleware'
 import { mergeRuntime, applyPlugins } from '../runtime/plugin'
 import type { CruxPlugin } from '../runtime/plugin'
 
@@ -97,62 +96,6 @@ describe('CruxPlugin system', () => {
       combined!.onChunk('hello')
       expect(reporter1.onChunk).toHaveBeenCalledWith('hello')
       expect(reporter2.onChunk).toHaveBeenCalledWith('hello')
-    })
-
-    it('fan-outs instrumentationHooks.onToolStart — both handlers called', () => {
-      const handler1 = vi.fn()
-      const handler2 = vi.fn()
-      const base: CruxRuntime = {
-        instrumentationHooks: { onToolStart: handler1 },
-      }
-      const patch: Partial<CruxRuntime> = {
-        instrumentationHooks: { onToolStart: handler2 },
-      }
-
-      const merged = mergeRuntime(base, patch)
-      const event = { toolCallId: 'tc1', toolName: 'search', args: {} }
-      merged.instrumentationHooks!.onToolStart!(event)
-
-      expect(handler1).toHaveBeenCalledWith(event)
-      expect(handler2).toHaveBeenCalledWith(event)
-    })
-
-    it('fan-outs instrumentationHooks.onMemoryRead — both handlers called', () => {
-      const handler1 = vi.fn()
-      const handler2 = vi.fn()
-      const base: CruxRuntime = {
-        instrumentationHooks: { onMemoryRead: handler1 },
-      }
-      const patch: Partial<CruxRuntime> = {
-        instrumentationHooks: { onMemoryRead: handler2 },
-      }
-
-      const merged = mergeRuntime(base, patch)
-      const event = {
-        memoryId: 'm1',
-        operation: 'get',
-        resultCount: 1,
-        durationMs: 5,
-      }
-      merged.instrumentationHooks!.onMemoryRead!(event)
-
-      expect(handler1).toHaveBeenCalledWith(event)
-      expect(handler2).toHaveBeenCalledWith(event)
-    })
-
-    it('preserves non-overlapping instrumentationHooks from both sides', () => {
-      const onToolStart = vi.fn()
-      const onMemoryRead = vi.fn()
-      const base: CruxRuntime = {
-        instrumentationHooks: { onToolStart },
-      }
-      const patch: Partial<CruxRuntime> = {
-        instrumentationHooks: { onMemoryRead },
-      }
-
-      const merged = mergeRuntime(base, patch)
-      expect(merged.instrumentationHooks!.onToolStart).toBeDefined()
-      expect(merged.instrumentationHooks!.onMemoryRead).toBeDefined()
     })
 
     it('chains middleware — new wraps old (layered)', async () => {

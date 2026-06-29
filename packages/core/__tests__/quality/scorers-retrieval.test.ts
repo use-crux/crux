@@ -17,7 +17,7 @@ describe('scorers.retrieval.hitRateAtK', () => {
     expect(score).toMatchObject({ name: 'hitRate@3', score: 1 })
   })
 
-  it('scores 0 when the expected source ranks below k', async () => {
+    it('scores 0 when the expected source ranks below k', async () => {
     const scorer = scorers.retrieval.hitRateAtK(2)
     const score = await scorer({
       input: { query: 'q' },
@@ -27,18 +27,18 @@ describe('scorers.retrieval.hitRateAtK', () => {
     expect(score.score).toBe(0)
   })
 
-  it('returns null without an expected payload', async () => {
+    it('returns null without an expected payload', async () => {
     const scorer = scorers.retrieval.hitRateAtK(3)
     const score = await scorer({ input: {}, output: hits('a'), expected: undefined })
     expect(score.score).toBeNull()
   })
 
-  it('throws a clear error when expected does not match the { sources } shape', () => {
+    it('throws a clear error when expected does not match the { sources } shape', () => {
     const scorer = scorers.retrieval.hitRateAtK(3)
     expect(() => scorer({ input: {}, output: hits('a'), expected: { wrong: true } })).toThrow(/expected.*sources/i)
   })
 
-  it('reads hits from a `{ hits }` record output and degrades to null for non-hit outputs', async () => {
+    it('reads hits from a `{ hits }` record output and degrades to null for non-hit outputs', async () => {
     const scorer = scorers.retrieval.hitRateAtK(2)
     const fromRecord = await scorer({ input: {}, output: { hits: hits('a') }, expected: expectedSources('a') })
     expect(fromRecord.score).toBe(1)
@@ -60,7 +60,7 @@ describe('scorers.retrieval.recallAtK / precisionAtK', () => {
     expect(score).toMatchObject({ name: 'recall@2', score: 0.5 })
   })
 
-  it('precision@k = fraction of the top k that are expected sources (denominator k)', async () => {
+    it('precision@k = fraction of the top k that are expected sources (denominator k)', async () => {
     const scorer = scorers.retrieval.precisionAtK(4)
     const score = await scorer({
       input: {},
@@ -70,7 +70,7 @@ describe('scorers.retrieval.recallAtK / precisionAtK', () => {
     expect(score).toMatchObject({ name: 'precision@4', score: 0.5 })
   })
 
-  it('chunkId in an expected source must match the hit chunk', async () => {
+    it('chunkId in an expected source must match the hit chunk', async () => {
     const scorer = scorers.retrieval.recallAtK(3)
     const score = await scorer({
       input: {},
@@ -91,7 +91,7 @@ describe('scorers.retrieval.mrr / ndcg', () => {
     expect(missing.score).toBe(0)
   })
 
-  it('ndcg@k is 1 for a perfect ranking and discounts late hits', async () => {
+    it('ndcg@k is 1 for a perfect ranking and discounts late hits', async () => {
     const perfect = await scorers.retrieval.ndcg(2)({
       input: {},
       output: hits('a', 'b'),
@@ -109,7 +109,7 @@ describe('scorers.retrieval.mrr / ndcg', () => {
     expect(late.score).toBeCloseTo(1 / Math.log2(3), 10)
   })
 
-  it('hits carrying ranks are sorted by rank before measuring', async () => {
+    it('hits carrying ranks are sorted by rank before measuring', async () => {
     const scorer = scorers.retrieval.mrr()
     const score = await scorer({
       input: {},

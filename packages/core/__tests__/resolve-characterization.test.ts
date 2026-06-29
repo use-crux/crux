@@ -111,27 +111,27 @@ describe('entry resolution via compilePrompt', () => {
     ])
   })
 
-  it('anonymous contexts are excluded with their positional source', async () => {
+    it('anonymous contexts are excluded with their positional source', async () => {
     const first = context({ id: 'first', system: 'a' })
     const anon = context({ when: () => false, system: 'b' })
     const result = await inspectCompiled({ system: 'S', use: [first, anon] } as AnyConfig, {}, undefined)
     expect(result.excludedContexts).toEqual([{ source: 'context[1]', reason: 'context-level when returned false' }])
   })
 
-  it('a passing when() wrapper still honors the wrapped context-level when', async () => {
+    it('a passing when() wrapper still honors the wrapped context-level when', async () => {
     const ctx = context({ id: 'both', when: () => false, system: 'x' })
     const result = await inspectCompiled({ system: 'S', use: [when(() => true, ctx)] } as AnyConfig, {}, undefined)
     expect(result.excludedContexts).toEqual([{ source: 'context:both', reason: 'context-level when returned false' }])
   })
 
-  it('falsy entries are silently filtered', async () => {
+    it('falsy entries are silently filtered', async () => {
     const config: AnyConfig = { system: 'S', use: [false, null, undefined, context({ system: 'kept' })] }
     const result = await inspectCompiled(config, {}, undefined)
     expect(result.system.total).toBe('S\n\nkept')
     expect(result.excludedContexts).toEqual([])
   })
 
-  it('nested entries collect their side families (memory bindings from nested memories)', async () => {
+    it('nested entries collect their side families (memory bindings from nested memories)', async () => {
     const mem = fakeMemory('nested-m', 'remembered')
     const parent = context({ id: 'parent', system: 'PARENT', use: [mem] })
     const result = await resolveCompiled({ id: 'p', system: 'OWN', use: [parent] } as AnyConfig, {}, undefined)
@@ -139,7 +139,7 @@ describe('entry resolution via compilePrompt', () => {
     expect(result.memoryBindings?.map((b) => b.memory.id)).toEqual(['nested-m'])
   })
 
-  it('match branch entries are re-resolved with branch-local indices', async () => {
+    it('match branch entries are re-resolved with branch-local indices', async () => {
     const anonFailing = context({ when: () => false, system: 'nope' })
     const spec = match({ on: () => 'hit', cases: { hit: [context({ system: 'lead' }), anonFailing] } })
     const config: AnyConfig = { system: 'Base.', use: [context({ system: 'pad' }), spec] }
@@ -149,7 +149,7 @@ describe('entry resolution via compilePrompt', () => {
     expect(result.excludedContexts).toEqual([{ source: 'context[1]', reason: 'context-level when returned false' }])
   })
 
-  it('nested useEntries contribute system text before their parent', async () => {
+    it('nested useEntries contribute system text before their parent', async () => {
     const inner = context({ id: 'inner', system: 'INNER' })
     const parent = context({ id: 'parent', system: 'PARENT', use: [inner] })
     const config: AnyConfig = { system: 'OWN', use: [parent] }
@@ -158,7 +158,7 @@ describe('entry resolution via compilePrompt', () => {
     expect(result.system).toBe('OWN\n\nINNER\n\nPARENT')
   })
 
-  it('match selects the matching branch and default as fallback', async () => {
+    it('match selects the matching branch and default as fallback', async () => {
     const spec = match({
       on: (i) => i.mode as string,
       cases: { research: context({ id: 'r', system: 'RESEARCH' }) },
@@ -199,7 +199,7 @@ describe('injectable resolution', () => {
     expect(result.metadata).toEqual({ retriever: 'docs' })
   })
 
-  it('injected contexts re-enter the pipeline (when respected, exclusion attributed)', async () => {
+    it('injected contexts re-enter the pipeline (when respected, exclusion attributed)', async () => {
     const inj = injectable({
       id: 'cond-inject',
       inject: () => ({ contexts: [context({ id: 'maybe', when: () => false, system: 'no' })] }),
@@ -208,7 +208,7 @@ describe('injectable resolution', () => {
     expect(result.excludedContexts).toEqual([{ source: 'context:maybe', reason: 'context-level when returned false' }])
   })
 
-  it('throws the exact injected-tool collision message', async () => {
+    it('throws the exact injected-tool collision message', async () => {
     const a = injectable({ id: 'first', inject: () => ({ tools: { dup: 1 } }) })
     const b = injectable({ id: 'second', inject: () => ({ tools: { dup: 2 } }) })
 
@@ -217,7 +217,7 @@ describe('injectable resolution', () => {
     )
   })
 
-  it('passes input and promptId to inject()', async () => {
+    it('passes input and promptId to inject()', async () => {
     const seen: unknown[] = []
     const inj = injectable({
       id: 'spy',
@@ -245,7 +245,7 @@ describe('memory resolution', () => {
     expect(result.memoryBindings).toEqual([{ memory: mem, input: { q: 1 }, promptId: 'with-memory' }])
   })
 
-  it('memory tools are opt-in: neither merged into resolved tools nor reported as injected', async () => {
+    it('memory tools are opt-in: neither merged into resolved tools nor reported as injected', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -275,7 +275,7 @@ describe('blackboard resolution', () => {
     expect(result.tools).toEqual({ write_plan: 'tool' })
   })
 
-  it('throws the exact blackboard tool collision message against existing tools', async () => {
+    it('throws the exact blackboard tool collision message against existing tools', async () => {
     const board = fakeBlackboard('plan', { dup: 'board-tool' })
     const config: AnyConfig = { system: 'S', use: [board], tools: { dup: 'config-tool' } }
 
@@ -307,7 +307,7 @@ describe('skill resolution', () => {
     expect((result as { _skillSession?: unknown })._skillSession).toBeDefined()
   })
 
-  it('injects loaded-skill contexts for ids passed via _crux_activeSkills', async () => {
+    it('injects loaded-skill contexts for ids passed via _crux_activeSkills', async () => {
     const s = fakeSkill('writer', 'Writing skill', 'Write well.')
     const config: AnyConfig = { system: 'OWN', use: [s] }
 
@@ -316,7 +316,7 @@ describe('skill resolution', () => {
     expect(loaded?.text).toBe('## Skill: writer\n\nWrite well.')
   })
 
-  it('degrades a failing lazy registry fetch to the placeholder with a console.warn', async () => {
+    it('degrades a failing lazy registry fetch to the placeholder with a console.warn', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const s = lazySkill('no-such-registry:owner/repo/slug')
     const config: AnyConfig = { system: 'OWN', use: [s] }
@@ -330,7 +330,7 @@ describe('skill resolution', () => {
     expect(result.system).toContain('no-such-registry:owner/repo/slug')
   })
 
-  it('inspect mirrors the index context and reports loader tool names', async () => {
+    it('inspect mirrors the index context and reports loader tool names', async () => {
     const s = fakeSkill('inspector')
     const config: AnyConfig = { system: 'OWN', use: [s] }
 
@@ -401,7 +401,7 @@ describe('observability emission', () => {
     ])
   })
 
-  it('emits context.predicate spans with included/reason attributes', async () => {
+    it('emits context.predicate spans with included/reason attributes', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -432,7 +432,7 @@ describe('observability emission', () => {
     })
   })
 
-  it('emits an active match artifact with the selected branch', async () => {
+    it('emits an active match artifact with the selected branch', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -455,7 +455,7 @@ describe('observability emission', () => {
     })
   })
 
-  it('emits tool-injection artifacts for injectable and blackboard entries (memory contributes none)', async () => {
+    it('emits tool-injection artifacts for injectable and blackboard entries (memory contributes none)', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -491,7 +491,7 @@ describe('observability emission', () => {
     ])
   })
 
-  it('emits active contribution artifacts with tokens, cacheStatus, and the declared family', async () => {
+    it('emits active contribution artifacts with tokens, cacheStatus, and the declared family', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -511,7 +511,7 @@ describe('observability emission', () => {
     expect(typeof composed?.tokens).toBe('number')
   })
 
-  it('emits prompt.input artifacts for passed, failed, and not-configured validation', async () => {
+    it('emits prompt.input artifacts for passed, failed, and not-configured validation', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const schema = z.object({ name: z.string() })
@@ -549,7 +549,7 @@ describe('observability emission', () => {
     ])
   })
 
-  it('emits a prompt.budget artifact with dropped contexts when tokenBudget applies', async () => {
+    it('emits a prompt.budget artifact with dropped contexts when tokenBudget applies', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     setTokenizer((text) => text.length)
@@ -575,35 +575,6 @@ describe('observability emission', () => {
     })
   })
 })
-
-// ─────────────────────────────────────────────────────────────────
-// Context resolver cache instrumentation
-// ─────────────────────────────────────────────────────────────────
-
-describe('context cache instrumentation hooks', () => {
-  it('fires onContextCacheMiss then onContextCacheHit with the derived cache key', async () => {
-    const events: Array<{ kind: string; payload: Record<string, unknown> }> = []
-    updateRuntime({
-      instrumentationHooks: {
-        onContextCacheHit: (e) => events.push({ kind: 'hit', payload: e as unknown as Record<string, unknown> }),
-        onContextCacheMiss: (e) => events.push({ kind: 'miss', payload: e as unknown as Record<string, unknown> }),
-      },
-    })
-
-    const unique = `cache-char-${Date.now()}`
-    const cached = context({ id: unique, system: () => 'cached text', cache: 300_000 })
-    const config: AnyConfig = { system: 'S', use: [cached] }
-    await resolveCompiled(config, {}, undefined)
-    await resolveCompiled(config, {}, undefined)
-
-    expect(events.map((e) => e.kind)).toEqual(['miss', 'hit'])
-    expect(events[0]!.payload).toMatchObject({ contextId: unique, cacheKey: `cache:ctx:${unique}:` })
-    expect(typeof events[0]!.payload.resolutionMs).toBe('number')
-    expect(events[1]!.payload).toMatchObject({ contextId: unique, cacheKey: `cache:ctx:${unique}:` })
-    expect(typeof events[1]!.payload.ageMs).toBe('number')
-  })
-})
-
 // ─────────────────────────────────────────────────────────────────
 // Input schema collection (definition-time shape walk)
 // ─────────────────────────────────────────────────────────────────
@@ -616,7 +587,7 @@ describe('compilePrompt input schema shape collection', () => {
     expect(merged.safeParse({}).success).toBe(false)
   })
 
-  it('match branch context keys become optional', () => {
+    it('match branch context keys become optional', () => {
     const branch = context({ id: 'b', input: z.object({ lang: z.string() }), system: 'B' })
     const spec = match({ on: () => 'b', cases: { b: branch } })
     const merged = inputSchemaFor([spec], undefined)!
@@ -624,12 +595,12 @@ describe('compilePrompt input schema shape collection', () => {
     expect(merged.safeParse({ lang: 'fr' }).success).toBe(true)
   })
 
-  it('skills, memories, and blackboards contribute no schema', () => {
+    it('skills, memories, and blackboards contribute no schema', () => {
     const merged = inputSchemaFor([fakeSkill('s'), fakeMemory('m', 't'), fakeBlackboard('b', {})], undefined)
     expect(merged).toBeUndefined()
   })
 
-  it('duplicate keys across contexts throw the exact conflict message', () => {
+    it('duplicate keys across contexts throw the exact conflict message', () => {
     const a = context({ id: 'first', input: z.object({ name: z.string() }), system: 'a' })
     const b = context({ id: 'second', input: z.object({ name: z.string() }), system: 'b' })
     expect(() => inputSchemaFor([a, b], undefined)).toThrow(
@@ -637,7 +608,7 @@ describe('compilePrompt input schema shape collection', () => {
     )
   })
 
-  it('nested useEntries schemas are collected (children before parent)', () => {
+    it('nested useEntries schemas are collected (children before parent)', () => {
     const inner = context({ id: 'inner', input: z.object({ x: z.string() }), system: 'i' })
     const parent = context({ id: 'parent', input: z.object({ y: z.string() }), system: 'p', use: [inner] })
     const merged = inputSchemaFor([parent], undefined)!

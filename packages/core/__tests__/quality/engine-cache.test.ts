@@ -57,7 +57,7 @@ describe('runEvaluation — output cache and reuseOutputs (spec 03 §5)', () => 
     }
   })
 
-  it('a changed task misses the cache (taskFingerprint differs) and executes live', async () => {
+    it('a changed task misses the cache (taskFingerprint differs) and executes live', async () => {
     const cacheDir = await mkdtemp(join(tmpdir(), 'crux-quality-cache-'))
     let calls = 0
     const original = evaluate('cache.miss', {
@@ -83,7 +83,7 @@ describe('runEvaluation — output cache and reuseOutputs (spec 03 §5)', () => 
     expect(experiment.perCase[0]!.output).toBe('aa')
   })
 
-  it('reuseOutputs without any cache executes live (miss = live, never an error)', async () => {
+    it('reuseOutputs without any cache executes live (miss = live, never an error)', async () => {
     const cacheDir = await mkdtemp(join(tmpdir(), 'crux-quality-cache-'))
     let calls = 0
     const evaluation = evaluate('cache.cold', {
@@ -99,7 +99,7 @@ describe('runEvaluation — output cache and reuseOutputs (spec 03 §5)', () => 
     expect(experiment.perCase[0]!.status).toBe('passed')
   })
 
-  it('does not reuse the cache when reuseOutputs is not set, but keeps it warm', async () => {
+    it('does not reuse the cache when reuseOutputs is not set, but keeps it warm', async () => {
     const cacheDir = await mkdtemp(join(tmpdir(), 'crux-quality-cache-'))
     let calls = 0
     const makeEvaluation = () =>

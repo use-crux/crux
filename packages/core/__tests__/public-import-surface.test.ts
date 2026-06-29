@@ -53,7 +53,7 @@ describe('@use-crux/core (root barrel)', () => {
     expect(typeof config).toBe('function')
   })
 
-  it('prompt() composes context system text through the public surface', async () => {
+    it('prompt() composes context system text through the public surface', async () => {
     const brand = context({
       id: 'brand',
       input: z.object({ brand: z.string() }),
@@ -74,7 +74,7 @@ describe('@use-crux/core (root barrel)', () => {
     expect(resolved.prompt).toBe('Hi?')
   })
 
-  it('when()/match() gate context contributions through the public surface', async () => {
+    it('when()/match() gate context contributions through the public surface', async () => {
     const onlyEn = when(
       (input: { locale: string }) => input.locale === 'en',
       context({ id: 'en', system: 'Answer in English.' }),
@@ -94,7 +94,7 @@ describe('@use-crux/core (root barrel)', () => {
     expect(fr.system).toBe('Base.\n\nBe verbose.')
   })
 
-  it('createPrompts()/createContexts() build addressable trees', () => {
+    it('createPrompts()/createContexts() build addressable trees', () => {
     const ctxTree = createContexts({ tone: context({ id: 'tone', system: 'Friendly.' }) })
     expect(ctxTree.tone.id).toBe('tone')
 
@@ -137,7 +137,7 @@ describe('@use-crux/core/tool-middleware', () => {
     expect(mw.id).toBe('logger')
   })
 
-  it('approvalMiddleware() builds a tagged middleware object', () => {
+    it('approvalMiddleware() builds a tagged middleware object', () => {
     expect(typeof approvalMiddleware).toBe('function')
 
     const mw = approvalMiddleware({ id: 'gate', match: ['dangerous_tool'] })
@@ -158,7 +158,7 @@ describe('@use-crux/core/adapter', () => {
     expect(typeof defineSingleTurnProviderBundle).toBe('function')
   })
 
-  it('adapter() returns a client-bound factory exposing generate/stream', () => {
+    it('adapter() returns a client-bound factory exposing generate/stream', () => {
     const createTestAdapter = adapter<{ token: string }>({
       providerId: 'test-provider',
       call: async () => ({ text: '', toolCalls: [] }),
@@ -193,14 +193,14 @@ describe('@use-crux/core/safety', () => {
     expect(isGuardrail(guard)).toBe(true)
   })
 
-  it('constraint() builds a recognizable constraint', () => {
+    it('constraint() builds a recognizable constraint', () => {
     const c = constraint({ name: 'non-empty', check: async () => ({ pass: true }) })
 
     expect(c._tag).toBe('Constraint')
     expect(isConstraint(c)).toBe(true)
   })
 
-  it('createSafety() opens a per-call session with the documented methods', () => {
+    it('createSafety() opens a per-call session with the documented methods', () => {
     expect(typeof createSafety).toBe('function')
 
     const session = createSafety({})
@@ -209,7 +209,7 @@ describe('@use-crux/core/safety', () => {
     expect(typeof session.stamp).toBe('function')
   })
 
-  it('createSafetyPlugin() builds the named safety plugin', () => {
+    it('createSafetyPlugin() builds the named safety plugin', () => {
     const plugin = createSafetyPlugin({})
     expect(plugin.name).toBe('crux:safety')
     expect(typeof plugin.install).toBe('function')

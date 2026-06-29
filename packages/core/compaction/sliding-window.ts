@@ -81,11 +81,6 @@ export function createSlidingWindow(config: SlidingWindowConfig): SlidingWindow 
         : evicted
 
       const inputTokens = toSummarize.reduce((sum, m) => sum + countTokens(m.content), 0)
-      getRuntime().instrumentationHooks?.onCompactStart?.({
-        reason: 'sliding-window',
-        inputMessageCount: evicted.length,
-        inputTokens,
-      })
       const compactStart = Date.now()
 
       const result = await summarizeMessages({
@@ -99,12 +94,6 @@ export function createSlidingWindow(config: SlidingWindowConfig): SlidingWindow 
       await saveSummary(result.summary)
 
       const outputTokens = countTokens(result.summary)
-      getRuntime().instrumentationHooks?.onCompactEnd?.({
-        outputTokens,
-        compressionRatio: inputTokens > 0 ? outputTokens / inputTokens : 0,
-        summaryPreview: result.summary.slice(0, 100),
-        durationMs: Date.now() - compactStart,
-      })
     }
 
     await saveMessages(messages)

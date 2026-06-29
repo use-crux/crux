@@ -71,7 +71,7 @@ describe('error paths across agent modules', () => {
     })
   })
 
-  describe('handoff: async transform throwing propagates', () => {
+describe('handoff: async transform throwing propagates', () => {
     it('propagates error from async transform', async () => {
       const h = makeHandoff({
         id: 'error-handoff',
@@ -124,7 +124,7 @@ describe('error paths across agent modules', () => {
     })
   })
 
-  describe('blackboard: subscriber callback throwing does not prevent store write', () => {
+describe('blackboard: subscriber callback throwing does not prevent store write', () => {
     it('write succeeds even when subscriber throws', async () => {
       const board = makeBlackboard({
         id: 'error-board',

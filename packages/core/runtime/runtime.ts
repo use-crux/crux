@@ -16,9 +16,9 @@ import type {
   ExecutionHook,
   StreamProgressHook,
   StreamStartHook,
-  InstrumentationHooks,
 } from './middleware'
 import type { CruxObservabilityTransport, ObservabilityDeliveryOptions } from '../observability'
+import type { CruxObservabilityCapturePolicy } from '../observability/capture-policy'
 import type { CruxStore } from '../store/types'
 
 /**
@@ -34,7 +34,6 @@ import type { CruxStore } from '../store/types'
  * // Install all hooks at once
  * setRuntime({
  *   middleware: myMiddleware,
- *   instrumentationHooks: myHooks,
  * })
  *
  * // Tear down cleanly
@@ -52,11 +51,11 @@ export interface CruxRuntime {
   streamProgressHook?: StreamProgressHook
   /** Fires immediately when a stream begins, before any chunks arrive. */
   streamStartHook?: StreamStartHook
-  /** Hooks for observing memory, compaction, scoring, and agent operations. */
-  instrumentationHooks?: InstrumentationHooks
   /** Canonical observability graph transport and delivery bounds. */
   observabilityTransport?: CruxObservabilityTransport
   observabilityDelivery?: ObservabilityDeliveryOptions
+  /** Central policy for whether canonical observability artifacts include payload previews. */
+  observabilityCapture?: CruxObservabilityCapturePolicy
   /** Global CruxStore for flow state persistence (suspend/resume). */
   store?: CruxStore
   /** Global constraints registered via createConstraintPlugin(). */
@@ -76,8 +75,7 @@ let _runtime: CruxRuntime = {}
  *
  * @example
  * ```ts
- * const { middleware, instrumentationHooks } = getRuntime()
- * instrumentationHooks?.onMemoryRead(event)
+ * const { middleware, observabilityTransport } = getRuntime()
  * ```
  */
 export function getRuntime(): Readonly<CruxRuntime> {

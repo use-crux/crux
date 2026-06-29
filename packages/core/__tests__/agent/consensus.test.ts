@@ -42,7 +42,7 @@ describe('consensus', () => {
     expect(result.details).toHaveLength(3)
   })
 
-  it('majority wins with 2/3 agreement', async () => {
+    it('majority wins with 2/3 agreement', async () => {
     const executor = createVotingExecutor(['billing', 'billing', 'shipping'])
     const consensus = createConsensus(executor)
 
@@ -57,7 +57,7 @@ describe('consensus', () => {
     expect(result.votes).toEqual({ billing: 2, shipping: 1 })
   })
 
-  it('all different picks most frequent (first for ties)', async () => {
+    it('all different picks most frequent (first for ties)', async () => {
     const executor = createVotingExecutor(['billing', 'shipping', 'general'])
     const consensus = createConsensus(executor)
 
@@ -73,7 +73,7 @@ describe('consensus', () => {
     expect(result.votes).toEqual({ billing: 1, shipping: 1, general: 1 })
   })
 
-  it('quorum: unanimous throws on disagreement', async () => {
+    it('quorum: unanimous throws on disagreement', async () => {
     const executor = createVotingExecutor(['billing', 'billing', 'shipping'])
     const consensus = createConsensus(executor)
 
@@ -87,7 +87,7 @@ describe('consensus', () => {
     ).rejects.toThrow(/quorum|consensus/i)
   })
 
-  it('quorum: number succeeds when threshold met', async () => {
+    it('quorum: number succeeds when threshold met', async () => {
     const executor = createVotingExecutor(['billing', 'billing', 'shipping'])
     const consensus = createConsensus(executor)
 
@@ -101,7 +101,7 @@ describe('consensus', () => {
     expect(result.result).toBe('billing')
   })
 
-  it('quorum: number throws when threshold not met', async () => {
+    it('quorum: number throws when threshold not met', async () => {
     const executor = createVotingExecutor(['billing', 'shipping', 'general'])
     const consensus = createConsensus(executor)
 
@@ -115,7 +115,7 @@ describe('consensus', () => {
     ).rejects.toThrow(/quorum|consensus/i)
   })
 
-  it('inherits parallel error handling (fail-fast)', async () => {
+    it('inherits parallel error handling (fail-fast)', async () => {
     const executor = createFakeAgentExecutor({ agents: { classifier: { throws: 'classifier down' } } })
     const consensus = createConsensus(executor)
 
@@ -128,7 +128,7 @@ describe('consensus', () => {
     ).rejects.toThrow('classifier down')
   })
 
-  it('returns durationMs', async () => {
+    it('returns durationMs', async () => {
     const executor = createVotingExecutor(['billing', 'billing'])
     const consensus = createConsensus(executor)
 

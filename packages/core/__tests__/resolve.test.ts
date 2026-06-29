@@ -34,7 +34,7 @@ describe('compilePrompt input schema', () => {
     expect(schema?.safeParse({ foo: 'x', bar: 42 }).success).toBe(true)
   })
 
-  it('throws on duplicate keys across contexts', () => {
+    it('throws on duplicate keys across contexts', () => {
     const ctx1 = context({
       id: 'first',
       input: z.object({ name: z.string() }),
@@ -51,7 +51,7 @@ describe('compilePrompt input schema', () => {
     )
   })
 
-  it('prompt-owned fields take precedence over context fields', () => {
+    it('prompt-owned fields take precedence over context fields', () => {
     const ctx = context({
       id: 'ctx',
       input: z.object({ lang: z.string() }),
@@ -63,7 +63,7 @@ describe('compilePrompt input schema', () => {
     expect(schema?.safeParse({}).success).toBe(true)
   })
 
-  it('returns no schema when neither prompt nor contexts declare input', () => {
+    it('returns no schema when neither prompt nor contexts declare input', () => {
     const ctx = context({ system: 'static' })
     expect(compilePrompt({ system: 'S', use: [ctx] } as AnyPromptConfig).inputSchema).toBeUndefined()
   })
@@ -78,13 +78,13 @@ describe('compilePrompt resolution', () => {
     ).rejects.toThrow(/Input validation failed/)
   })
 
-  it('composes system text from prompt and contexts', async () => {
+    it('composes system text from prompt and contexts', async () => {
     const ctx = context({ id: 'ctx', system: 'Context here.' })
     const result = await resolveArgs({ system: 'You are a bot.', use: [ctx] } as AnyPromptConfig)
     expect(result.system).toBe('You are a bot.\n\nContext here.')
   })
 
-  it('resolves prompt text from static strings and functions', async () => {
+    it('resolves prompt text from static strings and functions', async () => {
     const staticResult = await resolveArgs({ system: 'sys', prompt: 'do this' } as AnyPromptConfig)
     expect(staticResult.prompt).toBe('do this')
 
@@ -100,7 +100,7 @@ describe('compilePrompt resolution', () => {
     expect(dynamicResult.prompt).toBe('Task: edit')
   })
 
-  it('keeps segmented system text in inspect and resolved blocks', async () => {
+    it('keeps segmented system text in inspect and resolved blocks', async () => {
     const ctx = context({
       id: 'current-date',
       input: z.object({ today: z.string() }),
@@ -155,7 +155,7 @@ describe('compilePrompt resolution', () => {
     })
   })
 
-  it('applies provider-specific adaptations and call-site settings precedence', async () => {
+    it('applies provider-specific adaptations and call-site settings precedence', async () => {
     const config = {
       system: 'core',
       prompt: 'question',
@@ -178,7 +178,7 @@ describe('compilePrompt resolution', () => {
     expect(result.settings.maxTokens).toBe(100)
   })
 
-  it('matches model id slash-prefix adaptations and wildcard fallbacks', async () => {
+    it('matches model id slash-prefix adaptations and wildcard fallbacks', async () => {
     const config = {
       system: 'S',
       adapt: {
@@ -191,7 +191,7 @@ describe('compilePrompt resolution', () => {
     expect((await resolveArgs(config, { provider: 'mistral', modelId: 'mistral-large' })).system).toBe('S\n\nWILD')
   })
 
-  it('collects context and prompt tools', async () => {
+    it('collects context and prompt tools', async () => {
     const ctx = context({ system: 'a', tools: { ctxTool: 'ct' } })
     const config = {
       system: 'sys',
@@ -203,7 +203,7 @@ describe('compilePrompt resolution', () => {
     expect(result.tools).toEqual({ ctxTool: 'ct', promptTool: 'pt' })
   })
 
-  it('supports structured-output prompts while keeping tools available', async () => {
+    it('supports structured-output prompts while keeping tools available', async () => {
     const ctx = context({ system: 'a', tools: { ctxTool: 'ct' } })
     const config = {
       system: 'sys',
@@ -217,7 +217,7 @@ describe('compilePrompt resolution', () => {
     expect(result.tools).toEqual({ ctxTool: 'ct', promptTool: 'pt' })
   })
 
-  it('injects composed system text into messages mode', async () => {
+    it('injects composed system text into messages mode', async () => {
     const ctx = context({ id: 'rules', system: 'Be polite.' })
     const result = await resolveArgs({
       use: [ctx],
@@ -229,7 +229,7 @@ describe('compilePrompt resolution', () => {
     expect(result.system).toBeUndefined()
   })
 
-  it('prepends composed system text to an existing system message', async () => {
+    it('prepends composed system text to an existing system message', async () => {
     const ctx = context({ id: 'ctx', system: 'Context.' })
     const result = await resolveArgs({
       use: [ctx],
@@ -263,7 +263,7 @@ describe('compilePrompt token-aware system composition', () => {
     })
   })
 
-  it('never drops the prompt-owned system text', async () => {
+    it('never drops the prompt-owned system text', async () => {
     setTokenizer((text) => text.length)
 
     const ctx = context({ id: 'ctx', system: 'context text', priority: 10 })
@@ -272,7 +272,7 @@ describe('compilePrompt token-aware system composition', () => {
     expect(result.system).toContain('my system')
   })
 
-  it('returns system blocks with provider cache metadata', async () => {
+    it('returns system blocks with provider cache metadata', async () => {
     const cached = context({ id: 'cached', system: () => 'cached text', cache: 300_000 })
     const uncached = context({ id: 'uncached', system: 'plain text' })
     const result = await resolveArgs({ system: 'System.', use: [cached, uncached] } as AnyPromptConfig)
@@ -283,7 +283,7 @@ describe('compilePrompt token-aware system composition', () => {
     expect(result.systemBlocks?.[2]).toMatchObject({ source: 'context:uncached', providerCache: false })
   })
 
-  it('excludes skipped and dropped contexts from blocks', async () => {
+    it('excludes skipped and dropped contexts from blocks', async () => {
     setTokenizer((text) => text.length)
 
     const empty = context({
@@ -301,7 +301,7 @@ describe('compilePrompt token-aware system composition', () => {
     expect(budgeted.systemBlocks?.map((block) => block.source)).toEqual(['prompt', 'context:high'])
   })
 
-  it('caches context resolver output by declared input fields', async () => {
+    it('caches context resolver output by declared input fields', async () => {
     const resolver = vi.fn(({ input }: { input: { orgId: string } }) => `result-${input.orgId}`)
     const cached = context({
       id: 'cache-by-org',
@@ -340,7 +340,7 @@ describe('compilePrompt inspection', () => {
     expect(result.totalTokens).toBeGreaterThan(0)
   })
 
-  it('reuses the resolved pass when inspecting a PromptResolution', async () => {
+    it('reuses the resolved pass when inspecting a PromptResolution', async () => {
     const system = vi.fn(() => 'resolved once')
     const compiled = compilePrompt({ system } as AnyPromptConfig)
 

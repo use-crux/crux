@@ -15,6 +15,7 @@ import {
   type CruxSpanId,
   type CruxTraceId,
 } from './contract'
+import { publishObservabilityChannel } from './channel'
 import {
   createCruxArtifactId,
   createCruxEdgeId,
@@ -26,7 +27,16 @@ import {
 } from './ids'
 import { normalizeObservedError, observedErrorSummary } from './errors'
 import { CruxGraphRecordSchema } from './schema'
+import { applyConfiguredObservabilityCapturePolicy } from './capture-policy'
+import {
+  observabilitySubscriberErrorCount,
+  publishObservabilitySubscribers,
+  resetObservabilitySubscribers,
+} from './subscribers'
 import type { CruxObservabilityTransport } from './transport'
+
+export { subscribeObservability, type CruxObservabilitySubscriber } from './subscribers'
+export { hasObservabilitySubscribers } from './subscribers'
 
 export interface ObservabilityDeliveryOptions {
   /**
@@ -46,6 +56,7 @@ export interface ObservabilityDiagnostics {
   readonly pendingDeliveries: number
   readonly droppedRecords: number
   readonly deliveryErrors: readonly unknown[]
+  readonly subscriberErrors: number
 }
 
 export interface ObservabilityFlushOptions {
@@ -218,6 +229,8 @@ function durationSince(startedAtMs: number): number {
 
 function emit(record: CruxGraphRecord): void {
   CruxGraphRecordSchema.parse(record)
+  publishObservabilitySubscribers(record)
+  publishObservabilityChannel(record)
   if (!activeTransport) return
   queuedRecords.push(record)
   if (pendingDeliveries.size === 0) {
@@ -420,6 +433,7 @@ export function currentObservabilityTransport(): CruxObservabilityTransport | un
 export function resetObservabilityRuntime(): void {
   activeTransport = undefined
   configureDelivery(undefined)
+  resetObservabilitySubscribers()
   queuedRecords.length = 0
   dispatchScheduled = false
   pendingDeliveries.clear()
@@ -437,6 +451,7 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
     pendingDeliveries: pendingDeliveries.size,
     droppedRecords,
     deliveryErrors,
+    subscriberErrors: observabilitySubscriberErrorCount(),
   }
 }
 
@@ -813,7 +828,8 @@ export const observe = {
     const context = currentContext()
     if (!context) return undefined
 
-    const artifactId = options.artifactId ?? createCruxArtifactId()
+    const artifact = applyConfiguredObservabilityCapturePolicy(options)
+    const artifactId = artifact.artifactId ?? createCruxArtifactId()
     const spanId = context.spanStack[context.spanStack.length - 1]
     emit({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -823,15 +839,15 @@ export const observe = {
       traceId: context.traceId,
       artifactId,
       ...(spanId ? { spanId } : {}),
-      kind: options.kind,
+      kind: artifact.kind,
       createdAt: now(),
-      contentType: options.contentType,
-      encoding: options.encoding,
-      ...(options.sizeBytes !== undefined ? { sizeBytes: options.sizeBytes } : {}),
-      ...(options.hash ? { hash: options.hash } : {}),
-      ...(options.preview !== undefined ? { preview: options.preview } : {}),
-      ...(options.uri ? { uri: options.uri } : {}),
-      ...(options.attributes ? { attributes: options.attributes } : {}),
+      contentType: artifact.contentType,
+      encoding: artifact.encoding,
+      ...(artifact.sizeBytes !== undefined ? { sizeBytes: artifact.sizeBytes } : {}),
+      ...(artifact.hash ? { hash: artifact.hash } : {}),
+      ...(artifact.preview !== undefined ? { preview: artifact.preview } : {}),
+      ...(artifact.uri ? { uri: artifact.uri } : {}),
+      ...(artifact.attributes ? { attributes: artifact.attributes } : {}),
     })
     return artifactId
   },

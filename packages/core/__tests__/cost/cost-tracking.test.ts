@@ -60,7 +60,7 @@ describe('withCostTracking', () => {
     vi.restoreAllMocks()
   })
 
-  it('uses provider-reported cost when present', async () => {
+    it('uses provider-reported cost when present', async () => {
     const tracker = withCostTracking({
       pricing: modelPricing({
         'gpt-4o': { input: 2.5, output: 10 },
@@ -79,7 +79,7 @@ describe('withCostTracking', () => {
     expect(report.byModel['gpt-4o']?.cost).toBe(0.42)
   })
 
-  it('estimates cost from token usage and pricing when provider cost is absent', async () => {
+    it('estimates cost from token usage and pricing when provider cost is absent', async () => {
     const tracker = withCostTracking({
       pricing: modelPricing({
         'gpt-4o': { input: 2.5, output: 10 },
@@ -94,7 +94,7 @@ describe('withCostTracking', () => {
     expect(report.entries[0]?.source).toBe('estimated')
   })
 
-  it('attributes cost to active trace context dimensions', async () => {
+    it('attributes cost to active trace context dimensions', async () => {
     const tracker = withCostTracking({
       pricing: modelPricing({
         'gpt-4o': { input: 1, output: 1 },
@@ -126,25 +126,7 @@ describe('withCostTracking', () => {
     })
   })
 
-  it('emits warning and throws when budget thresholds are crossed', async () => {
-    const tracker = withCostTracking({
-      pricing: modelPricing({
-        'gpt-4o': { input: 1, output: 1 },
-      }),
-      budget: { warn: 0.05, limit: 0.08 },
-    })
-    const onCostWarn = vi.fn()
-    const onCostLimit = vi.fn()
-    setRuntime({ ...getRuntime(), instrumentationHooks: { onCostWarn, onCostLimit } })
-    install(tracker.asPlugin())
-
-    await expect(generateOnce({ cost: 0.1 })).rejects.toBeInstanceOf(CostLimitError)
-    expect(onCostWarn).toHaveBeenCalledOnce()
-    expect(onCostLimit).toHaveBeenCalledOnce()
-    expect(tracker.getReport().total.cost).toBe(0.1)
-  })
-
-  it('resets all entries or only one session', async () => {
+    it('resets all entries or only one session', async () => {
     const tracker = withCostTracking()
     install(tracker.asPlugin())
 

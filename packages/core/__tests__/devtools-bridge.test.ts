@@ -55,7 +55,7 @@ describe('devtools runtime bridge contract', () => {
     clearInspectableResources()
   })
 
-  it('accepts bridge options on config()', () => {
+    it('accepts bridge options on config()', () => {
     const crux = config({
       devtools: {
         serverUrl: 'http://localhost:4400',
@@ -75,7 +75,7 @@ describe('devtools runtime bridge contract', () => {
     crux.dispose()
   })
 
-  it('parses boolean and explicit bridge configuration', () => {
+    it('parses boolean and explicit bridge configuration', () => {
     expect(RuntimeBridgeConfigSchema.parse(true)).toBe(true)
     expect(
       RuntimeBridgeConfigSchema.parse({
@@ -89,7 +89,7 @@ describe('devtools runtime bridge contract', () => {
     })
   })
 
-  it('parses runtime hello capabilities', () => {
+    it('parses runtime hello capabilities', () => {
     const parsed = RuntimePeerHelloSchema.parse({
       type: 'runtime.hello',
       peer: {
@@ -112,7 +112,7 @@ describe('devtools runtime bridge contract', () => {
     expect(parsed.peer.capabilities).toHaveLength(2)
   })
 
-  it('parses eval.run and store.read command requests', () => {
+    it('parses eval.run and store.read command requests', () => {
     expect(
       BridgeCommandRequestSchema.parse({
         type: 'command.request',
@@ -144,7 +144,7 @@ describe('devtools runtime bridge contract', () => {
     })
   })
 
-  it('rejects unknown bridge commands', () => {
+    it('rejects unknown bridge commands', () => {
     expect(() =>
       RuntimeBridgeMessageSchema.parse({
         type: 'command.request',
@@ -156,7 +156,7 @@ describe('devtools runtime bridge contract', () => {
     ).toThrow()
   })
 
-  it('derives the default local Node websocket bridge manifest', () => {
+    it('derives the default local Node websocket bridge manifest', () => {
     const manifest = getRuntimeBridgeManifest({
       devtools: {
         serverUrl: 'http://localhost:4400',
@@ -176,7 +176,7 @@ describe('devtools runtime bridge contract', () => {
     })
   })
 
-  it('derives framework HTTP bridge manifests from explicit integration options', () => {
+    it('derives framework HTTP bridge manifests from explicit integration options', () => {
     const manifest = getRuntimeBridgeManifest(
       {
         devtools: {
@@ -200,7 +200,7 @@ describe('devtools runtime bridge contract', () => {
     })
   })
 
-  it('lets explicit bridge transport and url override defaults', () => {
+    it('lets explicit bridge transport and url override defaults', () => {
     const manifest = getRuntimeBridgeManifest(
       {
         devtools: {
@@ -220,12 +220,12 @@ describe('devtools runtime bridge contract', () => {
     })
   })
 
-  it('normalizes bridge URLs for http and ws transports', () => {
+    it('normalizes bridge URLs for http and ws transports', () => {
     expect(deriveBridgeUrl('http://localhost:4400', 'ws', '/ws/runtime')).toBe('ws://localhost:4400/ws/runtime')
     expect(deriveBridgeUrl('wss://example.dev', 'http', '/crux/bridge')).toBe('https://example.dev/crux/bridge')
   })
 
-  it('connects a local Node websocket peer and sends runtime hello', () => {
+    it('connects a local Node websocket peer and sends runtime hello', () => {
     const connection = connectRuntimeBridge(
       {
         devtools: {
@@ -259,7 +259,7 @@ describe('devtools runtime bridge contract', () => {
     expect(socket.readyState).toBe(3)
   })
 
-  it('executes store.read commands over the websocket peer', async () => {
+    it('executes store.read commands over the websocket peer', async () => {
     const store = {
       async get(key: string) {
         return { key, ok: true }
@@ -304,7 +304,7 @@ describe('devtools runtime bridge contract', () => {
     })
   })
 
-  it('includes normalized error details when websocket command execution fails', async () => {
+    it('includes normalized error details when websocket command execution fails', async () => {
     const store = {
       async get() {
         throw new Error('store exploded')
@@ -362,7 +362,7 @@ describe('devtools runtime bridge contract', () => {
     expect(reply.error.details.stack).toContain('store exploded')
   })
 
-  it('starts and disposes the local Node websocket peer from config()', () => {
+    it('starts and disposes the local Node websocket peer from config()', () => {
     vi.stubGlobal('WebSocket', FakeWebSocket)
 
     const crux = config({
@@ -399,7 +399,7 @@ describe('devtools runtime bridge contract', () => {
     expect(socket.readyState).toBe(3)
   })
 
-  it('advertises resources automatically registered by primitives', () => {
+    it('advertises resources automatically registered by primitives', () => {
     const store = inMemoryCruxStore()
     memory({
       id: 'project-memory',
@@ -422,7 +422,7 @@ describe('devtools runtime bridge contract', () => {
     })
   })
 
-  it('reads an automatically registered blackboard resource without a manual key', async () => {
+    it('reads an automatically registered blackboard resource without a manual key', async () => {
     const store = inMemoryCruxStore()
     const board = blackboard({ id: 'thread', schema: z.object({ status: z.string() }), store })
     await board.set('status', 'ready')
@@ -447,7 +447,7 @@ describe('devtools runtime bridge contract', () => {
     })
   })
 
-  it('infers memory resources from trace ids when a readable runtime store is available', async () => {
+    it('infers memory resources from trace ids when a readable runtime store is available', async () => {
     const store = inMemoryCruxStore()
     await store.set('memory:dynamic:thread-1:block:recent:000001', { role: 'user', content: 'hello' })
 

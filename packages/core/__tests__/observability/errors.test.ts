@@ -40,7 +40,7 @@ describe('observability error normalization', () => {
     expect(metadata.safe).toBe('visible')
   })
 
-  it('normalizes thrown values and keeps circular raw data JSON-safe', () => {
+    it('normalizes thrown values and keeps circular raw data JSON-safe', () => {
     const thrownValue: Record<string, unknown> = {
       message: 'plain object failed',
       password: 'secret-password',

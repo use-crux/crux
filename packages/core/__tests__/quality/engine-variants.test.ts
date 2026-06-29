@@ -57,7 +57,7 @@ describe('variant matrix execution', () => {
     ])
   })
 
-  it('ctx.variant exposes the variant name and effective params to expect callbacks', async () => {
+    it('ctx.variant exposes the variant name and effective params to expect callbacks', async () => {
     const seen: Array<{ name: string; tier: unknown }> = []
     const evaluation = evaluate('variants.ctx', {
       task: echoParamsTask,
@@ -75,7 +75,7 @@ describe('variant matrix execution', () => {
     ])
   })
 
-  it('merges steps/tools override records per entry instead of replacing them', async () => {
+    it('merges steps/tools override records per entry instead of replacing them', async () => {
     const seenSteps: Array<Record<string, unknown>> = []
     const task = (input: { q: string }, params: { steps?: Record<string, { model?: string }> }) => {
       seenSteps.push(params.steps ?? {})
@@ -92,7 +92,7 @@ describe('variant matrix execution', () => {
     expect(seenSteps).toEqual([{ plan: { model: 'base-model' }, write: { model: 'fancy-model' } }])
   })
 
-  it('a variant model override reaches the generate fn for that variant only (type-test item 7, runtime)', async () => {
+    it('a variant model override reaches the generate fn for that variant only (type-test item 7, runtime)', async () => {
     const modelsSeen: string[] = []
     const generate = (async (_prompt: never, opts: never) => {
       modelsSeen.push((opts as { model?: string }).model ?? '(none)')
@@ -115,7 +115,7 @@ describe('variant matrix execution', () => {
     expect(modelsSeen.sort()).toEqual(['base-model', 'cheap-model'])
   })
 
-  it('a variant prompt substitution executes the replacement prompt (type-test item 8, runtime)', async () => {
+    it('a variant prompt substitution executes the replacement prompt (type-test item 8, runtime)', async () => {
     const promptIdsSeen: string[] = []
     const generate = (async (p: never, _opts: never) => {
       promptIdsSeen.push((p as { id?: string }).id ?? '(anon)')
@@ -143,7 +143,7 @@ describe('variant matrix execution', () => {
     expect(promptIdsSeen.sort()).toEqual(['prompt-v1', 'prompt-v2'])
   })
 
-  it('a variant task substitution runs the substituted task for that variant', async () => {
+    it('a variant task substitution runs the substituted task for that variant', async () => {
     const baseTask = (_input: { q: string }) => ({ from: 'base' })
     const swappedTask = (_input: { q: string }) => ({ from: 'swapped' })
     const evaluation = evaluate('variants.task-swap', {
@@ -159,7 +159,7 @@ describe('variant matrix execution', () => {
     expect(experiment.variants.find((variant) => variant.name === 'harness')!.overrideKeys).toEqual(['task'])
   })
 
-  it('a variant task lacking a capability honest-fails the assertion for that cell only', async () => {
+    it('a variant task lacking a capability honest-fails the assertion for that cell only', async () => {
     // The base flow task captures `steps`; the substituted plain fn does not.
     const baseFlow = flow<{ ok: boolean }, { q: string }>('variants-honest', async (ctx) => {
       await ctx.step('plan', async () => ({ goal: 'x' }))
@@ -183,7 +183,7 @@ describe('variant matrix execution', () => {
     expect(harness.assertions.failures[0]!.message).toContain('no steps signal was captured')
   })
 
-  it('aggregates and consistency are computed per variant', async () => {
+    it('aggregates and consistency are computed per variant', async () => {
     let candidateCalls = 0
     const task = (_input: { q: string }, params: { flaky?: boolean }) => {
       if (params.flaky === true) {
@@ -222,25 +222,25 @@ describe('variant filters (RunOverrides.variants)', () => {
       baseline: 'current',
     })
 
-  it('runs only the selected variants', async () => {
+    it('runs only the selected variants', async () => {
     const experiment = await run(evaluationWithBaseline(), { variants: ['current', 'candidate'] })
     expect(Object.keys(experiment.aggregates.perVariant).sort()).toEqual(['candidate', 'current'])
     expect(experiment.perCase).toHaveLength(2)
   })
 
-  it('a subset that includes the baseline keeps gates blocking', async () => {
+    it('a subset that includes the baseline keeps gates blocking', async () => {
     const experiment = await run(evaluationWithBaseline(), { variants: ['current', 'candidate'] })
     expect(experiment.filteredRun).toBe(false)
     expect(experiment.gates.informational).toBe(false)
   })
 
-  it('a subset that excludes the baseline demotes gates to informational', async () => {
+    it('a subset that excludes the baseline demotes gates to informational', async () => {
     const experiment = await run(evaluationWithBaseline(), { variants: ['candidate'] })
     expect(experiment.filteredRun).toBe(true)
     expect(experiment.gates.informational).toBe(true)
   })
 
-  it('an unknown variant name is a definition error', async () => {
+    it('an unknown variant name is a definition error', async () => {
     await expect(run(evaluationWithBaseline(), { variants: ['nope'] })).rejects.toThrowError(QualityDefinitionError)
     await expect(run(evaluationWithBaseline(), { variants: ['nope'] })).rejects.toThrowError(/nope/)
   })

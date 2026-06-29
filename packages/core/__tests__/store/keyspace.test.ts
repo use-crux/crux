@@ -10,57 +10,63 @@ describe('keySpace', () => {
     it('generates correct key', () => {
       expect(keySpace.plan.key('abc')).toBe('plan:abc')
     })
+
     it('has correct prefix', () => {
       expect(keySpace.plan.prefix).toBe('plan:')
     })
   })
 
-  describe('taskList', () => {
+describe('taskList', () => {
     it('generates correct key', () => {
       expect(keySpace.taskList.key('xyz')).toBe('tasklist:xyz')
     })
+
     it('has correct prefix', () => {
       expect(keySpace.taskList.prefix).toBe('tasklist:')
     })
   })
 
-  describe('task', () => {
+describe('task', () => {
     it('generates correct key with list and task ID', () => {
       expect(keySpace.task.key('list1', 'research')).toBe('task:list1:research')
     })
+
     it('generates correct prefix for a list', () => {
       expect(keySpace.task.prefix('list1')).toBe('task:list1:')
     })
   })
 
-  describe('flow', () => {
+describe('flow', () => {
     it('generates correct key', () => {
       expect(keySpace.flow.key('flow-123')).toBe('crux:flow:flow-123')
     })
+
     it('has correct prefix', () => {
       expect(keySpace.flow.prefix).toBe('crux:flow:')
     })
   })
 
-  describe('signal', () => {
+describe('signal', () => {
     it('generates correct key', () => {
       expect(keySpace.signal.key('flow-1', 'approval')).toBe('crux:signal:flow-1:approval')
     })
+
     it('generates correct prefix for a flow', () => {
       expect(keySpace.signal.prefix('flow-1')).toBe('crux:signal:flow-1:')
     })
   })
 
-  describe('blackboard', () => {
+describe('blackboard', () => {
     it('generates correct key', () => {
       expect(keySpace.blackboard.key('shared')).toBe('blackboard:shared')
     })
+
     it('has correct prefix', () => {
       expect(keySpace.blackboard.prefix).toBe('blackboard:')
     })
   })
 
-  describe('consistency', () => {
+describe('consistency', () => {
     it('no prefix collisions between namespaces', () => {
       const prefixes = [
         keySpace.plan.prefix,

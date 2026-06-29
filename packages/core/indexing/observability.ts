@@ -25,7 +25,6 @@ import type {
 
 /** Forward a progress event to hooks/callback and strip transport fields. */
 export function emitProgress(options: CorpusSyncOptions, event: CorpusProgressEvent): CorpusSourceResult {
-  getRuntime().instrumentationHooks?.onCorpusSource?.(event)
   options.onProgress?.(event)
   const { syncId: _syncId, corpusId: _corpusId, namespace: _namespace, dryRun: _dryRun, ...result } = event
   return result
@@ -332,7 +331,6 @@ export async function runIndexOperation<T extends IndexResult | IndexDryRunResul
     ...(args.dryRun !== undefined ? { dryRun: args.dryRun } : {}),
   }
 
-  getRuntime().instrumentationHooks?.onIndexStart?.(eventBase)
   const span =
     args.instrument === false
       ? undefined
@@ -360,19 +358,8 @@ export async function runIndexOperation<T extends IndexResult | IndexDryRunResul
           : { sourceCount: result.sourceCount, chunkCount: result.chunkCount }),
       })
     }
-    getRuntime().instrumentationHooks?.onIndexEnd?.({
-      ...eventBase,
-      durationMs: Date.now() - startedAt,
-      ...(typeof result === 'number' ? { deletedCount: result } : {}),
-      ...(typeof result === 'number' || !result.stages ? {} : { stages: result.stages }),
-    })
     return result
   } catch (error) {
-    getRuntime().instrumentationHooks?.onIndexEnd?.({
-      ...eventBase,
-      durationMs: Date.now() - startedAt,
-      error: error instanceof Error ? error.message : String(error),
-    })
     span?.error(error)
     throw error
   }

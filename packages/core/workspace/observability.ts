@@ -37,14 +37,6 @@ export async function instrument<T>(event: WorkspaceEvent, run: () => Promise<T>
     const result = await span.withContext(run)
     span.withContext(() => emitWorkspaceArtifact(span.spanId, event, result))
     const resultAttributes = workspaceResultAttributes(result)
-    getRuntime().instrumentationHooks?.onWorkspaceOperation?.({
-      workspaceId: event.workspaceId,
-      namespace: event.namespace,
-      operation: event.operation,
-      path: event.path,
-      status: 'success',
-      durationMs: Date.now() - start,
-    })
     span.end({
       attributes: {
         workspaceId: event.workspaceId,
@@ -57,15 +49,6 @@ export async function instrument<T>(event: WorkspaceEvent, run: () => Promise<T>
     })
     return result
   } catch (error) {
-    getRuntime().instrumentationHooks?.onWorkspaceOperation?.({
-      workspaceId: event.workspaceId,
-      namespace: event.namespace,
-      operation: event.operation,
-      path: event.path,
-      status: 'error',
-      durationMs: Date.now() - start,
-      error: error instanceof Error ? error.message : String(error),
-    })
     span.error(error, {
       workspaceId: event.workspaceId,
       operation: event.operation,

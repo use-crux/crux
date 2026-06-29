@@ -174,27 +174,12 @@ export function createParallel(executor: AgentExecutor) {
                 }
               }
 
-              runtime.instrumentationHooks?.onCompositionAgent?.({
-                compositionId,
-                agentId: result.agentId,
-                index,
-                status: 'success',
-                durationMs: result.durationMs,
-              })
 
               return result
             } catch (err) {
               const agentId = isAgent(agentLike) ? agentLike.id : key
               const errorMsg = err instanceof Error ? err.message : String(err)
 
-              runtime.instrumentationHooks?.onCompositionAgent?.({
-                compositionId,
-                agentId,
-                index,
-                status: 'error',
-                durationMs: Date.now() - agentStart,
-                error: errorMsg,
-              })
 
               throw err
             }
@@ -211,11 +196,6 @@ export function createParallel(executor: AgentExecutor) {
       },
       async () => {
         // Emit composition:start
-        runtime.instrumentationHooks?.onCompositionStart?.({
-          compositionId,
-          kind: 'parallel',
-          agentIds,
-        })
 
         try {
           if (onError === 'continue') {
@@ -238,13 +218,6 @@ export function createParallel(executor: AgentExecutor) {
             }
 
             const durationMs = Date.now() - start
-            runtime.instrumentationHooks?.onCompositionEnd?.({
-              compositionId,
-              kind: 'parallel',
-              status: Object.values(settledMap).some((s) => s.status === 'error') ? 'error' : 'success',
-              durationMs,
-              agentCount: entries.length,
-            })
             emitParallelCompositionReport({
               compositionId,
               status: Object.values(settledMap).some((s) => s.status === 'error') ? 'error' : 'success',
@@ -286,13 +259,6 @@ export function createParallel(executor: AgentExecutor) {
           }
 
           const durationMs = Date.now() - start
-          runtime.instrumentationHooks?.onCompositionEnd?.({
-            compositionId,
-            kind: 'parallel',
-            status: 'success',
-            durationMs,
-            agentCount: entries.length,
-          })
           emitParallelCompositionReport({
             compositionId,
             status: 'success',
@@ -314,13 +280,6 @@ export function createParallel(executor: AgentExecutor) {
             durationMs,
           }
         } catch (err) {
-          runtime.instrumentationHooks?.onCompositionEnd?.({
-            compositionId,
-            kind: 'parallel',
-            status: 'error',
-            durationMs: Date.now() - start,
-            agentCount: entries.length,
-          })
           throw err
         }
       },

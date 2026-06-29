@@ -58,7 +58,7 @@ describe('finalizeOutput — constraints', () => {
     })
   })
 
-  it('throws ConstraintViolationError with audit attached when assert retries are exhausted', async () => {
+    it('throws ConstraintViolationError with audit attached when assert retries are exhausted', async () => {
     const safety = session({ call: { constraints: [needsNeedle('strict', 'unicorn', { maxRetries: 1 })] } })
     const regenerate = vi.fn(async (): Promise<SafetyOutput> => ({ text: 'still wrong' }))
 
@@ -74,7 +74,7 @@ describe('finalizeOutput — constraints', () => {
     expect(regenerate).toHaveBeenCalledTimes(1)
   })
 
-  it('enforces the shared constraintMaxRetries cap across constraints', async () => {
+    it('enforces the shared constraintMaxRetries cap across constraints', async () => {
     const safety = session({
       call: { constraints: [needsNeedle('never-happy', 'unicorn', { maxRetries: 10 })], constraintMaxRetries: 2 },
     })
@@ -84,7 +84,7 @@ describe('finalizeOutput — constraints', () => {
     expect(regenerate).toHaveBeenCalledTimes(2)
   })
 
-  it('suggest failures never regenerate and surface as suggestFallback in the audit', async () => {
+    it('suggest failures never regenerate and surface as suggestFallback in the audit', async () => {
     const safety = session({ call: { constraints: [needsNeedle('soft', 'unicorn', { severity: 'suggest' })] } })
 
     const final = await safety.finalizeOutput({ text: 'plain output' }, noRegen)
@@ -94,7 +94,7 @@ describe('finalizeOutput — constraints', () => {
     expect(safety.audit.constraints?.allPassed).toBe(false)
   })
 
-  it('a custom formatter receives structured failures and call identity', async () => {
+    it('a custom formatter receives structured failures and call identity', async () => {
     const format = vi.fn(() => 'FIX IT')
     const safety = session({
       call: { constraints: [needsNeedle('brand-voice', 'ship')] },
@@ -111,7 +111,7 @@ describe('finalizeOutput — constraints', () => {
     expect(regenerate.mock.calls[0]![0]).toEqual([{ role: 'user', content: 'FIX IT' }])
   })
 
-  it('a formatter may return full messages, forwarded to regenerate as-is', async () => {
+    it('a formatter may return full messages, forwarded to regenerate as-is', async () => {
     const corrective: Message[] = [
       { role: 'assistant', content: 'I will fix this.' },
       { role: 'user', content: 'do better' },
@@ -148,7 +148,7 @@ describe('finalizeOutput — output guardrails', () => {
     expect(safety.audit.guardrails?.applied).toContainEqual(expect.objectContaining({ guard: 'no-emails', action: 'redact' }))
   })
 
-  it('throws GuardrailBlockedError when an output guard blocks', async () => {
+    it('throws GuardrailBlockedError when an output guard blocks', async () => {
     const blocker = guardrail({
       name: 'toxicity',
       phase: 'output',
@@ -159,7 +159,7 @@ describe('finalizeOutput — output guardrails', () => {
     await expect(safety.finalizeOutput({ text: 'bad output' }, noRegen)).rejects.toBeInstanceOf(GuardrailBlockedError)
   })
 
-  it('preserves the parsed object while guards rewrite only text', async () => {
+    it('preserves the parsed object while guards rewrite only text', async () => {
     const transformer = guardrail({
       name: 'suffix',
       phase: 'output',
@@ -215,70 +215,6 @@ describe('finalizeOutput — suspension', () => {
     expect(safety.audit.guardrails).toBeUndefined()
   })
 })
-
-// ── Instrumentation hooks ──────────────────────────────────────────
-
-describe('instrumentation hooks', () => {
-  it('fires onConstraintCheck / onConstraintRetry / onConstraintViolation', async () => {
-    const onConstraintCheck = vi.fn()
-    const onConstraintRetry = vi.fn()
-    const onConstraintViolation = vi.fn()
-    updateRuntime({ instrumentationHooks: { onConstraintCheck, onConstraintRetry, onConstraintViolation } })
-
-    const safety = session({ call: { constraints: [needsNeedle('hooked', 'unicorn', { maxRetries: 1 })] } })
-    await safety
-      .finalizeOutput({ text: 'wrong' }, async () => ({ text: 'still wrong' }))
-      .catch(() => undefined)
-
-    expect(onConstraintCheck).toHaveBeenCalledWith(
-      expect.objectContaining({ constraintName: 'hooked', pass: false, traceId: 'trace-1' }),
-    )
-    expect(onConstraintRetry).toHaveBeenCalledWith(
-      expect.objectContaining({ constraintNames: ['hooked'], attempt: 1, combinedFeedback: 'must mention unicorn' }),
-    )
-    expect(onConstraintViolation).toHaveBeenCalledWith(
-      expect.objectContaining({ constraintNames: ['hooked'], totalAttempts: 2 }),
-    )
-  })
-
-  it('fires onGuardrailRun per applied audit entry', async () => {
-    const onGuardrailRun = vi.fn()
-    updateRuntime({ instrumentationHooks: { onGuardrailRun } })
-
-    const safety = session({
-      call: {
-        guardrails: [
-          guardrail({ name: 'g-in', phase: 'input', validate: async () => ({ action: 'pass' as const }) }),
-          guardrail({ name: 'g-out', phase: 'output', validate: async () => ({ action: 'pass' as const }) }),
-        ],
-      },
-    })
-    await safety.guardInput({ messages: [{ role: 'user', content: 'hi' }] })
-    await safety.finalizeOutput({ text: 'out' }, noRegen)
-
-    expect(onGuardrailRun).toHaveBeenCalledWith(
-      expect.objectContaining({ guardrailId: 'g-in', phase: 'input', action: 'pass', traceId: 'trace-1' }),
-    )
-    expect(onGuardrailRun).toHaveBeenCalledWith(
-      expect.objectContaining({ guardrailId: 'g-out', phase: 'output', action: 'pass' }),
-    )
-  })
-
-  it('snapshots hooks at session creation — a mid-call setRuntime cannot half-instrument', async () => {
-    const early = vi.fn()
-    updateRuntime({ instrumentationHooks: { onGuardrailRun: early } })
-    const safety = session({
-      call: { guardrails: [guardrail({ name: 'g', phase: 'input', validate: async () => ({ action: 'pass' as const }) })] },
-    })
-
-    const late = vi.fn()
-    updateRuntime({ instrumentationHooks: { onGuardrailRun: late } })
-    await safety.guardInput({ messages: [{ role: 'user', content: 'hi' }] })
-
-    expect(early).toHaveBeenCalledTimes(1)
-  })
-})
-
 // ── stamp ──────────────────────────────────────────────────────────
 
 describe('stamp', () => {
@@ -299,7 +235,7 @@ describe('stamp', () => {
     expect(meta.constraints?.entries).toHaveLength(1)
   })
 
-  it('attaches nothing when no safety ran', () => {
+    it('attaches nothing when no safety ran', () => {
     const safety = session({ call: { constraints: [needsNeedle('c', 'x')] } })
     const meta = safety.stamp({ finishReason: 'stop' })
     expect('guardrails' in meta).toBe(false)
@@ -369,7 +305,7 @@ describe('createSafetyPlugin', () => {
     expect(checkSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('multiple safety plugins compose — policies concatenate', () => {
+    it('multiple safety plugins compose — policies concatenate', () => {
     const g1 = guardrail({ name: 'g1', phase: 'input', validate: async () => ({ action: 'pass' as const }) })
     const g2 = guardrail({ name: 'g2', phase: 'input', validate: async () => ({ action: 'pass' as const }) })
 
@@ -405,7 +341,7 @@ describe('finalizeOutput — output guardrail pipeline', () => {
     expect(final.text).toBe('y-1-2')
   })
 
-  it('stops at the first blocking output guard — a later guard never runs', async () => {
+    it('stops at the first blocking output guard — a later guard never runs', async () => {
     const later = vi.fn()
     const blocker = guardrail({
       name: 'blk',
@@ -427,7 +363,7 @@ describe('finalizeOutput — output guardrail pipeline', () => {
     expect(later).not.toHaveBeenCalled()
   })
 
-  it('throws a GuardrailBlockedError carrying phase "output"', async () => {
+    it('throws a GuardrailBlockedError carrying phase "output"', async () => {
     const blocker = guardrail({
       name: 'toxicity',
       phase: 'output',

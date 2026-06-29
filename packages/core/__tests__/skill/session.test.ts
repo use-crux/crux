@@ -20,7 +20,7 @@ describe('SkillActivationSession', () => {
     expect(second.newlyActivated()).toEqual([seo])
   })
 
-  it('activates skills and exposes session-owned context, injection, and snapshot state', () => {
+    it('activates skills and exposes session-owned context, injection, and snapshot state', () => {
     const seo = skill.inline({
       id: 'seo',
       description: 'SEO writing',
@@ -48,7 +48,7 @@ describe('SkillActivationSession', () => {
     })
   })
 
-  it('resolves input with active skill ids for the next prompt resolution', () => {
+    it('resolves input with active skill ids for the next prompt resolution', () => {
     const seo = skill.inline({
       id: 'seo',
       description: 'SEO writing',
@@ -66,7 +66,7 @@ describe('SkillActivationSession', () => {
     })
   })
 
-  it('loads persisted snapshots with createSkillActivationSession.forTarget', async () => {
+    it('loads persisted snapshots with createSkillActivationSession.forTarget', async () => {
     const seo = skill.inline({
       id: 'seo',
       description: 'SEO writing',
@@ -89,7 +89,7 @@ describe('SkillActivationSession', () => {
     expect(session.newlyActivated()).toEqual([])
   })
 
-  it('attaches an explicit session handle to resolved prompts that include skills', async () => {
+    it('attaches an explicit session handle to resolved prompts that include skills', async () => {
     const seo = skill.inline({
       id: 'seo',
       description: 'SEO writing',

@@ -8,13 +8,15 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
+import { resetRuntime, updateRuntime } from '../../runtime/runtime'
 
 describe('generation observability', () => {
   afterEach(() => {
     resetObservabilityRuntime()
+    resetRuntime()
   })
 
-  it('emits an implicit run, generation span, artifacts, edges, and usage for generate', async () => {
+    it('emits an implicit run, generation span, artifacts, edges, and usage for generate', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -54,9 +56,54 @@ describe('generation observability', () => {
     expect(transport.records[4]).not.toMatchObject({
       attributes: expect.objectContaining({ cost: expect.any(Number) }),
     })
+    const generationEnd = transport.records.find((record) => record.type === 'span:end')
+    expect(generationEnd).toMatchObject({
+      type: 'span:end',
+      metrics: expect.objectContaining({
+        'gen.duration_ms': expect.any(Number),
+        'gen.output_tokens_per_second': expect.any(Number),
+      }),
+    })
+    expect(generationEnd && 'metrics' in generationEnd ? generationEnd.metrics?.['gen.duration_ms'] : undefined)
+      .toBeGreaterThanOrEqual(0)
   })
 
-  it('records operation deadlines on timed generation spans', async () => {
+    it('omits generation input and output previews when capture policy disables them', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    updateRuntime({
+      observabilityCapture: {
+        recordInputs: false,
+        recordOutputs: false,
+      },
+    })
+
+    await orchestrateGenerate(generationSpec('generate'), async () => ({
+      text: 'hello',
+      _meta: {
+        usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },
+      },
+    }))
+    await observe.flush()
+
+    const inputArtifact = transport.records.find((record) => record.type === 'artifact' && record.kind === 'messages')
+    const outputArtifact = transport.records.find((record) => record.type === 'artifact' && record.kind === 'output')
+
+    expect(inputArtifact).toMatchObject({
+      encoding: 'reference',
+      sizeBytes: expect.any(Number),
+      hash: expect.any(String),
+    })
+    expect(inputArtifact).not.toHaveProperty('preview')
+    expect(outputArtifact).toMatchObject({
+      encoding: 'reference',
+      sizeBytes: expect.any(Number),
+      hash: expect.any(String),
+    })
+    expect(outputArtifact).not.toHaveProperty('preview')
+  })
+
+    it('records operation deadlines on timed generation spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -92,7 +139,7 @@ describe('generation observability', () => {
     })
   })
 
-  it('ends timed generation spans when the provider call never settles', async () => {
+    it('ends timed generation spans when the provider call never settles', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -117,7 +164,7 @@ describe('generation observability', () => {
     })
   })
 
-  it('records structured generation objects in the output artifact preview', async () => {
+    it('records structured generation objects in the output artifact preview', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -143,7 +190,7 @@ describe('generation observability', () => {
     })
   })
 
-  it('links resolved context artifacts to the generation span that consumes them', async () => {
+    it('links resolved context artifacts to the generation span that consumes them', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const contextArtifactId = createCruxArtifactId('context_profile')
@@ -192,7 +239,7 @@ describe('generation observability', () => {
     )
   })
 
-  it('includes prepared request tool names in the messages artifact preview', async () => {
+    it('includes prepared request tool names in the messages artifact preview', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -223,7 +270,7 @@ describe('generation observability', () => {
     })
   })
 
-  it('ends stream spans when the raw stream completes before completion is read', async () => {
+    it('ends stream spans when the raw stream completes before completion is read', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -291,7 +338,7 @@ describe('generation observability', () => {
     })
   })
 
-  it('emits canonical usage and streaming metrics when stream completion is read', async () => {
+    it('emits canonical usage and streaming metrics when stream completion is read', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -329,9 +376,19 @@ describe('generation observability', () => {
     expect(usageEvent).not.toMatchObject({
       attributes: expect.objectContaining({ cost: expect.any(Number) }),
     })
+    const generationEnd = transport.records.find((record) => record.type === 'span:end')
+    expect(generationEnd).toMatchObject({
+      type: 'span:end',
+      metrics: expect.objectContaining({
+        'gen.duration_ms': expect.any(Number),
+        'gen.time_to_first_token_ms': expect.any(Number),
+        'gen.output_tokens_per_second': expect.any(Number),
+        'gen.time_per_output_chunk_ms': expect.any(Number),
+      }),
+    })
   })
 
-  it('ends stream spans as errors when the raw stream throws', async () => {
+    it('ends stream spans as errors when the raw stream throws', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 

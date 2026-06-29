@@ -108,11 +108,6 @@ export async function withFlow<T, TInput = void>(
 
   // Emit flow resume hook (before flow start, so timeline ordering is correct)
   if (isResume) {
-    getRuntime().instrumentationHooks?.onFlowResume?.({
-      flowId,
-      name,
-      timestamp: Date.now(),
-    })
   }
 
   // Resolve input: on resume, restore from snapshot; otherwise use options
@@ -142,15 +137,6 @@ export async function withFlow<T, TInput = void>(
       spanStack: flowSpan.parentSpanId ? [flowSpan.parentSpanId] : [],
     } as const)
   const spanId = flowSpan.spanId
-  getRuntime().instrumentationHooks?.onFlowStart?.({
-    flowId,
-    name,
-    parentFlowId,
-    goal: options?.goal,
-    input: flowInput !== undefined ? flowInput : undefined,
-    startedAt,
-    spanId,
-  })
 
   // Track aggregates across steps
   let stepCount = 0
@@ -193,12 +179,6 @@ export async function withFlow<T, TInput = void>(
 
       // Capture source location and emit step start hook
       const stepSource = captureSource()
-      getRuntime().instrumentationHooks?.onStepStart?.({
-        flowId,
-        stepId,
-        label,
-        ...(stepSource ? { source: stepSource } : {}),
-      })
 
       // Always pass scope to step function — () => T functions ignore the extra arg
       const boundStepFn = () => (stepFn as (flow: FlowScope<TInput>) => Promise<S> | S)(scope)
@@ -244,27 +224,12 @@ export async function withFlow<T, TInput = void>(
         results[label] = result
 
         // Emit step end hook
-        getRuntime().instrumentationHooks?.onStepEnd?.({
-          flowId,
-          stepId,
-          label,
-          status: 'success',
-          durationMs: Date.now() - stepStartedAt,
-        })
         stepSpan.end()
 
         return result
       } catch (error) {
         // Don't emit step end for FlowSuspendedError — it's not a real step error
         if (!(error instanceof FlowSuspendedError)) {
-          getRuntime().instrumentationHooks?.onStepEnd?.({
-            flowId,
-            stepId,
-            label,
-            status: 'error',
-            durationMs: Date.now() - stepStartedAt,
-            error: error instanceof Error ? error.message : String(error),
-          })
           stepSpan.error(error)
         } else {
           await stepSpan.withContext(async () => {
@@ -301,12 +266,6 @@ export async function withFlow<T, TInput = void>(
           if (signalDoc) {
             // Signal found — emit hook and return payload
             const payload = (signalDoc.payload ?? {}) as S
-            getRuntime().instrumentationHooks?.onFlowSignal?.({
-              flowId,
-              signalName: _name,
-              payload,
-              timestamp: Date.now(),
-            })
             return payload
           }
         }
@@ -366,14 +325,6 @@ export async function withFlow<T, TInput = void>(
       runWithExecutionContext({ ...existing, flowId, parentFlowId }, () => fn(scope)),
     )
 
-    getRuntime().instrumentationHooks?.onFlowEnd?.({
-      flowId,
-      name,
-      status: 'success',
-      durationMs: Date.now() - startedAt,
-      totalSteps: stepCount,
-      spanId,
-    })
 
     flowSpan.end({ attributes: { flowStatus: 'completed', totalSteps: stepCount } })
     return { status: 'completed', output: result, flowId }
@@ -403,15 +354,6 @@ export async function withFlow<T, TInput = void>(
         await flowStore.set(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
       }
 
-      getRuntime().instrumentationHooks?.onFlowSuspend?.({
-        flowId,
-        name,
-        suspendPoint: error.suspendPoint,
-        timestamp: Date.now(),
-      })
-
-      // Note: onFlowEnd is NOT fired for suspend — the flow isn't terminal.
-      // onFlowSuspend signals the pause; onFlowResume will signal continuation.
 
       await flowSpan.withContext(async () => {
         await emitFlowSuspensionMarker(error.suspendPoint, {
@@ -450,21 +392,7 @@ export async function withFlow<T, TInput = void>(
         })
       }
 
-      getRuntime().instrumentationHooks?.onFlowCancel?.({
-        flowId,
-        name,
-        reason: error.reason,
-        timestamp: Date.now(),
-      })
 
-      getRuntime().instrumentationHooks?.onFlowEnd?.({
-        flowId,
-        name,
-        status: 'cancelled',
-        durationMs: Date.now() - startedAt,
-        totalSteps: stepCount,
-        spanId,
-      })
 
       flowSpan.end({
         status: 'cancelled',
@@ -484,35 +412,12 @@ export async function withFlow<T, TInput = void>(
         })
       }
 
-      getRuntime().instrumentationHooks?.onFlowExpired?.({
-        flowId,
-        name,
-        suspendPoint: error.suspendPoint,
-        timestamp: Date.now(),
-      })
 
-      getRuntime().instrumentationHooks?.onFlowEnd?.({
-        flowId,
-        name,
-        status: 'expired',
-        durationMs: Date.now() - startedAt,
-        totalSteps: stepCount,
-        spanId,
-      })
 
       flowSpan.error(error, { flowStatus: 'expired', suspendedAt: error.suspendPoint, totalSteps: stepCount })
       return { status: 'expired', flowId, suspendedAt: error.suspendPoint }
     }
 
-    getRuntime().instrumentationHooks?.onFlowEnd?.({
-      flowId,
-      name,
-      status: 'error',
-      durationMs: Date.now() - startedAt,
-      totalSteps: stepCount,
-      error: error instanceof Error ? error.message : String(error),
-      spanId,
-    })
 
     flowSpan.error(error, { totalSteps: stepCount })
     throw error

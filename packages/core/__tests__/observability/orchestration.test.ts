@@ -39,7 +39,7 @@ describe('canonical orchestration observability', () => {
     resetObservabilityRuntime()
   })
 
-  it('records standalone parallel runs with sibling agent spans and nested generation spans', async () => {
+    it('records standalone parallel runs with sibling agent spans and nested generation spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -96,7 +96,7 @@ describe('canonical orchestration observability', () => {
     )
   })
 
-  it('records pipeline steps as canonical flow.step children', async () => {
+    it('records pipeline steps as canonical flow.step children', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const pipeline = createPipeline(async (agent) => ({
@@ -142,7 +142,7 @@ describe('canonical orchestration observability', () => {
     )
   })
 
-  it('records runtime flows as flow.run with canonical flow.step children', async () => {
+    it('records runtime flows as flow.run with canonical flow.step children', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -162,7 +162,7 @@ describe('canonical orchestration observability', () => {
     expect(stepSpans.map((record) => record.parentSpanId)).toEqual([flowRun?.spanId, flowRun?.spanId])
   })
 
-  it('records delegates and handoff payload relations canonically', async () => {
+    it('records delegates and handoff payload relations canonically', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const contract = handoff({
@@ -227,7 +227,7 @@ describe('canonical orchestration observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'delegate.invoked' }))
   })
 
-  it('records consensus and its nested parallel voters canonically', async () => {
+    it('records consensus and its nested parallel voters canonically', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const consensus = createConsensus(async (agent) => ({
@@ -269,7 +269,7 @@ describe('canonical orchestration observability', () => {
     )
   })
 
-  it('records swarm agent turns and handoffs canonically', async () => {
+    it('records swarm agent turns and handoffs canonically', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const triage = makeAgent({

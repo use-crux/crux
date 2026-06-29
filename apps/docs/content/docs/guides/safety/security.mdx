@@ -225,7 +225,7 @@ Security warnings are emitted from the devtools middleware with full trace corre
 import { updateRuntime } from '@use-crux/core'
 
 updateRuntime({
-  instrumentationHooks: {
+  observability subscribers: {
     onSecurityWarning: (event) => {
       // event: { promptId, field, pattern, message, inputPreview }
       myLogger.send(event)

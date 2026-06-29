@@ -49,7 +49,7 @@ describe('guardInput — pipeline ordering and content flow', () => {
     expect(result.messages.at(-1)?.content).toBe('x-1-2')
   })
 
-  it('feeds the redacted output of an earlier guard into a later guard as its input', async () => {
+    it('feeds the redacted output of an earlier guard into a later guard as its input', async () => {
     const laterSaw = vi.fn()
     const redactor = guardrail({
       name: 'redactor',
@@ -101,7 +101,7 @@ describe('guardInput — block short-circuit', () => {
     expect(later).not.toHaveBeenCalled()
   })
 
-  it('throws a GuardrailBlockedError shaped with guardrailId, phase, and reason', async () => {
+    it('throws a GuardrailBlockedError shaped with guardrailId, phase, and reason', async () => {
     const blocker = guardrail({
       name: 'pii',
       phase: 'input',

@@ -8,7 +8,7 @@ describe('context()', () => {
     expect(ctx.systemFn({})).toBe('Be polite.')
   })
 
-  it('dynamic context: systemFn calls the function with input', () => {
+    it('dynamic context: systemFn calls the function with input', () => {
     const ctx = context({
       input: z.object({ lang: z.string() }),
       system: ({ input }) => `Respond in ${input.lang}.`,
@@ -16,17 +16,17 @@ describe('context()', () => {
     expect(ctx.systemFn({ lang: 'French' })).toBe('Respond in French.')
   })
 
-  it('priority defaults to 50', () => {
+    it('priority defaults to 50', () => {
     const ctx = context({ system: 'text' })
     expect(ctx.priority).toBe(50)
   })
 
-  it('custom priority is preserved', () => {
+    it('custom priority is preserved', () => {
     const ctx = context({ system: 'text', priority: 10 })
     expect(ctx.priority).toBe(10)
   })
 
-  it('inputSchema and inputKeys extracted correctly', () => {
+    it('inputSchema and inputKeys extracted correctly', () => {
     const ctx = context({
       input: z.object({ foo: z.string(), bar: z.number() }),
       system: 'text',
@@ -35,14 +35,14 @@ describe('context()', () => {
     expect([...ctx.inputKeys]).toEqual(['foo', 'bar'])
   })
 
-  it('static tools returned via toolsFn', () => {
+    it('static tools returned via toolsFn', () => {
     const tools = { search: 'tool' }
     const ctx = context({ system: 'text', tools })
     expect(ctx.toolsFn).toBeDefined()
     expect(ctx.toolsFn!({})).toEqual({ search: 'tool' })
   })
 
-  it('dynamic tools function called with input', () => {
+    it('dynamic tools function called with input', () => {
     const ctx = context({
       input: z.object({ enabled: z.boolean() }),
       system: 'text',
@@ -52,28 +52,28 @@ describe('context()', () => {
     expect(ctx.toolsFn!({ enabled: false })).toEqual({})
   })
 
-  it('context without tools has toolsFn = undefined', () => {
+    it('context without tools has toolsFn = undefined', () => {
     const ctx = context({ system: 'text' })
     expect(ctx.toolsFn).toBeUndefined()
   })
 
-  it('context is frozen', () => {
+    it('context is frozen', () => {
     const ctx = context({ id: 'test', system: 'text' })
     expect(Object.isFrozen(ctx)).toBe(true)
   })
 
-  it('has _tag = Context', () => {
+    it('has _tag = Context', () => {
     const ctx = context({ system: 'text' })
     expect(ctx._tag).toBe('Context')
   })
 
-  it('id and description are preserved', () => {
+    it('id and description are preserved', () => {
     const ctx = context({ id: 'my-ctx', description: 'My context', system: 'text' })
     expect(ctx.id).toBe('my-ctx')
     expect(ctx.description).toBe('My context')
   })
 
-  it('inputKeys is frozen', () => {
+    it('inputKeys is frozen', () => {
     const ctx = context({
       input: z.object({ a: z.string() }),
       system: 'text',
@@ -81,7 +81,7 @@ describe('context()', () => {
     expect(Object.isFrozen(ctx.inputKeys)).toBe(true)
   })
 
-  it('async system function returns a promise', async () => {
+    it('async system function returns a promise', async () => {
     const ctx = context({
       id: 'async-ctx',
       system: async () => {
@@ -94,7 +94,7 @@ describe('context()', () => {
     expect(result).toBe('Async result')
   })
 
-  it('async system function with input', async () => {
+    it('async system function with input', async () => {
     const ctx = context({
       id: 'async-input',
       input: z.object({ userId: z.string() }),
@@ -190,7 +190,7 @@ describe('createContexts()', () => {
     expect(tree.brand._tag).toBe('Context')
   })
 
-  it('throws on non-Context leaf values', () => {
+    it('throws on non-Context leaf values', () => {
     expect(() =>
       createContexts({
         bad: 'not a context' as any,
@@ -198,7 +198,7 @@ describe('createContexts()', () => {
     ).toThrow(/invalid value at "bad"/)
   })
 
-  it('throws on array values', () => {
+    it('throws on array values', () => {
     expect(() =>
       createContexts({
         bad: [] as any,
@@ -206,7 +206,7 @@ describe('createContexts()', () => {
     ).toThrow(/invalid value/)
   })
 
-  it('allows deeply nested trees', () => {
+    it('allows deeply nested trees', () => {
     const tree = createContexts({
       a: {
         b: {

@@ -2,7 +2,13 @@ import { Buffer } from 'node:buffer'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resetRuntime, setRuntime } from '@use-crux/core'
+import { resetRuntime } from '@use-crux/core'
+import {
+  subscribeObservability,
+  type CruxGraphRecord,
+  type CruxSpanEndRecord,
+  type CruxSpanStartRecord,
+} from '@use-crux/core/observability'
 import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow } from 'docx'
 import ExcelJS from 'exceljs'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -330,28 +336,42 @@ describe('@use-crux/ingest structured sources', () => {
     const badPath = join(dir, 'bad.json')
     await writeFile(okPath, 'hello', 'utf8')
     await writeFile(badPath, '{not-json', 'utf8')
-    const starts: Array<{ parser: string; sourceId: string; byteLength: number }> = []
-    const ends: Array<{ parser: string; sourceId: string; partCount: number; warningCount: number; error?: string }> =
-      []
-    setRuntime({
-      instrumentationHooks: {
-        onIngestParseStart: (event) => starts.push(event),
-        onIngestParseEnd: (event) => ends.push(event),
-      },
-    })
+    const records: CruxGraphRecord[] = []
+    const unsubscribe = subscribeObservability((record) => records.push(record))
 
-    await collect(fileSource(okPath, { namespace: 'kb' }).load())
-    await collect(fileSource(badPath, { namespace: 'kb' }).load())
+    try {
+      await collect(fileSource(okPath, { namespace: 'kb' }).load())
+      await collect(fileSource(badPath, { namespace: 'kb' }).load())
+    } finally {
+      unsubscribe()
+    }
+
+    const starts = records.filter(isIngestParseStart)
+    const ends = records.filter(isIngestParseEnd)
 
     expect(starts).toMatchObject([
-      { parser: 'text', sourceId: okPath, byteLength: 5 },
-      { parser: 'json', sourceId: badPath, byteLength: 9 },
+      { attributes: { parser: 'text', sourceId: okPath, byteLength: 5 } },
+      { attributes: { parser: 'json', sourceId: badPath, byteLength: 9 } },
     ])
-    expect(ends[0]).toMatchObject({ parser: 'text', sourceId: okPath, partCount: 1, warningCount: 0 })
-    expect(ends[1]).toMatchObject({ parser: 'json', sourceId: badPath, partCount: 0, warningCount: 0 })
-    expect(ends[1].error).toContain('JSON')
+    expect(ends[0]).toMatchObject({
+      status: 'ok',
+      attributes: { parser: 'text', sourceId: okPath, partCount: 1, warningCount: 0 },
+    })
+    expect(ends[1]).toMatchObject({
+      status: 'error',
+      attributes: { parser: 'json', sourceId: badPath, partCount: 0, warningCount: 0 },
+    })
+    expect(ends[1].error?.message).toContain('JSON')
   })
 })
+
+function isIngestParseStart(record: CruxGraphRecord): record is CruxSpanStartRecord {
+  return record.type === 'span:start' && record.primitive === 'ingest.parse'
+}
+
+function isIngestParseEnd(record: CruxGraphRecord): record is CruxSpanEndRecord {
+  return record.type === 'span:end' && record.attributes?.parser !== undefined
+}
 
 async function collect<T>(iterable: AsyncIterable<T>): Promise<T[]> {
   const result: T[] = []

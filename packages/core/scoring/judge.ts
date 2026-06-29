@@ -180,14 +180,6 @@ export function llmJudge<TDetail = unknown>(config: JudgeConfig<TDetail>): Judge
         })
       })
 
-      getRuntime().instrumentationHooks?.onJudgeResult?.({
-        metricId: config.id,
-        score: clampedScore,
-        reasoning: object.reasoning,
-        ...(options?.evalId ? { evalId: options.evalId } : {}),
-        input: truncate(input.input, 200),
-        output: truncate(input.output, 200),
-      })
 
       span.end({
         metricId: config.id,

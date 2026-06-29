@@ -137,7 +137,7 @@ describe('adapter execution session', () => {
     expect(assistantEcho(core.calls[1]?.messages)).toContain(INVALID_JSON)
   })
 
-  it('adapts AdapterSpec hooks into a core-step dialect without changing their contract', async () => {
+    it('adapts AdapterSpec hooks into a core-step dialect without changing their contract', async () => {
     const client = { apiKey: 'test-key' }
     const call = vi.fn(async (_client: typeof client, args: CallArgs<{ mode: string }>) => ({
       raw: { provider: 'raw', mode: args.extra.mode },
@@ -192,7 +192,7 @@ describe('adapter execution session', () => {
     ])
   })
 
-  it('tags a LoopRuntimePort as an sdk-loop dialect without changing its contract', async () => {
+    it('tags a LoopRuntimePort as an sdk-loop dialect without changing its contract', async () => {
     const modelInfo: ModelInfo = { provider: 'sdk-provider', modelId: 'sdk-model' }
     const runTextLoop = vi.fn(async (request: ExecutorRequest<string>) => ({
       status: 'complete' as const,

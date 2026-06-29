@@ -24,11 +24,11 @@ describe('formatTranscript', () => {
     expect(result).toContain('[4] assistant: The capital of Germany is Berlin.')
   })
 
-  it('handles empty array', () => {
+    it('handles empty array', () => {
     expect(formatTranscript([])).toBe('')
   })
 
-  it('handles single message', () => {
+    it('handles single message', () => {
     const result = formatTranscript([{ role: 'user', content: 'Hello' }])
     expect(result).toBe('[1] user: Hello')
   })
@@ -45,7 +45,7 @@ describe('summarizeMessages', () => {
     expect(result.summary).toBe('User asked about European capitals. France: Paris, Germany: Berlin.')
   })
 
-  it('computes token metrics', async () => {
+    it('computes token metrics', async () => {
     const result = await summarizeMessages({
       messages: sampleMessages,
       generate: mockGenerate,
@@ -58,7 +58,7 @@ describe('summarizeMessages', () => {
     expect(result.ratio).toBeLessThanOrEqual(1)
   })
 
-  it('returns empty result for empty messages', async () => {
+    it('returns empty result for empty messages', async () => {
     const result = await summarizeMessages({
       messages: [],
       generate: mockGenerate,
@@ -71,7 +71,7 @@ describe('summarizeMessages', () => {
     expect(result.ratio).toBe(1)
   })
 
-  it('passes focus areas to system prompt', async () => {
+    it('passes focus areas to system prompt', async () => {
     let capturedSystem = ''
     const generate: GenerateTextFn = async (opts) => {
       capturedSystem = opts.system ?? ''
@@ -89,7 +89,7 @@ describe('summarizeMessages', () => {
     expect(capturedSystem).toContain('tool_results')
   })
 
-  it('passes transcript as prompt', async () => {
+    it('passes transcript as prompt', async () => {
     let capturedPrompt = ''
     const generate: GenerateTextFn = async (opts) => {
       capturedPrompt = opts.prompt
@@ -106,7 +106,7 @@ describe('summarizeMessages', () => {
     expect(capturedPrompt).toContain('[4] assistant:')
   })
 
-  it('passes model through to generate', async () => {
+    it('passes model through to generate', async () => {
     let capturedModel: unknown
     const generate: GenerateTextFn = async (opts) => {
       capturedModel = opts.model
@@ -122,7 +122,7 @@ describe('summarizeMessages', () => {
     expect(capturedModel).toBe('my-custom-model')
   })
 
-  it('uses default maxTokens of 500', async () => {
+    it('uses default maxTokens of 500', async () => {
     let capturedSystem = ''
     const generate: GenerateTextFn = async (opts) => {
       capturedSystem = opts.system ?? ''
@@ -138,7 +138,7 @@ describe('summarizeMessages', () => {
     expect(capturedSystem).toContain('500')
   })
 
-  it('respects custom maxTokens', async () => {
+    it('respects custom maxTokens', async () => {
     let capturedSystem = ''
     const generate: GenerateTextFn = async (opts) => {
       capturedSystem = opts.system ?? ''

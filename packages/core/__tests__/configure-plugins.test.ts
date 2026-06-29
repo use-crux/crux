@@ -23,7 +23,7 @@ describe('configure — plugins', () => {
     setTokenizer(defaultTokenizer)
   })
 
-  it('calls plugin install() with the current runtime', () => {
+    it('calls plugin install() with the current runtime', () => {
     const install = vi.fn().mockReturnValue({})
     const plugin: CruxPlugin = { name: 'test-plugin', install }
 
@@ -38,7 +38,7 @@ describe('configure — plugins', () => {
     reg.dispose()
   })
 
-  it("second plugin sees first plugin's hooks in the runtime", () => {
+    it("second plugin sees first plugin's hooks in the runtime", () => {
     const hook1 = vi.fn()
     const seenRuntimes: Record<string, unknown>[] = []
 
@@ -67,32 +67,7 @@ describe('configure — plugins', () => {
     reg.dispose()
   })
 
-  it('plugin hooks are active in the global runtime after configure', () => {
-    const hook = vi.fn()
-    const plugin: CruxPlugin = {
-      name: 'hook-plugin',
-      install() {
-        return {
-          instrumentationHooks: { onToolStart: hook },
-        }
-      },
-    }
-
-    const reg = configure({ prompts: [makePrompt('a')], plugins: [plugin] })
-
-    // The hook should be installed in the global runtime
-    const rt = getRuntime()
-    rt.instrumentationHooks?.onToolStart?.({
-      toolCallId: 'tc1',
-      toolName: 'test',
-      args: {},
-    })
-    expect(hook).toHaveBeenCalledOnce()
-
-    reg.dispose()
-  })
-
-  it('dispose() calls plugin dispose in reverse order before resetRuntime', () => {
+    it('dispose() calls plugin dispose in reverse order before resetRuntime', () => {
     const order: string[] = []
     const plugin1: CruxPlugin = {
       name: 'p1',
@@ -112,7 +87,7 @@ describe('configure — plugins', () => {
     expect(order).toEqual(['p2-dispose', 'p1-dispose'])
   })
 
-  it('works unchanged when no plugins are provided', () => {
+    it('works unchanged when no plugins are provided', () => {
     const reg = configure({ prompts: [makePrompt('a')] })
     expect(reg.get('a')).toBeDefined()
     reg.dispose()

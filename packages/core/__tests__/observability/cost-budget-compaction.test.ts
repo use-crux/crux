@@ -59,7 +59,7 @@ describe('canonical cost, budget, and compaction observability', () => {
     vi.restoreAllMocks()
   })
 
-  it('records cost entries and budget warnings as cost.record spans', async () => {
+    it('records cost entries and budget warnings as cost.record spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const tracker = withCostTracking({
@@ -107,7 +107,7 @@ describe('canonical cost, budget, and compaction observability', () => {
     )
   })
 
-  it('records cost limit crossings before preserving the existing limit error', async () => {
+    it('records cost limit crossings before preserving the existing limit error', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const tracker = withCostTracking({ budget: { limit: 0.05 } })
@@ -134,7 +134,7 @@ describe('canonical cost, budget, and compaction observability', () => {
     )
   })
 
-  it('records budget checks as prompt.budget spans', async () => {
+    it('records budget checks as prompt.budget spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const budget = createBudgetManager({ limit: 100, warningThreshold: 0.5, criticalThreshold: 0.9 })
@@ -162,7 +162,7 @@ describe('canonical cost, budget, and compaction observability', () => {
     )
   })
 
-  it('records compaction summaries with before/after token metadata and bounded artifacts', async () => {
+    it('records compaction summaries with before/after token metadata and bounded artifacts', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const generate = vi.fn(async () => ({ text: 'User discussed European capitals.' }))

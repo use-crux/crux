@@ -25,7 +25,7 @@ describe('createSlidingWindow', () => {
     expect(messages).toEqual([])
   })
 
-  it('returns pushed messages within window size', async () => {
+    it('returns pushed messages within window size', async () => {
     const window = createSlidingWindow({
       windowSize: 5,
       generate: mockGenerate,
@@ -41,7 +41,7 @@ describe('createSlidingWindow', () => {
     expect(messages[1].content).toBe('Hi there')
   })
 
-  it('does not produce summary when within window', async () => {
+    it('does not produce summary when within window', async () => {
     const window = createSlidingWindow({
       windowSize: 5,
       generate: mockGenerate,
@@ -56,7 +56,7 @@ describe('createSlidingWindow', () => {
     expect(messages.every((m) => m.role !== 'system')).toBe(true)
   })
 
-  it('triggers compaction when window overflows', async () => {
+    it('triggers compaction when window overflows', async () => {
     const window = createSlidingWindow({
       windowSize: 2,
       generate: mockGenerate,
@@ -74,7 +74,7 @@ describe('createSlidingWindow', () => {
     expect(messages[0].content).toContain('Summary')
   })
 
-  it('keeps exactly windowSize recent messages after compaction', async () => {
+    it('keeps exactly windowSize recent messages after compaction', async () => {
     const window = createSlidingWindow({
       windowSize: 2,
       generate: mockGenerate,
@@ -93,7 +93,7 @@ describe('createSlidingWindow', () => {
     expect(nonSystem[1].content).toBe('Recent 2')
   })
 
-  it('tracks stats correctly', async () => {
+    it('tracks stats correctly', async () => {
     const window = createSlidingWindow({
       windowSize: 2,
       generate: mockGenerate,
@@ -114,7 +114,7 @@ describe('createSlidingWindow', () => {
     expect(window.getStats().summaryTokens).toBeGreaterThan(0)
   })
 
-  it('calls generate with previous summary on subsequent compactions', async () => {
+    it('calls generate with previous summary on subsequent compactions', async () => {
     let callCount = 0
     let lastPrompt = ''
     const generate: GenerateTextFn = async (opts) => {
@@ -140,7 +140,7 @@ describe('createSlidingWindow', () => {
     expect(lastPrompt).toContain('Summary v1')
   })
 
-  it('uses provided MemoryStore for persistence', async () => {
+    it('uses provided MemoryStore for persistence', async () => {
     const store = inMemoryStore()
     const window = createSlidingWindow({
       windowSize: 2,
@@ -158,7 +158,7 @@ describe('createSlidingWindow', () => {
     expect(entry!.content).toContain('Hello')
   })
 
-  it('uses custom id for store keys', async () => {
+    it('uses custom id for store keys', async () => {
     const store = inMemoryStore()
     const window = createSlidingWindow({
       windowSize: 5,
@@ -174,7 +174,7 @@ describe('createSlidingWindow', () => {
     expect(entry).not.toBeNull()
   })
 
-  it('passes model to generate function', async () => {
+    it('passes model to generate function', async () => {
     let capturedModel: unknown
     const generate: GenerateTextFn = async (opts) => {
       capturedModel = opts.model
@@ -193,7 +193,7 @@ describe('createSlidingWindow', () => {
     expect(capturedModel).toBe('special-model')
   })
 
-  it('handles window size of 1', async () => {
+    it('handles window size of 1', async () => {
     const window = createSlidingWindow({
       windowSize: 1,
       generate: mockGenerate,
@@ -210,7 +210,7 @@ describe('createSlidingWindow', () => {
     expect(messages[0].role).toBe('system')
   })
 
-  it('handles rapid sequential pushes', async () => {
+    it('handles rapid sequential pushes', async () => {
     const window = createSlidingWindow({
       windowSize: 3,
       generate: mockGenerate,

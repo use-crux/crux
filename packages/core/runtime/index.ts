@@ -53,10 +53,9 @@ export { mergeRuntime, applyPlugins } from './plugin'
 export type { CruxPlugin, CruxPluginResult, ApplyPluginsResult } from './plugin'
 
 // ─────────────────────────────────────────────────────────────────
-// Middleware + hook contracts
+// Middleware contracts
 // ─────────────────────────────────────────────────────────────────
 
-export type { InstrumentationHooks } from './middleware'
 export type { PromptMiddleware, PromptMiddlewareArgs, MiddlewareResult } from './types'
 
 // ─────────────────────────────────────────────────────────────────

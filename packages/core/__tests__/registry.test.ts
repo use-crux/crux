@@ -14,13 +14,13 @@ describe('configure', () => {
     reg.dispose()
   })
 
-  it('get() throws on missing id', () => {
+    it('get() throws on missing id', () => {
     const reg = configure({ prompts: [makePrompt('a')] })
     expect(() => reg.get('nonexistent')).toThrow(/prompt "nonexistent" not found/)
     reg.dispose()
   })
 
-  it('find() returns prompt or undefined', () => {
+    it('find() returns prompt or undefined', () => {
     const p = makePrompt('beta')
     const reg = configure({ prompts: [p] })
     expect(reg.find('beta')).toBe(p)
@@ -28,14 +28,14 @@ describe('configure', () => {
     reg.dispose()
   })
 
-  it('list() returns all prompts', () => {
+    it('list() returns all prompts', () => {
     const prompts = [makePrompt('a'), makePrompt('b'), makePrompt('c')]
     const reg = configure({ prompts })
     expect(reg.list()).toHaveLength(3)
     reg.dispose()
   })
 
-  it('byTag() filters correctly', () => {
+    it('byTag() filters correctly', () => {
     const p1 = makePrompt('p1', ['editing'])
     const p2 = makePrompt('p2', ['analysis'])
     const p3 = makePrompt('p3', ['editing', 'analysis'])
@@ -47,7 +47,7 @@ describe('configure', () => {
     reg.dispose()
   })
 
-  it('byTags() intersects multiple tags', () => {
+    it('byTags() intersects multiple tags', () => {
     const p1 = makePrompt('p1', ['a', 'b'])
     const p2 = makePrompt('p2', ['a'])
     const p3 = makePrompt('p3', ['a', 'b', 'c'])
@@ -58,7 +58,7 @@ describe('configure', () => {
     reg.dispose()
   })
 
-  it('tags() returns all unique tags', () => {
+    it('tags() returns all unique tags', () => {
     const reg = configure({
       prompts: [makePrompt('p1', ['a', 'b']), makePrompt('p2', ['b', 'c'])],
     })
@@ -66,12 +66,12 @@ describe('configure', () => {
     reg.dispose()
   })
 
-  it('throws on missing id at creation', () => {
+    it('throws on missing id at creation', () => {
     const p = cruxPrompt({ system: 'no id' } as any) // id is undefined
     expect(() => configure({ prompts: [p] })).toThrow(/all prompts must have an id/)
   })
 
-  it('throws on duplicate id at creation', () => {
+    it('throws on duplicate id at creation', () => {
     expect(() => configure({ prompts: [makePrompt('dup'), makePrompt('dup')] })).toThrow(/duplicate prompt id "dup"/)
   })
 })

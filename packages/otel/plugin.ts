@@ -8,11 +8,12 @@
  */
 
 import type { CruxPlugin } from '@use-crux/core'
+import { subscribeObservability } from '@use-crux/core/observability'
 import type { TraceSpan } from './types'
 import { createCallbackExporter, createUrlExporter, type SpanExporter } from './exporter'
 import { createLightweightSpanManager, type SpanManager } from './span-manager'
-import { createOtelMiddleware } from './middleware'
-import { createOtelInstrumentationHooks } from './hooks'
+import { createOpenTelemetrySpanManager } from './otel-span-manager'
+import { createOtelRecordSubscriber } from './record-mapper'
 
 // ─────────────────────────────────────────────────────────────────
 // Configuration types
@@ -57,13 +58,6 @@ export interface TelemetryOptions {
    * @default '@use-crux/otel'
    */
   serviceName?: string
-
-  /**
-   * Whether to record prompt/input content as span attributes.
-   * Disable in production to avoid logging sensitive data.
-   * @default false
-   */
-  recordContent?: boolean
 
   /** Custom attributes added to every span. */
   attributes?: Record<string, string>
@@ -110,13 +104,11 @@ export function withTelemetry(options?: TelemetryOptions): CruxPlugin {
     name: 'crux:otel',
     install(runtime) {
       const spanManager = createSpanManager(opts)
-      const middleware = createOtelMiddleware(spanManager, opts)
-      const instrumentationHooks = createOtelInstrumentationHooks(spanManager, opts)
+      const unsubscribe = subscribeObservability(createOtelRecordSubscriber(spanManager, opts))
 
       return {
-        middleware,
-        instrumentationHooks,
         dispose() {
+          unsubscribe()
           spanManager.shutdown()
         },
       }
@@ -129,7 +121,7 @@ export function withTelemetry(options?: TelemetryOptions): CruxPlugin {
  *
  * - Callback exporter: lightweight span manager with callback exporter
  * - URL exporter: lightweight span manager with URL exporter
- * - No exporter: lightweight span manager with no-op exporter (OTel path TBD)
+ * - No exporter: standard OTel tracer when `@opentelemetry/api` is available
  */
 function createSpanManager(options: TelemetryOptions): SpanManager {
   let exporter: SpanExporter
@@ -140,14 +132,12 @@ function createSpanManager(options: TelemetryOptions): SpanManager {
     } else {
       exporter = createUrlExporter(options.exporter)
     }
-  } else {
-    // No exporter configured — for now, use a no-op exporter.
-    // OTel TracerProvider integration will be added when needed.
-    exporter = {
-      export: () => {},
-      shutdown: async () => {},
-    }
+    return createLightweightSpanManager(exporter)
   }
 
-  return createLightweightSpanManager(exporter)
+  return createOpenTelemetrySpanManager(options.serviceName) ??
+    createLightweightSpanManager({
+      export: () => {},
+      shutdown: async () => {},
+    })
 }

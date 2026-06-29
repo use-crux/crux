@@ -33,14 +33,14 @@ describe('storage capabilities', () => {
     expect(Object.isFrozen(bundle)).toBe(true)
   })
 
-  it('does not pretend a data store is a vector or blob store', () => {
+    it('does not pretend a data store is a vector or blob store', () => {
     const data = inMemoryDataStore()
 
     expect('search' in data).toBe(false)
     expect('put' in data).toBe(false)
   })
 
-  it('provides a complete in-memory bundle for tests and demos', () => {
+    it('provides a complete in-memory bundle for tests and demos', () => {
     const bundle = inMemoryStorage()
 
     expect(bundle.data._tag).toBe('DataStore')

@@ -22,7 +22,7 @@ describe('canonical routing and fallback observability', () => {
     vi.restoreAllMocks()
   })
 
-  it('records router decisions with selected route metadata', async () => {
+    it('records router decisions with selected route metadata', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const routed = router({
@@ -89,7 +89,7 @@ describe('canonical routing and fallback observability', () => {
     )
   })
 
-  it('records cascade tiers, rejection, acceptance, and terminal metadata', async () => {
+    it('records cascade tiers, rejection, acceptance, and terminal metadata', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const cascaded = cascade({
@@ -157,7 +157,7 @@ describe('canonical routing and fallback observability', () => {
     )
   })
 
-  it('records full cascade ladder and structured evaluation notes', async () => {
+    it('records full cascade ladder and structured evaluation notes', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const cascaded = cascade({
@@ -214,7 +214,7 @@ describe('canonical routing and fallback observability', () => {
     )
   })
 
-  it('records fallback attempts with failed and successful model relations', async () => {
+    it('records fallback attempts with failed and successful model relations', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>

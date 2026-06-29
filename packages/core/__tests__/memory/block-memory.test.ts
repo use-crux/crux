@@ -86,7 +86,7 @@ describe('memory block system', () => {
     await expect(second.asContext().systemFn({})).resolves.toContain('Namespace: agent:reviewer')
   })
 
-  it('allows memory() directly in prompt use and merges block tools', async () => {
+    it('allows memory() directly in prompt use and merges block tools', async () => {
     const mem = memory({
       id: 'prompt-memory',
       namespace: 'thread:1',
@@ -120,7 +120,7 @@ describe('memory block system', () => {
     expect(resolved.memoryBindings).toHaveLength(1)
   })
 
-  it('captures completed adapter turns after generation and flushes deferred work', async () => {
+    it('captures completed adapter turns after generation and flushes deferred work', async () => {
     const store = inMemoryCruxStore()
     const recent = recentMessages({ id: 'recent', maxMessages: 5 })
     const mem = memory({
@@ -149,7 +149,7 @@ describe('memory block system', () => {
     expect(turns[1].content).toBe('stored answer')
   })
 
-  it('supports standalone working state blocks', async () => {
+    it('supports standalone working state blocks', async () => {
     const store = inMemoryCruxStore()
     const state = workingState({
       id: 'state',
@@ -165,7 +165,7 @@ describe('memory block system', () => {
     })
   })
 
-  it('supports standalone episodes with dense recall', async () => {
+    it('supports standalone episodes with dense recall', async () => {
     const store = inMemoryCruxStore()
     const ep = episodes({ id: 'episodes', embed: mockEmbed })
 
@@ -177,7 +177,7 @@ describe('memory block system', () => {
     expect(results[0].score).toBeDefined()
   })
 
-  it('creates fact proposals by default and approves them through memory()', async () => {
+    it('creates fact proposals by default and approves them through memory()', async () => {
     const store = inMemoryCruxStore()
     const factBlock = facts({
       id: 'facts',
@@ -206,7 +206,7 @@ describe('memory block system', () => {
     expect(stored[0].content).toBe('User prefers concise answers')
   })
 
-  it('allows extractive blocks to customize prompt rendering', async () => {
+    it('allows extractive blocks to customize prompt rendering', async () => {
     const store = inMemoryCruxStore()
     const factBlock = facts({
       id: 'facts',
@@ -229,7 +229,7 @@ describe('memory block system', () => {
     )
   })
 
-  it('supports procedural memories without mutating prompt definitions', async () => {
+    it('supports procedural memories without mutating prompt definitions', async () => {
     const store = inMemoryCruxStore()
     const proc = procedures({ id: 'procedures' })
     await proc.add(

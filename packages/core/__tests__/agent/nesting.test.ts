@@ -81,7 +81,7 @@ describe('composition nesting', () => {
     expect(ctxFor('agent-c')[0]?.stepLabel).toBe('reviewer2')
   })
 
-  it('pipeline nested inside another pipeline', async () => {
+    it('pipeline nested inside another pipeline', async () => {
     const { executor, ctxFor } = createTracingExecutor()
     const pipeline = createPipeline(executor)
 
@@ -113,7 +113,7 @@ describe('composition nesting', () => {
     expect(ctxFor('agent-c')[0]?.stepLabel).toBe('inner-second')
   })
 
-  it('consensus inside a pipeline step', async () => {
+    it('consensus inside a pipeline step', async () => {
     const { executor, ctxFor } = createTracingExecutor()
     const pipeline = createPipeline(executor)
     const consensus = createConsensus(executor)
@@ -148,7 +148,7 @@ describe('composition nesting', () => {
     expect(ctxFor('agent-b')[2]?.stepLabel).toBe('voter-2')
   })
 
-  it('swarm agent can run a pipeline internally via tools', async () => {
+    it('swarm agent can run a pipeline internally via tools', async () => {
     const { executor: tracingExecutor, ctxFor } = createTracingExecutor()
     const pipeline = createPipeline(tracingExecutor)
 
@@ -206,7 +206,7 @@ describe('composition nesting', () => {
     expect(ctxFor('agent-c')[0]?.stepLabel).toBe('sub-step-2')
   })
 
-  it('sessionId propagates through nested compositions', async () => {
+    it('sessionId propagates through nested compositions', async () => {
     const { executor, ctxFor } = createTracingExecutor()
     const pipeline = createPipeline(executor)
     const parallel = createParallel(executor)

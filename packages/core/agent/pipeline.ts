@@ -392,11 +392,6 @@ export function createPipeline(executor: AgentExecutor) {
         let accumulatedContext: Record<string, unknown> = { ...context }
 
         // Emit composition:start
-        runtime.instrumentationHooks?.onCompositionStart?.({
-          compositionId,
-          kind: 'pipeline',
-          agentIds,
-        })
 
         for (let i = 0; i < steps.length; i++) {
           const step = steps[i]
@@ -491,13 +486,6 @@ export function createPipeline(executor: AgentExecutor) {
             accumulatedContext = { ...accumulatedContext, [step.name]: stepOutput }
 
             // Emit composition:agent (success)
-            runtime.instrumentationHooks?.onCompositionAgent?.({
-              compositionId,
-              agentId: result.agentId,
-              index: i,
-              status: 'success',
-              durationMs: result.durationMs,
-            })
             stepSpan.end({ agentId: result.agentId })
           } catch (err) {
             stepSpan.error(err)
@@ -505,22 +493,7 @@ export function createPipeline(executor: AgentExecutor) {
             const message = err instanceof Error ? err.message : String(err)
 
             // Emit composition:agent (error)
-            runtime.instrumentationHooks?.onCompositionAgent?.({
-              compositionId,
-              agentId,
-              index: i,
-              status: 'error',
-              durationMs: Date.now() - stepStart,
-              error: message,
-            })
             // Emit composition:end (error)
-            runtime.instrumentationHooks?.onCompositionEnd?.({
-              compositionId,
-              kind: 'pipeline',
-              status: 'error',
-              durationMs: Date.now() - pipelineStart,
-              agentCount: steps.length,
-            })
             throw new Error(`Pipeline step "${step.name}" failed: ${message}`)
           }
         }
@@ -528,13 +501,6 @@ export function createPipeline(executor: AgentExecutor) {
         const durationMs = Date.now() - pipelineStart
 
         // Emit composition:end (success)
-        runtime.instrumentationHooks?.onCompositionEnd?.({
-          compositionId,
-          kind: 'pipeline',
-          status: 'success',
-          durationMs,
-          agentCount: steps.length,
-        })
         emitPipelineCompositionReport({
           compositionId,
           durationMs,

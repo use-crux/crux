@@ -57,7 +57,7 @@ describe('createSemanticCache', () => {
     vi.restoreAllMocks()
   })
 
-  it('requires a dense embedding', () => {
+    it('requires a dense embedding', () => {
     expect(() =>
       createSemanticCache({
         store: inMemoryCruxStore(),
@@ -68,7 +68,7 @@ describe('createSemanticCache', () => {
     ).toThrow('requires a dense embedding')
   })
 
-  it('requires ttl', () => {
+    it('requires ttl', () => {
     expect(() =>
       createSemanticCache({
         store: inMemoryCruxStore(),
@@ -79,7 +79,7 @@ describe('createSemanticCache', () => {
     ).toThrow('ttl')
   })
 
-  it('warns when a prompt opts in but no semantic cache plugin is installed', async () => {
+    it('warns when a prompt opts in but no semantic cache plugin is installed', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const p = cacheablePrompt()
 
@@ -100,7 +100,7 @@ describe('createSemanticCache', () => {
     expect(warn.mock.calls[0][0]).toContain('no createSemanticCache() plugin is installed')
   })
 
-  it('writes on miss and hydrates a cached structured result on semantic hit', async () => {
+    it('writes on miss and hydrates a cached structured result on semantic hit', async () => {
     const store = inMemoryCruxStore()
     install(
       createSemanticCache({
@@ -149,7 +149,7 @@ describe('createSemanticCache', () => {
     expect(doGenerate).toHaveBeenCalledTimes(1)
   })
 
-  it('isolates hits by scope', async () => {
+    it('isolates hits by scope', async () => {
     install(
       createSemanticCache({
         store: inMemoryCruxStore(),
@@ -182,7 +182,7 @@ describe('createSemanticCache', () => {
     expect(doGenerate).toHaveBeenCalledTimes(2)
   })
 
-  it('honors shouldCache policies', async () => {
+    it('honors shouldCache policies', async () => {
     install(
       createSemanticCache({
         store: inMemoryCruxStore(),
@@ -214,7 +214,7 @@ describe('createSemanticCache', () => {
     expect(doGenerate).toHaveBeenCalledTimes(2)
   })
 
-  it('returns a synthetic cached stream replay', async () => {
+    it('returns a synthetic cached stream replay', async () => {
     install(
       createSemanticCache({
         store: inMemoryCruxStore(),

@@ -8,8 +8,6 @@
  */
 
 import type { CruxStore, JsonObject } from '../store/types'
-import { getExecutionContext } from '../runtime/execution-context'
-import { getRuntime } from '../runtime/runtime'
 import { taskListKey, taskPrefix } from './helpers'
 import { deriveStatus, rebuildCounts } from './status'
 import type { StatusCounts } from './status'
@@ -55,7 +53,6 @@ function deriveStatusFromTaskRows(list: TaskList, tasks: readonly Task[], counts
 export async function repairTaskListState(
   store: CruxStore,
   taskListId: string,
-  options?: { emitCompletionHook?: boolean },
 ): Promise<TaskList | null> {
   const rawList = await store.get(taskListKey(taskListId))
   if (!rawList) return null
@@ -75,18 +72,6 @@ export async function repairTaskListState(
 
   if (shouldPersist) {
     await store.set(taskListKey(taskListId), nextList as unknown as JsonObject)
-  }
-
-  if (options?.emitCompletionHook && status === 'completed' && list.status !== 'completed') {
-    const total =
-      counts.pending + counts.in_progress + counts.completed + counts.failed + counts.skipped + counts.cancelled
-    const ctx = getExecutionContext()
-    getRuntime().instrumentationHooks?.onTaskListCompleted?.({
-      taskListId,
-      totalTasks: total,
-      durationMs: (nextList.completedAt ?? Date.now()) - nextList.createdAt,
-      traceId: ctx?.traceId,
-    })
   }
 
   return nextList

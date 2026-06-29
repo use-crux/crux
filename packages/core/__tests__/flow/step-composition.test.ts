@@ -89,7 +89,7 @@ describe('step composition: end-to-end', () => {
     }
   })
 
-  it('flow.input and flow.results survive suspend/resume with external steps', async () => {
+    it('flow.input and flow.results survive suspend/resume with external steps', async () => {
     const store = inMemoryCruxStore()
     updateRuntime({ store })
 
@@ -146,7 +146,7 @@ describe('step composition: end-to-end', () => {
     }
   })
 
-  it('mixed pattern: return values and flow.results in same flow', async () => {
+    it('mixed pattern: return values and flow.results in same flow', async () => {
     const result = await makeFlow<string, { seed: number }>('mixed-pattern', async (flow) => {
       // Return-value pattern (typed)
       const doubled = await flow.step('double', () => flow.input.seed * 2)

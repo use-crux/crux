@@ -322,7 +322,7 @@ Constraints emit three event types:
 | `constraint:retry` | Combined retry triggered | `constraintNames`, `attempt`, `combinedFeedback` |
 | `constraint:violation` | Assert exhausted | `constraintNames`, `totalAttempts` |
 
-These appear in the Constraints view in the devtools dashboard, are emitted as OTel spans when `@use-crux/otel` is active, and are wired through `InstrumentationHooks` (`onConstraintCheck`, `onConstraintRetry`, `onConstraintViolation`).
+These appear in the Constraints view in the devtools dashboard, are emitted as OTel spans when `@use-crux/otel` is active, and are wired through `graph-record subscribers` (`constraint.checked records`, `constraint.retry records`, `constraint failure records`).
 
 ---
 

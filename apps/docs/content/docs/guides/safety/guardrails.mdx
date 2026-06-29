@@ -396,9 +396,9 @@ Guardrails emit two event types to the devtools protocol:
 These events:
 - Appear in the devtools timeline alongside traces, tool calls, and memory events
 - Are emitted as OTel spans when `@use-crux/otel` is active
-- Are wired through `InstrumentationHooks` (`onGuardrailRun`)
+- Are wired through `graph-record subscribers` (`guardrail.action records`)
 
-Use `InstrumentationHooks.onGuardrailRun` plus the audit on `result._meta.guardrails` for application-level logging and EU AI Act audit trails. The optional `category` field on each policy lets reporting aggregate by risk type (`pii`, `jailbreak`, `toxicity`, ...) instead of by policy name.
+Use `graph-record guardrail events` plus the audit on `result._meta.guardrails` for application-level logging and EU AI Act audit trails. The optional `category` field on each policy lets reporting aggregate by risk type (`pii`, `jailbreak`, `toxicity`, ...) instead of by policy name.
 
 ---
 

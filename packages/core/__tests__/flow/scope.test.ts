@@ -10,7 +10,7 @@ describe('createFlowId', () => {
     expect(id).toMatch(/^flow-\d+-[a-z0-9]+$/)
   })
 
-  it('returns unique values', () => {
+    it('returns unique values', () => {
     const ids = new Set(Array.from({ length: 100 }, () => createFlowId()))
     expect(ids.size).toBe(100)
   })
@@ -21,7 +21,7 @@ describe('flow', () => {
     resetRuntime()
   })
 
-  it('runs the function and returns its result wrapped in FlowResult', async () => {
+    it('runs the function and returns its result wrapped in FlowResult', async () => {
     const result = await makeFlow('test', async () => 42).run()
     expect(result.status).toBe('completed')
     if (result.status === 'completed') {
@@ -29,7 +29,7 @@ describe('flow', () => {
     }
   })
 
-  it('sets flowId in trace context during execution', async () => {
+    it('sets flowId in trace context during execution', async () => {
     let capturedFlowId: string | undefined
     await makeFlow('test', async (flow) => {
       capturedFlowId = getExecutionContext()?.flowId
@@ -38,7 +38,7 @@ describe('flow', () => {
     expect(capturedFlowId).toBeTruthy()
   })
 
-  it('preserves existing sessionId from parent context', async () => {
+    it('preserves existing sessionId from parent context', async () => {
     let capturedSessionId: string | undefined
     await runWithExecutionContext({ sessionId: 'sess-123' }, () =>
       makeFlow('test', async () => {
@@ -48,7 +48,7 @@ describe('flow', () => {
     expect(capturedSessionId).toBe('sess-123')
   })
 
-  it('uses provided flowId from options', async () => {
+    it('uses provided flowId from options', async () => {
     const customId = 'my-custom-flow-id'
     await makeFlow('test', async (flow) => {
       expect(flow.flowId).toBe(customId)
@@ -56,7 +56,7 @@ describe('flow', () => {
     }).run({ flowId: customId })
   })
 
-  it('propagates errors', async () => {
+    it('propagates errors', async () => {
     await expect(
       makeFlow('test', async () => {
         throw new Error('boom')
@@ -64,7 +64,7 @@ describe('flow', () => {
     ).rejects.toThrow('boom')
   })
 
-  it('cleans up flowId after completion', async () => {
+    it('cleans up flowId after completion', async () => {
     await makeFlow('test', async () => 42).run()
     expect(getExecutionContext()?.flowId).toBeUndefined()
   })
@@ -75,7 +75,7 @@ describe('flow.step', () => {
     resetRuntime()
   })
 
-  it('runs the step function and returns its result', async () => {
+    it('runs the step function and returns its result', async () => {
     const result = await makeFlow('test', async (flow) => {
       return flow.step('plan', async () => 'planned')
     }).run()
@@ -85,7 +85,7 @@ describe('flow.step', () => {
     }
   })
 
-  it('sets stepId and stepLabel in trace context during step execution', async () => {
+    it('sets stepId and stepLabel in trace context during step execution', async () => {
     await makeFlow('test', async (flow) => {
       await flow.step('plan', async () => {
         const ctx = getExecutionContext()
@@ -96,7 +96,7 @@ describe('flow.step', () => {
     }).run()
   })
 
-  it('generates unique stepIds for same labels', async () => {
+    it('generates unique stepIds for same labels', async () => {
     const stepIds: string[] = []
     await makeFlow('test', async (flow) => {
       await flow.step('search', async () => {
@@ -109,7 +109,7 @@ describe('flow.step', () => {
     expect(stepIds[0]).not.toBe(stepIds[1])
   })
 
-  it('supports synchronous step functions', async () => {
+    it('supports synchronous step functions', async () => {
     const result = await makeFlow('test', async (flow) => {
       return flow.step('sync', () => 'sync-result')
     }).run()
@@ -119,7 +119,7 @@ describe('flow.step', () => {
     }
   })
 
-  it('runs multiple steps sequentially', async () => {
+    it('runs multiple steps sequentially', async () => {
     const order: string[] = []
     await makeFlow('pipeline', async (flow) => {
       await flow.step('plan', async () => {
@@ -141,7 +141,7 @@ describe('step retry', () => {
     resetRuntime()
   })
 
-  it('retries on failure up to attempts count', async () => {
+    it('retries on failure up to attempts count', async () => {
     let attempts = 0
     const result = await makeFlow('test', async (flow) => {
       return flow.step(
@@ -161,7 +161,7 @@ describe('step retry', () => {
     expect(attempts).toBe(3)
   })
 
-  it('throws after all retries exhausted', async () => {
+    it('throws after all retries exhausted', async () => {
     await expect(
       makeFlow('test', async (flow) => {
         return flow.step(
@@ -175,7 +175,7 @@ describe('step retry', () => {
     ).rejects.toThrow('permanent')
   })
 
-  it('uses fallback after retries exhausted', async () => {
+    it('uses fallback after retries exhausted', async () => {
     const result = await makeFlow('test', async (flow) => {
       return flow.step(
         'with-fallback',
@@ -194,7 +194,7 @@ describe('step retry', () => {
     }
   })
 
-  it('uses exponential backoff', async () => {
+    it('uses exponential backoff', async () => {
     const timestamps: number[] = []
     let attempts = 0
 
@@ -218,78 +218,12 @@ describe('step retry', () => {
     expect(timestamps.length).toBe(3)
   })
 })
-
-describe('flow + instrumentation hooks', () => {
-  it('calls hook start/step/end when instrumentationHooks are available', async () => {
-    const hookCalls: string[] = []
-    updateRuntime({
-      instrumentationHooks: {
-        onFlowStart: () => {
-          hookCalls.push('flow:start')
-        },
-        onFlowEnd: () => {
-          hookCalls.push('flow:end')
-        },
-        onStepStart: () => {
-          hookCalls.push('step:start')
-        },
-        onStepEnd: () => {
-          hookCalls.push('step:end')
-        },
-      },
-    })
-
-    await makeFlow('test', async (flow) => {
-      await flow.step('plan', async () => 'done')
-    }).run()
-
-    expect(hookCalls).toContain('flow:start')
-    expect(hookCalls).toContain('step:start')
-    expect(hookCalls).toContain('step:end')
-    expect(hookCalls).toContain('flow:end')
-
-    resetRuntime()
-  })
-
-  it('reports failure on error', async () => {
-    const events: any[] = []
-    updateRuntime({
-      instrumentationHooks: {
-        onFlowStart: (e) => {
-          events.push({ type: 'flow:start', ...e })
-        },
-        onFlowEnd: (e) => {
-          events.push({ type: 'flow:end', ...e })
-        },
-        onStepStart: (e) => {
-          events.push({ type: 'step:start', ...e })
-        },
-        onStepEnd: (e) => {
-          events.push({ type: 'step:end', ...e })
-        },
-      },
-    })
-
-    await expect(
-      makeFlow('test', async () => {
-        throw new Error('boom')
-      }).run(),
-    ).rejects.toThrow('boom')
-
-    const endEvent = events.find((e) => e.type === 'flow:end')
-    expect(endEvent?.status).toBe('error')
-    expect(endEvent?.error).toBe('boom')
-
-    resetRuntime()
-  })
-})
-
 describe('nested flows', () => {
   afterEach(() => {
     resetRuntime()
   })
 
-  it('sets parentFlowId when nesting flow calls', async () => {
+    it('sets parentFlowId when nesting flow calls', async () => {
     let outerFlowId: string | undefined
     let innerParentFlowId: string | undefined
     let innerFlowId: string | undefined
@@ -310,7 +244,7 @@ describe('nested flows', () => {
     expect(innerParentFlowId).toBe(outerFlowId)
   })
 
-  it('inner flow gets its own flowId in trace context', async () => {
+    it('inner flow gets its own flowId in trace context', async () => {
     let outerCtxFlowId: string | undefined
     let innerCtxFlowId: string | undefined
 
@@ -326,7 +260,7 @@ describe('nested flows', () => {
     expect(innerCtxFlowId).not.toBe(outerCtxFlowId)
   })
 
-  it('preserves sessionId through nested flows', async () => {
+    it('preserves sessionId through nested flows', async () => {
     let innerSessionId: string | undefined
 
     await withSession('sess-nested', () =>
@@ -340,7 +274,7 @@ describe('nested flows', () => {
     expect(innerSessionId).toBe('sess-nested')
   })
 
-  it('inner flow steps have correct trace context', async () => {
+    it('inner flow steps have correct trace context', async () => {
     let innerStepCtx: { flowId?: string; parentFlowId?: string; stepLabel?: string } | undefined
 
     await makeFlow('outer', async (outerFlow) => {
@@ -364,45 +298,7 @@ describe('nested flows', () => {
     expect(innerStepCtx?.flowId).not.toBe(innerStepCtx?.parentFlowId)
   })
 
-  it('emits parentFlowId in hook events when nested', async () => {
-    const events: any[] = []
-    updateRuntime({
-      instrumentationHooks: {
-        onFlowStart: (e) => {
-          events.push({ type: 'flow:start', ...e })
-        },
-        onFlowEnd: (e) => {
-          events.push({ type: 'flow:end', ...e })
-        },
-        onStepStart: (e) => {
-          events.push({ type: 'step:start', ...e })
-        },
-        onStepEnd: (e) => {
-          events.push({ type: 'step:end', ...e })
-        },
-      },
-    })
-
-    await makeFlow('outer', async (outerFlow) => {
-      await outerFlow.step('delegate', async () => {
-        await makeFlow('inner', async (innerFlow) => {
-          await innerFlow.step('sub-plan', async () => 'done')
-        }).run()
-      })
-    }).run()
-
-    const innerStart = events.find((e) => e.type === 'flow:start' && e.name === 'inner')
-    expect(innerStart).toBeTruthy()
-    expect(innerStart.parentFlowId).toBeTruthy()
-
-    // The outer flow's start should not have parentFlowId
-    const outerStart = events.find((e) => e.type === 'flow:start' && e.name === 'outer')
-    expect(outerStart.parentFlowId).toBeUndefined()
-
-    resetRuntime()
-  })
-
-  it('three-level nesting propagates correctly', async () => {
+    it('three-level nesting propagates correctly', async () => {
     const flowIds: string[] = []
     const parentFlowIds: (string | undefined)[] = []
 
@@ -436,7 +332,7 @@ describe('flow.input', () => {
     resetRuntime()
   })
 
-  it('is accessible within step functions when input is provided', async () => {
+    it('is accessible within step functions when input is provided', async () => {
     let capturedInput: unknown
 
     const result = await makeFlow<number, { topic: string; audience: string }>('test-input', async (flow) => {
@@ -456,7 +352,7 @@ describe('flow.input', () => {
     }
   })
 
-  it('is undefined when no input is provided (backward compat)', async () => {
+    it('is undefined when no input is provided (backward compat)', async () => {
     let capturedInput: unknown = 'sentinel'
 
     await makeFlow('no-input', async (flow) => {
@@ -466,7 +362,7 @@ describe('flow.input', () => {
     expect(capturedInput).toBeUndefined()
   })
 
-  it('survives suspend/resume (persisted in snapshot)', async () => {
+    it('survives suspend/resume (persisted in snapshot)', async () => {
     const store = inMemoryCruxStore()
     updateRuntime({ store })
 
@@ -509,7 +405,7 @@ describe('flow.results', () => {
     resetRuntime()
   })
 
-  it('is empty {} at the start of a fresh flow', async () => {
+    it('is empty {} at the start of a fresh flow', async () => {
     let initialResults: Record<string, unknown> | undefined
 
     await makeFlow('empty-results', async (flow) => {
@@ -519,7 +415,7 @@ describe('flow.results', () => {
     expect(initialResults).toEqual({})
   })
 
-  it('accumulates step return values keyed by label', async () => {
+    it('accumulates step return values keyed by label', async () => {
     let capturedResults: Record<string, unknown> | undefined
 
     await makeFlow('results-test', async (flow) => {
@@ -535,7 +431,7 @@ describe('flow.results', () => {
     })
   })
 
-  it('is pre-populated from cache on resume and includes skip-replayed steps', async () => {
+    it('is pre-populated from cache on resume and includes skip-replayed steps', async () => {
     const store = inMemoryCruxStore()
     updateRuntime({ store })
 
@@ -595,7 +491,7 @@ describe('flow.step auto-pass', () => {
     resetRuntime()
   })
 
-  it('passes flow scope to step functions that accept a parameter', async () => {
+    it('passes flow scope to step functions that accept a parameter', async () => {
     let receivedFlow: FlowScope | undefined
 
     // External step function that receives flow
@@ -616,7 +512,7 @@ describe('flow.step auto-pass', () => {
     }
   })
 
-  it('() => T step functions still work (backward compat)', async () => {
+    it('() => T step functions still work (backward compat)', async () => {
     const result = await makeFlow('compat', async (flow) => {
       const value = await flow.step('plain', () => 42)
       return value
@@ -628,7 +524,7 @@ describe('flow.step auto-pass', () => {
     }
   })
 
-  it('both signatures work in the same flow', async () => {
+    it('both signatures work in the same flow', async () => {
     // External flow-aware step
     async function flowAwareStep(flow: FlowScope<{ seed: number }>) {
       return flow.input.seed * 2
@@ -646,7 +542,7 @@ describe('flow.step auto-pass', () => {
     }
   })
 
-  it('flow-aware step can read flow.input and flow.results', async () => {
+    it('flow-aware step can read flow.input and flow.results', async () => {
     // External step that reads both input and prior results
     async function summaryStep(flow: FlowScope<{ topic: string }>) {
       const planResult = flow.results.plan as { planId: string }

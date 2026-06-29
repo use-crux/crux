@@ -126,15 +126,6 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
     if (attempts < maxRetries) {
       attempts++
       validationRetry?.onRetry?.(attempts, attempt.error)
-      getRuntime().instrumentationHooks?.onValidationRetryAttempt?.({
-        retryId,
-        attemptNumber: attempts,
-        maxAttempts: maxRetries,
-        error: attempt.error.message,
-        rawOutput: attempt.rawText.slice(0, 500),
-        repairAttempted: true,
-        repairSucceeded: false,
-      })
       currentMessages = appendCorrectiveExchange(
         currentPrompt,
         currentMessages,
@@ -145,12 +136,6 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
       continue
     }
 
-    getRuntime().instrumentationHooks?.onValidationRetryExhausted?.({
-      retryId,
-      totalAttempts: attempts,
-      lastError: attempt.error.message,
-      promptId: promptId ?? 'unknown',
-    })
     validationRetry?.onExhausted?.(attempts, attempt.error)
     throw new ValidationExhaustedError({
       lastRawOutput: attempt.rawText,

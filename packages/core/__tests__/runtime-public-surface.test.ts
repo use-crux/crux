@@ -98,7 +98,7 @@ describe('@use-crux/core runtime hook store', () => {
     expect(getRuntime()).toEqual({})
   })
 
-  it('getRuntime() returns a frozen snapshot', () => {
+    it('getRuntime() returns a frozen snapshot', () => {
     resetRuntime()
     expect(Object.isFrozen(getRuntime())).toBe(true)
   })
@@ -109,17 +109,6 @@ describe('@use-crux/core runtime hook store', () => {
 // ─────────────────────────────────────────────────────────────────
 
 describe('@use-crux/core plugin composition', () => {
-  it('mergeRuntime fans out instrumentation hooks', () => {
-    const calls: string[] = []
-    const merged = mergeRuntime(
-      { instrumentationHooks: { onToolStart: () => calls.push('a') } },
-      { instrumentationHooks: { onToolStart: () => calls.push('b') } },
-    )
-
-    merged.instrumentationHooks?.onToolStart?.({ toolCallId: '1', toolName: 't', args: {} })
-    expect(calls).toEqual(['a', 'b'])
-  })
-
   it('applyPlugins installs ordered plugins and disposes in reverse', () => {
     const order: string[] = []
     const plugins: CruxPlugin[] = [

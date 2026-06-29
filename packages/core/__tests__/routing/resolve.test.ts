@@ -72,7 +72,7 @@ describe('resolveModel() — router', () => {
     })
   })
 
-  it('falls to default when classify returns unknown key', async () => {
+    it('falls to default when classify returns unknown key', async () => {
     const r = router({
       classify: () => 'nonexistent' as any,
       routes: {
@@ -89,7 +89,7 @@ describe('resolveModel() — router', () => {
     expect(result._meta.router.selectedModel).toBe('model-default')
   })
 
-  it('uses forced route from .select(), skipping classify', async () => {
+    it('uses forced route from .select(), skipping classify', async () => {
     const classify = vi.fn(() => 'a' as const)
     const r = router({
       classify,
@@ -108,7 +108,7 @@ describe('resolveModel() — router', () => {
     })
   })
 
-  it('passes hints from .with() to classify', async () => {
+    it('passes hints from .with() to classify', async () => {
     const classify = vi.fn((_input: Record<string, unknown>, hints?: { cheap?: boolean }) => {
       return hints?.cheap ? 'budget' : 'premium'
     })
@@ -125,7 +125,7 @@ describe('resolveModel() — router', () => {
     expect(result._meta.router.hints).toEqual({ cheap: true })
   })
 
-  it('supports async classify', async () => {
+    it('supports async classify', async () => {
     const r = router({
       classify: async (input) => {
         await new Promise((r) => setTimeout(r, 1))
@@ -167,7 +167,7 @@ describe('resolveModel() — cascade', () => {
     })
   })
 
-  it('escalates to next tier when evaluate returns false', async () => {
+    it('escalates to next tier when evaluate returns false', async () => {
     const c = cascade({
       tiers: [
         { model: 'model-cheap', evaluate: () => false },
@@ -188,7 +188,7 @@ describe('resolveModel() — cascade', () => {
     expect(result._meta.cascade.tiers[1].status).toBe('accepted')
   })
 
-  it('last tier without evaluate always accepts', async () => {
+    it('last tier without evaluate always accepts', async () => {
     const c = cascade({
       tiers: [
         { model: 'model-cheap', evaluate: () => false },
@@ -203,7 +203,7 @@ describe('resolveModel() — cascade', () => {
     expect(result._meta.cascade.acceptedAtTier).toBe(1)
   })
 
-  it('throws CascadeExhaustedError when all tiers fail evaluation', async () => {
+    it('throws CascadeExhaustedError when all tiers fail evaluation', async () => {
     const c = cascade({
       tiers: [
         { model: 'model-a', evaluate: () => false },
@@ -216,7 +216,7 @@ describe('resolveModel() — cascade', () => {
     await expect(resolveModel(c, {}, tryModel, extractModelId)).rejects.toThrow(CascadeExhaustedError)
   })
 
-  it('returns last result with budgetExceeded when cost exceeds maxCost', async () => {
+    it('returns last result with budgetExceeded when cost exceeds maxCost', async () => {
     const c = cascade({
       tiers: [{ model: 'model-cheap', evaluate: () => false }, { model: 'model-expensive' }],
       budget: { maxCost: 0.005 },
@@ -231,7 +231,7 @@ describe('resolveModel() — cascade', () => {
     expect(result.text).toBe('response from model-cheap')
   })
 
-  it('returns last result with budgetExceeded when latency exceeds maxLatencyMs', async () => {
+    it('returns last result with budgetExceeded when latency exceeds maxLatencyMs', async () => {
     const c = cascade({
       tiers: [
         {
@@ -257,7 +257,7 @@ describe('resolveModel() — cascade', () => {
     expect(calls).toEqual(['model-cheap']) // never tried tier 2
   })
 
-  it('propagates provider errors (does not catch them)', async () => {
+    it('propagates provider errors (does not catch them)', async () => {
     const c = cascade({
       tiers: [{ model: 'model-a', evaluate: () => true }, { model: 'model-b' }],
     })
@@ -269,7 +269,7 @@ describe('resolveModel() — cascade', () => {
     await expect(resolveModel(c, {}, tryModel, extractModelId)).rejects.toThrow('Provider is down')
   })
 
-  it('passes tier context to evaluate function', async () => {
+    it('passes tier context to evaluate function', async () => {
     const evaluateSpy = vi.fn(() => true)
 
     const c = cascade({

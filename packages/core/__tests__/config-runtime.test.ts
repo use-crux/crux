@@ -31,12 +31,31 @@ describe('config — runtime domain mapping', () => {
 
     expect(getRuntime().observabilityTransport).toBeUndefined()
     expect(getRuntime().observabilityDelivery).toBeUndefined()
+    expect(getRuntime().observabilityCapture).toBeUndefined()
     expect(currentObservabilityTransport()).toBeUndefined()
 
     crux.dispose()
   })
 
-  it('installs persistence.store before plugins run', () => {
+    it('installs observability capture policy without requiring a transport', () => {
+    const crux = config({
+      observability: {
+        recordInputs: false,
+        recordOutputs: false,
+      },
+    })
+
+    expect(getRuntime().observabilityCapture).toEqual({
+      recordInputs: false,
+      recordOutputs: false,
+    })
+    expect(getRuntime().observabilityTransport).toBeUndefined()
+    expect(currentObservabilityTransport()).toBeUndefined()
+
+    crux.dispose()
+  })
+
+    it('installs persistence.store before plugins run', () => {
     const store = inMemoryCruxStore()
     const seenStores: unknown[] = []
     const plugin: CruxPlugin = {
@@ -58,7 +77,7 @@ describe('config — runtime domain mapping', () => {
     crux.dispose()
   })
 
-  it('installs explicit observability transport before plugins run', () => {
+    it('installs explicit observability transport before plugins run', () => {
     const transport: CruxObservabilityTransport = { send: vi.fn() }
     const seenTransports: Array<{ runtime: unknown; active: unknown }> = []
     const plugin: CruxPlugin = {
@@ -85,7 +104,7 @@ describe('config — runtime domain mapping', () => {
     expect(currentObservabilityTransport()).toBeUndefined()
   })
 
-  it('installs explicit observability server URL and delivery before plugins run', () => {
+    it('installs explicit observability server URL and delivery before plugins run', () => {
     const seen: Array<{ runtimeTransport: unknown; activeTransport: unknown; delivery: unknown }> = []
     const delivery = { maxPendingDeliveries: 2 }
     const plugin: CruxPlugin = {
@@ -123,7 +142,7 @@ describe('config — runtime domain mapping', () => {
     expect(currentObservabilityTransport()).toBeUndefined()
   })
 
-  it('passes observability token into the generated HTTP transport', async () => {
+    it('passes observability token into the generated HTTP transport', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
     vi.stubGlobal('fetch', fetchImpl)
     const crux = config({
@@ -147,7 +166,7 @@ describe('config — runtime domain mapping', () => {
     }
   })
 
-  it('lets explicit observability override devtools before plugins run', () => {
+    it('lets explicit observability override devtools before plugins run', () => {
     const transport: CruxObservabilityTransport = { send: vi.fn() }
     const seenTransports: Array<{ runtime: unknown; active: unknown }> = []
     const plugin: CruxPlugin = {
@@ -174,7 +193,7 @@ describe('config — runtime domain mapping', () => {
     crux.dispose()
   })
 
-  it('disables observability before plugins run', () => {
+    it('disables observability before plugins run', () => {
     const previousTransport: CruxObservabilityTransport = { send: vi.fn() }
     const restorePrevious = configureObservability({ transport: previousTransport })
     updateRuntime({ observabilityTransport: previousTransport })
@@ -208,7 +227,7 @@ describe('config — runtime domain mapping', () => {
     }
   })
 
-  it('maps generation middleware and tokenizer into runtime setup', () => {
+    it('maps generation middleware and tokenizer into runtime setup', () => {
     const promptMiddleware: PromptMiddleware = async (args, next) => next(args)
     const crux = config({
       generation: {
@@ -223,7 +242,7 @@ describe('config — runtime domain mapping', () => {
     crux.dispose()
   })
 
-  it('disables config side effects in CRUX_INDEX mode', () => {
+    it('disables config side effects in CRUX_INDEX mode', () => {
     const previous = process.env.CRUX_INDEX
     process.env.CRUX_INDEX = '1'
     const install = vi.fn().mockReturnValue({})

@@ -19,7 +19,7 @@ Instructions here.`
     expect(result.body).toBe('# SEO Analysis\n\nInstructions here.')
   })
 
-  it('parses optional version and license fields', () => {
+    it('parses optional version and license fields', () => {
     const raw = `---
 name: test
 description: Test skill
@@ -34,7 +34,7 @@ Body.`
     expect(result.meta.license).toBe('Apache-2.0')
   })
 
-  it('parses tags as comma-separated values', () => {
+    it('parses tags as comma-separated values', () => {
     const raw = `---
 name: test
 description: Test
@@ -47,7 +47,7 @@ Body.`
     expect(result.meta.tags).toEqual(['seo', 'writing', 'analysis'])
   })
 
-  it('parses tags in YAML array syntax', () => {
+    it('parses tags in YAML array syntax', () => {
     const raw = `---
 name: test
 description: Test
@@ -60,7 +60,7 @@ Body.`
     expect(result.meta.tags).toEqual(['seo', 'writing'])
   })
 
-  it('ignores IDE-specific fields', () => {
+    it('ignores IDE-specific fields', () => {
     const raw = `---
 name: test
 description: Test
@@ -78,7 +78,7 @@ Body.`
     // No error thrown — unknown fields are silently ignored
   })
 
-  it('handles quoted values', () => {
+    it('handles quoted values', () => {
     const raw = `---
 name: "my-skill"
 description: 'A skill with special: characters'
@@ -91,7 +91,7 @@ Body.`
     expect(result.meta.description).toBe('A skill with special: characters')
   })
 
-  it('throws SkillLoadError for missing frontmatter', () => {
+    it('throws SkillLoadError for missing frontmatter', () => {
     const raw = `# Just Markdown
 
 No frontmatter here.`
@@ -100,7 +100,7 @@ No frontmatter here.`
     expect(() => parseFrontmatter(raw, 'test')).toThrow('YAML frontmatter')
   })
 
-  it('throws SkillLoadError for missing name', () => {
+    it('throws SkillLoadError for missing name', () => {
     const raw = `---
 description: Has description but no name
 ---
@@ -111,7 +111,7 @@ Body.`
     expect(() => parseFrontmatter(raw, 'test')).toThrow('name')
   })
 
-  it('throws SkillLoadError for missing description', () => {
+    it('throws SkillLoadError for missing description', () => {
     const raw = `---
 name: test
 ---
@@ -122,7 +122,7 @@ Body.`
     expect(() => parseFrontmatter(raw, 'test')).toThrow('description')
   })
 
-  it('handles empty body after frontmatter', () => {
+    it('handles empty body after frontmatter', () => {
     const raw = `---
 name: test
 description: Test
@@ -133,7 +133,7 @@ description: Test
     expect(result.body).toBe('')
   })
 
-  it('handles comments in frontmatter', () => {
+    it('handles comments in frontmatter', () => {
     const raw = `---
 name: test
 # This is a comment

@@ -12,7 +12,7 @@
  */
 
 import type { CruxRuntime } from './runtime'
-import type { InstrumentationHooks, ResolveHook, ResolveHookArgs, StreamProgressReporter } from './middleware'
+import type { ResolveHook, ResolveHookArgs, StreamProgressReporter } from './middleware'
 import type { PromptMiddleware } from './types'
 
 /**
@@ -22,7 +22,6 @@ import type { PromptMiddleware } from './types'
  *   base and patch handlers are called for every event.
  * - **Middleware**: Layered chaining — patch middleware wraps base middleware.
  * - **streamProgressHook**: Fan-out — both reporters receive chunks.
- * - **instrumentationHooks**: Per-hook fan-out for all sub-hooks.
  * - **observability transport**: Last-write-wins.
  *
  * @param base - The current runtime state.
@@ -57,11 +56,6 @@ export function mergeRuntime(base: CruxRuntime, patch: Partial<CruxRuntime>): Cr
 
   if (patch.streamProgressHook !== undefined) {
     result.streamProgressHook = fanOutStreamProgressHook(base.streamProgressHook, patch.streamProgressHook)
-  }
-
-  // Instrumentation hooks: per-hook fan-out
-  if (patch.instrumentationHooks !== undefined) {
-    result.instrumentationHooks = mergeInstrumentationHooks(base.instrumentationHooks, patch.instrumentationHooks)
   }
 
   // Global safety policies: concat so multiple plugins compose
@@ -155,96 +149,4 @@ function fanOutStreamProgressHook(
       },
     }
   }
-}
-
-/** All keys of InstrumentationHooks that are hook functions. */
-const INSTRUMENTATION_HOOK_KEYS: ReadonlyArray<keyof InstrumentationHooks> = [
-  'onEmbedStart',
-  'onEmbedEnd',
-  'onRetrievalStart',
-  'onRetrievalEnd',
-  'onRetrievalStageStart',
-  'onRetrievalStageEnd',
-  'onWorkspaceOperation',
-  'onIndexStart',
-  'onIndexEnd',
-  'onCorpusSyncStart',
-  'onCorpusSource',
-  'onCorpusSyncEnd',
-  'onIngestParseStart',
-  'onIngestParseEnd',
-  'onMemoryRead',
-  'onMemoryWrite',
-  'onCompactStart',
-  'onCompactEnd',
-  'onBudgetCheck',
-  'onCostReport',
-  'onCostWarn',
-  'onCostLimit',
-  'onBlackboardUpdate',
-  'onHandoffPrepare',
-  'onJudgeResult',
-  'onDelegateStart',
-  'onDelegateComplete',
-  'onToolStart',
-  'onToolEnd',
-  'onToolApprovalRequest',
-  'onToolApprovalDecision',
-  'onSecurityWarning',
-  'onCompositionStart',
-  'onCompositionAgent',
-  'onCompositionEnd',
-  'onFlowStart',
-  'onFlowEnd',
-  'onStepStart',
-  'onStepEnd',
-  'onContextCacheHit',
-  'onContextCacheMiss',
-  'onSkillLoad',
-  'onSkillCacheHit',
-  'onSkillCacheMiss',
-  'onSkillResolve',
-  'onGuardrailRun',
-  'onConstraintCheck',
-  'onConstraintRetry',
-  'onConstraintViolation',
-  'onSemanticCacheLookupStart',
-  'onSemanticCacheLookupEnd',
-  'onSemanticCacheHit',
-  'onSemanticCacheMiss',
-  'onSemanticCacheWrite',
-  'onSemanticCacheSkip',
-  'onSemanticCacheReplayStart',
-  'onSemanticCacheReplayEnd',
-]
-
-/**
- * Merge instrumentation hooks: per-hook fan-out.
- * Non-overlapping hooks are preserved from both sides.
- */
-function mergeInstrumentationHooks(
-  base: InstrumentationHooks | undefined,
-  patch: InstrumentationHooks,
-): InstrumentationHooks {
-  if (!base) return { ...patch }
-
-  const merged: InstrumentationHooks = { ...base }
-
-  for (const key of INSTRUMENTATION_HOOK_KEYS) {
-    const baseHook = base[key]
-    const patchHook = patch[key]
-    if (patchHook) {
-      if (baseHook) {
-        // Fan-out: call both
-        ;(merged as Record<string, unknown>)[key] = (event: unknown) => {
-          ;(baseHook as (e: unknown) => void)(event)
-          ;(patchHook as (e: unknown) => void)(event)
-        }
-      } else {
-        ;(merged as Record<string, unknown>)[key] = patchHook
-      }
-    }
-  }
-
-  return merged
 }

@@ -71,20 +71,12 @@ export async function runEmbeddingOperation<T>(args: {
     },
   })
 
-  getRuntime().instrumentationHooks?.onEmbedStart?.(eventBase)
 
   try {
     const result = await span.withContext(async () => {
       const executionResult = await executeGovernedEmbedding(args)
       emitEmbeddingOutputArtifact(span.spanId, args, executionResult)
       return executionResult
-    })
-    getRuntime().instrumentationHooks?.onEmbedEnd?.({
-      ...eventBase,
-      durationMs: Date.now() - startedAt,
-      ...(result.usage ? { usage: result.usage } : {}),
-      ...(result.cost !== undefined ? { cost: result.cost } : {}),
-      ...eventGovernance(result.governance),
     })
     span.end({
       embeddingName: args.name,
@@ -100,11 +92,6 @@ export async function runEmbeddingOperation<T>(args: {
     })
     return result
   } catch (error) {
-    getRuntime().instrumentationHooks?.onEmbedEnd?.({
-      ...eventBase,
-      durationMs: Date.now() - startedAt,
-      error: error instanceof Error ? error.message : String(error),
-    })
     span.error(error, {
       embeddingName: args.name,
       embeddingKind: args.kind,

@@ -15,7 +15,7 @@ describe('canonical plan observability', () => {
     resetRuntime()
   })
 
-  it('records plan mutations with full plan artifact data for devtools read models', async () => {
+    it('records plan mutations with full plan artifact data for devtools read models', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     updateRuntime({ store: inMemoryCruxStore() })

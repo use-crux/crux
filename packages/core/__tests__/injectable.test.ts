@@ -53,7 +53,7 @@ describe('injectable()', () => {
     expect(resolved.metadata).toMatchObject({ injected: true })
   })
 
-  it('lets context use entries compose before the context system text', async () => {
+    it('lets context use entries compose before the context system text', async () => {
     const nested = injectable({
       id: 'nested',
       inject: () => ({
@@ -77,7 +77,7 @@ describe('injectable()', () => {
     expect(resolved.system).toBe('Base.\n\nNested evidence.\n\nReusable instructions.')
   })
 
-  it('throws on injected tool collisions', async () => {
+    it('throws on injected tool collisions', async () => {
     const first = injectable({
       id: 'first',
       inject: () => ({

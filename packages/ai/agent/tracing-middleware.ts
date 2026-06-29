@@ -9,6 +9,7 @@ import {
 import type { SkillActivationSession } from '@use-crux/core/skill'
 import { extractCost } from './metadata'
 import { injectNewlyActivatedSkills } from './skill-injection'
+import { observeAgentToolCall } from './observability'
 import { emitEstimatedToolEnds, cleanStaleStepTimings, recordStepTiming } from './tool-timing'
 import { generateExecTraceId, safeParseJson } from './utils'
 
@@ -65,12 +66,11 @@ export function createTracingMiddleware(
       const startedAt = Date.now()
       const traceId = generateExecTraceId()
       const ctx = getExecutionContext()
-      const instrumentationHooks = getRuntime().instrumentationHooks
       const timingKey = parentResolveTraceId ?? traceId
 
-      emitEstimatedToolEnds(params, timingKey, instrumentationHooks)
+      emitEstimatedToolEnds(params, timingKey)
       cleanStaleStepTimings()
-      injectNewlyActivatedSkills(params, instrumentationHooks, skillSession)
+      injectNewlyActivatedSkills(params, skillSession)
 
       try {
         const result = await runWithExecutionContext(
@@ -94,9 +94,9 @@ export function createTracingMiddleware(
           }))
 
         for (const toolCall of toolCalls) {
-          instrumentationHooks?.onToolStart?.({
-            toolCallId: toolCall.id ?? `tc_${Date.now()}`,
-            toolName: toolCall.name,
+          observeAgentToolCall({
+            id: toolCall.id ?? `tc_${Date.now()}`,
+            name: toolCall.name,
             args: toolCall.args,
             traceId,
           })
@@ -150,10 +150,9 @@ export function createTracingMiddleware(
       const traceId = generateExecTraceId()
       const ctx = getExecutionContext()
       const progress = getRuntime().streamProgressHook?.(traceId)
-      const instrumentationHooks = getRuntime().instrumentationHooks
       const timingKey = parentResolveTraceId ?? traceId
 
-      emitEstimatedToolEnds(params, timingKey, instrumentationHooks)
+      emitEstimatedToolEnds(params, timingKey)
       cleanStaleStepTimings()
 
       const streamStartHook = getRuntime().streamStartHook
@@ -201,9 +200,9 @@ export function createTracingMiddleware(
             } else if (chunk.type === 'tool-call') {
               const args = safeParseJson(chunk.input)
               toolCalls.push({ id: chunk.toolCallId, name: chunk.toolName, args })
-              instrumentationHooks?.onToolStart?.({
-                toolCallId: chunk.toolCallId,
-                toolName: chunk.toolName,
+              observeAgentToolCall({
+                id: chunk.toolCallId,
+                name: chunk.toolName,
                 args,
                 traceId,
               })

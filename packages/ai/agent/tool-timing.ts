@@ -1,6 +1,7 @@
 import type { LanguageModelV3CallOptions } from '@ai-sdk/provider'
-import type { CruxRuntime, ToolModelOutput } from '@use-crux/core'
+import type { ToolModelOutput } from '@use-crux/core'
 import type { PromptMessage } from './message-shapes'
+import { observeEstimatedAgentToolEnd } from './observability'
 
 interface StepTimingEntry {
   lastFlushAt: number
@@ -57,10 +58,7 @@ function collectToolResults(prompt: readonly PromptMessage[] | undefined): Map<s
 export function emitEstimatedToolEnds(
   params: LanguageModelV3CallOptions,
   timingKey: string,
-  instrumentationHooks: CruxRuntime['instrumentationHooks'],
 ): void {
-  if (!instrumentationHooks?.onToolEnd) return
-
   const prompt = params.prompt as unknown as PromptMessage[] | undefined
   const hasToolResults = prompt?.some((message) => message.role === 'tool')
   if (!hasToolResults) return
@@ -77,12 +75,11 @@ export function emitEstimatedToolEnds(
       ? (resultMap.get(toolCall.id) as { modelOutput?: ToolModelOutput; result?: unknown } | undefined)
       : undefined
 
-    instrumentationHooks.onToolEnd({
-      toolCallId: callId,
-      toolName: toolCall.name,
+    observeEstimatedAgentToolEnd({
+      id: callId,
+      name: toolCall.name,
       durationMs: estimatedMs,
       result: shaped?.result,
-      modelOutput: shaped?.modelOutput,
       modelOutputType: shaped?.modelOutput?.type,
       estimated: true,
       traceId: toolCall.traceId,

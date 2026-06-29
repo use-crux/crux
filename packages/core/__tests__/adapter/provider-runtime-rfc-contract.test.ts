@@ -147,7 +147,7 @@ describe('provider runtime RFC contract', () => {
     ])
   })
 
-  it('creates a loop-owned provider runtime through a bound loop contract', async () => {
+    it('creates a loop-owned provider runtime through a bound loop contract', async () => {
     const provider = defineProviderRuntime({
       id: 'runtime-bound-loop',
       loop: {

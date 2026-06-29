@@ -267,11 +267,6 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
     }
     config.onUpdate?.(config.id, fieldsChanged)
     const current = await rawGetAll()
-    getRuntime().instrumentationHooks?.onBlackboardUpdate?.({
-      boardId: config.id,
-      fieldsChanged,
-      snapshot: (current ?? {}) as Record<string, unknown>,
-    })
   }
 
   async function rawGetAll(): Promise<Partial<State> | null> {
@@ -281,13 +276,6 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
       const content = entry.content as string
       return JSON.parse(content) as Partial<State>
     } catch (err) {
-      getRuntime().instrumentationHooks?.onBlackboardUpdate?.({
-        boardId: config.id,
-        fieldsChanged: [],
-        snapshot: {
-          _error: `JSON parse failed: ${err instanceof Error ? err.message : String(err)}`,
-        },
-      })
       return null
     }
   }

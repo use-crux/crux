@@ -5,11 +5,12 @@ description: Devtools, OpenTelemetry, plugins, and middleware — see what your 
 
 LLMs fail in subtle ways. The output looks fine but the model never saw the brand context. The retry logic kicked in twice. The token budget dropped your most important fragment. None of this is visible from outputs alone — you need observability.
 
-Crux gives you four layers, all built on the same instrumentation hooks:
+Crux gives you observability layers built on the same canonical graph-record spine:
 
 - **[Devtools](/docs/guides/observability/devtools)** — visual UI for development. Live trace timeline, prompt index, memory operations.
 - **[Cost tracking](/docs/guides/observability/cost-tracking)** — per-call spend attribution, reports, and warn/limit budgets.
 - **[Telemetry](/docs/guides/observability/telemetry)** — `@use-crux/otel` emits OpenTelemetry spans for production (Datadog, Honeycomb, Grafana).
+- **Subscribers** — use `subscribeObservability()` or the `crux:observability` diagnostics channel to consume raw graph records.
 - **[Plugins](/docs/guides/observability/plugins)** — composable runtime extensions via the `CruxPlugin` interface. Devtools and OTel are themselves plugins.
 - **[Middleware](/docs/guides/observability/middleware)** — global wrapper around every `generate()` / `stream()` call.
 
@@ -23,13 +24,13 @@ Without observability:
 - You don't know which prompt, flow, or model is driving spend
 - You can't reproduce a bad output because you don't have the inputs
 
-With observability, every interesting moment in the pipeline emits an event. Plugins fan that event out to the visual UI, OTel spans, custom telemetry, or your own backend.
+With observability, every interesting moment in the pipeline emits one graph record. Subscribers, the diagnostics channel, plugins, and devtools can consume that same record without each call site firing separate events.
 
 ## When should I use which?
 
 - **Always:** install devtools in dev. It's zero-cost when disabled.
 - **Production:** install `@use-crux/otel` if you have an existing OTel-compatible APM (Datadog, Honeycomb, Grafana, New Relic). Otherwise the lightweight HTTP/callback exporter works.
-- **Custom logic:** use a `CruxPlugin` if you want to tap specific events (e.g. push memory operations to your audit log).
+- **Custom logic:** use `subscribeObservability()` for raw graph records, or a `CruxPlugin` when you need broader runtime composition.
 - **Per-call wrapping:** use middleware for things that wrap *every* generation — request logging, timing, multi-tenant scoping.
 
 ## When should I NOT use middleware?
@@ -43,6 +44,6 @@ With observability, every interesting moment in the pipeline emits an event. Plu
   <Card title="Devtools" description="Visual tracing UI for development, with CLI and TUI dashboards." href="/docs/guides/observability/devtools" />
   <Card title="Cost tracking" description="Attribute model spend to prompts, models, sessions, flows, and steps." href="/docs/guides/observability/cost-tracking" />
   <Card title="Telemetry" description="OpenTelemetry spans for production observability." href="/docs/guides/observability/telemetry" />
-  <Card title="Plugins" description="Build a custom CruxPlugin to hook any instrumentation event." href="/docs/guides/observability/plugins" />
+  <Card title="Plugins" description="Build a custom CruxPlugin or graph-record subscriber." href="/docs/guides/observability/plugins" />
   <Card title="Middleware" description="Global wrapper around every generate() / stream() call." href="/docs/guides/observability/middleware" />
 </Cards>

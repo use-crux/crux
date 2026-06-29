@@ -46,7 +46,7 @@ Workspace records use explicit storage capabilities:
 
 Default mounts are `/workspace` and `/outputs`. Optional `/sources` mounts are configured explicitly by the app because source ownership can come from uploads, ingestion, MCP, retrieval, or app storage. Generated deliverables remain normal files under `/outputs`; there is no public artifact primitive in V1.
 
-Instrumentation emits `workspace:operation` protocol events and `onWorkspaceOperation` hooks. Devtools can show workspace ids, namespaces, paths, operations, and file metadata from the protocol stream; OTel receives only privacy-safe attributes such as workspace id, operation, MIME type, size, status, and path hash.
+Instrumentation emits `workspace:operation` protocol events and `workspace.operation records` hooks. Devtools can show workspace ids, namespaces, paths, operations, and file metadata from the protocol stream; OTel receives only privacy-safe attributes such as workspace id, operation, MIME type, size, status, and path hash.
 
 ## Package Structure Policy
 
@@ -112,7 +112,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── configure.ts / configure-registry.ts   configure() registry build + global security flags
 │   ├── runtime.ts      CruxRuntime — global hooks/reporters (getRuntime/setRuntime/updateRuntime/resetRuntime)
 │   ├── plugin.ts / merge-runtime.ts   CruxPlugin, applyPlugins(), mergeRuntime() layered composition
-│   ├── middleware.ts / instrumentation-hooks.ts   per-call hook function types + the InstrumentationHooks contract
+│   ├── middleware.ts / instrumentation-hooks.ts   per-call hook function types + the graph-record subscribers contract
 │   ├── execution-context.ts   session/execution context helpers
 │   └── types.ts        Runtime middleware contracts (PromptMiddleware, PromptMiddlewareArgs, MiddlewareResult)
 ├── generation/         Provider-neutral generation lifecycle policy
@@ -301,7 +301,7 @@ compatibility shims, while every implementation lives in a domain folder.
 
 Inside `@use-crux/ai`, the `LoopRuntimePort` implementation (`createAiSdkLoopRuntime(gateway)`) is intentionally just a gateway runner over an internal SDK call-plan codec. The codec builds AI SDK args, wires loop steering, tool-call repair, structured-output repair/error projection, stream callbacks, stream safety transforms, completion metadata, and replay shape; `SdkGateway` remains the only code that calls the `ai` package runtime. The external-agent bridge follows the same boundary: `@use-crux/ai/agent` uses core prompt resolution and inspect data, then owns AI SDK model wrapping, stream progress, tool timing estimates, provider metadata cost extraction, and tracing middleware.
 
-Both regimes drive the same private gate→execute→settle verdict kernel inside `adapter/tool/session.ts`: `executeRound()` is the pull shell, the armed tool map is the push shell. Live SDK-regime tools now use the same canonical emission profile as core-regime tool execution: `tool.call` spans with consumed `tool.args`, raw and model-facing `tool.result` artifacts, relation edges, and paired `onToolStart` / `onToolEnd` hooks. That, plus the shared Safety session, is the structural guarantee that validation retry, instrumentation hook ordering, tool observability, approval semantics, skill re-resolution, memory capture, and safety merges behave identically regardless of who drives the loop. The cross-dialect parity suite (`__tests__/adapter/dialect-parity.test.ts`) verifies it mechanically: identical hook protocols, span/artifact structures, message shapes, and errors for clean rounds, middleware-modified rounds, suspension, resume-approved, resume-denied, token mismatch, and mid-loop skill loads.
+Both regimes drive the same private gate→execute→settle verdict kernel inside `adapter/tool/session.ts`: `executeRound()` is the pull shell, the armed tool map is the push shell. Live SDK-regime tools now use the same canonical emission profile as core-regime tool execution: `tool.call` spans with consumed `tool.args`, raw and model-facing `tool.result` artifacts, relation edges, and paired `tool.call start records` / `tool.call end records` hooks. That, plus the shared Safety session, is the structural guarantee that validation retry, instrumentation hook ordering, tool observability, approval semantics, skill re-resolution, memory capture, and safety merges behave identically regardless of who drives the loop. The cross-dialect parity suite (`__tests__/adapter/dialect-parity.test.ts`) verifies it mechanically: identical hook protocols, span/artifact structures, message shapes, and errors for clean rounds, middleware-modified rounds, suspension, resume-approved, resume-denied, token mismatch, and mid-loop skill loads.
 
 ## Runtime Profiles
 
@@ -543,7 +543,7 @@ Execution model:
 8. Reassemble cached and provider results in original input order.
 9. Aggregate optional `usage`, `cost`, cache, retry, truncation, and rate-limit metadata across chunks.
 10. Emit a canonical `embedding.call` span once per top-level `embed()` or `embedMany()` call, including bounded output metadata artifacts and produced edges.
-11. Emit legacy `onEmbedStart` and `onEmbedEnd` instrumentation hooks for compatibility.
+11. Emit legacy `embedding.call start records` and `embedding.call end records` instrumentation hooks for compatibility.
 
 Governance is intentionally on `embedding()` instead of retrievers/indexers. Preprocessing, truncation, retry, cache keys, and provider rate limits change the vectors being generated or the provider calls needed to generate them. Placing those policies on the primitive makes every consumer use the same behavior.
 
@@ -590,7 +590,7 @@ Advanced query-time composition lives in `retrievalPipeline(base, stages)`, not 
 
 Parent expansion relies on write-side metadata. Parent/child indexing writes `parent.key` onto child chunks using the indexer id, namespace, source id, and parent id. `parentExpand()` follows that key and enriches the child hit with parent content without replacing the child identity or score.
 
-Retrieval observability writes the canonical graph directly. Direct retriever calls open `retrieval.query` spans with `retrieval.hits` artifacts and `retrieval.returned` edges. Retrieval pipelines open a parent `retrieval.pipeline` span, fanout and each query/hit stage open `retrieval.stage` child spans, and stage outputs attach bounded `output` artifacts. Devtools and the TUI read the backend graph; OTel receives only privacy-safe metadata unless a caller explicitly configures redaction/content export.
+Retrieval observability writes the canonical graph directly. Direct retriever calls open `retrieval.query` spans with `retrieval.hits` artifacts and `retrieval.returned` edges. Retrieval pipelines open a parent `retrieval.pipeline` span, fanout and each query/hit stage open `retrieval.stage` child spans, and stage outputs attach bounded `output` artifacts. Devtools, the TUI, subscribers, diagnostics-channel listeners, and OTel all read from the same graph records; payload capture is controlled centrally by `observability.recordInputs` / `observability.recordOutputs`.
 
 Prompt composition uses a generic injectable `use` contract. Plain contexts still contribute system text, but richer primitives can inject context, tools, constraints, guardrails, and metadata in one resolution pass. `context.contribution` artifacts include the specific `injectedTools` names contributed by that context when tools are present, including contexts whose text is later dropped by a token budget. Direct tool producers such as custom injectables, retrievers/grounding, memory, and blackboards also emit tool-only `context.contribution` previews with their source kind, so backend read models can join request tools back to the primitive that supplied them without parsing tool names. Runtime prompt input validation is represented separately by redacted `prompt.input` previews, allowing local read models to compare observed input keys with effective prompt schemas without storing raw values. `context({ use })` nests the same composition model, so product teams can build reusable contexts that bundle retrieval, grounding, memory, and coordination state without forcing prompt authors to call `asContext()` or `asTools()` manually.
 
@@ -614,9 +614,7 @@ Loaders expose two read modes. `load()` yields `{ ok: true, document } | { ok: f
 
 `corpus()` sits next to `indexer()` because it is still write-side retrieval infrastructure. The indexer knows how to prepare and write chunks for a single operation. The corpus owns the source ledger around repeated operations: content hashes, metadata hashes, index-pipeline fingerprints, source status, stale-source policy, and dry-run planning. This keeps incremental sync explicit without pushing loader state into `@use-crux/ingest` or query semantics into `@use-crux/core/retrieval`.
 
-Corpus and indexing observability write the canonical graph directly. `indexer().chunk()`, `indexer().indexDocuments()`, and `indexer().indexChunks()` open `indexing.pipeline` spans; document transforms, chunkers, and chunk transforms open child `indexing.pipeline` stage spans and attach bounded `indexing.report` artifacts with cache status, hashes, counts, and timings. `corpus().sync()` opens `corpus.sync`, records loader results as `ingest.parse` with `ingest.report`, nests indexing work below the corpus span, and attaches a `corpus.report` source-ledger summary artifact. Legacy instrumentation hooks still fire for compatibility, but the backend-owned graph is the source of truth for devtools and TUI rendering.
-
-Parser execution emits `onIngestParseStart` and `onIngestParseEnd`. Devtools forwards those as `ingest:parse:start` and `ingest:parse:end`; the CLI/devtools server keeps them in a runtime ring buffer; `@use-crux/otel` maps them to `crux.ingest.parse` spans with hashed namespace/source identifiers.
+Corpus and indexing observability write the canonical graph directly. `indexer().chunk()`, `indexer().indexDocuments()`, and `indexer().indexChunks()` open `indexing.pipeline` spans; document transforms, chunkers, and chunk transforms open child `indexing.pipeline` stage spans and attach bounded `indexing.report` artifacts with cache status, hashes, counts, and timings. `corpus().sync()` opens `corpus.sync`, records loader results as `ingest.parse` with `ingest.report`, nests indexing work below the corpus span, and attaches a `corpus.report` source-ledger summary artifact. Parser execution opens `ingest.parse` spans with parser name, format, byte length, part count, warning count, and error status; devtools, subscribers, and `@use-crux/otel` consume those records from the same spine.
 
 ## Middleware Pipeline
 
@@ -651,7 +649,7 @@ All global hooks live in the `CruxRuntime` object (`runtime/runtime.ts`). Use `s
 | `ExecutionHook`        | Agent adapter  | `runtime.executionHook`             | Observe model calls from agent frameworks             |
 | `StreamProgressHook`   | Streaming      | `runtime.streamProgressHook`        | Live streaming metrics (TTFT, chunks)                 |
 | `StreamStartHook`      | Streaming      | `runtime.streamStartHook`           | Eager hook before first chunk                         |
-| `InstrumentationHooks` | All primitives | `runtime.instrumentationHooks`      | Observe memory, compaction, scoring, agent operations |
+| `graph-record subscribers` | All primitives | `runtime.observability subscribers`      | Observe memory, compaction, scoring, agent operations |
 | `onPrepare`            | Single prompt  | `prompt({ hooks: { onPrepare } })`  | After system assembly, before generation              |
 | `onGenerate`           | Single prompt  | `prompt({ hooks: { onGenerate } })` | After successful generation                           |
 | `onError`              | Single prompt  | `prompt({ hooks: { onError } })`    | After failed generation                               |
@@ -666,7 +664,7 @@ The plugin system enables composable hook installation. Three key functions:
 | `applyPlugins(plugins, initial)`     | Process plugins in order, each seeing cumulative state. Returns merged runtime + dispose                              |
 | `withDevtools()` / `withTelemetry()` | Built-in plugins returning `CruxPluginResult`                                                                         |
 
-**Fan-out semantics**: When two plugins install the same hook (e.g., `onToolStart`), both handlers are called for every event. Neither can suppress the other.
+**Fan-out semantics**: When two plugins install the same hook (e.g., `tool.call start records`), both handlers are called for every event. Neither can suppress the other.
 
 **Layered middleware**: When two plugins install middleware, the later plugin wraps the earlier one. Calling `next()` in the outer middleware invokes the inner middleware.
 
@@ -685,16 +683,22 @@ The plugin system supersedes the previous manual chaining approach. `withDevtool
 
 ### Instrumentation Standard
 
-All primitives emit events through `InstrumentationHooks` only. No primitive should reference `collector`, `getRuntime().collector`, or any reporter directly.
+Detailed tracing uses canonical `@use-crux/core/observability` graph records emitted through
+`observe.*` / `emit()`. Runtime integrations must not introduce ad hoc collectors or reporters at
+primitive call sites. `emit()` is the event spine: records are delivered to in-process subscribers,
+the Node diagnostics channel, and the async devtools transport from the same validated graph record.
+Generation and streaming spans also carry `gen.*` performance metrics on terminal span records, and
+`observability.recordInputs` / `observability.recordOutputs` controls whether input/output artifacts
+carry previews or only reference metadata.
 
-**Event flow for hook-based integrations:**
+**Event flow for integrations:**
 
 ```
-Primitive (memory, swarm, flow, etc.)
-  → getRuntime().instrumentationHooks?.onXxx(event)
-    → Fan-out to all installed plugin handlers
-      → OTel handler: create spans
-      → Custom handler: user-defined logic
+Primitive (generation, tools, memory, swarm, flow, etc.)
+    → observe.* → emit(record)
+      → subscribeObservability() consumers such as @use-crux/otel
+      → node:diagnostics_channel consumers
+      → configured observability transport for devtools
 ```
 
 Devtools tracing itself uses the canonical `@use-crux/core/observability` graph runtime. Built-in primitives write `run:start`, `span:start`, `span:event`, `artifact`, `edge`, `span:end`, and `run:end` records; the Go backend validates and persists those records, builds read models, and pushes subscription updates to the web UI and TUI.
@@ -712,10 +716,10 @@ graph in the same backend whenever quality runs are executed with devtools attac
 
 **Rules:**
 
-1. Primitives call `instrumentationHooks?.onXxx()` — never `collector.send()`
-2. Hook events carry domain data only (flowId, status, durationMs, etc.)
+1. Primitives emit canonical graph records once through `observe.*`.
+2. Subscribers, diagnostics-channel consumers, and transports only read those records.
 3. Transport metadata (sessionId, traceId, timestamp) is added by handlers at call time from the active observability context.
-4. The `RuntimeFlowSessionReporter` remains a public API for users who want manual flow reporting with rich metadata
+4. The `RuntimeFlowSessionReporter` remains a public API for users who want manual flow reporting with rich metadata.
 
 ## configure() Internals
 
@@ -888,12 +892,12 @@ The indexer projects a shared injection read model over merged definitions and r
 
 The old collector protocol has been removed from `@use-crux/core`. New tracing uses `@use-crux/core/observability` records and the Go backend validates batches at `POST /api/observability/records`. Non-execution index data uses `@use-crux/core/project-index` contracts and `/api/index/snapshot` instead of being disguised as spans.
 
-### InstrumentationHooks
+### graph-record subscribers
 
-`InstrumentationHooks` is a global singleton (same pattern as `PromptMiddleware`) with optional callbacks for all instrumented operations:
+`graph-record subscribers` is a global singleton (same pattern as `PromptMiddleware`) with optional callbacks for all instrumented operations:
 
 ```ts
-interface InstrumentationHooks {
+interface graph-record subscribers {
   // Memory
   onMemoryRead?: (event: {
     memoryId
@@ -917,8 +921,8 @@ interface InstrumentationHooks {
   onDelegateStart?: (event: { delegateId; handoffId; inputSize; input? }) => void
   onDelegateComplete?: (event: { delegateId; handoffId; durationMs; inputSize; outputSize; output? }) => void
   // Tools
-  onToolStart?: (event: { toolCallId; toolName; args?; traceId? }) => void
-  onToolEnd?: (event: {
+  tool.call start records?: (event: { toolCallId; toolName; args?; traceId? }) => void
+  tool.call end records?: (event: {
     toolCallId
     toolName
     durationMs
@@ -961,10 +965,10 @@ interface InstrumentationHooks {
     finalAgentId?
   }) => void
   // Flows
-  onFlowStart?: (event: { flowId; name; parentFlowId?; goal? }) => void
-  onFlowEnd?: (event: { flowId; name; status; durationMs; totalSteps; error? }) => void
-  onStepStart?: (event: { flowId; stepId; label }) => void
-  onStepEnd?: (event: { flowId; stepId; label; status; durationMs; error? }) => void
+  flow.run start records?: (event: { flowId; name; parentFlowId?; goal? }) => void
+  flow.run end records?: (event: { flowId; name; status; durationMs; totalSteps; error? }) => void
+  flow.step start records?: (event: { flowId; stepId; label }) => void
+  flow.step end records?: (event: { flowId; stepId; label; status; durationMs; error? }) => void
   // Flow lifecycle (suspend/resume)
   onFlowSuspend?: (event: { flowId; name; suspendPoint }) => void
   onFlowResume?: (event: { flowId; name }) => void
@@ -974,7 +978,7 @@ interface InstrumentationHooks {
 }
 ```
 
-Each primitive calls `getRuntime().instrumentationHooks?.onXxx?.(...)` — zero cost when no hooks are installed. Plugins install hooks via the plugin system; `mergeRuntime()` automatically fan-outs multiple handlers for the same hook.
+` — zero cost when no hooks are installed. Plugins install hooks via the plugin system; `mergeRuntime()` automatically fan-outs multiple handlers for the same hook.
 
 The `evalId` field on `onJudgeResult` enables correlation: callers that run judges inside a larger evaluation can pass an id through `JudgeScoreOptions`, and the judge includes it in the hook event so devtools can link individual judge scores back to the run that triggered them. (Quality cells don't need it — judge calls made by `scorers.judge()` nest inside the cell's observed run.)
 
@@ -1184,7 +1188,7 @@ External code calls `signalFlow(flowId, name, payload)` which resolves the store
 
 ### Observability
 
-`onFlowEnd` fires only on terminal states (completed, failed, cancelled, expired). Suspended flows fire `onFlowSuspend` — the flow is paused, not finished. On resume, `onFlowResume` fires before step execution begins. OTel spans end on suspend and start fresh on resume, correlated by `crux.flow.id`.
+`flow.run end records` fires only on terminal states (completed, failed, cancelled, expired). Suspended flows fire `onFlowSuspend` — the flow is paused, not finished. On resume, `onFlowResume` fires before step execution begins. OTel spans end on suspend and start fresh on resume, correlated by `crux.flow.id`.
 
 ### Durable composition boundary
 
@@ -1206,7 +1210,7 @@ Shared typed scratchpad backed by `CruxStore`. Single store key: `blackboard:{id
 
 1. Calls in-process subscribers (registered via `subscribe()`)
 2. Calls the `onUpdate` callback from config
-3. Calls `getRuntime().instrumentationHooks?.onBlackboardUpdate?.()`
+`
 
 ### Handoff
 
@@ -1471,6 +1475,14 @@ Use `upstashVectorStore()` for new retrieval/indexing code. Key/value memory blo
 
 `@use-crux/core/observability` is the only TypeScript write contract for detailed traces. Runtime primitives emit append-only graph records and the Go backend owns all graph complexity: validation, idempotent ingestion, placeholder reconciliation, read-model building, filtering, search, retention, and subscriptions.
 
+`emit()` is the in-process event spine for those records. It validates each graph record once, then
+fans out synchronously to `subscribeObservability()` subscribers, publishes `{ schemaVersion,
+record }` on the Node diagnostics channel `crux:observability` when that channel has subscribers,
+and queues the same record for the async transport when a transport is configured. In-process
+subscriber failures are counted in `observabilityDiagnostics().subscriberErrors` and never interrupt
+user code, sibling subscribers, or transport delivery. The diagnostics channel is a Node tee for
+external observers and degrades to no-op when `node:diagnostics_channel` is unavailable.
+
 `observe.run()` creates user-facing execution roots. `observe.span()` creates inspectable operations and automatically opens an implicit run when called outside an active run, so compositions such as `pipeline`, `consensus`, `parallel`, and `swarm` remain traceable when used directly. `observe.event()`, `observe.artifact()`, and `observe.edge()` attach timestamped detail, payloads, and relations to the active graph context.
 
 Built-in orchestration primitives write the graph contract directly. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` / `withFlow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. Successful `flow.step` spans also record the step result as an `output` artifact, so step outputs are inspectable from the trace (and back Quality `ctx.step()` access) without re-running the flow. `consensus()` nests its voter fanout under `composition.consensus`; `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
@@ -1481,7 +1493,7 @@ Memory primitives write the graph contract from the shared block hook path. `rec
 
 Retrieval and data-loading primitives write the same graph contract. `retrieval.pipeline`, `retrieval.query`, `retrieval.stage`, `indexing.pipeline`, `ingest.parse`, and `corpus.sync` spans are emitted at the public API boundaries so standalone calls create implicit runs and calls during prompt/corpus work nest under the active span stack. Detailed payloads stay in canonical artifacts: `retrieval.hits`, `embedding.report`, `indexing.report`, `ingest.report`, `corpus.report`, `cache.report`, `routing.report`, `compaction.report`, `score.report`, `citation.report`, `composition.report`, `handoff.payload`, `delegate.report`, `memory.snapshot`, and `security.report`. Routing reports preserve router/cascade/fallback decisions for Run Detail cards; cascade reports include the full ordered ladder, skipped configured tiers, and per-tier evaluator note/confidence/budget when supplied. Production OTel export should keep metadata-only defaults unless a redaction callback opts into content.
 
-Tool primitives write the graph from the shared adapter loop. This keeps user-defined tools, context-injected tools, skill tools, swarm transfer tools, and approved resume executions on one contract: `tool.request` for model intent, `tool.call` for execution, `tool.args` / `tool.result` artifacts for inspectable payloads, and `tool.approval` for gates. The legacy `tool:start` / `tool:end` hooks still fire for compatibility, but the backend-owned canonical graph is the read source for detailed devtools/TUI inspection.
+Tool primitives write the graph from the shared adapter loop. This keeps user-defined tools, context-injected tools, skill tools, swarm transfer tools, and approved resume executions on one contract: `tool.request` for model intent, `tool.call` for execution, `tool.args` / `tool.result` artifacts for inspectable payloads, and `tool.approval` for gates. Devtools, subscribers, diagnostics-channel listeners, and `@use-crux/otel` all consume those canonical graph records directly.
 
 Delivery is intentionally non-blocking for normal Node.js use. The first queued delivery starts immediately so devtools can show live span starts during long-running actions. Later records coalesce per microtask and are delivered FIFO behind the active transport send, so a later `span:end` cannot overtake its own `span:start` across HTTP delivery attempts. HTTP batches are JSON-normalized before transport: cyclic values, `bigint`, functions, non-finite numbers, deep objects, and oversized strings are converted into inspectable safe previews instead of poisoning the POST. If the Go backend rejects a multi-record batch, the transport isolates records and still delivers valid lifecycle records such as `span:end` / `run:end`, so one bad detail artifact cannot strand a successful run as visually running. The Go observability service still reconciles out-of-order lifecycle records by stable ids and timestamps defensively, so externally reordered records do not corrupt the read model. Generation `timeoutMs` is enforced in core orchestration, not only in provider adapters: if a model call never settles, `generation.call` / `generation.stream` emits a terminal error span instead of relying on backend deadline reconciliation. For presentation only, terminal ancestor scopes such as suspended flows can close still-running descendants before operation deadline fallback marks them incomplete; output or usage evidence lets completed generations render as `ok` while the enclosing flow renders as `suspended`. Transport errors are collected by diagnostics and do not throw into user code. Bounded `observe.flush({ timeoutMs })` and `observe.shutdown({ timeoutMs })` exist for serverless runtimes and Convex-style request lifecycles where queued writes must be awaited before the platform freezes or kills the process. Bounded flush uses a cancelable timeout primitive so a successful delivery does not leave a timer alive after the flush returns.
 

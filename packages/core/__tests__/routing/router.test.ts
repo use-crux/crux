@@ -20,7 +20,7 @@ describe('router()', () => {
     })
   })
 
-  it('returns a frozen immutable object', () => {
+    it('returns a frozen immutable object', () => {
     const r = router({
       classify: () => 'default',
       routes: { default: 'model-a' },
@@ -39,11 +39,11 @@ describe('isRouter()', () => {
     expect(isRouter(r)).toBe(true)
   })
 
-  it('returns false for regular objects', () => {
+    it('returns false for regular objects', () => {
     expect(isRouter({ provider: 'openai', modelId: 'gpt-4o' })).toBe(false)
   })
 
-  it('returns false for null/undefined/strings', () => {
+    it('returns false for null/undefined/strings', () => {
     expect(isRouter(null)).toBe(false)
     expect(isRouter(undefined)).toBe(false)
     expect(isRouter('gpt-4o')).toBe(false)
@@ -64,7 +64,7 @@ describe('.select()', () => {
     expect(selected).not.toBe(r) // new instance
   })
 
-  it('returns a frozen instance', () => {
+    it('returns a frozen instance', () => {
     const r = router({
       classify: () => 'default',
       routes: { default: 'model-a' },
@@ -88,7 +88,7 @@ describe('.with()', () => {
     expect(hinted).not.toBe(r)
   })
 
-  it('preserves forced route when adding hints', () => {
+    it('preserves forced route when adding hints', () => {
     const r = router({
       classify: (_input, _hints?: { fast?: boolean }) => 'default',
       routes: { x: 'model-x', default: 'model-a' },

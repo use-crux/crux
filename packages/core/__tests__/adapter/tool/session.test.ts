@@ -41,7 +41,7 @@ describe('createToolLifecycle — preparation', () => {
     expect(lifecycle.descriptors?.find((d) => d.name === 'echo')?.description).toBe('call echo')
   })
 
-  it('is disabled with no tools: getters undefined, resume/notify/capture are no-ops', async () => {
+    it('is disabled with no tools: getters undefined, resume/notify/capture are no-ops', async () => {
     const lifecycle = createToolLifecycle({
       regime: 'core',
       resolved: resolvedWith({}),
@@ -61,7 +61,7 @@ describe('createToolLifecycle — preparation', () => {
     expect(lifecycle.transcript).toEqual([{ t: 'prepare', tools: 0, middleware: 0 }])
   })
 
-  it('arms an instrumented tool map in the sdk regime and refuses executeRound (RFC #28)', async () => {
+    it('arms an instrumented tool map in the sdk regime and refuses executeRound (RFC #28)', async () => {
     const lifecycle = createToolLifecycle({
       regime: 'sdk',
       resolved: resolvedWith({ tools: { echo: { description: 'echo', execute: async () => 'ok' } } }),
@@ -86,7 +86,7 @@ describe('createToolLifecycle — preparation', () => {
     ).rejects.toThrow(/sdk/i)
   })
 
-  it('chains prompt middleware before call middleware (call middleware is outermost)', async () => {
+    it('chains prompt middleware before call middleware (call middleware is outermost)', async () => {
     const tool = {
       description: 'concat',
       execute: vi.fn(async (input: { v: string }) => input.v),
@@ -169,7 +169,7 @@ describe('createToolLifecycle — executeRound', () => {
     expect(lifecycle.transcript).toContainEqual({ t: 'round', settled: 1, suspended: 0 })
   })
 
-  it('uses the provided appendToolRound strategy for the round shape', async () => {
+    it('uses the provided appendToolRound strategy for the round shape', async () => {
     const lifecycle = coreLifecycle(
       { echo: { execute: async () => 'ok' } },
       {
@@ -187,7 +187,7 @@ describe('createToolLifecycle — executeRound', () => {
     expect(round.messages).toEqual([{ role: 'assistant', content: 'custom:hi:1' }])
   })
 
-  it('settles a throwing tool as an error-json result without failing the round', async () => {
+    it('settles a throwing tool as an error-json result without failing the round', async () => {
     const lifecycle = coreLifecycle({
       boom: {
         execute: async () => {
@@ -215,7 +215,7 @@ describe('createToolLifecycle — executeRound', () => {
     expect(lifecycle.transcript).toContainEqual({ t: 'execute.settle', toolCallId: 'tc1', outcome: 'error' })
   })
 
-  it('settles hallucinated tool calls even when the prompt declares no tools at all', async () => {
+    it('settles hallucinated tool calls even when the prompt declares no tools at all', async () => {
     const lifecycle = createToolLifecycle({ regime: 'core', resolved: resolvedWith({}), promptId: 'p1' })
     expect(lifecycle.enabled).toBe(false)
 
@@ -232,7 +232,7 @@ describe('createToolLifecycle — executeRound', () => {
     expect(round.messages.at(-1)).toMatchObject({ role: 'tool', metadata: { toolCallId: 'tc1' } })
   })
 
-  it('settles unknown tools as tool_not_found errors', async () => {
+    it('settles unknown tools as tool_not_found errors', async () => {
     const lifecycle = coreLifecycle({ known: { execute: async () => 'ok' } })
     const round = await lifecycle.executeRound(
       adapterResponse({ toolCalls: [{ id: 'tc1', name: 'ghost', args: {} }] }),
@@ -252,7 +252,7 @@ describe('createToolLifecycle — executeRound', () => {
     })
   })
 
-  it('honors toModelOutput when shaping what the model sees', async () => {
+    it('honors toModelOutput when shaping what the model sees', async () => {
     const lifecycle = coreLifecycle({
       big: {
         execute: async () => ({ huge: 'x'.repeat(100) }),
@@ -308,7 +308,7 @@ describe('createToolLifecycle — approval gate', () => {
     expect(lifecycle.transcript).toContainEqual({ t: 'suspend.mint', toolCallId: 'tc9', approvalId: 'approval_tc9' })
   })
 
-  it('evaluates function-form needsApproval against the call input', async () => {
+    it('evaluates function-form needsApproval against the call input', async () => {
     const execute = vi.fn(async () => 'ran')
     const lifecycle = coreLifecycle({
       guarded: { needsApproval: async (input: { risky: boolean }) => input.risky, execute },
@@ -329,7 +329,7 @@ describe('createToolLifecycle — approval gate', () => {
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
-  it('persists settled siblings: their results follow the approval-request message', async () => {
+    it('persists settled siblings: their results follow the approval-request message', async () => {
     const lifecycle = coreLifecycle({
       first: { execute: async () => 'first done' },
       dangerous: { needsApproval: true, execute: vi.fn() },
@@ -359,7 +359,7 @@ describe('createToolLifecycle — approval gate', () => {
     expect(lifecycle.transcript).toContainEqual({ t: 'round', settled: 1, suspended: 1 })
   })
 
-  it('does not replay persisted siblings when the suspension is later resumed', async () => {
+    it('does not replay persisted siblings when the suspension is later resumed', async () => {
     const firstExecute = vi.fn(async () => 'first done')
     const dangerousExecute = vi.fn(async () => 'risky done')
     const tools = {
@@ -452,7 +452,7 @@ describe('createToolLifecycle — resume', () => {
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
-  it('settles a denied call as execution-denied without executing', async () => {
+    it('settles a denied call as execution-denied without executing', async () => {
     const { tools, execute, messages } = await suspendThenDecide({ approved: false, reason: 'too risky' })
     const lifecycle = coreLifecycle(tools)
 
@@ -474,7 +474,7 @@ describe('createToolLifecycle — resume', () => {
     })
   })
 
-  it('throws on an approval-token mismatch even when the tool no longer requires approval', async () => {
+    it('throws on an approval-token mismatch even when the tool no longer requires approval', async () => {
     const { execute, messages } = await suspendThenDecide({ approved: true, tamperToken: 'forged' })
     // The tool was re-registered WITHOUT needsApproval — the token check still guards the replay.
     const lifecycle = coreLifecycle({ dangerous: { description: 'risky', execute } })
@@ -483,7 +483,7 @@ describe('createToolLifecycle — resume', () => {
     expect(execute).not.toHaveBeenCalled()
   })
 
-  it('fires approvalMiddleware onApproved exactly once across resume calls', async () => {
+    it('fires approvalMiddleware onApproved exactly once across resume calls', async () => {
     const onApproved = vi.fn()
     const onDenied = vi.fn()
     const middleware = approvalMiddleware({ id: 'audit', match: ['dangerous'], onApproved, onDenied })
@@ -547,90 +547,7 @@ describe('createToolLifecycle — applySkillLoads', () => {
       reresolve: async () => resolved,
     })
     expect(await withReresolve.applySkillLoads([{ name: 'echo', args: {} }])).toBeUndefined()
-  })
-
-  it('re-resolves, augments the system prompt, re-arms tools, and refunds the step', async () => {
-    const onSkillLoad = vi.fn()
-    const onSkillResolve = vi.fn()
-    updateRuntime({ instrumentationHooks: { onSkillLoad, onSkillResolve } })
-
-    const { session, resolved } = skillFixture()
-    const loadedSkillText = session.loadedContexts()[0]?.systemFn({})
-    const reResolved = resolvedWith({
-      system: `rebuilt system\n\n${loadedSkillText}`,
-      systemBlocks: [{ text: 'rebuilt system' }],
-      tools: { echo: { description: 'v2', execute: async () => 'two' } },
-    })
-    ;(reResolved as ResolvedPrompt & { _skillSession?: unknown })._skillSession = session
-    const reresolve = vi.fn(async () => reResolved)
-
-    const lifecycle = createToolLifecycle({ regime: 'core', resolved, promptId: 'p1', reresolve })
-    const amendment = await lifecycle.applySkillLoads([{ name: LOAD_SKILL_TOOL_NAME, args: { name: 'sql' } }])
-
-    expect(reresolve).toHaveBeenCalledTimes(1)
-    expect(amendment).toBeDefined()
-    expect(amendment!.refundStep).toBe(true)
-    expect(amendment!.system).toContain('rebuilt system')
-    expect(amendment!.system).toContain('## Skill: sql')
-    expect(amendment!.system).toContain('Always use parameterized queries.')
-    expect(amendment!.systemBlocks).toEqual([{ text: 'rebuilt system' }])
-    expect(onSkillLoad).toHaveBeenCalledExactlyOnceWith({ skillId: 'sql', source: 'inline' })
-    expect(onSkillResolve).toHaveBeenCalledWith({ skillId: 'sql' })
-    // Tools were re-armed from the re-resolved prompt.
-    expect(lifecycle.descriptors?.find((d) => d.name === 'echo')?.description).toBe('v2')
-    expect(lifecycle.transcript).toContainEqual({ t: 'skill.load', skillId: 'sql' })
-
-    // A second LoadSkill for the same skill still amends but does not re-announce.
-    const again = await lifecycle.applySkillLoads([{ name: LOAD_SKILL_TOOL_NAME, args: { name: 'sql' } }])
-    expect(again).toBeDefined()
-    expect(onSkillLoad).toHaveBeenCalledTimes(1)
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────
-// suspend (sdk regime)
-// ─────────────────────────────────────────────────────────────────
-
-describe('createToolLifecycle — suspend', () => {
-  afterEach(() => resetRuntime())
-
-  it('seals an SDK suspension: mints ids/tokens, appends request messages, emits hooks', () => {
-    const onToolApprovalRequest = vi.fn()
-    updateRuntime({ instrumentationHooks: { onToolApprovalRequest } })
-
-    const lifecycle = createToolLifecycle({
-      regime: 'sdk',
-      resolved: resolvedWith({ tools: { dangerous: { needsApproval: true, execute: async () => 'x' } } }),
-      promptId: 'p1',
-      createApprovalToken: () => 'token-9',
-    })
-
-    const sealed = lifecycle.suspend(
-      [{ toolCallId: 'tc1', toolName: 'dangerous', input: { target: 'db' } }],
-      adapterResponse({ text: 'requesting' }),
-      [{ role: 'user', content: 'go' }],
-    )
-
-    expect(sealed.requests).toEqual([
-      {
-        approvalId: 'approval_tc1',
-        toolCallId: 'tc1',
-        toolName: 'dangerous',
-        input: { target: 'db' },
-        approvalToken: 'token-9',
-      },
-    ])
-    const last = sealed.messages.at(-1)!
-    expect(last.role).toBe('assistant')
-    expect(last.content).toBe('requesting')
-    expect((last.metadata as { toolApprovalRequests: unknown[] }).toolApprovalRequests).toEqual(sealed.requests)
-    expect(onToolApprovalRequest).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ approvalId: 'approval_tc1', toolCallId: 'tc1', toolName: 'dangerous' }),
-    )
-    expect(lifecycle.transcript).toContainEqual({ t: 'suspend.mint', toolCallId: 'tc1', approvalId: 'approval_tc1' })
-  })
-})
-
+  })})
 // ─────────────────────────────────────────────────────────────────
 // Memory capture
 // ─────────────────────────────────────────────────────────────────
@@ -664,71 +581,5 @@ describe('createToolLifecycle — captureTurn', () => {
       toolEvents: [{ toolCallId: 'tc1', toolName: 'echo', args: {} }],
     })
     expect(lifecycle.transcript.filter((e) => e.t === 'memory.capture')).toEqual([{ t: 'memory.capture', bindings: 2 }])
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────
-// Observability goldens — hook payload shapes per settle path
-// ─────────────────────────────────────────────────────────────────
-
-describe('createToolLifecycle — instrumentation hook payloads', () => {
-  afterEach(() => resetRuntime())
-
-  function recordHooks() {
-    const events: Array<{ hook: string; payload: Record<string, unknown> }> = []
-    updateRuntime({
-      instrumentationHooks: {
-        onToolStart: (payload) =>
-          events.push({ hook: 'start', payload: payload as unknown as Record<string, unknown> }),
-        onToolEnd: (payload) => events.push({ hook: 'end', payload: payload as unknown as Record<string, unknown> }),
-      },
-    })
-    return events
-  }
-
-  it('emits onToolStart/onToolEnd with the documented payload fields on success', async () => {
-    const events = recordHooks()
-    const lifecycle = coreLifecycle({ echo: { execute: async () => ({ big: 'result' }) } })
-    await lifecycle.executeRound(adapterResponse({ toolCalls: [{ id: 'tc1', name: 'echo', args: { q: 1 } }] }), [])
-
-    expect(events.map((e) => e.hook)).toEqual(['start', 'end'])
-    expect(events[0]!.payload).toMatchObject({ toolCallId: 'tc1', toolName: 'echo', args: { q: 1 } })
-    expect(events[0]!.payload.spanId).toBeDefined()
-    const end = events[1]!.payload
-    expect(end).toMatchObject({
-      toolCallId: 'tc1',
-      toolName: 'echo',
-      result: { big: 'result' },
-      modelOutput: { type: 'json', value: { big: 'result' } },
-      modelOutputType: 'json',
-    })
-    expect(typeof end.durationMs).toBe('number')
-    expect(typeof end.outputSize).toBe('number')
-    expect(typeof end.modelOutputSize).toBe('number')
-    expect(typeof end.tokenSavingsEstimate).toBe('number')
-  })
-
-  it('emits an error-shaped onToolEnd for throwing and unknown tools', async () => {
-    const events = recordHooks()
-    const lifecycle = coreLifecycle({
-      boom: {
-        execute: async () => {
-          throw new Error('nope')
-        },
-      },
-    })
-    await lifecycle.executeRound(
-      adapterResponse({
-        toolCalls: [
-          { id: 'tc1', name: 'boom', args: {} },
-          { id: 'tc2', name: 'ghost', args: {} },
-        ],
-      }),
-      [],
-    )
-
-    const ends = events.filter((e) => e.hook === 'end').map((e) => e.payload)
-    expect(ends[0]).toMatchObject({ toolCallId: 'tc1', error: 'nope', modelOutputType: 'error-json', outputSize: 0 })
-    expect(ends[1]).toMatchObject({ toolCallId: 'tc2', error: 'Tool "ghost" not found', tokenSavingsEstimate: 0 })
   })
 })

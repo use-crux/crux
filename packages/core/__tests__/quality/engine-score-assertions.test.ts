@@ -109,7 +109,7 @@ describe('runEvaluation - score-aware assertions', () => {
     expect(requests[0]).toMatchObject({ role: 'failed', frameRadius: 4 })
   })
 
-  it('keeps expect pre-score semantics and runs case-level asserts after scorers', async () => {
+    it('keeps expect pre-score semantics and runs case-level asserts after scorers', async () => {
     const order: string[] = []
     let scorerCalls = 0
     const evaluation = evaluate({

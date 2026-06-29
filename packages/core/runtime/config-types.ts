@@ -9,7 +9,11 @@
  * @module
  */
 
-import type { CruxObservabilityTransport, ObservabilityDeliveryOptions } from '../observability'
+import type {
+  CruxObservabilityCapturePolicy,
+  CruxObservabilityTransport,
+  ObservabilityDeliveryOptions,
+} from '../observability'
 import type { CruxPlugin } from './plugin'
 import type { CruxLintConfig as CoreCruxLintConfig } from '../project-index'
 import type { QualityConfig } from '../quality/config'
@@ -154,6 +158,24 @@ export interface CruxDevtoolsConfig {
 export interface CruxObservabilityConfig {
   /** Set `false` to explicitly disable an already configured observability transport. */
   readonly enabled?: boolean
+  /**
+   * Include input-family artifact previews in the canonical observability graph.
+   *
+   * Set to `false` to emit prompt messages, system/prompt inputs, tool requests,
+   * and tool arguments as reference artifacts with size/hash metadata only.
+   *
+   * @default true
+   */
+  readonly recordInputs?: CruxObservabilityCapturePolicy['recordInputs']
+  /**
+   * Include output-family artifact previews in the canonical observability graph.
+   *
+   * Set to `false` to emit generation outputs, stream timelines, and tool
+   * results as reference artifacts with size/hash metadata only.
+   *
+   * @default true
+   */
+  readonly recordOutputs?: CruxObservabilityCapturePolicy['recordOutputs']
   /**
    * Explicit observability ingest endpoint used to create an HTTP transport.
    *

@@ -101,12 +101,12 @@ describe('withAttemptTimeout', () => {
     vi.restoreAllMocks()
   })
 
-  it('returns result when fn completes before timeout', async () => {
+    it('returns result when fn completes before timeout', async () => {
     const result = await withAttemptTimeout(() => Promise.resolve('ok'), 5000)
     expect(result).toBe('ok')
   })
 
-  it('throws AbortError when fn exceeds timeout', async () => {
+    it('throws AbortError when fn exceeds timeout', async () => {
     await expect(withAttemptTimeout(() => new Promise((resolve) => setTimeout(resolve, 5000)), 50)).rejects.toThrow(
       'Fallback attempt timed out',
     )
@@ -119,12 +119,12 @@ describe('withAttemptTimeout', () => {
     }
   })
 
-  it('no-ops when timeoutMs is undefined', async () => {
+    it('no-ops when timeoutMs is undefined', async () => {
     const result = await withAttemptTimeout(() => Promise.resolve(42))
     expect(result).toBe(42)
   })
 
-  it('no-ops when timeoutMs is 0', async () => {
+    it('no-ops when timeoutMs is 0', async () => {
     const result = await withAttemptTimeout(() => Promise.resolve(42), 0)
     expect(result).toBe(42)
   })
@@ -149,7 +149,7 @@ describe('executeFallbackLoop', () => {
     expect(result._meta?.fallback).toBeUndefined()
   })
 
-  it('falls back on qualifying error (rate_limit)', async () => {
+    it('falls back on qualifying error (rate_limit)', async () => {
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(rateLimitError()).mockResolvedValueOnce(mockResult('from B'))
 
@@ -162,7 +162,7 @@ describe('executeFallbackLoop', () => {
     expect(result._meta.fallback.failedModels).toEqual(['model-a'])
   })
 
-  it('falls back on server error (500)', async () => {
+    it('falls back on server error (500)', async () => {
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(serverError()).mockResolvedValueOnce(mockResult('from B'))
 
@@ -172,7 +172,7 @@ describe('executeFallbackLoop', () => {
     expect(result._meta.fallback.details[0].errorCategory).toBe('server_error')
   })
 
-  it('does NOT fall back on non-qualifying error (400)', async () => {
+    it('does NOT fall back on non-qualifying error (400)', async () => {
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(clientError())
 
@@ -180,7 +180,7 @@ describe('executeFallbackLoop', () => {
     expect(tryModel).toHaveBeenCalledTimes(1)
   })
 
-  it('throws AggregateError when all models fail', async () => {
+    it('throws AggregateError when all models fail', async () => {
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>
     const tryModel = vi
       .fn()
@@ -195,7 +195,7 @@ describe('executeFallbackLoop', () => {
     })
   })
 
-  it('records timing per attempt in fallback details', async () => {
+    it('records timing per attempt in fallback details', async () => {
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(rateLimitError()).mockResolvedValueOnce(mockResult('from B', 0.05))
 
@@ -211,7 +211,7 @@ describe('executeFallbackLoop', () => {
     expect(typeof details[1].durationMs).toBe('number')
   })
 
-  it('records error classification per failed attempt', async () => {
+    it('records error classification per failed attempt', async () => {
     const fb = fallback('model-a', 'model-b', 'model-c') as FallbackModel<string>
     const tryModel = vi
       .fn()
@@ -227,7 +227,7 @@ describe('executeFallbackLoop', () => {
     expect(details[2].status).toBe('success')
   })
 
-  it('respects `on` filter', async () => {
+    it('respects `on` filter', async () => {
     const fb = fallback('model-a', 'model-b', {
       on: ['rate_limit'],
     }) as FallbackModel<string>
@@ -239,7 +239,7 @@ describe('executeFallbackLoop', () => {
     expect(tryModel).toHaveBeenCalledTimes(1)
   })
 
-  it('calls onAttemptError for each failed attempt', async () => {
+    it('calls onAttemptError for each failed attempt', async () => {
     const onAttemptError = vi.fn()
     const fb = fallback('model-a', 'model-b', {
       onAttemptError,
@@ -252,7 +252,7 @@ describe('executeFallbackLoop', () => {
     expect(onAttemptError).toHaveBeenCalledWith(expect.any(Error), 1, 'model-a')
   })
 
-  it('timeout triggers fallback to next model', async () => {
+    it('timeout triggers fallback to next model', async () => {
     const fb = fallback('model-a', 'model-b', {
       timeout: 50,
     }) as FallbackModel<string>
@@ -267,7 +267,7 @@ describe('executeFallbackLoop', () => {
     expect(result._meta.fallback.details[0].errorCategory).toBe('timeout')
   })
 
-  it('works with 3+ models', async () => {
+    it('works with 3+ models', async () => {
     const fb = fallback('model-a', 'model-b', 'model-c') as FallbackModel<string>
     const tryModel = vi
       .fn()
@@ -317,7 +317,7 @@ describe('orchestrateGenerate', () => {
     expect(result.text).toBe('hello')
   })
 
-  it('fires onGenerate hook with durationMs after success', async () => {
+    it('fires onGenerate hook with durationMs after success', async () => {
     const onGenerate = vi.fn()
     const doGenerate = vi.fn().mockResolvedValue(mockResult('hello'))
     const spec = makeSpec({
@@ -336,7 +336,7 @@ describe('orchestrateGenerate', () => {
     )
   })
 
-  it('fires onError hook on failure and re-throws', async () => {
+    it('fires onError hook on failure and re-throws', async () => {
     const onError = vi.fn()
     const error = new Error('generation failed')
     const doGenerate = vi.fn().mockRejectedValue(error)
@@ -355,7 +355,7 @@ describe('orchestrateGenerate', () => {
     )
   })
 
-  it('does not fire onGenerate on failure', async () => {
+    it('does not fire onGenerate on failure', async () => {
     const onGenerate = vi.fn()
     const doGenerate = vi.fn().mockRejectedValue(new Error('fail'))
     const spec = makeSpec({
@@ -366,7 +366,7 @@ describe('orchestrateGenerate', () => {
     expect(onGenerate).not.toHaveBeenCalled()
   })
 
-  it('works when no hooks are configured', async () => {
+    it('works when no hooks are configured', async () => {
     const doGenerate = vi.fn().mockResolvedValue(mockResult('hello'))
     const spec = makeSpec({ promptConfig: {} })
 
@@ -397,7 +397,7 @@ describe('orchestrateStream', () => {
     expect(result).toBe(stream)
   })
 
-  it('fires onError hook on failure and re-throws', async () => {
+    it('fires onError hook on failure and re-throws', async () => {
     const onError = vi.fn()
     const error = new Error('stream failed')
     const doStream = vi.fn().mockRejectedValue(error)
@@ -451,7 +451,7 @@ describe('wrapStreamIterable', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
-  it('calls progress.onChunk with undefined when no text delta', async () => {
+    it('calls progress.onChunk with undefined when no text delta', async () => {
     const chunks = [{ type: 'metadata', data: {} }]
     const stream = mockStream(chunks)
     const progress = {
@@ -470,7 +470,7 @@ describe('wrapStreamIterable', () => {
     expect(progress.onChunk).toHaveBeenCalledWith(undefined)
   })
 
-  it('calls progress.dispose and onError on iteration error', async () => {
+    it('calls progress.dispose and onError on iteration error', async () => {
     const error = new Error('stream broke')
     const stream = mockErrorStream([{ text: 'a' }], 0, error)
     const progress = {
@@ -492,7 +492,7 @@ describe('wrapStreamIterable', () => {
     expect(onError).toHaveBeenCalledWith(error)
   })
 
-  it('works without progress reporter (undefined)', async () => {
+    it('works without progress reporter (undefined)', async () => {
     const chunks = [{ text: 'hello' }]
     const stream = mockStream(chunks)
     const onComplete = vi.fn()
@@ -508,7 +508,7 @@ describe('wrapStreamIterable', () => {
     expect(onComplete).toHaveBeenCalled()
   })
 
-  it('preserves original stream object identity (mutation, not wrapper)', async () => {
+    it('preserves original stream object identity (mutation, not wrapper)', async () => {
     const chunks = [{ text: 'hi' }]
     const stream = mockStream(chunks)
     const originalStream = stream

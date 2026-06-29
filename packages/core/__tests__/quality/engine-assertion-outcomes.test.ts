@@ -89,7 +89,7 @@ describe('runEvaluation — assertion outcome ledger', () => {
     ])
   })
 
-  it('records soft failures and later passing assertions in the same ledger', async () => {
+    it('records soft failures and later passing assertions in the same ledger', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],
@@ -118,7 +118,7 @@ describe('runEvaluation — assertion outcome ledger', () => {
     ])
   })
 
-  it('keeps old experiment cells assignable when assertion outcomes are absent', () => {
+    it('keeps old experiment cells assignable when assertion outcomes are absent', () => {
     const oldCell: ExperimentCell<{ q: string }, { answer: string }> = {
       caseId: 'legacy',
       variantName: 'default',
@@ -150,7 +150,7 @@ describe('runEvaluation — assertion outcome ledger', () => {
     expect(oldCell.assertions.failures[0]!.matcher).toBe('toBe')
   })
 
-  it('redacts assertion outcome values before exposing experiment cells', async () => {
+    it('redacts assertion outcome values before exposing experiment cells', async () => {
     const evaluation = evaluate({
       task: async (input: { user: { email: string }; token: string }) => input,
       data: [{ input: { user: { email: 'secret@example.com' }, token: 'safe-token' } }],

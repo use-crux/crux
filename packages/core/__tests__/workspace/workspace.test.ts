@@ -19,7 +19,7 @@ describe('workspace()', () => {
     expect(listing.entries.map((entry) => entry.path)).toEqual(['/outputs', '/workspace'])
   })
 
-  it('rejects traversal and paths outside configured mounts before storage access', async () => {
+    it('rejects traversal and paths outside configured mounts before storage access', async () => {
     const data = inMemoryDataStore()
     const setSpy = vi.spyOn(data, 'set')
     const ws = workspace({ id: 'research', namespace: 'thread:1', data })
@@ -29,7 +29,7 @@ describe('workspace()', () => {
     expect(setSpy).not.toHaveBeenCalled()
   })
 
-  it('round-trips inline text through the store', async () => {
+    it('round-trips inline text through the store', async () => {
     const ws = workspace({
       id: 'research',
       namespace: 'thread:1',
@@ -48,7 +48,7 @@ describe('workspace()', () => {
     })
   })
 
-  it('lists directories and simple globs', async () => {
+    it('lists directories and simple globs', async () => {
     const ws = workspace({
       id: 'research',
       namespace: 'thread:1',
@@ -70,7 +70,7 @@ describe('workspace()', () => {
     })
   })
 
-  it('stores binary content in blobs and keeps metadata in the store', async () => {
+    it('stores binary content in blobs and keeps metadata in the store', async () => {
     const data = inMemoryDataStore()
     const blobs = inMemoryBlobStore()
     const ws = workspace({ id: 'research', namespace: 'thread:1', storage: storage({ data, blobs }) })
@@ -91,7 +91,7 @@ describe('workspace()', () => {
     })
   })
 
-  it('throws clearly when binary content is written without a blob store', async () => {
+    it('throws clearly when binary content is written without a blob store', async () => {
     const ws = workspace({ id: 'research', namespace: 'thread:1', data: inMemoryDataStore() })
 
     await expect(ws.write('/outputs/report.pdf', new Uint8Array([1]), { mimeType: 'application/pdf' })).rejects.toThrow(
@@ -99,7 +99,7 @@ describe('workspace()', () => {
     )
   })
 
-  it('renders manifest context without dumping file contents', async () => {
+    it('renders manifest context without dumping file contents', async () => {
     const ws = workspace({ id: 'research', namespace: 'thread:1', data: inMemoryDataStore() })
     await ws.write('/workspace/notes.md', 'private notes')
 
@@ -114,7 +114,7 @@ describe('workspace()', () => {
     expect(resolved.system).not.toContain('private notes')
   })
 
-  it('injects default tools and omits delete by default', async () => {
+    it('injects default tools and omits delete by default', async () => {
     const ws = workspace({ id: 'research', namespace: 'thread:1', data: inMemoryDataStore() })
     const resolved = await prompt({
       id: 'analyst',
@@ -130,7 +130,7 @@ describe('workspace()', () => {
     ])
   })
 
-  it('binds injected tools to the same dynamic namespace as the manifest', async () => {
+    it('binds injected tools to the same dynamic namespace as the manifest', async () => {
     const ws = workspace({
       id: 'research',
       namespace: ({ input }) => {
@@ -161,7 +161,7 @@ describe('workspace()', () => {
     })
   })
 
-  it('supports prefixed tools and delete opt-in', () => {
+    it('supports prefixed tools and delete opt-in', () => {
     const ws = workspace({
       id: 'research',
       namespace: 'thread:1',
@@ -182,7 +182,7 @@ describe('workspace()', () => {
     })
   })
 
-  it('throws on multiple unprefixed workspace injections', async () => {
+    it('throws on multiple unprefixed workspace injections', async () => {
     const data = inMemoryDataStore()
     const one = workspace({ id: 'one', namespace: 'thread:1', data })
     const two = workspace({ id: 'two', namespace: 'thread:1', data })
@@ -194,34 +194,4 @@ describe('workspace()', () => {
         system: 'Analyze.',
       }).resolve({}),
     ).rejects.toThrow(/tool name collision/i)
-  })
-
-  it('emits workspace operation instrumentation', async () => {
-    const onWorkspaceOperation = vi.fn()
-    setRuntime({ instrumentationHooks: { onWorkspaceOperation } })
-    const ws = workspace({ id: 'research', namespace: 'thread:1', data: inMemoryDataStore() })
-
-    try {
-      await ws.write('/workspace/notes.md', 'notes')
-      await ws.read('/workspace/notes.md')
-    } finally {
-      resetRuntime()
-    }
-
-    expect(onWorkspaceOperation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceId: 'research',
-        namespace: 'thread:1',
-        operation: 'write',
-        path: '/workspace/notes.md',
-        status: 'success',
-      }),
-    )
-    expect(onWorkspaceOperation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        operation: 'read',
-        status: 'success',
-      }),
-    )
-  })
-})
+  })})

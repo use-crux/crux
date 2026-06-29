@@ -44,7 +44,7 @@ describe('indexer', () => {
     expect(chunks[0].metadata).toMatchObject({ normalized: true })
   })
 
-  it('structured default chunking preserves table rows, json paths, and source spans', async () => {
+    it('structured default chunking preserves table rows, json paths, and source spans', async () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
@@ -98,7 +98,7 @@ describe('indexer', () => {
     expect(chunks.some((item) => item.provenance?.jsonPaths?.includes('$.plans[0]'))).toBe(true)
   })
 
-  it('parent-child chunking stores parent records and searchable active child chunks', async () => {
+    it('parent-child chunking stores parent records and searchable active child chunks', async () => {
     const store = inMemoryCruxStore()
     const dense = makeEmbedding({
       kind: 'dense',
@@ -138,7 +138,7 @@ describe('indexer', () => {
     expect(chunks[0].value.embedding).toBeDefined()
   })
 
-  it('stage-level cache reuses document transform output and supports bypass', async () => {
+    it('stage-level cache reuses document transform output and supports bypass', async () => {
     const store = inMemoryCruxStore()
     const run = vi.fn(async (document: { content: string }) => ({ ...document, content: `${document.content}!` }))
     const indexer = makeIndexer({
@@ -158,7 +158,7 @@ describe('indexer', () => {
     expect(run).toHaveBeenCalledTimes(2)
   })
 
-  it('generation-aware replacement keeps the previous generation active if a later pipeline fails', async () => {
+    it('generation-aware replacement keeps the previous generation active if a later pipeline fails', async () => {
     const store = inMemoryCruxStore()
     let shouldFail = false
     const indexer = makeIndexer({
@@ -199,7 +199,7 @@ describe('indexer', () => {
     )
   })
 
-  it('chunks documents with stable source and chunk metadata', async () => {
+    it('chunks documents with stable source and chunk metadata', async () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
@@ -233,7 +233,7 @@ describe('indexer', () => {
     expect(new Set(chunks.map((chunk) => chunk.chunkId)).size).toBe(chunks.length)
   })
 
-  it('preserves coarse structured part provenance on default chunks', async () => {
+    it('preserves coarse structured part provenance on default chunks', async () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
@@ -274,7 +274,7 @@ describe('indexer', () => {
     })
   })
 
-  it('applies overlap between adjacent chunks', async () => {
+    it('applies overlap between adjacent chunks', async () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
@@ -299,7 +299,7 @@ describe('indexer', () => {
     expect(chunks[1].content.startsWith('hij')).toBe(true)
   })
 
-  it('uses a custom chunker when provided', async () => {
+    it('uses a custom chunker when provided', async () => {
     const customChunker = {
       _tag: 'Chunker' as const,
       name: 'custom',
@@ -338,7 +338,7 @@ describe('indexer', () => {
     expect(chunks[0].content).toBe('HELLO')
   })
 
-  it('indexes documents with dense embeddings and replace-by-source semantics', async () => {
+    it('indexes documents with dense embeddings and replace-by-source semantics', async () => {
     const store = inMemoryCruxStore()
     const dense = makeEmbedding({
       kind: 'dense',
@@ -385,7 +385,7 @@ describe('indexer', () => {
     expect(secondPass.entries.every((entry) => entry.value.sourceId === 'doc-1')).toBe(true)
   })
 
-  it('indexes documents from an AsyncIterable source', async () => {
+    it('indexes documents from an AsyncIterable source', async () => {
     const store = inMemoryCruxStore()
     const dense = makeEmbedding({
       kind: 'dense',
@@ -418,7 +418,7 @@ describe('indexer', () => {
     expect(entries.entries[0].value.embedding).toEqual([25, 1])
   })
 
-  it('dry-runs document indexing without mutating the store', async () => {
+    it('dry-runs document indexing without mutating the store', async () => {
     const store = inMemoryCruxStore()
     const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
     const dense = makeEmbedding({
@@ -462,7 +462,7 @@ describe('indexer', () => {
     expect((await listAll(store, 'indexer:docs:namespace:kb:source:doc-dry:')).entries).toHaveLength(0)
   })
 
-  it('indexes chunks with sparse embeddings', async () => {
+    it('indexes chunks with sparse embeddings', async () => {
     const store = inMemoryCruxStore()
     const sparse = makeEmbedding({
       kind: 'sparse',
@@ -501,7 +501,7 @@ describe('indexer', () => {
     })
   })
 
-  it('indexes chunks with dense and sparse embeddings together', async () => {
+    it('indexes chunks with dense and sparse embeddings together', async () => {
     const store = inMemoryCruxStore()
     const dense = makeEmbedding({
       kind: 'dense',
@@ -546,7 +546,7 @@ describe('indexer', () => {
     expect(stored?.sparseEmbedding).toBeDefined()
   })
 
-  it('deleteSource removes only matching namespace/source entries', async () => {
+    it('deleteSource removes only matching namespace/source entries', async () => {
     const store = inMemoryCruxStore()
     await store.set('indexer:docs:namespace:kb:source:doc-1:chunk:0', {
       namespace: 'kb',
@@ -585,7 +585,7 @@ describe('indexer', () => {
     expect(await store.get('indexer:docs:namespace:kb:source:doc-2:chunk:0')).not.toBeNull()
   })
 
-  it('clear removes all entries for the indexer namespace', async () => {
+    it('clear removes all entries for the indexer namespace', async () => {
     const store = inMemoryCruxStore()
     await store.set('indexer:docs:namespace:kb:source:doc-1:chunk:0', {
       namespace: 'kb',

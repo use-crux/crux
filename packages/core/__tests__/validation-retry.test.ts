@@ -26,7 +26,7 @@ describe('ValidationExhaustedError', () => {
     expect(err.promptId).toBe('test-prompt')
   })
 
-  it('has a descriptive message', () => {
+    it('has a descriptive message', () => {
     const err = new ValidationExhaustedError({
       lastRawOutput: '{}',
       zodErrors: zodError,
@@ -39,7 +39,7 @@ describe('ValidationExhaustedError', () => {
     expect(err.message).toContain('3')
   })
 
-  it('preserves the prototype chain for instanceof checks', () => {
+    it('preserves the prototype chain for instanceof checks', () => {
     const err = new ValidationExhaustedError({
       lastRawOutput: '{}',
       zodErrors: zodError,
@@ -67,11 +67,11 @@ describe('isValidationExhaustedError()', () => {
     expect(isValidationExhaustedError(err)).toBe(true)
   })
 
-  it('returns false for regular Error instances', () => {
+    it('returns false for regular Error instances', () => {
     expect(isValidationExhaustedError(new Error('nope'))).toBe(false)
   })
 
-  it('returns false for null/undefined', () => {
+    it('returns false for null/undefined', () => {
     expect(isValidationExhaustedError(null)).toBe(false)
     expect(isValidationExhaustedError(undefined)).toBe(false)
   })
@@ -87,7 +87,7 @@ describe('ValidationRetryOptions type', () => {
     expect(opts.maxRetries).toBe(3)
   })
 
-  it('all fields are optional', () => {
+    it('all fields are optional', () => {
     const opts: ValidationRetryOptions = {}
     expect(opts.maxRetries).toBeUndefined()
   })

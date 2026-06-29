@@ -15,31 +15,31 @@ describe('blackboard', () => {
     expect(board.id).toBe('test')
   })
 
-  it('getAll returns null for uninitialized board', async () => {
+    it('getAll returns null for uninitialized board', async () => {
     const board = makeBlackboard({ id: 'test', schema: testSchema })
     expect(await board.getAll()).toBeNull()
   })
 
-  it('set + getAll round-trips a field', async () => {
+    it('set + getAll round-trips a field', async () => {
     const board = makeBlackboard({ id: 'test', schema: testSchema })
     await board.set('goal', 'Research AI safety')
     const state = await board.getAll()
     expect(state).toEqual({ goal: 'Research AI safety' })
   })
 
-  it('get returns a single field', async () => {
+    it('get returns a single field', async () => {
     const board = makeBlackboard({ id: 'test', schema: testSchema })
     await board.set('goal', 'Test goal')
     expect(await board.get('goal')).toBe('Test goal')
   })
 
-  it('get returns undefined for unset field', async () => {
+    it('get returns undefined for unset field', async () => {
     const board = makeBlackboard({ id: 'test', schema: testSchema })
     await board.set('goal', 'Something')
     expect(await board.get('status')).toBeUndefined()
   })
 
-  it('patch merges multiple fields', async () => {
+    it('patch merges multiple fields', async () => {
     const board = makeBlackboard({ id: 'test', schema: testSchema })
     await board.set('goal', 'Initial')
     await board.patch({ findings: ['fact1'], status: 'running' })
@@ -52,20 +52,20 @@ describe('blackboard', () => {
     })
   })
 
-  it('patch on uninitialized board creates state', async () => {
+    it('patch on uninitialized board creates state', async () => {
     const board = makeBlackboard({ id: 'test', schema: testSchema })
     await board.patch({ goal: 'New goal' })
     expect(await board.get('goal')).toBe('New goal')
   })
 
-  it('clear removes all state', async () => {
+    it('clear removes all state', async () => {
     const board = makeBlackboard({ id: 'test', schema: testSchema })
     await board.set('goal', 'Something')
     await board.clear()
     expect(await board.getAll()).toBeNull()
   })
 
-  it('uses custom store', async () => {
+    it('uses custom store', async () => {
     const store = inMemoryStore()
     const board = makeBlackboard({ id: 'test', schema: testSchema, store })
     await board.set('goal', 'Stored')
@@ -75,17 +75,17 @@ describe('blackboard', () => {
     expect(JSON.parse(entry!.content)).toEqual({ goal: 'Stored' })
   })
 
-  it('set rejects invalid field value via schema', async () => {
+    it('set rejects invalid field value via schema', async () => {
     const board = makeBlackboard({ id: 'test', schema: testSchema })
     await expect(board.set('goal', 123 as any)).rejects.toThrow()
   })
 
-  it('patch rejects invalid field values via schema', async () => {
+    it('patch rejects invalid field values via schema', async () => {
     const board = makeBlackboard({ id: 'test', schema: testSchema })
     await expect(board.patch({ findings: 'not-an-array' as any })).rejects.toThrow()
   })
 
-  describe('subscribe', () => {
+describe('subscribe', () => {
     it('callback is called after set()', async () => {
       const board = makeBlackboard({ id: 'test', schema: testSchema })
       const listener = vi.fn()
@@ -151,7 +151,7 @@ describe('blackboard', () => {
     })
   })
 
-  describe('onUpdate', () => {
+describe('onUpdate', () => {
     it('fires after set()', async () => {
       const onUpdate = vi.fn()
       const board = makeBlackboard({
@@ -175,7 +175,7 @@ describe('blackboard', () => {
     })
   })
 
-  describe('asContext', () => {
+describe('asContext', () => {
     it('returns a Context instance', () => {
       const board = makeBlackboard({ id: 'test', schema: testSchema })
       const ctx = board.asContext()

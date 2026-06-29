@@ -53,7 +53,7 @@ describe('runEvaluation - source frame snapshots', () => {
     )
   })
 
-  it('records authored source-frame snapshots from a supplied resolver', async () => {
+    it('records authored source-frame snapshots from a supplied resolver', async () => {
     const requests: QualitySourceFrameRequest[] = []
     const resolver: QualitySourceFrameResolver = {
       async resolveSourceFrame(request) {
@@ -119,7 +119,7 @@ describe('runEvaluation - source frame snapshots', () => {
     expect(requests[0]!.sourceRef).toMatch(/engine-source-frames\.test\.ts:\d+:\d+$/)
   })
 
-  it('records source-frame snapshots for expect callback errors', async () => {
+    it('records source-frame snapshots for expect callback errors', async () => {
     const requests: QualitySourceFrameRequest[] = []
     const resolver: QualitySourceFrameResolver = {
       async resolveSourceFrame(request) {

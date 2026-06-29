@@ -36,6 +36,7 @@ import {
   linkActiveSpanToArtifact,
   linkResolvedContextArtifacts,
 } from './orchestrate-observability'
+import { createGenerationPerformanceTracker } from './performance-metrics'
 
 // ─────────────────────────────────────────────────────────────────
 // orchestrateGenerate
@@ -70,14 +71,15 @@ export async function orchestrateGenerate<TArgs extends Record<string, unknown>,
   spec: OrchestrationSpec<TArgs>,
   doGenerate: (args: TArgs) => Promise<TResult>,
 ): Promise<TResult> {
-  return observe.span(
-    {
-      name: spec.promptId ? `generate ${spec.promptId}` : 'generate',
-      family: 'generation',
-      primitive: 'generation.call',
-      attributes: generationAttributes(spec, 'generate'),
-    },
-    async () => {
+  const span = observe.openSpan({
+    name: spec.promptId ? `generate ${spec.promptId}` : 'generate',
+    family: 'generation',
+    primitive: 'generation.call',
+    attributes: generationAttributes(spec, 'generate'),
+  })
+  const performance = createGenerationPerformanceTracker()
+  try {
+    const result = await span.withContext(async () => {
       emitOperationDeadline(spec.timeoutMs)
       const inputArtifactId = observe.artifact({
         kind: 'messages',
@@ -106,8 +108,13 @@ export async function orchestrateGenerate<TArgs extends Record<string, unknown>,
       })
       linkActiveSpanToArtifact('produced', outputArtifactId)
       return result
-    },
-  )
+    })
+    span.end({ metrics: performance.metrics(getMeta(result)) })
+    return result
+  } catch (error) {
+    span.error(error)
+    throw error
+  }
 }
 
 async function orchestrateGenerateInner<TArgs extends Record<string, unknown>, TResult>(
@@ -197,6 +204,7 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
     primitive: 'generation.stream',
     attributes: generationAttributes(spec, 'stream'),
   })
+  const performance = createGenerationPerformanceTracker()
   try {
     return await span.withContext(async () => {
       emitOperationDeadline(spec.timeoutMs)
@@ -209,7 +217,7 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
       linkActiveSpanToArtifact('consumed', inputArtifactId)
       linkResolvedContextArtifacts(spec.resolved)
       const result = await withAttemptTimeout(() => orchestrateStreamInner(spec, doStream), spec.timeoutMs)
-      attachStreamObservability(result, span)
+      attachStreamObservability(result, span, performance)
       return result
     })
   } catch (error) {

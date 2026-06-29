@@ -42,11 +42,11 @@ export function withCostTracker(options: CostTrackerOptions): CruxPlugin {
     name: 'app:cost-tracker',
     install(runtime: Readonly<CruxRuntime>) {
       return {
-        instrumentationHooks: {
-          ...runtime.instrumentationHooks,
+        observability subscribers: {
+          ...runtime.observability subscribers,
           onGenerateEnd: async (event) => {
             // Forward to existing handlers (fan-out)
-            await runtime.instrumentationHooks?.onGenerateEnd?.(event)
+            await runtime.observability subscribers?.onGenerateEnd?.(event)
 
             // Push cost metric
             await options.onCost({

@@ -41,7 +41,7 @@ describe('toolMiddleware()', () => {
     )
   })
 
-  it('supports predicate matchers', async () => {
+    it('supports predicate matchers', async () => {
     const before = vi.fn()
     const tools = applyToolMiddleware(
       {
@@ -71,7 +71,7 @@ describe('toolMiddleware()', () => {
     )
   })
 
-  it('can modify input by calling next with replacement arguments', async () => {
+    it('can modify input by calling next with replacement arguments', async () => {
     const execute = vi.fn().mockImplementation(async (input: { subject: string }) => `sent ${input.subject}`)
     const tools = applyToolMiddleware(
       {
@@ -97,7 +97,7 @@ describe('toolMiddleware()', () => {
     expect(execute).toHaveBeenCalledWith({ subject: 'Hello' }, { toolCallId: 'call-1' })
   })
 
-  it('can return early without executing the wrapped tool', async () => {
+    it('can return early without executing the wrapped tool', async () => {
     const execute = vi.fn().mockResolvedValue('sent')
     const tools = applyToolMiddleware(
       {
@@ -149,7 +149,7 @@ describe('approvalMiddleware()', () => {
     )
   })
 
-  it('notifies approved callbacks when approval response is present on resume', async () => {
+    it('notifies approved callbacks when approval response is present on resume', async () => {
     const onApproved = vi.fn()
     const execute = vi.fn().mockResolvedValue('sent')
     const tools = applyToolMiddleware(
@@ -183,7 +183,7 @@ describe('approvalMiddleware()', () => {
     )
   })
 
-  it('does not notify approval callbacks for unmatched tools', async () => {
+    it('does not notify approval callbacks for unmatched tools', async () => {
     const onRequest = vi.fn()
     const onDenied = vi.fn()
     const tools = applyToolMiddleware(
@@ -215,7 +215,7 @@ describe('approvalMiddleware()', () => {
     expect(onDenied).not.toHaveBeenCalled()
   })
 
-  it('notifies denied callbacks without executing the tool', async () => {
+    it('notifies denied callbacks without executing the tool', async () => {
     const onDenied = vi.fn()
     const execute = vi.fn().mockResolvedValue('sent')
     const tools = applyToolMiddleware(
@@ -245,7 +245,7 @@ describe('approvalMiddleware()', () => {
     )
   })
 
-  it('creates typed approval response parts', () => {
+    it('creates typed approval response parts', () => {
     expect(toolApprovalResponse({ approvalId: 'approval-1', approved: false, reason: 'No' })).toEqual({
       type: 'tool-approval-response',
       approvalId: 'approval-1',

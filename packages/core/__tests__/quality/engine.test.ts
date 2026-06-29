@@ -72,7 +72,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(experiment.passed).toBe(true)
   })
 
-  it('runs evaluation-level expect for every case and lowers failures into the pass score', async () => {
+    it('runs evaluation-level expect for every case and lowers failures into the pass score', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'good' } }, { input: { q: 'bad' } }],
@@ -103,7 +103,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(experiment.passed).toBe(false)
   })
 
-  it('records assertion position: a hard failure stops the callback and counts notEvaluated', async () => {
+    it('records assertion position: a hard failure stops the callback and counts notEvaluated', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],
@@ -122,7 +122,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(cell.assertions.failures).toHaveLength(1)
   })
 
-  it('expect.soft records the failure and continues the callback', async () => {
+    it('expect.soft records the failure and continues the callback', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],
@@ -139,7 +139,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(cell.assertions.failures).toEqual([expect.objectContaining({ matcher: 'soft.toBe', soft: true, index: 0 })])
   })
 
-  it('runs evaluation-level and case-level expect callbacks independently', async () => {
+    it('runs evaluation-level and case-level expect callbacks independently', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [
@@ -160,7 +160,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(cell.assertions.failures.map((failure) => failure.level)).toEqual(['evaluation', 'case'])
   })
 
-  it('marks task-thrown cells errored with phase execute (false-safe gates)', async () => {
+    it('marks task-thrown cells errored with phase execute (false-safe gates)', async () => {
     const evaluation = evaluate({
       task: async (_input: { q: string }) => {
         throw new Error('boom')
@@ -191,7 +191,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(experiment.passed).toBe(false)
   })
 
-  it('treats non-assertion expect callback crashes as errored cells (phase expect)', async () => {
+    it('treats non-assertion expect callback crashes as errored cells (phase expect)', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],
@@ -205,7 +205,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(cell.error).toMatchObject({ message: 'user bug', phase: 'expect' })
   })
 
-  it('records ctx.score values alongside scorer scores', async () => {
+    it('records ctx.score values alongside scorer scores', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'hello' } }],
@@ -219,7 +219,7 @@ describe('runEvaluation — plain fn task end-to-end', () => {
     expect(experiment.aggregates.perVariant.default!.scores['answer-length']).toEqual({ mean: 0.5, sem: 0, n: 1 })
   })
 
-  it('a throwing scorer marks the cell errored with phase score', async () => {
+    it('a throwing scorer marks the cell errored with phase score', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],
@@ -259,7 +259,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(aggregate.consistency).toEqual({ passAtK: 1, passAllTrials: 0 })
   })
 
-  it('per-case trials win over the evaluation default', async () => {
+    it('per-case trials win over the evaluation default', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [
@@ -272,7 +272,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(experiment.perCase.filter((cell) => cell.caseName === 'once')).toHaveLength(1)
   })
 
-  it('respects the concurrency bound', async () => {
+    it('respects the concurrency bound', async () => {
     let active = 0
     let peak = 0
     const evaluation = evaluate({
@@ -291,7 +291,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(peak).toBeGreaterThan(1)
   })
 
-  it('times out slow cells with phase timeout', async () => {
+    it('times out slow cells with phase timeout', async () => {
     const evaluation = evaluate({
       task: async (_input: { q: string }) => {
         await new Promise((resolve) => setTimeout(resolve, 5_000))
@@ -306,7 +306,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(cell.error).toMatchObject({ phase: 'timeout' })
   })
 
-  it('reports skipped cases with their reason and excludes them from passRate', async () => {
+    it('reports skipped cases with their reason and excludes them from passRate', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'run' } }, { name: 'flaky upstream', input: { q: 'skip' }, skip: 'broken fixture' }],
@@ -320,13 +320,13 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(aggregate).toMatchObject({ cells: 2, skipped: 1, passRate: 1 })
   })
 
-  it('evaluate.skip skips every cell', async () => {
+    it('evaluate.skip skips every cell', async () => {
     const evaluation = evaluate.skip({ task: upperTask, data: [{ input: { q: 'x' } }] })
     const experiment = await run(evaluation)
     expect(experiment.perCase.every((cell) => cell.status === 'skipped')).toBe(true)
   })
 
-  it('case-level only filters the run and demotes gates to informational', async () => {
+    it('case-level only filters the run and demotes gates to informational', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [
@@ -346,7 +346,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(experiment.gates.passed).toBe(true)
   })
 
-  it('RunOverrides.cases filters by name, id, and glob', async () => {
+    it('RunOverrides.cases filters by name, id, and glob', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [
@@ -360,7 +360,7 @@ describe('runEvaluation — trials, skip/only, filters, timeouts', () => {
     expect(experiment.perCase.map((cell) => cell.caseName).sort()).toEqual(['smoke en', 'smoke nl'])
   })
 
-  it('aborts remaining cells when the signal fires', async () => {
+    it('aborts remaining cells when the signal fires', async () => {
     const controller = new AbortController()
     controller.abort()
     const evaluation = evaluate({ task: upperTask, data: [{ input: { q: 'x' } }] })
@@ -379,13 +379,13 @@ describe('runEvaluation — phase boundaries', () => {
     await expect(run(evaluation)).rejects.toThrowError(/cassette name/)
   })
 
-  it('promote() on a derived-id experiment rejects with the id pin guidance', async () => {
+    it('promote() on a derived-id experiment rejects with the id pin guidance', async () => {
     const evaluation = evaluate({ task: upperTask, data: fnCases })
     const experiment = await run(evaluation)
     await expect(experiment.promote()).rejects.toThrowError(/explicit evaluation id/)
   })
 
-  it('multi-turn cases error with a clear message', async () => {
+    it('multi-turn cases error with a clear message', async () => {
     const flowTask = (await import('../../flow/scope')).flow<{ ok: boolean }, { topic: string }>('turny', async () => ({
       ok: true,
     }))
@@ -427,7 +427,7 @@ describe('runEvaluation — declared gates', () => {
     expect(experiment.passed).toBe(false)
   })
 
-  it('minDeltaVsBaseline with no baseline yet is informational, never blocking', async () => {
+    it('minDeltaVsBaseline with no baseline yet is informational, never blocking', async () => {
     const evaluation = evaluate({
       task: upperTask,
       data: [{ input: { q: 'x' } }],

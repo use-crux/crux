@@ -227,17 +227,6 @@ export function handoff<TInput extends z.ZodType, TOutput extends z.ZodType>(
             attributes: { handoffId: id },
           })
         }
-        getRuntime().instrumentationHooks?.onHandoffPrepare?.({
-          handoffId: id,
-          inputSize: inSize,
-          outputSize: outSize,
-          summary,
-          input,
-          output: validatedOutput,
-          ...(observedContext?.currentSpanId ? { spanId: observedContext.currentSpanId } : {}),
-          ...(config.fromAgent ? { fromAgent: config.fromAgent } : {}),
-          ...(config.toAgent ? { toAgent: config.toAgent } : {}),
-        })
 
         const payload = {
           handoffId: id,

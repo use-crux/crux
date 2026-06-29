@@ -142,7 +142,7 @@ export interface DiagnosticsPort {
   warn(message: string, detail?: unknown): void
 }
 
-/** Context-cache instrumentation events, forwarded to `instrumentationHooks` by default. */
+/** Context-cache instrumentation events. */
 export interface InstrumentationPort {
   contextCacheHit(event: { contextId: string; cacheKey: string; ageMs: number }): void
   contextCacheMiss(event: { contextId: string; cacheKey: string; resolutionMs: number }): void
@@ -241,10 +241,8 @@ const consoleDiagnostics: DiagnosticsPort = {
 
 const runtimeInstrumentation: InstrumentationPort = {
   contextCacheHit(event) {
-    getRuntime().instrumentationHooks?.onContextCacheHit?.(event)
   },
   contextCacheMiss(event) {
-    getRuntime().instrumentationHooks?.onContextCacheMiss?.(event)
   },
 }
 
@@ -260,7 +258,7 @@ function configuredPolicy(): ResolvePolicy {
  *
  * With no argument this returns the exact ambient behavior the pipeline has
  * always had (global `observe`, skill registry, module cache, `Date.now`,
- * `configure()` policy, `console.warn`, `instrumentationHooks`). Pass a
+ * `configure()` policy, `console.warn`). Pass a
  * partial object to substitute individual ports — everything else stays real.
  */
 export function withDefaultResolverPorts(overrides?: Partial<ResolverPorts>): ResolverPorts {

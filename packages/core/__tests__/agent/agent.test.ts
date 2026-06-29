@@ -11,7 +11,7 @@ describe('agent', () => {
     system: 'You are a test agent.',
   })
 
-  it('returns an agent with _tag and id', () => {
+    it('returns an agent with _tag and id', () => {
     const agent = makeAgent({
       id: 'test-agent',
       prompt: testPrompt,
@@ -21,7 +21,7 @@ describe('agent', () => {
     expect(agent.id).toBe('test-agent')
   })
 
-  it('preserves all config fields', () => {
+    it('preserves all config fields', () => {
     const mockModel = { provider: 'test', modelId: 'gpt-4' }
     const mockTools = { search: { execute: async () => 'result' } }
 
@@ -40,7 +40,7 @@ describe('agent', () => {
     expect(agent.tools).toBe(mockTools)
   })
 
-  it('defaults model, tools, and description to undefined', () => {
+    it('defaults model, tools, and description to undefined', () => {
     const agent = makeAgent({
       id: 'minimal-agent',
       prompt: testPrompt,
@@ -51,7 +51,7 @@ describe('agent', () => {
     expect(agent.tools).toBeUndefined()
   })
 
-  it('stores handoffs when provided', () => {
+    it('stores handoffs when provided', () => {
     const agent = makeAgent({
       id: 'routing-agent',
       prompt: testPrompt,
@@ -61,7 +61,7 @@ describe('agent', () => {
     expect(agent.handoffs).toEqual([{ id: 'billing' }, { id: 'shipping' }])
   })
 
-  it('defaults handoffs to empty array when not provided', () => {
+    it('defaults handoffs to empty array when not provided', () => {
     const agent = makeAgent({
       id: 'no-handoffs',
       prompt: testPrompt,
@@ -70,7 +70,7 @@ describe('agent', () => {
     expect(agent.handoffs).toEqual([])
   })
 
-  it('freezes the handoffs array', () => {
+    it('freezes the handoffs array', () => {
     const agent = makeAgent({
       id: 'frozen-handoffs',
       prompt: testPrompt,
@@ -80,7 +80,7 @@ describe('agent', () => {
     expect(Object.isFrozen(agent.handoffs)).toBe(true)
   })
 
-  it('returns a frozen object', () => {
+    it('returns a frozen object', () => {
     const agent = makeAgent({
       id: 'frozen-agent',
       prompt: testPrompt,
@@ -92,7 +92,7 @@ describe('agent', () => {
     }).toThrow()
   })
 
-  describe('isAgent', () => {
+describe('isAgent', () => {
     it('returns true for agents', () => {
       const agent = makeAgent({ id: 'a', prompt: testPrompt })
       expect(isAgent(agent)).toBe(true)

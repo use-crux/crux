@@ -52,7 +52,7 @@ describe('resolveCitations()', () => {
     })
   })
 
-  it('requires namespace when source and chunk are ambiguous', () => {
+    it('requires namespace when source and chunk are ambiguous', () => {
     const result = resolveCitations(
       [{ sourceId: 'guide.md', chunkId: 'chunk-1', quote: 'retrieval' }],
       [hit({ namespace: 'public' }), hit({ namespace: 'internal' })],
@@ -67,7 +67,7 @@ describe('resolveCitations()', () => {
     })
   })
 
-  it('fails when required quotes are missing or not found in the hit content', () => {
+    it('fails when required quotes are missing or not found in the hit content', () => {
     const missing = resolveCitations([{ sourceId: 'guide.md', chunkId: 'chunk-1' }], [hit()], {
       quotes: 'required',
     })
@@ -83,7 +83,7 @@ describe('resolveCitations()', () => {
     expect(notFound.issues[0].code).toBe('quote_not_found')
   })
 
-  it('validates spans strictly when present', () => {
+    it('validates spans strictly when present', () => {
     const content = 'The quick brown fox jumps.'
     const ok = resolveCitations(
       [{ sourceId: 'guide.md', chunkId: 'chunk-1', quote: 'quick brown', span: { start: 4, end: 15 } }],
@@ -142,7 +142,7 @@ describe('citationConstraint()', () => {
     })
   })
 
-  it('fails with actionable feedback when citations are missing', async () => {
+    it('fails with actionable feedback when citations are missing', async () => {
     const check = citationConstraint({
       hits: [hit()],
       required: true,

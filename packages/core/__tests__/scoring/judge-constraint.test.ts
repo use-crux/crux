@@ -71,7 +71,7 @@ describe('judgeConstraint — factory shape', () => {
     expect(c.onChunk).toBeUndefined()
   })
 
-  it('passes severity, maxRetries, and category through to the constraint', () => {
+    it('passes severity, maxRetries, and category through to the constraint', () => {
     const c = judgeConstraint(testJudge(generateWith(9)), {
       min: 7,
       severity: 'suggest',
@@ -94,13 +94,13 @@ describe('judgeConstraint — threshold semantics', () => {
     expect(result.pass).toBe(true)
   })
 
-  it('passes when score equals min (inclusive threshold)', async () => {
+    it('passes when score equals min (inclusive threshold)', async () => {
     const c = judgeConstraint(testJudge(generateWith(7)), { min: 7 })
     const result = await c.check({ text: 'borderline copy', parsed: undefined }, bareCtx)
     expect(result.pass).toBe(true)
   })
 
-  it('fails below min with the judge reasoning as feedback', async () => {
+    it('fails below min with the judge reasoning as feedback', async () => {
     const c = judgeConstraint(testJudge(generateWith(3, 'Too formal for the brand voice.')), { min: 7 })
     const result = await c.check({ text: 'off-brand copy', parsed: undefined }, bareCtx)
 
@@ -109,7 +109,7 @@ describe('judgeConstraint — threshold semantics', () => {
     expect(result.feedback).toBe('Too formal for the brand voice.')
   })
 
-  it('falls back to a score-below-minimum message when reasoning is empty', async () => {
+    it('falls back to a score-below-minimum message when reasoning is empty', async () => {
     const c = judgeConstraint(testJudge(generateWith(3, '')), { min: 7 })
     const result = await c.check({ text: 'off-brand copy', parsed: undefined }, bareCtx)
 
@@ -118,7 +118,7 @@ describe('judgeConstraint — threshold semantics', () => {
     expect(result.feedback).toBe('Judge "brand-voice" scored 3; the minimum acceptable score is 7.')
   })
 
-  it('uses the custom feedback formatter when provided', async () => {
+    it('uses the custom feedback formatter when provided', async () => {
     const c = judgeConstraint(testJudge(generateWith(3, 'raw reasoning')), {
       min: 7,
       feedback: (result) => `Score ${result.score}/10 — rewrite warmer.`,
@@ -130,7 +130,7 @@ describe('judgeConstraint — threshold semantics', () => {
     expect(result.feedback).toBe('Score 3/10 — rewrite warmer.')
   })
 
-  it('attaches the judge verdict to check metadata on both pass and fail', async () => {
+    it('attaches the judge verdict to check metadata on both pass and fail', async () => {
     const pass = await judgeConstraint(testJudge(generateWith(9, 'Great.')), { min: 7 }).check(
       { text: 'good', parsed: undefined },
       bareCtx,
@@ -209,7 +209,7 @@ describe('judgeConstraint — judge call plumbing', () => {
     expect(capturedModel).toBe('prod-model')
   })
 
-  it('sends an empty judge input by default and the derived input when opts.input is set', async () => {
+    it('sends an empty judge input by default and the derived input when opts.input is set', async () => {
     const prompts: string[] = []
     const generate = (async (opts: { prompt: string }) => {
       prompts.push(opts.prompt)
@@ -226,7 +226,7 @@ describe('judgeConstraint — judge call plumbing', () => {
     expect(prompts[1]).toContain('## Input\nthe question')
   })
 
-  it('propagates judge errors (fail-closed), e.g. missing generate binding', async () => {
+    it('propagates judge errors (fail-closed), e.g. missing generate binding', async () => {
     const judge = llmJudge({ id: 'unbound', criteria: 'c', scale: { min: 0, max: 10 } })
     const c = judgeConstraint(judge, { min: 5 })
 
@@ -265,7 +265,7 @@ describe('judgeConstraint — through the safety session', () => {
     expect(audit?.entries[0].feedback).toBe('Too stiff — loosen the tone.')
   })
 
-  it('throws ConstraintViolationError when retries are exhausted (assert severity)', async () => {
+    it('throws ConstraintViolationError when retries are exhausted (assert severity)', async () => {
     const judge = testJudge(generateWith(2, 'Still off brand.'))
     const safety = createSafety({
       call: { constraints: [judgeConstraint(judge, { min: 7, maxRetries: 1 })] },
@@ -278,7 +278,7 @@ describe('judgeConstraint — through the safety session', () => {
     ).rejects.toThrow(ConstraintViolationError)
   })
 
-  it('suggest severity falls back to the last attempt instead of throwing', async () => {
+    it('suggest severity falls back to the last attempt instead of throwing', async () => {
     const judge = testJudge(generateWith(2, 'Off brand.'))
     const safety = createSafety({
       call: { constraints: [judgeConstraint(judge, { min: 7, severity: 'suggest' })] },
@@ -292,7 +292,7 @@ describe('judgeConstraint — through the safety session', () => {
     expect(safety.audit.constraints?.suggestFallback).toBe(true)
   })
 
-  it('produces the same protocol transcript as a hand-written constraint with the same verdicts', async () => {
+    it('produces the same protocol transcript as a hand-written constraint with the same verdicts', async () => {
     const run = async (policy: Parameters<typeof createSafety>[0]['call']) => {
       const safety = createSafety({ call: policy, promptId: 'p1', model: 'm1' })
       await safety.finalizeOutput({ text: 'first draft' }, async () => ({ text: 'second draft' }))

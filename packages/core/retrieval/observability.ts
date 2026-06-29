@@ -46,7 +46,6 @@ export async function runRetrievalOperation(args: {
     ...(args.fusion ? { fusion: args.fusion } : {}),
   }
 
-  getRuntime().instrumentationHooks?.onRetrievalStart?.(eventBase)
   const span = observe.openSpan({
     name: `${args.retrieverId}.retrieve`,
     family: 'retrieval',
@@ -63,19 +62,8 @@ export async function runRetrievalOperation(args: {
       })
     })
     span.end({ resultCount: hits.length })
-    getRuntime().instrumentationHooks?.onRetrievalEnd?.({
-      ...eventBase,
-      resultCount: hits.length,
-      durationMs: Date.now() - startedAt,
-    })
     return hits
   } catch (error) {
-    getRuntime().instrumentationHooks?.onRetrievalEnd?.({
-      ...eventBase,
-      resultCount: 0,
-      durationMs: Date.now() - startedAt,
-      error: error instanceof Error ? error.message : String(error),
-    })
     span.error(error, { resultCount: 0 })
     throw error
   }

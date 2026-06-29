@@ -36,7 +36,7 @@ describe('InferAgentInput', () => {
     expect(input.query).toBe('AI safety')
   })
 
-  it('extracts input type from text-mode agent', () => {
+    it('extracts input type from text-mode agent', () => {
     const input: InferAgentInput<typeof textAgent> = {
       topic: 'TypeScript',
     }
@@ -54,7 +54,7 @@ describe('InferAgentOutput', () => {
     expect(output.sources).toHaveLength(2)
   })
 
-  it('infers string for text-mode agents (no output schema)', () => {
+    it('infers string for text-mode agents (no output schema)', () => {
     const output: InferAgentOutput<typeof textAgent> = 'some text output'
     expect(typeof output).toBe('string')
   })

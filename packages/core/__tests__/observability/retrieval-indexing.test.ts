@@ -26,7 +26,7 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     resetObservabilityRuntime()
   })
 
-  it('records standalone retriever calls as retrieval.query spans with hit artifacts and relation edges', async () => {
+    it('records standalone retriever calls as retrieval.query spans with hit artifacts and relation edges', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const docs = retriever({
@@ -72,7 +72,7 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'retrieval.returned' }))
   })
 
-  it('records retrieval pipelines and every stage as canonical child spans', async () => {
+    it('records retrieval pipelines and every stage as canonical child spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const base = retriever({
@@ -137,7 +137,7 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     )
   })
 
-  it('records indexing operations and pipeline stages as inspectable spans and artifacts', async () => {
+    it('records indexing operations and pipeline stages as inspectable spans and artifacts', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const store = inMemoryCruxStore()
@@ -198,7 +198,7 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     )
   })
 
-  it('records corpus sync, ingest load results, and nested indexing work in one trace', async () => {
+    it('records corpus sync, ingest load results, and nested indexing work in one trace', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const store = inMemoryCruxStore()

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { channel } from 'node:diagnostics_channel'
 import {
+  CRUX_OBSERVABILITY_CHANNEL,
+  CRUX_OBSERVABILITY_SCHEMA_VERSION,
+  type CruxObservabilityChannelMessage,
   createHttpObservabilityTransport,
   createCruxArtifactId,
   createInMemoryObservabilityTransport,
@@ -8,6 +12,7 @@ import {
   observabilityDeliveryErrors,
   resetObservabilityRuntime,
   setObservabilityTransport,
+  subscribeObservability,
 } from '../../observability'
 
 describe('observe runtime', () => {
@@ -45,6 +50,133 @@ describe('observe runtime', () => {
     })
     expect(spanEnd).toMatchObject({ type: 'span:end', runId: runStart.runId, spanId: spanStart.spanId, status: 'ok' })
     expect(runEnd).toMatchObject({ type: 'run:end', runId: runStart.runId, traceId: runStart.traceId, status: 'ok' })
+  })
+
+  it('delivers records to subscribers without a configured transport', async () => {
+    const records: string[] = []
+    subscribeObservability((record) => {
+      records.push(record.type)
+    })
+
+    await observe.run({ name: 'subscriber only', rootPrimitive: 'custom.operation' }, async () => 'ok')
+
+    expect(records).toEqual(['run:start', 'run:end'])
+    expect(observabilityDiagnostics()).toMatchObject({
+      pendingDeliveries: 0,
+      droppedRecords: 0,
+      subscriberErrors: 0,
+    })
+  })
+
+  it('delivers every graph record type to subscribers in emission order', async () => {
+    const recordTypes: string[] = []
+    subscribeObservability((record) => {
+      recordTypes.push(record.type)
+    })
+
+    await observe.run({ name: 'subscriber graph', rootPrimitive: 'custom.operation' }, async () => {
+      await observe.span({ name: 'producer', family: 'custom', primitive: 'custom.operation' }, async () => {
+        observe.event({ name: 'phase' })
+        const artifactId = observe.artifact({
+          kind: 'output',
+          contentType: 'application/json',
+          encoding: 'json',
+          preview: { ok: true },
+        })
+        observe.edge({
+          edgeType: 'produced',
+          from: { kind: 'span', id: observe.captureContext()!.currentSpanId! },
+          to: { kind: 'artifact', id: artifactId! },
+        })
+      })
+    })
+
+    expect(recordTypes).toEqual([
+      'run:start',
+      'span:start',
+      'span:event',
+      'artifact',
+      'edge',
+      'span:end',
+      'run:end',
+    ])
+  })
+
+  it('removes subscribers through the returned unsubscribe function', async () => {
+    const records: string[] = []
+    const unsubscribe = subscribeObservability((record) => {
+      records.push(record.type)
+    })
+
+    unsubscribe()
+    unsubscribe()
+    await observe.run({ name: 'after unsubscribe', rootPrimitive: 'custom.operation' }, async () => 'ok')
+
+    expect(records).toEqual([])
+  })
+
+  it('clears subscribers when the observability runtime resets', async () => {
+    const records: string[] = []
+    subscribeObservability((record) => {
+      records.push(record.type)
+    })
+
+    resetObservabilityRuntime()
+    await observe.run({ name: 'after reset', rootPrimitive: 'custom.operation' }, async () => 'ok')
+
+    expect(records).toEqual([])
+    expect(observabilityDiagnostics().subscriberErrors).toBe(0)
+  })
+
+  it('isolates throwing subscribers from sibling subscribers and transport delivery', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    const siblingRecords: string[] = []
+    setObservabilityTransport(transport)
+    subscribeObservability(() => {
+      throw new Error('subscriber failed')
+    })
+    subscribeObservability((record) => {
+      siblingRecords.push(record.type)
+    })
+
+    await observe.run({ name: 'safe publish', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.flush()
+
+    expect(siblingRecords).toEqual(['run:start', 'run:end'])
+    expect(transport.records.map((record) => record.type)).toEqual(['run:start', 'run:end'])
+    expect(observabilityDiagnostics()).toMatchObject({
+      subscriberErrors: 2,
+      deliveryErrors: [],
+    })
+  })
+
+  it('publishes records to the diagnostics channel with the public message shape', async () => {
+    const messages: CruxObservabilityChannelMessage[] = []
+    const diagnosticsChannel = channel(CRUX_OBSERVABILITY_CHANNEL)
+    const onMessage = (message: unknown) => {
+      messages.push(message as CruxObservabilityChannelMessage)
+    }
+    diagnosticsChannel.subscribe(onMessage)
+
+    try {
+      await observe.run({ name: 'channel subscriber', rootPrimitive: 'custom.operation' }, async () => {
+        await observe.span({ name: 'channel span', family: 'custom', primitive: 'custom.operation' }, async () => 'ok')
+      })
+    } finally {
+      diagnosticsChannel.unsubscribe(onMessage)
+    }
+
+    expect(messages.map((message) => message.schemaVersion)).toEqual([
+      CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      CRUX_OBSERVABILITY_SCHEMA_VERSION,
+    ])
+    expect(messages.map((message) => message.record.type)).toEqual(['run:start', 'span:start', 'span:end', 'run:end'])
+    expect(messages[0].record).toMatchObject({
+      type: 'run:start',
+      name: 'channel subscriber',
+    })
   })
 
   it('preserves parent span across async work and captured context handoff', async () => {

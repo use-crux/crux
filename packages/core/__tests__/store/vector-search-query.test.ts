@@ -11,7 +11,7 @@ describe('CruxStore.searchVectors', () => {
     expect(result[0]?.key).toBe('k1')
   })
 
-  it('supports sparse queries', async () => {
+    it('supports sparse queries', async () => {
     const store = inMemoryCruxStore()
     await store.set('k1', { sparseEmbedding: { indices: [0, 2], values: [1, 2] } })
     await store.set('k2', { sparseEmbedding: { indices: [1], values: [5] } })
@@ -23,7 +23,7 @@ describe('CruxStore.searchVectors', () => {
     expect(result[0]?.key).toBe('k1')
   })
 
-  it('supports hybrid queries', async () => {
+    it('supports hybrid queries', async () => {
     const store = inMemoryCruxStore()
     await store.set('k1', {
       embedding: [1, 0],
@@ -42,7 +42,7 @@ describe('CruxStore.searchVectors', () => {
     expect(result[0]?.key).toBe('k1')
   })
 
-  it('throws for empty queries', async () => {
+    it('throws for empty queries', async () => {
     const store = inMemoryCruxStore()
     await expect(store.searchVectors!({})).rejects.toThrow('dense or sparse')
   })
