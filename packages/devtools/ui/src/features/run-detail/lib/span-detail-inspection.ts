@@ -12,6 +12,7 @@ import type {
 // diagnostics) live in the Inspector; structure (graph) is a lens — neither is
 // a center tab.
 export type InspectTabId =
+  | 'insight'
   | 'output'
   | 'context'
   | 'tool'
@@ -28,6 +29,7 @@ export type InspectTabId =
   | 'agent'
 
 export const TAB_LABEL: Record<InspectTabId, string> = {
+  insight: 'Insight',
   output: 'Output',
   context: 'Context',
   tool: 'Tool',

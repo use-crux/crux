@@ -28,6 +28,10 @@ import type {
 import { currentObservabilityTransport, observe, setObservabilityTransport } from '../../observability'
 import type { TokenUsage } from '../../generation/types'
 import type { Capability } from '../target'
+import {
+  extractTurnDecisionReportSignals,
+  type TurnDecisionReportSignal,
+} from './decision-report-signals'
 
 // ─────────────────────────────────────────────────────────────────
 // Signal model
@@ -143,6 +147,7 @@ export interface CellSignals {
   constraints: readonly ConstraintSignal[]
   memoryOps: readonly MemoryOpSignal[]
   routing: readonly RoutingSignal[]
+  decisionReports: readonly TurnDecisionReportSignal[]
   /** Completed span durations — the population behind `latency.p95()`. */
   operationDurations: readonly number[]
   /** Count of spans that ended with `error` status. */
@@ -171,6 +176,7 @@ export function emptyCellSignals(): CellSignals {
     constraints: [],
     memoryOps: [],
     routing: [],
+    decisionReports: [],
     operationDurations: [],
     erroredSpans: 0,
     retries: 0,
@@ -265,6 +271,7 @@ function stringOrUndefined(value: unknown): string | undefined {
 export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSignals {
   const spans = new Map<string, CompletedSpan>()
   const artifactsBySpan = new Map<string, CruxArtifactRecord[]>()
+  const artifactRecords: CruxArtifactRecord[] = []
   let runErrored = false
 
   for (const record of records) {
@@ -314,6 +321,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         }
       }
     } else if (record.type === 'artifact' && record.spanId !== undefined) {
+      artifactRecords.push(record)
       const bucket = artifactsBySpan.get(record.spanId)
       if (bucket) bucket.push(record)
       else artifactsBySpan.set(record.spanId, [record])
@@ -333,12 +341,15 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
   const constraints: ConstraintSignal[] = []
   const memoryOps: MemoryOpSignal[] = []
   const routing: RoutingSignal[] = []
+  const decisionReports = extractTurnDecisionReportSignals(artifactRecords)
   const operationDurations: number[] = []
   let erroredSpans = runErrored ? 1 : 0
   let retries = 0
   let usedFallback = false
   let costUsd: number | undefined
   let usage: TokenUsage | undefined
+
+  if (decisionReports.length > 0) captured.add('decisionReports')
 
   const artifactPreview = (spanId: string, kind: string): unknown => {
     const artifact = artifactsBySpan.get(spanId)?.find((entry) => entry.kind === kind)
@@ -540,6 +551,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
     constraints,
     memoryOps,
     routing,
+    decisionReports,
     operationDurations,
     erroredSpans,
     retries,

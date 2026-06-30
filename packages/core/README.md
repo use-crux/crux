@@ -251,7 +251,7 @@ Disabled input/output artifacts are still emitted as references with `sizeBytes`
 | `@use-crux/core/quality`       | Evaluations, suites, assertions, scorers, gates, variants, and baselines.           |
 | `@use-crux/core/agent`         | Agents, blackboards, handoffs, delegates, parallel, pipeline, consensus, and swarm. |
 | `@use-crux/core/flow`          | Suspendable typed workflows.                                                        |
-| `@use-crux/core/observability` | Canonical graph records, devtools transport, subscribers, and diagnostics channel.  |
+| `@use-crux/core/observability` | Canonical graph records, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model.  |
 | `@use-crux/core/project-index` | Public Project Index contracts for local devtools and source intelligence.          |
 
 See the full [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) for every subpath and API.

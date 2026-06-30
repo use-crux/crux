@@ -107,10 +107,17 @@ describe("workspace artifacts facet", () => {
     );
     await ws.write("/workspace/notes.md", "Not an artifact");
 
-    await expect(ws.artifacts({ status: "final" })).resolves.toMatchObject([
-      { path: "/outputs/chart.json", status: "final", kind: "chart" },
-      { path: "/outputs/final.md", status: "final", kind: "report" },
-    ]);
+    // `artifacts()` does not guarantee a result order, so assert membership
+    // (mirroring the `kind: "report"` assertion below) rather than a fixed
+    // sequence — the store's iteration order varies across environments.
+    const finalArtifacts = await ws.artifacts({ status: "final" });
+    expect(finalArtifacts).toHaveLength(2);
+    expect(finalArtifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "/outputs/chart.json", status: "final", kind: "chart" }),
+        expect.objectContaining({ path: "/outputs/final.md", status: "final", kind: "report" }),
+      ]),
+    );
     await expect(ws.artifacts({ kind: "report" })).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ path: "/outputs/final.md", kind: "report" }),

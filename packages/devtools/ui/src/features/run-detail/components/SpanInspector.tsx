@@ -19,6 +19,8 @@ import type { ObservabilityRunDetail, ObservabilityRunDetailNode } from '@/types
 import type { CruxCitationReportPreview, CruxScoreReportPreview } from '@use-crux/core/observability'
 import { KindTag, StatusPill, type RunNodeKind } from './atoms'
 import { routingFacts, governanceFacts } from './GenerationDecisions'
+import { RunInsightFacts, TurnInspectorFacts } from './explain/InspectorFacts'
+import { collectTurnReports } from '@/features/run-detail/lib/explain/rollup'
 import {
   findArtifact,
   findNode,
@@ -244,6 +246,10 @@ export function SpanInspector({
         {cacheRead != null && <Metric k="cache rd" v={fmtTokens(cacheRead)} tone="var(--qw-ok)" />}
         <Metric k="cost" v={fmtCost(cost)} />
       </div>
+
+      {/* Turn Explanation — run-root roll-up, then this turn's compact facts */}
+      {runLevel && runDetail && <RunInsightFacts reports={collectTurnReports(runDetail.root)} />}
+      {!runLevel && node.decisionReport && <TurnInspectorFacts report={node.decisionReport} />}
 
       {/* Routing — folded cascade/router decision (see Decisions tab for the body) */}
       {routing && (

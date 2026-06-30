@@ -144,7 +144,8 @@ compatibility shims, while every implementation lives in a domain folder.
 │   └── schema-compat.ts  sanitizeJsonSchema() — provider JSON-schema sanitization (@internal)
 ├── observability/
 │   ├── index.ts        Barrel: canonical graph contract, schemas, ID helpers, observe runtime, transports
-│   ├── contract.ts     Run, Span, SpanEvent, Edge, Artifact, RunDetail, and realtime notification types; branded IDs; taxonomies
+│   ├── contract.ts     Run, Span, SpanEvent, Edge, Artifact, RunDetail (incl. optional decisionReport), and realtime notification types; branded IDs; taxonomies
+│   ├── turn-decision-report/  Per-turn TurnDecisionReport explanation read model (report/items/evidence/source-coverage/targets/shared), barrelled by turn-decision-report.ts
 │   ├── schema.ts       Zod schemas for graph records and batches
 │   ├── ids.ts          Runtime-owned public graph ID helpers
 │   ├── observe.ts      Non-blocking runtime emitters, manual/open run lifecycles for serverless resumes, AsyncLocalStorage context propagation, flush/shutdown

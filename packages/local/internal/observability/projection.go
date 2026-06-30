@@ -67,6 +67,7 @@ func ProjectRunDetail(graph Graph, opts ProjectionOptions) RunDetail {
 	toolRequestsByCallID := buildToolRequestIndex(graph.Artifacts)
 	applyRunDetailInspection(&root, toolRequestsByCallID)
 	applyRunDetailRequests(&root, graph)
+	applyRunDetailDecisionReports(&root)
 	resetRunDetailIndex(&root, spanIndex)
 	rows := flattenRunDetailRows(root)
 	facets := buildRunDetailFacets(graph)

@@ -137,7 +137,7 @@ describe('evaluation.manifest — spec 02 §2 shape for inline-case definitions'
       source: 'file',
       description: 'Refund quality bar',
       tags: ['support'],
-      task: { kind: 'prompt', ref: 'support', capabilities: ['modelCalls', 'citations', 'safety'] },
+      task: { kind: 'prompt', ref: 'support', capabilities: ['modelCalls', 'citations', 'safety', 'decisionReports'] },
       hasEvaluationExpect: true,
       scorers: [
         { name: 'helpful', costClass: 'model' },
@@ -205,7 +205,7 @@ describe('evaluation.manifest — spec 02 §2 shape for inline-case definitions'
 
     const agentEval = evaluate({ task: supportAgent, data: baseCases })
     expect(agentEval.manifest.task).toMatchObject({ kind: 'agent', ref: 'support-agent' })
-    expect(agentEval.manifest.task.capabilities).toHaveLength(9)
+    expect(agentEval.manifest.task.capabilities).toHaveLength(10)
 
     const targetEval = evaluate({ task: target.prompt(supportPrompt, { model: 'gpt-5' }), data: baseCases })
     expect(targetEval.manifest.task).toMatchObject({ kind: 'prompt', ref: 'support' })
@@ -233,7 +233,15 @@ describe('target.*', () => {
   it('wraps primitives with kind, id, and capability sets', () => {
     const t = target.flow(summarizeFlow)
     expect(t).toMatchObject({ _tag: 'QualityTarget', kind: 'flow', id: 'summarize' })
-    expect(t.capabilities).toEqual(['modelCalls', 'steps', 'toolCalls', 'routing', 'safety', 'memory'])
+    expect(t.capabilities).toEqual([
+      'modelCalls',
+      'steps',
+      'toolCalls',
+      'routing',
+      'safety',
+      'memory',
+      'decisionReports',
+    ])
     expect(Object.isFrozen(t)).toBe(true)
   })
 

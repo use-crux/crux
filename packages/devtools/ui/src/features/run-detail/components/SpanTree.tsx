@@ -227,6 +227,9 @@ interface SpanRowProps {
   node: SpanNode
   isSelected: boolean
   isCollapsed: boolean
+  /** This span's turn explanation carries a warning signal (stale-used,
+   *  dropped, fallback, …). Renders a badge; selecting it opens Explain. */
+  warning?: boolean
   onSelect: (id: string) => void
   /** Chevron toggle — opens or closes the node. */
   onToggle: (id: string) => void
@@ -241,6 +244,7 @@ function SpanRow({
   node,
   isSelected,
   isCollapsed,
+  warning,
   onSelect,
   onToggle,
   onExpand,
@@ -350,6 +354,21 @@ function SpanRow({
         {node.model && (
           <span className="text-[9px] bg-(--qw-bg-muted) text-(--qw-fg-muted) rounded px-1 ml-1.5 shrink-0">
             {node.model}
+          </span>
+        )}
+
+        {/* Turn explanation warning — selecting the span opens Explain */}
+        {warning && (
+          <span
+            className="ml-1.5 inline-flex shrink-0 items-center gap-[3px] rounded-[3px] px-1 text-[9px]"
+            style={{
+              color: 'var(--qw-warn)',
+              background: 'var(--qw-warn-soft)',
+              boxShadow: 'inset 0 0 0 1px var(--qw-warn-line)',
+            }}
+            title="Turn explanation has a warning signal — open Explain"
+          >
+            ✦ explain
           </span>
         )}
 
@@ -596,6 +615,8 @@ interface WaterfallRowProps {
   node: SpanNode
   isSelected: boolean
   isCollapsed: boolean
+  /** This span's turn explanation carries a warning signal — render a badge. */
+  warning?: boolean
   onSelect: (id: string) => void
   /** Chevron toggle — opens or closes the node. */
   onToggle: (id: string) => void
@@ -609,6 +630,7 @@ function WaterfallRow({
   node,
   isSelected,
   isCollapsed,
+  warning,
   onSelect,
   onToggle,
   onExpand,
@@ -685,6 +707,17 @@ function WaterfallRow({
 
         {/* Label */}
         <span className="text-(--qw-fg) truncate min-w-0 flex-1 text-[10px]">{node.label}</span>
+
+        {/* Turn explanation warning — selecting the span opens Explain */}
+        {warning && (
+          <span
+            className="ml-1 shrink-0 text-[10px]"
+            style={{ color: 'var(--qw-warn)' }}
+            title="Turn explanation has a warning signal — open Explain"
+          >
+            ✦
+          </span>
+        )}
       </div>
 
       {/* Right side: time axis — bar positioned on the shared run timeline.
@@ -723,7 +756,7 @@ function WaterfallRow({
 // SpanTree
 // ---------------------------------------------------------------------------
 
-export function SpanTree({ tree, selectedId, onSelect, layout, triage = false }: SpanTreeProps) {
+export function SpanTree({ tree, selectedId, warningSpanIds, onSelect, layout, triage = false }: SpanTreeProps) {
   const [searchQuery, setSearchQuery] = useState('')
   // The span tree filter rebuilds a potentially large render. Defer the
   // query value so typing stays responsive on big traces; dim the
@@ -1049,6 +1082,7 @@ export function SpanTree({ tree, selectedId, onSelect, layout, triage = false }:
                 node={node}
                 isSelected={node.id === selectedId}
                 isCollapsed={collapsed.has(node.id)}
+                warning={warningSpanIds?.has(node.id) ?? false}
                 onSelect={onSelect}
                 onToggle={toggleCollapse}
                 onExpand={expandRow}
@@ -1064,6 +1098,7 @@ export function SpanTree({ tree, selectedId, onSelect, layout, triage = false }:
                 node={node}
                 isSelected={node.id === selectedId}
                 isCollapsed={collapsed.has(node.id)}
+                warning={warningSpanIds?.has(node.id) ?? false}
                 onSelect={onSelect}
                 onToggle={toggleCollapse}
                 onExpand={expandRow}
@@ -1092,6 +1127,8 @@ export function SpanTree({ tree, selectedId, onSelect, layout, triage = false }:
 interface SpanTreeProps {
   tree: SpanNode
   selectedId: string | null
+  /** Span ids whose turn explanation carries a warning signal — render badges. */
+  warningSpanIds?: ReadonlySet<string>
   onSelect: (id: string) => void
   /** Controlled view layout. When set, the lens owns Tree↔Timeline and the
    *  inline toggle is hidden. Omit for the standalone, self-toggling tree. */
