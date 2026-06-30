@@ -84,7 +84,10 @@ describe("workspace() operator limits", () => {
       /maxNamespaceBytes/,
     );
 
-    expect(set).toHaveBeenCalledTimes(2);
+    // The rejected write persists nothing; the two accepted files each persist
+    // a HEAD record plus a version snapshot.
+    expect(set).toHaveBeenCalledTimes(4);
+    expect(await ws.exists("/workspace/c.txt")).toBe(false);
   });
 
   it("serializes concurrent namespace quota checks with the write", async () => {

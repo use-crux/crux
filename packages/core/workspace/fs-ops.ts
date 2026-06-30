@@ -15,6 +15,7 @@ import { instrument } from "./observability";
 import { mountForPath, normalizePath } from "./path";
 import { recordToReadResult } from "./read-result";
 import { fileKey, getRecord, listFileRecords } from "./store";
+import { recordFileVersion } from "./version-store";
 import {
   assertWorkspaceWriteAllowed,
   withWorkspaceWriteLock,
@@ -33,6 +34,7 @@ import type {
   WorkspaceMoveOptions,
   WorkspaceNamespaceOption,
   WorkspaceRetention,
+  WorkspaceVersioning,
 } from "./types";
 
 /** Bound dependencies for filesystem-style workspace operations. */
@@ -44,6 +46,7 @@ export interface WorkspaceFilesystemOpsConfig {
   readonly inlineTextBelowBytes: number;
   readonly limits?: WorkspaceLimits;
   readonly retention?: WorkspaceRetention;
+  readonly versioning?: WorkspaceVersioning;
   readonly resolveNamespace: () => Promise<string>;
 }
 
@@ -184,14 +187,30 @@ export function createWorkspaceFilesystemOps(
               producedBy: existing?.producedBy,
               existing,
               now,
+              version: (existing?.headVersion ?? 0) + 1,
               inlineTextBelowBytes: config.inlineTextBelowBytes,
               blobs: config.blobs,
             });
+            const setOptions = workspaceSetOptions(
+              config.store,
+              config.retention,
+            );
             await config.store.set(
               fileKey(config.workspaceId, namespace, normalized),
               record,
-              workspaceSetOptions(config.store, config.retention),
+              setOptions,
             );
+            await recordFileVersion({
+              store: config.store,
+              blobs: config.blobs,
+              workspaceId: config.workspaceId,
+              namespace,
+              path: normalized,
+              record,
+              operation: "append",
+              versioning: config.versioning,
+              setOptions,
+            });
             return recordToFile(record);
           },
         );
@@ -269,6 +288,7 @@ export function createWorkspaceFilesystemOps(
               ...source,
               path: toPath,
               mount: toMount.path,
+              headVersion: 1,
               updatedAt: Date.now(),
             };
             await config.store.set(
@@ -342,6 +362,7 @@ export function createWorkspaceFilesystemOps(
               ...source,
               path: toPath,
               mount: toMount.path,
+              headVersion: 1,
               updatedAt: Date.now(),
             };
             await config.store.set(

@@ -189,7 +189,7 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── storage/
 │   └── index.ts        DataStore, VectorStore, BlobStore, storage(), and in-memory implementations
 ├── workspace/
-│   └── index.ts        workspace(), workspaceToolNames() — durable mounted file tree, prompt injection, file tools, artifacts view, TTL/quota guards, blob-backed payloads, canonical operation spans
+│   └── index.ts        workspace(), workspaceToolNames() — durable mounted file tree, prompt injection, file tools, artifacts view, append-only versioning (history/read@version/diff/undo, version-scoped blobs, maxVersions GC), TTL/quota guards, blob-backed payloads, canonical operation spans
 ├── indexing/
 │   └── index.ts        indexer() + corpus() + indexingPipeline() — document transforms, structured/parent-child/semantic chunkers, stage cache, generation-aware promotion, source ledger sync, dry runs, and store writes
 ├── cost/

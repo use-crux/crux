@@ -490,6 +490,65 @@ func TestWorkspaceDetailUsesPathHashAndArtifactMetadataFromObservedActivity(t *t
 	}
 }
 
+func TestWorkspaceFileDetailReconstructsVersionHistoryWithoutDoubleCounting(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewStore()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	obs, err := observability.NewService(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A write (v1), then an edit (v2). The edit emits an OUTER edit span plus a
+	// nested write span — so there are three operation spans but only two
+	// versions. Each version is announced by exactly one workspace.version marker.
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(`{
+		"records": [
+			{"schemaVersion":1,"recordId":"rec_w","type":"span","runId":"run","traceId":"trace_w","spanId":"span_w","family":"workspace","primitive":"workspace.operation","name":"workspace.write","startedAt":"2026-06-30T10:00:00.000Z","endedAt":"2026-06-30T10:00:00.010Z","durationMs":10,"status":"ok","attributes":{"workspaceId":"drafts","operation":"write","pathHash":"fnv1a:aaa111","namespaceHash":"ns1"}},
+			{"schemaVersion":1,"recordId":"rec_vw","type":"span","runId":"run","traceId":"trace_w","spanId":"span_vw","family":"workspace","primitive":"workspace.operation","name":"workspace.version","startedAt":"2026-06-30T10:00:00.011Z","endedAt":"2026-06-30T10:00:00.011Z","durationMs":0,"status":"ok","attributes":{"workspaceId":"drafts","operation":"write","pathHash":"fnv1a:aaa111","namespaceHash":"ns1","version":1}},
+			{"schemaVersion":1,"recordId":"rec_e","type":"span","runId":"run","traceId":"trace_e","spanId":"span_e","family":"workspace","primitive":"workspace.operation","name":"workspace.edit","startedAt":"2026-06-30T10:00:01.000Z","endedAt":"2026-06-30T10:00:01.020Z","durationMs":20,"status":"ok","attributes":{"workspaceId":"drafts","operation":"edit","pathHash":"fnv1a:aaa111","namespaceHash":"ns1"}},
+			{"schemaVersion":1,"recordId":"rec_ew","type":"span","runId":"run","traceId":"trace_e","spanId":"span_ew","parentSpanId":"span_e","family":"workspace","primitive":"workspace.operation","name":"workspace.write","startedAt":"2026-06-30T10:00:01.002Z","endedAt":"2026-06-30T10:00:01.012Z","durationMs":10,"status":"ok","attributes":{"workspaceId":"drafts","operation":"write","pathHash":"fnv1a:aaa111","namespaceHash":"ns1"}},
+			{"schemaVersion":1,"recordId":"rec_ve","type":"span","runId":"run","traceId":"trace_e","spanId":"span_ve","parentSpanId":"span_ew","family":"workspace","primitive":"workspace.operation","name":"workspace.version","startedAt":"2026-06-30T10:00:01.013Z","endedAt":"2026-06-30T10:00:01.013Z","durationMs":0,"status":"ok","attributes":{"workspaceId":"drafts","operation":"edit","pathHash":"fnv1a:aaa111","namespaceHash":"ns1","version":2}}
+		]
+	}`), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	service := NewService(st, quality.NewService(st, t.TempDir())).WithObservability(obs)
+	value, found, err := service.WorkspaceDetail(ctx, "drafts/files/hash:fnv1a:aaa111")
+	if err != nil || !found {
+		t.Fatalf("workspace file detail found=%v err=%v", found, err)
+	}
+	detail := value.(workspaceFileDetail)
+
+	// Two versions, newest first — the nested write span does NOT add a third.
+	if len(detail.Versions) != 2 {
+		t.Fatalf("versions = %#v", detail.Versions)
+	}
+	if detail.Versions[0].VersionID != "v2" || detail.Versions[0].Actor != "edit" {
+		t.Fatalf("newest version = %#v", detail.Versions[0])
+	}
+	if detail.Versions[1].VersionID != "v1" || detail.Versions[1].Actor != "write" {
+		t.Fatalf("oldest version = %#v", detail.Versions[1])
+	}
+	if detail.Versions[0].TraceID != "trace_e" {
+		t.Fatalf("version trace id = %q", detail.Versions[0].TraceID)
+	}
+	// Version markers must not leak into the operations list.
+	for _, op := range detail.Operations {
+		if op.Op == "version" {
+			t.Fatalf("version marker leaked into operations: %#v", detail.Operations)
+		}
+	}
+}
+
 func TestPlansEndpointProjectsObservedPlanArtifacts(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewStore()

@@ -30,6 +30,7 @@ export function workspaceToolNames<const Options extends Pick<WorkspaceToolOptio
     renameFile: prefix ? `rename${prefix}WorkspaceFile` : 'renameWorkspaceFile',
     grep: prefix ? `grep${prefix}Workspace` : 'grepWorkspace',
     deleteFile: prefix ? `delete${prefix}WorkspaceFile` : 'deleteWorkspaceFile',
+    undoFile: prefix ? `undo${prefix}WorkspaceFile` : 'undoWorkspaceFile',
   } as WorkspaceToolNames<WorkspaceToolPrefix<Options>>
 }
 

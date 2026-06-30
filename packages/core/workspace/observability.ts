@@ -11,12 +11,48 @@
 import { observe } from "../observability";
 import type { WorkspaceProvenance } from "./artifact-types";
 import type { WorkspaceOperation } from "./types";
+import type { WorkspaceVersionOperation } from "./version-types";
 
 interface WorkspaceEvent {
   readonly workspaceId: string;
   readonly operation: WorkspaceOperation;
   readonly namespace: string;
   readonly path: string;
+}
+
+/**
+ * Emit a privacy-safe marker for a newly recorded file version.
+ *
+ * Devtools reconstruct a file's history from these markers rather than from
+ * operation spans: `edit`/`undo` wrap a nested `write` span, so counting
+ * operation spans would double-count, whereas this fires exactly once per
+ * version from the single persistence chokepoint — carrying the version number
+ * and its true operation label, never the raw path or content.
+ */
+export function emitWorkspaceVersion(event: {
+  readonly workspaceId: string;
+  readonly namespace: string;
+  readonly path: string;
+  readonly version: number;
+  readonly operation: WorkspaceVersionOperation;
+}): void {
+  const attributes = {
+    primitive: "workspace.operation",
+    workspaceId: event.workspaceId,
+    operation: event.operation,
+    namespaceHash: hashString(event.namespace),
+    pathHash: hashString(event.path),
+    version: event.version,
+  };
+  // The span name (never a real operation) plus the numeric `version` attribute
+  // let the devtools read model pick markers out of the workspace family.
+  const span = observe.openSpan({
+    name: "workspace.version",
+    family: "workspace",
+    primitive: "workspace.operation",
+    attributes,
+  });
+  span.end({ attributes: { ...attributes, status: "success" } });
 }
 
 /** Capture artifact provenance from an already-active caller run/span. */

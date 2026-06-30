@@ -22,6 +22,13 @@ export interface WorkspaceArtifact {
   readonly path: string
   readonly kind?: string
   readonly status: WorkspaceArtifactStatus
+  /**
+   * The published version this artifact resolves to. `finalize()` pins the
+   * current version, so a `final` artifact keeps surfacing this revision even as
+   * the working file is edited further. Use `read(path, { version })` to fetch
+   * the pinned content for an inline artifact.
+   */
+  readonly version?: number
   readonly mimeType: string
   readonly size: number
   readonly uri?: string

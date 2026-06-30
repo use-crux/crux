@@ -297,9 +297,10 @@ describe("first-party extractor fixtures", () => {
           id: 'scratch',
           namespace: 'tenant-a',
           mounts: [{ path: '/workspace', access: 'readwrite', description: 'Working files' }],
-          tools: { prefix: 'research', delete: true, searchDocs },
+          tools: { prefix: 'research', delete: true, undo: true, searchDocs },
           limits: { maxFileBytes: 1000, maxNamespaceBytes: 5000 },
           retention: { ttlMs: 60000 },
+          versioning: { maxVersions: 7 },
           storage: blobStore,
         })
 
@@ -309,10 +310,13 @@ describe("first-party extractor fixtures", () => {
             await scratch.exists('/workspace/a.md')
             await scratch.stat('/workspace/a.md')
             await scratch.grep('alpha')
+            await scratch.history('/workspace/a.md')
+            await scratch.diff('/workspace/a.md')
             await scratch.artifacts({ status: 'final' })
             await scratch.rename('/workspace/a.md', '/workspace/b.md')
             await scratch.move('/workspace/b.md', '/workspace/c.md')
             await scratch.copy('/workspace/c.md', '/outputs/report-copy.md')
+            await scratch.undo('/workspace/c.md')
             await scratch.finalize('/outputs/report.md')
             return 'done'
           },
@@ -329,6 +333,7 @@ describe("first-party extractor fixtures", () => {
         tools: expect.objectContaining({
           prefix: "research",
           delete: true,
+          undo: true,
           generated: expect.objectContaining({
             list: "listResearchWorkspace",
             readFile: "readResearchWorkspaceFile",
@@ -337,10 +342,12 @@ describe("first-party extractor fixtures", () => {
             renameFile: "renameResearchWorkspaceFile",
             grep: "grepResearchWorkspace",
             deleteFile: "deleteResearchWorkspaceFile",
+            undoFile: "undoResearchWorkspaceFile",
           }),
         }),
         limits: { maxFileBytes: 1000, maxNamespaceBytes: 5000 },
         retention: { ttlMs: 60000 },
+        versioning: { maxVersions: 7 },
         mounts: [
           expect.objectContaining({ path: "/workspace", access: "readwrite" }),
         ],
@@ -350,6 +357,7 @@ describe("first-party extractor fixtures", () => {
           operator: expect.objectContaining({
             retention: { ttlMs: 60000 },
             limits: { maxFileBytes: 1000, maxNamespaceBytes: 5000 },
+            versioning: { maxVersions: 7 },
           }),
         }),
       }),
@@ -376,6 +384,14 @@ describe("first-party extractor fixtures", () => {
               targetVariable: "scratch",
               operation: "stat",
             }),
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "history",
+            }),
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "diff",
+            }),
           ]),
           writes: expect.arrayContaining([
             expect.objectContaining({
@@ -389,6 +405,10 @@ describe("first-party extractor fixtures", () => {
             expect.objectContaining({
               targetVariable: "scratch",
               operation: "copy",
+            }),
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "undo",
             }),
             expect.objectContaining({
               targetVariable: "scratch",
