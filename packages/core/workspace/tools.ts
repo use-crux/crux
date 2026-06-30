@@ -9,8 +9,8 @@
  * @module
  */
 
-import { z } from 'zod'
-import type { ToolDef } from '../types/tool'
+import { z } from "zod";
+import type { ToolDef } from "../types/tool";
 import {
   fileModelOutput,
   modelJsonOutput,
@@ -21,7 +21,7 @@ import {
   readRequiredString,
   readWorkspaceToolContent,
   workspaceToolNames,
-} from './tool-io'
+} from "./tool-io";
 import type {
   WorkspaceContent,
   WorkspaceDeleteOptions,
@@ -37,21 +37,42 @@ import type {
   WorkspaceReadOptions,
   WorkspaceReadResult,
   WorkspaceToolOptions,
-  WorkspaceToolDelete,
-  WorkspaceToolPrefix,
+  WorkspaceToolDeleteWithDefaults,
+  WorkspaceToolPrefixWithDefaults,
   WorkspaceTools,
   WorkspaceWriteOptions,
-} from './types'
+} from "./types";
 
 /** The bound workspace operations the generated tools delegate to. */
 export interface WorkspaceToolOperations {
-  list(path: string, options?: WorkspaceListOptions): Promise<WorkspaceListResult>
-  read(path: string, options?: WorkspaceReadOptions): Promise<WorkspaceReadResult>
-  write(path: string, content: WorkspaceContent, options?: WorkspaceWriteOptions): Promise<WorkspaceFile>
-  edit(path: string, patch: WorkspaceEditPatch, options?: WorkspaceEditOptions): Promise<WorkspaceFile>
-  rename(from: string, to: string, options?: WorkspaceMoveOptions): Promise<WorkspaceFile>
-  grep(query: string, options?: WorkspaceGrepOptions): Promise<WorkspaceGrepResult>
-  remove(path: string, options?: WorkspaceDeleteOptions): Promise<void>
+  list(
+    path: string,
+    options?: WorkspaceListOptions,
+  ): Promise<WorkspaceListResult>;
+  read(
+    path: string,
+    options?: WorkspaceReadOptions,
+  ): Promise<WorkspaceReadResult>;
+  write(
+    path: string,
+    content: WorkspaceContent,
+    options?: WorkspaceWriteOptions,
+  ): Promise<WorkspaceFile>;
+  edit(
+    path: string,
+    patch: WorkspaceEditPatch,
+    options?: WorkspaceEditOptions,
+  ): Promise<WorkspaceFile>;
+  rename(
+    from: string,
+    to: string,
+    options?: WorkspaceMoveOptions,
+  ): Promise<WorkspaceFile>;
+  grep(
+    query: string,
+    options?: WorkspaceGrepOptions,
+  ): Promise<WorkspaceGrepResult>;
+  remove(path: string, options?: WorkspaceDeleteOptions): Promise<void>;
 }
 
 /**
@@ -62,43 +83,62 @@ export interface WorkspaceToolOperations {
  * @param args.ops - Bound workspace operations.
  * @returns A function producing the tool set, optionally for a fixed namespace.
  */
-export function createWorkspaceTools(args: {
-  readonly workspaceId: string
-  readonly defaultToolOptions?: WorkspaceToolOptions
-  readonly ops: WorkspaceToolOperations
-}): <const Options extends WorkspaceToolOptions & WorkspaceNamespaceOption = {}>(
+export function createWorkspaceTools<
+  const Defaults extends WorkspaceToolOptions | undefined = undefined,
+>(args: {
+  readonly workspaceId: string;
+  readonly defaultToolOptions?: Defaults;
+  readonly ops: WorkspaceToolOperations;
+}): <
+  const Options extends WorkspaceToolOptions & WorkspaceNamespaceOption = {},
+>(
   options?: Options,
-) => WorkspaceTools<WorkspaceToolPrefix<Options>, WorkspaceToolDelete<Options>> {
-  const { workspaceId, defaultToolOptions, ops } = args
-  return <const Options extends WorkspaceToolOptions & WorkspaceNamespaceOption = {}>(
+) => WorkspaceTools<
+  WorkspaceToolPrefixWithDefaults<Defaults, Options>,
+  WorkspaceToolDeleteWithDefaults<Defaults, Options>
+> {
+  const { workspaceId, defaultToolOptions, ops } = args;
+  return <
+    const Options extends WorkspaceToolOptions & WorkspaceNamespaceOption = {},
+  >(
     options?: Options,
-  ): WorkspaceTools<WorkspaceToolPrefix<Options>, WorkspaceToolDelete<Options>> => {
-    const toolOptions = { ...defaultToolOptions, ...options }
-    const namespace = options?.namespace
-    const names = workspaceToolNames(toolOptions)
+  ): WorkspaceTools<
+    WorkspaceToolPrefixWithDefaults<Defaults, Options>,
+    WorkspaceToolDeleteWithDefaults<Defaults, Options>
+  > => {
+    const toolOptions = { ...defaultToolOptions, ...options };
+    const namespace = options?.namespace;
+    const names = workspaceToolNames(toolOptions);
     const tools: Record<string, ToolDef> = {
       [names.list]: {
         description: `List files in workspace "${workspaceId}". Supports directory paths and simple globs like /workspace/**/*.md.`,
         parameters: z.object({
-          path: z.string().optional().describe('Directory path or glob. Defaults to /.'),
+          path: z
+            .string()
+            .optional()
+            .describe("Directory path or glob. Defaults to /."),
           limit: z.number().int().positive().optional(),
         }),
         execute: (toolArgs: Record<string, unknown>) =>
-          ops.list(readOptionalString(toolArgs.path) ?? '/', {
+          ops.list(readOptionalString(toolArgs.path) ?? "/", {
             limit: readOptionalPositiveInteger(toolArgs.limit),
             namespace,
           }),
-        toModelOutput: modelJsonOutput('Workspace listing'),
+        toModelOutput: modelJsonOutput("Workspace listing"),
       },
       [names.readFile]: {
         description: `Read a workspace file from "${workspaceId}". Text/JSON may be returned inline; binary files return safe metadata and URI.`,
         parameters: z.object({
-          path: z.string().describe('Absolute workspace path, e.g. /workspace/notes.md.'),
+          path: z
+            .string()
+            .describe("Absolute workspace path, e.g. /workspace/notes.md."),
           maxInlineBytes: z.number().int().positive().optional(),
         }),
         execute: (toolArgs: Record<string, unknown>) =>
-          ops.read(readRequiredString(toolArgs.path, 'path'), {
-            maxInlineBytes: readOptionalPositiveInteger(toolArgs.maxInlineBytes),
+          ops.read(readRequiredString(toolArgs.path, "path"), {
+            maxInlineBytes: readOptionalPositiveInteger(
+              toolArgs.maxInlineBytes,
+            ),
             namespace,
           }),
         toModelOutput: ({ output }) => readModelOutput(output),
@@ -106,7 +146,9 @@ export function createWorkspaceTools(args: {
       [names.writeFile]: {
         description: `Write a workspace file in "${workspaceId}". Binary and oversized content require a WorkspaceBlobStore.`,
         parameters: z.object({
-          path: z.string().describe('Absolute workspace path, e.g. /outputs/report.md.'),
+          path: z
+            .string()
+            .describe("Absolute workspace path, e.g. /outputs/report.md."),
           content: z
             .union([
               z.string(),
@@ -116,14 +158,18 @@ export function createWorkspaceTools(args: {
               z.boolean(),
               z.null(),
             ])
-            .describe('Text content or JSON content.'),
+            .describe("Text content or JSON content."),
           mimeType: z.string().optional(),
         }),
         execute: (toolArgs: Record<string, unknown>) =>
-          ops.write(readRequiredString(toolArgs.path, 'path'), readWorkspaceToolContent(toolArgs.content), {
-            mimeType: readOptionalString(toolArgs.mimeType),
-            namespace,
-          }),
+          ops.write(
+            readRequiredString(toolArgs.path, "path"),
+            readWorkspaceToolContent(toolArgs.content),
+            {
+              mimeType: readOptionalString(toolArgs.mimeType),
+              namespace,
+            },
+          ),
         toModelOutput: fileModelOutput,
       },
       [names.editFile]: {
@@ -136,48 +182,61 @@ export function createWorkspaceTools(args: {
         }),
         execute: (toolArgs: Record<string, unknown>) =>
           ops.edit(
-            readRequiredString(toolArgs.path, 'path'),
+            readRequiredString(toolArgs.path, "path"),
             {
-              find: readRequiredString(toolArgs.find, 'find'),
-              replace: readRequiredString(toolArgs.replace, 'replace'),
+              find: readRequiredString(toolArgs.find, "find"),
+              replace: readRequiredString(toolArgs.replace, "replace"),
               occurrence: readOptionalPositiveInteger(toolArgs.occurrence),
             },
             { namespace },
-        ),
+          ),
         toModelOutput: fileModelOutput,
       },
       [names.renameFile]: {
         description: `Rename or move a workspace file in "${workspaceId}". Fails if the destination exists unless overwrite is true.`,
         parameters: z.object({
-          from: z.string().describe('Existing absolute workspace path.'),
-          to: z.string().describe('Destination absolute workspace path.'),
+          from: z.string().describe("Existing absolute workspace path."),
+          to: z.string().describe("Destination absolute workspace path."),
           overwrite: z.boolean().optional(),
         }),
         execute: (toolArgs: Record<string, unknown>) =>
-          ops.rename(readRequiredString(toolArgs.from, 'from'), readRequiredString(toolArgs.to, 'to'), {
-            overwrite: readOptionalBoolean(toolArgs.overwrite),
-            namespace,
-          }),
+          ops.rename(
+            readRequiredString(toolArgs.from, "from"),
+            readRequiredString(toolArgs.to, "to"),
+            {
+              overwrite: readOptionalBoolean(toolArgs.overwrite),
+              namespace,
+            },
+          ),
         toModelOutput: fileModelOutput,
       },
       [names.grep]: {
         description: `Search text files in workspace "${workspaceId}". Returns at most maxResults matches, defaulting to 100.`,
         parameters: z.object({
-          query: z.string().describe('Substring or regular expression to search for.'),
-          path: z.string().optional().describe('Optional absolute path or glob scope.'),
+          query: z
+            .string()
+            .describe(
+              "Literal text to search for, or a regular expression when regex is true.",
+            ),
+          path: z
+            .string()
+            .optional()
+            .describe("Optional absolute path or glob scope."),
           ignoreCase: z.boolean().optional(),
+          regex: z.boolean().optional(),
           maxResults: z.number().int().positive().optional(),
         }),
         execute: (toolArgs: Record<string, unknown>) =>
-          ops.grep(readRequiredString(toolArgs.query, 'query'), {
+          ops.grep(readRequiredString(toolArgs.query, "query"), {
             path: readOptionalString(toolArgs.path),
             ignoreCase: readOptionalBoolean(toolArgs.ignoreCase),
+            regex: readOptionalBoolean(toolArgs.regex),
             maxResults: readOptionalPositiveInteger(toolArgs.maxResults),
             namespace,
           }),
-        toModelOutput: modelJsonOutput('Workspace grep matches'),
+        toModelOutput: modelJsonOutput("Workspace grep matches"),
       },
-    }
+    };
 
     if (toolOptions.delete) {
       tools[names.deleteFile] = {
@@ -186,13 +245,16 @@ export function createWorkspaceTools(args: {
           path: z.string(),
         }),
         execute: async (toolArgs: Record<string, unknown>) => {
-          const path = readRequiredString(toolArgs.path, 'path')
-          await ops.remove(path, { namespace })
-          return { deleted: true, path }
+          const path = readRequiredString(toolArgs.path, "path");
+          await ops.remove(path, { namespace });
+          return { deleted: true, path };
         },
-        toModelOutput: modelJsonOutput('Workspace file deleted'),
-      }
+        toModelOutput: modelJsonOutput("Workspace file deleted"),
+      };
     }
-    return tools as WorkspaceTools<WorkspaceToolPrefix<Options>, WorkspaceToolDelete<Options>>
-  }
+    return tools as WorkspaceTools<
+      WorkspaceToolPrefixWithDefaults<Defaults, Options>,
+      WorkspaceToolDeleteWithDefaults<Defaults, Options>
+    >;
+  };
 }

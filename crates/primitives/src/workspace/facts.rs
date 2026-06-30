@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use serde_json::{Map, Value, json};
 
 use crate::{
@@ -6,7 +8,7 @@ use crate::{
     protocol::{LiteralValue, StaticSyntaxValue},
     record_values::{
         direct_string_property, has_property, number_property, object_array_value,
-        object_map_identifier_entries, object_value, property_value,
+        object_map_identifier_entries, object_value, property_value, resolve_static_value,
     },
     routing::output::extracted_facts,
 };
@@ -35,7 +37,7 @@ pub(crate) fn workspace_facts(
     let mounts = config
         .map(|config| workspace_mounts(config, context))
         .unwrap_or_default();
-    let tools = config.and_then(workspace_tools);
+    let tools = config.and_then(|config| workspace_tools(config, context));
     let limits = config.and_then(|config| workspace_limits(config, context));
     let retention = config.and_then(|config| workspace_retention(config, context));
 
@@ -165,10 +167,10 @@ fn compact_number_metadata<const N: usize>(entries: [(&str, Option<f64>); N]) ->
     (!metadata.is_empty()).then_some(Value::Object(metadata))
 }
 
-fn workspace_tools(config: &StaticSyntaxValue) -> Option<Value> {
+fn workspace_tools(config: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -> Option<Value> {
     let tools = object_value(property_value(config, "tools")?)?;
-    let prefix = direct_string_property(tools, "prefix");
-    let delete = direct_boolean_property(tools, "delete").unwrap_or(false);
+    let prefix = string_property(tools, "prefix", context);
+    let delete = boolean_property(tools, "delete", context).unwrap_or(false);
     let mut metadata = Map::new();
     if let Some(prefix) = prefix.clone() {
         metadata.insert("prefix".to_string(), Value::String(prefix));
@@ -227,8 +229,29 @@ fn capitalize_ascii(value: &str) -> String {
     format!("{}{}", first.to_ascii_uppercase(), chars.as_str())
 }
 
-fn direct_boolean_property(object: &StaticSyntaxValue, name: &str) -> Option<bool> {
-    match property_value(object, name) {
+fn string_property(
+    object: &StaticSyntaxValue,
+    name: &str,
+    context: &PrimitiveContext<'_>,
+) -> Option<String> {
+    match property_value(object, name)
+        .map(|value| resolve_static_value(value, &context.initializers, &mut HashSet::new()))
+    {
+        Some(StaticSyntaxValue::Literal {
+            value: LiteralValue::String(value),
+        }) => Some(value.clone()),
+        _ => None,
+    }
+}
+
+fn boolean_property(
+    object: &StaticSyntaxValue,
+    name: &str,
+    context: &PrimitiveContext<'_>,
+) -> Option<bool> {
+    match property_value(object, name)
+        .map(|value| resolve_static_value(value, &context.initializers, &mut HashSet::new()))
+    {
         Some(StaticSyntaxValue::Literal {
             value: LiteralValue::Boolean(value),
         }) => Some(*value),

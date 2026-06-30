@@ -27,7 +27,7 @@ func workspaceEventsFromActivity(activity []observability.ResourceActivity) []st
 			DurationMs:     item.DurationMs,
 			Mount:          stringValue(attrs, "mount", ""),
 			MimeType:       stringValue(attrs, "mimeType", stringValue(artifactAttrs, "mimeType", firstWorkspaceArtifactContentType(item.Artifacts))),
-			ArtifactStatus: stringValue(attrs, "status", stringValue(artifactAttrs, "status", "")),
+			ArtifactStatus: stringValue(attrs, "artifactStatus", stringValue(artifactAttrs, "artifactStatus", "")),
 			ArtifactKind:   stringValue(attrs, "artifactKind", stringValue(artifactAttrs, "artifactKind", "")),
 			URI:            stringValue(attrs, "uri", stringValue(artifactAttrs, "uri", firstWorkspaceArtifactURI(item.Artifacts))),
 		}
@@ -39,7 +39,7 @@ func workspaceEventsFromActivity(activity []observability.ResourceActivity) []st
 			event.Size = &size
 		} else if size, ok := optionalIntValue(artifactAttrs, "sizeBytes"); ok {
 			event.Size = &size
-		} else if size := firstWorkspaceArtifactSize(item.Artifacts); size > 0 {
+		} else if size, ok := firstWorkspaceArtifactSize(item.Artifacts); ok {
 			event.Size = &size
 		}
 		if msg := errorMessage(item.Error); msg != "" {
@@ -51,11 +51,11 @@ func workspaceEventsFromActivity(activity []observability.ResourceActivity) []st
 }
 
 func workspaceActivityPathLabel(attrs map[string]any, pathHash string) string {
-	if path := stringValue(attrs, "path", ""); path != "" {
-		return path
-	}
 	if pathHash != "" {
 		return "hash:" + pathHash
+	}
+	if path := stringValue(attrs, "path", ""); path != "" {
+		return path
 	}
 	return "/"
 }
@@ -88,11 +88,9 @@ func firstWorkspaceArtifactURI(artifacts []observability.ResourceArtifact) strin
 	return ""
 }
 
-func firstWorkspaceArtifactSize(artifacts []observability.ResourceArtifact) int {
+func firstWorkspaceArtifactSize(artifacts []observability.ResourceArtifact) (int, bool) {
 	for _, artifact := range artifacts {
-		if artifact.SizeBytes > 0 {
-			return int(artifact.SizeBytes)
-		}
+		return int(artifact.SizeBytes), true
 	}
-	return 0
+	return 0, false
 }

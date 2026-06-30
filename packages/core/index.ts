@@ -54,10 +54,19 @@
  */
 
 // Core definition API (prompt authoring domain)
-export { prompt, context, createContexts, when, match, injectable, contributor, isContributorEntry } from './prompt'
-export type { ContributorConfig } from './prompt'
-export type { ContributorContribution, ContributorEntry } from './prompt'
-export { compilePrompt } from './resolver/compile'
+export {
+  prompt,
+  context,
+  createContexts,
+  when,
+  match,
+  injectable,
+  contributor,
+  isContributorEntry,
+} from "./prompt";
+export type { ContributorConfig } from "./prompt";
+export type { ContributorContribution, ContributorEntry } from "./prompt";
+export { compilePrompt } from "./resolver/compile";
 export type {
   CompiledPrompt,
   CompilePromptOptions,
@@ -65,7 +74,7 @@ export type {
   PromptResolutionPipeline,
   Resolution,
   ResolveCallOptions,
-} from './resolver/compile'
+} from "./resolver/compile";
 // In-memory fakes for every resolver port — the same deterministic seams the
 // core test suite uses, for SDK consumers testing resolution without global
 // runtime/observability setup.
@@ -79,7 +88,7 @@ export {
   recordingInstrumentation,
   staticTokenizer,
   createResolverFakes,
-} from './resolver/fakes'
+} from "./resolver/fakes";
 export type {
   RecordedArtifact,
   RecordingObservability,
@@ -90,10 +99,10 @@ export type {
   RecordingInstrumentation,
   ResolverFakes,
   ResolverFakesOptions,
-} from './resolver/fakes'
+} from "./resolver/fakes";
 // Test helper: a conformant in-memory `AgentExecutor` for composition tests
 // (the agent-layer analogue of the resolver fakes above).
-export { createFakeAgentExecutor } from './agent/fakes'
+export { createFakeAgentExecutor } from "./agent/fakes";
 export type {
   FakeAgentExecutor,
   FakeAgentExecutorConfig,
@@ -101,7 +110,7 @@ export type {
   FakeAgentBehaviorResolver,
   FakeAgentInvocation,
   FakeAgentUsage,
-} from './agent/fakes'
+} from "./agent/fakes";
 export type {
   ClockPort,
   ContextCacheHit,
@@ -116,11 +125,11 @@ export type {
   ResolveTraceScope,
   SkillSourcePort,
   TokenizerPort,
-} from './resolver/ports'
+} from "./resolver/ports";
 // The contributor contract types — the lowered form every `use:` entry
 // resolves through internally. App code composes entries with the factories
 // above and never touches lowering/driver functions directly.
-export { CONTRIBUTOR } from './resolver/contract'
+export { CONTRIBUTOR } from "./resolver/contract";
 export type {
   ContributeArgs,
   Contribution,
@@ -131,10 +140,20 @@ export type {
   MergedResolution,
   ResolvedSystemContent,
   SchemaContribution,
-} from './resolver/contract'
-export { workspace, memoryWorkspaceBlobStore, workspaceToolNames } from './workspace'
-export { inMemoryBlobStore, inMemoryDataStore, inMemoryStorage, inMemoryVectorStore, storage } from './storage'
-export type { ContextTreeResult } from './prompt'
+} from "./resolver/contract";
+export {
+  workspace,
+  memoryWorkspaceBlobStore,
+  workspaceToolNames,
+} from "./workspace";
+export {
+  inMemoryBlobStore,
+  inMemoryDataStore,
+  inMemoryStorage,
+  inMemoryVectorStore,
+  storage,
+} from "./storage";
+export type { ContextTreeResult } from "./prompt";
 export type {
   Workspace,
   WorkspaceArtifact,
@@ -160,18 +179,21 @@ export type {
   WorkspaceListEntry,
   WorkspaceListOptions,
   WorkspaceListResult,
+  WorkspaceLimits,
   WorkspaceMount,
   WorkspaceMountAccess,
   WorkspaceMoveOptions,
   WorkspaceNamespaceOption,
   WorkspaceOperation,
+  WorkspaceProvenance,
   WorkspaceReadOptions,
   WorkspaceReadResult,
+  WorkspaceRetention,
   WorkspaceToolOptions,
   WorkspaceTools,
   WorkspaceToolNames,
   WorkspaceWriteOptions,
-} from './workspace'
+} from "./workspace";
 export type {
   BlobReadResult,
   BlobRef,
@@ -181,14 +203,14 @@ export type {
   VectorHit,
   VectorRecord,
   VectorStore,
-} from './storage'
-export { createPrompts } from './prompt'
-export type { PromptTree, PromptTreeResult } from './prompt'
-export { tool } from './tools/define-tool'
-export type { NamedToolDef, ToolConfig } from './tools/types'
+} from "./storage";
+export { createPrompts } from "./prompt";
+export type { PromptTree, PromptTreeResult } from "./prompt";
+export { tool } from "./tools/define-tool";
+export type { NamedToolDef, ToolConfig } from "./tools/types";
 
 // Configuration + runtime domain (runtime/config/plugin/hook surface)
-export { config } from './runtime'
+export { config } from "./runtime";
 export type {
   CruxConfig,
   Crux,
@@ -208,12 +230,17 @@ export type {
   CruxLintSelectedProfile,
   CruxObservabilityConfig,
   CruxPersistenceConfig,
-} from './runtime'
-export type { QualityConfig } from './quality/config'
-export type { PromptRegistry } from './runtime'
+} from "./runtime";
+export type { QualityConfig } from "./quality/config";
+export type { PromptRegistry } from "./runtime";
 
-export { withSession, createSessionId, getExecutionContext, runWithExecutionContext } from './runtime'
-export type { ExecutionContext } from './runtime'
+export {
+  withSession,
+  createSessionId,
+  getExecutionContext,
+  runWithExecutionContext,
+} from "./runtime";
+export type { ExecutionContext } from "./runtime";
 export {
   flow,
   createFlowId,
@@ -223,7 +250,7 @@ export {
   FlowSuspendedError,
   FlowCancelledError,
   FlowExpiredError,
-} from './flow/scope'
+} from "./flow/scope";
 export type {
   FlowHandle,
   FlowRunOptions,
@@ -235,16 +262,20 @@ export type {
   SuspendOptions,
   StepOptions,
   WithFlowOptions,
-} from './flow/scope'
+} from "./flow/scope";
 
 // Tokenizer
-export { setTokenizer, countTokens } from './shared/tokenizer'
+export { setTokenizer, countTokens } from "./shared/tokenizer";
 
 // Plugin system
-export { mergeRuntime, applyPlugins } from './runtime'
-export type { CruxPlugin, CruxPluginResult, ApplyPluginsResult } from './runtime'
+export { mergeRuntime, applyPlugins } from "./runtime";
+export type {
+  CruxPlugin,
+  CruxPluginResult,
+  ApplyPluginsResult,
+} from "./runtime";
 
-export { toolMiddleware, approvalMiddleware } from './tools/middleware'
+export { toolMiddleware, approvalMiddleware } from "./tools/middleware";
 export {
   toolApprovalResponse,
   toolApprovalResponseMessage,
@@ -252,7 +283,7 @@ export {
   findToolApprovalRequests,
   findToolApprovalDecision,
   deniedToolModelOutput,
-} from './tools/approvals'
+} from "./tools/approvals";
 export type {
   ToolApprovalDecision,
   ToolApprovalDecisionEvent,
@@ -272,39 +303,79 @@ export type {
   ToolMiddlewareNext,
   ToolResultContext,
   ApprovalMiddlewareConfig,
-} from './tools/types'
+} from "./tools/types";
 
 // Runtime hooks — prefer `config()` for centralized setup
-export { getRuntime, setRuntime, updateRuntime, resetRuntime, resolveStore } from './runtime'
-export type { CruxRuntime } from './runtime'
-export type { PromptMiddleware, PromptMiddlewareArgs } from './runtime'
+export {
+  getRuntime,
+  setRuntime,
+  updateRuntime,
+  resetRuntime,
+  resolveStore,
+} from "./runtime";
+export type { CruxRuntime } from "./runtime";
+export type { PromptMiddleware, PromptMiddlewareArgs } from "./runtime";
 
 // Canonical observability graph contract.
-export * from './observability'
+export * from "./observability";
 
 // Canonical message type (generation lifecycle domain)
-export type { Message, CompactionResult } from './generation'
+export type { Message, CompactionResult } from "./generation";
 
 // Fallback (generation lifecycle domain)
-export { fallback, isFallback, classifyError, shouldAttemptFallback } from './generation'
-export type { FallbackModel, FallbackOptions, FallbackMeta, FallbackAttemptDetail, ErrorCategory } from './generation'
+export {
+  fallback,
+  isFallback,
+  classifyError,
+  shouldAttemptFallback,
+} from "./generation";
+export type {
+  FallbackModel,
+  FallbackOptions,
+  FallbackMeta,
+  FallbackAttemptDetail,
+  ErrorCategory,
+} from "./generation";
 
 // Validation Retry (generation lifecycle domain)
-export { ValidationExhaustedError, isValidationExhaustedError } from './generation'
-export type { ValidationRetryOptions, ValidationExhaustedErrorInit } from './generation'
-export { repairJsonText } from './generation'
+export {
+  ValidationExhaustedError,
+  isValidationExhaustedError,
+} from "./generation";
+export type {
+  ValidationRetryOptions,
+  ValidationExhaustedErrorInit,
+} from "./generation";
+export { repairJsonText } from "./generation";
 
 // Sanitization
-export { escapeXml, truncate, userContent, safe, raw, limit, wrap } from './shared/sanitize'
-export type { SuspiciousPatternWarning } from './shared/sanitize'
+export {
+  escapeXml,
+  truncate,
+  userContent,
+  safe,
+  raw,
+  limit,
+  wrap,
+} from "./shared/sanitize";
+export type { SuspiciousPatternWarning } from "./shared/sanitize";
 
 // Guardrail
-export { guardrail, isGuardrail, GuardrailBlockedError } from './safety/guardrail'
-export type { Guardrail, GuardrailConfig, GuardrailContext, GuardrailPhase } from './safety/guardrail'
+export {
+  guardrail,
+  isGuardrail,
+  GuardrailBlockedError,
+} from "./safety/guardrail";
+export type {
+  Guardrail,
+  GuardrailConfig,
+  GuardrailContext,
+  GuardrailPhase,
+} from "./safety/guardrail";
 
 // Constraint
-export { constraint, isConstraint } from './safety/constraint'
-export { ConstraintViolationError } from './safety/constraint'
+export { constraint, isConstraint } from "./safety/constraint";
+export { ConstraintViolationError } from "./safety/constraint";
 export type {
   Constraint,
   ConstraintConfig,
@@ -312,13 +383,22 @@ export type {
   ConstraintSeverity,
   ConstraintCheckResult,
   ConstraintAudit,
-} from './safety/constraint'
+} from "./safety/constraint";
 
 // Safety session + plugin (full surface at ./safety)
-export { createSafety, defaultConstraintFeedbackFormatter } from './safety/session'
-export type { Safety, SafetyCallOptions, SafetyOutput, SafetyStream, SafetyProtocolEvent } from './safety/session'
-export { createSafetyPlugin } from './safety/plugin'
-export type { SafetyPolicy } from './safety/plugin'
+export {
+  createSafety,
+  defaultConstraintFeedbackFormatter,
+} from "./safety/session";
+export type {
+  Safety,
+  SafetyCallOptions,
+  SafetyOutput,
+  SafetyStream,
+  SafetyProtocolEvent,
+} from "./safety/session";
+export { createSafetyPlugin } from "./safety/plugin";
+export type { SafetyPolicy } from "./safety/plugin";
 
 // Type exports — prompt authoring domain
 export type {
@@ -350,7 +430,7 @@ export type {
   PrepareHookArgs,
   GenerateHookArgs,
   ErrorHookArgs,
-} from './prompt'
+} from "./prompt";
 
 // Type exports — provider-neutral base surface (owned by the root type module)
 export type {
@@ -362,7 +442,7 @@ export type {
   ModelInfo,
   // Project tool catalog
   FlowToolDef,
-} from './types'
+} from "./types";
 
 // Type exports — prompt resolution + inspection output (resolver domain)
 export type {
@@ -373,14 +453,20 @@ export type {
   InspectPart,
   DroppedContext,
   ExcludedContext,
-} from './resolver/types'
+} from "./resolver/types";
 
 // Type exports — generation lifecycle domain (settings, adaptation, usage)
-export type { GenerationSettings, PromptAdaptation, AdapterMap, TokenUsage, TraceMeta } from './generation'
-export type { TokenizerFn } from './shared/tokenizer'
+export type {
+  GenerationSettings,
+  PromptAdaptation,
+  AdapterMap,
+  TokenUsage,
+  TraceMeta,
+} from "./generation";
+export type { TokenizerFn } from "./shared/tokenizer";
 
 // Store
-export { inMemoryCruxStore } from './store/memory'
+export { inMemoryCruxStore } from "./store/memory";
 export type {
   CruxStore,
   JsonObject,
@@ -395,10 +481,19 @@ export type {
   StoreEvent,
   StoreSetEvent,
   StoreDeleteEvent,
-} from './store/types'
+} from "./store/types";
 
 // Memory
-export { memory, memoryBlock, recentMessages, workingState, episodes, facts, procedures, reflections } from './memory'
+export {
+  memory,
+  memoryBlock,
+  recentMessages,
+  workingState,
+  episodes,
+  facts,
+  procedures,
+  reflections,
+} from "./memory";
 export type {
   Memory,
   MemoryBudget,
@@ -423,11 +518,11 @@ export type {
   MemoryToolEvent,
   MemoryTurn,
   MemoryWriteMode,
-} from './memory'
+} from "./memory";
 
 // Entity interface
-export { composeTools } from './tools/entity'
-export type { CruxEntity, QueryableCruxEntity } from './tools/entity'
+export { composeTools } from "./tools/entity";
+export type { CruxEntity, QueryableCruxEntity } from "./tools/entity";
 
 // Retrieval
 export {
@@ -441,7 +536,7 @@ export {
   compress,
   diversify,
   decay,
-} from './retrieval'
+} from "./retrieval";
 export type {
   Retriever,
   RetrieverHit,
@@ -457,10 +552,16 @@ export type {
   RetrievalPipelineTrace,
   RetrievalStageTrace,
   PlannedRetrievalQuery,
-} from './retrieval'
+} from "./retrieval";
 
 // Citations / grounding
-export { citationSchema, citationConstraint, grounding, renderCitationContext, resolveCitations } from './citations'
+export {
+  citationSchema,
+  citationConstraint,
+  grounding,
+  renderCitationContext,
+  resolveCitations,
+} from "./citations";
 export type {
   Citation,
   CitationConstraintConfig,
@@ -474,10 +575,10 @@ export type {
   Grounding,
   GroundingConfig,
   ResolvedCitation,
-} from './citations'
+} from "./citations";
 
 // Indexing
-export { corpus, indexer } from './indexing'
+export { corpus, indexer } from "./indexing";
 export type {
   Corpus,
   CorpusConfig,
@@ -496,7 +597,7 @@ export type {
   Indexer,
   SourceRecord,
   SourceStatus,
-} from './indexing'
+} from "./indexing";
 
 // Semantic response cache (prompt-level cache intent)
 export type {
@@ -504,10 +605,10 @@ export type {
   SemanticCachePromptOptions,
   PromptCacheOptions,
   SemanticCacheQueryContext,
-} from './prompt'
+} from "./prompt";
 
 // Cost tracking
-export { CostLimitError, modelPricing, withCostTracking } from './cost'
+export { CostLimitError, modelPricing, withCostTracking } from "./cost";
 export type {
   CostBreakdown,
   CostBudgetEvent,
@@ -520,12 +621,12 @@ export type {
   CostTrackingOptions,
   ModelPrice,
   ModelPricing,
-} from './cost'
+} from "./cost";
 
 // Plan & Tasks primitives
-export { plan } from './plan/plans'
-export { tasks } from './plan/tasks'
-export { task } from './plan/task-spec'
+export { plan } from "./plan/plans";
+export { tasks } from "./plan/tasks";
+export { task } from "./plan/task-spec";
 export {
   DuplicateTaskIdError,
   InvalidTaskTransitionError,
@@ -535,14 +636,25 @@ export {
   TaskNotFoundError,
   TaskRemovedError,
   TaskResultValidationError,
-} from './plan/errors'
-export { deriveTaskListStatus } from './plan/helpers'
-export { CreationToolNotCreatedError, isCreationToolNotCreatedError } from './types/tool'
-export type { ToolDef, CreationTool, CreationToolNotCreatedError as CreationToolNotCreatedErrorType } from './types/tool'
-export type { PlanFactory, PlanListOptions } from './plan/plans'
-export type { TaskListListOptions, TasksFactory } from './plan/tasks'
-export type { PlanToolOptions, TasksToolOptions } from './plan/creation-tools'
-export type { TaskLifecycleError, TaskLifecycleErrorDetails, TaskLifecycleErrorName } from './plan/errors'
+} from "./plan/errors";
+export { deriveTaskListStatus } from "./plan/helpers";
+export {
+  CreationToolNotCreatedError,
+  isCreationToolNotCreatedError,
+} from "./types/tool";
+export type {
+  ToolDef,
+  CreationTool,
+  CreationToolNotCreatedError as CreationToolNotCreatedErrorType,
+} from "./types/tool";
+export type { PlanFactory, PlanListOptions } from "./plan/plans";
+export type { TaskListListOptions, TasksFactory } from "./plan/tasks";
+export type { PlanToolOptions, TasksToolOptions } from "./plan/creation-tools";
+export type {
+  TaskLifecycleError,
+  TaskLifecycleErrorDetails,
+  TaskLifecycleErrorName,
+} from "./plan/errors";
 export type {
   AddTaskInput,
   CancellableTaskStatus,
@@ -561,21 +673,24 @@ export type {
   TasksHandle,
   TasksInput,
   TerminalTaskStatus,
-} from './plan/types'
+} from "./plan/types";
 
 // Adapter internals — used by @use-crux/ai, @use-crux/openai, @use-crux/google, @use-crux/convex
-/** @internal */ export { sanitizeJsonSchema } from './shared/schema-compat'
+/** @internal */ export { sanitizeJsonSchema } from "./shared/schema-compat";
 /** @internal */ export {
   orchestrateGenerate,
   orchestrateStream,
   executeFallbackLoop,
   withAttemptTimeout,
   wrapStreamIterable,
-} from './generation'
-/** @internal */ export type { OrchestrationSpec, TextDeltaExtractor } from './generation'
+} from "./generation";
+/** @internal */ export type {
+  OrchestrationSpec,
+  TextDeltaExtractor,
+} from "./generation";
 
 // Provider adapter abstraction (also available as @use-crux/core/adapter subpath)
-export { adapter } from './adapter/define-adapter'
+export { adapter } from "./adapter/define-adapter";
 export type {
   AdapterSpec,
   AdapterResponse,
@@ -587,10 +702,10 @@ export type {
   AdapterGenerateOptions,
   AdapterStreamOptions,
   AdapterGenerateResult,
-} from './adapter/index'
+} from "./adapter/index";
 
 // Loop-owning adapter abstraction (also available as @use-crux/core/adapter subpath)
-export { loopRuntimeAdapter } from './adapter/define-executor'
+export { loopRuntimeAdapter } from "./adapter/define-executor";
 export type {
   LoopRuntimePort,
   BoundLoopRuntime,
@@ -612,7 +727,7 @@ export type {
   ExecutorStreamOptions,
   ExecutorGenerateResult,
   ApprovalRequestInfo,
-} from './adapter/index'
+} from "./adapter/index";
 
 export type {
   JsonPrimitive,
@@ -621,4 +736,4 @@ export type {
   ToolContentPart,
   ToolModelOutput,
   ToModelOutputArgs,
-} from './types/tool'
+} from "./types/tool";

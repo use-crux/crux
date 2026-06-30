@@ -1,20 +1,21 @@
 export interface SemanticBackendParityFixture {
-  readonly name: string
-  readonly files: Readonly<Record<string, string>>
+  readonly name: string;
+  readonly files: Readonly<Record<string, string>>;
   readonly expect: {
-    readonly definitionIds?: readonly string[]
-    readonly relationTypes?: readonly string[]
-    readonly sourceRefRoles?: readonly string[]
-    readonly lintRuleIds?: readonly string[]
-  }
+    readonly definitionIds?: readonly string[];
+    readonly relationTypes?: readonly string[];
+    readonly sourceRefRoles?: readonly string[];
+    readonly lintRuleIds?: readonly string[];
+  };
 }
 
 /** Semantic fixtures that must produce identical facts for every backend. */
-export const semanticBackendParityFixtures: readonly SemanticBackendParityFixture[] = [
-  {
-    name: 'direct-crux-no-zod-native-path',
-    files: {
-      'src/index.ts': `
+export const semanticBackendParityFixtures: readonly SemanticBackendParityFixture[] =
+  [
+    {
+      name: "direct-crux-no-zod-native-path",
+      files: {
+        "src/index.ts": `
         import { context, prompt, tool } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
@@ -27,17 +28,17 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           tools: { searchTool },
         })
       `,
+      },
+      expect: {
+        definitionIds: ["prompt:writer-simple"],
+        relationTypes: ["prompt.uses_context", "prompt.uses_tool"],
+        sourceRefRoles: ["config"],
+      },
     },
-    expect: {
-      definitionIds: ['prompt:writer-simple'],
-      relationTypes: ['prompt.uses_context', 'prompt.uses_tool'],
-      sourceRefRoles: ['config'],
-    },
-  },
-  {
-    name: 'direct-crux-duplicate-variable-names',
-    files: {
-      'src/a.ts': `
+    {
+      name: "direct-crux-duplicate-variable-names",
+      files: {
+        "src/a.ts": `
         import { context, prompt, tool } from '@use-crux/core'
 
         export const sharedContext = context({ id: 'a.context' })
@@ -48,7 +49,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           tools: { sharedTool },
         })
       `,
-      'src/b.ts': `
+        "src/b.ts": `
         import { context, prompt, tool } from '@use-crux/core'
 
         export const sharedContext = context({ id: 'b.context' })
@@ -59,23 +60,23 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           tools: { sharedTool },
         })
       `,
+      },
+      expect: {
+        definitionIds: ["prompt:a.prompt", "prompt:b.prompt"],
+        relationTypes: ["prompt.uses_context", "prompt.uses_tool"],
+        sourceRefRoles: ["config"],
+      },
     },
-    expect: {
-      definitionIds: ['prompt:a.prompt', 'prompt:b.prompt'],
-      relationTypes: ['prompt.uses_context', 'prompt.uses_tool'],
-      sourceRefRoles: ['config'],
-    },
-  },
-  {
-    name: 'schema-source-refs-and-agent-config',
-    files: {
-      'src/schema-fragments.ts': `
+    {
+      name: "schema-source-refs-and-agent-config",
+      files: {
+        "src/schema-fragments.ts": `
         import { z } from 'zod'
         export const NestedSchema = z.object({
           url: z.string().describe('Source URL'),
         })
       `,
-      'src/shared.ts': `
+        "src/shared.ts": `
         import { tool } from '@use-crux/core'
         import { z } from 'zod'
         import { NestedSchema } from './schema-fragments'
@@ -92,7 +93,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         export const searchDocs = tool({ name: 'searchDocs', parameters: z.object({ query: z.string() }), execute: async () => [] })
         export const sharedTools = { searchDocs }
       `,
-      'src/index.ts': `
+        "src/index.ts": `
         import { agent, prompt } from '@use-crux/core'
         import { WRITER_SYSTEM, WriterSchema, renderPrompt, sharedTools, usageHandler } from './shared'
 
@@ -110,17 +111,21 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           handoffs: ['Reviewer', { id: 'Editor', when: 'Needs editing' }],
         })
       `,
+      },
+      expect: {
+        definitionIds: ["prompt:writer"],
+        relationTypes: [
+          "agent.uses_prompt",
+          "agent.uses_tool",
+          "agent.can_handoff_to",
+        ],
+        sourceRefRoles: ["schema", "system", "prompt", "config", "callback"],
+      },
     },
-    expect: {
-      definitionIds: ['prompt:writer'],
-      relationTypes: ['agent.uses_prompt', 'agent.uses_tool', 'agent.can_handoff_to'],
-      sourceRefRoles: ['schema', 'system', 'prompt', 'config', 'callback'],
-    },
-  },
-  {
-    name: 'use-arrays-tool-maps-and-relations',
-    files: {
-      'src/primitives.ts': `
+    {
+      name: "use-arrays-tool-maps-and-relations",
+      files: {
+        "src/primitives.ts": `
         import { context, injectable, memory, tool } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
@@ -139,7 +144,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           return { tools: editorialTools }
         }
       `,
-      'src/authoring.ts': `
+        "src/authoring.ts": `
         import { context, injectable, prompt } from '@use-crux/core'
         import { baseTools, brandContext, editorialTools, guardInjection, injectEditorialTools, localeContext, nestedInjection, sessionMemory, sharedUse, summarizeTool } from './primitives'
 
@@ -159,27 +164,31 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           inject: injectEditorialTools,
         })
       `,
+      },
+      expect: {
+        definitionIds: [
+          "prompt:writer-relations",
+          "context:writer-context",
+          "injectable:writer-injection",
+        ],
+        relationTypes: [
+          "prompt.uses_context",
+          "prompt.uses_injectable",
+          "prompt.uses_memory",
+          "prompt.uses_tool",
+          "context.uses_injectable",
+          "context.uses_tool",
+          "injectable.uses_context",
+          "injectable.uses_memory",
+          "injectable.uses_tool",
+        ],
+        sourceRefRoles: ["config"],
+      },
     },
-    expect: {
-      definitionIds: ['prompt:writer-relations', 'context:writer-context', 'injectable:writer-injection'],
-      relationTypes: [
-        'prompt.uses_context',
-        'prompt.uses_injectable',
-        'prompt.uses_memory',
-        'prompt.uses_tool',
-        'context.uses_injectable',
-        'context.uses_tool',
-        'injectable.uses_context',
-        'injectable.uses_memory',
-        'injectable.uses_tool',
-      ],
-      sourceRefRoles: ['config'],
-    },
-  },
-  {
-    name: 'conditional-use-and-definition-enrichment',
-    files: {
-      'src/primitives.ts': `
+    {
+      name: "conditional-use-and-definition-enrichment",
+      files: {
+        "src/primitives.ts": `
         import { blackboard, context, injectable, memory } from '@use-crux/core'
 
         export const brandContext = context({ id: 'brand' })
@@ -188,13 +197,13 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         export const sessionMemory = memory({ id: 'session' })
         export const draftBoard = blackboard({ id: 'drafts' })
       `,
-      'src/conditions.ts': `
+        "src/conditions.ts": `
         export function hasBrand(input: { brand?: string }) {
           return Boolean(input.brand)
         }
         export const includeDraftBoard = true
       `,
-      'src/authoring.ts': `
+        "src/authoring.ts": `
         import { match, prompt, when } from '@use-crux/core'
         import { includeDraftBoard, hasBrand } from './conditions'
         import { brandContext, draftBoard, guardInjection, policyContext, sessionMemory } from './primitives'
@@ -213,16 +222,16 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           ],
         })
       `,
+      },
+      expect: {
+        definitionIds: ["prompt:writer-conditional"],
+        sourceRefRoles: ["policy", "config"],
+      },
     },
-    expect: {
-      definitionIds: ['prompt:writer-conditional'],
-      sourceRefRoles: ['policy', 'config'],
-    },
-  },
-  {
-    name: 'dynamic-tools-contributions-and-router-folds',
-    files: {
-      'src/safety.ts': `
+    {
+      name: "dynamic-tools-contributions-and-router-folds",
+      files: {
+        "src/safety.ts": `
         import { agent, constraint, guardrail, tool } from '@use-crux/core'
 
         export const safeTone = constraint({ name: 'safe-tone', check: () => ({ ok: true }) })
@@ -245,7 +254,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         export const writerAgent = agent({ name: 'Writer' })
         export const routes = { draft: writerAgent }
       `,
-      'src/authoring.ts': `
+        "src/authoring.ts": `
         import { injectable, prompt, router } from '@use-crux/core'
         import { baseConstraints, extraConstraints, guardrails, partialTools, routes, sharedMetadata } from './safety'
 
@@ -267,21 +276,21 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           classify: async () => 'draft',
         })
       `,
+      },
+      expect: {
+        definitionIds: [
+          "prompt:writer-dynamic",
+          "injectable:safety-injection",
+          "routing.router:writer-router:route:draft",
+        ],
+        relationTypes: ["prompt.uses_tool", "router.route.uses_agent"],
+        sourceRefRoles: ["config"],
+      },
     },
-    expect: {
-      definitionIds: [
-        'prompt:writer-dynamic',
-        'injectable:safety-injection',
-        'routing.router:writer-router:route:draft',
-      ],
-      relationTypes: ['prompt.uses_tool', 'router.route.uses_agent'],
-      sourceRefRoles: ['config'],
-    },
-  },
-  {
-    name: 'data-access-relations-and-lint-facts',
-    files: {
-      'src/resources.ts': `
+    {
+      name: "data-access-relations-and-lint-facts",
+      files: {
+        "src/resources.ts": `
         import { workspace } from '@use-crux/core'
         import { blackboard } from '@use-crux/core/agent'
         import { memory, workingState } from '@use-crux/core/memory'
@@ -300,7 +309,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         export const factuality = llmJudge({ id: 'factuality', criteria: 'Factual', scale: { min: 0, max: 1 } })
         export const writerEval = evaluate('writer-eval', { task: (input: { draft: string }) => input.draft, data: [] })
       `,
-      'src/helpers.ts': `
+        "src/helpers.ts": `
         import { docsRetriever, factuality, notes, readBackMemory, scratch, writeOnlyMemory, writerEval } from './resources'
 
         export async function persistWithoutRead() {
@@ -308,7 +317,8 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           await notes.update('decision', 'publish')
           await scratch.writeFile('/drafts/article.md', 'done')
           await scratch.rename('/drafts/article.md', '/drafts/article-final.md')
-          await scratch.copy('/drafts/article-final.md', '/outputs/article.md')
+          await scratch.move('/drafts/article-final.md', '/drafts/article-ready.md')
+          await scratch.copy('/drafts/article-ready.md', '/outputs/article.md')
           await scratch.finalize('/outputs/article.md')
         }
         export async function persistAndReadBack() {
@@ -327,10 +337,10 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           await writerEval.run({ input: 'draft' })
         }
       `,
-      'src/barrel.ts': `
+        "src/barrel.ts": `
         export { hydrateDraft, persistAndReadBack, persistWithoutRead } from './helpers'
       `,
-      'src/app.ts': `
+        "src/app.ts": `
         import { flow, tool } from '@use-crux/core'
         import { hydrateDraft, persistAndReadBack, persistWithoutRead } from './barrel'
 
@@ -343,21 +353,25 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           },
         })
       `,
+      },
+      expect: {
+        definitionIds: [
+          "memory:write-only-memory",
+          "memory:read-back-memory",
+          "workspace:scratch",
+        ],
+        relationTypes: [
+          "tool.writes_memory",
+          "tool.reads_memory",
+          "tool.writes_blackboard",
+          "tool.writes_workspace",
+          "flow.step.writes_blackboard",
+          "flow.step.writes_workspace",
+          "flow.step.queries_retriever",
+          "flow.step.uses_scorer",
+          "flow.step.runs_eval",
+        ],
+        lintRuleIds: ["resource.write_without_read"],
+      },
     },
-    expect: {
-      definitionIds: ['memory:write-only-memory', 'memory:read-back-memory', 'workspace:scratch'],
-      relationTypes: [
-        'tool.writes_memory',
-        'tool.reads_memory',
-        'tool.writes_blackboard',
-        'tool.writes_workspace',
-        'flow.step.writes_blackboard',
-        'flow.step.writes_workspace',
-        'flow.step.queries_retriever',
-        'flow.step.uses_scorer',
-        'flow.step.runs_eval',
-      ],
-      lintRuleIds: ['resource.write_without_read'],
-    },
-  },
-]
+  ];
