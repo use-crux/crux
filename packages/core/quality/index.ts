@@ -34,6 +34,11 @@ export type {
   UncapturedSignalError,
 } from './expect'
 export type {
+  TurnDecisionReportContextExpect,
+  TurnDecisionReportExpect,
+  TurnDecisionReportReasonOptions,
+} from './decision-report-expect'
+export type {
   Target,
   Capability,
   TaskLike,
