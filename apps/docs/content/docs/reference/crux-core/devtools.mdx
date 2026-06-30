@@ -14,6 +14,11 @@ telemetry and remote collectors are configured through explicit `observability` 
 plugins. CLI commands, web UI workflows, and TUI navigation live in the [@use-crux/local
 reference](/docs/reference/local) and [Devtools guide](/docs/guides/observability/devtools).
 
+The Project Index devtools surface includes Storage Beta inventory and relations when source indexing
+can see `RecordStore`, `VectorStore`, `BlobStore`, `storage()`, and `storage.scope()` wiring. The UI
+shows capabilities and warnings without exposing record values, vector contents, blob bodies, or signed
+URLs by default.
+
 ## `withDevtools(options)`
 
 Creates a `CruxPlugin` that installs the canonical local observability transport.

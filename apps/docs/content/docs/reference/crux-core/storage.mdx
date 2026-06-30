@@ -1,20 +1,21 @@
 ---
 title: Storage Interfaces
-description: DataStore, VectorStore, BlobStore, storage(), and in-memory storage implementations.
+description: RecordStore, VectorStore, BlobStore, storage(), and in-memory Storage Beta implementations.
 ---
 
 ```ts
 import {
   inMemoryBlobStore,
-  inMemoryDataStore,
+  inMemoryRecordStore,
   inMemoryStorage,
   inMemoryVectorStore,
   storage,
+  StorageError,
 } from '@use-crux/core/storage'
 
 import type {
   BlobStore,
-  DataStore,
+  RecordStore,
   Storage,
   VectorStore,
 } from '@use-crux/core/storage'
@@ -26,20 +27,20 @@ Crux storage is split into explicit capabilities:
 
 | Interface | Purpose |
 | --- | --- |
-| `DataStore` | JSON records with `get`, `set`, `delete`, `list`, optional TTL, and optional subscriptions |
-| `VectorStore` | Dense, sparse, and hybrid vector search |
-| `BlobStore` | Binary and oversized payload storage |
-| `Storage` | A bundle: `{ data, vectors?, blobs? }` |
+| `RecordStore` | JSON records with `get`, `put`, `create`, `delete`, paged `list`, optional `scan`, TTL, filters, and watches |
+| `VectorStore` | Dense, sparse, and hybrid vector indexes with explicit capability claims |
+| `BlobStore` | Binary and oversized payload storage with `put`, `get`, `head`, and `delete` |
+| `Storage` | A capability bundle: `{ records, vectors?, blobs? }` |
 
-Use the guide for the conceptual model: [Storage](/docs/guides/storage).
+Use this module for new application code. `@use-crux/core/store` is the legacy compatibility module and should not be used for Storage Beta wiring.
 
 ## `storage(config)`
 
-Normalize a capability bundle:
+Normalize and shallow-freeze a capability bundle:
 
 ```ts
 const appStorage = storage({
-  data,
+  records,
   vectors,
   blobs,
 })
@@ -49,21 +50,57 @@ Primitives can consume the whole bundle or the specific capability they need:
 
 ```ts
 workspace({ id: 'files', namespace, storage: appStorage })
-retriever({ id: 'docs', data, vectors, dense })
+retriever({ id: 'docs', records, vectors, dense })
 ```
 
-## `DataStore`
+Use `storage.scope()` for tenant, user, session, or workspace isolation:
 
 ```ts
-interface DataStore {
-  get(key: string): Promise<JsonObject | null>
-  set(key: string, value: JsonObject, options?: { ttl?: number }): Promise<void>
+const tenantStorage = storage.scope(appStorage, `tenant:${tenantId}`)
+```
+
+Scoped storage preserves capability claims while prefixing record and vector keys.
+
+## `RecordStore`
+
+```ts
+interface RecordStore<T extends JsonObject = JsonObject> {
+  get(key: string): Promise<T | null>
+  getMany?(keys: readonly string[]): Promise<readonly (T | null)[]>
+  put(key: string, value: T, options?: RecordWriteOptions): Promise<void>
+  putMany?(entries: readonly RecordWrite<T>[]): Promise<void>
+  create(key: string, value: T, options?: RecordWriteOptions): Promise<boolean>
   delete(key: string): Promise<void>
-  list(prefix: string, options?: ListOptions): Promise<ListResult>
-  subscribe?(callback: (event: StoreEvent) => void): () => void
-  supportsTtl?(): boolean
+  deleteMany?(keys: readonly string[]): Promise<void>
+  list(prefix: string, options?: RecordListOptions): Promise<RecordPage<T>>
+  scan?(prefix: string, options?: Omit<RecordListOptions, 'cursor'>): AsyncIterable<RecordEntry<T>>
+  watch?(prefix: string, callback: (event: RecordEvent<T>) => void): () => void
+  capabilities(): RecordStoreCapabilities
 }
 ```
+
+`put()` accepts `{ ttlMs }`, not `{ ttl }`. `create()` is the atomic insert primitive and returns `false` when an active record already exists.
+
+Capability levels are explicit:
+
+```ts
+type RecordStoreCapabilities = {
+  ttl: 'native' | 'lazy' | false
+  filter: 'native' | 'scan' | false
+  watch: boolean
+  batch: boolean
+}
+```
+
+Filters are exact top-level scalar equality only:
+
+```ts
+await records.list('docs:', {
+  filter: { namespace: 'public', active: true, deletedAt: null },
+})
+```
+
+Adapters must reject unsupported filters with `StorageError` code `invalid_filter`; they must not silently drop filter clauses.
 
 ## `VectorStore`
 
@@ -72,9 +109,37 @@ interface VectorStore {
   upsert(records: readonly VectorRecord[]): Promise<void>
   delete(keys: readonly string[]): Promise<void>
   search(query: VectorSearchQuery): Promise<readonly VectorHit[]>
-  capabilities?(): VectorStoreCapabilities
+  capabilities(): VectorStoreCapabilities
 }
 ```
+
+`search()` uses a discriminated query:
+
+```ts
+await vectors.search({
+  mode: 'hybrid',
+  dense: [0.12, 0.4, 0.9],
+  sparse: { indices: [12, 98], values: [0.8, 0.3] },
+  fusion: 'dbsf',
+  limit: 10,
+  filter: { namespace: 'docs' },
+})
+```
+
+Capability levels are part of correctness:
+
+```ts
+type VectorStoreCapabilities = {
+  dense: boolean
+  sparse: boolean
+  hybrid: boolean
+  fusion: readonly ('rrf' | 'dbsf')[]
+  filter: 'pre' | 'post' | false
+  consistency: 'strong' | 'eventual'
+}
+```
+
+Production filtered retrieval requires `filter: 'pre'`. A `post` filter can be useful for local tooling, but Crux primitives that rely on exact filtered top-k results reject it unless they explicitly opt into approximate behavior.
 
 ## `BlobStore`
 
@@ -82,28 +147,49 @@ interface VectorStore {
 interface BlobStore {
   put(input: BlobPutInput): Promise<BlobRef>
   get(uri: string): Promise<BlobReadResult>
-  delete?(uri: string): Promise<void>
+  head?(uri: string): Promise<BlobRef | null>
+  delete(uri: string): Promise<void>
+  createReadUrl?(uri: string, options?: { expiresInMs?: number }): Promise<string>
+  capabilities(): BlobStoreCapabilities
 }
 ```
 
-## In-Memory Implementations
+Blob URIs are internal application references, not automatic public URLs. Signed URLs are app-authorized and are not shown in devtools by default.
 
-Use these for tests, demos, and examples:
+## Errors
+
+Storage contract failures throw `StorageError`:
 
 ```ts
-const data = inMemoryDataStore()
+try {
+  await records.put('cache:key', { value: 'x' }, { ttlMs: 60_000 })
+} catch (error) {
+  if (error instanceof StorageError && error.code === 'ttl_unsupported') {
+    // choose a non-TTL path
+  }
+}
+```
+
+Error codes include `not_found`, `conflict`, `unsupported_capability`, `invalid_key`, `invalid_value`, `invalid_filter`, `ttl_unsupported`, and `backend_error`.
+
+## In-Memory Implementations
+
+Use these for tests, demos, and local examples:
+
+```ts
+const records = inMemoryRecordStore()
 const vectors = inMemoryVectorStore()
 const blobs = inMemoryBlobStore()
 const all = inMemoryStorage()
 ```
 
-In-memory stores are process-local and not durable.
+In-memory stores are process-local and not durable. They are contract-correct reference implementations: records use lazy TTL and scan filtering, vectors pre-filter metadata before scoring, and blobs support `head()` and `delete()`.
 
 ## Related
 
 <Cards>
-  <Card title="DataStore guide" description="Record storage, TTL, subscriptions, and custom database implementations." href="/docs/guides/storage/crux-store" />
+  <Card title="RecordStore guide" description="JSON record storage, TTL, filters, watches, and custom database implementations." href="/docs/guides/storage/crux-store" />
   <Card title="VectorStore guide" description="Dense, sparse, and hybrid vector search." href="/docs/guides/storage/vector-store" />
   <Card title="BlobStore guide" description="Binary files, generated outputs, and custom object storage." href="/docs/guides/storage/blob-storage" />
-  <Card title="Postgres DataStore" description="A complete cookbook implementation for SQL-backed data storage." href="/docs/cookbook/basics/postgres-data-store" />
+  <Card title="Postgres RecordStore" description="A complete cookbook implementation for SQL-backed record storage." href="/docs/cookbook/basics/postgres-data-store" />
 </Cards>

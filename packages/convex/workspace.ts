@@ -2,7 +2,7 @@
  * Convex workspace storage helpers.
  *
  * Bridges `@use-crux/core/storage` blob payloads to Convex file storage while
- * leaving workspace metadata in a normal `DataStore`.
+ * leaving workspace metadata in a normal `RecordStore`.
  *
  * @module
  */
@@ -25,16 +25,18 @@ export interface ConvexWorkspaceBlobStoreConfig {
 /**
  * Create a `BlobStore` backed by Convex file storage.
  *
- * Use this together with a Convex store document contract:
+ * Use this together with a Convex `RecordStore`:
  *
  * ```ts
- * const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+ * import { storage } from '@use-crux/core/storage'
+ * import { workspace } from '@use-crux/core/workspace'
+ * import { convexRecordStore, convexWorkspaceBlobStore } from '@use-crux/convex'
  *
  * const ws = workspace({
  *   id: 'thread-workspace',
  *   namespace: threadId,
  *   storage: storage({
- *     records: cruxDocuments.store(ctx),
+ *     records: convexRecordStore({ component: components.crux, ctx }),
  *     blobs: convexWorkspaceBlobStore({ ctx }),
  *   }),
  * })

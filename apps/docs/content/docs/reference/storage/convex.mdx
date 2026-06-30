@@ -1,6 +1,6 @@
 ---
 title: '@use-crux/convex'
-description: Convex CruxStore adapter, Convex runtime profile, Convex Agent integration, flow helpers, and conversation compaction.
+description: Convex Storage Beta adapters, Convex runtime profile, Convex Agent integration, flow helpers, and conversation compaction.
 ---
 
 Peer dependency: `convex` >=1.0.0
@@ -14,6 +14,9 @@ import {
   createCruxConvex,
   createConvexRuntimeBridge,
   defineConvexStoreContract,
+  convexRecordStore,
+  convexVectorStore,
+  convexStorage,
   convexWorkspaceBlobStore,
 } from '@use-crux/convex'
 
@@ -191,6 +194,48 @@ const io: ComponentDocumentPort = {
 
 `convexComponentDocumentPort({ ctx, component })` is the generated Convex adapter for that port. It forwards raw document operations to `component.memory.*` and delegates dense vector search to `ctx.vectorSearch()` when the current context supports it.
 
+### Storage Beta Factories
+
+Use these factories for new Storage Beta wiring:
+
+```ts
+import { convexRecordStore, convexStorage, convexVectorStore, convexWorkspaceBlobStore } from '@use-crux/convex'
+
+const records = convexRecordStore({
+  component: components.crux,
+  ctx,
+})
+
+const vectors = convexVectorStore({
+  component: components.crux,
+  ctx,
+})
+
+const appStorage = convexStorage({
+  component: components.crux,
+  ctx,
+  blobs: { ctx },
+})
+```
+
+Capability claims are intentionally narrow:
+
+| Adapter | Capability | Value |
+| --- | --- | --- |
+| `convexRecordStore()` | Record TTL | `'lazy'` |
+| `convexRecordStore()` | Record filters | `'scan'` |
+| `convexRecordStore()` | Watch | `false` |
+| `convexRecordStore()` | Batch | `false` |
+| `convexVectorStore()` | Dense search | `true` |
+| `convexVectorStore()` | Sparse search | `false` |
+| `convexVectorStore()` | Hybrid search | `false` |
+| `convexVectorStore()` | Vector filters | `'post'` |
+| `convexVectorStore()` | Consistency | `'strong'` |
+| `convexWorkspaceBlobStore()` | Multipart | `false` |
+| `convexWorkspaceBlobStore()` | Signed URLs | `false` |
+
+Convex vector filtering is post-filtered by the component port, so production retrieval paths that require exact filtered top-k results should use a pre-filter-capable vector backend.
+
 ### `convexWorkspaceBlobStore(config)`
 
 Create a `BlobStore` backed by Convex file storage. Use it with `workspace()` when agents write PDFs, images, CSVs, or other binary/large outputs.
@@ -206,13 +251,13 @@ const ws = workspace({
   id: 'thread-workspace',
   namespace: threadId,
   storage: storage({
-    data: cruxDocuments.store(ctx),
+    records: convexRecordStore({ component: components.crux, ctx }),
     blobs: convexWorkspaceBlobStore({ ctx }),
   }),
 })
 ```
 
-Workspace metadata stays in the Convex-backed `DataStore`; binary and oversized payloads go to Convex file storage. If the current Convex runtime cannot read blobs, `get()` throws clearly instead of silently dropping file content.
+Workspace metadata stays in the Convex-backed `RecordStore`; binary and oversized payloads go to Convex file storage. If the current Convex runtime cannot read blobs, `get()` throws clearly instead of silently dropping file content.
 
 ### `convexAgent(config)`
 

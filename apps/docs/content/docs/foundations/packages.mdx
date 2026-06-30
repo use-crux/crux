@@ -20,8 +20,8 @@ Crux is split into focused packages. Everyone needs `@use-crux/core`. Pick an ad
 | `@use-crux/openai`    | OpenAI SDK adapter (`createOpenAI`)                                                                                                  | You use the `openai` package directly                  |
 | `@use-crux/google`    | Google GenAI adapter (`createGoogle`)                                                                                                | You use `@google/genai`                                |
 | `@use-crux/anthropic` | Anthropic SDK adapter (`createAnthropic`)                                                                                            | You use `@anthropic-ai/sdk` directly                   |
-| `@use-crux/convex`    | Convex DataStore adapter, workspace BlobStore, server boundaries, Agent bridge, compaction, swarm component                          | Your backend is Convex                                 |
-| `@use-crux/upstash`   | Upstash VectorStore, Redis DataStore adapter, compatibility stores                                                                   | You need managed vector search or Redis-backed storage |
+| `@use-crux/convex`    | Convex RecordStore adapter, dense VectorStore adapter, workspace BlobStore, server boundaries, Agent bridge, compaction, swarm component | Your backend is Convex                                 |
+| `@use-crux/upstash`   | Upstash VectorStore, Redis RecordStore adapter, compatibility stores                                                                 | You need managed vector search or Redis-backed storage |
 | `@use-crux/otel`      | OpenTelemetry spans for production observability                                                                                     | You need traces in Datadog, Honeycomb, Grafana, etc.   |
 | `@use-crux/local`     | Local Go runtime, dev server, web UI host, TUI, eval runner, index, lint, and trace services                                         | Development and debugging                              |
 | `@use-crux/devtools`  | React web devtools UI bundle                                                                                                         | Usually installed through `@use-crux/local`            |
@@ -34,7 +34,7 @@ The base package. Contains all SDK-agnostic primitives, organized into subpath e
 | ------------------------------- | ------------------------------------------------------------------------------------ |
 | `@use-crux/core`                | `prompt`, `context`, `createPrompts`, `createContexts`, `config`, `when`, `match`    |
 | `@use-crux/core/memory`         | `memory`, `workingState`, `episodes`, `facts`, `procedures`                          |
-| `@use-crux/core/storage`        | `DataStore`, `VectorStore`, `BlobStore`, `storage`, `inMemoryStorage`                |
+| `@use-crux/core/storage`        | `RecordStore`, `VectorStore`, `BlobStore`, `storage`, `inMemoryStorage`              |
 | `@use-crux/core/compaction`     | `createSlidingWindow`, `createBudgetManager`, `extractKeyFacts`, `summarizeMessages` |
 | `@use-crux/core/scoring`        | `llmJudge`, `metrics`                                                                |
 | `@use-crux/core/agent`          | `agent`, `blackboard`, `handoff`, `delegate`, composition factories                  |
@@ -78,15 +78,14 @@ await google.generate(prompt, { model: 'gemini-2.5-flash', input })
 
 ## Storage packages
 
-Persistent storage is split by capability. `DataStore` holds JSON records, `VectorStore` handles dense/sparse/hybrid search, and `BlobStore` holds workspace bytes.
+Persistent storage is split by capability. `RecordStore` holds JSON records, `VectorStore` handles dense/sparse/hybrid search, and `BlobStore` holds workspace bytes.
 
 ```ts
 // Convex
-import { defineConvexStoreContract, convexWorkspaceBlobStore } from '@use-crux/convex'
+import { convexRecordStore, convexStorage, convexVectorStore, convexWorkspaceBlobStore } from '@use-crux/convex'
 
 // Upstash Vector + Redis
-import { upstashVectorStore } from '@use-crux/upstash'
-import { cruxRedisStore } from '@use-crux/upstash/redis'
+import { upstashRedisRecordStore, upstashVectorStore } from '@use-crux/upstash'
 ```
 
 For Convex runtime setup and boundary rules, see the [Convex guide](/docs/guides/convex).
