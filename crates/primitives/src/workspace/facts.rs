@@ -11,6 +11,9 @@ use crate::{
         object_map_identifier_entries, object_value, property_value, resolve_static_value,
     },
     routing::output::extracted_facts,
+    storage::dependencies::{
+        storage_config_references, storage_dependency_metadata, storage_relation_refs,
+    },
 };
 
 pub(crate) fn workspace_facts(
@@ -40,6 +43,8 @@ pub(crate) fn workspace_facts(
     let tools = config.and_then(|config| workspace_tools(config, context));
     let limits = config.and_then(|config| workspace_limits(config, context));
     let retention = config.and_then(|config| workspace_retention(config, context));
+    let storage_refs = storage_config_references(config, &context.initializers);
+    let storage_dependencies = storage_dependency_metadata(&storage_refs);
 
     let mut metadata = Map::new();
     metadata.insert(
@@ -76,7 +81,9 @@ pub(crate) fn workspace_facts(
             Value::Bool(has_property(config, "blobs") || has_property(config, "storage")),
         );
     }
-    if let Some(intelligence) = workspace_intelligence(&mounts, &tool_refs, limits, retention) {
+    if let Some(intelligence) =
+        workspace_intelligence(&mounts, &tool_refs, limits, retention, storage_dependencies)
+    {
         metadata.insert("intelligence".to_string(), intelligence);
     }
 
@@ -95,6 +102,7 @@ pub(crate) fn workspace_facts(
         tool_refs
             .iter()
             .map(|to_variable| json!({"type": "workspace.exposes_tool", "toVariable": to_variable}))
+            .chain(storage_relation_refs("workspace", &storage_refs))
             .chain(mounts.iter().filter_map(|mount| {
                 mount.get("path").and_then(Value::as_str).map(|path| {
                     json!({
@@ -264,9 +272,11 @@ fn workspace_intelligence(
     tool_refs: &[String],
     limits: Option<Value>,
     retention: Option<Value>,
+    dependencies: Option<Value>,
 ) -> Option<Value> {
     let has_operator = limits.is_some() || retention.is_some();
-    if mounts.is_empty() && tool_refs.is_empty() && !has_operator {
+    let has_dependencies = dependencies.is_some();
+    if mounts.is_empty() && tool_refs.is_empty() && !has_operator && !has_dependencies {
         return None;
     }
     let artifacts = mounts
@@ -288,6 +298,9 @@ fn workspace_intelligence(
     intelligence.insert("data".to_string(), Value::Object(data));
     if !tool_refs.is_empty() {
         intelligence.insert("tools".to_string(), json!(tool_refs));
+    }
+    if let Some(dependencies) = dependencies {
+        intelligence.insert("dependencies".to_string(), dependencies);
     }
     if has_operator {
         let mut operator = Map::new();

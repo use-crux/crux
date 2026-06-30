@@ -17,6 +17,10 @@ const staticIndexExtractorIds = new Set([
   }),
   extractorKey({
     extension: { name: CRUX_CORE_EXTENSION, version: '*' },
+    name: 'storage',
+  }),
+  extractorKey({
+    extension: { name: CRUX_CORE_EXTENSION, version: '*' },
     name: 'workspace',
   }),
   extractorKey({

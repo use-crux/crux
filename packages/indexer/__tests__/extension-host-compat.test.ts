@@ -85,7 +85,7 @@ describe('static extension host compatibility layer', () => {
     expect(result.nativeOnlyEligible).toBe(true)
     expect(result.manifest.staticHost).toEqual(
       expect.objectContaining({
-        bundledNativeExtractorCount: 17,
+        bundledNativeExtractorCount: 18,
         bundledTypeScriptExtractorCount: 0,
         extensionTypeScriptExtractorCount: 0,
         requiresCompatibilityEvidence: false,

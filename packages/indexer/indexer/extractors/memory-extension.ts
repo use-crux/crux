@@ -425,10 +425,10 @@ function authoredStoreMetadata(
 }
 
 /**
- * Preserves legacy component extraction for rare store shapes not covered by stable call readers.
+ * Reads component references for store call shapes not covered by stable call readers yet.
  *
- * The normal path uses `ConfigReader.callObject('store')`; this fallback keeps compatibility while the
- * remaining native memory-id handling is still first-party/internal.
+ * The normal path uses `ConfigReader.callObject('store')`; this fallback keeps the first-party
+ * memory metadata complete while native memory-id handling remains internal.
  */
 function authoredStoreComponentFallback(
   object: ts.ObjectLiteralExpression,

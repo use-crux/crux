@@ -80,6 +80,28 @@
     },
     {
       "extension": "@use-crux/indexer/crux-core",
+      "extractor": "storage",
+      "family": "storage",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "first-party-phase5-native-fixtures.ts",
+        "relations": "first-party-phase5-native-fixtures.ts",
+        "sourceRefs": "first-party-phase5-native-fixtures.ts",
+        "diagnostics": "first-party-phase5-native-fixtures.ts",
+        "dependencies": "first-party-phase5-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase5-native-fixtures.ts",
+        "sourceGraph": "first-party-phase5-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase5-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase5-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "workspace",
       "family": "workspace",
       "nativeCovered": true,

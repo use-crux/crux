@@ -40,6 +40,11 @@ describe("first-party extractor fixtures", () => {
         staticIndexCoverage: "covered",
       },
       {
+        extractor: "storage",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
         extractor: "workspace",
         fixtureCoverage: "dedicated-fixture",
         staticIndexCoverage: "covered",
@@ -127,6 +132,7 @@ describe("first-party extractor fixtures", () => {
         "rag.retriever",
         "safety",
         "scorer",
+        "storage",
         "workspace",
         "eval",
         "skill-registry",
@@ -412,6 +418,196 @@ describe("first-party extractor fixtures", () => {
         }),
       ]),
     );
+  });
+
+  it("extracts Storage Beta definitions, wiring, and primitive dependencies", async () => {
+    const out = await extractFixtureSource(
+      cruxFixture,
+      `
+        import {
+          inMemoryBlobStore,
+          inMemoryRecordStore,
+          inMemoryVectorStore,
+          storage,
+        } from '@use-crux/core/storage'
+        import { retriever, workspace } from '@use-crux/core'
+
+        export const records = inMemoryRecordStore()
+        export const vectors = inMemoryVectorStore()
+        export const blobs = inMemoryBlobStore()
+        export const appStorage = storage({ records, vectors, blobs })
+        export const literalStorage = { records, vectors, blobs }
+        export const tenantStorage = storage.scope(appStorage, 'tenant-a')
+
+        export const docsRetriever = retriever({
+          id: 'docs',
+          storage: appStorage,
+          records,
+          vectors,
+        })
+
+        export const scratch = workspace({
+          id: 'scratch',
+          storage: tenantStorage,
+          records,
+          blobs,
+        })
+      `,
+    );
+
+    expect(definition(out.definitions, "storage.recordStore:records")).toMatchObject({
+      kind: "storage.recordStore",
+      name: "records",
+      metadata: expect.objectContaining({
+        exportName: "records",
+        backend: "inMemoryRecordStore",
+        facts: expect.objectContaining({
+          kind: "storage.recordStore",
+          backend: "inMemoryRecordStore",
+          capabilities: expect.objectContaining({
+            record: expect.objectContaining({
+              ttl: "lazy",
+              filter: "scan",
+              watch: true,
+              batch: false,
+            }),
+          }),
+        }),
+      }),
+    });
+    expect(definition(out.definitions, "storage.vectorStore:vectors")).toMatchObject({
+      kind: "storage.vectorStore",
+      name: "vectors",
+      metadata: expect.objectContaining({
+        backend: "inMemoryVectorStore",
+        facts: expect.objectContaining({
+          kind: "storage.vectorStore",
+          capabilities: expect.objectContaining({
+            vector: expect.objectContaining({
+              dense: true,
+              sparse: true,
+              hybrid: true,
+              fusion: [],
+              filter: "pre",
+              consistency: "strong",
+            }),
+          }),
+        }),
+      }),
+    });
+    expect(definition(out.definitions, "storage.blobStore:blobs")).toMatchObject({
+      kind: "storage.blobStore",
+      name: "blobs",
+      metadata: expect.objectContaining({
+        backend: "inMemoryBlobStore",
+        facts: expect.objectContaining({
+          kind: "storage.blobStore",
+          capabilities: expect.objectContaining({
+            blob: expect.objectContaining({
+              multipart: false,
+              signedUrls: false,
+            }),
+          }),
+        }),
+      }),
+    });
+    expect(definition(out.definitions, "storage.bundle:appStorage")).toMatchObject({
+      kind: "storage.bundle",
+      name: "appStorage",
+      metadata: expect.objectContaining({
+        recordsVariable: "records",
+        vectorsVariable: "vectors",
+        blobsVariable: "blobs",
+        facts: expect.objectContaining({
+          kind: "storage.bundle",
+          records: "records",
+          vectors: "vectors",
+          blobs: "blobs",
+        }),
+        intelligence: expect.objectContaining({
+          dependencies: expect.objectContaining({
+            recordStores: ["records"],
+            vectorStores: ["vectors"],
+            blobStores: ["blobs"],
+          }),
+        }),
+      }),
+    });
+    expect(definition(out.definitions, "storage.bundle:literalStorage")).toMatchObject({
+      kind: "storage.bundle",
+      name: "literalStorage",
+      metadata: expect.objectContaining({
+        recordsVariable: "records",
+        vectorsVariable: "vectors",
+        blobsVariable: "blobs",
+      }),
+    });
+    expect(definition(out.definitions, "storage.scope:tenantStorage")).toMatchObject({
+      kind: "storage.scope",
+      name: "tenantStorage",
+      metadata: expect.objectContaining({
+        baseStorageVariable: "appStorage",
+        prefix: "tenant-a",
+        facts: expect.objectContaining({
+          kind: "storage.scope",
+          storage: "appStorage",
+          prefix: "tenant-a",
+        }),
+      }),
+    });
+    expect(definition(out.definitions, "rag.retriever:docs")?.metadata?.intelligence).toEqual(
+      expect.objectContaining({
+        dependencies: expect.objectContaining({
+          storage: ["appStorage"],
+          recordStores: ["records"],
+          vectorStores: ["vectors"],
+        }),
+      }),
+    );
+    expect(definition(out.definitions, "workspace:scratch")?.metadata?.intelligence).toEqual(
+      expect.objectContaining({
+        dependencies: expect.objectContaining({
+          storage: ["tenantStorage"],
+          recordStores: ["records"],
+          blobStores: ["blobs"],
+        }),
+      }),
+    );
+    expect(out.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "storage.bundle.uses_record_store",
+          from: "storage.bundle:appStorage",
+          to: "storage.recordStore:records",
+        }),
+        expect.objectContaining({
+          type: "storage.bundle.uses_vector_store",
+          from: "storage.bundle:appStorage",
+          to: "storage.vectorStore:vectors",
+        }),
+        expect.objectContaining({
+          type: "storage.bundle.uses_blob_store",
+          from: "storage.bundle:appStorage",
+          to: "storage.blobStore:blobs",
+        }),
+        expect.objectContaining({
+          type: "storage.scope.wraps_storage",
+          from: "storage.scope:tenantStorage",
+          to: "storage.bundle:appStorage",
+        }),
+        expect.objectContaining({
+          type: "rag.retriever.uses_storage",
+          from: "rag.retriever:docs",
+          to: "storage.bundle:appStorage",
+        }),
+        expect.objectContaining({
+          type: "workspace.uses_storage",
+          from: "workspace:scratch",
+          to: "storage.scope:tenantStorage",
+        }),
+      ]),
+    );
+    expect(out.diagnostics.filter((diagnostic) => diagnostic.code.startsWith("storage."))).toEqual([]);
   });
 
   it("extracts routing routers as folded child graphs", async () => {

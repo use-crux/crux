@@ -10,7 +10,7 @@
   },
   "primitiveManifest": {
     "name": "crux-first-party-primitives",
-    "version": "1",
+    "version": "2",
     "digest": "sha256:primitive-manifest"
   },
   "relationPolicy": {

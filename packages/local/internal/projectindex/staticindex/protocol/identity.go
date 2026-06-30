@@ -13,7 +13,7 @@ func StaticIndexIdentityManifest() IdentityManifest {
 		},
 		PrimitiveManifest: DigestIdentity{
 			Name:    "crux-first-party-primitives",
-			Version: "1",
+			Version: "2",
 			Digest:  "sha256:primitive-manifest",
 		},
 		RelationPolicy: DigestIdentity{

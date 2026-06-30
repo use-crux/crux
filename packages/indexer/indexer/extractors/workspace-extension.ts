@@ -1,6 +1,8 @@
 import { safeId } from '../definitions'
+import type { DependencyFacts } from '@use-crux/core/project-index'
 import type { IndexExtractor } from '../extensions'
 import { facts } from '../extensions'
+import { storageConfigReferences, storageDependencyFacts, storageRelationRefs } from './storage-dependencies'
 
 /**
  * Extracts workspace definitions and their mount/write-policy intelligence.
@@ -21,6 +23,8 @@ export const workspaceIndexExtractor: IndexExtractor = {
     const tools = workspaceToolsMetadata(ctx.config?.object('tools'))
     const limits = workspaceLimitsMetadata(ctx.config?.object('limits'))
     const retention = workspaceRetentionMetadata(ctx.config?.object('retention'))
+    const storageRefs = storageConfigReferences(ctx.config)
+    const storageDependencies = storageDependencyFacts(storageRefs)
     return facts({
       definitions: [
         ctx.define.definition({
@@ -38,12 +42,13 @@ export const workspaceIndexExtractor: IndexExtractor = {
             limits,
             retention,
             hasBlobStorage: ctx.config ? ctx.config.has('blobs') || ctx.config.has('storage') : undefined,
-            intelligence: workspaceIntelligence(mounts, toolRefs, { limits, retention }),
+            intelligence: workspaceIntelligence(mounts, toolRefs, { limits, retention }, storageDependencies),
           },
         }),
       ],
       references: [
         ...toolRefs.map((toVariable) => ctx.ref.variable('workspace.exposes_tool', toVariable)),
+        ...storageRelationRefs('workspace', storageRefs),
         ...(mounts ?? []).flatMap((mount) =>
           typeof mount.path === 'string'
             ? [
@@ -141,9 +146,11 @@ function workspaceIntelligence(
     readonly limits?: Record<string, number>
     readonly retention?: Record<string, number>
   },
+  dependencies: DependencyFacts | undefined,
 ): Record<string, unknown> | undefined {
   const hasOperator = operator.limits !== undefined || operator.retention !== undefined
-  if ((!mounts || mounts.length === 0) && toolRefs.length === 0 && !hasOperator) return undefined
+  const hasDependencies = dependencies !== undefined && Object.keys(dependencies).length > 0
+  if ((!mounts || mounts.length === 0) && toolRefs.length === 0 && !hasOperator && !hasDependencies) return undefined
   return {
     confidence: 'static',
     data: {
@@ -156,6 +163,7 @@ function workspaceIntelligence(
         : {}),
     },
     ...(toolRefs.length > 0 ? { tools: [...toolRefs] } : {}),
+    ...(dependencies ? { dependencies } : {}),
     ...(hasOperator ? { operator } : {}),
   }
 }

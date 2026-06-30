@@ -238,6 +238,18 @@ fn data_access_target_kind(target_variable: &str) -> Option<&'static str> {
     {
         return Some("workspace");
     }
+    if normalized.contains("record") {
+        return Some("storage.recordStore");
+    }
+    if normalized.contains("vector") {
+        return Some("storage.vectorStore");
+    }
+    if normalized.contains("blob") {
+        return Some("storage.blobStore");
+    }
+    if normalized.contains("storage") {
+        return Some("storage.bundle");
+    }
     if normalized.contains("store") {
         return Some("store");
     }
