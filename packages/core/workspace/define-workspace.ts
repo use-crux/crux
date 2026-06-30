@@ -34,6 +34,17 @@ import { createWorkspaceFilesystemOps } from "./fs-ops";
 import { createWorkspaceArtifactOps } from "./artifacts";
 import { createWorkspaceContextAdapters } from "./context-adapters";
 import {
+  assertWorkspaceMountIsLocal,
+  hasWorkspaceMountSource,
+  listWorkspaceMountSource,
+  readWorkspaceMountSource,
+  sourceMountForPath,
+} from "./virtual-source";
+import {
+  deleteWorkspaceMountSource,
+  writeWorkspaceMountSource,
+} from "./source-write";
+import {
   assertWorkspaceWriteAllowed,
   withWorkspaceWriteLock,
   workspaceSetOptions,
@@ -50,6 +61,7 @@ import {
   type WorkspaceListOptions,
   type WorkspaceListResult,
   type WorkspaceBlobStore,
+  type WorkspaceMountWriteOptions,
   type WorkspaceNamespaceOption,
   type WorkspaceReadOptions,
   type WorkspaceReadResult,
@@ -128,6 +140,16 @@ export function workspace<const Config extends WorkspaceConfig>(
           isGlob || normalized === "/"
             ? undefined
             : mountForPath(normalized, mounts, "read");
+        const sourceMount =
+          normalized === "/"
+            ? undefined
+            : sourceMountForPath(normalized, mounts);
+        if (sourceMount) {
+          return listWorkspaceMountSource(sourceMount, normalized, {
+            limit: options?.limit,
+            cursor: options?.cursor,
+          });
+        }
         return listEntries({
           store,
           workspaceId: config.id,
@@ -160,7 +182,20 @@ export function workspace<const Config extends WorkspaceConfig>(
       { workspaceId: config.id, operation: "read", namespace, path },
       async () => {
         const normalized = normalizePath(path);
-        mountForPath(normalized, mounts, "read");
+        const mount = mountForPath(normalized, mounts, "read");
+        if (hasWorkspaceMountSource(mount)) {
+          if (options?.version !== undefined) {
+            throw new Error(
+              `workspace.read(): source-backed mount "${mount.path}" does not support versioned reads.`,
+            );
+          }
+          const result = await readWorkspaceMountSource(mount, normalized, {
+            maxInlineBytes: options?.maxInlineBytes,
+            offset: options?.offset,
+          });
+          if (!result) throw new Error(`workspace file not found: "${path}".`);
+          return result;
+        }
         if (options?.version !== undefined) {
           return versionOps.readVersion(
             namespace,
@@ -216,6 +251,14 @@ export function workspace<const Config extends WorkspaceConfig>(
         return withWorkspaceWriteLock(config.id, namespace, async () => {
           const normalized = normalizePath(path);
           const mount = mountForPath(normalized, mounts, "write");
+          if (hasWorkspaceMountSource(mount)) {
+            return writeWorkspaceMountSource(
+              mount,
+              normalized,
+              content,
+              mountWriteOptions(options, mountWriteOperation(operation)),
+            );
+          }
           const analysis = await analyzeContent(content, options?.mimeType);
           const existing = await getRecord(
             store,
@@ -361,7 +404,12 @@ export function workspace<const Config extends WorkspaceConfig>(
       { workspaceId: config.id, operation: "delete", namespace, path },
       async () => {
         const normalized = normalizePath(path);
-        mountForPath(normalized, mounts, "write");
+        const mount = mountForPath(normalized, mounts, "write");
+        if (hasWorkspaceMountSource(mount)) {
+          await deleteWorkspaceMountSource(mount, normalized);
+          return;
+        }
+        assertWorkspaceMountIsLocal(mount, "delete");
         const record = await getRecord(store, config.id, namespace, normalized);
         await store.delete(fileKey(config.id, namespace, normalized));
         await purgeVersions(store, blobs, config.id, namespace, normalized, {
@@ -479,4 +527,23 @@ function assertNonEmpty(value: string, message: string): void {
 function artifactWriteProvenance(options: WorkspaceWriteOptions | undefined) {
   if (!options?.status && !options?.kind) return undefined;
   return activeWorkspaceProvenance();
+}
+
+function mountWriteOptions(
+  options: WorkspaceWriteOptions | undefined,
+  operation: WorkspaceMountWriteOptions["operation"],
+): WorkspaceMountWriteOptions {
+  return {
+    ...(options?.mimeType !== undefined ? { mimeType: options.mimeType } : {}),
+    ...(options?.metadata !== undefined ? { metadata: options.metadata } : {}),
+    ...(options?.status !== undefined ? { status: options.status } : {}),
+    ...(options?.kind !== undefined ? { kind: options.kind } : {}),
+    operation,
+  };
+}
+
+function mountWriteOperation(
+  operation: WorkspaceVersionOperation,
+): WorkspaceMountWriteOptions["operation"] {
+  return operation === "edit" || operation === "append" ? operation : "write";
 }

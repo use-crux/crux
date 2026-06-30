@@ -25,4 +25,39 @@ describe('workspace manifest', () => {
     expect(listedPathCount).toBeLessThan(500)
     expect(resolved.system).not.toContain('secret content 499')
   })
+
+  it('can include source-backed files in context without copying bytes', async () => {
+    const ws = workspace({
+      id: 'research',
+      namespace: 'thread:1',
+      records: inMemoryRecordStore(),
+      mounts: [
+        {
+          path: '/sources',
+          access: 'read',
+          source: {
+            kind: 'custom',
+            list: async () => ({ entries: [] }),
+            read: async (path) => ({
+              kind: 'text',
+              path,
+              mimeType: 'text/markdown',
+              content: '# Source brief',
+              size: 14,
+            }),
+          },
+        },
+      ],
+    })
+
+    const resolved = await prompt({
+      id: 'analyst',
+      use: [ws.asContext({ include: ['/sources/brief.md'] })],
+      system: 'Analyze.',
+    }).resolve({})
+
+    expect(resolved.system).toContain('- /sources (read, source: custom)')
+    expect(resolved.system).toContain('### /sources/brief.md')
+    expect(resolved.system).toContain('# Source brief')
+  })
 })

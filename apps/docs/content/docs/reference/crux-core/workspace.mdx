@@ -6,7 +6,11 @@ description: API reference for durable, path-addressed agent workspaces.
 Import from `@use-crux/core/workspace`:
 
 ```ts
-import { workspace, workspaceToolNames } from "@use-crux/core/workspace";
+import {
+  retrieverWorkspaceMountSource,
+  workspace,
+  workspaceToolNames,
+} from "@use-crux/core/workspace";
 
 import type { BlobStore } from "@use-crux/core/storage";
 ```
@@ -97,6 +101,117 @@ grepWorkspace
 ```
 
 `exists`, `stat`, `append`, and `copy` are programmatic methods by default.
+
+## Source-Backed Mounts
+
+`WorkspaceMount.source` turns a mount into a provider-backed virtual root.
+
+```ts
+type WorkspaceMountSource =
+  | {
+      kind: "retriever";
+      retriever: Retriever;
+      query?:
+        | string
+        | ((input: WorkspaceRetrieverMountQueryInput) => string | Promise<string>);
+      limit?: number;
+      pathForHit?: (hit: RetrieverHit) => string;
+      contentForHit?: (hit: RetrieverHit) => string;
+      mimeType?: string | ((hit: RetrieverHit) => string);
+    }
+  | {
+      kind: "custom";
+      list(path: string, options?: WorkspaceMountListOptions): WorkspaceListResult | Promise<WorkspaceListResult>;
+      read(path: string, options?: WorkspaceMountReadOptions): WorkspaceReadResult | null | Promise<WorkspaceReadResult | null>;
+      grep?(query: string, options?: WorkspaceMountGrepOptions): WorkspaceGrepResult | Promise<WorkspaceGrepResult>;
+      exists?(path: string, options?: WorkspaceMountPathOptions): boolean | Promise<boolean>;
+      stat?(path: string, options?: WorkspaceMountPathOptions): WorkspaceFile | null | Promise<WorkspaceFile | null>;
+      write?(
+        path: string,
+        content: WorkspaceContent,
+        options?: WorkspaceMountWriteOptions,
+      ): WorkspaceFile | WorkspaceReadResult | null | void | Promise<WorkspaceFile | WorkspaceReadResult | null | void>;
+      delete?(path: string, options?: WorkspaceMountPathOptions): void | Promise<void>;
+    };
+```
+
+Retriever source:
+
+```ts
+const ws = workspace({
+  id: "research",
+  namespace,
+  storage,
+  mounts: [
+    { path: "/workspace", access: "readwrite" },
+    { path: "/outputs", access: "readwrite" },
+    {
+      path: "/sources",
+      access: "read",
+      source: {
+        kind: "retriever",
+        retriever: docs,
+        query: "current task source documents",
+      },
+    },
+  ],
+});
+```
+
+Adapter helper:
+
+```ts
+source: retrieverWorkspaceMountSource(docs, {
+  query: "current task source documents",
+  pathForHit: (hit) => `${hit.sourceId}/${hit.chunkId}.md`,
+});
+```
+
+Custom source:
+
+```ts
+source: {
+  kind: "custom",
+  list: async (path) => ({ entries: await provider.list(path) }),
+  read: async (path) => provider.readWorkspaceText(path),
+}
+```
+
+For source-backed paths, `list`, `read`, `grep`, `exists`, and `stat` delegate
+to the provider. If a custom source omits `grep`, Crux falls back to
+`list + read`; if it omits `stat`, Crux derives file metadata from `read`.
+Source-backed `list()` results are still bounded by the workspace `limit` even
+when the provider ignores the hint.
+
+Mutation operations are provider opt-ins. Retriever sources and custom sources
+without hooks are read-only. `write`, `edit`, `append`, and provider-destination
+`copy` require both `access: "readwrite"` on the mount and a custom source
+`write()` hook; `delete` requires `access: "readwrite"` and `delete()`. `edit`
+and `append` read the provider text first, then call `write()` with the updated
+content.
+
+```ts
+await ws.write("/sources/new.md", "draft"); // delegates to source.write()
+await ws.edit("/sources/brief.md", { find: "x", replace: "y" }); // read + source.write()
+await ws.copy("/workspace/brief.md", "/sources/brief.md"); // delegates to source.write()
+await ws.delete("/sources/brief.md"); // delegates to source.delete()
+await ws.finalize("/sources/brief.md"); // throws
+```
+
+Version history, `undo`, `diff`, `finalize`, and artifact manifests remain
+local workspace features. A provider-backed source can expose its own history or
+conflict policy through its wrapper, but Crux does not invent local versions for
+provider-owned bytes.
+
+`copy()` is the one bridge from provider-backed bytes to local workspace state:
+
+```ts
+await ws.copy("/sources/brief.md", "/workspace/brief.md");
+```
+
+It can materialize readable virtual text and JSON files into writable local
+mounts. Binary provider resources need a custom app-side copy flow until the
+provider exposes readable bytes.
 
 ## Artifacts
 

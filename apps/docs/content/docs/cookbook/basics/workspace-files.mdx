@@ -93,3 +93,9 @@ const files = workspace({
 ```
 
 `records` keeps file metadata and small inline text. `blobs` keeps binary and large files. See [Storage](/docs/guides/storage) and [BlobStore](/docs/guides/storage/blob-storage) for custom S3/R2/GCS-style blob stores.
+
+For source material that already lives in a retriever, MCP server, project
+index, connected drive, or app document service, use a source-backed mount
+instead of copying everything into the workspace. Provider mounts are read-only
+by default and can opt into writes through custom source hooks. See
+[Federated workspace sources](/docs/cookbook/basics/workspace-source-mounts).

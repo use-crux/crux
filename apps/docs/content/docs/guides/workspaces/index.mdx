@@ -305,6 +305,146 @@ const ws = workspace({
 
 Use `/sources` for uploaded files, mounted MCP resources, app-owned documents, or material produced by ingestion.
 
+## Source-Backed Mounts
+
+A mount can be backed by a provider instead of the workspace `RecordStore`. This
+lets the workspace present one file tree where `/workspace` and `/outputs` are
+local writable files, while `/sources` resolves lazily from retrieval results,
+an app document service, an MCP resource server, a project index, or another
+connected system.
+
+Source-backed mounts are read-only by default. The workspace owns path
+normalization and verifies that providers cannot return paths outside their
+mount root. A custom source can opt into provider writes by mounting with
+`access: "readwrite"` and implementing `write()` and/or `delete()`. Retriever
+sources stay read-only.
+
+```ts
+import { retriever, workspace } from "@use-crux/core";
+import { storage } from "@use-crux/core/storage";
+
+const docs = retriever({
+  id: "docs",
+  namespace,
+  retrieve: async (query, options) => {
+    // Return RetrieverHit[] from your corpus.
+    return searchDocs(query, options);
+  },
+});
+
+const ws = workspace({
+  id: "research",
+  namespace,
+  storage: storage({ records, blobs }),
+  mounts: [
+    { path: "/workspace", access: "readwrite" },
+    { path: "/outputs", access: "readwrite" },
+    {
+      path: "/sources",
+      access: "read",
+      source: {
+        kind: "retriever",
+        retriever: docs,
+        query: "current task source documents",
+      },
+    },
+  ],
+});
+```
+
+A retriever mount projects hits as virtual text files. The default path is
+`hit.sourcePath` when present, otherwise `${sourceId}/${chunkId}.md`. Use
+`pathForHit`, `contentForHit`, or `mimeType` when your corpus needs a different
+mapping.
+
+```ts
+{
+  path: "/sources",
+  access: "read",
+  source: {
+    kind: "retriever",
+    retriever: docs,
+    query: ({ operation, query, path }) =>
+      operation === "grep" ? query ?? "" : path ?? "source docs",
+    pathForHit: (hit) => `${hit.sourceId}.md`,
+    contentForHit: (hit) => hit.parent?.content ?? hit.content,
+  },
+}
+```
+
+Custom sources expose any provider as files by implementing `list()` and
+`read()`. Optional `grep`, `exists`, and `stat` hooks let providers avoid
+fallback work; if `stat` is omitted, Crux derives file metadata from `read()`.
+
+```ts
+const uploadedSources = {
+  kind: "custom" as const,
+  list: async (path) => ({
+    entries: await appFiles.listWorkspaceEntries(path),
+  }),
+  read: async (path) => {
+    const file = await appFiles.readText(path);
+    return file
+      ? {
+          kind: "text" as const,
+          path,
+          mimeType: file.mimeType,
+          content: file.text,
+          size: file.size,
+          metadata: file.metadata,
+        }
+      : null;
+  },
+};
+```
+
+Read methods delegate to source-backed mounts:
+
+```ts
+await ws.list("/sources");
+await ws.read("/sources/brief.md");
+await ws.exists("/sources/brief.md");
+await ws.stat("/sources/brief.md");
+await ws.grep("needle", { path: "/sources/**/*.md" });
+```
+
+Unscoped `grep()` searches local files first and then source-backed mounts until
+`maxResults` is reached. `copy()` can materialize readable virtual text and JSON
+files into writable local mounts, or into provider-backed mounts that implement
+`write()`:
+
+```ts
+await ws.copy("/sources/brief.md", "/workspace/brief.md");
+```
+
+Version history is local to stored workspace files. `read(path, { version })`,
+`history`, `diff`, and `undo` are for local files, not live provider resources.
+To preserve a source-backed file, copy it into a writable mount and version the
+copy.
+
+Provider writes do not create Crux-managed versions or artifacts for the
+provider resource. The provider wrapper owns authorization, conflict handling,
+revision ids, and native history. `rename`, `move`, `undo`, and `finalize` stay
+local-only.
+
+### Provider patterns
+
+Providers that are not bundled as first-class workspace source kinds should be
+wrapped as `kind: "custom"`:
+
+- MCP resources: map resource URIs to stable `/sources/...` paths, authorize
+  before each call, and return normalized text or binary references.
+- Project Index snapshots: expose selected definitions or source summaries as
+  generated markdown files, not raw compiler objects.
+- Connected drives or CMS media: list only the app-authorized folder, map opaque
+  provider ids to workspace paths, and put provider ids in metadata instead of
+  leaking them into paths.
+
+See [Federated workspace sources](/docs/cookbook/basics/workspace-source-mounts)
+for read-mostly custom-source recipes and
+[Editable workspace sources](/docs/cookbook/basics/workspace-editable-source-mounts)
+for provider write hooks.
+
 ## Multiple Workspaces
 
 One unprefixed workspace can be injected directly:

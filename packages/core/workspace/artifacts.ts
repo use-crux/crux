@@ -14,6 +14,7 @@ import { mountForPath, normalizePath } from "./path";
 import { fileKey, getRequiredRecord, listFileRecords } from "./store";
 import { getVersionRecord } from "./version-store";
 import { workspaceSetOptions } from "./limits";
+import { assertWorkspaceMountIsLocal } from "./virtual-source";
 import type {
   WorkspaceArtifact,
   WorkspaceArtifactsQuery,
@@ -99,7 +100,8 @@ export function createWorkspaceArtifactOps(
       },
       async () => {
         const normalized = normalizePath(path);
-        mountForPath(normalized, config.mounts, "write");
+        const mount = mountForPath(normalized, config.mounts, "write");
+        assertWorkspaceMountIsLocal(mount, "finalize");
         const current = await getRequiredRecord(
           config.store,
           config.workspaceId,

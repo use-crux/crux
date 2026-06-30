@@ -7,6 +7,8 @@
     "structured-extraction",
     "streaming-with-tools",
     "workspace-files",
+    "workspace-source-mounts",
+    "workspace-editable-source-mounts",
     "postgres-data-store",
     "tool-approval-react",
     "tool-approval-cli",

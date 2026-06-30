@@ -1,16 +1,25 @@
 import { expectTypeOf } from "vitest";
 import { z } from "zod";
-import { workspace } from "../workspace";
+import { workspace, retrieverWorkspaceMountSource } from "../workspace";
 import type {
   WorkspaceLimits,
   WorkspaceProvenance,
   WorkspaceRetention,
 } from "../index";
 import type { Context } from "../prompt/context-types";
+import type { Retriever } from "../retrieval";
 import type {
   WorkspaceArtifact,
+  WorkspaceCustomMountSource,
   WorkspaceContent,
   WorkspaceJsonContent,
+  WorkspaceMountGrepOptions,
+  WorkspaceMountListOptions,
+  WorkspaceMountPathOptions,
+  WorkspaceMountReadOptions,
+  WorkspaceRetrieverMountSource,
+  WorkspaceRetrieverMountSourceOptions,
+  WorkspaceMountSource,
   WorkspaceTools,
 } from "../workspace";
 
@@ -78,3 +87,40 @@ expectTypeOf<{
   maxNamespaceBytes: 2;
 }>().toExtend<WorkspaceLimits>();
 expectTypeOf<{ ttlMs: 1 }>().toExtend<WorkspaceRetention>();
+
+expectTypeOf<{
+  kind: "custom";
+  list: (
+    path: string,
+    options?: WorkspaceMountListOptions,
+  ) => {
+    entries: [];
+  };
+  read: (path: string, options?: WorkspaceMountReadOptions) => null;
+  exists: (path: string, options?: WorkspaceMountPathOptions) => true;
+  grep: (
+    query: string,
+    options?: WorkspaceMountGrepOptions,
+  ) => {
+    matches: [];
+  };
+}>().toExtend<WorkspaceCustomMountSource>();
+expectTypeOf<WorkspaceCustomMountSource>().toExtend<WorkspaceMountSource>();
+
+declare const sourceRetriever: Retriever;
+expectTypeOf<{
+  kind: "retriever";
+  retriever: Retriever;
+  query: "docs";
+}>().toExtend<WorkspaceRetrieverMountSource>();
+expectTypeOf<WorkspaceRetrieverMountSource>().toExtend<WorkspaceMountSource>();
+expectTypeOf(
+  retrieverWorkspaceMountSource(sourceRetriever, {
+    query: ({ operation }) => operation,
+    pathForHit: (hit) => `${hit.sourceId}/${hit.chunkId}.md`,
+  }),
+).toExtend<WorkspaceCustomMountSource>();
+expectTypeOf<{
+  query: "docs";
+  limit: 5;
+}>().toExtend<WorkspaceRetrieverMountSourceOptions>();

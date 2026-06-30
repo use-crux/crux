@@ -13,6 +13,10 @@ import { resolveArtifact } from "./artifacts";
 import { mountForPath, normalizePath } from "./path";
 import { recordToReadResult } from "./read-result";
 import {
+  hasWorkspaceMountSource,
+  readWorkspaceMountSource,
+} from "./virtual-source";
+import {
   getRequiredRecord,
   listAllFileEntries,
   listEntries,
@@ -22,6 +26,7 @@ import type {
   NormalizedMount,
   WorkspaceContextOptions,
   WorkspaceListResult,
+  WorkspaceReadResult,
 } from "./types";
 
 const MANIFEST_FILE_LIMIT = 100;
@@ -64,7 +69,7 @@ export async function renderWorkspaceManifest(args: {
     "Mounted roots:",
     ...mounts.map(
       (mount) =>
-        `- ${mount.path} (${mount.access})${mount.description ? `: ${mount.description}` : ""}`,
+        `- ${mount.path} (${mountLabel(mount)})${mount.description ? `: ${mount.description}` : ""}`,
     ),
   ];
   if (rootListing.entries.length > 0) {
@@ -109,7 +114,18 @@ export async function renderWorkspaceManifest(args: {
     lines.push("", "Included workspace files:");
     for (const include of includes) {
       const normalized = normalizePath(include);
-      mountForPath(normalized, mounts, "read");
+      const mount = mountForPath(normalized, mounts, "read");
+      if (hasWorkspaceMountSource(mount)) {
+        const result = await readWorkspaceMountSource(mount, normalized, {
+          maxInlineBytes: options?.maxInlineBytes,
+        });
+        if (!result) {
+          throw new Error(`workspace file not found: "${include}".`);
+        }
+        pushIncludedFile(lines, result);
+        continue;
+      }
+
       const record = await getRequiredRecord(
         store,
         workspaceId,
@@ -120,23 +136,36 @@ export async function renderWorkspaceManifest(args: {
         blobs,
         maxInlineBytes: options?.maxInlineBytes,
       });
-      if (result.kind === "text") {
-        lines.push(`### ${result.path}`, result.content);
-      } else if (result.kind === "json") {
-        lines.push(
-          `### ${result.path}`,
-          "```json",
-          JSON.stringify(result.content, null, 2),
-          "```",
-        );
-      } else {
-        lines.push(
-          `### ${result.path}`,
-          `[binary ${result.mimeType}, ${result.size} bytes]`,
-        );
-      }
+      pushIncludedFile(lines, result);
     }
   }
 
   return lines.join("\n");
+}
+
+function pushIncludedFile(
+  lines: string[],
+  result: WorkspaceReadResult,
+): void {
+  if (result.kind === "text") {
+    lines.push(`### ${result.path}`, result.content);
+  } else if (result.kind === "json") {
+    lines.push(
+      `### ${result.path}`,
+      "```json",
+      JSON.stringify(result.content, null, 2),
+      "```",
+    );
+  } else {
+    lines.push(
+      `### ${result.path}`,
+      `[binary ${result.mimeType}, ${result.size} bytes]`,
+    );
+  }
+}
+
+function mountLabel(mount: NormalizedMount): string {
+  return mount.source
+    ? `${mount.access}, source: ${mount.source.kind}`
+    : mount.access;
 }

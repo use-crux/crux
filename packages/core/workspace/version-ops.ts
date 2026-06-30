@@ -16,6 +16,7 @@ import { mountForPath, normalizePath } from "./path";
 import { recordToReadResult } from "./read-result";
 import { snapshotContent, snapshotText } from "./version-content";
 import { getRecord } from "./store";
+import { assertWorkspaceMountIsLocal } from "./virtual-source";
 import {
   getVersionRecord,
   headToVersion,
@@ -159,7 +160,8 @@ export function createWorkspaceVersionOps(
       { workspaceId: config.workspaceId, operation: "undo", namespace, path },
       async () => {
         const normalized = normalizePath(path);
-        mountForPath(normalized, config.mounts, "write");
+        const mount = mountForPath(normalized, config.mounts, "write");
+        assertWorkspaceMountIsLocal(mount, "undo");
         const head = await requireHead(namespace, normalized, "undo");
         const current = head.headVersion ?? 1;
         if (current <= 1) {

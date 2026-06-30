@@ -1,0 +1,114 @@
+---
+title: Editable workspace sources
+description: Let a custom source-backed mount write changes back to its provider.
+---
+
+Use this when a file tree should stay provider-owned, but the agent may update
+provider documents through workspace operations. Common examples are internal
+documents, CMS drafts, connected-drive files, and app-owned resources with
+existing authorization rules.
+
+## Provider Contract
+
+Custom sources are read-only by default. To make one editable:
+
+- Set the mount to `access: "readwrite"`.
+- Implement `write()` for `write`, `edit`, `append`, and provider-destination
+  `copy`.
+- Implement `delete()` when workspace deletes should remove provider files.
+
+Crux still owns path normalization and mount-boundary validation. The provider
+owns authorization, conflict behavior, revision ids, and native history.
+
+```ts
+import type { WorkspaceCustomMountSource } from "@use-crux/core/workspace";
+
+export function editableAppDocumentSource(): WorkspaceCustomMountSource {
+  return {
+    kind: "custom",
+    list: async (path, options) => ({
+      entries: await appDocuments.list({
+        workspacePath: path,
+        limit: options?.limit,
+      }),
+    }),
+    read: async (path) => appDocuments.readWorkspaceText(path),
+    write: async (path, content, options) => {
+      if (typeof content !== "string") {
+        throw new Error("app documents only accept text content");
+      }
+
+      const saved = await appDocuments.upsertText({
+        workspacePath: path,
+        text: content,
+        mimeType: options?.mimeType,
+        metadata: options?.metadata,
+      });
+
+      return {
+        kind: "text" as const,
+        path,
+        mimeType: saved.mimeType,
+        content: saved.text,
+        size: new TextEncoder().encode(saved.text).byteLength,
+        metadata: saved.metadata,
+      };
+    },
+    delete: async (path) => {
+      await appDocuments.delete(path);
+    },
+  };
+}
+```
+
+## Mount It
+
+```ts
+import { workspace } from "@use-crux/core/workspace";
+
+const files = workspace({
+  id: "research-files",
+  namespace,
+  storage,
+  mounts: [
+    { path: "/workspace", access: "readwrite" },
+    {
+      path: "/sources",
+      access: "readwrite",
+      source: editableAppDocumentSource(),
+    },
+  ],
+});
+```
+
+The agent can use normal workspace operations:
+
+```ts
+await files.write("/sources/draft.md", "# Draft", {
+  mimeType: "text/markdown",
+});
+
+await files.edit("/sources/draft.md", {
+  find: "# Draft",
+  replace: "# Final",
+});
+
+await files.append("/sources/draft.md", "\n\nReviewed.");
+await files.copy("/workspace/review.md", "/sources/review.md");
+await files.delete("/sources/draft.md");
+```
+
+`edit()` and `append()` read the provider file first, then call the same
+`write()` hook with the updated text. Copying from a local workspace file into
+the provider also calls `write()`. If the source omits `write()`, those
+operations reject even when the mount is `readwrite`.
+
+## Local Snapshots
+
+Provider writes do not create Crux-managed versions, artifact manifests, or
+finalized deliverables. Use `copy()` when the agent needs a durable local
+snapshot with normal workspace history:
+
+```ts
+await files.copy("/sources/draft.md", "/workspace/draft.md");
+```
