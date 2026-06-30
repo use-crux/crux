@@ -15,7 +15,12 @@ export function createFakeUpstashVectorIndex() {
       }
     }),
     query: vi.fn(async (input: unknown) => queryVectors(vectors, input)),
-    delete: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn(async (input: unknown) => {
+      const ids = Array.isArray(input) ? input : [input]
+      for (const id of ids) {
+        vectors.delete(String(id))
+      }
+    }),
   }
   const index = {
     namespace: vi.fn(() => namespace),

@@ -1,5 +1,5 @@
 /**
- * Redis-backed CruxStore using `@upstash/redis`.
+ * Legacy Redis-backed CruxStore using `@upstash/redis`.
  *
  * Stores documents as JSON strings in Redis keys with a configurable prefix.
  * Change notifications via Redis `PUBLISH`/`SUBSCRIBE` on an events channel.
@@ -22,8 +22,10 @@ import type {
 import { matchesFilter } from '@use-crux/core/store'
 
 /**
- * Minimal Redis client interface compatible with `@upstash/redis`.
- * Only the methods actually used by `cruxRedisStore`.
+ * Minimal Redis client interface compatible with legacy `cruxRedisStore`.
+ *
+ * For the Storage Beta `RecordStore` API, prefer `upstashRedisRecordStore()`
+ * from the package root; it uses cursor-based SCAN for production listing.
  */
 export interface RedisClient {
   get<T = string | JsonObject>(key: string): Promise<T | null>

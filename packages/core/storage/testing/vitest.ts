@@ -178,28 +178,61 @@ export function describeVectorStoreConformance(options: DescribeVectorStoreConfo
       ).resolves.toEqual([])
     })
 
-    it('supports sparse and hybrid search but fails unsupported fusion claims fast', async () => {
+    it('honors sparse, hybrid, and fusion capability claims', async () => {
       const vectors = await options.prepare()
-      await vectors.upsert([
-        {
-          key: 'vector:hybrid',
-          dense: [1, 0],
-          sparse: { indices: [3], values: [2] },
-          metadata: { namespace: 'hybrid' },
-        },
-      ])
+      const capabilities = vectors.capabilities()
 
-      await expect(vectors.search({ mode: 'sparse', sparse: { indices: [3], values: [1] } })).resolves.toEqual([
-        expect.objectContaining({ key: 'vector:hybrid' }),
-      ])
-      await expect(
-        vectors.search({ mode: 'hybrid', dense: [1, 0], sparse: { indices: [3], values: [1] } }),
-      ).resolves.toEqual([expect.objectContaining({ key: 'vector:hybrid' })])
+      if (capabilities.sparse) {
+        await vectors.upsert([
+          {
+            key: 'vector:sparse',
+            sparse: { indices: [3], values: [2] },
+            metadata: { namespace: 'sparse' },
+          },
+        ])
+        await expect(vectors.search({ mode: 'sparse', sparse: { indices: [3], values: [1] } })).resolves.toEqual([
+          expect.objectContaining({ key: 'vector:sparse' }),
+        ])
+      } else {
+        await expect(vectors.search({ mode: 'sparse', sparse: { indices: [3], values: [1] } })).rejects.toMatchObject({
+          code: 'unsupported_capability',
+        })
+      }
 
-      const unsupportedFusion = vectors.capabilities().fusion.includes('rrf') ? 'dbsf' : 'rrf'
-      await expect(
-        vectors.search({ mode: 'hybrid', dense: [1, 0], sparse: { indices: [3], values: [1] }, fusion: unsupportedFusion }),
-      ).rejects.toMatchObject({ code: 'unsupported_capability' })
+      if (capabilities.hybrid) {
+        await vectors.upsert([
+          {
+            key: 'vector:hybrid',
+            dense: [1, 0],
+            sparse: { indices: [3], values: [2] },
+            metadata: { namespace: 'hybrid' },
+          },
+        ])
+        await expect(
+          vectors.search({
+            mode: 'hybrid',
+            dense: [1, 0],
+            sparse: { indices: [3], values: [1] },
+            filter: { namespace: 'hybrid' },
+          }),
+        ).resolves.toEqual([expect.objectContaining({ key: 'vector:hybrid' })])
+      } else {
+        await expect(
+          vectors.search({ mode: 'hybrid', dense: [1, 0], sparse: { indices: [3], values: [1] } }),
+        ).rejects.toMatchObject({ code: 'unsupported_capability' })
+      }
+
+      const unsupportedFusion = (['rrf', 'dbsf'] as const).find((fusion) => !capabilities.fusion.includes(fusion))
+      if (unsupportedFusion) {
+        await expect(
+          vectors.search({
+            mode: 'hybrid',
+            dense: [1, 0],
+            sparse: { indices: [3], values: [1] },
+            fusion: unsupportedFusion,
+          }),
+        ).rejects.toMatchObject({ code: 'unsupported_capability' })
+      }
     })
   })
 }
@@ -211,13 +244,16 @@ export function describeBlobStoreConformance(options: DescribeBlobStoreConforman
       const blobs = await options.prepare()
       const ref = await blobs.put({ key: 'reports/a.txt', content: 'hello', mimeType: 'text/plain' })
 
-      expect(ref.uri).toContain('reports')
       expect(ref.size).toBe(5)
-      await expect(blobs.get(ref.uri)).resolves.toMatchObject({
-        content: 'hello',
-        mimeType: 'text/plain',
-        size: 5,
-      })
+      const read = await blobs.get(ref.uri)
+      expect(read).toMatchObject({ mimeType: 'text/plain', size: 5 })
+      if (typeof read.content === 'string') {
+        expect(read.content).toBe('hello')
+      } else if (typeof Blob !== 'undefined' && read.content instanceof Blob) {
+        await expect(read.content.text()).resolves.toBe('hello')
+      } else {
+        expect(read.content).toEqual(new TextEncoder().encode('hello'))
+      }
       await expect(blobs.head?.(ref.uri)).resolves.toMatchObject({ uri: ref.uri, size: 5 })
       await blobs.delete(ref.uri)
       await expect(blobs.head?.(ref.uri)).resolves.toBeNull()

@@ -1,8 +1,10 @@
 /**
  * `@use-crux/convex` — Convex storage adapter for Crux.
  *
- * Provides `defineConvexStoreContract()` for creating server-side stores and
- * React transports backed by the same Convex store document contract.
+ * Provides Storage Beta factories (`convexRecordStore`, `convexVectorStore`,
+ * and `convexStorage`) plus `defineConvexStoreContract()` for creating legacy
+ * combined stores and React transports backed by the same Convex store
+ * document contract.
  *
  * **Setup:** Install the crux Convex component and use the component ref:
  *
@@ -19,6 +21,8 @@
 
 export { convexWorkspaceBlobStore } from './workspace'
 export type { ConvexWorkspaceBlobStoreConfig } from './workspace'
+export { convexRecordStore, convexStorage, convexVectorStore } from './storage'
+export type { ConvexStorageConfig } from './storage'
 export { flushObservability, withObservabilityFlush } from './observability'
 export type { ConvexActionHandler, ConvexObservabilityFlushOptions } from './observability'
 export { setup } from './bridge'

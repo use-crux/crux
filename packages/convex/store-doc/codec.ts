@@ -19,7 +19,7 @@ import type { DecodedStoreDoc, StoreDocCodec, StoreDocCodecOptions, StoreDocReco
  * for stores to apply TTL cleanup, vector scores, and top-level filters.
  */
 export function createStoreDocCodec(options: StoreDocCodecOptions = {}): StoreDocCodec {
-  const now = options.now ?? Date.now
+  const now = options.now ?? (() => Date.now())
 
   return {
     encode(key, value, setOptions) {

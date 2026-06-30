@@ -12,7 +12,10 @@ pnpm add @use-crux/upstash @use-crux/core @upstash/vector
 
 ## Usage
 
-Use `upstashVectorStore()` as the canonical `VectorStore` for dense, sparse, and hybrid retrieval.
+Use `upstashVectorStore()` as the canonical Storage Beta `VectorStore`. The
+adapter defaults to dense-only search because Upstash index mode is deployment
+configuration; opt into sparse or hybrid capabilities only when the backing
+index is known to support them.
 
 ```ts
 import { upstashVectorStore } from '@use-crux/upstash'
@@ -20,6 +23,7 @@ import { upstashVectorStore } from '@use-crux/upstash'
 const vectors = upstashVectorStore({
   index,
   namespace: 'docs',
+  capabilities: { dense: true, filter: 'pre' },
 })
 ```
 
@@ -41,6 +45,15 @@ const cacheStore = cruxUpstashStore({
 Do not reuse the same vector namespace for RAG chunks, memory, and semantic cache entries. `createSemanticCache()` requires an isolated namespace so cache lookup is not crowded out by unrelated vectors before filtering.
 
 ## Redis Store
+
+Use `upstashRedisRecordStore()` for the Storage Beta `RecordStore` API. It uses
+Redis PX expiry for native TTL and cursor-based SCAN for prefix listing.
+
+```ts
+import { upstashRedisRecordStore } from '@use-crux/upstash'
+
+const records = upstashRedisRecordStore({ redis, prefix: 'crux:' })
+```
 
 `cruxRedisStore()` is a Redis-backed key/value store with optional pub/sub. Plain Redis mode does not expose vector search:
 

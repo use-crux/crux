@@ -191,6 +191,25 @@ const cacheStore = semanticCacheDocuments.store(ctx)
 
 Only set `isolatedVectorNamespace: true` when the backing vector index is not shared with RAG chunks or memory entries. The flag is not enabled by default because a normal contract store is often shared by memory and retrieval. Semantic cache lookup needs a dedicated vector space so unrelated vectors cannot crowd out cache entries before filtering.
 
+### Storage Beta
+
+Use `convexStorage()` when a Crux primitive expects a Storage Beta capability
+bundle:
+
+```ts
+import { convexStorage } from '@use-crux/convex'
+
+const storage = convexStorage({
+  component: components.crux,
+  ctx,
+})
+```
+
+`convexRecordStore()` exposes component-backed JSON records with lazy TTL and
+scan-backed exact filters. `convexVectorStore()` is dense-only and reports
+post-filtered vector filtering truthfully, so production consumers that require
+pre-filtered vector search can reject it.
+
 ### `convexWorkspaceBlobStore(config)`
 
 Blob storage for `workspace()` binary and oversized files.
@@ -198,21 +217,21 @@ Blob storage for `workspace()` binary and oversized files.
 ```ts
 import { workspace } from '@use-crux/core/workspace'
 import { storage } from '@use-crux/core/storage'
-import { defineConvexStoreContract, convexWorkspaceBlobStore } from '@use-crux/convex'
+import { convexRecordStore, convexWorkspaceBlobStore } from '@use-crux/convex'
 
-const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+const records = convexRecordStore({ component: components.crux, ctx })
 
 const ws = workspace({
   id: 'thread-workspace',
   namespace: threadId,
   storage: storage({
-    data: cruxDocuments.store(ctx),
+    records,
     blobs: convexWorkspaceBlobStore({ ctx }),
   }),
 })
 ```
 
-Workspace metadata stays in the Convex-backed `DataStore`. Binary and large payloads go through Convex file storage. If the current Convex runtime cannot read blobs, `get()` throws clearly. Use a custom `BlobStore` for S3, R2, GCS, local disk, or another app-owned file service.
+Workspace metadata stays in the Convex-backed `RecordStore`. Binary and large payloads go through Convex file storage. If the current Convex runtime cannot read blobs, `get()` throws `StorageError('unsupported_capability')`. Missing blobs throw `StorageError('not_found')`. Use a custom `BlobStore` for S3, R2, GCS, local disk, or another app-owned file service.
 
 ### Observability helpers
 

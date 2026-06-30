@@ -1,8 +1,8 @@
 /**
- * `@use-crux/upstash` - Upstash Vector store adapter for Crux.
+ * `@use-crux/upstash` - Upstash storage adapters for Crux.
  *
- * Hybrid storage: text/metadata persisted in Convex (reliable, transactional),
- * vectors stored in Upstash Vector (fast similarity search).
+ * Exposes Storage Beta adapters for Upstash Vector and Redis, plus the legacy
+ * combined Convex + Upstash store for callers that have not migrated yet.
  *
  * @module
  */
@@ -23,6 +23,8 @@ import { matchesFilter } from '@use-crux/core/store'
 import { toStoreValue } from '@use-crux/core/memory'
 import type { RawMemoryDocument } from '@use-crux/core/memory'
 import { normalizeListPage } from './convex-list-page'
+export { upstashRedisRecordStore } from './redis-record-store'
+export type { RedisRecordClient, RedisSubscriber, UpstashRedisRecordStoreConfig } from './redis-record-store'
 import { upstashFilter, upstashVectorStore } from './vector-store'
 import type { UpstashIndex, UpstashVectorStoreConfig } from './vector-store'
 
@@ -221,7 +223,7 @@ export function cruxUpstashStore(config: UpstashMemoryStoreConfig): CruxStore {
         throw new Error('searchVectors requires a dense or sparse query vector.')
       }
 
-      const filter = upstashFilter(query.filter)
+      const filter = upstashFilter(query.filter as never)
       const results = await ns.query({
         ...(query.dense ? { vector: query.dense } : {}),
         ...(query.sparse ? { sparseVector: query.sparse } : {}),
