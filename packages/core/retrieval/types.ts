@@ -11,7 +11,7 @@
 
 import type { z } from 'zod'
 import type { DenseEmbedding, SparseEmbedding } from '../embedding'
-import type { CruxStore, DataStore, Storage, VectorStore } from '../store/types'
+import type { ExactFilter, RecordStore, Storage, VectorStore } from '../storage'
 import type { Context, PromptInjection } from '../prompt/context-types'
 import type { ToolDef } from '../types/tool'
 import type { QueryableCruxEntity } from '../tools/entity'
@@ -73,7 +73,7 @@ export interface RetrieverHit {
 export interface RetrieveOptions {
   limit?: number
   threshold?: number
-  filter?: Record<string, unknown>
+  filter?: ExactFilter
   mode?: 'dense' | 'sparse' | 'hybrid'
   fusion?: 'rrf' | 'dbsf'
 }
@@ -108,7 +108,7 @@ export type RetrievalStageKind =
   | 'custom'
 
 /** A planned subquery produced by a query stage. */
-export interface PlannedRetrievalQuery<TFilter extends Record<string, unknown> = Record<string, unknown>> {
+export interface PlannedRetrievalQuery<TFilter extends ExactFilter = ExactFilter> {
   query: string
   filter?: TFilter
   weight?: number
@@ -261,10 +261,9 @@ export interface DenseStoreBackedRetrieverConfig {
   /** Indexer id used to derive parent/chunk record keys. Defaults to `id`. */
   indexerId?: string
   namespace: string
-  data?: DataStore
+  records?: RecordStore
   vectors?: VectorStore
   storage?: Storage
-  store?: CruxStore
   dense?: DenseEmbedding
   sparse?: SparseEmbedding
   rerank?: RetrieverReranker | RetrieverReranker[]
@@ -272,7 +271,7 @@ export interface DenseStoreBackedRetrieverConfig {
     mode?: 'dense' | 'sparse' | 'hybrid'
     limit?: number
     threshold?: number
-    filter?: Record<string, unknown>
+    filter?: ExactFilter
     fusion?: 'rrf' | 'dbsf'
   }
   context?: RetrieverContextConfig

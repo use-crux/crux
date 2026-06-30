@@ -20,7 +20,7 @@ import {
   normalizePromptHint,
   resolveScope,
   validateConfig,
-  validateStore,
+  resolveSemanticCacheStores,
 } from './query'
 import { shouldLookup } from './policies'
 import { performLookup } from './lookup'
@@ -29,12 +29,12 @@ import { performWrite } from './write'
 /**
  * Create the semantic response cache plugin.
  *
- * @param config - Store, dense embedding, ttl, scope, threshold, and gates.
+ * @param config - Storage, dense embedding, ttl, scope, threshold, and gates.
  * @returns A {@link CruxPlugin} installing the semantic-cache middleware.
  *
  * @example
  * ```ts
- * config({ plugins: [createSemanticCache({ store, embedding, ttl: 86_400_000, scope: 'global' })] })
+ * config({ plugins: [createSemanticCache({ records, vectors, embedding, ttl: 86_400_000, scope: 'global' })] })
  * ```
  */
 export function createSemanticCache(config: SemanticCacheConfig): CruxPlugin {
@@ -46,7 +46,7 @@ export function createSemanticCache(config: SemanticCacheConfig): CruxPlugin {
   return {
     name: 'semantic-cache',
     install() {
-      validateStore(config.store)
+      resolveSemanticCacheStores(config)
 
       return {
         semanticCacheInstalled: true,

@@ -1,15 +1,15 @@
 /**
- * Flow lifecycle utilities — ID generation, duration parsing, and store operations
+ * Flow lifecycle utilities — ID generation, duration parsing, and record operations
  * for signaling, cancelling, and listing flows.
  *
- * Extracted from scope.ts — these functions depend on the runtime store
+ * Extracted from scope.ts — these functions depend on runtime record persistence
  * but not on the flow execution engine itself.
  *
  * @module
  */
 
-import { getRuntime, resolveStore } from '../runtime/runtime'
-import type { JsonObject } from '../store/types'
+import { getRuntime, resolveRecords } from '../runtime/runtime'
+import type { JsonObject } from '../storage'
 import type { FlowSnapshot, ListFlowsOptions, FlowSummary } from './types'
 
 // ─────────────────────────────────────────────────────────────────
@@ -70,11 +70,11 @@ export function parseDuration(duration: string): number {
  * Writes the signal payload to the store. The flow will pick it up
  * on the next `flow().run({ resume })` call.
  *
- * Uses the CruxStore from the runtime config (set via `config({ persistence: { store } })`).
+ * Uses the RecordStore from runtime config (`config({ persistence: { records } })`).
  */
 export async function signalFlow(flowId: string, name: string, payload: JsonObject = {}): Promise<void> {
-  const store = resolveStore()
-  await store.set(`${SIGNAL_KEY_PREFIX}${flowId}:${name}`, {
+  const store = resolveRecords()
+  await store.put(`${SIGNAL_KEY_PREFIX}${flowId}:${name}`, {
     payload,
     signaledAt: Date.now(),
     updatedAt: Date.now(),
@@ -83,17 +83,17 @@ export async function signalFlow(flowId: string, name: string, payload: JsonObje
 
 /** Load a persisted flow snapshot by ID. */
 export async function getFlowSnapshot(flowId: string): Promise<FlowSnapshot | null> {
-  const store = resolveStore()
+  const store = resolveRecords()
   return (await store.get(`${FLOW_KEY_PREFIX}${flowId}`)) as FlowSnapshot | null
 }
 
 /**
  * List flows from the store, optionally filtered by status.
  *
- * Uses the CruxStore from the runtime config (set via `config({ persistence: { store } })`).
+ * Uses the RecordStore from runtime config (`config({ persistence: { records } })`).
  */
 export async function listFlows(options?: ListFlowsOptions): Promise<FlowSummary[]> {
-  const store = resolveStore()
+  const store = resolveRecords()
   const filter = options?.status ? { status: options.status } : undefined
   const result = await store.list(FLOW_KEY_PREFIX, { filter })
   return result.entries.map((entry) => ({
@@ -111,13 +111,13 @@ export async function listFlows(options?: ListFlowsOptions): Promise<FlowSummary
  * Cancel a suspended flow externally.
  *
  * Updates the flow snapshot status to 'cancelled' in the store.
- * Uses the CruxStore from the runtime config (set via `config({ persistence: { store } })`).
+ * Uses the RecordStore from runtime config (`config({ persistence: { records } })`).
  */
 export async function cancelFlow(flowId: string, reason?: string): Promise<void> {
-  const store = resolveStore()
+  const store = resolveRecords()
   const snapshot = await store.get(`${FLOW_KEY_PREFIX}${flowId}`)
   if (snapshot) {
-    await store.set(`${FLOW_KEY_PREFIX}${flowId}`, {
+    await store.put(`${FLOW_KEY_PREFIX}${flowId}`, {
       ...snapshot,
       status: 'cancelled',
       cancelReason: reason,

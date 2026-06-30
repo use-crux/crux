@@ -988,6 +988,22 @@ function fallbackRelationTargetId(type: string, variableName: string | undefined
     case 'rag.pipeline.uses_retriever':
     case 'rag.pipeline.stage.uses_retriever':
       return `rag.retriever:${safeVariableId(variableName)}`
+    case 'storage.bundle.uses_record_store':
+    case 'rag.retriever.uses_record_store':
+    case 'workspace.uses_record_store':
+      return `storage.recordStore:${safeVariableId(variableName)}`
+    case 'storage.bundle.uses_vector_store':
+    case 'rag.retriever.uses_vector_store':
+    case 'workspace.uses_vector_store':
+      return `storage.vectorStore:${safeVariableId(variableName)}`
+    case 'storage.bundle.uses_blob_store':
+    case 'rag.retriever.uses_blob_store':
+    case 'workspace.uses_blob_store':
+      return `storage.blobStore:${safeVariableId(variableName)}`
+    case 'storage.scope.wraps_storage':
+    case 'rag.retriever.uses_storage':
+    case 'workspace.uses_storage':
+      return `storage.bundle:${safeVariableId(variableName)}`
     case 'constraint.applies_to':
     case 'guardrail.applies_to':
     case 'eval.covers_definition':

@@ -7,10 +7,10 @@
  * @module
  */
 
-import type { JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
+import type { JsonObject, RecordEntry, RecordListOptions } from '@use-crux/core/storage'
 
 /**
- * Transport interface for reactive CruxStore access.
+ * Transport interface for reactive record access.
  *
  * Each method IS a React hook — transports implement these using their native
  * reactive primitive. Convex uses `useQuery()`, SSE uses `useSyncExternalStore`,
@@ -19,7 +19,7 @@ import type { JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
  * Return semantics:
  * - `undefined` = loading (no data yet) or skipped (undefined key/prefix)
  * - `null` = loaded, document not found (`useDocument` only)
- * - `JsonObject` / `StoreEntry[]` = loaded with data
+ * - `JsonObject` / `RecordEntry[]` = loaded with data
  */
 export interface CruxTransport {
   /**
@@ -32,5 +32,5 @@ export interface CruxTransport {
    * React hook: subscribe to a list of documents by key prefix.
    * Pass `undefined` as prefix to skip the query (returns `undefined`).
    */
-  useDocumentList(prefix: string | undefined, options?: ListOptions): StoreEntry[] | undefined
+  useDocumentList(prefix: string | undefined, options?: RecordListOptions): RecordEntry[] | undefined
 }

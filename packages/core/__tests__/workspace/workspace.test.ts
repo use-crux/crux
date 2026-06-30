@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { prompt } from '../../prompt/prompt'
-import { inMemoryBlobStore, inMemoryDataStore, storage } from '../../storage'
+import { inMemoryBlobStore, inMemoryRecordStore, storage } from '../../storage'
 import { workspace, workspaceToolNames } from '../../workspace'
 import { resetRuntime, setRuntime } from '../../runtime/runtime'
 
@@ -9,7 +9,7 @@ describe('workspace()', () => {
     const ws = workspace({
       id: 'research',
       namespace: 'thread:1',
-      storage: storage({ data: inMemoryDataStore(), blobs: inMemoryBlobStore() }),
+      storage: storage({ records: inMemoryRecordStore(), blobs: inMemoryBlobStore() }),
     })
 
     const listing = await ws.list('/')
@@ -20,8 +20,8 @@ describe('workspace()', () => {
   })
 
     it('rejects traversal and paths outside configured mounts before storage access', async () => {
-    const data = inMemoryDataStore()
-    const setSpy = vi.spyOn(data, 'set')
+    const data = inMemoryRecordStore()
+    const setSpy = vi.spyOn(data, 'put')
     const ws = workspace({ id: 'research', namespace: 'thread:1', data })
 
     await expect(ws.write('/workspace/../secret.md', 'nope')).rejects.toThrow(/path traversal/i)
@@ -33,7 +33,7 @@ describe('workspace()', () => {
     const ws = workspace({
       id: 'research',
       namespace: 'thread:1',
-      storage: storage({ data: inMemoryDataStore(), blobs: inMemoryBlobStore() }),
+      storage: storage({ records: inMemoryRecordStore(), blobs: inMemoryBlobStore() }),
     })
 
     await ws.write('/workspace/notes.md', '# Notes', { mimeType: 'text/markdown' })
@@ -52,7 +52,7 @@ describe('workspace()', () => {
     const ws = workspace({
       id: 'research',
       namespace: 'thread:1',
-      storage: storage({ data: inMemoryDataStore(), blobs: inMemoryBlobStore() }),
+      storage: storage({ records: inMemoryRecordStore(), blobs: inMemoryBlobStore() }),
     })
 
     await ws.write('/workspace/notes.md', 'notes')
@@ -73,9 +73,9 @@ describe('workspace()', () => {
   })
 
     it('stores binary content in blobs and keeps metadata in the store', async () => {
-    const data = inMemoryDataStore()
+    const data = inMemoryRecordStore()
     const blobs = inMemoryBlobStore()
-    const ws = workspace({ id: 'research', namespace: 'thread:1', storage: storage({ data, blobs }) })
+    const ws = workspace({ id: 'research', namespace: 'thread:1', storage: storage({ records: data, blobs }) })
 
     await ws.write('/outputs/report.pdf', new Uint8Array([1, 2, 3]), { mimeType: 'application/pdf' })
     const file = await ws.read('/outputs/report.pdf')
@@ -94,7 +94,7 @@ describe('workspace()', () => {
   })
 
     it('throws clearly when binary content is written without a blob store', async () => {
-    const ws = workspace({ id: 'research', namespace: 'thread:1', data: inMemoryDataStore() })
+    const ws = workspace({ id: 'research', namespace: 'thread:1', records: inMemoryRecordStore() })
 
     await expect(ws.write('/outputs/report.pdf', new Uint8Array([1]), { mimeType: 'application/pdf' })).rejects.toThrow(
       /WorkspaceBlobStore/,
@@ -102,7 +102,7 @@ describe('workspace()', () => {
   })
 
     it('renders manifest context without dumping file contents', async () => {
-    const ws = workspace({ id: 'research', namespace: 'thread:1', data: inMemoryDataStore() })
+    const ws = workspace({ id: 'research', namespace: 'thread:1', records: inMemoryRecordStore() })
     await ws.write('/workspace/notes.md', 'private notes')
 
     const resolved = await prompt({
@@ -117,7 +117,7 @@ describe('workspace()', () => {
   })
 
     it('injects default tools and omits delete by default', async () => {
-    const ws = workspace({ id: 'research', namespace: 'thread:1', data: inMemoryDataStore() })
+    const ws = workspace({ id: 'research', namespace: 'thread:1', records: inMemoryRecordStore() })
     const resolved = await prompt({
       id: 'analyst',
       use: [ws],
@@ -142,7 +142,7 @@ describe('workspace()', () => {
         if (typeof threadId !== 'string') throw new Error('threadId is required')
         return `thread:${threadId}`
       },
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     })
     const resolved = await prompt({
       id: 'analyst',
@@ -169,7 +169,7 @@ describe('workspace()', () => {
     const ws = workspace({
       id: 'research',
       namespace: 'thread:1',
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
       tools: { prefix: 'research', delete: true },
     })
 
@@ -191,7 +191,7 @@ describe('workspace()', () => {
   })
 
     it('throws on multiple unprefixed workspace injections', async () => {
-    const data = inMemoryDataStore()
+    const data = inMemoryRecordStore()
     const one = workspace({ id: 'one', namespace: 'thread:1', data })
     const two = workspace({ id: 'two', namespace: 'thread:1', data })
 

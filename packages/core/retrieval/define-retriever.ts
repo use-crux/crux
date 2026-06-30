@@ -13,7 +13,7 @@ import { createRetrieverEntity } from './entity'
 import { runRetrievalOperation } from './observability'
 import {
   deriveStoreBackedMode,
-  getRetrieverDataStore,
+  getRetrieverRecordStore,
   getRetrieverVectorStore,
 } from './search'
 import { createIndexedKnowledgeStore } from '../indexed-knowledge'
@@ -56,19 +56,18 @@ function validateDenseStoreBackedConfig(
   config: Partial<DenseStoreBackedRetrieverConfig>,
 ): asserts config is DenseStoreBackedRetrieverConfig {
   const mode = deriveStoreBackedMode(config)
-  const data = getRetrieverDataStore(config)
+  const records = getRetrieverRecordStore(config)
   const vectors = getRetrieverVectorStore(config)
-  const legacyStore = config.store
 
   if (mode === 'dense') {
     if (!config.dense) {
       throw new Error('Store-backed retriever requires a dense embedding.')
     }
-    if (!vectors && !legacyStore?.vectorSearch && !legacyStore?.searchVectors) {
-      throw new Error('Dense retriever requires vectors.search(), store.vectorSearch(), or store.searchVectors().')
+    if (!vectors) {
+      throw new Error('Dense retriever requires vectors.search().')
     }
-    if (vectors && !data) {
-      throw new Error('Retriever with vectors requires data to hydrate vector hits.')
+    if (!records) {
+      throw new Error('Retriever with vectors requires records to hydrate vector hits.')
     }
     return
   }
@@ -77,11 +76,11 @@ function validateDenseStoreBackedConfig(
     if (!config.sparse) {
       throw new Error('Sparse retriever requires a sparse embedding.')
     }
-    if (!vectors && !legacyStore?.searchVectors) {
-      throw new Error('Sparse retriever requires vectors.search() or store.searchVectors().')
+    if (!vectors) {
+      throw new Error('Sparse retriever requires vectors.search().')
     }
-    if (vectors && !data) {
-      throw new Error('Retriever with vectors requires data to hydrate vector hits.')
+    if (!records) {
+      throw new Error('Retriever with vectors requires records to hydrate vector hits.')
     }
     return
   }
@@ -89,24 +88,23 @@ function validateDenseStoreBackedConfig(
   if (!config.dense || !config.sparse) {
     throw new Error('Hybrid retriever requires both dense and sparse embeddings.')
   }
-  if (!vectors && !legacyStore?.searchVectors) {
-    throw new Error('Hybrid retriever requires vectors.search() or store.searchVectors().')
+  if (!vectors) {
+    throw new Error('Hybrid retriever requires vectors.search().')
   }
-  if (vectors && !data) {
-    throw new Error('Retriever with vectors requires data to hydrate vector hits.')
+  if (!records) {
+    throw new Error('Retriever with vectors requires records to hydrate vector hits.')
   }
 }
 
 function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig): Retriever {
   const defaultMode = deriveStoreBackedMode(config)
   const rerankers = normalizeRerankers(config.rerank)
-  const data = getRetrieverDataStore(config)
+  const recordStore = getRetrieverRecordStore(config)
   const records = createIndexedKnowledgeStore({
     indexerId: config.indexerId ?? config.id,
     namespace: config.namespace,
-    data: data ?? config.store!,
+    records: recordStore!,
     vectors: getRetrieverVectorStore(config),
-    legacyStore: config.store,
   })
 
   const retrieve: Retriever['retrieve'] = async (query, options = {}) => {

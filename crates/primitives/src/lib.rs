@@ -82,6 +82,12 @@ mod scorer {
     pub(crate) mod facts;
 }
 mod source_refs;
+mod storage {
+    pub(crate) mod capabilities;
+    pub(crate) mod dependencies;
+    pub(crate) mod facts;
+    pub(crate) mod metadata;
+}
 mod tool {
     pub(crate) mod facts;
 }

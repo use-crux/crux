@@ -9,7 +9,7 @@
  */
 
 import type { CruxChunk, CruxParentChunk } from '../indexing/types'
-import type { CruxStore, DataStore, SparseVector, VectorStore } from '../store/types'
+import type { ExactFilter, RecordStore, SparseVector, VectorStore } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
 
 /** Storage ports required by the indexed knowledge read model. */
@@ -18,12 +18,10 @@ export interface IndexedKnowledgeStoreConfig {
   readonly indexerId: string
   /** Namespace for all records handled by this store instance. */
   readonly namespace: string
-  /** Durable JSON store containing chunk and parent records. */
-  readonly data: DataStore
+  /** Durable JSON records containing chunk and parent records. */
+  readonly records: RecordStore
   /** Optional split vector store for dense, sparse, or hybrid search. */
   readonly vectors?: VectorStore
-  /** Optional legacy combined store used during the storage split migration. */
-  readonly legacyStore?: CruxStore
 }
 
 /** Internal read-model API for indexed chunks and parent records. */
@@ -83,7 +81,7 @@ export interface IndexedChunkSearchQuery {
   /** Minimum vector similarity score. */
   readonly threshold?: number
   /** User filter merged with namespace, record type, and active-generation filters. */
-  readonly filter?: Record<string, unknown>
+  readonly filter?: ExactFilter
   /** Optional fusion algorithm for hybrid-capable vector stores. */
   readonly fusion?: 'rrf' | 'dbsf'
 }

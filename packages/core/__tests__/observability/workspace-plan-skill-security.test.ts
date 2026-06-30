@@ -19,7 +19,7 @@ import {
   resolveRegistrySkill,
   skill,
 } from "../../skill";
-import { inMemoryCruxStore, inMemoryDataStore } from "../../store/memory";
+import { inMemoryRecordStore } from "../../storage";
 import { workspace } from "../../workspace";
 
 const fixtureRoot = join(__dirname, "__observability-fixtures__");
@@ -43,7 +43,7 @@ describe("canonical workspace, plan-task, skill, and security observability", ()
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "private notes", {
@@ -106,7 +106,7 @@ describe("canonical workspace, plan-task, skill, and security observability", ()
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/outputs/report.md", "# Report", {
@@ -166,7 +166,7 @@ describe("canonical workspace, plan-task, skill, and security observability", ()
   it("records plan and task mutations as plan/task spans", async () => {
     const transport = createInMemoryObservabilityTransport();
     setObservabilityTransport(transport);
-    updateRuntime({ store: inMemoryCruxStore() });
+    updateRuntime({ records: inMemoryRecordStore() });
 
     const p = await plan({ title: "Migration Plan", content: "Do the work." });
     await updatePlan(p.id, { content: "Do the better work." });

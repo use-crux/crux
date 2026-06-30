@@ -184,6 +184,10 @@ function dataAccessTargetKind(
     normalized.includes("fs")
   )
     return "workspace";
+  if (normalized.includes("record")) return "storage.recordStore";
+  if (normalized.includes("vector")) return "storage.vectorStore";
+  if (normalized.includes("blob")) return "storage.blobStore";
+  if (normalized.includes("storage")) return "storage.bundle";
   if (normalized.includes("store")) return "store";
   if (normalized.includes("block")) return "block";
   if (

@@ -10,7 +10,7 @@
  * @module
  */
 
-import type { JsonObject } from "../store/types";
+import type { JsonObject } from "../storage";
 import type { WorkspaceFileRecord, WorkspaceNamespaceOption } from "./types";
 
 /** Persisted schema version for a {@link WorkspaceVersionRecord}. */
@@ -140,6 +140,9 @@ export interface WorkspaceDiff {
 /** Options for {@link Workspace.undo}. */
 export interface WorkspaceUndoOptions extends WorkspaceNamespaceOption {}
 
+/** JSON-compatible workspace file snapshot persisted in version history. */
+type WorkspaceVersionSnapshot = WorkspaceFileRecord & JsonObject;
+
 /**
  * The persisted snapshot of a file at a single version. Internal.
  *
@@ -154,5 +157,5 @@ export interface WorkspaceVersionRecord extends JsonObject {
   readonly version: number;
   readonly operation: WorkspaceVersionOperation;
   readonly createdAt: number;
-  readonly snapshot: WorkspaceFileRecord;
+  readonly snapshot: WorkspaceVersionSnapshot;
 }

@@ -11,7 +11,7 @@ This recipe sets up a complete production-style RAG pipeline: ingest a directory
 - `@use-crux/core/indexing` — `indexer()` for chunk + embed + write, `corpus()` for incremental sync
 - `@use-crux/core/retrieval` — `retriever()` for query + asContext
 - `@use-crux/ai` — `reranker()` for model-based reranking
-- `@use-crux/upstash` — `upstashVectorStore()` for managed vector search
+- `@use-crux/convex` and `@use-crux/upstash` — `convexRecordStore()` for JSON records and `upstashVectorStore()` for managed vector search
 - `embedding()` — one dense + one sparse embedding
 
 ## When to reach for this pattern
@@ -54,15 +54,14 @@ export const sparse = embedding({
 ### `lib/rag/storage.ts`
 
 ```ts
-import { defineConvexStoreContract } from '@use-crux/convex'
+import { convexRecordStore } from '@use-crux/convex'
 import { upstashVectorStore } from '@use-crux/upstash'
 import { Index } from '@upstash/vector'
 
-const cruxDocuments = defineConvexStoreContract({
+export const records = convexRecordStore({
   component: components.crux,
+  ctx,
 })
-
-export const data = cruxDocuments.store(ctx)
 
 export const vectors = upstashVectorStore({
   index: new Index({
@@ -80,12 +79,12 @@ import { chunker, corpus, indexer, indexingPipeline, transform } from '@use-crux
 import { filesSource } from '@use-crux/ingest/files'
 
 import { dense, sparse } from './embedding'
-import { data, vectors } from './storage'
+import { records, vectors } from './storage'
 
 export const docsIndexer = indexer({
   id: 'product-docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -110,7 +109,7 @@ export const docsIndexer = indexer({
 export const docsCorpus = corpus({
   id: 'product-docs',
   namespace: 'product-docs',
-  store: data,
+  records,
   indexer: docsIndexer,
 })
 
@@ -136,7 +135,7 @@ import { reranker } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 import { dense, sparse } from './embedding'
-import { data, vectors } from './storage'
+import { records, vectors } from './storage'
 
 const docsReranker = reranker({
   name: 'product-docs-reranker',
@@ -147,7 +146,7 @@ const docsReranker = reranker({
 export const docs = retriever({
   id: 'product-docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -179,7 +178,7 @@ export const advancedDocs = retrievalPipeline(docs, [
     count: 4,
   }),
   parentExpand({
-    store: data,
+    records,
     maxParentChars: 4000,
   }),
   compress({
@@ -298,5 +297,5 @@ const urlGrounding = grounding({
   <Card title="Local files RAG" description="The same retrieval stack with an in-memory local corpus." href="/docs/cookbook/rag/local-files-rag" />
   <Card title="Retrieval guide" description="The full RAG architecture — embeddings, ingestion, indexing, retrieval." href="/docs/guides/retrieval" />
   <Card title="Episodic recall" description="Auto-recall past chat turns instead of indexed docs." href="/docs/cookbook/rag/episodic-recall" />
-  <Card title="@use-crux/upstash reference" description="Upstash VectorStore and Redis DataStore APIs." href="/docs/reference/storage/upstash" />
+  <Card title="@use-crux/upstash reference" description="Upstash VectorStore and Redis RecordStore APIs." href="/docs/reference/storage/upstash" />
 </Cards>

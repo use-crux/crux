@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { DataStore } from "../store/types";
+import type { JsonObject, RecordStore } from "../storage";
 import { analyzeContent, createFileRecord, recordToFile } from "./content";
 import { globToRegExp, hasGlob } from "./glob";
 import { instrument } from "./observability";
@@ -42,7 +42,7 @@ import type {
 /** Bound dependencies for filesystem-style workspace operations. */
 export interface WorkspaceFilesystemOpsConfig {
   readonly workspaceId: string;
-  readonly store: DataStore;
+  readonly store: RecordStore;
   readonly blobs?: WorkspaceBlobStore;
   readonly mounts: readonly NormalizedMount[];
   readonly inlineTextBelowBytes: number;
@@ -197,9 +197,9 @@ export function createWorkspaceFilesystemOps(
               config.store,
               config.retention,
             );
-            await config.store.set(
+            await config.store.put(
               fileKey(config.workspaceId, namespace, normalized),
-              record,
+              record as unknown as JsonObject,
               setOptions,
             );
             await recordFileVersion({
@@ -528,7 +528,7 @@ export function createWorkspaceFilesystemOps(
   ): Promise<void> {
     const key = fileKey(config.workspaceId, namespace, path);
     const setOptions = workspaceSetOptions(config.store, config.retention);
-    await config.store.set(key, record, setOptions);
+    await config.store.put(key, record as unknown as JsonObject, setOptions);
     try {
       await recordFileVersion({
         store: config.store,
@@ -543,7 +543,11 @@ export function createWorkspaceFilesystemOps(
       });
     } catch (error) {
       if (previous) {
-        await config.store.set(key, previous, setOptions);
+        await config.store.put(
+          key,
+          previous as unknown as JsonObject,
+          setOptions,
+        );
       } else {
         await config.store.delete(key);
       }

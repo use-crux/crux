@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { DataStore } from "../store/types";
+import type { RecordStore } from "../storage";
 import { computeWorkspaceDiff } from "./diff";
 import { instrument } from "./observability";
 import { mountForPath, normalizePath } from "./path";
@@ -45,7 +45,7 @@ import type {
 /** Bound dependencies for the version-aware operations. */
 export interface WorkspaceVersionOpsConfig {
   readonly workspaceId: string;
-  readonly store: DataStore;
+  readonly store: RecordStore;
   readonly blobs?: WorkspaceBlobStore;
   readonly mounts: readonly NormalizedMount[];
   readonly resolveNamespace: () => Promise<string>;

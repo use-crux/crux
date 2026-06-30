@@ -148,13 +148,13 @@ const ws = workspace({
   id: "research",
   namespace: threadId,
   storage: storage({
-    data,
+    records,
     blobs: convexWorkspaceBlobStore({ ctx }),
   }),
 });
 ```
 
-See [Storage](/docs/guides/storage) for the difference between `DataStore`, `VectorStore`, and `BlobStore`, and [BlobStore](/docs/guides/storage/blob-storage) for custom S3/R2/GCS-style blob stores.
+See [Storage](/docs/guides/storage) for the difference between `RecordStore`, `VectorStore`, and `BlobStore`, and [BlobStore](/docs/guides/storage/blob-storage) for custom S3/R2/GCS-style blob stores.
 
 ## Versioning And History
 
@@ -219,7 +219,7 @@ workspace({
 });
 ```
 
-`retention.ttlMs` is passed to `DataStore.set({ ttl })` only when the store
+`retention.ttlMs` is passed to `RecordStore.put(..., { ttlMs })` only when the store
 supports TTL. `maxFileBytes` rejects a single oversized write, and
 `maxNamespaceBytes` rejects writes that would push the namespace over its cap.
 

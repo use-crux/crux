@@ -1,13 +1,13 @@
 /**
  * Server-side stream helpers for injecting Crux data into AI SDK streams.
  *
- * Subscribe to CruxStore changes during streaming and inject `data-crux`
+ * Subscribe to RecordStore changes during streaming and inject `data-crux`
  * parts into the active UI message stream.
  *
  * @module
  */
 
-import type { CruxStore, StoreEvent } from '@use-crux/core/store'
+import type { JsonObject, RecordEvent, RecordStore } from '@use-crux/core/storage'
 import type { CruxDataPart } from './types'
 
 /**
@@ -37,7 +37,7 @@ interface CruxStreamWriterOptions {
 
 /**
  * A crux stream writer handle. Call `close()` when the stream ends
- * to unsubscribe from store changes.
+ * to unsubscribe from record changes.
  */
 interface CruxStreamWriterHandle {
   /** Unsubscribe from store changes and flush pending updates. */
@@ -47,12 +47,12 @@ interface CruxStreamWriterHandle {
 /**
  * Create a crux data injector for an AI SDK UIMessageStream.
  *
- * Subscribes to `store.subscribe()` and writes `data-crux` parts
+ * Subscribes to `RecordStore.watch()` and writes `data-crux` parts
  * to the stream writer whenever plans, task lists, or tasks change.
  * Progress updates are debounced to avoid flooding the stream.
  *
  * @param writer - The UIMessageStreamWriter from `createUIMessageStream`'s execute callback.
- * @param store - The CruxStore to subscribe to.
+ * @param records - The RecordStore to subscribe to.
  * @param options - Optional debounce configuration.
  * @returns A handle with a `close()` method to stop listening.
  *
@@ -78,7 +78,7 @@ interface CruxStreamWriterHandle {
  */
 export function createCruxStreamWriter(
   writer: StreamWriter,
-  store: CruxStore,
+  records: RecordStore,
   options?: CruxStreamWriterOptions,
 ): CruxStreamWriterHandle {
   const debounceMs = options?.debounceMs ?? 500
@@ -98,8 +98,8 @@ export function createCruxStreamWriter(
     return null
   }
 
-  function isProgressUpdate(event: StoreEvent): boolean {
-    if (event.type !== 'set') return false
+  function isProgressUpdate(event: RecordEvent): boolean {
+    if (event.type !== 'put') return false
     const entity = classifyKey(event.key)
     if (entity !== 'task') return false
     // A progress-only update: status didn't change, just progress text
@@ -107,21 +107,21 @@ export function createCruxStreamWriter(
     return value?.progress !== undefined
   }
 
-  function writePart(key: string, value: unknown | null, eventType: 'set' | 'delete') {
+  function writePart(key: string, value: unknown | null, eventType: 'put' | 'delete') {
     const entity = classifyKey(key)
     if (!entity) return
 
     const part: CruxDataPart = {
       entity,
       key,
-      value: value as Record<string, unknown> | null,
+      value: value as JsonObject | null,
       event: eventType,
     }
 
     writer.write({ type: 'data-crux', data: part })
   }
 
-  function handleEvent(event: StoreEvent) {
+  function handleEvent(event: RecordEvent) {
     const entity = classifyKey(event.key)
     if (!entity) return
 
@@ -144,17 +144,16 @@ export function createCruxStreamWriter(
       }
       const timer = setTimeout(() => {
         pendingProgress.delete(event.key)
-        writePart(event.key, event.value, 'set')
+        writePart(event.key, event.value, 'put')
       }, debounceMs)
       pendingProgress.set(event.key, { timer, value: event.value })
       return
     }
 
-    writePart(event.key, event.value, 'set')
+    writePart(event.key, event.value, 'put')
   }
 
-  // Subscribe to store changes
-  const unsubscribe = store.subscribe?.(handleEvent)
+  const unsubscribe = records.watch?.('', handleEvent)
 
   return {
     close() {
@@ -162,7 +161,7 @@ export function createCruxStreamWriter(
       // Flush all pending progress updates
       for (const [key, pending] of pendingProgress) {
         clearTimeout(pending.timer)
-        writePart(key, pending.value, 'set')
+        writePart(key, pending.value, 'put')
       }
       pendingProgress.clear()
     },

@@ -2,6 +2,7 @@ import type { ProjectDefinition } from '@use-crux/core/project-index'
 import type { IndexExtractor, ConfigReader } from '../extensions'
 import { facts } from '../extensions'
 import { foldedIndexChild } from '../index-presentation'
+import { storageConfigReferences, storageDependencyFacts, storageRelationRefs } from './storage-dependencies'
 
 /**
  * Extracts retriever and retrieval-pipeline definitions.
@@ -19,6 +20,8 @@ export const ragRetrieverIndexExtractor: IndexExtractor = {
     if (ctx.match.name === 'retriever' && ctx.config) {
       const explicitId = ctx.config.string('id')
       const name = explicitId ?? ctx.source.variableName
+      const storageRefs = storageConfigReferences(ctx.config)
+      const storageDependencies = storageDependencyFacts(storageRefs)
       return facts({
         definitions: [
           ctx.define.definition({
@@ -35,10 +38,12 @@ export const ragRetrieverIndexExtractor: IndexExtractor = {
               },
               intelligence: {
                 confidence: 'static',
+                ...(storageDependencies ? { dependencies: storageDependencies } : {}),
               },
             },
           }),
         ],
+        references: storageRelationRefs('rag.retriever', storageRefs),
       })
     }
 

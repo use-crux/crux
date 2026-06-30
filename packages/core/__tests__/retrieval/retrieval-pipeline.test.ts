@@ -15,7 +15,7 @@ import {
   retrievalStage,
   retriever as makeRetriever,
 } from '../../retrieval'
-import { inMemoryCruxStore } from '../../store/memory'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 import type { RetrieverHit } from '../../retrieval'
 
 function hit(id: string, content: string, score = 1, metadata: Record<string, unknown> = {}): RetrieverHit {
@@ -182,7 +182,8 @@ describe('retrievalPipeline', () => {
   })
 
     it('expands parent records without replacing child evidence', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const dense = makeEmbedding({
       kind: 'dense',
       name: 'dense',
@@ -194,7 +195,8 @@ describe('retrievalPipeline', () => {
     const docsIndexer = makeIndexer({
       id: 'docs',
       namespace: 'docs',
-      store,
+      records,
+      vectors,
       dense,
       pipeline: indexingPipeline({
         chunker: chunker.parentChild({ parentMaxChars: 80, childMaxChars: 40 }),
@@ -210,8 +212,8 @@ describe('retrievalPipeline', () => {
       },
     ])
 
-    const docs = makeRetriever({ id: 'docs', namespace: 'docs', store, dense })
-    const pipeline = retrievalPipeline(docs, [parentExpand({ store })])
+    const docs = makeRetriever({ id: 'docs', namespace: 'docs', records, vectors, dense })
+    const pipeline = retrievalPipeline(docs, [parentExpand({ records })])
     const hits = await pipeline.retrieve('pricing')
 
     expect(hits[0].sourceId).toBe('pricing')
@@ -224,7 +226,7 @@ describe('retrievalPipeline', () => {
   })
 
     it('can fail parent expansion when a referenced parent is missing', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
     const { retriever } = baseRetriever({
       pricing: [
         {
@@ -233,7 +235,7 @@ describe('retrievalPipeline', () => {
         },
       ],
     })
-    const pipeline = retrievalPipeline(retriever, [parentExpand({ store, missing: 'error' })])
+    const pipeline = retrievalPipeline(retriever, [parentExpand({ records, missing: 'error' })])
 
     await expect(pipeline.retrieve('pricing')).rejects.toThrow('parentExpand could not find parent record')
   })

@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { DataStore } from "../store/types";
+import type { ExactFilter, JsonObject, RecordStore } from "../storage";
 import { instrument } from "./observability";
 import { mountForPath, normalizePath } from "./path";
 import { fileKey, getRequiredRecord, listFileRecords } from "./store";
@@ -29,7 +29,7 @@ import type {
 /** Bound dependencies for artifact lifecycle operations. */
 export interface WorkspaceArtifactOpsConfig {
   readonly workspaceId: string;
-  readonly store: DataStore;
+  readonly store: RecordStore;
   readonly mounts: readonly NormalizedMount[];
   readonly retention?: WorkspaceRetention;
   readonly resolveNamespace: () => Promise<string>;
@@ -106,17 +106,18 @@ export function createWorkspaceArtifactOps(
           namespace,
           normalized,
         );
+        const kind = options?.kind ?? current.kind;
         const finalized: WorkspaceFileRecord = {
           ...current,
           status: "final",
-          kind: options?.kind ?? current.kind,
+          ...(kind !== undefined ? { kind } : {}),
           // Pin the current revision as the published version.
           finalVersion: current.headVersion ?? 1,
           updatedAt: Date.now(),
         };
-        await config.store.set(
+        await config.store.put(
           fileKey(config.workspaceId, namespace, normalized),
-          finalized,
+          finalized as unknown as JsonObject,
           workspaceSetOptions(config.store, config.retention),
         );
         return resolveArtifact({
@@ -153,7 +154,7 @@ export function createWorkspaceArtifactOps(
  */
 export async function resolveArtifact(input: {
   readonly record: WorkspaceFileRecord;
-  readonly store: DataStore;
+  readonly store: RecordStore;
   readonly workspaceId: string;
   readonly namespace: string;
 }): Promise<WorkspaceArtifact> {
@@ -232,8 +233,8 @@ function inlineArtifactUri(
 
 function artifactFilter(
   options: WorkspaceArtifactsQuery | undefined,
-): Record<string, unknown> | undefined {
-  const filter: Record<string, unknown> = {};
+): ExactFilter | undefined {
+  const filter: Record<string, ExactFilter[string]> = {};
   if (options?.status) filter.status = options.status;
   if (options?.kind) filter.kind = options.kind;
   if (options?.path) filter.path = normalizePath(options.path);

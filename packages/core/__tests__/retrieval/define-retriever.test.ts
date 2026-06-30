@@ -3,9 +3,8 @@ import { z } from 'zod'
 import { embedding as makeEmbedding } from '../../embedding'
 import { indexer as makeIndexer } from '../../indexing'
 import { retriever as makeRetriever, reranker as makeReranker } from '../../retrieval'
-import { inMemoryDataStore, inMemoryVectorStore } from '../../storage'
-import { inMemoryCruxStore } from '../../store/memory'
-import type { CruxStore, JsonObject, ListResult, ScoredEntry, VectorSearchQuery } from '../../store/types'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
+import type { JsonObject, VectorHit } from '../../storage'
 
 function createDenseEmbedding() {
   return makeEmbedding({
@@ -32,51 +31,46 @@ function createSparseEmbedding() {
   })
 }
 
-function createScoredEntry(
+function createVectorHit(
   key: string,
-  value: Partial<JsonObject> & {
+  value: {
     namespace: string
     sourceId: string
     chunkId: string
     content: string
+    metadata?: JsonObject
+    parent?: JsonObject
   },
   score: number,
-): ScoredEntry {
+): { readonly record: JsonObject; readonly hit: VectorHit } {
   return {
-    key,
-    score,
-    value: {
+    record: {
+      _cruxRecordType: 'chunk',
       namespace: value.namespace,
       sourceId: value.sourceId,
       chunkId: value.chunkId,
       content: value.content,
       metadata: value.metadata ?? {},
+      generationId: 'gen-test',
+      active: true,
+      ordinal: 0,
+      createdAt: 1,
+      updatedAt: 1,
       ...(value.parent ? { parent: value.parent } : {}),
-      ...(value.sourceUrl ? { sourceUrl: value.sourceUrl } : {}),
-      ...(value.sourcePath ? { sourcePath: value.sourcePath } : {}),
     },
-  }
-}
-
-function createBaseStore(overrides: Partial<CruxStore> = {}): CruxStore {
-  return {
-    get: async () => null,
-    set: async () => {},
-    delete: async () => {},
-    list: async (): Promise<ListResult> => ({ entries: [] }),
-    ...overrides,
+    hit: { key, score },
   }
 }
 
 describe('retriever', () => {
-    it('retrieves chunks indexed into explicit data and vector stores', async () => {
-    const data = inMemoryDataStore()
+    it('retrieves chunks indexed into explicit record and vector stores', async () => {
+    const records = inMemoryRecordStore()
     const vectors = inMemoryVectorStore()
     const dense = createDenseEmbedding()
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'docs',
-      data,
+      records,
       vectors,
       dense,
     })
@@ -92,7 +86,7 @@ describe('retriever', () => {
     const retriever = makeRetriever({
       id: 'docs',
       namespace: 'docs',
-      data,
+      records,
       vectors,
       dense,
       search: { mode: 'dense' },
@@ -216,33 +210,31 @@ describe('retriever', () => {
     ).toThrow('Reranker name must be non-empty')
   })
 
-    it('retrieves dense hits via vectorSearch and forwards user filters', async () => {
+    it('retrieves dense hits via vectors.search and forwards user filters', async () => {
     const dense = createDenseEmbedding()
-    const vectorSearch = vi.fn(async (_embedding: number[], options?: { limit?: number; threshold?: number; filter?: Record<string, unknown> }) => {
-      expect(options?.limit).toBe(3)
-      expect(options?.threshold).toBe(0.4)
-      expect(options?.filter).toMatchObject({ topic: 'launch' })
-      return [
-        createScoredEntry(
-          'retriever:r1:source:doc-1:chunk:0',
-          {
-            namespace: 'docs',
-            sourceId: 'doc-1',
-            chunkId: '0',
-            content: 'Launch checklist',
-            metadata: { topic: 'launch' },
-            parent: { title: 'Launch Plan' },
-          },
-          0.92,
-        ),
-      ]
-    })
-    const store = createBaseStore({ vectorSearch })
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
+    const key = 'retriever:r1:source:doc-1:chunk:0'
+    const chunk = createVectorHit(
+      key,
+      {
+        namespace: 'docs',
+        sourceId: 'doc-1',
+        chunkId: '0',
+        content: 'Launch checklist',
+        metadata: { topic: 'launch' },
+        parent: { title: 'Launch Plan' },
+      },
+      0.92,
+    )
+    await records.put(key, chunk.record)
+    const search = vi.spyOn(vectors, 'search').mockResolvedValue([chunk.hit])
 
     const retriever = makeRetriever({
       id: 'r1',
       namespace: 'docs',
-      store,
+      records,
+      vectors,
       dense,
       search: {
         limit: 2,
@@ -252,7 +244,15 @@ describe('retriever', () => {
 
     const hits = await retriever.retrieve('launch steps', { limit: 3, threshold: 0.4 })
 
-    expect(vectorSearch).toHaveBeenCalledTimes(1)
+    expect(search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'dense',
+        dense: [12, 6],
+        limit: 3,
+        threshold: 0.4,
+        filter: expect.objectContaining({ topic: 'launch', namespace: 'docs' }),
+      }),
+    )
     expect(hits).toEqual([
       {
         namespace: 'docs',
@@ -266,38 +266,43 @@ describe('retriever', () => {
     ])
   })
 
-    it('falls back to searchVectors for dense retrieval when vectorSearch is absent', async () => {
+    it('uses beta vector search for dense retrieval', async () => {
     const dense = createDenseEmbedding()
-    const searchVectors = vi.fn(async (query: VectorSearchQuery) => {
-      expect(query.dense).toEqual([13, 6.5])
-      expect(query.limit).toBe(4)
-      expect(query.filter).toMatchObject({ namespace: 'docs' })
-      return [
-        createScoredEntry(
-          'retriever:r1:source:doc-2:chunk:1',
-          {
-            namespace: 'docs',
-            sourceId: 'doc-2',
-            chunkId: '1',
-            content: 'Roadmap notes',
-            metadata: {},
-          },
-          0.88,
-        ),
-      ]
-    })
-    const store = createBaseStore({ searchVectors })
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
+    const key = 'retriever:r1:source:doc-2:chunk:1'
+    const chunk = createVectorHit(
+      key,
+      {
+        namespace: 'docs',
+        sourceId: 'doc-2',
+        chunkId: '1',
+        content: 'Roadmap notes',
+        metadata: {},
+      },
+      0.88,
+    )
+    await records.put(key, chunk.record)
+    const search = vi.spyOn(vectors, 'search').mockResolvedValue([chunk.hit])
 
     const retriever = makeRetriever({
       id: 'r1',
       namespace: 'docs',
-      store,
+      records,
+      vectors,
       dense,
     })
 
     const hits = await retriever.retrieve('roadmap query', { limit: 4 })
 
-    expect(searchVectors).toHaveBeenCalledTimes(1)
+    expect(search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'dense',
+        dense: [13, 6.5],
+        limit: 4,
+        filter: expect.objectContaining({ namespace: 'docs' }),
+      }),
+    )
     expect(hits[0].sourceId).toBe('doc-2')
   })
 
@@ -478,34 +483,30 @@ describe('retriever', () => {
     expect(hits[0].content).toBe('custom:alpha')
   })
 
-    it('retrieves sparse hits through searchVectors', async () => {
+    it('retrieves sparse hits through vectors.search', async () => {
     const sparse = createSparseEmbedding()
-    const searchVectors = vi.fn(async (query: VectorSearchQuery) => {
-      expect(query.sparse).toEqual({
-        indices: [0, 1, 2, 3, 4, 5],
-        values: [1, 1, 1, 1, 1, 1],
-      })
-      expect(query.filter).toMatchObject({ namespace: 'docs' })
-      return [
-        createScoredEntry(
-          'retriever:r1:source:doc-5:chunk:0',
-          {
-            namespace: 'docs',
-            sourceId: 'doc-5',
-            chunkId: '0',
-            content: 'Sparse hit',
-            metadata: { mode: 'sparse' },
-          },
-          0.77,
-        ),
-      ]
-    })
-    const store = createBaseStore({ searchVectors })
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
+    const key = 'retriever:r1:source:doc-5:chunk:0'
+    const chunk = createVectorHit(
+      key,
+      {
+        namespace: 'docs',
+        sourceId: 'doc-5',
+        chunkId: '0',
+        content: 'Sparse hit',
+        metadata: { mode: 'sparse' },
+      },
+      0.77,
+    )
+    await records.put(key, chunk.record)
+    const search = vi.spyOn(vectors, 'search').mockResolvedValue([chunk.hit])
 
     const retriever = makeRetriever({
       id: 'r1',
       namespace: 'docs',
-      store,
+      records,
+      vectors,
       sparse,
       search: { mode: 'sparse' },
     })
@@ -513,40 +514,44 @@ describe('retriever', () => {
     const hits = await retriever.retrieve('sparse', {})
 
     expect(retriever.mode).toBe('sparse')
-    expect(searchVectors).toHaveBeenCalledTimes(1)
+    expect(search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'sparse',
+        sparse: {
+          indices: [0, 1, 2, 3, 4, 5],
+          values: [1, 1, 1, 1, 1, 1],
+        },
+        filter: expect.objectContaining({ namespace: 'docs' }),
+      }),
+    )
     expect(hits[0].metadata).toEqual({ mode: 'sparse' })
   })
 
-    it('retrieves hybrid hits through searchVectors with fusion', async () => {
+    it('retrieves hybrid hits through vectors.search with fusion', async () => {
     const dense = createDenseEmbedding()
     const sparse = createSparseEmbedding()
-    const searchVectors = vi.fn(async (query: VectorSearchQuery) => {
-      expect(query.dense).toEqual([6, 3])
-      expect(query.sparse).toEqual({
-        indices: [0, 1, 2, 3, 4, 5],
-        values: [1, 1, 1, 1, 1, 1],
-      })
-      expect(query.fusion).toBe('rrf')
-      return [
-        createScoredEntry(
-          'retriever:r1:source:doc-6:chunk:1',
-          {
-            namespace: 'docs',
-            sourceId: 'doc-6',
-            chunkId: '1',
-            content: 'Hybrid hit',
-            metadata: { mode: 'hybrid' },
-          },
-          0.91,
-        ),
-      ]
-    })
-    const store = createBaseStore({ searchVectors })
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
+    const key = 'retriever:r1:source:doc-6:chunk:1'
+    const chunk = createVectorHit(
+      key,
+      {
+        namespace: 'docs',
+        sourceId: 'doc-6',
+        chunkId: '1',
+        content: 'Hybrid hit',
+        metadata: { mode: 'hybrid' },
+      },
+      0.91,
+    )
+    await records.put(key, chunk.record)
+    const search = vi.spyOn(vectors, 'search').mockResolvedValue([chunk.hit])
 
     const retriever = makeRetriever({
       id: 'r1',
       namespace: 'docs',
-      store,
+      records,
+      vectors,
       dense,
       sparse,
       search: { mode: 'hybrid', fusion: 'rrf' },
@@ -555,12 +560,23 @@ describe('retriever', () => {
     const hits = await retriever.retrieve('hybrid')
 
     expect(retriever.mode).toBe('hybrid')
-    expect(searchVectors).toHaveBeenCalledTimes(1)
+    expect(search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: 'hybrid',
+        dense: [6, 3],
+        sparse: {
+          indices: [0, 1, 2, 3, 4, 5],
+          values: [1, 1, 1, 1, 1, 1],
+        },
+        fusion: 'rrf',
+      }),
+    )
     expect(hits[0].content).toBe('Hybrid hit')
   })
 
     it('retrieves chunks that were indexed through indexer', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const dense = makeEmbedding({
       kind: 'dense',
       name: 'integration-dense',
@@ -576,7 +592,8 @@ describe('retriever', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'docs',
-      store,
+      records,
+      vectors,
       dense,
     })
 
@@ -598,7 +615,8 @@ describe('retriever', () => {
     const retriever = makeRetriever({
       id: 'r1',
       namespace: 'docs',
-      store,
+      records,
+      vectors,
       dense,
       search: { limit: 1 },
     })
@@ -611,7 +629,8 @@ describe('retriever', () => {
   })
 
     it('excludes inactive generations from indexed retrieval', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const dense = makeEmbedding({
       kind: 'dense',
       name: 'integration-dense',
@@ -623,7 +642,8 @@ describe('retriever', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'docs',
-      store,
+      records,
+      vectors,
       dense,
     })
 
@@ -633,7 +653,8 @@ describe('retriever', () => {
     const retriever = makeRetriever({
       id: 'r1',
       namespace: 'docs',
-      store,
+      records,
+      vectors,
       dense,
     })
 
@@ -646,78 +667,71 @@ describe('retriever', () => {
     it('defaults to hybrid mode when both dense and sparse embeddings are configured', async () => {
     const dense = createDenseEmbedding()
     const sparse = createSparseEmbedding()
-    const searchVectors = vi.fn(async () => [])
-    const store = createBaseStore({ searchVectors })
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
+    const search = vi.spyOn(vectors, 'search').mockResolvedValue([])
 
     const retriever = makeRetriever({
       id: 'r1',
       namespace: 'docs',
-      store,
+      records,
+      vectors,
       dense,
       sparse,
     })
 
     expect(retriever.mode).toBe('hybrid')
     await retriever.retrieve('hybrid query')
-    expect(searchVectors).toHaveBeenCalledTimes(1)
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ mode: 'hybrid' }))
   })
 
     it('throws when a store-backed retriever is missing a dense embedding', () => {
-    const store = createBaseStore({
-      vectorSearch: async () => [],
-    })
-
     expect(() =>
       makeRetriever({
         id: 'r1',
         namespace: 'docs',
-        store,
+        records: inMemoryRecordStore(),
+        vectors: inMemoryVectorStore(),
       } as any),
     ).toThrow('requires a dense embedding')
   })
 
-    it('throws when a dense store-backed retriever has no search capability', () => {
+    it('throws when a dense store-backed retriever has no vector store', () => {
     const dense = createDenseEmbedding()
-    const store = createBaseStore()
 
     expect(() =>
       makeRetriever({
         id: 'r1',
         namespace: 'docs',
-        store,
+        records: inMemoryRecordStore(),
         dense,
       }),
-    ).toThrow('requires vectors.search(), store.vectorSearch(), or store.searchVectors()')
+    ).toThrow('Dense retriever requires vectors.search().')
   })
 
-    it('throws when sparse retrieval is configured without searchVectors', () => {
+    it('throws when sparse retrieval is configured without a vector store', () => {
     const sparse = createSparseEmbedding()
-    const store = createBaseStore({
-      vectorSearch: async () => [],
-    })
 
     expect(() =>
       makeRetriever({
         id: 'r1',
         namespace: 'docs',
-        store,
+        records: inMemoryRecordStore(),
         sparse,
         search: { mode: 'sparse' },
       }),
-    ).toThrow('requires vectors.search() or store.searchVectors()')
+    ).toThrow('Sparse retriever requires vectors.search().')
   })
 
     it('throws when hybrid retrieval is configured without both embeddings', () => {
     const dense = createDenseEmbedding()
-    const store = createBaseStore({
-      searchVectors: async () => [],
-    })
 
     expect(() =>
       makeRetriever({
         id: 'r1',
         namespace: 'docs',
-        store,
+        records: inMemoryRecordStore(),
+        vectors: inMemoryVectorStore(),
         dense,
         search: { mode: 'hybrid' },
       }),

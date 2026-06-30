@@ -43,7 +43,7 @@ Read this as the public object your app and agents use to search knowledge:
 const docs = retriever({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -61,7 +61,7 @@ prompt({
 Use it when you want:
 
 - text query -> scored hits
-- `DataStore`-backed records plus `VectorStore`-backed dense, sparse, or hybrid retrieval
+- `RecordStore`-backed records plus `VectorStore`-backed dense, sparse, or hybrid retrieval
 - prompt injection through `use: [retriever]`
 - query tools through `use: [retriever]`
 - a custom retrieval wrapper when your backend does not map to Crux's store interfaces
@@ -94,7 +94,7 @@ That means most production code has one write path and one read path:
 await corpus({ indexer }).sync(loader.load())
 
 // Read path
-const docs = retriever({ data, vectors, dense, sparse, search: { mode: 'hybrid' } })
+const docs = retriever({ records, vectors, dense, sparse, search: { mode: 'hybrid' } })
 const answer = prompt({ use: [docs], ... })
 ```
 
@@ -113,7 +113,7 @@ Retrievers and retrieval pipelines are valid `use` entries.
 const docs = retriever({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   context: {
@@ -162,7 +162,7 @@ const docs = retriever({
 const docsRetriever = retriever({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -181,7 +181,7 @@ const docsRetriever = retriever({
 | `id` | `string` | Stable retriever identifier |
 | `indexerId` | `string?` | Writer indexer id to use when it differs from the retriever id |
 | `namespace` | `string` | Required corpus boundary |
-| `data` | `DataStore` | JSON record hydration for retrieved chunks and sources |
+| `records` | `RecordStore` | JSON record hydration for retrieved chunks and sources |
 | `vectors` | `VectorStore` | Dense, sparse, or hybrid vector search |
 | `dense` | `DenseEmbedding?` | Dense query embedding |
 | `sparse` | `SparseEmbedding?` | Sparse query embedding |
@@ -205,7 +205,7 @@ const docsRetriever = retriever({
 })
 ```
 
-This path is the supported escape hatch for systems that do not naturally map to Crux's `DataStore` and `VectorStore` split.
+This path is the supported escape hatch for systems that do not naturally map to Crux's `RecordStore` and `VectorStore` split.
 
 ## `reranker(config)`
 
@@ -244,7 +244,7 @@ const advancedDocs = retrievalPipeline(docsRetriever, [
     model: queryModel,
     count: 4,
   }),
-  parentExpand({ store: data, maxParentChars: 4000 }),
+  parentExpand({ records, maxParentChars: 4000 }),
   compress({
     generate: generateObjectFn,
     model: compressionModel,
@@ -272,7 +272,7 @@ const promptDocs = retrievalPipeline(
   docsRetriever,
   [
     multiQuery({ generate: generateTextFn, model: queryModel, count: 4 }),
-    parentExpand({ store: data, maxParentChars: 4000 }),
+    parentExpand({ records, maxParentChars: 4000 }),
   ],
   {
     inject: 'both',
@@ -354,7 +354,7 @@ The pipeline fans out to the base retriever for every planned query and merges d
 
 ```ts
 const parents = parentExpand({
-  store: data,
+  records,
   indexerId: 'docs',
   maxParentChars: 4000,
   missing: 'warn',
@@ -435,22 +435,22 @@ Mode is derived from config unless explicitly overridden.
 ### Dense
 
 - requires `dense`
-- requires `vectors.search({ dense })`
+- requires `vectors.search({ mode: 'dense', dense })`
 
 ### Sparse
 
 - requires `sparse`
-- requires `vectors.search({ sparse })`
+- requires `vectors.search({ mode: 'sparse', sparse })`
 
 ### Hybrid
 
 - requires `dense`
 - requires `sparse`
-- requires `vectors.search({ dense, sparse, fusion? })`
+- requires `vectors.search({ mode: 'hybrid', dense, sparse, fusion? })`
 
 ### Custom
 
-- bypasses the `DataStore`/`VectorStore` path entirely
+- bypasses the `RecordStore`/`VectorStore` path entirely
 
 Unsupported combinations throw explicitly. Crux does not silently degrade hybrid or sparse queries into dense-only behavior.
 
@@ -564,7 +564,7 @@ Reach for `retriever()` when you want one reusable retrieval object that can be 
 
 If you only need a one-off vector query, use `VectorStore.search()` directly instead.
 
-If your retrieval system does not map well to `DataStore` plus `VectorStore`, use the custom retriever path instead of forcing your backend into a shape it does not naturally fit.
+If your retrieval system does not map well to `RecordStore` plus `VectorStore`, use the custom retriever path instead of forcing your backend into a shape it does not naturally fit.
 
 If you want model-based reranking, `@use-crux/ai` exposes `reranker()` on top of AI SDK `rerank()`.
 

@@ -39,14 +39,14 @@ This keeps the SDK readable at call sites: users define nouns once, execute verb
 
 Workspace records use explicit storage capabilities:
 
-- `DataStore` stores metadata, paths, MIME type, size, timestamps, previews, and small inline text/JSON.
+- `RecordStore` stores metadata, paths, MIME type, size, timestamps, previews, and small inline text/JSON.
 - `BlobStore` stores binary and oversized payloads.
 
-`VectorStore` is separate and only used by retrieval/search features. Core includes in-memory `DataStore`, `VectorStore`, and `BlobStore` implementations for tests and demos. Durable blob stores belong in adapters or userland implementations; object storage backends such as S3, R2, GCS, local disk, and app-owned file services should implement `BlobStore` instead of overloading `DataStore` with raw bytes.
+`VectorStore` is separate and only used by retrieval/search features. Core includes in-memory `RecordStore`, `VectorStore`, and `BlobStore` implementations for tests and demos. Durable blob stores belong in adapters or userland implementations; object storage backends such as S3, R2, GCS, local disk, and app-owned file services should implement `BlobStore` instead of overloading records with raw bytes.
 
 Default mounts are `/workspace` and `/outputs`. Optional `/sources` mounts are configured explicitly by the app because source ownership can come from uploads, ingestion, MCP, retrieval, or app storage. Generated deliverables remain normal files under `/outputs`; the artifacts facet is a typed view over those same file records (`status`, artifact `kind`, provenance, and download references), not a second store or keyspace.
 
-Retention and limits are enforced at the workspace write boundary. `retention.ttlMs` is passed through to `DataStore.set({ ttl })` only when the store reports TTL support; stores without TTL support keep records normally. `limits.maxFileBytes` and `limits.maxNamespaceBytes` reject writes before metadata persistence. Namespace quotas intentionally scan the namespace's current file records in V0 instead of maintaining counters, keeping adapter requirements small and behavior easy to verify.
+Retention and limits are enforced at the workspace write boundary. `retention.ttlMs` is passed through to `RecordStore.put(..., { ttlMs })` only when the store reports TTL support; stores without TTL support keep records normally. `limits.maxFileBytes` and `limits.maxNamespaceBytes` reject writes before metadata persistence. Namespace quotas intentionally scan the namespace's current file records in V0 instead of maintaining counters, keeping adapter requirements small and behavior easy to verify.
 
 Instrumentation emits `workspace.operation` spans, output artifacts, and produced edges for all workspace methods. Devtools can show workspace ids, hashed namespaces, operations, file labels, MIME type, size, artifact status/kind, and download refs from local resource activity. When a raw path is not available from a local-only source, devtools use the stable `hash:<pathHash>` label instead of collapsing files to `/`. OTel receives only privacy-safe attributes such as workspace id, operation, MIME type, size, status, and `crux.workspace.path_hash`; raw paths are dropped from workspace-shaped OTel records.
 
@@ -187,7 +187,7 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── retrieval/
 │   └── index.ts        retriever(), retrievalPipeline() — query-first retrieval plus advanced query-time RAG composition
 ├── storage/
-│   └── index.ts        DataStore, VectorStore, BlobStore, storage(), and in-memory implementations
+│   └── index.ts        RecordStore, VectorStore, BlobStore, storage(), and in-memory implementations
 ├── workspace/
 │   └── index.ts        workspace(), workspaceToolNames() — durable mounted file tree, prompt injection, file tools, artifacts view, append-only versioning (history/read@version/diff/undo, version-scoped blobs, maxVersions GC), TTL/quota guards, blob-backed payloads, canonical operation spans
 ├── indexing/
@@ -221,7 +221,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   └── types.ts        JudgeConfig, JudgeResult, JudgeInstance, JudgeScoreOptions
 ├── flow/
 │   ├── index.ts        Barrel — flow, signalFlow, cancelFlow, listFlows, createFlowId
-│   └── scope.ts        flow<T, TInput>(), FlowHandle<T, TInput>, FlowRunOptions<TInput>, FlowScope<TInput> — flow.input (typed), flow.results (auto-populated Record<string, unknown>), auto-pass (step fns accepting FlowScope receive it automatically), suspend/resume/cancel — throw-to-unwind pattern with CruxStore persistence
+│   └── scope.ts        flow<T, TInput>(), FlowHandle<T, TInput>, FlowRunOptions<TInput>, FlowScope<TInput> — flow.input (typed), flow.results (auto-populated Record<string, unknown>), auto-pass (step fns accepting FlowScope receive it automatically), suspend/resume/cancel — throw-to-unwind pattern with RecordStore persistence
 ├── agent/
 │   ├── index.ts        Barrel: agent, AnyAgent, InferAgentInput, InferAgentOutput, composition utilities, blackboard, handoff, delegate
 │   ├── agent.ts        agent(), isAgent(), AnyAgent, InferAgentInput, InferAgentOutput — frozen agent definition
@@ -822,7 +822,7 @@ The Runtime Bridge is the local-dev command plane. It is intentionally separate 
 - Project Index snapshots: runtime -> Go through `POST /api/index/snapshot`.
 - Runtime Bridge: Go -> runtime through typed `command.request` messages and `command.result` / `command.error` replies.
 
-`@use-crux/core/runtime-bridge` owns the TypeScript schemas and inferred types for `runtime.hello`, `runtime.heartbeat`, `command.request`, `command.progress`, `command.result`, and `command.error`. `config()` starts a local Node WebSocket peer when `devtools.bridge` resolves to `transport: 'ws'`; the peer advertises derived capabilities, including `store.read` for an explicit `persistence.store` and any inspectable resources registered by primitives. Memory and blackboard definitions register those resources as they are created, keeping user DX focused on composing primitives rather than manually wiring devtools stores. `eval.run` is part of the typed command contract and is executed by the Go bridge service through the embedded eval runner so quality persistence and observability reuse the existing eval path. Runtime peers must only advertise `eval.run` if they provide their own direct execution path. Bridge failures are logged as dev warnings and must never throw into user code. HTTP/framework transports are registered by integration packages such as `@use-crux/convex`; those endpoints derive their public URL from the framework request when possible, advertise request-scoped store capabilities, and convert malformed command bodies into structured `command.error` responses. `crux dev` auto-discovers framework HTTP peers from `CRUX_BRIDGE_URL`, `CONVEX_SITE_URL`, `CONVEX_URL`, or `NEXT_PUBLIC_CONVEX_URL` in the shell or project `.env.local` / `.env`, fetching `/crux/bridge` and registering the manifest-backed peer in Go. Go owns peer selection, command dispatch, subscriptions, and read-model side effects.
+`@use-crux/core/runtime-bridge` owns the TypeScript schemas and inferred types for `runtime.hello`, `runtime.heartbeat`, `command.request`, `command.progress`, `command.result`, and `command.error`. `config()` starts a local Node WebSocket peer when `devtools.bridge` resolves to `transport: 'ws'`; the peer advertises derived capabilities, including `store.read` for an explicit `persistence.records` store and any inspectable resources registered by primitives. Memory and blackboard definitions register those resources as they are created, keeping user DX focused on composing primitives rather than manually wiring devtools stores. `eval.run` is part of the typed command contract and is executed by the Go bridge service through the embedded eval runner so quality persistence and observability reuse the existing eval path. Runtime peers must only advertise `eval.run` if they provide their own direct execution path. Bridge failures are logged as dev warnings and must never throw into user code. HTTP/framework transports are registered by integration packages such as `@use-crux/convex`; those endpoints derive their public URL from the framework request when possible, advertise request-scoped store capabilities, and convert malformed command bodies into structured `command.error` responses. `crux dev` auto-discovers framework HTTP peers from `CRUX_BRIDGE_URL`, `CONVEX_SITE_URL`, `CONVEX_URL`, or `NEXT_PUBLIC_CONVEX_URL` in the shell or project `.env.local` / `.env`, fetching `/crux/bridge` and registering the manifest-backed peer in Go. Go owns peer selection, command dispatch, subscriptions, and read-model side effects.
 
 Resource Inspection is the product-facing Go service layered above the bridge. Web devtools, the TUI, CLI commands, and future IDE integrations ask Go for capabilities and resources through stable product-shaped calls such as `GET /api/resources/capabilities`, `GET /api/resources/{resourceId}`, and `GET /api/resources/{resourceId}/entries`. The service maps `blackboard:*`, `memory:*`, and `crux.store` requests to bridge `store.read` only when a live peer is available, otherwise it returns structured `unavailable` or `partial` results with reasons such as `bridge_required`, `runtime_unavailable`, `unsupported_resource`, `ambiguous_peer`, or `command_failed`. Clients must not call Convex `/crux/bridge` or construct bridge command envelopes directly. Domain read models can embed this service when that keeps clients simpler: `GET /api/memory/stores/{id}` returns projected memory/blackboard state and an optional `inspection` object. `inspection.status="ok"` plus `source="mixed"` means live entries were joined with the projection; `inspection.status="partial"` plus `source="projection"` means the projection is usable while live runtime inspection is unavailable or failed.
 
@@ -1035,14 +1035,12 @@ Built-in block reads and writes emit the canonical observability graph from the 
 
 Crux public storage is split by capability:
 
-1. **`DataStore`** — JSON records with `get`, `set`, `delete`, `list`, optional TTL, and optional subscriptions.
+1. **`RecordStore`** — JSON records with `get`, `put`, `create`, `delete`, `list`, optional TTL, filters, and optional watches.
 2. **`VectorStore`** — Dense, sparse, and hybrid vector records with `upsert`, `delete`, and `search`.
 3. **`BlobStore`** — Binary and oversized payload storage for workspaces.
-4. **`Storage`** — A convenience bundle: `{ data, vectors?, blobs? }`.
+4. **`Storage`** — A convenience bundle: `{ records, vectors?, blobs? }`.
 
-`CruxStore` remains as a compatibility shape for older adapters and primitives that still need a combined record/vector object, but new user-facing APIs should request the narrow capability they need.
-
-The in-memory implementations are Map-backed and suitable for testing and single-process development: `inMemoryDataStore()`, `inMemoryVectorStore()`, `inMemoryBlobStore()`, and `inMemoryStorage()`.
+The in-memory implementations are Map-backed and suitable for testing and single-process development: `inMemoryRecordStore()`, `inMemoryVectorStore()`, `inMemoryBlobStore()`, and `inMemoryStorage()`.
 
 ### Tool Description Override
 
@@ -1068,8 +1066,8 @@ Keys are auto-generated as `episodic:{id}:{timestamp}-{counter}-{random}`. The `
 
 `recall()` has two paths:
 
-- **With embeddings**: Embeds the query, calls `store.vectorSearch()`, takes top-N results
-- **Without embeddings**: Falls back to `store.list()` by prefix (recency order)
+- **With embeddings**: Embeds the query, calls `VectorStore.search({ mode: 'dense', dense })`, takes top-N results
+- **Without embeddings**: Falls back to `RecordStore.list()` by prefix (recency order)
 
 Both paths respect `filter` for metadata matching.
 
@@ -1091,7 +1089,7 @@ Stateless: formats messages into a numbered transcript, sends to an LLM with a s
 
 ### Sliding Window
 
-Stateful, backed by `CruxStore`. Maintains a running summary under `compact:{id}:summary` and message entries under `compact:{id}:msg:{index}`.
+Stateful, backed by `RecordStore`. Maintains a running summary under `compact:{id}:summary` and message entries under `compact:{id}:msg:{index}`.
 
 When `push()` exceeds `windowSize`:
 
@@ -1147,7 +1145,7 @@ Example: a brand alignment judge with `detailSchema: z.object({ notes: z.array(z
 
 ### Mechanism
 
-`flow.suspend(name)` throws a `FlowSuspendedError` to unwind the call stack. The internal executor catches it and persists a `FlowSnapshot` to `CruxStore` at `crux:flow:{flowId}`. No code after `suspend()` executes in the current call.
+`flow.suspend(name)` throws a `FlowSuspendedError` to unwind the call stack. The internal executor catches it and persists a `FlowSnapshot` to `RecordStore` at `crux:flow:{flowId}`. No code after `suspend()` executes in the current call.
 
 ```
 flow.suspend('approval')
@@ -1212,7 +1210,7 @@ External code calls `signalFlow(flowId, name, payload)` which resolves the store
 
 ### Blackboard
 
-Shared typed scratchpad backed by `CruxStore`. Single store key: `blackboard:{id}`. State is a JSON object matching the Zod schema.
+Shared typed scratchpad backed by `RecordStore`. Single store key: `blackboard:{id}`. State is a JSON object matching the Zod schema.
 
 `blackboard()` is an agent coordination primitive, not memory. Memory owns private or persistent recall and post-generation capture. Blackboard owns shared, explicit coordination state between agents, flows, and tools.
 
@@ -1241,12 +1239,12 @@ Transform pipeline with optional persistence. Supports two modes:
 
 `asContext(payload)` takes the payload as an argument and injects it as a system message with priority 80.
 
-**Stored** — when `store: CruxStore` is configured:
+**Stored** — when `records: RecordStore` is configured:
 
-- `send(input)` — calls `prepare()` then persists to `store.set('handoff:${id}', serialized)`
-- `receive()` — calls `store.get('handoff:${id}')` and deserializes to `HandoffPayload`
+- `send(input)` — calls `prepare()` then persists to `records.put('handoff:${id}', serialized)`
+- `receive()` — calls `records.get('handoff:${id}')` and deserializes to `HandoffPayload`
 - Enables distributed agents running in separate processes/actions (e.g., Convex, serverless)
-- `send()`/`receive()` throw with a clear error if `store` is not configured
+- `send()`/`receive()` throw with a clear error if `records` is not configured
 
 ### Delegate
 
@@ -1343,12 +1341,12 @@ The crux Convex component (`@use-crux/convex/convex.config`) provides persistenc
 - State stored in component's `swarmRuns` table automatically
 - This helper is experimental. The stable launch model is that compositions execute immediately, while durable orchestration uses `flow()`.
 
-**`defineConvexStoreContract({ component })`** — store document contract backed by the component's `memories` table:
+**`convexRecordStore({ component, ctx })` / `convexStorage({ component, ctx })`** — storage adapters backed by the component's `memories` table:
 
 - No manual schema or function references needed
-- Works with memory blocks, blackboards, plans, workspace metadata, and other `CruxStore` consumers
-- `store(ctx)` uses `ctx.vectorSearch()` for dense vector search when available
-- `transport({ useQuery })` uses the same document contract for React reads
+- Works with memory blocks, blackboards, plans, workspace metadata, and other `RecordStore` consumers
+- `convexVectorStore()` uses `ctx.vectorSearch()` for dense vector search when available
+- `createConvexTransport({ api, useQuery })` uses the same document contract for React reads
 - Component `memory.list` owns only `by_key` prefix pagination and returns `{ docs, cursor }`
 - Store-document policy owns `_cruxDoc` decoding, TTL cleanup, top-level value filters, vector hit shaping, and filtered-page filling
 
@@ -1471,9 +1469,9 @@ result._meta = {
 
 ### Convex (`convex/`)
 
-`defineConvexStoreContract({ component })` — implements the Convex store document contract for Crux storage. It is backed by the crux Convex component's `memories` table. `store(ctx)` accepts a structural `ConvexCtxPort` and uses `ctx.vectorSearch()` where configured. `transport({ useQuery })` reads through the same contract for React hooks. The Convex component query boundary is intentionally small: `memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. The Convex package keeps current `_cruxDoc` JSON decoding, TTL suppression/lazy deletion, top-level filters, filtered-list page filling, vector scores, and strict React transport reads behind one store-document boundary so server stores and React transport cannot drift.
+`convexRecordStore({ component, ctx })`, `convexVectorStore({ component, ctx })`, and `convexStorage({ component, ctx })` implement Convex-backed Crux storage. They use the crux Convex component's `memories` table and a structural `ConvexCtxPort`; vector storage delegates dense search to `ctx.vectorSearch()` where configured. `createConvexTransport({ api, useQuery })` reads through the same document contract for React hooks. The Convex component query boundary is intentionally small: `memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. The Convex package keeps current `_cruxDoc` JSON decoding, TTL suppression/lazy deletion, top-level filters, filtered-list page filling, vector scores, and strict React transport reads behind one store-document boundary so server records and React transport cannot drift.
 
-`createCruxConvex({ components, store })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed store resolver, optional `store.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge store reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same store resolver. The profile-backed Convex Agent facade keeps a Convex-Agent-compatible public shape while routing turn preparation through an internal lifecycle and `ConvexAgentDriver` port; only the production SDK adapter imports `@convex-dev/agent`, and boundary tests use a fake driver for request-scoped store binding, prompt/use merging, tool adaptation, stream callbacks, persistence, and driver failures. Lower-level store and transport helpers remain package-internal implementation details; application integrations should start from the profile or `defineConvexStoreContract()`. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, dense vector result shaping, sparse/hybrid rejection, and capability reporting.
+`createCruxConvex({ components, storage })` is the request-scoped Convex runtime profile boundary. It owns the default component-backed storage resolver, optional `storage.create` override, namespace default, ctx/target runtime binding, profile-created Convex Agent wrappers, and HTTP bridge record reads. `crux.run(ctx, target, fn)`, `crux.convexAgent(config)`, and `crux.bridge(http, cruxConfig)` all normalize through the same storage resolver. The profile-backed Convex Agent facade keeps a Convex-Agent-compatible public shape while routing turn preparation through an internal lifecycle and `ConvexAgentDriver` port; only the production SDK adapter imports `@convex-dev/agent`, and boundary tests use a fake driver for request-scoped storage binding, prompt/use merging, tool adaptation, stream callbacks, persistence, and driver failures. Lower-level storage and transport helpers remain package-internal implementation details; application integrations should start from the profile or the Storage Beta factories. The store-doc module remains the document policy boundary for serialization, TTL cleanup, filters, dense vector result shaping, sparse/hybrid rejection, and capability reporting.
 
 Also exports Convex-specific helpers:
 
@@ -1483,9 +1481,9 @@ Also exports Convex-specific helpers:
 
 `upstashVectorStore(config)` — `VectorStore` backed by Upstash Vector for dense, sparse, and hybrid retrieval.
 
-`cruxUpstashStore(config)` — compatibility combined storage: text/metadata persisted in Convex (reliable, transactional), vectors stored in Upstash Vector (fast similarity search). Uses Upstash Vector's namespace feature for data isolation (e.g., `memory-{projectId}`).
+`upstashRedisRecordStore(config)` — `RecordStore` backed by Upstash Redis for JSON records with native TTL.
 
-Use `upstashVectorStore()` for new retrieval/indexing code. Key/value memory blocks can use a Convex contract store; embedding-backed blocks should use an explicit vector-capable store path.
+Use `upstashVectorStore()` for retrieval/indexing code and pair it with an explicit `RecordStore` when a primitive needs hydration.
 
 ## Canonical Observability Runtime
 

@@ -1,5 +1,5 @@
 {
   "title": "Memory",
-  "description": "Block-based memory with shared CruxStore persistence.",
+  "description": "Block-based memory with shared RecordStore persistence.",
   "pages": ["index", "working", "episodic", "semantic", "stores"]
 }

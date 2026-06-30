@@ -7,7 +7,7 @@ import {
 } from '../../observability'
 import { plan, updatePlan } from '../../plan/plans'
 import { resetRuntime, updateRuntime } from '../../runtime/runtime'
-import { inMemoryCruxStore } from '../../store/memory'
+import { inMemoryRecordStore } from '../../storage'
 
 describe('canonical plan observability', () => {
   afterEach(() => {
@@ -18,7 +18,7 @@ describe('canonical plan observability', () => {
     it('records plan mutations with full plan artifact data for devtools read models', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    updateRuntime({ store: inMemoryCruxStore() })
+    updateRuntime({ records: inMemoryRecordStore() })
 
     const created = await plan({
       title: 'Fact check plan',

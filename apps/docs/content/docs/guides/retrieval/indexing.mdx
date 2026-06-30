@@ -8,13 +8,13 @@ Indexing is the write side of retrieval. Loaders produce documents, the indexer 
 The flow is:
 
 ```txt
-loader.load() -> indexer.indexDocuments() -> chunker -> embedding() -> DataStore + VectorStore
+loader.load() -> indexer.indexDocuments() -> chunker -> embedding() -> RecordStore + VectorStore
 ```
 
 In production you usually call that through `corpus.sync()` so Crux can skip unchanged sources and delete stale ones safely:
 
 ```txt
-loader.load() -> corpus.sync() -> indexer() -> DataStore + VectorStore
+loader.load() -> corpus.sync() -> indexer() -> RecordStore + VectorStore
 ```
 
 Use indexing when you have source material that should be searchable later. Use retrieval when a user asks a question over that indexed material.
@@ -24,7 +24,7 @@ The shortest useful version looks like this. The embeddings are defined once and
 ```ts
 import { embedding } from '@use-crux/core/embedding'
 import { corpus, indexer } from '@use-crux/core/indexing'
-import { inMemoryDataStore, inMemoryVectorStore } from '@use-crux/core/storage'
+import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
 import { filesSource } from '@use-crux/ingest/files'
 
 const dense = embedding({
@@ -34,13 +34,13 @@ const dense = embedding({
   maxInputTokens: 8191,
   embed: async (texts) => ({ embeddings: await embedDense(texts) }),
 })
-const data = inMemoryDataStore()
+const records = inMemoryRecordStore()
 const vectors = inMemoryVectorStore()
 
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
 })
@@ -48,7 +48,7 @@ const docsIndexer = indexer({
 const docsCorpus = corpus({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   indexer: docsIndexer,
 })
 
@@ -71,7 +71,7 @@ Add `sparse` too when your retriever will run sparse or hybrid search:
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -80,7 +80,7 @@ const docsIndexer = indexer({
 const docs = retriever({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -100,7 +100,7 @@ import { chunker, corpus, indexer, indexingPipeline, transform } from '@use-crux
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -178,7 +178,7 @@ Enable stage caching on the indexer:
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   pipeline,
@@ -232,7 +232,7 @@ import { retriever } from '@use-crux/core/retrieval'
 const docs = retriever({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -257,7 +257,7 @@ const docs = retriever({
   id: 'docs-search',
   indexerId: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
 })
@@ -281,7 +281,7 @@ Or expose it as an agent tool:
 const searchableDocs = retriever({
   id: 'docs-tools',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,

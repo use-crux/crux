@@ -1,20 +1,20 @@
 /**
- * Polling transport — universal fallback for any CruxStore.
+ * Polling transport — universal fallback for any RecordStore.
  *
- * Periodically fetches data from a CruxStore and exposes it as a
+ * Periodically fetches data from a RecordStore and exposes it as a
  * `CruxTransport` via `useSyncExternalStore`. Works with any backend
- * that implements CruxStore (no `subscribe()` required).
+ * that implements RecordStore (no `watch()` required).
  *
  * @module
  */
 
 import { useSyncExternalStore } from 'react'
-import type { CruxStore, JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
-import { matchesFilter } from '@use-crux/core/store'
+import type { JsonObject, RecordEntry, RecordListOptions, RecordStore } from '@use-crux/core/storage'
+import { matchesExactFilter } from '@use-crux/core/storage'
 import type { CruxTransport } from './types'
 
 /**
- * A `CruxTransport` backed by periodic polling of a `CruxStore`.
+ * A `CruxTransport` backed by periodic polling of a `RecordStore`.
  */
 export interface PollingTransport extends CruxTransport {
   /** Manually trigger a poll (useful in tests). */
@@ -32,12 +32,12 @@ export interface PollingTransportOptions {
 }
 
 /**
- * Create a `CruxTransport` that polls a `CruxStore` at a regular interval.
+ * Create a `CruxTransport` that polls a `RecordStore` at a regular interval.
  *
  * This is the universal fallback — works with any backend that implements
- * `CruxStore`, even without `subscribe()` support.
+ * `RecordStore`, even without `watch()` support.
  *
- * @param store - The CruxStore to poll.
+ * @param records - The RecordStore to poll.
  * @param options - Polling interval configuration.
  * @returns A `PollingTransport` with `poll()` and `stop()` controls.
  *
@@ -52,7 +52,7 @@ export interface PollingTransportOptions {
  * </CruxProvider>
  * ```
  */
-export function createPollingTransport(store: CruxStore, options?: PollingTransportOptions): PollingTransport {
+export function createPollingTransport(records: RecordStore, options?: PollingTransportOptions): PollingTransport {
   const intervalMs = options?.intervalMs ?? 1000
   const cache = new Map<string, JsonObject>()
   const listeners = new Set<() => void>()
@@ -81,7 +81,7 @@ export function createPollingTransport(store: CruxStore, options?: PollingTransp
 
   async function poll() {
     // Fetch all entries from the store
-    const result = await store.list('')
+    const result = await records.list('')
     cache.clear()
     for (const entry of result.entries) {
       cache.set(entry.key, entry.value)
@@ -106,12 +106,12 @@ export function createPollingTransport(store: CruxStore, options?: PollingTransp
       })
     },
 
-    useDocumentList(prefix: string | undefined, options?: ListOptions): StoreEntry[] | undefined {
+    useDocumentList(prefix: string | undefined, options?: RecordListOptions): RecordEntry[] | undefined {
       const filterKey = options?.filter ? JSON.stringify(options.filter) : ''
       return useSyncExternalStore(subscribe, () => {
         if (prefix === undefined) return undefined
         return cachedSnapshot(`list:${prefix}:${filterKey}`, () => {
-          let entries: StoreEntry[] = []
+          let entries: RecordEntry[] = []
           for (const [key, value] of cache) {
             if (key.startsWith(prefix)) {
               entries.push({ key, value })
@@ -119,7 +119,7 @@ export function createPollingTransport(store: CruxStore, options?: PollingTransp
           }
           if (options?.filter) {
             const filter = options.filter
-            entries = entries.filter((e) => matchesFilter(e.value, filter))
+            entries = entries.filter((e) => matchesExactFilter(e.value, filter))
           }
           return entries
         })

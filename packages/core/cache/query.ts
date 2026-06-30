@@ -8,7 +8,8 @@
  * @module
  */
 
-import type { CruxStore } from '../store/types'
+import { StorageError } from '../storage'
+import type { RecordStore, VectorStore } from '../storage'
 import type { PromptMiddlewareArgs } from '../runtime/types'
 import type { SemanticCachePromptOptions, SemanticCacheQueryContext } from '../prompt/prompt-types'
 import type { NormalizedPromptHint, SemanticCacheConfig, SemanticCacheScopeContext } from './types'
@@ -32,15 +33,29 @@ export function validateConfig(config: SemanticCacheConfig): void {
   }
 }
 
-/** Validate that the store supports isolated semantic-cache vector search. */
-export function validateStore(store: CruxStore): void {
-  const capabilities = store.capabilities?.()
-  if (!capabilities?.semanticCache?.isolatedVectorNamespace) {
-    throw new Error('createSemanticCache() requires a CruxStore with isolated semantic-cache vector namespace support.')
+/** Resolve and validate the beta storage ports used by semantic cache. */
+export function resolveSemanticCacheStores(config: SemanticCacheConfig): {
+  readonly records: RecordStore
+  readonly vectors: VectorStore
+} {
+  const records = config.records ?? config.storage?.records
+  const vectors = config.vectors ?? config.storage?.vectors
+  if (!records) {
+    throw new Error('createSemanticCache() requires records or storage.records.')
   }
-  if (!store.searchVectors && !store.vectorSearch) {
-    throw new Error('createSemanticCache() requires a store with dense vector search support.')
+  if (!vectors) {
+    throw new Error('createSemanticCache() requires vectors or storage.vectors.')
   }
+  if (records.capabilities().ttl === false) {
+    throw new StorageError('ttl_unsupported', 'createSemanticCache() requires a record store with TTL support.')
+  }
+  if (vectors.capabilities().filter !== 'pre') {
+    throw new StorageError(
+      'unsupported_capability',
+      'createSemanticCache() requires a vector store with pre-filter support.',
+    )
+  }
+  return { records, vectors }
 }
 
 /** Normalize the per-prompt `cache.semantic` hint to a {@link NormalizedPromptHint}. */

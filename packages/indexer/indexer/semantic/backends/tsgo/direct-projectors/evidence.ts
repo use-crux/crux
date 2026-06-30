@@ -25,6 +25,10 @@ import {
 import { hasUnsupportedSemanticProperty } from "./guards";
 import { definitionName, nativeCruxCall, propertyInitializer } from "./object";
 import { routingEvidenceForDefinition } from "./routing";
+import {
+  isNativeDirectStorageInitializer,
+  nativeDirectStorageEvidence,
+} from "./storage";
 import { nativeDefinitionMapsByFile, nativeVariableMapsByFile } from "./scope";
 import { sourceRefEvidenceForDefinition } from "./source-refs";
 import type {
@@ -132,6 +136,11 @@ export function nativeDirectEvidence(
   ) {
     return undefined;
   }
+  const storageEvidence = nativeDirectStorageEvidence(
+    nativeVariables,
+    nativeBindingsByFile,
+  );
+  if (!storageEvidence) return undefined;
 
   const definitions = nativeVariables.flatMap(
     (variable) => nativeDefinition(variable) ?? [],
@@ -213,15 +222,18 @@ export function nativeDirectEvidence(
   return {
     definitions: [
       ...definitionFacts,
+      ...storageEvidence.definitions,
       ...routingEvidencePairs.flatMap(({ value }) => value.definitions),
     ],
     relations: [
       ...dependencyEvidencePairs.flatMap(({ value }) => value.relations),
+      ...storageEvidence.relations,
       ...routingEvidencePairs.flatMap(({ value }) => value.relations),
     ],
     sourceRefs: [
       ...sourceEvidencePairs.flatMap(({ value }) => value.sourceRefs),
       ...dependencyEvidencePairs.flatMap(({ value }) => value.sourceRefs),
+      ...storageEvidence.sourceRefs,
       ...routingEvidencePairs.flatMap(({ value }) => value.sourceRefs),
     ],
     diagnostics: [],
@@ -261,6 +273,7 @@ function hasUnsupportedTopLevelInitializer(
   variablesByFile: ReadonlyMap<SourceFile, ReadonlyMap<string, NativeVariable>>,
 ): boolean {
   if (nativeCruxCall(variable.initializer)) return false;
+  if (isNativeDirectStorageInitializer(variable)) return false;
   if (!isCallExpression(variable.initializer)) return false;
   const variables = variablesByFile.get(variable.file);
   if (!variables) return true;

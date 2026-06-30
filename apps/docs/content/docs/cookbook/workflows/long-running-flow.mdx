@@ -9,7 +9,7 @@ This recipe shows a flow that performs an LLM step, suspends to wait for an exte
 
 - `flow()` with `flow.step()` and `flow.suspend()`
 - `signalFlow()` to resume from external code
-- A `CruxStore` to persist flow state across the suspension
+- A `RecordStore` to persist flow state across the suspension
 
 ## When to reach for this pattern
 
@@ -75,7 +75,7 @@ export async function handleEmailVerified(flowId: string, verifiedAt: string) {
 ## How it works
 
 1. **`flow.step()` caches results.** Each named step's output is persisted. If the flow resumes, completed steps are skipped.
-2. **`flow.suspend()` checkpoints the flow.** State (input, completed-step results, current position) is persisted to `CruxStore` keyed by `flowId`. The handler returns control; the server is free.
+2. **`flow.suspend()` checkpoints the flow.** State (input, completed-step results, current position) is persisted to `RecordStore` keyed by `flowId`. The handler returns control; the server is free.
 3. **Signal the flow from anywhere.** `signalFlow(flowId, 'email-verified', payload)` writes the signal. The schema in `suspend()` validates the payload when resume happens.
 4. **Resume re-runs the handler from the start.** Each `flow.step()` returns its cached result without re-executing. When execution reaches the suspension point, the recorded signal is consumed and `suspend()` returns the payload. The flow continues from there.
 5. **`timeout: '24h'`** auto-expires the flow if no signal arrives. The flow result becomes `{ status: 'expired' }`.

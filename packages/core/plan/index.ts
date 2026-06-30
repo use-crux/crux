@@ -3,7 +3,7 @@
  *
  * Plans are freeform documents describing what an agent intends to do.
  * Task lists are structured work tracking with live status updates.
- * Both persist via `CruxStore` adapters.
+ * Both persist via configured `RecordStore` adapters.
  *
  * @module
  */

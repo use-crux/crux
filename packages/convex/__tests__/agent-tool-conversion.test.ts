@@ -9,7 +9,7 @@ import {
 } from '@use-crux/core/observability'
 import { Agent, convexTools } from '../agent'
 import { tool as convexRuntimeTool } from '../tools'
-import { inMemoryCruxStore } from '../memory'
+import { inMemoryRecordStore } from '../memory'
 import { runWithConvexCruxRuntime } from '../runtime'
 
 describe('agent tool conversion', () => {
@@ -123,10 +123,12 @@ describe('agent tool conversion', () => {
         toolCallId: target.toolCallId,
       }),
     })
+    const records = inMemoryRecordStore()
     const tools = runWithConvexCruxRuntime(
       {
         ctx: {},
-        store: inMemoryCruxStore(),
+        storage: { records },
+        records,
         target: { threadId: 'thread-runtime' },
       },
       () => convexTools({ runtimeLookup: runtimeTool }),

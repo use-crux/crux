@@ -46,3 +46,80 @@ func TestDirectClientQualityRunsGetJSONUsesRegisteredFilters(t *testing.T) {
 		t.Fatalf("runs = %#v, want filtered generation run", runs)
 	}
 }
+
+func TestDirectClientProjectIndexIncludesStorageReadModel(t *testing.T) {
+	ctx := context.Background()
+	s := store.NewStore()
+	s.SetIndexData(store.IndexData{
+		Definitions: []store.ProjectDefinition{
+			{
+				ID:       "storage.recordStore:records",
+				Kind:     "storage.recordStore",
+				Name:     "records",
+				Fidelity: "resolved",
+				Status:   "active",
+				Metadata: json.RawMessage(`{"facts":{"kind":"storage.recordStore","backend":"inMemoryRecordStore","capabilities":{"record":{"ttl":"lazy","filter":"scan","watch":true,"batch":false}}}}`),
+			},
+			{
+				ID:       "storage.bundle:appStorage",
+				Kind:     "storage.bundle",
+				Name:     "appStorage",
+				Fidelity: "resolved",
+				Status:   "active",
+				Metadata: json.RawMessage(`{"facts":{"kind":"storage.bundle","records":"records"}}`),
+			},
+			{ID: "workspace:docs", Kind: "workspace", Name: "docs", Fidelity: "resolved", Status: "active"},
+		},
+		Relations: []store.ProjectRelation{
+			{ID: "rel:bundle:records", Type: "storage.bundle.uses_record_store", From: "storage.bundle:appStorage", To: "storage.recordStore:records", Fidelity: "resolved"},
+			{ID: "rel:workspace:storage", Type: "workspace.uses_storage", From: "workspace:docs", To: "storage.bundle:appStorage", Fidelity: "resolved"},
+		},
+	})
+	client := NewDirectClientFromService(NewService(s, nil))
+
+	index, err := client.ProjectIndex(ctx)
+	if err != nil {
+		t.Fatalf("ProjectIndex error = %v", err)
+	}
+	definition := findAPIDefinition(index.Definitions, "storage.bundle:appStorage")
+	if definition == nil {
+		t.Fatalf("definitions = %+v, want storage bundle", index.Definitions)
+	}
+	storage := apiMapValue(t, definition.Metadata, "storage")
+	components := apiMapValue(t, storage, "components")
+	if components["recordStoreId"] != "storage.recordStore:records" {
+		t.Fatalf("components = %+v, want record store id", components)
+	}
+	if !apiStorageWarningsInclude(storage, "storage.workspace_blob_missing") {
+		t.Fatalf("storage = %+v, want workspace missing blob warning", storage)
+	}
+}
+
+func findAPIDefinition(definitions []api.ProjectDefinition, id string) *api.ProjectDefinition {
+	for i := range definitions {
+		if definitions[i].ID == id {
+			return &definitions[i]
+		}
+	}
+	return nil
+}
+
+func apiMapValue(t *testing.T, data map[string]any, key string) map[string]any {
+	t.Helper()
+	nested, ok := data[key].(map[string]any)
+	if !ok {
+		t.Fatalf("%s = %+v, want object", key, data[key])
+	}
+	return nested
+}
+
+func apiStorageWarningsInclude(storage map[string]any, code string) bool {
+	warnings, _ := storage["warnings"].([]any)
+	for _, warning := range warnings {
+		row, ok := warning.(map[string]any)
+		if ok && row["code"] == code {
+			return true
+		}
+	}
+	return false
+}

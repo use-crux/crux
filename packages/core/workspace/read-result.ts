@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { BlobContent } from "../store/types";
+import type { BlobContent } from "../storage";
 import type { JsonValue } from "../types/tool";
 import { recordArtifactFields, byteLength } from "./content";
 import {

@@ -148,10 +148,11 @@ export {
 } from "./workspace";
 export {
   inMemoryBlobStore,
-  inMemoryDataStore,
+  inMemoryRecordStore,
   inMemoryStorage,
   inMemoryVectorStore,
   storage,
+  StorageError,
 } from "./storage";
 export type { ContextTreeResult } from "./prompt";
 export type {
@@ -198,10 +199,20 @@ export type {
   BlobReadResult,
   BlobRef,
   BlobStore,
-  DataStore,
+  ExactFilter,
+  JsonObject,
+  RecordEntry,
+  RecordListOptions,
+  RecordPage,
+  RecordStore,
+  RecordStoreCapabilities,
+  RecordWrite,
+  RecordWriteOptions,
   Storage,
+  StorageErrorCode,
   VectorHit,
   VectorRecord,
+  VectorSearchQuery,
   VectorStore,
 } from "./storage";
 export { createPrompts } from "./prompt";
@@ -311,7 +322,7 @@ export {
   setRuntime,
   updateRuntime,
   resetRuntime,
-  resolveStore,
+  resolveRecords,
 } from "./runtime";
 export type { CruxRuntime } from "./runtime";
 export type { PromptMiddleware, PromptMiddlewareArgs } from "./runtime";
@@ -464,24 +475,6 @@ export type {
   TraceMeta,
 } from "./generation";
 export type { TokenizerFn } from "./shared/tokenizer";
-
-// Store
-export { inMemoryCruxStore } from "./store/memory";
-export type {
-  CruxStore,
-  JsonObject,
-  StoreEntry,
-  ListOptions,
-  ListResult,
-  ScoredEntry,
-  SparseVector,
-  VectorSearchOptions,
-  VectorSearchQuery,
-  CruxStoreCapabilities,
-  StoreEvent,
-  StoreSetEvent,
-  StoreDeleteEvent,
-} from "./store/types";
 
 // Memory
 export {

@@ -4,8 +4,8 @@ import { z } from 'zod'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
 import { createCruxConvex, prompt, type ConvexCtxPort } from '../index'
 import { convexAgent } from '../agent'
-import { inMemoryCruxStore, memory, memoryBlock, recentMessages } from '../memory'
-import { convexRuntimeStore, getConvexCruxRuntime, runWithConvexCruxRuntime } from '../runtime'
+import { inMemoryRecordStore, memory, memoryBlock, recentMessages } from '../memory'
+import { convexRuntimeRecords, getConvexCruxRuntime, runWithConvexCruxRuntime } from '../runtime'
 import { context } from '../context'
 import { tool } from '../tools'
 import {
@@ -22,8 +22,8 @@ describe('Convex profile runtime', () => {
     resetObservabilityRuntime()
   })
 
-  it('late-binds memory store and default thread namespace from the active runtime', async () => {
-    const store = inMemoryCruxStore()
+  it('late-binds memory storage and default thread namespace from the active runtime', async () => {
+    const records = inMemoryRecordStore()
     const runtimeMemory = memory({
       id: 'runtime-memory',
       blocks: [
@@ -37,7 +37,8 @@ describe('Convex profile runtime', () => {
     const rendered = await runWithConvexCruxRuntime(
       {
         ctx: {},
-        store,
+        storage: { records },
+        records,
         target: { threadId: 'thread-1' },
       },
       () => runtimeMemory.asContext().systemFn({}),
@@ -65,7 +66,8 @@ describe('Convex profile runtime', () => {
     const result = await runWithConvexCruxRuntime(
       {
         ctx: { marker: true },
-        store: inMemoryCruxStore(),
+        storage: { records: inMemoryRecordStore() },
+        records: inMemoryRecordStore(),
         target: { threadId: 'thread-2' },
       },
       () => runtimeTool.execute({ value: 'ok' }),
@@ -78,8 +80,8 @@ describe('Convex profile runtime', () => {
     })
   })
 
-  it('binds one profile-created store for a request-scoped run', async () => {
-    const store = inMemoryCruxStore()
+  it('binds one profile-created storage bundle for a request-scoped run', async () => {
+    const records = inMemoryRecordStore()
     const components = {
       crux: { marker: 'crux' } as never,
       agent: { marker: 'agent' } as never,
@@ -89,7 +91,7 @@ describe('Convex profile runtime', () => {
       expect(defaults.component).toBe(components.crux)
       expect(defaults.vectorIndexName).toBe('by_custom_embedding')
       expect(defaults.semanticCache).toEqual({ isolatedVectorNamespace: true })
-      return store
+      return records
     })
     const ctx: ConvexCtxPort & { tenantId: string } = {
       tenantId: 'tenant-1',
@@ -108,7 +110,7 @@ describe('Convex profile runtime', () => {
     const crux = createCruxConvex({
       components,
       namespace: ({ target }) => `profile:${target?.threadId ?? 'missing'}`,
-      store: {
+      storage: {
         vectorIndexName: 'by_custom_embedding',
         semanticCache: { isolatedVectorNamespace: true },
         create: createStore,
@@ -117,14 +119,14 @@ describe('Convex profile runtime', () => {
 
     const result = await crux.run(ctx, { threadId: 'thread-profile', userId: 'user-1' }, async (scope) => {
       expect(scope.ctx).toBe(ctx)
-      expect(scope.store).toBe(store)
-      expect(scope.runtime.store).toBe(store)
-      await scope.store.set('direct', { ok: true })
-      await convexRuntimeStore.set('runtime', { ok: true })
+      expect(scope.records).toBe(records)
+      expect(scope.runtime.records).toBe(records)
+      await scope.records.put('direct', { ok: true })
+      await convexRuntimeRecords.put('runtime', { ok: true })
       const rendered = await runtimeMemory.asContext().systemFn({})
       return {
-        direct: await store.get('direct'),
-        runtime: await store.get('runtime'),
+        direct: await records.get('direct'),
+        runtime: await records.get('runtime'),
         rendered,
         target: getConvexCruxRuntime()?.target,
       }
@@ -139,8 +141,8 @@ describe('Convex profile runtime', () => {
     expect(createStore).toHaveBeenCalledTimes(1)
   })
 
-  it('delegates profile-created agent store creation through the profile', async () => {
-    const store = inMemoryCruxStore()
+  it('delegates profile-created agent storage creation through the profile', async () => {
+    const store = inMemoryRecordStore()
     const components = {
       crux: { marker: 'crux' } as never,
       agent: { marker: 'agent' } as never,
@@ -170,7 +172,7 @@ describe('Convex profile runtime', () => {
     const crux = createCruxConvex({
       components,
       namespace: ({ target }) => `profile-agent:${target?.threadId ?? 'missing'}`,
-      store: {
+      storage: {
         create: createStore,
       },
     })
@@ -208,7 +210,7 @@ describe('Convex profile runtime', () => {
       },
       prompt: basePrompt,
       model: {} as LanguageModelV3,
-      store: () => inMemoryCruxStore(),
+      crux: { runtime: { storage: () => inMemoryRecordStore() } },
     })
 
     const resolved = await agent.resolve(
@@ -241,7 +243,8 @@ describe('Convex profile runtime', () => {
       runWithConvexCruxRuntime(
         {
           ctx: { label: 'first' },
-          store: inMemoryCruxStore(),
+          storage: { records: inMemoryRecordStore() },
+          records: inMemoryRecordStore(),
           target: { threadId: 'thread-first' },
         },
         () => runtimeTool.execute({ label: 'first' }),
@@ -249,7 +252,8 @@ describe('Convex profile runtime', () => {
       runWithConvexCruxRuntime(
         {
           ctx: { label: 'second' },
-          store: inMemoryCruxStore(),
+          storage: { records: inMemoryRecordStore() },
+          records: inMemoryRecordStore(),
           target: { threadId: 'thread-second' },
         },
         () => runtimeTool.execute({ label: 'second' }),
@@ -296,12 +300,14 @@ describe('Convex profile runtime', () => {
       },
       prompt: basePrompt,
       model: {} as LanguageModelV3,
-      store: () => inMemoryCruxStore(),
-      prepare: ({ input }) => ({
-        prompt: overridePrompt,
-        input,
-        use: [extraContext],
-      }),
+      crux: {
+        runtime: { storage: () => inMemoryRecordStore() },
+        prepare: ({ input }) => ({
+          prompt: overridePrompt,
+          input,
+          use: [extraContext],
+        }),
+      },
     })
 
     const resolved = await agent.resolve(
@@ -349,7 +355,7 @@ describe('Convex profile runtime', () => {
       },
       prompt: basePrompt,
       model: {} as LanguageModelV3,
-      store: () => inMemoryCruxStore(),
+      crux: { runtime: { storage: () => inMemoryRecordStore() } },
       tools: {
         cruxStyleTool,
         existingConvexTool,
@@ -455,14 +461,16 @@ describe('Convex profile runtime', () => {
       },
       prompt: basePrompt,
       model: {} as LanguageModelV3,
-      store: () => inMemoryCruxStore(),
-      prepare: ({ input, messages }) => ({
-        input: {
-          ...input,
-          memoryQuery: typeof messages?.inputPrompt[0]?.content === 'string' ? messages.inputPrompt[0].content : '',
-        },
-        use: [currentPromptContext],
-      }),
+      crux: {
+        runtime: { storage: () => inMemoryRecordStore() },
+        prepare: ({ input, messages }) => ({
+          input: {
+            ...input,
+            memoryQuery: typeof messages?.inputPrompt[0]?.content === 'string' ? messages.inputPrompt[0].content : '',
+          },
+          use: [currentPromptContext],
+        }),
+      },
     })
 
     const { thread } = await agent.continueThread(ctx, { threadId: 'thread-5', userId: 'user-1' })
@@ -622,7 +630,7 @@ describe('Convex profile runtime', () => {
       },
       prompt: basePrompt,
       model: {} as LanguageModelV3,
-      store: () => inMemoryCruxStore(),
+      crux: { runtime: { storage: () => inMemoryRecordStore() } },
     })
 
     const { thread } = await agent.continueThread(ctx, { threadId: 'thread-6', userId: 'user-1' })
@@ -687,7 +695,7 @@ describe('Convex profile runtime', () => {
       },
       prompt: basePrompt,
       model: {} as LanguageModelV3,
-      store: () => inMemoryCruxStore(),
+      crux: { runtime: { storage: () => inMemoryRecordStore() } },
     })
 
     await observe.run({ name: 'chat', rootPrimitive: 'agent.run' }, async () => {
@@ -751,12 +759,12 @@ describe('Convex profile runtime', () => {
       auth: {},
     }
 
-    // A store whose writes always fail forces memory captureTurn to throw,
-    // simulating a transient Convex store failure during post-turn persistence.
+    // A record store whose writes always fail forces memory captureTurn to throw,
+    // simulating a transient Convex storage failure during post-turn persistence.
     const failingStore = {
-      ...inMemoryCruxStore(),
-      set: async () => {
-        throw new Error('store write boom')
+      ...inMemoryRecordStore(),
+      put: async () => {
+        throw new Error('record write boom')
       },
     }
 
@@ -785,8 +793,10 @@ describe('Convex profile runtime', () => {
       components: { crux: { marker: 'crux' } as never, agent: agentComponent as never },
       prompt: basePrompt,
       model: {} as LanguageModelV3,
-      store: () => failingStore,
-      prepare: () => ({ use: [captureMemory] }),
+      crux: {
+        runtime: { storage: () => failingStore },
+        prepare: () => ({ use: [captureMemory] }),
+      },
     })
 
     const { thread } = await agent.continueThread(ctx, { threadId: 'thread-cap', userId: 'user-1' })

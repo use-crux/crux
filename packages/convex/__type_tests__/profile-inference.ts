@@ -2,7 +2,7 @@ import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
 import { Agent as ConvexAgentBase } from '@convex-dev/agent'
-import type { CruxStore } from '@use-crux/core/store'
+import type { RecordStore, Storage } from '@use-crux/core/storage'
 import type { ToolDef } from '@use-crux/core/tools'
 import * as convexRoot from '../index'
 import { createConvexRuntimeBridge, createCruxConvex, prompt, type ConvexCtxPort } from '../index'
@@ -110,13 +110,15 @@ const profileAgent = crux.convexAgent({
   name: 'Profile Editor',
   prompt: editPrompt,
   model,
-  prepare: async ({ input, messages }) => {
-    expectTypeOf(messages?.recent[0]?.content).toEqualTypeOf<unknown>()
-    return {
-      input,
-      use: [editorialContext],
-      captureMessages: messages?.recent,
-    }
+  crux: {
+    prepare: async ({ input, messages }) => {
+      expectTypeOf(messages?.recent[0]?.content).toEqualTypeOf<unknown>()
+      return {
+        input,
+        use: [editorialContext],
+        captureMessages: messages?.recent,
+      }
+    },
   },
 })
 
@@ -130,7 +132,7 @@ const languageModelAgent = convexAgent({
   languageModel: model,
 })
 
-// @ts-expect-error profile-backed agents require `languageModel` or the legacy `model` alias.
+// @ts-expect-error profile-backed agents require `languageModel` or `model`.
 convexAgent({
   components: {
     crux: { crux: true } as never,
@@ -158,7 +160,7 @@ const profileLanguageModelAgent = crux.convexAgent({
   languageModel: model,
 })
 
-// @ts-expect-error profile-created agents require `languageModel` or the legacy `model` alias.
+// @ts-expect-error profile-created agents require `languageModel` or `model`.
 crux.convexAgent({
   name: 'Missing Profile Model Editor',
   prompt: editPrompt,
@@ -228,13 +230,13 @@ const tenantProfile = createCruxConvex<TenantConvexCtx>({
     crux: { crux: true } as never,
     agent: { agent: true } as never,
   },
-  store: {
+  storage: {
     vectorIndexName: 'by_tenant_embedding',
     create(ctx, defaults) {
       expectTypeOf(ctx.tenantId).toEqualTypeOf<string>()
       expectTypeOf(defaults.vectorIndexName).toEqualTypeOf<string>()
-      expectTypeOf(defaults.createComponentStore(ctx)).toEqualTypeOf<CruxStore>()
-      return defaults.createComponentStore(ctx)
+      expectTypeOf(defaults.createComponentStorage(ctx)).toEqualTypeOf<Storage>()
+      return defaults.createComponentStorage(ctx)
     },
   },
 })
@@ -245,13 +247,14 @@ const tenantCtx = {
   runMutation: async <TResult = unknown>() => undefined as TResult,
 } satisfies TenantConvexCtx
 
-expectTypeOf(tenantProfile.store(tenantCtx)).toEqualTypeOf<CruxStore | Promise<CruxStore>>()
+expectTypeOf(tenantProfile.storage(tenantCtx)).toEqualTypeOf<Storage | Promise<Storage>>()
 
 const tenantRunResult = tenantProfile.run(tenantCtx, { threadId: 'thread-1', attempt: 1 }, (scope) => {
   expectTypeOf(scope.ctx.tenantId).toEqualTypeOf<string>()
   expectTypeOf(scope.target?.threadId).toEqualTypeOf<string | undefined>()
   expectTypeOf(scope.target?.attempt).toEqualTypeOf<number | undefined>()
-  expectTypeOf(scope.store).toEqualTypeOf<CruxStore>()
+  expectTypeOf(scope.storage).toEqualTypeOf<Storage>()
+  expectTypeOf(scope.records).toEqualTypeOf<RecordStore>()
   return { ok: true as const }
 })
 
@@ -264,7 +267,8 @@ const runtimeBridge = createConvexRuntimeBridge<TenantConvexCtx>({
 const runtimeBridgeResult = runtimeBridge.run(tenantCtx, { threadId: 'thread-1', attempt: 1 }, (scope) => {
   expectTypeOf(scope.ctx.tenantId).toEqualTypeOf<string>()
   expectTypeOf(scope.target?.attempt).toEqualTypeOf<number | undefined>()
-  expectTypeOf(scope.store).toEqualTypeOf<CruxStore>()
+  expectTypeOf(scope.storage).toEqualTypeOf<Storage>()
+  expectTypeOf(scope.records).toEqualTypeOf<RecordStore>()
   return { runtime: true as const }
 })
 

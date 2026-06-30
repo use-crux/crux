@@ -10,7 +10,7 @@
  * @module
  */
 
-import type { DataStore, JsonObject, SetOptions } from "../store/types";
+import type { JsonObject, RecordStore, RecordWriteOptions } from "../storage";
 import { emitWorkspaceVersion } from "./observability";
 import type {
   WorkspaceBlobStore,
@@ -35,7 +35,7 @@ function versionPrefix(
   )}:version:${encodeURIComponent(path)}:v`;
 }
 
-/** The data-store key for a single file version snapshot. */
+/** The record-store key for a single file version snapshot. */
 export function versionKey(
   workspaceId: string,
   namespace: string,
@@ -53,7 +53,7 @@ export function versionKey(
  * persist the HEAD record (with its version-scoped blob URI) first.
  */
 export async function recordFileVersion(input: {
-  readonly store: DataStore;
+  readonly store: RecordStore;
   readonly blobs?: WorkspaceBlobStore;
   readonly workspaceId: string;
   readonly namespace: string;
@@ -61,7 +61,7 @@ export async function recordFileVersion(input: {
   readonly record: WorkspaceFileRecord;
   readonly operation: WorkspaceVersionOperation;
   readonly versioning?: WorkspaceVersioning;
-  readonly setOptions?: SetOptions;
+  readonly setOptions?: RecordWriteOptions;
 }): Promise<void> {
   const version = input.record.headVersion ?? 1;
   const value: WorkspaceVersionRecord = {
@@ -70,11 +70,11 @@ export async function recordFileVersion(input: {
     version,
     operation: input.operation,
     createdAt: input.record.updatedAt,
-    snapshot: input.record,
+    snapshot: input.record as unknown as WorkspaceVersionRecord["snapshot"],
   };
-  await input.store.set(
+  await input.store.put(
     versionKey(input.workspaceId, input.namespace, input.path, version),
-    value,
+    value as unknown as JsonObject,
     input.setOptions,
   );
   emitWorkspaceVersion({
@@ -100,7 +100,7 @@ export async function recordFileVersion(input: {
 
 /** Read a single version snapshot, or `null` when absent/malformed. */
 export async function getVersionRecord(
-  store: DataStore,
+  store: RecordStore,
   workspaceId: string,
   namespace: string,
   path: WorkspacePath,
@@ -114,7 +114,7 @@ export async function getVersionRecord(
 
 /** List a file's version snapshots, newest version first. */
 export async function listVersionRecords(
-  store: DataStore,
+  store: RecordStore,
   workspaceId: string,
   namespace: string,
   path: WorkspacePath,
@@ -139,7 +139,7 @@ export async function listVersionRecords(
 
 /** Delete every version snapshot for a path, along with its out-of-line blobs. */
 export async function purgeVersions(
-  store: DataStore,
+  store: RecordStore,
   blobs: WorkspaceBlobStore | undefined,
   workspaceId: string,
   namespace: string,
@@ -177,7 +177,7 @@ export async function purgeVersions(
 
 /** Drop the oldest snapshots (and their blobs) beyond `maxVersions`. */
 async function gcVersions(input: {
-  readonly store: DataStore;
+  readonly store: RecordStore;
   readonly blobs?: WorkspaceBlobStore;
   readonly workspaceId: string;
   readonly namespace: string;
@@ -203,7 +203,7 @@ async function gcVersions(input: {
 }
 
 async function deleteVersion(
-  store: DataStore,
+  store: RecordStore,
   blobs: WorkspaceBlobStore | undefined,
   workspaceId: string,
   namespace: string,

@@ -45,7 +45,7 @@ const sparse = embedding({ kind: 'sparse', ... })
 
 // Production docs search: use both, then retrieve in hybrid mode
 const docs = retriever({
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -58,8 +58,8 @@ const docs = retriever({
 | Goal | Use |
 |------|-----|
 | `episodes()`, `facts()`, `procedures()`, or dense similarity search | One dense embedding |
-| Keyword-weighted or BM25-style retrieval | One sparse embedding plus `vectors.search({ sparse })` |
-| Upstash hybrid retrieval | One dense embedding, one sparse embedding, plus `vectors.search({ dense, sparse })` |
+| Keyword-weighted or BM25-style retrieval | One sparse embedding plus `vectors.search({ mode: 'sparse', sparse })` |
+| Upstash hybrid retrieval | One dense embedding, one sparse embedding, plus `vectors.search({ mode: 'hybrid', dense, sparse })` |
 | Store-specific or fully custom retrieval | Your own store or retriever logic |
 
 ## Dense: semantic similarity
@@ -122,7 +122,7 @@ You do not define a hybrid embedding. You define one dense embedding and one spa
 const docs = retriever({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -144,9 +144,9 @@ The same primitive owns the policies that affect how vectors are generated. Put 
 
 ```ts
 import { embedding, embeddingCache, normalizeText } from '@use-crux/core/embedding'
-import { inMemoryDataStore } from '@use-crux/core/storage'
+import { inMemoryRecordStore } from '@use-crux/core/storage'
 
-const store = inMemoryDataStore()
+const records = inMemoryRecordStore()
 
 const dense = embedding({
   kind: 'dense',
@@ -257,7 +257,7 @@ Indexers use embeddings when writing chunks. Retrievers use the same embeddings 
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -266,7 +266,7 @@ const docsIndexer = indexer({
 const docs = retriever({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -282,6 +282,7 @@ Vector stores receive the vector query shape directly:
 
 ```ts
 const denseResults = await vectors.search({
+  mode: 'dense',
   dense: await dense.embed('roadmap'),
 })
 ```
@@ -290,10 +291,12 @@ Sparse-only and hybrid-capable stores use the same method:
 
 ```ts
 const sparseResults = await vectors.search({
+  mode: 'sparse',
   sparse: await sparse.embed('roadmap'),
 })
 
 const hybridResults = await vectors.search({
+  mode: 'hybrid',
   dense: await dense.embed('roadmap'),
   sparse: await sparse.embed('roadmap'),
   fusion: 'dbsf',
@@ -321,6 +324,7 @@ const vectors = upstashVectorStore({
 })
 
 const results = await vectors.search({
+  mode: 'hybrid',
   dense: await dense.embed('latest roadmap'),
   sparse: await sparse.embed('latest roadmap'),
   fusion: 'dbsf',

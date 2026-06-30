@@ -1,7 +1,7 @@
 import { config } from '@use-crux/core'
 import { describe, expect, it, vi } from 'vitest'
-import { convexRuntimeStore, createConvexRuntimeBridge, getConvexCruxRuntime, type ConvexCtxPort } from '../index'
-import { inMemoryCruxStore, memory, memoryBlock } from '../memory'
+import { convexRuntimeRecords, createConvexRuntimeBridge, getConvexCruxRuntime, type ConvexCtxPort } from '../index'
+import { inMemoryRecordStore, memory, memoryBlock } from '../memory'
 
 interface TenantCtx extends ConvexCtxPort {
   tenantId: string
@@ -26,13 +26,13 @@ type TestHttpAction = {
 }
 
 describe('Convex runtime bridge', () => {
-  it('binds one ctx-scoped store and namespace for a run', async () => {
-    const store = inMemoryCruxStore()
+  it('binds one ctx-scoped storage bundle and namespace for a run', async () => {
+    const records = inMemoryRecordStore()
     const component = { marker: 'crux' } as never
     const createStore = vi.fn((ctx: TenantCtx, defaults) => {
       expect(ctx.tenantId).toBe('tenant-1')
       expect(defaults.component).toBe(component)
-      return store
+      return records
     })
     const ctx: TenantCtx = {
       tenantId: 'tenant-1',
@@ -52,7 +52,7 @@ describe('Convex runtime bridge', () => {
     const bridge = createConvexRuntimeBridge<TenantCtx>({
       component,
       namespace: ({ target }) => `runtime:${target?.threadId ?? 'missing'}`,
-      store: {
+      storage: {
         create: createStore,
       },
     })
@@ -60,11 +60,11 @@ describe('Convex runtime bridge', () => {
     const result = await bridge.run(ctx, { threadId: 'thread-1', attempt: 2 }, async (scope) => {
       expect(scope.ctx.tenantId).toBe('tenant-1')
       expect(scope.target?.attempt).toBe(2)
-      expect(scope.runtime.store).toBe(store)
-      await convexRuntimeStore.set('runtime:key', { ok: true })
+      expect(scope.runtime.records).toBe(records)
+      await convexRuntimeRecords.put('runtime:key', { ok: true })
       const rendered = await runtimeMemory.asContext().systemFn({})
       return {
-        stored: await store.get('runtime:key'),
+        stored: await records.get('runtime:key'),
         rendered,
         activeTarget: getConvexCruxRuntime()?.target,
       }
@@ -79,9 +79,9 @@ describe('Convex runtime bridge', () => {
   })
 
   it('executes bridge commands through the runtime bridge store path', async () => {
-    const store = inMemoryCruxStore()
-    await store.set('blackboard:runtime', { status: 'ready' })
-    const createStore = vi.fn(() => store)
+    const records = inMemoryRecordStore()
+    await records.put('blackboard:runtime', { status: 'ready' })
+    const createStore = vi.fn(() => records)
     const crux = config({
       devtools: {
         bridge: {
@@ -93,7 +93,7 @@ describe('Convex runtime bridge', () => {
     const http = new FakeHttpRouter()
     const bridge = createConvexRuntimeBridge<TenantCtx>({
       component: { marker: 'crux' } as never,
-      store: {
+      storage: {
         create: createStore,
       },
     })

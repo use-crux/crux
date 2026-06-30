@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { BlobStore, DataStore } from "../store/types";
+import type { BlobStore, RecordStore } from "../storage";
 import { resolveArtifact } from "./artifacts";
 import { mountForPath, normalizePath } from "./path";
 import { recordToReadResult } from "./read-result";
@@ -28,7 +28,7 @@ const MANIFEST_FILE_LIMIT = 100;
 
 /** Render the markdown manifest for a workspace namespace. */
 export async function renderWorkspaceManifest(args: {
-  readonly store: DataStore;
+  readonly store: RecordStore;
   readonly blobs?: BlobStore;
   readonly workspaceId: string;
   readonly mounts: readonly NormalizedMount[];

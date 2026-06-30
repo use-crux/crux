@@ -344,7 +344,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             .iter()
             .any(|class| class == "dependencies")
     );
-    assert_eq!(coverage.identities.len(), 17);
+    assert_eq!(coverage.identities.len(), 18);
 
     // The Rust first-party projection manifest must cover exactly these
     // identities, with the same stable replacement identity it stamps when it

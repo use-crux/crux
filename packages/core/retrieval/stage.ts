@@ -20,6 +20,7 @@ import type {
   RetrievalStageKind,
   RetrievalStagePhase,
 } from './types'
+import { StorageError, type ExactFilter } from '../storage'
 
 /** Define a query-phase retrieval stage. */
 export function retrievalStage(config: {
@@ -61,7 +62,12 @@ export function validateStageName(name: string): void {
 }
 
 /** Trim and validate a planned query, dropping empty optional fields. */
-export function normalizePlannedQuery(query: PlannedRetrievalQuery): PlannedRetrievalQuery {
+export function normalizePlannedQuery(query: {
+  readonly query: string
+  readonly filter?: Record<string, unknown>
+  readonly weight?: number
+  readonly reason?: string
+}): PlannedRetrievalQuery {
   const trimmed = query.query.trim()
   if (!trimmed) throw new Error('Planned retrieval query must be non-empty.')
   if (query.weight !== undefined && query.weight <= 0) {
@@ -69,8 +75,28 @@ export function normalizePlannedQuery(query: PlannedRetrievalQuery): PlannedRetr
   }
   return {
     query: trimmed,
-    ...(query.filter ? { filter: query.filter } : {}),
+    ...(query.filter ? { filter: normalizeExactFilter(query.filter) } : {}),
     ...(query.weight !== undefined ? { weight: query.weight } : {}),
     ...(query.reason ? { reason: query.reason } : {}),
   }
+}
+
+function normalizeExactFilter(filter: Record<string, unknown>): ExactFilter {
+  const normalized: Record<string, ExactFilter[string]> = {}
+  for (const [key, value] of Object.entries(filter)) {
+    if (key.includes('.') || !isExactFilterValue(value)) {
+      throw new StorageError('invalid_filter', 'Retrieval filters support exact top-level scalar equality only.')
+    }
+    normalized[key] = value
+  }
+  return normalized
+}
+
+function isExactFilterValue(value: unknown): value is ExactFilter[string] {
+  return (
+    value === null ||
+    typeof value === 'string' ||
+    (typeof value === 'number' && Number.isFinite(value)) ||
+    typeof value === 'boolean'
+  )
 }

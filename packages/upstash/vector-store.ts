@@ -7,15 +7,22 @@
  * @module
  */
 
-import type { SparseVector, VectorSearchQuery } from '@use-crux/core/store'
-import type { VectorHit, VectorRecord, VectorStore } from '@use-crux/core/storage'
-
-interface UpstashUpsertData {
-  id: string
-  vector?: number[]
-  sparseVector?: SparseVector
-  metadata?: Record<string, unknown>
-}
+import { StorageError } from '@use-crux/core/storage'
+import type {
+  SparseVector,
+  VectorHit,
+  VectorRecord,
+  VectorSearchQuery,
+  VectorStore,
+  VectorStoreCapabilities,
+} from '@use-crux/core/storage'
+import { upstashFilter } from './vector-filter'
+import {
+  normalizeCapabilities,
+  normalizeSearchQuery,
+  normalizeUpsertRecord,
+  vectorHitMetadata,
+} from './vector-store-contract'
 
 interface UpstashQueryData {
   vector?: number[]
@@ -59,88 +66,76 @@ export interface UpstashVectorStoreConfig {
   index: UpstashIndex
   /** Namespace for this vector store. */
   namespace: string
+  /**
+   * Capabilities for the configured Upstash index.
+   *
+   * Upstash index mode is deployment configuration, so the adapter defaults to
+   * dense-only search and lets apps opt into sparse or hybrid behavior when the
+   * backing index is known to support it.
+   */
+  capabilities?: Partial<VectorStoreCapabilities>
 }
 
 /** Create a standalone Crux `VectorStore` backed by Upstash Vector. */
 export function upstashVectorStore(config: UpstashVectorStoreConfig): VectorStore {
   const ns = config.index.namespace(config.namespace)
+  const capabilities = normalizeCapabilities(config.capabilities)
 
   return {
     _tag: 'VectorStore',
     async upsert(records: readonly VectorRecord[]): Promise<void> {
       if (records.length === 0) return
-      await ns.upsert(
-        records.map(
-          (record) =>
-            ({
-              id: record.key,
-              ...(record.dense ? { vector: record.dense } : {}),
-              ...(record.sparse ? { sparseVector: record.sparse } : {}),
-              ...(record.metadata
-                ? { metadata: { ...record.metadata, _key: record.key } }
-                : { metadata: { _key: record.key } }),
-            }) satisfies UpstashUpsertData,
-        ),
-      )
+      const payload = records.map((record) => normalizeUpsertRecord(record, capabilities))
+      try {
+        await ns.upsert(payload)
+      } catch (cause) {
+        throw new StorageError('backend_error', 'Upstash Vector upsert failed.', { cause })
+      }
     },
 
     async delete(keys: readonly string[]): Promise<void> {
       if (keys.length === 0) return
-      await ns.delete([...keys])
+      try {
+        await ns.delete([...keys])
+      } catch (cause) {
+        throw new StorageError('backend_error', 'Upstash Vector delete failed.', { cause })
+      }
     },
 
     async search(query: VectorSearchQuery): Promise<readonly VectorHit[]> {
-      if (!query.dense && !query.sparse) {
-        throw new Error('upstashVectorStore.search() requires a dense or sparse query vector.')
-      }
-
-      const filter = upstashFilter(query.filter)
-      const results = await ns.query({
-        ...(query.dense ? { vector: query.dense } : {}),
-        ...(query.sparse ? { sparseVector: query.sparse } : {}),
-        ...(query.fusion ? { fusion: query.fusion } : {}),
+      const normalized = normalizeSearchQuery(query, capabilities)
+      const filter = upstashFilter(normalized.filter)
+      const request = {
+        ...(normalized.dense ? { vector: [...normalized.dense] } : {}),
+        ...(normalized.sparse ? { sparseVector: normalized.sparse } : {}),
+        ...(normalized.fusion ? { fusion: normalized.fusion } : {}),
         ...(filter ? { filter } : {}),
-        topK: query.limit ?? 10,
+        topK: normalized.limit,
         includeMetadata: true,
-      } satisfies UpstashQueryData)
+      } satisfies UpstashQueryData
+      const results = await queryUpstash(ns, request)
 
       return results
-        .filter((result) => query.threshold === undefined || result.score >= query.threshold)
+        .filter((result) => result.score >= normalized.threshold)
         .map((result) => ({
-          key: (result.metadata?._key as string | undefined) ?? String(result.id),
+          key: String(result.id),
           score: result.score,
-          ...(result.metadata ? { metadata: result.metadata } : {}),
+          ...(result.metadata ? { metadata: vectorHitMetadata(result.metadata) } : {}),
         }))
     },
 
     capabilities() {
-      return { dense: true, sparse: true, hybrid: true, fusion: ['rrf', 'dbsf'] as const }
+      return capabilities
     },
   }
 }
 
-export function upstashFilter(filter: Record<string, unknown> | undefined): string | undefined {
-  if (!filter) return undefined
-  const clauses = Object.entries(filter).flatMap(([key, value]) => {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return []
-    const encoded = encodeFilterValue(value)
-    return encoded ? [`${key} = ${encoded}`] : []
-  })
-  return clauses.length > 0 ? clauses.join(' and ') : undefined
+async function queryUpstash(ns: UpstashNamespace, request: UpstashQueryData): Promise<UpstashQueryResult[]> {
+  try {
+    return await ns.query(request)
+  } catch (cause) {
+    throw new StorageError('backend_error', 'Upstash Vector query failed.', { cause })
+  }
 }
 
-function encodeFilterValue(value: unknown): string | undefined {
-  if (typeof value === 'string') {
-    return `'${value.replace(/'/g, "''")}'`
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return String(value)
-  }
-  if (typeof value === 'boolean') {
-    return value ? 'true' : 'false'
-  }
-  if (value === null) {
-    return 'null'
-  }
-  return undefined
-}
+export { upstashFilter } from './vector-filter'

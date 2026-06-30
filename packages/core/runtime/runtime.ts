@@ -19,7 +19,7 @@ import type {
 } from './middleware'
 import type { CruxObservabilityTransport, ObservabilityDeliveryOptions } from '../observability'
 import type { CruxObservabilityCapturePolicy } from '../observability/capture-policy'
-import type { CruxStore } from '../store/types'
+import type { RecordStore } from '../storage'
 
 /**
  * The set of global hooks and reporters that instrument Crux primitives.
@@ -56,8 +56,8 @@ export interface CruxRuntime {
   observabilityDelivery?: ObservabilityDeliveryOptions
   /** Central policy for whether canonical observability artifacts include payload previews. */
   observabilityCapture?: CruxObservabilityCapturePolicy
-  /** Global CruxStore for flow state persistence (suspend/resume). */
-  store?: CruxStore
+  /** Global record store for flow state persistence (suspend/resume). */
+  records?: RecordStore
   /** Global constraints registered via createConstraintPlugin(). */
   globalConstraints?: import('../safety/constraint/types').Constraint[]
   /** Global guardrails registered via createGuardrailPlugin(). */
@@ -131,25 +131,25 @@ export function resetRuntime(): void {
 }
 
 /**
- * Resolve the global CruxStore from the runtime, or throw if none is configured.
+ * Resolve the global record store from the runtime, or throw if none is configured.
  *
  * Used internally by plans, tasks, flows, and other primitives that need
- * store access. The store is configured via `config({ persistence: { store } })`.
+ * record persistence. Configure it with `config({ persistence: { records } })`.
  *
  * @throws {Error} If no store has been configured.
  *
  * @example
  * ```ts
- * const store = resolveStore()
- * await store.set('key', value)
+ * const records = resolveRecords()
+ * await records.put('key', value)
  * ```
  */
-export function resolveStore(): CruxStore {
-  const store = _runtime.store
-  if (!store) {
+export function resolveRecords(): RecordStore {
+  const records = _runtime.records
+  if (!records) {
     throw new Error(
-      'No CruxStore configured. Call config({ persistence: { store } }) before using plans, tasks, or flows.',
+      'No RecordStore configured. Call config({ persistence: { records } }) before using plans, tasks, or flows.',
     )
   }
-  return store
+  return records
 }

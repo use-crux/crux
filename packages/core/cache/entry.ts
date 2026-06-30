@@ -8,13 +8,21 @@
  * @module
  */
 
-import type { CruxStore, ScoredEntry } from '../store/types'
+import type { ExactFilter, RecordStore, VectorStore } from '../storage'
 import type { MiddlewareResult, PromptMiddlewareArgs } from '../runtime/types'
 import type { CacheableResult, SemanticCacheEntry } from './types'
 
+/** Hydrated semantic cache vector hit. */
+export interface SemanticCacheHit {
+  readonly key: string
+  readonly value: SemanticCacheEntry
+  readonly score: number
+}
+
 /** Vector-search the store for the closest matching cache entry above threshold. */
 export async function lookupEntry(
-  store: CruxStore,
+  records: RecordStore,
+  vectors: VectorStore,
   query: {
     namespace: string
     promptId?: string
@@ -24,8 +32,8 @@ export async function lookupEntry(
     dense: number[]
     threshold: number
   },
-): Promise<ScoredEntry | null> {
-  const filter = {
+): Promise<SemanticCacheHit | null> {
+  const filter: ExactFilter = {
     cruxType: 'semantic-cache-entry',
     namespace: query.namespace,
     ...(query.promptId ? { promptId: query.promptId } : {}),
@@ -33,10 +41,17 @@ export async function lookupEntry(
     version: query.version,
     resultKind: query.resultKind,
   }
-  const results = store.searchVectors
-    ? await store.searchVectors({ dense: query.dense, threshold: query.threshold, limit: 1, filter })
-    : await store.vectorSearch!(query.dense, { threshold: query.threshold, limit: 1, filter })
-  return results[0] ?? null
+  const results = await vectors.search({
+    mode: 'dense',
+    dense: query.dense,
+    threshold: query.threshold,
+    limit: 1,
+    filter,
+  })
+  const hit = results[0]
+  if (!hit) return null
+  const value = await records.get(hit.key)
+  return isSemanticCacheEntry(value) ? { key: hit.key, value, score: hit.score } : null
 }
 
 /** Serialize a generate result into the persisted entry `result` shape. */
@@ -45,11 +60,13 @@ export function serializeResult(
   resultKind: 'text' | 'object',
 ): SemanticCacheEntry['result'] {
   const meta = result?._meta ?? {}
+  const finishReason = meta.finishReason ?? result?.finishReason
+  const usage = meta.usage ?? result?.usage
   return {
     ...(typeof result?.text === 'string' ? { text: result.text } : {}),
     ...(resultKind === 'object' && result?.object !== undefined ? { object: result.object } : {}),
-    finishReason: meta.finishReason ?? result?.finishReason,
-    usage: meta.usage ?? result?.usage,
+    ...(finishReason !== undefined ? { finishReason } : {}),
+    ...(usage !== undefined ? { usage } : {}),
     meta,
   }
 }
@@ -118,4 +135,14 @@ export function cacheKey(
   queryHash: string,
 ): string {
   return `crux:semantic-cache:${namespace}:${promptId ?? 'anonymous'}:${scopeHash}:${version}:${queryHash}`
+}
+
+function isSemanticCacheEntry(value: unknown): value is SemanticCacheEntry {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      (value as { cruxType?: unknown }).cruxType === 'semantic-cache-entry' &&
+      typeof (value as { namespace?: unknown }).namespace === 'string' &&
+      typeof (value as { queryHash?: unknown }).queryHash === 'string',
+  )
 }

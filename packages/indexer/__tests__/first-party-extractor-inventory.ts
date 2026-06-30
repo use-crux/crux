@@ -38,6 +38,7 @@ const firstPartyFixtureCoverageByExtractor: Readonly<Record<string, FirstPartyFi
   'rag.retriever': 'dedicated-fixture',
   safety: 'dedicated-fixture',
   scorer: 'dedicated-fixture',
+  storage: 'dedicated-fixture',
   workspace: 'dedicated-fixture',
   eval: 'dedicated-fixture',
   'skill-registry': 'dedicated-fixture',

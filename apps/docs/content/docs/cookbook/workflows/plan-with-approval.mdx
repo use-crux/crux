@@ -3,7 +3,7 @@ title: Plan with approval
 description: Generate a plan, pause for human review, execute on approval. Plan + flow + signal.
 ---
 
-This recipe builds a workflow that proposes a plan, suspends for human review, and resumes only after a user approves (or modifies) it. The plan persists in `CruxStore` so the UI can render it live; the flow suspends so server resources don't sit idle.
+This recipe builds a workflow that proposes a plan, suspends for human review, and resumes only after a user approves (or modifies) it. The plan persists in `RecordStore` so the UI can render it live; the flow suspends so server resources don't sit idle.
 
 ## Primitives used
 
@@ -110,7 +110,7 @@ export function PlanReview({ planId, flowId }: { planId: string; flowId: string 
 
 ## How it works
 
-1. **The flow drafts the plan and persists it.** The plan document lives in `CruxStore`; the UI subscribes via `usePlan()` and re-renders when the content changes.
+1. **The flow drafts the plan and persists it.** The plan document lives in `RecordStore`; the UI subscribes via `usePlan()` and re-renders when the content changes.
 2. **`flow.suspend('await-approval', { schema, timeout })` releases the server.** The flow's state is checkpointed; nothing runs until a signal arrives. The schema validates the signal payload on resume.
 3. **The mutation signals the flow.** `signalFlow(flowId, name, payload)` writes to the store; on Convex, schedule the resume action from an app-local signal helper.
 4. **The flow resumes from after `suspend()`.** Earlier `flow.step()` results are cached — only the post-suspend work re-runs.

@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { JsonObject } from '../store/types'
+import type { JsonObject } from '../storage'
 import type { JsonValue } from '../types/tool'
 import type {
   Task,
@@ -23,9 +23,9 @@ import type {
   TaskSpecRecord,
   TasksHandle,
 } from './types'
-import { TASKLIST_PREFIX, isCancellable, metadataFilter, taskKey, taskListKey } from './helpers'
+import { TASKLIST_PREFIX, isCancellable, matchesMetadataFilter, metadataFilter, taskKey, taskListKey } from './helpers'
 import { emptyCounts, rebuildCounts } from './status'
-import { resolveStore } from '../runtime/runtime'
+import { resolveRecords } from '../runtime/runtime'
 import { observe } from '../observability'
 import { getExecutionContext } from '../runtime/execution-context'
 import { taskListAgent, taskWorker } from './agent'
@@ -165,17 +165,17 @@ async function createTaskList(
       metadataKeys: input.metadata ? Object.keys(input.metadata).sort() : [],
     },
   })
-  const store = resolveStore()
+  const store = resolveRecords()
   const now = Date.now()
   const id = crypto.randomUUID()
 
   const list: TaskList = {
     id,
-    planId: input.planId,
-    title: input.title,
     status: 'pending',
     counts: emptyCounts(),
-    metadata: input.metadata,
+    ...(input.planId !== undefined ? { planId: input.planId } : {}),
+    ...(input.title !== undefined ? { title: input.title } : {}),
+    ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
     createdAt: now,
     updatedAt: now,
   }
@@ -188,7 +188,7 @@ async function createTaskList(
 
   try {
     await span.withContext(async () => {
-      await store.set(taskListKey(id), list as unknown as JsonObject)
+      await store.put(taskListKey(id), list as unknown as JsonObject)
       emitTaskArtifact(span.spanId, 'tasklist.create', list)
     })
     const ctx = getExecutionContext()
@@ -213,24 +213,22 @@ async function createTaskList(
  * @returns The task list with correct derived status, or `null` if not found.
  */
 export async function getTaskList(taskListId: string): Promise<TaskList | null> {
-  return repairTaskListState(resolveStore(), taskListId)
+  return repairTaskListState(resolveRecords(), taskListId)
 }
 
 /** List persisted task ledgers, optionally filtered by plan and metadata. */
 export async function listTaskLists(options?: TaskListListOptions): Promise<TaskList[]> {
   const planId = typeof options?.plan === 'string' ? options.plan : options?.plan?.id
-  const result = await resolveStore().list(TASKLIST_PREFIX, {
-    cursor: options?.cursor,
-    limit: options?.limit,
-    filter: {
-      ...(planId !== undefined ? { planId } : {}),
-      ...(metadataFilter(options?.metadata) ?? {}),
-    },
-  })
+  const metadata = metadataFilter(options?.metadata)
+  const result = await resolveRecords().list(TASKLIST_PREFIX, { cursor: options?.cursor })
   const repaired = await Promise.all(
-    result.entries.map((entry) => repairTaskListState(resolveStore(), (entry.value as unknown as TaskList).id)),
+    result.entries.map((entry) => repairTaskListState(resolveRecords(), (entry.value as unknown as TaskList).id)),
   )
-  return repaired.filter((list): list is TaskList => list !== null)
+  const lists = repaired
+    .filter((list): list is TaskList => list !== null)
+    .filter((list) => planId === undefined || list.planId === planId)
+    .filter((list) => matchesMetadataFilter(list.metadata, metadata))
+  return options?.limit === undefined ? lists : lists.slice(0, options.limit)
 }
 
 /**
@@ -240,7 +238,7 @@ export async function listTaskLists(options?: TaskListListOptions): Promise<Task
  * @returns The first task list with this planId, or `null`.
  */
 export async function getTaskListByPlan(planId: string): Promise<TaskList | null> {
-  const store = resolveStore()
+  const store = resolveRecords()
   const result = await store.list('tasklist:', { filter: { planId } })
   if (result.entries.length === 0) return null
 
@@ -266,16 +264,16 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
           assignee: input.assignee,
         },
       })
-      const store = resolveStore()
+      const store = resolveRecords()
       const now = Date.now()
       const task: Task = {
         id: input.id,
         taskListId,
         label: input.label,
-        description: input.description,
         status: 'pending',
-        assignee: input.assignee,
-        metadata: input.metadata,
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.assignee !== undefined ? { assignee: input.assignee } : {}),
+        ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
         createdAt: now,
         updatedAt: now,
       }
@@ -293,7 +291,7 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
         assertMutableTaskList(list, taskListId)
 
         await span.withContext(async () => {
-          const inserted = await store.setIfAbsent(taskKey(taskListId, input.id), task as unknown as JsonObject)
+          const inserted = await store.create(taskKey(taskListId, input.id), task as unknown as JsonObject)
           if (!inserted) throw DuplicateTaskIdError(taskListId, input.id)
           emitTaskArtifact(span.spanId, 'add', task)
         })
@@ -327,7 +325,7 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
           hasError: update.error !== undefined,
         },
       })
-      const store = resolveStore()
+      const store = resolveRecords()
       try {
         const [rawList, raw] = await Promise.all([
           store.get(taskListKey(taskListId)),
@@ -371,7 +369,7 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
         }
 
         await span.withContext(async () => {
-          await store.set(taskKey(taskListId, taskId), updated as unknown as JsonObject)
+          await store.put(taskKey(taskListId, taskId), updated as unknown as JsonObject)
           emitTaskArtifact(span.spanId, 'update', updated)
         })
         const ctx = getExecutionContext()
@@ -408,7 +406,7 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
           taskId,
         },
       })
-      const store = resolveStore()
+      const store = resolveRecords()
       try {
         const [rawList, raw] = await Promise.all([
           store.get(taskListKey(taskListId)),
@@ -424,7 +422,7 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
         task.removedAt = Date.now()
         task.updatedAt = Date.now()
         await span.withContext(async () => {
-          await store.set(taskKey(taskListId, taskId), task as unknown as JsonObject)
+          await store.put(taskKey(taskListId, taskId), task as unknown as JsonObject)
           emitTaskArtifact(span.spanId, 'remove', task)
         })
         const ctx = getExecutionContext()
@@ -455,7 +453,7 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
           reasonPreview: reason?.slice(0, 500),
         },
       })
-      const store = resolveStore()
+      const store = resolveRecords()
       try {
         const rawList = await store.get(taskListKey(taskListId))
         if (!rawList) {
@@ -492,14 +490,14 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
           status: 'discarded',
           counts: rebuildCounts(nextTasks),
           discardedAt: now,
-          discardReason: reason,
+          ...(reason !== undefined ? { discardReason: reason } : {}),
           updatedAt: now,
         }
 
         await span.withContext(async () => {
-          await store.set(taskListKey(taskListId), nextList as unknown as JsonObject)
+          await store.put(taskListKey(taskListId), nextList as unknown as JsonObject)
           await Promise.all(
-            nextTasks.map((task) => store.set(taskKey(taskListId, task.id), task as unknown as JsonObject)),
+            nextTasks.map((task) => store.put(taskKey(taskListId, task.id), task as unknown as JsonObject)),
           )
           emitTaskArtifact(span.spanId, 'tasklist.discard', nextList)
         })
@@ -520,11 +518,11 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
     },
 
     async getTasks(): Promise<Task[]> {
-      return getActiveTasks(resolveStore(), taskListId)
+      return getActiveTasks(resolveRecords(), taskListId)
     },
 
     async getStatus(): Promise<TaskListStatus> {
-      return (await repairTaskListState(resolveStore(), taskListId))?.status ?? 'pending'
+      return (await repairTaskListState(resolveRecords(), taskListId))?.status ?? 'pending'
     },
 
     asContext(options?: { priority?: number; renderContext?: (tasks: Task[]) => string }) {
@@ -558,11 +556,11 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
     },
 
     async list(options?: { includeRemoved?: boolean }) {
-      return options?.includeRemoved ? getAllTasks(resolveStore(), taskListId) : getActiveTasks(resolveStore(), taskListId)
+      return options?.includeRemoved ? getAllTasks(resolveRecords(), taskListId) : getActiveTasks(resolveRecords(), taskListId)
     },
 
     async getTask(taskId: string) {
-      const raw = await resolveStore().get(taskKey(taskListId, taskId))
+      const raw = await resolveRecords().get(taskKey(taskListId, taskId))
       const task = raw as unknown as Task | null
       if (!task || task.removedAt) return null
       return task

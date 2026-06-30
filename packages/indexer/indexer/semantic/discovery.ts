@@ -6,8 +6,14 @@ import {
   semanticStringLiteralProperty,
   semanticVariableNameForNode,
 } from './syntax-readers'
+import {
+  semanticAuthoredStorageBundleCandidate,
+  semanticDiscoveryContext,
+  semanticLocalObject,
+  semanticStorageCandidateForCall,
+  type SemanticDiscoveryContext,
+} from './storage-discovery'
 import type { SemanticSyntaxNode, SemanticSyntaxSourceFile, SemanticSyntaxView } from './syntax-view'
-
 /**
  * Finds authored Crux definitions in a source file without resolving imports.
  *
@@ -22,9 +28,8 @@ export function semanticDefinitionCandidates<
   sourceFile: TSourceFile,
   syntax: SemanticSyntaxView<TNode, TSourceFile>,
 ): SemanticDefinitionCandidate<TNode, TNode>[] {
-  return semanticDefinitionCandidatesForNode(sourceFile, syntax)
+  return semanticDefinitionCandidatesForNode(sourceFile, syntax, semanticDiscoveryContext(sourceFile, syntax))
 }
-
 /**
  * Recursively collects candidates from a node and its semantic children.
  */
@@ -34,13 +39,13 @@ function semanticDefinitionCandidatesForNode<
 >(
   node: TNode,
   syntax: SemanticSyntaxView<TNode, TSourceFile>,
+  context: SemanticDiscoveryContext<TNode>,
 ): SemanticDefinitionCandidate<TNode, TNode>[] {
   return [
-    ...semanticDefinitionCandidatesForCurrentNode(node, syntax),
-    ...syntax.children(node).flatMap((child) => semanticDefinitionCandidatesForNode(child, syntax)),
+    ...semanticDefinitionCandidatesForCurrentNode(node, syntax, context),
+    ...syntax.children(node).flatMap((child) => semanticDefinitionCandidatesForNode(child, syntax, context)),
   ]
 }
-
 /**
  * Converts a single syntax node into zero or more semantic candidates.
  */
@@ -50,17 +55,21 @@ function semanticDefinitionCandidatesForCurrentNode<
 >(
   node: TNode,
   syntax: SemanticSyntaxView<TNode, TSourceFile>,
+  context: SemanticDiscoveryContext<TNode>,
 ): SemanticDefinitionCandidate<TNode, TNode>[] {
   if (syntax.isKind(node, 'callExpression')) {
-    return semanticCallExpressionCandidate(node, syntax).map((candidate) => ({ ...candidate, call: node }))
+    return semanticCallExpressionCandidate(node, syntax, context).map((candidate) => ({ ...candidate, call: node }))
   }
   if (syntax.isKind(node, 'newExpression') && syntax.callExpressionName(node) === 'Agent') {
     const object = syntax.newArguments(node).find((argument) => syntax.isKind(argument, 'objectLiteral'))
     return object ? [semanticAgentCandidate(object, semanticVariableNameForNode(node, syntax), syntax)] : []
   }
+  if (syntax.isKind(node, 'objectLiteral')) {
+    const candidate = semanticAuthoredStorageBundleCandidate(node, semanticVariableNameForNode(node, syntax), syntax)
+    return candidate ? [candidate] : []
+  }
   return []
 }
-
 /**
  * Converts a call expression into a candidate when it is a known Crux helper.
  */
@@ -70,17 +79,17 @@ function semanticCallExpressionCandidate<
 >(
   call: TNode,
   syntax: SemanticSyntaxView<TNode, TSourceFile>,
+  context: SemanticDiscoveryContext<TNode>,
 ): SemanticDefinitionCandidate<TNode, TNode>[] {
   const [firstArg] = syntax.callArguments(call)
-  const object = firstArg && syntax.isKind(firstArg, 'objectLiteral') ? firstArg : undefined
+  const object =
+    firstArg && syntax.isKind(firstArg, 'objectLiteral') ? firstArg : semanticLocalObject(firstArg, syntax, context)
   const callName = syntax.callExpressionName(call)
   const variableName = semanticVariableNameForNode(call, syntax)
   const fallbackCandidate = callName === 'fallback' ? semanticFallbackCandidate(call, variableName, syntax) : undefined
-  const candidate =
-    fallbackCandidate ?? (object ? semanticDefinitionCandidateForCall(callName, object, variableName, syntax) : undefined)
+  const candidate = fallbackCandidate ?? semanticDefinitionCandidateForCall(callName, object ?? call, variableName, syntax)
   return candidate ? [candidate] : []
 }
-
 /**
  * Maps a known helper call to the index definition it authors.
  */
@@ -159,11 +168,14 @@ function semanticDefinitionCandidateForCall<
       const name = semanticStringLiteralProperty(object, 'id', syntax) ?? variableName ?? 'anonymous'
       return { definitionId: `workspace:${safeId(name)}`, kind: 'workspace', name, object }
     }
+    case 'retriever': {
+      const name = semanticStringLiteralProperty(object, 'id', syntax) ?? variableName ?? 'anonymous'
+      return { definitionId: `rag.retriever:${safeId(name)}`, kind: 'rag.retriever', name, object }
+    }
     default:
-      return undefined
+      return semanticStorageCandidateForCall(callName, object, variableName, syntax)
   }
 }
-
 function compositionCandidate<TNode extends SemanticSyntaxNode>(
   kind:
     | 'composition.parallel'
@@ -176,7 +188,6 @@ function compositionCandidate<TNode extends SemanticSyntaxNode>(
   const name = variableName ?? 'anonymous'
   return { definitionId: `${kind}:${safeId(name)}`, kind, name, object }
 }
-
 /**
  * Builds the authored definition candidate for `fallback(...)`.
  */

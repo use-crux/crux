@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { inMemoryCruxStore } from '../../store/memory'
+import { inMemoryRecordStore } from '../../storage'
 import { plan } from '../../plan/plans'
 import { tasks } from '../../plan/tasks'
 import { task } from '../../plan/task-spec'
@@ -10,8 +10,8 @@ import { updateRuntime, resetRuntime } from '../../runtime/runtime'
 
 /** Register a fresh in-memory store for each test. */
 function setup() {
-  const store = inMemoryCruxStore()
-  updateRuntime({ store })
+  const store = inMemoryRecordStore()
+  updateRuntime({ records: store })
   return store
 }
 

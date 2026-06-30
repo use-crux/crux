@@ -8,8 +8,7 @@
  */
 
 import type { RetryOptions } from '../generation/retry'
-import type { JsonObject } from '../store/types'
-import type { CapturedObservabilityContext } from '../observability'
+import type { JsonObject, JsonValue } from '../storage'
 import type { ZodType } from 'zod'
 
 // ─────────────────────────────────────────────────────────────────
@@ -93,7 +92,7 @@ export type FlowResult<T> =
   | { status: 'cancelled'; flowId: string; cancelReason?: string }
   | { status: 'expired'; flowId: string; suspendedAt: string }
 
-/** Persisted flow snapshot stored in CruxStore. */
+/** Persisted flow snapshot stored in a RecordStore. */
 export interface FlowSnapshot extends JsonObject {
   flowId: string
   name: string
@@ -102,15 +101,14 @@ export interface FlowSnapshot extends JsonObject {
   completedSteps: Record<
     string,
     {
-      output: JsonObject | string | number | boolean | null
+      output: JsonValue
       durationMs: number
     }
   >
-  traceContext: Record<string, unknown>
-  observabilityContext?: CapturedObservabilityContext
+  traceContext: JsonObject
+  observabilityContext?: JsonObject
   createdAt: number
   updatedAt: number
-  [key: string]: unknown
 }
 
 export interface FlowScope<TInput = void> {

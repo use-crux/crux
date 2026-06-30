@@ -1,11 +1,12 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
 import { prompt as definePrompt } from '@use-crux/core'
 import type { ContextEntry, ResolveOptions } from '@use-crux/core'
+import type { RecordStore, Storage } from '@use-crux/core/storage'
 import type { z } from 'zod'
 import { runWithConvexCruxRuntime, type ConvexRuntimeTarget } from '../runtime'
 import { afterPreparedAgentCall, readPersistedSkillIds } from './lifecycle-persistence'
 import { observeAgentRun } from './lifecycle-observability'
-import { defaultConvexAgentStore } from './lifecycle-store'
+import { defaultConvexAgentStorage } from './lifecycle-store'
 import { agentOptionsFromConfig } from './lifecycle-config'
 import {
   prepareMessagesFromSnapshot,
@@ -44,12 +45,15 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
   const resolvedLanguageModel: LanguageModelV3 = languageModel
 
   async function withPreparedRuntime<R>(ctx: unknown, target: ConvexRuntimeTarget, fn: () => Promise<R>): Promise<R> {
-    const store = config.store ? await config.store(ctx) : await defaultConvexAgentStore(config.components.crux, ctx)
+    const storage = config.storage
+      ? normalizeStorage(await config.storage(ctx))
+      : await defaultConvexAgentStorage(config.components.crux, ctx)
     return await runWithConvexCruxRuntime(
       {
         ctx,
         component: config.components.crux,
-        store,
+        storage,
+        records: storage.records,
         target,
         namespace: config.namespace,
       },
@@ -263,6 +267,10 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
       }
     },
   }
+}
+
+function normalizeStorage(value: Storage | RecordStore): Storage {
+  return 'records' in value ? value : { records: value }
 }
 
 async function inputWithPersistedSkills(input: Record<string, unknown>): Promise<Record<string, unknown>> {

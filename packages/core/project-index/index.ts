@@ -192,7 +192,17 @@ export interface ControlFacts {
 export interface DataAccessFact {
   targetId?: string;
   targetVariable?: string;
-  targetKind?: "memory" | "blackboard" | "workspace" | "store" | "block";
+  targetKind?:
+    | "memory"
+    | "blackboard"
+    | "workspace"
+    | "store"
+    | "block"
+    | "storage.recordStore"
+    | "storage.vectorStore"
+    | "storage.blobStore"
+    | "storage.bundle"
+    | "storage.scope";
   key?: string;
   operation?:
     | "read"
@@ -247,6 +257,16 @@ export interface DependencyFacts {
   blackboards?: string[];
   workspaces?: string[];
   stores?: string[];
+  /** Storage Beta record-store dependencies referenced by variable or definition id. */
+  recordStores?: string[];
+  /** Storage Beta vector-store dependencies referenced by variable or definition id. */
+  vectorStores?: string[];
+  /** Storage Beta blob-store dependencies referenced by variable or definition id. */
+  blobStores?: string[];
+  /** Storage Beta bundle dependencies referenced by variable or definition id. */
+  storage?: string[];
+  /** Scoped Storage Beta wrappers referenced by variable or definition id. */
+  storageScopes?: string[];
   blocks?: string[];
   routers?: string[];
   ragPipelines?: string[];
@@ -299,6 +319,16 @@ export interface ProjectRuntimeJoin {
   retrieverId?: string;
   memoryId?: string;
   memoryStoreId?: string;
+  /** Runtime join key for a Storage Beta record-store definition. */
+  recordStoreId?: string;
+  /** Runtime join key for a Storage Beta vector-store definition. */
+  vectorStoreId?: string;
+  /** Runtime join key for a Storage Beta blob-store definition. */
+  blobStoreId?: string;
+  /** Runtime join key for a Storage Beta bundle definition. */
+  storageId?: string;
+  /** Runtime join key for a scoped Storage Beta wrapper definition. */
+  storageScopeId?: string;
   ragPipelineId?: string;
   workspaceId?: string;
   routingId?: string;
@@ -316,6 +346,7 @@ export type ProjectDefinitionIndexPresentationRole =
   | "option"
   | "block"
   | "store"
+  | "storage"
   | "case";
 
 export interface ProjectDefinitionIndexPresentation {
@@ -393,6 +424,11 @@ export type ProjectDefinitionKind =
   | "memory.block"
   | "blackboard"
   | "workspace"
+  | "storage.recordStore"
+  | "storage.vectorStore"
+  | "storage.blobStore"
+  | "storage.bundle"
+  | "storage.scope"
   | "constraint"
   | "guardrail"
   | "scorer"
@@ -643,6 +679,66 @@ export interface WorkspaceFacts {
   hasTools?: boolean;
 }
 
+/** Project Index capability summary for Storage Beta definitions. */
+export interface IndexedStorageCapabilities {
+  /** JSON record-store capabilities when the definition is a record store or bundle. */
+  record?: {
+    /** TTL support: backend-native, adapter-managed lazy expiry, unsupported, or unknown statically. */
+    ttl?: 'native' | 'lazy' | false | 'unknown'
+    /** Exact top-level scalar filter support. */
+    filter?: 'native' | 'scan' | false | 'unknown'
+    /** Whether record watch subscriptions are available. */
+    watch?: boolean | 'unknown'
+    /** Whether native batch record operations are available. */
+    batch?: boolean | 'unknown'
+  }
+  /** Vector-index capabilities when the definition is a vector store or bundle. */
+  vector?: {
+    /** Whether dense-vector similarity search is available. */
+    dense?: boolean | 'unknown'
+    /** Whether sparse-vector search is available. */
+    sparse?: boolean | 'unknown'
+    /** Whether dense and sparse queries can be combined by the same store. */
+    hybrid?: boolean | 'unknown'
+    /** Supported hybrid result fusion algorithms, or `unknown` when the adapter cannot report them. */
+    fusion?: readonly ('rrf' | 'dbsf')[] | 'unknown'
+    /** Whether metadata filters run before vector search, after vector search, or not at all. */
+    filter?: 'pre' | 'post' | false | 'unknown'
+    /** Read-after-write visibility expected from the vector backend. */
+    consistency?: 'strong' | 'eventual' | 'unknown'
+  }
+  /** Blob-store capabilities when the definition is a blob store or bundle. */
+  blob?: {
+    /** Whether multipart uploads are available for large blobs. */
+    multipart?: boolean | 'unknown'
+    /** Whether the adapter can mint signed URLs for direct blob access. */
+    signedUrls?: boolean | 'unknown'
+    /** Maximum blob size in bytes when known statically. */
+    maxBytes?: number | 'unknown'
+  }
+}
+
+/** First-class Storage Beta definition facts emitted by Project Index. */
+export interface StorageFacts {
+  kind: 'storage.recordStore' | 'storage.vectorStore' | 'storage.blobStore' | 'storage.bundle' | 'storage.scope'
+  /** Store or bundle factory name when statically known, for example `inMemoryStorage`. */
+  backend?: string
+  /** Authored variable bound to this storage definition. */
+  variableName?: string
+  /** Capabilities provided by this storage definition, or `unknown` fields for conservative static output. */
+  capabilities?: IndexedStorageCapabilities
+  /** Record store variable or definition id used by a bundle. */
+  records?: string
+  /** Vector store variable or definition id used by a bundle. */
+  vectors?: string
+  /** Blob store variable or definition id used by a bundle. */
+  blobs?: string
+  /** Base storage variable or definition id wrapped by a scope. */
+  storage?: string
+  /** Key prefix used by a scoped storage wrapper when statically known. */
+  prefix?: string
+}
+
 export interface SafetyFacts {
   kind: "constraint" | "guardrail";
   appliesTo?: string[];
@@ -697,6 +793,7 @@ export type PrimitiveSpecificFacts =
   | MemoryStoreFacts
   | MemoryBlockFacts
   | WorkspaceFacts
+  | StorageFacts
   | SafetyFacts
   | ScorerFacts
   | EvalFacts;
@@ -1116,6 +1213,11 @@ export const ProjectDefinitionKindSchema = z.enum([
   "memory.block",
   "blackboard",
   "workspace",
+  "storage.recordStore",
+  "storage.vectorStore",
+  "storage.blobStore",
+  "storage.bundle",
+  "storage.scope",
   "constraint",
   "guardrail",
   "scorer",
@@ -1315,7 +1417,18 @@ export const DataAccessFactSchema = z.object({
   targetId: z.string().optional(),
   targetVariable: z.string().optional(),
   targetKind: z
-    .enum(["memory", "blackboard", "workspace", "store", "block"])
+    .enum([
+      "memory",
+      "blackboard",
+      "workspace",
+      "store",
+      "block",
+      "storage.recordStore",
+      "storage.vectorStore",
+      "storage.blobStore",
+      "storage.bundle",
+      "storage.scope",
+    ])
     .optional(),
   key: z.string().optional(),
   operation: z
@@ -1375,6 +1488,11 @@ export const DependencyFactsSchema = z
     blackboards: z.array(z.string()).optional(),
     workspaces: z.array(z.string()).optional(),
     stores: z.array(z.string()).optional(),
+    recordStores: z.array(z.string()).optional(),
+    vectorStores: z.array(z.string()).optional(),
+    blobStores: z.array(z.string()).optional(),
+    storage: z.array(z.string()).optional(),
+    storageScopes: z.array(z.string()).optional(),
     blocks: z.array(z.string()).optional(),
     routers: z.array(z.string()).optional(),
     ragPipelines: z.array(z.string()).optional(),
@@ -1420,6 +1538,11 @@ export const ProjectRuntimeJoinSchema = z
     retrieverId: z.string().optional(),
     memoryId: z.string().optional(),
     memoryStoreId: z.string().optional(),
+    recordStoreId: z.string().optional(),
+    vectorStoreId: z.string().optional(),
+    blobStoreId: z.string().optional(),
+    storageId: z.string().optional(),
+    storageScopeId: z.string().optional(),
     ragPipelineId: z.string().optional(),
     workspaceId: z.string().optional(),
     routingId: z.string().optional(),
@@ -1463,6 +1586,7 @@ export const ProjectDefinitionIndexPresentationSchema = z.object({
       "option",
       "block",
       "store",
+      "storage",
       "case",
     ])
     .optional(),

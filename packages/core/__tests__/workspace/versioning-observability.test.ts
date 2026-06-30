@@ -5,7 +5,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from "../../observability";
-import { inMemoryDataStore } from "../../storage";
+import { inMemoryRecordStore } from "../../storage";
 import { workspace } from "../../workspace";
 
 describe("workspace version observability markers", () => {
@@ -17,7 +17,7 @@ describe("workspace version observability markers", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "alpha"); // v1

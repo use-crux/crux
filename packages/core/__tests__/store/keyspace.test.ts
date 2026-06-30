@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { keySpace } from '../../store/keyspace'
+import { keySpace } from '../../storage/keyspace'
 
 describe('keySpace', () => {
   describe('plan', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inMemoryBlobStore, inMemoryDataStore, storage } from "../../storage";
+import { inMemoryBlobStore, inMemoryRecordStore, storage } from "../../storage";
 import { workspace, workspaceToolNames } from "../../workspace";
 
 describe("workspace filesystem operations", () => {
@@ -7,7 +7,7 @@ describe("workspace filesystem operations", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "default notes");
@@ -29,7 +29,7 @@ describe("workspace filesystem operations", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "private notes", {
@@ -57,7 +57,7 @@ describe("workspace filesystem operations", () => {
       id: "research",
       namespace: "thread:default",
       storage: storage({
-        data: inMemoryDataStore(),
+        records: inMemoryRecordStore(),
         blobs: inMemoryBlobStore(),
       }),
     });
@@ -90,7 +90,7 @@ describe("workspace filesystem operations", () => {
       id: "research",
       namespace: "thread:default",
       storage: storage({
-        data: inMemoryDataStore(),
+        records: inMemoryRecordStore(),
         blobs: inMemoryBlobStore(),
       }),
       mounts: [
@@ -152,7 +152,7 @@ describe("workspace filesystem operations", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/source.md", "source");
@@ -177,7 +177,7 @@ describe("workspace filesystem operations", () => {
       id: "research",
       namespace: "thread:default",
       storage: storage({
-        data: inMemoryDataStore(),
+        records: inMemoryRecordStore(),
         blobs: inMemoryBlobStore(),
       }),
       content: { inlineTextBelowBytes: 4 },
@@ -214,7 +214,7 @@ describe("workspace filesystem operations", () => {
       id: "research",
       namespace: "thread:default",
       storage: storage({
-        data: inMemoryDataStore(),
+        records: inMemoryRecordStore(),
         blobs: inMemoryBlobStore(),
       }),
       content: { inlineTextBelowBytes: 4 },
@@ -251,7 +251,7 @@ describe("workspace filesystem operations", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/a.md", "a.*b\na123b");
@@ -271,7 +271,7 @@ describe("workspace filesystem operations", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
     const tools = ws.asTools();
 

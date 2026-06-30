@@ -11,6 +11,10 @@ import type {
 import { semanticSourceForNode, semanticStringLiteralProperty } from '../syntax-readers'
 import { objectMemberExpression, semanticFallbackOptions, semanticObjectExpression } from './object-readers'
 import {
+  hasSemanticStorageBundleFields,
+  semanticStorageFactoryDescriptor,
+} from '../storage-model'
+import {
   callExpressionName,
   isResolvableSourceExpression,
   resolveSemanticExpression,
@@ -113,8 +117,13 @@ function semanticTargetForDefinitionExpression(
   variableName: string | undefined,
   view: SemanticAnalyzerView,
 ): SemanticTarget | undefined {
+  if (view.syntax.isKind(expression, 'objectLiteral') && variableName && hasStorageBundleFields(expression, view)) {
+    return { id: `storage.bundle:${safeId(variableName)}`, kind: 'storage.bundle' }
+  }
   if (view.syntax.isKind(expression, 'callExpression')) {
     const callName = callExpressionName(expression, view)
+    const storageTarget = semanticStorageTargetForCall(callName, variableName, expression, view)
+    if (storageTarget) return storageTarget
     if (callName === 'fallback') {
       const target = semanticFallbackTarget(expression, variableName, view)
       if (target) return target
@@ -155,6 +164,33 @@ function semanticTargetForDefinitionExpression(
     return { id: `agent:${safeId(name)}`, kind: 'agent' }
   }
   return undefined
+}
+
+function semanticStorageTargetForCall(
+  callName: string | undefined,
+  variableName: string | undefined,
+  call: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): SemanticTarget | undefined {
+  const descriptor = semanticStorageFactoryDescriptor(callName)
+  if (!descriptor || !variableName) return undefined
+  if (callName === 'storage') {
+    const [config] = view.syntax.callArguments(call)
+    const object = config ? semanticObjectExpression(config, view, new Set()) : undefined
+    if (!object || !hasStorageBundleFields(object, view)) return undefined
+  }
+  return { id: `${descriptor.kind}:${safeId(variableName)}`, kind: descriptor.kind }
+}
+
+function hasStorageBundleFields(
+  object: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): boolean {
+  return hasSemanticStorageBundleFields(new Set(view.syntax.objectProperties(object).flatMap((property) => {
+    const name = view.syntax.propertyName(property)
+    const text = name ? (view.syntax.identifierText(name) ?? view.syntax.stringLiteralText(name)) : undefined
+    return text ? [text] : []
+  })))
 }
 
 function semanticDefinitionTargetForCall(

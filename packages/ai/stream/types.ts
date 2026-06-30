@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { JsonObject } from '@use-crux/core/store'
+import type { JsonObject } from '@use-crux/core/storage'
 
 /**
  * A Crux data part payload sent through an AI SDK stream.
@@ -18,12 +18,12 @@ import type { JsonObject } from '@use-crux/core/store'
 export interface CruxDataPart {
   /** The entity type being updated (built-in: 'plan' | 'tasklist' | 'task', extensible). */
   entity: string
-  /** The CruxStore key (e.g., 'plan:abc', 'task:list-1:t1'). */
+  /** The RecordStore key (e.g., 'plan:abc', 'task:list-1:t1'). */
   key: string
   /** The entity value. `null` for delete events. */
   value: JsonObject | null
-  /** Whether this is a set (create/update) or delete event. */
-  event: 'set' | 'delete'
+  /** Whether this is a put (create/update) or delete event. */
+  event: 'put' | 'delete'
 }
 
 /**

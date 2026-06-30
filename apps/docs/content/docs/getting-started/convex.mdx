@@ -41,7 +41,7 @@ convex/
   agent/
     chat.ts           ← Action that calls generate()
   memory/
-    store.ts          ← Convex memory store setup
+    storage.ts        ← Convex memory storage setup
   convex.config.ts    ← Component installation
 ```
 
@@ -98,33 +98,31 @@ export const respond = action({
 
 ## Persistent memory
 
-`defineConvexStoreContract()` creates the shared Convex document contract. Use `contract.store(ctx)` with any memory primitive:
+Use `convexRecordStore()` for durable Convex-backed memory records:
 
-```ts title="convex/memory/store.ts"
-import { defineConvexStoreContract } from '@use-crux/convex'
+```ts title="convex/memory/storage.ts"
+import { convexRecordStore } from '@use-crux/convex'
 import { episodes, memory, workingState } from '@use-crux/convex/memory'
 import { components } from '../_generated/api'
 import type { ActionCtx } from '../_generated/server'
 
-const cruxDocuments = defineConvexStoreContract({ component: components.crux })
-
-export function createMemoryStore(ctx: ActionCtx) {
-  return cruxDocuments.store(ctx)
+export function createMemoryRecords(ctx: ActionCtx) {
+  return convexRecordStore({ component: components.crux, ctx })
 }
 
 // Inside an action:
-const store = createMemoryStore(ctx)
+const records = createMemoryRecords(ctx)
 const episodic = episodes({ id: 'chat', embed: embedFn })
 const working = workingState({ id: 'session', schema })
 const assistantMemory = memory({
   id: 'assistant',
-  store,
+  records,
   namespace: 'thread:1',
   blocks: [working, episodic],
 })
 ```
 
-The component handles all CRUD operations (`get`, `set`, `remove`, `list`) automatically. Vector search uses `ctx.vectorSearch` from the action context.
+The component handles record operations (`get`, `put`, `create`, `delete`, `list`) automatically. Dense vector search uses `ctx.vectorSearch` from the action context through `convexVectorStore()` or `convexStorage()`.
 
 ## With the Convex Agent SDK
 
@@ -158,11 +156,11 @@ export const chatAgent = crux.convexAgent({
 await chatAgent.generateText(ctx, { threadId, userId }, { input: { message, mode } })
 ```
 
-Use `crux.run(ctx, target, fn)` when lower-level action code needs the same request-scoped store and runtime binding without going through an agent:
+Use `crux.run(ctx, target, fn)` when lower-level action code needs the same request-scoped storage and runtime binding without going through an agent:
 
 ```ts
-await crux.run(ctx, { threadId, userId }, async ({ store }) => {
-  await store.set(`blackboard:${threadId}`, { status: 'ready' })
+await crux.run(ctx, { threadId, userId }, async ({ records }) => {
+  await records.put(`blackboard:${threadId}`, { status: 'ready' })
 })
 ```
 
@@ -171,7 +169,7 @@ It keeps the Convex Agent call shape while Crux handles the request-scoped lifec
 
 Use `languageModel` for new `convexAgent()` code to match Convex Agent terminology; `model` remains accepted for existing call sites.
 
-Use `createConvexRuntimeBridge()` when custom actions or normal Convex Agent-shaped code need the Crux runtime/store/bridge without the profile-backed agent helper.
+Use `createConvexRuntimeBridge()` when custom actions or normal Convex Agent-shaped code need the Crux runtime/storage/bridge without the profile-backed agent helper.
 
 ## Action timeouts
 

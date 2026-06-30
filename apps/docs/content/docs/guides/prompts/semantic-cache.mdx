@@ -21,7 +21,7 @@ Install the plugin once and opt in per prompt:
 import { config, prompt } from '@use-crux/core'
 import { createSemanticCache } from '@use-crux/core/cache'
 import { embedding } from '@use-crux/openai'
-import { inMemoryCruxStore } from '@use-crux/core/store'
+import { inMemoryStorage } from '@use-crux/core/storage'
 import { z } from 'zod'
 
 const classifyIntent = prompt({
@@ -45,7 +45,7 @@ const classifyIntent = prompt({
 config({
   plugins: [
     createSemanticCache({
-      store: inMemoryCruxStore(),
+      storage: inMemoryStorage(),
       embedding: embedding({
         name: 'cache',
         model: 'text-embedding-3-small',
@@ -122,14 +122,23 @@ If you need sparse or hybrid cache lookup, implement it as a custom cache or ret
 
 ## Durable Stores
 
-The cache store must support TTL and dense vector search. It must also declare an isolated semantic-cache vector namespace:
+The cache needs records with TTL support and a dense vector store with pre-filter support:
 
 ```ts
-const cacheStore = cruxUpstashStore({
-  index,
-  namespace: 'semantic-cache',
-  convex: { ctx, fns },
-  semanticCache: { isolatedVectorNamespace: true },
+import { upstashRedisRecordStore, upstashVectorStore } from '@use-crux/upstash'
+
+createSemanticCache({
+  records: upstashRedisRecordStore({
+    redis,
+    prefix: 'semantic-cache:',
+  }),
+  vectors: upstashVectorStore({
+    index,
+    namespace: 'semantic-cache',
+  }),
+  embedding,
+  ttl: 60_000,
+  scope: ({ input }) => `tenant:${input.tenantId}`,
 })
 ```
 
@@ -138,43 +147,19 @@ Use a dedicated namespace/table/index for cache entries. Do not point the cache 
 For Convex, the explicit flag is a safety declaration, not a generic Convex limitation:
 
 ```ts
-import { defineConvexStoreContract } from '@use-crux/convex'
+import { convexStorage } from '@use-crux/convex'
 
-const semanticCacheDocuments = defineConvexStoreContract({
+const cacheStorage = convexStorage({
   component: components.crux,
+  ctx,
   vectorIndexName: 'by_embedding',
   semanticCache: { isolatedVectorNamespace: true },
 })
-
-const cacheStore = semanticCacheDocuments.store(ctx)
 ```
 
 Only use that configuration when the backing table/index is dedicated to semantic-cache entries. A shared memory/RAG index can create false misses because unrelated vectors may rank ahead of cache entries before filters are applied.
 
-For Redis, plain `cruxRedisStore()` is key/value plus pub/sub and does not expose vector search. If your Redis deployment has vector search through Redis Stack, RediSearch, a managed module, or a sidecar index, provide product-specific vector hooks:
-
-```ts
-const cacheStore = cruxRedisStore({
-  redis,
-  prefix: 'semantic-cache:',
-  vector: {
-    capabilities: { dense: true },
-    semanticCache: { isolatedVectorNamespace: true },
-    upsert: async ({ key, value }) => {
-      // Index value.embedding using your Redis vector product.
-    },
-    delete: async ({ key }) => {
-      // Remove vector index row.
-    },
-    searchVectors: async (query) => {
-      // Return Crux keys and scores from your Redis vector query.
-      return [{ key: 'entry-key', score: 0.98 }]
-    },
-  },
-})
-```
-
-Without those hooks, `cruxRedisStore()` intentionally has no `searchVectors()` method, and semantic cache setup throws a clear capability error.
+Redis records alone are not enough for semantic cache lookup. Pair `upstashRedisRecordStore()` with `upstashVectorStore()` or another pre-filter-capable `VectorStore`.
 
 ## Observability
 

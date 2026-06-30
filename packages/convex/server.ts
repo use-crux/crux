@@ -9,6 +9,7 @@ import {
   type ObserveSpanOptions,
 } from '@use-crux/core/observability'
 import { flow as coreFlow, getFlowSnapshot, signalFlow, type FlowResult, type FlowScope } from '@use-crux/core/flow'
+import type { JsonObject } from '@use-crux/core/storage'
 import { flushObservability } from './observability'
 
 const CRUX_ARG = '__crux'
@@ -547,9 +548,9 @@ export function flow<TCtx extends ConvexLikeCtx, TArgs extends Record<string, un
     action: actionDefinition,
 
     async signal(ctx, actionRef, flowId, signalName, payload = {}) {
-      await signalFlow(flowId, signalName, payload)
+      await signalFlow(flowId, signalName, payload as JsonObject)
       const snapshot = await getFlowSnapshot(flowId)
-      const resumeObservability = snapshot?.observabilityContext
+      const resumeObservability = snapshot?.observabilityContext as CapturedObservabilityContext | undefined
       if (ctx.crux?.scheduler) {
         await ctx.crux.scheduler.runAfter(
           `resume ${definition.name}`,

@@ -103,8 +103,8 @@ describe('handoff: async transform throwing propagates', () => {
     })
 
     it('propagates transform error through send()', async () => {
-      const { inMemoryCruxStore } = await import('../../store/memory')
-      const store = inMemoryCruxStore()
+      const { inMemoryRecordStore } = await import('../../storage')
+      const store = inMemoryRecordStore()
 
       const h = makeHandoff({
         id: 'send-error',
@@ -113,7 +113,7 @@ describe('handoff: async transform throwing propagates', () => {
         transform: async () => {
           throw new Error('Transform failed in send')
         },
-        store,
+        records: store,
       })
 
       await expect(h.send({ data: 'test' })).rejects.toThrow('Transform failed in send')
@@ -151,13 +151,13 @@ describe('blackboard: subscriber callback throwing does not prevent store write'
       // The write should have persisted despite the subscriber error
       // Create a new board reading from the same store to verify
       // Since default store is ephemeral per-instance, we test with explicit store
-      const { inMemoryCruxStore } = await import('../../store/memory')
-      const store = inMemoryCruxStore()
+      const { inMemoryRecordStore } = await import('../../storage')
+      const store = inMemoryRecordStore()
 
       const board2 = makeBlackboard({
         id: 'shared-board',
         schema: z.object({ goal: z.string() }),
-        store,
+        records: store,
       })
 
       const throwingSub = vi.fn(() => {
@@ -205,8 +205,8 @@ describe('blackboard: subscriber callback throwing does not prevent store write'
     })
 
     it('patch persists despite subscriber error', async () => {
-      const { inMemoryCruxStore } = await import('../../store/memory')
-      const store = inMemoryCruxStore()
+      const { inMemoryRecordStore } = await import('../../storage')
+      const store = inMemoryRecordStore()
 
       const board = makeBlackboard({
         id: 'patch-error-board',
@@ -214,7 +214,7 @@ describe('blackboard: subscriber callback throwing does not prevent store write'
           goal: z.string(),
           status: z.enum(['idle', 'done']),
         }),
-        store,
+        records: store,
       })
 
       board.subscribe(() => {

@@ -1,14 +1,14 @@
 /**
- * Serialization and decoding policy for Convex store documents.
+ * Serialization and decoding policy for Convex record documents.
  *
  * Server stores and React transport helpers are intentionally strict: reads
- * fail clearly when a document was not written in the current Crux store
+ * fail clearly when a document was not written in the current Crux record
  * document format.
  *
  * @module
  */
 
-import type { JsonObject } from '@use-crux/core/store'
+import type { ExactFilter, JsonObject } from '@use-crux/core/storage'
 import { STORE_DOC_COMPONENT_SPEC } from './manifest'
 import type { DecodedStoreDoc, StoreDocCodec, StoreDocCodecOptions, StoreDocRecord } from './types'
 
@@ -19,14 +19,14 @@ import type { DecodedStoreDoc, StoreDocCodec, StoreDocCodecOptions, StoreDocReco
  * for stores to apply TTL cleanup, vector scores, and top-level filters.
  */
 export function createStoreDocCodec(options: StoreDocCodecOptions = {}): StoreDocCodec {
-  const now = options.now ?? Date.now
+  const now = options.now ?? (() => Date.now())
 
   return {
     encode(key, value, setOptions) {
       const updatedAt = now()
       const stored =
-        setOptions?.ttl !== undefined && setOptions.ttl > 0
-          ? { ...value, [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: updatedAt + setOptions.ttl }
+        setOptions?.ttlMs !== undefined && setOptions.ttlMs > 0
+          ? { ...value, [STORE_DOC_COMPONENT_SPEC.fields.expiresAt]: updatedAt + setOptions.ttlMs }
           : value
       const embedding = isNumberArray(value.embedding) ? value.embedding : undefined
       return {
@@ -39,19 +39,19 @@ export function createStoreDocCodec(options: StoreDocCodecOptions = {}): StoreDo
     },
 
     decode(doc) {
-      return decodeCruxStoreDoc(doc, now)
+      return decodeCruxRecordDoc(doc, now)
     },
 
     value(doc) {
       if (doc === undefined) return undefined
       if (doc === null) return null
-      const decoded = decodeCruxStoreDoc(doc, now)
+      const decoded = decodeCruxRecordDoc(doc, now)
       return decoded.expired ? null : decoded.value
     },
 
     entries(docs, entryOptions) {
       return docs
-        .map((doc) => decodeCruxStoreDoc(doc, now))
+        .map((doc) => decodeCruxRecordDoc(doc, now))
         .filter((decoded) => !decoded.expired && matchesTopLevelFilter(decoded.value, entryOptions?.filter))
         .map((decoded) => ({ key: decoded.key, value: decoded.value }))
     },
@@ -60,11 +60,11 @@ export function createStoreDocCodec(options: StoreDocCodecOptions = {}): StoreDo
   }
 }
 
-function decodeCruxStoreDoc(doc: StoreDocRecord, now: () => number): DecodedStoreDoc {
+function decodeCruxRecordDoc(doc: StoreDocRecord, now: () => number): DecodedStoreDoc {
   const key = requireStringField(doc, 'key')
   const metadata = isRecord(doc.metadata) ? doc.metadata : undefined
   if (metadata?.[STORE_DOC_COMPONENT_SPEC.fields.marker] !== true || typeof doc.content !== 'string') {
-    throw new Error('Convex store expected a document written in the current Crux store format.')
+    throw new Error('Convex storage expected a document written in the current Crux record format.')
   }
   const content = requireStringField(doc, 'content')
   const value = parseJsonObject(content)
@@ -80,7 +80,7 @@ function decodeCruxStoreDoc(doc: StoreDocRecord, now: () => number): DecodedStor
   }
 }
 
-function matchesTopLevelFilter(value: JsonObject, filter?: Record<string, unknown>): boolean {
+function matchesTopLevelFilter(value: JsonObject, filter?: ExactFilter): boolean {
   if (!filter) return true
   for (const [key, expected] of Object.entries(filter)) {
     const actual = value[key]
@@ -96,15 +96,15 @@ function matchesTopLevelFilter(value: JsonObject, filter?: Record<string, unknow
 function parseJsonObject(content: string): JsonObject {
   const parsed: unknown = JSON.parse(content)
   if (!isRecord(parsed)) {
-    throw new Error('Crux store document content must decode to a JSON object.')
+    throw new Error('Crux record document content must decode to a JSON object.')
   }
-  return parsed
+  return parsed as JsonObject
 }
 
 function requireStringField(record: StoreDocRecord, field: string): string {
   const value = record[field]
   if (typeof value !== 'string') {
-    throw new Error(`Crux store document field "${field}" must be a string.`)
+    throw new Error(`Crux record document field "${field}" must be a string.`)
   }
   return value
 }

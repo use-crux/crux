@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { inMemoryBlobStore, inMemoryDataStore, storage } from "../../storage";
+import { inMemoryBlobStore, inMemoryRecordStore, storage } from "../../storage";
 import { workspace } from "../../workspace";
 import { observe } from "../../observability";
 import { prompt } from "../../prompt";
@@ -9,7 +9,7 @@ describe("workspace artifacts facet", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     const written = await ws.write("/outputs/report.md", "# Report", {
@@ -39,7 +39,7 @@ describe("workspace artifacts facet", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/outputs/report.md", "# Report", {
@@ -67,7 +67,7 @@ describe("workspace artifacts facet", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/outputs/report.md", "# Report", {
@@ -87,7 +87,7 @@ describe("workspace artifacts facet", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/outputs/report.md", "published", {
@@ -130,7 +130,7 @@ describe("workspace artifacts facet", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/outputs/report.md", "v1 published", { kind: "report" });
@@ -147,12 +147,12 @@ describe("workspace artifacts facet", () => {
   });
 
   it("queries artifacts by status and kind through store filters", async () => {
-    const data = inMemoryDataStore();
+    const data = inMemoryRecordStore();
     const listSpy = vi.spyOn(data, "list");
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data,
+      records: data,
     });
 
     await ws.write("/outputs/draft.md", "Draft", {
@@ -201,7 +201,7 @@ describe("workspace artifacts facet", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      storage: storage({ data: inMemoryDataStore(), blobs }),
+      storage: storage({ records: inMemoryRecordStore(), blobs }),
     });
 
     await ws.write("/outputs/report.pdf", new Uint8Array([1, 2, 3]), {
@@ -232,7 +232,7 @@ describe("workspace artifacts facet", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/outputs/no-span.md", "No span", {
@@ -271,7 +271,7 @@ describe("workspace artifacts facet", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/outputs/report.md", "private report", {
@@ -302,7 +302,7 @@ describe("workspace artifacts facet", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/outputs/report.md", "published copy", {
@@ -331,7 +331,7 @@ describe("workspace artifacts facet", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     for (let index = 0; index < 120; index += 1) {

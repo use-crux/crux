@@ -8,7 +8,7 @@ import {
 } from '../../observability'
 import { blackboard } from '../../agent/blackboard'
 import { facts, memory, recentMessages, workingState } from '../../memory'
-import { inMemoryCruxStore } from '../../store/memory'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 
 describe('canonical memory observability', () => {
   afterEach(() => {
@@ -18,14 +18,14 @@ describe('canonical memory observability', () => {
     it('records standalone memory writes and reads with snapshot artifacts and relation edges', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    const store = inMemoryCruxStore()
+    const store = inMemoryRecordStore()
     const state = workingState({
       id: 'state',
       schema: z.object({ step: z.number(), goal: z.string() }),
     })
 
-    await state.set({ step: 1, goal: 'draft' }, { store, namespace: 'thread:1', memoryId: 'planner' })
-    await state.get({ store, namespace: 'thread:1', memoryId: 'planner' })
+    await state.set({ step: 1, goal: 'draft' }, { records: store, namespace: 'thread:1', memoryId: 'planner' })
+    await state.get({ records: store, namespace: 'thread:1', memoryId: 'planner' })
     await observe.flush()
 
     const spanStarts = transport.records.filter((record) => record.type === 'span:start')
@@ -63,14 +63,14 @@ describe('canonical memory observability', () => {
     it('records working-state writes with before and after diff artifacts', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    const store = inMemoryCruxStore()
+    const store = inMemoryRecordStore()
     const state = workingState({
       id: 'state',
       schema: z.object({ intent: z.string(), plan: z.string().optional() }),
     })
 
-    await state.set({ intent: 'refund' }, { store, namespace: 'thread:1', memoryId: 'planner' })
-    await state.set({ intent: 'refund', plan: 'annual' }, { store, namespace: 'thread:1', memoryId: 'planner' })
+    await state.set({ intent: 'refund' }, { records: store, namespace: 'thread:1', memoryId: 'planner' })
+    await state.set({ intent: 'refund', plan: 'annual' }, { records: store, namespace: 'thread:1', memoryId: 'planner' })
     await observe.flush()
 
     expect(transport.records).toContainEqual(
@@ -93,7 +93,8 @@ describe('canonical memory observability', () => {
     it('records recalled memory blocks with key, preview, score, and query', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    const store = inMemoryCruxStore()
+    const store = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const factBlock = facts({
       id: 'facts',
       embed: async (text) => (text.includes('refund') ? [1, 0] : [0, 1]),
@@ -102,9 +103,9 @@ describe('canonical memory observability', () => {
 
     await factBlock.add(
       { content: 'User wants help with a refund.', confidence: 0.8 },
-      { store, namespace: 'user:1', memoryId: 'profile' },
+      { records: store, vectors, namespace: 'user:1', memoryId: 'profile' },
     )
-    await factBlock.find('refund policy', { store, namespace: 'user:1', memoryId: 'profile', limit: 3 })
+    await factBlock.find('refund policy', { records: store, vectors, namespace: 'user:1', memoryId: 'profile', limit: 3 })
     await observe.flush()
 
     expect(transport.records).toContainEqual(
@@ -135,14 +136,14 @@ describe('canonical memory observability', () => {
     it('does not emit recalled-block artifacts for empty memory reads', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    const store = inMemoryCruxStore()
+    const store = inMemoryRecordStore()
     const factBlock = facts({
       id: 'facts',
       embed: async () => [1, 0],
       write: { mode: 'auto' },
     })
 
-    await factBlock.find('refund policy', { store, namespace: 'user:1', memoryId: 'profile', limit: 3 })
+    await factBlock.find('refund policy', { records: store, namespace: 'user:1', memoryId: 'profile', limit: 3 })
     await observe.flush()
 
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'span:start', primitive: 'memory.read' }))
@@ -198,18 +199,18 @@ describe('canonical memory observability', () => {
   })
 
   it('records memory context hydration as child memory.read spans', async () => {
-    const store = inMemoryCruxStore()
+    const store = inMemoryRecordStore()
     const recent = recentMessages({ id: 'recent' })
     await recent.addTurn(
       { messages: [{ role: 'user', content: 'Remember concise answers.' }] },
-      { store, namespace: 'thread:1', memoryId: 'conversation' },
+      { records: store, namespace: 'thread:1', memoryId: 'conversation' },
     )
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
     const mem = memory({
       id: 'conversation',
-      store,
+      records: store,
       namespace: 'thread:1',
       blocks: [recent],
     })
@@ -234,17 +235,17 @@ describe('canonical memory observability', () => {
     it('records proposals and approvals as memory writes', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    const store = inMemoryCruxStore()
+    const store = inMemoryRecordStore()
     const factBlock = facts({
       id: 'facts',
       extract: async () => [{ content: 'User prefers concise answers', confidence: 0.9 }],
     })
     const mem = memory({
       id: 'profile',
-      store,
+      records: store,
       namespace: 'user:1',
       blocks: [factBlock],
-      processing: { mode: 'inline' },
+      capture: { mode: 'inline' },
     })
 
     await mem.captureTurn({

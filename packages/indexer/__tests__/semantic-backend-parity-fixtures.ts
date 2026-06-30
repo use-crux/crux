@@ -186,6 +186,72 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
     },
     {
+      name: "storage-beta-aliases-configs-and-scopes",
+      files: {
+        "src/storage.ts": `
+        import {
+          inMemoryBlobStore,
+          inMemoryRecordStore,
+          inMemoryVectorStore,
+          storage,
+        } from '@use-crux/core/storage'
+
+        export const recordsAlias = inMemoryRecordStore()
+        export const vectors = inMemoryVectorStore()
+        export const blobs = inMemoryBlobStore()
+        const bundleParts = { records: recordsAlias, vectors, blobs }
+        export const appStorage = storage(bundleParts)
+        export const inlineStorage = { records: recordsAlias, vectors, blobs }
+        export const tenantStorage = storage.scope(appStorage, 'tenant-a')
+      `,
+        "src/usage.ts": `
+        import { retriever, workspace } from '@use-crux/core'
+        import { appStorage, blobs, recordsAlias as docsRecords, tenantStorage, vectors } from './storage'
+
+        const retrieverConfig = {
+          id: 'docs',
+          storage: tenantStorage,
+          records: docsRecords,
+          vectors,
+        }
+        export const docsRetriever = retriever(retrieverConfig)
+
+        const workspaceConfig = {
+          id: 'scratch',
+          storage: appStorage,
+          records: docsRecords,
+          blobs,
+        }
+        export const scratch = workspace(workspaceConfig)
+      `,
+      },
+      expect: {
+        definitionIds: [
+          "storage.recordStore:recordsAlias",
+          "storage.vectorStore:vectors",
+          "storage.blobStore:blobs",
+          "storage.bundle:appStorage",
+          "storage.bundle:inlineStorage",
+          "storage.scope:tenantStorage",
+          "rag.retriever:docs",
+          "workspace:scratch",
+        ],
+        relationTypes: [
+          "storage.bundle.uses_record_store",
+          "storage.bundle.uses_vector_store",
+          "storage.bundle.uses_blob_store",
+          "storage.scope.wraps_storage",
+          "rag.retriever.uses_storage",
+          "rag.retriever.uses_record_store",
+          "rag.retriever.uses_vector_store",
+          "workspace.uses_storage",
+          "workspace.uses_record_store",
+          "workspace.uses_blob_store",
+        ],
+        sourceRefRoles: ["config"],
+      },
+    },
+    {
       name: "conditional-use-and-definition-enrichment",
       files: {
         "src/primitives.ts": `

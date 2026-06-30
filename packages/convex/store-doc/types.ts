@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { JsonObject, ListOptions, SetOptions, StoreEntry } from '@use-crux/core/store'
+import type { ExactFilter, JsonObject, RecordEntry, RecordListOptions, RecordWriteOptions } from '@use-crux/core/storage'
 
 /** Structural Convex document record accepted at the store boundary. */
 export type StoreDocRecord = Readonly<Record<string, unknown>>
@@ -46,7 +46,7 @@ export interface StoreDocPageQuery {
  */
 export interface StoreDocListQuery extends StoreDocPageQuery {
   /** Optional top-level value filter. */
-  filter?: Record<string, unknown>
+  filter?: ExactFilter
 }
 
 /** Canonical page shape returned by Convex component queries and local fakes. */
@@ -82,13 +82,6 @@ export interface ComponentDocumentPort<TDoc extends StoreDocRecord = StoreDocRec
 }
 
 /**
- * @deprecated Use `ComponentDocumentPort`.
- *
- * Kept as a compatibility alias for callers that adopted the earlier internal
- * name before the document component contract was formalized.
- */
-export type StoreDocComponentPort<TDoc extends StoreDocRecord = StoreDocRecord> = ComponentDocumentPort<TDoc>
-
 /** Decoded store document with policy metadata surfaced for callers. */
 export interface DecodedStoreDoc {
   /** Store key. */
@@ -108,31 +101,19 @@ export interface DecodedStoreDoc {
 /** Codec for translating between Crux values and Convex memory documents. */
 export interface StoreDocCodec {
   /** Encode a `JsonObject` into the current `_cruxDoc` write format. */
-  encode(key: string, value: JsonObject, options?: SetOptions): StoreDocWrite
+  encode(key: string, value: JsonObject, options?: RecordWriteOptions): StoreDocWrite
   /** Decode a raw record into a `JsonObject` plus format and expiry metadata. */
   decode(doc: StoreDocRecord): DecodedStoreDoc
   /** Decode a React transport value, preserving `undefined` loading and `null` missing states. */
   value(doc: StoreDocRecord | null | undefined): JsonObject | null | undefined
   /** Decode a React transport list, suppressing expired values and applying optional filters. */
-  entries(docs: readonly StoreDocRecord[], options?: Pick<ListOptions, 'filter'>): StoreEntry[]
+  entries(docs: readonly StoreDocRecord[], options?: Pick<RecordListOptions, 'filter'>): RecordEntry[]
   /** Return whether a decoded value matches top-level exact filter semantics. */
-  matchesFilter(value: JsonObject, filter?: Record<string, unknown>): boolean
+  matchesFilter(value: JsonObject, filter?: ExactFilter): boolean
 }
 
 /** Options for creating a store document codec. */
 export interface StoreDocCodecOptions {
   /** Clock used for `updatedAt` writes and TTL checks. Defaults to `Date.now`. */
   now?: () => number
-}
-
-/** Configuration for a `CruxStore` built on top of document I/O ports. */
-export interface StoreDocStoreConfig<TDoc extends StoreDocRecord = StoreDocRecord> {
-  /** Adapter-local document I/O port. */
-  io: ComponentDocumentPort<TDoc>
-  /** Clock used for writes and TTL checks. Defaults to `Date.now`. */
-  now?: () => number
-  /** Semantic-cache capability metadata for stores with isolated vector namespaces. */
-  semanticCache?: { isolatedVectorNamespace?: boolean }
-  /** Whether this store should advertise dense vector search capability. */
-  denseVectorSearch?: boolean
 }

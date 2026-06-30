@@ -1,71 +1,78 @@
 /**
- * Shared store construction for the Convex runtime profile.
+ * Shared storage construction for the Convex runtime profile.
  *
  * `createCruxConvex()`, standalone `convexAgent()`, and the HTTP bridge all
- * normalize through this module so component-backed defaults and custom store
+ * normalize through this module so component-backed defaults and custom storage
  * overrides cannot drift.
  *
  * @module
  */
 
-import type { CruxStore } from '@use-crux/core/store'
+import type { RecordStore, Storage } from '@use-crux/core/storage'
 import type { ComponentApi } from './src/component/_generated/component'
-import { cruxConvexStore, type ConvexCtxPort, type ConvexMemoryStoreConfig } from './store'
+import { convexStorage } from './storage'
+import type { ConvexCtxPort, ConvexMemoryStoreConfig } from './store'
 
-/** Semantic-cache store capability options. */
+/** Semantic-cache storage capability options. */
 export type ConvexSemanticCacheOptions = ConvexMemoryStoreConfig['semanticCache']
 
-/** Defaults provided to a custom profile store factory. */
-export interface CruxConvexProfileStoreDefaults {
+/** Defaults provided to a custom profile storage factory. */
+export interface CruxConvexProfileStorageDefaults {
   /** Crux persistence component ref from `components.crux`. */
   readonly component: ComponentApi
-  /** Vector index name used by the component-backed default store. */
+  /** Vector index name used by the component-backed default storage. */
   readonly vectorIndexName: string
-  /** Semantic-cache metadata for the default store, when configured. */
+  /** Semantic-cache metadata for the default storage, when configured. */
   readonly semanticCache?: ConvexSemanticCacheOptions
   /**
-   * Build the standard component-backed store for a ctx.
+   * Build the standard component-backed storage bundle for a ctx.
    *
    * Custom factories can call this to wrap, decorate, or selectively delegate
-   * to the default store without duplicating component wiring.
+   * to the default storage without duplicating component wiring.
    */
-  createComponentStore(ctx: ConvexCtxPort): CruxStore
+  createComponentStorage(ctx: ConvexCtxPort): Storage
 }
 
-/** Optional advanced store override accepted by `createCruxConvex()`. */
-export interface CruxConvexProfileStoreOptions<TCtx extends ConvexCtxPort = ConvexCtxPort> {
+export type ConvexProfileStorageResult = Storage | RecordStore
+
+/** Optional advanced storage override accepted by `createCruxConvex()`. */
+export interface CruxConvexProfileStorageOptions<TCtx extends ConvexCtxPort = ConvexCtxPort> {
   /**
-   * Vector index name for the default component-backed store.
+   * Vector index name for the default component-backed storage.
    *
    * @default 'by_embedding'
    */
   readonly vectorIndexName?: string
-  /** Semantic-cache metadata for the default component-backed store. */
+  /** Semantic-cache metadata for the default component-backed storage. */
   readonly semanticCache?: ConvexSemanticCacheOptions
   /**
-   * Replace or wrap the default component-backed store for this request.
+   * Replace or wrap the default component-backed storage for this request.
    *
    * This is the single profile-level escape hatch for tests, migrations, and
    * alternate storage. Most apps should omit it and use the component-backed
    * default.
    */
-  readonly create?: (ctx: TCtx, defaults: CruxConvexProfileStoreDefaults) => CruxStore | Promise<CruxStore>
+  readonly create?: (
+    ctx: TCtx,
+    defaults: CruxConvexProfileStorageDefaults,
+  ) => ConvexProfileStorageResult | Promise<ConvexProfileStorageResult>
 }
 
-interface CreateProfileStoreResolverOptions<TCtx extends ConvexCtxPort> extends CruxConvexProfileStoreOptions<TCtx> {
+interface CreateProfileStorageResolverOptions<TCtx extends ConvexCtxPort>
+  extends CruxConvexProfileStorageOptions<TCtx> {
   readonly component: ComponentApi
 }
 
-/** Build the standard component-backed store from shared profile defaults. */
-export function createDefaultConvexCruxStore<TCtx extends ConvexCtxPort>(
+/** Build the standard component-backed storage bundle from shared profile defaults. */
+export function createDefaultConvexStorage<TCtx extends ConvexCtxPort>(
   ctx: TCtx,
   options: {
     readonly component: ComponentApi
     readonly vectorIndexName?: string
     readonly semanticCache?: ConvexSemanticCacheOptions
   },
-): CruxStore {
-  return cruxConvexStore({
+): Storage {
+  return convexStorage({
     component: options.component,
     ctx,
     vectorIndexName: options.vectorIndexName,
@@ -76,28 +83,28 @@ export function createDefaultConvexCruxStore<TCtx extends ConvexCtxPort>(
 /** Assert an unknown value can be used as the minimal Convex ctx port. */
 export function assertConvexCtxPort(ctx: unknown): asserts ctx is ConvexCtxPort {
   if (!isRecord(ctx) || typeof ctx.runQuery !== 'function' || typeof ctx.runMutation !== 'function') {
-    throw new Error('A Convex ctx with runQuery() and runMutation() is required to create a Crux Convex store.')
+    throw new Error('A Convex ctx with runQuery() and runMutation() is required to create Convex-backed Crux storage.')
   }
 }
 
 /**
- * Create a request-scoped store resolver for a profile.
+ * Create a request-scoped storage resolver for a profile.
  *
  * The returned function may be synchronous or asynchronous depending on the
- * custom `store.create` override. Callers that need to support both should
+ * custom `storage.create` override. Callers that need to support both should
  * `await` the result.
  */
-export function createCruxConvexStoreResolver<TCtx extends ConvexCtxPort>(
-  options: CreateProfileStoreResolverOptions<TCtx>,
-): (ctx: TCtx) => CruxStore | Promise<CruxStore> {
+export function createCruxConvexStorageResolver<TCtx extends ConvexCtxPort>(
+  options: CreateProfileStorageResolverOptions<TCtx>,
+): (ctx: TCtx) => Storage | Promise<Storage> {
   const vectorIndexName = options.vectorIndexName ?? 'by_embedding'
-  const defaults: CruxConvexProfileStoreDefaults = Object.freeze({
+  const defaults: CruxConvexProfileStorageDefaults = Object.freeze({
     component: options.component,
     vectorIndexName,
     ...(options.semanticCache === undefined ? {} : { semanticCache: options.semanticCache }),
-    createComponentStore(ctx: ConvexCtxPort) {
+    createComponentStorage(ctx: ConvexCtxPort) {
       assertConvexCtxPort(ctx)
-      return createDefaultConvexCruxStore(ctx, {
+      return createDefaultConvexStorage(ctx, {
         component: options.component,
         vectorIndexName,
         semanticCache: options.semanticCache,
@@ -105,10 +112,14 @@ export function createCruxConvexStoreResolver<TCtx extends ConvexCtxPort>(
     },
   })
 
-  return (ctx) => {
-    if (options.create) return options.create(ctx, defaults)
-    return defaults.createComponentStore(ctx)
+  return async (ctx) => {
+    if (options.create) return normalizeStorage(await options.create(ctx, defaults))
+    return defaults.createComponentStorage(ctx)
   }
+}
+
+function normalizeStorage(value: ConvexProfileStorageResult): Storage {
+  return 'records' in value ? value : { records: value }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

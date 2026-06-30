@@ -1,14 +1,18 @@
 /**
- * Explicit storage capability interfaces for Crux.
+ * Canonical Storage Beta API for Crux.
  *
- * `DataStore` is for JSON records, `VectorStore` is for dense/sparse/hybrid
- * search, and `BlobStore` is for binary or oversized payloads.
+ * `RecordStore` is for JSON records, `VectorStore` is for dense/sparse/hybrid
+ * search, and `BlobStore` is for binary or oversized payloads. Use
+ * {@link storage} to bundle capabilities for Crux primitives.
  *
  * @module
  */
 
-export { inMemoryBlobStore, inMemoryDataStore, inMemoryStorage, inMemoryVectorStore } from '../store/memory'
-export { storage } from '../store/types'
+export { StorageError } from './errors'
+export { storage } from './bundle'
+export { inMemoryBlobStore, inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore } from './memory'
+export { matchesExactFilter } from './filter'
+export { keySpace } from './keyspace'
 
 export type {
   BlobContent,
@@ -17,22 +21,28 @@ export type {
   BlobRef,
   BlobStore,
   BlobStoreCapabilities,
-  DataStore,
-  DataStoreCapabilities,
+  DenseVectorSearchQuery,
+  ExactFilter,
+  FilterValue,
+  HybridVectorSearchQuery,
   JsonObject,
-  ListOptions,
-  ListResult,
-  SetOptions,
+  JsonPrimitive,
+  JsonValue,
+  RecordEntry,
+  RecordEvent,
+  RecordListOptions,
+  RecordPage,
+  RecordStore,
+  RecordStoreCapabilities,
+  RecordWrite,
+  RecordWriteOptions,
   SparseVector,
+  SparseVectorSearchQuery,
   Storage,
-  StoreDeleteEvent,
-  StoreEntry,
-  StoreEvent,
-  StoreSetEvent,
   VectorHit,
   VectorRecord,
-  VectorSearchOptions,
   VectorSearchQuery,
   VectorStore,
   VectorStoreCapabilities,
-} from '../store/types'
+} from './types'
+export type { StorageErrorCode, StorageErrorOptions } from './errors'

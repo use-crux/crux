@@ -70,13 +70,13 @@ indexingPipeline({
 })
 ```
 
-The retriever searches child chunks. Each child stores a parent reference; `parentExpand({ store: data })` resolves that reference through the indexed read model at query time and adds parent content while keeping the child chunk as the citation.
+The retriever searches child chunks. Each child stores a parent reference; `parentExpand({ records })` resolves that reference through the indexed read model at query time and adds parent content while keeping the child chunk as the citation.
 
 ```ts
 import { parentExpand, retrievalPipeline } from '@use-crux/core/retrieval'
 
 const expandedDocs = retrievalPipeline(docs, [
-  parentExpand({ store: data, maxParentChars: 4000 }),
+  parentExpand({ records, maxParentChars: 4000 }),
 ])
 ```
 

@@ -5,15 +5,15 @@ description: Store dense, sparse, and hybrid vectors for retrieval and semantic 
 
 `VectorStore` is Crux's similarity-search interface.
 
-Use it when a feature needs dense, sparse, or hybrid vector search. Keep JSON records in [`DataStore`](/docs/guides/storage/crux-store), then store searchable vectors in `VectorStore` using the same keys.
+Use it when a feature needs dense, sparse, or hybrid vector search. Keep JSON records in [`RecordStore`](/docs/guides/storage/crux-store), then store searchable vectors in `VectorStore` using the same keys.
 
 ```ts
-import { inMemoryDataStore, inMemoryVectorStore, storage } from '@use-crux/core/storage'
+import { inMemoryRecordStore, inMemoryVectorStore, storage } from '@use-crux/core/storage'
 
-const data = inMemoryDataStore()
+const records = inMemoryRecordStore()
 const vectors = inMemoryVectorStore()
 
-const appStorage = storage({ data, vectors })
+const appStorage = storage({ records, vectors })
 ```
 
 ## Interface
@@ -31,17 +31,24 @@ const vectors: VectorStore = {
   },
 
   async search(query) {
-    // query: { dense?, sparse?, fusion?, limit?, threshold?, filter? }
+    // query.mode is 'dense', 'sparse', or 'hybrid'
     return []
   },
 
   capabilities() {
-    return { dense: true, sparse: true, hybrid: true }
+    return {
+      dense: true,
+      sparse: false,
+      hybrid: false,
+      fusion: [],
+      filter: 'pre',
+      consistency: 'strong',
+    }
   },
 }
 ```
 
-`search()` returns keys and scores. Crux hydrates full records through `DataStore` when it needs document content or metadata.
+`search()` returns keys and scores. Crux hydrates full records through `RecordStore` when it needs document content or metadata.
 
 ## Dense, Sparse, Hybrid
 
@@ -49,6 +56,7 @@ Dense search uses one dense vector:
 
 ```ts
 await vectors.search({
+  mode: 'dense',
   dense: [0.12, 0.4, 0.9],
   limit: 10,
 })
@@ -58,6 +66,7 @@ Sparse search uses token indices and weights:
 
 ```ts
 await vectors.search({
+  mode: 'sparse',
   sparse: {
     indices: [12, 98, 322],
     values: [0.8, 0.3, 0.6],
@@ -70,6 +79,7 @@ Hybrid search sends both:
 
 ```ts
 await vectors.search({
+  mode: 'hybrid',
   dense: [0.12, 0.4, 0.9],
   sparse: {
     indices: [12, 98, 322],
@@ -80,17 +90,40 @@ await vectors.search({
 })
 ```
 
-Unsupported modes should throw clearly. Never silently degrade hybrid to dense-only or sparse-only.
+Unsupported modes should throw `StorageError` code `unsupported_capability`. Never silently degrade hybrid to dense-only or sparse-only.
+
+## Filtering
+
+Vector filters use the same exact top-level scalar equality as records:
+
+```ts
+await vectors.search({
+  mode: 'dense',
+  dense,
+  limit: 10,
+  filter: { namespace: 'product-docs', active: true },
+})
+```
+
+Capability truth matters:
+
+| `capabilities().filter` | Meaning |
+| --- | --- |
+| `'pre'` | The backend applies filters before top-k scoring. This is required for production filtered retrieval. |
+| `'post'` | The adapter can filter returned hits after top-k. Useful for local/dev tooling, but approximate. |
+| `false` | Filtered vector searches throw. |
+
+Crux retrieval and indexed-knowledge paths that rely on exact filtered top-k results reject `post` and `false` vector stores.
 
 ## With Retriever
 
-Most users do not call `VectorStore` directly. They pass data and vectors to `retriever()`:
+Most users do not call `VectorStore` directly. They pass records and vectors to `retriever()`:
 
 ```ts
 const docs = retriever({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -98,7 +131,7 @@ const docs = retriever({
 })
 ```
 
-The retriever handles embedding the query, searching vectors, hydrating records from data, and returning hits.
+The retriever handles embedding the query, searching vectors, hydrating records, and returning hits.
 
 ## Bundled Vector Stores
 
@@ -110,7 +143,7 @@ import { inMemoryVectorStore } from '@use-crux/core/storage'
 const vectors = inMemoryVectorStore()
 ```
 
-Use Upstash Vector for production dense, sparse, or hybrid retrieval:
+Use Upstash Vector for managed retrieval:
 
 ```ts
 import { upstashVectorStore } from '@use-crux/upstash'
@@ -122,10 +155,18 @@ const vectors = upstashVectorStore({
     token: process.env.UPSTASH_VECTOR_REST_TOKEN!,
   }),
   namespace: 'product-docs',
+  capabilities: {
+    dense: true,
+    sparse: true,
+    hybrid: true,
+    fusion: ['rrf', 'dbsf'],
+  },
 })
 ```
 
-See [Retrieval](/docs/guides/retrieval) for the user-facing retrieval APIs, [Upstash storage](/docs/reference/storage/upstash) for the bundled hybrid-capable adapter, and the [Postgres storage cookbook](/docs/cookbook/basics/postgres-data-store) for a dense pgvector example.
+Upstash index mode is deployment-owned, so the adapter defaults conservatively and only claims sparse, hybrid, or fusion support when you configure those capabilities.
+
+See [Retrieval](/docs/guides/retrieval) for the user-facing retrieval APIs, [Upstash storage](/docs/reference/storage/upstash) for the adapter reference, and the [Postgres storage cookbook](/docs/cookbook/basics/postgres-data-store) for a dense pgvector example.
 
 ## Custom VectorStore
 
@@ -151,10 +192,12 @@ export function myVectorStore(): VectorStore {
 
     async search(query) {
       const results = await vectorDb.query({
-        vector: query.dense,
-        sparseVector: query.sparse,
+        mode: query.mode,
+        vector: query.mode !== 'sparse' ? query.dense : undefined,
+        sparseVector: query.mode !== 'dense' ? query.sparse : undefined,
         topK: query.limit ?? 10,
-        fusion: query.fusion,
+        fusion: query.mode === 'hybrid' ? query.fusion : undefined,
+        filter: query.filter,
       })
 
       return results.map((result) => ({
@@ -163,8 +206,19 @@ export function myVectorStore(): VectorStore {
         metadata: result.metadata,
       }))
     },
+
+    capabilities() {
+      return {
+        dense: true,
+        sparse: true,
+        hybrid: true,
+        fusion: ['rrf', 'dbsf'],
+        filter: 'pre',
+        consistency: 'eventual',
+      }
+    },
   }
 }
 ```
 
-If your vector database also stores full JSON documents, you can expose that separately as a `DataStore`. The public Crux contract stays clear: data hydrates records; vectors find similar records.
+If your vector database also stores full JSON documents, expose that separately as a `RecordStore`. The public Crux contract stays clear: records hydrate data; vectors find similar records.

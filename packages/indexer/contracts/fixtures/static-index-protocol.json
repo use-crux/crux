@@ -9,10 +9,10 @@
       "identity": {
         "protocolVersion": 2,
         "compiler": { "name": "crux-indexer-static-compiler", "version": "phase-3" },
-        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.133.0+crux_native_group3.5" },
+        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.133.0+crux_native_group3.6" },
         "primitiveManifest": {
           "name": "crux-first-party-primitives",
-          "version": "1",
+          "version": "2",
           "digest": "sha256:primitive-manifest"
         },
         "relationPolicy": {
@@ -63,10 +63,10 @@
       "identity": {
         "protocolVersion": 2,
         "compiler": { "name": "crux-indexer-static-compiler", "version": "phase-3" },
-        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.133.0+crux_native_group3.5" },
+        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.133.0+crux_native_group3.6" },
         "primitiveManifest": {
           "name": "crux-first-party-primitives",
-          "version": "1",
+          "version": "2",
           "digest": "sha256:primitive-manifest"
         },
         "relationPolicy": {
@@ -130,10 +130,10 @@
       "identity": {
         "protocolVersion": 2,
         "compiler": { "name": "crux-indexer-static-compiler", "version": "phase-3" },
-        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.133.0+crux_native_group3.5" },
+        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.133.0+crux_native_group3.6" },
         "primitiveManifest": {
           "name": "crux-first-party-primitives",
-          "version": "1",
+          "version": "2",
           "digest": "sha256:primitive-manifest"
         },
         "relationPolicy": {
@@ -262,10 +262,10 @@
       "identity": {
         "protocolVersion": 2,
         "compiler": { "name": "crux-indexer-static-compiler", "version": "phase-3" },
-        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.133.0+crux_native_group3.5" },
+        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.133.0+crux_native_group3.6" },
         "primitiveManifest": {
           "name": "crux-first-party-primitives",
-          "version": "1",
+          "version": "2",
           "digest": "sha256:primitive-manifest"
         },
         "relationPolicy": {

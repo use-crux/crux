@@ -27,7 +27,7 @@ Required fields:
 
 | Field | Description |
 |---|---|
-| `store` | `CruxStore` with TTL, dense vector search, and isolated semantic-cache namespace capability. |
+| `store` | `RecordStore` with TTL, dense vector search, and isolated semantic-cache namespace capability. |
 | `embedding` | `DenseEmbedding`. Sparse and hybrid lookup are intentionally not accepted. |
 | `ttl` | Maximum cache lifetime in milliseconds. Must be greater than zero. |
 | `scope` | `'global'` or a function returning a safety boundary string. |
@@ -86,4 +86,4 @@ store.capabilities().semanticCache.isolatedVectorNamespace === true
 
 This is deliberate. Semantic cache entries should live in a dedicated vector namespace/table/index. Shared memory or RAG indexes can cause unrelated vectors to rank ahead of cache entries before filters are applied.
 
-`inMemoryCruxStore()` supports this by default. Durable adapters opt in only when the configured backend is isolated. Plain Redis stores do not expose vector search unless product-specific vector hooks are configured.
+`inMemoryRecordStore()` supports this by default. Durable adapters opt in only when the configured backend is isolated. Plain Redis stores do not expose vector search unless product-specific vector hooks are configured.

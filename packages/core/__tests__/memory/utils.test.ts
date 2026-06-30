@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toStoreValue, toMemoryEntry } from '../../memory/utils'
+import { toStoreValue } from '../../memory/utils'
 import type { RawMemoryDocument } from '../../memory/utils'
 
 describe('toStoreValue', () => {
@@ -42,7 +42,4 @@ describe('toStoreValue', () => {
     expect(value.embedding).toBeUndefined()
   })
 
-    it('toMemoryEntry is an alias for toStoreValue', () => {
-    expect(toMemoryEntry).toBe(toStoreValue)
-  })
 })

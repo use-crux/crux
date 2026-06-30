@@ -9,6 +9,9 @@ use crate::{
         direct_identifier, direct_string_property, object_array_value, property_value,
     },
     routing::output::{extracted_facts, insert_string},
+    storage::dependencies::{
+        storage_config_references, storage_dependency_metadata, storage_relation_refs,
+    },
 };
 
 pub(crate) fn rag_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
@@ -59,10 +62,17 @@ fn retriever_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
         direct_string_property(config, "namespace"),
     );
     metadata.insert("facts".to_string(), Value::Object(facts));
-    metadata.insert(
-        "intelligence".to_string(),
-        json!({ "confidence": "static" }),
+    let storage_refs = storage_config_references(Some(config), &context.initializers);
+    let storage_dependencies = storage_dependency_metadata(&storage_refs);
+    let mut intelligence = Map::new();
+    intelligence.insert(
+        "confidence".to_string(),
+        Value::String("static".to_string()),
     );
+    if let Some(storage_dependencies) = storage_dependencies {
+        intelligence.insert("dependencies".to_string(), storage_dependencies);
+    }
+    metadata.insert("intelligence".to_string(), Value::Object(intelligence));
 
     Some(extracted_facts(
         parts.variable_name,
@@ -76,7 +86,7 @@ fn retriever_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
             metadata,
         }),
         Vec::new(),
-        Vec::new(),
+        storage_relation_refs("rag.retriever", &storage_refs),
         Vec::new(),
     ))
 }

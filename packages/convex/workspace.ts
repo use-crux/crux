@@ -2,11 +2,12 @@
  * Convex workspace storage helpers.
  *
  * Bridges `@use-crux/core/storage` blob payloads to Convex file storage while
- * leaving workspace metadata in a normal `DataStore`.
+ * leaving workspace metadata in a normal `RecordStore`.
  *
  * @module
  */
 
+import { StorageError } from '@use-crux/core/storage'
 import type { BlobReadResult, BlobRef, BlobStore } from '@use-crux/core/storage'
 
 interface ConvexStorageLike {
@@ -24,16 +25,18 @@ export interface ConvexWorkspaceBlobStoreConfig {
 /**
  * Create a `BlobStore` backed by Convex file storage.
  *
- * Use this together with a Convex store document contract:
+ * Use this together with a Convex `RecordStore`:
  *
  * ```ts
- * const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+ * import { storage } from '@use-crux/core/storage'
+ * import { workspace } from '@use-crux/core/workspace'
+ * import { convexRecordStore, convexWorkspaceBlobStore } from '@use-crux/convex'
  *
  * const ws = workspace({
  *   id: 'thread-workspace',
  *   namespace: threadId,
  *   storage: storage({
- *     data: cruxDocuments.store(ctx),
+ *     records: convexRecordStore({ component: components.crux, ctx }),
  *     blobs: convexWorkspaceBlobStore({ ctx }),
  *   }),
  * })
@@ -54,10 +57,13 @@ export function convexWorkspaceBlobStore(config: ConvexWorkspaceBlobStoreConfig)
     async get(uri): Promise<BlobReadResult> {
       const storageId = parseConvexUri(uri)
       if (!config.ctx.storage.get) {
-        throw new Error('convexWorkspaceBlobStore.get() requires ctx.storage.get, which is not available here.')
+        throw new StorageError(
+          'unsupported_capability',
+          'convexWorkspaceBlobStore.get() requires ctx.storage.get, which is not available here.',
+        )
       }
       const blob = await config.ctx.storage.get(storageId)
-      if (!blob) throw new Error(`Convex workspace blob not found for storage id "${storageId}".`)
+      if (!blob) throw new StorageError('not_found', `Convex workspace blob not found for storage id "${storageId}".`)
       return {
         content: blob,
         mimeType: blob.type || 'application/octet-stream',
@@ -65,10 +71,22 @@ export function convexWorkspaceBlobStore(config: ConvexWorkspaceBlobStoreConfig)
       }
     },
 
+    async head(uri): Promise<BlobRef | null> {
+      const storageId = parseConvexUri(uri)
+      if (!config.ctx.storage.get) return null
+      const blob = await config.ctx.storage.get(storageId)
+      return blob ? { uri, size: blob.size } : null
+    },
+
     async delete(uri): Promise<void> {
       if (!config.ctx.storage.delete) return
       await config.ctx.storage.delete(parseConvexUri(uri))
     },
+
+    capabilities: () => ({
+      multipart: false,
+      signedUrls: false,
+    }),
   }
 }
 
@@ -88,9 +106,9 @@ async function toBlob(
 
 function parseConvexUri(uri: string): string {
   if (!uri.startsWith('convex://')) {
-    throw new Error(`Expected a convex:// workspace blob URI, got "${uri}".`)
+    throw new StorageError('invalid_key', `Expected a convex:// workspace blob URI, got "${uri}".`)
   }
   const storageId = uri.slice('convex://'.length)
-  if (!storageId) throw new Error('Convex workspace blob URI is missing a storage id.')
+  if (!storageId) throw new StorageError('invalid_key', 'Convex workspace blob URI is missing a storage id.')
   return storageId
 }

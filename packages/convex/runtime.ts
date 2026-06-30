@@ -1,14 +1,17 @@
 import type {
-  CruxStore,
   JsonObject,
-  ListOptions,
-  ListResult,
-  ScoredEntry,
-  SetOptions,
-  StoreEvent,
-  VectorSearchOptions,
+  RecordEvent,
+  RecordListOptions,
+  RecordPage,
+  RecordStore,
+  RecordWriteOptions,
+  Storage,
+  VectorHit,
+  VectorRecord,
   VectorSearchQuery,
-} from '@use-crux/core/store'
+  VectorStore,
+  VectorStoreCapabilities,
+} from '@use-crux/core/storage'
 import { getRuntime } from '@use-crux/core'
 
 export interface ConvexRuntimeTarget {
@@ -28,7 +31,8 @@ export type ConvexMemoryNamespace = string | ((args: ConvexMemoryNamespaceArgs) 
 
 export interface ConvexCruxRuntime<TCtx = unknown, TTarget extends ConvexRuntimeTarget = ConvexRuntimeTarget> {
   ctx: TCtx
-  store: CruxStore
+  storage: Storage
+  records: RecordStore
   target?: TTarget
   component?: unknown
   namespace?: ConvexMemoryNamespace
@@ -126,50 +130,76 @@ function popRuntime(runtime: ConvexCruxRuntime): void {
   }
 }
 
-function resolveRuntimeStore(): CruxStore {
-  const store = getConvexCruxRuntime()?.store ?? getRuntime().store
-  if (!store) {
+function resolveRuntimeStorage(): Storage {
+  const runtimeStorage = getConvexCruxRuntime()?.storage
+  if (runtimeStorage) return runtimeStorage
+  const runtimeRecords = getRuntime().records
+  if (!runtimeRecords) {
     throw new Error(
-      'No Convex Crux runtime store is active. Use createCruxConvex(...).run(), convexAgent(), or pass an explicit memory store.',
+      'No Convex Crux runtime storage is active. Use createCruxConvex(...).run(), convexAgent(), or pass explicit storage.',
     )
   }
-  return store
+  return { records: runtimeRecords }
 }
 
-export const convexRuntimeStore: CruxStore = {
+function resolveRuntimeRecords(): RecordStore {
+  return getConvexCruxRuntime()?.records ?? resolveRuntimeStorage().records
+}
+
+export const convexRuntimeRecords: RecordStore = {
+  _tag: 'RecordStore',
   get(key: string): Promise<JsonObject | null> {
-    return resolveRuntimeStore().get(key)
+    return resolveRuntimeRecords().get(key)
   },
-  set(key: string, value: JsonObject, options?: SetOptions): Promise<void> {
-    return resolveRuntimeStore().set(key, value, options)
+  put(key: string, value: JsonObject, options?: RecordWriteOptions): Promise<void> {
+    return resolveRuntimeRecords().put(key, value, options)
   },
-  setIfAbsent(key: string, value: JsonObject, options?: SetOptions): Promise<boolean> {
-    return resolveRuntimeStore().setIfAbsent(key, value, options)
+  create(key: string, value: JsonObject, options?: RecordWriteOptions): Promise<boolean> {
+    return resolveRuntimeRecords().create(key, value, options)
   },
   delete(key: string): Promise<void> {
-    return resolveRuntimeStore().delete(key)
+    return resolveRuntimeRecords().delete(key)
   },
-  list(prefix: string, options?: ListOptions): Promise<ListResult> {
-    return resolveRuntimeStore().list(prefix, options)
+  list(prefix: string, options?: RecordListOptions): Promise<RecordPage> {
+    return resolveRuntimeRecords().list(prefix, options)
   },
-  subscribe(callback: (event: StoreEvent) => void): () => void {
-    return resolveRuntimeStore().subscribe?.(callback) ?? (() => undefined)
-  },
-  supportsTtl(): boolean {
-    return resolveRuntimeStore().supportsTtl?.() ?? false
+  watch(prefix: string, callback: (event: RecordEvent) => void) {
+    return resolveRuntimeRecords().watch?.(prefix, callback) ?? (() => undefined)
   },
   capabilities() {
-    return resolveRuntimeStore().capabilities?.() ?? {}
+    return resolveRuntimeRecords().capabilities()
   },
-  vectorSearch(embedding: number[], options?: VectorSearchOptions): Promise<ScoredEntry[]> {
-    const vectorSearch = resolveRuntimeStore().vectorSearch
-    if (!vectorSearch) return Promise.resolve([])
-    return vectorSearch(embedding, options)
+}
+
+function resolveRuntimeVectors(): VectorStore {
+  const vectors = resolveRuntimeStorage().vectors
+  if (!vectors) {
+    throw new Error('No Convex Crux runtime vector storage is active. Pass storage.vectors or use convexStorage().')
+  }
+  return vectors
+}
+
+export const convexRuntimeVectors: VectorStore = {
+  _tag: 'VectorStore',
+  upsert(records: readonly VectorRecord[]): Promise<void> {
+    return resolveRuntimeVectors().upsert(records)
   },
-  searchVectors(query: VectorSearchQuery): Promise<ScoredEntry[]> {
-    const searchVectors = resolveRuntimeStore().searchVectors
-    if (!searchVectors) return Promise.resolve([])
-    return searchVectors(query)
+  delete(keys: readonly string[]): Promise<void> {
+    return resolveRuntimeVectors().delete(keys)
+  },
+  search(query: VectorSearchQuery): Promise<readonly VectorHit[]> {
+    return resolveRuntimeVectors().search(query)
+  },
+  capabilities(): VectorStoreCapabilities {
+    return resolveRuntimeVectors().capabilities()
+  },
+}
+
+export const convexRuntimeStorage: Storage = {
+  records: convexRuntimeRecords,
+  vectors: convexRuntimeVectors,
+  get blobs() {
+    return resolveRuntimeStorage().blobs
   },
 }
 

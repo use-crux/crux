@@ -211,6 +211,50 @@ describe("first-party Phase 5 native fixtures", () => {
   );
 
   itWithRustOxc(
+    "emits exact native storage facts and dependencies from Rust/Oxc records",
+    async () => {
+      const source = [
+        "export const records = inMemoryRecordStore()",
+        "export const vectors = inMemoryVectorStore()",
+        "export const blobs = inMemoryBlobStore()",
+        "export const appStorage = storage({ records, vectors, blobs })",
+        "export const literalStorage = { records, vectors, blobs }",
+        "export const tenantStorage = storage.scope(appStorage, 'tenant-a')",
+        "",
+        "export const docsRetriever = retriever({",
+        "  id: 'docs',",
+        "  storage: appStorage,",
+        "  records,",
+        "  vectors,",
+        "})",
+        "",
+        "export const scratch = workspace({",
+        "  id: 'scratch',",
+        "  storage: tenantStorage,",
+        "  records,",
+        "  blobs,",
+        "})",
+      ].join("\n");
+      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
+        source,
+        callNames: [
+          "inMemoryRecordStore",
+          "inMemoryVectorStore",
+          "inMemoryBlobStore",
+          "storage",
+          "scope",
+          "retriever",
+          "workspace",
+        ],
+      });
+
+      expect(nativeFactCount(record, "storage")).toBe(6);
+      expectNativeExtractionParity(nativeOut, fallbackOut);
+    },
+    30_000,
+  );
+
+  itWithRustOxc(
     "emits exact native registry and registry skill facts from Rust/Oxc records",
     async () => {
       const source = [

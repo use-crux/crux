@@ -21,7 +21,7 @@ Rolling window that keeps recent messages and summarizes older ones.
 | `generate`      | `GenerateTextFn` | Text generation function        |
 | `model`         | `unknown`        | Model for summarization         |
 | `summaryBudget` | `number?`        | Max tokens for summary          |
-| `store`         | `CruxStore?`     | Persistent storage for messages |
+| `store`         | `RecordStore?`     | Persistent storage for messages |
 
 **Returns:** `SlidingWindow`
 

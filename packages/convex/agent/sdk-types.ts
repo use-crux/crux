@@ -1,7 +1,7 @@
 import { Agent as ConvexAgent } from '@convex-dev/agent'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
 import type { ContextEntry, Prompt, ResolvedPrompt } from '@use-crux/core'
-import type { CruxStore } from '@use-crux/core/store'
+import type { RecordStore, Storage } from '@use-crux/core/storage'
 import type { z } from 'zod'
 import type { ComponentApi } from '../src/component/_generated/component'
 import type { ConvexRuntimeTarget } from '../runtime'
@@ -76,8 +76,8 @@ export type ConvexAgentModelConfig =
 
 /** Crux runtime options for profile-backed Convex Agent turns. */
 export interface ConvexAgentCruxRuntimeConfig {
-  /** Request-scoped store factory used by prompt memory, skills, and Crux tools. */
-  store?: (ctx: unknown) => CruxStore | Promise<CruxStore>
+  /** Request-scoped storage factory used by prompt memory, skills, and Crux tools. */
+  storage?: (ctx: unknown) => Storage | RecordStore | Promise<Storage | RecordStore>
   /** Namespace override for Convex-profile memory and skill state. */
   namespace?:
     | string
@@ -94,7 +94,7 @@ export interface ConvexAgentCruxConfig<
 > {
   /** Advanced adapter override used by tests and custom Convex Agent runtimes. */
   driver?: ConvexAgentDriver
-  /** Runtime binding for request-scoped Crux store and namespace state. */
+  /** Runtime binding for request-scoped Crux storage and namespace state. */
   runtime?: ConvexAgentCruxRuntimeConfig
   /** Profile `agent.run` observability controls. */
   observe?: ConvexAgentObserveConfig
@@ -130,26 +130,6 @@ export interface ConvexAgentBaseConfig<
   tools?: ToolRecord
   /** Crux-owned lifecycle controls. Prefer this namespace for new code. */
   crux?: ConvexAgentCruxConfig<TPrompt>
-  /**
-   * Per-turn hook that can override prompt input, contexts, tools, and budget.
-   *
-   * @deprecated Use `crux.prepare`.
-   */
-  prepare?: (
-    args: ConvexAgentPrepareArgs<TPrompt>,
-  ) => ConvexAgentPrepareResult<TPrompt> | Promise<ConvexAgentPrepareResult<TPrompt>>
-  /**
-   * Request-scoped store factory.
-   *
-   * @deprecated Use `crux.runtime.store`.
-   */
-  store?: (ctx: unknown) => CruxStore | Promise<CruxStore>
-  /**
-   * Namespace override for Convex-profile memory and skill state.
-   *
-   * @deprecated Use `crux.runtime.namespace`.
-   */
-  namespace?: ConvexAgentCruxRuntimeConfig['namespace']
 }
 
 /** Complete config for a profile-backed Convex Agent helper. */

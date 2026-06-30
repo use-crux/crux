@@ -1,13 +1,13 @@
 /**
  * Workspace file-record persistence and listing.
  *
- * Keys records by workspace id + namespace + path in a {@link DataStore}, and
+ * Keys records by workspace id + namespace + path in a {@link RecordStore}, and
  * derives directory/glob listings from the stored set.
  *
  * @module
  */
 
-import type { DataStore, JsonObject } from "../store/types";
+import type { ExactFilter, JsonObject, RecordStore } from "../storage";
 import { recordToFile } from "./content";
 import { globToRegExp } from "./glob";
 import { mountForPath, normalizePath } from "./path";
@@ -36,7 +36,7 @@ export function fileKey(
 
 /** Read a stored file record, or `null` if absent/malformed. */
 export async function getRecord(
-  store: DataStore,
+  store: RecordStore,
   workspaceId: string,
   namespace: string,
   path: WorkspacePath,
@@ -47,7 +47,7 @@ export async function getRecord(
 
 /** Read a stored file record or throw if it does not exist. */
 export async function getRequiredRecord(
-  store: DataStore,
+  store: RecordStore,
   workspaceId: string,
   namespace: string,
   path: WorkspacePath,
@@ -59,7 +59,7 @@ export async function getRequiredRecord(
 
 /** List directory or glob entries beneath a query path. */
 export async function listEntries(input: {
-  readonly store: DataStore;
+  readonly store: RecordStore;
   readonly workspaceId: string;
   readonly namespace: string;
   readonly mounts: readonly NormalizedMount[];
@@ -114,7 +114,7 @@ export async function listEntries(input: {
 
 /** List every file record in a namespace as {@link WorkspaceFile} entries. */
 export async function listAllFileEntries(
-  store: DataStore,
+  store: RecordStore,
   workspaceId: string,
   namespace: string,
   options: { readonly limit?: number } = {},
@@ -132,11 +132,11 @@ export async function listAllFileEntries(
 
 /** List stored file records in a namespace. */
 export async function listFileRecords(
-  store: DataStore,
+  store: RecordStore,
   workspaceId: string,
   namespace: string,
   options: {
-    readonly filter?: Record<string, unknown>;
+    readonly filter?: ExactFilter;
     readonly limit?: number;
   } = {},
 ): Promise<readonly WorkspaceFileRecord[]> {
@@ -199,10 +199,12 @@ function directoryEntries(
   );
 }
 
-function isFileRecord(value: JsonObject | null): value is WorkspaceFileRecord {
+function isFileRecord(value: unknown): value is WorkspaceFileRecord {
+  if (!value || typeof value !== "object") return false;
+  const record = value as { _cruxWorkspaceFile?: unknown; version?: unknown; path?: unknown };
   return (
-    value?._cruxWorkspaceFile === true &&
-    value.version === FILE_RECORD_VERSION &&
-    typeof value.path === "string"
+    record._cruxWorkspaceFile === true &&
+    record.version === FILE_RECORD_VERSION &&
+    typeof record.path === "string"
   );
 }

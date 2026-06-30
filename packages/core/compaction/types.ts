@@ -9,7 +9,7 @@
 
 import type { z } from 'zod'
 import type { Message, CompactionResult } from '../generation/messages'
-import type { CruxStore } from '../store/types'
+import type { RecordStore } from '../storage'
 
 // ── Generate Function Abstractions ──────────────────────────────────
 
@@ -62,8 +62,8 @@ export interface SlidingWindowConfig {
   model: unknown
   /** Max tokens for the running summary. Default: 1000. */
   summaryBudget?: number
-  /** Backing store for persistence. Defaults to inMemoryStore(). */
-  store?: CruxStore
+  /** Record store for persistence. Defaults to `inMemoryRecordStore()`. */
+  records?: RecordStore
   /** Namespace key for this window instance. Default: 'default'. */
   id?: string
 }

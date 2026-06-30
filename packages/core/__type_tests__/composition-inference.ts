@@ -5,7 +5,7 @@ import { citationSchema, grounding } from '../citations'
 import { prompt } from '../prompt/prompt'
 import { embedding, embeddingCache, normalizeText } from '../embedding'
 import { retriever, retrievalPipeline, retrievalStage } from '../retrieval'
-import { inMemoryCruxStore } from '../store'
+import { inMemoryRecordStore } from '../storage'
 import type { RetrieverTools } from '../retrieval'
 import type { ToolDef } from '../types/tool'
 
@@ -104,7 +104,7 @@ expectTypeOf<RetrieverTools<{ prefix: 'kb'; include: readonly ['search'] }>>().t
   kbSearch: ToolDef
 }>()
 
-const cache = embeddingCache({ store: inMemoryCruxStore(), namespace: 'type-test' })
+const cache = embeddingCache({ records: inMemoryRecordStore(), namespace: 'type-test' })
 
 const denseEmbedding = embedding({
   kind: 'dense',
@@ -138,5 +138,7 @@ const sparseEmbedding = embedding({
     })),
 })
 
-expectTypeOf(sparseEmbedding.embed('x')).toEqualTypeOf<Promise<{ indices: number[]; values: number[] }>>()
+expectTypeOf(sparseEmbedding.embed('x')).toEqualTypeOf<
+  Promise<{ readonly indices: readonly number[]; readonly values: readonly number[] }>
+>()
 expectTypeOf(sparseEmbedding).not.toHaveProperty('asEmbedFn')

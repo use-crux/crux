@@ -9,8 +9,8 @@
 
 import { useSyncExternalStore } from 'react'
 import type { CruxTransport } from '@use-crux/react'
-import type { JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
-import { matchesFilter } from '@use-crux/core/store'
+import type { JsonObject, RecordEntry, RecordListOptions } from '@use-crux/core/storage'
+import { matchesExactFilter } from '@use-crux/core/storage'
 import type { CruxDataPart } from './types'
 
 /**
@@ -104,12 +104,12 @@ export function createStreamTransport(): StreamTransport {
       })
     },
 
-    useDocumentList(prefix: string | undefined, options?: ListOptions): StoreEntry[] | undefined {
+    useDocumentList(prefix: string | undefined, options?: RecordListOptions): RecordEntry[] | undefined {
       const filterKey = options?.filter ? JSON.stringify(options.filter) : ''
       return useSyncExternalStore(subscribe, () => {
         if (prefix === undefined) return undefined
         return cachedSnapshot(`list:${prefix}:${filterKey}`, () => {
-          let entries: StoreEntry[] = []
+          let entries: RecordEntry[] = []
           for (const [key, value] of cache) {
             if (key.startsWith(prefix)) {
               entries.push({ key, value })
@@ -117,7 +117,7 @@ export function createStreamTransport(): StreamTransport {
           }
           if (options?.filter) {
             const filter = options.filter
-            entries = entries.filter((e) => matchesFilter(e.value, filter))
+            entries = entries.filter((e) => matchesExactFilter(e.value, filter))
           }
           return entries
         })

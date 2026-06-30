@@ -1,5 +1,5 @@
 import type { Context } from '../prompt/context-types'
-import type { CruxStore } from '../store/types'
+import type { RecordStore, Storage, VectorStore } from '../storage'
 import type { AnyToolSet } from '../types'
 import type { MemoryNamespace } from './namespace'
 import type { MemoryBudget } from './rendering'
@@ -40,10 +40,20 @@ export type {
 
 /** Configuration for `memory()`, the top-level memory composition primitive. */
 export interface MemoryConfig {
-  /** Stable identifier used in store keys, traces, and devtools resources. */
+  /** Stable identifier used in record keys, traces, and devtools resources. */
   id: string
-  /** Store backing this memory instance. Defaults to an in-memory store. */
-  store?: CruxStore
+  /**
+   * Storage bundle backing this memory instance.
+   *
+   * When omitted, memory uses an in-process bundle from `inMemoryStorage()`.
+   * Pass `records` and optionally `vectors` directly when only those
+   * capabilities should be shared with memory.
+   */
+  storage?: Storage
+  /** Record store backing block reads, writes, proposal state, and listings. */
+  records?: RecordStore
+  /** Optional vector store used by semantic recall when a block has an embedder. */
+  vectors?: VectorStore
   /** Namespace scope for all reads, writes, tools, capture, and proposals. */
   namespace: MemoryNamespace
   /** Ordered memory blocks composed by this memory instance. */
@@ -54,15 +64,6 @@ export interface MemoryConfig {
    * Defaults to `afterResponse`.
    */
   capture?: MemoryCaptureConfig
-  /**
-   * @deprecated Use `capture` instead. Legacy `deferred` maps to
-   * `capture.mode: "afterResponse"` and legacy `manual` maps to
-   * `capture.mode: "detached"` because capture still starts immediately.
-   */
-  processing?: {
-    mode?: 'deferred' | 'inline' | 'manual'
-    waitUntil?: (promise: Promise<unknown>) => void
-  }
   /**
    * Approximate token budget for the composed memory context.
    *
@@ -76,7 +77,7 @@ export interface MemoryConfig {
 /** Composed memory object usable from prompts, agents, and application code. */
 export interface Memory {
   readonly _tag: 'Memory'
-  /** Stable identifier used in store keys, traces, and devtools resources. */
+  /** Stable identifier used in record keys, traces, and devtools resources. */
   readonly id: string
   readonly blocks: readonly MemoryBlock[]
   readonly config: MemoryConfig

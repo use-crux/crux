@@ -14,11 +14,11 @@ import { workspace } from '@use-crux/core/workspace'
 const files = workspace({
   id: 'thread-files',
   namespace: threadId,
-  storage: storage({ data, blobs }),
+  storage: storage({ records, blobs }),
 })
 ```
 
-The workspace stores file metadata in `DataStore`: path, MIME type, size, timestamps, preview, and blob URI. The blob store keeps the actual bytes.
+The workspace stores file metadata in `RecordStore`: path, MIME type, size, timestamps, preview, and blob URI. The blob store keeps the actual bytes.
 
 ## Bundled Blob Stores
 
@@ -74,8 +74,17 @@ const blobs: BlobStore = {
     // return the original bytes, MIME type, and optional size
   },
 
+  async head(uri): Promise<BlobRef | null> {
+    // return metadata without reading the content
+    return null
+  },
+
   async delete(uri) {
-    // optional hard delete
+    // hard delete
+  },
+
+  capabilities() {
+    return { multipart: false, signedUrls: false }
   },
 }
 ```
@@ -123,6 +132,13 @@ export function s3BlobStore(bucket: string): BlobStore {
       const { bucket, key } = parseS3Uri(uri)
       await s3.deleteObject({ Bucket: bucket, Key: key })
     },
+
+    capabilities() {
+      return {
+        multipart: true,
+        signedUrls: true,
+      }
+    },
   }
 }
 ```
@@ -132,7 +148,7 @@ Keep these rules:
 1. Return a stable URI from `put()`.
 2. Make `get(uri)` return the original bytes or a readable equivalent.
 3. Preserve `mimeType`.
-4. Delete blobs when your app needs hard deletion.
+4. Implement `delete(uri)`; beta blob stores require a lifecycle delete operation.
 5. Do not expose signed URLs or secrets to the model unless your application explicitly chooses to.
 
 ## Security Notes
@@ -160,7 +176,7 @@ If your app needs a public download URL, generate it in app code after authoriza
     href="/docs/guides/workspaces"
   />
   <Card
-    title="DataStore"
+    title="RecordStore"
     description="Understand JSON record storage and custom database adapters."
     href="/docs/guides/storage/crux-store"
   />

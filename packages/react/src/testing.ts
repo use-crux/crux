@@ -2,23 +2,23 @@
  * Mock transport for testing Crux reactive hooks.
  *
  * Backed by an in-memory Map with `useSyncExternalStore` for reactivity.
- * Use `transport.set()` to update data and trigger re-renders in tests.
+ * Use `transport.put()` to update data and trigger re-renders in tests.
  *
  * @module
  */
 
 import { useSyncExternalStore } from 'react'
-import type { JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
-import { matchesFilter } from '@use-crux/core/store'
+import type { JsonObject, RecordEntry, RecordListOptions } from '@use-crux/core/storage'
+import { matchesExactFilter } from '@use-crux/core/storage'
 import type { CruxTransport } from './types'
 
 /**
- * A mock transport that extends CruxTransport with a `set()` method
+ * A mock transport that extends CruxTransport with a `put()` method
  * for updating data in tests.
  */
 export interface MockTransport extends CruxTransport {
-  /** Set a document value. Triggers re-renders for subscribed hooks. */
-  set(key: string, value: JsonObject): void
+  /** Put a document value. Triggers re-renders for subscribed hooks. */
+  put(key: string, value: JsonObject): void
   /** Delete a document. Triggers re-renders for subscribed hooks. */
   delete(key: string): void
   /** Get the raw data map (for assertions). */
@@ -31,7 +31,7 @@ export interface MockTransport extends CruxTransport {
  * @example
  * ```tsx
  * const transport = createMockTransport()
- * transport.set('plan:abc', { id: 'abc', title: 'Test', ... })
+ * transport.put('plan:abc', { id: 'abc', title: 'Test', ... })
  *
  * const { result } = renderHook(() => usePlan('abc'), {
  *   wrapper: ({ children }) => <CruxProvider transport={transport}>{children}</CruxProvider>,
@@ -70,7 +70,7 @@ export function createMockTransport(): MockTransport {
   }
 
   return {
-    set(key: string, value: JsonObject) {
+    put(key: string, value: JsonObject) {
       data.set(key, value)
       notify()
     },
@@ -91,12 +91,12 @@ export function createMockTransport(): MockTransport {
       })
     },
 
-    useDocumentList(prefix: string | undefined, options?: ListOptions): StoreEntry[] | undefined {
+    useDocumentList(prefix: string | undefined, options?: RecordListOptions): RecordEntry[] | undefined {
       const filterKey = options?.filter ? JSON.stringify(options.filter) : ''
       return useSyncExternalStore(subscribe, () => {
         if (prefix === undefined) return undefined
         return cachedSnapshot(`list:${prefix}:${filterKey}`, () => {
-          let entries: StoreEntry[] = []
+          let entries: RecordEntry[] = []
           for (const [key, value] of data) {
             if (key.startsWith(prefix)) {
               entries.push({ key, value })
@@ -104,7 +104,7 @@ export function createMockTransport(): MockTransport {
           }
           if (options?.filter) {
             const filter = options.filter
-            entries = entries.filter((e) => matchesFilter(e.value, filter))
+            entries = entries.filter((e) => matchesExactFilter(e.value, filter))
           }
           return entries
         })

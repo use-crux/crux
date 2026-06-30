@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createSlidingWindow } from '../../compaction/sliding-window'
-import { inMemoryCruxStore as inMemoryStore } from '../../store/memory'
+import { inMemoryRecordStore as inMemoryStore } from '../../storage'
 import type { Message } from '../../generation/messages'
 import type { GenerateTextFn } from '../../compaction/types'
 
@@ -146,7 +146,7 @@ describe('createSlidingWindow', () => {
       windowSize: 2,
       generate: mockGenerate,
       model: 'test',
-      store,
+      records: store,
     })
 
     await window.push(msg('user', 'Hello'))
@@ -164,7 +164,7 @@ describe('createSlidingWindow', () => {
       windowSize: 5,
       generate: mockGenerate,
       model: 'test',
-      store,
+      records: store,
       id: 'my-window',
     })
 

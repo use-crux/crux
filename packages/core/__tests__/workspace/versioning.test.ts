@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   inMemoryBlobStore,
-  inMemoryDataStore,
+  inMemoryRecordStore,
   storage,
-  type DataStore,
+  type RecordStore,
   type JsonObject,
-  type SetOptions,
+  type RecordWriteOptions,
 } from "../../storage";
 import { workspace } from "../../workspace";
 
@@ -14,7 +14,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "first");
@@ -34,7 +34,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "first");
@@ -51,7 +51,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "first");
@@ -66,7 +66,7 @@ describe("workspace versioning & history", () => {
       id: "research",
       namespace: "thread:1",
       storage: storage({
-        data: inMemoryDataStore(),
+        records: inMemoryRecordStore(),
         blobs: inMemoryBlobStore(),
       }),
       content: { inlineTextBelowBytes: 4 },
@@ -90,7 +90,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "alpha\n");
@@ -110,7 +110,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "original");
@@ -137,7 +137,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "only");
@@ -151,7 +151,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "line one\nline two\nline three\n");
@@ -175,7 +175,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
       versioning: { maxVersions: 2 },
     });
 
@@ -195,7 +195,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "v1");
@@ -206,27 +206,25 @@ describe("workspace versioning & history", () => {
   });
 
   it("rolls back the live record when version persistence fails", async () => {
-    const data = inMemoryDataStore();
+    const records = inMemoryRecordStore();
     let failVersionWrite = false;
-    const guardedData: DataStore = {
-      get: data.get,
-      list: data.list,
-      delete: data.delete,
-      async set(
+    const guardedRecords: RecordStore = {
+      ...records,
+      async put(
         key: string,
         value: JsonObject,
-        options?: SetOptions,
+        options?: RecordWriteOptions,
       ): Promise<void> {
         if (failVersionWrite && key.includes(":version:")) {
           throw new Error("version write failed");
         }
-        await data.set(key, value, options);
+        await records.put(key, value, options);
       },
     };
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: guardedData,
+      records: guardedRecords,
     });
 
     await ws.write("/workspace/notes.md", "v1");
@@ -248,7 +246,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "v1");
@@ -264,7 +262,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      storage: storage({ data: inMemoryDataStore(), blobs }),
+      storage: storage({ records: inMemoryRecordStore(), blobs }),
     });
 
     await ws.write("/workspace/file.bin", new Uint8Array([1]), {
@@ -296,7 +294,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      storage: storage({ data: inMemoryDataStore(), blobs }),
+      storage: storage({ records: inMemoryRecordStore(), blobs }),
     });
 
     await ws.write("/workspace/file.bin", new Uint8Array([1]), {
@@ -322,7 +320,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/source.md", "v1");
@@ -342,7 +340,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/source.md", "v1");
@@ -360,7 +358,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
     const before = Array.from({ length: 1001 }, (_, index) => `a${index}`).join(
       "\n",
@@ -379,7 +377,7 @@ describe("workspace versioning & history", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     expect(ws.asTools()).not.toHaveProperty("undoWorkspaceFile");

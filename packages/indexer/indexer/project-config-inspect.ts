@@ -7,7 +7,7 @@
  * renders the effective {@link CruxConfig}: every domain `config()` accepts, with
  * each value tagged by where it came from — an explicit config value, a built-in
  * default, package metadata, or the presence of a non-serializable binding
- * (store, tokenizer, middleware, transport).
+ * (record store, tokenizer, middleware, transport).
  *
  * It is a representation of configuration, not of authored primitives. A compact
  * discovery summary (definition/relation counts) is included for context; the
@@ -168,7 +168,7 @@ export async function inspectProjectConfig(options: InspectProjectConfigOptions)
       bridge: presence(devtools?.bridge != null),
     },
     persistence: {
-      store: presence(cfg?.persistence?.store != null),
+      records: presence(cfg?.persistence?.records != null),
     },
     lint: {
       profile: lint?.profile != null ? explicit(lint.profile) : fromDefault(DEFAULT_LINT_PROFILE),

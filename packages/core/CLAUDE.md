@@ -9,15 +9,15 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API
 - **`/devtools`** — `withDevtools()` plugin, `enableDevtools()`
 - **`/observability`** — canonical graph contract, schemas, runtime emitters, transports
 - **`/flow`** — `flow()`, `signalFlow()`, `cancelFlow()`, `executeFlow()` (suspendable/resumable)
-- **`/memory`** — `memory()`, `memoryBlock()`, `recentMessages()`, `workingState()`, `episodes()`, `facts()`, `procedures()`, `CruxStore`
+- **`/memory`** — `memory()`, `memoryBlock()`, `recentMessages()`, `workingState()`, `episodes()`, `facts()`, `procedures()`
 - **`/embedding`** — `embedding()` (dense or sparse vector primitive)
-- **`/indexing`** — `indexer()` (chunk + embed + write documents to a CruxStore)
+- **`/indexing`** — `indexer()` (chunk + embed + write documents to record/vector stores)
 - **`/retrieval`** — `retriever()`, `reranker()` (text query → scored hits, `asContext()`, `asTools()`)
 - **`/compaction`** — `summarizeMessages()`, `createSlidingWindow()`, `createBudgetManager()`, `extractKeyFacts()`
 - **`/scoring`** — `llmJudge()`, pre-built metrics, `judgeConstraint()` (judge → `Constraint` bridge)
 - **`/quality`** — `evaluate()`, `target.*`, `scorers.*`, `dataset()`, `cassette()` (the Quality system: evaluations → experiments → baselines, replay at the executor boundary)
 - **`/agent`** — `agent()`, `parallel()`, `pipeline()`, `consensus()`, `swarm()`, `blackboard()`, `handoff()`, `delegate()`
-- **`/store`** — `CruxStore` interface, `inMemoryCruxStore()`
+- **`/storage`** — `RecordStore`, `VectorStore`, `BlobStore`, `storage()`, `inMemoryStorage()`
 - **`/plan` + `/tasks`** — `plan()`, `tasks()`, `task()`, handle contexts, handle tools, and workers
 - **`/index`** — project index contracts, schemas, serializers, and source metadata helpers
 - **`/lint`** — index lint contracts and rule registry metadata

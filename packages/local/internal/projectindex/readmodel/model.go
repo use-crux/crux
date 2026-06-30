@@ -58,7 +58,7 @@ func (m *Model) Raw() store.IndexData {
 // Index runs all read-model enrichment passes in fixed order:
 //  1. in-memory eval/rag/flow run joins
 //  2. file-backed quality records and lint policy
-//  3. source mtime metadata and safety target metadata
+//  3. source mtime metadata, safety target metadata, and storage summaries
 func (m *Model) Index() store.IndexData {
 	if m == nil || m.runs == nil {
 		return store.IndexData{}
@@ -69,5 +69,6 @@ func (m *Model) Index() store.IndexData {
 		index = enrichFileBackedQuality(index, m.qualityDir)
 	}
 	index = enrichDefinitionUpdated(index, m.stat)
-	return enrichSafetyTargets(index)
+	index = enrichSafetyTargets(index)
+	return enrichStorage(index)
 }

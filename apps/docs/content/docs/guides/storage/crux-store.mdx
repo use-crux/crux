@@ -1,19 +1,19 @@
 ---
-title: DataStore
+title: RecordStore
 description: Store Crux JSON records for memory, cache, flows, evals, and workspace metadata.
 ---
 
-`DataStore` is Crux's durable JSON record interface.
+`RecordStore` is Crux's durable JSON record interface.
 
-Use it when Crux needs to read, write, list, or subscribe to structured state:
+Use it when Crux needs to read, write, list, filter, or watch structured state:
 
 ```ts
-import { inMemoryDataStore } from '@use-crux/core/storage'
+import { inMemoryRecordStore } from '@use-crux/core/storage'
 
-const data = inMemoryDataStore()
+const records = inMemoryRecordStore()
 
-await data.set('notes:1', { title: 'First note' })
-const note = await data.get('notes:1')
+await records.put('notes:1', { title: 'First note' })
+const note = await records.get('notes:1')
 ```
 
 It is not a vector index and it is not a blob store. If a feature needs similarity search, give it a [`VectorStore`](/docs/guides/storage/vector-store). If a workspace needs binary files, give it a [`BlobStore`](/docs/guides/storage/blob-storage).
@@ -21,15 +21,20 @@ It is not a vector index and it is not a blob store. If a feature needs similari
 ## Interface
 
 ```ts
-import type { DataStore, JsonObject } from '@use-crux/core/storage'
+import type { JsonObject, RecordStore } from '@use-crux/core/storage'
 
-const data: DataStore = {
+const records: RecordStore = {
   async get(key) {
     return null
   },
 
-  async set(key, value, options) {
+  async put(key, value, options) {
     // persist JsonObject
+  },
+
+  async create(key, value, options) {
+    // atomically insert only when absent
+    return true
   },
 
   async delete(key) {
@@ -39,41 +44,34 @@ const data: DataStore = {
   async list(prefix, options) {
     return { entries: [] }
   },
+
+  capabilities() {
+    return { ttl: false, filter: false, watch: false, batch: false }
+  },
 }
 ```
 
-Core features use namespaced keys internally. Preserve keys exactly and make prefix listing deterministic.
+Core features use namespaced keys internally. Preserve keys exactly and make prefix listing deterministic. If a consumer needs complete traversal, implement `scan()` or make sure repeated `list(prefix, { cursor })` calls exhaust all pages.
 
 ## Common Uses
 
-Memory uses a data store for block state:
-
-```ts
-memory({
-  id: 'assistant',
-  store: data,
-  namespace: `user:${userId}`,
-  blocks,
-})
-```
-
-Workspace metadata uses a data store for paths, MIME types, sizes, timestamps, previews, and blob URIs:
+Workspace metadata uses records for paths, MIME types, sizes, timestamps, previews, and blob URIs:
 
 ```ts
 workspace({
   id: 'thread-files',
   namespace: threadId,
-  data,
+  records,
   blobs,
 })
 ```
 
-Retrieval systems usually pair data with vectors:
+Retrieval systems usually pair records with vectors:
 
 ```ts
 retriever({
   id: 'docs',
-  data,
+  records,
   vectors,
   dense,
 })
@@ -81,49 +79,63 @@ retriever({
 
 ## TTL
 
-`set()` accepts an optional TTL in milliseconds:
+`put()` and `create()` accept an optional TTL in milliseconds:
 
 ```ts
-await data.set('cache:brand:abc', { text: 'Brand voice' }, { ttl: 300_000 })
+await records.put('cache:brand:abc', { text: 'Brand voice' }, { ttlMs: 300_000 })
 ```
 
-Stores that support TTL should expose `supportsTtl()`:
+Check capability levels before writing TTL-backed data:
 
 ```ts
-if (data.supportsTtl?.()) {
-  await data.set(key, value, { ttl: 300_000 })
+const capabilities = records.capabilities()
+
+if (capabilities.ttl !== false) {
+  await records.put(key, value, { ttlMs: 300_000 })
 }
 ```
 
 Bundled TTL behavior:
 
-| Store                 | TTL behavior                             |
-| --------------------- | ---------------------------------------- |
-| `inMemoryDataStore()` | Lazy expiry on `get()` and `list()`      |
-| Convex contract store | Stores `_expiresAt`, lazy expiry on read |
-| `cruxRedisStore()`    | Native Redis `PX` key expiration         |
+| Store | TTL behavior |
+| --- | --- |
+| `inMemoryRecordStore()` | Lazy expiry on `get()`, `list()`, and `scan()` |
+| `convexRecordStore()` | Lazy expiry through the Convex document contract |
+| `upstashRedisRecordStore()` | Native Redis `PX` key expiration |
 
-TTL is used by [context caching](/docs/guides/contexts/caching) and can also be used for short-lived app data.
+If `capabilities().ttl === false`, passing `ttlMs` throws `StorageError` code `ttl_unsupported`.
 
-## Bundled Data Stores
+## Filters
 
-Use `inMemoryDataStore()` for tests and examples:
+Record filters are exact top-level scalar equality:
 
 ```ts
-import { inMemoryDataStore } from '@use-crux/core/storage'
-
-const data = inMemoryDataStore()
+const page = await records.list('docs:', {
+  filter: { namespace: 'public', active: true, deletedAt: null },
+})
 ```
 
-Use `defineConvexStoreContract().store(ctx)` when your app already runs on Convex. Its component list query returns `{ docs, cursor }` pages from the `by_key` index while the store contract owns TTL suppression and decoded-value filters. See the [Convex guide](/docs/guides/convex) for setup and boundary rules.
+`null` matches explicit JSON `null`, not a missing field. Arrays, nested paths, regex, provider-specific filter strings, and operators are outside the beta contract. Unsupported filter values must throw `StorageError` code `invalid_filter`.
 
-Use Upstash Redis for a simple durable key-value store:
+## Bundled Record Stores
+
+Use `inMemoryRecordStore()` for tests and examples:
+
+```ts
+import { inMemoryRecordStore } from '@use-crux/core/storage'
+
+const records = inMemoryRecordStore()
+```
+
+Use `convexRecordStore()` or `convexStorage()` when your app already runs on Convex. The Convex adapter owns decoded-value filters, lazy TTL suppression, and the component page shape. See the [Convex guide](/docs/guides/convex) for setup and boundary rules.
+
+Use Upstash Redis for a simple durable record store:
 
 ```ts
 import { Redis } from '@upstash/redis'
-import { cruxRedisStore } from '@use-crux/upstash/redis'
+import { upstashRedisRecordStore } from '@use-crux/upstash'
 
-const data = cruxRedisStore({
+const records = upstashRedisRecordStore({
   redis: new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,
@@ -131,13 +143,13 @@ const data = cruxRedisStore({
 })
 ```
 
-## Subscriptions And Reactive UI
+## Watches And Reactive UI
 
-`subscribe()` is optional. Implement it when your backend can push changes and you want reactive UI without polling.
+`watch(prefix, callback)` is optional. Implement it when your backend can push changes and you want reactive UI without polling.
 
 ```ts
-data.subscribe?.((event) => {
-  if (event.type === 'set') {
+records.watch?.('plan:', (event) => {
+  if (event.type === 'put') {
     console.log('Updated', event.key, event.value)
   } else {
     console.log('Deleted', event.key)
@@ -145,34 +157,38 @@ data.subscribe?.((event) => {
 })
 ```
 
-Reactive UI can use:
+Reactive UI adapters consume the same `RecordStore` records through a transport. Prefer prefix-scoped watches when your backend supports them and polling when it does not.
 
-- `defineConvexStoreContract().transport({ useQuery })` when using Convex. It consumes the component's `{ docs, cursor }` page shape and filters decoded values locally.
-- `createSSETransport()` with `cruxSSEHandler()` when the store implements `subscribe()`.
-- `createPollingTransport()` with any `DataStore`.
+## Custom RecordStore
 
-See [React reference](/docs/reference/react) and [Server reference](/docs/reference/react-server) for exact APIs.
-
-## Custom DataStore
-
-A custom data store is straightforward if your database can read/write JSON records and list by key prefix.
+A custom record store is straightforward if your database can read/write JSON records and list by key prefix.
 
 ```ts
-import type { DataStore, JsonObject } from '@use-crux/core/storage'
+import type { JsonObject, RecordStore } from '@use-crux/core/storage'
 
-export function myDataStore(): DataStore {
+export function myRecordStore(): RecordStore {
   return {
     async get(key) {
       const row = await db.records.findUnique({ where: { key } })
       return row ? (row.value as JsonObject) : null
     },
 
-    async set(key, value) {
+    async put(key, value) {
       await db.records.upsert({
         where: { key },
         create: { key, value },
         update: { value },
       })
+    },
+
+    async create(key, value) {
+      try {
+        await db.records.create({ data: { key, value } })
+        return true
+      } catch (error) {
+        if (isUniqueConstraintError(error)) return false
+        throw error
+      }
     },
 
     async delete(key) {
@@ -192,10 +208,14 @@ export function myDataStore(): DataStore {
         })),
       }
     },
+
+    capabilities() {
+      return { ttl: false, filter: 'native', watch: false, batch: false }
+    },
   }
 }
 ```
 
 If your database also supports vectors or blobs, implement [`VectorStore`](/docs/guides/storage/vector-store) or [`BlobStore`](/docs/guides/storage/blob-storage) as separate capabilities and bundle them with `storage()`.
 
-For a complete SQL implementation, see the [Postgres DataStore cookbook](/docs/cookbook/basics/postgres-data-store).
+For a complete SQL implementation, see the [Postgres RecordStore cookbook](/docs/cookbook/basics/postgres-data-store).

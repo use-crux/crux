@@ -1,17 +1,17 @@
 /**
  * `@use-crux/convex` — Convex storage adapter for Crux.
  *
- * Provides `defineConvexStoreContract()` for creating server-side stores and
- * React transports backed by the same Convex store document contract.
+ * Provides Storage Beta factories (`convexRecordStore`, `convexVectorStore`,
+ * and `convexStorage`) plus profile helpers for Convex request lifecycles.
  *
  * **Setup:** Install the crux Convex component and use the component ref:
  *
  * ```ts
- * import { defineConvexStoreContract } from '@use-crux/convex'
+ * import { convexStorage } from '@use-crux/convex'
  * import { components } from './_generated/api'
  *
- * const cruxDocuments = defineConvexStoreContract({ component: components.crux })
- * const store = cruxDocuments.store(ctx)
+ * const storage = convexStorage({ component: components.crux, ctx })
+ * await storage.records.put('memory:alpha', { content: 'Alpha' })
  * ```
  *
  * @module
@@ -19,6 +19,8 @@
 
 export { convexWorkspaceBlobStore } from './workspace'
 export type { ConvexWorkspaceBlobStoreConfig } from './workspace'
+export { convexRecordStore, convexStorage, convexVectorStore } from './storage'
+export type { ConvexStorageConfig } from './storage'
 export { flushObservability, withObservabilityFlush } from './observability'
 export type { ConvexActionHandler, ConvexObservabilityFlushOptions } from './observability'
 export { setup } from './bridge'
@@ -38,8 +40,7 @@ export type {
   CruxConvexProfileAgentConfig,
   CruxConvexRunScope,
 } from './profile'
-export { defineConvexStoreContract } from './store-contract'
-export { convexComponentDocumentPort, cruxConvexStore } from './store'
+export { convexComponentDocumentPort } from './store'
 export type {
   ConvexComponentDocumentPortConfig,
   ConvexContext,
@@ -50,20 +51,16 @@ export {
   createInMemoryConvexStoreDocumentComponent,
   isConvexStoreDocumentComponent,
 } from './store-document-component'
+export { createConvexTransport } from './react'
+export type { ConvexTransportConfig, CruxTransport, UseQueryFn } from './react'
 export type {
   InMemoryConvexStoreDocumentComponent,
   InMemoryConvexStoreDocumentComponentOptions,
 } from './store-document-component'
 export type {
-  ConvexStoreContract,
-  ConvexStoreContractTransportOptions,
-  ConvexStoreSemanticCacheOptions,
-  DefineConvexStoreContractOptions,
-} from './store-contract'
-export type {
-  ConvexCruxStoreComponent,
-  ConvexCruxStoreMemoryComponent,
-  ConvexCruxStoreTransportComponent,
+  ConvexCruxStorageComponent,
+  ConvexCruxStorageMemoryComponent,
+  ConvexCruxStorageTransportComponent,
   ConvexStoreDocumentComponent,
   ConvexStoreDocumentComponentIoOptions,
   ConvexStoreDocumentComponentReadOptions,
@@ -114,7 +111,8 @@ export type {
   ResolvedPrompt,
 } from '@use-crux/core'
 export {
-  convexRuntimeStore,
+  convexRuntimeRecords,
+  convexRuntimeStorage,
   getConvexCruxRuntime,
   resolveConvexMemoryNamespace,
   runWithConvexCruxRuntime,

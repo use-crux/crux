@@ -134,6 +134,16 @@ export interface ProjectRuntimeJoin {
   retrieverId?: string
   memoryId?: string
   memoryStoreId?: string
+  /** Runtime join key for a Storage Beta record-store definition. */
+  recordStoreId?: string
+  /** Runtime join key for a Storage Beta vector-store definition. */
+  vectorStoreId?: string
+  /** Runtime join key for a Storage Beta blob-store definition. */
+  blobStoreId?: string
+  /** Runtime join key for a Storage Beta bundle definition. */
+  storageId?: string
+  /** Runtime join key for a scoped Storage Beta wrapper definition. */
+  storageScopeId?: string
   ragPipelineId?: string
   workspaceId?: string
   routingId?: string
@@ -224,9 +234,33 @@ export interface ControlFacts {
 export interface DataAccessFact {
   targetId?: string
   targetVariable?: string
-  targetKind?: 'memory' | 'blackboard' | 'workspace' | 'store' | 'block'
+  targetKind?:
+    | 'memory'
+    | 'blackboard'
+    | 'workspace'
+    | 'store'
+    | 'block'
+    | 'storage.recordStore'
+    | 'storage.vectorStore'
+    | 'storage.blobStore'
+    | 'storage.bundle'
+    | 'storage.scope'
   key?: string
-  operation?: 'read' | 'write' | 'append' | 'update' | 'delete' | 'query'
+  operation?:
+    | 'read'
+    | 'write'
+    | 'append'
+    | 'update'
+    | 'delete'
+    | 'query'
+    | 'exists'
+    | 'stat'
+    | 'grep'
+    | 'artifacts'
+    | 'rename'
+    | 'move'
+    | 'copy'
+    | 'finalize'
   source?: { file: string; line: number; column?: number; function?: string }
 }
 
@@ -258,6 +292,16 @@ export interface DependencyFacts {
   blackboards?: string[]
   workspaces?: string[]
   stores?: string[]
+  /** Storage Beta record-store dependencies referenced by variable or definition id. */
+  recordStores?: string[]
+  /** Storage Beta vector-store dependencies referenced by variable or definition id. */
+  vectorStores?: string[]
+  /** Storage Beta blob-store dependencies referenced by variable or definition id. */
+  blobStores?: string[]
+  /** Storage Beta bundle dependencies referenced by variable or definition id. */
+  storage?: string[]
+  /** Scoped Storage Beta wrappers referenced by variable or definition id. */
+  storageScopes?: string[]
   blocks?: string[]
   routers?: string[]
   ragPipelines?: string[]
@@ -457,6 +501,7 @@ export type PrimitiveSpecificFacts =
       mounts?: Array<{ path: string; mode?: string }>
       hasTools?: boolean
     }
+  | StorageFacts
   | { kind: 'constraint' | 'guardrail'; appliesTo?: string[]; policy?: string; severity?: string }
   | {
       kind: 'scorer'
@@ -482,6 +527,66 @@ export type ProjectDefinitionFacts =
   | PrimitiveSpecificFacts
   | ({ kind: string; extensions?: Record<string, unknown> } & Record<string, unknown>)
 
+/** Project Index capability summary for Storage Beta definitions. */
+export interface IndexedStorageCapabilities {
+  /** JSON record-store capabilities when the definition is a record store or bundle. */
+  record?: {
+    /** TTL support: backend-native, adapter-managed lazy expiry, unsupported, or unknown statically. */
+    ttl?: 'native' | 'lazy' | false | 'unknown'
+    /** Exact top-level scalar filter support. */
+    filter?: 'native' | 'scan' | false | 'unknown'
+    /** Whether record watch subscriptions are available. */
+    watch?: boolean | 'unknown'
+    /** Whether native batch record operations are available. */
+    batch?: boolean | 'unknown'
+  }
+  /** Vector-index capabilities when the definition is a vector store or bundle. */
+  vector?: {
+    /** Whether dense-vector similarity search is available. */
+    dense?: boolean | 'unknown'
+    /** Whether sparse-vector search is available. */
+    sparse?: boolean | 'unknown'
+    /** Whether dense and sparse queries can be combined by the same store. */
+    hybrid?: boolean | 'unknown'
+    /** Supported hybrid result fusion algorithms, or `unknown` when the adapter cannot report them. */
+    fusion?: readonly ('rrf' | 'dbsf')[] | 'unknown'
+    /** Whether metadata filters run before vector search, after vector search, or not at all. */
+    filter?: 'pre' | 'post' | false | 'unknown'
+    /** Read-after-write visibility expected from the vector backend. */
+    consistency?: 'strong' | 'eventual' | 'unknown'
+  }
+  /** Blob-store capabilities when the definition is a blob store or bundle. */
+  blob?: {
+    /** Whether multipart uploads are available for large blobs. */
+    multipart?: boolean | 'unknown'
+    /** Whether the adapter can mint signed URLs for direct blob access. */
+    signedUrls?: boolean | 'unknown'
+    /** Maximum blob size in bytes when known statically. */
+    maxBytes?: number | 'unknown'
+  }
+}
+
+/** First-class Storage Beta definition facts emitted by Project Index. */
+export interface StorageFacts {
+  kind: 'storage.recordStore' | 'storage.vectorStore' | 'storage.blobStore' | 'storage.bundle' | 'storage.scope'
+  /** Store or bundle factory name when statically known, for example `inMemoryStorage`. */
+  backend?: string
+  /** Authored variable bound to this storage definition. */
+  variableName?: string
+  /** Capabilities provided by this storage definition, or `unknown` fields for conservative static output. */
+  capabilities?: IndexedStorageCapabilities
+  /** Record store variable or definition id used by a bundle. */
+  records?: string
+  /** Vector store variable or definition id used by a bundle. */
+  vectors?: string
+  /** Blob store variable or definition id used by a bundle. */
+  blobs?: string
+  /** Base storage variable or definition id wrapped by a scope. */
+  storage?: string
+  /** Key prefix used by a scoped storage wrapper when statically known. */
+  prefix?: string
+}
+
 export interface ProjectDefinitionMetadata extends Record<string, unknown> {
   argsSchema?: JsonSchema
   inputSchema?: JsonSchema
@@ -492,7 +597,7 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
     standalone: boolean
     parentDefinitionId?: string
     parentRelationType?: string
-    role?: 'step' | 'branch' | 'stage' | 'route' | 'tier' | 'option' | 'block' | 'store' | 'case'
+    role?: 'step' | 'branch' | 'stage' | 'route' | 'tier' | 'option' | 'block' | 'store' | 'storage' | 'case'
     order?: number
   }
   intelligence?: DefinitionIntelligence

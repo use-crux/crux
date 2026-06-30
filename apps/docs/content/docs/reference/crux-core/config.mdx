@@ -253,19 +253,19 @@ See [Prompt execution](/docs/guides/prompts/execution) and [Security warnings](/
 
 ## `persistence`
 
-Persistence config installs an explicit runtime store. Crux does not infer durability, tenancy, or data
+Persistence config installs explicit runtime records. Crux does not infer durability, tenancy, or data
 locality from source discovery.
 
-| Option              | Type        | Default     | Notes                                                                     |
-| ------------------- | ----------- | ----------- | ------------------------------------------------------------------------- |
-| `persistence.store` | `CruxStore` | `undefined` | Required for durable flows, plans, tasks, and Runtime Bridge store reads. |
+| Option                | Type          | Default     | Notes                                                                       |
+| --------------------- | ------------- | ----------- | --------------------------------------------------------------------------- |
+| `persistence.records` | `RecordStore` | `undefined` | Required for durable flows, plans, tasks, and Runtime Bridge record reads.  |
 
 ```ts title="crux.config.ts"
-import { inMemoryCruxStore } from '@use-crux/core/store'
+import { inMemoryRecordStore } from '@use-crux/core/storage'
 
 export default config({
   persistence: {
-    store: inMemoryCruxStore(),
+    records: inMemoryRecordStore(),
   },
 })
 ```

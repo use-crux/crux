@@ -208,11 +208,11 @@ const kit = await createAgentSkillKit(myPrompt, {
   persistence: {
     load: async () => {
       // Called before pre-resolve and each later resolveInput() call.
-      return (await store.get('activeSkills')) ?? null
+      return (await records.get('activeSkills')) ?? null
     },
     save: async (_target, snapshot) => {
       // Called after LoadSkill succeeds.
-      await store.set('activeSkills', snapshot)
+      await records.put('activeSkills', snapshot)
     },
   },
 })

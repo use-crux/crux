@@ -13,7 +13,7 @@ const board = blackboard({
     findings: z.array(z.string()),
     status: z.enum(['planning', 'researching', 'done']),
   }),
-  store: sharedStore,
+  records: sharedRecords,
 })
 
 // Write individual fields (validated per-field)
@@ -31,7 +31,7 @@ const unsubscribe = board.subscribe((fields) => {
 ```
 
 <Callout type="warn">
-Board writes are in-process only. For cross-process coordination (e.g., separate serverless invocations), provide a persistent `store` — see [Memory](/docs/guides/memory) for store options.
+Board writes are in-process only. For cross-process coordination (e.g., separate serverless invocations), provide persistent `records` — see [Memory](/docs/guides/memory) for storage options.
 </Callout>
 
 ## Prompt and tool integration

@@ -13,7 +13,7 @@ It is a good starting point when your source material already lives on disk and 
 - `@use-crux/core/indexing` for corpus sync, chunking, and write-time embedding
 - `@use-crux/core/retrieval` for query-time search and context injection
 - `@use-crux/ai` for execution and AI SDK reranking
-- `inMemoryDataStore()` and `inMemoryVectorStore()` for a lightweight local corpus
+- `inMemoryRecordStore()` and `inMemoryVectorStore()` for a lightweight local corpus
 
 ## Full code
 
@@ -43,9 +43,9 @@ export const dense = embedding({
 ### `lib/rag/store.ts`
 
 ```ts
-import { inMemoryDataStore, inMemoryVectorStore } from '@use-crux/core/storage'
+import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
 
-export const data = inMemoryDataStore()
+export const records = inMemoryRecordStore()
 export const vectors = inMemoryVectorStore()
 ```
 
@@ -56,12 +56,12 @@ import { corpus, indexer } from '@use-crux/core/indexing'
 import { filesSource } from '@use-crux/ingest/files'
 
 import { dense } from './embedding'
-import { data, vectors } from './store'
+import { records, vectors } from './store'
 
 export const docsIndexer = indexer({
   id: 'local-docs',
   namespace: 'local-docs',
-  data,
+  records,
   vectors,
   dense,
 })
@@ -69,7 +69,7 @@ export const docsIndexer = indexer({
 export const docsCorpus = corpus({
   id: 'local-docs',
   namespace: 'local-docs',
-  store: data,
+  records,
   indexer: docsIndexer,
 })
 
@@ -94,7 +94,7 @@ import { reranker } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 import { dense } from './embedding'
-import { data, vectors } from './store'
+import { records, vectors } from './store'
 
 const docsReranker = reranker({
   name: 'local-docs-reranker',
@@ -105,7 +105,7 @@ const docsReranker = reranker({
 export const docs = retriever({
   id: 'local-docs',
   namespace: 'local-docs',
-  data,
+  records,
   vectors,
   dense,
   search: { mode: 'dense', limit: 10 },
@@ -192,7 +192,7 @@ That split is what makes the recipe easy to evolve. If you later move from local
 
 If you want the cheapest possible version, skip the reranker and keep the retriever dense-only.
 
-If you want a persistent local-dev workflow, swap `inMemoryDataStore()` and `inMemoryVectorStore()` for production adapters and keep the same indexer and retriever shapes.
+If you want a persistent local-dev workflow, swap `inMemoryRecordStore()` and `inMemoryVectorStore()` for production adapters and keep the same indexer and retriever shapes.
 
 If you only need a throwaway fixture, you can call `docsIndexer.indexDocuments()` directly. For an app or background job that runs more than once, prefer `docsCorpus.sync()` so unchanged files do not rewrite the whole corpus.
 

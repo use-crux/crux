@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prompt as makePrompt } from '../../prompt/prompt'
 import { createSemanticCache, semanticCachePolicies } from '../../cache'
 import { embedding } from '../../embedding'
-import { inMemoryCruxStore } from '../../store'
+import { inMemoryStorage } from '../../storage'
 import { applyPlugins } from '../../runtime/plugin'
 import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
 import { orchestrateGenerate, orchestrateStream } from '../../generation/orchestrate'
@@ -60,7 +60,7 @@ describe('createSemanticCache', () => {
     it('requires a dense embedding', () => {
     expect(() =>
       createSemanticCache({
-        store: inMemoryCruxStore(),
+        storage: inMemoryStorage(),
         embedding: sparseEmbedding() as any,
         ttl: 1000,
         scope: 'global',
@@ -71,7 +71,7 @@ describe('createSemanticCache', () => {
     it('requires ttl', () => {
     expect(() =>
       createSemanticCache({
-        store: inMemoryCruxStore(),
+        storage: inMemoryStorage(),
         embedding: denseEmbedding(),
         ttl: 0,
         scope: 'global',
@@ -101,10 +101,10 @@ describe('createSemanticCache', () => {
   })
 
     it('writes on miss and hydrates a cached structured result on semantic hit', async () => {
-    const store = inMemoryCruxStore()
+    const storage = inMemoryStorage()
     install(
       createSemanticCache({
-        store,
+        storage,
         embedding: denseEmbedding(),
         ttl: 60_000,
         scope: ({ input }) => String(input.userId),
@@ -152,7 +152,7 @@ describe('createSemanticCache', () => {
     it('isolates hits by scope', async () => {
     install(
       createSemanticCache({
-        store: inMemoryCruxStore(),
+        storage: inMemoryStorage(),
         embedding: denseEmbedding(),
         ttl: 60_000,
         scope: ({ input }) => String(input.userId),
@@ -185,7 +185,7 @@ describe('createSemanticCache', () => {
     it('honors shouldCache policies', async () => {
     install(
       createSemanticCache({
-        store: inMemoryCruxStore(),
+        storage: inMemoryStorage(),
         embedding: denseEmbedding(),
         ttl: 60_000,
         scope: 'global',
@@ -217,7 +217,7 @@ describe('createSemanticCache', () => {
     it('returns a synthetic cached stream replay', async () => {
     install(
       createSemanticCache({
-        store: inMemoryCruxStore(),
+        storage: inMemoryStorage(),
         embedding: denseEmbedding(),
         ttl: 60_000,
         scope: 'global',

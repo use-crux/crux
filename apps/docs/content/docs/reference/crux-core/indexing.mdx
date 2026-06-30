@@ -29,7 +29,7 @@ import type {
 - versioned document transforms, chunkers, and chunk transforms
 - dense and sparse embedding at write time
 - generation-aware replacement
-- `DataStore` and `VectorStore` writes
+- `RecordStore` and `VectorStore` writes
 - source replacement and clearing
 
 It does not load files or URLs. That belongs to `@use-crux/ingest`.
@@ -44,7 +44,7 @@ The easiest way to think about an indexer is that it turns source material into 
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
 })
@@ -65,7 +65,7 @@ await docsIndexer.indexDocuments([
 const docsCorpus = corpus({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   indexer: docsIndexer,
 })
 
@@ -81,7 +81,7 @@ await docsCorpus.sync(source.load(), {
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -94,7 +94,7 @@ const docsIndexer = indexer({
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   cache: true,
@@ -120,7 +120,7 @@ const docsIndexer = indexer({
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   pipeline: indexingPipeline({
@@ -139,7 +139,7 @@ const docsIndexer = indexer({
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   pipeline: indexingPipeline({
@@ -160,7 +160,7 @@ const docsIndexer = indexer({
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -182,7 +182,7 @@ const docsIndexer = indexer({
 | ----------- | ---------------------- | --------------------------------------------------- |
 | `id`        | `string`               | Stable indexer identifier                           |
 | `namespace` | `string`               | Required corpus boundary                            |
-| `data`      | `DataStore`            | Chunk, parent, and corpus record storage           |
+| `records`   | `RecordStore`            | Chunk, parent, and corpus record storage           |
 | `vectors`   | `VectorStore?`         | Dense, sparse, or hybrid vector index              |
 | `dense`     | `DenseEmbedding?`      | Dense write-time embedding                          |
 | `sparse`    | `SparseEmbedding?`     | Sparse write-time embedding                         |
@@ -367,7 +367,7 @@ Behavior:
 - Persists active searchable child chunks through the same read model.
 - Child chunks include parent refs and optional parent title.
 - Store-backed retrievers search active child chunks only through the read-model boundary.
-- `parentExpand({ store })` resolves parent refs through the indexed read model to enrich hits with parent content while preserving child identity and score.
+- `parentExpand({ records })` resolves parent refs through the indexed read model to enrich hits with parent content while preserving child identity and score.
 
 ### `chunker.semantic(options)`
 
@@ -569,7 +569,7 @@ Dry runs also return prepared parent records and pipeline stages when the config
 const docsCorpus = corpus({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   indexer: docsIndexer,
 })
 
@@ -583,7 +583,7 @@ const result = await docsCorpus.sync(docs, {
 | ----------- | ------------------- | ----------------------------------------------------------- |
 | `id`        | `string`            | Stable corpus identifier                                    |
 | `namespace` | `string`            | Must match the wrapped indexer namespace                    |
-| `data`      | `DataStore`         | Stores source ledger records                                |
+| `records`   | `RecordStore`         | Stores source ledger records                                |
 | `indexer`   | `Indexer`           | Performs chunking, embedding, and chunk writes              |
 | `hash?`     | `SourceHashOptions` | Customize metadata hashing and volatile metadata exclusions |
 

@@ -10,7 +10,7 @@
  */
 
 import type { DenseEmbedding, SparseEmbedding } from '../embedding'
-import type { CruxStore, DataStore, JsonObject, Storage, VectorStore } from '../store/types'
+import type { JsonObject, RecordStore, Storage, VectorStore } from '../storage'
 
 /** A loaded source document, optionally split into typed parts. */
 export interface CruxDocument {
@@ -151,7 +151,7 @@ export type PipelineCacheConfig =
   | false
   | true
   | {
-      store?: DataStore
+      records?: RecordStore
       scope?: string
     }
 
@@ -336,10 +336,9 @@ export interface Indexer {
 export interface IndexerConfig {
   id: string
   namespace: string
-  data?: DataStore
+  records?: RecordStore
   vectors?: VectorStore
   storage?: Storage
-  store?: CruxStore
   dense?: DenseEmbedding
   sparse?: SparseEmbedding
   pipeline?: IndexingPipeline
@@ -379,7 +378,7 @@ export interface SourceStageRecord {
 }
 
 /** The persisted state of a corpus source. */
-export interface SourceRecord extends JsonObject {
+export interface SourceRecord {
   readonly _tag: 'SourceRecord'
   corpusId: string
   namespace: string
@@ -433,8 +432,7 @@ export interface SourceHashInput {
 export interface CorpusConfig {
   id: string
   namespace: string
-  data?: DataStore
-  store?: CruxStore
+  records?: RecordStore
   indexer: Indexer
   hash?: SourceHashOptions
   indexVersion?: string

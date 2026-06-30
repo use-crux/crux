@@ -15,7 +15,7 @@ import { listAll, sourceKey, sourcePrefixKey } from './keys'
 import { emitCorpusSyncArtifact, emitIngestLoadObservation, emitProgress } from './observability'
 import {
   classifySource,
-  getCorpusDataStore,
+  getCorpusRecordStore,
   isFailedLoadResult,
   isSourceRecord,
   isSuccessfulLoadResult,
@@ -50,7 +50,7 @@ import type {
  */
 export function corpus(config: CorpusConfig): Corpus {
   validateCorpusConfig(config)
-  const dataStore = getCorpusDataStore(config)
+  const recordStore = getCorpusRecordStore(config)
 
   async function sync(
     documentsInput:
@@ -107,7 +107,7 @@ export function corpus(config: CorpusConfig): Corpus {
             if (!dryRun && input.sourceId) {
               const existing = await getSource(input.sourceId)
               const now = Date.now()
-              await dataStore.set(sourceKey(config.id, config.namespace, input.sourceId), {
+              await recordStore.put(sourceKey(config.id, config.namespace, input.sourceId), {
                 _tag: 'SourceRecord',
                 corpusId: config.id,
                 namespace: config.namespace,
@@ -131,7 +131,7 @@ export function corpus(config: CorpusConfig): Corpus {
                 lastSyncRunId: syncId,
                 lastError: sourceError,
                 errors: [...(existing?.errors ?? []), sourceError],
-              } satisfies SourceRecord)
+              } as unknown as import('../storage').JsonObject)
             }
 
             sourceResults.push(
@@ -226,7 +226,7 @@ export function corpus(config: CorpusConfig): Corpus {
             }
             if (!dryRun) {
               const now = Date.now()
-              await dataStore.set(sourceKey(config.id, config.namespace, document.sourceId), {
+              await recordStore.put(sourceKey(config.id, config.namespace, document.sourceId), {
                 _tag: 'SourceRecord',
                 corpusId: config.id,
                 namespace: config.namespace,
@@ -247,7 +247,7 @@ export function corpus(config: CorpusConfig): Corpus {
                 lastSyncRunId: syncId,
                 errors: existing?.errors ?? [],
                 ...(indexResult.stages ? { stages: indexResult.stages } : {}),
-              } satisfies SourceRecord)
+              } as unknown as import('../storage').JsonObject)
             }
 
             const result = emitProgress(options, {
@@ -273,7 +273,7 @@ export function corpus(config: CorpusConfig): Corpus {
             if (!dryRun && document.sourceId) {
               const existing = await getSource(document.sourceId)
               const now = Date.now()
-              await dataStore.set(sourceKey(config.id, config.namespace, document.sourceId), {
+              await recordStore.put(sourceKey(config.id, config.namespace, document.sourceId), {
                 _tag: 'SourceRecord',
                 corpusId: config.id,
                 namespace: config.namespace,
@@ -298,7 +298,7 @@ export function corpus(config: CorpusConfig): Corpus {
                 lastSyncRunId: syncId,
                 lastError: sourceError,
                 errors: [...(existing?.errors ?? []), sourceError],
-              } satisfies SourceRecord)
+              } as unknown as import('../storage').JsonObject)
             }
 
             const result = emitProgress(options, {
@@ -393,18 +393,16 @@ export function corpus(config: CorpusConfig): Corpus {
   }
 
   async function getSource(sourceId: string): Promise<SourceRecord | null> {
-    const value = await dataStore.get(sourceKey(config.id, config.namespace, sourceId))
+    const value = await recordStore.get(sourceKey(config.id, config.namespace, sourceId))
     return isSourceRecord(value) ? value : null
   }
 
   async function listSources(options: SourceListOptions = {}): Promise<SourceRecord[]> {
-    const entries = await listAll(dataStore, sourcePrefixKey(config.id, config.namespace))
+    const entries = await listAll(recordStore, sourcePrefixKey(config.id, config.namespace))
     const statuses = options.status
       ? new Set(Array.isArray(options.status) ? options.status : [options.status])
       : undefined
-    let sources = entries
-      .map((entry) => entry.value)
-      .filter(isSourceRecord)
+    let sources = entries.flatMap((entry) => (isSourceRecord(entry.value) ? [entry.value] : []))
       .filter((source) => (options.includeDeleted ? true : source.status !== 'deleted'))
       .filter((source) => (statuses ? statuses.has(source.status) : true))
 
@@ -418,7 +416,7 @@ export function corpus(config: CorpusConfig): Corpus {
     const existing = await getSource(sourceId)
     const deletedCount = await config.indexer.deleteSource(sourceId)
     const now = Date.now()
-    await dataStore.set(sourceKey(config.id, config.namespace, sourceId), {
+    await recordStore.put(sourceKey(config.id, config.namespace, sourceId), {
       _tag: 'SourceRecord',
       corpusId: config.id,
       namespace: config.namespace,
@@ -436,7 +434,7 @@ export function corpus(config: CorpusConfig): Corpus {
       firstSeenAt: existing?.firstSeenAt ?? now,
       deletedAt: now,
       errors: existing?.errors ?? [],
-    } satisfies SourceRecord)
+    } as unknown as import('../storage').JsonObject)
     return { sourceId, deletedCount }
   }
 

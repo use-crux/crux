@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { prompt } from '../../prompt/prompt'
-import { inMemoryDataStore } from '../../storage'
+import { inMemoryRecordStore } from '../../storage'
 import { workspace } from '../../workspace'
 
 describe('workspace manifest', () => {
@@ -8,7 +8,7 @@ describe('workspace manifest', () => {
     const ws = workspace({
       id: 'research',
       namespace: 'thread:1',
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     })
 
     for (let index = 0; index < 500; index += 1) {

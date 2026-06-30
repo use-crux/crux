@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { resetObservabilityRuntime } from "@use-crux/core/observability";
-import { inMemoryDataStore, workspace } from "@use-crux/core";
+import { inMemoryRecordStore, workspace } from "@use-crux/core";
 import { withTelemetry } from "../index";
 import type { TraceSpan } from "../types";
 
@@ -19,7 +19,7 @@ describe("workspace OTel privacy", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/secret-name.md", "classified");
@@ -46,7 +46,7 @@ describe("workspace OTel privacy", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/a.md", "alpha");

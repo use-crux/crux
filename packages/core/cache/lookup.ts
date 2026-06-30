@@ -14,8 +14,8 @@ import { getRuntime } from '../runtime/runtime'
 import type { MiddlewareResult } from '../runtime/types'
 import { buildHitMeta, hydrateResult, lookupEntry, resultKindFromArgs } from './entry'
 import { emitSemanticCacheArtifact } from './observability'
-import { hashStable, resolveQueryText } from './query'
-import type { SemanticCacheCall, SemanticCacheEntry } from './types'
+import { hashStable, resolveQueryText, resolveSemanticCacheStores } from './query'
+import type { SemanticCacheCall } from './types'
 
 /**
  * Run the cache lookup phase for a call.
@@ -25,6 +25,7 @@ import type { SemanticCacheCall, SemanticCacheEntry } from './types'
  */
 export async function performLookup(call: SemanticCacheCall): Promise<MiddlewareResult | undefined> {
   const { config, namespace, args, promptHint, cacheId, scopeHash } = call
+  const stores = resolveSemanticCacheStores(config)
   const { promptId, operation, version, mode, toolsPresent, threshold: effectiveThreshold } = call.lookupCtx
 
   const lookupStarted = Date.now()
@@ -57,7 +58,7 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
       queryHash = hashStable(queryText)
 
 
-      const hit = await lookupEntry(config.store, {
+      const hit = await lookupEntry(stores.records, stores.vectors, {
         namespace,
         promptId,
         scopeHash,
@@ -69,7 +70,7 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
 
 
       if (hit) {
-        const entry = hit.value as SemanticCacheEntry
+        const entry = hit.value
         const ageMs = Date.now() - entry.createdAt
         observe.event({
           name: 'semantic-cache.hit',

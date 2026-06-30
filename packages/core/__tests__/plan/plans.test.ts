@@ -1,13 +1,13 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { inMemoryCruxStore } from '../../store/memory'
+import { inMemoryRecordStore } from '../../storage'
 import { plan, getPlan, updatePlan } from '../../plan/plans'
 import { updateRuntime, resetRuntime } from '../../runtime/runtime'
 import type { CreatePlanInput, JsonObject, PlanUpdate } from '../../plan/types'
 
 /** Create a fresh store and register it in the runtime. */
 function setup() {
-  const store = inMemoryCruxStore()
-  updateRuntime({ store })
+  const store = inMemoryRecordStore()
+  updateRuntime({ records: store })
   return store
 }
 

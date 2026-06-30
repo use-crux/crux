@@ -6,7 +6,7 @@ import {
   type SparseVector,
 } from '../../embedding'
 import { resetRuntime, updateRuntime } from '../../runtime/runtime'
-import { inMemoryCruxStore } from '../../store'
+import { inMemoryRecordStore } from '../../storage'
 
 describe('embedding', () => {
   it('creates a dense embedding with single and batch helpers', async () => {
@@ -211,7 +211,7 @@ describe('embedding', () => {
   })
 
     it('caches normalized dense inputs while preserving output order', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
     const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length]))
     const dense = makeEmbedding({
       kind: 'dense',
@@ -220,7 +220,7 @@ describe('embedding', () => {
       maxInputTokens: 100,
       batch: { maxSize: 10 },
       preprocess: normalizeText({ trim: true, collapseWhitespace: true }),
-      cache: embeddingCache({ store, namespace: 'embeddings' }),
+      cache: embeddingCache({ records, namespace: 'embeddings' }),
       embed,
     })
 
@@ -231,7 +231,7 @@ describe('embedding', () => {
   })
 
     it('keeps cache keys separate when preprocessing policy changes', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
     const upperEmbed = vi.fn(async (texts: string[]) => texts.map((text) => [text.charCodeAt(0)]))
     const lowerEmbed = vi.fn(async (texts: string[]) => texts.map((text) => [text.charCodeAt(0)]))
 
@@ -242,7 +242,7 @@ describe('embedding', () => {
       maxInputTokens: 100,
       batch: { maxSize: 10 },
       preprocess: normalizeText({ trim: true }),
-      cache: embeddingCache({ store, namespace: 'embeddings' }),
+      cache: embeddingCache({ records, namespace: 'embeddings' }),
       embed: upperEmbed,
     })
     const lower = makeEmbedding({
@@ -252,7 +252,7 @@ describe('embedding', () => {
       maxInputTokens: 100,
       batch: { maxSize: 10 },
       preprocess: normalizeText({ trim: true, lowercase: true }),
-      cache: embeddingCache({ store, namespace: 'embeddings' }),
+      cache: embeddingCache({ records, namespace: 'embeddings' }),
       embed: lowerEmbed,
     })
 

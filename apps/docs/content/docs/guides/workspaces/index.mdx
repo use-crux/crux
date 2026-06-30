@@ -160,7 +160,7 @@ which GCs the oldest snapshots (and their blobs):
 const ws = workspace({
   id: "research",
   namespace,
-  storage: storage({ data, blobs }),
+  storage: storage({ records, blobs }),
   versioning: { maxVersions: 20 },
 });
 ```
@@ -177,7 +177,7 @@ import { storage } from "@use-crux/core/storage";
 
 workspace({
   storage: storage({
-    data, // metadata + small inline text/json
+    records, // metadata + small inline text/json
     blobs, // binary and large payloads
   }),
   content: {
@@ -188,7 +188,7 @@ workspace({
 
 Rules:
 
-- Small text and JSON can live inline in `DataStore`.
+- Small text and JSON can live inline in `RecordStore`.
 - Large text goes to `BlobStore`.
 - Binary always goes to `BlobStore`.
 - Writing binary or oversized content without `blobs` throws clearly.
@@ -205,7 +205,7 @@ calls can pass an override:
 const ws = workspace({
   id: "research",
   namespace: ({ input }) => `thread:${input.threadId}`,
-  storage: storage({ data, blobs }),
+  storage: storage({ records, blobs }),
 });
 
 await ws.write("/workspace/notes.md", "# Notes", { namespace: "thread:123" });
@@ -224,7 +224,7 @@ Operator controls live on the workspace config:
 const ws = workspace({
   id: "research",
   namespace,
-  storage: storage({ data, blobs }),
+  storage: storage({ records, blobs }),
   retention: { ttlMs: 1000 * 60 * 60 * 24 },
   limits: {
     maxFileBytes: 1_000_000,
@@ -233,7 +233,7 @@ const ws = workspace({
 });
 ```
 
-`retention.ttlMs` is passed to the data store only when the store supports TTL.
+`retention.ttlMs` is passed to the record store only when the store supports TTL.
 `maxFileBytes` rejects one oversized write, and `maxNamespaceBytes` rejects writes
 that would push the namespace total over its cap. The namespace quota counts live
 files only, not historical snapshots — bound history storage with
@@ -290,7 +290,7 @@ working copy.)
 const ws = workspace({
   id: "research",
   namespace,
-  storage: storage({ data, blobs }),
+  storage: storage({ records, blobs }),
   mounts: [
     {
       path: "/sources",
@@ -323,14 +323,14 @@ Multiple workspaces need prefixes so tool names do not collide:
 const research = workspace({
   id: "research",
   namespace,
-  storage: storage({ data, blobs }),
+  storage: storage({ records, blobs }),
   tools: { prefix: "research" },
 });
 
 const drafts = workspace({
   id: "drafts",
   namespace,
-  storage: storage({ data, blobs }),
+  storage: storage({ records, blobs }),
   tools: { prefix: "drafts" },
 });
 
@@ -351,7 +351,7 @@ Delete is intentionally not injected by default:
 const ws = workspace({
   id: "research",
   namespace,
-  storage: storage({ data, blobs }),
+  storage: storage({ records, blobs }),
   tools: {
     delete: true,
   },
@@ -381,7 +381,7 @@ Prefixes change the final tool names, so match the generated names.
 
 ## Convex
 
-Convex apps use `defineConvexStoreContract().store(ctx)` for workspace metadata and `convexWorkspaceBlobStore()` for binary/large payloads. See the [Convex guide](/docs/guides/convex) for the complete setup and runtime caveats.
+Convex apps use `convexRecordStore({ component, ctx })` for workspace metadata and `convexWorkspaceBlobStore()` for binary/large payloads. See the [Convex guide](/docs/guides/convex) for the complete setup and runtime caveats.
 
 ## Devtools
 

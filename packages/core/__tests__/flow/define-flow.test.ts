@@ -1,14 +1,14 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { flow as makeFlow, signalFlow, cancelFlow, type FlowHandle, type FlowRunOptions } from '../../flow/scope'
 import { updateRuntime, resetRuntime } from '../../runtime/runtime'
-import { inMemoryCruxStore } from '../../store/memory'
-import type { CruxStore } from '../../store/types'
+import { inMemoryRecordStore } from '../../storage'
+import type { RecordStore } from '../../storage'
 
-let store: CruxStore
+let store: RecordStore
 
 function setupStore() {
-  store = inMemoryCruxStore()
-  updateRuntime({ store })
+  store = inMemoryRecordStore()
+  updateRuntime({ records: store })
   return store
 }
 

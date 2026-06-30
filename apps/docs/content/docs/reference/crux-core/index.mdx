@@ -98,7 +98,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   />
   <Card
     title="Storage"
-    description="DataStore, VectorStore, BlobStore, and compatibility store interfaces."
+    description="RecordStore, VectorStore, BlobStore, and storage bundles."
     href="/docs/reference/crux-core/storage"
   />
   <Card
@@ -214,7 +214,7 @@ For defaults, stability notes, and every nested option, see [Config](/docs/refer
 | `lint`                        | `CruxLintConfig`           | Project Index lint profile and rule overrides.                                       |
 | `indexer`                     | `CruxIndexerConfig`        | Extension references, extension trust policy, and indexer rule options.              |
 | `experimental`                | `CruxExperimentalConfig`   | Unstable opt-in tooling features such as the TypeScript-Go semantic indexer backend. |
-| `persistence.store`           | `CruxStore`                | Explicit runtime persistence for flows, plans, and bridge reads.                     |
+| `persistence.records`         | `RecordStore`                | Explicit runtime persistence for flows, plans, and bridge reads.                     |
 | `generation.middleware`       | `PromptMiddleware`         | Global generate/stream wrapper.                                                      |
 | `generation.tokenizer`        | `(text: string) => number` | Custom token counting.                                                               |
 | `generation.autoEscape`       | `boolean`                  | Auto-escape XML-like user input. Defaults to `true`.                                 |
@@ -462,7 +462,7 @@ Use `retriever()` as the app-facing search object:
 const docs = retriever({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -482,7 +482,7 @@ const answer = prompt({
 | `id`        | `string`                                       | Stable retriever identifier                      |
 | `indexerId` | `string?`                                      | Writer indexer id when it differs from `id`      |
 | `namespace` | `string`                                       | Required corpus boundary                         |
-| `data`      | `DataStore?`                                   | JSON record hydration for store-backed retrieval |
+| `records`   | `RecordStore?`                                   | JSON record hydration for record-backed retrieval |
 | `vectors`   | `VectorStore?`                                 | Dense, sparse, or hybrid vector search           |
 | `dense`     | `DenseEmbedding?`                              | Dense query embedding                            |
 | `sparse`    | `SparseEmbedding?`                             | Sparse query embedding                           |
@@ -510,7 +510,7 @@ Creates the write-time document indexing primitive. It owns chunking, transforms
 | ------------ | ------------------- | ---------------------------------------- |
 | `id`         | `string`            | Stable indexer identifier                |
 | `namespace`  | `string`            | Required corpus boundary                 |
-| `data`       | `DataStore`         | Chunk, parent, and corpus record storage |
+| `records`    | `RecordStore`         | Chunk, parent, and corpus record storage |
 | `vectors`    | `VectorStore?`      | Dense, sparse, or hybrid vector index    |
 | `dense`      | `DenseEmbedding?`   | Dense write-time embedding               |
 | `sparse`     | `SparseEmbedding?`  | Sparse write-time embedding              |
@@ -583,4 +583,4 @@ import type {
 
 - Guide: [Foundations](/docs/foundations) — mental model and primitives tour
 - Reference: [Adapters](/docs/reference/adapters) — execution layer
-- Reference: [Storage](/docs/reference/storage) — persistent DataStore, VectorStore, and BlobStore implementations
+- Reference: [Storage](/docs/reference/storage) — persistent RecordStore, VectorStore, and BlobStore implementations

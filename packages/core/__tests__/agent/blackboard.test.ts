@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
 import { blackboard as makeBlackboard } from '../../agent/blackboard'
-import { inMemoryCruxStore as inMemoryStore } from '../../store/memory'
+import { inMemoryRecordStore as inMemoryStore } from '../../storage'
 
 const testSchema = z.object({
   goal: z.string(),
@@ -67,7 +67,7 @@ describe('blackboard', () => {
 
     it('uses custom store', async () => {
     const store = inMemoryStore()
-    const board = makeBlackboard({ id: 'test', schema: testSchema, store })
+    const board = makeBlackboard({ id: 'test', schema: testSchema, records: store })
     await board.set('goal', 'Stored')
 
     const entry = await store.get('blackboard:test')

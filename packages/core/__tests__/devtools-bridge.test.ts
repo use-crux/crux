@@ -14,7 +14,7 @@ import {
 } from '../runtime-bridge'
 import { clearInspectableResources } from '../runtime-bridge/resources'
 import { memory, recentMessages } from '../memory'
-import { inMemoryCruxStore } from '../store'
+import { inMemoryRecordStore } from '../storage'
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = []
@@ -162,7 +162,7 @@ describe('devtools runtime bridge contract', () => {
         serverUrl: 'http://localhost:4400',
         bridge: true,
       },
-      store: {},
+      records: inMemoryRecordStore(),
       eval: { include: './evals/**/*.eval.ts' },
     })
 
@@ -183,7 +183,7 @@ describe('devtools runtime bridge contract', () => {
           serverUrl: 'https://project.convex.site',
           bridge: true,
         },
-        store: {},
+        records: inMemoryRecordStore(),
       },
       {
         environment: 'convex',
@@ -232,7 +232,7 @@ describe('devtools runtime bridge contract', () => {
           serverUrl: 'http://localhost:4400',
           bridge: true,
         },
-        store: {},
+        records: inMemoryRecordStore(),
       },
       {
         WebSocket: FakeWebSocket,
@@ -260,21 +260,15 @@ describe('devtools runtime bridge contract', () => {
   })
 
     it('executes store.read commands over the websocket peer', async () => {
-    const store = {
-      async get(key: string) {
-        return { key, ok: true }
-      },
-      async list(prefix: string) {
-        return { entries: [{ key: `${prefix}1`, value: { ok: true } }] }
-      },
-    }
+    const records = inMemoryRecordStore()
+    await records.put('memory:1', { key: 'memory:1', ok: true })
     connectRuntimeBridge(
       {
         devtools: {
           serverUrl: 'http://localhost:4400',
           bridge: true,
         },
-        store,
+        records,
       },
       { WebSocket: FakeWebSocket },
     )
@@ -305,12 +299,10 @@ describe('devtools runtime bridge contract', () => {
   })
 
     it('includes normalized error details when websocket command execution fails', async () => {
-    const store = {
+    const records = {
+      ...inMemoryRecordStore(),
       async get() {
         throw new Error('store exploded')
-      },
-      async list() {
-        return { entries: [] }
       },
     }
     connectRuntimeBridge(
@@ -319,7 +311,7 @@ describe('devtools runtime bridge contract', () => {
           serverUrl: 'http://localhost:4400',
           bridge: true,
         },
-        store,
+        records,
       },
       { WebSocket: FakeWebSocket },
     )
@@ -367,14 +359,7 @@ describe('devtools runtime bridge contract', () => {
 
     const crux = config({
       persistence: {
-        store: {
-          async get() {
-            return null
-          },
-          async list() {
-            return { entries: [] }
-          },
-        },
+        records: inMemoryRecordStore(),
       },
       devtools: {
         bridge: {
@@ -400,14 +385,14 @@ describe('devtools runtime bridge contract', () => {
   })
 
     it('advertises resources automatically registered by primitives', () => {
-    const store = inMemoryCruxStore()
+    const store = inMemoryRecordStore()
     memory({
       id: 'project-memory',
       namespace: 'project-1',
-      store,
+      records: store,
       blocks: [recentMessages({ id: 'recent' })],
     })
-    blackboard({ id: 'thread', schema: z.object({ status: z.string().optional() }), store })
+    blackboard({ id: 'thread', schema: z.object({ status: z.string().optional() }), records: store })
 
     const manifest = getRuntimeBridgeManifest({
       devtools: { serverUrl: 'http://localhost:4400', bridge: true },
@@ -423,8 +408,8 @@ describe('devtools runtime bridge contract', () => {
   })
 
     it('reads an automatically registered blackboard resource without a manual key', async () => {
-    const store = inMemoryCruxStore()
-    const board = blackboard({ id: 'thread', schema: z.object({ status: z.string() }), store })
+    const store = inMemoryRecordStore()
+    const board = blackboard({ id: 'thread', schema: z.object({ status: z.string() }), records: store })
     await board.set('status', 'ready')
 
     await expect(
@@ -447,13 +432,13 @@ describe('devtools runtime bridge contract', () => {
     })
   })
 
-    it('infers memory resources from trace ids when a readable runtime store is available', async () => {
-    const store = inMemoryCruxStore()
-    await store.set('memory:dynamic:thread-1:block:recent:000001', { role: 'user', content: 'hello' })
+    it('infers memory resources from trace ids when readable runtime records are available', async () => {
+    const store = inMemoryRecordStore()
+    await store.put('memory:dynamic:thread-1:block:recent:000001', { role: 'user', content: 'hello' })
 
     await expect(
       executeRuntimeBridgeCommand(
-        { store },
+        { records: store },
         {
           type: 'command.request',
           commandId: 'cmd_memory',

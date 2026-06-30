@@ -1,6 +1,6 @@
 ---
 title: Setup
-description: Install @use-crux/convex, register the component, and create a shared Crux store helper.
+description: Install @use-crux/convex, register the component, and create shared Crux storage helpers.
 ---
 
 # Convex Setup
@@ -37,23 +37,21 @@ Run Convex codegen after adding the component so `components.crux` exists:
 npx convex dev
 ```
 
-## Create A Store Helper
+## Create A Record Helper
 
-Create one small helper and reuse it everywhere you need a Crux store.
+Create one small helper and reuse it everywhere you need Crux records.
 
-```ts title="convex/crux/store.ts"
+```ts title="convex/crux/storage.ts"
 import type { ActionCtx, MutationCtx } from '../_generated/server'
 import { components } from '../_generated/api'
-import { defineConvexStoreContract } from '@use-crux/convex'
+import { convexRecordStore } from '@use-crux/convex'
 
-const cruxDocuments = defineConvexStoreContract({ component: components.crux })
-
-export function cruxStore(ctx: ActionCtx | MutationCtx) {
-  return cruxDocuments.store(ctx)
+export function cruxRecords(ctx: ActionCtx | MutationCtx) {
+  return convexRecordStore({ component: components.crux, ctx })
 }
 ```
 
-Use this store for memory blocks, blackboards, plans, prompt cache data, and workspace metadata. Use a separate dedicated store or component instance for semantic cache entries if you need isolated vector search behavior.
+Use these records for memory blocks, blackboards, plans, prompt cache data, and workspace metadata. Use a separate dedicated component instance or vector namespace for semantic cache entries if you need isolated vector search behavior.
 
 ## Create An Agent Profile
 
@@ -71,16 +69,16 @@ export const crux = createCruxConvex({
 })
 ```
 
-Use `crux.convexAgent({ prompt, languageModel, ... })` when Crux should resolve the prompt for each Convex Agent turn. Use `crux.store(ctx)` for a request-scoped store and `crux.run(ctx, target, fn)` for lower-level integrations that need Convex-bound memory/tools outside the profile-backed helper.
+Use `crux.convexAgent({ prompt, languageModel, ... })` when Crux should resolve the prompt for each Convex Agent turn. Use `crux.storage(ctx)` for request-scoped storage and `crux.run(ctx, target, fn)` for lower-level integrations that need Convex-bound memory/tools outside the profile-backed helper.
 
-If tests, migrations, or alternate storage need to replace the default component store, configure one profile-level store factory:
+If tests, migrations, or alternate storage need to replace the default component-backed storage, configure one profile-level storage factory:
 
 ```ts title="convex/crux/profile.ts"
 export const crux = createCruxConvex({
   components: { crux: components.crux, agent: components.agent },
-  store: {
+  storage: {
     create(ctx, defaults) {
-      return defaults.createComponentStore(ctx)
+      return defaults.createComponentStorage(ctx)
     },
   },
 })
@@ -99,7 +97,7 @@ export const runtime = createConvexRuntimeBridge({
 })
 ```
 
-The bridge exposes the same `store(ctx)`, `run(ctx, target, fn)`, and `bridge(http, cruxConfig)` methods as the runtime part of `createCruxConvex()`. `createCruxConvex()` delegates those methods to this lower-level bridge.
+The bridge exposes the same `storage(ctx)`, `run(ctx, target, fn)`, and `bridge(http, cruxConfig)` methods as the runtime part of `createCruxConvex()`. `createCruxConvex()` delegates those methods to this lower-level bridge.
 
 ## Runtime Layout
 
@@ -110,7 +108,7 @@ convex/
   prompts/
     support.ts          # prompt(), context(), agent() definitions
   crux/
-    store.ts            # cruxStore(ctx) for storage-only code
+    storage.ts          # cruxRecords(ctx) for record-only code
     profile.ts          # createCruxConvex({ components }) for profile-backed Convex Agent code
     runtime.ts          # createConvexRuntimeBridge({ component }) for bridge-only/runtime-only code
   chat/
@@ -158,7 +156,7 @@ crux.bridge(http, cruxConfig)
 export default http
 ```
 
-This registers `GET /crux/bridge`, `POST /crux/bridge`, and `OPTIONS /crux/bridge`. The Go devtools backend calls that endpoint for read-only live-runtime commands such as `store.read`. The profile bridge uses the same request-scoped store path as `crux.run()` and `crux.convexAgent()`, so memory and blackboard resources can be inspected by resource id without separately registering every store. The manifest uses the actual HTTP Actions URL from the request unless you pass an explicit `url`, and invalid command bodies return structured bridge errors. Treat the bridge as trusted local-dev infrastructure; do not expose it as a public application RPC surface.
+This registers `GET /crux/bridge`, `POST /crux/bridge`, and `OPTIONS /crux/bridge`. The Go devtools backend calls that endpoint for read-only live-runtime commands such as `store.read`. The profile bridge uses the same request-scoped storage path as `crux.run()` and `crux.convexAgent()`, so memory and blackboard resources can be inspected by resource id without separately registering every store. The manifest uses the actual HTTP Actions URL from the request unless you pass an explicit `url`, and invalid command bodies return structured bridge errors. Treat the bridge as trusted local-dev infrastructure; do not expose it as a public application RPC surface.
 
 ## Next
 

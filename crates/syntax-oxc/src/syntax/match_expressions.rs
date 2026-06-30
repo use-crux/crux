@@ -83,6 +83,21 @@ pub(crate) fn visit_expression(
                 matches,
             );
         }
+        Expression::ConditionalExpression(conditional) => {
+            visit_expression(context, &conditional.test, scoped_initializers, matches);
+            visit_expression(
+                context,
+                &conditional.consequent,
+                scoped_initializers,
+                matches,
+            );
+            visit_expression(
+                context,
+                &conditional.alternate,
+                scoped_initializers,
+                matches,
+            );
+        }
         Expression::UnaryExpression(unary_expression) => {
             visit_expression(
                 context,
@@ -95,6 +110,46 @@ pub(crate) fn visit_expression(
             visit_expression(
                 context,
                 &parenthesized.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        Expression::TSAsExpression(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        Expression::TSSatisfiesExpression(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        Expression::TSTypeAssertion(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        Expression::TSNonNullExpression(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        Expression::TSInstantiationExpression(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
                 scoped_initializers,
                 matches,
             );

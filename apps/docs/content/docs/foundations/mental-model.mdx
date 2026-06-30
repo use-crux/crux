@@ -175,7 +175,7 @@ Once you see the four stages, the rest of Crux becomes legible:
 - **Compaction** runs _before_ resolve — it summarizes or trims the message history that you'd then feed into the prompt's `messages`.
 - **Agents** are prompts with a defined identity, a model preference, and a list of allowed handoffs. Compositions (pipeline / parallel / consensus / swarm) are higher-order functions over agents.
 - **Flows** are suspendable/resumable wrappers over multi-step orchestration. A flow records its `step` results so a resume re-runs only the work after the suspension point.
-- **Plans / Tasks** are structured documents that persist via `CruxStore` — read by humans (UI), written by agents (tools).
+- **Plans / Tasks** are structured documents that persist via `RecordStore` — read by humans (UI), written by agents (tools).
 - **Quality** runs suites across targets, optionally scored by LLM judges, and uses the same prompt setup as production.
 - **Devtools / OTel** are plugins that subscribe to instrumentation hooks.
 

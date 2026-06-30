@@ -1,7 +1,7 @@
 /**
  * Embedding cache: the {@link embeddingCache} factory, store codecs, and keys.
  *
- * {@link embeddingCache} wraps a {@link CruxStore} into a namespaced cache. The
+ * {@link embeddingCache} wraps a {@link RecordStore} into a namespaced cache. The
  * dense/sparse {@link CacheCodec}s serialize embeddings to/from stored entries,
  * {@link embeddingCacheKey} derives the deterministic key, and the vector guards
  * validate stored payloads.
@@ -9,12 +9,12 @@
  * @module
  */
 
-import type { JsonObject, SparseVector } from '../store/types'
+import type { JsonObject, SparseVector } from '../storage'
 import { hashString } from './hashing'
 import type { CacheCodec, EmbeddingCache, EmbeddingCacheOptions } from './types'
 
 /**
- * Build a namespaced {@link EmbeddingCache} backed by a {@link CruxStore}.
+ * Build a namespaced {@link EmbeddingCache} backed by a {@link RecordStore}.
  *
  * @param options - Store, namespace (trailing colons stripped), and optional ttl.
  * @returns A frozen embedding cache.
@@ -31,9 +31,9 @@ export function embeddingCache(options: EmbeddingCacheOptions): EmbeddingCache {
     _tag: 'EmbeddingCache' as const,
     namespace,
     ttlMs: options.ttlMs,
-    get: (key: string) => options.store.get(key),
+    get: (key: string) => options.records.get(key),
     set: (key: string, value: JsonObject) =>
-      options.store.set(key, value, options.ttlMs === undefined ? undefined : { ttl: options.ttlMs }),
+      options.records.put(key, value, options.ttlMs === undefined ? undefined : { ttlMs: options.ttlMs }),
   })
 }
 
@@ -74,7 +74,10 @@ export const sparseCacheCodec: CacheCodec<SparseVector> = {
     return {
       _tag: 'EmbeddingCacheEntry',
       kind: 'sparse',
-      embedding,
+      embedding: {
+        indices: [...embedding.indices],
+        values: [...embedding.values],
+      },
       createdAt: Date.now(),
     }
   },

@@ -25,14 +25,14 @@ import {
   setRuntime,
   updateRuntime,
   resetRuntime,
-  resolveStore,
+  resolveRecords,
   mergeRuntime,
   applyPlugins,
   withSession,
   createSessionId,
   getExecutionContext,
   runWithExecutionContext,
-  inMemoryCruxStore,
+  inMemoryRecordStore,
 } from '@use-crux/core'
 import type { CruxPlugin, CruxRuntime } from '@use-crux/core'
 
@@ -47,7 +47,7 @@ describe('@use-crux/core (runtime surface)', () => {
     expect(typeof setRuntime).toBe('function')
     expect(typeof updateRuntime).toBe('function')
     expect(typeof resetRuntime).toBe('function')
-    expect(typeof resolveStore).toBe('function')
+    expect(typeof resolveRecords).toBe('function')
     expect(typeof mergeRuntime).toBe('function')
     expect(typeof applyPlugins).toBe('function')
     expect(typeof withSession).toBe('function')
@@ -63,13 +63,13 @@ describe('@use-crux/core (runtime surface)', () => {
 
 describe('@use-crux/core config()', () => {
   it('applies persistence and returns a frozen Crux with the raw config', () => {
-    const store = inMemoryCruxStore()
-    const crux = config({ persistence: { store } })
+    const records = inMemoryRecordStore()
+    const crux = config({ persistence: { records } })
 
     try {
       expect(Object.isFrozen(crux)).toBe(true)
-      expect(crux.config.persistence?.store).toBe(store)
-      expect(resolveStore()).toBe(store)
+      expect(crux.config.persistence?.records).toBe(records)
+      expect(resolveRecords()).toBe(records)
       expect(typeof crux.dispose).toBe('function')
     } finally {
       crux.dispose()

@@ -9,7 +9,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { convexAgent } from '../agent'
-import { inMemoryCruxStore } from '../memory'
+import { inMemoryRecordStore } from '../memory'
 import { FakeConvexAgentDriver } from './fixtures/fakeAgentDriver'
 
 describe('profile-backed Convex Agent observability config', () => {
@@ -40,7 +40,7 @@ describe('profile-backed Convex Agent observability config', () => {
       crux: {
         driver,
         runtime: {
-          store: () => inMemoryCruxStore(),
+          storage: () => inMemoryRecordStore(),
         },
         observe: {
           name: ({ operation, target }) => `Observed ${operation} ${target.threadId}`,
@@ -106,7 +106,7 @@ describe('profile-backed Convex Agent observability config', () => {
       crux: {
         driver,
         runtime: {
-          store: () => inMemoryCruxStore(),
+          storage: () => inMemoryRecordStore(),
         },
         observe: {
           enabled: false,

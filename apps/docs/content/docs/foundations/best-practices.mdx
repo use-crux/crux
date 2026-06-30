@@ -176,24 +176,25 @@ Use Zod schemas on prompt `input` and `output` — Crux validates these automati
 
 For user-facing input, rely on Crux's auto-escaping (enabled by default). Only use `rawFields` when you intentionally need unescaped content like HTML.
 
-## Start with `inMemoryDataStore()`, swap later
+## Start with `inMemoryRecordStore()`, swap later
 
-Memory blocks can run on the in-memory store first, then move to a Convex store contract or a custom store for production. The block API does not change; only the store does.
+Memory blocks can run on an in-memory `RecordStore` first, then move to `convexRecordStore()` or a custom `RecordStore` for production. The block API does not change; only the records implementation does.
 
 ```ts
-import { defineConvexStoreContract } from '@use-crux/convex'
+import { convexRecordStore } from '@use-crux/convex'
+import { inMemoryRecordStore } from '@use-crux/core/storage'
 
 // Development
-const data = inMemoryDataStore()
+const devRecords = inMemoryRecordStore()
 const factsBlock = facts({ id: 'facts', embed })
-const mem = memory({ id: 'assistant', namespace: 'user:123', store: data, blocks: [factsBlock] })
+const devMemory = memory({ id: 'assistant', namespace: 'user:123', records: devRecords, blocks: [factsBlock] })
 
-// Production -- same memory shape, persistent store
-const cruxDocuments = defineConvexStoreContract({ component: components.crux })
-const mem = memory({
+// Production -- same memory shape, persistent records
+const prodRecords = convexRecordStore({ component: components.crux, ctx })
+const prodMemory = memory({
   id: 'assistant',
   namespace: 'user:123',
-  store: cruxDocuments.store(ctx),
+  records: prodRecords,
   blocks: [factsBlock],
 })
 ```

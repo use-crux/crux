@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { createIndexedKnowledgeStore } from '../../indexed-knowledge'
-import { inMemoryDataStore, inMemoryVectorStore } from '../../storage'
-import { inMemoryCruxStore } from '../../store/memory'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 
 describe('indexed knowledge store', () => {
   it('persists generations, searches active chunks, and expands parents through the read model', async () => {
-    const data = inMemoryDataStore()
+    const data = inMemoryRecordStore()
     const vectors = inMemoryVectorStore()
     const records = createIndexedKnowledgeStore({
       indexerId: 'docs',
       namespace: 'kb',
-      data,
+      records: data,
       vectors,
     })
 
@@ -84,13 +83,13 @@ describe('indexed knowledge store', () => {
     })
   })
 
-  it('deletes source and namespace records from data and vector stores consistently', async () => {
-    const data = inMemoryDataStore()
+  it('deletes source and namespace records from record and vector stores consistently', async () => {
+    const data = inMemoryRecordStore()
     const vectors = inMemoryVectorStore()
     const records = createIndexedKnowledgeStore({
       indexerId: 'docs',
       namespace: 'kb',
-      data,
+      records: data,
       vectors,
     })
 
@@ -130,11 +129,11 @@ describe('indexed knowledge store', () => {
   })
 
   it('expands parents from derived refs and supports missing-parent errors', async () => {
-    const data = inMemoryDataStore()
+    const data = inMemoryRecordStore()
     const records = createIndexedKnowledgeStore({
       indexerId: 'docs',
       namespace: 'kb',
-      data,
+      records: data,
     })
 
     await records.persistGeneration({
@@ -186,24 +185,23 @@ describe('indexed knowledge store', () => {
     ).rejects.toThrow('parentExpand could not find parent record')
   })
 
-  it('supports legacy combined store vector search while mapping chunk hits', async () => {
-    const store = inMemoryCruxStore()
+  it('fails fast when searching without a vector store', async () => {
+    const data = inMemoryRecordStore()
     const records = createIndexedKnowledgeStore({
       indexerId: 'docs',
       namespace: 'kb',
-      data: store,
-      legacyStore: store,
+      records: data,
     })
 
     await records.persistGeneration({
       chunks: [
         {
           namespace: 'kb',
-          sourceId: 'legacy',
+          sourceId: 'missing-vectors',
           chunkId: 'a',
           ordinal: 0,
-          content: 'legacy chunk',
-          metadata: { topic: 'legacy' },
+          content: 'chunk',
+          metadata: { topic: 'vectors' },
         },
       ],
       parents: [],
@@ -217,12 +215,6 @@ describe('indexed knowledge store', () => {
         dense: [1, 0],
         filter: { namespace: 'kb' },
       }),
-    ).resolves.toEqual([
-      expect.objectContaining({
-        sourceId: 'legacy',
-        chunkId: 'a',
-        content: 'legacy chunk',
-      }),
-    ])
+    ).rejects.toThrow('Indexed knowledge search requires vectors')
   })
 })

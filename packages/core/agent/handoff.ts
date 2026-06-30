@@ -7,14 +7,14 @@
  *
  * Supports two modes:
  * - **Stateless**: Use `prepare()` + `asContext()` for in-process handoffs.
- * - **Stored**: Provide a `store` to enable `send()` / `receive()` for
+ * - **Stored**: Provide `records` to enable `send()` / `receive()` for
  *   distributed agents that run in separate processes or actions.
  *
  * @module
  */
 
 import { z } from 'zod'
-import type { CruxStore } from '../store/types'
+import type { JsonObject, RecordStore } from '../storage'
 import type { Context } from '../prompt/context-types'
 import type { GenerateTextFn } from '../compaction/types'
 import { context } from '../prompt/context'
@@ -43,10 +43,10 @@ export interface HandoffConfig<TInput extends z.ZodType, TOutput extends z.ZodTy
     system?: string
   }
   /**
-   * Optional store for persistence. When set, enables `send()` and `receive()`.
+   * Optional record store for persistence. When set, enables `send()` and `receive()`.
    * Use this for distributed agents that run in separate processes or actions.
    */
-  store?: CruxStore
+  records?: RecordStore
   /** Optional callback fired after prepare() completes (for devtools wiring). */
   onPrepare?: (handoffId: string, inputSize: number, outputSize: number) => void
   /** Name of the sending agent (for devtools identification). */
@@ -83,14 +83,14 @@ export interface HandoffInstance<TInput extends z.ZodType, TOutput extends z.Zod
   prepare(input: z.infer<TInput>): Promise<HandoffPayload<z.infer<TOutput>>>
 
   /**
-   * Validate input, transform, optionally summarize, and PERSIST to store.
-   * Requires `store` to be configured. Throws if no store is set.
+   * Validate input, transform, optionally summarize, and persist to records.
+   * Requires `records` to be configured. Throws if no record store is set.
    */
   send(input: z.infer<TInput>): Promise<HandoffPayload<z.infer<TOutput>>>
 
   /**
-   * Read the latest payload from store.
-   * Requires `store` to be configured. Throws if no store is set.
+   * Read the latest payload from records.
+   * Requires `records` to be configured. Throws if no record store is set.
    * Returns null if no payload has been sent yet.
    */
   receive(): Promise<HandoffPayload<z.infer<TOutput>> | null>
@@ -114,7 +114,7 @@ function approxSize(value: unknown): number {
 /**
  * Create a structured handoff for context transfer between agents.
  *
- * @param config - Configuration with id, input/output schemas, transform, optional summarize and store.
+ * @param config - Configuration with id, input/output schemas, transform, optional summarize and records.
  * @returns A `HandoffInstance` with prepare(), send(), receive(), and asContext() methods.
  *
  * @example
@@ -135,7 +135,7 @@ function approxSize(value: unknown): number {
  *   inputSchema: ResearchResultSchema,
  *   outputSchema: WriterContextSchema,
  *   transform: (input) => ({ ... }),
- *   store: cruxDocuments.store(ctx),
+ *   records,
  * })
  * // Producer:
  * await handoff.send(rawResults)
@@ -146,8 +146,8 @@ function approxSize(value: unknown): number {
 export function handoff<TInput extends z.ZodType, TOutput extends z.ZodType>(
   config: HandoffConfig<TInput, TOutput>,
 ): HandoffInstance<TInput, TOutput> {
-  const { id, inputSchema, outputSchema, transform, store } = config
-  const storeKey = `handoff:${id}`
+  const { id, inputSchema, outputSchema, transform, records } = config
+  const recordKey = `handoff:${id}`
 
   async function prepare(input: z.infer<TInput>): Promise<HandoffPayload<z.infer<TOutput>>> {
     return observe.span(
@@ -276,14 +276,13 @@ export function handoff<TInput extends z.ZodType, TOutput extends z.ZodType>(
   }
 
   async function send(input: z.infer<TInput>): Promise<HandoffPayload<z.infer<TOutput>>> {
-    if (!store) {
-      throw new Error(`Handoff "${id}": send() requires a store. Pass a CruxStore via the \`store\` option.`)
+    if (!records) {
+      throw new Error(`Handoff "${id}": send() requires records. Pass a RecordStore via the \`records\` option.`)
     }
 
     const payload = await prepare(input)
 
-    // Persist to store
-    await store.set(storeKey, {
+    await records.put(recordKey, {
       content: JSON.stringify({
         data: payload.data,
         summary: payload.summary,
@@ -291,17 +290,17 @@ export function handoff<TInput extends z.ZodType, TOutput extends z.ZodType>(
       }),
       metadata: { handoffId: id, type: 'handoff' },
       updatedAt: Date.now(),
-    })
+    } satisfies JsonObject)
 
     return payload
   }
 
   async function receive(): Promise<HandoffPayload<z.infer<TOutput>> | null> {
-    if (!store) {
-      throw new Error(`Handoff "${id}": receive() requires a store. Pass a CruxStore via the \`store\` option.`)
+    if (!records) {
+      throw new Error(`Handoff "${id}": receive() requires records. Pass a RecordStore via the \`records\` option.`)
     }
 
-    const entry = await store.get(storeKey)
+    const entry = await records.get(recordKey)
     if (!entry) return null
 
     try {

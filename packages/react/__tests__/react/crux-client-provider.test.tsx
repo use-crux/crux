@@ -16,7 +16,7 @@ import { CruxProvider, useCruxTransport } from '../../src/provider'
 import { usePlan, useTasks } from '../../src/hooks'
 import { createConvexContractTransport, createMockConvexBackend } from './convex-contract-harness'
 import type { Plan, Task } from '@use-crux/core/plan'
-import type { JsonObject } from '@use-crux/core/store'
+import type { JsonObject } from '@use-crux/core/storage'
 
 // ── Memoized Provider (mirrors CruxClientProvider from apps/web) ──
 

@@ -11,7 +11,7 @@
  */
 
 import type { DenseEmbedding } from '../embedding'
-import type { CruxStore, JsonObject } from '../store/types'
+import type { JsonObject, RecordStore, Storage, VectorStore } from '../storage'
 import type { PromptMiddlewareArgs } from '../runtime/types'
 import type { SemanticCacheMode, SemanticCachePromptOptions } from '../prompt/prompt-types'
 
@@ -41,7 +41,9 @@ export interface SemanticCacheWriteContext extends SemanticCacheLookupContext {
 
 /** Configuration for {@link createSemanticCache}. */
 export interface SemanticCacheConfig {
-  store: CruxStore
+  storage?: Storage
+  records?: RecordStore
+  vectors?: VectorStore
   embedding: DenseEmbedding
   ttl: number
   threshold?: number
@@ -64,8 +66,8 @@ export interface NormalizedPromptHint {
   query?: SemanticCachePromptOptions['query']
 }
 
-/** The cache entry persisted to the {@link CruxStore} vector namespace. Internal. */
-export interface SemanticCacheEntry extends JsonObject {
+/** The cache entry persisted to the semantic-cache record store. Internal. */
+export interface SemanticCacheEntry {
   cruxType: 'semantic-cache-entry'
   namespace: string
   promptId?: string

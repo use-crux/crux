@@ -39,7 +39,7 @@ const answerDocs = prompt({
 ```ts
 const advancedDocs = retrievalPipeline(docs, [
   multiQuery({ generate, model, count: 4 }),
-  parentExpand({ store }),
+  parentExpand({ records }),
   compress({ generate, model, mode: 'extractive' }),
 ])
 
