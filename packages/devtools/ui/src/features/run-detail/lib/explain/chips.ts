@@ -16,6 +16,7 @@
 
 import type { IconName } from '@/qw/shell/nav'
 import type { TurnDecisionReport, TurnSummaryChip } from '@/types'
+import { normalizeTurnDecisionReport, type RuntimeTurnDecisionReport } from './report'
 
 /** Section anchor ids used by the Explain tab body. */
 export type ExplainSection = 'saw' | 'considered' | 'fresh' | 'decisions' | 'source' | 'protect' | 'gaps'
@@ -110,12 +111,14 @@ function deriveChips(report: TurnDecisionReport): ExplainChip[] {
 /**
  * The verdict-band scan chips — backend chips when present, derived otherwise.
  */
-export function summaryChips(report: TurnDecisionReport): ExplainChip[] {
-  if (report.summary && report.summary.length > 0) return report.summary.map(fromBackend)
-  return deriveChips(report)
+export function summaryChips(report: TurnDecisionReport | RuntimeTurnDecisionReport): ExplainChip[] {
+  const normalized = normalizeTurnDecisionReport(report)
+  if (!normalized) return []
+  if (normalized.summary && normalized.summary.length > 0) return normalized.summary.map(fromBackend)
+  return deriveChips(normalized)
 }
 
 /** The subset of {@link summaryChips} that carry a warning, for the sub-header. */
-export function warningChips(report: TurnDecisionReport): ExplainChip[] {
+export function warningChips(report: TurnDecisionReport | RuntimeTurnDecisionReport): ExplainChip[] {
   return summaryChips(report).filter((c) => c.tone === 'warning' || c.tone === 'danger')
 }

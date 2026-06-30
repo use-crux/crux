@@ -18,6 +18,7 @@ import { Icon } from '@/qw/shell/Icon'
 import type { ObservabilityRunDetailNode, Trace } from '@/types'
 import { turnHasWarningSignal, turnInitialTab } from '@/features/run-detail/lib/explain/signals'
 import { warningChips } from '@/features/run-detail/lib/explain/chips'
+import { normalizeTurnDecisionReport } from '@/features/run-detail/lib/explain/report'
 import { KindTag, StatStrip, StatusPill } from './atoms'
 import { ContextComposition } from './ContextComposition'
 import { ExplainTab } from './explain/ExplainTab'
@@ -296,7 +297,7 @@ export function GenerationDetail({
   // The Turn Explanation read model, when the local projection emitted one for
   // this generation turn. Drives the leading Explain tab + the default-tab and
   // sub-header signals; absent reports leave the existing tabs untouched.
-  const report = node.decisionReport
+  const report = useMemo(() => normalizeTurnDecisionReport(node.decisionReport), [node.decisionReport])
   const [tab, setTab] = useState<GenTab>(() => turnInitialTab(report) as GenTab)
   const [outMode, setOutMode] = useState<OutMode>('pretty')
 

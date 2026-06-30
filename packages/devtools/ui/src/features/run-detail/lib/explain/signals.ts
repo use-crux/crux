@@ -15,6 +15,7 @@
  */
 
 import type { TurnDecisionReport } from '@/types'
+import { normalizeTurnDecisionReport, type RuntimeTurnDecisionReport } from './report'
 import type { ExplainGenTab } from './tabs'
 
 /** A turn status that is not a clean success. */
@@ -50,13 +51,15 @@ function hasDroppedRequired(report: TurnDecisionReport): boolean {
  * Pure over recorded report facts; see the module note for why coverage gaps
  * are intentionally excluded from this set.
  */
-export function turnHasWarningSignal(report: TurnDecisionReport): boolean {
+export function turnHasWarningSignal(report: TurnDecisionReport | RuntimeTurnDecisionReport): boolean {
+  const normalized = normalizeTurnDecisionReport(report)
+  if (!normalized) return false
   return (
-    statusIsWarning(report.turn.status) ||
-    hasStaleUsed(report) ||
-    hasDroppedRequired(report) ||
-    hasFiredFallback(report) ||
-    hasSafetyBlock(report)
+    statusIsWarning(normalized.turn.status) ||
+    hasStaleUsed(normalized) ||
+    hasDroppedRequired(normalized) ||
+    hasFiredFallback(normalized) ||
+    hasSafetyBlock(normalized)
   )
 }
 
@@ -66,7 +69,7 @@ export function turnHasWarningSignal(report: TurnDecisionReport): boolean {
  * `Explain` for a turn with a warning signal, `Output` otherwise — including
  * when no report is available, preserving the existing default.
  */
-export function turnInitialTab(report: TurnDecisionReport | undefined): ExplainGenTab {
+export function turnInitialTab(report: TurnDecisionReport | RuntimeTurnDecisionReport | null | undefined): ExplainGenTab {
   if (report && turnHasWarningSignal(report)) return 'explain'
   return 'output'
 }

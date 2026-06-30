@@ -8,12 +8,13 @@
  */
 
 import type { TurnDecisionReport } from '@/types'
+import { normalizeTurnDecisionReport, type RuntimeTurnDecisionReport } from './report'
 import { turnHasWarningSignal } from './signals'
 
 /** The minimal recursive node shape this walk needs (a run-detail node). */
 export interface ReportNode {
   id?: string
-  decisionReport?: TurnDecisionReport
+  decisionReport?: RuntimeTurnDecisionReport | null
   children?: readonly ReportNode[]
 }
 
@@ -21,7 +22,8 @@ export interface ReportNode {
 export function collectTurnReports(node: ReportNode): TurnDecisionReport[] {
   const out: TurnDecisionReport[] = []
   const walk = (n: ReportNode): void => {
-    if (n.decisionReport) out.push(n.decisionReport)
+    const report = normalizeTurnDecisionReport(n.decisionReport)
+    if (report) out.push(report)
     for (const child of n.children ?? []) walk(child)
   }
   walk(node)
@@ -43,7 +45,8 @@ export interface TurnEntry {
 export function collectTurnEntries(node: ReportNode): TurnEntry[] {
   const out: TurnEntry[] = []
   const walk = (n: ReportNode): void => {
-    if (n.id && n.decisionReport) out.push({ id: n.id, report: n.decisionReport })
+    const report = normalizeTurnDecisionReport(n.decisionReport)
+    if (n.id && report) out.push({ id: n.id, report })
     for (const child of n.children ?? []) walk(child)
   }
   walk(node)
@@ -60,7 +63,8 @@ export function collectTurnEntries(node: ReportNode): TurnEntry[] {
 export function warningTurnSpanIds(node: ReportNode): Set<string> {
   const ids = new Set<string>()
   const walk = (n: ReportNode): void => {
-    if (n.id && n.decisionReport && turnHasWarningSignal(n.decisionReport)) ids.add(n.id)
+    const report = normalizeTurnDecisionReport(n.decisionReport)
+    if (n.id && report && turnHasWarningSignal(report)) ids.add(n.id)
     for (const child of n.children ?? []) walk(child)
   }
   walk(node)
@@ -79,9 +83,11 @@ export interface RunAggregate {
 }
 
 /** Fold per-turn reports into the run-root insight summary. */
-export function aggregateRun(reports: readonly TurnDecisionReport[]): RunAggregate {
+export function aggregateRun(reports: readonly (TurnDecisionReport | RuntimeTurnDecisionReport | null | undefined)[]): RunAggregate {
   const agg: RunAggregate = { turns: 0, needAttention: 0, dropped: 0, staleUsed: 0, fallback: 0, covered: 0, total: 0 }
-  for (const r of reports) {
+  for (const raw of reports) {
+    const r = normalizeTurnDecisionReport(raw)
+    if (!r) continue
     agg.turns += 1
     if (turnHasWarningSignal(r)) agg.needAttention += 1
     agg.dropped += r.considered.filter((c) => c.disposition === 'dropped').length

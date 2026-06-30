@@ -32,6 +32,7 @@ func buildTurnDecisionReport(span SpanSummary, request *RunDetailRequest) *TurnD
 		Turn:          turnDecisionTurnFromSpan(span, request),
 		Coverage:      defaultTurnDecisionCoverage(),
 	}
+	defer normalizeTurnDecisionReportCollections(report)
 	if request == nil {
 		report.Gaps = append(report.Gaps, missingRequestGap(span))
 		report.Turn.Verdict = "Answered with request composition evidence unavailable."

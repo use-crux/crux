@@ -14,8 +14,9 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { summaryChips, type ExplainSection } from '@/features/run-detail/lib/explain/chips'
+import { normalizeTurnDecisionReport, type RuntimeTurnDecisionReport } from '@/features/run-detail/lib/explain/report'
 import { resolveOpenTab, type ExplainGenTab } from '@/features/run-detail/lib/explain/tabs'
-import type { TurnDecisionReport, TurnDeepTabTarget } from '@/types'
+import type { TurnDeepTabTarget } from '@/types'
 import { SecBand } from './band'
 import { VerdictBand } from './sections/VerdictBand'
 import { ConsideredRow, SawRow } from './sections/EvidenceSection'
@@ -68,12 +69,13 @@ export function ExplainTab({
   availableTabs,
   onOpenTab,
 }: {
-  report: TurnDecisionReport
+  report: RuntimeTurnDecisionReport
   /** Tab ids present on this turn — gates which deep links are live. */
   availableTabs: readonly string[]
   /** Switch the generation detail pane to a deep tab. */
   onOpenTab: (tab: ExplainGenTab) => void
 }) {
+  const normalized = normalizeTurnDecisionReport(report)
   const scrollRef = useRef<HTMLDivElement>(null)
   const sectionRefs = useRef<Partial<Record<ExplainSection, HTMLDivElement | null>>>({})
   const [flash, setFlash] = useState<ExplainSection | null>(null)
@@ -104,28 +106,30 @@ export function ExplainTab({
     sectionRefs.current[id] = el
   }, [])
 
-  const chips = summaryChips(report)
-  const droppedSome = report.considered.some((c) => c.disposition === 'dropped')
-  const uncovered = report.coverage.covered < report.coverage.total
+  if (!normalized) return null
+
+  const chips = summaryChips(normalized)
+  const droppedSome = normalized.considered.some((c) => c.disposition === 'dropped')
+  const uncovered = normalized.coverage.covered < normalized.coverage.total
 
   return (
     <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
       <div className="mx-auto px-6 py-5" style={{ maxWidth: 960 }}>
-        <VerdictBand verdict={report.turn.verdict} chips={chips} activeJump={flash} onJump={jump} />
+        <VerdictBand verdict={normalized.turn.verdict} chips={chips} activeJump={flash} onJump={jump} />
 
         <Sec id="saw" flash={flash} register={register}>
           <SecBand
             icon="doc"
             title="What the model saw"
-            count={`${report.saw.length} items`}
+            count={`${normalized.saw.length} items`}
             hint="present in the rendered request"
             right={contextLink ? <OpenContext onClick={contextLink} /> : undefined}
           />
           <Card>
-            {report.saw.length === 0 ? (
+            {normalized.saw.length === 0 ? (
               <Empty>Nothing was recorded as reaching the model for this turn.</Empty>
             ) : (
-              report.saw.map((item, i) => <SawRow key={item.id ?? i} item={item} onOpen={contextLink} />)
+              normalized.saw.map((item, i) => <SawRow key={item.id ?? i} item={item} onOpen={contextLink} />)
             )}
           </Card>
         </Sec>
@@ -134,43 +138,43 @@ export function ExplainTab({
           <SecBand
             icon="search"
             title="Checked but not sent"
-            count={`${report.considered.length} candidates`}
+            count={`${normalized.considered.length} candidates`}
             hint="evaluated, did not reach the model"
             tone={droppedSome ? 'warn' : 'muted'}
           />
           <Card>
-            {report.considered.length === 0 ? (
+            {normalized.considered.length === 0 ? (
               <Empty>Every evaluated candidate reached the model.</Empty>
             ) : (
-              report.considered.map((item, i) => <ConsideredRow key={item.id ?? i} item={item} />)
+              normalized.considered.map((item, i) => <ConsideredRow key={item.id ?? i} item={item} />)
             )}
           </Card>
         </Sec>
 
         <Sec id="fresh" flash={flash} register={register}>
           <SecBand icon="clock" title="Freshness & cache" hint="two different questions — kept apart on purpose" />
-          <FreshCacheBlock freshness={report.freshness} cache={report.cache} />
+          <FreshCacheBlock freshness={normalized.freshness} cache={normalized.cache} />
         </Sec>
 
         <Sec id="decisions" flash={flash} register={register}>
           <SecBand
             icon="branch"
             title="Decisions"
-            count={`${report.decisions.length}`}
+            count={`${normalized.decisions.length}`}
             hint="runtime control folded into this turn"
           />
           <Card>
-            {report.decisions.length === 0 ? (
+            {normalized.decisions.length === 0 ? (
               <Empty>No runtime decisions were folded onto this turn.</Empty>
             ) : (
-              report.decisions.map((d) => <DecisionRow key={d.id} decision={d} onOpen={linkTo(d.tab)} />)
+              normalized.decisions.map((d) => <DecisionRow key={d.id} decision={d} onOpen={linkTo(d.tab)} />)
             )}
           </Card>
         </Sec>
 
         <Sec id="source" flash={flash} register={register}>
           <SecBand icon="link" title="What source do I change?" hint="definitions that shaped this turn" />
-          <SourceGroups groups={report.source} />
+          <SourceGroups groups={normalized.source} />
         </Sec>
 
         <Sec id="protect" flash={flash} register={register}>
@@ -180,17 +184,17 @@ export function ExplainTab({
             hint="quality coverage & gaps worth testing"
             tone={uncovered ? 'warn' : 'ok'}
           />
-          <ProtectBlock coverage={report.coverage} />
+          <ProtectBlock coverage={normalized.coverage} />
         </Sec>
 
         <Sec id="gaps" flash={flash} register={register}>
           <SecBand
             icon="info"
             title="Missing evidence"
-            count={report.gaps.length ? `${report.gaps.length}` : undefined}
+            count={normalized.gaps.length ? `${normalized.gaps.length}` : undefined}
             hint="what Crux could not prove from recorded data"
           />
-          <GapsBlock gaps={report.gaps} />
+          <GapsBlock gaps={normalized.gaps} />
         </Sec>
       </div>
     </div>

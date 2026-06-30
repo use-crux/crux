@@ -9,7 +9,7 @@
 import type { ReactNode } from 'react'
 import { turnHasWarningSignal } from '@/features/run-detail/lib/explain/signals'
 import { aggregateRun, type RunAggregate } from '@/features/run-detail/lib/explain/rollup'
-import type { TurnDecisionReport } from '@/types'
+import { normalizeTurnDecisionReport, type RuntimeTurnDecisionReport } from '@/features/run-detail/lib/explain/report'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -39,36 +39,41 @@ function Fact({ k, v, tone }: { k: string; v: ReactNode; tone?: string }) {
 }
 
 /** The single most notable degraded freshness state across the turn, or null. */
-function dominantFreshness(report: TurnDecisionReport): string | null {
+function dominantFreshness(report: RuntimeTurnDecisionReport): string | null {
+  const normalized = normalizeTurnDecisionReport(report)
+  if (!normalized) return null
   for (const want of ['stale-used', 'stale-rejected', 'unknown', 'refreshed']) {
-    if (report.freshness.some((f) => f.status === want)) return want
+    if (normalized.freshness.some((f) => f.status === want)) return want
   }
-  return report.freshness.length > 0 ? 'fresh' : null
+  return normalized.freshness.length > 0 ? 'fresh' : null
 }
 
 /** One short sentence on why this turn leads with Explain (or that it is clean). */
-function attentionReason(report: TurnDecisionReport): string {
-  if (!turnHasWarningSignal(report)) return 'No warning signal — opened Output.'
+function attentionReason(report: RuntimeTurnDecisionReport): string {
+  const normalized = normalizeTurnDecisionReport(report)
+  if (!normalized || !turnHasWarningSignal(normalized)) return 'No warning signal — opened Output.'
   const reasons: string[] = []
-  if (report.turn.status && report.turn.status !== 'ok') reasons.push(report.turn.status)
-  if (report.considered.some((c) => c.required && c.disposition === 'dropped')) reasons.push('required context dropped')
-  if (report.freshness.some((f) => f.status === 'stale-used')) reasons.push('stale evidence used')
-  if (report.decisions.some((d) => d.reason.code.startsWith('routing.fallback'))) reasons.push('fallback fired')
+  if (normalized.turn.status && normalized.turn.status !== 'ok') reasons.push(normalized.turn.status)
+  if (normalized.considered.some((c) => c.required && c.disposition === 'dropped')) reasons.push('required context dropped')
+  if (normalized.freshness.some((f) => f.status === 'stale-used')) reasons.push('stale evidence used')
+  if (normalized.decisions.some((d) => d.reason.code.startsWith('routing.fallback'))) reasons.push('fallback fired')
   return reasons.length > 0 ? `Opened Explain · ${reasons.join(', ')}.` : 'Opened Explain.'
 }
 
 /** Compact per-turn facts for the inspector rail. */
-export function TurnInspectorFacts({ report }: { report: TurnDecisionReport }) {
-  const checked = report.considered.filter((c) => c.disposition === 'checked').length
-  const dropped = report.considered.filter((c) => c.disposition === 'dropped').length
-  const fresh = dominantFreshness(report)
-  const cacheHit = report.cache.some((c) => c.status === 'hit')
-  const cov = report.coverage
+export function TurnInspectorFacts({ report }: { report: RuntimeTurnDecisionReport }) {
+  const normalized = normalizeTurnDecisionReport(report)
+  if (!normalized) return null
+  const checked = normalized.considered.filter((c) => c.disposition === 'checked').length
+  const dropped = normalized.considered.filter((c) => c.disposition === 'dropped').length
+  const fresh = dominantFreshness(normalized)
+  const cacheHit = normalized.cache.some((c) => c.status === 'hit')
+  const cov = normalized.coverage
   const covered = cov.total > 0 ? `${cov.covered}/${cov.total}` : '—'
   return (
     <Section title="Explain">
       <div className="grid grid-cols-3 gap-x-3 gap-y-3">
-        <Fact k="saw" v={report.saw.length} />
+        <Fact k="saw" v={normalized.saw.length} />
         <Fact k="checked" v={checked} />
         <Fact k="dropped" v={dropped} tone={dropped > 0 ? 'var(--qw-danger)' : undefined} />
         {fresh && <Fact k="freshness" v={fresh} tone={fresh === 'stale-used' ? 'var(--qw-warn)' : undefined} />}
@@ -101,7 +106,7 @@ function RunInsightBody({ agg }: { agg: RunAggregate }) {
 }
 
 /** Run-level Explain roll-up across every turn report under the run. */
-export function RunInsightFacts({ reports }: { reports: readonly TurnDecisionReport[] }) {
+export function RunInsightFacts({ reports }: { reports: readonly RuntimeTurnDecisionReport[] }) {
   if (reports.length === 0) return null
   return (
     <Section title="Run insight">
