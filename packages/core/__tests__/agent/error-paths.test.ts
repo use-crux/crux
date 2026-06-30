@@ -113,7 +113,7 @@ describe('handoff: async transform throwing propagates', () => {
         transform: async () => {
           throw new Error('Transform failed in send')
         },
-        store,
+        records: store,
       })
 
       await expect(h.send({ data: 'test' })).rejects.toThrow('Transform failed in send')
@@ -157,7 +157,7 @@ describe('blackboard: subscriber callback throwing does not prevent store write'
       const board2 = makeBlackboard({
         id: 'shared-board',
         schema: z.object({ goal: z.string() }),
-        store,
+        records: store,
       })
 
       const throwingSub = vi.fn(() => {
@@ -214,7 +214,7 @@ describe('blackboard: subscriber callback throwing does not prevent store write'
           goal: z.string(),
           status: z.enum(['idle', 'done']),
         }),
-        store,
+        records: store,
       })
 
       board.subscribe(() => {

@@ -67,7 +67,7 @@ describe('blackboard', () => {
 
     it('uses custom store', async () => {
     const store = inMemoryStore()
-    const board = makeBlackboard({ id: 'test', schema: testSchema, store })
+    const board = makeBlackboard({ id: 'test', schema: testSchema, records: store })
     await board.set('goal', 'Stored')
 
     const entry = await store.get('blackboard:test')

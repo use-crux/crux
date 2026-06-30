@@ -4,7 +4,7 @@ import { adapter as makeAdapter } from '../../adapter/define-adapter'
 import type { AdapterResponse } from '../../adapter/types'
 import { prompt as makePrompt } from '../../prompt/prompt'
 import { defaultTokenizer, setTokenizer } from '../../shared/tokenizer'
-import { inMemoryRecordStore } from '../../storage'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 import {
   episodes,
   facts,
@@ -105,7 +105,7 @@ describe('memory block system', () => {
     })
     const mem = memory({
       id: 'dynamic-contract',
-      store,
+      records: store,
       namespace: ({ input }) => `tenant:${input.tenantId}:thread:${input.threadId}`,
       blocks: [inspector, recent, factBlock],
     })
@@ -300,7 +300,7 @@ describe('memory block system', () => {
     const recent = recentMessages({ id: 'recent', maxMessages: 5 })
     const mem = memory({
       id: 'capture',
-      store,
+      records: store,
       namespace: ({ input }) => `thread:${input.threadId}`,
       blocks: [recent],
     })
@@ -342,12 +342,13 @@ describe('memory block system', () => {
 
   it('supports standalone episodes with dense recall', async () => {
     const store = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const ep = episodes({ id: 'episodes', embed: mockEmbed })
 
-    await ep.record({ content: 'User asked about pricing' }, { records: store, namespace: 'user:1' })
-    await ep.record({ content: 'We discussed React hooks' }, { records: store, namespace: 'user:1' })
+    await ep.record({ content: 'User asked about pricing' }, { records: store, vectors, namespace: 'user:1' })
+    await ep.record({ content: 'We discussed React hooks' }, { records: store, vectors, namespace: 'user:1' })
 
-    const results = await ep.recall('pricing', { records: store, namespace: 'user:1', limit: 1 })
+    const results = await ep.recall('pricing', { records: store, vectors, namespace: 'user:1', limit: 1 })
     expect(results).toHaveLength(1)
     expect(results[0].score).toBeDefined()
   })
@@ -360,7 +361,7 @@ describe('memory block system', () => {
     })
     const mem = memory({
       id: 'proposals',
-      store,
+      records: store,
       namespace: 'user:1',
       blocks: [factBlock],
     })
@@ -390,7 +391,7 @@ describe('memory block system', () => {
     })
     const mem = memory({
       id: 'proposal-lifecycle',
-      store,
+      records: store,
       namespace: 'user:1',
       blocks: [factBlock],
       capture: { mode: 'inline' },
@@ -436,7 +437,7 @@ describe('memory block system', () => {
     await factBlock.add({ content: 'User prefers concise answers' }, { records: store, namespace: 'user:1', memoryId: 'facts' })
     const mem = memory({
       id: 'facts',
-      store,
+      records: store,
       namespace: 'user:1',
       blocks: [factBlock],
     })
@@ -466,7 +467,7 @@ describe('memory block system', () => {
     })
     const mem = memory({
       id: 'semantic-render',
-      store,
+      records: store,
       namespace: 'user:1',
       blocks: [factBlock],
     })

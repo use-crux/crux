@@ -8,7 +8,7 @@ import {
 } from '../../observability'
 import { blackboard } from '../../agent/blackboard'
 import { facts, memory, recentMessages, workingState } from '../../memory'
-import { inMemoryRecordStore } from '../../storage'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 
 describe('canonical memory observability', () => {
   afterEach(() => {
@@ -94,6 +94,7 @@ describe('canonical memory observability', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const store = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const factBlock = facts({
       id: 'facts',
       embed: async (text) => (text.includes('refund') ? [1, 0] : [0, 1]),
@@ -102,9 +103,9 @@ describe('canonical memory observability', () => {
 
     await factBlock.add(
       { content: 'User wants help with a refund.', confidence: 0.8 },
-      { records: store, namespace: 'user:1', memoryId: 'profile' },
+      { records: store, vectors, namespace: 'user:1', memoryId: 'profile' },
     )
-    await factBlock.find('refund policy', { records: store, namespace: 'user:1', memoryId: 'profile', limit: 3 })
+    await factBlock.find('refund policy', { records: store, vectors, namespace: 'user:1', memoryId: 'profile', limit: 3 })
     await observe.flush()
 
     expect(transport.records).toContainEqual(
@@ -209,7 +210,7 @@ describe('canonical memory observability', () => {
 
     const mem = memory({
       id: 'conversation',
-      store,
+      records: store,
       namespace: 'thread:1',
       blocks: [recent],
     })
@@ -241,10 +242,10 @@ describe('canonical memory observability', () => {
     })
     const mem = memory({
       id: 'profile',
-      store,
+      records: store,
       namespace: 'user:1',
       blocks: [factBlock],
-      processing: { mode: 'inline' },
+      capture: { mode: 'inline' },
     })
 
     await mem.captureTurn({

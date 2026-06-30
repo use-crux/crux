@@ -146,7 +146,7 @@ describe('createSlidingWindow', () => {
       windowSize: 2,
       generate: mockGenerate,
       model: 'test',
-      store,
+      records: store,
     })
 
     await window.push(msg('user', 'Hello'))
@@ -164,7 +164,7 @@ describe('createSlidingWindow', () => {
       windowSize: 5,
       generate: mockGenerate,
       model: 'test',
-      store,
+      records: store,
       id: 'my-window',
     })
 

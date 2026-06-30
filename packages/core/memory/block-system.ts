@@ -136,7 +136,34 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function toJsonObject(value: Record<string, unknown>): JsonObject {
-  return value as JsonObject
+  return omitUndefinedObjectProperties(value) as JsonObject
+}
+
+/**
+ * Storage records are strict JSON objects. Proposal and message builders often
+ * carry optional fields as `undefined`, so omit those object properties before
+ * the storage layer validates the payload.
+ */
+function omitUndefinedObjectProperties(value: Record<string, unknown>): Record<string, unknown> {
+  const output: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value)) {
+    const normalized = omitUndefined(item)
+    if (normalized !== undefined) output[key] = normalized
+  }
+  return output
+}
+
+function omitUndefined(value: unknown): unknown {
+  if (value === undefined) return undefined
+  if (Array.isArray(value)) return value.map((item) => omitUndefined(item) ?? null)
+  if (isPlainRecord(value)) return omitUndefinedObjectProperties(value)
+  return value
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
 }
 
 function isFilterValue(value: unknown): value is FilterValue {

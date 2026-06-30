@@ -20,7 +20,6 @@ import {
   skill,
 } from "../../skill";
 import { inMemoryRecordStore } from "../../storage";
-import { inMemoryRecordStore } from "../../storage";
 import { workspace } from "../../workspace";
 
 const fixtureRoot = join(__dirname, "__observability-fixtures__");

@@ -44,7 +44,7 @@ describe('handoff send/receive (store-backed)', () => {
 
 describe('send()', () => {
     it('persists payload to store', async () => {
-      const h = makeHandoff({ store })
+      const h = makeHandoff({ records: store })
       await h.send(sampleInput)
 
       const entry = await store.get('handoff:test-handoff')
@@ -55,7 +55,7 @@ describe('send()', () => {
     })
 
     it('returns a valid HandoffPayload', async () => {
-      const h = makeHandoff({ store })
+      const h = makeHandoff({ records: store })
       const payload = await h.send(sampleInput)
 
       expect(payload.handoffId).toBe('test-handoff')
@@ -66,7 +66,7 @@ describe('send()', () => {
 
     it('throws when no store configured', async () => {
       const h = makeHandoff() // no store
-      await expect(h.send(sampleInput)).rejects.toThrow(/requires a store/)
+      await expect(h.send(sampleInput)).rejects.toThrow(/requires records/)
     })
 
     it('includes summary when summarize configured', async () => {
@@ -74,7 +74,7 @@ describe('send()', () => {
         text: 'Summary of research results',
       })
       const h = makeHandoff({
-        store,
+        records: store,
         summarize: { generate: gen, model: 'mock' },
       })
 
@@ -90,7 +90,7 @@ describe('send()', () => {
 
 describe('receive()', () => {
     it('retrieves persisted payload', async () => {
-      const h = makeHandoff({ store })
+      const h = makeHandoff({ records: store })
       await h.send(sampleInput)
 
       const payload = await h.receive()
@@ -101,18 +101,18 @@ describe('receive()', () => {
     })
 
     it('returns null when no payload exists', async () => {
-      const h = makeHandoff({ store })
+      const h = makeHandoff({ records: store })
       const payload = await h.receive()
       expect(payload).toBeNull()
     })
 
     it('throws when no store configured', async () => {
       const h = makeHandoff() // no store
-      await expect(h.receive()).rejects.toThrow(/requires a store/)
+      await expect(h.receive()).rejects.toThrow(/requires records/)
     })
 
     it('returns payload with createdAt as Date', async () => {
-      const h = makeHandoff({ store })
+      const h = makeHandoff({ records: store })
       await h.send(sampleInput)
 
       const payload = await h.receive()
@@ -122,7 +122,7 @@ describe('receive()', () => {
 
 describe('round-trip', () => {
     it('send then receive returns correct data', async () => {
-      const h = makeHandoff({ store })
+      const h = makeHandoff({ records: store })
 
       const sent = await h.send(sampleInput)
       const received = await h.receive()
@@ -135,7 +135,7 @@ describe('round-trip', () => {
     it('send then receive preserves summary', async () => {
       const gen: GenerateTextFn = async () => ({ text: 'Round-trip summary' })
       const h = makeHandoff({
-        store,
+        records: store,
         summarize: { generate: gen, model: 'mock' },
       })
 
@@ -146,7 +146,7 @@ describe('round-trip', () => {
     })
 
     it('latest send overwrites previous', async () => {
-      const h = makeHandoff({ store })
+      const h = makeHandoff({ records: store })
 
       await h.send(sampleInput)
       await h.send({
