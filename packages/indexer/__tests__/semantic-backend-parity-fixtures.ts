@@ -288,7 +288,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
     },
     {
-      name: "workspace-versioning-access-relations",
+      name: "workspace-history-read-relation",
       files: {
         "src/resources.ts": `
         import { workspace } from '@use-crux/core'
@@ -303,7 +303,55 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           name: 'versioningTool',
           execute: async () => {
             await scratch.history('/drafts/article.md')
+          },
+        })
+      `,
+      },
+      expect: {
+        definitionIds: ["workspace:scratch"],
+        relationTypes: ["tool.reads_workspace"],
+      },
+    },
+    {
+      name: "workspace-diff-read-relation",
+      files: {
+        "src/resources.ts": `
+        import { workspace } from '@use-crux/core'
+
+        export const scratch = workspace({ id: 'scratch', mounts: [{ path: '/drafts', access: 'readwrite' }] })
+      `,
+        "src/app.ts": `
+        import { tool } from '@use-crux/core'
+        import { scratch } from './resources'
+
+        export const versioningTool = tool({
+          name: 'versioningTool',
+          execute: async () => {
             await scratch.diff('/drafts/article.md')
+          },
+        })
+      `,
+      },
+      expect: {
+        definitionIds: ["workspace:scratch"],
+        relationTypes: ["tool.reads_workspace"],
+      },
+    },
+    {
+      name: "workspace-undo-write-relation",
+      files: {
+        "src/resources.ts": `
+        import { workspace } from '@use-crux/core'
+
+        export const scratch = workspace({ id: 'scratch', mounts: [{ path: '/drafts', access: 'readwrite' }] })
+      `,
+        "src/app.ts": `
+        import { tool } from '@use-crux/core'
+        import { scratch } from './resources'
+
+        export const versioningTool = tool({
+          name: 'versioningTool',
+          execute: async () => {
             await scratch.undo('/drafts/article.md')
           },
         })
@@ -311,7 +359,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
       expect: {
         definitionIds: ["workspace:scratch"],
-        relationTypes: ["tool.reads_workspace", "tool.writes_workspace"],
+        relationTypes: ["tool.writes_workspace"],
       },
     },
     {

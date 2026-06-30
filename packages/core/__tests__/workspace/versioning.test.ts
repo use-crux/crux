@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { inMemoryBlobStore, inMemoryDataStore, storage } from "../../storage";
+import { describe, expect, it, vi } from "vitest";
+import {
+  inMemoryBlobStore,
+  inMemoryDataStore,
+  storage,
+  type DataStore,
+  type JsonObject,
+  type SetOptions,
+} from "../../storage";
 import { workspace } from "../../workspace";
 
 describe("workspace versioning & history", () => {
@@ -148,10 +155,7 @@ describe("workspace versioning & history", () => {
     });
 
     await ws.write("/workspace/notes.md", "line one\nline two\nline three\n");
-    await ws.write(
-      "/workspace/notes.md",
-      "line one\nline TWO\nline three\n",
-    );
+    await ws.write("/workspace/notes.md", "line one\nline TWO\nline three\n");
 
     const diff = await ws.diff("/workspace/notes.md");
 
@@ -187,6 +191,59 @@ describe("workspace versioning & history", () => {
     ).rejects.toThrow(/version 1 .* was not found/i);
   });
 
+  it("honors an explicit history limit of zero", async () => {
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      data: inMemoryDataStore(),
+    });
+
+    await ws.write("/workspace/notes.md", "v1");
+
+    await expect(
+      ws.history("/workspace/notes.md", { limit: 0 }),
+    ).resolves.toEqual([]);
+  });
+
+  it("rolls back the live record when version persistence fails", async () => {
+    const data = inMemoryDataStore();
+    let failVersionWrite = false;
+    const guardedData: DataStore = {
+      get: data.get,
+      list: data.list,
+      delete: data.delete,
+      async set(
+        key: string,
+        value: JsonObject,
+        options?: SetOptions,
+      ): Promise<void> {
+        if (failVersionWrite && key.includes(":version:")) {
+          throw new Error("version write failed");
+        }
+        await data.set(key, value, options);
+      },
+    };
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      data: guardedData,
+    });
+
+    await ws.write("/workspace/notes.md", "v1");
+    failVersionWrite = true;
+
+    await expect(ws.write("/workspace/notes.md", "v2")).rejects.toThrow(
+      /version write failed/,
+    );
+    await expect(ws.read("/workspace/notes.md")).resolves.toMatchObject({
+      kind: "text",
+      content: "v1",
+    });
+    expect(
+      (await ws.history("/workspace/notes.md")).map((entry) => entry.version),
+    ).toEqual([1]);
+  });
+
   it("purges version history when a file is deleted", async () => {
     const ws = workspace({
       id: "research",
@@ -199,6 +256,123 @@ describe("workspace versioning & history", () => {
     await ws.delete("/workspace/notes.md");
 
     expect(await ws.history("/workspace/notes.md")).toEqual([]);
+  });
+
+  it("preserves blob payloads when deleteBlob is false", async () => {
+    const blobs = inMemoryBlobStore();
+    const deleteBlob = vi.spyOn(blobs, "delete");
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({ data: inMemoryDataStore(), blobs }),
+    });
+
+    await ws.write("/workspace/file.bin", new Uint8Array([1]), {
+      mimeType: "application/octet-stream",
+    });
+    const first = await ws.read("/workspace/file.bin");
+    await ws.write("/workspace/file.bin", new Uint8Array([2]), {
+      mimeType: "application/octet-stream",
+    });
+    const second = await ws.read("/workspace/file.bin");
+    if (first.kind !== "binary" || second.kind !== "binary") {
+      throw new Error("expected binary reads");
+    }
+
+    await ws.delete("/workspace/file.bin", { deleteBlob: false });
+
+    expect(deleteBlob).not.toHaveBeenCalled();
+    await expect(blobs.get(first.uri)).resolves.toMatchObject({
+      mimeType: "application/octet-stream",
+    });
+    await expect(blobs.get(second.uri)).resolves.toMatchObject({
+      mimeType: "application/octet-stream",
+    });
+  });
+
+  it("deletes each blob-backed version once when a file is deleted", async () => {
+    const blobs = inMemoryBlobStore();
+    const deleteBlob = vi.spyOn(blobs, "delete");
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({ data: inMemoryDataStore(), blobs }),
+    });
+
+    await ws.write("/workspace/file.bin", new Uint8Array([1]), {
+      mimeType: "application/octet-stream",
+    });
+    const first = await ws.read("/workspace/file.bin");
+    await ws.write("/workspace/file.bin", new Uint8Array([2]), {
+      mimeType: "application/octet-stream",
+    });
+    const second = await ws.read("/workspace/file.bin");
+    if (first.kind !== "binary" || second.kind !== "binary") {
+      throw new Error("expected binary reads");
+    }
+
+    await ws.delete("/workspace/file.bin");
+
+    expect(deleteBlob.mock.calls.map(([uri]) => uri).sort()).toEqual(
+      [first.uri, second.uri].sort(),
+    );
+  });
+
+  it("reseeds copied files with fresh destination history", async () => {
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      data: inMemoryDataStore(),
+    });
+
+    await ws.write("/workspace/source.md", "v1");
+    await ws.write("/workspace/source.md", "v2");
+    await ws.copy("/workspace/source.md", "/workspace/copy.md");
+    await ws.write("/workspace/copy.md", "v3");
+
+    await expect(
+      ws.read("/workspace/copy.md", { version: 1 }),
+    ).resolves.toMatchObject({ kind: "text", content: "v2" });
+    expect(
+      (await ws.history("/workspace/copy.md")).map((entry) => entry.version),
+    ).toEqual([2, 1]);
+  });
+
+  it("reseeds moved files with fresh destination history and purges source history", async () => {
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      data: inMemoryDataStore(),
+    });
+
+    await ws.write("/workspace/source.md", "v1");
+    await ws.write("/workspace/source.md", "v2");
+    await ws.move("/workspace/source.md", "/workspace/moved.md");
+    await ws.write("/workspace/moved.md", "v3");
+
+    await expect(
+      ws.read("/workspace/moved.md", { version: 1 }),
+    ).resolves.toMatchObject({ kind: "text", content: "v2" });
+    await expect(ws.history("/workspace/source.md")).resolves.toEqual([]);
+  });
+
+  it("rejects exact diffs that would allocate an unbounded LCS matrix", async () => {
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      data: inMemoryDataStore(),
+    });
+    const before = Array.from({ length: 1001 }, (_, index) => `a${index}`).join(
+      "\n",
+    );
+    const after = Array.from({ length: 1001 }, (_, index) => `b${index}`).join(
+      "\n",
+    );
+
+    await ws.write("/workspace/large.md", before);
+    await ws.write("/workspace/large.md", after);
+
+    await expect(ws.diff("/workspace/large.md")).rejects.toThrow(/too large/);
   });
 
   it("exposes the undoWorkspaceFile tool only when opted in", async () => {

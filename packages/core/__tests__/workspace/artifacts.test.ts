@@ -98,12 +98,14 @@ describe("workspace artifacts facet", () => {
     expect(finalized).toMatchObject({ status: "final", version: 1, size: 9 });
 
     // The agent keeps iterating the working copy.
+    await new Promise((resolve) => setTimeout(resolve, 1));
     await ws.edit("/outputs/report.md", {
       find: "published",
       replace: "work in progress draft",
     });
 
     // The published artifact still resolves to the pinned revision.
+    const stat = await ws.stat("/outputs/report.md");
     const [artifact] = await ws.artifacts({ status: "final" });
     expect(artifact).toMatchObject({
       path: "/outputs/report.md",
@@ -111,6 +113,7 @@ describe("workspace artifacts facet", () => {
       version: 1,
       size: 9,
     });
+    expect(artifact?.updatedAt).toBe(stat?.updatedAt);
 
     // read() is the working surface and reflects the edit.
     await expect(ws.read("/outputs/report.md")).resolves.toMatchObject({

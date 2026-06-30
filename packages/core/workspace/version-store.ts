@@ -12,7 +12,11 @@
 
 import type { DataStore, JsonObject, SetOptions } from "../store/types";
 import { emitWorkspaceVersion } from "./observability";
-import type { WorkspaceBlobStore, WorkspaceFileRecord, WorkspacePath } from "./types";
+import type {
+  WorkspaceBlobStore,
+  WorkspaceFileRecord,
+  WorkspacePath,
+} from "./types";
 import {
   VERSION_RECORD_SCHEMA,
   type WorkspaceVersion,
@@ -116,6 +120,7 @@ export async function listVersionRecords(
   path: WorkspacePath,
   options: { readonly limit?: number } = {},
 ): Promise<WorkspaceVersionRecord[]> {
+  if (options.limit === 0) return [];
   const prefix = versionPrefix(workspaceId, namespace, path);
   const records: WorkspaceVersionRecord[] = [];
   let cursor: string | undefined;
@@ -127,7 +132,9 @@ export async function listVersionRecords(
     cursor = listed.cursor;
   } while (cursor);
   records.sort((a, b) => b.version - a.version);
-  return options.limit !== undefined ? records.slice(0, options.limit) : records;
+  return options.limit !== undefined
+    ? records.slice(0, options.limit)
+    : records;
 }
 
 /** Delete every version snapshot for a path, along with its out-of-line blobs. */
@@ -137,10 +144,34 @@ export async function purgeVersions(
   workspaceId: string,
   namespace: string,
   path: WorkspacePath,
+  options: {
+    readonly currentBlobUri?: string;
+    readonly deleteBlob?: boolean;
+  } = {},
 ): Promise<void> {
   const records = await listVersionRecords(store, workspaceId, namespace, path);
+  const deletedBlobUris = new Set<string>();
+  const blobStore = options.deleteBlob === false ? undefined : blobs;
   for (const record of records) {
-    await deleteVersion(store, blobs, workspaceId, namespace, path, record);
+    await deleteVersion(
+      store,
+      blobStore,
+      workspaceId,
+      namespace,
+      path,
+      record,
+      {
+        deletedBlobUris,
+      },
+    );
+  }
+  if (
+    options.deleteBlob !== false &&
+    options.currentBlobUri &&
+    blobs?.delete &&
+    !deletedBlobUris.has(options.currentBlobUri)
+  ) {
+    await blobs.delete(options.currentBlobUri);
   }
 }
 
@@ -178,13 +209,20 @@ async function deleteVersion(
   namespace: string,
   path: WorkspacePath,
   record: WorkspaceVersionRecord,
+  options: { readonly deletedBlobUris?: Set<string> } = {},
 ): Promise<void> {
   await store.delete(versionKey(workspaceId, namespace, path, record.version));
   const uri = record.snapshot.uri;
   // Each version owns a version-scoped blob, so deleting it never orphans the
   // HEAD or a retained snapshot.
-  if (record.snapshot.storage === "blob" && uri && blobs?.delete) {
+  if (
+    record.snapshot.storage === "blob" &&
+    uri &&
+    blobs?.delete &&
+    !options.deletedBlobUris?.has(uri)
+  ) {
     await blobs.delete(uri);
+    options.deletedBlobUris?.add(uri);
   }
 }
 

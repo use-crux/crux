@@ -190,7 +190,7 @@ pinned revision (`WorkspaceArtifact.version`) until you `finalize()` again.
 
 Injected workspaces add a bounded manifest plus file tools for list, read, write,
 edit, rename, and grep. Programmatic methods also include `exists`, `stat`,
-`append`, `copy`, `delete`, `history`, `diff`, `undo`, `artifacts`, and
+`append`, `move`, `copy`, `delete`, `history`, `diff`, `undo`, `artifacts`, and
 `finalize`. Blob-backed text and JSON read back as text/JSON; binary files return
 a URI for app-side fetching. Every operation accepts a `{ namespace }` override
 for direct calls and manually created tools.

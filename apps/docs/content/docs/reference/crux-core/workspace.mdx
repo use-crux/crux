@@ -116,7 +116,9 @@ const finals = await ws.artifacts({ status: "final" });
 `finalize()` pins the current version as the published artifact (`artifact.version`).
 Editing the file afterwards creates new draft versions, but `artifacts()` and the
 manifest keep surfacing the pinned revision until you `finalize()` again. `read()`
-returns the live working copy; `read(path, { version })` fetches the pinned one.
+returns the live working copy; `read(path, { version })` reads a specific
+retained snapshot, whether that version is the pinned artifact revision or any
+other retained revision.
 
 Small inline artifacts expose a `workspace-inline://...` reference. Blob-backed
 artifacts expose the blob URI.

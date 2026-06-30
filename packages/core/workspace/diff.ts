@@ -16,6 +16,8 @@ import type {
 
 /** Number of unchanged context lines kept around each change. */
 const CONTEXT_LINES = 3;
+/** Maximum line-pair cells allocated for the exact LCS diff. */
+const MAX_EXACT_DIFF_CELLS = 1_000_000;
 
 interface DiffOp {
   readonly kind: WorkspaceDiffLine["kind"];
@@ -61,6 +63,11 @@ function splitLines(text: string): string[] {
 function diffLines(before: string[], after: string[]): DiffOp[] {
   const rows = before.length;
   const cols = after.length;
+  if (rows > 0 && cols > Math.floor(MAX_EXACT_DIFF_CELLS / rows)) {
+    throw new Error(
+      `workspace.diff(): input is too large for exact line diff (${rows}x${cols} line pairs).`,
+    );
+  }
   const lcs: number[][] = Array.from({ length: rows + 1 }, () =>
     new Array<number>(cols + 1).fill(0),
   );
@@ -108,7 +115,10 @@ function groupHunks(ops: DiffOp[]): WorkspaceDiffHunk[] {
     let end = start;
     let next = cursor + 1;
     // Merge changes whose context gaps would overlap into one hunk.
-    while (next < changedAt.length && changedAt[next]! - end <= CONTEXT_LINES * 2) {
+    while (
+      next < changedAt.length &&
+      changedAt[next]! - end <= CONTEXT_LINES * 2
+    ) {
       end = changedAt[next]!;
       next += 1;
     }
@@ -162,7 +172,8 @@ function renderUnified(
     out.push(
       `@@ -${hunk.fromStart},${hunk.fromLines} +${hunk.toStart},${hunk.toLines} @@`,
     );
-    for (const line of hunk.lines) out.push(`${prefixFor(line.kind)}${line.text}`);
+    for (const line of hunk.lines)
+      out.push(`${prefixFor(line.kind)}${line.text}`);
   }
   return `${out.join("\n")}\n`;
 }

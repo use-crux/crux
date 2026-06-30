@@ -162,10 +162,15 @@ export function workspace<const Config extends WorkspaceConfig>(
         const normalized = normalizePath(path);
         mountForPath(normalized, mounts, "read");
         if (options?.version !== undefined) {
-          return versionOps.readVersion(namespace, normalized, options.version, {
-            maxInlineBytes: options.maxInlineBytes,
-            offset: options.offset,
-          });
+          return versionOps.readVersion(
+            namespace,
+            normalized,
+            options.version,
+            {
+              maxInlineBytes: options.maxInlineBytes,
+              offset: options.offset,
+            },
+          );
         }
         const record = await getRequiredRecord(
           store,
@@ -245,22 +250,28 @@ export function workspace<const Config extends WorkspaceConfig>(
             blobs,
           });
           const setOptions = workspaceSetOptions(store, config.retention);
-          await store.set(
-            fileKey(config.id, namespace, normalized),
-            record,
-            setOptions,
-          );
-          await recordFileVersion({
-            store,
-            blobs,
-            workspaceId: config.id,
-            namespace,
-            path: normalized,
-            record,
-            operation,
-            versioning: config.versioning,
-            setOptions,
-          });
+          const key = fileKey(config.id, namespace, normalized);
+          await store.set(key, record, setOptions);
+          try {
+            await recordFileVersion({
+              store,
+              blobs,
+              workspaceId: config.id,
+              namespace,
+              path: normalized,
+              record,
+              operation,
+              versioning: config.versioning,
+              setOptions,
+            });
+          } catch (error) {
+            if (existing) {
+              await store.set(key, existing, setOptions);
+            } else {
+              await store.delete(key);
+            }
+            throw error;
+          }
           return recordToFile(record);
         });
       },
@@ -349,10 +360,10 @@ export function workspace<const Config extends WorkspaceConfig>(
         mountForPath(normalized, mounts, "write");
         const record = await getRecord(store, config.id, namespace, normalized);
         await store.delete(fileKey(config.id, namespace, normalized));
-        await purgeVersions(store, blobs, config.id, namespace, normalized);
-        if (options?.deleteBlob !== false && record?.uri && blobs?.delete) {
-          await blobs.delete(record.uri);
-        }
+        await purgeVersions(store, blobs, config.id, namespace, normalized, {
+          deleteBlob: options?.deleteBlob,
+          currentBlobUri: record?.uri,
+        });
       },
     );
   }
@@ -375,7 +386,14 @@ export function workspace<const Config extends WorkspaceConfig>(
     mounts,
     resolveNamespace,
     write: (namespace, path, content, options, operation) =>
-      writeForNamespace(namespace, path, content, options, undefined, operation),
+      writeForNamespace(
+        namespace,
+        path,
+        content,
+        options,
+        undefined,
+        operation,
+      ),
   });
   const artifactOps = createWorkspaceArtifactOps({
     workspaceId: config.id,

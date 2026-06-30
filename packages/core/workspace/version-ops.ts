@@ -89,10 +89,16 @@ export function createWorkspaceVersionOps(
   ): Promise<readonly WorkspaceVersion[]> {
     const namespace = await namespaceFor(options);
     return instrument(
-      { workspaceId: config.workspaceId, operation: "history", namespace, path },
+      {
+        workspaceId: config.workspaceId,
+        operation: "history",
+        namespace,
+        path,
+      },
       async () => {
         const normalized = normalizePath(path);
         mountForPath(normalized, config.mounts, "read");
+        if (options?.limit === 0) return [];
         const snapshots = await listVersionRecords(
           config.store,
           config.workspaceId,
@@ -133,7 +139,13 @@ export function createWorkspaceVersionOps(
         }
         const before = await versionText(namespace, normalized, from, head);
         const after = await versionText(namespace, normalized, to, head);
-        return computeWorkspaceDiff({ path: normalized, from, to, before, after });
+        return computeWorkspaceDiff({
+          path: normalized,
+          from,
+          to,
+          before,
+          after,
+        });
       },
     );
   }

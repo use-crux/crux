@@ -81,29 +81,43 @@ function containsDataAccessCall(
   seen: ReadonlySet<string> = new Set(),
 ): boolean {
   if (isIdentifier(node)) {
-    const binding = bindings.get(node.text);
-    if (!binding || seen.has(binding.name)) return false;
-    const nextSeen = new Set(seen);
-    nextSeen.add(binding.name);
-    return Boolean(
-      (binding.initializer &&
-        containsDataAccessCall(binding.initializer, bindings, nextSeen)) ||
-      containsDataAccessCall(binding.declaration, bindings, nextSeen),
-    );
+    return containsDataAccessCallInBinding(node.text, bindings, seen);
+  }
+  if (isCallExpression(node)) {
+    if (
+      isPropertyAccessExpression(node.expression) &&
+      dataAccessKindForMethod(node.expression.name.text)
+    ) {
+      return true;
+    }
+    if (
+      isIdentifier(node.expression) &&
+      containsDataAccessCallInBinding(node.expression.text, bindings, seen)
+    ) {
+      return true;
+    }
   }
   let found = false;
   const visit = (child: Node): void => {
     if (found) return;
-    if (
-      isCallExpression(child) &&
-      isPropertyAccessExpression(child.expression) &&
-      dataAccessKindForMethod(child.expression.name.text)
-    ) {
-      found = true;
-      return;
-    }
-    child.forEachChild(visit);
+    found = containsDataAccessCall(child, bindings, seen);
   };
   node.forEachChild(visit);
   return found;
+}
+
+function containsDataAccessCallInBinding(
+  symbol: string,
+  bindings: ReadonlyMap<string, NativeSourceBinding>,
+  seen: ReadonlySet<string>,
+): boolean {
+  const binding = bindings.get(symbol);
+  if (!binding || seen.has(binding.name)) return false;
+  const nextSeen = new Set(seen);
+  nextSeen.add(binding.name);
+  return Boolean(
+    (binding.initializer &&
+      containsDataAccessCall(binding.initializer, bindings, nextSeen)) ||
+    containsDataAccessCall(binding.declaration, bindings, nextSeen),
+  );
 }

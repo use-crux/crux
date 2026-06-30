@@ -177,6 +177,8 @@ export async function resolveArtifact(input: {
       return recordToArtifact(
         {
           ...pinned.snapshot,
+          createdAt: record.createdAt,
+          updatedAt: record.updatedAt,
           status: "final",
           kind: record.kind,
           producedBy: record.producedBy,
@@ -198,7 +200,9 @@ export function recordToArtifact(
     path: record.path,
     ...(record.kind ? { kind: record.kind } : {}),
     status: record.status ?? "draft",
-    ...(record.finalVersion !== undefined ? { version: record.finalVersion } : {}),
+    ...(record.finalVersion !== undefined
+      ? { version: record.finalVersion }
+      : {}),
     mimeType: record.mimeType,
     size: record.size,
     uri:

@@ -1089,6 +1089,7 @@ export const ProjectIdentitySchema = z.object({
 export const ProjectDefinitionKindSchema = z.enum([
   "prompt",
   "context",
+  "injectable",
   "tool",
   "agent",
   "flow",
@@ -1119,6 +1120,8 @@ export const ProjectDefinitionKindSchema = z.enum([
   "guardrail",
   "scorer",
   "dataset",
+  "evaluation",
+  "evaluation.case",
   "suite",
   "suite.case",
   "eval.prompt",
@@ -1202,12 +1205,48 @@ export const SourceRefSummarySchema = z.object({
   description: z.string().optional(),
 }) satisfies z.ZodType<SourceRefSummary>;
 
+export const InputSchemaContributionSchema = z.object({
+  field: z.string(),
+  schema: JsonSchemaSchema.optional(),
+  description: z.string().optional(),
+  required: z.boolean().optional(),
+  sourceDefinitionId: z.string().optional(),
+  sourceName: z.string().optional(),
+  sourceKind: ProjectDefinitionKindSchema.optional(),
+  path: z.array(z.string()).optional(),
+  via: z
+    .enum([
+      "direct",
+      "array-ref",
+      "spread",
+      "when",
+      "match",
+      "binary",
+      "runtime",
+    ])
+    .optional(),
+  conditionality: z
+    .enum([
+      "always",
+      "when",
+      "match-case",
+      "match-default",
+      "binary-guard",
+      "dynamic",
+      "unknown",
+    ])
+    .optional(),
+  branch: z.string().optional(),
+}) satisfies z.ZodType<InputSchemaContribution>;
+
 export const ContractFactsSchema = z.object({
   argsSchema: JsonSchemaSchema.optional(),
   inputSchema: JsonSchemaSchema.optional(),
+  expandedInputSchema: JsonSchemaSchema.optional(),
   outputSchema: JsonSchemaSchema.optional(),
   configSchema: JsonSchemaSchema.optional(),
   schemaRefs: z.array(SourceRefSummarySchema).optional(),
+  inputContributions: z.array(InputSchemaContributionSchema).optional(),
   nestedSchemas: z
     .array(
       z.object({
@@ -1328,6 +1367,7 @@ export const DependencyFactsSchema = z
   .object({
     prompts: z.array(z.string()).optional(),
     contexts: z.array(z.string()).optional(),
+    injectables: z.array(z.string()).optional(),
     tools: z.array(z.string()).optional(),
     agents: z.array(z.string()).optional(),
     flows: z.array(z.string()).optional(),
@@ -1463,6 +1503,15 @@ export const ProjectDefinitionMetadataSchema = z
   })
   .catchall(z.unknown()) satisfies z.ZodType<ProjectDefinitionMetadata>;
 
+export const ProjectDefinitionQualityDriftRowSchema = z.object({
+  id: z.string(),
+  passRate: z.number(),
+  runs: z.number(),
+  baselineExperimentId: z.string(),
+  baselinePassRate: z.number(),
+  driftPp: z.number(),
+}) satisfies z.ZodType<ProjectDefinitionQualityDriftRow>;
+
 export const ProjectDefinitionQualitySchema = z.object({
   evalIds: z.array(z.string()).optional(),
   suiteIds: z.array(z.string()).optional(),
@@ -1492,6 +1541,12 @@ export const ProjectDefinitionQualitySchema = z.object({
   currentFingerprint: z.string().optional(),
   baselineFingerprint: z.string().optional(),
   changedSinceBaseline: z.boolean().optional(),
+  drift: z
+    .object({
+      evals: z.array(ProjectDefinitionQualityDriftRowSchema),
+      suites: z.array(ProjectDefinitionQualityDriftRowSchema),
+    })
+    .optional(),
 }) satisfies z.ZodType<ProjectDefinitionQuality>;
 
 export const ProjectDefinitionSchema = z.object({
