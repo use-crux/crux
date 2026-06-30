@@ -66,14 +66,16 @@ pub(crate) fn fallback_relation_target_id(
         }
         "storage.bundle.uses_record_store"
         | "rag.retriever.uses_record_store"
-        | "workspace.uses_record_store" => {
-            Some(format!("storage.recordStore:{}", safe_use_entry_id(variable)))
-        }
+        | "workspace.uses_record_store" => Some(format!(
+            "storage.recordStore:{}",
+            safe_use_entry_id(variable)
+        )),
         "storage.bundle.uses_vector_store"
         | "rag.retriever.uses_vector_store"
-        | "workspace.uses_vector_store" => {
-            Some(format!("storage.vectorStore:{}", safe_use_entry_id(variable)))
-        }
+        | "workspace.uses_vector_store" => Some(format!(
+            "storage.vectorStore:{}",
+            safe_use_entry_id(variable)
+        )),
         "storage.bundle.uses_blob_store"
         | "rag.retriever.uses_blob_store"
         | "workspace.uses_blob_store" => {

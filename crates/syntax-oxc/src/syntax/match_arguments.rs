@@ -88,10 +88,65 @@ pub(crate) fn visit_argument(
                 matches,
             );
         }
+        Argument::ConditionalExpression(conditional) => {
+            visit_expression(context, &conditional.test, scoped_initializers, matches);
+            visit_expression(
+                context,
+                &conditional.consequent,
+                scoped_initializers,
+                matches,
+            );
+            visit_expression(
+                context,
+                &conditional.alternate,
+                scoped_initializers,
+                matches,
+            );
+        }
         Argument::ParenthesizedExpression(parenthesized) => {
             visit_expression(
                 context,
                 &parenthesized.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        Argument::TSAsExpression(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        Argument::TSSatisfiesExpression(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        Argument::TSTypeAssertion(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        Argument::TSNonNullExpression(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        Argument::TSInstantiationExpression(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
                 scoped_initializers,
                 matches,
             );
@@ -179,10 +234,65 @@ pub(crate) fn visit_array_element(
                 matches,
             );
         }
+        ArrayExpressionElement::ConditionalExpression(conditional) => {
+            visit_expression(context, &conditional.test, scoped_initializers, matches);
+            visit_expression(
+                context,
+                &conditional.consequent,
+                scoped_initializers,
+                matches,
+            );
+            visit_expression(
+                context,
+                &conditional.alternate,
+                scoped_initializers,
+                matches,
+            );
+        }
         ArrayExpressionElement::ParenthesizedExpression(parenthesized) => {
             visit_expression(
                 context,
                 &parenthesized.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        ArrayExpressionElement::TSAsExpression(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        ArrayExpressionElement::TSSatisfiesExpression(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        ArrayExpressionElement::TSTypeAssertion(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        ArrayExpressionElement::TSNonNullExpression(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
+                scoped_initializers,
+                matches,
+            );
+        }
+        ArrayExpressionElement::TSInstantiationExpression(expression) => {
+            visit_expression(
+                context,
+                &expression.expression,
                 scoped_initializers,
                 matches,
             );
