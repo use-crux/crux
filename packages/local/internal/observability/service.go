@@ -223,45 +223,47 @@ type RunDetailCounts struct {
 
 type RunDetailNode struct {
 	SpanSummary
-	ID            string                 `json:"id"`
-	Virtual       bool                   `json:"virtual"`
-	ParentID      string                 `json:"parentId"`
-	Path          []string               `json:"path"`
-	Kind          string                 `json:"kind"`
-	Display       RunDetailDisplay       `json:"display"`
-	Timing        RunDetailTiming        `json:"timing"`
-	MetricBuckets RunDetailMetricBuckets `json:"metricBuckets"`
-	Source        RunDetailSource        `json:"source"`
-	Details       []RunDetailDetail      `json:"details"`
-	Artifacts     []ArtifactSummary      `json:"artifacts"`
-	Events        []SpanEventSummary     `json:"events"`
-	Relations     []EdgeSummary          `json:"relations"`
-	Diagnostics   []RunDetailDiagnostic  `json:"diagnostics"`
-	Flow          map[string]any         `json:"flow,omitempty"`
-	Step          map[string]any         `json:"step,omitempty"`
-	Composition   map[string]any         `json:"composition,omitempty"`
-	Transition    map[string]any         `json:"transition,omitempty"`
-	Request       *RunDetailRequest      `json:"request,omitempty"`
-	Inspection    RunDetailInspection    `json:"inspection,omitempty"`
-	Children      []RunDetailNode        `json:"children"`
+	ID             string                 `json:"id"`
+	Virtual        bool                   `json:"virtual"`
+	ParentID       string                 `json:"parentId"`
+	Path           []string               `json:"path"`
+	Kind           string                 `json:"kind"`
+	Display        RunDetailDisplay       `json:"display"`
+	Timing         RunDetailTiming        `json:"timing"`
+	MetricBuckets  RunDetailMetricBuckets `json:"metricBuckets"`
+	Source         RunDetailSource        `json:"source"`
+	Details        []RunDetailDetail      `json:"details"`
+	Artifacts      []ArtifactSummary      `json:"artifacts"`
+	Events         []SpanEventSummary     `json:"events"`
+	Relations      []EdgeSummary          `json:"relations"`
+	Diagnostics    []RunDetailDiagnostic  `json:"diagnostics"`
+	Flow           map[string]any         `json:"flow,omitempty"`
+	Step           map[string]any         `json:"step,omitempty"`
+	Composition    map[string]any         `json:"composition,omitempty"`
+	Transition     map[string]any         `json:"transition,omitempty"`
+	Request        *RunDetailRequest      `json:"request,omitempty"`
+	DecisionReport *TurnDecisionReport    `json:"decisionReport,omitempty"`
+	Inspection     RunDetailInspection    `json:"inspection,omitempty"`
+	Children       []RunDetailNode        `json:"children"`
 }
 
 type RunDetailDetail struct {
 	SpanSummary
-	ID          string                `json:"id"`
-	Kind        string                `json:"kind"`
-	Role        string                `json:"role,omitempty"`
-	Label       string                `json:"label"`
-	Display     string                `json:"display"`
-	Timing      RunDetailTiming       `json:"timing"`
-	Summary     string                `json:"summary,omitempty"`
-	Events      []SpanEventSummary    `json:"events"`
-	Artifacts   []ArtifactSummary     `json:"artifacts"`
-	Relations   []EdgeSummary         `json:"relations"`
-	Diagnostics []RunDetailDiagnostic `json:"diagnostics"`
-	Source      RunDetailSource       `json:"source"`
-	Request     *RunDetailRequest     `json:"request,omitempty"`
-	Inspection  RunDetailInspection   `json:"inspection,omitempty"`
+	ID             string                `json:"id"`
+	Kind           string                `json:"kind"`
+	Role           string                `json:"role,omitempty"`
+	Label          string                `json:"label"`
+	Display        string                `json:"display"`
+	Timing         RunDetailTiming       `json:"timing"`
+	Summary        string                `json:"summary,omitempty"`
+	Events         []SpanEventSummary    `json:"events"`
+	Artifacts      []ArtifactSummary     `json:"artifacts"`
+	Relations      []EdgeSummary         `json:"relations"`
+	Diagnostics    []RunDetailDiagnostic `json:"diagnostics"`
+	Source         RunDetailSource       `json:"source"`
+	Request        *RunDetailRequest     `json:"request,omitempty"`
+	DecisionReport *TurnDecisionReport   `json:"decisionReport,omitempty"`
+	Inspection     RunDetailInspection   `json:"inspection,omitempty"`
 }
 
 type RunDetailRequest struct {
