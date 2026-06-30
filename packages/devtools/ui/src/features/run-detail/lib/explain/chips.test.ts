@@ -83,7 +83,7 @@ describe('summaryChips (derived when the backend emits none)', () => {
 describe('summaryChips (passthrough when the backend emits them)', () => {
   it('uses backend chips and maps their filter target to a section id', () => {
     const r = baseReport()
-    r.summary = [
+    r.chips = [
       { id: 'saw', label: 'Saw 2', tone: 'neutral', filter: { target: 'saw' } },
       { id: 'cache', label: 'Cache hit', tone: 'info', filter: { target: 'cache' } },
       { id: 'cov', label: 'Quality unprotected', tone: 'warning', filter: { target: 'coverage' } },

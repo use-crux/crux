@@ -1,0 +1,142 @@
+---
+title: Debug why a model turn behaved badly
+description: Use Run Detail Explain to inspect what shaped one model turn, find the source to change, and protect the behavior with Quality assertions.
+---
+
+Bad AI behavior usually starts before the final text: missing context, dropped
+context, stale evidence, cache reuse, routing or fallback choices, guardrail
+behavior, or missing quality coverage. Run Detail **Explain** gives you a
+deterministic readout of those setup decisions for one generation turn.
+
+## 1. Open the turn
+
+Start local devtools, run the workflow that produced the bad answer, then open
+the run:
+
+```bash
+crux dev
+```
+
+In Run Detail, select the generation turn with the bad answer and open
+**Explain**. Explain opens by default for warning turns, and the Tree, Timeline,
+and Graph badges point to turns that need attention. Selecting the run root
+shows Run Insight, a roll-up derived from the per-turn reports in that run.
+
+## 2. Check what the model saw
+
+Start with **What the model saw**. These are the prompt, messages, active
+contexts, retrieval, memory, and tool rows that reached the model. Token counts
+appear when Crux recorded enough evidence to estimate them.
+
+Ask: did the model actually receive the information I expected?
+
+## 3. Check what was considered but not sent
+
+Open **Checked but not sent** when the expected information is missing. These
+rows show candidates Crux evaluated but withheld:
+
+- `checked`
+- `dropped`
+- `disabled`
+- `unknown`
+
+Reason states explain the withholding path: predicate false, match no case,
+budget, compaction, stale rejected, disabled, empty, or unknown.
+
+Ask: was the right thing available but withheld?
+
+## 4. Check freshness and cache separately
+
+Keep the mental model strict:
+
+- Freshness: was the evidence current enough?
+- Cache: what was reused or stored?
+
+Cached evidence can be accepted by freshness or rejected by freshness. Live
+evidence can still be stale or unknown. Avoid treating this as "cache
+freshness"; the report keeps correctness and reuse as separate evidence.
+
+## 5. Check runtime decisions
+
+Use **Decisions** to inspect runtime choices that shaped the turn:
+
+- routing
+- fallback
+- guardrail
+- security
+- constraint
+- cache
+- compaction
+
+Each row links to the deeper tab for that evidence.
+
+Ask: did routing, fallback, safety, or compaction change this turn?
+
+## 6. Find what source to change
+
+Use **What source do I change?** to find the prompt, context, tool, route,
+guardrail, or quality definition that caused the behavior. Source joins report
+their fidelity:
+
+- `exact`
+- `runtime-join`
+- `source-id`
+- `inferred`
+- `unresolved`
+
+Ask: which definition caused this, and can Crux prove the source location?
+
+## 7. Protect it with a quality assertion
+
+Once you know the setup behavior you want, protect stable machine fields instead
+of human-facing text. `reason.text`, `turn.readout`, labels, and suggestions are
+display copy; reason codes and coverage ids are stable.
+
+Assert that the required context reaches the model:
+
+```ts
+expect: (ctx) => {
+  ctx.expect.decisionReport.context.toHaveDisposition('context:customerProfile', 'active', {
+    reasonCode: 'context.active',
+  })
+}
+```
+
+Assert that stale cached evidence is rejected:
+
+```ts
+expect: (ctx) => {
+  ctx.expect.decisionReport.cache.toHaveFreshnessAcceptance('context:customerProfile', 'rejected', {
+    reasonCode: 'cache.freshness.rejected',
+  })
+}
+```
+
+Assert that routing picked the intended route:
+
+```ts
+expect: (ctx) => {
+  ctx.expect.decisionReport.routing.toHaveOutcome('route:billing', 'selected', {
+    reasonCode: 'routing.router.selected',
+  })
+}
+```
+
+## 8. Interpret missing evidence honestly
+
+Missing evidence is not automatically a product bug. It means Crux could not
+prove the fact from recorded evidence. Unknown, unresolved, missing, and
+inferred states remain explicit so you can distinguish "bad behavior happened"
+from "the trace did not prove why."
+
+Use `evidenceLevel` to understand each reason:
+
+- `declared`: the primitive declared the reason.
+- `observed`: Crux observed the behavior directly.
+- `inferred`: Crux inferred the reason from available evidence.
+- `missing`: Crux could not prove the reason from recorded evidence.
+
+## Next
+
+[Observability reference](/docs/reference/crux-core/observability#turn-explanation-decisionreport)
+— the `TurnDecisionReport` V1 contract and compatibility policy.

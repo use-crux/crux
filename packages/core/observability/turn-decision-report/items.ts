@@ -22,8 +22,8 @@ export interface TurnDecisionTurn {
   ttftMs?: number;
   tokens?: { input?: number; output?: number; total?: number };
   cost?: { totalUsd?: number; inputUsd?: number; outputUsd?: number };
-  /** Short deterministic sentence composed only from report facts. */
-  verdict?: string;
+  /** Short deterministic sentence composed only from report facts, not a judgment. */
+  readout?: string;
 }
 
 /** Item that reached the model prompt or tool surface. */

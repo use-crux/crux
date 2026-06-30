@@ -1,7 +1,7 @@
 /**
  * The Run Detail `Explain` tab — the runtime plane's read-out of one model turn.
  *
- * Verdict-led, then a scannable body that answers the six debugging questions
+ * Readout-led, then a scannable body that answers the six debugging questions
  * and links into the existing deep tabs (Context, Routing, Cache, …) rather than
  * duplicating them. Bound to the live {@link TurnDecisionReport}; every honest
  * state (missing / unknown / unresolved) renders rather than blanking.
@@ -18,7 +18,7 @@ import { normalizeTurnDecisionReport, type RuntimeTurnDecisionReport } from '@/f
 import { resolveOpenTab, type ExplainGenTab } from '@/features/run-detail/lib/explain/tabs'
 import type { TurnDeepTabTarget } from '@/types'
 import { SecBand } from './band'
-import { VerdictBand } from './sections/VerdictBand'
+import { ReadoutBand } from './sections/ReadoutBand'
 import { ConsideredRow, SawRow } from './sections/EvidenceSection'
 import { FreshCacheBlock } from './sections/FreshCache'
 import { DecisionRow } from './sections/Decisions'
@@ -115,7 +115,7 @@ export function ExplainTab({
   return (
     <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
       <div className="mx-auto px-6 py-5" style={{ maxWidth: 960 }}>
-        <VerdictBand verdict={normalized.turn.verdict} chips={chips} activeJump={flash} onJump={jump} />
+        <ReadoutBand readout={normalized.turn.readout} chips={chips} activeJump={flash} onJump={jump} />
 
         <Sec id="saw" flash={flash} register={register}>
           <SecBand

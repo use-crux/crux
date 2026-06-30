@@ -35,7 +35,7 @@ func buildTurnDecisionReport(span SpanSummary, request *RunDetailRequest) *TurnD
 	defer normalizeTurnDecisionReportCollections(report)
 	if request == nil {
 		report.Gaps = append(report.Gaps, missingRequestGap(span))
-		report.Turn.Verdict = "Answered with request composition evidence unavailable."
+		report.Turn.Readout = "Answered with request composition evidence unavailable."
 		return report
 	}
 
@@ -143,7 +143,7 @@ func buildTurnDecisionReport(span SpanSummary, request *RunDetailRequest) *TurnD
 	if len(report.Freshness) == 0 || missingFreshness {
 		report.Gaps = append(report.Gaps, missingFreshnessGap(span))
 	}
-	report.Turn.Verdict = turnVerdict(activeContexts, budgetDrops)
+	report.Turn.Readout = turnReadout(activeContexts, budgetDrops)
 	return report
 }
 

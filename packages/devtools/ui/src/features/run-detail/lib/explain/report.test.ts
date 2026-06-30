@@ -17,7 +17,7 @@ describe('normalizeTurnDecisionReport', () => {
       source: [{ group: 'Contexts', items: null }],
       coverage: { covered: 0, total: 6, areas: null },
       gaps: null,
-      summary: null,
+      chips: null,
     } satisfies RuntimeTurnDecisionReport
 
     const normalized = normalizeTurnDecisionReport(report)
@@ -29,7 +29,7 @@ describe('normalizeTurnDecisionReport', () => {
       coverage: { covered: 0, total: 6, areas: [] },
     })
     expect(normalized?.source[0]?.items).toEqual([])
-    expect(normalized?.summary).toBeUndefined()
+    expect(normalized?.chips).toBeUndefined()
   })
 
   it('passes through valid report arrays without changing the contract shape', () => {

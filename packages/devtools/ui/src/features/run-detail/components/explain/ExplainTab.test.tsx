@@ -13,7 +13,7 @@ describe('ExplainTab', () => {
         id: 'gen',
         kind: 'generation.call',
         status: 'ok',
-        verdict: 'Answered with request composition evidence unavailable.',
+        readout: 'Answered with request composition evidence unavailable.',
       },
       saw: [],
       considered: null,
@@ -23,7 +23,7 @@ describe('ExplainTab', () => {
       source: [{ group: 'Contexts', items: null }],
       coverage: { covered: 0, total: 6, areas: null },
       gaps: null,
-      summary: null,
+      chips: null,
     } satisfies RuntimeTurnDecisionReport
 
     const html = renderToStaticMarkup(

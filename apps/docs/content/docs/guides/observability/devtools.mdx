@@ -154,7 +154,7 @@ Constraint / Compaction tabs rather than duplicating them. It is backed by the
 deterministic [`TurnDecisionReport`](/docs/reference/crux-core/observability#turn-explanation-decisionreport)
 projected onto the turn — nothing here implies model chain-of-thought.
 
-Explain leads with a one-line **verdict** and a row of scan chips, then a
+Explain leads with a one-line **readout** and a row of scan chips, then a
 scannable body:
 
 - **What the model saw** — prompt, context, retrieval, memory, and tools that
@@ -170,8 +170,9 @@ scannable body:
   compaction outcomes, each linking to its deep tab.
 - **What source do I change?** — the prompt/context/tool/route definitions that
   shaped the turn, with file:line and a resolution status when known.
-- **How this is protected** — a coverage scorecard plus read-only suggested
-  assertions (tests are authored in code and run from the CLI).
+- **How this is protected** — a coverage scorecard keyed by stable area ids,
+  with display labels and read-only suggested assertions (tests are authored in
+  code and run from the CLI).
 - **Missing evidence** — what Crux could not prove from recorded data, shown
   factually (never as an error).
 
@@ -179,9 +180,10 @@ Explain opens **by default** when the turn carries a warning signal — an error
 a fired fallback, stale-used evidence, a dropped required context, or a
 guardrail/security block — and the same turns are flagged with a badge in the
 Tree, Timeline, and Graph lenses. Selecting the **run root** shows a
-failing-first **Insight** roll-up across every turn. Status (disposition,
-freshness, cache, coverage) is the only saturated colour; coverage gaps and
-missing evidence are never styled as failures.
+failing-first **Insight** roll-up derived from the per-turn reports in that run;
+there is no separate run-level `decisionReport` projection in V1. Status
+(disposition, freshness, cache, coverage) is the only saturated colour; coverage
+gaps and missing evidence are never styled as failures.
 
 ### Stats panel
 

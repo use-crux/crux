@@ -157,13 +157,13 @@ ctx.expect.errors.toHaveNone()
 The rest are **capability-typed**: they exist at compile time only when the
 task kind captures that signal family.
 
-| Task kind | Capabilities                                                      |
-| --------- | ----------------------------------------------------------------- |
-| prompt    | `modelCalls`, `citations`, `safety`                               |
-| flow      | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory` |
-| agent     | all nine: + `handoffs`, `retrieval`                               |
-| retriever | `retrieval`                                                       |
-| plain fn  | none                                                              |
+| Task kind | Capabilities                                                                        |
+| --------- | ----------------------------------------------------------------------------------- |
+| prompt    | `modelCalls`, `citations`, `safety`, `decisionReport`                               |
+| flow      | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory`, `decisionReport` |
+| agent     | all ten signal namespaces, including `handoffs`, `retrieval`, and `decisionReport`  |
+| retriever | `retrieval`                                                                         |
+| plain fn  | none                                                                                |
 
 So `ctx.expect.toolCalls` autocompletes on an agent task and is a compile
 error on a prompt task. Examples across the namespaces:
@@ -185,6 +185,58 @@ ctx.expect.modelCalls.count().toBeLessThanOrEqual(3)
 For trajectory assertions, prefer the outcome-first modes (`'subset'`,
 `'superset'`) over `'strict'`/`'unordered'` — exact trajectories are brittle;
 reserve `strict` for hard protocol checks.
+
+## Decision report assertions
+
+Use `ctx.expect.decisionReport` when the regression is about setup behavior:
+context inclusion, routing/fallback choices, freshness status, or whether cache
+evidence was accepted by freshness. These assertions read the captured
+`TurnDecisionReport` for the model turn, so they protect what shaped the request
+rather than only the final answer text.
+
+Assert that a required context reached the model:
+
+```ts
+expect: (ctx) => {
+  ctx.expect.decisionReport.context.toHaveDisposition('context:customerProfile', 'active', {
+    reasonCode: 'context.active',
+  })
+}
+```
+
+Assert that stale cached evidence was rejected:
+
+```ts
+expect: (ctx) => {
+  ctx.expect.decisionReport.cache.toHaveFreshnessAcceptance('context:customerProfile', 'rejected', {
+    reasonCode: 'cache.freshness.rejected',
+  })
+}
+```
+
+Assert that routing picked the intended route:
+
+```ts
+expect: (ctx) => {
+  ctx.expect.decisionReport.routing.toHaveOutcome('route:billing', 'selected', {
+    reasonCode: 'routing.router.selected',
+  })
+}
+```
+
+Fallback behavior has its own matcher:
+
+```ts
+expect: (ctx) => {
+  ctx.expect.decisionReport.fallback.toHaveFired({
+    reasonCode: 'routing.fallback.fired',
+  })
+}
+```
+
+Prefer stable reason codes over human-facing text. `reason.text`,
+`turn.readout`, labels, and suggestions are display copy and may change without
+changing the machine contract.
 
 **Honest failure semantics:** asserting on a signal that was _not captured in
 this execution_ throws an `UncapturedSignalError` naming the signal and which
