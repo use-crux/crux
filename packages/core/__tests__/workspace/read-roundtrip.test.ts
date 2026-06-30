@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inMemoryBlobStore, inMemoryDataStore, storage } from "../../storage";
+import { inMemoryBlobStore, inMemoryRecordStore, storage } from "../../storage";
 import { workspace } from "../../workspace";
 
 describe("workspace read round-trips", () => {
@@ -8,7 +8,7 @@ describe("workspace read round-trips", () => {
       id: "research",
       namespace: "thread:1",
       storage: storage({
-        data: inMemoryDataStore(),
+        records: inMemoryRecordStore(),
         blobs: inMemoryBlobStore(),
       }),
       content: { inlineTextBelowBytes: 10 },
@@ -32,7 +32,7 @@ describe("workspace read round-trips", () => {
       id: "research",
       namespace: "thread:1",
       storage: storage({
-        data: inMemoryDataStore(),
+        records: inMemoryRecordStore(),
         blobs: inMemoryBlobStore(),
       }),
       content: { inlineTextBelowBytes: 10 },
@@ -60,7 +60,7 @@ describe("workspace read round-trips", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
     const content = "abcdefghijklmnopqrstuvwxyzabc";
 
@@ -86,7 +86,7 @@ describe("workspace read round-trips", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
     const content = "0123456789".repeat(10);
 
@@ -109,7 +109,7 @@ describe("workspace read round-trips", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/unicode.txt", "aébc");

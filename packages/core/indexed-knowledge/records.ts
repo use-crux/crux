@@ -9,7 +9,7 @@
  */
 
 import type { CruxChunk, CruxParentChunk } from '../indexing/types'
-import type { JsonObject, SparseVector } from '../store/types'
+import type { ExactFilter, JsonObject, SparseVector } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
 import { indexedParentKey } from './keys'
 
@@ -20,7 +20,7 @@ const indexedRecordTypes = {
 
 type IndexedRecordType = (typeof indexedRecordTypes)[keyof typeof indexedRecordTypes]
 
-type IndexedBaseRecord<TType extends IndexedRecordType> = JsonObject & {
+type IndexedBaseRecord<TType extends IndexedRecordType> = {
   readonly _cruxRecordType: TType
   readonly namespace: string
   readonly sourceId: string
@@ -48,7 +48,7 @@ export type IndexedParentStoredRecord = IndexedBaseRecord<'parent'> & {
 }
 
 /** Filter that selects only active chunk records in the configured namespace. */
-export function activeChunkFilter(namespace: string, filter?: Record<string, unknown>): Record<string, unknown> {
+export function activeChunkFilter(namespace: string, filter?: ExactFilter): ExactFilter {
   return {
     ...(filter ?? {}),
     namespace,
@@ -118,7 +118,7 @@ export function createIndexedParentRecord(input: {
 }
 
 /** Project the persisted fields copied into vector metadata. */
-export function indexedVectorMetadata(value: IndexedChunkRecord): Record<string, unknown> {
+export function indexedVectorMetadata(value: IndexedChunkRecord): ExactFilter {
   return {
     _cruxRecordType: value._cruxRecordType,
     namespace: value.namespace,
@@ -126,12 +126,12 @@ export function indexedVectorMetadata(value: IndexedChunkRecord): Record<string,
     chunkId: value.chunkId,
     generationId: value.generationId,
     active: value.active,
-    ...value.metadata,
+    ...scalarMetadata(value.metadata),
   }
 }
 
 /** Narrow an arbitrary JSON value to an active indexed parent record. */
-export function asIndexedParentRecord(value: JsonObject | null): IndexedParentStoredRecord | null {
+export function asIndexedParentRecord(value: unknown): IndexedParentStoredRecord | null {
   if (
     !isRecord(value) ||
     value._cruxRecordType !== indexedRecordTypes.parent ||
@@ -194,4 +194,19 @@ export function indexedChunkToHit(input: {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function scalarMetadata(metadata: Record<string, unknown>): ExactFilter {
+  return Object.fromEntries(
+    Object.entries(metadata).filter(([, value]) => isExactFilterValue(value)),
+  ) as ExactFilter
+}
+
+function isExactFilterValue(value: unknown): value is ExactFilter[string] {
+  return (
+    value === null ||
+    typeof value === 'string' ||
+    (typeof value === 'number' && Number.isFinite(value)) ||
+    typeof value === 'boolean'
+  )
 }

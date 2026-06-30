@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import { inMemoryDataStore } from "../../storage";
+import { inMemoryRecordStore } from "../../storage";
 import { workspace } from "../../workspace";
 
 describe("workspace() operator limits", () => {
   it("passes retention TTL to stores that support it and omits it for stores that do not", async () => {
-    const ttlStore = inMemoryDataStore();
-    const ttlSet = vi.spyOn(ttlStore, "set");
+    const ttlStore = inMemoryRecordStore();
+    const ttlSet = vi.spyOn(ttlStore, "put");
     const expiring = workspace({
       id: "research",
       namespace: "thread:1",
-      data: ttlStore,
+      records: ttlStore,
       retention: { ttlMs: 1_000 },
     });
 
@@ -18,19 +18,20 @@ describe("workspace() operator limits", () => {
     expect(ttlSet).toHaveBeenCalledWith(
       expect.stringContaining("workspace%2Fnotes.md"),
       expect.objectContaining({ path: "/workspace/notes.md" }),
-      { ttl: 1_000 },
+      { ttlMs: 1_000 },
     );
 
-    const nonTtlStore = inMemoryDataStore();
-    const nonTtlSet = vi.spyOn(nonTtlStore, "set");
+    const nonTtlStore = inMemoryRecordStore();
+    const nonTtlSet = vi.spyOn(nonTtlStore, "put");
     const nonExpiring = workspace({
       id: "research",
       namespace: "thread:2",
-      data: {
+      records: {
         get: nonTtlStore.get,
-        set: nonTtlStore.set,
+        put: nonTtlStore.put,
         delete: nonTtlStore.delete,
         list: nonTtlStore.list,
+        capabilities: () => ({ ...nonTtlStore.capabilities(), ttl: false }),
       },
       retention: { ttlMs: 1_000 },
     });
@@ -48,12 +49,12 @@ describe("workspace() operator limits", () => {
   });
 
   it("rejects a single file above maxFileBytes before writing to the store", async () => {
-    const data = inMemoryDataStore();
-    const set = vi.spyOn(data, "set");
+    const data = inMemoryRecordStore();
+    const set = vi.spyOn(data, "put");
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data,
+      records: data,
       limits: { maxFileBytes: 4 },
     });
 
@@ -65,12 +66,12 @@ describe("workspace() operator limits", () => {
   });
 
   it("allows writes under maxNamespaceBytes and rejects the write that would exceed it", async () => {
-    const data = inMemoryDataStore();
-    const set = vi.spyOn(data, "set");
+    const data = inMemoryRecordStore();
+    const set = vi.spyOn(data, "put");
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data,
+      records: data,
       limits: { maxNamespaceBytes: 10 },
     });
 
@@ -91,7 +92,7 @@ describe("workspace() operator limits", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
       limits: { maxNamespaceBytes: 5 },
     });
 
@@ -109,12 +110,12 @@ describe("workspace() operator limits", () => {
   });
 
   it("applies retention and limits to filesystem mutations", async () => {
-    const data = inMemoryDataStore();
-    const set = vi.spyOn(data, "set");
+    const data = inMemoryRecordStore();
+    const set = vi.spyOn(data, "put");
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data,
+      records: data,
       retention: { ttlMs: 1_000 },
       limits: { maxFileBytes: 8, maxNamespaceBytes: 20 },
     });
@@ -130,12 +131,12 @@ describe("workspace() operator limits", () => {
     expect(set).toHaveBeenCalledWith(
       expect.stringContaining("workspace%2Fa.txt"),
       expect.objectContaining({ path: "/workspace/a.txt" }),
-      { ttl: 1_000 },
+      { ttlMs: 1_000 },
     );
     expect(set).toHaveBeenCalledWith(
       expect.stringContaining("workspace%2Fc.txt"),
       expect.objectContaining({ path: "/workspace/c.txt", status: "final" }),
-      { ttl: 1_000 },
+      { ttlMs: 1_000 },
     );
   });
 });

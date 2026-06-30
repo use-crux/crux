@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { DataStore, StoreEntry } from '../store/types'
+import type { RecordEntry, RecordStore } from '../storage'
 
 /** Prefix for all corpus source records in a namespace. */
 export function sourcePrefixKey(corpusId: string, namespace: string): string {
@@ -20,8 +20,8 @@ export function sourceKey(corpusId: string, namespace: string, sourceId: string)
 }
 
 /** Read every store entry under a prefix, following pagination cursors. */
-export async function listAll(store: DataStore, prefix: string): Promise<StoreEntry[]> {
-  const entries: StoreEntry[] = []
+export async function listAll(store: RecordStore, prefix: string): Promise<RecordEntry[]> {
+  const entries: RecordEntry[] = []
   let cursor: string | undefined
 
   while (true) {

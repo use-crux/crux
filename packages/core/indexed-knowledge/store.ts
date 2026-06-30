@@ -8,8 +8,8 @@
  * @module
  */
 
-import { matchesFilter } from '../store/filter'
-import type { ScoredEntry, VectorSearchQuery } from '../store/types'
+import { StorageError } from '../storage'
+import type { ExactFilter, JsonObject, VectorSearchQuery } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
 import {
   activeChunkFilter,
@@ -39,6 +39,12 @@ import type {
 
 let generationCounter = 0
 
+interface ScoredEntry {
+  readonly key: string
+  readonly value: JsonObject
+  readonly score: number
+}
+
 /** Create an indexed knowledge read-model store from core storage ports. */
 export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig): IndexedKnowledgeStore {
   async function persistGeneration(input: PersistIndexedGenerationInput): Promise<PersistIndexedGenerationResult> {
@@ -60,7 +66,7 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
         now,
       })
       const key = indexedChunkKey(config.indexerId, chunk.namespace, chunk.sourceId, chunk.chunkId)
-      await config.data.set(key, record)
+      await config.records.put(key, record as unknown as JsonObject)
       if (config.vectors && (input.dense?.[index] || input.sparse?.[index])) {
         await config.vectors.upsert([
           {
@@ -74,9 +80,9 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
     }
 
     for (const parent of input.parents) {
-      await config.data.set(
+      await config.records.put(
         indexedParentKey(config.indexerId, parent.namespace, parent.sourceId, parent.parentId),
-        createIndexedParentRecord({ generationId, parent, now }),
+        createIndexedParentRecord({ generationId, parent, now }) as unknown as JsonObject,
       )
     }
 
@@ -99,7 +105,7 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
   async function getParent(ref: IndexedParentRef): Promise<IndexedParentRecord | null> {
     const key = ref.key ?? (ref.parentId ? indexedParentKey(config.indexerId, config.namespace, ref.sourceId, ref.parentId) : undefined)
     if (!key) return null
-    const record = asIndexedParentRecord(await config.data.get(key))
+    const record = asIndexedParentRecord(await config.records.get(key))
     if (!record) return null
     return {
       parentId: record.parentId,
@@ -140,10 +146,10 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
     activeGenerationId: string,
   ): Promise<void> {
     for (const sourceId of sourceIds) {
-      const entries = await listIndexedEntries(config.data, indexedSourcePrefix(config.indexerId, config.namespace, sourceId))
+      const entries = await listIndexedEntries(config.records, indexedSourcePrefix(config.indexerId, config.namespace, sourceId))
       for (const entry of entries) {
         if (entry.value.generationId !== activeGenerationId && entry.value.active === true) {
-          await config.data.set(entry.key, { ...entry.value, active: false, updatedAt: Date.now() })
+          await config.records.put(entry.key, { ...entry.value, active: false, updatedAt: Date.now() })
         }
       }
     }
@@ -158,9 +164,9 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
   }
 
   async function deleteEntries(prefix: string): Promise<number> {
-    const entries = await listIndexedEntries(config.data, prefix)
+    const entries = await listIndexedEntries(config.records, prefix)
     for (const entry of entries) {
-      await config.data.delete(entry.key)
+      await config.records.delete(entry.key)
       await config.vectors?.delete([entry.key])
     }
     return entries.length
@@ -168,37 +174,22 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
 
   async function searchScoredEntries(
     query: IndexedChunkSearchQuery,
-    filter: Record<string, unknown>,
+    filter: ExactFilter,
   ): Promise<ScoredEntry[]> {
     if (config.vectors) {
+      assertPreFilteredVectors(config.vectors.capabilities().filter)
       const vectorHits = await config.vectors.search(vectorSearchQuery(query, filter))
       const entries: ScoredEntry[] = []
       const hydrationFilter = activeChunkFilter(config.namespace)
       for (const hit of vectorHits) {
-        const value = await config.data.get(hit.key)
-        if (!value || !matchesFilter(value, hydrationFilter)) continue
+        const value = await config.records.get(hit.key)
+        if (!value || !matchesExactFilter(value, hydrationFilter)) continue
         entries.push({ key: hit.key, value, score: hit.score })
       }
       return entries
     }
 
-    if (!config.legacyStore) {
-      throw new Error('Indexed knowledge search requires vectors or a legacy store search capability.')
-    }
-
-    if (query.mode === 'dense' && config.legacyStore.vectorSearch) {
-      if (!query.dense) throw new Error('Dense indexed knowledge search requires a dense query vector.')
-      return config.legacyStore.vectorSearch([...query.dense], {
-        limit: query.limit,
-        threshold: query.threshold,
-        filter,
-      })
-    }
-
-    if (!config.legacyStore.searchVectors) {
-      throw new Error('Indexed knowledge search requires a legacy searchVectors capability.')
-    }
-    return config.legacyStore.searchVectors(vectorSearchQuery(query, filter))
+    throw new Error('Indexed knowledge search requires vectors.')
   }
 
   return Object.freeze({
@@ -212,15 +203,50 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
   })
 }
 
-function vectorSearchQuery(query: IndexedChunkSearchQuery, filter: Record<string, unknown>): VectorSearchQuery {
+function vectorSearchQuery(query: IndexedChunkSearchQuery, filter: ExactFilter): VectorSearchQuery {
+  if (query.mode === 'dense') {
+    if (!query.dense) throw new Error('Dense indexed knowledge search requires a dense query vector.')
+    return {
+      mode: 'dense',
+      dense: [...query.dense],
+      limit: query.limit,
+      threshold: query.threshold,
+      filter,
+    }
+  }
+  if (query.mode === 'sparse') {
+    if (!query.sparse) throw new Error('Sparse indexed knowledge search requires a sparse query vector.')
+    return {
+      mode: 'sparse',
+      sparse: query.sparse,
+      limit: query.limit,
+      threshold: query.threshold,
+      filter,
+    }
+  }
+  if (!query.dense || !query.sparse) throw new Error('Hybrid indexed knowledge search requires dense and sparse vectors.')
   return {
-    ...(query.dense ? { dense: [...query.dense] } : {}),
-    ...(query.sparse ? { sparse: query.sparse } : {}),
+    mode: 'hybrid',
+    dense: [...query.dense],
+    sparse: query.sparse,
     limit: query.limit,
     threshold: query.threshold,
     filter,
     fusion: query.fusion,
   }
+}
+
+function assertPreFilteredVectors(filterCapability: 'pre' | 'post' | false): void {
+  if (filterCapability !== 'pre') {
+    throw new StorageError(
+      'unsupported_capability',
+      'Indexed knowledge search requires a vector store with pre-filter support.',
+    )
+  }
+}
+
+function matchesExactFilter(value: JsonObject, filter: ExactFilter): boolean {
+  return Object.entries(filter).every(([key, expected]) => value[key] === expected)
 }
 
 function createGenerationId(): string {

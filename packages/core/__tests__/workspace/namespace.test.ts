@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { prompt } from "../../prompt/prompt";
-import { inMemoryDataStore } from "../../storage";
+import { inMemoryRecordStore } from "../../storage";
 import { workspace } from "../../workspace";
 
 describe("workspace namespace overrides", () => {
@@ -13,7 +13,7 @@ describe("workspace namespace overrides", () => {
           throw new Error("threadId is required");
         return `thread:${threadId}`;
       },
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
   }
 
@@ -63,7 +63,7 @@ describe("workspace namespace overrides", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:static",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/a.md", "static");
@@ -102,7 +102,7 @@ describe("workspace namespace overrides", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:static",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
     const writeTool = ws.asTools().writeWorkspaceFile;
 

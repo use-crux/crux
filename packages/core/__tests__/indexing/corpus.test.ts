@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { embedding } from '../../embedding'
 import { corpus, indexer, indexingPipeline, transform } from '../../indexing'
-import { inMemoryCruxStore, inMemoryDataStore, inMemoryVectorStore } from '../../store/memory'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 
 describe('corpus', () => {
   function setup() {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
     const dense = embedding({
       kind: 'dense',
@@ -18,17 +19,19 @@ describe('corpus', () => {
     const docsIndexer = indexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       dense,
     })
     const docs = corpus({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       indexer: docsIndexer,
     })
 
-    return { store, docs, embed }
+    return { records, docs, embed }
   }
 
   it('syncs a new source and writes a source record', async () => {
@@ -72,8 +75,8 @@ describe('corpus', () => {
     expect(source?.indexedAt).toEqual(expect.any(Number))
   })
 
-    it('accepts explicit DataStore and VectorStore capabilities', async () => {
-    const data = inMemoryDataStore()
+  it('accepts explicit RecordStore and VectorStore capabilities', async () => {
+    const records = inMemoryRecordStore()
     const vectors = inMemoryVectorStore()
     const dense = embedding({
       kind: 'dense',
@@ -86,11 +89,11 @@ describe('corpus', () => {
     const docsIndexer = indexer({
       id: 'docs',
       namespace: 'kb',
-      data,
+      records,
       vectors,
       dense,
     })
-    const docs = corpus({ id: 'docs', namespace: 'kb', data, indexer: docsIndexer })
+    const docs = corpus({ id: 'docs', namespace: 'kb', records, vectors, indexer: docsIndexer })
 
     await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
 
@@ -98,11 +101,13 @@ describe('corpus', () => {
   })
 
     it('records the indexing pipeline stages on source records', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const docsIndexer = indexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       cache: true,
       pipeline: indexingPipeline({
         documents: [
@@ -116,7 +121,7 @@ describe('corpus', () => {
         ],
       }),
     })
-    const docs = corpus({ id: 'docs', namespace: 'kb', store, indexer: docsIndexer })
+    const docs = corpus({ id: 'docs', namespace: 'kb', records, vectors, indexer: docsIndexer })
 
     await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: '  Hello pipeline  ' }])
 
@@ -157,12 +162,14 @@ describe('corpus', () => {
   })
 
     it('ignores excluded volatile metadata when hashing sources', async () => {
-    const store = inMemoryCruxStore()
-    const docsIndexer = indexer({ id: 'docs', namespace: 'kb', store })
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
+    const docsIndexer = indexer({ id: 'docs', namespace: 'kb', records, vectors })
     const docs = corpus({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       indexer: docsIndexer,
       hash: { excludeMetadata: ['mtimeMs'] },
     })
@@ -194,7 +201,7 @@ describe('corpus', () => {
   })
 
     it('deletes stale sources only for complete source sets', async () => {
-    const { docs, store } = setup()
+    const { docs, records } = setup()
     await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }])
 
     const result = await docs.sync([], { stale: 'delete', sourceSet: 'complete' })
@@ -203,11 +210,11 @@ describe('corpus', () => {
     expect(result.deleted).toBe(1)
     expect(result.sources[0]).toMatchObject({ sourceId: 'intro', action: 'deleted', reason: 'stale' })
     expect(await docs.getSource('intro')).toMatchObject({ status: 'deleted' })
-    expect((await store.list('indexer:docs:namespace:kb:source:intro:')).entries).toHaveLength(0)
+    expect((await records.list('indexer:docs:namespace:kb:source:intro:')).entries).toHaveLength(0)
   })
 
     it('dry-runs a full sync simulation without writing chunks or ledger records', async () => {
-    const { docs, store, embed } = setup()
+    const { docs, records, embed } = setup()
 
     const result = await docs.sync([{ namespace: 'kb', sourceId: 'intro', content: 'Hello corpus' }], {
       dryRun: true,
@@ -218,15 +225,17 @@ describe('corpus', () => {
     expect(result.chunkCount).toBe(1)
     expect(embed).toHaveBeenCalledTimes(1)
     expect(await docs.getSource('intro')).toBeNull()
-    expect((await store.list('indexer:docs:namespace:kb:source:intro:')).entries).toHaveLength(0)
+    expect((await records.list('indexer:docs:namespace:kb:source:intro:')).entries).toHaveLength(0)
   })
 
     it('records failed sources while continuing the sync', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const docsIndexer = indexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       pipeline: indexingPipeline({
         documents: [
           transform.document({
@@ -240,7 +249,7 @@ describe('corpus', () => {
         ],
       }),
     })
-    const docs = corpus({ id: 'docs', namespace: 'kb', store, indexer: docsIndexer })
+    const docs = corpus({ id: 'docs', namespace: 'kb', records, vectors, indexer: docsIndexer })
 
     const result = await docs.sync([
       { namespace: 'kb', sourceId: 'bad', content: 'Bad' },

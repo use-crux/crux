@@ -9,13 +9,13 @@
  */
 
 import { createIndexedKnowledgeStore } from '../indexed-knowledge'
-import type { DataStore } from '../store/types'
+import type { RecordStore } from '../storage'
 import { retrievalStage } from './stage'
 import type { HitRetrievalStage, RetrieverHit } from './types'
 
 /** Hydrate each hit with its parent record's content/metadata. */
 export function parentExpand(config: {
-  store: DataStore
+  records: RecordStore
   indexerId?: string
   maxParentChars?: number
   missing?: 'ignore' | 'warn' | 'error'
@@ -37,7 +37,7 @@ export function parentExpand(config: {
         const records = createIndexedKnowledgeStore({
           indexerId: config.indexerId ?? retrieverId,
           namespace: hit.namespace,
-          data: config.store,
+          records: config.records,
         })
         const parentRecord = await records.getParent({
           sourceId: hit.sourceId,

@@ -10,7 +10,7 @@
 import { z } from "zod";
 import { context } from "../prompt/context";
 import type { Context, PromptInjection } from "../prompt/context-types";
-import type { BlobStore, DataStore } from "../store/types";
+import type { BlobStore, RecordStore } from "../storage";
 import { renderWorkspaceManifest } from "./manifest";
 import type {
   NormalizedMount,
@@ -27,7 +27,7 @@ export interface WorkspaceContextAdaptersConfig<
   Defaults extends WorkspaceToolOptions | undefined = undefined,
 > {
   readonly workspaceId: string;
-  readonly store: DataStore;
+  readonly store: RecordStore;
   readonly blobs?: BlobStore;
   readonly mounts: readonly NormalizedMount[];
   readonly resolveNamespace: (

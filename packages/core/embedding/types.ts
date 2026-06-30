@@ -10,7 +10,8 @@
  * @module
  */
 
-import type { CruxStore, EmbedFn, JsonObject, SparseVector } from '../store/types'
+import type { EmbedFn } from '../store/types'
+import type { JsonObject, RecordStore, SparseVector } from '../storage'
 
 /** Token usage reported by an embedding provider. */
 export interface EmbeddingUsage {
@@ -100,7 +101,7 @@ export interface EmbeddingRateLimitPolicy {
   concurrency: number
 }
 
-/** A namespaced embedding cache backed by a {@link CruxStore}. */
+/** A namespaced embedding cache backed by a {@link RecordStore}. */
 export interface EmbeddingCache {
   readonly _tag: 'EmbeddingCache'
   readonly namespace: string
@@ -111,7 +112,7 @@ export interface EmbeddingCache {
 
 /** Options for {@link embeddingCache}. */
 export interface EmbeddingCacheOptions {
-  store: CruxStore
+  records: RecordStore
   namespace: string
   ttlMs?: number
 }

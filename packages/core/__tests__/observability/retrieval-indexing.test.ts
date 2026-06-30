@@ -7,7 +7,7 @@ import {
   setObservabilityTransport,
 } from '../../observability'
 import { retrievalPipeline, retrievalStage, retriever } from '../../retrieval'
-import { inMemoryCruxStore } from '../../store/memory'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 import type { RetrieverHit } from '../../retrieval'
 
 function hit(id: string, content: string, score = 1): RetrieverHit {
@@ -140,11 +140,13 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     it('records indexing operations and pipeline stages as inspectable spans and artifacts', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const docs = indexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       pipeline: indexingPipeline({
         documents: [
           transform.document({
@@ -201,9 +203,10 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     it('records corpus sync, ingest load results, and nested indexing work in one trace', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    const store = inMemoryCruxStore()
-    const docsIndexer = indexer({ id: 'docs', namespace: 'kb', store })
-    const docs = corpus({ id: 'docs', namespace: 'kb', store, indexer: docsIndexer })
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
+    const docsIndexer = indexer({ id: 'docs', namespace: 'kb', records, vectors })
+    const docs = corpus({ id: 'docs', namespace: 'kb', records, vectors, indexer: docsIndexer })
 
     await docs.sync([
       {

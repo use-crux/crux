@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { inMemoryDataStore } from "../../storage";
+import { inMemoryRecordStore } from "../../storage";
 import { workspace } from "../../workspace";
 
 describe("workspace listing", () => {
@@ -7,7 +7,7 @@ describe("workspace listing", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/top.md", "top");
@@ -22,12 +22,12 @@ describe("workspace listing", () => {
   });
 
   it("pushes list limits into the data store", async () => {
-    const data = inMemoryDataStore();
+    const data = inMemoryRecordStore();
     const listSpy = vi.spyOn(data, "list");
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data,
+      records: data,
     });
 
     for (let index = 0; index < 50; index += 1) {
@@ -44,12 +44,12 @@ describe("workspace listing", () => {
   });
 
   it("keeps fetching pages until filtered directory entries satisfy the limit", async () => {
-    const data = inMemoryDataStore();
+    const data = inMemoryRecordStore();
     const listSpy = vi.spyOn(data, "list");
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data,
+      records: data,
     });
 
     vi.useFakeTimers();

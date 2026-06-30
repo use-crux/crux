@@ -20,7 +20,7 @@ import {
   normalizePromptHint,
   resolveScope,
   validateConfig,
-  validateStore,
+  resolveSemanticCacheStores,
 } from './query'
 import { shouldLookup } from './policies'
 import { performLookup } from './lookup'
@@ -46,7 +46,7 @@ export function createSemanticCache(config: SemanticCacheConfig): CruxPlugin {
   return {
     name: 'semantic-cache',
     install() {
-      validateStore(config.store)
+      resolveSemanticCacheStores(config)
 
       return {
         semanticCacheInstalled: true,

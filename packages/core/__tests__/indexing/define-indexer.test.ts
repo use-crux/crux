@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { embedding as makeEmbedding } from '../../embedding'
 import { chunker, indexer as makeIndexer, indexingPipeline, transform } from '../../indexing'
 import { parentExpand, retrievalPipeline, retriever as makeRetriever } from '../../retrieval'
-import { inMemoryCruxStore } from '../../store/memory'
-import type { CruxStore, JsonObject, ListResult } from '../../store/types'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
+import type { JsonObject, RecordPage, RecordStore } from '../../storage'
 
 describe('indexer', () => {
   it('uses indexingPipeline() document transforms before structured default chunking', async () => {
@@ -16,7 +16,8 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store: inMemoryCruxStore(),
+      records: inMemoryRecordStore(),
+      vectors: inMemoryVectorStore(),
       pipeline: indexingPipeline({
         documents: [
           transform.document({
@@ -49,7 +50,8 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store: inMemoryCruxStore(),
+      records: inMemoryRecordStore(),
+      vectors: inMemoryVectorStore(),
       pipeline: indexingPipeline({
         chunker: chunker.structured({ tableRowsPerChunk: 1 }),
       }),
@@ -100,19 +102,21 @@ describe('indexer', () => {
   })
 
     it('parent-child chunking stores parent records and searchable active child chunks', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const dense = makeEmbedding({
       kind: 'dense',
       name: 'dense-test',
       dimensions: 2,
       maxInputTokens: 100,
       batch: { maxSize: 8 },
-      embed: async (texts) => texts.map((text) => [text.length, 1]),
+      embed: async (texts) => texts.map((text) => (/Alpha|beta/.test(text) ? [1, 0] : [0, 1])),
     })
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       dense,
       pipeline: indexingPipeline({
         chunker: chunker.parentChild({ parentMaxChars: 20, childMaxChars: 8, childOverlapChars: 0 }),
@@ -128,8 +132,8 @@ describe('indexer', () => {
       },
     ])
 
-    const docs = makeRetriever({ id: 'docs', namespace: 'kb', store, dense })
-    const expandedDocs = retrievalPipeline(docs, [parentExpand({ store })])
+    const docs = makeRetriever({ id: 'docs', namespace: 'kb', records, vectors, dense })
+    const expandedDocs = retrievalPipeline(docs, [parentExpand({ records })])
     const hits = await expandedDocs.retrieve('Alpha beta')
 
     expect(hits.length).toBeGreaterThan(0)
@@ -141,12 +145,14 @@ describe('indexer', () => {
   })
 
     it('stage-level cache reuses document transform output and supports bypass', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const run = vi.fn(async (document: { content: string }) => ({ ...document, content: `${document.content}!` }))
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       pipeline: indexingPipeline({
         documents: [transform.document({ name: 'bang', version: '1', run })],
       }),
@@ -161,7 +167,8 @@ describe('indexer', () => {
   })
 
     it('generation-aware replacement keeps the previous generation active if a later pipeline fails', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     let shouldFail = false
     const dense = makeEmbedding({
       kind: 'dense',
@@ -174,7 +181,8 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       dense,
       pipeline: indexingPipeline({
         documents: [
@@ -197,7 +205,7 @@ describe('indexer', () => {
       indexer.indexDocuments([{ namespace: 'kb', sourceId: 'doc-gen', content: 'Second version' }]),
     ).rejects.toThrow('pipeline failed')
 
-    const docs = makeRetriever({ id: 'docs', namespace: 'kb', store, dense })
+    const docs = makeRetriever({ id: 'docs', namespace: 'kb', records, vectors, dense })
     const hits = await docs.retrieve('First version', { threshold: 0.5 })
     expect(hits.map((hit) => hit.content)).toEqual(['First version'])
   })
@@ -206,7 +214,8 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store: inMemoryCruxStore(),
+      records: inMemoryRecordStore(),
+      vectors: inMemoryVectorStore(),
     })
 
     const chunks = await indexer.chunk(
@@ -240,7 +249,8 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store: inMemoryCruxStore(),
+      records: inMemoryRecordStore(),
+      vectors: inMemoryVectorStore(),
     })
 
     const chunks = await indexer.chunk([
@@ -281,7 +291,8 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store: inMemoryCruxStore(),
+      records: inMemoryRecordStore(),
+      vectors: inMemoryVectorStore(),
     })
 
     const chunks = await indexer.chunk(
@@ -324,7 +335,8 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store: inMemoryCruxStore(),
+      records: inMemoryRecordStore(),
+      vectors: inMemoryVectorStore(),
       pipeline: indexingPipeline({ chunker: customChunker }),
     })
 
@@ -342,7 +354,8 @@ describe('indexer', () => {
   })
 
     it('indexes documents with dense embeddings and replace-by-source semantics', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const dense = makeEmbedding({
       kind: 'dense',
       name: 'dense-test',
@@ -354,7 +367,8 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       dense,
     })
 
@@ -366,9 +380,9 @@ describe('indexer', () => {
       },
     ])
 
-    const firstPass = await listAll(store, 'indexer:docs:namespace:kb:source:doc-1:')
+    const firstPass = await listAll(records, 'indexer:docs:namespace:kb:source:doc-1:')
     expect(firstPass.entries).toHaveLength(1)
-    const docs = makeRetriever({ id: 'docs', namespace: 'kb', store, dense })
+    const docs = makeRetriever({ id: 'docs', namespace: 'kb', records, vectors, dense })
     await expect(docs.retrieve('first version', { threshold: 0.5 })).resolves.toEqual([
       expect.objectContaining({ sourceId: 'doc-1', content: 'first version' }),
     ])
@@ -386,13 +400,14 @@ describe('indexer', () => {
       },
     )
 
-    const secondPass = await listAll(store, 'indexer:docs:namespace:kb:source:doc-1:')
+    const secondPass = await listAll(records, 'indexer:docs:namespace:kb:source:doc-1:')
     expect(secondPass.entries.length).toBeGreaterThan(1)
     expect(secondPass.entries.every((entry) => entry.value.sourceId === 'doc-1')).toBe(true)
   })
 
     it('indexes documents from an AsyncIterable source', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const dense = makeEmbedding({
       kind: 'dense',
       name: 'dense-test',
@@ -404,7 +419,8 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       dense,
     })
 
@@ -417,18 +433,19 @@ describe('indexer', () => {
     }
 
     const result = await indexer.indexDocuments(documents())
-    const entries = await listAll(store, 'indexer:docs:namespace:kb:source:doc-async:')
+    const entries = await listAll(records, 'indexer:docs:namespace:kb:source:doc-async:')
 
     expect(result.sourceCount).toBe(1)
     expect(entries.entries).toHaveLength(1)
-    const docs = makeRetriever({ id: 'docs', namespace: 'kb', store, dense })
+    const docs = makeRetriever({ id: 'docs', namespace: 'kb', records, vectors, dense })
     await expect(docs.retrieve('hello from async iterable', { threshold: 0.5 })).resolves.toEqual([
       expect.objectContaining({ sourceId: 'doc-async', content: 'hello from async iterable' }),
     ])
   })
 
     it('dry-runs document indexing without mutating the store', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const embed = vi.fn(async (texts: string[]) => texts.map((text) => [text.length, 1]))
     const dense = makeEmbedding({
       kind: 'dense',
@@ -441,7 +458,8 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       dense,
     })
 
@@ -468,11 +486,12 @@ describe('indexer', () => {
     expect(result.chunkCount).toBeGreaterThan(1)
     expect(result.chunks.map((chunk) => chunk.sourceId)).toEqual(['doc-dry', 'doc-dry'])
     expect(embed).toHaveBeenCalledTimes(1)
-    expect((await listAll(store, 'indexer:docs:namespace:kb:source:doc-dry:')).entries).toHaveLength(0)
+    expect((await listAll(records, 'indexer:docs:namespace:kb:source:doc-dry:')).entries).toHaveLength(0)
   })
 
     it('indexes chunks with sparse embeddings', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const sparse = makeEmbedding({
       kind: 'sparse',
       name: 'sparse-test',
@@ -487,7 +506,8 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       sparse,
     })
 
@@ -506,7 +526,8 @@ describe('indexer', () => {
     const docs = makeRetriever({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       sparse,
       search: { mode: 'sparse' },
     })
@@ -516,7 +537,8 @@ describe('indexer', () => {
   })
 
     it('indexes chunks with dense and sparse embeddings together', async () => {
-    const store = inMemoryCruxStore()
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const dense = makeEmbedding({
       kind: 'dense',
       name: 'dense-test',
@@ -539,7 +561,8 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       dense,
       sparse,
     })
@@ -558,7 +581,8 @@ describe('indexer', () => {
     const docs = makeRetriever({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
       dense,
       sparse,
       search: { mode: 'hybrid' },
@@ -569,8 +593,9 @@ describe('indexer', () => {
   })
 
     it('deleteSource removes only matching namespace/source entries', async () => {
-    const store = inMemoryCruxStore()
-    await store.set('indexer:docs:namespace:kb:source:doc-1:chunk:0', {
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
+    await records.put('indexer:docs:namespace:kb:source:doc-1:chunk:0', {
       namespace: 'kb',
       sourceId: 'doc-1',
       chunkId: '0',
@@ -578,7 +603,7 @@ describe('indexer', () => {
       content: 'a',
       metadata: {},
     })
-    await store.set('indexer:docs:namespace:kb:source:doc-1:chunk:1', {
+    await records.put('indexer:docs:namespace:kb:source:doc-1:chunk:1', {
       namespace: 'kb',
       sourceId: 'doc-1',
       chunkId: '1',
@@ -586,7 +611,7 @@ describe('indexer', () => {
       content: 'b',
       metadata: {},
     })
-    await store.set('indexer:docs:namespace:kb:source:doc-2:chunk:0', {
+    await records.put('indexer:docs:namespace:kb:source:doc-2:chunk:0', {
       namespace: 'kb',
       sourceId: 'doc-2',
       chunkId: '0',
@@ -598,18 +623,20 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
     })
 
     const deleted = await indexer.deleteSource('doc-1')
     expect(deleted).toBe(2)
-    expect(await store.get('indexer:docs:namespace:kb:source:doc-1:chunk:0')).toBeNull()
-    expect(await store.get('indexer:docs:namespace:kb:source:doc-2:chunk:0')).not.toBeNull()
+    expect(await records.get('indexer:docs:namespace:kb:source:doc-1:chunk:0')).toBeNull()
+    expect(await records.get('indexer:docs:namespace:kb:source:doc-2:chunk:0')).not.toBeNull()
   })
 
     it('clear removes all entries for the indexer namespace', async () => {
-    const store = inMemoryCruxStore()
-    await store.set('indexer:docs:namespace:kb:source:doc-1:chunk:0', {
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
+    await records.put('indexer:docs:namespace:kb:source:doc-1:chunk:0', {
       namespace: 'kb',
       sourceId: 'doc-1',
       chunkId: '0',
@@ -617,7 +644,7 @@ describe('indexer', () => {
       content: 'a',
       metadata: {},
     })
-    await store.set('indexer:docs:namespace:kb:source:doc-2:chunk:0', {
+    await records.put('indexer:docs:namespace:kb:source:doc-2:chunk:0', {
       namespace: 'kb',
       sourceId: 'doc-2',
       chunkId: '0',
@@ -625,7 +652,7 @@ describe('indexer', () => {
       content: 'b',
       metadata: {},
     })
-    await store.set('indexer:docs:namespace:other:source:doc-3:chunk:0', {
+    await records.put('indexer:docs:namespace:other:source:doc-3:chunk:0', {
       namespace: 'other',
       sourceId: 'doc-3',
       chunkId: '0',
@@ -637,21 +664,22 @@ describe('indexer', () => {
     const indexer = makeIndexer({
       id: 'docs',
       namespace: 'kb',
-      store,
+      records,
+      vectors,
     })
 
     const deleted = await indexer.clear()
     expect(deleted).toBe(2)
-    expect(await store.get('indexer:docs:namespace:other:source:doc-3:chunk:0')).not.toBeNull()
+    expect(await records.get('indexer:docs:namespace:other:source:doc-3:chunk:0')).not.toBeNull()
   })
 })
 
-async function listAll(store: CruxStore, prefix: string): Promise<ListResult> {
+async function listAll(records: RecordStore, prefix: string): Promise<RecordPage> {
   const entries: Array<{ key: string; value: JsonObject }> = []
   let cursor: string | undefined
 
   while (true) {
-    const page = await store.list(prefix, { cursor, limit: 100 })
+    const page = await records.list(prefix, { cursor, limit: 100 })
     entries.push(...page.entries)
     if (!page.cursor) {
       return { entries }

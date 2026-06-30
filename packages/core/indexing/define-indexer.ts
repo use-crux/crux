@@ -22,7 +22,7 @@ import { applyParentProvenanceConfidence, applyProvenanceConfidence } from './pr
 import { indexingPipeline, stageFingerprint } from './pipeline'
 import { createIndexedKnowledgeStore } from '../indexed-knowledge'
 import { observe } from '../observability'
-import type { DataStore, SparseVector } from '../store/types'
+import type { RecordStore, SparseVector } from '../storage'
 import type {
   ChunkingOptions,
   ChunkingResult,
@@ -52,16 +52,15 @@ export function indexer(config: IndexerConfig): Indexer {
   validateConfig(config)
 
   const pipeline = config.pipeline ?? indexingPipeline()
-  const dataStore = getIndexerDataStore(config)
+  const recordStore = getIndexerRecordStore(config)
   const vectorStore = config.vectors ?? config.storage?.vectors
   const records = createIndexedKnowledgeStore({
     indexerId: config.id,
     namespace: config.namespace,
-    data: dataStore,
+    records: recordStore,
     vectors: vectorStore,
-    legacyStore: config.store,
   })
-  const cacheConfig = normalizePipelineCache(config.cache, dataStore, config.id)
+  const cacheConfig = normalizePipelineCache(config.cache, recordStore, config.id)
 
   async function chunk(
     documentsInput: AsyncIterable<CruxDocument> | CruxDocument[],
@@ -469,8 +468,8 @@ function validateConfig(config: IndexerConfig): void {
   }
 }
 
-function getIndexerDataStore(config: IndexerConfig): DataStore {
-  const data = config.data ?? config.storage?.data ?? config.store
-  if (!data) throw new Error('indexer() requires data, storage.data, or store.')
-  return data
+function getIndexerRecordStore(config: IndexerConfig): RecordStore {
+  const records = config.records ?? config.storage?.records
+  if (!records) throw new Error('indexer() requires records or storage.records.')
+  return records
 }

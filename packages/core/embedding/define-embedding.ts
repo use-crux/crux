@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { SparseVector } from '../store/types'
+import type { SparseVector } from '../storage'
 import { createBatchExecutor, createProviderBatchRunner } from './batch'
 import { denseCacheCodec, sparseCacheCodec } from './cache'
 import { runEmbeddingOperation } from './execute'

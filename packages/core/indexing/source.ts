@@ -5,7 +5,7 @@
  * @module
  */
 
-import type { CruxStore, DataStore, JsonObject } from '../store/types'
+import type { JsonObject, RecordStore } from '../storage'
 import type { CorpusConfig, CruxDocument, CruxIngestLoadResultLike, SourceError, SourceRecord } from './types'
 
 /** Validate a corpus config: ids, namespace, and indexer namespace match. */
@@ -24,10 +24,9 @@ export function validateCorpusConfig(config: CorpusConfig): void {
 }
 
 /** Resolve a corpus data store from config or fail. */
-export function getCorpusDataStore(config: CorpusConfig): DataStore {
-  const data = config.data ?? (config.store as CruxStore | undefined)
-  if (!data) throw new Error('corpus() requires data or store.')
-  return data
+export function getCorpusRecordStore(config: CorpusConfig): RecordStore {
+  if (!config.records) throw new Error('corpus() requires records.')
+  return config.records
 }
 
 /** Validate that a document belongs to the corpus namespace and has a source id. */
@@ -75,8 +74,8 @@ export function classifySource(
 }
 
 /** Whether a stored value is a {@link SourceRecord}. */
-export function isSourceRecord(value: JsonObject | null): value is SourceRecord {
-  return value?._tag === 'SourceRecord'
+export function isSourceRecord(value: unknown): value is SourceRecord {
+  return Boolean(value && typeof value === 'object' && (value as { _tag?: unknown })._tag === 'SourceRecord')
 }
 
 /** Coerce an unknown error into a {@link SourceError}. */

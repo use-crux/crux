@@ -11,11 +11,11 @@
 export type JsonPrimitive = string | number | boolean | null
 
 /** Recursive JSON value accepted by public storage APIs. */
-export type JsonValue = JsonPrimitive | readonly JsonValue[] | { readonly [key: string]: JsonValue }
+export type JsonValue = JsonPrimitive | readonly JsonValue[] | { readonly [key: string]: JsonValue | undefined }
 
 /** JSON object value stored by {@link RecordStore}. */
 export interface JsonObject {
-  readonly [key: string]: JsonValue
+  readonly [key: string]: JsonValue | undefined
 }
 
 /** Scalar value supported by exact top-level filters. */

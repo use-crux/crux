@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { DataStore } from "../store/types";
+import type { JsonObject, RecordStore } from "../storage";
 import { analyzeContent, createFileRecord, recordToFile } from "./content";
 import { globToRegExp, hasGlob } from "./glob";
 import { instrument } from "./observability";
@@ -38,7 +38,7 @@ import type {
 /** Bound dependencies for filesystem-style workspace operations. */
 export interface WorkspaceFilesystemOpsConfig {
   readonly workspaceId: string;
-  readonly store: DataStore;
+  readonly store: RecordStore;
   readonly blobs?: WorkspaceBlobStore;
   readonly mounts: readonly NormalizedMount[];
   readonly inlineTextBelowBytes: number;
@@ -187,9 +187,9 @@ export function createWorkspaceFilesystemOps(
               inlineTextBelowBytes: config.inlineTextBelowBytes,
               blobs: config.blobs,
             });
-            await config.store.set(
+            await config.store.put(
               fileKey(config.workspaceId, namespace, normalized),
-              record,
+              record as unknown as JsonObject,
               workspaceSetOptions(config.store, config.retention),
             );
             return recordToFile(record);
@@ -271,9 +271,9 @@ export function createWorkspaceFilesystemOps(
               mount: toMount.path,
               updatedAt: Date.now(),
             };
-            await config.store.set(
+            await config.store.put(
               fileKey(config.workspaceId, namespace, toPath),
-              moved,
+              moved as unknown as JsonObject,
               workspaceSetOptions(config.store, config.retention),
             );
             await config.store.delete(
@@ -344,9 +344,9 @@ export function createWorkspaceFilesystemOps(
               mount: toMount.path,
               updatedAt: Date.now(),
             };
-            await config.store.set(
+            await config.store.put(
               fileKey(config.workspaceId, namespace, toPath),
-              copied,
+              copied as unknown as JsonObject,
               workspaceSetOptions(config.store, config.retention),
             );
             return recordToFile(copied);

@@ -11,6 +11,7 @@
 
 import { observe } from '../observability'
 import { getRuntime } from '../runtime/runtime'
+import type { JsonObject } from '../storage'
 import type { MiddlewareResult } from '../runtime/types'
 import {
   attachMissMeta,
@@ -21,7 +22,7 @@ import {
   serializeResult,
 } from './entry'
 import { emitSemanticCacheArtifact, emitSemanticCacheSkipSpan } from './observability'
-import { hashStable, resolveQueryText } from './query'
+import { hashStable, resolveQueryText, resolveSemanticCacheStores } from './query'
 import { shouldCache } from './policies'
 import type { CacheableResult, SemanticCacheCall, SemanticCacheEntry, SemanticCacheWriteContext } from './types'
 
@@ -34,6 +35,7 @@ import type { CacheableResult, SemanticCacheCall, SemanticCacheEntry, SemanticCa
  */
 export async function performWrite(call: SemanticCacheCall, result: MiddlewareResult): Promise<MiddlewareResult> {
   const { config, namespace, args, promptHint, cacheId, scopeHash, ttl, lookupCtx } = call
+  const stores = resolveSemanticCacheStores(config)
   const { promptId, operation, version, mode } = lookupCtx
   const cacheableResult = result as unknown as CacheableResult
 
@@ -99,7 +101,22 @@ export async function performWrite(call: SemanticCacheCall, result: MiddlewareRe
         expiresAt: now + ttl,
       }
 
-      await config.store.set(cacheKey(namespace, promptId, scopeHash, version, entry.queryHash), entry, { ttl })
+      const key = cacheKey(namespace, promptId, scopeHash, version, entry.queryHash)
+      await stores.records.put(key, entry as unknown as JsonObject, { ttlMs: ttl })
+      await stores.vectors.upsert([
+        {
+          key,
+          dense,
+          metadata: {
+            cruxType: 'semantic-cache-entry',
+            namespace,
+            ...(promptId ? { promptId } : {}),
+            scopeHash,
+            version,
+            resultKind,
+          },
+        },
+      ])
       observe.event({
         name: 'semantic-cache.write',
         attributes: {

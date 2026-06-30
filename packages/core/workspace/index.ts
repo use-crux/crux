@@ -2,7 +2,7 @@
  * Durable workspaces for path-addressed agent files.
  *
  * Workspaces give prompts a scoped, filesystem-like tree for scratch files and
- * generated outputs. Metadata lives in a `DataStore`; binary or oversized
+ * generated outputs. Metadata lives in a `RecordStore`; binary or oversized
  * payloads live in a `BlobStore`.
  *
  * @module

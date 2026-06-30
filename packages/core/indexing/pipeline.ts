@@ -10,6 +10,7 @@
 
 import { chunkDocumentParentChild, chunkDocumentSemantic, chunkDocumentStructured } from './chunkers'
 import { stableHash } from './hash'
+import type { JsonObject } from '../storage'
 import type {
   Chunker,
   ChunkerContext,
@@ -27,7 +28,6 @@ import type {
   SemanticChunkerOptions,
   StructuredChunkerOptions,
 } from './types'
-import type { JsonObject } from '../store/types'
 
 /** Registry for building document and chunk transforms. */
 export const transform = Object.freeze({
@@ -156,7 +156,7 @@ export function stageFingerprint(stage: {
     name: stage.name,
     version: stage.version,
     ...(stage.options ? { options: stage.options } : {}),
-    ...(stage.fingerprint !== undefined ? { fingerprint: sanitizeFingerprint(stage.fingerprint) } : {}),
+    ...(stage.fingerprint !== undefined ? { fingerprint: sanitizeFingerprint(stage.fingerprint) as JsonObject[string] } : {}),
   }
 }
 

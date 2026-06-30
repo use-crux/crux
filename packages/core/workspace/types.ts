@@ -15,10 +15,10 @@ import type {
   BlobReadResult,
   BlobRef,
   BlobStore,
-  DataStore,
   JsonObject,
+  RecordStore,
   Storage,
-} from "../store/types";
+} from "../storage";
 import type { Context, PromptInjection } from "../prompt/context-types";
 import type { JsonValue } from "../types/tool";
 import type {
@@ -119,7 +119,7 @@ export interface WorkspaceConfig {
         input: Record<string, unknown>;
         promptId?: string;
       }) => string | Promise<string>);
-  readonly data?: DataStore;
+  readonly records?: RecordStore;
   readonly blobs?: BlobStore;
   readonly storage?: Storage;
   readonly mounts?: readonly WorkspaceMount[];
@@ -346,7 +346,7 @@ export interface WorkspaceContextOptions {
 }
 
 /** The persisted record for a workspace file. Internal. */
-export interface WorkspaceFileRecord extends JsonObject {
+export interface WorkspaceFileRecord {
   readonly _cruxWorkspaceFile: true;
   readonly version: typeof FILE_RECORD_VERSION;
   readonly workspaceId: string;

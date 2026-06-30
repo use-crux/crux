@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { DataStore, VectorStore } from '../store/types'
+import type { RecordStore, VectorStore } from '../storage'
 import type { DenseStoreBackedRetrieverConfig, RetrieverMode } from './types'
 
 type StoreBackedRetrieverMode = Exclude<RetrieverMode, 'custom'>
@@ -26,9 +26,9 @@ export function deriveStoreBackedMode(config: Partial<DenseStoreBackedRetrieverC
   return 'dense'
 }
 
-/** Resolve the data store from explicit config, storage bundle, or legacy store. */
-export function getRetrieverDataStore(config: Partial<DenseStoreBackedRetrieverConfig>): DataStore | undefined {
-  return config.data ?? config.storage?.data ?? config.store
+/** Resolve the record store from explicit config or a storage bundle. */
+export function getRetrieverRecordStore(config: Partial<DenseStoreBackedRetrieverConfig>): RecordStore | undefined {
+  return config.records ?? config.storage?.records
 }
 
 /** Resolve the vector store from explicit config or storage bundle. */

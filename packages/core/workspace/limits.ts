@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { DataStore, SetOptions } from "../store/types";
+import type { RecordStore, RecordWriteOptions } from "../storage";
 import { listFileRecords } from "./store";
 import type { WorkspaceFileRecord } from "./types";
 
@@ -25,7 +25,7 @@ export interface WorkspaceRetention {
   /**
    * Time-to-live in milliseconds for workspace metadata records.
    *
-   * The value is passed to `DataStore.set({ ttl })` only when the configured
+   * The value is passed to `RecordStore.put({ ttlMs })` only when the configured
    * store reports TTL support. Stores without TTL support keep the record
    * indefinitely and do not throw.
    */
@@ -36,13 +36,13 @@ const namespaceLocks = new Map<string, Promise<void>>();
 
 /** Return store write options for the configured retention policy. */
 export function workspaceSetOptions(
-  store: DataStore,
+  store: RecordStore,
   retention: WorkspaceRetention | undefined,
-): SetOptions | undefined {
+): RecordWriteOptions | undefined {
   const ttl = retention?.ttlMs;
-  if (ttl === undefined || ttl <= 0 || store.supportsTtl?.() !== true)
+  if (ttl === undefined || ttl <= 0 || store.capabilities().ttl === false)
     return undefined;
-  return { ttl };
+  return { ttlMs: ttl };
 }
 
 /** Serialize quota validation and persistence per workspace namespace. */
@@ -72,7 +72,7 @@ export async function withWorkspaceWriteLock<T>(
 
 /** Enforce configured byte limits before a workspace record is persisted. */
 export async function assertWorkspaceWriteAllowed(input: {
-  readonly store: DataStore;
+  readonly store: RecordStore;
   readonly workspaceId: string;
   readonly namespace: string;
   readonly path: string;

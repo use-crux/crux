@@ -19,7 +19,8 @@ import {
   resolveRegistrySkill,
   skill,
 } from "../../skill";
-import { inMemoryCruxStore, inMemoryDataStore } from "../../store/memory";
+import { inMemoryRecordStore } from "../../storage";
+import { inMemoryCruxStore } from "../../store/memory";
 import { workspace } from "../../workspace";
 
 const fixtureRoot = join(__dirname, "__observability-fixtures__");
@@ -43,7 +44,7 @@ describe("canonical workspace, plan-task, skill, and security observability", ()
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/workspace/notes.md", "private notes", {
@@ -106,7 +107,7 @@ describe("canonical workspace, plan-task, skill, and security observability", ()
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      data: inMemoryDataStore(),
+      records: inMemoryRecordStore(),
     });
 
     await ws.write("/outputs/report.md", "# Report", {

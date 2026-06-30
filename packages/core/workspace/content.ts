@@ -9,6 +9,7 @@
  */
 
 import type { JsonValue } from "../types/tool";
+import type { ExactFilter } from "../storage";
 import type {
   WorkspaceArtifactStatus,
   WorkspaceProvenance,
@@ -88,6 +89,9 @@ export async function createFileRecord(input: {
   readonly inlineTextBelowBytes: number;
   readonly blobs: WorkspaceBlobStore | undefined;
 }): Promise<WorkspaceFileRecord> {
+  const status = input.status ?? input.existing?.status;
+  const kind = input.artifactKind ?? input.existing?.kind;
+  const producedBy = input.producedBy ?? input.existing?.producedBy;
   const base = {
     _cruxWorkspaceFile: true as const,
     version: FILE_RECORD_VERSION as typeof FILE_RECORD_VERSION,
@@ -97,10 +101,10 @@ export async function createFileRecord(input: {
     mount: input.mount,
     mimeType: input.analysis.mimeType,
     size: input.analysis.size,
-    metadata: input.metadata,
-    status: input.status ?? input.existing?.status,
-    kind: input.artifactKind ?? input.existing?.kind,
-    producedBy: input.producedBy ?? input.existing?.producedBy,
+    ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+    ...(status !== undefined ? { status } : {}),
+    ...(kind !== undefined ? { kind } : {}),
+    ...(producedBy !== undefined ? { producedBy } : {}),
     createdAt: input.existing?.createdAt ?? input.now,
     updatedAt: input.now,
   };
@@ -149,14 +153,14 @@ export async function createFileRecord(input: {
     key: `${input.workspaceId}/${input.namespace}${input.path}`,
     content: payload,
     mimeType: input.analysis.mimeType,
-    metadata: input.metadata,
+    metadata: scalarMetadata(input.metadata),
   });
   return {
     ...base,
     storage: "blob",
     uri: ref.uri,
     size: ref.size || input.analysis.size,
-    preview: input.analysis.text ? preview(input.analysis.text) : undefined,
+    ...(input.analysis.text ? { preview: preview(input.analysis.text) } : {}),
   };
 }
 
@@ -189,6 +193,23 @@ export function recordArtifactFields(record: WorkspaceFileRecord): {
     ...(record.kind ? { artifactKind: record.kind } : {}),
     ...(record.producedBy ? { producedBy: record.producedBy } : {}),
   };
+}
+
+function scalarMetadata(metadata: Record<string, JsonValue> | undefined): ExactFilter | undefined {
+  if (!metadata) return undefined;
+  const entries = Object.entries(metadata).filter(([, value]) =>
+    isExactFilterValue(value),
+  );
+  return entries.length > 0 ? (Object.fromEntries(entries) as ExactFilter) : undefined;
+}
+
+function isExactFilterValue(value: JsonValue | undefined): value is ExactFilter[string] {
+  return (
+    value === null ||
+    typeof value === "string" ||
+    (typeof value === "number" && Number.isFinite(value)) ||
+    typeof value === "boolean"
+  );
 }
 
 function isBlob(value: unknown): value is Blob {

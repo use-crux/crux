@@ -9,7 +9,7 @@
  */
 
 import { observe } from '../observability'
-import type { DataStore, JsonObject } from '../store/types'
+import type { JsonObject, RecordStore } from '../storage'
 import { stableHash } from './hash'
 import { emitIndexingStageArtifact, stageRecordAttributes } from './observability'
 import type {
@@ -24,18 +24,18 @@ import type {
 /** Resolve a pipeline cache config from user input + indexer defaults. */
 export function normalizePipelineCache(
   cache: PipelineCacheConfig | undefined,
-  indexStore: DataStore,
+  indexStore: RecordStore,
   indexerId: string,
-): { enabled: boolean; store: DataStore; scope: string } {
+): { enabled: boolean; records: RecordStore; scope: string } {
   if (!cache) {
-    return { enabled: false, store: indexStore, scope: indexerId }
+    return { enabled: false, records: indexStore, scope: indexerId }
   }
   if (cache === true) {
-    return { enabled: true, store: indexStore, scope: indexerId }
+    return { enabled: true, records: indexStore, scope: indexerId }
   }
   return {
     enabled: true,
-    store: cache.store ?? indexStore,
+    records: cache.records ?? indexStore,
     scope: cache.scope ?? indexerId,
   }
 }
@@ -51,7 +51,7 @@ export function resolveCacheMode(
 
 /** Run a pipeline stage with read-through/write-back caching + instrumentation. */
 export async function runCachedStage<T extends JsonObject | CruxDocument | ChunkingResult | CruxChunk[]>(args: {
-  cacheConfig: { enabled: boolean; store: DataStore; scope: string }
+  cacheConfig: { enabled: boolean; records: RecordStore; scope: string }
   cacheMode: PipelineCacheMode | 'disabled'
   namespace: string
   sourceId: string
@@ -110,7 +110,7 @@ export async function runCachedStage<T extends JsonObject | CruxDocument | Chunk
 
   const key = pipelineCacheKey(args)
   if (args.cacheMode === 'readwrite') {
-    const cached = await args.cacheConfig.store.get(key)
+    const cached = await args.cacheConfig.records.get(key)
     if (cached && cached._cruxRecordType === 'pipeline-cache' && 'value' in cached) {
       const value = cached.value as T
       const record = baseRecord(value, 'success', 'hit')
@@ -123,7 +123,7 @@ export async function runCachedStage<T extends JsonObject | CruxDocument | Chunk
 
   try {
     const value = await span.withContext(args.run)
-    await args.cacheConfig.store.set(key, {
+    await args.cacheConfig.records.put(key, {
       _cruxRecordType: 'pipeline-cache',
       namespace: args.namespace,
       sourceId: args.sourceId,

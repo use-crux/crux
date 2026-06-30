@@ -12,7 +12,7 @@ import {
 import { orchestrateGenerate } from '../../generation/orchestrate'
 import { applyPlugins } from '../../runtime/plugin'
 import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
-import { inMemoryCruxStore } from '../../store'
+import { inMemoryRecordStore, inMemoryStorage } from '../../storage'
 
 function install(plugin: ReturnType<typeof createSemanticCache>) {
   const applied = applyPlugins([plugin], getRuntime())
@@ -51,7 +51,7 @@ describe('canonical embedding and cache observability', () => {
       dimensions: 2,
       maxInputTokens: 100,
       batch: { maxSize: 2 },
-      cache: embeddingCache({ store: inMemoryCruxStore(), namespace: 'embeddings' }),
+      cache: embeddingCache({ records: inMemoryRecordStore(), namespace: 'embeddings' }),
       embed: provider,
     })
 
@@ -137,7 +137,7 @@ describe('canonical embedding and cache observability', () => {
     it('records semantic cache lookup, miss, write, and hit decisions as cache.lookup spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    const store = inMemoryCruxStore()
+    const storage = inMemoryStorage()
     const embed = embedding({
       kind: 'dense',
       name: 'semantic-dense',
@@ -153,7 +153,7 @@ describe('canonical embedding and cache observability', () => {
     })
     install(
       createSemanticCache({
-        store,
+        storage,
         embedding: embed,
         ttl: 60_000,
         scope: ({ input }) => String(input.userId),

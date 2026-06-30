@@ -1,7 +1,7 @@
 /**
  * The {@link workspace} factory.
  *
- * Wires a {@link WorkspaceConfig} to a {@link DataStore} (metadata) and optional
+ * Wires a {@link WorkspaceConfig} to a {@link RecordStore} (metadata) and optional
  * {@link BlobStore} (binary/oversized payloads), then exposes the file
  * operations plus context/tool/injection adapters. Every operation is
  * instrumented and namespace-scoped.
@@ -9,7 +9,7 @@
  * @module
  */
 
-import { inMemoryBlobStore, inMemoryDataStore } from "../store/memory";
+import { inMemoryBlobStore, inMemoryRecordStore, type JsonObject } from "../storage";
 import {
   analyzeContent,
   createFileRecord,
@@ -68,7 +68,7 @@ export function workspace<const Config extends WorkspaceConfig>(
 ): Workspace<Config["tools"]> {
   assertNonEmpty(config.id, "workspace(): id must be non-empty.");
 
-  const store = config.data ?? config.storage?.data ?? inMemoryDataStore();
+  const store = config.records ?? config.storage?.records ?? inMemoryRecordStore();
   const blobs = config.blobs ?? config.storage?.blobs;
   const mounts = normalizeMounts(config.mounts ?? defaultMounts());
   const inlineTextBelowBytes =
@@ -232,9 +232,9 @@ export function workspace<const Config extends WorkspaceConfig>(
             inlineTextBelowBytes,
             blobs,
           });
-          await store.set(
+          await store.put(
             fileKey(config.id, namespace, normalized),
-            record,
+            record as unknown as JsonObject,
             workspaceSetOptions(store, config.retention),
           );
           return recordToFile(record);

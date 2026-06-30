@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { DataStore, StoreEntry } from '../store/types'
+import type { RecordEntry, RecordStore } from '../storage'
 
 /** Prefix for all records in an indexer namespace. */
 export function indexedNamespacePrefix(indexerId: string, namespace: string): string {
@@ -30,8 +30,8 @@ export function indexedParentKey(indexerId: string, namespace: string, sourceId:
 }
 
 /** Read every entry under a prefix, following store cursors. */
-export async function listIndexedEntries(store: DataStore, prefix: string): Promise<StoreEntry[]> {
-  const entries: StoreEntry[] = []
+export async function listIndexedEntries(store: RecordStore, prefix: string): Promise<RecordEntry[]> {
+  const entries: RecordEntry[] = []
   let cursor: string | undefined
 
   while (true) {

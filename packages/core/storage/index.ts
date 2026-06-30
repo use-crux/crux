@@ -11,8 +11,6 @@
 export { StorageError } from './errors'
 export { storage } from './bundle'
 export { inMemoryBlobStore, inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore } from './memory'
-// Temporary runtime bridge for legacy core consumers that Phase 3 migrates.
-export { inMemoryDataStore } from '../store/memory'
 
 export type {
   BlobContent,
