@@ -9,7 +9,7 @@
  */
 
 import { getRuntime, resolveRecords } from '../runtime/runtime'
-import type { JsonObject } from '../storage'
+import type { JsonValue } from '../storage'
 import type { FlowSnapshot, ListFlowsOptions, FlowSummary } from './types'
 
 // ─────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ export function parseDuration(duration: string): number {
  *
  * Uses the RecordStore from runtime config (`config({ persistence: { records } })`).
  */
-export async function signalFlow(flowId: string, name: string, payload: JsonObject = {}): Promise<void> {
+export async function signalFlow(flowId: string, name: string, payload: JsonValue = {}): Promise<void> {
   const store = resolveRecords()
   await store.put(`${SIGNAL_KEY_PREFIX}${flowId}:${name}`, {
     payload,

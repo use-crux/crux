@@ -38,6 +38,14 @@ export type {
   SuspendOptions,
   StepOptions,
 } from './types'
+export { noPayload } from './signals'
+export type {
+  FlowDefinitionOptions,
+  FlowSignalMap,
+  FlowSignalPayload,
+  FlowSignalSpec,
+  NoPayloadSignal,
+} from './signals'
 
 // Lifecycle utilities (decomposed from scope.ts)
 export { createFlowId, signalFlow, cancelFlow, getFlowSnapshot, listFlows } from './lifecycle'

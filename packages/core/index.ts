@@ -273,6 +273,7 @@ export {
   FlowSuspendedError,
   FlowCancelledError,
   FlowExpiredError,
+  noPayload,
 } from "./flow/scope";
 export type {
   FlowHandle,
@@ -286,6 +287,13 @@ export type {
   SuspendOptions,
   StepOptions,
 } from "./flow/scope";
+export type {
+  FlowDefinitionOptions,
+  FlowSignalMap,
+  FlowSignalPayload,
+  FlowSignalSpec,
+  NoPayloadSignal,
+} from "./flow";
 
 // Tokenizer
 export { setTokenizer, countTokens } from "./shared/tokenizer";

@@ -31,6 +31,8 @@ import type {
   FlowSummary,
 } from './types'
 import { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from './types'
+import { noPayload, signalSchemaFor } from './signals'
+import type { FlowDefinitionOptions, FlowSignalMap } from './signals'
 import {
   createFlowId,
   signalFlow,
@@ -56,7 +58,7 @@ export type {
   ListFlowsOptions,
   FlowSummary,
 }
-export { FlowSuspendedError, FlowCancelledError, FlowExpiredError, createFlowId, signalFlow, cancelFlow, listFlows }
+export { FlowSuspendedError, FlowCancelledError, FlowExpiredError, createFlowId, signalFlow, cancelFlow, listFlows, noPayload }
 
 // ─────────────────────────────────────────────────────────────────
 // Internal flow executor
@@ -75,29 +77,35 @@ export { FlowSuspendedError, FlowCancelledError, FlowExpiredError, createFlowId,
  */
 type Awaitable<T> = T | Promise<T>
 
-type InferredFlowHandler = (flow: FlowScope<unknown>, ...args: never[]) => Awaitable<unknown>
+type InferredFlowHandler<TSignals extends FlowSignalMap | undefined = undefined> = (
+  flow: FlowScope<unknown, TSignals>,
+  ...args: never[]
+) => Awaitable<unknown>
 
-type HandlerInput<THandler extends InferredFlowHandler> = Parameters<THandler> extends [
-  FlowScope<unknown>,
-  infer TInput,
-  ...unknown[],
-]
-  ? TInput
+type HandlerInput<THandler> = THandler extends (...args: never[]) => Awaitable<unknown>
+  ? Parameters<THandler> extends [unknown, infer TInput, ...unknown[]]
+    ? TInput
+    : void
   : void
 
-type HandlerOutput<THandler extends InferredFlowHandler> = Awaited<ReturnType<THandler>>
+type HandlerOutput<THandler> = THandler extends (...args: never[]) => Awaitable<infer TOutput>
+  ? Awaited<TOutput>
+  : never
 
-interface FlowExecutionOptions<TInput> extends FlowRunOptions, FlowResumeOptions {
+interface FlowExecutionOptions<TInput, TSignals extends FlowSignalMap | undefined = undefined>
+  extends FlowRunOptions, FlowResumeOptions {
   /** Input persisted for fresh runs and restored on resume. */
   input?: TInput
   /** Flow ID for a suspended flow that should be resumed. */
   resume?: string
+  /** Definition-time local signal declarations. */
+  signals?: TSignals
 }
 
-async function executeFlow<T, TInput = void>(
+async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | undefined = undefined>(
   name: string,
-  fn: (flow: FlowScope<TInput>, input: TInput) => Promise<T> | T,
-  options?: FlowExecutionOptions<TInput>,
+  fn: (flow: FlowScope<TInput, TSignals>, input: TInput) => Promise<T> | T,
+  options?: FlowExecutionOptions<TInput, TSignals>,
 ): Promise<FlowResult<T>> {
   const isResume = !!options?.resume
   const flowId = options?.resume ?? options?.flowId ?? createFlowId()
@@ -171,14 +179,14 @@ async function executeFlow<T, TInput = void>(
   }
 
   // Create the flow scope
-  const scope: FlowScope<TInput> = {
+  const scope = {
     flowId,
     input: flowInput,
     results,
 
     async step<S>(
       label: string,
-      stepFn: ((flow: FlowScope<TInput>) => Promise<S> | S) | (() => Promise<S> | S),
+      stepFn: ((flow: FlowScope<TInput, TSignals>) => Promise<S> | S) | (() => Promise<S> | S),
       stepOptions?: StepOptions,
     ): Promise<S> {
       stepCount++
@@ -203,7 +211,7 @@ async function executeFlow<T, TInput = void>(
       const stepSource = captureSource()
 
       // Always pass scope to step function — () => T functions ignore the extra arg
-      const boundStepFn = () => (stepFn as (flow: FlowScope<TInput>) => Promise<S> | S)(scope)
+      const boundStepFn = () => (stepFn as (flow: FlowScope<TInput, TSignals>) => Promise<S> | S)(scope)
       const stepSpan = observe.openSpan({
         name: label,
         family: 'flow',
@@ -270,13 +278,17 @@ async function executeFlow<T, TInput = void>(
     },
 
     async suspend<S>(_name: string, _options?: SuspendOptions<S>): Promise<S> {
+      const localSchema = signalSchemaFor(options?.signals?.[_name])
+      const suspendOptions = (localSchema ? { ..._options, schema: localSchema } : _options) as
+        | SuspendOptions<S>
+        | undefined
       // On resume, first check for expiration
       if (isResume && snapshot) {
         const timeoutAt = snapshot.timeoutAt as number | undefined
         if (timeoutAt && Date.now() > timeoutAt) {
           // Flow has expired — invoke callback and throw
-          if (_options?.onExpired) {
-            await _options.onExpired({ flowId, suspendedAt: _name })
+          if (suspendOptions?.onExpired) {
+            await suspendOptions.onExpired({ flowId, suspendedAt: _name })
           }
           throw new FlowExpiredError(_name)
         }
@@ -300,7 +312,7 @@ async function executeFlow<T, TInput = void>(
       }
 
       // Not resuming or no signal yet — suspend
-      throw new FlowSuspendedError(_name, _options)
+      throw new FlowSuspendedError(_name, suspendOptions)
     },
 
     async waitUntil(
@@ -338,7 +350,7 @@ async function executeFlow<T, TInput = void>(
     cancel(reason?: string): never {
       throw new FlowCancelledError(reason)
     },
-  }
+  } as FlowScope<TInput, TSignals>
 
   // Run the flow function with flow/session metadata while the canonical
   // observability span context is active.
@@ -368,7 +380,7 @@ async function executeFlow<T, TInput = void>(
           createdAt: snapshot?.createdAt ?? startedAt,
           updatedAt: Date.now(),
           ...(timeoutAt !== undefined ? { timeoutAt } : {}),
-          ...(options?.input !== undefined ? { input: options.input as unknown as JsonObject } : {}),
+          ...(flowInput !== undefined ? { input: flowInput as unknown as JsonValue } : {}),
         }
         await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
       }
@@ -540,32 +552,59 @@ export function flow<THandler extends InferredFlowHandler>(
   name: string,
   handler: THandler,
 ): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>>
+export function flow<const TSignals extends FlowSignalMap, THandler extends InferredFlowHandler<TSignals>>(
+  name: string,
+  options: FlowDefinitionOptions<TSignals>,
+  handler: THandler,
+): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>, TSignals>
 export function flow(
   name: string,
-  handler: (flow: FlowScope<unknown>, input?: unknown) => Awaitable<unknown>,
-): FlowHandle<unknown, unknown> {
+  optionsOrHandler:
+    | FlowDefinitionOptions<FlowSignalMap>
+    | ((flow: FlowScope<unknown, FlowSignalMap | undefined>, input?: unknown) => Awaitable<unknown>),
+  maybeHandler?: (flow: FlowScope<unknown, FlowSignalMap>, input?: unknown) => Awaitable<unknown>,
+): FlowHandle<unknown, unknown, FlowSignalMap | undefined> {
+  const definitionOptions = isFlowDefinitionOptions(optionsOrHandler) ? optionsOrHandler : undefined
+  const handler = typeof optionsOrHandler === 'function' ? optionsOrHandler : maybeHandler
+  if (typeof handler !== 'function') {
+    throw new TypeError('flow() requires a handler function.')
+  }
+
   const handlerExpectsInput = handler.length >= 2
-  const executeHandler = (scope: FlowScope<unknown>, input: unknown) => handler(scope, input)
+  const runtimeHandler = handler as (
+    flow: FlowScope<unknown, FlowSignalMap | undefined>,
+    input?: unknown,
+  ) => Awaitable<unknown>
+  const executeHandler = (scope: FlowScope<unknown, FlowSignalMap | undefined>, input: unknown) =>
+    runtimeHandler(scope, input)
 
   const handle = {
     name,
 
     run(...args: readonly unknown[]): Promise<FlowResult<unknown>> {
-      return executeFlow(name, executeHandler, normalizeRunArgs(args, handlerExpectsInput))
-    },
-
-    resume(flowId: string, options?: FlowResumeOptions): Promise<FlowResult<unknown>> {
-      return executeFlow(name, executeHandler, {
-        parentFlowId: options?.parentFlowId,
-        goal: options?.goal,
-        resume: flowId,
+      return executeFlow<unknown, unknown, FlowSignalMap | undefined>(name, executeHandler, {
+        ...normalizeRunArgs(args, handlerExpectsInput),
+        signals: definitionOptions?.signals,
       })
     },
 
-    signal(flowId: string, signalName: string, payload: JsonObject = {}): Promise<void> {
+    resume(flowId: string, options?: FlowResumeOptions): Promise<FlowResult<unknown>> {
+      return executeFlow<unknown, unknown, FlowSignalMap | undefined>(name, executeHandler, {
+        parentFlowId: options?.parentFlowId,
+        goal: options?.goal,
+        resume: flowId,
+        signals: definitionOptions?.signals,
+      })
+    },
+
+    signal(flowId: string, signalName: string, payload: JsonValue = {}): Promise<void> {
       return signalFlow(flowId, signalName, payload)
     },
-  } satisfies FlowHandle<unknown, unknown>
+  }
 
-  return Object.freeze(handle)
+  return Object.freeze(handle) as FlowHandle<unknown, unknown, FlowSignalMap | undefined>
+}
+
+function isFlowDefinitionOptions(value: unknown): value is FlowDefinitionOptions<FlowSignalMap> {
+  return isRecord(value) && isRecord(value.signals)
 }

@@ -10,6 +10,7 @@
 import type { RetryOptions } from '../generation/retry'
 import type { JsonObject, JsonValue } from '../storage'
 import type { ZodType } from 'zod'
+import type { FlowSignalMap, FlowSignalPayload, FlowSignalPayloadArgs, UntypedSignalPayloadArgs } from './signals'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -42,15 +43,35 @@ type FlowRunArgs<TInput> = [TInput] extends [void]
   ? [options?: FlowRunOptions]
   : [input: TInput, options?: FlowRunOptions]
 
+type FlowSignalName<TSignals> = TSignals extends FlowSignalMap ? keyof TSignals & string : string
+
+type FlowHandleSignal<TSignals> = TSignals extends FlowSignalMap
+  ? <TName extends FlowSignalName<TSignals>>(
+      flowId: string,
+      signalName: TName,
+      ...args: TName extends keyof TSignals ? FlowSignalPayloadArgs<FlowSignalPayload<TSignals[TName]>> : never
+    ) => Promise<void>
+  : (flowId: string, signalName: string, ...args: UntypedSignalPayloadArgs) => Promise<void>
+
+type FlowScopeSuspend<TSignals> = TSignals extends FlowSignalMap
+  ? <TName extends FlowSignalName<TSignals>>(
+      name: TName,
+      options?: TName extends keyof TSignals
+        ? Omit<SuspendOptions<FlowSignalPayload<TSignals[TName]>>, 'schema'>
+        : never,
+    ) => Promise<TName extends keyof TSignals ? FlowSignalPayload<TSignals[TName]> : never>
+  : <TPayload = unknown>(name: string, options?: SuspendOptions<TPayload>) => Promise<TPayload>
+
 /**
  * A frozen handle returned by `flow()`.
  *
  * Separates flow definition from execution — define once, run many times.
  *
  * @typeParam T — The flow's return type (inferred from the handler).
- * @typeParam TInput — The typed input available on `flow.input` (default: `void`).
+ * @typeParam TInput — The typed input passed to `run(input, options?)`.
+ * @typeParam TSignals — Optional local signal map used to type `.signal()`.
  */
-export interface FlowHandle<T, TInput = void> {
+export interface FlowHandle<T, TInput = void, TSignals extends FlowSignalMap | undefined = undefined> {
   /** The flow's registered name. */
   readonly name: string
   /**
@@ -79,7 +100,7 @@ export interface FlowHandle<T, TInput = void> {
    * @param signalName — The suspend point name to signal
    * @param payload — Optional JSON payload delivered to the suspend point
    */
-  signal(flowId: string, signalName: string, payload?: JsonObject): Promise<void>
+  signal: FlowHandleSignal<TSignals>
 }
 
 /** Options for `flow.suspend()`. */
@@ -121,7 +142,7 @@ export interface FlowSnapshot extends JsonObject {
   updatedAt: number
 }
 
-export interface FlowScope<TInput = void> {
+export interface FlowScope<TInput = void, TSignals extends FlowSignalMap | undefined = undefined> {
   /** The flow's unique identifier. */
   readonly flowId: string
 
@@ -147,7 +168,7 @@ export interface FlowScope<TInput = void> {
    */
   step<T>(
     label: string,
-    fn: ((flow: FlowScope<TInput>) => Promise<T> | T) | (() => Promise<T> | T),
+    fn: ((flow: FlowScope<TInput, TSignals>) => Promise<T> | T) | (() => Promise<T> | T),
     options?: StepOptions,
   ): Promise<T>
 
@@ -160,7 +181,7 @@ export interface FlowScope<TInput = void> {
    *
    * On resume, the signal payload is returned (typed if schema is provided).
    */
-  suspend<T = unknown>(name: string, options?: SuspendOptions<T>): Promise<T>
+  suspend: FlowScopeSuspend<TSignals>
 
   /**
    * Suspend the flow until a condition function returns true.
