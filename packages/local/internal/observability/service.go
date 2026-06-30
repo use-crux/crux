@@ -326,26 +326,37 @@ type RunDetailRequestMessages struct {
 }
 
 type RunDetailRequestContribution struct {
-	Kind           string          `json:"kind"`
-	State          string          `json:"state"`
-	Included       bool            `json:"included"`
-	SourceID       string          `json:"sourceId"`
-	InjectableKind string          `json:"injectableKind"`
-	Reason         string          `json:"reason,omitempty"`
-	Branch         string          `json:"branch,omitempty"`
-	Injects        []string        `json:"injects,omitempty"`
-	Priority       *float64        `json:"priority,omitempty"`
-	SizeBytes      *float64        `json:"sizeBytes,omitempty"`
-	Tokens         *float64        `json:"tokens,omitempty"`
-	CacheStatus    string          `json:"cacheStatus,omitempty"`
-	InjectedTools  []string        `json:"injectedTools,omitempty"`
-	Segments       json.RawMessage `json:"segments,omitempty"`
-	StaticTokens   *float64        `json:"staticTokens,omitempty"`
-	DynamicTokens  *float64        `json:"dynamicTokens,omitempty"`
-	Text           string          `json:"text,omitempty"`
-	ArtifactID     string          `json:"artifactId,omitempty"`
-	SourceSpanID   string          `json:"sourceSpanId,omitempty"`
-	Order          int             `json:"order"`
+	Kind                   string          `json:"kind"`
+	State                  string          `json:"state"`
+	Included               bool            `json:"included"`
+	SourceID               string          `json:"sourceId"`
+	InjectableKind         string          `json:"injectableKind"`
+	Reason                 string          `json:"reason,omitempty"`
+	Branch                 string          `json:"branch,omitempty"`
+	Injects                []string        `json:"injects,omitempty"`
+	Priority               *float64        `json:"priority,omitempty"`
+	SizeBytes              *float64        `json:"sizeBytes,omitempty"`
+	Tokens                 *float64        `json:"tokens,omitempty"`
+	CacheStatus            string          `json:"cacheStatus,omitempty"`
+	CacheKey               string          `json:"cacheKey,omitempty"`
+	CacheAgeMs             *float64        `json:"cacheAgeMs,omitempty"`
+	CacheTTLMS             *float64        `json:"cacheTtlMs,omitempty"`
+	CacheReason            string          `json:"cacheReason,omitempty"`
+	InjectedTools          []string        `json:"injectedTools,omitempty"`
+	Segments               json.RawMessage `json:"segments,omitempty"`
+	StaticTokens           *float64        `json:"staticTokens,omitempty"`
+	DynamicTokens          *float64        `json:"dynamicTokens,omitempty"`
+	FreshnessStatus        string          `json:"freshnessStatus,omitempty"`
+	FreshnessAgeMs         *float64        `json:"freshnessAgeMs,omitempty"`
+	FreshnessMaxAgeMs      *float64        `json:"freshnessMaxAgeMs,omitempty"`
+	FreshnessObservedAt    string          `json:"freshnessObservedAt,omitempty"`
+	FreshnessValidUntil    string          `json:"freshnessValidUntil,omitempty"`
+	FreshnessSourceVersion string          `json:"freshnessSourceVersion,omitempty"`
+	FreshnessReason        string          `json:"freshnessReason,omitempty"`
+	Text                   string          `json:"text,omitempty"`
+	ArtifactID             string          `json:"artifactId,omitempty"`
+	SourceSpanID           string          `json:"sourceSpanId,omitempty"`
+	Order                  int             `json:"order"`
 }
 
 type RunDetailRequestBudget struct {

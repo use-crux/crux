@@ -64,17 +64,22 @@ func metricsForContribution(contribution RunDetailRequestContribution) *TurnDeci
 	return metrics
 }
 
-func cacheEvidenceForContribution(contribution RunDetailRequestContribution) *TurnCacheEvidence {
+func cacheEvidenceForContribution(contribution RunDetailRequestContribution, freshness *TurnFreshnessEvidence) *TurnCacheEvidence {
 	status := normalizeCacheStatus(contribution.CacheStatus)
 	if status == "" || status == "disabled" || status == "not-applicable" {
 		return nil
 	}
 	return &TurnCacheEvidence{
-		Subject:       TurnDecisionSubject{Kind: "context", ID: contribution.SourceID, Name: contributionName(contribution)},
-		Status:        status,
-		Reason:        contribution.CacheStatus,
-		EvidenceLevel: "declared",
-		Tab:           contextTab(contribution),
+		Subject:             TurnDecisionSubject{Kind: firstNonEmpty(contribution.InjectableKind, "context"), ID: contribution.SourceID, Name: contributionName(contribution)},
+		Status:              status,
+		CacheKey:            contribution.CacheKey,
+		AgeMs:               floatPtrValue(contribution.CacheAgeMs),
+		TTLMS:               floatPtrValue(contribution.CacheTTLMS),
+		AcceptedByFreshness: cacheAcceptedByFreshness(freshness),
+		RejectedByFreshness: cacheRejectedByFreshness(freshness),
+		Reason:              firstNonEmpty(contribution.CacheReason, contribution.CacheStatus, status),
+		EvidenceLevel:       "declared",
+		Tab:                 contextTab(contribution),
 	}
 }
 
@@ -85,7 +90,7 @@ func cacheDecisionForContribution(span SpanSummary, contribution RunDetailReques
 		Kind:    "context.cache",
 		Subject: cache.Subject,
 		Outcome: cache.Status,
-		Reason:  declaredReason("context.cache."+cache.Status, "Context cache status was recorded."),
+		Reason:  declaredReason(cacheFreshnessReasonCode(cache), "Context cache status was evaluated with freshness evidence."),
 		Source:  ptrSourceJoin(sourceJoinForContribution(contribution)),
 		Tab:     contextTab(contribution),
 		Cache:   &cache,

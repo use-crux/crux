@@ -56,12 +56,25 @@ func buildTurnDecisionReport(span SpanSummary, request *RunDetailRequest) *TurnD
 	contextSources := make([]TurnSourceJoin, 0, len(request.Contributions))
 	activeContexts := 0
 	budgetDrops := 0
+	missingFreshness := false
 	for _, contribution := range request.Contributions {
 		source := sourceJoinForContribution(contribution)
 		contextSources = append(contextSources, source)
 		disposition := dispositionForContribution(contribution)
 		reason := reasonForContribution(contribution, disposition)
 		metrics := metricsForContribution(contribution)
+		freshness := freshnessEvidenceForContribution(contribution)
+		cache := cacheEvidenceForContribution(contribution, freshness)
+		if freshness != nil {
+			report.Freshness = append(report.Freshness, *freshness)
+			if freshness.EvidenceLevel == "missing" {
+				missingFreshness = true
+			}
+		}
+		if cache != nil {
+			report.Cache = append(report.Cache, *cache)
+			report.Decisions = append(report.Decisions, cacheDecisionForContribution(span, contribution, *cache))
+		}
 
 		switch disposition {
 		case "active":
@@ -77,11 +90,8 @@ func buildTurnDecisionReport(span SpanSummary, request *RunDetailRequest) *TurnD
 				Source:        &source,
 				Tab:           contextTab(contribution),
 			}
-			if cache := cacheEvidenceForContribution(contribution); cache != nil {
-				saw.Cache = cache
-				report.Cache = append(report.Cache, *cache)
-				report.Decisions = append(report.Decisions, cacheDecisionForContribution(span, contribution, *cache))
-			}
+			saw.Freshness = freshness
+			saw.Cache = cache
 			report.Saw = append(report.Saw, saw)
 		default:
 			if reasonStateForContribution(contribution, disposition) == "budget" {
@@ -95,6 +105,8 @@ func buildTurnDecisionReport(span SpanSummary, request *RunDetailRequest) *TurnD
 				ReasonState:   reasonStateForContribution(contribution, disposition),
 				Reason:        reason,
 				Tokens:        floatPtrValue(contribution.Tokens),
+				Freshness:     freshness,
+				Cache:         cache,
 				EvidenceLevel: reason.EvidenceLevel,
 				SourceStatus:  source.Status,
 				Source:        &source,
@@ -103,16 +115,18 @@ func buildTurnDecisionReport(span SpanSummary, request *RunDetailRequest) *TurnD
 		}
 
 		report.Decisions = append(report.Decisions, TurnDecision{
-			ID:       "decision:" + span.SpanID + ":" + firstNonEmpty(contribution.SourceID, contribution.ArtifactID, contribution.Kind),
-			Phase:    "request",
-			Kind:     "context.disposition",
-			Subject:  TurnDecisionSubject{Kind: "context", ID: contribution.SourceID, Name: contributionName(contribution)},
-			Outcome:  disposition,
-			Reason:   reason,
-			Source:   &source,
-			Tab:      contextTab(contribution),
-			Evidence: evidenceForContribution(contribution),
-			Metrics:  metrics,
+			ID:        "decision:" + span.SpanID + ":" + firstNonEmpty(contribution.SourceID, contribution.ArtifactID, contribution.Kind),
+			Phase:     "request",
+			Kind:      "context.disposition",
+			Subject:   TurnDecisionSubject{Kind: "context", ID: contribution.SourceID, Name: contributionName(contribution)},
+			Outcome:   disposition,
+			Reason:    reason,
+			Source:    &source,
+			Tab:       contextTab(contribution),
+			Evidence:  evidenceForContribution(contribution),
+			Freshness: freshness,
+			Cache:     cache,
+			Metrics:   metrics,
 		})
 	}
 
@@ -125,7 +139,9 @@ func buildTurnDecisionReport(span SpanSummary, request *RunDetailRequest) *TurnD
 	}
 
 	report.Source = sourceGroups(promptSource, contextSources)
-	report.Gaps = append(report.Gaps, missingFreshnessGap(span))
+	if len(report.Freshness) == 0 || missingFreshness {
+		report.Gaps = append(report.Gaps, missingFreshnessGap(span))
+	}
 	report.Turn.Verdict = turnVerdict(activeContexts, budgetDrops)
 	return report
 }
@@ -219,7 +235,14 @@ func reasonStateForContribution(contribution RunDetailRequestContribution, dispo
 
 func reasonForContribution(contribution RunDetailRequestContribution, disposition string) TurnDecisionReason {
 	code := "context." + disposition
-	if disposition == "dropped" && reasonStateForContribution(contribution, disposition) == "budget" {
+	reasonState := reasonStateForContribution(contribution, disposition)
+	if disposition == "active" && freshnessStatusForContribution(contribution) == "stale-used" {
+		code = "context.freshness.stale_used"
+	}
+	if reasonState == "stale-rejected" {
+		code = "context.freshness.stale_rejected"
+	}
+	if disposition == "dropped" && reasonState == "budget" {
 		code = "context.dropped.token_budget"
 	}
 	return declaredReason(code, firstNonEmpty(contribution.Reason, contribution.State, disposition))

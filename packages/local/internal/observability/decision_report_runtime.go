@@ -5,16 +5,26 @@ import "strings"
 func appendRuntimeDecisionEvidence(report *TurnDecisionReport, turn SpanSummary, details []RunDetailDetail, children []RunDetailNode) {
 	for _, detail := range details {
 		if decision, ok := runtimeDecisionForSpan(turn, detail.SpanSummary); ok {
-			report.Decisions = append(report.Decisions, decision)
+			appendDecisionReportRuntimeDecision(report, decision)
 			report.Source = appendSourceGroupItem(report.Source, sourceGroupForRuntimeFamily(detail.Family), runtimeSourceJoin(detail.SpanSummary))
 		}
 	}
 	for _, child := range children {
 		if decision, ok := runtimeDecisionForSpan(turn, child.SpanSummary); ok {
-			report.Decisions = append(report.Decisions, decision)
+			appendDecisionReportRuntimeDecision(report, decision)
 			report.Source = appendSourceGroupItem(report.Source, sourceGroupForRuntimeFamily(child.Family), runtimeSourceJoin(child.SpanSummary))
 		}
 		appendRuntimeDecisionEvidence(report, turn, child.Details, child.Children)
+	}
+}
+
+func appendDecisionReportRuntimeDecision(report *TurnDecisionReport, decision TurnDecision) {
+	report.Decisions = append(report.Decisions, decision)
+	if decision.Freshness != nil {
+		report.Freshness = append(report.Freshness, *decision.Freshness)
+	}
+	if decision.Cache != nil {
+		report.Cache = append(report.Cache, *decision.Cache)
 	}
 }
 
@@ -78,7 +88,14 @@ func cacheRuntimeDecisionForSpan(turn SpanSummary, span SpanSummary) TurnDecisio
 	if status == "" || status == "ok" {
 		status = "unknown"
 	}
-	return runtimeDecision(turn, span, "efficiency", span.Primitive, "cache", status, observedReason("cache."+status, "Cache decision was observed."), "Cache")
+	decision := runtimeDecision(turn, span, "efficiency", span.Primitive, "cache", status, observedReason("cache."+status, "Cache decision was observed."), "Cache")
+	freshness := freshnessEvidenceForSpan(span, "cache")
+	decision.Freshness = freshness
+	decision.Cache = cacheEvidenceForSpan(span, status, freshness)
+	if decision.Cache != nil {
+		decision.Reason = observedReason(cacheFreshnessReasonCode(*decision.Cache), "Cache decision was observed with freshness evidence.")
+	}
+	return decision
 }
 
 func compactionDecisionForSpan(turn SpanSummary, span SpanSummary) TurnDecision {
@@ -94,7 +111,9 @@ func retrievalDecisionForSpan(turn SpanSummary, span SpanSummary) TurnDecision {
 	if count, ok := numericAttribute(span.Attributes, "resultCount"); ok && count == 0 {
 		outcome = "returned_empty"
 	}
-	return runtimeDecision(turn, span, "data", span.Primitive, "retrieval", outcome, observedReason("retrieval."+outcome, "Retrieval decision was observed."), "Context")
+	decision := runtimeDecision(turn, span, "data", span.Primitive, "retrieval", outcome, observedReason("retrieval."+outcome, "Retrieval decision was observed."), "Context")
+	decision.Freshness = freshnessEvidenceForSpan(span, "retrieval")
+	return decision
 }
 
 func memoryDecisionForSpan(turn SpanSummary, span SpanSummary) TurnDecision {
@@ -102,7 +121,9 @@ func memoryDecisionForSpan(turn SpanSummary, span SpanSummary) TurnDecision {
 	if strings.Contains(span.Primitive, "write") {
 		code = "memory.written"
 	}
-	return runtimeDecision(turn, span, "data", span.Primitive, "memory", span.Status, observedReason(code, "Memory decision was observed."), "Context")
+	decision := runtimeDecision(turn, span, "data", span.Primitive, "memory", span.Status, observedReason(code, "Memory decision was observed."), "Context")
+	decision.Freshness = freshnessEvidenceForSpan(span, "memory")
+	return decision
 }
 
 func fallbackDecisionForSpan(turn SpanSummary, span SpanSummary) TurnDecision {
