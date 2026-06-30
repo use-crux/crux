@@ -100,37 +100,55 @@ Common detail artifacts use stable kinds so `RunDetail.inspection` can route the
 the Run Detail **Explain** tab. It is a projection over evidence Crux already
 records (request composition, context contribution and prompt-budget artifacts,
 routing/fallback reports, guardrail/constraint/security/cache/compaction reports,
-retrieval/memory artifacts, Project Index source refs, and quality records) — not
-a new trace format. It summarises and links into the existing detail views rather
-than duplicating their payloads.
+retrieval/memory artifacts, Project Index source refs, and quality records), not
+a new trace format and not model chain-of-thought. It summarizes and links into
+the existing detail views rather than duplicating their payloads.
 
 The local Go projection attaches one report to each generation node and folded
-generation detail, plus the run root, exposed as the optional `decisionReport`
-field on `CruxRunDetailNode` and `CruxRunDetailDetail`. Consumers read it directly;
-when it is absent the existing detail tabs are unaffected.
+generation detail, exposed as the optional `decisionReport` field on
+`CruxRunDetailNode` and `CruxRunDetailDetail`. Consumers read it directly; when it
+is absent the existing detail tabs are unaffected. Run Insight is derived by the
+UI from per-turn reports that share the same `runId`; V1 does not define a
+separate run-level `decisionReport` projection.
 
-| Field        | Purpose                                                                                          |
-| ------------ | ------------------------------------------------------------------------------------------------ |
-| `turn`       | Turn metadata and a short, evidence-bound `verdict` sentence.                                     |
-| `saw`        | Items that reached the model (`disposition: "active"`).                                           |
-| `considered` | Items checked but not sent (`checked` / `dropped` / `disabled` / `unknown`) with a reason.        |
-| `freshness`  | Whether evidence was current enough (`fresh` / `refreshed` / `stale-used` / `stale-rejected` / …).|
-| `cache`      | Reuse/write/miss behaviour, with `acceptedByFreshness` / `rejectedByFreshness` as the only join.  |
-| `decisions`  | Routing, fallback, guardrail, security, constraint, cache, and compaction outcomes + deep-tab targets. |
-| `source`     | Grouped source-definition joins ("what do I change?") with file:line and resolution fidelity.     |
-| `coverage`   | Quality coverage scorecard across six areas, with optional read-only suggested assertions.        |
+| Field        | Purpose                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| `turn`       | Turn metadata and a short, evidence-bound `readout` sentence.                                      |
+| `saw`        | Items that reached the model (`disposition: "active"`).                                            |
+| `considered` | Items checked but not sent (`checked` / `dropped` / `disabled` / `unknown`) with a reason.         |
+| `freshness`  | Whether evidence was current enough (`fresh` / `refreshed` / `stale-used` / `stale-rejected` / ...). |
+| `cache`      | Reuse/write/miss behavior, with `acceptedByFreshness` / `rejectedByFreshness` as the explicit join. |
+| `decisions`  | Routing, fallback, guardrail, security, constraint, cache, and compaction outcomes plus deep-tab targets. |
+| `source`     | Grouped source-definition joins ("what do I change?") with file:line and resolution fidelity.      |
+| `coverage`   | Quality coverage scorecard with stable area `id`, display `label`, status, and optional `suggestion` / `command`. |
 | `gaps`       | Missing or inferred evidence the report could not prove.                                           |
+| `chips`      | Optional stable scan/filter chips for Explain.                                                     |
 
-Cache and freshness are deliberately separate concepts and types — freshness is
+Cache and freshness are deliberately separate concepts and types: freshness is
 correctness (was the data current enough?), cache is efficiency (what did reuse
 save?). Every decision, disposition, and diagnostic carries an `evidenceLevel`
 (`declared` / `observed` / `inferred` / `missing`) so the report stays honest
 about what it could and could not prove; `reason.source: "not-recorded"` maps to
-`evidenceLevel: "missing"`. Reason codes are stable strings (e.g.
+`evidenceLevel: "missing"`. Reason codes are stable strings (for example
 `routing.fallback.fired`, `context.freshness.stale_used`,
 `cache.freshness.rejected`) suitable for quality matchers, while human-facing
 text can change independently. The same codes back the
 `ctx.expect.decisionReport` Quality matchers.
+
+### TurnDecisionReport V1 compatibility
+
+`schemaVersion: 1` is the compatibility boundary for this read model:
+
+- Required top-level collections remain arrays.
+- Future V1 changes are additive unless `schemaVersion` changes.
+- Human-facing text (`reason.text`, `turn.readout`, labels, and suggestions) is display copy and not matcher-stable.
+- Stable reason codes are matcher-stable.
+- Coverage area ids are stable for matchers, filtering, and localization.
+- Cache and freshness remain separate evidence concepts.
+- Unknown, missing, unresolved, and inferred states remain explicitly representable.
+
+String unions stay open through the contract's literal-extension types where the
+TypeScript API allows custom or unknown values.
 
 ## Runtime emitters
 

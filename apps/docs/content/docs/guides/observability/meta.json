@@ -4,6 +4,7 @@
   "pages": [
     "index",
     "devtools",
+    "debug-model-turns",
     "devtools-cloud",
     "observability-context",
     "cost-tracking",
