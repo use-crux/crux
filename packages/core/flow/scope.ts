@@ -54,6 +54,7 @@ import {
 } from './suspend-state'
 import { createFlowStepIdentityTracker } from './step-identity'
 import { flowStepRetryOptions } from './retry-control'
+import { assertFlowJsonValue, assertFlowSnapshotMetadata, completedStepsForSnapshot } from './serialization'
 
 // Re-export types and errors so existing internal `../flow/scope` imports
 // keep working while the public flow surface stays centered on `flow()`.
@@ -70,6 +71,8 @@ export type {
   FlowSummary,
 }
 export { FlowSuspendedError, FlowCancelledError, FlowExpiredError, createFlowId, signalFlow, cancelFlow, listFlows, noPayload }
+export { FlowSerializationError } from './serialization'
+export type { FlowPersistenceBoundary } from './serialization'
 
 // ─────────────────────────────────────────────────────────────────
 // Internal flow executor
@@ -323,6 +326,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           if (signalDoc) {
             // Signal found — emit hook and return payload
             const payload = validateSignalPayload(_name, suspendOptions?.schema, signalDoc.payload ?? {}) as S
+            assertFlowJsonValue(payload, { boundary: 'signal payload' })
             recordDeliveredSignal(deliveredSignals, deliveryKey, _name, payload as JsonValue)
             await consumeFlowSignal(store, flowId, _name)
             return payload
@@ -387,17 +391,18 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
 
     if (isResume && store && snapshot) {
       const completedAt = Date.now()
-      await store.put(`${FLOW_KEY_PREFIX}${flowId}`, {
+      const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
+      const completedSnapshot: FlowSnapshot = {
         ...snapshot,
         status: 'completed',
-        completedSteps: completedSteps as FlowSnapshot['completedSteps'],
-        ...(deliveredSignalsForSnapshot(deliveredSignals)
-          ? { deliveredSignals: deliveredSignalsForSnapshot(deliveredSignals) }
-          : {}),
+        completedSteps: completedStepsForSnapshot(completedSteps),
+        ...(deliveredSignalsSnapshot ? { deliveredSignals: deliveredSignalsSnapshot } : {}),
         updatedAt: completedAt,
         completedAt,
         observabilityContext: snapshot.observabilityContext ?? (resumeObservabilityContext as unknown as JsonObject),
-      })
+      }
+      assertFlowSnapshotMetadata(completedSnapshot)
+      await store.put(`${FLOW_KEY_PREFIX}${flowId}`, completedSnapshot)
     }
 
     flowSpan.end({ attributes: { flowStatus: 'completed', totalSteps: stepCount } })
@@ -408,16 +413,18 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       const flowStore = store ?? getRuntime().records
       if (flowStore) {
         const timeoutAt = error.options?.timeout ? Date.now() + parseDuration(error.options.timeout) : undefined
+        if (flowInput !== undefined) {
+          assertFlowJsonValue(flowInput, { boundary: 'flow input' })
+        }
 
+        const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
         const snapshotData: FlowSnapshot = {
           flowId,
           name,
           status: 'suspended',
           suspendedAt: error.suspendPoint,
-          completedSteps: completedSteps as FlowSnapshot['completedSteps'],
-          ...(deliveredSignalsForSnapshot(deliveredSignals)
-            ? { deliveredSignals: deliveredSignalsForSnapshot(deliveredSignals) }
-            : {}),
+          completedSteps: completedStepsForSnapshot(completedSteps),
+          ...(deliveredSignalsSnapshot ? { deliveredSignals: deliveredSignalsSnapshot } : {}),
           traceContext: flowTraceContext(existing?.sessionId, parentFlowId),
           observabilityContext: resumeObservabilityContext as unknown as JsonObject,
           createdAt: snapshot?.createdAt ?? startedAt,
@@ -425,6 +432,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           ...(timeoutAt !== undefined ? { timeoutAt } : {}),
           ...(flowInput !== undefined ? { input: flowInput as unknown as JsonValue } : {}),
         }
+        assertFlowSnapshotMetadata(snapshotData)
         await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
       }
 
@@ -449,15 +457,20 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       const flowStore = store ?? getRuntime().records
       if (flowStore) {
         const cancelledAt = Date.now()
-        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, {
+        if (error.reason !== undefined) {
+          assertFlowJsonValue(error.reason, { boundary: 'flow snapshot metadata', path: '$.cancelReason' })
+        }
+        if (flowInput !== undefined) {
+          assertFlowJsonValue(flowInput, { boundary: 'flow input' })
+        }
+        const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
+        const snapshotData: FlowSnapshot = {
           flowId,
           name,
           status: 'cancelled',
           suspendedAt: '',
-          completedSteps: completedSteps as FlowSnapshot['completedSteps'],
-          ...(deliveredSignalsForSnapshot(deliveredSignals)
-            ? { deliveredSignals: deliveredSignalsForSnapshot(deliveredSignals) }
-            : {}),
+          completedSteps: completedStepsForSnapshot(completedSteps),
+          ...(deliveredSignalsSnapshot ? { deliveredSignals: deliveredSignalsSnapshot } : {}),
           traceContext: flowTraceContext(existing?.sessionId, parentFlowId),
           observabilityContext: snapshot?.observabilityContext ?? (resumeObservabilityContext as unknown as JsonObject),
           createdAt: snapshot?.createdAt ?? startedAt,
@@ -465,7 +478,9 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           cancelledAt,
           ...(error.reason !== undefined ? { cancelReason: error.reason } : {}),
           ...(flowInput !== undefined ? { input: flowInput as unknown as JsonValue } : {}),
-        })
+        }
+        assertFlowSnapshotMetadata(snapshotData)
+        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
       }
 
 
@@ -482,12 +497,14 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       const flowStore = store ?? getRuntime().records
       if (flowStore) {
         const expiredAt = Date.now()
-        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, {
+        const snapshotData = {
           ...(snapshot ?? {}),
           status: 'expired',
           expiredAt,
           updatedAt: expiredAt,
-        })
+        } as FlowSnapshot
+        assertFlowSnapshotMetadata(snapshotData)
+        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
       }
 
 

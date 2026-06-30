@@ -22,4 +22,6 @@ Flow step labels are now enforced as durable replay identities. Duplicate labels
 
 Flow lifecycle control errors thrown inside `flow.step()` now bypass step retry and fallback handling, preserving suspend, cancel, and expire outcomes.
 
+Persisted flow input, step outputs, signal payloads, and terminal snapshot metadata are now validated as JSON-serializable before flow state is written.
+
 Refresh OTel package README wording to describe `flow().run()` spans.

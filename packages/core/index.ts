@@ -273,10 +273,12 @@ export {
   FlowSuspendedError,
   FlowCancelledError,
   FlowExpiredError,
+  FlowSerializationError,
   noPayload,
 } from "./flow/scope";
 export type {
   FlowHandle,
+  FlowPersistenceBoundary,
   FlowResumeOptions,
   FlowRunOptions,
   FlowScope,

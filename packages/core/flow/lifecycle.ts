@@ -11,6 +11,7 @@
 import { getRuntime, resolveRecords } from '../runtime/runtime'
 import type { JsonValue, RecordStore } from '../storage'
 import type { FlowSnapshot, ListFlowsOptions, FlowSummary } from './types'
+import { assertFlowJsonValue, assertFlowSnapshotMetadata } from './serialization'
 
 // ─────────────────────────────────────────────────────────────────
 // Constants
@@ -102,6 +103,7 @@ export function assertFlowSnapshotResumable(snapshot: FlowSnapshot): void {
  */
 export async function signalFlow(flowId: string, name: string, payload: JsonValue = {}): Promise<void> {
   const store = resolveRecords()
+  assertFlowJsonValue(payload, { boundary: 'signal payload' })
   await store.put(`${SIGNAL_KEY_PREFIX}${flowId}:${name}`, {
     payload,
     signaledAt: Date.now(),
@@ -157,12 +159,17 @@ export async function cancelFlow(flowId: string, reason?: string): Promise<void>
   const snapshot = await store.get(`${FLOW_KEY_PREFIX}${flowId}`)
   if (snapshot) {
     const cancelledAt = Date.now()
-    await store.put(`${FLOW_KEY_PREFIX}${flowId}`, {
+    if (reason !== undefined) {
+      assertFlowJsonValue(reason, { boundary: 'flow snapshot metadata', path: '$.cancelReason' })
+    }
+    const cancelledSnapshot = {
       ...snapshot,
       status: 'cancelled',
-      cancelReason: reason,
+      ...(reason !== undefined ? { cancelReason: reason } : {}),
       cancelledAt,
       updatedAt: cancelledAt,
-    })
+    } as FlowSnapshot
+    assertFlowSnapshotMetadata(cancelledSnapshot)
+    await store.put(`${FLOW_KEY_PREFIX}${flowId}`, cancelledSnapshot)
   }
 }

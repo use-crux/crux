@@ -26,6 +26,8 @@
 
 // Types and error classes (decomposed from scope.ts)
 export { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from './types'
+export { FlowSerializationError } from './serialization'
+export type { FlowPersistenceBoundary } from './serialization'
 export type {
   FlowHandle,
   FlowResumeOptions,
