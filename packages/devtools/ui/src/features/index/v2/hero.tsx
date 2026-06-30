@@ -954,6 +954,11 @@ export function IndexHero({ def }: { def: ViewDef }) {
         tone="plum"
         right={
           <HWrap>
+            {f.namespace && (
+              <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>
+                namespace · {f.namespace}
+              </span>
+            )}
             {f.hasTools && (
               <Chip tone="plum" mono>
                 has tools
@@ -963,33 +968,41 @@ export function IndexHero({ def }: { def: ViewDef }) {
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {(f.mounts ?? []).map((mnt) => (
-            <div
-              key={mnt.path}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '8px 12px',
-                borderRadius: 9,
-                background: T.bgElev,
-                border: `1px solid ${T.border}`,
-              }}
-            >
-              <Icon name="folder" size={14} color={T.plum} />
-              <span style={{ fontFamily: T.mono, fontSize: 12, color: T.fg }}>{mnt.path}</span>
-              {mnt.mode && (
-                <Chip tone={mnt.mode === 'rw' || mnt.mode === 'read-write' ? 'warn' : 'muted'} mono>
-                  {mnt.mode}
-                </Chip>
-              )}
-              {f.namespace && (
-                <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint, marginLeft: 'auto' }}>
-                  namespace · {f.namespace}
-                </span>
-              )}
-            </div>
-          ))}
+          {(f.mounts ?? []).map((mnt) => {
+            const mode = mnt.mode ?? mnt.access
+            return (
+              <div
+                key={mnt.path}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '8px 12px',
+                  borderRadius: 9,
+                  background: T.bgElev,
+                  border: `1px solid ${T.border}`,
+                }}
+              >
+                <Icon name="folder" size={14} color={T.plum} />
+                <span style={{ fontFamily: T.mono, fontSize: 12, color: T.fg }}>{mnt.path}</span>
+                {mode && (
+                  <Chip tone={mode === 'rw' || mode === 'readwrite' || mode === 'read-write' ? 'warn' : 'muted'} mono>
+                    {mode}
+                  </Chip>
+                )}
+                {mnt.source?.kind && (
+                  <Chip tone={mnt.source.kind === 'retriever' ? 'crux' : 'muted'} mono>
+                    {mnt.source.kind}
+                  </Chip>
+                )}
+                {(mnt.source?.helper ?? mnt.source?.retriever ?? mnt.source?.reference) && (
+                  <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.fgFaint }}>
+                    {mnt.source?.helper ?? mnt.source?.retriever ?? mnt.source?.reference}
+                  </span>
+                )}
+              </div>
+            )
+          })}
         </div>
       </HeroFrame>
     )

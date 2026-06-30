@@ -375,6 +375,22 @@ export interface DefinitionIntelligence {
   extensions?: Record<string, unknown>
 }
 
+export interface WorkspaceMountSourceSummary {
+  kind?: string
+  retriever?: string
+  helper?: string
+  reference?: string
+  capabilities?: readonly string[]
+}
+
+export interface WorkspaceDefinitionMount {
+  path: string
+  access?: string
+  mode?: string
+  description?: string
+  source?: WorkspaceMountSourceSummary
+}
+
 export type PrimitiveSpecificFacts =
   | {
       kind: 'prompt'
@@ -498,7 +514,7 @@ export type PrimitiveSpecificFacts =
       kind: 'workspace'
       workspaceId?: string
       namespace?: string
-      mounts?: Array<{ path: string; mode?: string }>
+      mounts?: WorkspaceDefinitionMount[]
       hasTools?: boolean
     }
   | StorageFacts
@@ -3473,6 +3489,11 @@ export interface WorkspaceMount {
   path: string
   mode?: 'read-write' | 'read-only' | string
   fileCount?: number
+  sourceKind?: string
+  sourceHelper?: string
+  sourceRef?: string
+  retriever?: string
+  capabilities?: readonly string[]
 }
 
 export interface WorkspaceStats {

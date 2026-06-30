@@ -208,6 +208,12 @@ fn reference_name(value: Option<&StaticSyntaxValue>) -> Option<String> {
     match value {
         Some(StaticSyntaxValue::Identifier { name }) => Some(name.clone()),
         Some(StaticSyntaxValue::PropertyAccess { name, .. }) => Some(name.clone()),
+        Some(StaticSyntaxValue::Call { callee, .. }) => Some(
+            callee
+                .local_name
+                .clone()
+                .unwrap_or_else(|| callee.name.clone()),
+        ),
         _ => None,
     }
 }

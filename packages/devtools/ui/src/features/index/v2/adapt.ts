@@ -31,6 +31,7 @@ import type {
   ProjectRuntimeJoin,
   ProjectSourceRef,
   SourceSnippet,
+  WorkspaceDefinitionMount,
 } from '@/types'
 import { kindMeta, type FamilyId, type LintSeverity } from './kit'
 
@@ -180,7 +181,7 @@ export interface IndexFacts {
   prefix?: string
   // workspace
   namespace?: string
-  mounts?: Array<{ path: string; mode?: string }>
+  mounts?: WorkspaceDefinitionMount[]
   hasTools?: boolean
   // guardrail / constraint
   policy?: string
@@ -398,7 +399,23 @@ function enrichFacts(facts: IndexFacts | undefined, meta: ProjectDefinitionMetad
     out.criteriaPreview = metaRec.criteriaPreview
     touched = true
   }
+  if (out.namespace == null && typeof metaRec.namespace === 'string') {
+    out.namespace = metaRec.namespace
+    touched = true
+  }
+  if (out.mounts == null && Array.isArray(metaRec.mounts)) {
+    out.mounts = metaRec.mounts.filter(isWorkspaceDefinitionMount)
+    touched = true
+  }
+  if (out.hasTools == null && typeof metaRec.hasTools === 'boolean') {
+    out.hasTools = metaRec.hasTools
+    touched = true
+  }
   return touched ? out : facts
+}
+
+function isWorkspaceDefinitionMount(value: unknown): value is WorkspaceDefinitionMount {
+  return Boolean(value && typeof value === 'object' && typeof (value as { path?: unknown }).path === 'string')
 }
 
 /**

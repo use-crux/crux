@@ -379,6 +379,34 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
     },
     {
+      name: "workspace-source-backed-mount-enrichment",
+      files: {
+        "src/resources.ts": `
+        import { retrieverWorkspaceMountSource, workspace } from '@use-crux/core'
+        import { retriever } from '@use-crux/core/retrieval'
+
+        const docsRetriever = retriever({ id: 'docs', retrieve: async () => [] })
+        const customSource = {
+          kind: 'custom',
+          list: async () => ({ entries: [] }),
+          read: async () => null,
+          write: async () => null,
+        }
+        const mounts = [
+          { path: '/provider', access: 'readwrite', source: customSource },
+          { path: '/docs', access: 'read', source: { kind: 'retriever', retriever: docsRetriever } },
+          { path: '/guide', access: 'read', source: retrieverWorkspaceMountSource(docsRetriever, { query: 'guide' }) },
+        ]
+
+        export const scratch = workspace({ id: 'scratch', mounts })
+      `,
+      },
+      expect: {
+        definitionIds: ["workspace:scratch"],
+        relationTypes: ["workspace.mounts_path"],
+      },
+    },
+    {
       name: "workspace-diff-read-relation",
       files: {
         "src/resources.ts": `

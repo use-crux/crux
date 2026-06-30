@@ -449,7 +449,7 @@ describe('memory block system', () => {
 
   it('renders extractive blocks with an explicit semantic strategy scoped to namespace and block id', async () => {
     const store = inMemoryRecordStore()
-    const semanticEmbed = async (text: string) => (text.includes('billing') ? [1, 0] : [0, 1])
+    const semanticEmbed = async (text: string) => (text.toLowerCase().includes('billing') ? [1, 0] : [0, 1])
     const factBlock = facts({
       id: 'facts',
       embed: semanticEmbed,

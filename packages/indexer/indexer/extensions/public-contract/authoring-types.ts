@@ -14,13 +14,22 @@ export interface StaticObjectReader {
   /** Reads an identifier-valued property, preserving the authored binding name. */
   identifier(property: string): string | undefined
   /**
-   * Reads a reference-like property, including shorthand properties and property-access expressions.
+   * Reads a reference-like property, including shorthand properties, property-access expressions, and
+   * helper/factory call names.
    *
    * Use this for config values that point at another authored binding or runtime component, for
-   * example `{ store }` or `{ component: components.crux }`. The reader returns the authored binding
-   * name or final property segment and returns `undefined` for dynamic expressions.
+   * example `{ store }`, `{ component: components.crux }`, or `{ source: helper(...) }`. The reader
+   * returns the authored binding name, final property segment, or helper name and returns `undefined`
+   * for dynamic expressions.
    */
   reference(property: string): string | undefined
+  /**
+   * Reads the callee name when a property is authored directly as a helper/factory call.
+   *
+   * Unlike `reference`, this does not classify identifier-backed properties as calls, so extractors can
+   * distinguish `{ source: loader }` from `{ source: loader() }` when that distinction affects metadata.
+   */
+  callName(property: string): string | undefined
   /** Reads an array of identifier references, preserving authored binding names. */
   identifierArray(property: string): readonly string[]
   /** Reads a nested object literal property as another stable object reader. */

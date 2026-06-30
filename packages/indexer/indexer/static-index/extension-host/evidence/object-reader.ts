@@ -32,6 +32,7 @@ export function createStaticObjectReader(
     stringArray: (property) => stringArrayProperty(object, property) ?? [],
     identifier: (property) => identifierProperty(object, property),
     reference: (property) => referenceProperty(object, property, localInitializers),
+    callName: (property) => callNameProperty(object, property),
     identifierArray: (property) => identifierArrayProperty(object, property),
     object: (property) => {
       const expression = resolvedPropertyExpression(object, property, localInitializers)
@@ -51,6 +52,12 @@ export function createStaticObjectReader(
     schema: (property) => schemaProperty(object, property, localInitializers),
     json: (property) => staticJson(object, property, localInitializers),
   }
+}
+
+/** Reads the direct helper/factory call name for a property without treating identifiers as calls. */
+function callNameProperty(object: ts.ObjectLiteralExpression, property: string): string | undefined {
+  const expression = propertyExpression(object, property)
+  return expression && ts.isCallExpression(expression) ? expressionName(expression.expression) : undefined
 }
 
 /**
@@ -197,8 +204,9 @@ function objectMapIdentifierEntries(
  * Reads a property as a conservative source reference name.
  *
  * Shorthand properties return their shorthand name. Identifier initializers return that identifier,
- * and property-access initializers return the final segment. Local identifier aliases are followed
- * once so simple constants preserve existing first-party extraction behavior.
+ * property-access initializers return the final segment, and helper/factory calls return the callee
+ * name. Local identifier aliases are followed once so simple constants preserve existing first-party
+ * extraction behavior.
  */
 function referenceProperty(
   object: ts.ObjectLiteralExpression,
@@ -305,6 +313,7 @@ function expressionJson(expression: ts.Expression, localInitializers: ReadonlyMa
 function expressionName(expression: ts.Expression): string | undefined {
   if (ts.isIdentifier(expression)) return expression.text
   if (ts.isPropertyAccessExpression(expression)) return expression.name.text
+  if (ts.isCallExpression(expression) || ts.isNewExpression(expression)) return expressionName(expression.expression)
   return undefined
 }
 

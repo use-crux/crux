@@ -50,6 +50,7 @@ export function createStaticRecordObjectReader(
     stringArray: (property) => stringArrayValue(propertyValue(property)),
     identifier: (property) => directIdentifier(propertyValue(property)),
     reference: (property) => referenceValue(propertyValue(property), initializers),
+    callName: (property) => callNameValue(propertyValue(property)),
     identifierArray: (property) => identifierArrayValue(propertyValue(property), initializers),
     object: (property) => {
       const nested = staticObjectValue(propertyValue(property), initializers)
@@ -68,6 +69,10 @@ export function createStaticRecordObjectReader(
     json: (property) =>
       staticSyntaxValueJson(property === undefined ? object : propertyValue(property), initializers),
   }
+}
+
+function callNameValue(value: StaticSyntaxValue | undefined): string | undefined {
+  return value?.kind === 'call' ? (value.callee.localName ?? value.callee.name) : undefined
 }
 
 function staticObjectPropertyMap(object: StaticObjectValue): ReadonlyMap<string, StaticSyntaxValue> {
