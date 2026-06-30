@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   inMemoryBlobStore,
-  inMemoryDataStore,
+  inMemoryRecordStore,
   inMemoryStorage,
   inMemoryVectorStore,
   storage,
@@ -9,12 +9,12 @@ import {
 
 describe('storage capabilities', () => {
   it('keeps document data, vector search, and blobs as explicit capabilities', async () => {
-    const data = inMemoryDataStore()
+    const records = inMemoryRecordStore()
     const vectors = inMemoryVectorStore()
     const blobs = inMemoryBlobStore()
-    const bundle = storage({ data, vectors, blobs })
+    const bundle = storage({ records, vectors, blobs })
 
-    await bundle.data.set('docs:a', { title: 'Alpha' })
+    await bundle.records.put('docs:a', { title: 'Alpha' })
     await bundle.vectors?.upsert([{ key: 'docs:a', dense: [1, 0] }])
     const blob = await bundle.blobs?.put({
       key: 'outputs/report.txt',
@@ -22,8 +22,8 @@ describe('storage capabilities', () => {
       mimeType: 'text/plain',
     })
 
-    await expect(bundle.data.get('docs:a')).resolves.toMatchObject({ title: 'Alpha' })
-    await expect(bundle.vectors?.search({ dense: [1, 0] })).resolves.toEqual([
+    await expect(bundle.records.get('docs:a')).resolves.toMatchObject({ title: 'Alpha' })
+    await expect(bundle.vectors?.search({ mode: 'dense', dense: [1, 0] })).resolves.toEqual([
       expect.objectContaining({ key: 'docs:a', score: 1 }),
     ])
     await expect(bundle.blobs?.get(blob?.uri ?? '')).resolves.toMatchObject({
@@ -33,17 +33,17 @@ describe('storage capabilities', () => {
     expect(Object.isFrozen(bundle)).toBe(true)
   })
 
-    it('does not pretend a data store is a vector or blob store', () => {
-    const data = inMemoryDataStore()
+  it('does not pretend a record store is a vector or blob store', () => {
+    const records = inMemoryRecordStore()
 
-    expect('search' in data).toBe(false)
-    expect('put' in data).toBe(false)
+    expect('search' in records).toBe(false)
+    expect('createReadUrl' in records).toBe(false)
   })
 
-    it('provides a complete in-memory bundle for tests and demos', () => {
+  it('provides a complete in-memory bundle for tests and demos', () => {
     const bundle = inMemoryStorage()
 
-    expect(bundle.data._tag).toBe('DataStore')
+    expect(bundle.records._tag).toBe('RecordStore')
     expect(bundle.vectors?._tag).toBe('VectorStore')
     expect(bundle.blobs?._tag).toBe('BlobStore')
   })

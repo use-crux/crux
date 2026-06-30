@@ -1,0 +1,140 @@
+/**
+ * Storage bundle helpers.
+ *
+ * @module
+ */
+
+import type { BlobStore, RecordStore, Storage, VectorStore } from './types'
+
+/** Factory for normalizing storage bundles and scoped wrappers. */
+export interface StorageFactory {
+  /**
+   * Normalize and shallow-freeze a storage capability bundle.
+   *
+   * @param config - Explicit storage capabilities.
+   * @returns A shallow-frozen storage bundle.
+   */
+  (config: Storage): Storage
+
+  /**
+   * Prefix storage keys for tenant, user, session, or workspace isolation.
+   *
+   * @param base - Storage bundle to scope.
+   * @param prefix - Prefix applied to keys and blob identifiers.
+   * @returns A shallow-frozen scoped storage bundle.
+   */
+  scope(base: Storage, prefix: string): Storage
+}
+
+/** Normalize and shallow-freeze a storage capability bundle. */
+export const storage: StorageFactory = Object.assign(createStorage, {
+  scope,
+})
+
+function createStorage(config: Storage): Storage {
+  return Object.freeze({ ...config })
+}
+
+function scope(base: Storage, prefix: string): Storage {
+  const normalizedPrefix = prefix.endsWith(':') ? prefix : `${prefix}:`
+  return storage({
+    records: scopeRecords(base.records, normalizedPrefix),
+    ...(base.vectors ? { vectors: scopeVectors(base.vectors, normalizedPrefix) } : {}),
+    ...(base.blobs ? { blobs: scopeBlobs(base.blobs, normalizedPrefix) } : {}),
+  })
+}
+
+function scopeRecords(records: RecordStore, prefix: string): RecordStore {
+  return {
+    _tag: 'RecordStore',
+    get: (key) => records.get(prefixKey(prefix, key)),
+    getMany: records.getMany ? (keys) => records.getMany!(keys.map((key) => prefixKey(prefix, key))) : undefined,
+    put: (key, value, options) => records.put(prefixKey(prefix, key), value, options),
+    putMany: records.putMany
+      ? (entries) =>
+          records.putMany!(
+            entries.map((entry) => ({
+              ...entry,
+              key: prefixKey(prefix, entry.key),
+            })),
+          )
+      : undefined,
+    create: (key, value, options) => records.create(prefixKey(prefix, key), value, options),
+    delete: (key) => records.delete(prefixKey(prefix, key)),
+    deleteMany: records.deleteMany ? (keys) => records.deleteMany!(keys.map((key) => prefixKey(prefix, key))) : undefined,
+    list: async (listPrefix, options) => {
+      const page = await records.list(prefixKey(prefix, listPrefix), options)
+      return {
+        ...page,
+        entries: page.entries.map((entry) => ({
+          ...entry,
+          key: unprefixKey(prefix, entry.key),
+        })),
+      }
+    },
+    scan: records.scan
+      ? async function* (scanPrefix, options) {
+          for await (const entry of records.scan!(prefixKey(prefix, scanPrefix), options)) {
+            yield {
+              ...entry,
+              key: unprefixKey(prefix, entry.key),
+            }
+          }
+        }
+      : undefined,
+    watch: records.watch
+      ? (watchPrefix, callback) =>
+          records.watch!(prefixKey(prefix, watchPrefix), (event) =>
+            callback({
+              ...event,
+              key: unprefixKey(prefix, event.key),
+            }),
+          )
+      : undefined,
+    capabilities: () => records.capabilities(),
+  }
+}
+
+function scopeVectors(vectors: VectorStore, prefix: string): VectorStore {
+  return {
+    _tag: 'VectorStore',
+    upsert: (records) =>
+      vectors.upsert(
+        records.map((record) => ({
+          ...record,
+          key: prefixKey(prefix, record.key),
+        })),
+      ),
+    delete: (keys) => vectors.delete(keys.map((key) => prefixKey(prefix, key))),
+    search: async (query) =>
+      (await vectors.search(query)).map((hit) => ({
+        ...hit,
+        key: unprefixKey(prefix, hit.key),
+      })),
+    capabilities: () => vectors.capabilities(),
+  }
+}
+
+function scopeBlobs(blobs: BlobStore, prefix: string): BlobStore {
+  return {
+    _tag: 'BlobStore',
+    put: (input) =>
+      blobs.put({
+        ...input,
+        ...(input.key ? { key: prefixKey(prefix, input.key) } : {}),
+      }),
+    get: (uri) => blobs.get(uri),
+    head: blobs.head ? (uri) => blobs.head!(uri) : undefined,
+    delete: (uri) => blobs.delete(uri),
+    createReadUrl: blobs.createReadUrl ? (uri, options) => blobs.createReadUrl!(uri, options) : undefined,
+    capabilities: () => blobs.capabilities(),
+  }
+}
+
+function prefixKey(prefix: string, key: string): string {
+  return key.startsWith(prefix) ? key : `${prefix}${key}`
+}
+
+function unprefixKey(prefix: string, key: string): string {
+  return key.startsWith(prefix) ? key.slice(prefix.length) : key
+}
