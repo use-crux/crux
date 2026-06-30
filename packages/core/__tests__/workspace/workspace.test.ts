@@ -62,9 +62,11 @@ describe('workspace()', () => {
     await expect(ws.list('/workspace')).resolves.toMatchObject({
       entries: [{ path: '/workspace/nested' }, { path: '/workspace/notes.md' }],
     })
-    await expect(ws.list('/workspace/**/*.md')).resolves.toMatchObject({
-      entries: [{ path: '/workspace/nested/brief.md' }],
-    })
+    const markdownListing = await ws.list('/workspace/**/*.md')
+    expect(markdownListing.entries.map((entry) => entry.path).sort()).toEqual([
+      '/workspace/nested/brief.md',
+      '/workspace/notes.md',
+    ])
     await expect(ws.list('/outputs/*.pdf')).resolves.toMatchObject({
       entries: [{ path: '/outputs/report.pdf' }],
     })
@@ -124,8 +126,10 @@ describe('workspace()', () => {
 
     expect(Object.keys(resolved.tools ?? {}).sort()).toEqual([
       'editWorkspaceFile',
+      'grepWorkspace',
       'listWorkspace',
       'readWorkspaceFile',
+      'renameWorkspaceFile',
       'writeWorkspaceFile',
     ])
   })
@@ -172,12 +176,16 @@ describe('workspace()', () => {
     expect(Object.keys(ws.asTools()).sort()).toEqual([
       'deleteResearchWorkspaceFile',
       'editResearchWorkspaceFile',
+      'grepResearchWorkspace',
       'listResearchWorkspace',
       'readResearchWorkspaceFile',
+      'renameResearchWorkspaceFile',
       'writeResearchWorkspaceFile',
     ])
     expect(workspaceToolNames({ prefix: 'research' })).toMatchObject({
       deleteFile: 'deleteResearchWorkspaceFile',
+      grep: 'grepResearchWorkspace',
+      renameFile: 'renameResearchWorkspaceFile',
       writeFile: 'writeResearchWorkspaceFile',
     })
   })

@@ -9,18 +9,28 @@
  */
 
 import type { JsonValue, ToolModelOutput } from '../types/tool'
-import type { WorkspaceFile, WorkspaceReadResult, WorkspaceToolNames, WorkspaceToolOptions } from './types'
+import type {
+  WorkspaceFile,
+  WorkspaceReadResult,
+  WorkspaceToolNames,
+  WorkspaceToolOptions,
+  WorkspaceToolPrefix,
+} from './types'
 
 /** Resolve the generated workspace tool names from an optional prefix. */
-export function workspaceToolNames(options?: Pick<WorkspaceToolOptions, 'prefix'>): WorkspaceToolNames {
+export function workspaceToolNames<const Options extends Pick<WorkspaceToolOptions, 'prefix'> = {}>(
+  options?: Options,
+): WorkspaceToolNames<WorkspaceToolPrefix<Options>> {
   const prefix = options?.prefix ? toPascalCase(options.prefix) : ''
   return {
     list: prefix ? `list${prefix}Workspace` : 'listWorkspace',
     readFile: prefix ? `read${prefix}WorkspaceFile` : 'readWorkspaceFile',
     writeFile: prefix ? `write${prefix}WorkspaceFile` : 'writeWorkspaceFile',
     editFile: prefix ? `edit${prefix}WorkspaceFile` : 'editWorkspaceFile',
+    renameFile: prefix ? `rename${prefix}WorkspaceFile` : 'renameWorkspaceFile',
+    grep: prefix ? `grep${prefix}Workspace` : 'grepWorkspace',
     deleteFile: prefix ? `delete${prefix}WorkspaceFile` : 'deleteWorkspaceFile',
-  }
+  } as WorkspaceToolNames<WorkspaceToolPrefix<Options>>
 }
 
 function toPascalCase(value: string): string {
@@ -47,6 +57,11 @@ export function readOptionalString(value: unknown): string | undefined {
 /** Read an optional positive-integer tool argument. */
 export function readOptionalPositiveInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined
+}
+
+/** Read an optional boolean tool argument. */
+export function readOptionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined
 }
 
 /** Coerce a tool `content` argument into a string or JSON value. */

@@ -202,15 +202,24 @@ fn data_access_key(value: Option<&StaticSyntaxValue>) -> Option<String> {
 
 fn data_access_kind(method: &str) -> Option<&'static str> {
     match method {
-        "get" | "read" | "query" | "find" | "search" | "list" | "readFile" | "load" => Some("read"),
+        "get" | "read" | "query" | "find" | "search" | "list" | "readFile" | "load" | "grep"
+        | "artifacts" | "stat" | "exists" => Some("read"),
         "set" | "write" | "update" | "append" | "delete" | "put" | "writeFile" | "edit"
-        | "deleteFile" | "save" => Some("write"),
+        | "deleteFile" | "save" | "rename" | "move" | "copy" | "finalize" => Some("write"),
         _ => None,
     }
 }
 
 fn data_access_operation(method: &str, kind: &str) -> &'static str {
     match method {
+        "grep" => "grep",
+        "artifacts" => "artifacts",
+        "stat" => "stat",
+        "exists" => "exists",
+        "rename" => "rename",
+        "move" => "move",
+        "copy" => "copy",
+        "finalize" => "finalize",
         "query" | "find" | "search" | "list" => "query",
         "append" | "put" | "save" => "append",
         "update" | "edit" => "update",

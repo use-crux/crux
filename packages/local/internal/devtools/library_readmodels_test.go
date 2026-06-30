@@ -439,6 +439,57 @@ func TestMemoryOperationsEndpointFiltersAndLimits(t *testing.T) {
 	}
 }
 
+func TestWorkspaceDetailUsesPathHashAndArtifactMetadataFromObservedActivity(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewStore()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	obs, err := observability.NewService(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(`{
+		"records": [
+			{"schemaVersion":1,"recordId":"rec_write","type":"span","runId":"run_ws","traceId":"trace_ws","spanId":"span_write","family":"workspace","primitive":"workspace.operation","name":"workspace.write","startedAt":"2026-06-30T10:00:00.000Z","endedAt":"2026-06-30T10:00:00.012Z","durationMs":12,"status":"ok","attributes":{"workspaceId":"drafts","operation":"write","pathHash":"fnv1a:aaa111","namespaceHash":"ns1","mimeType":"text/markdown","size":42,"artifactStatus":"draft","artifactKind":"report"}},
+			{"schemaVersion":1,"recordId":"rec_finalize","type":"span","runId":"run_ws","traceId":"trace_ws","spanId":"span_finalize","family":"workspace","primitive":"workspace.operation","name":"workspace.finalize","startedAt":"2026-06-30T10:00:01.000Z","endedAt":"2026-06-30T10:00:01.009Z","durationMs":9,"status":"ok","attributes":{"workspaceId":"drafts","operation":"finalize","pathHash":"fnv1a:bbb222","namespaceHash":"ns1","mimeType":"application/pdf","size":9001,"artifactStatus":"final","artifactKind":"report","uri":"workspace-inline://drafts/ns1/outputs/report.pdf"}},
+			{"schemaVersion":1,"recordId":"artifact_finalize","type":"artifact","runId":"run_ws","traceId":"trace_ws","artifactId":"artifact_report","spanId":"span_finalize","kind":"output","createdAt":"2026-06-30T10:00:01.009Z","contentType":"application/json","encoding":"json","sizeBytes":9001,"uri":"workspace-inline://drafts/ns1/outputs/report.pdf","preview":{"contentStored":false},"attributes":{"workspaceId":"drafts","operation":"finalize","pathHash":"fnv1a:bbb222","artifactStatus":"final","artifactKind":"report","mimeType":"application/pdf","size":9001,"uri":"workspace-inline://drafts/ns1/outputs/report.pdf"}}
+		]
+	}`), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	service := NewService(st, quality.NewService(st, t.TempDir())).WithObservability(obs)
+	value, found, err := service.WorkspaceDetail(ctx, "drafts")
+	if err != nil || !found {
+		t.Fatalf("workspace detail found=%v err=%v", found, err)
+	}
+	detail := value.(workspaceDetail)
+	if len(detail.Files) != 2 {
+		t.Fatalf("files = %#v", detail.Files)
+	}
+	byPath := map[string]workspaceFileSummary{}
+	for _, file := range detail.Files {
+		byPath[file.Path] = file
+		if file.Path == "/" {
+			t.Fatalf("file collapsed to root: %#v", file)
+		}
+	}
+	if byPath["hash:fnv1a:aaa111"].Op != "write" || byPath["hash:fnv1a:bbb222"].Op != "finalize" {
+		t.Fatalf("files by path = %#v", byPath)
+	}
+	finalized := byPath["hash:fnv1a:bbb222"]
+	if finalized.ArtifactStatus != "final" || finalized.ArtifactKind != "report" || finalized.URI != "workspace-inline://drafts/ns1/outputs/report.pdf" {
+		t.Fatalf("finalized artifact metadata = %#v", finalized)
+	}
+}
+
 func TestPlansEndpointProjectsObservedPlanArtifacts(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewStore()

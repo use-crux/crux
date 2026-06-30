@@ -347,19 +347,23 @@ type RetrievalStageEndEvent struct {
 
 // WorkspaceOperationEvent is the incoming event for workspace:operation.
 type WorkspaceOperationEvent struct {
-	WorkspaceID string  `json:"workspaceId"`
-	Namespace   string  `json:"namespace"`
-	Operation   string  `json:"operation"`
-	Path        string  `json:"path"`
-	Status      string  `json:"status"`
-	DurationMs  float64 `json:"durationMs"`
-	Mount       string  `json:"mount,omitempty"`
-	MimeType    string  `json:"mimeType,omitempty"`
-	Size        *int    `json:"size,omitempty"`
-	Error       string  `json:"error,omitempty"`
-	TraceID     string  `json:"traceId,omitempty"`
-	SessionID   string  `json:"sessionId,omitempty"`
-	Timestamp   int64   `json:"timestamp"`
+	WorkspaceID    string  `json:"workspaceId"`
+	Namespace      string  `json:"namespace"`
+	Operation      string  `json:"operation"`
+	Path           string  `json:"path"`
+	PathHash       string  `json:"pathHash,omitempty"`
+	Status         string  `json:"status"`
+	DurationMs     float64 `json:"durationMs"`
+	Mount          string  `json:"mount,omitempty"`
+	MimeType       string  `json:"mimeType,omitempty"`
+	Size           *int    `json:"size,omitempty"`
+	ArtifactStatus string  `json:"artifactStatus,omitempty"`
+	ArtifactKind   string  `json:"artifactKind,omitempty"`
+	URI            string  `json:"uri,omitempty"`
+	Error          string  `json:"error,omitempty"`
+	TraceID        string  `json:"traceId,omitempty"`
+	SessionID      string  `json:"sessionId,omitempty"`
+	Timestamp      int64   `json:"timestamp"`
 }
 
 // SourceStageEventRecord is a pipeline/source ledger entry attached to index and corpus events.

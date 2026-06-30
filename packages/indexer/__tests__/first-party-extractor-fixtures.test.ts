@@ -1,77 +1,153 @@
-import { describe, expect, it } from 'vitest'
-import type { ProjectDefinition } from '@use-crux/core/project-index'
-import { cruxCoreExtension } from '../indexer/extractors/crux-core-extension'
-import './first-party-phase5-native-fixtures'
-import './first-party-phase6-agent-native-fixtures'
-import './first-party-phase6-native-fixtures'
-import './first-party-phase7-composition-native-fixtures'
-import './first-party-phase7-flow-native-fixtures'
-import './first-party-phase7-native-fixtures'
+import { describe, expect, it } from "vitest";
+import type { ProjectDefinition } from "@use-crux/core/project-index";
+import { cruxCoreExtension } from "../indexer/extractors/crux-core-extension";
+import "./first-party-phase5-native-fixtures";
+import "./first-party-phase6-agent-native-fixtures";
+import "./first-party-phase6-native-fixtures";
+import "./first-party-phase7-composition-native-fixtures";
+import "./first-party-phase7-flow-native-fixtures";
+import "./first-party-phase7-native-fixtures";
 import {
   firstPartyStaticIndexNodeOwnershipAudit,
   firstPartyPrimitiveFixtureInventory,
-} from './first-party-extractor-inventory'
-import { assertDeterministicExtraction, defineIndexerExtensionFixture, extractFixtureSource } from '../testing'
+} from "./first-party-extractor-inventory";
+import {
+  assertDeterministicExtraction,
+  defineIndexerExtensionFixture,
+  extractFixtureSource,
+} from "../testing";
 
-const cruxFixture = defineIndexerExtensionFixture(cruxCoreExtension)
+const cruxFixture = defineIndexerExtensionFixture(cruxCoreExtension);
 
-describe('first-party extractor fixtures', () => {
-  it('records the first-party primitive fixture inventory', () => {
-    const inventory = firstPartyPrimitiveFixtureInventory()
+describe("first-party extractor fixtures", () => {
+  it("records the first-party primitive fixture inventory", () => {
+    const inventory = firstPartyPrimitiveFixtureInventory();
 
     expect(inventory).toEqual([
-      { extractor: 'rag.retriever', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'safety', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'scorer', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'workspace', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'eval', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'skill-registry', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'registry-skill', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'tool', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'injectable', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'context', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'prompt', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'agent', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'composition', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'memory', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'blackboard', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'routing', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-      { extractor: 'flow', fixtureCoverage: 'dedicated-fixture', staticIndexCoverage: 'covered' },
-    ])
+      {
+        extractor: "rag.retriever",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "safety",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "scorer",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "workspace",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "eval",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "skill-registry",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "registry-skill",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "tool",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "injectable",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "context",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "prompt",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "agent",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "composition",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "memory",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "blackboard",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "routing",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+      {
+        extractor: "flow",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
+    ]);
     expect(
-      inventory.filter((item) => item.fixtureCoverage === 'missing-fixture').map((item) => item.extractor),
-    ).toEqual([])
-  })
+      inventory
+        .filter((item) => item.fixtureCoverage === "missing-fixture")
+        .map((item) => item.extractor),
+    ).toEqual([]);
+  });
 
-  it('records first-party host eligibility and remaining Go-owned Node reasons', () => {
+  it("records first-party host eligibility and remaining Go-owned Node reasons", () => {
     expect(firstPartyStaticIndexNodeOwnershipAudit()).toEqual({
       nativeOnlyEligible: true,
-      nodeStartsBecause: ['Go asks Node to inspect the static syntax plan before Rust/Oxc parses files.'],
+      nodeStartsBecause: [
+        "Go asks Node to inspect the static syntax plan before Rust/Oxc parses files.",
+      ],
       bundledNativeExtractors: [
-        'rag.retriever',
-        'safety',
-        'scorer',
-        'workspace',
-        'eval',
-        'skill-registry',
-        'registry-skill',
-        'tool',
-        'injectable',
-        'context',
-        'prompt',
-        'agent',
-        'composition',
-        'memory',
-        'blackboard',
-        'routing',
-        'flow',
+        "rag.retriever",
+        "safety",
+        "scorer",
+        "workspace",
+        "eval",
+        "skill-registry",
+        "registry-skill",
+        "tool",
+        "injectable",
+        "context",
+        "prompt",
+        "agent",
+        "composition",
+        "memory",
+        "blackboard",
+        "routing",
+        "flow",
       ],
       bundledTypeScriptExtractors: [],
       typeScriptRuleCount: 0,
-    })
-  })
+    });
+  });
 
-  it('extracts prompt and context facts through the public fixture engine', async () => {
+  it("extracts prompt and context facts through the public fixture engine", async () => {
     const out = await extractFixtureSource(
       cruxFixture,
       `
@@ -87,51 +163,53 @@ describe('first-party extractor fixtures', () => {
           prompt: () => 'Draft copy',
         })
       `,
-    )
+    );
 
-    expect(definition(out.definitions, 'context:brand-context')).toMatchObject({
-      kind: 'context',
-      name: 'brand-context',
+    expect(definition(out.definitions, "context:brand-context")).toMatchObject({
+      kind: "context",
+      name: "brand-context",
       metadata: expect.objectContaining({
-        exportName: 'brandContext',
+        exportName: "brandContext",
         isStatic: true,
         facts: expect.objectContaining({
-          kind: 'context',
+          kind: "context",
           isStatic: true,
         }),
       }),
-    })
-    expect(definition(out.definitions, 'prompt:writer')).toMatchObject({
-      kind: 'prompt',
-      name: 'writer',
+    });
+    expect(definition(out.definitions, "prompt:writer")).toMatchObject({
+      kind: "prompt",
+      name: "writer",
       metadata: expect.objectContaining({
-        exportName: 'writerPrompt',
+        exportName: "writerPrompt",
         facts: expect.objectContaining({
-          kind: 'prompt',
+          kind: "prompt",
           hasSystem: true,
           hasPrompt: true,
-          useEntries: expect.arrayContaining([expect.objectContaining({ variable: 'brandContext' })]),
+          useEntries: expect.arrayContaining([
+            expect.objectContaining({ variable: "brandContext" }),
+          ]),
         }),
       }),
-    })
+    });
     expect(out.relations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'prompt.uses_context',
-          from: 'prompt:writer',
-          to: 'context:brand-context',
+          type: "prompt.uses_context",
+          from: "prompt:writer",
+          to: "context:brand-context",
         }),
       ]),
-    )
+    );
     await expect(
       assertDeterministicExtraction(
         cruxFixture,
         `export const writerPrompt = prompt({ id: 'writer', prompt: 'Draft copy' })`,
       ),
-    ).resolves.toBeUndefined()
-  })
+    ).resolves.toBeUndefined();
+  });
 
-  it('extracts tool schemas and execution metadata without parser-native test contexts', async () => {
+  it("extracts tool schemas and execution metadata without parser-native test contexts", async () => {
     const out = await extractFixtureSource(
       cruxFixture,
       `
@@ -144,24 +222,24 @@ describe('first-party extractor fixtures', () => {
           execute: async () => 'result',
         })
       `,
-    )
+    );
 
-    expect(definition(out.definitions, 'tool:searchDocs')).toMatchObject({
-      kind: 'tool',
-      name: 'searchDocs',
+    expect(definition(out.definitions, "tool:searchDocs")).toMatchObject({
+      kind: "tool",
+      name: "searchDocs",
       metadata: expect.objectContaining({
-        exportName: 'searchDocs',
+        exportName: "searchDocs",
         hasExecute: true,
         facts: expect.objectContaining({
-          kind: 'tool',
-          toolName: 'searchDocs',
+          kind: "tool",
+          toolName: "searchDocs",
           hasExecute: true,
         }),
       }),
-    })
-  })
+    });
+  });
 
-  it('extracts agent prompt and tool relations from source text', async () => {
+  it("extracts agent prompt and tool relations from source text", async () => {
     const out = await extractFixtureSource(
       cruxFixture,
       `
@@ -179,37 +257,164 @@ describe('first-party extractor fixtures', () => {
           tools: [searchDocs],
         })
       `,
-    )
+    );
 
-    expect(definition(out.definitions, 'agent:writer-agent')).toMatchObject({
-      kind: 'agent',
-      name: 'writer-agent',
+    expect(definition(out.definitions, "agent:writer-agent")).toMatchObject({
+      kind: "agent",
+      name: "writer-agent",
       metadata: expect.objectContaining({
-        exportName: 'writerAgent',
+        exportName: "writerAgent",
         facts: expect.objectContaining({
-          kind: 'agent',
-          promptId: 'writerPrompt',
-          toolNames: ['searchDocs'],
+          kind: "agent",
+          promptId: "writerPrompt",
+          toolNames: ["searchDocs"],
         }),
       }),
-    })
+    });
     expect(out.relations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'agent.uses_prompt',
-          from: 'agent:writer-agent',
-          to: 'prompt:writer',
+          type: "agent.uses_prompt",
+          from: "agent:writer-agent",
+          to: "prompt:writer",
         }),
         expect.objectContaining({
-          type: 'agent.uses_tool',
-          from: 'agent:writer-agent',
-          to: 'tool:searchDocs',
+          type: "agent.uses_tool",
+          from: "agent:writer-agent",
+          to: "tool:searchDocs",
         }),
       ]),
-    )
-  })
+    );
+  });
 
-  it('extracts routing routers as folded child graphs', async () => {
+  it("extracts workspace operator config and generated tool posture", async () => {
+    const out = await extractFixtureSource(
+      cruxFixture,
+      `
+        const searchDocs = createTool({ name: 'searchDocs' })
+
+        export const scratch = workspace({
+          id: 'scratch',
+          namespace: 'tenant-a',
+          mounts: [{ path: '/workspace', access: 'readwrite', description: 'Working files' }],
+          tools: { prefix: 'research', delete: true, searchDocs },
+          limits: { maxFileBytes: 1000, maxNamespaceBytes: 5000 },
+          retention: { ttlMs: 60000 },
+          storage: blobStore,
+        })
+
+        export const writer = tool({
+          name: 'writer',
+          execute: async () => {
+            await scratch.exists('/workspace/a.md')
+            await scratch.stat('/workspace/a.md')
+            await scratch.grep('alpha')
+            await scratch.artifacts({ status: 'final' })
+            await scratch.rename('/workspace/a.md', '/workspace/b.md')
+            await scratch.move('/workspace/b.md', '/workspace/c.md')
+            await scratch.copy('/workspace/c.md', '/outputs/report-copy.md')
+            await scratch.finalize('/outputs/report.md')
+            return 'done'
+          },
+        })
+      `,
+    );
+
+    expect(definition(out.definitions, "workspace:scratch")?.metadata).toEqual(
+      expect.objectContaining({
+        namespace: "tenant-a",
+        hasBlobStorage: true,
+        hasTools: true,
+        toolRefs: ["searchDocs"],
+        tools: expect.objectContaining({
+          prefix: "research",
+          delete: true,
+          generated: expect.objectContaining({
+            list: "listResearchWorkspace",
+            readFile: "readResearchWorkspaceFile",
+            writeFile: "writeResearchWorkspaceFile",
+            editFile: "editResearchWorkspaceFile",
+            renameFile: "renameResearchWorkspaceFile",
+            grep: "grepResearchWorkspace",
+            deleteFile: "deleteResearchWorkspaceFile",
+          }),
+        }),
+        limits: { maxFileBytes: 1000, maxNamespaceBytes: 5000 },
+        retention: { ttlMs: 60000 },
+        mounts: [
+          expect.objectContaining({ path: "/workspace", access: "readwrite" }),
+        ],
+        intelligence: expect.objectContaining({
+          confidence: "static",
+          tools: ["searchDocs"],
+          operator: expect.objectContaining({
+            retention: { ttlMs: 60000 },
+            limits: { maxFileBytes: 1000, maxNamespaceBytes: 5000 },
+          }),
+        }),
+      }),
+    );
+    expect(
+      definition(out.definitions, "tool:writer")?.metadata?.intelligence,
+    ).toEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          reads: expect.arrayContaining([
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "grep",
+            }),
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "artifacts",
+            }),
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "exists",
+            }),
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "stat",
+            }),
+          ]),
+          writes: expect.arrayContaining([
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "rename",
+            }),
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "move",
+            }),
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "copy",
+            }),
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "finalize",
+            }),
+          ]),
+        }),
+      }),
+    );
+    expect(out.relations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "tool.reads_workspace",
+          from: "tool:writer",
+          to: "workspace:scratch",
+        }),
+        expect.objectContaining({
+          type: "tool.writes_workspace",
+          from: "tool:writer",
+          to: "workspace:scratch",
+        }),
+      ]),
+    );
+  });
+
+  it("extracts routing routers as folded child graphs", async () => {
     const out = await extractFixtureSource(
       cruxFixture,
       `
@@ -223,45 +428,55 @@ describe('first-party extractor fixtures', () => {
           classify: () => 'default',
         })
       `,
-    )
+    );
 
-    expect(definition(out.definitions, 'routing.router:quality-router')).toMatchObject({
-      kind: 'routing.router',
-      name: 'quality-router',
+    expect(
+      definition(out.definitions, "routing.router:quality-router"),
+    ).toMatchObject({
+      kind: "routing.router",
+      name: "quality-router",
       metadata: expect.objectContaining({
-        exportName: 'qualityRouter',
-        routeKeys: ['default'],
+        exportName: "qualityRouter",
+        routeKeys: ["default"],
         routeCount: 1,
         hasDefaultRoute: true,
         hasClassify: true,
       }),
-    })
-    expect(definition(out.definitions, 'routing.router:quality-router:route:default')).toMatchObject({
-      kind: 'routing.router.route',
-      name: 'default',
+    });
+    expect(
+      definition(
+        out.definitions,
+        "routing.router:quality-router:route:default",
+      ),
+    ).toMatchObject({
+      kind: "routing.router.route",
+      name: "default",
       metadata: expect.objectContaining({
-        routerDefinitionId: 'routing.router:quality-router',
-        routeKey: 'default',
-        targetVariable: 'writerPrompt',
+        routerDefinitionId: "routing.router:quality-router",
+        routeKey: "default",
+        targetVariable: "writerPrompt",
       }),
-    })
+    });
     expect(out.relations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'router.includes_route',
-          from: 'routing.router:quality-router',
-          to: 'routing.router:quality-router:route:default',
+          type: "router.includes_route",
+          from: "routing.router:quality-router",
+          to: "routing.router:quality-router:route:default",
         }),
         expect.objectContaining({
-          type: 'router.route.uses_prompt',
-          from: 'routing.router:quality-router:route:default',
-          to: 'prompt:writer',
+          type: "router.route.uses_prompt",
+          from: "routing.router:quality-router:route:default",
+          to: "prompt:writer",
         }),
       ]),
-    )
-  })
-})
+    );
+  });
+});
 
-function definition(definitions: readonly ProjectDefinition[], id: string): ProjectDefinition | undefined {
-  return definitions.find((item) => item.id === id)
+function definition(
+  definitions: readonly ProjectDefinition[],
+  id: string,
+): ProjectDefinition | undefined {
+  return definitions.find((item) => item.id === id);
 }

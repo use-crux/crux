@@ -66,6 +66,21 @@ export function FileInspector({
             {summary.status}
           </Chip>
         )}
+        {summary?.artifactStatus && (
+          <Chip tone="muted" mono>
+            {summary.artifactStatus}
+          </Chip>
+        )}
+        {summary?.artifactKind && (
+          <Chip tone="muted" mono>
+            {summary.artifactKind}
+          </Chip>
+        )}
+        {summary?.uri && (
+          <Chip tone="muted" mono>
+            ref
+          </Chip>
+        )}
         <div className="ml-auto flex shrink-0 gap-1.5">
           <Btn size="xs" icon={<Icon name="diff" size={10} />} disabled title="Versions — pending backend projection">
             Versions
@@ -206,6 +221,7 @@ function FileOperationsTable({ ops }: { ops: readonly WorkspaceOpRecord[] }) {
   const hasSpan = ops.some((o) => o.spanId)
   const hasBytes = ops.some((o) => o.bytes != null)
   const hasTrace = ops.some((o) => o.traceId)
+  const hasArtifact = ops.some((o) => o.artifactStatus || o.artifactKind || o.uri)
   return (
     <section>
       <SectionHead
@@ -227,6 +243,7 @@ function FileOperationsTable({ ops }: { ops: readonly WorkspaceOpRecord[] }) {
             ...(hasDur ? [{ label: 'dur', width: '70px', align: 'right' as const }] : []),
             ...(hasActor ? [{ label: 'actor', width: '120px' }] : []),
             ...(hasSpan ? [{ label: 'span', width: 'minmax(0, 1fr)' }] : []),
+            ...(hasArtifact ? [{ label: 'artifact', width: '150px' }] : []),
             ...(hasBytes ? [{ label: 'bytes', width: '70px', align: 'right' as const }] : []),
             ...(hasTrace ? [{ label: 'trace', width: '70px', align: 'right' as const }] : []),
           ]}
@@ -242,6 +259,7 @@ function FileOperationsTable({ ops }: { ops: readonly WorkspaceOpRecord[] }) {
                 hasDur ? '70px' : '',
                 hasActor ? '120px' : '',
                 hasSpan ? 'minmax(0, 1fr)' : '',
+                hasArtifact ? '150px' : '',
                 hasBytes ? '70px' : '',
                 hasTrace ? '70px' : '',
               ]
@@ -265,6 +283,11 @@ function FileOperationsTable({ ops }: { ops: readonly WorkspaceOpRecord[] }) {
                 title={o.spanId ?? undefined}
               >
                 {o.spanId ?? '—'}
+              </span>
+            )}
+            {hasArtifact && (
+              <span className="truncate" style={{ color: 'var(--qw-fg-muted)' }} title={o.uri}>
+                {[o.artifactStatus, o.artifactKind].filter(Boolean).join(' · ') || (o.uri ? 'ref' : '—')}
               </span>
             )}
             {hasBytes && (

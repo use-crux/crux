@@ -10,28 +10,29 @@ Use it when the model needs a durable working area: notes, intermediate drafts, 
 ## Basic Usage
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { inMemoryStorage } from '@use-crux/core/storage'
-import { workspace } from '@use-crux/core/workspace'
+import { prompt } from "@use-crux/core";
+import { inMemoryStorage } from "@use-crux/core/storage";
+import { workspace } from "@use-crux/core/workspace";
 
 const ws = workspace({
-  id: 'research',
+  id: "research",
   namespace: `thread:${threadId}`,
   storage: inMemoryStorage(),
-})
+});
 
 const analyst = prompt({
-  id: 'analyst',
+  id: "analyst",
   use: [ws],
-  system: 'Research the request and write final deliverables to /outputs.',
-})
+  system: "Research the request and write final deliverables to /outputs.",
+});
 ```
 
 `use: [ws]` injects two things:
 
 ```txt
 1. A compact workspace manifest in the system prompt.
-2. File tools: listWorkspace, readWorkspaceFile, writeWorkspaceFile, editWorkspaceFile.
+2. File tools: listWorkspace, readWorkspaceFile, writeWorkspaceFile, editWorkspaceFile,
+   renameWorkspaceFile, grepWorkspace.
 ```
 
 The manifest shows paths and metadata, not file contents. The model calls read tools when it needs contents.
@@ -46,60 +47,91 @@ Zero-config workspaces create two writable mounts:
 ```
 
 ```ts
-await ws.write('/workspace/notes.md', '# Research notes')
+await ws.write("/workspace/notes.md", "# Research notes");
 
-await ws.write('/outputs/report.md', '# Final report')
+await ws.write("/outputs/report.md", "# Final report");
 ```
 
-There is no separate public `artifact()` API in V1. Outputs are regular files under `/outputs`.
+Outputs are regular files under `/outputs`. Mark generated deliverables with
+`status` and `kind` when the app needs an artifacts view.
+
+```ts
+await ws.write("/outputs/report.md", "# Final report", {
+  status: "draft",
+  kind: "report",
+});
+
+const artifact = await ws.finalize("/outputs/report.md");
+```
 
 ## Listing Files
 
 `list()` and `listWorkspace` support directory paths and simple globs:
 
 ```ts
-await ws.list('/workspace')
-await ws.list('/workspace/**/*.md')
-await ws.list('/outputs/*.pdf')
+await ws.list("/workspace");
+await ws.list("/workspace/**/*.md");
+await ws.list("/outputs/*.pdf");
 ```
 
-Supported in V1:
+Supported in V0:
 
 - `*` within one path segment.
 - `**` across path segments.
 - extension patterns such as `/**/*.md`.
 - `limit`.
 
+## File Operations
+
+The model gets rename and grep tools by default. Apps also get direct methods for
+common filesystem checks and mutations:
+
+```ts
+await ws.exists("/workspace/notes.md");
+await ws.stat("/workspace/notes.md");
+await ws.append("/workspace/notes.md", "\nMore notes.");
+await ws.rename("/workspace/notes.md", "/outputs/report.md");
+await ws.move("/outputs/report.md", "/outputs/final-report.md");
+await ws.copy("/outputs/final-report.md", "/workspace/report-copy.md");
+await ws.grep("launch", { path: "/workspace/**/*.md", ignoreCase: true });
+```
+
+`rename`, `move`, and `copy` preserve metadata, including artifact status and kind.
+
 ## Reading Files
 
 `read()` returns a discriminated union:
 
 ```ts
-const file = await ws.read('/workspace/notes.md')
+const file = await ws.read("/workspace/notes.md");
 
-if (file.kind === 'text') {
-  console.log(file.content)
+if (file.kind === "text") {
+  console.log(file.content);
 }
 ```
 
 Binary files return metadata and a URI instead of raw bytes:
 
 ```ts
-const file = await ws.read('/outputs/report.pdf')
+const file = await ws.read("/outputs/report.pdf");
 
-if (file.kind === 'binary') {
-  console.log(file.uri, file.mimeType, file.size)
+if (file.kind === "binary") {
+  console.log(file.uri, file.mimeType, file.size);
 }
 ```
 
 Models see paths, metadata, previews when available, and blob URIs. Apps and devtools can fetch full bytes through the blob store.
+
+Blob-backed text and JSON still read back as `text` and `json`; the workspace
+fetches their payload from the blob store. `maxInlineBytes` windows text reads
+instead of throwing when a caller asks for a smaller preview.
 
 ## Storage Rules
 
 Workspaces use two storage layers:
 
 ```ts
-import { storage } from '@use-crux/core/storage'
+import { storage } from "@use-crux/core/storage";
 
 workspace({
   storage: storage({
@@ -109,7 +141,7 @@ workspace({
   content: {
     inlineTextBelowBytes: 64_000,
   },
-})
+});
 ```
 
 Rules:
@@ -121,25 +153,84 @@ Rules:
 
 For bundled storage options and custom S3/R2/GCS-style blob stores, see [Storage](/docs/guides/storage) and [BlobStore](/docs/guides/storage/blob-storage).
 
+## Namespaces
+
+Namespaces isolate files for tenants, users, threads, or runs. Static namespaces
+work directly. Dynamic namespaces resolve during prompt injection, and direct
+calls can pass an override:
+
+```ts
+const ws = workspace({
+  id: "research",
+  namespace: ({ input }) => `thread:${input.threadId}`,
+  storage: storage({ data, blobs }),
+});
+
+await ws.write("/workspace/notes.md", "# Notes", { namespace: "thread:123" });
+
+const tools = ws.asTools({ namespace: "thread:123" });
+```
+
+The override is also useful when running workspace operations outside a prompt
+resolution.
+
+## Retention And Quotas
+
+Operator controls live on the workspace config:
+
+```ts
+const ws = workspace({
+  id: "research",
+  namespace,
+  storage: storage({ data, blobs }),
+  retention: { ttlMs: 1000 * 60 * 60 * 24 },
+  limits: {
+    maxFileBytes: 1_000_000,
+    maxNamespaceBytes: 25_000_000,
+  },
+});
+```
+
+`retention.ttlMs` is passed to the data store only when the store supports TTL.
+`maxFileBytes` rejects one oversized write, and `maxNamespaceBytes` rejects writes
+that would push the namespace total over its cap.
+
+## Artifacts
+
+Artifacts are a view over normal workspace files:
+
+```ts
+await ws.write("/outputs/chart.png", imageBytes, {
+  mimeType: "image/png",
+  status: "final",
+  kind: "chart",
+});
+
+const charts = await ws.artifacts({ status: "final", kind: "chart" });
+```
+
+Inline artifacts expose a `workspace-inline://...` reference. Blob-backed
+artifacts expose the blob URI.
+
 ## Source Files
 
 `/sources` is explicit because source ownership differs per app.
 
 ```ts
 const ws = workspace({
-  id: 'research',
+  id: "research",
   namespace,
   storage: storage({ data, blobs }),
   mounts: [
     {
-      path: '/sources',
-      access: 'read',
-      description: 'Uploaded reference material for this task.',
+      path: "/sources",
+      access: "read",
+      description: "Uploaded reference material for this task.",
     },
-    { path: '/workspace', access: 'readwrite' },
-    { path: '/outputs', access: 'readwrite' },
+    { path: "/workspace", access: "readwrite" },
+    { path: "/outputs", access: "readwrite" },
   ],
-})
+});
 ```
 
 Use `/sources` for uploaded files, mounted MCP resources, app-owned documents, or material produced by ingestion.
@@ -150,34 +241,34 @@ One unprefixed workspace can be injected directly:
 
 ```ts
 prompt({
-  id: 'writer',
+  id: "writer",
   use: [ws],
-  system: 'Write the report.',
-})
+  system: "Write the report.",
+});
 ```
 
 Multiple workspaces need prefixes so tool names do not collide:
 
 ```ts
 const research = workspace({
-  id: 'research',
+  id: "research",
   namespace,
   storage: storage({ data, blobs }),
-  tools: { prefix: 'research' },
-})
+  tools: { prefix: "research" },
+});
 
 const drafts = workspace({
-  id: 'drafts',
+  id: "drafts",
   namespace,
   storage: storage({ data, blobs }),
-  tools: { prefix: 'drafts' },
-})
+  tools: { prefix: "drafts" },
+});
 
 prompt({
-  id: 'writer',
+  id: "writer",
   use: [research, drafts],
-  system: 'Use research files to produce drafts.',
-})
+  system: "Use research files to produce drafts.",
+});
 ```
 
 That produces names such as `listResearchWorkspace` and `writeDraftsWorkspaceFile`.
@@ -188,13 +279,13 @@ Delete is intentionally not injected by default:
 
 ```ts
 const ws = workspace({
-  id: 'research',
+  id: "research",
   namespace,
   storage: storage({ data, blobs }),
   tools: {
     delete: true,
   },
-})
+});
 ```
 
 ## Approvals
@@ -202,18 +293,18 @@ const ws = workspace({
 Use tool middleware for policy and approval.
 
 ```ts
-import { approvalMiddleware } from '@use-crux/core'
-import { workspaceToolNames } from '@use-crux/core/workspace'
+import { approvalMiddleware } from "@use-crux/core";
+import { workspaceToolNames } from "@use-crux/core/workspace";
 
-const names = workspaceToolNames({ prefix: 'research' })
+const names = workspaceToolNames({ prefix: "research" });
 
 const approvals = approvalMiddleware({
-  id: 'workspace-writes',
+  id: "workspace-writes",
   match: [names.writeFile, names.editFile],
   onRequest: async ({ input }) => {
-    await notifyUser(input)
+    await notifyUser(input);
   },
-})
+});
 ```
 
 Prefixes change the final tool names, so match the generated names.
@@ -234,4 +325,4 @@ research
    └─ report.pdf
 ```
 
-OTel receives privacy-safe operation metadata only. Raw file contents and full paths are not emitted to OTel.
+OTel receives privacy-safe operation metadata only. Raw file contents and full paths are not emitted to OTel. Workspace OTel spans use `crux.workspace.operation` and `crux.workspace.path_hash`; devtools use the same path hash as a stable file label when no local-only raw path is available. Finalized artifacts expose bounded metadata such as status, artifact kind, MIME type, size, and download ref. Project Index data-access facts preserve exact workspace operations, including `grep`, `artifacts`, `rename`, and `finalize`.

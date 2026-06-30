@@ -5,18 +5,22 @@ func (s *Store) WorkspaceOperation(event WorkspaceOperationEvent) {
 	s.mu.Lock()
 
 	entry := WorkspaceEventData{
-		TraceID:     event.TraceID,
-		SessionID:   event.SessionID,
-		Timestamp:   event.Timestamp,
-		WorkspaceID: event.WorkspaceID,
-		Namespace:   event.Namespace,
-		Operation:   event.Operation,
-		Path:        event.Path,
-		Status:      event.Status,
-		DurationMs:  event.DurationMs,
-		Mount:       event.Mount,
-		MimeType:    event.MimeType,
-		Size:        event.Size,
+		TraceID:        event.TraceID,
+		SessionID:      event.SessionID,
+		Timestamp:      event.Timestamp,
+		WorkspaceID:    event.WorkspaceID,
+		Namespace:      event.Namespace,
+		Operation:      event.Operation,
+		Path:           event.Path,
+		PathHash:       event.PathHash,
+		Status:         event.Status,
+		DurationMs:     event.DurationMs,
+		Mount:          event.Mount,
+		MimeType:       event.MimeType,
+		Size:           event.Size,
+		ArtifactStatus: event.ArtifactStatus,
+		ArtifactKind:   event.ArtifactKind,
+		URI:            event.URI,
 	}
 	if event.Error != "" {
 		entry.Error = &event.Error
@@ -24,14 +28,18 @@ func (s *Store) WorkspaceOperation(event WorkspaceOperationEvent) {
 	s.workspaceEvents.Push(entry)
 
 	s.correlate(event.TraceID, "workspace:operation", event.Timestamp, map[string]any{
-		"workspaceId": event.WorkspaceID,
-		"operation":   event.Operation,
-		"path":        event.Path,
-		"status":      event.Status,
-		"durationMs":  event.DurationMs,
-		"mimeType":    event.MimeType,
-		"size":        event.Size,
-		"error":       event.Error,
+		"workspaceId":    event.WorkspaceID,
+		"operation":      event.Operation,
+		"path":           event.Path,
+		"pathHash":       event.PathHash,
+		"status":         event.Status,
+		"durationMs":     event.DurationMs,
+		"mimeType":       event.MimeType,
+		"size":           event.Size,
+		"artifactStatus": event.ArtifactStatus,
+		"artifactKind":   event.ArtifactKind,
+		"uri":            event.URI,
+		"error":          event.Error,
 	})
 
 	s.mu.Unlock()

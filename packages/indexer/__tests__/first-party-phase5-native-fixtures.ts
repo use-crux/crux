@@ -56,6 +56,36 @@ describe('first-party Phase 5 native fixtures', () => {
   )
 
   itWithRustOxc(
+    'matches workspace V0 data access methods in native primitive facts',
+    async () => {
+      const source = [
+        "export const scratch = workspace({ id: 'scratch' })",
+        '',
+        'export const writer = tool({',
+        "  name: 'writer',",
+        '  execute: async () => {',
+        "    await scratch.grep('alpha')",
+        "    await scratch.artifacts({ status: 'final' })",
+        "    await scratch.stat('/workspace/a.md')",
+        "    await scratch.exists('/workspace/a.md')",
+        "    await scratch.rename('/workspace/a.md', '/workspace/b.md')",
+        "    await scratch.move('/workspace/b.md', '/workspace/c.md')",
+        "    await scratch.copy('/workspace/c.md', '/workspace/d.md')",
+        "    await scratch.finalize('/outputs/report.md')",
+        '  },',
+        '})',
+      ].join('\n')
+      const { fallbackOut, nativeOut } = await extractNativeAndFallback({
+        source,
+        callNames: ['workspace', 'tool'],
+      })
+
+      expectNativeExtractionParity(nativeOut, fallbackOut)
+    },
+    30_000,
+  )
+
+  itWithRustOxc(
     'matches property-access workspace calls without config objects',
     async () => {
       const source = [

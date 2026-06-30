@@ -119,6 +119,9 @@ type workspaceFileSummary struct {
 	Status           string  `json:"status"`
 	Size             *int    `json:"size,omitempty"`
 	Mime             string  `json:"mime,omitempty"`
+	ArtifactStatus   string  `json:"artifactStatus,omitempty"`
+	ArtifactKind     string  `json:"artifactKind,omitempty"`
+	URI              string  `json:"uri,omitempty"`
 	LastOpAt         int64   `json:"lastOpAt"`
 	LastOpDurationMs float64 `json:"lastOpDurationMs"`
 	LastError        string  `json:"lastError,omitempty"`
@@ -126,17 +129,21 @@ type workspaceFileSummary struct {
 }
 
 type workspaceOpDetail struct {
-	EventID    string  `json:"eventId"`
-	Op         string  `json:"op"`
-	Path       string  `json:"path"`
-	DurationMs float64 `json:"durationMs"`
-	Status     string  `json:"status"`
-	Bytes      *int    `json:"bytes,omitempty"`
-	TraceID    string  `json:"traceId,omitempty"`
-	SpanID     string  `json:"spanId,omitempty"`
-	Actor      string  `json:"actor,omitempty"`
-	Error      string  `json:"error,omitempty"`
-	Timestamp  int64   `json:"timestamp"`
+	EventID        string  `json:"eventId"`
+	Op             string  `json:"op"`
+	Path           string  `json:"path"`
+	DurationMs     float64 `json:"durationMs"`
+	Status         string  `json:"status"`
+	Bytes          *int    `json:"bytes,omitempty"`
+	Mime           string  `json:"mime,omitempty"`
+	ArtifactStatus string  `json:"artifactStatus,omitempty"`
+	ArtifactKind   string  `json:"artifactKind,omitempty"`
+	URI            string  `json:"uri,omitempty"`
+	TraceID        string  `json:"traceId,omitempty"`
+	SpanID         string  `json:"spanId,omitempty"`
+	Actor          string  `json:"actor,omitempty"`
+	Error          string  `json:"error,omitempty"`
+	Timestamp      int64   `json:"timestamp"`
 }
 
 type workspaceFileDetail struct {
@@ -533,39 +540,6 @@ func memoryEventsFromActivity(activity []observability.ResourceActivity) []store
 			event.Content = stringValue(attrs, "contentPreview", stringValue(attrs, "content", ""))
 			event.WriteMode = stringValue(attrs, "writeMode", "")
 			event.ProposalStatus = stringValue(attrs, "proposalStatus", "")
-		}
-		out = append(out, event)
-	}
-	return out
-}
-
-func workspaceEventsFromActivity(activity []observability.ResourceActivity) []store.WorkspaceEventData {
-	out := make([]store.WorkspaceEventData, 0, len(activity))
-	for _, item := range activity {
-		attrs := rawMap(item.Attributes)
-		status := "success"
-		if item.Status == "error" || len(item.Error) > 0 && string(item.Error) != "null" {
-			status = "error"
-		}
-		event := store.WorkspaceEventData{
-			TraceID:     item.TraceID,
-			Timestamp:   parseUnixMillis(item.StartedAt),
-			WorkspaceID: stringValue(attrs, "workspaceId", item.ResourceID),
-			Namespace:   stringValue(attrs, "namespaceHash", stringValue(attrs, "namespace", "")),
-			Operation:   stringValue(attrs, "operation", operationFromActivity(item)),
-			Path:        stringValue(attrs, "path", "/"),
-			Status:      status,
-			DurationMs:  item.DurationMs,
-			Mount:       stringValue(attrs, "mount", ""),
-			MimeType:    stringValue(attrs, "mimeType", ""),
-		}
-		if size, ok := optionalIntValue(attrs, "size"); ok {
-			event.Size = &size
-		} else if size, ok := optionalIntValue(attrs, "sizeBytes"); ok {
-			event.Size = &size
-		}
-		if msg := errorMessage(item.Error); msg != "" {
-			event.Error = &msg
 		}
 		out = append(out, event)
 	}
@@ -1303,6 +1277,9 @@ func workspaceFilesFromEvents(events []store.WorkspaceEventData) []workspaceFile
 				Status:           status,
 				Size:             event.Size,
 				Mime:             event.MimeType,
+				ArtifactStatus:   event.ArtifactStatus,
+				ArtifactKind:     event.ArtifactKind,
+				URI:              event.URI,
 				LastOpAt:         event.Timestamp,
 				LastOpDurationMs: event.DurationMs,
 				LastError:        lastError,
@@ -1322,15 +1299,19 @@ func workspaceOpsFromEvents(events []store.WorkspaceEventData) []workspaceOpDeta
 	out := make([]workspaceOpDetail, 0, len(events))
 	for _, event := range events {
 		out = append(out, workspaceOpDetail{
-			EventID:    eventID("workspace", event.TraceID, event.Timestamp, event.Path),
-			Op:         event.Operation,
-			Path:       event.Path,
-			DurationMs: event.DurationMs,
-			Status:     workspaceStatus(event.Status),
-			Bytes:      event.Size,
-			TraceID:    event.TraceID,
-			Error:      derefString(event.Error),
-			Timestamp:  event.Timestamp,
+			EventID:        eventID("workspace", event.TraceID, event.Timestamp, event.Path),
+			Op:             event.Operation,
+			Path:           event.Path,
+			DurationMs:     event.DurationMs,
+			Status:         workspaceStatus(event.Status),
+			Bytes:          event.Size,
+			Mime:           event.MimeType,
+			ArtifactStatus: event.ArtifactStatus,
+			ArtifactKind:   event.ArtifactKind,
+			URI:            event.URI,
+			TraceID:        event.TraceID,
+			Error:          derefString(event.Error),
+			Timestamp:      event.Timestamp,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Timestamp > out[j].Timestamp })
