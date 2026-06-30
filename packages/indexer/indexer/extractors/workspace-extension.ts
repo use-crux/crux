@@ -1,8 +1,12 @@
-import { safeId } from '../definitions'
-import type { DependencyFacts } from '@use-crux/core/project-index'
-import type { IndexExtractor } from '../extensions'
-import { facts } from '../extensions'
-import { storageConfigReferences, storageDependencyFacts, storageRelationRefs } from './storage-dependencies'
+import type { DependencyFacts } from "@use-crux/core/project-index";
+import { safeId } from "../definitions";
+import type { IndexExtractor } from "../extensions";
+import { facts } from "../extensions";
+import {
+  storageConfigReferences,
+  storageDependencyFacts,
+  storageRelationRefs,
+} from "./storage-dependencies";
 
 /**
  * Extracts workspace definitions and their mount/write-policy intelligence.
@@ -11,117 +15,170 @@ import { storageConfigReferences, storageDependencyFacts, storageRelationRefs } 
  * writable/read-only posture so lint rules and detail views can reason about guardrails.
  */
 export const workspaceIndexExtractor: IndexExtractor = {
-  name: 'workspace',
-  patterns: [{ kind: 'call', name: 'workspace' }],
+  name: "workspace",
+  patterns: [{ kind: "call", name: "workspace" }],
   extract: (ctx) => {
-    if (ctx.match.name !== 'workspace') return { kind: 'none' }
-    const explicitId = ctx.config?.string('id')
-    const localId = explicitId ?? ctx.source.localName
-    const id = `workspace:${safeId(localId)}`
-    const toolRefs = ctx.config?.objectMapIdentifiers('tools') ?? []
-    const mounts = workspaceMountsMetadata(ctx.config?.objectArray('mounts') ?? [])
-    const tools = workspaceToolsMetadata(ctx.config?.object('tools'))
-    const limits = workspaceLimitsMetadata(ctx.config?.object('limits'))
-    const retention = workspaceRetentionMetadata(ctx.config?.object('retention'))
-    const storageRefs = storageConfigReferences(ctx.config)
-    const storageDependencies = storageDependencyFacts(storageRefs)
+    if (ctx.match.name !== "workspace") return { kind: "none" };
+    const explicitId = ctx.config?.string("id");
+    const localId = explicitId ?? ctx.source.localName;
+    const id = `workspace:${safeId(localId)}`;
+    const toolRefs = ctx.config?.objectMapIdentifiers("tools") ?? [];
+    const mounts = workspaceMountsMetadata(
+      ctx.config?.objectArray("mounts") ?? [],
+    );
+    const tools = workspaceToolsMetadata(ctx.config?.object("tools"));
+    const limits = workspaceLimitsMetadata(ctx.config?.object("limits"));
+    const retention = workspaceRetentionMetadata(
+      ctx.config?.object("retention"),
+    );
+    const versioning = workspaceVersioningMetadata(
+      ctx.config?.object("versioning"),
+    );
+    const storageRefs = storageConfigReferences(ctx.config);
+    const storageDependencies = storageDependencyFacts(storageRefs);
     return facts({
       definitions: [
         ctx.define.definition({
           variableName: ctx.source.variableName,
           id,
-          kind: 'workspace',
+          kind: "workspace",
           name: explicitId ?? ctx.source.variableName,
           metadata: {
             exportName: ctx.source.variableName,
-            namespace: ctx.config?.string('namespace'),
+            namespace: ctx.config?.string("namespace"),
             mounts,
-            hasTools: ctx.config?.has('tools'),
+            hasTools: ctx.config?.has("tools"),
             tools,
             toolRefs: toolRefs.length > 0 ? toolRefs : undefined,
             limits,
             retention,
-            hasBlobStorage: ctx.config ? ctx.config.has('blobs') || ctx.config.has('storage') : undefined,
-            intelligence: workspaceIntelligence(mounts, toolRefs, { limits, retention }, storageDependencies),
+            versioning,
+            hasBlobStorage: ctx.config
+              ? ctx.config.has("blobs") || ctx.config.has("storage")
+              : undefined,
+            intelligence: workspaceIntelligence(
+              mounts,
+              toolRefs,
+              {
+                limits,
+                retention,
+                versioning,
+              },
+              storageDependencies,
+            ),
           },
         }),
       ],
       references: [
-        ...toolRefs.map((toVariable) => ctx.ref.variable('workspace.exposes_tool', toVariable)),
-        ...storageRelationRefs('workspace', storageRefs),
+        ...toolRefs.map((toVariable) =>
+          ctx.ref.variable("workspace.exposes_tool", toVariable),
+        ),
+        ...storageRelationRefs("workspace", storageRefs),
         ...(mounts ?? []).flatMap((mount) =>
-          typeof mount.path === 'string'
+          typeof mount.path === "string"
             ? [
                 ctx.ref.id(
-                  'workspace.mounts_path',
+                  "workspace.mounts_path",
                   `workspace.path:${safeId(localId)}:${safeId(mount.path)}`,
                 ),
               ]
             : [],
         ),
       ],
-    })
+    });
   },
-}
+};
 
 /** Converts authored mount objects into JSON-like metadata suitable for index consumers. */
 function workspaceMountsMetadata(
-  mounts: readonly { readonly string: (property: string) => string | undefined }[],
+  mounts: readonly {
+    readonly string: (property: string) => string | undefined;
+  }[],
 ): Array<Record<string, unknown>> | undefined {
   const metadata = mounts
     .map((mount) => ({
-      path: mount.string('path'),
-      access: mount.string('access'),
-      description: mount.string('description'),
+      path: mount.string("path"),
+      access: mount.string("access"),
+      description: mount.string("description"),
     }))
-    .filter((mount) => mount.path || mount.access || mount.description)
-  return metadata.length > 0 ? metadata : undefined
+    .filter((mount) => mount.path || mount.access || mount.description);
+  return metadata.length > 0 ? metadata : undefined;
 }
 
 /** Reads the public `limits` workspace config into operator-facing metadata. */
 function workspaceLimitsMetadata(
-  limits: { readonly number: (property: string) => number | undefined } | undefined,
+  limits:
+    | { readonly number: (property: string) => number | undefined }
+    | undefined,
 ): Record<string, number> | undefined {
-  if (!limits) return undefined
+  if (!limits) return undefined;
   const metadata = {
-    maxFileBytes: limits.number('maxFileBytes'),
-    maxNamespaceBytes: limits.number('maxNamespaceBytes'),
-  }
-  return compactNumberMetadata(metadata)
+    maxFileBytes: limits.number("maxFileBytes"),
+    maxNamespaceBytes: limits.number("maxNamespaceBytes"),
+  };
+  return compactNumberMetadata(metadata);
 }
 
 /** Reads the public `retention` workspace config into operator-facing metadata. */
 function workspaceRetentionMetadata(
-  retention: { readonly number: (property: string) => number | undefined } | undefined,
+  retention:
+    | { readonly number: (property: string) => number | undefined }
+    | undefined,
 ): Record<string, number> | undefined {
-  if (!retention) return undefined
-  return compactNumberMetadata({ ttlMs: retention.number('ttlMs') })
+  if (!retention) return undefined;
+  return compactNumberMetadata({ ttlMs: retention.number("ttlMs") });
 }
 
-function compactNumberMetadata(metadata: Record<string, number | undefined>): Record<string, number> | undefined {
-  const entries = Object.entries(metadata).filter((entry): entry is [string, number] => typeof entry[1] === 'number')
-  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+/** Reads the public `versioning` workspace config into operator-facing metadata. */
+function workspaceVersioningMetadata(
+  versioning:
+    | { readonly number: (property: string) => number | undefined }
+    | undefined,
+): Record<string, number> | undefined {
+  if (!versioning) return undefined;
+  return compactNumberMetadata({
+    maxVersions: versioning.number("maxVersions"),
+  });
+}
+
+function compactNumberMetadata(
+  metadata: Record<string, number | undefined>,
+): Record<string, number> | undefined {
+  const entries = Object.entries(metadata).filter(
+    (entry): entry is [string, number] => typeof entry[1] === "number",
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 /** Projects generated workspace tool names from the authored `tools` config. */
 function workspaceToolsMetadata(
-  tools: {
-    readonly string: (property: string) => string | undefined
-    readonly boolean: (property: string) => boolean | undefined
-  } | undefined,
+  tools:
+    | {
+        readonly string: (property: string) => string | undefined;
+        readonly boolean: (property: string) => boolean | undefined;
+      }
+    | undefined,
 ): Record<string, unknown> | undefined {
-  if (!tools) return undefined
-  const prefix = tools.string('prefix')
-  const deleteEnabled = tools.boolean('delete') === true
+  if (!tools) return undefined;
+  const prefix = tools.string("prefix");
+  const deleteEnabled = tools.boolean("delete") === true;
+  const undoEnabled = tools.boolean("undo") === true;
   return {
     ...(prefix ? { prefix } : {}),
     ...(deleteEnabled ? { delete: true } : {}),
-    generated: workspaceGeneratedToolNames(prefix, deleteEnabled),
-  }
+    ...(undoEnabled ? { undo: true } : {}),
+    generated: workspaceGeneratedToolNames(prefix, deleteEnabled, undoEnabled),
+  };
 }
 
-function workspaceGeneratedToolNames(prefix: string | undefined, deleteEnabled: boolean): Record<string, string> {
-  const part = prefix ? `${prefix[0]?.toUpperCase() ?? ''}${prefix.slice(1)}` : ''
+function workspaceGeneratedToolNames(
+  prefix: string | undefined,
+  deleteEnabled: boolean,
+  undoEnabled: boolean,
+): Record<string, string> {
+  const part = prefix
+    ? `${prefix[0]?.toUpperCase() ?? ""}${prefix.slice(1)}`
+    : "";
   return {
     list: `list${part}Workspace`,
     readFile: `read${part}WorkspaceFile`,
@@ -130,7 +187,8 @@ function workspaceGeneratedToolNames(prefix: string | undefined, deleteEnabled: 
     renameFile: `rename${part}WorkspaceFile`,
     grep: `grep${part}Workspace`,
     ...(deleteEnabled ? { deleteFile: `delete${part}WorkspaceFile` } : {}),
-  }
+    ...(undoEnabled ? { undoFile: `undo${part}WorkspaceFile` } : {}),
+  };
 }
 
 /**
@@ -143,27 +201,44 @@ function workspaceIntelligence(
   mounts: Array<Record<string, unknown>> | undefined,
   toolRefs: readonly string[],
   operator: {
-    readonly limits?: Record<string, number>
-    readonly retention?: Record<string, number>
+    readonly limits?: Record<string, number>;
+    readonly retention?: Record<string, number>;
+    readonly versioning?: Record<string, number>;
   },
   dependencies: DependencyFacts | undefined,
 ): Record<string, unknown> | undefined {
-  const hasOperator = operator.limits !== undefined || operator.retention !== undefined
-  const hasDependencies = dependencies !== undefined && Object.keys(dependencies).length > 0
-  if ((!mounts || mounts.length === 0) && toolRefs.length === 0 && !hasOperator && !hasDependencies) return undefined
+  const hasOperator =
+    operator.limits !== undefined ||
+    operator.retention !== undefined ||
+    operator.versioning !== undefined;
+  const hasDependencies =
+    dependencies !== undefined && Object.keys(dependencies).length > 0;
+  if (
+    (!mounts || mounts.length === 0) &&
+    toolRefs.length === 0 &&
+    !hasOperator &&
+    !hasDependencies
+  )
+    return undefined;
   return {
-    confidence: 'static',
+    confidence: "static",
     data: {
       ...(mounts && mounts.length > 0
         ? {
             artifacts: mounts
-              .filter((mount): mount is { path: string; access?: string } => typeof mount.path === 'string')
-              .map((mount) => ({ name: mount.path, kind: mount.access ?? 'mount' })),
+              .filter(
+                (mount): mount is { path: string; access?: string } =>
+                  typeof mount.path === "string",
+              )
+              .map((mount) => ({
+                name: mount.path,
+                kind: mount.access ?? "mount",
+              })),
           }
         : {}),
     },
     ...(toolRefs.length > 0 ? { tools: [...toolRefs] } : {}),
     ...(dependencies ? { dependencies } : {}),
     ...(hasOperator ? { operator } : {}),
-  }
+  };
 }

@@ -40,6 +40,7 @@ import type {
   WorkspaceToolDeleteWithDefaults,
   WorkspaceToolPrefixWithDefaults,
   WorkspaceTools,
+  WorkspaceToolUndoWithDefaults,
   WorkspaceWriteOptions,
 } from "./types";
 
@@ -73,6 +74,7 @@ export interface WorkspaceToolOperations {
     options?: WorkspaceGrepOptions,
   ): Promise<WorkspaceGrepResult>;
   remove(path: string, options?: WorkspaceDeleteOptions): Promise<void>;
+  undo(path: string, options?: WorkspaceNamespaceOption): Promise<WorkspaceFile>;
 }
 
 /**
@@ -95,7 +97,8 @@ export function createWorkspaceTools<
   options?: Options,
 ) => WorkspaceTools<
   WorkspaceToolPrefixWithDefaults<Defaults, Options>,
-  WorkspaceToolDeleteWithDefaults<Defaults, Options>
+  WorkspaceToolDeleteWithDefaults<Defaults, Options>,
+  WorkspaceToolUndoWithDefaults<Defaults, Options>
 > {
   const { workspaceId, defaultToolOptions, ops } = args;
   return <
@@ -104,7 +107,8 @@ export function createWorkspaceTools<
     options?: Options,
   ): WorkspaceTools<
     WorkspaceToolPrefixWithDefaults<Defaults, Options>,
-    WorkspaceToolDeleteWithDefaults<Defaults, Options>
+    WorkspaceToolDeleteWithDefaults<Defaults, Options>,
+    WorkspaceToolUndoWithDefaults<Defaults, Options>
   > => {
     const toolOptions = { ...defaultToolOptions, ...options };
     const namespace = options?.namespace;
@@ -252,9 +256,24 @@ export function createWorkspaceTools<
         toModelOutput: modelJsonOutput("Workspace file deleted"),
       };
     }
+
+    if (toolOptions.undo) {
+      tools[names.undoFile] = {
+        description: `Revert the last change to a workspace file in "${workspaceId}", restoring its previous version. Appends a new version; never rewrites history.`,
+        parameters: z.object({
+          path: z
+            .string()
+            .describe("Absolute workspace path to roll back one version."),
+        }),
+        execute: (toolArgs: Record<string, unknown>) =>
+          ops.undo(readRequiredString(toolArgs.path, "path"), { namespace }),
+        toModelOutput: fileModelOutput,
+      };
+    }
     return tools as WorkspaceTools<
       WorkspaceToolPrefixWithDefaults<Defaults, Options>,
-      WorkspaceToolDeleteWithDefaults<Defaults, Options>
+      WorkspaceToolDeleteWithDefaults<Defaults, Options>,
+      WorkspaceToolUndoWithDefaults<Defaults, Options>
     >;
   };
 }

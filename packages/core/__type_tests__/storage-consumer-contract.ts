@@ -15,7 +15,7 @@ import { memory, recentMessages } from '../memory'
 import { retriever } from '../retrieval'
 import { config } from '../runtime'
 import { handoff } from '../agent'
-import { inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore, storage } from '../storage'
+import { inMemoryRecordStore, inMemoryVectorStore, storage } from '../storage'
 import type { RecordStore, Storage, VectorStore } from '../storage'
 import { workspace, type WorkspaceConfig } from '../workspace'
 import { z } from 'zod'
@@ -42,15 +42,15 @@ workspace({
 workspace({
   id: 'drafts',
   namespace: 'thread:1',
-  // @ts-expect-error - workspace metadata storage is configured as `records`.
-  data: records,
+  // @ts-expect-error - workspace rejects unknown storage fields.
+  extraRecords: records,
 } satisfies WorkspaceConfig)
 
 workspace({
   id: 'drafts',
   namespace: 'thread:1',
-  // @ts-expect-error - canonical storage bundles use `records`, not `data`.
-  storage: storage({ data: records }),
+  // @ts-expect-error - canonical storage bundles reject unknown storage fields.
+  storage: storage({ records, extraRecords: records }),
 } satisfies WorkspaceConfig)
 
 indexer({
@@ -71,8 +71,8 @@ indexer({
 indexer({
   id: 'docs',
   namespace: 'docs',
-  // @ts-expect-error - indexer() no longer exposes legacy `data`.
-  data: records,
+  // @ts-expect-error - indexer() rejects unknown storage fields.
+  extraRecords: records,
   dense,
 })
 
@@ -94,8 +94,8 @@ retriever({
 retriever({
   id: 'docs',
   namespace: 'docs',
-  // @ts-expect-error - retriever() no longer exposes legacy `store`.
-  store: inMemoryStorage(),
+  // @ts-expect-error - retriever() rejects unknown storage fields.
+  extraStorage: betaStorage,
   dense,
 })
 
@@ -106,8 +106,8 @@ embeddingCache({
 })
 
 embeddingCache({
-  // @ts-expect-error - embeddingCache() uses `records`.
-  store: records,
+  // @ts-expect-error - embeddingCache() rejects unknown storage fields.
+  extraRecords: records,
   namespace: 'embeddings',
 })
 
@@ -127,8 +127,8 @@ createSemanticCache({
 })
 
 createSemanticCache({
-  // @ts-expect-error - semantic cache requires explicit storage, records, or vectors fields.
-  store: inMemoryStorage(),
+  // @ts-expect-error - semantic cache rejects unknown storage fields.
+  extraStorage: betaStorage,
   embedding: dense,
   ttl: 60_000,
   scope: 'global',
@@ -142,8 +142,8 @@ config({
 
 config({
   persistence: {
-    // @ts-expect-error - runtime persistence uses `records`, not legacy `store`.
-    store: records,
+    // @ts-expect-error - runtime persistence rejects unknown storage fields.
+    extraRecords: records,
   },
 })
 
@@ -165,8 +165,8 @@ memory({
 memory({
   id: 'profile',
   namespace: 'user:1',
-  // @ts-expect-error - memory() uses `records`/`storage`, not legacy `store`.
-  store: records,
+  // @ts-expect-error - memory() rejects unknown storage fields.
+  extraRecords: records,
   blocks: [recentMessages({ id: 'recent' })],
 })
 
@@ -179,8 +179,8 @@ blackboard({
 blackboard({
   id: 'team',
   schema: z.object({ status: z.string() }),
-  // @ts-expect-error - blackboard() uses `records`, not legacy `store`.
-  store: records,
+  // @ts-expect-error - blackboard() rejects unknown storage fields.
+  extraRecords: records,
 })
 
 handoff({
@@ -196,8 +196,8 @@ handoff({
   inputSchema: z.object({ findings: z.string() }),
   outputSchema: z.object({ brief: z.string() }),
   transform: (input) => ({ brief: input.findings }),
-  // @ts-expect-error - handoff() uses `records`, not legacy `store`.
-  store: records,
+  // @ts-expect-error - handoff() rejects unknown storage fields.
+  extraRecords: records,
 })
 
 const generate: GenerateTextFn = async () => ({ text: 'summary' })
@@ -214,8 +214,8 @@ createSlidingWindow({
   windowSize: 3,
   generate,
   model: {},
-  // @ts-expect-error - compaction uses `records`, not legacy `store`.
-  store: records,
+  // @ts-expect-error - compaction rejects unknown storage fields.
+  extraRecords: records,
 })
 
 void inMemoryRecordStore

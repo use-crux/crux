@@ -34,9 +34,10 @@ import type { Retriever, RetrieveOptions, RetrieverHit } from '../retrieval'
  * execution captures them and their namespaces always exist.
  *
  * Capability sets are fixed per task kind in v1: prompts capture
- * `modelCalls`/`citations`/`safety`; flows add `steps`/`toolCalls`/`routing`/
- * `memory`; agents capture all nine; retrievers capture `retrieval`; plain
- * functions capture none (value matchers + always-on namespaces only).
+ * `modelCalls`/`citations`/`safety`/`decisionReports`; flows add `steps`/
+ * `toolCalls`/`routing`/`memory`; agents capture all ten; retrievers capture
+ * `retrieval`; plain functions capture none (value matchers + always-on
+ * namespaces only).
  *
  * @example
  * ```ts
@@ -59,12 +60,20 @@ export type Capability =
   | 'safety' // guardrail + constraint outcomes
   | 'memory' // memory reads/writes
   | 'routing' // route/tier/model selection decisions
+  | 'decisionReports' // TurnDecisionReport rows emitted for the turn
 
 /** The capability set of a prompt task. */
-export type PromptCapability = 'modelCalls' | 'citations' | 'safety'
+export type PromptCapability = 'modelCalls' | 'citations' | 'safety' | 'decisionReports'
 
 /** The capability set of a flow task. */
-export type FlowCapability = 'modelCalls' | 'steps' | 'toolCalls' | 'routing' | 'safety' | 'memory'
+export type FlowCapability =
+  | 'modelCalls'
+  | 'steps'
+  | 'toolCalls'
+  | 'routing'
+  | 'safety'
+  | 'memory'
+  | 'decisionReports'
 
 /** The capability set of an agent task — all nine families. */
 export type AgentCapability = Capability
@@ -73,7 +82,12 @@ export type AgentCapability = Capability
 export type RetrieverCapability = 'retrieval'
 
 /** Runtime capability set for prompt tasks. @internal */
-export const PROMPT_CAPABILITIES: readonly PromptCapability[] = Object.freeze(['modelCalls', 'citations', 'safety'])
+export const PROMPT_CAPABILITIES: readonly PromptCapability[] = Object.freeze([
+  'modelCalls',
+  'citations',
+  'safety',
+  'decisionReports',
+])
 
 /** Runtime capability set for flow tasks. @internal */
 export const FLOW_CAPABILITIES: readonly FlowCapability[] = Object.freeze([
@@ -83,6 +97,7 @@ export const FLOW_CAPABILITIES: readonly FlowCapability[] = Object.freeze([
   'routing',
   'safety',
   'memory',
+  'decisionReports',
 ])
 
 /** Runtime capability set for agent tasks. @internal */
@@ -96,6 +111,7 @@ export const AGENT_CAPABILITIES: readonly AgentCapability[] = Object.freeze([
   'safety',
   'memory',
   'routing',
+  'decisionReports',
 ])
 
 /** Runtime capability set for retriever tasks. @internal */

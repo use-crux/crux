@@ -94,6 +94,44 @@ Common detail artifacts use stable kinds so `RunDetail.inspection` can route the
 | `embedding.report` / `indexing.report` / `ingest.report` / `corpus.report` | Embedding shape/cache metrics, indexing totals/stage counts, loader status, and corpus source ledger summaries.                                                                  |
 | `security.report`                                                          | Prompt-injection warning severity, pattern, field/location, action, and bounded preview.                                                                                         |
 
+## Turn Explanation (`decisionReport`)
+
+`TurnDecisionReport` is a deterministic per-generation-turn read model that powers
+the Run Detail **Explain** tab. It is a projection over evidence Crux already
+records (request composition, context contribution and prompt-budget artifacts,
+routing/fallback reports, guardrail/constraint/security/cache/compaction reports,
+retrieval/memory artifacts, Project Index source refs, and quality records) — not
+a new trace format. It summarises and links into the existing detail views rather
+than duplicating their payloads.
+
+The local Go projection attaches one report to each generation node and folded
+generation detail, plus the run root, exposed as the optional `decisionReport`
+field on `CruxRunDetailNode` and `CruxRunDetailDetail`. Consumers read it directly;
+when it is absent the existing detail tabs are unaffected.
+
+| Field        | Purpose                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------------------ |
+| `turn`       | Turn metadata and a short, evidence-bound `verdict` sentence.                                     |
+| `saw`        | Items that reached the model (`disposition: "active"`).                                           |
+| `considered` | Items checked but not sent (`checked` / `dropped` / `disabled` / `unknown`) with a reason.        |
+| `freshness`  | Whether evidence was current enough (`fresh` / `refreshed` / `stale-used` / `stale-rejected` / …).|
+| `cache`      | Reuse/write/miss behaviour, with `acceptedByFreshness` / `rejectedByFreshness` as the only join.  |
+| `decisions`  | Routing, fallback, guardrail, security, constraint, cache, and compaction outcomes + deep-tab targets. |
+| `source`     | Grouped source-definition joins ("what do I change?") with file:line and resolution fidelity.     |
+| `coverage`   | Quality coverage scorecard across six areas, with optional read-only suggested assertions.        |
+| `gaps`       | Missing or inferred evidence the report could not prove.                                           |
+
+Cache and freshness are deliberately separate concepts and types — freshness is
+correctness (was the data current enough?), cache is efficiency (what did reuse
+save?). Every decision, disposition, and diagnostic carries an `evidenceLevel`
+(`declared` / `observed` / `inferred` / `missing`) so the report stays honest
+about what it could and could not prove; `reason.source: "not-recorded"` maps to
+`evidenceLevel: "missing"`. Reason codes are stable strings (e.g.
+`routing.fallback.fired`, `context.freshness.stale_used`,
+`cache.freshness.rejected`) suitable for quality matchers, while human-facing
+text can change independently. The same codes back the
+`ctx.expect.decisionReport` Quality matchers.
+
 ## Runtime emitters
 
 Use `observe.run()` for user-facing execution roots and `observe.span()` for inspectable work inside a run. Standalone spans automatically create an implicit run, so helpers like `pipeline`, `consensus`, or `swarm` can be called directly and still produce a complete trace.

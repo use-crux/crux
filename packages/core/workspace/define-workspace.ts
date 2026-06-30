@@ -24,6 +24,9 @@ import {
 } from "./path";
 import { activeWorkspaceProvenance, instrument } from "./observability";
 import { fileKey, getRecord, getRequiredRecord, listEntries } from "./store";
+import { purgeVersions, recordFileVersion } from "./version-store";
+import { createWorkspaceVersionOps } from "./version-ops";
+import type { WorkspaceVersionOperation } from "./version-types";
 import { createWorkspaceTools } from "./tools";
 import { hasGlob } from "./glob";
 import { recordToReadResult } from "./read-result";
@@ -54,6 +57,7 @@ import {
   type WorkspaceToolOptions,
   type WorkspaceToolPrefixWithDefaults,
   type WorkspaceTools,
+  type WorkspaceToolUndoWithDefaults,
   type WorkspaceWriteOptions,
 } from "./types";
 
@@ -157,6 +161,17 @@ export function workspace<const Config extends WorkspaceConfig>(
       async () => {
         const normalized = normalizePath(path);
         mountForPath(normalized, mounts, "read");
+        if (options?.version !== undefined) {
+          return versionOps.readVersion(
+            namespace,
+            normalized,
+            options.version,
+            {
+              maxInlineBytes: options.maxInlineBytes,
+              offset: options.offset,
+            },
+          );
+        }
         const record = await getRequiredRecord(
           store,
           config.id,
@@ -193,6 +208,7 @@ export function workspace<const Config extends WorkspaceConfig>(
     content: WorkspaceContent,
     options?: WorkspaceWriteOptions,
     producedBy = artifactWriteProvenance(options),
+    operation: WorkspaceVersionOperation = "write",
   ): Promise<WorkspaceFile> {
     return instrument(
       { workspaceId: config.id, operation: "write", namespace, path },
@@ -229,14 +245,37 @@ export function workspace<const Config extends WorkspaceConfig>(
             producedBy,
             existing,
             now,
+            version: (existing?.headVersion ?? 0) + 1,
             inlineTextBelowBytes,
             blobs,
           });
-          await store.put(
-            fileKey(config.id, namespace, normalized),
-            record as unknown as JsonObject,
-            workspaceSetOptions(store, config.retention),
-          );
+          const setOptions = workspaceSetOptions(store, config.retention);
+          const key = fileKey(config.id, namespace, normalized);
+          await store.put(key, record as unknown as JsonObject, setOptions);
+          try {
+            await recordFileVersion({
+              store,
+              blobs,
+              workspaceId: config.id,
+              namespace,
+              path: normalized,
+              record,
+              operation,
+              versioning: config.versioning,
+              setOptions,
+            });
+          } catch (error) {
+            if (existing) {
+              await store.put(
+                key,
+                existing as unknown as JsonObject,
+                setOptions,
+              );
+            } else {
+              await store.delete(key);
+            }
+            throw error;
+          }
           return recordToFile(record);
         });
       },
@@ -299,6 +338,7 @@ export function workspace<const Config extends WorkspaceConfig>(
             kind: current.artifactKind,
           },
           current.producedBy,
+          "edit",
         );
       },
     );
@@ -324,9 +364,10 @@ export function workspace<const Config extends WorkspaceConfig>(
         mountForPath(normalized, mounts, "write");
         const record = await getRecord(store, config.id, namespace, normalized);
         await store.delete(fileKey(config.id, namespace, normalized));
-        if (options?.deleteBlob !== false && record?.uri && blobs?.delete) {
-          await blobs.delete(record.uri);
-        }
+        await purgeVersions(store, blobs, config.id, namespace, normalized, {
+          deleteBlob: options?.deleteBlob,
+          currentBlobUri: record?.uri,
+        });
       },
     );
   }
@@ -339,7 +380,24 @@ export function workspace<const Config extends WorkspaceConfig>(
     inlineTextBelowBytes,
     limits: config.limits,
     retention: config.retention,
+    versioning: config.versioning,
     resolveNamespace,
+  });
+  const versionOps = createWorkspaceVersionOps({
+    workspaceId: config.id,
+    store,
+    blobs,
+    mounts,
+    resolveNamespace,
+    write: (namespace, path, content, options, operation) =>
+      writeForNamespace(
+        namespace,
+        path,
+        content,
+        options,
+        undefined,
+        operation,
+      ),
   });
   const artifactOps = createWorkspaceArtifactOps({
     workspaceId: config.id,
@@ -359,6 +417,7 @@ export function workspace<const Config extends WorkspaceConfig>(
       rename: fsOps.rename,
       grep: fsOps.grep,
       remove,
+      undo: versionOps.undo,
     },
   });
   const contextAdapters = createWorkspaceContextAdapters<Config["tools"]>({
@@ -386,6 +445,9 @@ export function workspace<const Config extends WorkspaceConfig>(
     move: fsOps.move,
     copy: fsOps.copy,
     grep: fsOps.grep,
+    history: versionOps.history,
+    diff: versionOps.diff,
+    undo: versionOps.undo,
     artifacts: artifactOps.artifacts,
     finalize: artifactOps.finalize,
     asContext: contextAdapters.asContext,
@@ -396,7 +458,8 @@ export function workspace<const Config extends WorkspaceConfig>(
       options?: Options,
     ): WorkspaceTools<
       WorkspaceToolPrefixWithDefaults<Config["tools"], Options>,
-      WorkspaceToolDeleteWithDefaults<Config["tools"], Options>
+      WorkspaceToolDeleteWithDefaults<Config["tools"], Options>,
+      WorkspaceToolUndoWithDefaults<Config["tools"], Options>
     > => asTools(options),
     inject: contextAdapters.inject,
   };

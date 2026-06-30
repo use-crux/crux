@@ -116,8 +116,8 @@ expectTypeOf(Object.isFrozen(bundle)).toEqualTypeOf<boolean>()
 
 // @ts-expect-error — canonical storage bundles require `records`.
 storage({})
-// @ts-expect-error — canonical storage bundles use `records`, not legacy `data`.
-storage({ data: records })
+// @ts-expect-error — canonical storage bundles reject unknown storage fields.
+storage({ records, extraRecords: records })
 
 const error = new StorageError('invalid_filter', 'Unsupported filter value', { cause: new Error('provider') })
 expectTypeOf(error.code).toEqualTypeOf<StorageErrorCode>()

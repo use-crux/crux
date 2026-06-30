@@ -1,9 +1,8 @@
 /**
  * `@use-crux/upstash` - Upstash Storage Beta adapters for Crux.
  *
- * Exposes a Redis {@link RecordStore} adapter and an Upstash Vector
- * {@link VectorStore} adapter without bundling them into one legacy store
- * shape.
+ * Exposes Redis {@link RecordStore} and Upstash Vector {@link VectorStore}
+ * adapters as explicit Storage Beta capabilities.
  *
  * @module
  */

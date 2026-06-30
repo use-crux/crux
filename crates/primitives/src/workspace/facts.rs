@@ -43,6 +43,7 @@ pub(crate) fn workspace_facts(
     let tools = config.and_then(|config| workspace_tools(config, context));
     let limits = config.and_then(|config| workspace_limits(config, context));
     let retention = config.and_then(|config| workspace_retention(config, context));
+    let versioning = config.and_then(|config| workspace_versioning(config, context));
     let storage_refs = storage_config_references(config, &context.initializers);
     let storage_dependencies = storage_dependency_metadata(&storage_refs);
 
@@ -75,15 +76,23 @@ pub(crate) fn workspace_facts(
     if let Some(retention) = retention.clone() {
         metadata.insert("retention".to_string(), retention);
     }
+    if let Some(versioning) = versioning.clone() {
+        metadata.insert("versioning".to_string(), versioning);
+    }
     if let Some(config) = config {
         metadata.insert(
             "hasBlobStorage".to_string(),
             Value::Bool(has_property(config, "blobs") || has_property(config, "storage")),
         );
     }
-    if let Some(intelligence) =
-        workspace_intelligence(&mounts, &tool_refs, limits, retention, storage_dependencies)
-    {
+    if let Some(intelligence) = workspace_intelligence(
+        &mounts,
+        &tool_refs,
+        limits,
+        retention,
+        versioning,
+        storage_dependencies,
+    ) {
         metadata.insert("intelligence".to_string(), intelligence);
     }
 
@@ -165,6 +174,17 @@ fn workspace_retention(
     )])
 }
 
+fn workspace_versioning(
+    config: &StaticSyntaxValue,
+    context: &PrimitiveContext<'_>,
+) -> Option<Value> {
+    let versioning = object_value(property_value(config, "versioning")?)?;
+    compact_number_metadata([(
+        "maxVersions",
+        number_property(versioning, "maxVersions", &context.initializers),
+    )])
+}
+
 fn compact_number_metadata<const N: usize>(entries: [(&str, Option<f64>); N]) -> Option<Value> {
     let mut metadata = Map::new();
     for (key, value) in entries {
@@ -179,6 +199,7 @@ fn workspace_tools(config: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -
     let tools = object_value(property_value(config, "tools")?)?;
     let prefix = string_property(tools, "prefix", context);
     let delete = boolean_property(tools, "delete", context).unwrap_or(false);
+    let undo = boolean_property(tools, "undo", context).unwrap_or(false);
     let mut metadata = Map::new();
     if let Some(prefix) = prefix.clone() {
         metadata.insert("prefix".to_string(), Value::String(prefix));
@@ -186,14 +207,17 @@ fn workspace_tools(config: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -
     if delete {
         metadata.insert("delete".to_string(), Value::Bool(true));
     }
+    if undo {
+        metadata.insert("undo".to_string(), Value::Bool(true));
+    }
     metadata.insert(
         "generated".to_string(),
-        workspace_generated_tool_names(prefix.as_deref(), delete),
+        workspace_generated_tool_names(prefix.as_deref(), delete, undo),
     );
     Some(Value::Object(metadata))
 }
 
-fn workspace_generated_tool_names(prefix: Option<&str>, delete: bool) -> Value {
+fn workspace_generated_tool_names(prefix: Option<&str>, delete: bool, undo: bool) -> Value {
     let part = prefix.map(capitalize_ascii).unwrap_or_default();
     let mut generated = Map::new();
     generated.insert(
@@ -224,6 +248,12 @@ fn workspace_generated_tool_names(prefix: Option<&str>, delete: bool) -> Value {
         generated.insert(
             "deleteFile".to_string(),
             Value::String(format!("delete{part}WorkspaceFile")),
+        );
+    }
+    if undo {
+        generated.insert(
+            "undoFile".to_string(),
+            Value::String(format!("undo{part}WorkspaceFile")),
         );
     }
     Value::Object(generated)
@@ -272,9 +302,10 @@ fn workspace_intelligence(
     tool_refs: &[String],
     limits: Option<Value>,
     retention: Option<Value>,
+    versioning: Option<Value>,
     dependencies: Option<Value>,
 ) -> Option<Value> {
-    let has_operator = limits.is_some() || retention.is_some();
+    let has_operator = limits.is_some() || retention.is_some() || versioning.is_some();
     let has_dependencies = dependencies.is_some();
     if mounts.is_empty() && tool_refs.is_empty() && !has_operator && !has_dependencies {
         return None;
@@ -309,6 +340,9 @@ fn workspace_intelligence(
         }
         if let Some(retention) = retention {
             operator.insert("retention".to_string(), retention);
+        }
+        if let Some(versioning) = versioning {
+            operator.insert("versioning".to_string(), versioning);
         }
         intelligence.insert("operator".to_string(), Value::Object(operator));
     }

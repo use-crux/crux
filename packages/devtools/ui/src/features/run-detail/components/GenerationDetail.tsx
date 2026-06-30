@@ -11,13 +11,18 @@
  * Inspector, never here.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { JsonTree } from '@/shared/components/JsonTree'
 import { Chip } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
 import type { ObservabilityRunDetailNode, Trace } from '@/types'
+import { turnHasWarningSignal, turnInitialTab } from '@/features/run-detail/lib/explain/signals'
+import { warningChips } from '@/features/run-detail/lib/explain/chips'
+import { normalizeTurnDecisionReport } from '@/features/run-detail/lib/explain/report'
 import { KindTag, StatStrip, StatusPill } from './atoms'
 import { ContextComposition } from './ContextComposition'
+import { ExplainTab } from './explain/ExplainTab'
+import { SignalStrip } from './explain/band'
 import { GovernanceTab, GOV_LABEL, presentGovernance, type GovType } from './GenerationDecisions'
 import {
   findArtifact,
@@ -38,7 +43,7 @@ import {
 } from '../lib/span-detail-inspection'
 
 type OutMode = 'pretty' | 'tokens' | 'raw'
-type GenTab = 'output' | 'context' | GovType
+type GenTab = 'explain' | 'output' | 'context' | GovType
 
 // ─── design atoms (mapped to --qw tokens) ───────────────────────────
 
@@ -289,16 +294,31 @@ export function GenerationDetail({
   isRoot: boolean
   providedTools?: { name: string; used: boolean }[]
 }) {
-  const [tab, setTab] = useState<GenTab>('output')
+  // The Turn Explanation read model, when the local projection emitted one for
+  // this generation turn. Drives the leading Explain tab + the default-tab and
+  // sub-header signals; absent reports leave the existing tabs untouched.
+  const report = useMemo(() => normalizeTurnDecisionReport(node.decisionReport), [node.decisionReport])
+  const [tab, setTab] = useState<GenTab>(() => turnInitialTab(report) as GenTab)
   const [outMode, setOutMode] = useState<OutMode>('pretty')
+
+  // Re-pick the default tab when a different turn is selected: Explain leads for
+  // a turn with a warning signal, Output otherwise. Keyed on the turn id so a
+  // user's manual tab choice within one turn is preserved.
+  useEffect(() => {
+    setTab(turnInitialTab(report) as GenTab)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node.id])
 
   // Each governance type the backend folded onto this generation (routing,
   // guardrail, security, constraint, cache, compaction) gets its own tab.
   const govTabs = useMemo(() => presentGovernance(node), [node])
-  const tabs = useMemo<ReadonlyArray<GenTab>>(() => ['output', 'context', ...govTabs], [govTabs])
-  // Guard: if the selection changes to a span without this governance tab while
-  // it's active, fall back to Output instead of an empty pane.
-  const activeTab: GenTab = tab !== 'output' && tab !== 'context' && !govTabs.includes(tab) ? 'output' : tab
+  const tabs = useMemo<ReadonlyArray<GenTab>>(
+    () => [...(report ? (['explain'] as const) : []), 'output', 'context', ...govTabs],
+    [govTabs, report],
+  )
+  // Guard: if the selection lands on a tab this turn doesn't have (selection
+  // changed, or no report), fall back to Output instead of an empty pane.
+  const activeTab: GenTab = tabs.includes(tab) ? tab : 'output'
 
   const resolved = useMemo(() => resolveOutput(node, trace, isRoot), [node, trace, isRoot])
   const spanError = useMemo(() => resolveSpanError(node), [node])
@@ -373,6 +393,11 @@ export function GenerationDetail({
         <StatStrip items={strip} size={11} gap={12} />
       </div>
 
+      {/* Triage banner — the turn's warning stays visible on any tab. Shown
+          only when the turn actually needs attention, so a healthy-but-merely-
+          unprotected turn doesn't carry a permanent signal strip. */}
+      {report && turnHasWarningSignal(report) && <SignalStrip chips={warningChips(report)} />}
+
       {/* tabs */}
       <div
         className="flex flex-shrink-0 items-center gap-0 px-6"
@@ -392,7 +417,10 @@ export function GenerationDetail({
                 borderBottom: on ? '2px solid var(--qw-crux)' : '2px solid transparent',
               }}
             >
-              {id === 'output' || id === 'context' ? id : GOV_LABEL[id]}
+              {id === 'explain' && (
+                <Icon name="sparkle" size={13} color={on ? 'var(--qw-crux)' : 'var(--qw-warn)'} />
+              )}
+              {id === 'output' || id === 'context' || id === 'explain' ? id : GOV_LABEL[id]}
             </button>
           )
         })}
@@ -421,28 +449,34 @@ export function GenerationDetail({
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
-        <div className="mx-auto" style={{ maxWidth: 720 }}>
-          {activeTab === 'output' ? (
-            <OutputView
-              chunks={chunks}
-              text={text}
-              obj={obj}
-              outMode={outMode}
-              spanError={spanError}
-              citations={citations}
-              grounded={grounded}
-              toolCalls={toolCalls}
-              finish={finish}
-              streaming={node.status === 'running'}
-            />
-          ) : activeTab === 'context' ? (
-            <ContextComposition node={node} trace={trace} providedTools={providedTools} />
-          ) : (
-            <GovernanceTab node={node} type={activeTab} />
-          )}
+      {activeTab === 'explain' && report ? (
+        <ExplainTab report={report} availableTabs={tabs} onOpenTab={(id) => setTab(id as GenTab)} />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
+          <div className="mx-auto" style={{ maxWidth: 720 }}>
+            {activeTab === 'output' ? (
+              <OutputView
+                chunks={chunks}
+                text={text}
+                obj={obj}
+                outMode={outMode}
+                spanError={spanError}
+                citations={citations}
+                grounded={grounded}
+                toolCalls={toolCalls}
+                finish={finish}
+                streaming={node.status === 'running'}
+              />
+            ) : activeTab === 'context' ? (
+              <ContextComposition node={node} trace={trace} providedTools={providedTools} />
+            ) : (
+              // activeTab is a governance type here: Explain/output/context are
+              // handled above and the guard keeps `tab` within `tabs`.
+              <GovernanceTab node={node} type={activeTab as GovType} />
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

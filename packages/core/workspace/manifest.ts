@@ -9,7 +9,7 @@
  */
 
 import type { BlobStore, RecordStore } from "../storage";
-import { recordToArtifact } from "./artifacts";
+import { resolveArtifact } from "./artifacts";
 import { mountForPath, normalizePath } from "./path";
 import { recordToReadResult } from "./read-result";
 import {
@@ -47,12 +47,16 @@ export async function renderWorkspaceManifest(args: {
   const files = await listAllFileEntries(store, workspaceId, namespace, {
     limit: MANIFEST_FILE_LIMIT,
   });
-  const finalArtifacts = (
-    await listFileRecords(store, workspaceId, namespace, {
-      filter: { status: "final" },
-      limit: MANIFEST_FILE_LIMIT,
-    })
-  ).map((record) => recordToArtifact(record, { workspaceId, namespace }));
+  const finalArtifacts = await Promise.all(
+    (
+      await listFileRecords(store, workspaceId, namespace, {
+        filter: { status: "final" },
+        limit: MANIFEST_FILE_LIMIT,
+      })
+    ).map((record) =>
+      resolveArtifact({ record, store, workspaceId, namespace }),
+    ),
+  );
   const lines = [
     `## Workspace (${workspaceId})`,
     `Namespace: ${namespace}`,

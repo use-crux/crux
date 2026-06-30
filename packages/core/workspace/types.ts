@@ -41,7 +41,16 @@ import type {
   WorkspaceToolPrefix,
   WorkspaceToolPrefixWithDefaults,
   WorkspaceTools,
+  WorkspaceToolUndoWithDefaults,
 } from "./tool-types";
+import type {
+  WorkspaceDiff,
+  WorkspaceDiffOptions,
+  WorkspaceHistoryOptions,
+  WorkspaceUndoOptions,
+  WorkspaceVersion,
+  WorkspaceVersioning,
+} from "./version-types";
 
 export type {
   WorkspaceAppendOptions,
@@ -57,8 +66,22 @@ export type {
   WorkspaceToolPrefix,
   WorkspaceToolPrefixWithDefaults,
   WorkspaceTools,
+  WorkspaceToolUndo,
+  WorkspaceToolUndoWithDefaults,
 } from "./tool-types";
 export type { WorkspaceLimits, WorkspaceRetention } from "./limits";
+export type {
+  WorkspaceDiff,
+  WorkspaceDiffHunk,
+  WorkspaceDiffLine,
+  WorkspaceDiffLineKind,
+  WorkspaceDiffOptions,
+  WorkspaceHistoryOptions,
+  WorkspaceUndoOptions,
+  WorkspaceVersion,
+  WorkspaceVersioning,
+  WorkspaceVersionOperation,
+} from "./version-types";
 
 /** Default inline storage cutoff: text/JSON at or below this size is stored inline. */
 export const DEFAULT_INLINE_TEXT_BYTES = 64_000;
@@ -84,6 +107,9 @@ export type WorkspaceOperation =
   | "move"
   | "copy"
   | "grep"
+  | "history"
+  | "diff"
+  | "undo"
   | "artifacts"
   | "finalize";
 
@@ -103,6 +129,11 @@ export interface WorkspaceContentOptions {
 export interface WorkspaceToolOptions {
   readonly prefix?: string;
   readonly delete?: boolean;
+  /**
+   * Generate the `undoWorkspaceFile` tool. Opt-in like {@link WorkspaceToolOptions.delete}:
+   * it lets a model roll a file back to its previous version.
+   */
+  readonly undo?: boolean;
 }
 
 /** Per-call namespace override accepted by every workspace operation. */
@@ -129,6 +160,11 @@ export interface WorkspaceConfig {
   readonly limits?: WorkspaceLimits;
   /** Optional metadata retention policy, applied only when the data store supports TTL. */
   readonly retention?: WorkspaceRetention;
+  /**
+   * Optional versioning & history retention. History is always recorded; this
+   * only bounds how many versions are kept per file. See {@link WorkspaceVersioning}.
+   */
+  readonly versioning?: WorkspaceVersioning;
 }
 
 /** JSON values accepted by {@link Workspace.write}; strings are handled as text content. */
@@ -156,6 +192,11 @@ export interface WorkspaceWriteOptions extends WorkspaceNamespaceOption {
 export interface WorkspaceReadOptions extends WorkspaceNamespaceOption {
   readonly maxInlineBytes?: number;
   readonly offset?: number;
+  /**
+   * Read a specific historical revision instead of the current content. When
+   * omitted, the latest version is read. See {@link Workspace.history}.
+   */
+  readonly version?: number;
 }
 
 /** Options for {@link Workspace.list}. */
@@ -316,6 +357,34 @@ export interface Workspace<
     query: string,
     options?: WorkspaceGrepOptions,
   ): Promise<WorkspaceGrepResult>;
+  /**
+   * List a file's revision history, newest first.
+   *
+   * @param path - Absolute workspace path.
+   * @returns The recorded {@link WorkspaceVersion}s; empty when the file does
+   *   not exist.
+   */
+  history(
+    path: string,
+    options?: WorkspaceHistoryOptions,
+  ): Promise<readonly WorkspaceVersion[]>;
+  /**
+   * Diff two revisions of a text file as a unified-diff string plus structured
+   * hunks. Defaults to the most recent change (previous version → current).
+   *
+   * @param path - Absolute workspace path.
+   * @throws If the file is binary, or a requested version does not exist.
+   */
+  diff(path: string, options?: WorkspaceDiffOptions): Promise<WorkspaceDiff>;
+  /**
+   * Revert the last content change by appending the previous version's content
+   * as a new version. History is never rewritten.
+   *
+   * @param path - Absolute workspace path.
+   * @returns The file at its restored, newly-current version.
+   * @throws If there is no earlier version to restore.
+   */
+  undo(path: string, options?: WorkspaceUndoOptions): Promise<WorkspaceFile>;
   artifacts(
     options?: WorkspaceArtifactsQuery,
   ): Promise<readonly WorkspaceArtifact[]>;
@@ -330,7 +399,8 @@ export interface Workspace<
     options?: Options,
   ): WorkspaceTools<
     WorkspaceToolPrefixWithDefaults<DefaultToolOptions, Options>,
-    WorkspaceToolDeleteWithDefaults<DefaultToolOptions, Options>
+    WorkspaceToolDeleteWithDefaults<DefaultToolOptions, Options>,
+    WorkspaceToolUndoWithDefaults<DefaultToolOptions, Options>
   >;
   inject(args: {
     input: Record<string, unknown>;
@@ -364,6 +434,17 @@ export interface WorkspaceFileRecord {
   readonly status?: WorkspaceArtifactStatus;
   readonly kind?: string;
   readonly producedBy?: WorkspaceProvenance;
+  /**
+   * The current version number for this file, starting at 1. Absent on records
+   * written before versioning; treated as 1 when reading such records.
+   */
+  readonly headVersion?: number;
+  /**
+   * The published version pinned by `finalize()`. While set and the file stays
+   * `final`, the artifact/manifest projection surfaces this revision even as the
+   * working file advances to newer versions.
+   */
+  readonly finalVersion?: number;
   readonly createdAt: number;
   readonly updatedAt: number;
 }

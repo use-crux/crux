@@ -71,7 +71,7 @@ export interface ProjectConfigInspect {
     readonly bridge: ProjectConfigSetting
   }
   readonly persistence: {
-    readonly store: ProjectConfigSetting
+    readonly records: ProjectConfigSetting
   }
   readonly lint: {
     readonly profile: ProjectConfigSetting

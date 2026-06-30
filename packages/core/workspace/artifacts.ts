@@ -12,6 +12,7 @@ import type { ExactFilter, JsonObject, RecordStore } from "../storage";
 import { instrument } from "./observability";
 import { mountForPath, normalizePath } from "./path";
 import { fileKey, getRequiredRecord, listFileRecords } from "./store";
+import { getVersionRecord } from "./version-store";
 import { workspaceSetOptions } from "./limits";
 import type {
   WorkspaceArtifact,
@@ -20,6 +21,7 @@ import type {
 } from "./artifact-types";
 import type {
   NormalizedMount,
+  WorkspacePath,
   WorkspaceRetention,
   WorkspaceFileRecord,
 } from "./types";
@@ -69,14 +71,16 @@ export function createWorkspaceArtifactOps(
           namespace,
           { filter },
         );
-        return records
-          .filter(isArtifactRecord)
-          .map((record) =>
-            recordToArtifact(record, {
+        return Promise.all(
+          records.filter(isArtifactRecord).map((record) =>
+            resolveArtifact({
+              record,
+              store: config.store,
               workspaceId: config.workspaceId,
               namespace,
             }),
-          );
+          ),
+        );
       },
     );
   }
@@ -107,6 +111,8 @@ export function createWorkspaceArtifactOps(
           ...current,
           status: "final",
           ...(kind !== undefined ? { kind } : {}),
+          // Pin the current revision as the published version.
+          finalVersion: current.headVersion ?? 1,
           updatedAt: Date.now(),
         };
         await config.store.put(
@@ -114,7 +120,9 @@ export function createWorkspaceArtifactOps(
           finalized as unknown as JsonObject,
           workspaceSetOptions(config.store, config.retention),
         );
-        return recordToArtifact(finalized, {
+        return resolveArtifact({
+          record: finalized,
+          store: config.store,
           workspaceId: config.workspaceId,
           namespace,
         });
@@ -134,6 +142,56 @@ export function createWorkspaceArtifactOps(
   }
 }
 
+/**
+ * Project a record into a {@link WorkspaceArtifact}, resolving the pinned
+ * published version when the working copy has advanced past it.
+ *
+ * `finalize()` pins `finalVersion`; while a file stays `final` and is edited
+ * further, its HEAD moves to newer versions but the published artifact must keep
+ * surfacing the pinned revision. When the pin still equals HEAD (just finalized,
+ * or no later edits) the HEAD record is used directly. If the pinned snapshot is
+ * unavailable, this falls back to HEAD rather than failing.
+ */
+export async function resolveArtifact(input: {
+  readonly record: WorkspaceFileRecord;
+  readonly store: RecordStore;
+  readonly workspaceId: string;
+  readonly namespace: string;
+}): Promise<WorkspaceArtifact> {
+  const { record, store, workspaceId, namespace } = input;
+  const scope = { workspaceId, namespace };
+  const headVersion = record.headVersion ?? 1;
+  if (
+    record.status === "final" &&
+    record.finalVersion !== undefined &&
+    record.finalVersion !== headVersion
+  ) {
+    const pinned = await getVersionRecord(
+      store,
+      workspaceId,
+      namespace,
+      record.path as WorkspacePath,
+      record.finalVersion,
+    );
+    if (pinned) {
+      // Pinned content fields come from the snapshot; lifecycle fields from HEAD.
+      return recordToArtifact(
+        {
+          ...pinned.snapshot,
+          createdAt: record.createdAt,
+          updatedAt: record.updatedAt,
+          status: "final",
+          kind: record.kind,
+          producedBy: record.producedBy,
+          finalVersion: record.finalVersion,
+        },
+        scope,
+      );
+    }
+  }
+  return recordToArtifact(record, scope);
+}
+
 /** Convert a stored workspace file into its artifact projection. */
 export function recordToArtifact(
   record: WorkspaceFileRecord,
@@ -143,6 +201,9 @@ export function recordToArtifact(
     path: record.path,
     ...(record.kind ? { kind: record.kind } : {}),
     status: record.status ?? "draft",
+    ...(record.finalVersion !== undefined
+      ? { version: record.finalVersion }
+      : {}),
     mimeType: record.mimeType,
     size: record.size,
     uri:

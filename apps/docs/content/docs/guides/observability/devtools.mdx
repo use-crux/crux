@@ -145,6 +145,44 @@ Click a trace in the timeline to see its full execution:
 - **Streaming metrics** — throughput (tokens/sec), chunk count, stream duration
 - **Errors** — compact message, error type, stack trace, and raw safe details when a call, tool, stage, step, or runtime command throws
 
+### Explain tab — the turn read-out
+
+Select a generation turn and the **Explain** tab answers, in one place, *why this
+model call behaved the way it did*. It is a read-out: it summarises the turn and
+links into the existing Context / Routing / Cache / Guardrail / Security /
+Constraint / Compaction tabs rather than duplicating them. It is backed by the
+deterministic [`TurnDecisionReport`](/docs/reference/crux-core/observability#turn-explanation-decisionreport)
+projected onto the turn — nothing here implies model chain-of-thought.
+
+Explain leads with a one-line **verdict** and a row of scan chips, then a
+scannable body:
+
+- **What the model saw** — prompt, context, retrieval, memory, and tools that
+  reached the model, with token estimates.
+- **Checked but not sent** — candidates Crux evaluated but did not send, each
+  with its disposition (`checked` / `dropped` / `disabled`) and reason
+  (predicate false, budget, compaction, stale-rejected, …).
+- **Freshness & cache** — two deliberately separate columns. Freshness answers
+  *was the evidence current enough for this turn?* (`fresh` / `refreshed` /
+  `stale-used` / `stale-rejected`); cache answers *what did reuse save?*
+  (`hit` / `miss` / `write`). They are never merged into "cache freshness".
+- **Decisions** — routing, fallback, guardrail, security, constraint, cache, and
+  compaction outcomes, each linking to its deep tab.
+- **What source do I change?** — the prompt/context/tool/route definitions that
+  shaped the turn, with file:line and a resolution status when known.
+- **How this is protected** — a coverage scorecard plus read-only suggested
+  assertions (tests are authored in code and run from the CLI).
+- **Missing evidence** — what Crux could not prove from recorded data, shown
+  factually (never as an error).
+
+Explain opens **by default** when the turn carries a warning signal — an error,
+a fired fallback, stale-used evidence, a dropped required context, or a
+guardrail/security block — and the same turns are flagged with a badge in the
+Tree, Timeline, and Graph lenses. Selecting the **run root** shows a
+failing-first **Insight** roll-up across every turn. Status (disposition,
+freshness, cache, coverage) is the only saturated colour; coverage gaps and
+missing evidence are never styled as failures.
+
 ### Stats panel
 
 Aggregate metrics across all traces in the current session:

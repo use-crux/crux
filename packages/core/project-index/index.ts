@@ -8,7 +8,7 @@
  * @module
  */
 
-import { z } from 'zod'
+import { z } from "zod";
 import {
   IndexFactKindSchema,
   IndexRuleBudgetSchema,
@@ -18,629 +18,665 @@ import {
   type IndexRuleBudget,
   type IndexRuleFidelity,
   type IndexRulePhase,
-} from './rule-manifest'
+} from "./rule-manifest";
 
-export { captureSource } from './source'
-export * from './project-model'
-export * from './rule-manifest'
+export { captureSource } from "./source";
+export * from "./project-model";
+export * from "./rule-manifest";
 
 /** JSON Schema representation of a Zod schema. */
-export type JsonSchema = Record<string, unknown>
+export type JsonSchema = Record<string, unknown>;
 
 export interface SourceLocation {
-  file: string
-  line: number
-  column?: number
-  function?: string
+  file: string;
+  line: number;
+  column?: number;
+  function?: string;
 }
 
 export interface SourceRange {
-  file: string
-  startLine: number
-  endLine?: number
-  startColumn?: number
-  endColumn?: number
+  file: string;
+  startLine: number;
+  endLine?: number;
+  startColumn?: number;
+  endColumn?: number;
 }
 
 export interface SourceSnippet {
-  source: string
-  language?: string
-  range: SourceRange
-  truncated?: boolean
+  source: string;
+  language?: string;
+  range: SourceRange;
+  truncated?: boolean;
 }
 
-export type DefinitionFidelity = 'resolved' | 'partial' | 'error'
+export type DefinitionFidelity = "resolved" | "partial" | "error";
 
 export type ProjectSourceRefRole =
-  | 'schema'
-  | 'callback'
-  | 'handler'
-  | 'execute'
-  | 'prompt'
-  | 'system'
-  | 'resolver'
-  | 'validator'
-  | 'policy'
-  | 'config'
-  | 'helper'
+  | "schema"
+  | "callback"
+  | "handler"
+  | "execute"
+  | "prompt"
+  | "system"
+  | "resolver"
+  | "validator"
+  | "policy"
+  | "config"
+  | "helper";
 
 export interface ProjectSourceRef {
-  id: string
-  role: ProjectSourceRefRole
-  property?: string
-  symbol?: string
-  source: SourceLocation
-  snippet?: SourceSnippet
-  fidelity: 'resolved' | 'partial'
-  description?: string
+  id: string;
+  role: ProjectSourceRefRole;
+  property?: string;
+  symbol?: string;
+  source: SourceLocation;
+  snippet?: SourceSnippet;
+  fidelity: "resolved" | "partial";
+  description?: string;
   metadata?: {
-    schemaKind?: 'zod' | 'convex-validator' | 'json-schema'
-    parsedSchema?: boolean
-    referencedDefinitionIds?: string[]
-    dataAccess?: boolean
-    injected?: boolean
-    nested?: boolean
-    fragment?: boolean
-    factoryArg?: boolean
-    argumentIndex?: number
-    argumentName?: string
-    toolMapContributor?: 'spread' | 'property'
-    routingTarget?: boolean
-    extensions?: Record<string, unknown>
-  }
+    schemaKind?: "zod" | "convex-validator" | "json-schema";
+    parsedSchema?: boolean;
+    referencedDefinitionIds?: string[];
+    dataAccess?: boolean;
+    injected?: boolean;
+    nested?: boolean;
+    fragment?: boolean;
+    factoryArg?: boolean;
+    argumentIndex?: number;
+    argumentName?: string;
+    toolMapContributor?: "spread" | "property";
+    routingTarget?: boolean;
+    extensions?: Record<string, unknown>;
+  };
 }
 
-export type PrimitiveIntelligenceConfidence = 'static' | 'resolved' | 'semantic' | 'runtime' | 'partial'
+export type PrimitiveIntelligenceConfidence =
+  | "static"
+  | "resolved"
+  | "semantic"
+  | "runtime"
+  | "partial";
 
 export interface PrimitiveSuspensionPoint {
-  id: string
-  label: string
-  signal?: string
-  source?: SourceLocation
-  resumesDefinitionId?: string
+  id: string;
+  label: string;
+  signal?: string;
+  source?: SourceLocation;
+  resumesDefinitionId?: string;
 }
 
 export interface SourceRefSummary {
-  id?: string
-  role?: ProjectSourceRefRole
-  property?: string
-  symbol?: string
-  source?: SourceLocation
-  fidelity?: ProjectSourceRef['fidelity']
-  description?: string
+  id?: string;
+  role?: ProjectSourceRefRole;
+  property?: string;
+  symbol?: string;
+  source?: SourceLocation;
+  fidelity?: ProjectSourceRef["fidelity"];
+  description?: string;
 }
 
 export interface ContractFacts {
-  argsSchema?: JsonSchema
-  inputSchema?: JsonSchema
-  expandedInputSchema?: JsonSchema
-  outputSchema?: JsonSchema
-  configSchema?: JsonSchema
-  schemaRefs?: SourceRefSummary[]
-  inputContributions?: InputSchemaContribution[]
+  argsSchema?: JsonSchema;
+  inputSchema?: JsonSchema;
+  expandedInputSchema?: JsonSchema;
+  outputSchema?: JsonSchema;
+  configSchema?: JsonSchema;
+  schemaRefs?: SourceRefSummary[];
+  inputContributions?: InputSchemaContribution[];
   nestedSchemas?: Array<{
-    name: string
-    schema?: JsonSchema
-    source?: SourceLocation
-    role: 'input' | 'output' | 'args' | 'config' | 'field'
-  }>
-  requiredFields?: string[]
-  optionalFields?: string[]
-  enumFields?: Array<{ field: string; values: string[] }>
+    name: string;
+    schema?: JsonSchema;
+    source?: SourceLocation;
+    role: "input" | "output" | "args" | "config" | "field";
+  }>;
+  requiredFields?: string[];
+  optionalFields?: string[];
+  enumFields?: Array<{ field: string; values: string[] }>;
 }
 
 export interface InputSchemaContribution {
-  field: string
-  schema?: JsonSchema
-  description?: string
-  required?: boolean
-  sourceDefinitionId?: string
-  sourceName?: string
-  sourceKind?: ProjectDefinitionKind
-  path?: string[]
-  via?: InjectionUseFacts['via']
-  conditionality?: InjectionUseFacts['conditionality']
-  branch?: string
+  field: string;
+  schema?: JsonSchema;
+  description?: string;
+  required?: boolean;
+  sourceDefinitionId?: string;
+  sourceName?: string;
+  sourceKind?: ProjectDefinitionKind;
+  path?: string[];
+  via?: InjectionUseFacts["via"];
+  conditionality?: InjectionUseFacts["conditionality"];
+  branch?: string;
 }
 
 export interface ControlFacts {
   mode?:
-    | 'sequential'
-    | 'parallel'
-    | 'fanout'
-    | 'consensus'
-    | 'swarm'
-    | 'durable'
-    | 'immediate'
-    | 'routing'
-    | 'cascade'
-    | 'fallback'
-    | 'event-driven'
-  ordering?: 'ordered' | 'concurrent' | 'event-driven' | 'conditional' | 'unknown'
-  children?: string[]
+    | "sequential"
+    | "parallel"
+    | "fanout"
+    | "consensus"
+    | "swarm"
+    | "durable"
+    | "immediate"
+    | "routing"
+    | "cascade"
+    | "fallback"
+    | "event-driven";
+  ordering?:
+    | "ordered"
+    | "concurrent"
+    | "event-driven"
+    | "conditional"
+    | "unknown";
+  children?: string[];
   retryPolicy?: {
-    maxAttempts?: number
-    backoff?: string
-    nonRetryableErrors?: string[]
-    [key: string]: unknown
-  }
+    maxAttempts?: number;
+    backoff?: string;
+    nonRetryableErrors?: string[];
+    [key: string]: unknown;
+  };
   fallbackPolicy?: {
-    optionCount?: number
-    timeoutMs?: number
-    shouldFallback?: boolean | 'callback'
-    [key: string]: unknown
-  }
-  suspensionPoints?: PrimitiveSuspensionPoint[]
+    optionCount?: number;
+    timeoutMs?: number;
+    shouldFallback?: boolean | "callback";
+    [key: string]: unknown;
+  };
+  suspensionPoints?: PrimitiveSuspensionPoint[];
   budget?: {
-    maxDurationMs?: number
-    maxTokens?: number
-    maxCostUsd?: number
-    [key: string]: unknown
-  }
+    maxDurationMs?: number;
+    maxTokens?: number;
+    maxCostUsd?: number;
+    [key: string]: unknown;
+  };
 }
 
 export interface DataAccessFact {
-  targetId?: string
-  targetVariable?: string
+  targetId?: string;
+  targetVariable?: string;
   targetKind?:
-    | 'memory'
-    | 'blackboard'
-    | 'workspace'
-    | 'store'
-    | 'block'
-    | 'storage.recordStore'
-    | 'storage.vectorStore'
-    | 'storage.blobStore'
-    | 'storage.bundle'
-    | 'storage.scope'
-  key?: string
+    | "memory"
+    | "blackboard"
+    | "workspace"
+    | "store"
+    | "block"
+    | "storage.recordStore"
+    | "storage.vectorStore"
+    | "storage.blobStore"
+    | "storage.bundle"
+    | "storage.scope";
+  key?: string;
   operation?:
-    | 'read'
-    | 'write'
-    | 'append'
-    | 'update'
-    | 'delete'
-    | 'query'
-    | 'exists'
-    | 'stat'
-    | 'grep'
-    | 'artifacts'
-    | 'rename'
-    | 'move'
-    | 'copy'
-    | 'finalize'
-  source?: SourceLocation
+    | "read"
+    | "write"
+    | "append"
+    | "update"
+    | "delete"
+    | "query"
+    | "exists"
+    | "stat"
+    | "grep"
+    | "artifacts"
+    | "rename"
+    | "move"
+    | "copy"
+    | "history"
+    | "diff"
+    | "undo"
+    | "finalize";
+  source?: SourceLocation;
 }
 
 export interface ArtifactFact {
-  name: string
-  kind?: 'text' | 'json' | 'file' | 'plan' | 'score' | 'citation' | string
-  source?: SourceLocation
+  name: string;
+  kind?: "text" | "json" | "file" | "plan" | "score" | "citation" | string;
+  source?: SourceLocation;
 }
 
 export interface RetrievalFact {
-  retrieverId?: string
-  memoryId?: string
-  workspaceId?: string
-  querySource?: SourceLocation
-  topK?: number
+  retrieverId?: string;
+  memoryId?: string;
+  workspaceId?: string;
+  querySource?: SourceLocation;
+  topK?: number;
 }
 
 export interface DataFacts {
-  reads?: DataAccessFact[]
-  writes?: DataAccessFact[]
-  artifacts?: ArtifactFact[]
-  retrievals?: RetrievalFact[]
+  reads?: DataAccessFact[];
+  writes?: DataAccessFact[];
+  artifacts?: ArtifactFact[];
+  retrievals?: RetrievalFact[];
 }
 
 export interface DependencyFacts {
-  prompts?: string[]
-  contexts?: string[]
-  injectables?: string[]
-  tools?: string[]
-  agents?: string[]
-  flows?: string[]
-  memory?: string[]
-  blackboards?: string[]
-  workspaces?: string[]
-  stores?: string[]
+  prompts?: string[];
+  contexts?: string[];
+  injectables?: string[];
+  tools?: string[];
+  agents?: string[];
+  flows?: string[];
+  memory?: string[];
+  blackboards?: string[];
+  workspaces?: string[];
+  stores?: string[];
   /** Storage Beta record-store dependencies referenced by variable or definition id. */
-  recordStores?: string[]
+  recordStores?: string[];
   /** Storage Beta vector-store dependencies referenced by variable or definition id. */
-  vectorStores?: string[]
+  vectorStores?: string[];
   /** Storage Beta blob-store dependencies referenced by variable or definition id. */
-  blobStores?: string[]
+  blobStores?: string[];
   /** Storage Beta bundle dependencies referenced by variable or definition id. */
-  storage?: string[]
+  storage?: string[];
   /** Scoped Storage Beta wrappers referenced by variable or definition id. */
-  storageScopes?: string[]
-  blocks?: string[]
-  routers?: string[]
-  ragPipelines?: string[]
-  retrievers?: string[]
-  guardrails?: string[]
-  constraints?: string[]
-  scorers?: string[]
-  extensions?: Record<string, unknown>
+  storageScopes?: string[];
+  blocks?: string[];
+  routers?: string[];
+  ragPipelines?: string[];
+  retrievers?: string[];
+  guardrails?: string[];
+  constraints?: string[];
+  scorers?: string[];
+  extensions?: Record<string, unknown>;
 }
 
 export interface RuntimeFacts {
-  join?: ProjectRuntimeJoin
-  expectedPrimitive?: string
-  expectedSpanName?: string
-  correlationAttributes?: string[]
-  spanAttributes?: Record<string, string>
-  extensions?: Record<string, unknown>
+  join?: ProjectRuntimeJoin;
+  expectedPrimitive?: string;
+  expectedSpanName?: string;
+  correlationAttributes?: string[];
+  spanAttributes?: Record<string, string>;
+  extensions?: Record<string, unknown>;
 }
 
 export interface IntelligenceDiagnostic {
-  code: string
-  message: string
-  severity?: 'info' | 'warning' | 'error'
-  source?: SourceLocation
-  data?: Record<string, unknown>
+  code: string;
+  message: string;
+  severity?: "info" | "warning" | "error";
+  source?: SourceLocation;
+  data?: Record<string, unknown>;
 }
 
 export interface ProjectRuntimeJoin {
-  definitionId: string
-  kind: ProjectDefinitionKind
-  name: string
-  primitive?: string
-  spanName?: string
-  flowName?: string
-  stepLabel?: string
-  parentDefinitionId?: string
-  sourceDefinitionId?: string
-  blockDefinitionId?: string
-  blockId?: string
-  blockKind?: string
-  correlationAttributes?: string[]
-  spanAttributes?: Record<string, string>
-  backend?: string
-  resource?: string
-  runtimeIdPrefix?: string
-  promptId?: string
-  contextId?: string
-  agentId?: string
-  toolName?: string
-  retrieverId?: string
-  memoryId?: string
-  memoryStoreId?: string
+  definitionId: string;
+  kind: ProjectDefinitionKind;
+  name: string;
+  primitive?: string;
+  spanName?: string;
+  flowName?: string;
+  stepLabel?: string;
+  parentDefinitionId?: string;
+  sourceDefinitionId?: string;
+  blockDefinitionId?: string;
+  blockId?: string;
+  blockKind?: string;
+  correlationAttributes?: string[];
+  spanAttributes?: Record<string, string>;
+  backend?: string;
+  resource?: string;
+  runtimeIdPrefix?: string;
+  promptId?: string;
+  contextId?: string;
+  agentId?: string;
+  toolName?: string;
+  retrieverId?: string;
+  memoryId?: string;
+  memoryStoreId?: string;
   /** Runtime join key for a Storage Beta record-store definition. */
-  recordStoreId?: string
+  recordStoreId?: string;
   /** Runtime join key for a Storage Beta vector-store definition. */
-  vectorStoreId?: string
+  vectorStoreId?: string;
   /** Runtime join key for a Storage Beta blob-store definition. */
-  blobStoreId?: string
+  blobStoreId?: string;
   /** Runtime join key for a Storage Beta bundle definition. */
-  storageId?: string
+  storageId?: string;
   /** Runtime join key for a scoped Storage Beta wrapper definition. */
-  storageScopeId?: string
-  ragPipelineId?: string
-  workspaceId?: string
-  routingId?: string
-  routeKey?: string
-  extensions?: Record<string, unknown>
-  [key: string]: unknown
+  storageScopeId?: string;
+  ragPipelineId?: string;
+  workspaceId?: string;
+  routingId?: string;
+  routeKey?: string;
+  extensions?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export type ProjectDefinitionIndexPresentationRole =
-  | 'step'
-  | 'branch'
-  | 'stage'
-  | 'route'
-  | 'tier'
-  | 'option'
-  | 'block'
-  | 'store'
-  | 'storage'
-  | 'case'
+  | "step"
+  | "branch"
+  | "stage"
+  | "route"
+  | "tier"
+  | "option"
+  | "block"
+  | "store"
+  | "storage"
+  | "case";
 
 export interface ProjectDefinitionIndexPresentation {
-  standalone: boolean
-  parentDefinitionId?: string
-  parentRelationType?: string
-  role?: ProjectDefinitionIndexPresentationRole
-  order?: number
+  standalone: boolean;
+  parentDefinitionId?: string;
+  parentRelationType?: string;
+  role?: ProjectDefinitionIndexPresentationRole;
+  order?: number;
 }
 
 export interface PrimitiveIntelligence {
-  confidence: PrimitiveIntelligenceConfidence
-  contract?: ContractFacts
-  control?: ControlFacts
-  data?: DataFacts
-  dependencies?: DependencyFacts
-  runtime?: RuntimeFacts
-  diagnostics?: IntelligenceDiagnostic[]
-  runtimeJoin?: ProjectRuntimeJoin
-  extensions?: Record<string, unknown>
+  confidence: PrimitiveIntelligenceConfidence;
+  contract?: ContractFacts;
+  control?: ControlFacts;
+  data?: DataFacts;
+  dependencies?: DependencyFacts;
+  runtime?: RuntimeFacts;
+  diagnostics?: IntelligenceDiagnostic[];
+  runtimeJoin?: ProjectRuntimeJoin;
+  extensions?: Record<string, unknown>;
 }
 
 export interface ProjectDefinitionMetadata extends Record<string, unknown> {
-  argsSchema?: JsonSchema
-  inputSchema?: JsonSchema
-  outputSchema?: JsonSchema
-  configSchema?: JsonSchema
-  schema?: JsonSchema
-  indexPresentation?: ProjectDefinitionIndexPresentation
-  facts?: ProjectDefinitionFacts
-  configuration?: Record<string, unknown>
-  settings?: Record<string, unknown>
-  intelligence?: PrimitiveIntelligence
-  runtimeJoin?: ProjectRuntimeJoin
+  argsSchema?: JsonSchema;
+  inputSchema?: JsonSchema;
+  outputSchema?: JsonSchema;
+  configSchema?: JsonSchema;
+  schema?: JsonSchema;
+  indexPresentation?: ProjectDefinitionIndexPresentation;
+  facts?: ProjectDefinitionFacts;
+  configuration?: Record<string, unknown>;
+  settings?: Record<string, unknown>;
+  intelligence?: PrimitiveIntelligence;
+  runtimeJoin?: ProjectRuntimeJoin;
   sourceStatus?: {
-    importSafe?: boolean
-    partialReason?: string
-    confidence?: PrimitiveIntelligenceConfidence
-  }
+    importSafe?: boolean;
+    partialReason?: string;
+    confidence?: PrimitiveIntelligenceConfidence;
+  };
   updated?: {
-    lastEditedAt?: string
-    lastEditedAtMs?: number
-    sourceMtime?: boolean
-  }
-  extensions?: Record<string, unknown>
+    lastEditedAt?: string;
+    lastEditedAtMs?: number;
+    sourceMtime?: boolean;
+  };
+  extensions?: Record<string, unknown>;
 }
 
 export type ProjectDefinitionKind =
-  | 'prompt'
-  | 'context'
-  | 'injectable'
-  | 'tool'
-  | 'agent'
-  | 'flow'
-  | 'flow.step'
-  | 'composition.parallel'
-  | 'composition.parallel.branch'
-  | 'composition.pipeline'
-  | 'composition.pipeline.stage'
-  | 'composition.swarm'
-  | 'composition.consensus'
-  | 'routing.router'
-  | 'routing.router.route'
-  | 'routing.cascade'
-  | 'routing.cascade.tier'
-  | 'routing.fallback'
-  | 'routing.fallback.option'
-  | 'rag.pipeline'
-  | 'rag.pipeline.stage'
-  | 'rag.retriever'
-  | 'registry'
-  | 'skill'
-  | 'memory'
-  | 'memory.store'
-  | 'memory.block'
-  | 'blackboard'
-  | 'workspace'
-  | 'storage.recordStore'
-  | 'storage.vectorStore'
-  | 'storage.blobStore'
-  | 'storage.bundle'
-  | 'storage.scope'
-  | 'constraint'
-  | 'guardrail'
-  | 'scorer'
-  | 'dataset'
-  | 'evaluation'
-  | 'evaluation.case'
-  | 'suite'
-  | 'suite.case'
-  | 'eval.prompt'
-  | 'eval.flow'
-  | 'eval.rag'
-  | 'eval.quality'
-  | 'unknown'
+  | "prompt"
+  | "context"
+  | "injectable"
+  | "tool"
+  | "agent"
+  | "flow"
+  | "flow.step"
+  | "composition.parallel"
+  | "composition.parallel.branch"
+  | "composition.pipeline"
+  | "composition.pipeline.stage"
+  | "composition.swarm"
+  | "composition.consensus"
+  | "routing.router"
+  | "routing.router.route"
+  | "routing.cascade"
+  | "routing.cascade.tier"
+  | "routing.fallback"
+  | "routing.fallback.option"
+  | "rag.pipeline"
+  | "rag.pipeline.stage"
+  | "rag.retriever"
+  | "registry"
+  | "skill"
+  | "memory"
+  | "memory.store"
+  | "memory.block"
+  | "blackboard"
+  | "workspace"
+  | "storage.recordStore"
+  | "storage.vectorStore"
+  | "storage.blobStore"
+  | "storage.bundle"
+  | "storage.scope"
+  | "constraint"
+  | "guardrail"
+  | "scorer"
+  | "dataset"
+  | "evaluation"
+  | "evaluation.case"
+  | "suite"
+  | "suite.case"
+  | "eval.prompt"
+  | "eval.flow"
+  | "eval.rag"
+  | "eval.quality"
+  | "unknown";
 
 export interface PromptFacts {
-  kind: 'prompt'
-  use?: string[]
-  useEntries?: InjectionUseFacts[]
-  tools?: InjectionToolFacts
-  hasSystem?: boolean
-  hasPrompt?: boolean
-  hasMessages?: boolean
-  hasTests?: boolean
-  settings?: Record<string, unknown>
-  fragments?: SourceRefSummary[]
+  kind: "prompt";
+  use?: string[];
+  useEntries?: InjectionUseFacts[];
+  tools?: InjectionToolFacts;
+  hasSystem?: boolean;
+  hasPrompt?: boolean;
+  hasMessages?: boolean;
+  hasTests?: boolean;
+  settings?: Record<string, unknown>;
+  fragments?: SourceRefSummary[];
 }
 
 export interface ContextFacts {
-  kind: 'context'
-  use?: string[]
-  useEntries?: InjectionUseFacts[]
-  isStatic?: boolean
-  priority?: number
-  cache?: Record<string, unknown>
-  tools?: InjectionToolFacts
-  fragments?: SourceRefSummary[]
+  kind: "context";
+  use?: string[];
+  useEntries?: InjectionUseFacts[];
+  isStatic?: boolean;
+  priority?: number;
+  cache?: Record<string, unknown>;
+  tools?: InjectionToolFacts;
+  fragments?: SourceRefSummary[];
 }
 
 export interface InjectableFacts {
-  kind: 'injectable'
-  injectableId?: string
-  inputKeys?: string[]
-  mayInject?: Array<'contexts' | 'tools' | 'constraints' | 'guardrails' | 'metadata'>
-  useEntries?: InjectionUseFacts[]
-  tools?: InjectionToolFacts
-  contributions?: InjectionReturnContributionFacts
+  kind: "injectable";
+  injectableId?: string;
+  inputKeys?: string[];
+  mayInject?: Array<
+    "contexts" | "tools" | "constraints" | "guardrails" | "metadata"
+  >;
+  useEntries?: InjectionUseFacts[];
+  tools?: InjectionToolFacts;
+  contributions?: InjectionReturnContributionFacts;
 }
 
 export interface InjectionReturnContributionFacts {
-  constraints?: InjectionReferenceContributionFacts
-  guardrails?: InjectionReferenceContributionFacts
-  metadata?: InjectionMetadataContributionFacts
+  constraints?: InjectionReferenceContributionFacts;
+  guardrails?: InjectionReferenceContributionFacts;
+  metadata?: InjectionMetadataContributionFacts;
 }
 
 export interface InjectionReferenceContributionFacts {
-  variables?: string[]
-  dynamic?: boolean
+  variables?: string[];
+  dynamic?: boolean;
 }
 
 export interface InjectionMetadataContributionFacts {
-  keys?: string[]
-  dynamic?: boolean
+  keys?: string[];
+  dynamic?: boolean;
 }
 
 export interface InjectionUseFacts {
-  variable?: string
-  relationHint?: 'context' | 'injectable' | 'memory' | 'blackboard' | 'unknown'
-  targetDefinitionId?: string
-  targetKind?: ProjectDefinitionKind
-  targetName?: string
-  relationType?: string
-  relationFidelity?: ProjectRelationFidelity
-  conditionality?: 'always' | 'when' | 'match-case' | 'match-default' | 'binary-guard' | 'dynamic' | 'unknown'
-  branch?: string
-  via?: 'direct' | 'array-ref' | 'spread' | 'when' | 'match' | 'binary' | 'runtime'
+  variable?: string;
+  relationHint?: "context" | "injectable" | "memory" | "blackboard" | "unknown";
+  targetDefinitionId?: string;
+  targetKind?: ProjectDefinitionKind;
+  targetName?: string;
+  relationType?: string;
+  relationFidelity?: ProjectRelationFidelity;
+  conditionality?:
+    | "always"
+    | "when"
+    | "match-case"
+    | "match-default"
+    | "binary-guard"
+    | "dynamic"
+    | "unknown";
+  branch?: string;
+  via?:
+    | "direct"
+    | "array-ref"
+    | "spread"
+    | "when"
+    | "match"
+    | "binary"
+    | "runtime";
 }
 
 export interface InjectionToolFacts {
-  hasTools: boolean
-  dynamic?: boolean
-  names?: string[]
-  variables?: string[]
+  hasTools: boolean;
+  dynamic?: boolean;
+  names?: string[];
+  variables?: string[];
 }
 
 export interface ToolFacts {
-  kind: 'tool'
-  toolName?: string
-  hasExecute?: boolean
-  hasToModelOutput?: boolean
-  approvalRequired?: boolean
+  kind: "tool";
+  toolName?: string;
+  hasExecute?: boolean;
+  hasToModelOutput?: boolean;
+  approvalRequired?: boolean;
 }
 
 export interface RegistryFacts {
-  kind: 'registry'
-  registryName?: string
-  baseUrl?: string
-  hasAuth?: boolean
-  bundled?: boolean
+  kind: "registry";
+  registryName?: string;
+  baseUrl?: string;
+  hasAuth?: boolean;
+  bundled?: boolean;
 }
 
 export interface SkillFacts {
-  kind: 'skill'
-  loader?: 'registry'
-  identifier?: string
-  registryName?: string
-  registryPath?: string
-  registryVariable?: string
+  kind: "skill";
+  loader?: "registry";
+  identifier?: string;
+  registryName?: string;
+  registryPath?: string;
+  registryVariable?: string;
 }
 
 export interface AgentFacts {
-  kind: 'agent'
-  promptId?: string
-  toolNames?: string[]
-  handoffs?: string[]
-  contextHandler?: SourceRefSummary
-  usageHandler?: SourceRefSummary
-  prepareHandler?: SourceRefSummary
+  kind: "agent";
+  promptId?: string;
+  toolNames?: string[];
+  handoffs?: string[];
+  contextHandler?: SourceRefSummary;
+  usageHandler?: SourceRefSummary;
+  prepareHandler?: SourceRefSummary;
 }
 
 export interface FlowFacts {
-  kind: 'flow'
-  stepNames?: string[]
-  hasArgs?: boolean
-  runtime?: 'node' | 'convex'
+  kind: "flow";
+  stepNames?: string[];
+  hasArgs?: boolean;
+  runtime?: "node" | "convex";
 }
 
 export interface FlowStepFacts {
-  kind: 'flow.step'
-  flowId: string
-  stepId?: string
-  stepLabel?: string
-  targetDefinitionId?: string
-  targetKind?: ProjectDefinitionKind
+  kind: "flow.step";
+  flowId: string;
+  stepId?: string;
+  stepLabel?: string;
+  targetDefinitionId?: string;
+  targetKind?: ProjectDefinitionKind;
 }
 
 export interface CompositionFacts {
-  kind: 'composition.parallel' | 'composition.pipeline' | 'composition.swarm' | 'composition.consensus'
-  participants?: string[]
-  coordinator?: string
-  judge?: string
-  scorer?: string
-  sharedMemory?: string | string[]
-  sharedBlackboard?: string
+  kind:
+    | "composition.parallel"
+    | "composition.pipeline"
+    | "composition.swarm"
+    | "composition.consensus";
+  participants?: string[];
+  coordinator?: string;
+  judge?: string;
+  scorer?: string;
+  sharedMemory?: string | string[];
+  sharedBlackboard?: string;
 }
 
 export interface CompositionChildFacts {
-  kind: 'composition.parallel.branch' | 'composition.pipeline.stage'
-  compositionId: string
-  index?: number
-  branchId?: string
-  stageId?: string
-  targetVariable?: string
-  targetDefinitionId?: string
-  targetKind?: ProjectDefinitionKind
+  kind: "composition.parallel.branch" | "composition.pipeline.stage";
+  compositionId: string;
+  index?: number;
+  branchId?: string;
+  stageId?: string;
+  targetVariable?: string;
+  targetDefinitionId?: string;
+  targetKind?: ProjectDefinitionKind;
 }
 
 export interface RoutingFacts {
-  kind: 'routing.router' | 'routing.cascade' | 'routing.fallback'
-  routingId?: string
-  hasStableId?: boolean
-  routeKeys?: string[]
-  routeCount?: number
-  hasDefaultRoute?: boolean
-  hasClassify?: boolean
-  tierCount?: number
-  optionCount?: number
-  hasBudget?: boolean
-  budget?: Record<string, unknown>
+  kind: "routing.router" | "routing.cascade" | "routing.fallback";
+  routingId?: string;
+  hasStableId?: boolean;
+  routeKeys?: string[];
+  routeCount?: number;
+  hasDefaultRoute?: boolean;
+  hasClassify?: boolean;
+  tierCount?: number;
+  optionCount?: number;
+  hasBudget?: boolean;
+  budget?: Record<string, unknown>;
 }
 
 export interface RoutingChildFacts {
-  kind: 'routing.router.route' | 'routing.cascade.tier' | 'routing.fallback.option'
-  routingId?: string
-  routeKey?: string
-  tierIndex?: number
-  optionIndex?: number
-  parentDefinitionId?: string
-  targetVariable?: string
-  targetDefinitionId?: string
-  targetKind?: ProjectDefinitionKind
-  hasEvaluate?: boolean
-  isDefault?: boolean
+  kind:
+    | "routing.router.route"
+    | "routing.cascade.tier"
+    | "routing.fallback.option";
+  routingId?: string;
+  routeKey?: string;
+  tierIndex?: number;
+  optionIndex?: number;
+  parentDefinitionId?: string;
+  targetVariable?: string;
+  targetDefinitionId?: string;
+  targetKind?: ProjectDefinitionKind;
+  hasEvaluate?: boolean;
+  isDefault?: boolean;
 }
 
 export interface RagFacts {
-  kind: 'rag.pipeline' | 'rag.pipeline.stage' | 'rag.retriever'
-  retrieverId?: string
-  stageId?: string
-  stageKind?: string
-  topK?: number
+  kind: "rag.pipeline" | "rag.pipeline.stage" | "rag.retriever";
+  retrieverId?: string;
+  stageId?: string;
+  stageKind?: string;
+  topK?: number;
 }
 
 export interface MemoryFacts {
-  kind: 'memory' | 'blackboard'
-  backend?: string
-  runtimeIdPrefix?: string
-  blockCount?: number
-  evictionPolicy?: string
-  conflictPolicy?: string
+  kind: "memory" | "blackboard";
+  backend?: string;
+  runtimeIdPrefix?: string;
+  blockCount?: number;
+  evictionPolicy?: string;
+  conflictPolicy?: string;
 }
 
 export interface MemoryStoreFacts {
-  kind: 'memory.store'
-  ownerDefinitionKey?: string
-  backend?: string
-  component?: string
-  variableName?: string
+  kind: "memory.store";
+  ownerDefinitionKey?: string;
+  backend?: string;
+  component?: string;
+  variableName?: string;
 }
 
 export interface MemoryBlockFacts {
-  kind: 'memory.block'
-  memoryId: string
-  blockId?: string
-  blockKind?: string
-  priority?: number
-  writeMode?: string
-  hasEmbed?: boolean
+  kind: "memory.block";
+  memoryId: string;
+  blockId?: string;
+  blockKind?: string;
+  priority?: number;
+  writeMode?: string;
+  hasEmbed?: boolean;
 }
 
 export interface WorkspaceFacts {
-  kind: 'workspace'
-  workspaceId?: string
-  namespace?: string
-  mounts?: Array<{ path: string; mode?: string }>
-  hasTools?: boolean
+  kind: "workspace";
+  workspaceId?: string;
+  namespace?: string;
+  mounts?: Array<{ path: string; mode?: string }>;
+  hasTools?: boolean;
 }
 
 /** Project Index capability summary for Storage Beta definitions. */
@@ -704,31 +740,38 @@ export interface StorageFacts {
 }
 
 export interface SafetyFacts {
-  kind: 'constraint' | 'guardrail'
-  appliesTo?: string[]
-  policy?: string
-  severity?: string
+  kind: "constraint" | "guardrail";
+  appliesTo?: string[];
+  policy?: string;
+  severity?: string;
 }
 
 export interface ScorerFacts {
-  kind: 'scorer'
-  scorerId?: string
-  model?: string
-  threshold?: number
-  scaleMin?: number
-  scaleMax?: number
-  hasRubric?: boolean
-  hasDetailSchema?: boolean
-  chainOfThought?: boolean
-  criteriaPreview?: string
+  kind: "scorer";
+  scorerId?: string;
+  model?: string;
+  threshold?: number;
+  scaleMin?: number;
+  scaleMax?: number;
+  hasRubric?: boolean;
+  hasDetailSchema?: boolean;
+  chainOfThought?: boolean;
+  criteriaPreview?: string;
 }
 
 export interface EvalFacts {
-  kind: 'dataset' | 'suite' | 'suite.case' | 'eval.prompt' | 'eval.flow' | 'eval.rag' | 'eval.quality'
-  targetDefinitionId?: string
-  suiteId?: string
-  caseCount?: number
-  scorerIds?: string[]
+  kind:
+    | "dataset"
+    | "suite"
+    | "suite.case"
+    | "eval.prompt"
+    | "eval.flow"
+    | "eval.rag"
+    | "eval.quality";
+  targetDefinitionId?: string;
+  suiteId?: string;
+  caseCount?: number;
+  scorerIds?: string[];
 }
 
 export type PrimitiveSpecificFacts =
@@ -753,336 +796,339 @@ export type PrimitiveSpecificFacts =
   | StorageFacts
   | SafetyFacts
   | ScorerFacts
-  | EvalFacts
+  | EvalFacts;
 
 export type ProjectDefinitionFacts =
   | PrimitiveSpecificFacts
-  | ({ kind: ProjectDefinitionKind; extensions?: Record<string, unknown> } & Record<string, unknown>)
+  | ({
+      kind: ProjectDefinitionKind;
+      extensions?: Record<string, unknown>;
+    } & Record<string, unknown>);
 
 export interface ProjectIdentity {
-  root: string
-  name?: string
-  configFile?: string
+  root: string;
+  name?: string;
+  configFile?: string;
 }
 
 export interface ProjectDefinition {
-  id: string
-  kind: ProjectDefinitionKind
-  name: string
-  description?: string
-  tags?: string[]
+  id: string;
+  kind: ProjectDefinitionKind;
+  name: string;
+  description?: string;
+  tags?: string[];
   /** Authored namespace/tree path from createPrompts/createContexts/configure. */
-  path?: string[]
-  source?: SourceLocation
-  sourceSnippet?: SourceSnippet
-  sourceRefs?: ProjectSourceRef[]
-  fidelity: DefinitionFidelity
-  status?: 'active' | 'missing' | 'stale'
-  fingerprint?: string
-  metadata?: ProjectDefinitionMetadata
-  quality?: ProjectDefinitionQuality
+  path?: string[];
+  source?: SourceLocation;
+  sourceSnippet?: SourceSnippet;
+  sourceRefs?: ProjectSourceRef[];
+  fidelity: DefinitionFidelity;
+  status?: "active" | "missing" | "stale";
+  fingerprint?: string;
+  metadata?: ProjectDefinitionMetadata;
+  quality?: ProjectDefinitionQuality;
 }
 
 export interface ProjectDefinitionQuality {
-  evalIds?: string[]
-  suiteIds?: string[]
-  experimentIds?: string[]
-  baselineIds?: string[]
-  comparisonIds?: string[]
-  feedbackIds?: string[]
-  cassettePaths?: string[]
-  runIds?: string[]
-  traceIds?: string[]
-  affectedEvalIds?: string[]
-  affectedSuiteIds?: string[]
-  runCount?: number
-  experimentCount?: number
-  baselineCount?: number
-  comparisonCount?: number
-  feedbackCount?: number
-  cassetteCount?: number
-  completedRunCount?: number
-  failedRunCount?: number
-  runningRunCount?: number
-  lastRunId?: string
-  lastRunAt?: number
-  lastStatus?: string
-  caseCount?: number
-  passRate?: number
-  currentFingerprint?: string
-  baselineFingerprint?: string
-  changedSinceBaseline?: boolean
+  evalIds?: string[];
+  suiteIds?: string[];
+  experimentIds?: string[];
+  baselineIds?: string[];
+  comparisonIds?: string[];
+  feedbackIds?: string[];
+  cassettePaths?: string[];
+  runIds?: string[];
+  traceIds?: string[];
+  affectedEvalIds?: string[];
+  affectedSuiteIds?: string[];
+  runCount?: number;
+  experimentCount?: number;
+  baselineCount?: number;
+  comparisonCount?: number;
+  feedbackCount?: number;
+  cassetteCount?: number;
+  completedRunCount?: number;
+  failedRunCount?: number;
+  runningRunCount?: number;
+  lastRunId?: string;
+  lastRunAt?: number;
+  lastStatus?: string;
+  caseCount?: number;
+  passRate?: number;
+  currentFingerprint?: string;
+  baselineFingerprint?: string;
+  changedSinceBaseline?: boolean;
   drift?: {
-    evals: ProjectDefinitionQualityDriftRow[]
-    suites: ProjectDefinitionQualityDriftRow[]
-  }
+    evals: ProjectDefinitionQualityDriftRow[];
+    suites: ProjectDefinitionQualityDriftRow[];
+  };
 }
 
 export interface ProjectDefinitionQualityDriftRow {
-  id: string
-  passRate: number
-  runs: number
-  baselineExperimentId: string
-  baselinePassRate: number
-  driftPp: number
+  id: string;
+  passRate: number;
+  runs: number;
+  baselineExperimentId: string;
+  baselinePassRate: number;
+  driftPp: number;
 }
 
-export type ProjectRelationFidelity = DefinitionFidelity
+export type ProjectRelationFidelity = DefinitionFidelity;
 
 export interface ProjectRelation {
-  id: string
-  type: string
-  from: string
-  to: string
-  fidelity: ProjectRelationFidelity
-  source?: SourceLocation
-  metadata?: Record<string, unknown>
+  id: string;
+  type: string;
+  from: string;
+  to: string;
+  fidelity: ProjectRelationFidelity;
+  source?: SourceLocation;
+  metadata?: Record<string, unknown>;
 }
 
 export interface IndexDiagnostic {
-  id: string
-  severity: 'info' | 'warning' | 'error'
-  code: string
-  message: string
-  source?: SourceLocation
-  relatedDefinitionIds?: string[]
-  suggestedFix?: string
+  id: string;
+  severity: "info" | "warning" | "error";
+  code: string;
+  message: string;
+  source?: SourceLocation;
+  relatedDefinitionIds?: string[];
+  suggestedFix?: string;
 }
 
 export type CruxLintCategory =
-  | 'contracts'
-  | 'observability'
-  | 'evaluation'
-  | 'safety'
-  | 'memory'
-  | 'runtime'
-  | 'composition'
-  | 'quality'
+  | "contracts"
+  | "observability"
+  | "evaluation"
+  | "safety"
+  | "memory"
+  | "runtime"
+  | "composition"
+  | "quality";
 
-export type CruxLintMaturity = 'stable' | 'preview' | 'experimental'
+export type CruxLintMaturity = "stable" | "preview" | "experimental";
 
-export type CruxLintConfidence = 'high' | 'medium' | 'low'
+export type CruxLintConfidence = "high" | "medium" | "low";
 
-export type CruxLintProfile = 'recommended' | 'strict' | 'experimental'
+export type CruxLintProfile = "recommended" | "strict" | "experimental";
 
-export type CruxLintSelectedProfile = 'off' | CruxLintProfile
+export type CruxLintSelectedProfile = "off" | CruxLintProfile;
 
 export interface CruxLintRuleConfig {
   /** Disable a rule for this project. Prefer source suppressions for one-off exceptions. */
-  enabled?: boolean
+  enabled?: boolean;
   /** Override a rule's displayed severity for this project. */
-  severity?: IndexLintFinding['severity']
+  severity?: IndexLintFinding["severity"];
 }
 
 export interface CruxLintConfig {
   /** Which rule profile the dev server and index health views should expose. @default 'recommended' */
-  profile?: CruxLintSelectedProfile
+  profile?: CruxLintSelectedProfile;
   /** Project-level rule overrides keyed by rule id. */
-  rules?: Record<string, CruxLintRuleConfig>
+  rules?: Record<string, CruxLintRuleConfig>;
 }
 
 export interface IndexLintEvidence {
-  kind: 'definition' | 'relation' | 'quality' | 'runtime' | 'source'
-  label: string
-  description?: string
-  definitionId?: string
-  relationId?: string
-  source?: SourceLocation
-  data?: Record<string, unknown>
+  kind: "definition" | "relation" | "quality" | "runtime" | "source";
+  label: string;
+  description?: string;
+  definitionId?: string;
+  relationId?: string;
+  source?: SourceLocation;
+  data?: Record<string, unknown>;
 }
 
 export interface IndexLintFix {
-  title: string
-  description: string
-  kind: 'manual' | 'docs' | 'config' | 'suppress' | 'code-action'
-  docsUrl?: string
-  command?: string
-  suppression?: string
+  title: string;
+  description: string;
+  kind: "manual" | "docs" | "config" | "suppress" | "code-action";
+  docsUrl?: string;
+  command?: string;
+  suppression?: string;
 }
 
 export interface IndexLintFinding {
-  id: string
-  severity: 'info' | 'warning' | 'error'
-  ruleId: string
-  category: CruxLintCategory
-  maturity: CruxLintMaturity
-  confidence: CruxLintConfidence
-  profiles: CruxLintProfile[]
-  title: string
-  message: string
-  rationale: string
-  impact?: string
-  source?: SourceLocation
-  primaryDefinitionId?: string
-  relatedDefinitionIds: string[]
-  affectedDefinitionIds?: string[]
-  evidence: IndexLintEvidence[]
-  fixes: IndexLintFix[]
-  docsUrl: string
+  id: string;
+  severity: "info" | "warning" | "error";
+  ruleId: string;
+  category: CruxLintCategory;
+  maturity: CruxLintMaturity;
+  confidence: CruxLintConfidence;
+  profiles: CruxLintProfile[];
+  title: string;
+  message: string;
+  rationale: string;
+  impact?: string;
+  source?: SourceLocation;
+  primaryDefinitionId?: string;
+  relatedDefinitionIds: string[];
+  affectedDefinitionIds?: string[];
+  evidence: IndexLintEvidence[];
+  fixes: IndexLintFix[];
+  docsUrl: string;
   suppression?: {
-    supported: boolean
-    directive: string
-    scope: 'next-line' | 'line' | 'file'
-  }
-  suppressed?: boolean
+    supported: boolean;
+    directive: string;
+    scope: "next-line" | "line" | "file";
+  };
+  suppressed?: boolean;
   suppressedBy?: {
-    source: SourceLocation
-    reason?: string
-  }
-  propagatedDefinitionIds?: string[]
+    source: SourceLocation;
+    reason?: string;
+  };
+  propagatedDefinitionIds?: string[];
   propagationPaths?: Array<{
-    fromDefinitionId: string
-    toDefinitionId: string
-    relationTypes: string[]
-  }>
+    fromDefinitionId: string;
+    toDefinitionId: string;
+    relationTypes: string[];
+  }>;
 }
 
-export type AnalysisTier = 'syntax' | 'index' | 'semantic'
+export type AnalysisTier = "syntax" | "index" | "semantic";
 
 export interface IndexRuleDescriptor {
-  id: string
-  source: 'builtin' | 'extension'
+  id: string;
+  source: "builtin" | "extension";
   extension?: {
-    name: string
-    version?: string
-  }
-  severity?: IndexLintFinding['severity']
-  category?: CruxLintCategory
-  maturity?: CruxLintMaturity
-  confidence?: CruxLintConfidence
-  profiles?: CruxLintProfile[]
-  title: string
-  description: string
-  rationale?: string
-  impact?: string
-  docsUrl?: string
-  fixes?: IndexLintFix[]
+    name: string;
+    version?: string;
+  };
+  severity?: IndexLintFinding["severity"];
+  category?: CruxLintCategory;
+  maturity?: CruxLintMaturity;
+  confidence?: CruxLintConfidence;
+  profiles?: CruxLintProfile[];
+  title: string;
+  description: string;
+  rationale?: string;
+  impact?: string;
+  docsUrl?: string;
+  fixes?: IndexLintFix[];
   suppression?: {
-    supported: boolean
-    scope: 'next-line' | 'line' | 'file'
-    directive?: string
-  }
-  phase?: IndexRulePhase
-  requires?: IndexFactKind[]
-  fidelity?: IndexRuleFidelity
-  optionSchema?: unknown
-  messageIds?: string[]
-  defaultOptions?: unknown
-  budget?: IndexRuleBudget
+    supported: boolean;
+    scope: "next-line" | "line" | "file";
+    directive?: string;
+  };
+  phase?: IndexRulePhase;
+  requires?: IndexFactKind[];
+  fidelity?: IndexRuleFidelity;
+  optionSchema?: unknown;
+  messageIds?: string[];
+  defaultOptions?: unknown;
+  budget?: IndexRuleBudget;
 }
 
 export interface IndexSourceFile {
   /** Absolute source file path represented by this Project Index row. */
-  file: string
+  file: string;
   /** Indexing status for this source row after all projected facts are applied. */
-  status: 'indexed' | 'partial' | 'error'
+  status: "indexed" | "partial" | "error";
   /** Stable id of the package/workspace shard that owns this source file. */
-  shardId?: string
-  definitionIds?: string[]
-  dependencies?: string[]
-  dependents?: string[]
-  diagnostics?: string[]
+  shardId?: string;
+  definitionIds?: string[];
+  dependencies?: string[];
+  dependents?: string[];
+  diagnostics?: string[];
 }
 
-export type IndexIndexingPhase = 'cache' | 'ast' | 'semantic'
+export type IndexIndexingPhase = "cache" | "ast" | "semantic";
 
 export interface IndexIndexingPhaseStatus {
-  status: 'pending' | 'running' | 'ready' | 'degraded'
-  indexedAt?: string
-  durationMs?: number
-  fileCount?: number
-  changedFileCount?: number
-  diagnosticCount?: number
+  status: "pending" | "running" | "ready" | "degraded";
+  indexedAt?: string;
+  durationMs?: number;
+  fileCount?: number;
+  changedFileCount?: number;
+  diagnosticCount?: number;
 }
 
 export interface ProjectIndexingStatus {
-  status: 'cold' | 'cached' | 'refreshing' | 'ready' | 'degraded'
-  ast: IndexIndexingPhaseStatus
-  semantic: Omit<IndexIndexingPhaseStatus, 'status'> & {
-    status: 'disabled' | IndexIndexingPhaseStatus['status']
-    enrichedDefinitionCount?: number
-  }
+  status: "cold" | "cached" | "refreshing" | "ready" | "degraded";
+  ast: IndexIndexingPhaseStatus;
+  semantic: Omit<IndexIndexingPhaseStatus, "status"> & {
+    status: "disabled" | IndexIndexingPhaseStatus["status"];
+    enrichedDefinitionCount?: number;
+  };
   cache?: {
-    status: 'miss' | 'hit' | 'stale' | 'invalid'
-    loadedAt?: string
-    snapshotAgeMs?: number
-  }
+    status: "miss" | "hit" | "stale" | "invalid";
+    loadedAt?: string;
+    snapshotAgeMs?: number;
+  };
 }
 
 /** Serialized metadata for a single prompt. */
 export interface PromptMeta {
-  id?: string
-  description?: string
-  tags: readonly string[]
-  inputSchema?: JsonSchema
-  outputSchema?: JsonSchema
-  contextIds: (string | undefined)[]
-  hasOutput: boolean
-  settings: Record<string, unknown>
-  path?: string[]
-  systemTemplate?: string | null
-  promptTemplate?: string | null
-  hasMessages?: boolean
-  definitionSource?: SourceLocation
+  id?: string;
+  description?: string;
+  tags: readonly string[];
+  inputSchema?: JsonSchema;
+  outputSchema?: JsonSchema;
+  contextIds: (string | undefined)[];
+  hasOutput: boolean;
+  settings: Record<string, unknown>;
+  path?: string[];
+  systemTemplate?: string | null;
+  promptTemplate?: string | null;
+  hasMessages?: boolean;
+  definitionSource?: SourceLocation;
 }
 
 /** Serialized metadata for a registered tool. */
 export interface ToolMeta {
-  name: string
-  description: string
-  inputSchema?: JsonSchema
-  path?: string[]
+  name: string;
+  description: string;
+  inputSchema?: JsonSchema;
+  path?: string[];
 }
 
 /** Serialized metadata for a single context. */
 export interface ContextMeta {
-  id?: string
-  description?: string
-  priority: number
-  inputSchema?: JsonSchema
-  isStatic: boolean
-  usedBy: (string | undefined)[]
-  path?: string[]
-  systemTemplate?: string | null
-  definitionSource?: SourceLocation
+  id?: string;
+  description?: string;
+  priority: number;
+  inputSchema?: JsonSchema;
+  isStatic: boolean;
+  usedBy: (string | undefined)[];
+  path?: string[];
+  systemTemplate?: string | null;
+  definitionSource?: SourceLocation;
 }
 
 /** Full index/state snapshot registered with the devtools backend. */
 export interface IndexSnapshot {
-  schemaVersion: 1
-  prompts: PromptMeta[]
-  contexts: ContextMeta[]
-  tools?: ToolMeta[]
+  schemaVersion: 1;
+  prompts: PromptMeta[];
+  contexts: ContextMeta[];
+  tools?: ToolMeta[];
 }
 
 export interface ProjectIndexSnapshot extends IndexSnapshot {
-  project: ProjectIdentity
-  lint?: CruxLintConfig
-  indexedAt: string
-  indexing?: ProjectIndexingStatus
-  sourceGraph?: ProjectIndexSourceGraph
-  definitions: ProjectDefinition[]
-  relations: ProjectRelation[]
-  diagnostics: IndexDiagnostic[]
-  lintFindings: IndexLintFinding[]
-  ruleDescriptors: IndexRuleDescriptor[]
-  sources: IndexSourceFile[]
+  project: ProjectIdentity;
+  lint?: CruxLintConfig;
+  indexedAt: string;
+  indexing?: ProjectIndexingStatus;
+  sourceGraph?: ProjectIndexSourceGraph;
+  definitions: ProjectDefinition[];
+  relations: ProjectRelation[];
+  diagnostics: IndexDiagnostic[];
+  lintFindings: IndexLintFinding[];
+  ruleDescriptors: IndexRuleDescriptor[];
+  sources: IndexSourceFile[];
 }
 
 export interface ProjectIndexSourceGraph {
-  schemaVersion: 1
-  producedBy: '@use-crux/indexer'
-  capabilities: ProjectIndexSourceGraphCapability[]
+  schemaVersion: 1;
+  producedBy: "@use-crux/indexer";
+  capabilities: ProjectIndexSourceGraphCapability[];
   /** Package/workspace shards discovered for shard-local planning and invalidation. */
-  shards?: ProjectIndexShard[]
+  shards?: ProjectIndexShard[];
 }
 
 export type ProjectIndexSourceGraphCapability =
-  | 'source-dependencies'
-  | 'source-dependents'
-  | 'definition-ownership'
-  | 'diagnostic-ownership'
-  | 'project-shards'
+  | "source-dependencies"
+  | "source-dependents"
+  | "definition-ownership"
+  | "diagnostic-ownership"
+  | "project-shards";
 
 /**
  * Discovered package/workspace shard used to plan source-local index work.
@@ -1092,29 +1138,29 @@ export type ProjectIndexSourceGraphCapability =
  */
 export interface ProjectIndexShard {
   /** Stable shard id, usually the repo-relative package root or `.` for the root package. */
-  id: string
+  id: string;
   /** Absolute package/workspace root represented by this shard. */
-  root: string
+  root: string;
   /** Package name from `package.json`, when available. */
-  name?: string
+  name?: string;
   /** Absolute `package.json` path that defines this shard, when present. */
-  packageFile?: string
+  packageFile?: string;
   /** Absolute `tsconfig.json` or `jsconfig.json` selected for this shard, when present. */
-  configFile?: string
+  configFile?: string;
   /** Absolute manifest/config path that caused this shard to be discovered. */
-  discoveredBy?: string
+  discoveredBy?: string;
   /** Other shard ids referenced by this shard's TypeScript project references. */
-  references?: string[]
+  references?: string[];
 }
 
-export const JsonSchemaSchema = z.record(z.string(), z.unknown())
+export const JsonSchemaSchema = z.record(z.string(), z.unknown());
 
 export const SourceLocationSchema = z.object({
   file: z.string(),
   line: z.number(),
   column: z.number().optional(),
   function: z.string().optional(),
-})
+});
 
 export const SourceRangeSchema = z.object({
   file: z.string(),
@@ -1122,83 +1168,90 @@ export const SourceRangeSchema = z.object({
   endLine: z.number().optional(),
   startColumn: z.number().optional(),
   endColumn: z.number().optional(),
-})
+});
 
 export const SourceSnippetSchema = z.object({
   source: z.string(),
   language: z.string().optional(),
   range: SourceRangeSchema,
   truncated: z.boolean().optional(),
-})
+});
 
 export const ProjectIdentitySchema = z.object({
   root: z.string(),
   name: z.string().optional(),
   configFile: z.string().optional(),
-}) satisfies z.ZodType<ProjectIdentity>
+}) satisfies z.ZodType<ProjectIdentity>;
 
 export const ProjectDefinitionKindSchema = z.enum([
-  'prompt',
-  'context',
-  'tool',
-  'agent',
-  'flow',
-  'flow.step',
-  'composition.parallel',
-  'composition.parallel.branch',
-  'composition.pipeline',
-  'composition.pipeline.stage',
-  'composition.swarm',
-  'composition.consensus',
-  'routing.router',
-  'routing.router.route',
-  'routing.cascade',
-  'routing.cascade.tier',
-  'routing.fallback',
-  'routing.fallback.option',
-  'rag.pipeline',
-  'rag.pipeline.stage',
-  'rag.retriever',
-  'registry',
-  'skill',
-  'memory',
-  'memory.store',
-  'memory.block',
-  'blackboard',
-  'workspace',
-  'storage.recordStore',
-  'storage.vectorStore',
-  'storage.blobStore',
-  'storage.bundle',
-  'storage.scope',
-  'constraint',
-  'guardrail',
-  'scorer',
-  'dataset',
-  'suite',
-  'suite.case',
-  'eval.prompt',
-  'eval.flow',
-  'eval.rag',
-  'eval.quality',
-  'unknown',
-])
+  "prompt",
+  "context",
+  "injectable",
+  "tool",
+  "agent",
+  "flow",
+  "flow.step",
+  "composition.parallel",
+  "composition.parallel.branch",
+  "composition.pipeline",
+  "composition.pipeline.stage",
+  "composition.swarm",
+  "composition.consensus",
+  "routing.router",
+  "routing.router.route",
+  "routing.cascade",
+  "routing.cascade.tier",
+  "routing.fallback",
+  "routing.fallback.option",
+  "rag.pipeline",
+  "rag.pipeline.stage",
+  "rag.retriever",
+  "registry",
+  "skill",
+  "memory",
+  "memory.store",
+  "memory.block",
+  "blackboard",
+  "workspace",
+  "storage.recordStore",
+  "storage.vectorStore",
+  "storage.blobStore",
+  "storage.bundle",
+  "storage.scope",
+  "constraint",
+  "guardrail",
+  "scorer",
+  "dataset",
+  "evaluation",
+  "evaluation.case",
+  "suite",
+  "suite.case",
+  "eval.prompt",
+  "eval.flow",
+  "eval.rag",
+  "eval.quality",
+  "unknown",
+]);
 
-export const DefinitionFidelitySchema = z.enum(['resolved', 'partial', 'error'])
+export const DefinitionFidelitySchema = z.enum([
+  "resolved",
+  "partial",
+  "error",
+]);
 
 export const ProjectSourceRefRoleSchema = z.enum([
-  'schema',
-  'callback',
-  'handler',
-  'execute',
-  'prompt',
-  'system',
-  'resolver',
-  'validator',
-  'policy',
-  'config',
-  'helper',
-])
+  "schema",
+  "callback",
+  "handler",
+  "execute",
+  "prompt",
+  "system",
+  "resolver",
+  "validator",
+  "policy",
+  "config",
+  "helper",
+]);
 
 export const ProjectSourceRefSchema = z.object({
   id: z.string(),
@@ -1207,11 +1260,11 @@ export const ProjectSourceRefSchema = z.object({
   symbol: z.string().optional(),
   source: SourceLocationSchema,
   snippet: SourceSnippetSchema.optional(),
-  fidelity: z.enum(['resolved', 'partial']),
+  fidelity: z.enum(["resolved", "partial"]),
   description: z.string().optional(),
   metadata: z
     .object({
-      schemaKind: z.enum(['zod', 'convex-validator', 'json-schema']).optional(),
+      schemaKind: z.enum(["zod", "convex-validator", "json-schema"]).optional(),
       parsedSchema: z.boolean().optional(),
       referencedDefinitionIds: z.array(z.string()).optional(),
       dataAccess: z.boolean().optional(),
@@ -1221,14 +1274,20 @@ export const ProjectSourceRefSchema = z.object({
       factoryArg: z.boolean().optional(),
       argumentIndex: z.number().optional(),
       argumentName: z.string().optional(),
-      toolMapContributor: z.enum(['spread', 'property']).optional(),
+      toolMapContributor: z.enum(["spread", "property"]).optional(),
       routingTarget: z.boolean().optional(),
       extensions: z.record(z.string(), z.unknown()).optional(),
     })
     .optional(),
-}) satisfies z.ZodType<ProjectSourceRef>
+}) satisfies z.ZodType<ProjectSourceRef>;
 
-export const PrimitiveIntelligenceConfidenceSchema = z.enum(['static', 'resolved', 'semantic', 'runtime', 'partial'])
+export const PrimitiveIntelligenceConfidenceSchema = z.enum([
+  "static",
+  "resolved",
+  "semantic",
+  "runtime",
+  "partial",
+]);
 
 export const PrimitiveSuspensionPointSchema = z.object({
   id: z.string(),
@@ -1236,7 +1295,7 @@ export const PrimitiveSuspensionPointSchema = z.object({
   signal: z.string().optional(),
   source: SourceLocationSchema.optional(),
   resumesDefinitionId: z.string().optional(),
-}) satisfies z.ZodType<PrimitiveSuspensionPoint>
+}) satisfies z.ZodType<PrimitiveSuspensionPoint>;
 
 export const SourceRefSummarySchema = z.object({
   id: z.string().optional(),
@@ -1244,48 +1303,88 @@ export const SourceRefSummarySchema = z.object({
   property: z.string().optional(),
   symbol: z.string().optional(),
   source: SourceLocationSchema.optional(),
-  fidelity: z.enum(['resolved', 'partial']).optional(),
+  fidelity: z.enum(["resolved", "partial"]).optional(),
   description: z.string().optional(),
-}) satisfies z.ZodType<SourceRefSummary>
+}) satisfies z.ZodType<SourceRefSummary>;
+
+export const InputSchemaContributionSchema = z.object({
+  field: z.string(),
+  schema: JsonSchemaSchema.optional(),
+  description: z.string().optional(),
+  required: z.boolean().optional(),
+  sourceDefinitionId: z.string().optional(),
+  sourceName: z.string().optional(),
+  sourceKind: ProjectDefinitionKindSchema.optional(),
+  path: z.array(z.string()).optional(),
+  via: z
+    .enum([
+      "direct",
+      "array-ref",
+      "spread",
+      "when",
+      "match",
+      "binary",
+      "runtime",
+    ])
+    .optional(),
+  conditionality: z
+    .enum([
+      "always",
+      "when",
+      "match-case",
+      "match-default",
+      "binary-guard",
+      "dynamic",
+      "unknown",
+    ])
+    .optional(),
+  branch: z.string().optional(),
+}) satisfies z.ZodType<InputSchemaContribution>;
 
 export const ContractFactsSchema = z.object({
   argsSchema: JsonSchemaSchema.optional(),
   inputSchema: JsonSchemaSchema.optional(),
+  expandedInputSchema: JsonSchemaSchema.optional(),
   outputSchema: JsonSchemaSchema.optional(),
   configSchema: JsonSchemaSchema.optional(),
   schemaRefs: z.array(SourceRefSummarySchema).optional(),
+  inputContributions: z.array(InputSchemaContributionSchema).optional(),
   nestedSchemas: z
     .array(
       z.object({
         name: z.string(),
         schema: JsonSchemaSchema.optional(),
         source: SourceLocationSchema.optional(),
-        role: z.enum(['input', 'output', 'args', 'config', 'field']),
+        role: z.enum(["input", "output", "args", "config", "field"]),
       }),
     )
     .optional(),
   requiredFields: z.array(z.string()).optional(),
   optionalFields: z.array(z.string()).optional(),
-  enumFields: z.array(z.object({ field: z.string(), values: z.array(z.string()) })).optional(),
-}) satisfies z.ZodType<ContractFacts>
+  enumFields: z
+    .array(z.object({ field: z.string(), values: z.array(z.string()) }))
+    .optional(),
+}) satisfies z.ZodType<ContractFacts>;
 
 export const ControlFactsSchema = z.object({
   mode: z
     .enum([
-      'sequential',
-      'parallel',
-      'fanout',
-      'consensus',
-      'swarm',
-      'durable',
-      'immediate',
-      'routing',
-      'cascade',
-      'fallback',
-      'event-driven',
+      "sequential",
+      "parallel",
+      "fanout",
+      "consensus",
+      "swarm",
+      "durable",
+      "immediate",
+      "routing",
+      "cascade",
+      "fallback",
+      "event-driven",
     ])
     .optional(),
-  ordering: z.enum(['ordered', 'concurrent', 'event-driven', 'conditional', 'unknown']).optional(),
+  ordering: z
+    .enum(["ordered", "concurrent", "event-driven", "conditional", "unknown"])
+    .optional(),
   children: z.array(z.string()).optional(),
   retryPolicy: z
     .object({
@@ -1299,7 +1398,7 @@ export const ControlFactsSchema = z.object({
     .object({
       optionCount: z.number().optional(),
       timeoutMs: z.number().optional(),
-      shouldFallback: z.union([z.boolean(), z.literal('callback')]).optional(),
+      shouldFallback: z.union([z.boolean(), z.literal("callback")]).optional(),
     })
     .catchall(z.unknown())
     .optional(),
@@ -1312,52 +1411,55 @@ export const ControlFactsSchema = z.object({
     })
     .catchall(z.unknown())
     .optional(),
-}) satisfies z.ZodType<ControlFacts>
+}) satisfies z.ZodType<ControlFacts>;
 
 export const DataAccessFactSchema = z.object({
   targetId: z.string().optional(),
   targetVariable: z.string().optional(),
   targetKind: z
     .enum([
-      'memory',
-      'blackboard',
-      'workspace',
-      'store',
-      'block',
-      'storage.recordStore',
-      'storage.vectorStore',
-      'storage.blobStore',
-      'storage.bundle',
-      'storage.scope',
+      "memory",
+      "blackboard",
+      "workspace",
+      "store",
+      "block",
+      "storage.recordStore",
+      "storage.vectorStore",
+      "storage.blobStore",
+      "storage.bundle",
+      "storage.scope",
     ])
     .optional(),
   key: z.string().optional(),
   operation: z
     .enum([
-      'read',
-      'write',
-      'append',
-      'update',
-      'delete',
-      'query',
-      'exists',
-      'stat',
-      'grep',
-      'artifacts',
-      'rename',
-      'move',
-      'copy',
-      'finalize',
+      "read",
+      "write",
+      "append",
+      "update",
+      "delete",
+      "query",
+      "exists",
+      "stat",
+      "grep",
+      "artifacts",
+      "rename",
+      "move",
+      "copy",
+      "history",
+      "diff",
+      "undo",
+      "finalize",
     ])
     .optional(),
   source: SourceLocationSchema.optional(),
-}) satisfies z.ZodType<DataAccessFact>
+}) satisfies z.ZodType<DataAccessFact>;
 
 export const ArtifactFactSchema = z.object({
   name: z.string(),
   kind: z.string().optional(),
   source: SourceLocationSchema.optional(),
-}) satisfies z.ZodType<ArtifactFact>
+}) satisfies z.ZodType<ArtifactFact>;
 
 export const RetrievalFactSchema = z.object({
   retrieverId: z.string().optional(),
@@ -1365,19 +1467,20 @@ export const RetrievalFactSchema = z.object({
   workspaceId: z.string().optional(),
   querySource: SourceLocationSchema.optional(),
   topK: z.number().optional(),
-}) satisfies z.ZodType<RetrievalFact>
+}) satisfies z.ZodType<RetrievalFact>;
 
 export const DataFactsSchema = z.object({
   reads: z.array(DataAccessFactSchema).optional(),
   writes: z.array(DataAccessFactSchema).optional(),
   artifacts: z.array(ArtifactFactSchema).optional(),
   retrievals: z.array(RetrievalFactSchema).optional(),
-}) satisfies z.ZodType<DataFacts>
+}) satisfies z.ZodType<DataFacts>;
 
 export const DependencyFactsSchema = z
   .object({
     prompts: z.array(z.string()).optional(),
     contexts: z.array(z.string()).optional(),
+    injectables: z.array(z.string()).optional(),
     tools: z.array(z.string()).optional(),
     agents: z.array(z.string()).optional(),
     flows: z.array(z.string()).optional(),
@@ -1399,15 +1502,15 @@ export const DependencyFactsSchema = z
     scorers: z.array(z.string()).optional(),
     extensions: z.record(z.string(), z.unknown()).optional(),
   })
-  .catchall(z.unknown()) satisfies z.ZodType<DependencyFacts>
+  .catchall(z.unknown()) satisfies z.ZodType<DependencyFacts>;
 
 export const IntelligenceDiagnosticSchema = z.object({
   code: z.string(),
   message: z.string(),
-  severity: z.enum(['info', 'warning', 'error']).optional(),
+  severity: z.enum(["info", "warning", "error"]).optional(),
   source: SourceLocationSchema.optional(),
   data: z.record(z.string(), z.unknown()).optional(),
-}) satisfies z.ZodType<IntelligenceDiagnostic>
+}) satisfies z.ZodType<IntelligenceDiagnostic>;
 
 export const ProjectRuntimeJoinSchema = z
   .object({
@@ -1446,7 +1549,7 @@ export const ProjectRuntimeJoinSchema = z
     routeKey: z.string().optional(),
     extensions: z.record(z.string(), z.unknown()).optional(),
   })
-  .catchall(z.unknown()) satisfies z.ZodType<ProjectRuntimeJoin>
+  .catchall(z.unknown()) satisfies z.ZodType<ProjectRuntimeJoin>;
 
 export const RuntimeFactsSchema = z.object({
   join: ProjectRuntimeJoinSchema.optional(),
@@ -1455,7 +1558,7 @@ export const RuntimeFactsSchema = z.object({
   correlationAttributes: z.array(z.string()).optional(),
   spanAttributes: z.record(z.string(), z.string()).optional(),
   extensions: z.record(z.string(), z.unknown()).optional(),
-}) satisfies z.ZodType<RuntimeFacts>
+}) satisfies z.ZodType<RuntimeFacts>;
 
 export const PrimitiveIntelligenceSchema = z.object({
   confidence: PrimitiveIntelligenceConfidenceSchema,
@@ -1467,15 +1570,28 @@ export const PrimitiveIntelligenceSchema = z.object({
   diagnostics: z.array(IntelligenceDiagnosticSchema).optional(),
   runtimeJoin: ProjectRuntimeJoinSchema.optional(),
   extensions: z.record(z.string(), z.unknown()).optional(),
-}) satisfies z.ZodType<PrimitiveIntelligence>
+}) satisfies z.ZodType<PrimitiveIntelligence>;
 
 export const ProjectDefinitionIndexPresentationSchema = z.object({
   standalone: z.boolean(),
   parentDefinitionId: z.string().optional(),
   parentRelationType: z.string().optional(),
-  role: z.enum(['step', 'branch', 'stage', 'route', 'tier', 'option', 'block', 'store', 'storage', 'case']).optional(),
+  role: z
+    .enum([
+      "step",
+      "branch",
+      "stage",
+      "route",
+      "tier",
+      "option",
+      "block",
+      "store",
+      "storage",
+      "case",
+    ])
+    .optional(),
   order: z.number().optional(),
-}) satisfies z.ZodType<ProjectDefinitionIndexPresentation>
+}) satisfies z.ZodType<ProjectDefinitionIndexPresentation>;
 
 export const ProjectDefinitionMetadataSchema = z
   .object({
@@ -1485,7 +1601,10 @@ export const ProjectDefinitionMetadataSchema = z
     configSchema: JsonSchemaSchema.optional(),
     schema: JsonSchemaSchema.optional(),
     indexPresentation: ProjectDefinitionIndexPresentationSchema.optional(),
-    facts: z.object({ kind: ProjectDefinitionKindSchema }).catchall(z.unknown()).optional(),
+    facts: z
+      .object({ kind: ProjectDefinitionKindSchema })
+      .catchall(z.unknown())
+      .optional(),
     configuration: z.record(z.string(), z.unknown()).optional(),
     settings: z.record(z.string(), z.unknown()).optional(),
     intelligence: PrimitiveIntelligenceSchema.optional(),
@@ -1506,7 +1625,16 @@ export const ProjectDefinitionMetadataSchema = z
       .optional(),
     extensions: z.record(z.string(), z.unknown()).optional(),
   })
-  .catchall(z.unknown()) satisfies z.ZodType<ProjectDefinitionMetadata>
+  .catchall(z.unknown()) satisfies z.ZodType<ProjectDefinitionMetadata>;
+
+export const ProjectDefinitionQualityDriftRowSchema = z.object({
+  id: z.string(),
+  passRate: z.number(),
+  runs: z.number(),
+  baselineExperimentId: z.string(),
+  baselinePassRate: z.number(),
+  driftPp: z.number(),
+}) satisfies z.ZodType<ProjectDefinitionQualityDriftRow>;
 
 export const ProjectDefinitionQualitySchema = z.object({
   evalIds: z.array(z.string()).optional(),
@@ -1537,7 +1665,13 @@ export const ProjectDefinitionQualitySchema = z.object({
   currentFingerprint: z.string().optional(),
   baselineFingerprint: z.string().optional(),
   changedSinceBaseline: z.boolean().optional(),
-}) satisfies z.ZodType<ProjectDefinitionQuality>
+  drift: z
+    .object({
+      evals: z.array(ProjectDefinitionQualityDriftRowSchema),
+      suites: z.array(ProjectDefinitionQualityDriftRowSchema),
+    })
+    .optional(),
+}) satisfies z.ZodType<ProjectDefinitionQuality>;
 
 export const ProjectDefinitionSchema = z.object({
   id: z.string(),
@@ -1550,11 +1684,11 @@ export const ProjectDefinitionSchema = z.object({
   sourceSnippet: SourceSnippetSchema.optional(),
   sourceRefs: z.array(ProjectSourceRefSchema).optional(),
   fidelity: DefinitionFidelitySchema,
-  status: z.enum(['active', 'missing', 'stale']).optional(),
+  status: z.enum(["active", "missing", "stale"]).optional(),
   fingerprint: z.string().optional(),
   metadata: ProjectDefinitionMetadataSchema.optional(),
   quality: ProjectDefinitionQualitySchema.optional(),
-}) satisfies z.ZodType<ProjectDefinition>
+}) satisfies z.ZodType<ProjectDefinition>;
 
 export const ProjectRelationSchema = z.object({
   id: z.string(),
@@ -1564,69 +1698,82 @@ export const ProjectRelationSchema = z.object({
   fidelity: DefinitionFidelitySchema,
   source: SourceLocationSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
-}) satisfies z.ZodType<ProjectRelation>
+}) satisfies z.ZodType<ProjectRelation>;
 
 export const IndexDiagnosticSchema = z.object({
   id: z.string(),
-  severity: z.enum(['info', 'warning', 'error']),
+  severity: z.enum(["info", "warning", "error"]),
   code: z.string(),
   message: z.string(),
   source: SourceLocationSchema.optional(),
   relatedDefinitionIds: z.array(z.string()).optional(),
   suggestedFix: z.string().optional(),
-}) satisfies z.ZodType<IndexDiagnostic>
+}) satisfies z.ZodType<IndexDiagnostic>;
 
 export const CruxLintCategorySchema = z.enum([
-  'contracts',
-  'observability',
-  'evaluation',
-  'safety',
-  'memory',
-  'runtime',
-  'composition',
-  'quality',
-])
+  "contracts",
+  "observability",
+  "evaluation",
+  "safety",
+  "memory",
+  "runtime",
+  "composition",
+  "quality",
+]);
 
-export const CruxLintMaturitySchema = z.enum(['stable', 'preview', 'experimental'])
+export const CruxLintMaturitySchema = z.enum([
+  "stable",
+  "preview",
+  "experimental",
+]);
 
-export const CruxLintConfidenceSchema = z.enum(['high', 'medium', 'low'])
+export const CruxLintConfidenceSchema = z.enum(["high", "medium", "low"]);
 
-export const CruxLintProfileSchema = z.enum(['recommended', 'strict', 'experimental'])
+export const CruxLintProfileSchema = z.enum([
+  "recommended",
+  "strict",
+  "experimental",
+]);
 
-export const CruxLintSelectedProfileSchema = z.enum(['off', 'recommended', 'strict', 'experimental'])
+export const CruxLintSelectedProfileSchema = z.enum([
+  "off",
+  "recommended",
+  "strict",
+  "experimental",
+]);
 
 export const CruxLintRuleConfigSchema = z.object({
   enabled: z.boolean().optional(),
-  severity: z.enum(['info', 'warning', 'error']).optional(),
-}) satisfies z.ZodType<CruxLintRuleConfig>
+  severity: z.enum(["info", "warning", "error"]).optional(),
+}) satisfies z.ZodType<CruxLintRuleConfig>;
 
 export const CruxLintConfigSchema = z.object({
   profile: CruxLintSelectedProfileSchema.optional(),
   rules: z.record(z.string(), CruxLintRuleConfigSchema).optional(),
-}) satisfies z.ZodType<CruxLintConfig>
+}) satisfies z.ZodType<CruxLintConfig>;
 
 export const IndexLintEvidenceSchema = z.object({
-  kind: z.enum(['definition', 'relation', 'quality', 'runtime', 'source']),
+  kind: z.enum(["definition", "relation", "quality", "runtime", "source"]),
   label: z.string(),
   description: z.string().optional(),
   definitionId: z.string().optional(),
   relationId: z.string().optional(),
   source: SourceLocationSchema.optional(),
   data: z.record(z.string(), z.unknown()).optional(),
-}) satisfies z.ZodType<IndexLintEvidence>
+}) satisfies z.ZodType<IndexLintEvidence>;
 
 export const IndexLintFixSchema = z.object({
   title: z.string(),
   description: z.string(),
-  kind: z.enum(['manual', 'docs', 'config', 'suppress', 'code-action']),
+  kind: z.enum(["manual", "docs", "config", "suppress", "code-action"]),
   docsUrl: z.string().optional(),
   command: z.string().optional(),
   suppression: z.string().optional(),
-}) satisfies z.ZodType<IndexLintFix>
+}) satisfies z.ZodType<IndexLintFix>;
 
 export const IndexLintFindingSchema = z.object({
   id: z.string(),
-  severity: z.enum(['info', 'warning', 'error']),
+  severity: z.enum(["info", "warning", "error"]),
   ruleId: z.string(),
   category: CruxLintCategorySchema,
   maturity: CruxLintMaturitySchema,
@@ -1647,7 +1794,7 @@ export const IndexLintFindingSchema = z.object({
     .object({
       supported: z.boolean(),
       directive: z.string(),
-      scope: z.enum(['next-line', 'line', 'file']),
+      scope: z.enum(["next-line", "line", "file"]),
     })
     .optional(),
   suppressed: z.boolean().optional(),
@@ -1667,20 +1814,20 @@ export const IndexLintFindingSchema = z.object({
       }),
     )
     .optional(),
-}) satisfies z.ZodType<IndexLintFinding>
+}) satisfies z.ZodType<IndexLintFinding>;
 
-export const AnalysisTierSchema = z.enum(['syntax', 'index', 'semantic'])
+export const AnalysisTierSchema = z.enum(["syntax", "index", "semantic"]);
 
 export const IndexRuleDescriptorSchema = z.object({
   id: z.string(),
-  source: z.enum(['builtin', 'extension']),
+  source: z.enum(["builtin", "extension"]),
   extension: z
     .object({
       name: z.string(),
       version: z.string().optional(),
     })
     .optional(),
-  severity: z.enum(['info', 'warning', 'error']).optional(),
+  severity: z.enum(["info", "warning", "error"]).optional(),
   category: CruxLintCategorySchema.optional(),
   maturity: CruxLintMaturitySchema.optional(),
   confidence: CruxLintConfidenceSchema.optional(),
@@ -1694,7 +1841,7 @@ export const IndexRuleDescriptorSchema = z.object({
   suppression: z
     .object({
       supported: z.boolean(),
-      scope: z.enum(['next-line', 'line', 'file']),
+      scope: z.enum(["next-line", "line", "file"]),
       directive: z.string().optional(),
     })
     .optional(),
@@ -1705,42 +1852,42 @@ export const IndexRuleDescriptorSchema = z.object({
   messageIds: z.array(z.string()).optional(),
   defaultOptions: z.unknown().optional(),
   budget: IndexRuleBudgetSchema.optional(),
-}) satisfies z.ZodType<IndexRuleDescriptor>
+}) satisfies z.ZodType<IndexRuleDescriptor>;
 
 export const IndexSourceFileSchema = z.object({
   file: z.string(),
-  status: z.enum(['indexed', 'partial', 'error']),
+  status: z.enum(["indexed", "partial", "error"]),
   shardId: z.string().optional(),
   definitionIds: z.array(z.string()).optional(),
   dependencies: z.array(z.string()).optional(),
   dependents: z.array(z.string()).optional(),
   diagnostics: z.array(z.string()).optional(),
-}) satisfies z.ZodType<IndexSourceFile>
+}) satisfies z.ZodType<IndexSourceFile>;
 
 export const IndexIndexingPhaseStatusSchema = z.object({
-  status: z.enum(['pending', 'running', 'ready', 'degraded']),
+  status: z.enum(["pending", "running", "ready", "degraded"]),
   indexedAt: z.string().optional(),
   durationMs: z.number().optional(),
   fileCount: z.number().optional(),
   changedFileCount: z.number().optional(),
   diagnosticCount: z.number().optional(),
-}) satisfies z.ZodType<IndexIndexingPhaseStatus>
+}) satisfies z.ZodType<IndexIndexingPhaseStatus>;
 
 export const ProjectIndexingStatusSchema = z.object({
-  status: z.enum(['cold', 'cached', 'refreshing', 'ready', 'degraded']),
+  status: z.enum(["cold", "cached", "refreshing", "ready", "degraded"]),
   ast: IndexIndexingPhaseStatusSchema,
   semantic: IndexIndexingPhaseStatusSchema.omit({ status: true }).extend({
-    status: z.enum(['disabled', 'pending', 'running', 'ready', 'degraded']),
+    status: z.enum(["disabled", "pending", "running", "ready", "degraded"]),
     enrichedDefinitionCount: z.number().optional(),
   }),
   cache: z
     .object({
-      status: z.enum(['miss', 'hit', 'stale', 'invalid']),
+      status: z.enum(["miss", "hit", "stale", "invalid"]),
       loadedAt: z.string().optional(),
       snapshotAgeMs: z.number().optional(),
     })
     .optional(),
-}) satisfies z.ZodType<ProjectIndexingStatus>
+}) satisfies z.ZodType<ProjectIndexingStatus>;
 
 export const PromptMetaSchema = z.object({
   id: z.string().optional(),
@@ -1756,7 +1903,7 @@ export const PromptMetaSchema = z.object({
   promptTemplate: z.string().nullable().optional(),
   hasMessages: z.boolean().optional(),
   definitionSource: SourceLocationSchema.optional(),
-}) satisfies z.ZodType<PromptMeta>
+}) satisfies z.ZodType<PromptMeta>;
 
 export const ContextMetaSchema = z.object({
   id: z.string().optional(),
@@ -1768,21 +1915,21 @@ export const ContextMetaSchema = z.object({
   path: z.array(z.string()).optional(),
   systemTemplate: z.string().nullable().optional(),
   definitionSource: SourceLocationSchema.optional(),
-}) satisfies z.ZodType<ContextMeta>
+}) satisfies z.ZodType<ContextMeta>;
 
 export const ToolMetaSchema = z.object({
   name: z.string(),
   description: z.string(),
   inputSchema: JsonSchemaSchema.optional(),
   path: z.array(z.string()).optional(),
-}) satisfies z.ZodType<ToolMeta>
+}) satisfies z.ZodType<ToolMeta>;
 
 export const IndexSnapshotSchema = z.object({
   schemaVersion: z.literal(1),
   prompts: z.array(PromptMetaSchema),
   contexts: z.array(ContextMetaSchema),
   tools: z.array(ToolMetaSchema).optional(),
-}) satisfies z.ZodType<IndexSnapshot>
+}) satisfies z.ZodType<IndexSnapshot>;
 
 export const ProjectIndexSnapshotSchema = IndexSnapshotSchema.extend({
   project: ProjectIdentitySchema,
@@ -1792,14 +1939,14 @@ export const ProjectIndexSnapshotSchema = IndexSnapshotSchema.extend({
   sourceGraph: z
     .object({
       schemaVersion: z.literal(1),
-      producedBy: z.literal('@use-crux/indexer'),
+      producedBy: z.literal("@use-crux/indexer"),
       capabilities: z.array(
         z.enum([
-          'source-dependencies',
-          'source-dependents',
-          'definition-ownership',
-          'diagnostic-ownership',
-          'project-shards',
+          "source-dependencies",
+          "source-dependents",
+          "definition-ownership",
+          "diagnostic-ownership",
+          "project-shards",
         ]),
       ),
       shards: z
@@ -1823,4 +1970,4 @@ export const ProjectIndexSnapshotSchema = IndexSnapshotSchema.extend({
   lintFindings: z.array(IndexLintFindingSchema),
   ruleDescriptors: z.array(IndexRuleDescriptorSchema).default([]),
   sources: z.array(IndexSourceFileSchema),
-}) satisfies z.ZodType<ProjectIndexSnapshot>
+}) satisfies z.ZodType<ProjectIndexSnapshot>;

@@ -1052,6 +1052,31 @@ export type {
   CruxRunDetailRow as ObservabilityRunDetailRow,
 } from '@use-crux/core/observability'
 
+// Turn Explanation read model — backs the Run Detail `Explain` tab. Projected
+// onto generation nodes/details as `decisionReport` (see contract.ts).
+export type {
+  TurnDecisionReport,
+  TurnDecisionTurn,
+  TurnSawItem,
+  TurnConsideredItem,
+  TurnFreshnessEvidence,
+  TurnCacheEvidence,
+  TurnDecision,
+  TurnDecisionPhase,
+  TurnDecisionReason,
+  TurnDecisionSubject,
+  TurnSourceGroup,
+  TurnSourceJoin,
+  TurnDecisionCoverage,
+  TurnCoverageArea,
+  TurnDecisionDiagnostic,
+  TurnSummaryChip,
+  TurnDeepTabTarget,
+  TurnEvidenceLevel,
+  TurnDisposition,
+  TurnSourceStatus,
+} from '@use-crux/core/observability'
+
 export type QualityJsonValue =
   | string
   | number

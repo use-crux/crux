@@ -36,6 +36,7 @@ import type {
 import type { StandardSchemaV1 } from '../standard-schema'
 import type { TokenUsage } from '../../generation/types'
 import type { CellSignals } from './signals'
+import { createDecisionReportExpect } from './decision-report-matchers'
 import {
   assertionValue,
   failureFromOutcome,
@@ -73,6 +74,7 @@ const CAPTURING_KINDS: Record<Capability, readonly string[]> = {
   safety: ['prompt', 'flow', 'agent'],
   memory: ['flow', 'agent'],
   routing: ['flow', 'agent'],
+  decisionReports: ['prompt', 'flow', 'agent'],
 }
 
 /**
@@ -1087,6 +1089,11 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
         )
       },
     },
+    decisionReport: createDecisionReportExpect({
+      reports: signals.decisionReports,
+      assertOn,
+      requireCaptured: () => requireCaptured('decisionReports'),
+    }),
     modelCalls: {
       count() {
         requireCaptured('modelCalls')
@@ -1116,6 +1123,10 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
   surface.cost = alwaysOn.cost
   surface.errors = alwaysOn.errors
   for (const capability of runtime.capabilities) {
+    if (capability === 'decisionReports') {
+      surface.decisionReport = signalNamespaces.decisionReport
+      continue
+    }
     if (capability in signalNamespaces) {
       surface[capability] = signalNamespaces[capability as keyof SignalExpect]
     }

@@ -1,3 +1,5 @@
+import type { TurnDecisionReport } from './turn-decision-report'
+
 export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 1
 
 export const CRUX_PRIMITIVE_FAMILIES = [
@@ -1176,6 +1178,14 @@ export interface CruxRunDetailDetail extends CruxSpanSummaryView {
   source: CruxRunDetailSource
   inspection?: CruxRunDetailInspectionSections
   request?: CruxRunDetailRequest
+  /**
+   * Per-turn explanation read model projected onto a folded generation detail.
+   *
+   * Present only for generation details when the local projection has enough
+   * recorded evidence. Consumed by the Run Detail `Explain` tab; absent reports
+   * leave existing detail views unchanged.
+   */
+  decisionReport?: TurnDecisionReport
 }
 
 export interface CruxRunDetailNode extends CruxSpanSummaryView {
@@ -1199,6 +1209,15 @@ export interface CruxRunDetailNode extends CruxSpanSummaryView {
   transition?: CruxAttributes | null
   inspection?: CruxRunDetailInspectionSections
   request?: CruxRunDetailRequest
+  /**
+   * Per-turn explanation read model projected onto a generation node.
+   *
+   * The local Go projection emits one `TurnDecisionReport` per generation turn
+   * (and on the run root for run-level roll-up) when projection data is
+   * available. The Run Detail `Explain` tab treats it as authoritative when
+   * present and falls back to the existing tabs when it is absent.
+   */
+  decisionReport?: TurnDecisionReport
   children: CruxRunDetailNode[]
 }
 

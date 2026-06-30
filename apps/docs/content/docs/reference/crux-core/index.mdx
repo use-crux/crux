@@ -214,7 +214,7 @@ For defaults, stability notes, and every nested option, see [Config](/docs/refer
 | `lint`                        | `CruxLintConfig`           | Project Index lint profile and rule overrides.                                       |
 | `indexer`                     | `CruxIndexerConfig`        | Extension references, extension trust policy, and indexer rule options.              |
 | `experimental`                | `CruxExperimentalConfig`   | Unstable opt-in tooling features such as the TypeScript-Go semantic indexer backend. |
-| `persistence.store`           | `RecordStore`                | Explicit runtime persistence for flows, plans, and bridge reads.                     |
+| `persistence.records`         | `RecordStore`                | Explicit runtime persistence for flows, plans, and bridge reads.                     |
 | `generation.middleware`       | `PromptMiddleware`         | Global generate/stream wrapper.                                                      |
 | `generation.tokenizer`        | `(text: string) => number` | Custom token counting.                                                               |
 | `generation.autoEscape`       | `boolean`                  | Auto-escape XML-like user input. Defaults to `true`.                                 |

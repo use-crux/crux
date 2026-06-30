@@ -22,6 +22,7 @@ import type { Capability } from './target'
 import type { RetrieverHit } from '../retrieval'
 import type { TokenUsage } from '../generation/types'
 import type { CellScore } from './experiment'
+import type { TurnDecisionReportExpect } from './decision-report-expect'
 
 // ─────────────────────────────────────────────────────────────────
 // Errors
@@ -250,6 +251,8 @@ export interface SignalExpect {
     /** Assert the named model was selected. */
     toHaveSelectedModel(modelId: string): void
   }
+  /** Assertions over captured `TurnDecisionReport` rows for one turn. */
+  decisionReport: TurnDecisionReportExpect
   modelCalls: {
     /** Matchers over the number of model calls. */
     count(): Matchers<number>
@@ -283,9 +286,14 @@ export interface SignalExpect {
  * })
  * ```
  */
+type DecisionReportNamespace<TCaps extends Capability> = 'decisionReports' extends TCaps
+  ? Pick<SignalExpect, 'decisionReport'>
+  : object
+
 export type BoundExpect<TOutput, TCaps extends Capability> = ValueExpect &
   AlwaysOnExpect &
-  Pick<SignalExpect, Extract<TCaps, keyof SignalExpect>>
+  Pick<SignalExpect, Extract<TCaps, Exclude<keyof SignalExpect, 'decisionReport'>>> &
+  DecisionReportNamespace<TCaps>
 
 // ─────────────────────────────────────────────────────────────────
 // Case context

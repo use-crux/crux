@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/shared/components/ui/resizable'
 import { useNavigation } from '@/app/navigation/useNavigation'
 import { useObservabilityGraph } from '@/features/observability/hooks/useObservabilityGraph'
@@ -10,6 +10,7 @@ import { EvalRunCard, OperationReportCard } from '@/features/run-detail/componen
 import { EmptyHint } from '@/features/run-detail/components/SpanDetailPanelAtoms'
 import { LensSwitch } from '@/features/run-detail/components/atoms'
 import type { RunArchetype } from '@/features/run-detail/lib/archetype'
+import { warningTurnSpanIds } from '@/features/run-detail/lib/explain/rollup'
 import { SectionBoundary } from '@/qw/shell/SectionBoundary'
 import { Btn } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
@@ -50,6 +51,10 @@ export function CanvasMode({
   const canonical = useObservabilityGraph(traceId)
   const tree = canonical.spanTree
   const selectedSpanId = spanId ?? tree?.id ?? traceId ?? null
+  const warningSpanIds = useMemo(
+    () => (canonical.runDetail ? warningTurnSpanIds(canonical.runDetail.root) : undefined),
+    [canonical.runDetail],
+  )
   const handleSelectSpan = useCallback(
     (id: string) => {
       // Selecting a node keeps the current (graph) lens — selection is shared.
@@ -89,7 +94,12 @@ export function CanvasMode({
               </div>
             }
           >
-            <SpanGraph root={tree} selectedId={selectedSpanId} onSelect={handleSelectSpan} />
+            <SpanGraph
+              root={tree}
+              selectedId={selectedSpanId}
+              warningSpanIds={warningSpanIds}
+              onSelect={handleSelectSpan}
+            />
           </Suspense>
         </SectionBoundary>
       </div>
@@ -154,6 +164,12 @@ export function InspectMode({
   const canonical = useObservabilityGraph(traceId)
   const tree = canonical.spanTree
   const selectedSpanId = spanId ?? tree?.id ?? traceId ?? null
+  // Spans whose turn explanation carries a warning — badged in the structure
+  // lens; selecting one opens Explain by default.
+  const warningSpanIds = useMemo(
+    () => (canonical.runDetail ? warningTurnSpanIds(canonical.runDetail.root) : undefined),
+    [canonical.runDetail],
+  )
   // Timeline wants a wide structure axis, so the inspector starts collapsed
   // there (design `RunDetailTimeline`); Tree keeps the inspector pinned open.
   const isTimeline = layout === 'timeline'
@@ -189,6 +205,7 @@ export function InspectMode({
                 <SpanTree
                   tree={tree}
                   selectedId={selectedSpanId}
+                  warningSpanIds={warningSpanIds}
                   onSelect={handleSelectSpan}
                   layout={layout}
                   triage={triage}

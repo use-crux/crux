@@ -453,13 +453,31 @@ func (s *Service) workspaceFileDetail(ctx context.Context, workspaceID, filePath
 	}
 	files := workspaceFilesFromEvents(events)
 	file := files[0]
+	versions := workspaceFileVersions(
+		s.workspaceVersionEvents(ctx),
+		workspaceID,
+		file.Path,
+	)
 	return workspaceFileDetail{
 		Path:       file.Path,
 		Mime:       file.Mime,
 		Size:       file.Size,
 		Status:     file.Status,
 		Operations: workspaceFileOpsFromEvents(events),
+		Versions:   versions,
 	}, true, nil
+}
+
+// workspaceVersionEvents reconstructs file version markers from workspace
+// observability activity. Unlike operation events, these come only from live
+// observability (there is no local-store fallback for version history).
+func (s *Service) workspaceVersionEvents(ctx context.Context) []workspaceVersionEvent {
+	if s.observability != nil {
+		if activity, err := s.observability.ResourceActivity(ctx, "workspace"); err == nil && len(activity) > 0 {
+			return workspaceVersionEventsFromActivity(activity)
+		}
+	}
+	return nil
 }
 
 func (s *Service) plans(ctx context.Context) ([]planSummary, error) {

@@ -126,6 +126,48 @@ Blob-backed text and JSON still read back as `text` and `json`; the workspace
 fetches their payload from the blob store. `maxInlineBytes` windows text reads
 instead of throwing when a caller asks for a smaller preview.
 
+## Versioning And History
+
+Every content change (`write`, `edit`, `append`, `undo`) appends an immutable
+version. History is always recorded — there is no flag to enable — so a
+destructive edit is recoverable even when nobody planned ahead.
+
+```ts
+await ws.write("/outputs/report.md", "draft one");
+await ws.write("/outputs/report.md", "draft two");
+
+const history = await ws.history("/outputs/report.md");
+// → [{ version: 2, operation: "write", ... }, { version: 1, ... }]  (newest first)
+
+const old = await ws.read("/outputs/report.md", { version: 1 }); // "draft one"
+
+const diff = await ws.diff("/outputs/report.md", { from: 1, to: 2 });
+diff.unified; // git-style unified-diff string
+diff.hunks; // structured add/remove/context lines
+
+await ws.undo("/outputs/report.md"); // restores v1 as a new v3; history is never rewritten
+```
+
+`diff` defaults to the most recent change (previous version → current) and
+applies to text files; binary files throw. `undo` reverts the last content
+change. `rename`, `move`, and `copy` start fresh history at the destination
+path, and `delete` purges a file's history.
+
+Retention is unlimited by default. Bound it per file with `versioning.maxVersions`,
+which GCs the oldest snapshots (and their blobs):
+
+```ts
+const ws = workspace({
+  id: "research",
+  namespace,
+  storage: storage({ records, blobs }),
+  versioning: { maxVersions: 20 },
+});
+```
+
+The `undoWorkspaceFile` tool is opt-in via `tools: { undo: true }`, like
+`deleteWorkspaceFile`.
+
 ## Storage Rules
 
 Workspaces use two storage layers:
@@ -193,7 +235,9 @@ const ws = workspace({
 
 `retention.ttlMs` is passed to the record store only when the store supports TTL.
 `maxFileBytes` rejects one oversized write, and `maxNamespaceBytes` rejects writes
-that would push the namespace total over its cap.
+that would push the namespace total over its cap. The namespace quota counts live
+files only, not historical snapshots — bound history storage with
+`versioning.maxVersions` (see [Versioning And History](#versioning-and-history)).
 
 ## Artifacts
 
@@ -211,6 +255,32 @@ const charts = await ws.artifacts({ status: "final", kind: "chart" });
 
 Inline artifacts expose a `workspace-inline://...` reference. Blob-backed
 artifacts expose the blob URI.
+
+### Finalize pins a version
+
+`finalize()` **pins** the current version as the published artifact, like
+publishing in a CMS. The agent can keep editing the working file afterwards —
+those edits create new draft versions — but `artifacts()` and the manifest keep
+surfacing the pinned revision until you `finalize()` again.
+
+```ts
+await ws.write("/outputs/report.md", "published copy", { kind: "report" });
+const pinned = await ws.finalize("/outputs/report.md");
+pinned.version; // 1 — the published version
+
+await ws.edit("/outputs/report.md", { find: "published", replace: "wip" });
+
+await ws.read("/outputs/report.md"); // "wip copy" — read() is the working surface
+(await ws.artifacts({ status: "final" }))[0].version; // still 1 — published artifact unmoved
+await ws.read("/outputs/report.md", { version: 1 }); // "published copy" — the pinned content
+
+await ws.finalize("/outputs/report.md"); // re-publish → pins the latest version
+```
+
+`read()` always returns the live working copy; the published artifact resolves
+to the pinned version. (A file only created by `copy`/`rename` and never written
+or edited has no snapshot to pin; finalizing then editing it falls back to the
+working copy.)
 
 ## Source Files
 
@@ -325,4 +395,6 @@ research
    └─ report.pdf
 ```
 
-OTel receives privacy-safe operation metadata only. Raw file contents and full paths are not emitted to OTel. Workspace OTel spans use `crux.workspace.operation` and `crux.workspace.path_hash`; devtools use the same path hash as a stable file label when no local-only raw path is available. Finalized artifacts expose bounded metadata such as status, artifact kind, MIME type, size, and download ref. Project Index data-access facts preserve exact workspace operations, including `grep`, `artifacts`, `rename`, and `finalize`.
+OTel receives privacy-safe operation metadata only. Raw file contents and full paths are not emitted to OTel. Workspace OTel spans use `crux.workspace.operation` and `crux.workspace.path_hash`; devtools use the same path hash as a stable file label when no local-only raw path is available. Finalized artifacts expose bounded metadata such as status, artifact kind, MIME type, size, and download ref. Project Index data-access facts preserve exact workspace operations, including `grep`, `history`, `diff`, `undo`, `artifacts`, `rename`, and `finalize`.
+
+The file inspector also has a **Versions** tab showing a file's revision timeline (version number, when, the operation that produced it, and a trace link). Each version is announced by a single privacy-safe marker emitted when the version is recorded, so the timeline counts one entry per content change even though an `edit` or `undo` internally performs a nested write.
