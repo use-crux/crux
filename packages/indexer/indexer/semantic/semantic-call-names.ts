@@ -1,3 +1,5 @@
+import { semanticStorageCallNames } from './storage-model'
+
 const firstPartySemanticCallNames = [
   'Agent',
   'agent',
@@ -29,6 +31,7 @@ const firstPartySemanticCallNames = [
   'prompt',
   'when',
   'workspace',
+  ...semanticStorageCallNames,
 ] as const
 
 /** Sorted first-party call names that make a source file semantically relevant. */

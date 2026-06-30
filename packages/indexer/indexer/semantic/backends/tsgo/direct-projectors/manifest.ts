@@ -6,6 +6,7 @@ import type {
   ProjectSourceRefRole,
 } from '@use-crux/core/project-index'
 import { semanticPrimitiveCallNames } from '../../../semantic-call-names'
+import { semanticStorageCallNames } from '../../../storage-model'
 import { nativeDirectAgentPrimitiveManifest } from './agent-manifest'
 import { nativeDirectRoutingPrimitiveManifest } from './routing-manifest'
 
@@ -236,7 +237,10 @@ export const nativeDirectPrimitiveManifest = [
 
 export const nativeDirectPrimitiveCallNames = nativeDirectPrimitiveManifest.map((primitive) => primitive.callName)
 
-const nativeDirectPrimitiveCallNameSet: ReadonlySet<string> = new Set(nativeDirectPrimitiveCallNames)
+const nativeDirectPrimitiveCallNameSet: ReadonlySet<string> = new Set([
+  ...nativeDirectPrimitiveCallNames,
+  ...semanticStorageCallNames,
+])
 const semanticPrimitiveCallNameSet: ReadonlySet<string> = new Set(semanticPrimitiveCallNames)
 const nativeDirectPrimitiveByCallName: ReadonlyMap<string, NativeDirectPrimitiveSpec> = new Map(
   nativeDirectPrimitiveManifest.map((primitive) => [primitive.callName, primitive]),

@@ -65,6 +65,12 @@ export type SemanticDefinitionKind = Extract<
   | 'memory.block'
   | 'blackboard'
   | 'workspace'
+  | 'rag.retriever'
+  | 'storage.recordStore'
+  | 'storage.vectorStore'
+  | 'storage.blobStore'
+  | 'storage.bundle'
+  | 'storage.scope'
 >
 
 export type SemanticSchemaProperty = 'input' | 'inputSchema' | 'output' | 'parameters' | 'args' | 'schema'

@@ -181,6 +181,74 @@ func TestSQLiteIndexFactStoreClearsFactsWithoutEnvelopeMetadata(t *testing.T) {
 	}
 }
 
+func TestSQLiteIndexFactStoreProjectsStorageFactsForReplay(t *testing.T) {
+	root := t.TempDir()
+	facts := NewSQLiteIndexFactStore()
+	ctx := context.Background()
+	storageDef := store.ProjectDefinition{
+		ID:       "storage.bundle:appStorage",
+		Kind:     "storage.bundle",
+		Name:     "appStorage",
+		Fidelity: "resolved",
+		Status:   "active",
+		Metadata: json.RawMessage(`{"facts":{"kind":"storage.bundle","records":"records"}}`),
+	}
+	recordDef := store.ProjectDefinition{
+		ID:       "storage.recordStore:records",
+		Kind:     "storage.recordStore",
+		Name:     "records",
+		Fidelity: "resolved",
+		Status:   "active",
+		Metadata: json.RawMessage(`{"facts":{"kind":"storage.recordStore","backend":"inMemoryRecordStore","capabilities":{"record":{"ttl":"lazy","filter":"scan"}}}}`),
+	}
+	relation := store.ProjectRelation{
+		ID:       "relation:storage:records",
+		Type:     "storage.bundle.uses_record_store",
+		From:     "storage.bundle:appStorage",
+		To:       "storage.recordStore:records",
+		Fidelity: "resolved",
+	}
+	patch := IndexPatch{
+		SchemaVersion: 1,
+		Phase:         PhaseAST,
+		Project:       store.ProjectIdentity{Root: root, Name: "project"},
+		FinishedAt:    "2026-06-18T10:00:01Z",
+		Status:        "ok",
+		Facts: IndexPatchFacts{
+			Definitions: []store.ProjectDefinition{storageDef, recordDef},
+			Relations:   []store.ProjectRelation{relation},
+		},
+	}
+
+	if err := facts.CommitPhase(ctx, IndexFactTransaction{
+		Patch: patch,
+		Facts: []IndexFactEnvelope{
+			testIndexFactEnvelope(t, patch, "definitions:storage.bundle:appStorage", "definitions", storageDef),
+			testIndexFactEnvelope(t, patch, "definitions:storage.recordStore:records", "definitions", recordDef),
+			testIndexFactEnvelope(t, patch, "relations:storage.bundle.uses_record_store", "relations", relation),
+		},
+	}); err != nil {
+		t.Fatalf("CommitPhase error = %v", err)
+	}
+
+	projected, ok, err := facts.ProjectSnapshot(ctx, root, "project")
+	if err != nil {
+		t.Fatalf("ProjectSnapshot error = %v", err)
+	}
+	if !ok {
+		t.Fatal("ProjectSnapshot ok = false, want committed snapshot")
+	}
+	if findTestDefinition(projected.Definitions, "storage.bundle:appStorage") == nil {
+		t.Fatalf("definitions = %+v, want storage bundle", projected.Definitions)
+	}
+	if findTestDefinition(projected.Definitions, "storage.recordStore:records") == nil {
+		t.Fatalf("definitions = %+v, want record store", projected.Definitions)
+	}
+	if findTestRelation(projected.Relations, "relation:storage:records") == nil {
+		t.Fatalf("relations = %+v, want storage relation", projected.Relations)
+	}
+}
+
 func TestSQLiteIndexFactStoreInvalidatesFactsBySourceFile(t *testing.T) {
 	root := t.TempDir()
 	facts := NewSQLiteIndexFactStore()

@@ -20,6 +20,7 @@ import type {
   DataFacts,
   DependencyFacts,
   DefinitionIntelligence,
+  IndexedStorageCapabilities,
   InputSchemaContribution,
   JsonSchema,
   ProjectIndexData,
@@ -35,7 +36,7 @@ import { kindMeta, type FamilyId, type LintSeverity } from './kit'
 
 /** Structural/containment relation types — a child rolls up under `from`. */
 const CONTAINMENT_RE =
-  /includes_case|includes_step|includes_route|includes_tier|includes_option|includes_block|uses_store/
+  /includes_case|includes_step|includes_route|includes_tier|includes_option|includes_block|uses_store|storage\.bundle\.uses_(record|vector|blob)_store|storage\.scope\.wraps_storage/
 
 // ── schema field tree (JSON Schema → typed field nodes) ──────────────────────
 export interface SchemaField {
@@ -165,10 +166,18 @@ export interface IndexFacts {
   topK?: number
   // memory / blackboard
   backend?: string
+  variableName?: string
   blockCount?: number
   evictionPolicy?: string
   conflictPolicy?: string
   blockKind?: string
+  // storage
+  capabilities?: IndexedStorageCapabilities
+  records?: string
+  vectors?: string
+  blobs?: string
+  storage?: string
+  prefix?: string
   // workspace
   namespace?: string
   mounts?: Array<{ path: string; mode?: string }>
@@ -959,6 +968,32 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
       push('namespace', f.namespace)
       push('mounts', f.mounts)
       push('tools', f.hasTools ? 'yes' : null)
+      break
+    case 'storage.recordStore':
+      push('backend', f.backend)
+      push('variable', f.variableName)
+      push('ttl', f.capabilities?.record?.ttl)
+      push('filter', f.capabilities?.record?.filter)
+      break
+    case 'storage.vectorStore':
+      push('backend', f.backend)
+      push('variable', f.variableName)
+      push('dense', f.capabilities?.vector?.dense === true ? 'yes' : f.capabilities?.vector?.dense)
+      push('filter', f.capabilities?.vector?.filter)
+      break
+    case 'storage.blobStore':
+      push('backend', f.backend)
+      push('variable', f.variableName)
+      push('signed urls', f.capabilities?.blob?.signedUrls === true ? 'yes' : f.capabilities?.blob?.signedUrls)
+      break
+    case 'storage.bundle':
+      push('records', f.records)
+      push('vectors', f.vectors)
+      push('blobs', f.blobs)
+      break
+    case 'storage.scope':
+      push('storage', f.storage)
+      push('prefix', f.prefix)
       break
     case 'guardrail':
       push('policy', f.policy)

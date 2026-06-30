@@ -44,6 +44,7 @@ import {
   toExpression,
   unwrapExpression,
 } from './model'
+import { semanticStorageDefinitionEnrichments } from './storage-facts'
 
 type SemanticNode = SemanticAnalyzerNode<SemanticAnalyzerView>
 
@@ -63,7 +64,17 @@ export function semanticDefinitionEnrichments(
     case 'memory':
       return semanticMemoryDefinitionEnrichments(candidate, view)
     case 'workspace':
-      return semanticWorkspaceDefinitionEnrichments(candidate, view)
+      return [
+        ...semanticWorkspaceDefinitionEnrichments(candidate, view),
+        ...semanticStorageDefinitionEnrichments(candidate, view),
+      ]
+    case 'rag.retriever':
+    case 'storage.recordStore':
+    case 'storage.vectorStore':
+    case 'storage.blobStore':
+    case 'storage.bundle':
+    case 'storage.scope':
+      return semanticStorageDefinitionEnrichments(candidate, view)
     case 'routing.router':
       return semanticRouterDefinitionEnrichments(candidate, view)
     case 'routing.cascade':

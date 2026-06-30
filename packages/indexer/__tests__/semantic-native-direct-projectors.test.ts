@@ -204,6 +204,31 @@ describe('native semantic direct Crux projectors', () => {
 
     await expectDirectNativeParity(root, file)
   }, 20_000)
+
+  it('matches TypeScript facts for storage definitions and bundle wiring', async () => {
+    const root = await fixtureRoot()
+    await writeTsconfig(root)
+    const file = join(root, 'src/storage.ts')
+    await writeFile(
+      file,
+      `
+        import {
+          inMemoryBlobStore,
+          inMemoryRecordStore,
+          inMemoryVectorStore,
+          storage,
+        } from '@use-crux/core/storage'
+
+        export const records = inMemoryRecordStore()
+        export const vectors = inMemoryVectorStore()
+        export const blobs = inMemoryBlobStore()
+        export const appStorage = storage({ records, vectors, blobs })
+        export const tenantStorage = storage.scope(appStorage, 'tenant-a')
+      `,
+    )
+
+    await expectDirectNativeParity(root, file)
+  }, 20_000)
 })
 
 async function expectDirectNativeParity(root: string, file: string): Promise<void> {

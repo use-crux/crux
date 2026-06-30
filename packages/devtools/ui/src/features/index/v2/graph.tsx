@@ -37,7 +37,7 @@ function mulberry32(seed: number) {
 
 // containment / structural relation types are lifted, not drawn as edges
 const GRAPH_STRUCTURAL =
-  /includes_step|includes_route|includes_tier|includes_option|includes_block|includes_case|uses_store/
+  /includes_step|includes_route|includes_tier|includes_option|includes_block|includes_case|uses_store|storage\.bundle\.uses_(record|vector|blob)_store|storage\.scope\.wraps_storage/
 
 interface GNode {
   id: string

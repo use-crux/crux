@@ -27,6 +27,7 @@ import {
   toExpression,
   unwrapExpression,
 } from './model'
+import { semanticStorageRelationsForCandidate } from './storage-facts'
 import { semanticNodeKey, semanticStringLiteralProperty } from './syntax-readers'
 
 /**
@@ -67,6 +68,11 @@ export function semanticRelationsForCandidate(
       return semanticCascadeRelations(candidate, view)
     case 'routing.fallback':
       return [...semanticFallbackRelations(candidate, view), ...accessRelations]
+    case 'rag.retriever':
+    case 'workspace':
+    case 'storage.bundle':
+    case 'storage.scope':
+      return semanticStorageRelationsForCandidate(candidate, view)
     case 'constraint':
     case 'guardrail':
       return semanticSafetyRelations(candidate, view)
