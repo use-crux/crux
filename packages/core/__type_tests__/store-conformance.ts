@@ -1,27 +1,53 @@
 import { expectTypeOf } from 'vitest'
-import { inMemoryCruxStore, type CruxStore } from '@use-crux/core/store'
-import { describeCruxStoreConformance } from '@use-crux/core/store/testing/vitest'
-import type { DescribeCruxStoreConformanceOptions } from '@use-crux/core/store/testing/vitest'
+import { inMemoryBlobStore, inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
+import {
+  describeBlobStoreConformance,
+  describeRecordStoreConformance,
+  describeVectorStoreConformance,
+} from '@use-crux/core/storage/testing/vitest'
+import type {
+  DescribeBlobStoreConformanceOptions,
+  DescribeRecordStoreConformanceOptions,
+  DescribeVectorStoreConformanceOptions,
+} from '@use-crux/core/storage/testing/vitest'
+import type { BlobStore, JsonObject, RecordStore, VectorStore } from '@use-crux/core/storage'
 
-expectTypeOf(describeCruxStoreConformance).parameter(0).toEqualTypeOf<DescribeCruxStoreConformanceOptions>()
-
-const options: DescribeCruxStoreConformanceOptions = {
-  name: 'type-test-store',
-  prepare: () => inMemoryCruxStore(),
-  supports: {
-    ttl: true,
-    vectorSearch: true,
-  },
+interface ConformanceRecord extends JsonObject {
+  readonly title: string
 }
 
-expectTypeOf(options.prepare()).toEqualTypeOf<CruxStore | Promise<CruxStore>>()
+expectTypeOf(describeRecordStoreConformance<ConformanceRecord>)
+  .parameter(0)
+  .toEqualTypeOf<DescribeRecordStoreConformanceOptions<ConformanceRecord>>()
+expectTypeOf(describeVectorStoreConformance).parameter(0).toEqualTypeOf<DescribeVectorStoreConformanceOptions>()
+expectTypeOf(describeBlobStoreConformance).parameter(0).toEqualTypeOf<DescribeBlobStoreConformanceOptions>()
 
-const invalidOptions: DescribeCruxStoreConformanceOptions = {
+const recordOptions: DescribeRecordStoreConformanceOptions<ConformanceRecord> = {
+  name: 'type-test-records',
+  prepare: () => inMemoryRecordStore<ConformanceRecord>(),
+}
+
+const vectorOptions: DescribeVectorStoreConformanceOptions = {
+  name: 'type-test-vectors',
+  prepare: () => inMemoryVectorStore(),
+}
+
+const blobOptions: DescribeBlobStoreConformanceOptions = {
+  name: 'type-test-blobs',
+  prepare: () => inMemoryBlobStore(),
+}
+
+expectTypeOf(recordOptions.prepare()).toEqualTypeOf<RecordStore<ConformanceRecord> | Promise<RecordStore<ConformanceRecord>>>()
+expectTypeOf(vectorOptions.prepare()).toEqualTypeOf<VectorStore | Promise<VectorStore>>()
+expectTypeOf(blobOptions.prepare()).toEqualTypeOf<BlobStore | Promise<BlobStore>>()
+
+const invalidOptions: DescribeRecordStoreConformanceOptions = {
   name: 'invalid-store',
-  prepare: () => inMemoryCruxStore(),
-  // @ts-expect-error Conformance options intentionally constrain known optional capabilities.
-  supports: { blobSearch: true },
+  // @ts-expect-error Record conformance requires a RecordStore factory.
+  prepare: () => inMemoryVectorStore(),
 }
 
-void options
+void recordOptions
+void vectorOptions
+void blobOptions
 void invalidOptions

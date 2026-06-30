@@ -1,15 +1,26 @@
 import { describe, expect, it } from 'vitest'
+import { inMemoryBlobStore, inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
+import {
+  describeBlobStoreConformance,
+  describeRecordStoreConformance,
+  describeVectorStoreConformance,
+} from '../../storage/testing/vitest'
 import { inMemoryCruxStore } from '../../store/memory'
-import { describeCruxStoreConformance } from '../../store/testing/vitest'
 import type { StoreEvent } from '../../store/types'
 
-describeCruxStoreConformance({
-  name: 'inMemoryCruxStore',
-  prepare: () => inMemoryCruxStore(),
-  supports: {
-    ttl: true,
-    vectorSearch: true,
-  },
+describeRecordStoreConformance({
+  name: 'inMemoryRecordStore',
+  prepare: () => inMemoryRecordStore(),
+})
+
+describeVectorStoreConformance({
+  name: 'inMemoryVectorStore',
+  prepare: () => inMemoryVectorStore(),
+})
+
+describeBlobStoreConformance({
+  name: 'inMemoryBlobStore',
+  prepare: () => inMemoryBlobStore(),
 })
 
 describe('inMemoryCruxStore subscriptions', () => {
