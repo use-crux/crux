@@ -43,7 +43,15 @@ import {
   FLOW_KEY_PREFIX,
   SIGNAL_KEY_PREFIX,
   assertFlowSnapshotResumable,
+  consumeFlowSignal,
 } from './lifecycle'
+import {
+  cloneDeliveredSignals,
+  deliveredSignalPayload,
+  deliveredSignalsForSnapshot,
+  recordDeliveredSignal,
+  suspendDeliveryKey,
+} from './suspend-state'
 
 // Re-export types and errors so existing internal `../flow/scope` imports
 // keep working while the public flow surface stays centered on `flow()`.
@@ -137,6 +145,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
   const completedSteps: Record<string, { output: JsonValue; durationMs: number }> = snapshot?.completedSteps
     ? { ...snapshot.completedSteps }
     : {}
+  const deliveredSignals = cloneDeliveredSignals(snapshot)
 
   // Emit flow resume hook (before flow start, so timeline ordering is correct)
   if (isResume) {
@@ -172,6 +181,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
 
   // Track aggregates across steps
   let stepCount = 0
+  let suspendCount = 0
   const emittedSuspensionMarkers = new Set<string>()
 
   // Accumulated step results — pre-populated from snapshot on resume
@@ -280,10 +290,17 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
     },
 
     async suspend<S>(_name: string, _options?: SuspendOptions<S>): Promise<S> {
+      suspendCount++
+      const deliveryKey = suspendDeliveryKey(suspendCount, _name)
       const localSchema = signalSchemaFor(options?.signals?.[_name])
       const suspendOptions = (localSchema ? { ..._options, schema: localSchema } : _options) as
         | SuspendOptions<S>
         | undefined
+      const replayPayload = deliveredSignalPayload(deliveredSignals, deliveryKey)
+      if (isResume && replayPayload !== undefined) {
+        return validateSignalPayload(_name, suspendOptions?.schema, replayPayload) as S
+      }
+
       // On resume, first check for expiration
       if (isResume && snapshot) {
         const timeoutAt = snapshot.timeoutAt as number | undefined
@@ -302,6 +319,8 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           if (signalDoc) {
             // Signal found — emit hook and return payload
             const payload = validateSignalPayload(_name, suspendOptions?.schema, signalDoc.payload ?? {}) as S
+            recordDeliveredSignal(deliveredSignals, deliveryKey, _name, payload as JsonValue)
+            await consumeFlowSignal(store, flowId, _name)
             return payload
           }
         }
@@ -368,6 +387,9 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         ...snapshot,
         status: 'completed',
         completedSteps: completedSteps as FlowSnapshot['completedSteps'],
+        ...(deliveredSignalsForSnapshot(deliveredSignals)
+          ? { deliveredSignals: deliveredSignalsForSnapshot(deliveredSignals) }
+          : {}),
         updatedAt: completedAt,
         completedAt,
         observabilityContext: snapshot.observabilityContext ?? (resumeObservabilityContext as unknown as JsonObject),
@@ -389,6 +411,9 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           status: 'suspended',
           suspendedAt: error.suspendPoint,
           completedSteps: completedSteps as FlowSnapshot['completedSteps'],
+          ...(deliveredSignalsForSnapshot(deliveredSignals)
+            ? { deliveredSignals: deliveredSignalsForSnapshot(deliveredSignals) }
+            : {}),
           traceContext: flowTraceContext(existing?.sessionId, parentFlowId),
           observabilityContext: resumeObservabilityContext as unknown as JsonObject,
           createdAt: snapshot?.createdAt ?? startedAt,
@@ -426,6 +451,9 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           status: 'cancelled',
           suspendedAt: '',
           completedSteps: completedSteps as FlowSnapshot['completedSteps'],
+          ...(deliveredSignalsForSnapshot(deliveredSignals)
+            ? { deliveredSignals: deliveredSignalsForSnapshot(deliveredSignals) }
+            : {}),
           traceContext: flowTraceContext(existing?.sessionId, parentFlowId),
           observabilityContext: snapshot?.observabilityContext ?? (resumeObservabilityContext as unknown as JsonObject),
           createdAt: snapshot?.createdAt ?? startedAt,

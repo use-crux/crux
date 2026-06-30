@@ -4,11 +4,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Map, Value, json};
 
-use crate::builder::{StaticIndexLintBuilder, definition_evidence};
+use crate::builder::{StaticIndexLintBuilder, StaticIndexLintFindingInput, definition_evidence};
 use crate::contracts::{
-    context_requires_input_schema, flow_requires_args_schema, has_args_schema, has_input_schema,
-    has_output_schema, has_suspension_points, schema_source_evidence, suspension_point_labels,
-    tool_output_needs_adapter,
+    context_requires_input_schema, declared_signal_names, flow_requires_args_schema,
+    has_args_schema, has_input_schema, has_output_schema, has_suspension_points,
+    schema_source_evidence, suspension_point_labels, tool_output_needs_adapter,
 };
 use crate::emit::push_definition_finding;
 use crate::facts::{
@@ -158,6 +158,9 @@ fn append_definition_findings(
             )],
         );
     }
+    if definition.kind == "flow" {
+        append_flow_suspend_contract_findings(builder, definition, findings);
+    }
     if should_require_coverage(definition) && !context.covered.contains(&definition.id) {
         push_definition_finding(
             builder,
@@ -254,6 +257,98 @@ fn append_definition_findings(
             cascade_tiers: context.cascade_tiers,
         },
     ));
+}
+
+fn append_flow_suspend_contract_findings(
+    builder: &StaticIndexLintBuilder,
+    definition: &StaticIndexDefinition,
+    findings: &mut Vec<StaticIndexLintFinding>,
+) {
+    let labels = suspension_point_labels(definition);
+    let mut counts = BTreeMap::<String, usize>::new();
+    for label in &labels {
+        *counts.entry(label.clone()).or_insert(0) += 1;
+    }
+    for (label, count) in counts.into_iter().filter(|(_, count)| *count > 1) {
+        push_flow_suspend_finding(
+            builder,
+            findings,
+            "flow.duplicate_suspend_name",
+            &format!("{}:{}", definition.id, label),
+            definition,
+            format!(
+                "Flow \"{}\" suspends on \"{}\" {} times. Suspend names are pending-signal keys, so repeated names can make resume behavior ambiguous.",
+                definition.name, label, count
+            ),
+            vec![
+                definition_evidence(definition, "Flow has repeated suspend names"),
+                json!({
+                    "kind": "definition",
+                    "label": "Duplicate suspend name",
+                    "definitionId": definition.id,
+                    "source": definition.source,
+                    "data": { "suspendName": label, "occurrences": count },
+                }),
+            ],
+        );
+    }
+
+    let Some(declared) = declared_signal_names(definition) else {
+        return;
+    };
+    let mut reported = BTreeSet::new();
+    for label in labels {
+        if declared.contains(&label) || !reported.insert(label.clone()) {
+            continue;
+        }
+        push_flow_suspend_finding(
+            builder,
+            findings,
+            "flow.undeclared_suspend_signal",
+            &format!("{}:{}", definition.id, label),
+            definition,
+            format!(
+                "Flow \"{}\" suspends on \"{}\", but that signal is not declared in the local signal map.",
+                definition.name, label
+            ),
+            vec![
+                definition_evidence(
+                    definition,
+                    "Flow suspend name is missing from the local signal map",
+                ),
+                json!({
+                    "kind": "definition",
+                    "label": "Declared signals",
+                    "definitionId": definition.id,
+                    "source": definition.source,
+                    "data": { "signalNames": declared.iter().cloned().collect::<Vec<_>>() },
+                }),
+            ],
+        );
+    }
+}
+
+fn push_flow_suspend_finding(
+    builder: &StaticIndexLintBuilder,
+    findings: &mut Vec<StaticIndexLintFinding>,
+    rule_id: &str,
+    key: &str,
+    definition: &StaticIndexDefinition,
+    message: String,
+    evidence: Vec<Value>,
+) {
+    if let Some(finding) = builder.finding(StaticIndexLintFindingInput {
+        rule_id,
+        key,
+        message,
+        source: definition.source.as_ref(),
+        primary_definition_id: Some(definition.id.as_str()),
+        related_definition_ids: vec![definition.id.clone()],
+        evidence,
+        fixes: Vec::new(),
+    }) {
+        findings.push(finding);
+    }
 }
 
 fn has_experiment_history_without_baseline(definition: &StaticIndexDefinition) -> bool {

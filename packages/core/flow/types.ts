@@ -124,6 +124,21 @@ export type FlowResult<T> =
   | { status: 'expired'; flowId: string; suspendedAt: string }
 
 /** Persisted flow snapshot stored in a RecordStore. */
+export interface DeliveredFlowSignal extends JsonObject {
+  /** Signal name that was delivered to a suspend point. */
+  signalName: string
+  /** Validated signal payload replayed for this suspend occurrence. */
+  payload: JsonValue
+  /** Unix timestamp recorded when the pending signal was consumed. */
+  deliveredAt: number
+}
+
+/** Persisted, occurrence-keyed suspend payloads used for resume replay. */
+export interface DeliveredFlowSignals extends JsonObject {
+  [key: string]: DeliveredFlowSignal | undefined
+}
+
+/** Persisted flow snapshot stored in a RecordStore. */
 export interface FlowSnapshot extends JsonObject {
   flowId: string
   name: string
@@ -136,6 +151,12 @@ export interface FlowSnapshot extends JsonObject {
       durationMs: number
     }
   >
+  /**
+   * Validated suspend payloads that have already crossed the pending-signal
+   * boundary. Keys include the source-order suspend occurrence so repeated
+   * signal names do not accidentally replay stale approvals.
+   */
+  deliveredSignals?: DeliveredFlowSignals
   traceContext: JsonObject
   observabilityContext?: JsonObject
   createdAt: number

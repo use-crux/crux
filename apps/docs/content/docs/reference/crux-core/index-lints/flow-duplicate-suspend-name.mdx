@@ -1,0 +1,36 @@
+---
+title: flow.duplicate_suspend_name
+---
+
+## What it checks
+
+Crux emits this finding when one flow body contains the same literal `flow.suspend("name")` more than once.
+
+## Why it matters
+
+Flow signals are pending records keyed by signal name. Reusing a suspend name makes approval and resume behavior ambiguous because a later wait cannot be distinguished from an earlier one by name alone.
+
+## How to fix
+
+Give each suspend point a distinct literal name:
+
+```ts
+await flow.suspend("plan-approval")
+await flow.suspend("content-review")
+```
+
+## When to suppress
+
+Suppress only when the repeated name is intentional and covered by an integration test:
+
+```ts
+// crux-lint-disable-next-line flow.duplicate_suspend_name -- repeated wait covered by integration suite
+```
+
+## Rule metadata
+
+- Rule id: `flow.duplicate_suspend_name`
+- Category: `runtime`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

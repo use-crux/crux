@@ -79,19 +79,13 @@ function collectFlowStepRefs(
   ]
 }
 
-/** Converts one `step.step("name", target)` call into flow step evidence when it is statically visible. */
+/** Converts one authored step call into flow step evidence when it is statically visible. */
 function flowStepRefForCall(
   ctx: StaticCallContext,
   flowDefinitionKey: string,
   node: ts.Node,
 ): InternalFlowStepRef | undefined {
-  if (
-    !ts.isCallExpression(node) ||
-    !ts.isPropertyAccessExpression(node.expression) ||
-    node.expression.name.text !== 'step'
-  ) {
-    return undefined
-  }
+  if (!ts.isCallExpression(node) || flowScopeCallName(node) !== 'step') return undefined
   const firstArg = node.arguments[0]
   if (!firstArg || !ts.isStringLiteralLike(firstArg)) return undefined
   const targetArg = node.arguments[1]
@@ -172,24 +166,30 @@ function collectSuspensions(
 
 /** Returns the step label for a `step(...)` call when present. */
 function flowStepName(node: ts.Node): string | undefined {
-  if (
-    !ts.isCallExpression(node) ||
-    !ts.isPropertyAccessExpression(node.expression) ||
-    node.expression.name.text !== 'step'
-  ) {
-    return undefined
-  }
+  if (!ts.isCallExpression(node) || flowScopeCallName(node) !== 'step') return undefined
   const firstArg = node.arguments[0]
   return firstArg && ts.isStringLiteralLike(firstArg) ? firstArg.text : undefined
 }
 
 /** Returns signal evidence for `waitFor(...)` or `suspend(...)` calls. */
 function flowSuspensionForCall(node: ts.Node, stepName: string | undefined): InternalFlowSuspensionRef | undefined {
-  if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return undefined
-  const method = node.expression.name.text
+  if (!ts.isCallExpression(node)) return undefined
+  const method = flowScopeCallName(node)
   const firstArg = node.arguments[0]
   if ((method !== 'waitFor' && method !== 'suspend') || !firstArg || !ts.isStringLiteralLike(firstArg)) return undefined
   return { signal: firstArg.text, stepName }
+}
+
+/**
+ * Returns the authored flow-scope method name for direct destructured calls and member calls.
+ *
+ * The public authoring surface supports both `scope.step(...)` and `step(...)` when a handler
+ * destructures its flow scope. Index traversal normalizes those spellings before projecting facts.
+ */
+function flowScopeCallName(call: ts.CallExpression): string | undefined {
+  if (ts.isIdentifier(call.expression)) return call.expression.text
+  if (ts.isPropertyAccessExpression(call.expression)) return call.expression.name.text
+  return undefined
 }
 
 /** Returns source roots that may contain flow step or suspension calls. */

@@ -67,6 +67,20 @@ pub(crate) fn suspension_point_labels(definition: &StaticIndexDefinition) -> Vec
         .collect()
 }
 
+pub(crate) fn declared_signal_names(
+    definition: &StaticIndexDefinition,
+) -> Option<BTreeSet<String>> {
+    metadata_value(definition, "signalNames")
+        .and_then(Value::as_array)
+        .map(|signals| {
+            signals
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+}
+
 pub(crate) fn schema_source_evidence(
     definition: &StaticIndexDefinition,
     property: &str,

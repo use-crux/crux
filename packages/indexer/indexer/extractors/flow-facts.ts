@@ -58,6 +58,8 @@ export interface FlowFactProjectionInput {
   readonly argsSchema?: Record<string, unknown>
   /** Whether an args contract property is present. */
   readonly hasArgs: boolean
+  /** Local signal names declared on the flow definition, when statically visible. */
+  readonly signalNames?: readonly string[]
   /** Normalized traversal evidence from the selected syntax frontend. */
   readonly traversal: FlowTraversalEvidence
   /** Compiler-owned id sanitizer. */
@@ -113,10 +115,12 @@ export function flowFactsFromEvidence(input: FlowFactProjectionInput): Extracted
           args: input.args,
           argsSchema: input.argsSchema,
           hasArgs: input.hasArgs,
+          signalNames: input.signalNames,
           facts: {
             kind: 'flow',
             stepNames,
             hasArgs: input.hasArgs,
+            signalNames: input.signalNames,
             runtime,
           },
           intelligence: primitiveFlowIntelligence(

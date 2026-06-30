@@ -1,5 +1,6 @@
 ---
 "@use-crux/core": minor
+"@use-crux/indexer": minor
 "@use-crux/otel": patch
 ---
 
@@ -12,5 +13,9 @@ Flows can now declare local typed signal maps with `flow(name, { signals }, hand
 Declared signal schemas now validate payloads before `handle.signal()` writes to persistence and again when `flow.suspend()` delivers a stored signal during resume.
 
 Resumed flows now persist terminal lifecycle metadata when they complete, cancel, or expire. Terminal snapshots are retained for inspection and listing, but `completed`, `cancelled`, and `expired` snapshots cannot be resumed again.
+
+Delivered flow signals are now consumed after validation and replayed from the flow snapshot for earlier suspend points, preventing stale pending signals from satisfying later waits.
+
+The Project Index now records local flow signal names and emits lint findings for duplicate literal `flow.suspend()` names and literal suspend names missing from a local signal map.
 
 Refresh OTel package README wording to describe `flow().run()` spans.

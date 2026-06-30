@@ -9,7 +9,7 @@
  */
 
 import { getRuntime, resolveRecords } from '../runtime/runtime'
-import type { JsonValue } from '../storage'
+import type { JsonValue, RecordStore } from '../storage'
 import type { FlowSnapshot, ListFlowsOptions, FlowSummary } from './types'
 
 // ─────────────────────────────────────────────────────────────────
@@ -107,6 +107,17 @@ export async function signalFlow(flowId: string, name: string, payload: JsonValu
     signaledAt: Date.now(),
     updatedAt: Date.now(),
   })
+}
+
+/**
+ * Consume one pending signal after it has been validated for delivery.
+ *
+ * Delivery is a single-use boundary: once `flow.suspend(name)` accepts a
+ * persisted payload, later same-name suspend points must wait for a fresh
+ * signal instead of observing stale state.
+ */
+export async function consumeFlowSignal(store: RecordStore, flowId: string, name: string): Promise<void> {
+  await store.delete(`${SIGNAL_KEY_PREFIX}${flowId}:${name}`)
 }
 
 /** Load a persisted flow snapshot by ID. */

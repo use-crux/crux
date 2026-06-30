@@ -694,6 +694,76 @@
     "fidelity": "safe"
   },
   {
+    "id": "flow.duplicate_suspend_name",
+    "source": "builtin",
+    "severity": "warning",
+    "category": "runtime",
+    "maturity": "preview",
+    "confidence": "high",
+    "profiles": [
+      "recommended",
+      "strict"
+    ],
+    "title": "Flow repeats a suspend name",
+    "description": "Flow signal delivery is keyed by signal name and consumed after one delivery. Repeating a suspend name in one flow body makes later resumes depend on source-order replay rather than a distinct signal contract.",
+    "rationale": "Flow signal delivery is keyed by signal name and consumed after one delivery. Repeating a suspend name in one flow body makes later resumes depend on source-order replay rather than a distinct signal contract.",
+    "impact": "A repeated suspend name can make approvals ambiguous and can strand a later wait behind an already-used signal name.",
+    "docsUrl": "/docs/reference/crux-core/index-lints/flow-duplicate-suspend-name",
+    "fixes": [
+      {
+        "title": "Use unique suspend names",
+        "description": "Give each suspend point a distinct literal name, or split repeated waits into separate flows until scoped/repeating signal attempts are supported.",
+        "kind": "manual"
+      }
+    ],
+    "suppression": {
+      "supported": true,
+      "scope": "next-line",
+      "directive": "// crux-lint-disable-next-line flow.duplicate_suspend_name -- reason"
+    },
+    "phase": "index",
+    "requires": [
+      "definitions",
+      "relations"
+    ],
+    "fidelity": "safe"
+  },
+  {
+    "id": "flow.undeclared_suspend_signal",
+    "source": "builtin",
+    "severity": "warning",
+    "category": "contracts",
+    "maturity": "preview",
+    "confidence": "high",
+    "profiles": [
+      "recommended",
+      "strict"
+    ],
+    "title": "Flow suspends on an undeclared signal",
+    "description": "A local signal map is the public signal contract for a flow. Literal suspend names outside that map cannot be signaled through the typed handle and usually mean the runtime contract drifted from the authored type contract.",
+    "rationale": "A local signal map is the public signal contract for a flow. Literal suspend names outside that map cannot be signaled through the typed handle and usually mean the runtime contract drifted from the authored type contract.",
+    "impact": "A flow may suspend at a signal that callers cannot discover or type-check through the flow handle.",
+    "docsUrl": "/docs/reference/crux-core/index-lints/flow-undeclared-suspend-signal",
+    "fixes": [
+      {
+        "title": "Declare or rename the signal",
+        "description": "Add the suspend name to the flow signals map, or rename the suspend call to one of the declared signal keys.",
+        "kind": "manual"
+      }
+    ],
+    "suppression": {
+      "supported": true,
+      "scope": "next-line",
+      "directive": "// crux-lint-disable-next-line flow.undeclared_suspend_signal -- reason"
+    },
+    "phase": "index",
+    "requires": [
+      "definitions",
+      "relations"
+    ],
+    "fidelity": "safe"
+  },
+  {
     "id": "workspace.write_without_guardrail",
     "source": "builtin",
     "severity": "warning",

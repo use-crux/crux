@@ -120,6 +120,37 @@ const lintParityCases = [
     expectedRuleIds: ['definition.missing_eval_coverage', 'flow.suspension_without_coverage'],
   },
   {
+    name: 'flow suspend contract findings',
+    profile: 'strict',
+    definitions: [
+      definition({
+        id: 'flow:review',
+        kind: 'flow',
+        name: 'review',
+        metadata: {
+          argsSchema: { type: 'object' },
+          signalNames: ['approval'],
+          intelligence: {
+            confidence: 'static',
+            control: {
+              suspensionPoints: [
+                { id: 'approval', label: 'approval' },
+                { id: 'approval', label: 'approval' },
+                { id: 'release', label: 'release' },
+              ],
+            },
+          },
+        },
+      }),
+    ],
+    expectedRuleIds: [
+      'definition.missing_eval_coverage',
+      'flow.suspension_without_coverage',
+      'flow.duplicate_suspend_name',
+      'flow.undeclared_suspend_signal',
+    ],
+  },
+  {
     name: 'tool contract findings',
     profile: 'strict',
     definitions: [

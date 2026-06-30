@@ -1,0 +1,41 @@
+---
+title: flow.undeclared_suspend_signal
+---
+
+## What it checks
+
+Crux emits this finding when a flow declares a local `signals` map and the flow body suspends on a literal name that is not in that map.
+
+## Why it matters
+
+The local signal map is the flow's typed external contract. A suspend name outside that map cannot be sent through the typed flow handle, so callers lose autocomplete, payload typing, and validation guidance.
+
+## How to fix
+
+Add the suspend name to the signal map or rename the suspend call to an existing key:
+
+```ts
+const review = flow(
+  "review",
+  { signals: { approval: approvalSchema } },
+  async (flow) => {
+    await flow.suspend("approval")
+  },
+)
+```
+
+## When to suppress
+
+Suppress only when a dynamic or lower-level signal path intentionally owns that suspend point:
+
+```ts
+// crux-lint-disable-next-line flow.undeclared_suspend_signal -- signaled through a lower-level adapter
+```
+
+## Rule metadata
+
+- Rule id: `flow.undeclared_suspend_signal`
+- Category: `contracts`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

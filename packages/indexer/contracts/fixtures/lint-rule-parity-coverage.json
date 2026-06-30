@@ -106,6 +106,16 @@
       "negativeFixture": "index-lint-native-parity.test.ts"
     },
     {
+      "ruleId": "flow.duplicate_suspend_name",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "flow.undeclared_suspend_signal",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
       "ruleId": "workspace.write_without_guardrail",
       "positiveFixture": "index-lint-native-parity.test.ts",
       "negativeFixture": "index-lint-native-parity.test.ts"

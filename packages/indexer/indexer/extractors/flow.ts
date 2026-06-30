@@ -27,6 +27,7 @@ export function flowFactsFromStaticContext(ctx: StaticCallContext): ExtractedFac
     args: ctx.objectArg ? objectPropertyKeys(ctx.objectArg, 'args') : undefined,
     argsSchema,
     hasArgs: ctx.objectArg ? hasProperty(ctx.objectArg, 'args') : false,
+    signalNames: flowSignalNames(ctx),
     traversal,
     safeId: ctx.safeId,
     define: (id, kind, name, metadata) => ctx.define(id, kind, name, undefined, metadata),
@@ -46,6 +47,20 @@ function flowArgsSchema(ctx: StaticCallContext): Record<string, unknown> | undef
     schemaProperty(ctx.objectArg, 'args', ctx.localInitializers) ??
     convexArgsSchema(ctx.objectArg, ctx.localInitializers)
   )
+}
+
+/** Reads local flow signal names from object-style or positional definition metadata. */
+function flowSignalNames(ctx: StaticCallContext): readonly string[] | undefined {
+  const options = flowOptionsObject(ctx)
+  return options ? objectLiteralPropertyKeys(options, 'signals') : undefined
+}
+
+/** Returns the object that may contain definition-time flow options. */
+function flowOptionsObject(ctx: StaticCallContext): ts.ObjectLiteralExpression | undefined {
+  if (ctx.objectArg && hasProperty(ctx.objectArg, 'signals')) return ctx.objectArg
+  if (!ts.isCallExpression(ctx.call)) return undefined
+  const secondArg = ctx.call.arguments[1]
+  return secondArg && ts.isObjectLiteralExpression(secondArg) ? secondArg : undefined
 }
 
 /**
@@ -78,15 +93,20 @@ function propertyName(name: ts.PropertyName): string | undefined {
  * empty authored contract.
  */
 function objectPropertyKeys(object: ts.ObjectLiteralExpression, name: string): string[] | undefined {
+  const keys = objectLiteralPropertyKeys(object, name)
+  return keys && keys.length > 0 ? keys : undefined
+}
+
+/** Returns object-literal keys for a named property, preserving an empty object as an empty contract. */
+function objectLiteralPropertyKeys(object: ts.ObjectLiteralExpression, name: string): string[] | undefined {
   const property = object.properties.find(
     (item): item is ts.PropertyAssignment => ts.isPropertyAssignment(item) && propertyName(item.name) === name,
   )
   if (!property || !ts.isObjectLiteralExpression(property.initializer)) return undefined
-  const keys = property.initializer.properties
+  return property.initializer.properties
     .map((item) => {
       if (!ts.isPropertyAssignment(item) && !ts.isShorthandPropertyAssignment(item)) return undefined
       return propertyName(item.name)
     })
     .filter((value): value is string => typeof value === 'string')
-  return keys.length > 0 ? keys : undefined
 }
