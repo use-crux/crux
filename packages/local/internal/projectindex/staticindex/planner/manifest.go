@@ -6,7 +6,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-const syntaxFrontendVersion = "oxc_parser@0.133.0+crux_native_group3.5"
+const syntaxFrontendVersion = "oxc_parser@0.133.0+crux_native_group3.6"
 
 var defaultCallNames = []string{
 	"Agent",
@@ -17,6 +17,10 @@ var defaultCallNames = []string{
 	"constraint",
 	"context",
 	"convexAgent",
+	"convexRecordStore",
+	"convexStorage",
+	"convexVectorStore",
+	"convexWorkspaceBlobStore",
 	"createTool",
 	"cruxFlow",
 	"evaluate",
@@ -24,6 +28,10 @@ var defaultCallNames = []string{
 	"flow",
 	"fromRegistry",
 	"guardrail",
+	"inMemoryBlobStore",
+	"inMemoryRecordStore",
+	"inMemoryStorage",
+	"inMemoryVectorStore",
 	"injectable",
 	"llmJudge",
 	"memory",
@@ -34,8 +42,12 @@ var defaultCallNames = []string{
 	"retrievalPipeline",
 	"retriever",
 	"router",
+	"scope",
+	"storage",
 	"swarm",
 	"tool",
+	"upstashRedisRecordStore",
+	"upstashVectorStore",
 	"workspace",
 }
 
@@ -47,6 +59,10 @@ var defaultCallInterestNames = []string{
 	"constraint",
 	"context",
 	"convexAgent",
+	"convexRecordStore",
+	"convexStorage",
+	"convexVectorStore",
+	"convexWorkspaceBlobStore",
 	"createTool",
 	"cruxFlow",
 	"evaluate",
@@ -54,6 +70,10 @@ var defaultCallInterestNames = []string{
 	"flow",
 	"fromRegistry",
 	"guardrail",
+	"inMemoryBlobStore",
+	"inMemoryRecordStore",
+	"inMemoryStorage",
+	"inMemoryVectorStore",
 	"injectable",
 	"llmJudge",
 	"memory",
@@ -64,8 +84,12 @@ var defaultCallInterestNames = []string{
 	"retrievalPipeline",
 	"retriever",
 	"router",
+	"scope",
+	"storage",
 	"swarm",
 	"tool",
+	"upstashRedisRecordStore",
+	"upstashVectorStore",
 	"workspace",
 }
 
@@ -117,6 +141,7 @@ func defaultHost() json.RawMessage {
 		"safety",
 		"scorer",
 		"skill-registry",
+		"storage",
 		"tool",
 		"workspace",
 	}
@@ -125,7 +150,7 @@ func defaultHost() json.RawMessage {
 		extractors = append(extractors, map[string]any{
 			"extension": map[string]string{
 				"name":    "@use-crux/indexer/crux-core",
-				"version": "1",
+				"version": "2",
 			},
 			"name": family,
 			"mode": "native-covered",

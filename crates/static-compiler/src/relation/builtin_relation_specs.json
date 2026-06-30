@@ -1269,6 +1269,55 @@
     "runtimeJoin": true
   },
   {
+    "type": "rag.retriever.uses_blob_store",
+    "fromKinds": [
+      "rag.retriever"
+    ],
+    "toKinds": [
+      "storage.blobStore"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "rag.retriever.uses_record_store",
+    "fromKinds": [
+      "rag.retriever"
+    ],
+    "toKinds": [
+      "storage.recordStore"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "rag.retriever.uses_storage",
+    "fromKinds": [
+      "rag.retriever"
+    ],
+    "toKinds": [
+      "storage.bundle",
+      "storage.scope"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "rag.retriever.uses_vector_store",
+    "fromKinds": [
+      "rag.retriever"
+    ],
+    "toKinds": [
+      "storage.vectorStore"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
     "type": "router.includes_route",
     "fromKinds": [
       "routing.router"
@@ -1401,6 +1450,55 @@
     "runtimeJoin": true
   },
   {
+    "type": "storage.bundle.uses_blob_store",
+    "fromKinds": [
+      "storage.bundle"
+    ],
+    "toKinds": [
+      "storage.blobStore"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "storage.bundle.uses_record_store",
+    "fromKinds": [
+      "storage.bundle"
+    ],
+    "toKinds": [
+      "storage.recordStore"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "storage.bundle.uses_vector_store",
+    "fromKinds": [
+      "storage.bundle"
+    ],
+    "toKinds": [
+      "storage.vectorStore"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "storage.scope.wraps_storage",
+    "fromKinds": [
+      "storage.scope"
+    ],
+    "toKinds": [
+      "storage.bundle",
+      "storage.scope"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
     "type": "tool.queries_retriever",
     "fromKinds": [
       "tool"
@@ -1507,6 +1605,55 @@
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
+  },
+  {
+    "type": "workspace.uses_blob_store",
+    "fromKinds": [
+      "workspace"
+    ],
+    "toKinds": [
+      "storage.blobStore"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "workspace.uses_record_store",
+    "fromKinds": [
+      "workspace"
+    ],
+    "toKinds": [
+      "storage.recordStore"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "workspace.uses_storage",
+    "fromKinds": [
+      "workspace"
+    ],
+    "toKinds": [
+      "storage.bundle",
+      "storage.scope"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
+  },
+  {
+    "type": "workspace.uses_vector_store",
+    "fromKinds": [
+      "workspace"
+    ],
+    "toKinds": [
+      "storage.vectorStore"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": false
   },
   {
     "type": "workspace.exposes_tool",

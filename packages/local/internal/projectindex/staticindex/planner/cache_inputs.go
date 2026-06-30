@@ -10,7 +10,7 @@ func DefaultCacheCompilerInputs() []json.RawMessage {
 		`{"kind":"compiler-projection","name":"prompt-context-tree-paths","version":"1","phase":"resolve"}`,
 		`{"kind":"compiler-projection","name":"runtime-prepare-use-entries","version":"1","phase":"parse"}`,
 		`{"kind":"compiler-projection","name":"source-ref-projection","version":"1","phase":"parse"}`,
-		`{"kind":"extension-manifest","name":"@use-crux/indexer/crux-core","version":"2","digest":"9c3b36a0826e4861a68247126a241017715048d9fef28b6649808f17ace3ba71"}`,
+		`{"kind":"extension-manifest","name":"@use-crux/indexer/crux-core","version":"2","digest":"c7c2234898b2e15be8055b214140a4f6e77a7087c11e15a272e224403eaaef63"}`,
 		`{"kind":"extension","name":"@use-crux/indexer/crux-core","version":"2"}`,
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core","name":"agent"}`,
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core","name":"blackboard"}`,
@@ -27,12 +27,13 @@ func DefaultCacheCompilerInputs() []json.RawMessage {
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core","name":"safety"}`,
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core","name":"scorer"}`,
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core","name":"skill-registry"}`,
+		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core","name":"storage"}`,
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core","name":"tool"}`,
 		`{"kind":"extractor","extension":"@use-crux/indexer/crux-core","name":"workspace"}`,
-		`{"kind":"native-primitive-manifest","name":"crux-static-index-host","version":"1","digest":"03e0df54ff51a42158cd99f2c8a38e14b82f57f779b4e7c79710e6a86254bff5"}`,
-		`{"kind":"relation-policy","name":"runtime-relation-specs","digest":"0aa11aad16e45c4064273c1e406633efed30801f98f1e2f609c4191ecf21f7ed"}`,
-		`{"kind":"static-evidence-manifest","name":"runtime-static-interests","digest":"56da88dcef8a7fd7805bacf329632f17cd43d46d792216fe5522e2550f60b2a2"}`,
-		`{"kind":"syntax-frontend","name":"oxc-rust","version":"oxc_parser@0.133.0+crux_native_group3.5"}`,
+		`{"kind":"native-primitive-manifest","name":"crux-static-index-host","version":"1","digest":"559c42ef7b97804846278cb42b84eff15dfda9784f4be1cd172ec44dad0f9dfb"}`,
+		`{"kind":"relation-policy","name":"runtime-relation-specs","digest":"a6c6f3eb75269d7ee071eec64f069d4882a4dea07200477b65360bcc2ae8ddc6"}`,
+		`{"kind":"static-evidence-manifest","name":"runtime-static-interests","digest":"2469222bba7da6017ff090ab5a434511ff0d5adbb14970f5b420713304a0677c"}`,
+		`{"kind":"syntax-frontend","name":"oxc-rust","version":"oxc_parser@0.133.0+crux_native_group3.6"}`,
 	}
 	out := make([]json.RawMessage, 0, len(inputs))
 	for _, input := range inputs {
