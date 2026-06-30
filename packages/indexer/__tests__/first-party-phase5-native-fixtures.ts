@@ -1,255 +1,280 @@
-import { describe, expect } from 'vitest'
+import { describe, expect } from "vitest";
 import {
   extractNativeAndFallback,
   expectNativeExtractionParity,
   itWithRustOxc,
-} from './native-first-party-fixture-helpers'
+} from "./native-first-party-fixture-helpers";
 
-describe('first-party Phase 5 native fixtures', () => {
+describe("first-party Phase 5 native fixtures", () => {
   itWithRustOxc(
-    'emits exact native workspace facts from Rust/Oxc records',
+    "emits exact native workspace facts from Rust/Oxc records",
     async () => {
       const source = [
         "const searchDocs = createTool({ name: 'searchDocs' })",
-        '',
-        'export const scratch = workspace({',
+        "",
+        "export const scratch = workspace({",
         "  id: 'scratch',",
         "  namespace: 'tenant-a',",
-        '  tools: { searchDocs },',
+        "  tools: { searchDocs },",
         "  mounts: [{ path: '/workspace', access: 'write', description: 'Draft files' }],",
-        '  storage: blobStore,',
-        '})',
-      ].join('\n')
-      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
-        source,
-        callNames: ['workspace'],
-      })
+        "  storage: blobStore,",
+        "})",
+      ].join("\n");
+      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
+        {
+          source,
+          callNames: ["workspace"],
+        },
+      );
 
-      expect(record.nativeFacts ?? []).toHaveLength(1)
+      expect(record.nativeFacts ?? []).toHaveLength(1);
       expect(record.nativeFacts?.[0]?.replaces).toEqual([
-        { extension: '@use-crux/indexer/crux-core', extractor: 'workspace' },
-      ])
-      expectNativeExtractionParity(nativeOut, fallbackOut)
+        { extension: "@use-crux/indexer/crux-core", extractor: "workspace" },
+      ]);
+      expectNativeExtractionParity(nativeOut, fallbackOut);
     },
     30_000,
-  )
+  );
 
   itWithRustOxc(
-    'matches workspace tool-only intelligence metadata',
+    "matches workspace tool-only intelligence metadata",
     async () => {
       const source = [
         "const searchDocs = createTool({ name: 'searchDocs' })",
-        '',
-        'export const scratchPad = workspace({',
-        '  tools: { searchDocs },',
-        '})',
-      ].join('\n')
-      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
-        source,
-        callNames: ['workspace'],
-      })
+        "",
+        "export const scratchPad = workspace({",
+        "  tools: { searchDocs },",
+        "})",
+      ].join("\n");
+      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
+        {
+          source,
+          callNames: ["workspace"],
+        },
+      );
 
-      expect(record.nativeFacts ?? []).toHaveLength(1)
-      expectNativeExtractionParity(nativeOut, fallbackOut)
+      expect(record.nativeFacts ?? []).toHaveLength(1);
+      expectNativeExtractionParity(nativeOut, fallbackOut);
     },
     30_000,
-  )
+  );
 
   itWithRustOxc(
-    'matches workspace V0 data access methods in native primitive facts',
+    "matches workspace versioning data access methods in native primitive facts",
     async () => {
       const source = [
         "export const scratch = workspace({ id: 'scratch' })",
-        '',
-        'export const writer = tool({',
+        "",
+        "export const writer = tool({",
         "  name: 'writer',",
-        '  execute: async () => {',
+        "  execute: async () => {",
         "    await scratch.grep('alpha')",
         "    await scratch.artifacts({ status: 'final' })",
         "    await scratch.stat('/workspace/a.md')",
         "    await scratch.exists('/workspace/a.md')",
+        "    await scratch.history('/workspace/a.md')",
+        "    await scratch.diff('/workspace/a.md')",
         "    await scratch.rename('/workspace/a.md', '/workspace/b.md')",
         "    await scratch.move('/workspace/b.md', '/workspace/c.md')",
         "    await scratch.copy('/workspace/c.md', '/workspace/d.md')",
+        "    await scratch.undo('/workspace/d.md')",
         "    await scratch.finalize('/outputs/report.md')",
-        '  },',
-        '})',
-      ].join('\n')
+        "  },",
+        "})",
+      ].join("\n");
       const { fallbackOut, nativeOut } = await extractNativeAndFallback({
         source,
-        callNames: ['workspace', 'tool'],
-      })
+        callNames: ["workspace", "tool"],
+      });
 
-      expectNativeExtractionParity(nativeOut, fallbackOut)
+      expectNativeExtractionParity(nativeOut, fallbackOut);
     },
     30_000,
-  )
+  );
 
   itWithRustOxc(
-    'matches property-access workspace calls without config objects',
+    "matches property-access workspace calls without config objects",
     async () => {
       const source = [
         'const qk = { workspaces: { workspace: (id: string) => ["workspace", id] } }',
-        '',
-        'export function useWorkspace(workspaceId: string) {',
-        '  const key = qk.workspaces.workspace(workspaceId)',
-        '  return key',
-        '}',
-      ].join('\n')
-      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
-        source,
-        callNames: ['workspace'],
-      })
+        "",
+        "export function useWorkspace(workspaceId: string) {",
+        "  const key = qk.workspaces.workspace(workspaceId)",
+        "  return key",
+        "}",
+      ].join("\n");
+      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
+        {
+          source,
+          callNames: ["workspace"],
+        },
+      );
 
-      expect(record.nativeFacts ?? []).toHaveLength(1)
-      expectNativeExtractionParity(nativeOut, fallbackOut)
+      expect(record.nativeFacts ?? []).toHaveLength(1);
+      expectNativeExtractionParity(nativeOut, fallbackOut);
     },
     30_000,
-  )
+  );
 
   itWithRustOxc(
-    'emits exact native safety facts from Rust/Oxc records',
+    "emits exact native safety facts from Rust/Oxc records",
     async () => {
       const source = [
         "const writerPrompt = prompt({ id: 'writer' })",
-        'const validateTone = () => true',
-        'const runGuardrail = () => true',
-        '',
-        'export const safeTone = constraint({',
+        "const validateTone = () => true",
+        "const runGuardrail = () => true",
+        "",
+        "export const safeTone = constraint({",
         "  name: 'safe-tone',",
         "  severity: 'high',",
-        '  appliesTo: writerPrompt,',
-        '  validate: validateTone,',
-        '})',
-        '',
-        'export const outputGuard = guardrail({',
+        "  appliesTo: writerPrompt,",
+        "  validate: validateTone,",
+        "})",
+        "",
+        "export const outputGuard = guardrail({",
         "  name: 'output-guard',",
         "  phase: 'output',",
         "  targets: ['prompt:writer'],",
-        '  run: runGuardrail,',
-        '})',
-      ].join('\n')
-      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
-        source,
-        callNames: ['prompt', 'constraint', 'guardrail'],
-      })
+        "  run: runGuardrail,",
+        "})",
+      ].join("\n");
+      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
+        {
+          source,
+          callNames: ["prompt", "constraint", "guardrail"],
+        },
+      );
 
-      expect(nativeFactCount(record, 'safety')).toBe(2)
-      expectNativeExtractionParity(nativeOut, fallbackOut)
+      expect(nativeFactCount(record, "safety")).toBe(2);
+      expectNativeExtractionParity(nativeOut, fallbackOut);
     },
     30_000,
-  )
+  );
 
   itWithRustOxc(
-    'emits exact native scorer facts from Rust/Oxc records',
+    "emits exact native scorer facts from Rust/Oxc records",
     async () => {
-      const longCriteria = `${'A'.repeat(241)}`
+      const longCriteria = `${"A".repeat(241)}`;
       const source = [
         "const modelId = 'gpt-test'",
-        'const scoreAnswer = () => 1',
-        '',
-        'export const relevanceJudge = llmJudge({',
+        "const scoreAnswer = () => 1",
+        "",
+        "export const relevanceJudge = llmJudge({",
         "  id: 'relevance',",
-        '  model: modelId,',
-        '  threshold: 0.75,',
-        '  temperature: 0.1,',
-        '  samples: 3,',
-        '  scale: { min: 0, max: 1 },',
-        '  rubric: { answer: true },',
+        "  model: modelId,",
+        "  threshold: 0.75,",
+        "  temperature: 0.1,",
+        "  samples: 3,",
+        "  scale: { min: 0, max: 1 },",
+        "  rubric: { answer: true },",
         '  detailSchema: { score: "number" },',
-        '  chainOfThought: false,',
+        "  chainOfThought: false,",
         `  criteria: '${longCriteria}',`,
-        '  settings: { topP: 0.8, strict: true },',
-        '  score: scoreAnswer,',
-        '})',
-      ].join('\n')
-      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
-        source,
-        callNames: ['llmJudge'],
-      })
+        "  settings: { topP: 0.8, strict: true },",
+        "  score: scoreAnswer,",
+        "})",
+      ].join("\n");
+      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
+        {
+          source,
+          callNames: ["llmJudge"],
+        },
+      );
 
-      expect(record.nativeFacts ?? []).toHaveLength(1)
-      expectNativeExtractionParity(nativeOut, fallbackOut)
+      expect(record.nativeFacts ?? []).toHaveLength(1);
+      expectNativeExtractionParity(nativeOut, fallbackOut);
     },
     30_000,
-  )
+  );
 
   itWithRustOxc(
-    'emits exact native RAG retriever and pipeline facts from Rust/Oxc records',
+    "emits exact native RAG retriever and pipeline facts from Rust/Oxc records",
     async () => {
       const source = [
         "export const docsRetriever = retriever({ id: 'docs', namespace: 'public' })",
-        '',
-        'export const docsRag = retrievalPipeline(docsRetriever, [',
+        "",
+        "export const docsRag = retrievalPipeline(docsRetriever, [",
         "  { name: 'lookup', retriever: docsRetriever },",
-        '])',
-      ].join('\n')
-      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
-        source,
-        callNames: ['retriever', 'retrievalPipeline'],
-      })
+        "])",
+      ].join("\n");
+      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
+        {
+          source,
+          callNames: ["retriever", "retrievalPipeline"],
+        },
+      );
 
-      expect(record.nativeFacts ?? []).toHaveLength(2)
-      expectNativeExtractionParity(nativeOut, fallbackOut)
+      expect(record.nativeFacts ?? []).toHaveLength(2);
+      expectNativeExtractionParity(nativeOut, fallbackOut);
     },
     30_000,
-  )
+  );
 
   itWithRustOxc(
-    'emits exact native registry and registry skill facts from Rust/Oxc records',
+    "emits exact native registry and registry skill facts from Rust/Oxc records",
     async () => {
       const source = [
         "const registryAuth = () => 'token'",
-        '',
-        'export const acme = registry({',
+        "",
+        "export const acme = registry({",
         "  name: 'acme',",
         "  baseUrl: 'https://skills.acme.test',",
-        '  auth: registryAuth,',
-        '})',
-        '',
+        "  auth: registryAuth,",
+        "})",
+        "",
         "export const brand = skill.fromRegistry(acme, 'brand-guidelines')",
         "export const seo = skill.fromRegistry(skillsSh, 'owner/repo/seo')",
-      ].join('\n')
-      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
-        source,
-        callNames: ['registry', 'fromRegistry'],
-      })
+      ].join("\n");
+      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
+        {
+          source,
+          callNames: ["registry", "fromRegistry"],
+        },
+      );
 
-      expect(record.nativeFacts ?? []).toHaveLength(3)
-      expectNativeExtractionParity(nativeOut, fallbackOut)
+      expect(record.nativeFacts ?? []).toHaveLength(3);
+      expectNativeExtractionParity(nativeOut, fallbackOut);
     },
     30_000,
-  )
+  );
 
   itWithRustOxc(
-    'emits exact native eval facts from Rust/Oxc records',
+    "emits exact native eval facts from Rust/Oxc records",
     async () => {
       const source = [
         "export const writerPrompt = prompt({ id: 'writer', prompt: 'Write' })",
-        '',
+        "",
         "export const writerEval = evaluate('prompt.writer', {",
-        '  task: writerPrompt,',
+        "  task: writerPrompt,",
         "  data: [{ name: 'draft title', input: {}, expect: async (ctx) => { ctx.expect(true) } }],",
-        '  expect: async (ctx) => {',
-        '    ctx.assert(true)',
-        '  },',
-        '})',
-      ].join('\n')
-      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
-        source,
-        callNames: ['prompt', 'evaluate'],
-      })
+        "  expect: async (ctx) => {",
+        "    ctx.assert(true)",
+        "  },",
+        "})",
+      ].join("\n");
+      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
+        {
+          source,
+          callNames: ["prompt", "evaluate"],
+        },
+      );
 
-      expect(nativeFactCount(record, 'eval')).toBe(1)
-      expectNativeExtractionParity(nativeOut, fallbackOut)
+      expect(nativeFactCount(record, "eval")).toBe(1);
+      expectNativeExtractionParity(nativeOut, fallbackOut);
     },
     30_000,
-  )
-})
+  );
+});
 
 function nativeFactCount(
-  record: { readonly nativeFacts?: readonly { readonly replaces?: readonly { readonly extractor: string }[] }[] },
+  record: {
+    readonly nativeFacts?: readonly {
+      readonly replaces?: readonly { readonly extractor: string }[];
+    }[];
+  },
   extractor: string,
 ): number {
-  return (record.nativeFacts ?? []).filter((fact) => fact.replaces?.some((item) => item.extractor === extractor)).length
+  return (record.nativeFacts ?? []).filter((fact) =>
+    fact.replaces?.some((item) => item.extractor === extractor),
+  ).length;
 }

@@ -170,12 +170,30 @@ await ws.finalize("/outputs/final-report.md", {
 });
 ```
 
+Workspaces keep an append-only version history for every file. History is always
+recorded, so a destructive edit is recoverable even when no one planned ahead:
+
+```ts
+await ws.history("/outputs/report.md"); // newest-first WorkspaceVersion[]
+await ws.read("/outputs/report.md", { version: 1 }); // read an older revision
+await ws.diff("/outputs/report.md", { from: 1, to: 2 }); // unified string + structured hunks
+await ws.undo("/outputs/report.md"); // restore the previous version as a new one
+```
+
+Retention is unlimited by default; set `versioning: { maxVersions }` to bound how
+many revisions are kept per file. The `undoWorkspaceFile` tool is opt-in via
+`tools: { undo: true }`, like `deleteWorkspaceFile`.
+
+`finalize()` pins the current version as the published artifact: later edits
+create new draft versions, but `artifacts()` and the manifest keep surfacing the
+pinned revision (`WorkspaceArtifact.version`) until you `finalize()` again.
+
 Injected workspaces add a bounded manifest plus file tools for list, read, write,
 edit, rename, and grep. Programmatic methods also include `exists`, `stat`,
-`append`, `copy`, `delete`, `artifacts`, and `finalize`. Blob-backed text and JSON
-read back as text/JSON; binary files return a URI for app-side fetching. Every
-operation accepts a `{ namespace }` override for direct calls and manually created
-tools.
+`append`, `move`, `copy`, `delete`, `history`, `diff`, `undo`, `artifacts`, and
+`finalize`. Blob-backed text and JSON read back as text/JSON; binary files return
+a URI for app-side fetching. Every operation accepts a `{ namespace }` override
+for direct calls and manually created tools.
 
 Workspace operations are visible in devtools, OTel, and Project Index without
 exporting raw paths to OTel. OTel receives `crux.workspace.operation` and
@@ -183,8 +201,8 @@ exporting raw paths to OTel. OTel receives `crux.workspace.operation` and
 no local-only raw path is available. Project Index records mounts, generated
 tool names, blob-storage posture, retention TTL, quota limits, and workspace
 read/write relations from indexed owners. Workspace-specific Project Index
-data-access facts preserve exact V0 operations such as `grep`, `artifacts`,
-`rename`, `move`, `copy`, and `finalize`.
+data-access facts preserve exact operations such as `grep`, `history`, `diff`,
+`undo`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.
 
 ## What Core Gives You
 

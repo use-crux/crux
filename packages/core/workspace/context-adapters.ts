@@ -20,6 +20,7 @@ import type {
   WorkspaceToolOptions,
   WorkspaceToolPrefixWithDefaults,
   WorkspaceTools,
+  WorkspaceToolUndoWithDefaults,
 } from "./types";
 
 /** Bound dependencies for workspace prompt adapters. */
@@ -40,7 +41,8 @@ export interface WorkspaceContextAdaptersConfig<
     options?: Options,
   ) => WorkspaceTools<
     WorkspaceToolPrefixWithDefaults<Defaults, Options>,
-    WorkspaceToolDeleteWithDefaults<Defaults, Options>
+    WorkspaceToolDeleteWithDefaults<Defaults, Options>,
+    WorkspaceToolUndoWithDefaults<Defaults, Options>
   >;
 }
 

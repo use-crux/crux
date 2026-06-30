@@ -18,6 +18,8 @@ const readMethods = new Set([
   "artifacts",
   "stat",
   "exists",
+  "history",
+  "diff",
 ]);
 
 const writeMethods = new Set([
@@ -34,6 +36,7 @@ const writeMethods = new Set([
   "rename",
   "move",
   "copy",
+  "undo",
   "finalize",
 ]);
 
@@ -45,6 +48,9 @@ const exactOperations = new Set([
   "rename",
   "move",
   "copy",
+  "history",
+  "diff",
+  "undo",
   "finalize",
 ]);
 

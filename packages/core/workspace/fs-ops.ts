@@ -15,6 +15,8 @@ import { instrument } from "./observability";
 import { mountForPath, normalizePath } from "./path";
 import { recordToReadResult } from "./read-result";
 import { fileKey, getRecord, listFileRecords } from "./store";
+import { snapshotContent } from "./version-content";
+import { purgeVersions, recordFileVersion } from "./version-store";
 import {
   assertWorkspaceWriteAllowed,
   withWorkspaceWriteLock,
@@ -32,7 +34,9 @@ import type {
   WorkspaceLimits,
   WorkspaceMoveOptions,
   WorkspaceNamespaceOption,
+  WorkspacePath,
   WorkspaceRetention,
+  WorkspaceVersioning,
 } from "./types";
 
 /** Bound dependencies for filesystem-style workspace operations. */
@@ -44,6 +48,7 @@ export interface WorkspaceFilesystemOpsConfig {
   readonly inlineTextBelowBytes: number;
   readonly limits?: WorkspaceLimits;
   readonly retention?: WorkspaceRetention;
+  readonly versioning?: WorkspaceVersioning;
   readonly resolveNamespace: () => Promise<string>;
 }
 
@@ -184,14 +189,30 @@ export function createWorkspaceFilesystemOps(
               producedBy: existing?.producedBy,
               existing,
               now,
+              version: (existing?.headVersion ?? 0) + 1,
               inlineTextBelowBytes: config.inlineTextBelowBytes,
               blobs: config.blobs,
             });
+            const setOptions = workspaceSetOptions(
+              config.store,
+              config.retention,
+            );
             await config.store.set(
               fileKey(config.workspaceId, namespace, normalized),
               record,
-              workspaceSetOptions(config.store, config.retention),
+              setOptions,
             );
+            await recordFileVersion({
+              store: config.store,
+              blobs: config.blobs,
+              workspaceId: config.workspaceId,
+              namespace,
+              path: normalized,
+              record,
+              operation: "append",
+              versioning: config.versioning,
+              setOptions,
+            });
             return recordToFile(record);
           },
         );
@@ -265,19 +286,38 @@ export function createWorkspaceFilesystemOps(
               releasedBytes: source.size,
               limits: config.limits,
             });
-            const moved: WorkspaceFileRecord = {
-              ...source,
-              path: toPath,
-              mount: toMount.path,
-              updatedAt: Date.now(),
-            };
-            await config.store.set(
-              fileKey(config.workspaceId, namespace, toPath),
+            const moved = await freshRecordFromSource(
+              namespace,
+              source,
+              toPath,
+              toMount.path,
+            );
+            if (destination) {
+              await purgeVersions(
+                config.store,
+                config.blobs,
+                config.workspaceId,
+                namespace,
+                toPath,
+                { currentBlobUri: destination.uri },
+              );
+            }
+            await setFreshVersionedRecord(
+              namespace,
+              toPath,
               moved,
-              workspaceSetOptions(config.store, config.retention),
+              destination,
             );
             await config.store.delete(
               fileKey(config.workspaceId, namespace, fromPath),
+            );
+            await purgeVersions(
+              config.store,
+              config.blobs,
+              config.workspaceId,
+              namespace,
+              fromPath,
+              { currentBlobUri: source.uri },
             );
             return recordToFile(moved);
           },
@@ -338,16 +378,27 @@ export function createWorkspaceFilesystemOps(
               existing: destination,
               limits: config.limits,
             });
-            const copied: WorkspaceFileRecord = {
-              ...source,
-              path: toPath,
-              mount: toMount.path,
-              updatedAt: Date.now(),
-            };
-            await config.store.set(
-              fileKey(config.workspaceId, namespace, toPath),
+            const copied = await freshRecordFromSource(
+              namespace,
+              source,
+              toPath,
+              toMount.path,
+            );
+            if (destination) {
+              await purgeVersions(
+                config.store,
+                config.blobs,
+                config.workspaceId,
+                namespace,
+                toPath,
+                { currentBlobUri: destination.uri },
+              );
+            }
+            await setFreshVersionedRecord(
+              namespace,
+              toPath,
               copied,
-              workspaceSetOptions(config.store, config.retention),
+              destination,
             );
             return recordToFile(copied);
           },
@@ -441,6 +492,63 @@ export function createWorkspaceFilesystemOps(
       return options.namespace;
     }
     return config.resolveNamespace();
+  }
+
+  async function freshRecordFromSource(
+    namespace: string,
+    source: WorkspaceFileRecord,
+    path: WorkspacePath,
+    mount: WorkspacePath,
+  ): Promise<WorkspaceFileRecord> {
+    const content = await snapshotContent(source, config.blobs);
+    const analysis = await analyzeContent(content, source.mimeType);
+    return createFileRecord({
+      workspaceId: config.workspaceId,
+      namespace,
+      path,
+      mount,
+      analysis,
+      metadata: source.metadata,
+      status: source.status,
+      artifactKind: source.kind,
+      producedBy: source.producedBy,
+      existing: null,
+      now: Date.now(),
+      version: 1,
+      inlineTextBelowBytes: config.inlineTextBelowBytes,
+      blobs: config.blobs,
+    });
+  }
+
+  async function setFreshVersionedRecord(
+    namespace: string,
+    path: WorkspacePath,
+    record: WorkspaceFileRecord,
+    previous: WorkspaceFileRecord | null,
+  ): Promise<void> {
+    const key = fileKey(config.workspaceId, namespace, path);
+    const setOptions = workspaceSetOptions(config.store, config.retention);
+    await config.store.set(key, record, setOptions);
+    try {
+      await recordFileVersion({
+        store: config.store,
+        blobs: config.blobs,
+        workspaceId: config.workspaceId,
+        namespace,
+        path,
+        record,
+        operation: "write",
+        versioning: config.versioning,
+        setOptions,
+      });
+    } catch (error) {
+      if (previous) {
+        await config.store.set(key, previous, setOptions);
+      } else {
+        await config.store.delete(key);
+      }
+      throw error;
+    }
   }
 }
 

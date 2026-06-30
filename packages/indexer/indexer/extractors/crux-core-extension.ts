@@ -1,21 +1,27 @@
-import type { IndexerExtension } from '../extensions'
-import { relationSpecFromPolicy } from '../extensions'
-import { indexRelationPolicies } from '../relations'
-import { agentIndexExtractor } from './agent-extension'
-import { compositionIndexExtractor } from './composition-extension'
-import { contextIndexExtractor } from './context-extension'
-import { evalIndexExtractor } from './eval-extension'
-import { flowIndexExtractor } from './flow-extension'
-import { blackboardIndexExtractor, memoryIndexExtractor } from './memory-extension'
-import { injectableIndexExtractor } from './injectable-extension'
-import { promptIndexExtractor } from './prompt-extension'
-import { ragRetrieverIndexExtractor } from './rag-extension'
-import { routingIndexExtractor } from './routing-extension'
-import { safetyIndexExtractor } from './safety-extension'
-import { scorerIndexExtractor } from './scorer-extension'
-import { registryIndexExtractor, registrySkillIndexExtractor } from './skill-registry-extension'
-import { toolIndexExtractor } from './tool-extension'
-import { workspaceIndexExtractor } from './workspace-extension'
+import type { IndexerExtension } from "../extensions";
+import { relationSpecFromPolicy } from "../extensions";
+import { indexRelationPolicies } from "../relations";
+import { agentIndexExtractor } from "./agent-extension";
+import { compositionIndexExtractor } from "./composition-extension";
+import { contextIndexExtractor } from "./context-extension";
+import { evalIndexExtractor } from "./eval-extension";
+import { flowIndexExtractor } from "./flow-extension";
+import {
+  blackboardIndexExtractor,
+  memoryIndexExtractor,
+} from "./memory-extension";
+import { injectableIndexExtractor } from "./injectable-extension";
+import { promptIndexExtractor } from "./prompt-extension";
+import { ragRetrieverIndexExtractor } from "./rag-extension";
+import { routingIndexExtractor } from "./routing-extension";
+import { safetyIndexExtractor } from "./safety-extension";
+import { scorerIndexExtractor } from "./scorer-extension";
+import {
+  registryIndexExtractor,
+  registrySkillIndexExtractor,
+} from "./skill-registry-extension";
+import { toolIndexExtractor } from "./tool-extension";
+import { workspaceIndexExtractor } from "./workspace-extension";
 
 /**
  * First-party extension manifest for Crux-authored index primitives.
@@ -25,14 +31,14 @@ import { workspaceIndexExtractor } from './workspace-extension'
  * all first-party static extractor patterns.
  */
 export const cruxCoreExtension: IndexerExtension = {
-  name: '@use-crux/indexer/crux-core',
-  version: '1',
+  name: "@use-crux/indexer/crux-core",
+  version: "2",
   crux: {
-    indexer: '^0.1.0',
+    indexer: "^0.1.0",
     projectIndexSchema: 1,
   },
   static: {
-    evidence: { mode: 'declared' },
+    evidence: { mode: "declared" },
   },
   extractors: [
     ragRetrieverIndexExtractor,
@@ -54,4 +60,4 @@ export const cruxCoreExtension: IndexerExtension = {
     flowIndexExtractor,
   ],
   relations: indexRelationPolicies.map(relationSpecFromPolicy),
-}
+};

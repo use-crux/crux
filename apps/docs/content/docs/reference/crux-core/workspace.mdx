@@ -47,6 +47,10 @@ await ws.rename("/outputs/report.md", "/outputs/final-report.md");
 await ws.move("/outputs/final-report.md", "/workspace/final-report.md");
 await ws.copy("/workspace/final-report.md", "/workspace/report-copy.md");
 await ws.grep("revenue", { path: "/workspace/**/*.md", ignoreCase: true });
+await ws.history("/outputs/report.md");
+await ws.read("/outputs/report.md", { version: 1 });
+await ws.diff("/outputs/report.md", { from: 1, to: 2 });
+await ws.undo("/outputs/report.md");
 await ws.finalize("/workspace/final-report.md", { kind: "report" });
 await ws.artifacts({ status: "final" });
 await ws.delete("/outputs/report.md");
@@ -61,7 +65,8 @@ await ws.write("/workspace/notes.md", "# Notes", { namespace: "thread:123" });
 const tools = ws.asTools({ namespace: "thread:123", prefix: "research" });
 ```
 
-`deleteWorkspaceFile` is not auto-injected unless `tools.delete` is enabled.
+`deleteWorkspaceFile` and `undoWorkspaceFile` are not auto-injected unless
+`tools.delete` / `tools.undo` are enabled.
 
 ## Prompt Injection
 
@@ -108,6 +113,13 @@ const artifact = await ws.finalize("/outputs/report.md");
 const finals = await ws.artifacts({ status: "final" });
 ```
 
+`finalize()` pins the current version as the published artifact (`artifact.version`).
+Editing the file afterwards creates new draft versions, but `artifacts()` and the
+manifest keep surfacing the pinned revision until you `finalize()` again. `read()`
+returns the live working copy; `read(path, { version })` reads a specific
+retained snapshot, whether that version is the pinned artifact revision or any
+other retained revision.
+
 Small inline artifacts expose a `workspace-inline://...` reference. Blob-backed
 artifacts expose the blob URI.
 
@@ -144,6 +156,54 @@ const ws = workspace({
 
 See [Storage](/docs/guides/storage) for the difference between `DataStore`, `VectorStore`, and `BlobStore`, and [BlobStore](/docs/guides/storage/blob-storage) for custom S3/R2/GCS-style blob stores.
 
+## Versioning And History
+
+Every content change (`write`, `edit`, `append`, `undo`) appends an immutable
+version. History is always recorded — there is no flag to turn it on — so a
+destructive edit is recoverable even when no one planned ahead.
+
+```ts
+await ws.write("/outputs/report.md", "draft one");
+await ws.write("/outputs/report.md", "draft two");
+
+const history = await ws.history("/outputs/report.md");
+// → [{ version: 2, operation: "write", ... }, { version: 1, ... }]  (newest first)
+
+await ws.read("/outputs/report.md", { version: 1 }); // "draft one"
+
+const diff = await ws.diff("/outputs/report.md", { from: 1, to: 2 });
+diff.unified; // git-style unified-diff string
+diff.hunks; // structured add/remove/context lines
+
+await ws.undo("/outputs/report.md"); // restores v1 as a new v3 (history is never rewritten)
+```
+
+`diff` defaults to the most recent change (previous version → current) and
+applies to text files; binary files throw. `undo` reverts the last content
+change; `rename`/`move`/`copy` start fresh history at the destination path, and
+`delete` purges a file's history.
+
+Versioning is on by default with unlimited retention. Bound it per file with
+`versioning.maxVersions`, which GCs the oldest snapshots (and their blobs):
+
+```ts
+workspace({
+  id: "research",
+  namespace,
+  storage,
+  versioning: { maxVersions: 20 },
+});
+```
+
+Quota (`limits.maxNamespaceBytes`) counts live files only, not historical
+snapshots — use `maxVersions` to bound history storage.
+
+The `undoWorkspaceFile` tool is opt-in, like `deleteWorkspaceFile`:
+
+```ts
+ws.asTools({ undo: true }); // adds undoWorkspaceFile
+```
+
 ## Retention And Limits
 
 ```ts
@@ -172,6 +232,7 @@ names.list; // listResearchWorkspace
 names.writeFile; // writeResearchWorkspaceFile
 names.renameFile; // renameResearchWorkspaceFile
 names.grep; // grepResearchWorkspace
+names.undoFile; // undoResearchWorkspaceFile
 ```
 
 Use this helper when matching workspace tools in middleware.
@@ -180,4 +241,6 @@ Use this helper when matching workspace tools in middleware.
 
 Workspace operations emit `workspace.operation` spans with privacy-safe OTel attributes, including `crux.workspace.operation` and `crux.workspace.path_hash`. Raw paths and file contents are not exported to OTel. Local devtools can show artifact metadata and use a stable `hash:<pathHash>` file label when no local-only raw path is available.
 
-Project Index workspace metadata includes mounts, generated tool names, blob-storage posture, `retention.ttlMs`, and quota limits. Workspace method calls inside indexed owners are represented through workspace read/write relations, and workspace-specific data-access facts preserve exact V0 operations such as `grep`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.
+Each recorded version also emits a single privacy-safe version marker (path hash, version number, and operation only). The devtools file inspector reconstructs a file's **version history** from these markers — one entry per content change, even when an `edit`/`undo` performs a nested write internally.
+
+Project Index workspace metadata includes mounts, generated tool names, blob-storage posture, `retention.ttlMs`, and quota limits. Workspace method calls inside indexed owners are represented through workspace read/write relations, and workspace-specific data-access facts preserve exact operations such as `grep`, `history`, `diff`, `undo`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.

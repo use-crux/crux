@@ -83,6 +83,69 @@ describe("workspace artifacts facet", () => {
     });
   });
 
+  it("pins the finalized version so later edits do not move the published artifact", async () => {
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:default",
+      data: inMemoryDataStore(),
+    });
+
+    await ws.write("/outputs/report.md", "published", {
+      kind: "report",
+      mimeType: "text/markdown",
+    });
+    const finalized = await ws.finalize("/outputs/report.md");
+    expect(finalized).toMatchObject({ status: "final", version: 1, size: 9 });
+
+    // The agent keeps iterating the working copy.
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    await ws.edit("/outputs/report.md", {
+      find: "published",
+      replace: "work in progress draft",
+    });
+
+    // The published artifact still resolves to the pinned revision.
+    const stat = await ws.stat("/outputs/report.md");
+    const [artifact] = await ws.artifacts({ status: "final" });
+    expect(artifact).toMatchObject({
+      path: "/outputs/report.md",
+      status: "final",
+      version: 1,
+      size: 9,
+    });
+    expect(artifact?.updatedAt).toBe(stat?.updatedAt);
+
+    // read() is the working surface and reflects the edit.
+    await expect(ws.read("/outputs/report.md")).resolves.toMatchObject({
+      kind: "text",
+      content: "work in progress draft",
+    });
+    // The pinned content is still retrievable at its version.
+    await expect(
+      ws.read("/outputs/report.md", { version: 1 }),
+    ).resolves.toMatchObject({ kind: "text", content: "published" });
+  });
+
+  it("re-finalizing republishes the latest version", async () => {
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:default",
+      data: inMemoryDataStore(),
+    });
+
+    await ws.write("/outputs/report.md", "v1 published", { kind: "report" });
+    await ws.finalize("/outputs/report.md");
+    await ws.edit("/outputs/report.md", {
+      find: "v1 published",
+      replace: "v2 ready",
+    });
+    const republished = await ws.finalize("/outputs/report.md");
+
+    expect(republished).toMatchObject({ version: 2, size: 8 });
+    const [artifact] = await ws.artifacts({ status: "final" });
+    expect(artifact).toMatchObject({ version: 2, size: 8 });
+  });
+
   it("queries artifacts by status and kind through store filters", async () => {
     const data = inMemoryDataStore();
     const listSpy = vi.spyOn(data, "list");
@@ -107,17 +170,18 @@ describe("workspace artifacts facet", () => {
     );
     await ws.write("/workspace/notes.md", "Not an artifact");
 
-    // `artifacts()` does not guarantee a result order, so assert membership
-    // (mirroring the `kind: "report"` assertion below) rather than a fixed
-    // sequence — the store's iteration order varies across environments.
-    const finalArtifacts = await ws.artifacts({ status: "final" });
-    expect(finalArtifacts).toHaveLength(2);
-    expect(finalArtifacts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ path: "/outputs/chart.json", status: "final", kind: "chart" }),
-        expect.objectContaining({ path: "/outputs/final.md", status: "final", kind: "report" }),
-      ]),
-    );
+    const finalArtifacts = (await ws.artifacts({ status: "final" }))
+      .map(({ kind, path, status }) => ({
+        kind,
+        path,
+        status,
+      }))
+      .sort((left, right) => left.path.localeCompare(right.path));
+
+    expect(finalArtifacts).toEqual([
+      { path: "/outputs/chart.json", status: "final", kind: "chart" },
+      { path: "/outputs/final.md", status: "final", kind: "report" },
+    ]);
     await expect(ws.artifacts({ kind: "report" })).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ path: "/outputs/final.md", kind: "report" }),
@@ -232,6 +296,35 @@ describe("workspace artifacts facet", () => {
     );
     expect(resolved.system).not.toContain("/outputs/wip.md (report");
     expect(resolved.system).not.toContain("private report");
+  });
+
+  it("surfaces the pinned version in the manifest after later edits", async () => {
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:default",
+      data: inMemoryDataStore(),
+    });
+
+    await ws.write("/outputs/report.md", "published copy", {
+      kind: "report",
+      mimeType: "text/markdown",
+    });
+    await ws.finalize("/outputs/report.md");
+    await ws.edit("/outputs/report.md", {
+      find: "published copy",
+      replace: "a much longer work-in-progress draft body",
+    });
+
+    const resolved = await prompt({
+      id: "analyst",
+      use: [ws],
+      system: "Analyze.",
+    }).resolve({});
+
+    // Manifest reflects the pinned 14-byte revision, not the longer working copy.
+    expect(resolved.system).toContain(
+      "/outputs/report.md (report, text/markdown, 14 bytes)",
+    );
   });
 
   it("bounds final artifacts in the manifest", async () => {

@@ -85,9 +85,12 @@ export async function createFileRecord(input: {
   readonly producedBy: WorkspaceProvenance | undefined;
   readonly existing: WorkspaceFileRecord | null;
   readonly now: number;
+  /** The version number this record becomes; scopes the blob key so history is immutable. */
+  readonly version: number;
   readonly inlineTextBelowBytes: number;
   readonly blobs: WorkspaceBlobStore | undefined;
 }): Promise<WorkspaceFileRecord> {
+  const status = input.status ?? input.existing?.status;
   const base = {
     _cruxWorkspaceFile: true as const,
     version: FILE_RECORD_VERSION as typeof FILE_RECORD_VERSION,
@@ -98,9 +101,11 @@ export async function createFileRecord(input: {
     mimeType: input.analysis.mimeType,
     size: input.analysis.size,
     metadata: input.metadata,
-    status: input.status ?? input.existing?.status,
+    status,
     kind: input.artifactKind ?? input.existing?.kind,
     producedBy: input.producedBy ?? input.existing?.producedBy,
+    headVersion: input.version,
+    finalVersion: pinnedFinalVersion(status, input.version, input.existing),
     createdAt: input.existing?.createdAt ?? input.now,
     updatedAt: input.now,
   };
@@ -146,7 +151,7 @@ export async function createFileRecord(input: {
     throw new Error("workspace.write(): binary content could not be read.");
   }
   const ref = await input.blobs.put({
-    key: `${input.workspaceId}/${input.namespace}${input.path}`,
+    key: `${input.workspaceId}/${input.namespace}${input.path}@v${input.version}`,
     content: payload,
     mimeType: input.analysis.mimeType,
     metadata: input.metadata,
@@ -158,6 +163,26 @@ export async function createFileRecord(input: {
     size: ref.size || input.analysis.size,
     preview: input.analysis.text ? preview(input.analysis.text) : undefined,
   };
+}
+
+/**
+ * Resolve the pinned published version for a record being written.
+ *
+ * A file that newly becomes `final` pins the version it was finalized at; a file
+ * that stays `final` across a content edit keeps its existing pin (so the
+ * published artifact does not move while the working copy advances); a non-final
+ * file has no pin.
+ */
+function pinnedFinalVersion(
+  status: WorkspaceArtifactStatus | undefined,
+  version: number,
+  existing: WorkspaceFileRecord | null,
+): number | undefined {
+  if (status !== "final") return undefined;
+  if (existing?.status === "final" && existing.finalVersion !== undefined) {
+    return existing.finalVersion;
+  }
+  return version;
 }
 
 /** Convert a stored record into a {@link WorkspaceFile} listing entry. */

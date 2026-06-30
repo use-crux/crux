@@ -23,6 +23,13 @@ export type WorkspaceToolDelete<Options> = Options extends {
   ? true
   : false;
 
+/** Extract whether the undo tool is explicitly enabled from workspace tool options. */
+export type WorkspaceToolUndo<Options> = Options extends {
+  readonly undo: true;
+}
+  ? true
+  : false;
+
 /** Resolve the effective prefix when per-call tool options override config defaults. */
 export type WorkspaceToolPrefixWithDefaults<Defaults, Options> =
   "prefix" extends keyof Options
@@ -34,6 +41,12 @@ export type WorkspaceToolDeleteWithDefaults<Defaults, Options> =
   "delete" extends keyof Options
     ? WorkspaceToolDelete<Options>
     : WorkspaceToolDelete<NonNullable<Defaults>>;
+
+/** Resolve the effective undo setting when per-call tool options override config defaults. */
+export type WorkspaceToolUndoWithDefaults<Defaults, Options> =
+  "undo" extends keyof Options
+    ? WorkspaceToolUndo<Options>
+    : WorkspaceToolUndo<NonNullable<Defaults>>;
 
 type WorkspaceToolPrefixPart<Prefix extends string | undefined> =
   Prefix extends string ? PascalCaseWords<Prefix> : "";
@@ -57,12 +70,14 @@ export interface WorkspaceToolNames<
   readonly renameFile: `rename${WorkspaceToolPrefixPart<Prefix>}WorkspaceFile`;
   readonly grep: `grep${WorkspaceToolPrefixPart<Prefix>}Workspace`;
   readonly deleteFile: `delete${WorkspaceToolPrefixPart<Prefix>}WorkspaceFile`;
+  readonly undoFile: `undo${WorkspaceToolPrefixPart<Prefix>}WorkspaceFile`;
 }
 
-/** Generated workspace tools for a literal prefix and delete-tool setting. */
+/** Generated workspace tools for a literal prefix and opt-in tool settings. */
 export type WorkspaceTools<
   Prefix extends string | undefined = undefined,
   Delete extends boolean | undefined = false,
+  Undo extends boolean | undefined = false,
 > = {
   readonly [Key in WorkspaceToolNames<Prefix>["list"]]: ToolDef;
 } & {
@@ -78,5 +93,10 @@ export type WorkspaceTools<
 } & (Delete extends true
     ? {
         readonly [Key in WorkspaceToolNames<Prefix>["deleteFile"]]: ToolDef;
+      }
+    : {}) &
+  (Undo extends true
+    ? {
+        readonly [Key in WorkspaceToolNames<Prefix>["undoFile"]]: ToolDef;
       }
     : {});
