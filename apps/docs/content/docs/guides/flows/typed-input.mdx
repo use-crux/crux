@@ -3,7 +3,7 @@ title: Typed input and step composition
 description: Type the flow's input, share it with steps via flow.input, extract steps into reusable functions, and compose flows by nesting.
 ---
 
-`flow` accepts two type parameters — `T` for the return type and `TInput` for typed flow input. This lets you pass structured data into a flow at call time and access it from any step via `flow.input`, without threading it through every closure.
+`flow` infers typed input from the handler's second parameter. This lets you pass structured data into a flow at call time and access it directly in the flow body. The same input is also available on `flow.input` for reusable step helpers that receive the scope.
 
 ```ts
 import { flow } from '@use-crux/core'
@@ -13,20 +13,17 @@ interface PipelineInput {
   maxResults: number
 }
 
-const researchFlow = flow<GenerateResult, PipelineInput>('research', async (flow) => {
-  // flow.input is typed as PipelineInput
-  const plan = await flow.step('plan', () => generate(planner, { model, input: { query: flow.input.query } }))
+const researchFlow = flow('research', async (flow, input: PipelineInput) => {
+  const plan = await flow.step('plan', () => generate(planner, { model, input: { query: input.query } }))
   return flow.step('search', () =>
     generate(searcher, {
       model,
-      input: { plan: plan.object, limit: flow.input.maxResults },
+      input: { plan: plan.object, limit: input.maxResults },
     }),
   )
 })
 
-const result = await researchFlow.run({
-  input: { query: 'cloud migration', maxResults: 10 },
-})
+const result = await researchFlow.run({ query: 'cloud migration', maxResults: 10 })
 ```
 
 ## External Step Functions (Auto-Pass)
@@ -59,14 +56,12 @@ async function searchStep(flow: FlowScope<PipelineInput>) {
   return generate(searcher, { model, input: { plan, limit: flow.input.maxResults } })
 }
 
-const researchFlow = flow<SearchResult, PipelineInput>('research', async (flow) => {
+const researchFlow = flow('research', async (flow, _input: PipelineInput) => {
   await flow.step('plan', planStep)
   return flow.step('search', searchStep)
 })
 
-const result = await researchFlow.run({
-  input: { query: 'cloud migration', maxResults: 10 },
-})
+const result = await researchFlow.run({ query: 'cloud migration', maxResults: 10 })
 ```
 
 <Callout type="info">

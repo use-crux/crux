@@ -298,8 +298,8 @@ export const judged = evaluate('support.relevance', {
 // Recipe: flow — typed input, step assertions, per-step overrides.
 // ─────────────────────────────────────────────────────────────────
 
-const researchFlow = flow<{ summary: string }, { topic: string }>('research', async (f) => {
-  const sources = await f.step('search', async () => [`results for ${f.input.topic}`])
+const researchFlow = flow('research', async (f, input: { topic: string }) => {
+  const sources = await f.step('search', async () => [`results for ${input.topic}`])
   return f.step('write', async () => ({ summary: sources.join('\n') }))
 })
 

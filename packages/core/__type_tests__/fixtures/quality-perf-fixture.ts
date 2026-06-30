@@ -28,7 +28,7 @@ const text0 = prompt({
 
 const agent0 = agent({ id: 'fixture-agent-0', prompt: structured0 })
 
-const flow0 = flow<{ summary: string; score: number }, { topic: string }>('fixture-flow-0', async () => ({
+const flow0 = flow('fixture-flow-0', async (_flow, _input: { topic: string }) => ({
   summary: '',
   score: 0,
 }))
@@ -48,7 +48,7 @@ const text1 = prompt({
 
 const agent1 = agent({ id: 'fixture-agent-1', prompt: structured1 })
 
-const flow1 = flow<{ summary: string; score: number }, { topic: string }>('fixture-flow-1', async () => ({
+const flow1 = flow('fixture-flow-1', async (_flow, _input: { topic: string }) => ({
   summary: '',
   score: 0,
 }))
@@ -68,7 +68,7 @@ const text2 = prompt({
 
 const agent2 = agent({ id: 'fixture-agent-2', prompt: structured2 })
 
-const flow2 = flow<{ summary: string; score: number }, { topic: string }>('fixture-flow-2', async () => ({
+const flow2 = flow('fixture-flow-2', async (_flow, _input: { topic: string }) => ({
   summary: '',
   score: 0,
 }))
@@ -88,7 +88,7 @@ const text3 = prompt({
 
 const agent3 = agent({ id: 'fixture-agent-3', prompt: structured3 })
 
-const flow3 = flow<{ summary: string; score: number }, { topic: string }>('fixture-flow-3', async () => ({
+const flow3 = flow('fixture-flow-3', async (_flow, _input: { topic: string }) => ({
   summary: '',
   score: 0,
 }))
@@ -108,7 +108,7 @@ const text4 = prompt({
 
 const agent4 = agent({ id: 'fixture-agent-4', prompt: structured4 })
 
-const flow4 = flow<{ summary: string; score: number }, { topic: string }>('fixture-flow-4', async () => ({
+const flow4 = flow('fixture-flow-4', async (_flow, _input: { topic: string }) => ({
   summary: '',
   score: 0,
 }))

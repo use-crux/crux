@@ -127,7 +127,7 @@ describe('flow signal + resume', () => {
 
     const recordCountAfterSuspend = transport.records.length
     await signalFlow(suspended.flowId, 'approval', {})
-    const completed = await reviewFlow.run({ resume: suspended.flowId })
+    const completed = await reviewFlow.resume(suspended.flowId)
     await observe.flush()
 
     expect(completed).toMatchObject({ status: 'completed', flowId: suspended.flowId })
@@ -158,7 +158,7 @@ describe('flow signal + resume', () => {
 
     // Resume — should skip 'plan' step and execute 'execute' step
     stepsExecuted.length = 0
-    const resumed = await pipeFlow.run({ resume: suspended.flowId })
+    const resumed = await pipeFlow.resume(suspended.flowId)
 
     expect(resumed.status).toBe('completed')
     if (resumed.status === 'completed') {
@@ -178,7 +178,7 @@ describe('flow signal + resume', () => {
     const suspended = await pipeFlow.run()
     await signalFlow(suspended.flowId, 'approval')
 
-    const resumed = await pipeFlow.run({ resume: suspended.flowId })
+    const resumed = await pipeFlow.resume(suspended.flowId)
 
     expect(resumed.flowId).toBe(suspended.flowId)
   })
@@ -230,7 +230,7 @@ describe('flow suspend with typed signal payload', () => {
     })
 
     // Resume — approval should contain the signal payload
-    const resumed = await reviewFlow.run({ resume: suspended.flowId })
+    const resumed = await reviewFlow.resume(suspended.flowId)
     expect(resumed.status).toBe('completed')
     if (resumed.status === 'completed') {
       expect(resumed.output).toEqual({
@@ -256,11 +256,9 @@ describe('flow suspend error handling', () => {
     it('throws when resuming a non-existent flow', async () => {
     setupStore()
 
-    await expect(
-      makeFlow('missing', async () => {}).run({
-        resume: 'non-existent-flow-id',
-      }),
-    ).rejects.toThrow('No suspended flow found')
+    await expect(makeFlow('missing', async () => {}).resume('non-existent-flow-id')).rejects.toThrow(
+      'No suspended flow found',
+    )
   })
 })
 
@@ -377,7 +375,7 @@ describe('flow timeout/expiration', () => {
       await flow.step('plan', async () => ({ planId: 'abc' }))
       await flow.suspend('approval', { timeout: '0ms' })
       await flow.step('execute', async () => 'done')
-    }).run({ resume: run.flowId })
+    }).resume(run.flowId)
 
     expect(resumed.status).toBe('expired')
     if (resumed.status === 'expired') {
@@ -412,7 +410,7 @@ describe('flow timeout/expiration', () => {
           expiredFlowId = state.flowId
         },
       })
-    }).run({ resume: run.flowId })
+    }).resume(run.flowId)
 
     expect(expiredCalled).toBe(true)
     expect(expiredFlowId).toBe(run.flowId)
@@ -462,7 +460,7 @@ describe('multi-suspend lifecycle', () => {
     // Signal plan-approval and resume — suspends at content-review
     await signalFlow(run1.flowId, 'plan-approval')
     stepsExecuted.length = 0
-    const run2 = await multiFlow.run({ resume: run1.flowId })
+    const run2 = await multiFlow.resume(run1.flowId)
     expect(run2.status).toBe('suspended')
     if (run2.status === 'suspended') expect(run2.suspendedAt).toBe('content-review')
     expect(stepsExecuted).toEqual(['draft'])
@@ -470,7 +468,7 @@ describe('multi-suspend lifecycle', () => {
     // Signal content-review and resume — completes
     await signalFlow(run2.flowId, 'content-review')
     stepsExecuted.length = 0
-    const run3 = await multiFlow.run({ resume: run2.flowId })
+    const run3 = await multiFlow.resume(run2.flowId)
     expect(run3.status).toBe('completed')
     if (run3.status === 'completed') {
       expect(run3.output).toEqual({ published: true, draft: 'content' })
@@ -498,7 +496,7 @@ describe('multi-suspend lifecycle', () => {
     // Signal gate-2 (wrong gate) — should still be suspended at gate-1
     await signalFlow(run1.flowId, 'gate-2')
     // Resume — gate-1 has no signal, should re-suspend at gate-1
-    const run2 = await indFlow.run({ resume: run1.flowId })
+    const run2 = await indFlow.resume(run1.flowId)
     expect(run2.status).toBe('suspended')
     if (run2.status === 'suspended') expect(run2.suspendedAt).toBe('gate-1')
   })
@@ -524,7 +522,7 @@ describe('multi-suspend lifecycle', () => {
 
     // Signal and resume — cache step-b, suspend
     await signalFlow(run1.flowId, 'gate-1')
-    await accumFlow.run({ resume: run1.flowId })
+    await accumFlow.resume(run1.flowId)
     snapshot = await store.get(`crux:flow:${run1.flowId}`)
     expect(Object.keys((snapshot?.completedSteps as any) ?? {})).toContain('step-a')
     expect(Object.keys((snapshot?.completedSteps as any) ?? {})).toContain('step-b')
@@ -551,7 +549,7 @@ describe('flow.waitUntil', () => {
 
     // Set condition to true and resume
     conditionValue = true
-    const run2 = await waitFlow.run({ resume: run1.flowId })
+    const run2 = await waitFlow.resume(run1.flowId)
     expect(run2.status).toBe('completed')
     if (run2.status === 'completed') expect(run2.output).toBe('processed')
   })
@@ -572,7 +570,7 @@ describe('flow.waitUntil', () => {
     expect(run1.status).toBe('suspended')
 
     // Resume without changing condition — should re-suspend
-    const run2 = await resuspendFlow.run({ resume: run1.flowId })
+    const run2 = await resuspendFlow.resume(run1.flowId)
     expect(run2.status).toBe('suspended')
     if (run2.status === 'suspended') expect(run2.suspendedAt).toBe('data-ready')
   })
@@ -593,7 +591,7 @@ describe('flow.waitUntil', () => {
 
     await new Promise((r) => setTimeout(r, 5))
 
-    const run2 = await timeoutFlow.run({ resume: run1.flowId })
+    const run2 = await timeoutFlow.resume(run1.flowId)
     expect(run2.status).toBe('expired')
   })
 })
@@ -676,7 +674,7 @@ describe('suspend/resume instrumentation hooks', () => {
     await signalFlow(run.flowId, 'approval')
 
     // Resume — should still have sessionId from snapshot
-    const resumed = await ctxFlow.run({ resume: run.flowId })
+    const resumed = await ctxFlow.resume(run.flowId)
     expect(resumed.status).toBe('completed')
     // The snapshot should carry sessionId
     const snapshot = await store.get(`crux:flow:${run.flowId}`)

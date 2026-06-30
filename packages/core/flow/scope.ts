@@ -19,8 +19,8 @@ import { observe } from '../observability'
 
 // Import from decomposed modules
 import type {
-  WithFlowOptions,
   FlowRunOptions,
+  FlowResumeOptions,
   FlowHandle,
   SuspendOptions,
   StepOptions,
@@ -42,11 +42,11 @@ import {
   SIGNAL_KEY_PREFIX,
 } from './lifecycle'
 
-// Re-export types and errors so existing `import { ... } from '../flow/scope'`
-// paths continue to work without any consumer changes.
+// Re-export types and errors so existing internal `../flow/scope` imports
+// keep working while the public flow surface stays centered on `flow()`.
 export type {
-  WithFlowOptions,
   FlowRunOptions,
+  FlowResumeOptions,
   FlowHandle,
   SuspendOptions,
   StepOptions,
@@ -59,27 +59,45 @@ export type {
 export { FlowSuspendedError, FlowCancelledError, FlowExpiredError, createFlowId, signalFlow, cancelFlow, listFlows }
 
 // ─────────────────────────────────────────────────────────────────
-// withFlow
+// Internal flow executor
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Execute a function within a flow scope.
+ * Execute a captured flow handler within a runtime flow scope.
  *
- * Returns a `FlowResult<T>` discriminated union:
- * - `{ status: 'completed', output: T, flowId }` — flow ran to completion
- * - `{ status: 'suspended', flowId, suspendedAt }` — flow paused at a suspend point
+ * This is the implementation behind `flow().run()`. It is intentionally not
+ * exported as an authoring API; users define flows once with `flow()` and run
+ * the returned handle.
  *
- * For resume, pass `{ resume: flowId }` in options. The flow replays
- * cached step outputs and continues from the suspend point.
- *
- * @param name — Human-readable flow name for devtools display
- * @param fn — Flow execution function, receives a `FlowScope` for step tracking
- * @param options — Optional flowId, resume, goal
+ * @param name - Human-readable flow name for devtools display.
+ * @param fn - Flow execution function, receiving a `FlowScope` for step tracking.
+ * @param options - Runtime options supplied by the flow handle.
  */
-export async function withFlow<T, TInput = void>(
+type Awaitable<T> = T | Promise<T>
+
+type InferredFlowHandler = (flow: FlowScope<unknown>, ...args: never[]) => Awaitable<unknown>
+
+type HandlerInput<THandler extends InferredFlowHandler> = Parameters<THandler> extends [
+  FlowScope<unknown>,
+  infer TInput,
+  ...unknown[],
+]
+  ? TInput
+  : void
+
+type HandlerOutput<THandler extends InferredFlowHandler> = Awaited<ReturnType<THandler>>
+
+interface FlowExecutionOptions<TInput> extends FlowRunOptions, FlowResumeOptions {
+  /** Input persisted for fresh runs and restored on resume. */
+  input?: TInput
+  /** Flow ID for a suspended flow that should be resumed. */
+  resume?: string
+}
+
+async function executeFlow<T, TInput = void>(
   name: string,
-  fn: (flow: FlowScope<TInput>) => Promise<T> | T,
-  options?: WithFlowOptions<TInput>,
+  fn: (flow: FlowScope<TInput>, input: TInput) => Promise<T> | T,
+  options?: FlowExecutionOptions<TInput>,
 ): Promise<FlowResult<T>> {
   const isResume = !!options?.resume
   const flowId = options?.resume ?? options?.flowId ?? createFlowId()
@@ -100,7 +118,7 @@ export async function withFlow<T, TInput = void>(
     if (snapshot.observabilityContext && !observe.captureContext()) {
       return await observe.withContext(
         snapshot.observabilityContext as unknown as CapturedObservabilityContext,
-        () => withFlow(name, fn, options),
+        () => executeFlow(name, fn, options),
       )
     }
   }
@@ -326,7 +344,7 @@ export async function withFlow<T, TInput = void>(
   // observability span context is active.
   try {
     const result = await flowSpan.withContext(() =>
-      runWithExecutionContext({ ...existing, flowId, parentFlowId }, () => fn(scope)),
+      runWithExecutionContext({ ...existing, flowId, parentFlowId }, () => fn(scope, flowInput)),
     )
 
 
@@ -463,47 +481,91 @@ async function emitFlowSuspensionMarker(
 // flow — definition-time factory
 // ─────────────────────────────────────────────────────────────────
 
+function normalizeRunArgs(args: readonly unknown[], handlerExpectsInput: boolean): FlowExecutionOptions<unknown> {
+  if (handlerExpectsInput) {
+    return {
+      input: args[0],
+      ...(args[1] as FlowRunOptions | undefined),
+    }
+  }
+
+  if (args.length === 0) {
+    return {}
+  }
+
+  const first = args[0]
+  if (isRunOptionsLike(first)) {
+    return first
+  }
+
+  return {
+    input: first,
+    ...(args[1] as FlowRunOptions | undefined),
+  }
+}
+
+function isRunOptionsLike(value: unknown): value is FlowRunOptions {
+  return isRecord(value) && ('flowId' in value || 'parentFlowId' in value || 'goal' in value)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 /**
  * Define a named flow and return a frozen `FlowHandle`.
  *
- * Separates definition from execution: the handler is captured once,
- * then `.run()` can be called repeatedly with different inputs/options.
+ * Separates definition from execution: the handler is captured once, then
+ * `.run()` can be called repeatedly. Input-bearing flows infer input from the
+ * handler's second parameter and expose `run(input, options?)`; no-input flows
+ * expose `run(options?)`. Use `.resume(flowId, options?)` to continue a
+ * suspended flow with its persisted input.
  *
- * @param name — Human-readable flow name for devtools display
- * @param handler — Flow execution function, receives a `FlowScope` for step tracking
- * @returns A frozen `FlowHandle<T, TInput>` with `.run()` and `.signal()` methods
+ * @param name - Human-readable flow name for devtools display.
+ * @param handler - Flow execution function, receiving a `FlowScope` and optional input.
+ * @returns A frozen `FlowHandle` with `.run()`, `.resume()`, and `.signal()` methods.
  *
  * @example
  * ```ts
- * const researchFlow = flow('research', async (flow) => {
- *   const plan = await flow.step('plan', () => generate(planner, { model, input }))
- *   return flow.step('search', () => generate(searcher, { model, input: plan }))
+ * const reviewFlow = flow('review', async (flow, input: { docId: string }) => {
+ *   const draft = await flow.step('load', () => loadDraft(input.docId))
+ *   return flow.step('publish', () => publishDraft(draft))
  * })
  *
- * const result = await researchFlow.run()
+ * const suspended = await reviewFlow.run({ docId: 'doc_123' })
+ * const resumed = await reviewFlow.resume(suspended.flowId)
  * ```
  */
-export function flow<T, TInput = void>(
+export function flow<THandler extends InferredFlowHandler>(
   name: string,
-  handler: (flow: FlowScope<TInput>) => Promise<T> | T,
-): FlowHandle<T, TInput> {
-  const handle: FlowHandle<T, TInput> = {
+  handler: THandler,
+): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>>
+export function flow(
+  name: string,
+  handler: (flow: FlowScope<unknown>, input?: unknown) => Awaitable<unknown>,
+): FlowHandle<unknown, unknown> {
+  const handlerExpectsInput = handler.length >= 2
+  const executeHandler = (scope: FlowScope<unknown>, input: unknown) => handler(scope, input)
+
+  const handle = {
     name,
 
-    run(options?: FlowRunOptions<TInput>): Promise<FlowResult<T>> {
-      return withFlow<T, TInput>(name, handler, {
-        input: options?.input,
-        flowId: options?.flowId,
+    run(...args: readonly unknown[]): Promise<FlowResult<unknown>> {
+      return executeFlow(name, executeHandler, normalizeRunArgs(args, handlerExpectsInput))
+    },
+
+    resume(flowId: string, options?: FlowResumeOptions): Promise<FlowResult<unknown>> {
+      return executeFlow(name, executeHandler, {
         parentFlowId: options?.parentFlowId,
         goal: options?.goal,
-        resume: options?.resume,
+        resume: flowId,
       })
     },
 
     signal(flowId: string, signalName: string, payload: JsonObject = {}): Promise<void> {
       return signalFlow(flowId, signalName, payload)
     },
-  }
+  } satisfies FlowHandle<unknown, unknown>
 
   return Object.freeze(handle)
 }

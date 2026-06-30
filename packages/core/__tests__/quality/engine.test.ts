@@ -371,7 +371,7 @@ describe('Quality runner — phase boundaries', () => {
   })
 
   it('multi-turn cases error with a clear message', async () => {
-    const flowTask = (await import('../../flow/scope')).flow<{ ok: boolean }, { topic: string }>('turny', async () => ({
+    const flowTask = (await import('../../flow/scope')).flow('turny', async (_scope, _input: { topic: string }) => ({
       ok: true,
     }))
     const evaluation = evaluate({

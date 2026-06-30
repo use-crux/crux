@@ -378,8 +378,8 @@ describe('task execution — prompt, flow, retriever, agent', () => {
   })
 
   it('executes a flow task end-to-end with trace-backed step signals', async () => {
-    const researchFlow = flow<{ summary: string }, { topic: string }>('research', async (scope) => {
-      const plan = await scope.step('plan', () => ({ angle: `${scope.input.topic} basics` }))
+    const researchFlow = flow('research', async (scope, input: { topic: string }) => {
+      const plan = await scope.step('plan', () => ({ angle: `${input.topic} basics` }))
       const draft = await scope.step('draft', () => ({ summary: `About ${plan.angle}` }))
       return draft
     })
@@ -401,7 +401,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
   })
 
   it('ctx.step throws a helpful error for unknown steps and schema mismatches', async () => {
-    const tinyFlow = flow<{ ok: boolean }, { q: string }>('tiny', async (scope) => {
+    const tinyFlow = flow('tiny', async (scope, _input: { q: string }) => {
       await scope.step('only-step', () => ({ value: 42 }))
       return { ok: true }
     })

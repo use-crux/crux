@@ -68,7 +68,7 @@ export async function handleEmailVerified(flowId: string, verifiedAt: string) {
   await signalFlow(flowId, 'email-verified', { verifiedAt })
 }
 
-// Resume happens automatically on the next flow.run({ resume: flowId }) — usually
+// Resume happens automatically on the next flow.resume(flowId) — usually
 // scheduled by the platform (Convex can schedule the resume action from an app-local signal helper).
 ```
 

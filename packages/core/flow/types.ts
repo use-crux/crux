@@ -15,32 +15,32 @@ import type { ZodType } from 'zod'
 // Types
 // ─────────────────────────────────────────────────────────────────
 
-export interface WithFlowOptions<TInput = void> {
-  /** Use a specific flowId instead of generating one (for cross-action correlation). */
-  flowId?: string
-  /** Explicit parent flow ID for cross-action nesting (when AsyncLocalStorage context is lost). */
-  parentFlowId?: string
-  /** Goal description for devtools display. */
-  goal?: string
-  /** Resume a previously suspended flow by its flowId. */
-  resume?: string
-  /** Typed input data available on `flow.input` within all steps. */
-  input?: TInput
-}
-
-/** Runtime options for `FlowHandle.run()`. Excludes the handler and name (captured at definition time). */
-export interface FlowRunOptions<TInput = void> {
-  /** Typed input data available on `flow.input` within all steps. */
-  input?: TInput
+/**
+ * Runtime options for starting a flow through `FlowHandle.run()`.
+ *
+ * Input-bearing flows receive input as the first `run(input, options?)`
+ * argument. These options only describe execution metadata.
+ */
+export interface FlowRunOptions {
   /** Use a specific flowId instead of generating one. */
   flowId?: string
   /** Explicit parent flow ID for cross-action nesting. */
   parentFlowId?: string
   /** Goal description for devtools display. */
   goal?: string
-  /** Resume a previously suspended flow by its flowId. */
-  resume?: string
 }
+
+/** Runtime options for resuming a suspended flow through `FlowHandle.resume()`. */
+export interface FlowResumeOptions {
+  /** Explicit parent flow ID for cross-action nesting. */
+  parentFlowId?: string
+  /** Goal description for devtools display. */
+  goal?: string
+}
+
+type FlowRunArgs<TInput> = [TInput] extends [void]
+  ? [options?: FlowRunOptions]
+  : [input: TInput, options?: FlowRunOptions]
 
 /**
  * A frozen handle returned by `flow()`.
@@ -54,11 +54,21 @@ export interface FlowHandle<T, TInput = void> {
   /** The flow's registered name. */
   readonly name: string
   /**
-   * Execute the flow with optional input and runtime options.
+   * Execute the flow with runtime options.
    *
    * Delegates to the internal flow execution engine and returns a `FlowResult<T>`.
    */
-  run(options?: FlowRunOptions<TInput>): Promise<FlowResult<T>>
+  run(...args: FlowRunArgs<TInput>): Promise<FlowResult<T>>
+  /**
+   * Resume a suspended flow instance.
+   *
+   * The original input is restored from the persisted flow snapshot and passed
+   * back to the handler. Resume options only describe execution metadata.
+   *
+   * @param flowId - The ID of the suspended flow instance.
+   * @param options - Optional execution metadata for the resumed run.
+   */
+  resume(flowId: string, options?: FlowResumeOptions): Promise<FlowResult<T>>
   /**
    * Send a signal to a suspended instance of this flow.
    *
@@ -144,7 +154,7 @@ export interface FlowScope<TInput = void> {
   /**
    * Suspend the flow at a named point and wait for an external signal.
    *
-   * Throws internally to unwind the call stack. `withFlow()` catches this,
+   * Throws internally to unwind the call stack. The flow runtime catches this,
    * persists the flow snapshot to the store, and returns `{ status: 'suspended' }`.
    * No code after `suspend()` executes in the current call.
    *
@@ -173,7 +183,7 @@ export interface FlowScope<TInput = void> {
   /**
    * Cancel the flow with an optional reason.
    *
-   * Throws internally to unwind the call stack. `withFlow()` catches this
+   * Throws internally to unwind the call stack. The flow runtime catches this
    * and returns `{ status: 'cancelled', cancelReason }`.
    */
   cancel(reason?: string): never
@@ -202,7 +212,7 @@ export interface FlowSummary {
 
 /**
  * Thrown by `flow.suspend()` to unwind the call stack.
- * Caught by `withFlow()` — not a user-facing error.
+ * Caught by the flow runtime — not a user-facing error.
  */
 export class FlowSuspendedError extends Error {
   readonly _tag = 'FlowSuspendedError' as const
@@ -217,7 +227,7 @@ export class FlowSuspendedError extends Error {
 
 /**
  * Thrown by `flow.cancel()` to unwind the call stack.
- * Caught by `withFlow()` — not a user-facing error.
+ * Caught by the flow runtime — not a user-facing error.
  */
 export class FlowCancelledError extends Error {
   readonly _tag = 'FlowCancelledError' as const
@@ -229,7 +239,7 @@ export class FlowCancelledError extends Error {
 
 /**
  * Thrown internally when a flow's timeout has been exceeded.
- * Caught by `withFlow()` — not a user-facing error.
+ * Caught by the flow runtime — not a user-facing error.
  */
 export class FlowExpiredError extends Error {
   readonly _tag = 'FlowExpiredError' as const

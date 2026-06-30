@@ -62,7 +62,7 @@ const outputMismatchPrompt = prompt({
   system: 'Wrong output surface.',
 })
 
-const summarizeFlow = flow<{ summary: string }, { topic: string }>('summarize', async () => ({ summary: '' }))
+const summarizeFlow = flow('summarize', async (_flow, _input: { topic: string }) => ({ summary: '' }))
 
 const supportAgent = agent({ id: 'support-agent', prompt: supportPrompt })
 

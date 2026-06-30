@@ -8,7 +8,7 @@ import { createConsensus } from '../../agent/consensus'
 import { createSwarm } from '../../agent/swarm'
 import { delegate } from '../../agent/delegate'
 import { handoff } from '../../agent/handoff'
-import { withFlow } from '../../flow/scope'
+import { flow } from '../../flow/scope'
 import type { AgentExecutor } from '../../agent/executor'
 import {
   createInMemoryObservabilityTransport,
@@ -194,13 +194,13 @@ describe('canonical orchestration observability', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
-    await withFlow('research flow', async (flow) => {
+    await flow('research flow', async (flow) => {
       const plan = await flow.step('plan', async () => ({ planId: 'p1' }))
       return flow.step('publish', async () => ({
         planId: plan.planId,
         ok: true,
       }))
-    })
+    }).run()
     await observe.flush()
 
     const spanStarts = transport.records.filter(

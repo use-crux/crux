@@ -276,6 +276,7 @@ export {
 } from "./flow/scope";
 export type {
   FlowHandle,
+  FlowResumeOptions,
   FlowRunOptions,
   FlowScope,
   FlowResult,
@@ -284,7 +285,6 @@ export type {
   ListFlowsOptions,
   SuspendOptions,
   StepOptions,
-  WithFlowOptions,
 } from "./flow/scope";
 
 // Tokenizer

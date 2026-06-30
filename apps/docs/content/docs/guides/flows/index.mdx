@@ -136,7 +136,7 @@ const topicResearch = flow('research', async (flow) => {
   await flow.step('search', () => generate(searcher, { model, input }))
 })
 
-await withSession(sessionId, () => Promise.all(queries.map((q) => topicResearch.run({ input: { query: q } }))))
+await withSession(sessionId, () => Promise.all(queries.map((q) => topicResearch.run({ query: q }))))
 ```
 
 Each `.run()` call gets its own `flowId` and groups independently in devtools.
@@ -166,30 +166,9 @@ export default evaluate('research.pipeline', {
 
 See the [Quality guide](/docs/guides/quality) for variants, gates, and replay.
 
-## Migration from `withFlow`
+## Signaling Handles
 
-`flow` replaces the previous `withFlow(name, fn, options)` API. The migration is mechanical — define the flow once at module level, call `.run()` at each call site:
-
-```ts
-// Before
-import { withFlow } from '@use-crux/core'
-const result = await withFlow(
-  'pipeline',
-  async (flow) => {
-    /* steps */
-  },
-  { input, resume },
-)
-
-// After
-import { flow } from '@use-crux/core'
-const pipeline = flow('pipeline', async (flow) => {
-  /* steps */
-})
-const result = await pipeline.run({ input, resume })
-```
-
-The other notable change is signaling: prefer `pipeline.signal(flowId, name, payload)` on the handle. The bare `signalFlow()` export is now a low-level primitive that only writes the signal payload — see [Suspend and resume](/docs/guides/flows/suspend-and-resume#signaling-a-suspended-flow) for the full picture.
+Prefer `pipeline.signal(flowId, name, payload)` on the flow handle. The bare `signalFlow()` export is a low-level primitive that only writes the signal payload — see [Suspend and resume](/docs/guides/flows/suspend-and-resume#signaling-a-suspended-flow) for the full picture.
 
 ## Where to Next
 

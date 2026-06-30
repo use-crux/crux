@@ -61,9 +61,9 @@ afterEach(() => resetRuntime())
 
 describe('step composition: end-to-end', () => {
   it('external steps use flow.input and flow.results across a full flow', async () => {
-    const result = await makeFlow<{ published: boolean; title: string; audience: string }, ContentInput>(
+    const result = await makeFlow(
       'content-pipeline',
-      async (flow) => {
+      async (flow, _input: ContentInput) => {
         // Flow-aware step: auto-pass
         await flow.step('plan', planStep)
 
@@ -77,7 +77,7 @@ describe('step composition: end-to-end', () => {
         // Flow-aware step: reads flow.results.write
         return flow.step('publish', publishStep)
       },
-    ).run({ input: { topic: 'AI Safety', audience: 'engineers' } })
+    ).run({ topic: 'AI Safety', audience: 'engineers' })
 
     expect(result.status).toBe('completed')
     if (result.status === 'completed') {
@@ -95,7 +95,7 @@ describe('step composition: end-to-end', () => {
 
     const stepsExecuted: string[] = []
 
-    const flowFn = async (flow: FlowScope<ContentInput>) => {
+    const flowFn = async (flow: FlowScope<ContentInput>, _input: ContentInput) => {
       stepsExecuted.push('start')
 
       await flow.step('plan', planStep)
@@ -119,12 +119,10 @@ describe('step composition: end-to-end', () => {
       return flow.step('publish', publishStep)
     }
 
-    const contentFlow = makeFlow<any, ContentInput>('resume-composition', flowFn)
+    const contentFlow = makeFlow('resume-composition', flowFn)
 
     // First run — suspends
-    const suspended = await contentFlow.run({
-      input: { topic: 'AI Safety', audience: 'engineers' },
-    })
+    const suspended = await contentFlow.run({ topic: 'AI Safety', audience: 'engineers' })
     expect(suspended.status).toBe('suspended')
     expect(stepsExecuted).toEqual(['start'])
 
@@ -132,7 +130,7 @@ describe('step composition: end-to-end', () => {
     await signalFlow(suspended.flowId, 'review', { approved: true })
     stepsExecuted.length = 0
 
-    const resumed = await contentFlow.run({ resume: suspended.flowId })
+    const resumed = await contentFlow.resume(suspended.flowId)
 
     expect(resumed.status).toBe('completed')
     expect(stepsExecuted).toEqual(['start', 'post-resume'])
@@ -147,7 +145,7 @@ describe('step composition: end-to-end', () => {
   })
 
     it('mixed pattern: return values and flow.results in same flow', async () => {
-    const result = await makeFlow<string, { seed: number }>('mixed-pattern', async (flow) => {
+    const result = await makeFlow('mixed-pattern', async (flow, _input: { seed: number }) => {
       // Return-value pattern (typed)
       const doubled = await flow.step('double', () => flow.input.seed * 2)
 
@@ -157,7 +155,7 @@ describe('step composition: end-to-end', () => {
 
       // Both accessible
       return `${doubled} squared is ${squared}`
-    }).run({ input: { seed: 3 } })
+    }).run({ seed: 3 })
 
     expect(result.status).toBe('completed')
     if (result.status === 'completed') {

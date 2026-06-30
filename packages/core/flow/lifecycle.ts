@@ -68,7 +68,7 @@ export function parseDuration(duration: string): number {
  * Send a signal to a suspended flow.
  *
  * Writes the signal payload to the store. The flow will pick it up
- * on the next `flow().run({ resume })` call.
+ * on the next `flow().resume(flowId)` call.
  *
  * Uses the RecordStore from runtime config (`config({ persistence: { records } })`).
  */

@@ -59,11 +59,11 @@ describe('flow', () => {
   })
 
     it('.run() passes input to the flow scope', async () => {
-    const handle = makeFlow<string, { name: string }>('input-flow', async (flow) => {
+    const handle = makeFlow('input-flow', async (flow, _input: { name: string }) => {
       return `Hello, ${flow.input.name}`
     })
 
-    const result = await handle.run({ input: { name: 'World' } })
+    const result = await handle.run({ name: 'World' })
     expect(result.status).toBe('completed')
     if (result.status === 'completed') {
       expect(result.output).toBe('Hello, World')
@@ -128,7 +128,7 @@ describe('flow', () => {
 
     // Resume — should complete
     stepsExecuted.length = 0
-    const completed = await handle.run({ resume: suspended.flowId })
+    const completed = await handle.resume(suspended.flowId)
     expect(completed.status).toBe('completed')
     if (completed.status === 'completed') {
       expect(completed.output).toEqual({ done: true, planId: 'abc' })
@@ -177,7 +177,7 @@ describe('flow', () => {
     planCallCount = 0
     researchCallCount = 0
 
-    const completed = await handle.run({ resume: suspended.flowId })
+    const completed = await handle.resume(suspended.flowId)
     expect(completed.status).toBe('completed')
 
     // Neither plan nor research were re-executed
@@ -233,7 +233,7 @@ describe('flow', () => {
     // Signal plan-approval and resume → suspends at content-review
     await handle.signal(run1.flowId, 'plan-approval')
     stepsExecuted.length = 0
-    const run2 = await handle.run({ resume: run1.flowId })
+    const run2 = await handle.resume(run1.flowId)
     expect(run2.status).toBe('suspended')
     if (run2.status === 'suspended') expect(run2.suspendedAt).toBe('content-review')
     expect(stepsExecuted).toEqual(['draft']) // plan was skip-replayed
@@ -241,7 +241,7 @@ describe('flow', () => {
     // Signal content-review and resume → completes
     await handle.signal(run2.flowId, 'content-review')
     stepsExecuted.length = 0
-    const run3 = await handle.run({ resume: run2.flowId })
+    const run3 = await handle.resume(run2.flowId)
     expect(run3.status).toBe('completed')
     if (run3.status === 'completed') {
       expect(run3.output).toEqual({ published: true, content: 'article text' })
@@ -263,7 +263,7 @@ describe('flow', () => {
 
     // Signaling a non-existent flowId writes to store (no error at signal time)
     // But resuming a non-existent flow should throw
-    await expect(handle.run({ resume: 'non-existent-flow-id' })).rejects.toThrow('No suspended flow found')
+    await expect(handle.resume('non-existent-flow-id')).rejects.toThrow('No suspended flow found')
   })
 
   // ─────────────────────────────────────────────────────────────────
@@ -340,7 +340,7 @@ describe('flow', () => {
     await new Promise((r) => setTimeout(r, 5))
 
     // Resume — should be expired
-    const expired = await handle.run({ resume: suspended.flowId })
+    const expired = await handle.resume(suspended.flowId)
     expect(expired.status).toBe('expired')
     if (expired.status === 'expired') {
       expect(expired.flowId).toBe(suspended.flowId)
@@ -366,7 +366,7 @@ describe('flow', () => {
     const suspended = await handle.run()
     await new Promise((r) => setTimeout(r, 5))
 
-    const expired = await handle.run({ resume: suspended.flowId })
+    const expired = await handle.resume(suspended.flowId)
     expect(expired.status).toBe('expired')
     expect(expiredCalled).toBe(true)
     expect(expiredFlowId).toBe(suspended.flowId)

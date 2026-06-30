@@ -28,6 +28,7 @@
 export { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from './types'
 export type {
   FlowHandle,
+  FlowResumeOptions,
   FlowRunOptions,
   FlowScope,
   FlowResult,
@@ -36,7 +37,6 @@ export type {
   ListFlowsOptions,
   SuspendOptions,
   StepOptions,
-  WithFlowOptions,
 } from './types'
 
 // Lifecycle utilities (decomposed from scope.ts)
