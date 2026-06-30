@@ -85,3 +85,29 @@ export function signalSchemaFor(spec: FlowSignalSpec | undefined): ZodType<unkno
   if (!spec || isNoPayloadSignal(spec)) return undefined
   return spec as ZodType<unknown>
 }
+
+/**
+ * Validate a payload against a declared local signal schema.
+ *
+ * Local signal maps are runtime contracts as well as type contracts. This
+ * helper keeps schema parsing near the signal declaration utilities so the
+ * flow executor can stay focused on lifecycle control.
+ *
+ * @param signalName - Local signal name being delivered.
+ * @param spec - Signal declaration from the flow's local signal map.
+ * @param payload - Payload supplied by a caller or loaded from persistence.
+ * @returns The parsed payload when a schema exists, or the original payload.
+ */
+export function validateSignalPayload(
+  signalName: string,
+  spec: FlowSignalSpec | undefined,
+  payload: unknown,
+): unknown {
+  const schema = signalSchemaFor(spec)
+  if (!schema) return payload
+
+  const result = schema.safeParse(payload)
+  if (result.success) return result.data
+
+  throw new Error(`Invalid signal payload for "${signalName}": ${result.error.message}`)
+}

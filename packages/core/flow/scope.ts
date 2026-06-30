@@ -31,7 +31,7 @@ import type {
   FlowSummary,
 } from './types'
 import { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from './types'
-import { noPayload, signalSchemaFor } from './signals'
+import { noPayload, signalSchemaFor, validateSignalPayload } from './signals'
 import type { FlowDefinitionOptions, FlowSignalMap } from './signals'
 import {
   createFlowId,
@@ -299,7 +299,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           const signalDoc = await store.get(signalKey)
           if (signalDoc) {
             // Signal found — emit hook and return payload
-            const payload = (signalDoc.payload ?? {}) as S
+            const payload = validateSignalPayload(_name, suspendOptions?.schema, signalDoc.payload ?? {}) as S
             return payload
           }
         }
@@ -597,8 +597,9 @@ export function flow(
       })
     },
 
-    signal(flowId: string, signalName: string, payload: JsonValue = {}): Promise<void> {
-      return signalFlow(flowId, signalName, payload)
+    async signal(flowId: string, signalName: string, payload: JsonValue = {}): Promise<void> {
+      const parsedPayload = validateSignalPayload(signalName, definitionOptions?.signals[signalName], payload)
+      await signalFlow(flowId, signalName, parsedPayload as JsonValue)
     },
   }
 

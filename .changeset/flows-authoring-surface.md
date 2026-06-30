@@ -9,4 +9,6 @@ Flow input is now inferred from the handler's second parameter. Input-bearing ha
 
 Flows can now declare local typed signal maps with `flow(name, { signals }, handler)`. Signal schemas type both `flow.suspend('name')` and `handle.signal(flowId, 'name', payload)`, and `noPayload()` declares notification-only signals.
 
+Declared signal schemas now validate payloads before `handle.signal()` writes to persistence and again when `flow.suspend()` delivers a stored signal during resume.
+
 Refresh OTel package README wording to describe `flow().run()` spans.

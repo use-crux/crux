@@ -101,4 +101,66 @@ describe('flow handle surface', () => {
       })
     }
   })
+
+  it('rejects invalid typed signal payloads before writing them', async () => {
+    const store = inMemoryRecordStore()
+    updateRuntime({ records: store })
+
+    const review = flow(
+      'typed signal send validation',
+      {
+        signals: {
+          approval: z.object({
+            approved: z.boolean(),
+          }),
+        },
+      },
+      async (scope) => {
+        const approval = await scope.suspend('approval')
+        return approval.approved
+      },
+    )
+
+    const suspended = await review.run({ flowId: 'flow-invalid-signal-send' })
+    expect(suspended.status).toBe('suspended')
+
+    await expect(
+      review.signal(suspended.flowId, 'approval', {
+        approved: 'yes',
+      } as never),
+    ).rejects.toThrow(/Invalid signal payload for "approval"/)
+
+    await expect(store.get(`crux:signal:${suspended.flowId}:approval`)).resolves.toBeNull()
+  })
+
+  it('rejects invalid persisted signal payloads during resume delivery', async () => {
+    const store = inMemoryRecordStore()
+    updateRuntime({ records: store })
+
+    const review = flow(
+      'typed signal resume validation',
+      {
+        signals: {
+          approval: z.object({
+            approved: z.boolean(),
+          }),
+        },
+      },
+      async (scope) => {
+        const approval = await scope.suspend('approval')
+        return approval.approved
+      },
+    )
+
+    const suspended = await review.run({ flowId: 'flow-invalid-signal-resume' })
+    expect(suspended.status).toBe('suspended')
+
+    await store.put(`crux:signal:${suspended.flowId}:approval`, {
+      payload: { approved: 'yes' },
+      signaledAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+
+    await expect(review.resume(suspended.flowId)).rejects.toThrow(/Invalid signal payload for "approval"/)
+  })
 })
