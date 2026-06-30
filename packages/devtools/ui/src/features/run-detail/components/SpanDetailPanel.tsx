@@ -89,6 +89,8 @@ import { collectToolRequests, resolveToolPayload } from '../lib/span-detail-tool
 import { memoryRenderBudgetDecision } from '../lib/memory-span-detail'
 import { AgentCard, CompositionCard, EvalCard, EvalRunCard, FlowCard, OperationReportCard } from './PrimitiveCards'
 import { GenerationDetail } from './GenerationDetail'
+import { RunInsight } from './explain/RunInsight'
+import { collectTurnReports } from '@/features/run-detail/lib/explain/rollup'
 import { ContextComposition, hasContextContributions } from './ContextComposition'
 
 // ─── Card primitives ────────────────────────────────────────────────
@@ -3153,7 +3155,12 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
   // → composition card, …), not a generic "run" view (spec §4). `isRoot` still
   // drives run-level aggregates in the sub-header.
   const kind = classifyPrimitive(node.primitive)
-  const tabs = tabsForKind(kind)
+  // The run root leads with Turn Explanation rolled up across the run, when the
+  // projection emitted per-turn reports; its existing tabs stay one click away.
+  const runHasInsight = isRoot && collectTurnReports(detail.root).length > 0
+  const tabs: readonly InspectTabId[] = runHasInsight
+    ? ['insight', ...tabsForKind(kind)]
+    : tabsForKind(kind)
 
   const [activeTab, setActiveTab] = useState<InspectTabId>(tabs[0])
   // Reset to default tab whenever the selected node changes (so switching
@@ -3270,11 +3277,14 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
       {/* The tabs rail only earns its space once there's a choice to make:
           a single-tab span renders its one surface directly, no chrome. */}
       {tabs.length > 1 && <TabStrip tabs={tabs} active={activeTab} onSelect={setActiveTab} counts={counts} />}
-      {/* Per-tab error boundary: a broken render on one tab (malformed
+      {activeTab === 'insight' ? (
+        <RunInsight root={detail.root} onSelectSpan={(id) => onSelectSpan?.(id)} />
+      ) : (
+      /* Per-tab error boundary: a broken render on one tab (malformed
           message payload, unexpected handoff shape, etc.) shouldn't
           take down the rest of the span detail panel. `resetKey` ties
           the boundary to the selected node + tab, so switching tabs or
-          spans gives a clean retry surface. */}
+          spans gives a clean retry surface. */
       <div className="flex-1 overflow-auto px-4 py-4">
         <SectionErrorBoundary
           title={`${TAB_LABEL[activeTab] ?? activeTab} tab`}
@@ -3310,6 +3320,7 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
           {activeTab === 'children' && <ChildrenTab node={node} onSelect={(id) => onSelectSpan?.(id)} />}
         </SectionErrorBoundary>
       </div>
+      )}
     </div>
   )
 }

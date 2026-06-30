@@ -134,6 +134,8 @@ interface SpanNodeData extends Record<string, unknown> {
   status: SpanNode['status']
   selected: boolean
   accent: string
+  /** This span's turn explanation carries a warning signal — render a badge. */
+  warning?: boolean
 }
 
 const SpanNodeView = memo(function SpanNodeView({ data }: NodeProps<Node<SpanNodeData>>) {
@@ -201,6 +203,14 @@ const SpanNodeView = memo(function SpanNodeView({ data }: NodeProps<Node<SpanNod
           }}
         />
         <span style={{ flex: 1 }} />
+        {data.warning && (
+          <span
+            style={{ color: 'var(--qw-warn)', fontSize: 10, flexShrink: 0 }}
+            title="Turn explanation has a warning signal — open Explain"
+          >
+            ✦
+          </span>
+        )}
         <span style={{ color: 'var(--qw-fg-faint)', fontSize: 10, flexShrink: 0 }}>{fmtDuration(data.durationMs)}</span>
       </div>
       <div
@@ -242,6 +252,7 @@ function LegendEdge({ label, color, dash }: { label: string; color: string; dash
 function buildLayout(
   root: SpanNode,
   selectedId: string | null,
+  warningSpanIds?: ReadonlySet<string>,
 ): { nodes: Node<SpanNodeData>[]; edges: Edge[]; height: number } {
   const nodes: Node<SpanNodeData>[] = []
   const edges: Edge[] = []
@@ -268,6 +279,7 @@ function buildLayout(
         status: n.status,
         selected: isSelected,
         accent: accentFor(n),
+        warning: warningSpanIds?.has(n.id) ?? false,
       },
       draggable: false,
       selectable: true,
@@ -299,10 +311,15 @@ export interface SpanGraphProps {
   root: SpanNode
   selectedId: string | null
   onSelect: (id: string) => void
+  /** Span ids whose turn explanation carries a warning signal — badge them. */
+  warningSpanIds?: ReadonlySet<string>
 }
 
-export function SpanGraph({ root, selectedId, onSelect }: SpanGraphProps) {
-  const { nodes, edges } = useMemo(() => buildLayout(root, selectedId), [root, selectedId])
+export function SpanGraph({ root, selectedId, onSelect, warningSpanIds }: SpanGraphProps) {
+  const { nodes, edges } = useMemo(
+    () => buildLayout(root, selectedId, warningSpanIds),
+    [root, selectedId, warningSpanIds],
+  )
   const shape = useMemo(() => summarizeShape(root), [root])
   const hasHandoffs = shape.handoffs > 0
   const rfRef = useRef<ReactFlowInstance<Node<SpanNodeData>, Edge> | null>(null)
