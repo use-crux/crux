@@ -24,7 +24,7 @@ const report = {
     durMs: 1200,
     tokens: { input: 1000, output: 200, total: 1200 },
     cost: { totalUsd: 0.01 },
-    verdict: "Answered with one dropped context and partial quality coverage.",
+    readout: "Answered with one dropped context and partial quality coverage.",
   },
   saw: [
     {
@@ -123,10 +123,11 @@ const report = {
     total: 6,
     areas: [
       {
-        area: "Context inclusion",
+        id: "context-inclusion",
+        label: "Context inclusion",
         status: "partial",
-        suggest: "Assert context customerProfile is included",
-        cmd: "crux quality run --suite support-routing",
+        suggestion: "Assert context customerProfile is included",
+        command: "crux quality run --suite support-routing",
       },
     ],
   },
@@ -138,7 +139,7 @@ const report = {
       subject: { kind: "context", id: "ctx_policy" },
     },
   ],
-  summary: [
+  chips: [
     {
       id: "saw",
       label: "Saw 1",

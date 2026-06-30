@@ -1,20 +1,20 @@
 /**
- * The verdict band — the lead of the `Explain` tab. The eyebrow + a one-line
- * plain-language verdict (serif), then the scan chips that double as jump links
- * into the body. The verdict is the backend's deterministic, evidence-bound
+ * The readout band — the lead of the `Explain` tab. The eyebrow + a one-line
+ * plain-language readout (serif), then the scan chips that double as jump links
+ * into the body. The readout is the backend's deterministic, evidence-bound
  * sentence; we never synthesise prose here.
  */
 
 import type { ExplainChip, ExplainSection } from '@/features/run-detail/lib/explain/chips'
 import { SummaryChip } from '../band'
 
-export function VerdictBand({
-  verdict,
+export function ReadoutBand({
+  readout,
   chips,
   activeJump,
   onJump,
 }: {
-  verdict: string | undefined
+  readout: string | undefined
   chips: readonly ExplainChip[]
   activeJump?: ExplainSection | null
   onJump: (section: ExplainSection) => void
@@ -35,12 +35,12 @@ export function VerdictBand({
           Evidence for what shaped this model call.
         </span>
       </div>
-      {verdict && (
+      {readout && (
         <p
           className="m-0 mb-3.5 text-[15px] leading-[1.5]"
           style={{ fontFamily: 'var(--qw-serif)', color: 'var(--qw-fg)', maxWidth: 760 }}
         >
-          {verdict}
+          {readout}
         </p>
       )}
       <div className="flex flex-wrap gap-2">

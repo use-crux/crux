@@ -1,9 +1,9 @@
 /**
- * Summary chips for the `Explain` verdict band and span sub-header.
+ * Scan chips for the `Explain` readout band and span sub-header.
  *
- * The verdict band leads with the turn's one-line verdict, then a row of scan
+ * The readout band leads with the turn's one-line readout, then a row of scan
  * chips that double as jump links into the body sections. The backend may emit
- * stable {@link TurnSummaryChip}s; when it does we honour them (and map their
+ * stable {@link TurnDecisionChip}s; when it does we honour them (and map their
  * filter target to a section anchor). When it does not, we derive the seven
  * canonical chips from the report's own arrays and counts so the band is never
  * blank.
@@ -15,14 +15,14 @@
  */
 
 import type { IconName } from '@/qw/shell/nav'
-import type { TurnDecisionReport, TurnSummaryChip } from '@/types'
+import type { TurnDecisionChip, TurnDecisionReport } from '@/types'
 import { normalizeTurnDecisionReport, type RuntimeTurnDecisionReport } from './report'
 
 /** Section anchor ids used by the Explain tab body. */
 export type ExplainSection = 'saw' | 'considered' | 'fresh' | 'decisions' | 'source' | 'protect' | 'gaps'
 
 /** Report chip tone vocabulary, resolved to the app palette by the UI. */
-export type ExplainChipTone = NonNullable<TurnSummaryChip['tone']>
+export type ExplainChipTone = NonNullable<TurnDecisionChip['tone']>
 
 /** A scan chip in the verdict band / sub-header — view-ready. */
 export interface ExplainChip {
@@ -40,7 +40,7 @@ export interface ExplainChip {
 }
 
 /** The filter target a backend chip can carry. */
-type ChipFilterTarget = NonNullable<TurnSummaryChip['filter']>['target']
+type ChipFilterTarget = NonNullable<TurnDecisionChip['filter']>['target']
 
 /** Map a backend chip filter target to an Explain body section anchor. */
 function filterTargetToSection(target: ChipFilterTarget): ExplainSection {
@@ -70,7 +70,7 @@ function iconForTarget(target: string | undefined): IconName | undefined {
   return undefined
 }
 
-function fromBackend(chip: TurnSummaryChip): ExplainChip {
+function fromBackend(chip: TurnDecisionChip): ExplainChip {
   return {
     id: chip.id,
     label: chip.label,
@@ -109,12 +109,12 @@ function deriveChips(report: TurnDecisionReport): ExplainChip[] {
 }
 
 /**
- * The verdict-band scan chips — backend chips when present, derived otherwise.
+ * The readout-band scan chips — backend chips when present, derived otherwise.
  */
 export function summaryChips(report: TurnDecisionReport | RuntimeTurnDecisionReport): ExplainChip[] {
   const normalized = normalizeTurnDecisionReport(report)
   if (!normalized) return []
-  if (normalized.summary && normalized.summary.length > 0) return normalized.summary.map(fromBackend)
+  if (normalized.chips && normalized.chips.length > 0) return normalized.chips.map(fromBackend)
   return deriveChips(normalized)
 }
 

@@ -15,7 +15,7 @@ type TurnDecisionReport struct {
 	Source        []TurnSourceGroup        `json:"source"`
 	Coverage      TurnDecisionCoverage     `json:"coverage"`
 	Gaps          []TurnDecisionDiagnostic `json:"gaps"`
-	Summary       []TurnSummaryChip        `json:"summary,omitempty"`
+	Chips         []TurnDecisionChip       `json:"chips,omitempty"`
 }
 
 // TurnDecisionTurn describes the model call or stream being explained.
@@ -31,7 +31,7 @@ type TurnDecisionTurn struct {
 	TTFTMs       float64             `json:"ttftMs,omitempty"`
 	Tokens       *TurnDecisionTokens `json:"tokens,omitempty"`
 	Cost         *TurnDecisionCost   `json:"cost,omitempty"`
-	Verdict      string              `json:"verdict,omitempty"`
+	Readout      string              `json:"readout,omitempty"`
 }
 
 // TurnDecisionTokens mirrors generation usage totals for the explained turn.
@@ -179,12 +179,14 @@ type TurnDecisionCoverage struct {
 	Areas   []TurnCoverageArea `json:"areas"`
 }
 
-// TurnCoverageArea describes one quality protection area.
+// TurnCoverageArea describes one quality protection area. ID is stable for
+// matchers and filtering; Label is display copy.
 type TurnCoverageArea struct {
-	Area          string `json:"area"`
+	ID            string `json:"id"`
+	Label         string `json:"label"`
 	Status        string `json:"status"`
-	Suggest       string `json:"suggest,omitempty"`
-	Cmd           string `json:"cmd,omitempty"`
+	Suggestion    string `json:"suggestion,omitempty"`
+	Command       string `json:"command,omitempty"`
 	EvidenceLevel string `json:"evidenceLevel,omitempty"`
 }
 
@@ -198,16 +200,16 @@ type TurnDecisionDiagnostic struct {
 	Evidence      []TurnEvidenceRef    `json:"evidence,omitempty"`
 }
 
-// TurnSummaryChip is an optional stable scan/filter chip.
-type TurnSummaryChip struct {
-	ID     string                 `json:"id"`
-	Label  string                 `json:"label"`
-	Tone   string                 `json:"tone,omitempty"`
-	Filter *TurnSummaryChipFilter `json:"filter,omitempty"`
+// TurnDecisionChip is an optional stable scan/filter chip.
+type TurnDecisionChip struct {
+	ID     string                  `json:"id"`
+	Label  string                  `json:"label"`
+	Tone   string                  `json:"tone,omitempty"`
+	Filter *TurnDecisionChipFilter `json:"filter,omitempty"`
 }
 
-// TurnSummaryChipFilter identifies a report section and optional value.
-type TurnSummaryChipFilter struct {
+// TurnDecisionChipFilter identifies a report section and optional value.
+type TurnDecisionChipFilter struct {
 	Target string `json:"target"`
 	Value  string `json:"value,omitempty"`
 }

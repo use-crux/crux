@@ -74,9 +74,9 @@ function TurnRow({ entry, onSelect }: { entry: TurnEntry; onSelect: (id: string)
         )}
       </div>
       <StatusPill status={t.status ?? 'ok'} />
-      {t.verdict ? (
+      {t.readout ? (
         <span className="min-w-0 flex-1 truncate text-[12px] italic" style={{ fontFamily: 'var(--qw-serif)', color: 'var(--qw-fg-muted)' }}>
-          {t.verdict}
+          {t.readout}
         </span>
       ) : (
         <span className="min-w-0 flex-1" />

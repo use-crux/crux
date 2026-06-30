@@ -56,8 +56,8 @@ func TestProjectRunDetailBuildsTurnDecisionReportFromGenerationRequest(t *testin
 	if report.Turn.FinishReason != "stop" || report.Turn.Tokens == nil || report.Turn.Tokens.Total != 60 {
 		t.Fatalf("turn metrics = %#v, want finish reason and token totals", report.Turn)
 	}
-	if report.Turn.Verdict != "Answered with 1 active context and 1 context dropped by budget." {
-		t.Fatalf("verdict = %q", report.Turn.Verdict)
+	if report.Turn.Readout != "Answered with 1 active context and 1 context dropped by budget." {
+		t.Fatalf("readout = %q", report.Turn.Readout)
 	}
 
 	if len(report.Saw) != 3 {

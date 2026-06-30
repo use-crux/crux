@@ -7,11 +7,11 @@ import type {
 import type { TurnDecisionReason } from "./shared";
 import type {
   TurnCoverageArea,
+  TurnDecisionChip,
   TurnDecisionCoverage,
   TurnDecisionDiagnostic,
   TurnSourceGroup,
   TurnSourceJoin,
-  TurnSummaryChip,
 } from "./source-coverage";
 import type {
   TurnDecisionMetrics,
@@ -30,7 +30,7 @@ export interface TurnDecisionReport {
   runId: string;
   /** Trace id when the report is joined to a trace. */
   traceId?: string;
-  /** Generation turn metadata and deterministic verdict. */
+  /** Generation turn metadata and deterministic readout. */
   turn: TurnDecisionTurn;
   /** Items that reached the model. */
   saw: TurnSawItem[];
@@ -49,7 +49,7 @@ export interface TurnDecisionReport {
   /** Missing or degraded evidence that affects report confidence. */
   gaps: TurnDecisionDiagnostic[];
   /** Optional stable chips for scan/filter UI. */
-  summary?: TurnSummaryChip[];
+  chips?: TurnDecisionChip[];
 }
 
 /** Phase grouping used by the Decisions section. */

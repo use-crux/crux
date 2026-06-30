@@ -12,3 +12,5 @@ Project recorded freshness evidence into Run Detail `decisionReport` rows, inclu
 Add Quality `ctx.expect.decisionReport` matchers for protecting context dispositions, routing/fallback outcomes, freshness status, and cache acceptance using stable `TurnDecisionReport` reason codes.
 
 Harden Run Detail turn explanations so empty `decisionReport` collections encode as `[]` in Crux Local and Devtools tolerates older partial reports that used `null` for empty collections.
+
+Polish the `TurnDecisionReport` V1 contract before freeze: rename `turn.verdict` to `turn.readout` (a deterministic evidence-bound sentence, not a pass/fail judgment), rename the top-level `summary` chip list to `chips` (type `TurnDecisionChip`, was `TurnSummaryChip`), and replace `TurnCoverageArea.area` with stable `id` + display `label` fields while renaming `suggest`/`cmd` to `suggestion`/`command`. These are breaking renames to the pre-release public contract; `@use-crux/local` and Devtools are updated to match.

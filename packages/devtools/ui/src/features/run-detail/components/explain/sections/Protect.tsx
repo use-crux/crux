@@ -20,17 +20,17 @@ export function ProtectBlock({ coverage }: { coverage: TurnDecisionCoverage }) {
       </div>
       {coverage.areas.map((a, i) => (
         <div
-          key={a.area}
+          key={a.id}
           className="flex items-center gap-3 px-4 py-2.5"
           style={{ borderBottom: i < coverage.areas.length - 1 ? '1px solid var(--qw-border)' : 'none' }}
         >
           <span className="w-[170px] flex-shrink-0 text-[12.5px] font-medium" style={{ color: 'var(--qw-fg)' }}>
-            {a.area}
+            {a.label}
           </span>
           <span className="w-[132px] flex-shrink-0">
             <CoverageChip status={a.status} />
           </span>
-          {a.suggest ? (
+          {a.suggestion ? (
             <span className="flex min-w-0 flex-1 items-center gap-2">
               <span className="text-[12.5px] italic" style={{ fontFamily: 'var(--qw-serif)', color: 'var(--qw-fg-muted)' }}>
                 suggest
@@ -44,9 +44,9 @@ export function ProtectBlock({ coverage }: { coverage: TurnDecisionCoverage }) {
                   borderRadius: 5,
                   padding: '2px 8px',
                 }}
-                title={a.cmd ? `${a.suggest} — ${a.cmd}` : a.suggest}
+                title={a.command ? `${a.suggestion} — ${a.command}` : a.suggestion}
               >
-                {a.suggest}
+                {a.suggestion}
               </span>
             </span>
           ) : (

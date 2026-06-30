@@ -1070,7 +1070,7 @@ export type {
   TurnDecisionCoverage,
   TurnCoverageArea,
   TurnDecisionDiagnostic,
-  TurnSummaryChip,
+  TurnDecisionChip,
   TurnDeepTabTarget,
   TurnEvidenceLevel,
   TurnDisposition,

@@ -66,8 +66,8 @@ function normalizeSourceGroups(groups: readonly RuntimeSourceGroup[] | null | un
  * Return a render-safe report, or `undefined` when no report exists.
  *
  * The result conforms to the public `TurnDecisionReport` contract: collection
- * fields are arrays, coverage always has an `areas` array, and a `null` summary
- * remains absent so derived summary chips can take over.
+ * fields are arrays, coverage always has an `areas` array, and `null` chips
+ * remain absent so derived chips can take over.
  */
 export function normalizeTurnDecisionReport(
   report: RuntimeTurnDecisionReport | null | undefined,
@@ -90,8 +90,8 @@ export function normalizeTurnDecisionReport(
     gaps: arrayOrEmpty(report.gaps),
   }
 
-  if (Array.isArray(report.summary)) {
-    normalized.summary = [...report.summary]
+  if (Array.isArray(report.chips)) {
+    normalized.chips = [...report.chips]
   }
 
   return normalized

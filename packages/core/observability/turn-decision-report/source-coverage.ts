@@ -56,19 +56,28 @@ export interface TurnDecisionCoverage {
   areas: TurnCoverageArea[];
 }
 
-/** One area in the protection scorecard. */
+/** Stable id for one area in the protection scorecard. */
+export type TurnCoverageAreaId = TurnDecisionLiteral<
+  | "output-quality"
+  | "context-inclusion"
+  | "routing-fallback"
+  | "freshness-cache-acceptance"
+  | "guardrail-security"
+  | "tool-use"
+>;
+
+/**
+ * One area in the protection scorecard.
+ *
+ * `id` is stable for matchers, filtering, and localization. `label` is
+ * display copy and may change without breaking consumers.
+ */
 export interface TurnCoverageArea {
-  area: TurnDecisionLiteral<
-    | "Output quality"
-    | "Context inclusion"
-    | "Routing/fallback"
-    | "Freshness/cache acceptance"
-    | "Guardrail/security"
-    | "Tool use"
-  >;
+  id: TurnCoverageAreaId;
+  label: string;
   status: "covered" | "partial" | "none" | "unknown";
-  suggest?: string;
-  cmd?: string;
+  suggestion?: string;
+  command?: string;
   evidenceLevel?: TurnEvidenceLevel;
 }
 
@@ -82,8 +91,8 @@ export interface TurnDecisionDiagnostic {
   evidence?: TurnEvidenceRef[];
 }
 
-/** Optional summary chip for scan and filter affordances. */
-export interface TurnSummaryChip {
+/** Optional scan/filter chip surfaced in Explain's chip row. */
+export interface TurnDecisionChip {
   id: string;
   label: string;
   tone?: "neutral" | "info" | "warning" | "danger";

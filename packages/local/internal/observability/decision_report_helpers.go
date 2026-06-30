@@ -181,12 +181,12 @@ func normalizeCacheStatus(status string) string {
 
 func defaultTurnDecisionCoverage() TurnDecisionCoverage {
 	areas := []TurnCoverageArea{
-		{Area: "Output quality", Status: "unknown", Suggest: "Assert output quality for this turn", EvidenceLevel: "missing"},
-		{Area: "Context inclusion", Status: "unknown", Suggest: "Assert required contexts are included", EvidenceLevel: "missing"},
-		{Area: "Routing/fallback", Status: "unknown", Suggest: "Assert routing and fallback outcomes", EvidenceLevel: "missing"},
-		{Area: "Freshness/cache acceptance", Status: "unknown", Suggest: "Assert freshness and cache acceptance", EvidenceLevel: "missing"},
-		{Area: "Guardrail/security", Status: "unknown", Suggest: "Assert guardrail and security outcomes", EvidenceLevel: "missing"},
-		{Area: "Tool use", Status: "unknown", Suggest: "Assert eligible and called tools", EvidenceLevel: "missing"},
+		{ID: "output-quality", Label: "Output quality", Status: "unknown", Suggestion: "Assert output quality for this turn", EvidenceLevel: "missing"},
+		{ID: "context-inclusion", Label: "Context inclusion", Status: "unknown", Suggestion: "Assert required contexts are included", EvidenceLevel: "missing"},
+		{ID: "routing-fallback", Label: "Routing/fallback", Status: "unknown", Suggestion: "Assert routing and fallback outcomes", EvidenceLevel: "missing"},
+		{ID: "freshness-cache-acceptance", Label: "Freshness/cache acceptance", Status: "unknown", Suggestion: "Assert freshness and cache acceptance", EvidenceLevel: "missing"},
+		{ID: "guardrail-security", Label: "Guardrail/security", Status: "unknown", Suggestion: "Assert guardrail and security outcomes", EvidenceLevel: "missing"},
+		{ID: "tool-use", Label: "Tool use", Status: "unknown", Suggestion: "Assert eligible and called tools", EvidenceLevel: "missing"},
 	}
 	return TurnDecisionCoverage{Total: len(areas), Areas: areas}
 }
@@ -211,7 +211,7 @@ func missingFreshnessGap(span SpanSummary) TurnDecisionDiagnostic {
 	}
 }
 
-func turnVerdict(activeContexts int, budgetDrops int) string {
+func turnReadout(activeContexts int, budgetDrops int) string {
 	if activeContexts > 0 && budgetDrops > 0 {
 		return "Answered with " + pluralCount(activeContexts, "active context", "active contexts") + " and " + pluralCount(budgetDrops, "context dropped by budget", "contexts dropped by budget") + "."
 	}
