@@ -1359,8 +1359,14 @@ describe('project indexer', () => {
         export const MemoryState = z.object({
           turnCount: z.number(),
         })
+        export const workspaceMountSource = {
+          kind: 'custom',
+          list: async () => ({ entries: [] }),
+          read: async () => null,
+          write: async () => null,
+        }
         export const workspaceMounts = [
-          { path: '/drafts', access: 'readwrite', description: 'Draft files' },
+          { path: '/drafts', access: 'readwrite', description: 'Draft files', source: workspaceMountSource },
         ]
       `,
     )
@@ -1476,7 +1482,15 @@ describe('project indexer', () => {
       ]),
     )
     expect(workspaceDefinition?.metadata?.mounts).toEqual([
-      expect.objectContaining({ path: '/drafts', access: 'readwrite', description: 'Draft files' }),
+      expect.objectContaining({
+        path: '/drafts',
+        access: 'readwrite',
+        description: 'Draft files',
+        source: expect.objectContaining({
+          kind: 'custom',
+          capabilities: ['list', 'read', 'write'],
+        }),
+      }),
     ])
     expect(flowDefinition?.sourceRefs).toEqual(
       expect.arrayContaining([

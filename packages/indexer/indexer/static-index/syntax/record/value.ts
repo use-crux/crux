@@ -67,10 +67,11 @@ export function staticObjectValue(
   return resolved?.kind === 'object' ? resolved : undefined
 }
 
-/** Returns the authored reference name for identifier and property-access values. */
+/** Returns the authored reference name for identifier, property-access, and helper-call values. */
 export function staticReferenceName(value: StaticSyntaxValue | undefined): string | undefined {
   if (!value) return undefined
   if (value.kind === 'identifier' || value.kind === 'property-access') return value.name
+  if (value.kind === 'call') return value.callee.localName ?? value.callee.name
   return undefined
 }
 

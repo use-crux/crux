@@ -298,11 +298,40 @@ describe("first-party extractor fixtures", () => {
       cruxFixture,
       `
         const searchDocs = createTool({ name: 'searchDocs' })
+        const docsRetriever = retriever({ id: 'docs', retrieve: async () => [] })
+        const customLoader = () => ({ kind: 'custom', read: async () => null })
 
         export const scratch = workspace({
           id: 'scratch',
           namespace: 'tenant-a',
-          mounts: [{ path: '/workspace', access: 'readwrite', description: 'Working files' }],
+          mounts: [
+            {
+              path: '/workspace',
+              access: 'readwrite',
+              description: 'Working files',
+              source: {
+                kind: 'custom',
+                list: async () => ({ entries: [] }),
+                read: async () => null,
+                write: async () => null,
+              },
+            },
+            {
+              path: '/docs',
+              access: 'read',
+              source: { kind: 'retriever', retriever: docsRetriever },
+            },
+            {
+              path: '/guide',
+              access: 'read',
+              source: retrieverWorkspaceMountSource(docsRetriever, { query: 'guide' }),
+            },
+            {
+              path: '/catalog',
+              access: 'read',
+              source: customLoader(),
+            },
+          ],
           tools: { prefix: 'research', delete: true, undo: true, searchDocs },
           limits: { maxFileBytes: 1000, maxNamespaceBytes: 5000 },
           retention: { ttlMs: 60000 },
@@ -355,11 +384,65 @@ describe("first-party extractor fixtures", () => {
         retention: { ttlMs: 60000 },
         versioning: { maxVersions: 7 },
         mounts: [
-          expect.objectContaining({ path: "/workspace", access: "readwrite" }),
+          expect.objectContaining({
+            path: "/workspace",
+            access: "readwrite",
+            source: {
+              kind: "custom",
+              capabilities: ["list", "read", "write"],
+            },
+          }),
+          expect.objectContaining({
+            path: "/docs",
+            access: "read",
+            source: {
+              kind: "retriever",
+              retriever: "docsRetriever",
+              capabilities: ["list", "read", "grep", "exists", "stat"],
+            },
+          }),
+          expect.objectContaining({
+            path: "/guide",
+            access: "read",
+            source: {
+              kind: "retriever",
+              helper: "retrieverWorkspaceMountSource",
+              capabilities: ["list", "read", "grep", "exists", "stat"],
+            },
+          }),
+          expect.objectContaining({
+            path: "/catalog",
+            access: "read",
+            source: {
+              kind: "custom",
+              helper: "customLoader",
+            },
+          }),
         ],
         intelligence: expect.objectContaining({
           confidence: "static",
           tools: ["searchDocs"],
+          data: expect.objectContaining({
+            mounts: expect.arrayContaining([
+              expect.objectContaining({
+                path: "/guide",
+                sourceKind: "retriever",
+                sourceHelper: "retrieverWorkspaceMountSource",
+              }),
+              expect.objectContaining({
+                path: "/catalog",
+                sourceKind: "custom",
+                sourceHelper: "customLoader",
+              }),
+            ]),
+            artifacts: expect.arrayContaining([
+              expect.objectContaining({
+                name: "/docs",
+                kind: "read",
+                sourceKind: "retriever",
+              }),
+            ]),
+          }),
           operator: expect.objectContaining({
             retention: { ttlMs: 60000 },
             limits: { maxFileBytes: 1000, maxNamespaceBytes: 5000 },

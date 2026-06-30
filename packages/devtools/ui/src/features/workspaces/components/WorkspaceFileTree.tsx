@@ -99,12 +99,19 @@ export function FileTreePane({
         >
           <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em]">mounts · {mounts.length}</div>
           {mounts.map((m) => (
-            <div key={m.path} className="font-mono">
-              <span style={{ color: 'var(--qw-crux)' }}>{m.path}</span>
-              {m.mode && (
-                <span className="ml-1.5" style={{ color: 'var(--qw-fg-faint)' }}>
-                  ({m.mode})
-                </span>
+            <div key={m.path} className="mb-1 font-mono last:mb-0">
+              <div>
+                <span style={{ color: 'var(--qw-crux)' }}>{m.path}</span>
+                {m.mode && (
+                  <span className="ml-1.5" style={{ color: 'var(--qw-fg-faint)' }}>
+                    ({m.mode})
+                  </span>
+                )}
+              </div>
+              {(m.sourceKind || m.sourceHelper || m.retriever || m.sourceRef) && (
+                <div className="truncate" style={{ color: 'var(--qw-fg-muted)' }}>
+                  {[m.sourceKind, m.sourceHelper ?? m.retriever ?? m.sourceRef].filter(Boolean).join(' · ')}
+                </div>
               )}
             </div>
           ))}

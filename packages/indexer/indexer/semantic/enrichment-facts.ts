@@ -45,6 +45,15 @@ import {
   unwrapExpression,
 } from './model'
 import { semanticStorageDefinitionEnrichments } from './storage-facts'
+import {
+  compactWorkspaceMountMetadata,
+  compactWorkspaceMountSourceMetadata,
+  RETRIEVER_WORKSPACE_MOUNT_SOURCE_CAPABILITIES,
+  RETRIEVER_WORKSPACE_MOUNT_SOURCE_HELPER,
+  WORKSPACE_MOUNT_SOURCE_CAPABILITY_PROPERTIES,
+  type WorkspaceMountMetadata,
+  type WorkspaceMountSourceMetadata,
+} from '../extractors/workspace-mount-metadata'
 
 type SemanticNode = SemanticAnalyzerNode<SemanticAnalyzerView>
 
@@ -996,12 +1005,15 @@ function semanticWorkspaceDefinitionEnrichments(
     .arrayElements(mounts)
     .map((element) => unwrapExpression(element, view))
     .filter((element) => view.syntax.isKind(element, 'objectLiteral'))
-    .map((mount) => ({
-      path: semanticStringLiteralProperty(mount, 'path', view),
-      access: semanticStringLiteralProperty(mount, 'access', view),
-      description: semanticStringLiteralProperty(mount, 'description', view),
-    }))
-    .filter((mount) => mount.path || mount.access || mount.description)
+    .map((mount) =>
+      compactWorkspaceMountMetadata({
+        path: semanticStringLiteralProperty(mount, 'path', view),
+        access: semanticStringLiteralProperty(mount, 'access', view),
+        description: semanticStringLiteralProperty(mount, 'description', view),
+        source: semanticWorkspaceMountSourceMetadata(mount, view),
+      }),
+    )
+    .filter((mount): mount is WorkspaceMountMetadata => mount !== undefined)
   if (metadata.length === 0) return []
   return [
     {
@@ -1026,4 +1038,76 @@ function semanticWorkspaceDefinitionEnrichments(
       ),
     },
   ]
+}
+
+/**
+ * Reads source-backed workspace mount metadata from semantically resolved mount config.
+ *
+ * The enrichment uses backend-neutral syntax only so TypeScript and native semantic backends emit the
+ * same provider summary without exposing executable provider values.
+ */
+function semanticWorkspaceMountSourceMetadata(
+  mount: SemanticNode,
+  view: SemanticAnalyzerView,
+): WorkspaceMountSourceMetadata | undefined {
+  const sourceExpression = propertyInitializer(mount, 'source', view)
+  if (!sourceExpression) return undefined
+  const expression = toExpression(sourceExpression, view)
+  const sourceObject = semanticObjectExpression(expression, view, new Set())
+  if (sourceObject) return semanticWorkspaceMountObjectSourceMetadata(sourceObject, view)
+
+  const unwrapped = unwrapExpression(expression, view)
+  if (view.syntax.isKind(unwrapped, 'callExpression')) {
+    const helper = callExpressionName(unwrapped, view)
+    if (helper === RETRIEVER_WORKSPACE_MOUNT_SOURCE_HELPER) {
+      return {
+        kind: 'retriever',
+        helper: RETRIEVER_WORKSPACE_MOUNT_SOURCE_HELPER,
+        capabilities: RETRIEVER_WORKSPACE_MOUNT_SOURCE_CAPABILITIES,
+      }
+    }
+    return compactWorkspaceMountSourceMetadata({
+      kind: helper ? 'custom' : 'unknown',
+      helper,
+    })
+  }
+
+  const reference = semanticExpressionVariable(unwrapped, view)
+  return compactWorkspaceMountSourceMetadata({
+    kind: reference ? 'custom' : 'unknown',
+    reference,
+  })
+}
+
+function semanticWorkspaceMountObjectSourceMetadata(
+  source: SemanticNode,
+  view: SemanticAnalyzerView,
+): WorkspaceMountSourceMetadata | undefined {
+  const kind = semanticStringLiteralProperty(source, 'kind', view) ?? 'custom'
+  return compactWorkspaceMountSourceMetadata({
+    kind,
+    retriever: semanticReferenceProperty(source, 'retriever', view),
+    capabilities: semanticWorkspaceMountSourceCapabilities(source, kind, view),
+  })
+}
+
+function semanticWorkspaceMountSourceCapabilities(
+  source: SemanticNode,
+  kind: string,
+  view: SemanticAnalyzerView,
+): readonly string[] | undefined {
+  if (kind === 'retriever') return RETRIEVER_WORKSPACE_MOUNT_SOURCE_CAPABILITIES
+  const capabilities = WORKSPACE_MOUNT_SOURCE_CAPABILITY_PROPERTIES.filter((property) =>
+    Boolean(propertyInitializer(source, property, view)),
+  )
+  return capabilities.length > 0 ? capabilities : undefined
+}
+
+function semanticReferenceProperty(
+  object: SemanticNode,
+  name: string,
+  view: SemanticAnalyzerView,
+): string | undefined {
+  const expression = propertyInitializer(object, name, view)
+  return expression ? semanticExpressionVariable(toExpression(expression, view), view) : undefined
 }

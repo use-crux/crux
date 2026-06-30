@@ -150,6 +150,72 @@ func TestMemoryStoreDetailIncludesLiveInspectionEntries(t *testing.T) {
 	}
 }
 
+func TestWorkspaceReadmodelsIncludeAuthoredSourceBackedMounts(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewStore()
+	st.SetIndexData(store.IndexData{
+		Definitions: []store.ProjectDefinition{
+			{
+				ID:       "workspace:scratch",
+				Kind:     "workspace",
+				Name:     "scratch",
+				Fidelity: "resolved",
+				Metadata: json.RawMessage(`{
+					"namespace": "tenant-a",
+					"mounts": [
+						{
+							"path": "/docs",
+							"access": "read",
+							"source": {
+								"kind": "retriever",
+								"helper": "retrieverWorkspaceMountSource",
+								"capabilities": ["list", "read", "grep", "exists", "stat"]
+							}
+						},
+						{
+							"path": "/drafts",
+							"access": "readwrite",
+							"source": {
+								"kind": "custom",
+								"capabilities": ["list", "read", "write"]
+							}
+						}
+					]
+				}`),
+			},
+		},
+	})
+
+	service := NewService(st, quality.NewService(st, t.TempDir()))
+	value, err := service.Workspaces(ctx)
+	if err != nil {
+		t.Fatalf("workspaces error = %v", err)
+	}
+	summaries := value.([]workspaceSummary)
+	if len(summaries) != 1 || summaries[0].ID != "scratch" || summaries[0].Namespace != "tenant-a" {
+		t.Fatalf("summaries = %#v", summaries)
+	}
+	if len(summaries[0].Mounts) != 2 {
+		t.Fatalf("mounts = %#v", summaries[0].Mounts)
+	}
+	docs := summaries[0].Mounts[0]
+	if docs.Path != "/docs" || docs.Mode != "read-only" || docs.SourceKind != "retriever" || docs.SourceHelper != "retrieverWorkspaceMountSource" {
+		t.Fatalf("docs mount = %#v", docs)
+	}
+	if !reflect.DeepEqual(docs.Capabilities, []string{"list", "read", "grep", "exists", "stat"}) {
+		t.Fatalf("docs capabilities = %#v", docs.Capabilities)
+	}
+
+	detailValue, found, err := service.WorkspaceDetail(ctx, "scratch")
+	if err != nil || !found {
+		t.Fatalf("workspace detail found=%v err=%v", found, err)
+	}
+	detail := detailValue.(workspaceDetail)
+	if len(detail.Mounts) != 2 || detail.Mounts[1].Mode != "read-write" || detail.Mounts[1].SourceKind != "custom" {
+		t.Fatalf("detail mounts = %#v", detail.Mounts)
+	}
+}
+
 func TestMemoryStoreDetailJoinsIndexDefinitionByRuntimePrefix(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewStore()

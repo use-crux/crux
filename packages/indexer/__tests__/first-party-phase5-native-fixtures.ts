@@ -10,13 +10,30 @@ describe("first-party Phase 5 native fixtures", () => {
     "emits exact native workspace facts from Rust/Oxc records",
     async () => {
       const source = [
+        "const docsRetriever = retriever({ id: 'docs', retrieve: async () => [] })",
         "const searchDocs = createTool({ name: 'searchDocs' })",
+        "const customLoader = () => ({ kind: 'custom', read: async () => null })",
         "",
         "export const scratch = workspace({",
         "  id: 'scratch',",
         "  namespace: 'tenant-a',",
         "  tools: { searchDocs },",
-        "  mounts: [{ path: '/workspace', access: 'write', description: 'Draft files' }],",
+        "  mounts: [",
+        "    {",
+        "      path: '/workspace',",
+        "      access: 'write',",
+        "      description: 'Draft files',",
+        "      source: {",
+        "        kind: 'custom',",
+        "        list: async () => ({ entries: [] }),",
+        "        read: async () => null,",
+        "        write: async () => null,",
+        "      },",
+        "    },",
+        "    { path: '/docs', access: 'read', source: { kind: 'retriever', retriever: docsRetriever } },",
+        "    { path: '/guide', access: 'read', source: retrieverWorkspaceMountSource(docsRetriever, { query: 'guide' }) },",
+        "    { path: '/catalog', access: 'read', source: customLoader() },",
+        "  ],",
         "  storage: blobStore,",
         "})",
       ].join("\n");
@@ -31,9 +48,96 @@ describe("first-party Phase 5 native fixtures", () => {
       expect(record.nativeFacts?.[0]?.replaces).toEqual([
         { extension: "@use-crux/indexer/crux-core", extractor: "workspace" },
       ]);
+      const workspaceMetadata = nativeOut.definitions.find(
+        (definition) => definition.id === "workspace:scratch",
+      )?.metadata;
+      expect(workspaceMetadata?.mounts).toEqual([
+        expect.objectContaining({
+          path: "/workspace",
+          source: expect.objectContaining({
+            kind: "custom",
+            capabilities: ["list", "read", "write"],
+          }),
+        }),
+        expect.objectContaining({
+          path: "/docs",
+          source: expect.objectContaining({
+            kind: "retriever",
+            retriever: "docsRetriever",
+          }),
+        }),
+        expect.objectContaining({
+          path: "/guide",
+          source: expect.objectContaining({
+            kind: "retriever",
+            helper: "retrieverWorkspaceMountSource",
+          }),
+        }),
+        expect.objectContaining({
+          path: "/catalog",
+          source: expect.objectContaining({
+            kind: "custom",
+            helper: "customLoader",
+          }),
+        }),
+      ]);
+      expect(workspaceMetadata?.intelligence).toEqual(
+        expect.objectContaining({
+          confidence: "static",
+          tools: ["searchDocs"],
+          data: {
+            mounts: [
+              expect.objectContaining({
+                path: "/workspace",
+                sourceKind: "custom",
+                sourceCapabilities: ["list", "read", "write"],
+              }),
+              expect.objectContaining({
+                path: "/docs",
+                sourceKind: "retriever",
+                sourceRetriever: "docsRetriever",
+              }),
+              expect.objectContaining({
+                path: "/guide",
+                sourceKind: "retriever",
+                sourceHelper: "retrieverWorkspaceMountSource",
+              }),
+              expect.objectContaining({
+                path: "/catalog",
+                sourceKind: "custom",
+                sourceHelper: "customLoader",
+              }),
+            ],
+            artifacts: [
+              expect.objectContaining({
+                name: "/workspace",
+                kind: "write",
+                sourceKind: "custom",
+              }),
+              expect.objectContaining({
+                name: "/docs",
+                kind: "read",
+                sourceKind: "retriever",
+              }),
+              expect.objectContaining({
+                name: "/guide",
+                kind: "read",
+                sourceKind: "retriever",
+                sourceHelper: "retrieverWorkspaceMountSource",
+              }),
+              expect.objectContaining({
+                name: "/catalog",
+                kind: "read",
+                sourceKind: "custom",
+                sourceHelper: "customLoader",
+              }),
+            ],
+          },
+        }),
+      );
       expectNativeExtractionParity(nativeOut, fallbackOut);
     },
-    30_000,
+    60_000,
   );
 
   itWithRustOxc(

@@ -93,9 +93,14 @@ type workspaceSummary struct {
 }
 
 type workspaceMount struct {
-	Path      string `json:"path"`
-	Mode      string `json:"mode"`
-	FileCount int    `json:"fileCount"`
+	Path         string   `json:"path"`
+	Mode         string   `json:"mode"`
+	FileCount    int      `json:"fileCount"`
+	SourceKind   string   `json:"sourceKind,omitempty"`
+	SourceHelper string   `json:"sourceHelper,omitempty"`
+	SourceRef    string   `json:"sourceRef,omitempty"`
+	Retriever    string   `json:"retriever,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 type workspaceStats struct {
@@ -427,20 +432,47 @@ func (s *Service) workspaceSummaries(ctx context.Context) ([]workspaceSummary, e
 		id := nonEmpty(event.WorkspaceID, "workspace")
 		byID[id] = append(byID[id], event)
 	}
-	out := make([]workspaceSummary, 0, len(byID))
+	bySummaryID := map[string]workspaceSummary{}
 	for id, group := range byID {
-		out = append(out, workspaceSummaryFromEvents(id, group))
+		bySummaryID[id] = workspaceSummaryFromEvents(id, group)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].LastTouchedAt > out[j].LastTouchedAt })
+	for _, definition := range s.indexReadModel().Definitions {
+		if definition.Kind != "workspace" {
+			continue
+		}
+		summary := workspaceSummaryFromDefinition(definition)
+		if summary.ID == "" {
+			continue
+		}
+		current := bySummaryID[summary.ID]
+		bySummaryID[summary.ID] = mergeWorkspaceSummary(current, summary)
+	}
+	out := make([]workspaceSummary, 0, len(bySummaryID))
+	for _, summary := range bySummaryID {
+		out = append(out, summary)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].LastTouchedAt == out[j].LastTouchedAt {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].LastTouchedAt > out[j].LastTouchedAt
+	})
 	return out, nil
 }
 
 func (s *Service) workspaceDetail(ctx context.Context, id string) (workspaceDetail, bool, error) {
 	events := filterWorkspaceEvents(s.workspaceEvents(ctx), id)
+	indexSummary, hasIndexSummary := s.workspaceSummaryFromIndex(id)
 	if len(events) == 0 {
-		return workspaceDetail{}, false, nil
+		if !hasIndexSummary {
+			return workspaceDetail{}, false, nil
+		}
+		return workspaceDetail{workspaceSummary: indexSummary}, true, nil
 	}
 	summary := workspaceSummaryFromEvents(id, events)
+	if hasIndexSummary {
+		summary = mergeWorkspaceSummary(summary, indexSummary)
+	}
 	files := workspaceFilesFromEvents(events)
 	ops := workspaceOpsFromEvents(events)
 	return workspaceDetail{workspaceSummary: summary, Files: files, RecentOps: ops}, true, nil

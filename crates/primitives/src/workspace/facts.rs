@@ -8,13 +8,20 @@ use crate::{
     protocol::{LiteralValue, StaticSyntaxValue},
     record_values::{
         direct_string_property, has_property, number_property, object_array_value,
-        object_map_identifier_entries, object_value, property_value, resolve_static_value,
+        object_map_identifier_entries, object_value, property_value, reference_property,
+        resolve_static_value,
     },
     routing::output::extracted_facts,
     storage::dependencies::{
         storage_config_references, storage_dependency_metadata, storage_relation_refs,
     },
 };
+
+const RETRIEVER_WORKSPACE_MOUNT_SOURCE_HELPER: &str = "retrieverWorkspaceMountSource";
+const RETRIEVER_WORKSPACE_MOUNT_SOURCE_CAPABILITIES: [&str; 5] =
+    ["list", "read", "grep", "exists", "stat"];
+const WORKSPACE_MOUNT_SOURCE_CAPABILITY_PROPERTIES: [&str; 7] =
+    ["list", "read", "grep", "exists", "stat", "write", "delete"];
 
 pub(crate) fn workspace_facts(
     context: &PrimitiveContext<'_>,
@@ -144,9 +151,77 @@ fn workspace_mounts(
                 "description",
                 direct_string_property(mount, "description"),
             );
+            if let Some(source) = workspace_mount_source(mount, context) {
+                value.insert("source".to_string(), source);
+            }
             (!value.is_empty()).then_some(Value::Object(value))
         })
         .collect()
+}
+
+fn workspace_mount_source(
+    mount: &StaticSyntaxValue,
+    context: &PrimitiveContext<'_>,
+) -> Option<Value> {
+    let source_value = property_value(mount, "source")?;
+    let resolved = resolve_static_value(source_value, &context.initializers, &mut HashSet::new());
+    if let Some(source) = object_value(resolved) {
+        return workspace_mount_object_source(source, context);
+    }
+    match resolved {
+        StaticSyntaxValue::Call { callee, .. } => {
+            let helper = callee.local_name.as_deref().unwrap_or(&callee.name);
+            if helper == RETRIEVER_WORKSPACE_MOUNT_SOURCE_HELPER {
+                Some(json!({
+                    "kind": "retriever",
+                    "helper": RETRIEVER_WORKSPACE_MOUNT_SOURCE_HELPER,
+                    "capabilities": RETRIEVER_WORKSPACE_MOUNT_SOURCE_CAPABILITIES,
+                }))
+            } else {
+                let mut metadata = Map::new();
+                metadata.insert("kind".to_string(), Value::String("custom".to_string()));
+                metadata.insert("helper".to_string(), Value::String(helper.to_string()));
+                Some(Value::Object(metadata))
+            }
+        }
+        StaticSyntaxValue::Identifier { name } | StaticSyntaxValue::PropertyAccess { name, .. } => {
+            let mut metadata = Map::new();
+            metadata.insert("kind".to_string(), Value::String("custom".to_string()));
+            metadata.insert("reference".to_string(), Value::String(name.clone()));
+            Some(Value::Object(metadata))
+        }
+        _ => Some(json!({ "kind": "unknown" })),
+    }
+}
+
+fn workspace_mount_object_source(
+    source: &StaticSyntaxValue,
+    context: &PrimitiveContext<'_>,
+) -> Option<Value> {
+    let kind = direct_string_property(source, "kind").unwrap_or_else(|| "custom".to_string());
+    let mut metadata = Map::new();
+    metadata.insert("kind".to_string(), Value::String(kind.clone()));
+    insert_string(
+        &mut metadata,
+        "retriever",
+        reference_property(source, "retriever", &context.initializers),
+    );
+    if let Some(capabilities) = workspace_mount_source_capabilities(source, &kind) {
+        metadata.insert("capabilities".to_string(), capabilities);
+    }
+    Some(Value::Object(metadata))
+}
+
+fn workspace_mount_source_capabilities(source: &StaticSyntaxValue, kind: &str) -> Option<Value> {
+    if kind == "retriever" {
+        return Some(json!(RETRIEVER_WORKSPACE_MOUNT_SOURCE_CAPABILITIES));
+    }
+    let capabilities = WORKSPACE_MOUNT_SOURCE_CAPABILITY_PROPERTIES
+        .iter()
+        .copied()
+        .filter(|property| has_property(source, property))
+        .collect::<Vec<_>>();
+    (!capabilities.is_empty()).then_some(json!(capabilities))
 }
 
 fn workspace_limits(config: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -> Option<Value> {
@@ -310,12 +385,13 @@ fn workspace_intelligence(
     if mounts.is_empty() && tool_refs.is_empty() && !has_operator && !has_dependencies {
         return None;
     }
-    let artifacts = mounts
+    let mount_rows = mounts
         .iter()
-        .filter_map(|mount| {
-            let path = mount.get("path").and_then(Value::as_str)?;
-            Some(json!({"name": path, "kind": mount.get("access").and_then(Value::as_str).unwrap_or("mount")}))
-        })
+        .filter_map(workspace_intelligence_mount)
+        .collect::<Vec<_>>();
+    let artifacts = mount_rows
+        .iter()
+        .filter_map(workspace_intelligence_artifact)
         .collect::<Vec<_>>();
     let mut intelligence = Map::new();
     intelligence.insert(
@@ -323,7 +399,8 @@ fn workspace_intelligence(
         Value::String("static".to_string()),
     );
     let mut data = Map::new();
-    if !artifacts.is_empty() {
+    if !mounts.is_empty() {
+        data.insert("mounts".to_string(), Value::Array(mount_rows));
         data.insert("artifacts".to_string(), Value::Array(artifacts));
     }
     intelligence.insert("data".to_string(), Value::Object(data));
@@ -349,8 +426,51 @@ fn workspace_intelligence(
     Some(Value::Object(intelligence))
 }
 
+fn workspace_intelligence_mount(mount: &Value) -> Option<Value> {
+    let path = mount.get("path").and_then(Value::as_str)?;
+    let mut metadata = Map::new();
+    metadata.insert("path".to_string(), Value::String(path.to_string()));
+    insert_string_from_value(&mut metadata, "access", mount.get("access"));
+    insert_string_from_value(&mut metadata, "description", mount.get("description"));
+    if let Some(source) = mount.get("source") {
+        insert_string_from_value(&mut metadata, "sourceKind", source.get("kind"));
+        insert_string_from_value(&mut metadata, "sourceHelper", source.get("helper"));
+        insert_string_from_value(&mut metadata, "sourceReference", source.get("reference"));
+        insert_string_from_value(&mut metadata, "sourceRetriever", source.get("retriever"));
+        if let Some(capabilities) = source.get("capabilities") {
+            metadata.insert("sourceCapabilities".to_string(), capabilities.clone());
+        }
+    }
+    Some(Value::Object(metadata))
+}
+
+fn workspace_intelligence_artifact(mount: &Value) -> Option<Value> {
+    let path = mount.get("path").and_then(Value::as_str)?;
+    let mut metadata = Map::new();
+    metadata.insert("name".to_string(), Value::String(path.to_string()));
+    metadata.insert(
+        "kind".to_string(),
+        Value::String(
+            mount
+                .get("access")
+                .and_then(Value::as_str)
+                .unwrap_or("mount")
+                .to_string(),
+        ),
+    );
+    insert_string_from_value(&mut metadata, "sourceKind", mount.get("sourceKind"));
+    insert_string_from_value(&mut metadata, "sourceHelper", mount.get("sourceHelper"));
+    Some(Value::Object(metadata))
+}
+
 fn insert_string(metadata: &mut Map<String, Value>, key: &str, value: Option<String>) {
     if let Some(value) = value {
         metadata.insert(key.to_string(), Value::String(value));
+    }
+}
+
+fn insert_string_from_value(metadata: &mut Map<String, Value>, key: &str, value: Option<&Value>) {
+    if let Some(value) = value.and_then(Value::as_str) {
+        metadata.insert(key.to_string(), Value::String(value.to_string()));
     }
 }

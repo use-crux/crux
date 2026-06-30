@@ -7,6 +7,11 @@ import {
   storageDependencyFacts,
   storageRelationRefs,
 } from "./storage-dependencies";
+import {
+  workspaceMountIntelligenceData,
+  workspaceMountsMetadata,
+  type WorkspaceMountMetadata,
+} from "./workspace-mount-metadata";
 
 /**
  * Extracts workspace definitions and their mount/write-policy intelligence.
@@ -88,22 +93,6 @@ export const workspaceIndexExtractor: IndexExtractor = {
     });
   },
 };
-
-/** Converts authored mount objects into JSON-like metadata suitable for index consumers. */
-function workspaceMountsMetadata(
-  mounts: readonly {
-    readonly string: (property: string) => string | undefined;
-  }[],
-): Array<Record<string, unknown>> | undefined {
-  const metadata = mounts
-    .map((mount) => ({
-      path: mount.string("path"),
-      access: mount.string("access"),
-      description: mount.string("description"),
-    }))
-    .filter((mount) => mount.path || mount.access || mount.description);
-  return metadata.length > 0 ? metadata : undefined;
-}
 
 /** Reads the public `limits` workspace config into operator-facing metadata. */
 function workspaceLimitsMetadata(
@@ -198,7 +187,7 @@ function workspaceGeneratedToolNames(
  * free-form metadata.
  */
 function workspaceIntelligence(
-  mounts: Array<Record<string, unknown>> | undefined,
+  mounts: readonly WorkspaceMountMetadata[] | undefined,
   toolRefs: readonly string[],
   operator: {
     readonly limits?: Record<string, number>;
@@ -222,21 +211,7 @@ function workspaceIntelligence(
     return undefined;
   return {
     confidence: "static",
-    data: {
-      ...(mounts && mounts.length > 0
-        ? {
-            artifacts: mounts
-              .filter(
-                (mount): mount is { path: string; access?: string } =>
-                  typeof mount.path === "string",
-              )
-              .map((mount) => ({
-                name: mount.path,
-                kind: mount.access ?? "mount",
-              })),
-          }
-        : {}),
-    },
+    data: workspaceMountIntelligenceData(mounts),
     ...(toolRefs.length > 0 ? { tools: [...toolRefs] } : {}),
     ...(dependencies ? { dependencies } : {}),
     ...(hasOperator ? { operator } : {}),
