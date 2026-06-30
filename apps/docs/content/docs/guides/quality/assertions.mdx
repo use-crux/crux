@@ -157,13 +157,13 @@ ctx.expect.errors.toHaveNone()
 The rest are **capability-typed**: they exist at compile time only when the
 task kind captures that signal family.
 
-| Task kind | Capabilities                                                      |
-| --------- | ----------------------------------------------------------------- |
-| prompt    | `modelCalls`, `citations`, `safety`                               |
-| flow      | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory` |
-| agent     | all nine: + `handoffs`, `retrieval`                               |
-| retriever | `retrieval`                                                       |
-| plain fn  | none                                                              |
+| Task kind | Capabilities                                                                        |
+| --------- | ----------------------------------------------------------------------------------- |
+| prompt    | `modelCalls`, `citations`, `safety`, `decisionReport`                               |
+| flow      | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory`, `decisionReport` |
+| agent     | all ten signal namespaces, including `handoffs`, `retrieval`, and `decisionReport`  |
+| retriever | `retrieval`                                                                         |
+| plain fn  | none                                                                                |
 
 So `ctx.expect.toolCalls` autocompletes on an agent task and is a compile
 error on a prompt task. Examples across the namespaces:
