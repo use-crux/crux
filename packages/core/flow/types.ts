@@ -140,6 +140,14 @@ export interface FlowSnapshot extends JsonObject {
   observabilityContext?: JsonObject
   createdAt: number
   updatedAt: number
+  /** Unix timestamp recorded when the flow reaches `completed`. */
+  completedAt?: number
+  /** Unix timestamp recorded when the flow reaches `cancelled`. */
+  cancelledAt?: number
+  /** Unix timestamp recorded when the flow reaches `expired`. */
+  expiredAt?: number
+  /** Optional cancellation reason stored with terminal cancelled snapshots. */
+  cancelReason?: string
 }
 
 export interface FlowScope<TInput = void, TSignals extends FlowSignalMap | undefined = undefined> {

@@ -42,6 +42,7 @@ import {
   parseDuration,
   FLOW_KEY_PREFIX,
   SIGNAL_KEY_PREFIX,
+  assertFlowSnapshotResumable,
 } from './lifecycle'
 
 // Re-export types and errors so existing internal `../flow/scope` imports
@@ -123,6 +124,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
     if (!snapshot) {
       throw new Error(`No suspended flow found for flowId: ${flowId}`)
     }
+    assertFlowSnapshotResumable(snapshot)
     if (snapshot.observabilityContext && !observe.captureContext()) {
       return await observe.withContext(
         snapshot.observabilityContext as unknown as CapturedObservabilityContext,
@@ -360,6 +362,18 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
     )
 
 
+    if (isResume && store && snapshot) {
+      const completedAt = Date.now()
+      await store.put(`${FLOW_KEY_PREFIX}${flowId}`, {
+        ...snapshot,
+        status: 'completed',
+        completedSteps: completedSteps as FlowSnapshot['completedSteps'],
+        updatedAt: completedAt,
+        completedAt,
+        observabilityContext: snapshot.observabilityContext ?? (resumeObservabilityContext as unknown as JsonObject),
+      })
+    }
+
     flowSpan.end({ attributes: { flowStatus: 'completed', totalSteps: stepCount } })
     return { status: 'completed', output: result, flowId }
   } catch (error) {
@@ -405,6 +419,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
     if (error instanceof FlowCancelledError) {
       const flowStore = store ?? getRuntime().records
       if (flowStore) {
+        const cancelledAt = Date.now()
         await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, {
           flowId,
           name,
@@ -414,9 +429,10 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           traceContext: flowTraceContext(existing?.sessionId, parentFlowId),
           observabilityContext: snapshot?.observabilityContext ?? (resumeObservabilityContext as unknown as JsonObject),
           createdAt: snapshot?.createdAt ?? startedAt,
-          updatedAt: Date.now(),
+          updatedAt: cancelledAt,
+          cancelledAt,
           ...(error.reason !== undefined ? { cancelReason: error.reason } : {}),
-          ...(flowInput !== undefined ? { input: flowInput as unknown as JsonObject } : {}),
+          ...(flowInput !== undefined ? { input: flowInput as unknown as JsonValue } : {}),
         })
       }
 
@@ -433,10 +449,12 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
     if (error instanceof FlowExpiredError) {
       const flowStore = store ?? getRuntime().records
       if (flowStore) {
+        const expiredAt = Date.now()
         await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, {
           ...(snapshot ?? {}),
           status: 'expired',
-          updatedAt: Date.now(),
+          expiredAt,
+          updatedAt: expiredAt,
         })
       }
 

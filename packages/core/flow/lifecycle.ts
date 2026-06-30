@@ -22,6 +22,12 @@ export const FLOW_KEY_PREFIX = 'crux:flow:'
 /** Store key prefix for flow signals. */
 export const SIGNAL_KEY_PREFIX = 'crux:signal:'
 
+/** Flow statuses that close a persisted snapshot and cannot be resumed. */
+export const TERMINAL_FLOW_STATUSES = ['completed', 'cancelled', 'expired'] as const
+
+/** Persisted terminal status values for completed flow instances. */
+export type TerminalFlowStatus = (typeof TERMINAL_FLOW_STATUSES)[number]
+
 // ─────────────────────────────────────────────────────────────────
 // ID generators & utilities
 // ─────────────────────────────────────────────────────────────────
@@ -57,6 +63,28 @@ export function parseDuration(duration: string): number {
       return num * 24 * 60 * 60 * 1000
     default:
       throw new Error(`Unknown duration unit: ${unit}`)
+  }
+}
+
+/**
+ * Check whether a persisted flow status is terminal.
+ *
+ * Terminal snapshots remain useful for inspection and listing, but they are no
+ * longer executable resume targets.
+ */
+export function isTerminalFlowStatus(status: unknown): status is TerminalFlowStatus {
+  return TERMINAL_FLOW_STATUSES.includes(status as TerminalFlowStatus)
+}
+
+/**
+ * Assert that a loaded snapshot can be resumed.
+ *
+ * This keeps lifecycle rejection ahead of handler execution, so terminal
+ * snapshots cannot accidentally run user code or rewrite their terminal state.
+ */
+export function assertFlowSnapshotResumable(snapshot: FlowSnapshot): void {
+  if (isTerminalFlowStatus(snapshot.status)) {
+    throw new Error(`Flow ${snapshot.flowId} is ${snapshot.status} and cannot be resumed.`)
   }
 }
 
@@ -117,11 +145,13 @@ export async function cancelFlow(flowId: string, reason?: string): Promise<void>
   const store = resolveRecords()
   const snapshot = await store.get(`${FLOW_KEY_PREFIX}${flowId}`)
   if (snapshot) {
+    const cancelledAt = Date.now()
     await store.put(`${FLOW_KEY_PREFIX}${flowId}`, {
       ...snapshot,
       status: 'cancelled',
       cancelReason: reason,
-      updatedAt: Date.now(),
+      cancelledAt,
+      updatedAt: cancelledAt,
     })
   }
 }
