@@ -1,19 +1,17 @@
 /**
- * Component-backed CruxStore adapter for Convex.
+ * Component-backed document port for Convex storage.
  *
  * This module is the runtime edge between a structural Convex ctx and the
- * shared store-document policy in `store-doc`. It intentionally knows about
+ * shared storage-document adapters in `store-doc`. It intentionally knows about
  * Convex component function refs, while serialization, TTL, filtering, and
  * vector result shaping stay inside `store-doc`.
  *
  * @module
  */
 
-import type { CruxStore } from '@use-crux/core/store'
-import type { ConvexCruxStoreComponent } from './store-component'
+import type { ConvexCruxStorageComponent } from './store-component'
 import {
   STORE_DOC_COMPONENT_SPEC,
-  createStoreDocStore,
   type ComponentDocumentPort,
   type StoreDocPage,
   type StoreDocPageQuery,
@@ -43,13 +41,13 @@ export interface ConvexCtxPort {
   ): Promise<readonly StoreDocRecord[]>
 }
 
-/** Alias for Convex ctx values accepted by the Convex store contract. */
+/** Alias for Convex ctx values accepted by the Convex storage adapters. */
 export type ConvexContext = ConvexCtxPort
 
-/** Configuration for the Convex component-backed CruxStore. */
+/** Configuration for the Convex component-backed storage adapters. */
 export interface ConvexMemoryStoreConfig<TCtx extends ConvexCtxPort = ConvexCtxPort> {
   /** The Crux persistence component ref from `components.crux`. */
-  component: ConvexCruxStoreComponent
+  component: ConvexCruxStorageComponent
   /** Convex action or mutation ctx with query/mutation runners. */
   ctx: TCtx
   /**
@@ -59,7 +57,7 @@ export interface ConvexMemoryStoreConfig<TCtx extends ConvexCtxPort = ConvexCtxP
    */
   vectorIndexName?: string
   /**
-   * Declare this store/index is dedicated to semantic cache entries.
+   * Declare this storage/index is dedicated to semantic cache entries.
    *
    * Use this only when the backing vector index is not shared with memory or
    * retrieval vectors, because semantic-cache lookup must not compete with
@@ -77,7 +75,7 @@ export interface ConvexComponentDocumentPortConfig<TCtx extends ConvexCtxPort = 
   /** Convex action or mutation ctx with query/mutation runners. */
   readonly ctx: TCtx
   /** The Crux persistence component ref from `components.crux`. */
-  readonly component: ConvexCruxStoreComponent
+  readonly component: ConvexCruxStorageComponent
   /**
    * Vector index name for dense vector search via `ctx.vectorSearch`.
    *
@@ -89,7 +87,7 @@ export interface ConvexComponentDocumentPortConfig<TCtx extends ConvexCtxPort = 
 /**
  * Create the raw document I/O port for a Convex component.
  *
- * This is the local-substitutable boundary below the `CruxStore` policy. The
+ * This is the local-substitutable boundary below the storage adapters. The
  * port forwards raw document reads/writes to the generated component refs and
  * delegates dense vector search to Convex action contexts when available.
  */
@@ -114,36 +112,6 @@ export function convexComponentDocumentPort<TCtx extends ConvexCtxPort = ConvexC
       ? ({ vector, limit }) => vectorSearch(STORE_DOC_COMPONENT_SPEC.table, vectorIndexName, { vector, limit })
       : undefined,
   }
-}
-
-/**
- * Create a `CruxStore` backed by the Crux Convex component.
- *
- * The returned store is a normal Crux store. It supports TTL, top-level list
- * filters, component-backed CRUD, and dense vector search when the ctx exposes
- * `vectorSearch()`.
- *
- * @param config - Component ref, Convex ctx, and optional vector/cache options.
- * @returns A component-backed Crux store.
- *
- * @example
- * ```ts
- * import { defineConvexStoreContract } from '@use-crux/convex'
- * import { components } from './_generated/api'
- *
- * const cruxDocuments = defineConvexStoreContract({ component: components.crux })
- * const store = cruxDocuments.store(ctx)
- * ```
- */
-export function cruxConvexStore<TCtx extends ConvexCtxPort = ConvexCtxPort>(
-  config: ConvexMemoryStoreConfig<TCtx>,
-): CruxStore {
-  return createStoreDocStore({
-    now: config.now,
-    semanticCache: config.semanticCache,
-    denseVectorSearch: true,
-    io: convexComponentDocumentPort(config),
-  })
 }
 
 function storeDocPageArgs(query: StoreDocPageQuery): Record<string, unknown> {

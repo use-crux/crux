@@ -103,7 +103,7 @@ export interface LiveField {
 /**
  * Pull a field map out of a live-bridge `inspection`.
  *
- * The Convex CruxStore peer ships *one* entry per memory resource whose
+ * The Convex record peer ships *one* entry per memory resource whose
  * `value.content` is a JSON-string of the actual field map (the document the
  * runtime persists). We parse it back into typed rows so the existing
  * field/value table can render live data.

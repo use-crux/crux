@@ -5,7 +5,7 @@ import { renderHook, act } from '@testing-library/react'
 import { createSSETransport } from '../../src/sse'
 import { usePlan } from '../../src/hooks'
 import { CruxProvider } from '../../src/provider'
-import type { JsonObject } from '@use-crux/core/store'
+import type { JsonObject } from '@use-crux/core/storage'
 
 // ── Mock EventSource ──
 

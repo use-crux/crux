@@ -1,17 +1,17 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { flow as makeFlow, signalFlow, listFlows } from '../../flow/scope'
 import { resetRuntime, updateRuntime } from '../../runtime/runtime'
-import { inMemoryCruxStore } from '../../store/memory'
+import { inMemoryRecordStore } from '../../storage'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import type { CruxStore } from '../../store/types'
+import type { RecordStore } from '../../storage'
 import { z } from 'zod'
 
-let store: CruxStore
+let store: RecordStore
 
 afterEach(() => {
   resetRuntime()
@@ -19,8 +19,8 @@ afterEach(() => {
 })
 
 function setupStore() {
-  store = inMemoryCruxStore()
-  updateRuntime({ store })
+  store = inMemoryRecordStore()
+  updateRuntime({ records: store })
   return store
 }
 
@@ -250,7 +250,7 @@ describe('flow suspend error handling', () => {
       makeFlow('no-store', async (flow) => {
         await flow.suspend('approval')
       }).run(),
-    ).rejects.toThrow('CruxStore')
+    ).rejects.toThrow('RecordStore')
   })
 
     it('throws when resuming a non-existent flow', async () => {
@@ -266,9 +266,9 @@ describe('flow suspend error handling', () => {
 
 describe('config store integration', () => {
   it('uses store from config globally', async () => {
-    const store = inMemoryCruxStore()
+    const store = inMemoryRecordStore()
     // Simulate what config does — sets store on runtime
-    updateRuntime({ store })
+    updateRuntime({ records: store })
 
     const run = await makeFlow('cfg-test', async (flow) => {
       await flow.step('plan', async () => ({ planId: '1' }))

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { config } from '@use-crux/core'
-import type { CruxStore } from '@use-crux/core/store'
-import { inMemoryCruxStore } from '@use-crux/core/store'
+import type { RecordStore } from '@use-crux/core/storage'
+import { inMemoryRecordStore } from '@use-crux/core/storage'
 import { createCruxConvex } from '../index'
 import { setup } from '../bridge'
 
@@ -61,8 +61,8 @@ describe('@use-crux/convex bridge setup', () => {
   })
 
   it('executes store.read with a ctx-aware store factory', async () => {
-    const store = inMemoryCruxStore()
-    await store.set('memory:1', { ok: true })
+    const store = inMemoryRecordStore()
+    await store.put('memory:1', { ok: true })
     const crux = config({
       devtools: {
         bridge: {
@@ -74,7 +74,7 @@ describe('@use-crux/convex bridge setup', () => {
     const http = new FakeHttpRouter()
 
     setup(http, crux, {
-      store: () => store,
+      storage: () => ({ records: store }),
     })
 
     const postRoute = http.routes.find((route) => route.method === 'POST')
@@ -115,7 +115,7 @@ describe('@use-crux/convex bridge setup', () => {
       async list() {
         return { entries: [] }
       },
-    } as unknown as CruxStore
+    } as unknown as RecordStore
     const crux = config({
       devtools: {
         bridge: {
@@ -127,7 +127,7 @@ describe('@use-crux/convex bridge setup', () => {
     const http = new FakeHttpRouter()
 
     setup(http, crux, {
-      store: () => store,
+      storage: () => ({ records: store }),
     })
 
     const postRoute = http.routes.find((route) => route.method === 'POST')
@@ -185,7 +185,7 @@ describe('@use-crux/convex bridge setup', () => {
     const http = new FakeHttpRouter()
 
     setup(http, crux, {
-      store: () => inMemoryCruxStore(),
+      storage: () => ({ records: inMemoryRecordStore() }),
     })
 
     const postRoute = http.routes.find((route) => route.method === 'POST')
@@ -298,8 +298,8 @@ describe('@use-crux/convex bridge setup', () => {
   })
 
   it('profile bridge resolves store.read through the profile store factory', async () => {
-    const store = inMemoryCruxStore()
-    await store.set('blackboard:profile', { status: 'profile-ready' })
+    const store = inMemoryRecordStore()
+    await store.put('blackboard:profile', { status: 'profile-ready' })
     const crux = config({
       devtools: {
         bridge: {
@@ -316,7 +316,7 @@ describe('@use-crux/convex bridge setup', () => {
     let createCount = 0
     const profile = createCruxConvex({
       components,
-      store: {
+      storage: {
         create(_ctx, defaults) {
           createCount += 1
           expect(defaults.component).toBe(components.crux)

@@ -7,7 +7,7 @@ import { usePlan, useTasks } from '../../src/hooks'
 import { CruxProvider, useCruxTransport } from '../../src/provider'
 import { createMockTransport } from '../../src/testing'
 import type { Plan, PlanHandle, Task, TasksHandle } from '@use-crux/core/plan'
-import type { JsonObject } from '@use-crux/core/store'
+import type { JsonObject } from '@use-crux/core/storage'
 
 // ── Test Helpers ──
 
@@ -53,7 +53,7 @@ describe('usePlan', () => {
   it('returns a Plan when the document exists', () => {
     const plan = createTestPlan()
     const transport = createMockTransport()
-    transport.set(`plan:${plan.id}`, plan as unknown as JsonObject)
+    transport.put(`plan:${plan.id}`, plan as unknown as JsonObject)
 
     const { result } = renderHook(() => usePlan('plan-1'), {
       wrapper: createWrapper(transport),
@@ -88,7 +88,7 @@ describe('usePlan', () => {
   it('accepts a canonical plan handle', () => {
     const plan = createTestPlan()
     const transport = createMockTransport()
-    transport.set(`plan:${plan.id}`, plan as unknown as JsonObject)
+    transport.put(`plan:${plan.id}`, plan as unknown as JsonObject)
     const handle = { id: plan.id } as PlanHandle
 
     const { result } = renderHook(() => usePlan(handle), {
@@ -101,7 +101,7 @@ describe('usePlan', () => {
   it('re-renders when the plan changes', () => {
     const transport = createMockTransport()
     const plan = createTestPlan()
-    transport.set(`plan:${plan.id}`, plan as unknown as JsonObject)
+    transport.put(`plan:${plan.id}`, plan as unknown as JsonObject)
 
     const { result, rerender } = renderHook(() => usePlan('plan-1'), {
       wrapper: createWrapper(transport),
@@ -110,7 +110,7 @@ describe('usePlan', () => {
     expect(result.current!.title).toBe('Test Plan')
 
     act(() => {
-      transport.set(`plan:${plan.id}`, {
+      transport.put(`plan:${plan.id}`, {
         ...plan,
         title: 'Updated Title',
         version: 2,
@@ -131,7 +131,7 @@ describe('usePlan — metadata', () => {
     const plan = createTestPlan({
       metadata: { status: 'draft', instructions: [] },
     })
-    transport.set(`plan:${plan.id}`, plan as unknown as JsonObject)
+    transport.put(`plan:${plan.id}`, plan as unknown as JsonObject)
 
     const { result } = renderHook(() => usePlan('plan-1'), {
       wrapper: createWrapper(transport),
@@ -147,7 +147,7 @@ describe('usePlan — metadata', () => {
     const plan = createTestPlan({
       metadata: { status: 'draft' },
     })
-    transport.set(`plan:${plan.id}`, plan as unknown as JsonObject)
+    transport.put(`plan:${plan.id}`, plan as unknown as JsonObject)
 
     const { result, rerender } = renderHook(() => usePlan('plan-1'), {
       wrapper: createWrapper(transport),
@@ -157,7 +157,7 @@ describe('usePlan — metadata', () => {
 
     // Simulate plan approval
     act(() => {
-      transport.set(`plan:${plan.id}`, {
+      transport.put(`plan:${plan.id}`, {
         ...plan,
         metadata: { status: 'approved' },
         version: 2,
@@ -173,7 +173,7 @@ describe('usePlan — metadata', () => {
   it('tracks full metadata lifecycle: draft → approved → executing → completed', () => {
     const transport = createMockTransport()
     const plan = createTestPlan({ metadata: { status: 'draft' } })
-    transport.set(`plan:${plan.id}`, plan as unknown as JsonObject)
+    transport.put(`plan:${plan.id}`, plan as unknown as JsonObject)
 
     const { result, rerender } = renderHook(() => usePlan('plan-1'), {
       wrapper: createWrapper(transport),
@@ -185,7 +185,7 @@ describe('usePlan — metadata', () => {
     const transitions = ['approved', 'executing', 'completed'] as const
     for (const status of transitions) {
       act(() => {
-        transport.set(`plan:${plan.id}`, {
+        transport.put(`plan:${plan.id}`, {
           ...plan,
           metadata: { status },
         } as unknown as JsonObject)
@@ -206,14 +206,14 @@ describe('usePlan — metadata', () => {
         articleBrief: 'test',
       },
     })
-    transport.set(`plan:${plan.id}`, plan as unknown as JsonObject)
+    transport.put(`plan:${plan.id}`, plan as unknown as JsonObject)
 
     const { result, rerender } = renderHook(() => usePlan('plan-1'), {
       wrapper: createWrapper(transport),
     })
 
     act(() => {
-      transport.set(`plan:${plan.id}`, {
+      transport.put(`plan:${plan.id}`, {
         ...plan,
         metadata: {
           status: 'approved',
@@ -237,8 +237,8 @@ describe('useTasks', () => {
     const transport = createMockTransport()
     const t1 = createTestTask({ id: 't1' })
     const t2 = createTestTask({ id: 't2', label: 'Second task' })
-    transport.set(`task:list-1:t1`, t1 as unknown as JsonObject)
-    transport.set(`task:list-1:t2`, t2 as unknown as JsonObject)
+    transport.put(`task:list-1:t1`, t1 as unknown as JsonObject)
+    transport.put(`task:list-1:t2`, t2 as unknown as JsonObject)
 
     const { result } = renderHook(() => useTasks('list-1'), {
       wrapper: createWrapper(transport),
@@ -261,7 +261,7 @@ describe('useTasks', () => {
   it('accepts a canonical tasks handle', () => {
     const transport = createMockTransport()
     const t1 = createTestTask({ id: 'from-handle' })
-    transport.set(`task:list-1:from-handle`, t1 as unknown as JsonObject)
+    transport.put(`task:list-1:from-handle`, t1 as unknown as JsonObject)
     const handle = { id: 'list-1' } as TasksHandle
 
     const { result } = renderHook(() => useTasks(handle), {
@@ -275,8 +275,8 @@ describe('useTasks', () => {
     const transport = createMockTransport()
     const t1 = createTestTask({ id: 't1' })
     const t2 = createTestTask({ id: 't2', removedAt: 2000 })
-    transport.set(`task:list-1:t1`, t1 as unknown as JsonObject)
-    transport.set(`task:list-1:t2`, t2 as unknown as JsonObject)
+    transport.put(`task:list-1:t1`, t1 as unknown as JsonObject)
+    transport.put(`task:list-1:t2`, t2 as unknown as JsonObject)
 
     const { result } = renderHook(() => useTasks('list-1'), {
       wrapper: createWrapper(transport),
@@ -300,7 +300,7 @@ describe('useTasks', () => {
   it('re-renders when tasks change', () => {
     const transport = createMockTransport()
     const t1 = createTestTask({ id: 't1', status: 'pending' })
-    transport.set(`task:list-1:t1`, t1 as unknown as JsonObject)
+    transport.put(`task:list-1:t1`, t1 as unknown as JsonObject)
 
     const { result, rerender } = renderHook(() => useTasks('list-1'), {
       wrapper: createWrapper(transport),
@@ -309,7 +309,7 @@ describe('useTasks', () => {
     expect(result.current![0].status).toBe('pending')
 
     act(() => {
-      transport.set(`task:list-1:t1`, {
+      transport.put(`task:list-1:t1`, {
         ...t1,
         status: 'completed',
       } as unknown as JsonObject)
@@ -323,8 +323,8 @@ describe('useTasks', () => {
     const transport = createMockTransport()
     const t1 = createTestTask({ id: 'section-0-intro', status: 'pending' })
     const t2 = createTestTask({ id: 'section-1-body', status: 'pending' })
-    transport.set('task:list-1:section-0-intro', t1 as unknown as JsonObject)
-    transport.set('task:list-1:section-1-body', t2 as unknown as JsonObject)
+    transport.put('task:list-1:section-0-intro', t1 as unknown as JsonObject)
+    transport.put('task:list-1:section-1-body', t2 as unknown as JsonObject)
 
     const { result, rerender } = renderHook(() => useTasks('list-1'), {
       wrapper: createWrapper(transport),
@@ -335,7 +335,7 @@ describe('useTasks', () => {
 
     // First task starts
     act(() => {
-      transport.set('task:list-1:section-0-intro', {
+      transport.put('task:list-1:section-0-intro', {
         ...t1,
         status: 'in_progress',
         progress: 'Writing introduction section...',
@@ -348,12 +348,12 @@ describe('useTasks', () => {
 
     // First task completes, second starts
     act(() => {
-      transport.set('task:list-1:section-0-intro', {
+      transport.put('task:list-1:section-0-intro', {
         ...t1,
         status: 'completed',
         durationMs: 5000,
       } as unknown as JsonObject)
-      transport.set('task:list-1:section-1-body', {
+      transport.put('task:list-1:section-1-body', {
         ...t2,
         status: 'in_progress',
         progress: 'Writing body section...',
@@ -370,7 +370,7 @@ describe('useTasks', () => {
       id: 'research',
       assignee: { agent: 'writer', model: 'claude-sonnet-4-5' },
     })
-    transport.set('task:list-1:research', t1 as unknown as JsonObject)
+    transport.put('task:list-1:research', t1 as unknown as JsonObject)
 
     const { result } = renderHook(() => useTasks('list-1'), {
       wrapper: createWrapper(transport),
@@ -389,7 +389,7 @@ describe('useTasks', () => {
       status: 'failed',
       error: 'Token limit exceeded',
     })
-    transport.set('task:list-1:write-section', t1 as unknown as JsonObject)
+    transport.put('task:list-1:write-section', t1 as unknown as JsonObject)
 
     const { result } = renderHook(() => useTasks('list-1'), {
       wrapper: createWrapper(transport),

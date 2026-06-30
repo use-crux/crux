@@ -147,7 +147,7 @@ const principles = [
   },
   {
     n: 'Composition over configuration',
-    body: 'Small primitives compose through consistent interfaces: asContext(), asTools(), CruxStore, generate(). Build exactly what you need.',
+    body: 'Small primitives compose through consistent interfaces: asContext(), asTools(), RecordStore, generate(). Build exactly what you need.',
   },
   {
     n: 'SDK-agnostic by default',

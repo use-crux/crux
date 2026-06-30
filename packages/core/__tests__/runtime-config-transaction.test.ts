@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { CruxObservabilityTransport } from '../observability'
 import type { CruxPlugin } from '../runtime/plugin'
 import type { CruxRuntime } from '../runtime/runtime'
+import { inMemoryRecordStore } from '../storage'
 import {
   createRuntimeConfigTransaction,
   planRuntimeConfig,
@@ -111,7 +112,7 @@ describe('runtime config transaction', () => {
   })
 
   it('applies persistence and explicit observability before plugins run through ports', () => {
-    const store = { get: vi.fn(), set: vi.fn(), list: vi.fn(), delete: vi.fn() }
+    const records = inMemoryRecordStore()
     const transport: CruxObservabilityTransport = { send: vi.fn() }
     const events: string[] = []
     let runtime: CruxRuntime = {}
@@ -119,7 +120,7 @@ describe('runtime config transaction', () => {
       name: 'runtime-aware-plugin',
       install(pluginRuntime) {
         events.push('plugin')
-        expect(pluginRuntime.store).toBe(store)
+        expect(pluginRuntime.records).toBe(records)
         expect(pluginRuntime.observabilityTransport).toBe(transport)
         return {}
       },
@@ -149,7 +150,7 @@ describe('runtime config transaction', () => {
     const installation = createRuntimeConfigTransaction(
       {
         config: {
-          persistence: { store },
+          persistence: { records },
           observability: { transport },
           plugins: [plugin],
         },
@@ -158,7 +159,7 @@ describe('runtime config transaction', () => {
     ).apply()
 
     expect(events).toEqual(['observability:configure', 'runtime:update', 'plugin', 'runtime:set'])
-    expect(installation.runtime.store).toBe(store)
+    expect(installation.runtime.records).toBe(records)
     expect(installation.runtime.observabilityTransport).toBe(transport)
 
     installation.restore()
@@ -239,7 +240,7 @@ describe('runtime config transaction', () => {
       {
         env: { CRUX_INDEX: '1' },
         config: {
-          persistence: { store: { get: vi.fn(), set: vi.fn(), list: vi.fn(), delete: vi.fn() } },
+          persistence: { records: inMemoryRecordStore() },
           generation: {
             middleware: async (args, next) => next(args),
             tokenizer: (text) => text.length,

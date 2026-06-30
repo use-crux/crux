@@ -80,7 +80,7 @@ const userStorage = storage.scope(appStorage, `user:${userId}`)
 
 ## Migration Note
 
-Storage Beta is a pre-launch API. Compatibility with the old public `CruxStore`, `DataStore`, `{ data }`, `set()`, or `{ ttl }` shapes is not preserved. New code should use `RecordStore`, `{ records }`, `put()`, `create()`, and `{ ttlMs }`.
+Storage Beta is a pre-launch API. Treat the current `@use-crux/core/storage` contract as the source of truth; old pre-beta storage examples should be updated to `RecordStore`, `{ records }`, `put()`, `create()`, and `{ ttlMs }` rather than bridged.
 
 ## Where To Go Next
 

@@ -32,7 +32,7 @@ Crux storage is split into explicit capabilities:
 | `BlobStore` | Binary and oversized payload storage with `put`, `get`, `head`, and `delete` |
 | `Storage` | A capability bundle: `{ records, vectors?, blobs? }` |
 
-Use this module for new application code. `@use-crux/core/store` is the legacy compatibility module and should not be used for Storage Beta wiring.
+Use this module for application code. `@use-crux/core/storage` is the canonical Storage Beta entry point.
 
 ## `storage(config)`
 

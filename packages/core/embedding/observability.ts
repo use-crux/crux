@@ -9,7 +9,7 @@
  */
 
 import { observe } from '../observability'
-import type { JsonObject } from '../store/types'
+import type { JsonObject } from '../storage'
 import { isSparseVector } from './cache'
 import type { BatchExecutionResult, EmbeddingGovernanceMetrics } from './types'
 

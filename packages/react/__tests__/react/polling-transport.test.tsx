@@ -5,8 +5,8 @@ import { renderHook, act } from '@testing-library/react'
 import { createPollingTransport } from '../../src/polling'
 import { usePlan, useTasks } from '../../src/hooks'
 import { CruxProvider } from '../../src/provider'
-import type { CruxStore, JsonObject } from '@use-crux/core/store'
-import { inMemoryCruxStore } from '@use-crux/core/store'
+import type { RecordStore, JsonObject } from '@use-crux/core/storage'
+import { inMemoryRecordStore } from '@use-crux/core/storage'
 
 function createWrapper(transport: ReturnType<typeof createPollingTransport>) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
@@ -20,8 +20,8 @@ describe('createPollingTransport', () => {
   })
 
   it('fetches data from the store and makes it available via hooks', async () => {
-    const store = inMemoryCruxStore()
-    await store.set('plan:p1', {
+    const store = inMemoryRecordStore()
+    await store.put('plan:p1', {
       id: 'p1',
       title: 'Test',
       status: 'draft',
@@ -47,7 +47,7 @@ describe('createPollingTransport', () => {
   })
 
   it('returns undefined for missing documents', async () => {
-    const store = inMemoryCruxStore()
+    const store = inMemoryRecordStore()
     const transport = createPollingTransport(store, { intervalMs: 100 })
     await transport.poll()
 
@@ -60,10 +60,10 @@ describe('createPollingTransport', () => {
   })
 
   it('picks up store changes after poll()', async () => {
-    const store = inMemoryCruxStore()
+    const store = inMemoryRecordStore()
     const transport = createPollingTransport(store, { intervalMs: 100 })
 
-    await store.set('plan:p1', {
+    await store.put('plan:p1', {
       id: 'p1',
       title: 'V1',
       status: 'draft',
@@ -80,7 +80,7 @@ describe('createPollingTransport', () => {
     expect(result.current!.title).toBe('V1')
 
     // Update store and re-poll
-    await store.set('plan:p1', {
+    await store.put('plan:p1', {
       id: 'p1',
       title: 'V2',
       status: 'draft',
@@ -101,7 +101,7 @@ describe('createPollingTransport', () => {
   })
 
   it('stop() clears the polling interval', async () => {
-    const store = inMemoryCruxStore()
+    const store = inMemoryRecordStore()
     const transport = createPollingTransport(store, { intervalMs: 50 })
 
     transport.stop()

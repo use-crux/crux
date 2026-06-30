@@ -18,7 +18,7 @@ import type { CruxPlugin } from './plugin'
 import type { CruxLintConfig as CoreCruxLintConfig } from '../project-index'
 import type { QualityConfig } from '../quality/config'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
-import type { CruxStore } from '../store/types'
+import type { RecordStore } from '../storage'
 import type { TokenizerFn } from '../shared/tokenizer'
 import type { PromptMiddleware } from './types'
 
@@ -197,12 +197,12 @@ export interface CruxObservabilityConfig {
 
 export interface CruxPersistenceConfig {
   /**
-   * Global CruxStore for runtime persistence such as flow suspend/resume.
+   * Global record store for runtime persistence such as flow suspend/resume.
    *
    * Persistence is explicit because Crux cannot infer durability, tenancy,
    * storage backend, or data-locality policy from source discovery.
    */
-  readonly store?: CruxStore
+  readonly records?: RecordStore
 }
 
 export interface CruxGenerationConfig {

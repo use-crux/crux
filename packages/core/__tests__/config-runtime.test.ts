@@ -9,7 +9,7 @@ import {
 } from '../observability'
 import type { CruxPlugin } from '../runtime/plugin'
 import { getRuntime, resetRuntime, updateRuntime } from '../runtime/runtime'
-import { inMemoryCruxStore } from '../store'
+import { inMemoryRecordStore } from '../storage'
 import { countTokens, defaultTokenizer, setTokenizer } from '../shared/tokenizer'
 import type { PromptMiddleware } from '../runtime/types'
 
@@ -219,8 +219,8 @@ describe('config — runtime domain mapping', () => {
     const previous = process.env.CRUX_INDEX
     process.env.CRUX_INDEX = '1'
     const install = vi.fn().mockReturnValue({})
-    const previousStore = inMemoryCruxStore()
-    const ignoredStore = inMemoryCruxStore()
+    const previousStore = inMemoryRecordStore()
+    const ignoredStore = inMemoryRecordStore()
     const previousMiddleware: PromptMiddleware = async (args, next) => next(args)
     const ignoredMiddleware: PromptMiddleware = async (args, next) => next(args)
     const transport: CruxObservabilityTransport = { send: vi.fn() }
@@ -228,14 +228,14 @@ describe('config — runtime domain mapping', () => {
     const restorePrevious = configureObservability({ transport: previousTransport })
     setTokenizer((text) => text.length * 2)
     updateRuntime({
-      store: previousStore,
+      records: previousStore,
       middleware: previousMiddleware,
       observabilityTransport: previousTransport,
     })
 
     try {
       const crux = config({
-        persistence: { store: ignoredStore },
+        persistence: { records: ignoredStore },
         generation: {
           middleware: ignoredMiddleware,
           tokenizer: (text) => text.length,
@@ -246,14 +246,14 @@ describe('config — runtime domain mapping', () => {
       })
 
       expect(install).not.toHaveBeenCalled()
-      expect(getRuntime().store).toBe(previousStore)
+      expect(getRuntime().records).toBe(previousStore)
       expect(getRuntime().middleware).toBe(previousMiddleware)
       expect(getRuntime().observabilityTransport).toBe(previousTransport)
       expect(currentObservabilityTransport()).toBe(previousTransport)
       expect(countTokens('abc')).toBe(6)
 
       crux.dispose()
-      expect(getRuntime().store).toBe(previousStore)
+      expect(getRuntime().records).toBe(previousStore)
       expect(currentObservabilityTransport()).toBe(previousTransport)
     } finally {
       restorePrevious()

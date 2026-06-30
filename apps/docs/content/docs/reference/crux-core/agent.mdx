@@ -181,7 +181,7 @@ Shared typed state for multi-agent coordination.
 |-------|------|-------------|
 | `id` | `string` | Unique identifier |
 | `schema` | `ZodType` | Schema for state fields |
-| `store` | `CruxStore?` | Persistent storage |
+| `store` | `RecordStore?` | Persistent storage |
 
 **Returns:** `Blackboard<T>`
 
@@ -249,7 +249,7 @@ Structured context transfer between agents. Supports stateless (in-process) and 
 | `outputSchema` | `ZodType` | Validates transformed data |
 | `transform` | `(input) => output` | Transform function (may be async) |
 | `summarize` | `{ generate, model, system? }?` | Optional LLM summarization |
-| `store` | `CruxStore?` | Persistent storage — enables `send()` and `receive()` for distributed agents |
+| `store` | `RecordStore?` | Persistent storage — enables `send()` and `receive()` for distributed agents |
 | `fromAgent` | `string?` | Name of sending agent (for devtools identification) |
 | `toAgent` | `string?` | Name of receiving agent (for devtools identification) |
 

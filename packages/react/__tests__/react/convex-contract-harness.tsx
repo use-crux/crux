@@ -1,13 +1,13 @@
 import React, { type ReactNode } from 'react'
-import { defineConvexStoreContract } from '../../../convex'
+import { createConvexTransport } from '../../../convex/react'
 import { CruxProvider } from '../../src/provider'
-import type { JsonObject } from '@use-crux/core/store'
+import type { JsonObject } from '@use-crux/core/storage'
 
 /**
  * In-memory Convex component/query harness for React transport tests.
  *
- * It stores current Crux store documents and exposes the same component query
- * shape used by `defineConvexStoreContract().transport()`.
+ * It stores current Crux records and exposes the same component query shape
+ * used by `createConvexTransport()`.
  */
 export function createMockConvexBackend() {
   const data = new Map<string, Record<string, unknown>>()
@@ -75,19 +75,15 @@ export function createMockConvexBackend() {
   return { api, useQuery, setDoc, deleteDoc, data }
 }
 
-/** Create a `CruxProvider` wrapper from the Convex store contract transport. */
+/** Create a `CruxProvider` wrapper from the Convex storage transport. */
 export function createConvexWrapper(backend: ReturnType<typeof createMockConvexBackend>) {
-  const transport = defineConvexStoreContract({
-    component: backend.api,
-  }).transport({ useQuery: backend.useQuery })
+  const transport = createConvexTransport({ api: backend.api, useQuery: backend.useQuery })
   return function Wrapper({ children }: { children: ReactNode }) {
     return <CruxProvider transport={transport}>{children}</CruxProvider>
   }
 }
 
-/** Create the contract transport used by app-provider tests. */
+/** Create the storage transport used by app-provider tests. */
 export function createConvexContractTransport(backend: ReturnType<typeof createMockConvexBackend>) {
-  return defineConvexStoreContract({ component: backend.api }).transport({
-    useQuery: backend.useQuery,
-  })
+  return createConvexTransport({ api: backend.api, useQuery: backend.useQuery })
 }

@@ -11,6 +11,8 @@
 export { StorageError } from './errors'
 export { storage } from './bundle'
 export { inMemoryBlobStore, inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore } from './memory'
+export { matchesExactFilter } from './filter'
+export { keySpace } from './keyspace'
 
 export type {
   BlobContent,

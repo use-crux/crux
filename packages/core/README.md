@@ -128,7 +128,7 @@ Now the call has memory, retrieval, input screening, structured output, retryabl
 ## Give Agents A Workspace
 
 Use `workspace()` when an agent needs durable scratch files and generated outputs.
-Workspaces are namespace-scoped, path-addressed file trees backed by a `DataStore`
+Workspaces are namespace-scoped, path-addressed file trees backed by a `RecordStore`
 for metadata and small text/JSON, plus an optional `BlobStore` for binary and
 oversized payloads.
 

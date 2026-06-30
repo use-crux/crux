@@ -12,8 +12,8 @@ import {
   compactConversation,
   createContextHandler,
   createCruxConvex,
+  createConvexTransport,
   createConvexRuntimeBridge,
-  defineConvexStoreContract,
   convexRecordStore,
   convexVectorStore,
   convexStorage,
@@ -39,8 +39,8 @@ import { tool } from '@use-crux/convex/tools'
 | Subpath                    | Classification                       | Export behavior                                                                                                                   |
 | -------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | `@use-crux/convex/context` | Identical re-export                  | Same API as `@use-crux/core/context`.                                                                                             |
-| `@use-crux/convex/skill`   | Identical re-export + Convex adapter | Same skill authoring/session API as `@use-crux/core/skill`; adds `convexSkillActivationPersistence()` for Convex store snapshots. |
-| `@use-crux/convex/memory`  | Convex-bound drop-in                 | Re-exports memory block helpers and changes only `memory()` defaults.                                                             |
+| `@use-crux/convex/skill`   | Identical re-export + Convex adapter | Same skill authoring/session API as `@use-crux/core/skill`; adds `convexSkillActivationPersistence()` for Convex record snapshots. |
+| `@use-crux/convex/memory`  | Convex-bound drop-in                 | Re-exports memory block helpers and changes only `memory()` storage defaults.                                                     |
 | `@use-crux/convex/tools`   | Convex-bound drop-in                 | Mirrors `tool()` and injects Convex runtime metadata into execution.                                                              |
 | `@use-crux/convex/agent`   | Mixed                                | Convex-Agent-compatible `Agent` facade plus the profile-backed `convexAgent()` helper.                                            |
 
@@ -66,28 +66,28 @@ The returned profile exposes:
 
 | Method                               | Classification                | Description                                                                                                  |
 | ------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `store(ctx)`                         | Convex-only API               | Creates the request-scoped default `CruxStore`. Returns a promise only when a custom store factory is async. |
-| `run(ctx, target, fn)`               | Convex-bound drop-in boundary | Binds ctx, target, store, namespace, memory, and tools for lower-level Crux work.                            |
+| `storage(ctx)`                       | Convex-only API               | Creates the request-scoped default `Storage`. Returns a promise only when a custom storage factory is async.  |
+| `run(ctx, target, fn)`               | Convex-bound drop-in boundary | Binds ctx, target, storage, records, namespace, memory, and tools for lower-level Crux work.                 |
 | `convexAgent(config)`                | Convex-only API               | Creates a profile-backed Crux prompt lifecycle helper without repeating component wiring.                    |
-| `bridge(http, cruxConfig, options?)` | Convex-only API               | Registers the HTTP Runtime Bridge through the same profile store path.                                       |
+| `bridge(http, cruxConfig, options?)` | Convex-only API               | Registers the HTTP Runtime Bridge through the same profile storage path.                                     |
 
-Use `run()` when lower-level integration code needs a Convex-bound store or mirrored `@use-crux/convex/*` helpers outside the high-level agent wrapper:
+Use `run()` when lower-level integration code needs Convex-bound storage or mirrored `@use-crux/convex/*` helpers outside the high-level agent wrapper:
 
 ```ts
-await crux.run(ctx, { threadId }, async ({ store }) => {
-  await store.set(`blackboard:${threadId}`, { status: 'ready' })
+await crux.run(ctx, { threadId }, async ({ records }) => {
+  await records.put(`blackboard:${threadId}`, { status: 'ready' })
 })
 ```
 
-Advanced apps can override store construction once at the profile boundary. The override feeds `run()`, profile-created agents, and `crux.bridge()`:
+Advanced apps can override storage construction once at the profile boundary. The override feeds `run()`, profile-created agents, and `crux.bridge()`:
 
 ```ts
 export const crux = createCruxConvex({
   components: { crux: components.crux, agent: components.agent },
-  store: {
+  storage: {
     vectorIndexName: 'by_embedding',
     create(ctx, defaults) {
-      return defaults.createComponentStore(ctx)
+      return defaults.createComponentStorage(ctx)
     },
   },
 })
@@ -95,7 +95,7 @@ export const crux = createCruxConvex({
 
 ### `createConvexRuntimeBridge(options)`
 
-Create only the Crux-in-Convex runtime bridge: request-scoped store creation, ambient runtime binding, namespace defaults, and Runtime Bridge HTTP setup. Use this when custom Convex actions or normal Convex Agent-shaped code need Crux runtime plumbing without adopting the profile-backed `convexAgent()` helper.
+Create only the Crux-in-Convex runtime bridge: request-scoped storage creation, ambient runtime binding, namespace defaults, and Runtime Bridge HTTP setup. Use this when custom Convex actions or normal Convex Agent-shaped code need Crux runtime plumbing without adopting the profile-backed `convexAgent()` helper.
 
 ```ts
 import { createConvexRuntimeBridge } from '@use-crux/convex'
@@ -105,62 +105,67 @@ export const runtime = createConvexRuntimeBridge({
   component: components.crux,
 })
 
-await runtime.run(ctx, { threadId }, async ({ store }) => {
-  await store.set(`blackboard:${threadId}`, { status: 'ready' })
+await runtime.run(ctx, { threadId }, async ({ records }) => {
+  await records.put(`blackboard:${threadId}`, { status: 'ready' })
 })
 ```
 
-`createCruxConvex()` delegates its `store()`, `run()`, and `bridge()` methods to this lower-level bridge. Prefer the profile when you also want `crux.convexAgent()` to own prompt resolution, memory, skills, tools, and post-turn persistence.
+`createCruxConvex()` delegates its `storage()`, `run()`, and `bridge()` methods to this lower-level bridge. Prefer the profile when you also want `crux.convexAgent()` to own prompt resolution, memory, skills, tools, and post-turn persistence.
 
-### `defineConvexStoreContract(options)`
+### `convexRecordStore(config)`
 
-Define the shared Convex store document contract for a crux Convex component.
+Create a Convex-backed beta `RecordStore` for a crux Convex component.
 
 | Field             | Type                                     | Description                                                                        |
 | ----------------- | ---------------------------------------- | ---------------------------------------------------------------------------------- |
 | `component`       | `ComponentApi`                           | `components.crux` from the installed Convex component                              |
+| `ctx`             | `ConvexCtxPort`                          | Convex action or mutation ctx with query/mutation runners                          |
 | `vectorIndexName` | `string?`                                | Optional vector index name for `ctx.vectorSearch()`. Defaults to `'by_embedding'`. |
 | `semanticCache`   | `{ isolatedVectorNamespace?: boolean }?` | Capability metadata for semantic-cache stores with a dedicated vector namespace.   |
 | `now`             | `() => number?`                          | Optional clock for deterministic tests and TTL writes.                             |
 
-**Returns:** `ConvexStoreContract`
+```ts
+import { convexRecordStore } from '@use-crux/convex'
 
-| Method                     | Description                                          |
-| -------------------------- | ---------------------------------------------------- |
-| `.codec`                   | Shared current-format store document codec           |
-| `.store(ctx)`              | Create a server-side `CruxStore` for a Convex ctx    |
-| `.transport({ useQuery })` | Create a React transport for Convex reactive queries |
+const records = convexRecordStore({
+  component: components.crux,
+  ctx,
+})
 
-The contract's server store is intentionally dense-only today. It throws explicit errors for sparse or hybrid `searchVectors()` queries instead of silently degrading.
+await records.put('memory:alpha', {
+  content: 'Alpha',
+  namespace: 'kb',
+})
+```
 
-Store values are written as `_cruxDoc` records with JSON `content`, optional top-level `embedding`, `updatedAt`, and an `_expiresAt` value inside the JSON payload when `ttl` is provided. The component I/O contract stays narrow: `components.crux.memory.insert` atomically inserts a document only when the key is absent, and `components.crux.memory.list` accepts `prefix`, `limit`, and `cursor`, reads the `by_key` index, and returns `{ docs, cursor }`.
+Record values are written as `_cruxDoc` records with JSON `content`, optional top-level `embedding`, `updatedAt`, and an `_expiresAt` value inside the JSON payload when `ttlMs` is provided. The component I/O contract stays narrow: `components.crux.memory.insert` atomically inserts a document only when the key is absent, and `components.crux.memory.list` accepts `prefix`, `limit`, and `cursor`, reads the `by_key` index, and returns `{ docs, cursor }`.
 
-The same document contract is used by server stores, the HTTP bridge, and React transport: imperative reads suppress expired entries and lazily delete them, vector hits map Convex `_score` to `ScoredEntry.score`, and list/vector filters use top-level exact-match semantics. Filtered `list()` calls with a `limit` fill from additional component pages so `limit` means "up to N matching entries." Server and React reads are strict about current `_cruxDoc` records so malformed documents fail clearly.
+The same document boundary is used by server records, the HTTP bridge, and React transport: imperative reads suppress expired entries and lazily delete them, vector hits map Convex `_score` to `VectorHit.score`, and list/vector filters use top-level exact-match semantics. Filtered `list()` calls with a `limit` fill from additional component pages so `limit` means "up to N matching entries." Server and React reads are strict about current `_cruxDoc` records so malformed documents fail clearly.
 
 ### Document Boundary Substitution
 
 Most apps should pass generated component refs directly:
 
 ```ts
-const cruxDocuments = defineConvexStoreContract({
+const records = convexRecordStore({
   component: components.crux,
+  ctx,
 })
 ```
 
 Tests, migrations, and alternate runtimes can substitute the normalized document component instead. The built-in in-memory component exposes generated-like refs, a structural `ctx`, and a `useQuery` substitute backed by the same records:
 
 ```ts
-import { createInMemoryConvexStoreDocumentComponent, defineConvexStoreContract } from '@use-crux/convex'
+import { convexRecordStore, createConvexTransport, createInMemoryConvexStoreDocumentComponent } from '@use-crux/convex'
 
 const component = createInMemoryConvexStoreDocumentComponent()
-const cruxDocuments = defineConvexStoreContract({ component })
-
-const store = cruxDocuments.store(component.ctx)
-const transport = cruxDocuments.transport({
+const records = convexRecordStore({ component, ctx: component.ctx })
+const transport = createConvexTransport({
+  api: component.refs,
   useQuery: component.useQuery,
 })
 
-await store.set('memory:alpha', {
+await records.put('memory:alpha', {
   content: 'Alpha',
   namespace: 'kb',
 })
@@ -243,9 +248,7 @@ Create a `BlobStore` backed by Convex file storage. Use it with `workspace()` wh
 ```ts
 import { workspace } from '@use-crux/core/workspace'
 import { storage } from '@use-crux/core/storage'
-import { defineConvexStoreContract, convexWorkspaceBlobStore } from '@use-crux/convex'
-
-const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+import { convexRecordStore, convexWorkspaceBlobStore } from '@use-crux/convex'
 
 const ws = workspace({
   id: 'thread-workspace',
@@ -306,12 +309,12 @@ export const supportAgent = crux.convexAgent({
 await supportAgent.generateText(ctx, { threadId, userId }, { input: { message } })
 ```
 
-`convexAgent()` resolves the prompt per turn, builds the Convex Agent tool registry from resolved Crux tools plus optional extra tools, installs the Convex Crux runtime, captures resolved memory after completed turns, and persists skill activation snapshots in the Crux store for later turns. It supports text, streaming text, object generation, streaming objects, and Convex Agent's threaded flow:
+`convexAgent()` resolves the prompt per turn, builds the Convex Agent tool registry from resolved Crux tools plus optional extra tools, installs the Convex Crux runtime, captures resolved memory after completed turns, and persists skill activation snapshots in Crux records for later turns. It supports text, streaming text, object generation, streaming objects, and Convex Agent's threaded flow:
 
-The public surface remains Convex-Agent-shaped: app code calls `generateText()`, `streamText()`, `generateObject()`, `streamObject()`, and `continueThread()` with the same mental model as Convex Agent. Internally, Crux owns a profile-backed lifecycle that binds the request-scoped store, composes `crux.prepare()` overrides, resolves prompt `use[]`, adapts Crux and direct Convex Agent tools once, rebinds tool-call runtime metadata, handles best-effort skill/memory persistence, and records observability evidence around the turn.
+The public surface remains Convex-Agent-shaped: app code calls `generateText()`, `streamText()`, `generateObject()`, `streamObject()`, and `continueThread()` with the same mental model as Convex Agent. Internally, Crux owns a profile-backed lifecycle that binds request-scoped storage, composes `crux.prepare()` overrides, resolves prompt `use[]`, adapts Crux and direct Convex Agent tools once, rebinds tool-call runtime metadata, handles best-effort skill/memory persistence, and records observability evidence around the turn.
 
-Use `languageModel` for new code to mirror Convex Agent examples. Existing `model` call sites remain supported as a compatibility alias.
-The exported `ConvexAgentConfig` type requires one of those model fields, with `ConvexAgentBaseConfig` and `ConvexAgentModelConfig` available for typed profile wrappers.
+Use `languageModel` to mirror Convex Agent examples.
+The exported `ConvexAgentConfig` type requires a model field, with `ConvexAgentBaseConfig` and `ConvexAgentModelConfig` available for typed profile wrappers.
 
 ```ts
 const { thread } = await supportAgent.continueThread(ctx, { threadId, userId })
@@ -319,7 +322,7 @@ const { thread } = await supportAgent.continueThread(ctx, { threadId, userId })
 await thread.streamText({ input: { message }, stopWhen })
 ```
 
-`crux.prepare(args)` is the context-aware extension point for Convex Agent threads. It receives `{ ctx, target, input, messages }` and may return `input`, runtime `use[]`, extra tools, a prompt override, a token budget, and `captureMessages`. Runtime `use[]` entries are composed onto the active prompt even when a prompt override is returned. Use it when app data, request-scoped memory, retrievers, blackboards, or tool sets depend on the current Convex thread messages. Use `crux.runtime.store` and `crux.runtime.namespace` for request-scoped Crux store and namespace overrides, `crux.observe` to customize or disable the profile `agent.run` span, and `crux.persistence` to disable best-effort skill or memory persistence for specialized agents.
+`crux.prepare(args)` is the context-aware extension point for Convex Agent threads. It receives `{ ctx, target, input, messages }` and may return `input`, runtime `use[]`, extra tools, a prompt override, a token budget, and `captureMessages`. Runtime `use[]` entries are composed onto the active prompt even when a prompt override is returned. Use `crux.runtime.storage` and `crux.runtime.namespace` for request-scoped Crux storage and namespace overrides, `crux.observe` to customize or disable the profile `agent.run` span, and `crux.persistence` to disable best-effort skill or memory persistence for specialized agents.
 
 ```ts
 const supportMetadataPrompt = prompt({
@@ -404,17 +407,13 @@ Stateless conversation compaction for Convex actions.
 ### Usage
 
 ```ts
-import { defineConvexStoreContract } from '@use-crux/convex'
+import { convexRecordStore } from '@use-crux/convex'
 import { episodes, memory } from '@use-crux/convex/memory'
 import { components } from './_generated/api'
 
-const cruxDocuments = defineConvexStoreContract({
-  component: components.crux,
-})
-
-const store = cruxDocuments.store(ctx)
+const records = convexRecordStore({ component: components.crux, ctx })
 const history = episodes({ id: 'chat-log', embed: dense })
-const mem = memory({ id: 'assistant', store, namespace: 'thread:1', blocks: [history] })
+const mem = memory({ id: 'assistant', records, namespace: 'thread:1', blocks: [history] })
 ```
 
 ### `createContextHandler(config)`
@@ -445,11 +444,11 @@ That keeps retrieval, memory, and Convex Agent composition on the Crux side inst
 
 ### React transport
 
-Create a `CruxTransport` from the same Convex store contract used by server functions.
+Create a `CruxTransport` from the same Convex component API used by server functions.
 
 ```ts
 import { useQuery } from 'convex/react'
-import { defineConvexStoreContract } from '@use-crux/convex'
+import { createConvexTransport } from '@use-crux/convex'
 import { CruxProvider } from '@use-crux/react'
 ```
 
@@ -460,8 +459,7 @@ import { CruxProvider } from '@use-crux/react'
 **Returns:** `CruxTransport`
 
 ```tsx
-const cruxDocuments = defineConvexStoreContract({ component: api.crux })
-const transport = cruxDocuments.transport({ useQuery })
+const transport = createConvexTransport({ api: api.crux, useQuery })
 
 <ConvexProvider client={convex}>
   <CruxProvider transport={transport}>
@@ -471,7 +469,7 @@ const transport = cruxDocuments.transport({ useQuery })
 ```
 
 <Callout type="info">
-  Plans, task lists, and tasks stored via the contract store are automatically reactive through the Convex transport —
+  Plans, task lists, and tasks stored via Convex records are automatically reactive through the Convex transport —
   no polling or SSE needed. The transport consumes the component's `{ docs, cursor }` page shape and applies
   decoded-value filters locally.
 </Callout>
@@ -554,4 +552,4 @@ import type { ConvexWorkspaceBlobStoreConfig } from '@use-crux/convex/workspace'
 ## Related
 
 - Guide: [Convex](/docs/guides/convex)
-- Reference: [Store interface](/docs/reference/crux-core/store)
+- Reference: [RecordStore](/docs/reference/crux-core/store)

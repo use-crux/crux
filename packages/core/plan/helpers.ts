@@ -6,7 +6,7 @@
  * @module
  */
 
-import type { Task, TaskListStatus, CancellableTaskStatus, JsonValue } from './types'
+import type { Task, TaskListStatus, CancellableTaskStatus, JsonValue, JsonObject } from './types'
 import { deriveStatus, rebuildCounts } from './status'
 
 // ─────────────────────────────────────────────────────────────────
@@ -29,25 +29,30 @@ export const taskKey = (listId: string, taskId: string) => `${TASK_PREFIX}${list
 /** @internal */
 export const taskPrefix = (listId: string) => `${TASK_PREFIX}${listId}:`
 
-/**
- * Convert public metadata filters into store dot-path filters.
- *
- * The store filter contract supports exact matches on nested paths such as
- * `metadata.threadId`, which keeps plan/task list filtering on structured
- * fields rather than serialized string matching.
- *
- * @internal
- */
-export function metadataFilter(metadata?: Record<string, JsonValue>): Record<string, unknown> | undefined {
+/** Assert metadata filter keys are flat and return the original filter. @internal */
+export function metadataFilter(metadata?: Record<string, JsonValue>): Record<string, JsonValue> | undefined {
   if (!metadata) return undefined
-  return Object.fromEntries(
-    Object.entries(metadata).map(([key, value]) => {
-      if (key.includes('.')) {
-        throw new Error(`Metadata filter keys cannot contain ".": ${key}`)
-      }
-      return [`metadata.${key}`, value]
-    }),
-  )
+  for (const key of Object.keys(metadata)) {
+    if (key.includes('.')) {
+      throw new Error(`Metadata filter keys cannot contain ".": ${key}`)
+    }
+  }
+  return metadata
+}
+
+/** Match public metadata filters without relying on nested adapter filters. @internal */
+export function matchesMetadataFilter(
+  metadata: JsonObject | undefined,
+  filter: Record<string, JsonValue> | undefined,
+): boolean {
+  if (!filter) return true
+  if (!metadata) return false
+  return Object.entries(filter).every(([key, expected]) => jsonEqual(metadata[key], expected))
+}
+
+function jsonEqual(left: JsonValue | undefined, right: JsonValue): boolean {
+  if (left === right) return true
+  return JSON.stringify(left) === JSON.stringify(right)
 }
 
 // ─────────────────────────────────────────────────────────────────

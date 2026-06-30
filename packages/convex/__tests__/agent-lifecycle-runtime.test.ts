@@ -9,7 +9,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createProfileBackedAgentLifecycle } from '../agent/lifecycle'
-import { inMemoryCruxStore, memory, recentMessages } from '../memory'
+import { inMemoryRecordStore, memory, recentMessages } from '../memory'
 import { getConvexCruxRuntime } from '../runtime'
 import { tool } from '../tools'
 import { FakeConvexAgentDriver } from './fixtures/fakeAgentDriver'
@@ -22,13 +22,13 @@ describe('profile-backed Convex Agent runtime lifecycle', () => {
 
   it('uses one request-scoped store across prepare, prompt resolution, tool execution, and post-turn capture', async () => {
     const driver = new FakeConvexAgentDriver()
-    const baseStore = inMemoryCruxStore()
+    const baseStore = inMemoryRecordStore()
     const storeEvents: string[] = []
     const store = {
       ...baseStore,
-      set: async (...args: Parameters<typeof baseStore.set>) => {
-        storeEvents.push(`set:${args[0]}`)
-        await baseStore.set(...args)
+      put: async (...args: Parameters<typeof baseStore.put>) => {
+        storeEvents.push(`put:${args[0]}`)
+        await baseStore.put(...args)
       },
     }
     let storeFactoryCalls = 0
@@ -40,7 +40,7 @@ describe('profile-backed Convex Agent runtime lifecycle', () => {
       input: z.object({ value: z.string() }),
       execute: ({ input, target }) => {
         const runtime = getConvexCruxRuntime()
-        toolSawStore = runtime?.store === store
+        toolSawStore = runtime?.records === store
         return {
           value: input.value,
           threadId: target.threadId,
@@ -82,12 +82,12 @@ describe('profile-backed Convex Agent runtime lifecycle', () => {
       languageModel: {} as LanguageModelV3,
       name: 'Request Scope Agent',
       prompt: basePrompt,
-      store: () => {
+      storage: () => {
         storeFactoryCalls += 1
         return store
       },
       prepare: ({ input }) => {
-        prepareSawStore = getConvexCruxRuntime()?.store === store
+        prepareSawStore = getConvexCruxRuntime()?.records === store
         return {
           input,
           tools: {
@@ -117,13 +117,13 @@ describe('profile-backed Convex Agent runtime lifecycle', () => {
 
   it('patches stream onFinish and returns promise-valued stream metadata without awaiting it', async () => {
     const driver = new FakeConvexAgentDriver()
-    const baseStore = inMemoryCruxStore()
+    const baseStore = inMemoryRecordStore()
     const events: string[] = []
     const store = {
       ...baseStore,
-      set: async (...args: Parameters<typeof baseStore.set>) => {
+      put: async (...args: Parameters<typeof baseStore.put>) => {
         events.push(`store:${args[0]}`)
-        await baseStore.set(...args)
+        await baseStore.put(...args)
       },
     }
     const pendingMetadata = new Promise<unknown>(() => {})
@@ -164,7 +164,7 @@ describe('profile-backed Convex Agent runtime lifecycle', () => {
       languageModel: {} as LanguageModelV3,
       name: 'Stream Agent',
       prompt: basePrompt,
-      store: () => store,
+      storage: () => store,
     })
 
     await expect(
@@ -210,7 +210,7 @@ describe('profile-backed Convex Agent runtime lifecycle', () => {
       languageModel: {} as LanguageModelV3,
       name: 'Failing Agent',
       prompt: basePrompt,
-      store: () => inMemoryCruxStore(),
+      storage: () => inMemoryRecordStore(),
     })
 
     await expect(

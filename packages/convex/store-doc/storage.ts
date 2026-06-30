@@ -1,9 +1,8 @@
 /**
  * Storage Beta adapters over the Convex store document I/O port.
  *
- * This module keeps beta `RecordStore` and `VectorStore` behavior separate from
- * the legacy combined `CruxStore` policy while reusing the same component
- * document contract.
+ * This module keeps beta `RecordStore` and `VectorStore` behavior split while
+ * reusing the same component document contract.
  *
  * @module
  */
@@ -70,7 +69,7 @@ export function createStoreDocRecordStore<T extends JsonObject = JsonObject>(
   const encode = (key: string, value: T, options?: RecordWriteOptions) => {
     assertStorageKey(key)
     const ttl = normalizeTtlMs(options?.ttlMs)
-    return codec.encode(key, cloneJsonObject(value) as never, ttl === undefined ? undefined : { ttl })
+    return codec.encode(key, cloneJsonObject(value) as never, ttl === undefined ? undefined : { ttlMs: ttl })
   }
 
   async function list(prefix: string, options?: RecordListOptions) {

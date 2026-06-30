@@ -5,7 +5,7 @@ import { renderHook, act } from '@testing-library/react'
 import { createStreamTransport } from '../../stream/client'
 import { CruxProvider, usePlan, useTasks } from '@use-crux/react'
 import type { Task } from '@use-crux/core/plan'
-import type { JsonObject } from '@use-crux/core/store'
+import type { JsonObject } from '@use-crux/core/storage'
 import type { CruxDataPart } from '../../stream/types'
 
 function createWrapper(transport: ReturnType<typeof createStreamTransport>) {
@@ -33,7 +33,7 @@ describe('createStreamTransport', () => {
         entity: 'plan',
         key: 'plan:p1',
         value: plan,
-        event: 'set',
+        event: 'put',
       } satisfies CruxDataPart,
     })
 
@@ -70,7 +70,7 @@ describe('createStreamTransport', () => {
         entity: 'task',
         key: 'task:list-1:t1',
         value: task1,
-        event: 'set',
+        event: 'put',
       },
     })
     transport.ingest({
@@ -79,7 +79,7 @@ describe('createStreamTransport', () => {
         entity: 'task',
         key: 'task:list-1:t2',
         value: task2,
-        event: 'set',
+        event: 'put',
       },
     })
 
@@ -103,7 +103,7 @@ describe('createStreamTransport', () => {
 
     transport.ingest({
       type: 'data-crux' as const,
-      data: { entity: 'plan', key: 'plan:p1', value: plan, event: 'set' },
+      data: { entity: 'plan', key: 'plan:p1', value: plan, event: 'put' },
     })
 
     const { result, rerender } = renderHook(() => usePlan('p1'), {
@@ -119,7 +119,7 @@ describe('createStreamTransport', () => {
           entity: 'plan',
           key: 'plan:p1',
           value: { ...plan, title: 'V2', version: 2 },
-          event: 'set',
+          event: 'put',
         },
       })
     })
@@ -141,7 +141,7 @@ describe('createStreamTransport', () => {
 
     transport.ingest({
       type: 'data-crux' as const,
-      data: { entity: 'plan', key: 'plan:p1', value: plan, event: 'set' },
+      data: { entity: 'plan', key: 'plan:p1', value: plan, event: 'put' },
     })
 
     const { result, rerender } = renderHook(() => usePlan('p1'), {
@@ -176,7 +176,7 @@ describe('createStreamTransport', () => {
           createdAt: 1000,
           updatedAt: 1000,
         },
-        event: 'set',
+        event: 'put',
       },
     })
     transport.ingest({
@@ -193,7 +193,7 @@ describe('createStreamTransport', () => {
           createdAt: 1000,
           updatedAt: 1000,
         },
-        event: 'set',
+        event: 'put',
       },
     })
 
@@ -225,7 +225,7 @@ describe('createStreamTransport', () => {
         entity: 'plan',
         key: 'plan:p1',
         value: { id: 'p1', title: 'Test' },
-        event: 'set',
+        event: 'put',
       },
     })
 

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { context } from '../context'
 import { createProfileBackedAgentLifecycle } from '../agent/lifecycle'
-import { inMemoryCruxStore } from '../memory'
+import { inMemoryRecordStore } from '../memory'
 import { tool } from '../tools'
 import { FakeConvexAgentDriver } from './fixtures/fakeAgentDriver'
 
@@ -31,7 +31,7 @@ function createObjectLifecycle(driver: FakeConvexAgentDriver) {
     languageModel: {} as LanguageModelV3,
     name: 'Object Agent',
     prompt: basePrompt,
-    store: () => inMemoryCruxStore(),
+    storage: () => inMemoryRecordStore(),
   })
   return { lifecycle, output }
 }
@@ -84,7 +84,7 @@ describe('profile-backed Convex Agent lifecycle', () => {
       model,
       name: 'Writer',
       prompt: writerPrompt,
-      store: () => inMemoryCruxStore(),
+      storage: () => inMemoryRecordStore(),
       prepare: ({ input }) => ({
         input: {
           ...input,
@@ -158,7 +158,7 @@ describe('profile-backed Convex Agent lifecycle', () => {
       languageModel,
       name: 'Language Model Agent',
       prompt: basePrompt,
-      store: () => inMemoryCruxStore(),
+      storage: () => inMemoryRecordStore(),
     })
 
     await lifecycle.resolveOnly({

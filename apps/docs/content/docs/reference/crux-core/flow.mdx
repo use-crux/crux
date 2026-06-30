@@ -21,7 +21,7 @@ import {
 
 Flows group `generate()` calls into structured pipelines with named steps, automatic devtools tracing, suspend/resume, and retry/fallback. A run opens a canonical `flow.run` span, and each executed `flow.step()` opens a canonical `flow.step` child. Generated spans inside a flow inherit the active observability context for structured pipeline grouping in devtools. Flows can nest; calling `flow().run()` inside another flow preserves the parent-child relationship in the graph.
 
-Flows support suspend/resume for human-in-the-loop workflows. When `flow.suspend()` is called, the flow persists its state to the configured `CruxStore` and returns `{ status: 'suspended' }`. The observability graph records a `flow.suspension` marker linked to the causing step, and `RunDetail` presents that marker beside the other flow steps so successful generations and completed steps do not remain visually stuck. Pass `{ resume: flowId }` to `.run()` to resume a previously suspended flow.
+Flows support suspend/resume for human-in-the-loop workflows. When `flow.suspend()` is called, the flow persists its state to the configured `RecordStore` and returns `{ status: 'suspended' }`. The observability graph records a `flow.suspension` marker linked to the causing step, and `RunDetail` presents that marker beside the other flow steps so successful generations and completed steps do not remain visually stuck. Pass `{ resume: flowId }` to `.run()` to resume a previously suspended flow.
 
 ## `flow(name, handler)`
 
@@ -143,7 +143,7 @@ Discriminated union on `status`:
 
 ## `FlowSnapshot`
 
-Persisted flow state stored in `CruxStore` under the `crux:flow:{flowId}` key.
+Persisted flow state stored in `RecordStore` under the `crux:flow:{flowId}` key.
 
 | Field            | Type                                     | Description                    |
 | ---------------- | ---------------------------------------- | ------------------------------ |
@@ -161,7 +161,7 @@ Persisted flow state stored in `CruxStore` under the `crux:flow:{flowId}` key.
 ### `signalFlow(flowId, name, payload?)`
 
 <Callout type="warn">
-  **Low-level primitive.** `signalFlow()` only writes the signal to the CruxStore -- it does NOT trigger the flow to
+  **Low-level primitive.** `signalFlow()` only writes the signal to the RecordStore -- it does NOT trigger the flow to
   resume. Prefer `handle.signal()` which delegates to this internally. In Convex mutation-only modules, pair
   `signalFlow()` with `ctx.scheduler.runAfter()` in an app-local helper that also schedules the resume action.
 </Callout>

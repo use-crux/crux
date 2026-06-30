@@ -97,7 +97,7 @@ function normalizeVectorSearchQuery(query: VectorSearchQuery): NormalizedVectorS
     readonly threshold?: unknown
     readonly filter?: unknown
   }
-  const mode = runtimeQuery.mode ?? inferLegacyMode(runtimeQuery.dense, runtimeQuery.sparse)
+  const mode = runtimeQuery.mode
   const limit = normalizeLimit(runtimeQuery.limit)
   const threshold = normalizeThreshold(runtimeQuery.threshold)
   const filter = runtimeQuery.filter === undefined ? undefined : cloneFilter(runtimeQuery.filter)
@@ -122,13 +122,6 @@ function normalizeVectorSearchQuery(query: VectorSearchQuery): NormalizedVectorS
   }
 
   throw new StorageError('invalid_value', 'Vector search mode must be dense, sparse, or hybrid.')
-}
-
-function inferLegacyMode(dense: unknown, sparse: unknown): NormalizedVectorSearchQuery['mode'] {
-  if (dense !== undefined && sparse !== undefined) return 'hybrid'
-  if (dense !== undefined) return 'dense'
-  if (sparse !== undefined) return 'sparse'
-  throw new StorageError('invalid_value', 'Vector search requires a dense or sparse query vector.')
 }
 
 function cloneDenseVector(value: unknown): readonly number[] {

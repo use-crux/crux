@@ -1,21 +1,21 @@
 /**
- * SSE handler for streaming CruxStore changes to the browser.
+ * SSE handler for streaming RecordStore changes to the browser.
  *
- * Creates a Server-Sent Events endpoint that subscribes to `CruxStore.subscribe()`
- * and streams `data-crux` events to connected clients. Works with any CruxStore
- * that implements `subscribe()`.
+ * Creates a Server-Sent Events endpoint that subscribes to `RecordStore.watch()`
+ * and streams `data-crux` events to connected clients. Works with any
+ * RecordStore that implements `watch()`.
  *
  * @module
  */
 
-import type { CruxStore, StoreEvent } from '@use-crux/core/store'
+import type { RecordEvent, RecordStore } from '@use-crux/core/storage'
 
 /**
  * Options for `cruxSSEHandler`.
  */
 export interface CruxSSEHandlerOptions {
-  /** The CruxStore to subscribe to. Must implement `subscribe()`. */
-  store: CruxStore
+  /** The RecordStore to subscribe to. Must implement `watch()`. */
+  records: RecordStore
 
   /**
    * Optional key prefix filter. Only events for keys matching this prefix
@@ -25,7 +25,7 @@ export interface CruxSSEHandlerOptions {
 }
 
 /**
- * Create an SSE endpoint handler for streaming CruxStore changes.
+ * Create an SSE endpoint handler for streaming record changes.
  *
  * Returns a function compatible with Next.js App Router `GET` handlers,
  * or any framework that expects `(request: Request) => Response`.
@@ -33,7 +33,7 @@ export interface CruxSSEHandlerOptions {
  * The client connects via `EventSource` and receives `data-crux` events
  * matching the configured prefix filter.
  *
- * @param options - Store and optional prefix filter.
+ * @param options - Record store and optional prefix filter.
  * @returns A request handler function.
  *
  * @example
@@ -42,17 +42,17 @@ export interface CruxSSEHandlerOptions {
  * import { cruxSSEHandler } from '@use-crux/react/server'
  *
  * export const GET = cruxSSEHandler({
- *   store,
+ *   records,
  *   prefix: 'plan:',  // only plan events
  * })
  * ```
  */
 export function cruxSSEHandler(options: CruxSSEHandlerOptions): (request: Request) => Response {
-  const { store, prefix = '' } = options
+  const { records, prefix = '' } = options
 
   return (_request: Request) => {
-    if (!store.subscribe) {
-      return new Response('Store does not support subscribe()', {
+    if (!records.watch) {
+      return new Response('RecordStore does not support watch()', {
         status: 501,
       })
     }
@@ -65,17 +65,14 @@ export function cruxSSEHandler(options: CruxSSEHandlerOptions): (request: Reques
         // Send initial keepalive
         controller.enqueue(encoder.encode(': connected\n\n'))
 
-        unsubscribe = store.subscribe!((event: StoreEvent) => {
-          // Filter by prefix
-          if (prefix && !event.key.startsWith(prefix)) return
-
+        unsubscribe = records.watch!(prefix, (event: RecordEvent) => {
           const entity = classifyKey(event.key)
           if (!entity) return
 
           const data = JSON.stringify({
             entity,
             key: event.key,
-            value: event.type === 'set' ? event.value : null,
+            value: event.type === 'put' ? event.value : null,
             event: event.type,
           })
 
@@ -102,7 +99,7 @@ export function cruxSSEHandler(options: CruxSSEHandlerOptions): (request: Reques
   }
 }
 
-/** Classify a CruxStore key into an entity type. */
+/** Classify a record key into an entity type. */
 function classifyKey(key: string): 'plan' | 'tasklist' | 'task' | null {
   if (key.startsWith('plan:')) return 'plan'
   if (key.startsWith('tasklist:')) return 'tasklist'

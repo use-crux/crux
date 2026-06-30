@@ -1,5 +1,5 @@
 import type { ZodType } from 'zod'
-import type { CruxStore } from '../store/types'
+import type { RecordStore, Storage, VectorStore } from '../storage'
 import type { AnyToolSet } from '../types'
 import type { MemoryBudget } from './rendering'
 
@@ -52,8 +52,12 @@ export interface MemoryCaptureConfig {
  * should share storage keys with prompt-bound memory.
  */
 export interface MemoryRuntimeOptions {
-  /** Store used for block reads, writes, listing, and optional vector search. */
-  store: CruxStore
+  /** Storage bundle used by direct block methods, when available. */
+  storage?: Storage
+  /** Record store used for block reads, writes, and listing. */
+  records: RecordStore
+  /** Optional vector store used by semantic block recall. */
+  vectors?: VectorStore
   /** Stable tenant, user, thread, session, or agent scope. */
   namespace: string
   /** Composed memory id used in storage keys. Defaults to `standalone`. */

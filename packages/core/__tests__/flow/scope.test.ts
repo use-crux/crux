@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { flow as makeFlow, createFlowId, signalFlow, type FlowScope } from '../../flow/scope'
 import { updateRuntime, resetRuntime } from '../../runtime/runtime'
 import { getExecutionContext, runWithExecutionContext, withSession } from '../../runtime/execution-context'
-import { inMemoryCruxStore } from '../../store/memory'
+import { inMemoryRecordStore } from '../../storage'
 
 describe('createFlowId', () => {
   it('returns a unique string starting with flow-', () => {
@@ -363,8 +363,8 @@ describe('flow.input', () => {
   })
 
     it('survives suspend/resume (persisted in snapshot)', async () => {
-    const store = inMemoryCruxStore()
-    updateRuntime({ store })
+    const store = inMemoryRecordStore()
+    updateRuntime({ records: store })
 
     type Input = { topic: string; audience: string }
     let inputOnResume: unknown
@@ -432,8 +432,8 @@ describe('flow.results', () => {
   })
 
     it('is pre-populated from cache on resume and includes skip-replayed steps', async () => {
-    const store = inMemoryCruxStore()
-    updateRuntime({ store })
+    const store = inMemoryRecordStore()
+    updateRuntime({ records: store })
 
     const stepsExecuted: string[] = []
     let resultsAfterResume: Record<string, unknown> | undefined

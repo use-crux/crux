@@ -65,7 +65,7 @@ Delete is not injected unless you explicitly enable it:
 const files = workspace({
   id: 'case-files',
   namespace: 'case:demo',
-  storage: storage({ data, blobs }),
+  storage: storage({ records, blobs }),
   tools: {
     prefix: 'case',
     delete: true,
@@ -78,20 +78,18 @@ const files = workspace({
 For production, replace the in-memory stores with durable adapters.
 
 ```ts
-import { defineConvexStoreContract, convexWorkspaceBlobStore } from '@use-crux/convex'
+import { convexRecordStore, convexWorkspaceBlobStore } from '@use-crux/convex'
 import { storage } from '@use-crux/core/storage'
 import { workspace } from '@use-crux/core/workspace'
-
-const cruxDocuments = defineConvexStoreContract({ component: components.crux })
 
 const files = workspace({
   id: 'thread-files',
   namespace: threadId,
   storage: storage({
-    data: cruxDocuments.store(ctx),
+    records: convexRecordStore({ component: components.crux, ctx }),
     blobs: convexWorkspaceBlobStore({ ctx }),
   }),
 })
 ```
 
-`data` keeps file metadata and small inline text. `blobs` keeps binary and large files. See [Storage](/docs/guides/storage) and [BlobStore](/docs/guides/storage/blob-storage) for custom S3/R2/GCS-style blob stores.
+`records` keeps file metadata and small inline text. `blobs` keeps binary and large files. See [Storage](/docs/guides/storage) and [BlobStore](/docs/guides/storage/blob-storage) for custom S3/R2/GCS-style blob stores.

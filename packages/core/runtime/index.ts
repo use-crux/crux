@@ -42,7 +42,7 @@ export type { PromptRegistry } from './configure'
 // Global runtime hook store
 // ─────────────────────────────────────────────────────────────────
 
-export { getRuntime, setRuntime, updateRuntime, resetRuntime, resolveStore } from './runtime'
+export { getRuntime, setRuntime, updateRuntime, resetRuntime, resolveRecords } from './runtime'
 export type { CruxRuntime } from './runtime'
 
 // ─────────────────────────────────────────────────────────────────

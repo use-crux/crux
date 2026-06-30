@@ -4,7 +4,7 @@ import { resetObservabilityRuntime } from '@use-crux/core/observability'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { convexAgent } from '../agent'
-import { inMemoryCruxStore } from '../memory'
+import { inMemoryRecordStore } from '../memory'
 import { FakeConvexAgentDriver } from './fixtures/fakeAgentDriver'
 
 describe('profile-backed Convex Agent lifecycle config', () => {
@@ -33,7 +33,7 @@ describe('profile-backed Convex Agent lifecycle config', () => {
       crux: {
         driver,
         runtime: {
-          store: () => inMemoryCruxStore(),
+          storage: () => inMemoryRecordStore(),
         },
         prepare: ({ input }) => ({
           input: {

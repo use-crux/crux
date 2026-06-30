@@ -5,7 +5,7 @@ description: Pause flows for human approval or external events, persist state, a
 
 Some pipelines can't finish in a single call. A content pipeline might need editorial approval before publishing. A budget request might need manager sign-off. An agent plan might need the user to confirm before execution begins.
 
-`flow.suspend()` pauses the flow at a named point and returns control to the caller. The flow's state — which steps completed and what they returned — is persisted to your `CruxStore`. Later, an external signal triggers a resume, and execution continues from where it left off. Completed steps replay instantly from cache; no function is re-executed.
+`flow.suspend()` pauses the flow at a named point and returns control to the caller. The flow's state — which steps completed and what they returned — is persisted to your `RecordStore`. Later, an external signal triggers a resume, and execution continues from where it left off. Completed steps replay instantly from cache; no function is re-executed.
 
 ```ts
 import { flow } from '@use-crux/core'
@@ -46,7 +46,7 @@ This works from API routes, webhook handlers, UI buttons, or any other external 
 
 `handle.signal()` is the recommended API. It delegates to `signalFlow()` internally but is the proper entry point for application code.
 
-`signalFlow()` (exported from `@use-crux/core`) is a **low-level primitive** that only writes the signal payload to the CruxStore. It does NOT trigger the flow to resume — the caller must separately invoke `.run({ resume: flowId })` or, in Convex, schedule the resume action via `ctx.scheduler`. Use it only when you need bare store access without handle-level coordination.
+`signalFlow()` (exported from `@use-crux/core`) is a **low-level primitive** that only writes the signal payload to the RecordStore. It does NOT trigger the flow to resume — the caller must separately invoke `.run({ resume: flowId })` or, in Convex, schedule the resume action via `ctx.scheduler`. Use it only when you need bare store access without handle-level coordination.
 
 In Convex, the `@use-crux/convex/server` flow handle can also schedule the resume action. If a mutation-only module cannot import the handle, create a small app-local helper that calls `signalFlow()` and then `ctx.scheduler.runAfter()`.
 
@@ -151,14 +151,14 @@ await flow.waitUntil(
 **Suspend** — `flow.suspend()` throws a `FlowSuspendedError` to unwind the call stack. The internal executor catches it, persists a snapshot of completed steps to the store, and returns `{ status: 'suspended' }`.
 </Step>
 <Step>
-**Signal** — External code calls `handle.signal(flowId, name, payload)` to deliver the signal. Internally, this writes the payload to the CruxStore as a key-value entry. In Convex, `@use-crux/convex/server` flow handles can also schedule the resume action.
+**Signal** — External code calls `handle.signal(flowId, name, payload)` to deliver the signal. Internally, this writes the payload to the RecordStore as a key-value entry. In Convex, `@use-crux/convex/server` flow handles can also schedule the resume action.
 </Step>
 <Step>
 **Resume** — `handle.run({ resume: flowId })` loads the snapshot, replays completed steps from cache (no re-execution), and when `suspend()` is reached again, it finds the signal in the store and returns the payload instead of throwing.
 </Step>
 </Steps>
 
-The flow handler itself is stateless. All state lives in the store. This means a flow can suspend in one process (a Convex action, a Lambda, an API route) and resume in a completely different one — as long as both share the same `CruxStore`.
+The flow handler itself is stateless. All state lives in the store. This means a flow can suspend in one process (a Convex action, a Lambda, an API route) and resume in a completely different one — as long as both share the same `RecordStore`.
 
 <Callout type="warn">
   `flow.suspend()` works by throwing. Code after `suspend()` in the same block does **not** execute during the initial
@@ -168,5 +168,5 @@ The flow handler itself is stateless. All state lives in the store. This means a
 ## Related
 
 - [Convex flows](/docs/guides/convex/flows) — `@use-crux/convex/server` flows for cross-action suspend/resume
-- [Storage](/docs/guides/storage/crux-store) — `CruxStore` backends that persist flow snapshots
+- [Storage](/docs/guides/storage/crux-store) — `RecordStore` backends that persist flow snapshots
 - [API reference](/docs/reference/crux-core/flow) — full type signatures for `suspend`, `signal`, `cancelFlow`, `listFlows`

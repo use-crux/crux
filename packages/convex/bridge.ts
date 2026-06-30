@@ -12,9 +12,9 @@ import { httpActionGeneric } from 'convex/server'
 import type { PublicHttpAction } from 'convex/server'
 import type { Crux } from '@use-crux/core'
 import { normalizeObservedError } from '@use-crux/core/observability'
-import type { CruxStore } from '@use-crux/core/store'
+import type { RecordStore, Storage } from '@use-crux/core/storage'
 import type { ComponentApi } from './src/component/_generated/component'
-import { assertConvexCtxPort, createDefaultConvexCruxStore } from './profile-store'
+import { assertConvexCtxPort, createDefaultConvexStorage } from './profile-store'
 import {
   BridgeCommandErrorSchema,
   BridgeCommandRequestSchema,
@@ -38,16 +38,16 @@ export interface CruxConvexBridgeSetupOptions {
    */
   path?: string
   /**
-   * Optional ctx-aware store factory.
+   * Optional ctx-aware storage factory.
    *
-   * Convex stores usually need the current function ctx, so real Convex apps
-   * should pass `store: (ctx) => cruxDocuments.store(ctx)` unless the Crux
-   * config already contains a readable `persistence.store`.
+   * Convex storage usually needs the current function ctx, so real Convex apps
+   * should pass `storage: (ctx) => convexStorage({ ctx, component })` unless
+   * the Crux config already contains readable `persistence.records`.
    */
-  store?: (ctx: unknown) => CruxStore | Promise<CruxStore>
+  storage?: (ctx: unknown) => Storage | Promise<Storage>
   /**
    * Crux Convex component ref. When provided, the bridge automatically creates
-   * the default ctx-bound CruxStore for each command request.
+   * the default ctx-bound Storage bundle for each command request.
    */
   component?: ComponentApi
   /**
@@ -73,9 +73,9 @@ export function setup(http: CruxConvexBridgeHttpRouter, crux: Crux, options: Cru
       if (!parsed.ok) return jsonResponse(parsed.error, 400)
       const command = parsed.command
       try {
-        const store = await resolveBridgeStore(ctx, crux, options)
+        const records = await resolveBridgeRecords(ctx, crux, options)
         const result = await executeRuntimeBridgeCommand(
-          { devtools: crux.config.devtools, quality: crux.config.quality, store },
+          { devtools: crux.config.devtools, quality: crux.config.quality, records },
           command,
         )
         return jsonResponse(
@@ -130,17 +130,17 @@ async function parseBridgeCommandRequest(
   }
 }
 
-async function resolveBridgeStore(
+async function resolveBridgeRecords(
   ctx: unknown,
   crux: Crux,
   options: CruxConvexBridgeSetupOptions,
-): Promise<CruxStore | undefined> {
-  if (options.store) return await options.store(ctx)
+): Promise<RecordStore | undefined> {
+  if (options.storage) return (await options.storage(ctx)).records
   if (options.component) {
     assertConvexCtxPort(ctx)
-    return createDefaultConvexCruxStore(ctx, { component: options.component })
+    return createDefaultConvexStorage(ctx, { component: options.component }).records
   }
-  return crux.config.persistence?.store
+  return crux.config.persistence?.records
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -157,7 +157,7 @@ function convexBridgeManifest(
   const manifest = getRuntimeBridgeManifest(
     {
       quality: crux.config.quality,
-      store: crux.config.persistence?.store,
+      records: crux.config.persistence?.records,
       devtools: endpointUrl
         ? {
             ...crux.config.devtools,
@@ -178,7 +178,7 @@ function convexBridgeManifest(
       endpointPath: normalizePath(options.path ?? '/crux/bridge'),
     },
   )
-  if (!manifest || (!options.store && !options.component)) return manifest
+  if (!manifest || (!options.storage && !options.component)) return manifest
   if (manifest.capabilities.some((capability) => capability.command === 'store.read')) return manifest
 
   return RuntimeBridgeManifestSchema.parse({
@@ -191,7 +191,7 @@ function convexBridgeManifest(
           {
             resource: 'crux.store',
             operations: ['get', 'list'],
-            description: 'Convex-backed CruxStore resources',
+            description: 'Convex-backed record resources',
             kind: 'store',
           },
         ],

@@ -7,20 +7,20 @@
  * @module
  */
 
-import type { CruxStore, JsonObject } from '../store/types'
+import type { JsonObject, RecordStore } from '../storage'
 import { taskListKey, taskPrefix } from './helpers'
 import { deriveStatus, rebuildCounts } from './status'
 import type { StatusCounts } from './status'
 import type { Task, TaskList, TaskListStatus } from './types'
 
 /** Get all task rows, including soft-removed tasks, for a task list. */
-export async function getAllTasks(store: CruxStore, taskListId: string): Promise<Task[]> {
+export async function getAllTasks(store: RecordStore, taskListId: string): Promise<Task[]> {
   const result = await store.list(taskPrefix(taskListId))
   return result.entries.map((entry) => entry.value as unknown as Task)
 }
 
 /** Get active task rows for a task list. */
-export async function getActiveTasks(store: CruxStore, taskListId: string): Promise<Task[]> {
+export async function getActiveTasks(store: RecordStore, taskListId: string): Promise<Task[]> {
   const tasks = await getAllTasks(store, taskListId)
   return tasks.filter((task) => !task.removedAt)
 }
@@ -51,7 +51,7 @@ function deriveStatusFromTaskRows(list: TaskList, tasks: readonly Task[], counts
  * reads so stale counters cannot override visible task rows.
  */
 export async function repairTaskListState(
-  store: CruxStore,
+  store: RecordStore,
   taskListId: string,
 ): Promise<TaskList | null> {
   const rawList = await store.get(taskListKey(taskListId))
@@ -71,7 +71,7 @@ export async function repairTaskListState(
     : list
 
   if (shouldPersist) {
-    await store.set(taskListKey(taskListId), nextList as unknown as JsonObject)
+    await store.put(taskListKey(taskListId), nextList as unknown as JsonObject)
   }
 
   return nextList

@@ -11,7 +11,7 @@ import { renderHook } from '@testing-library/react'
 import { usePlan, useTasks } from '../../src/hooks'
 import { createConvexWrapper, createMockConvexBackend } from './convex-contract-harness'
 import type { Plan, Task } from '@use-crux/core/plan'
-import type { JsonObject } from '@use-crux/core/store'
+import type { JsonObject } from '@use-crux/core/storage'
 
 // ── plan:* key resolution ──
 

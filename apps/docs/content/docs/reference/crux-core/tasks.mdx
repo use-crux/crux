@@ -159,7 +159,7 @@ interface TasksHandle<TItems = undefined> {
 
 Defined ledgers narrow `TaskId<TItems>` to the keys in `items`, disable dynamic `add()`, and infer `complete()` arguments from each task's result schema. Dynamic ledgers accept arbitrary string IDs and JSON-safe completion results.
 
-Dynamic `add()` calls require each task ID to be unique within the ledger. Duplicate IDs reject with `DuplicateTaskIdError`; CruxStore adapters perform this insert atomically so concurrent writers cannot both create the same task ID.
+Dynamic `add()` calls require each task ID to be unique within the ledger. Duplicate IDs reject with `DuplicateTaskIdError`; RecordStore adapters perform this insert atomically so concurrent writers cannot both create the same task ID.
 
 ## Lifecycle
 

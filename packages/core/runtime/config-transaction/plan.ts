@@ -13,14 +13,14 @@ import type { RuntimeConfigEnvironment, RuntimeConfigPlan, RuntimeConfigTransact
 export function planRuntimeConfig(input: RuntimeConfigTransactionInput): RuntimeConfigPlan {
   const config = Object.freeze({ ...input.config })
   const inert = isIndexMode(input.env)
-  const store = config.persistence?.store
+  const records = config.persistence?.records
   const observability = config.observability
   const observabilityCapture = observabilityCapturePolicy(observability)
   const ownsObservability =
     observability?.enabled === false || observability?.transport !== undefined || observability?.serverUrl !== undefined
 
   const runtimePatch: Partial<CruxRuntime> = {
-    ...(store ? { store } : {}),
+    ...(records ? { records } : {}),
     ...(config.generation?.middleware ? { middleware: config.generation.middleware } : {}),
     ...(ownsObservability
       ? {
@@ -49,7 +49,7 @@ export function planRuntimeConfig(input: RuntimeConfigTransactionInput): Runtime
     bridgeOptions: {
       devtools: config.devtools,
       quality: config.quality,
-      store,
+      records,
     },
     plugins: ownsObservability && config.plugins ? [...config.plugins] : [],
     tokenizer: config.generation?.tokenizer,

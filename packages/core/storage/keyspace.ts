@@ -1,18 +1,18 @@
 /**
- * Centralized store key namespace.
+ * Centralized record key namespace.
  *
- * All CruxStore key patterns in one place. Modules import key builders
- * from here instead of scattering string literals across the codebase.
+ * All Crux record key patterns live in one place so modules can import key
+ * builders instead of scattering string literals across the codebase.
  *
  * @module
  */
 
 /**
- * Store key namespace registry.
+ * Record key namespace registry.
  *
  * Each namespace provides:
- * - `key(...)` — build a full key from identifiers
- * - `prefix` — the constant prefix for list/scan operations
+ * - `key(...)` - build a full key from identifiers
+ * - `prefix` - the constant prefix for list/scan operations
  *
  * Prefixes are guaranteed non-overlapping within the registry.
  */

@@ -322,7 +322,7 @@ export {
   setRuntime,
   updateRuntime,
   resetRuntime,
-  resolveStore,
+  resolveRecords,
 } from "./runtime";
 export type { CruxRuntime } from "./runtime";
 export type { PromptMiddleware, PromptMiddlewareArgs } from "./runtime";
@@ -475,22 +475,6 @@ export type {
   TraceMeta,
 } from "./generation";
 export type { TokenizerFn } from "./shared/tokenizer";
-
-// Store
-export { inMemoryCruxStore } from "./store/memory";
-export type {
-  CruxStore,
-  StoreEntry,
-  ListOptions,
-  ListResult,
-  ScoredEntry,
-  SparseVector,
-  VectorSearchOptions,
-  CruxStoreCapabilities,
-  StoreEvent,
-  StoreSetEvent,
-  StoreDeleteEvent,
-} from "./store/types";
 
 // Memory
 export {

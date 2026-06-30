@@ -1,9 +1,9 @@
 /**
- * Structural Convex component API types used by the Crux store contract.
+ * Structural Convex component API types used by the Crux storage adapters.
  *
  * Generated Convex component references are deeply typed. Crux only needs a
  * small structural surface here so tests, apps, and generated component refs
- * can all satisfy the contract without pulling generated types through every
+ * can all satisfy the adapter boundary without pulling generated types through every
  * adapter boundary.
  *
  * @module
@@ -14,8 +14,8 @@ import type { UseQueryFn } from './react'
 import type { ConvexCtxPort } from './store'
 import type { ComponentDocumentPort, StoreDocCodecOptions, StoreDocComponentTable, StoreDocRecord } from './store-doc'
 
-/** Convex memory function references required by the server-side Crux store. */
-export interface ConvexCruxStoreMemoryComponent {
+/** Convex memory function references required by the server-side Crux record store. */
+export interface ConvexCruxStorageMemoryComponent {
   /** Query reference for reading one memory document by key. */
   readonly get: unknown
   /** Query reference for listing memory documents by key prefix. */
@@ -28,16 +28,16 @@ export interface ConvexCruxStoreMemoryComponent {
   readonly remove: unknown
 }
 
-/** Convex component reference required by the Crux store document contract. */
-export interface ConvexCruxStoreComponent {
+/** Convex component reference required by the Crux storage document contract. */
+export interface ConvexCruxStorageComponent {
   /** Memory module exposed by the Crux Convex component. */
-  readonly memory: ConvexCruxStoreMemoryComponent
+  readonly memory: ConvexCruxStorageMemoryComponent
 }
 
 /** Convex component reference required by the React read transport. */
-export interface ConvexCruxStoreTransportComponent {
+export interface ConvexCruxStorageTransportComponent {
   /** Memory queries used by reactive Crux reads. */
-  readonly memory: Pick<ConvexCruxStoreMemoryComponent, 'get' | 'list'>
+  readonly memory: Pick<ConvexCruxStorageMemoryComponent, 'get' | 'list'>
 }
 
 /** Options passed when a normalized component creates server document I/O. */
@@ -55,20 +55,20 @@ export interface ConvexStoreDocumentComponentReadOptions {
    */
   readonly useQuery: UseQueryFn
   /** Optional transport API override for generated-client environments. */
-  readonly api?: ConvexCruxStoreTransportComponent
+  readonly api?: ConvexCruxStorageTransportComponent
   /** Clock used for TTL checks. Defaults to `Date.now`. */
   readonly now?: StoreDocCodecOptions['now']
 }
 
 /**
- * Normalized Convex store document component.
+ * Normalized Convex storage document component.
  *
  * A component exposes generated refs for app ergonomics, a document I/O port
- * for server stores, and React read hooks that decode the same raw documents.
+ * for server storage adapters, and React read hooks that decode the same raw documents.
  */
 export interface ConvexStoreDocumentComponent<TCtx extends ConvexCtxPort = ConvexCtxPort> {
   /** Generated Convex component refs used by app-facing server and client APIs. */
-  readonly refs: ConvexCruxStoreComponent
+  readonly refs: ConvexCruxStorageComponent
   /** Backing component table name. */
   readonly table: StoreDocComponentTable
   /** Create raw document I/O for a server-side Convex ctx. */

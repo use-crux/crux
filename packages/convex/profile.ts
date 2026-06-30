@@ -2,7 +2,7 @@
  * Convex runtime profile for Crux.
  *
  * A profile owns the request-scoped Convex runtime binding for one app: Crux
- * component refs, default store creation, namespace defaults, high-level agent
+ * component refs, default storage creation, namespace defaults, high-level agent
  * construction, and devtools bridge setup.
  *
  * @module
@@ -13,7 +13,7 @@ import type { z } from 'zod'
 import type { CruxConvexBridgeHttpRouter } from './bridge'
 import { convexAgent as createConvexAgent } from './agent'
 import type { ConvexAgentBaseConfig, ConvexAgentComponent, ConvexAgentModelConfig, CruxConvexAgent } from './agent'
-import { assertConvexCtxPort, type CruxConvexProfileStoreOptions } from './profile-store'
+import { assertConvexCtxPort, type CruxConvexProfileStorageOptions } from './profile-store'
 import { createConvexRuntimeBridge } from './runtime-bridge'
 import type { ConvexRunScope, ConvexRuntimeBridge, ConvexRuntimeBridgeSetupOptions } from './runtime-bridge'
 import type { ConvexMemoryNamespace, ConvexRuntimeTarget } from './runtime'
@@ -31,7 +31,7 @@ export interface CruxConvexComponents {
 /** Config accepted by a profile-created Convex agent. */
 export type CruxConvexProfileAgentConfig<
   TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
-> = Omit<ConvexAgentBaseConfig<TPrompt>, 'components' | 'store'> & ConvexAgentModelConfig
+> = Omit<ConvexAgentBaseConfig<TPrompt>, 'components' | 'storage'> & ConvexAgentModelConfig
 
 /** Scope passed to `CruxConvexProfile.run()`. */
 export type CruxConvexRunScope<TCtx extends ConvexCtxPort, TTarget extends ConvexRuntimeTarget> = ConvexRunScope<
@@ -43,7 +43,7 @@ export type CruxConvexRunScope<TCtx extends ConvexCtxPort, TTarget extends Conve
 export interface CruxConvexProfile<TCtx extends ConvexCtxPort = ConvexCtxPort> extends ConvexRuntimeBridge<TCtx> {
   /** Component refs captured by the profile. */
   readonly components: CruxConvexComponents
-  /** Create a Convex Agent wrapper using this profile's components and store. */
+  /** Create a Convex Agent wrapper using this profile's components and storage. */
   convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
     config: CruxConvexProfileAgentConfig<TPrompt>,
   ): CruxConvexAgent<TPrompt>
@@ -68,20 +68,20 @@ export interface CreateCruxConvexOptions<TCtx extends ConvexCtxPort = ConvexCtxP
    */
   readonly namespace?: ConvexMemoryNamespace
   /**
-   * Store options for the profile's request-scoped default store.
+   * Storage options for the profile's request-scoped default storage.
    *
    * This is the preferred home for vector index/cache options and the custom
-   * store factory override.
+   * storage factory override.
    */
-  readonly store?: CruxConvexProfileStoreOptions<TCtx>
+  readonly storage?: CruxConvexProfileStorageOptions<TCtx>
 }
 
 /**
  * Create a Convex runtime profile for Crux.
  *
  * The profile is the owning boundary for request-scoped runtime state:
- * component refs, ctx, target, store, namespace, agent defaults, and bridge
- * store reads.
+ * component refs, ctx, target, storage, namespace, agent defaults, and bridge
+ * record reads.
  *
  * @param options - Components and optional namespace/store defaults.
  * @returns A reusable Convex Crux profile.
@@ -92,8 +92,8 @@ export interface CreateCruxConvexOptions<TCtx extends ConvexCtxPort = ConvexCtxP
  *   components: { crux: components.crux, agent: components.agent },
  * })
  *
- * await crux.run(ctx, { threadId }, async ({ store }) => {
- *   await store.set(`blackboard:${threadId}`, { status: 'ready' })
+ * await crux.run(ctx, { threadId }, async ({ records }) => {
+ *   await records.put(`blackboard:${threadId}`, { status: 'ready' })
  * })
  * ```
  */
@@ -103,7 +103,7 @@ export function createCruxConvex<TCtx extends ConvexCtxPort = ConvexCtxPort>(
   const runtime = createConvexRuntimeBridge<TCtx>({
     component: options.components.crux,
     namespace: options.namespace,
-    store: options.store,
+    storage: options.storage,
   })
 
   const profile: CruxConvexProfile<TCtx> = {
@@ -115,10 +115,16 @@ export function createCruxConvex<TCtx extends ConvexCtxPort = ConvexCtxPort>(
       return createConvexAgent({
         ...config,
         components: options.components,
-        namespace: config.namespace ?? options.namespace,
-        store: (ctx) => {
-          assertConvexCtxPort(ctx)
-          return runtime.store(ctx as TCtx)
+        crux: {
+          ...config.crux,
+          runtime: {
+            ...config.crux?.runtime,
+            namespace: config.crux?.runtime?.namespace ?? options.namespace,
+            storage: async (ctx) => {
+              assertConvexCtxPort(ctx)
+              return await runtime.storage(ctx as TCtx)
+            },
+          },
         },
       })
     },

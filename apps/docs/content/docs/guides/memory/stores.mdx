@@ -1,22 +1,22 @@
 ---
 title: Memory Stores
-description: How memory blocks use CruxStore for persistence, recall, and production storage.
+description: How memory blocks use RecordStore for persistence, recall, and production storage.
 ---
 
-Memory does not define its own storage system. Every memory block persists through [`CruxStore`](/docs/reference/crux-core/store).
+Memory does not define its own storage system. Every memory block persists through [`RecordStore`](/docs/reference/crux-core/store).
 
-That means the same data store adapter can back memory records, indexing metadata, plans, flows, blackboards, and workspace metadata.
+That means the same record adapter can back memory records, indexing metadata, plans, flows, blackboards, and workspace metadata.
 
 ```ts
 import { memory, workingState } from "@use-crux/core/memory";
-import { inMemoryCruxStore } from "@use-crux/core/memory";
+import { inMemoryRecordStore } from "@use-crux/core/storage";
 
-const store = inMemoryCruxStore();
+const records = inMemoryRecordStore();
 
 const mem = memory({
   id: "assistant",
   namespace: "thread:123",
-  store,
+  records,
   blocks: [workingState({ id: "scratch", schema })],
 });
 ```
@@ -25,13 +25,13 @@ For general store APIs, TTL, adapters, subscriptions, and custom database implem
 
 ## What Memory Stores
 
-Memory blocks write JSON records to the configured `CruxStore`.
+Memory blocks write JSON records to the configured `RecordStore`.
 
 ```ts
 const mem = memory({
   id: "support-agent",
   namespace: `user:${userId}`,
-  store,
+  records,
   blocks: [
     workingState({ id: "profile", schema: profileSchema }),
     episodes({ id: "history", embed: dense }),
@@ -43,7 +43,7 @@ The `id` identifies the memory collection. The `namespace` scopes records to a u
 
 ## Defaults
 
-If you do not pass a store, memory uses in-memory storage. That is useful for tests and local demos, but it is not durable.
+If you do not pass records, memory uses in-memory storage. That is useful for tests and local demos, but it is not durable.
 
 ```ts
 const mem = memory({
@@ -53,11 +53,11 @@ const mem = memory({
 });
 ```
 
-For production, pass a durable `CruxStore`. Convex apps can use `cruxConvexStore()`. Upstash-backed apps can use `cruxRedisStore()` for Redis records, or `cruxUpstashStore()` when they need Convex persistence plus Upstash Vector recall.
+For production, pass a durable `RecordStore`. Convex apps can use `convexRecordStore()` or `convexStorage()`. Upstash-backed apps can use `upstashRedisRecordStore()` for Redis records and `upstashVectorStore()` for vector recall.
 
 ## Vector Recall
 
-Some memory blocks can use vector search when configured with a vector-capable store.
+Some memory blocks can use vector search when configured with a vector-capable storage bundle.
 
 ```ts
 const history = episodes({
@@ -68,23 +68,23 @@ const history = episodes({
 
 Rules:
 
-1. If the store supports vectors, embedding-backed blocks can recall semantically relevant entries.
-2. If the store does not support vectors, blocks that can degrade safely fall back to non-vector behavior such as recency or listing.
+1. If `vectors` is configured, embedding-backed blocks can recall semantically relevant entries.
+2. If `vectors` is not configured, blocks that can degrade safely fall back to non-vector behavior such as recency or listing.
 3. Memory vector search filters by `namespace` and `blockId`, hydrates JSON records before returning public entries, skips expired or missing records, and applies threshold and limit.
 
 For dense, sparse, and hybrid vector capabilities, see [VectorStore](/docs/guides/storage/vector-store).
 
 ## TTL And Cache-Like Memory
 
-Memory records can use stores that support TTL. TTL is a store feature, not a memory-only feature.
+Memory records can use stores that support TTL. TTL is a record-store feature, not a memory-only feature.
 
 ```ts
-await store.set(
+await records.put(
   "memory:temporary-note",
   {
     content: "Remember this only briefly.",
   },
-  { ttl: 300_000 },
+  { ttlMs: 300_000 },
 );
 ```
 
@@ -107,7 +107,7 @@ import {
   useWorkingMemory,
 } from "@use-crux/react";
 
-const transport = createPollingTransport(store);
+const transport = createPollingTransport(records);
 
 function MemoryPanel() {
   const profile = useWorkingMemory<{ tone: string }>("profile");
@@ -127,17 +127,17 @@ For memory, choose storage based on the behavior you need:
 
 | Need                                  | Use                                                                      |
 | ------------------------------------- | ------------------------------------------------------------------------ |
-| Tests and examples                    | `inMemoryCruxStore()`                                                    |
-| Convex app state and reactivity       | `cruxConvexStore()`                                                      |
-| Redis-backed key-value records        | `cruxRedisStore()` from `@use-crux/upstash/redis`                        |
-| Dense vector recall                   | `cruxUpstashStore()` with Convex persistence and an Upstash Vector index |
+| Tests and examples                    | `inMemoryRecordStore()`                                                    |
+| Convex app state and reactivity       | `convexRecordStore()` or `convexStorage()`                               |
+| Redis-backed key-value records        | `upstashRedisRecordStore()` from `@use-crux/upstash`                     |
+| Dense vector recall                   | `upstashVectorStore()` with an Upstash Vector index                      |
 | Workspace files and generated outputs | `BlobStore`, not memory storage                                          |
 
 ## Related
 
 <Cards>
   <Card
-    title="CruxStore"
+    title="RecordStore"
     description="General record storage, TTL, adapters, and custom stores."
     href="/docs/reference/crux-core/store"
   />

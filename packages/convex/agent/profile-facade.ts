@@ -25,12 +25,12 @@ import { convexTools, wrapToolRecord } from './sdk-tools'
 export function convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
   config: ConvexAgentConfig<TPrompt>,
 ): CruxConvexAgent<TPrompt> {
-  const { crux, prepare, store, namespace, ...agentConfig } = config
+  const { crux, ...agentConfig } = config
   const lifecycle = createProfileBackedAgentLifecycle({
     ...agentConfig,
-    prepare: crux?.prepare ?? prepare,
-    store: crux?.runtime?.store ?? store,
-    namespace: crux?.runtime?.namespace ?? namespace,
+    prepare: crux?.prepare,
+    storage: crux?.runtime?.storage,
+    namespace: crux?.runtime?.namespace,
     observe: crux?.observe,
     persistence: crux?.persistence,
     driver: crux?.driver ?? createDefaultConvexAgentDriver(),

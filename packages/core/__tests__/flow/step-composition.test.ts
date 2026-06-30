@@ -8,7 +8,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { flow as makeFlow, signalFlow, type FlowScope } from '../../flow/scope'
 import { updateRuntime, resetRuntime } from '../../runtime/runtime'
-import { inMemoryCruxStore } from '../../store/memory'
+import { inMemoryRecordStore } from '../../storage'
 
 // ── External step functions (simulating separate files) ────────
 
@@ -90,8 +90,8 @@ describe('step composition: end-to-end', () => {
   })
 
     it('flow.input and flow.results survive suspend/resume with external steps', async () => {
-    const store = inMemoryCruxStore()
-    updateRuntime({ store })
+    const store = inMemoryRecordStore()
+    updateRuntime({ records: store })
 
     const stepsExecuted: string[] = []
 

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { context } from '../context'
 import { createProfileBackedAgentLifecycle } from '../agent/lifecycle'
-import { inMemoryCruxStore } from '../memory'
+import { inMemoryRecordStore } from '../memory'
 import { tool } from '../tools'
 import { FakeConvexAgentDriver } from './fixtures/fakeAgentDriver'
 
@@ -52,7 +52,7 @@ describe('profile-backed Convex Agent thread and tool lifecycle', () => {
       model,
       name: 'Threaded Writer',
       prompt: basePrompt,
-      store: () => inMemoryCruxStore(),
+      storage: () => inMemoryRecordStore(),
       prepare: ({ input, messages }) => ({
         input: {
           ...input,
@@ -136,7 +136,7 @@ describe('profile-backed Convex Agent thread and tool lifecycle', () => {
       model,
       name: 'Tool Agent',
       prompt: basePrompt,
-      store: () => inMemoryCruxStore(),
+      storage: () => inMemoryRecordStore(),
       tools: {
         directTool,
       },

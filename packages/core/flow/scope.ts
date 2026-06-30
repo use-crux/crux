@@ -3,7 +3,7 @@
  * with named steps, automatic devtools tracing, and retry/fallback support.
  *
  * Supports suspend/resume for human-in-the-loop and async-wait workflows.
- * Suspended flows persist their state to CruxStore and can be resumed
+ * Suspended flows persist their state to a `RecordStore` and can be resumed
  * in a separate call (potentially in a different process).
  *
  * @module
@@ -11,9 +11,10 @@
 
 import { runWithExecutionContext, getExecutionContext } from '../runtime/execution-context'
 import { captureSource } from '../project-index/source'
-import { getRuntime, resolveStore } from '../runtime/runtime'
+import { getRuntime, resolveRecords } from '../runtime/runtime'
 import { executeWithRetry } from '../generation/retry'
-import type { CruxStore, JsonObject } from '../store/types'
+import type { JsonObject, JsonValue, RecordStore } from '../storage'
+import type { CapturedObservabilityContext } from '../observability'
 import { observe } from '../observability'
 
 // Import from decomposed modules
@@ -88,21 +89,24 @@ export async function withFlow<T, TInput = void>(
 
   // Load snapshot for resume
   let snapshot: FlowSnapshot | null = null
-  let store: CruxStore | undefined
+  let store: RecordStore | undefined
   if (isResume) {
-    store = resolveStore()
+    store = resolveRecords()
     const raw = await store.get(`${FLOW_KEY_PREFIX}${flowId}`)
     snapshot = raw as FlowSnapshot | null
     if (!snapshot) {
       throw new Error(`No suspended flow found for flowId: ${flowId}`)
     }
     if (snapshot.observabilityContext && !observe.captureContext()) {
-      return await observe.withContext(snapshot.observabilityContext, () => withFlow(name, fn, options))
+      return await observe.withContext(
+        snapshot.observabilityContext as unknown as CapturedObservabilityContext,
+        () => withFlow(name, fn, options),
+      )
     }
   }
 
   // Completed step cache (for skip-replay on resume)
-  const completedSteps: Record<string, { output: unknown; durationMs: number }> = snapshot?.completedSteps
+  const completedSteps: Record<string, { output: JsonValue; durationMs: number }> = snapshot?.completedSteps
     ? { ...snapshot.completedSteps }
     : {}
 
@@ -216,7 +220,7 @@ export async function withFlow<T, TInput = void>(
 
         // Cache the step output for potential suspend serialization
         completedSteps[label] = {
-          output: result as unknown,
+          output: result as JsonValue,
           durationMs: Date.now() - stepStartedAt,
         }
 
@@ -272,9 +276,9 @@ export async function withFlow<T, TInput = void>(
       }
 
       // Verify store is available before suspending
-      const flowStore = store ?? getRuntime().store
+      const flowStore = store ?? getRuntime().records
       if (!flowStore) {
-        throw new Error('flow.suspend() requires a CruxStore. Configure one via config({ persistence: { store } }).')
+        throw new Error('flow.suspend() requires a RecordStore. Configure one via config({ persistence: { records } }).')
       }
 
       // Not resuming or no signal yet — suspend
@@ -305,9 +309,9 @@ export async function withFlow<T, TInput = void>(
       }
 
       // Condition not met — verify store and suspend
-      const flowStore = store ?? getRuntime().store
+      const flowStore = store ?? getRuntime().records
       if (!flowStore) {
-        throw new Error('flow.waitUntil() requires a CruxStore. Configure one via config({ persistence: { store } }).')
+        throw new Error('flow.waitUntil() requires a RecordStore. Configure one via config({ persistence: { records } }).')
       }
 
       throw new FlowSuspendedError(_name, _options as SuspendOptions)
@@ -331,7 +335,7 @@ export async function withFlow<T, TInput = void>(
   } catch (error) {
     // Handle suspension — persist state and return suspended result
     if (error instanceof FlowSuspendedError) {
-      const flowStore = store ?? getRuntime().store
+      const flowStore = store ?? getRuntime().records
       if (flowStore) {
         const timeoutAt = error.options?.timeout ? Date.now() + parseDuration(error.options.timeout) : undefined
 
@@ -341,17 +345,14 @@ export async function withFlow<T, TInput = void>(
           status: 'suspended',
           suspendedAt: error.suspendPoint,
           completedSteps: completedSteps as FlowSnapshot['completedSteps'],
-          traceContext: {
-            sessionId: existing?.sessionId,
-            parentFlowId,
-          },
-          observabilityContext: resumeObservabilityContext,
+          traceContext: flowTraceContext(existing?.sessionId, parentFlowId),
+          observabilityContext: resumeObservabilityContext as unknown as JsonObject,
           createdAt: snapshot?.createdAt ?? startedAt,
           updatedAt: Date.now(),
           ...(timeoutAt !== undefined ? { timeoutAt } : {}),
           ...(options?.input !== undefined ? { input: options.input as unknown as JsonObject } : {}),
         }
-        await flowStore.set(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
+        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
       }
 
 
@@ -372,22 +373,19 @@ export async function withFlow<T, TInput = void>(
 
     // Handle cancellation
     if (error instanceof FlowCancelledError) {
-      const flowStore = store ?? getRuntime().store
+      const flowStore = store ?? getRuntime().records
       if (flowStore) {
-        await flowStore.set(`${FLOW_KEY_PREFIX}${flowId}`, {
+        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, {
           flowId,
           name,
           status: 'cancelled',
-          cancelReason: error.reason,
           suspendedAt: '',
           completedSteps: completedSteps as FlowSnapshot['completedSteps'],
-          traceContext: {
-            sessionId: existing?.sessionId,
-            parentFlowId,
-          },
-          observabilityContext: snapshot?.observabilityContext ?? resumeObservabilityContext,
+          traceContext: flowTraceContext(existing?.sessionId, parentFlowId),
+          observabilityContext: snapshot?.observabilityContext ?? (resumeObservabilityContext as unknown as JsonObject),
           createdAt: snapshot?.createdAt ?? startedAt,
           updatedAt: Date.now(),
+          ...(error.reason !== undefined ? { cancelReason: error.reason } : {}),
           ...(flowInput !== undefined ? { input: flowInput as unknown as JsonObject } : {}),
         })
       }
@@ -403,9 +401,9 @@ export async function withFlow<T, TInput = void>(
 
     // Handle expiration
     if (error instanceof FlowExpiredError) {
-      const flowStore = store ?? getRuntime().store
+      const flowStore = store ?? getRuntime().records
       if (flowStore) {
-        await flowStore.set(`${FLOW_KEY_PREFIX}${flowId}`, {
+        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, {
           ...(snapshot ?? {}),
           status: 'expired',
           updatedAt: Date.now(),
@@ -421,6 +419,13 @@ export async function withFlow<T, TInput = void>(
 
     flowSpan.error(error, { totalSteps: stepCount })
     throw error
+  }
+}
+
+function flowTraceContext(sessionId: string | undefined, parentFlowId: string | undefined): JsonObject {
+  return {
+    ...(sessionId !== undefined ? { sessionId } : {}),
+    ...(parentFlowId !== undefined ? { parentFlowId } : {}),
   }
 }
 

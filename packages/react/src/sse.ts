@@ -1,5 +1,5 @@
 /**
- * SSE transport — reactive CruxStore access via Server-Sent Events.
+ * SSE transport — reactive RecordStore access via Server-Sent Events.
  *
  * Connects to a `cruxSSEHandler` endpoint and accumulates `data-crux`
  * events into a local cache for use with `useSyncExternalStore`.
@@ -8,8 +8,8 @@
  */
 
 import { useSyncExternalStore } from 'react'
-import type { JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
-import { matchesFilter } from '@use-crux/core/store'
+import type { JsonObject, RecordEntry, RecordListOptions } from '@use-crux/core/storage'
+import { matchesExactFilter } from '@use-crux/core/storage'
 import type { CruxTransport } from './types'
 
 /**
@@ -113,7 +113,7 @@ export function createSSETransport(url: string, options?: SSETransportOptions): 
           entity: string
           key: string
           value: JsonObject | null
-          event: 'set' | 'delete'
+          event: 'put' | 'delete'
         }
 
         if (data.event === 'delete' || data.value === null) {
@@ -163,12 +163,12 @@ export function createSSETransport(url: string, options?: SSETransportOptions): 
       })
     },
 
-    useDocumentList(prefix: string | undefined, options?: ListOptions): StoreEntry[] | undefined {
+    useDocumentList(prefix: string | undefined, options?: RecordListOptions): RecordEntry[] | undefined {
       const filterKey = options?.filter ? JSON.stringify(options.filter) : ''
       return useSyncExternalStore(subscribe, () => {
         if (prefix === undefined) return undefined
         return cachedSnapshot(`list:${prefix}:${filterKey}`, () => {
-          let entries: StoreEntry[] = []
+          let entries: RecordEntry[] = []
           for (const [key, value] of cache) {
             if (key.startsWith(prefix)) {
               entries.push({ key, value })
@@ -176,7 +176,7 @@ export function createSSETransport(url: string, options?: SSETransportOptions): 
           }
           if (options?.filter) {
             const filter = options.filter
-            entries = entries.filter((e) => matchesFilter(e.value, filter))
+            entries = entries.filter((e) => matchesExactFilter(e.value, filter))
           }
           return entries
         })

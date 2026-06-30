@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
 import { blackboard as makeBlackboard } from '../../agent/blackboard'
-import { inMemoryCruxStore as inMemoryStore } from '../../store/memory'
+import { inMemoryRecordStore as inMemoryStore } from '../../storage'
 
 const testSchema = z.object({
   goal: z.string(),

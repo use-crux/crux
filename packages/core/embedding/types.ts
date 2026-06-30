@@ -10,7 +10,6 @@
  * @module
  */
 
-import type { EmbedFn } from '../store/types'
 import type { JsonObject, RecordStore, SparseVector } from '../storage'
 
 /** Token usage reported by an embedding provider. */
@@ -84,6 +83,9 @@ export interface EmbeddingPreprocessorConfig {
 
 /** One or more preprocessors. */
 export type EmbeddingPreprocessConfig = EmbeddingPreprocessor | readonly EmbeddingPreprocessor[]
+
+/** Provider-independent dense embedding function. */
+export type EmbedFn = (text: string) => Promise<number[]>
 
 /** Truncation policy: fail on overflow, or truncate to a character cap. */
 export type EmbeddingTruncatePolicy = { strategy?: 'fail' } | { strategy: 'chars'; maxChars: number }

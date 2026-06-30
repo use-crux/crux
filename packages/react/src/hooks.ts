@@ -8,7 +8,7 @@
  */
 
 import type { Plan, PlanHandle, Task, TasksHandle } from '@use-crux/core/plan'
-import type { StoreEntry } from '@use-crux/core/store'
+import type { RecordEntry } from '@use-crux/core/storage'
 import { useCruxTransport } from './provider'
 
 /** Key prefix helpers (must match plan/helpers.ts conventions) */
@@ -52,7 +52,7 @@ export function useTasks(tasks: EntityRef<TasksHandle>): Task[] | undefined {
 
   if (raw === undefined) return undefined
 
-  return raw.map((entry: StoreEntry) => entry.value as unknown as Task).filter((task: Task) => !task.removedAt)
+  return raw.map((entry: RecordEntry) => entry.value as unknown as Task).filter((task: Task) => !task.removedAt)
 }
 
 /**

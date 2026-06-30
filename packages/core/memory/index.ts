@@ -3,30 +3,30 @@
  *
  * Use `memory()` to compose reusable memory blocks into prompts and agents.
  * Blocks can also be used directly from application code, cron jobs, and
- * admin workflows by passing `{ store, namespace }`.
+ * admin workflows by passing `{ records, namespace }`.
  *
  * @module
  */
 
 // Storage helpers
-export { toStoreValue, toMemoryEntry } from './utils'
+export { toStoreValue } from './utils'
 export type { RawMemoryDocument } from './utils'
 
-// Re-export CruxStore types for convenience
-export { inMemoryCruxStore } from '../store/memory'
+// Re-export Storage Beta helpers for convenience
+export { inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore } from '../storage'
 export type {
-  CruxStore,
+  ExactFilter,
   JsonObject,
-  StoreEntry,
-  ListOptions,
-  ListResult,
-  ScoredEntry,
+  RecordEntry,
+  RecordListOptions,
+  RecordPage,
+  RecordStore,
   SparseVector,
-  VectorSearchOptions,
   VectorSearchQuery,
-  EmbedFn,
-  ToolConfig,
-} from '../store/types'
+  Storage,
+  VectorHit,
+  VectorStore,
+} from '../storage'
 
 // Block-based memory primitives
 export {

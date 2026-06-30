@@ -3,12 +3,12 @@
  *
  * Primitives register the resources they own when they are defined. Devtools
  * can then ask the live runtime to inspect `memory:project` or
- * `blackboard:thread` without users separately wiring stores into the bridge.
+ * `blackboard:thread` without users separately wiring record stores into the bridge.
  *
  * @module
  */
 
-import type { JsonObject, ListOptions, ListResult } from '../store/types'
+import type { JsonObject, RecordListOptions, RecordPage } from '../storage'
 
 export type InspectableResourceKind = 'store' | 'memory' | 'blackboard' | 'workspace' | 'retriever' | 'custom'
 
@@ -16,7 +16,7 @@ export type InspectableResourceOperation = 'get' | 'list'
 
 export interface InspectableReadableStore {
   get(key: string): Promise<JsonObject | null>
-  list(prefix: string, options?: ListOptions): Promise<ListResult>
+  list(prefix: string, options?: RecordListOptions): Promise<RecordPage>
 }
 
 export interface InspectableResource {
@@ -40,7 +40,7 @@ export type InspectableResourceReadRequest =
   | {
       readonly operation: 'list'
       readonly prefix?: string
-      readonly options?: ListOptions
+      readonly options?: RecordListOptions
       readonly store?: InspectableReadableStore
     }
 

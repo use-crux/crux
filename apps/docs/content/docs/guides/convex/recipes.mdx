@@ -39,7 +39,7 @@ Prefer core memory APIs from actions when possible:
 ```ts
 await episodes({ id: 'chat', embed }).record(
   { content: message, metadata: { role: 'user' } },
-  { store: cruxStore(ctx), namespace: `thread:${threadId}` },
+  { records: cruxRecords(ctx), namespace: `thread:${threadId}` },
 )
 ```
 
@@ -100,5 +100,5 @@ export const researchTool = createTool({
 - Raw `ctx.runAction()` for related AI work.
 - Exporting flow `.action` publicly when auth is needed.
 - Building strings by hand in Convex Agent context handlers when Crux contexts can resolve them.
-- Storing large workspace files in `CruxStore` instead of `convexWorkspaceBlobStore()`.
+- Storing large workspace files in `RecordStore` instead of `convexWorkspaceBlobStore()`.
 - Adding generic helpers to `@use-crux/convex` that assume host app table names.

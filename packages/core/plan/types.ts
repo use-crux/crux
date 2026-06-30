@@ -3,7 +3,7 @@
  *
  * Plans are freeform documents describing agent intent.
  * Task lists are structured work tracking with live status updates.
- * Both persist via `CruxStore` adapters.
+ * Both persist via configured `RecordStore` adapters.
  *
  * @module
  */
@@ -12,10 +12,10 @@
 // Status Types
 // ─────────────────────────────────────────────────────────────────
 
-import type { JsonObject, JsonValue } from '../types/tool'
+import type { JsonObject, JsonValue } from '../storage'
 import type { TaskCompleteArgs, TaskId, TaskSpecRecord } from './task-definition-types'
 
-export type { JsonObject, JsonPrimitive, JsonValue } from '../types/tool'
+export type { JsonObject, JsonPrimitive, JsonValue } from '../storage'
 export type {
   TaskCompleteArgs,
   TaskId,

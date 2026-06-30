@@ -1,5 +1,5 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
-import type { CruxStore } from '@use-crux/core/store'
+import type { RecordStore, Storage } from '@use-crux/core/storage'
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import { createCruxConvex, prompt } from '../index'
@@ -44,7 +44,7 @@ convexAgent({
   languageModel: model,
   crux: {
     runtime: {
-      store: () => ({}) as CruxStore,
+      storage: () => ({}) as RecordStore,
       namespace: ({ input }) => {
         expectTypeOf(input).toEqualTypeOf<Record<string, unknown>>()
         return 'tenant:test'
@@ -122,7 +122,17 @@ createProfileBackedAgentLifecycle({
   driver: {} as ConvexAgentDriver,
   prompt: editPrompt,
   languageModel: model,
-  store: () => ({}) as CruxStore,
+  storage: () => ({}) as RecordStore,
+})
+
+createProfileBackedAgentLifecycle({
+  components: {
+    agent: { agent: true },
+  },
+  driver: {} as ConvexAgentDriver,
+  prompt: editPrompt,
+  languageModel: model,
+  storage: () => ({ records: {} as RecordStore }) as Storage,
 })
 
 // @ts-expect-error components.crux is required when no custom store is supplied.

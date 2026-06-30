@@ -3,7 +3,7 @@
  *
  * This is the one Convex-specific skill API: normal skill authoring and
  * session primitives are identical re-exports from `@use-crux/core/skill`, while
- * this adapter binds snapshots to the active Convex Crux store.
+ * this adapter binds snapshots to the active Convex Crux record store.
  *
  * @module
  */
@@ -23,14 +23,14 @@ export function convexSkillActivationPersistence(): SkillActivationPersistence<C
       const runtime = getConvexCruxRuntime()
       const key = skillStateKey(target, runtime?.target)
       if (!runtime || !key) return null
-      const value = await runtime.store.get(key)
+      const value = await runtime.records.get(key)
       return readSkillActivationSnapshot(value)
     },
     async save(target, snapshot) {
       const runtime = getConvexCruxRuntime()
       const key = skillStateKey(target, runtime?.target)
       if (!runtime || !key) return
-      await runtime.store.set(key, {
+      await runtime.records.put(key, {
         activeSkillIds: [...snapshot.activeSkillIds],
         injectedSkillIds: [...(snapshot.injectedSkillIds ?? [])],
         updatedAt: Date.now(),

@@ -2,19 +2,16 @@
  * Convex transport for `@use-crux/react` hooks.
  *
  * Uses Convex's native `useQuery()` for automatic WebSocket-based reactivity.
- * App code should usually create this through
- * `defineConvexStoreContract().transport()` so server stores and React reads
- * share one document contract.
+ * App code should pass the Crux component API used by `convexStorage()` so
+ * server records and React reads share one document contract.
  *
  * @example
  * ```tsx
  * import { CruxProvider } from '@use-crux/react'
- * import { defineConvexStoreContract } from '@use-crux/convex'
  * import { useQuery } from 'convex/react'
  * import { api } from '../convex/_generated/api'
  *
- * const cruxDocuments = defineConvexStoreContract({ component: api.crux })
- * const transport = cruxDocuments.transport({ useQuery })
+ * const transport = createConvexTransport({ api: api.crux, useQuery })
  *
  * <ConvexProvider client={convex}>
  *   <CruxProvider transport={transport}>
@@ -40,7 +37,7 @@ export type UseQueryFn = (query: unknown, args: UseQueryArgs) => unknown
  */
 export interface ConvexTransportConfig {
   /** The Convex component API (e.g., `api.crux` or `components.crux`). */
-  api: ConvexCruxStoreTransportComponent
+  api: ConvexCruxStorageTransportComponent
   /**
    * The Convex `useQuery` hook. Pass this to avoid requiring `convex/react`
    * as a direct dependency of `@use-crux/convex`.
@@ -59,8 +56,8 @@ export interface ConvexTransportConfig {
 // Re-export the transport type for convenience
 export type { CruxTransport } from '@use-crux/react'
 import type { CruxTransport } from '@use-crux/react'
-import type { JsonObject, StoreEntry, ListOptions } from '@use-crux/core/store'
-import type { ConvexCruxStoreTransportComponent } from './store-component'
+import type { JsonObject, RecordEntry, RecordListOptions } from '@use-crux/core/storage'
+import type { ConvexCruxStorageTransportComponent } from './store-component'
 import {
   createStoreDocCodec,
   type StoreDocCodecOptions,
@@ -75,7 +72,7 @@ import {
  * Uses the crux Convex component's `memory.get` and `memory.list` queries,
  * which are automatically reactive via Convex's WebSocket protocol.
  *
- * CruxStore documents are serialized as JSON in the `content` field with
+ * Crux records are serialized as JSON in the `content` field with
  * a `{ _cruxDoc: true }` metadata marker. The transport deserializes them
  * back to `JsonObject` on read.
  *
@@ -85,10 +82,7 @@ import {
  * @example
  * ```tsx
  * import { useQuery } from 'convex/react'
- * import { defineConvexStoreContract } from '@use-crux/convex'
- *
- * const cruxDocuments = defineConvexStoreContract({ component: api.crux })
- * const transport = cruxDocuments.transport({ useQuery })
+ * const transport = createConvexTransport({ api: api.crux, useQuery })
  *
  * <CruxProvider transport={transport}>
  *   <App />
@@ -105,7 +99,7 @@ export function createConvexTransport(config: ConvexTransportConfig): CruxTransp
       return docs.value(result as StoreDocRecord | null | undefined)
     },
 
-    useDocumentList(prefix: string | undefined, options?: ListOptions): StoreEntry[] | undefined {
+    useDocumentList(prefix: string | undefined, options?: RecordListOptions): RecordEntry[] | undefined {
       const result = useQuery(
         api.memory.list,
         prefix !== undefined

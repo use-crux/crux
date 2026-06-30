@@ -10,7 +10,7 @@
  * ```ts
  * // crux.config.ts
  * import { config } from '@use-crux/core'
- * import { inMemoryCruxStore } from '@use-crux/core/store'
+ * import { inMemoryRecordStore } from '@use-crux/core/storage'
  *
  * export default config({
  *   quality: {
@@ -18,7 +18,7 @@
  *     defaults: { replay: 'record-new' },
  *   },
  *   persistence: {
- *     store: inMemoryCruxStore(),
+ *     records: inMemoryRecordStore(),
  *   },
  *   generation: {
  *     tokenizer: (text) => Math.ceil(text.length / 4),
@@ -89,7 +89,7 @@ export interface Crux extends PromptRegistry {
  *
  * export default config({
  *   quality: { defaults: { replay: 'record-new' } },
- *   persistence: { store },
+ *   persistence: { records },
  *   generation: { middleware, tokenizer },
  *   observability: { serverUrl: process.env.CRUX_OBSERVABILITY_URL },
  * })

@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { createMockTransport } from '../../src/testing'
-import type { JsonObject } from '@use-crux/core/store'
+import type { JsonObject } from '@use-crux/core/storage'
 
 // ── useDocument ──
 
@@ -27,7 +27,7 @@ describe('createMockTransport — useDocument', () => {
   it('returns value after set', () => {
     const transport = createMockTransport()
     const doc: JsonObject = { id: 'abc', title: 'Hello' }
-    transport.set('plan:abc', doc)
+    transport.put('plan:abc', doc)
 
     const { result } = renderHook(() => transport.useDocument('plan:abc'))
 
@@ -37,7 +37,7 @@ describe('createMockTransport — useDocument', () => {
   it('returns null after delete', () => {
     const transport = createMockTransport()
     const doc: JsonObject = { id: 'abc', title: 'Hello' }
-    transport.set('plan:abc', doc)
+    transport.put('plan:abc', doc)
 
     const { result: before } = renderHook(() => transport.useDocument('plan:abc'))
     expect(before.current).toEqual(doc)
@@ -69,7 +69,7 @@ describe('createMockTransport — useDocument', () => {
 
     // Set a value — should trigger re-render
     act(() => {
-      transport.set('item:1', { value: 'first' })
+      transport.put('item:1', { value: 'first' })
     })
 
     expect(renderCount.mock.calls.length).toBeGreaterThan(initialCallCount)
@@ -78,7 +78,7 @@ describe('createMockTransport — useDocument', () => {
     // Update the value — should trigger another re-render
     const afterFirstSetCount = renderCount.mock.calls.length
     act(() => {
-      transport.set('item:1', { value: 'second' })
+      transport.put('item:1', { value: 'second' })
     })
 
     expect(renderCount.mock.calls.length).toBeGreaterThan(afterFirstSetCount)
@@ -91,10 +91,10 @@ describe('createMockTransport — useDocument', () => {
 describe('createMockTransport — useDocumentList', () => {
   it('returns matching entries by prefix', () => {
     const transport = createMockTransport()
-    transport.set('task:list-1:t1', { id: 't1', label: 'First' })
-    transport.set('task:list-1:t2', { id: 't2', label: 'Second' })
-    transport.set('task:list-2:t3', { id: 't3', label: 'Other list' })
-    transport.set('plan:abc', { id: 'abc', title: 'Plan' })
+    transport.put('task:list-1:t1', { id: 't1', label: 'First' })
+    transport.put('task:list-1:t2', { id: 't2', label: 'Second' })
+    transport.put('task:list-2:t3', { id: 't3', label: 'Other list' })
+    transport.put('plan:abc', { id: 'abc', title: 'Plan' })
 
     const { result } = renderHook(() => transport.useDocumentList('task:list-1:'))
 
@@ -105,7 +105,7 @@ describe('createMockTransport — useDocumentList', () => {
 
   it('returns undefined when prefix is undefined (skip)', () => {
     const transport = createMockTransport()
-    transport.set('task:list-1:t1', { id: 't1' })
+    transport.put('task:list-1:t1', { id: 't1' })
 
     const { result } = renderHook(() => transport.useDocumentList(undefined))
 
@@ -114,7 +114,7 @@ describe('createMockTransport — useDocumentList', () => {
 
   it('returns empty array when no entries match prefix', () => {
     const transport = createMockTransport()
-    transport.set('plan:abc', { id: 'abc' })
+    transport.put('plan:abc', { id: 'abc' })
 
     const { result } = renderHook(() => transport.useDocumentList('task:'))
 
@@ -124,8 +124,8 @@ describe('createMockTransport — useDocumentList', () => {
 
   it('supports filter option for narrowing results', () => {
     const transport = createMockTransport()
-    transport.set('tasklist:l1', { id: 'l1', planId: 'plan-1' })
-    transport.set('tasklist:l2', { id: 'l2', planId: 'plan-2' })
+    transport.put('tasklist:l1', { id: 'l1', planId: 'plan-1' })
+    transport.put('tasklist:l2', { id: 'l2', planId: 'plan-2' })
 
     const { result } = renderHook(() => transport.useDocumentList('tasklist:', { filter: { planId: 'plan-1' } }))
 
@@ -142,7 +142,7 @@ describe('createMockTransport — useDocumentList', () => {
     expect(result.current).toHaveLength(0)
 
     act(() => {
-      transport.set('task:list-1:t1', { id: 't1', label: 'New task' })
+      transport.put('task:list-1:t1', { id: 't1', label: 'New task' })
     })
 
     expect(result.current).toHaveLength(1)
@@ -155,8 +155,8 @@ describe('createMockTransport — useDocumentList', () => {
 describe('createMockTransport — getData', () => {
   it('exposes the raw data map for assertions', () => {
     const transport = createMockTransport()
-    transport.set('key-1', { a: 1 })
-    transport.set('key-2', { b: 2 })
+    transport.put('key-1', { a: 1 })
+    transport.put('key-2', { b: 2 })
 
     const data = transport.getData()
 
@@ -167,7 +167,7 @@ describe('createMockTransport — getData', () => {
 
   it('reflects deletions in the raw data map', () => {
     const transport = createMockTransport()
-    transport.set('key-1', { a: 1 })
+    transport.put('key-1', { a: 1 })
     transport.delete('key-1')
 
     expect(transport.getData().size).toBe(0)

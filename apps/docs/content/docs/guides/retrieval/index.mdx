@@ -9,7 +9,7 @@ The useful mental model is two paths:
 
 ```txt
 Write path:
-source -> loader -> corpus.sync() -> indexer() -> records in DataStore + vectors in VectorStore
+source -> loader -> corpus.sync() -> indexer() -> records in RecordStore + vectors in VectorStore
                                       ^
                                       |
                                 embedding()
@@ -18,7 +18,7 @@ Read path:
 question -> retriever() -> hits -> prompt context or tools
                ^
                |
-         embedding() + DataStore + VectorStore
+         embedding() + RecordStore + VectorStore
 
 Optional read layers:
 retrievalPipeline(retriever) -> better selected hits
@@ -46,7 +46,7 @@ import { prompt } from '@use-crux/core'
 import { embedding } from '@use-crux/openai'
 import { corpus, indexer } from '@use-crux/core/indexing'
 import { retriever } from '@use-crux/core/retrieval'
-import { inMemoryDataStore, inMemoryVectorStore } from '@use-crux/core/storage'
+import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
 import { filesSource } from '@use-crux/ingest/files'
 import { z } from 'zod'
 
@@ -54,13 +54,13 @@ const dense = embedding({
   name: 'docs',
   model: 'text-embedding-3-small',
 })
-const data = inMemoryDataStore()
+const records = inMemoryRecordStore()
 const vectors = inMemoryVectorStore()
 
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
 })
@@ -68,7 +68,7 @@ const docsIndexer = indexer({
 const docsCorpus = corpus({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   indexer: docsIndexer,
 })
 
@@ -80,7 +80,7 @@ await docsCorpus.sync(
 const docs = retriever({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   context: {
@@ -104,7 +104,7 @@ You can add sparse embeddings and switch the retriever to hybrid mode without ch
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -113,7 +113,7 @@ const docsIndexer = indexer({
 const docs = retriever({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -163,7 +163,7 @@ Use `retrievalPipeline()` when the retriever finds candidates but needs better q
 ```ts
 const advancedDocs = retrievalPipeline(docs, [
   multiQuery({ generate, model, count: 4 }),
-  parentExpand({ store }),
+  parentExpand({ records }),
   diversify({ strategy: 'mmr', limit: 8 }),
 ])
 ```

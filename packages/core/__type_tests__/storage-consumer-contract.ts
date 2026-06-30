@@ -6,13 +6,19 @@
  */
 
 import { expectTypeOf } from 'vitest'
+import { blackboard } from '../agent'
 import { createSemanticCache } from '../cache'
+import { createSlidingWindow, type GenerateTextFn } from '../compaction'
 import { embeddingCache, type DenseEmbedding } from '../embedding'
 import { indexer } from '../indexing'
+import { memory, recentMessages } from '../memory'
 import { retriever } from '../retrieval'
+import { config } from '../runtime'
+import { handoff } from '../agent'
 import { inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore, storage } from '../storage'
 import type { RecordStore, Storage, VectorStore } from '../storage'
 import { workspace, type WorkspaceConfig } from '../workspace'
+import { z } from 'zod'
 
 declare const records: RecordStore
 declare const vectors: VectorStore
@@ -121,11 +127,95 @@ createSemanticCache({
 })
 
 createSemanticCache({
-  // @ts-expect-error - semantic cache no longer accepts a legacy combined store.
+  // @ts-expect-error - semantic cache requires explicit storage, records, or vectors fields.
   store: inMemoryStorage(),
   embedding: dense,
   ttl: 60_000,
   scope: 'global',
+})
+
+config({
+  persistence: {
+    records,
+  },
+})
+
+config({
+  persistence: {
+    // @ts-expect-error - runtime persistence uses `records`, not legacy `store`.
+    store: records,
+  },
+})
+
+memory({
+  id: 'profile',
+  namespace: 'user:1',
+  storage: betaStorage,
+  blocks: [recentMessages({ id: 'recent' })],
+})
+
+memory({
+  id: 'profile',
+  namespace: 'user:1',
+  records,
+  vectors,
+  blocks: [recentMessages({ id: 'recent' })],
+})
+
+memory({
+  id: 'profile',
+  namespace: 'user:1',
+  // @ts-expect-error - memory() uses `records`/`storage`, not legacy `store`.
+  store: records,
+  blocks: [recentMessages({ id: 'recent' })],
+})
+
+blackboard({
+  id: 'team',
+  schema: z.object({ status: z.string() }),
+  records,
+})
+
+blackboard({
+  id: 'team',
+  schema: z.object({ status: z.string() }),
+  // @ts-expect-error - blackboard() uses `records`, not legacy `store`.
+  store: records,
+})
+
+handoff({
+  id: 'research-to-write',
+  inputSchema: z.object({ findings: z.string() }),
+  outputSchema: z.object({ brief: z.string() }),
+  transform: (input) => ({ brief: input.findings }),
+  records,
+})
+
+handoff({
+  id: 'research-to-write',
+  inputSchema: z.object({ findings: z.string() }),
+  outputSchema: z.object({ brief: z.string() }),
+  transform: (input) => ({ brief: input.findings }),
+  // @ts-expect-error - handoff() uses `records`, not legacy `store`.
+  store: records,
+})
+
+const generate: GenerateTextFn = async () => ({ text: 'summary' })
+createSlidingWindow({
+  id: 'chat',
+  windowSize: 3,
+  generate,
+  model: {},
+  records,
+})
+
+createSlidingWindow({
+  id: 'chat',
+  windowSize: 3,
+  generate,
+  model: {},
+  // @ts-expect-error - compaction uses `records`, not legacy `store`.
+  store: records,
 })
 
 void inMemoryRecordStore

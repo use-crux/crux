@@ -2,7 +2,7 @@
  * Stateful rolling context compaction with a sliding message window.
  *
  * Maintains a running summary of evicted messages plus a window of recent
- * messages kept verbatim. Uses `MemoryStore` for persistence and
+ * messages kept verbatim. Uses `RecordStore` for persistence and
  * `summarizeMessages()` for compaction.
  *
  * @module
@@ -10,10 +10,9 @@
 
 import type { Message } from '../generation/messages'
 import type { SlidingWindowConfig, SlidingWindow, SlidingWindowStats } from './types'
-import { inMemoryCruxStore } from '../store/memory'
+import { inMemoryRecordStore } from '../storage'
 import { countTokens } from '../shared/tokenizer'
 import { summarizeMessages } from './summarize'
-import { getRuntime } from '../runtime/runtime'
 
 /**
  * Create a stateful sliding window compaction manager.
@@ -27,7 +26,7 @@ import { getRuntime } from '../runtime/runtime'
  */
 export function createSlidingWindow(config: SlidingWindowConfig): SlidingWindow {
   const { windowSize, generate, model, summaryBudget = 1000, id = 'default' } = config
-  const store = config.store ?? inMemoryCruxStore()
+  const records = config.records ?? inMemoryRecordStore()
 
   const summaryKey = `compact:${id}:summary`
   const messagesKey = `compact:${id}:messages`
@@ -38,26 +37,26 @@ export function createSlidingWindow(config: SlidingWindowConfig): SlidingWindow 
   let summaryTokens = 0
 
   async function loadMessages(): Promise<Message[]> {
-    const entry = await store.get(messagesKey)
+    const entry = await records.get(messagesKey)
     if (!entry) return []
     return JSON.parse(entry.content as string) as Message[]
   }
 
   async function saveMessages(messages: Message[]): Promise<void> {
-    await store.set(messagesKey, {
+    await records.put(messagesKey, {
       content: JSON.stringify(messages),
       metadata: { type: 'sliding-window-messages', windowId: id },
     })
   }
 
   async function loadSummary(): Promise<string> {
-    const entry = await store.get(summaryKey)
+    const entry = await records.get(summaryKey)
     return (entry?.content as string) ?? ''
   }
 
   async function saveSummary(summary: string): Promise<void> {
     summaryTokens = countTokens(summary)
-    await store.set(summaryKey, {
+    await records.put(summaryKey, {
       content: summary,
       metadata: { type: 'sliding-window-summary', windowId: id },
     })

@@ -1,23 +1,23 @@
 ---
 title: Postgres Storage
-description: Implement durable Crux DataStore, pgvector VectorStore, and bytea BlobStore adapters on Postgres.
+description: Implement durable Crux RecordStore, pgvector VectorStore, and bytea BlobStore adapters on Postgres.
 ---
 
-Use a `DataStore` when Crux needs durable JSON records. Postgres is a good fit when your app already uses it for product data and you want memory, flow state, corpus ledgers, and workspace metadata in the same operational database.
+Use a `RecordStore` when Crux needs durable JSON records. Postgres is a good fit when your app already uses it for product data and you want corpus ledgers, retrieval chunks, workspace metadata, and other Storage Beta records in the same operational database.
 
-This recipe starts with a `DataStore`, then shows optional Postgres-backed vector and blob storage. You can use only the pieces you need:
+This recipe starts with a `RecordStore`, then shows optional Postgres-backed vector and blob storage. You can use only the pieces you need:
 
 ```ts
-const data = postgresDataStore(pool)
+const records = postgresRecordStore(pool)
 const vectors = postgresVectorStore(pool) // optional, dense pgvector search
 const blobs = postgresBlobStore(pool)     // optional, modest bytea-backed files
 ```
 
 For large production files, object storage such as S3, R2, GCS, or Convex file storage is usually a better `BlobStore` than Postgres. Use the Postgres blob example when you deliberately want one operational database and the files are modest in size.
 
-## DataStore
+## RecordStore
 
-Implement the `DataStore` interface with a single table:
+Implement the `RecordStore` interface with a single table:
 
 ```sql
 create table crux_records (
@@ -39,11 +39,12 @@ This example uses `pg`, but the same shape works with Prisma, Drizzle, Kysely, N
 
 ```ts
 import type {
-  DataStore,
+  ExactFilter,
   JsonObject,
-  ListOptions,
-  ListResult,
-  SetOptions,
+  RecordListOptions,
+  RecordPage,
+  RecordStore,
+  RecordWriteOptions,
 } from '@use-crux/core/storage'
 
 type Row = {
@@ -58,8 +59,10 @@ type Queryable = {
   ): Promise<{ rows: T[] }>
 }
 
-export function postgresDataStore(pool: Queryable): DataStore {
+export function postgresRecordStore(pool: Queryable): RecordStore {
   return {
+    _tag: 'RecordStore',
+
     async get(key) {
       await pool.query(
         `
@@ -82,10 +85,10 @@ export function postgresDataStore(pool: Queryable): DataStore {
       return row.rows[0]?.value ?? null
     },
 
-    async set(key, value, options?: SetOptions) {
+    async put(key, value, options?: RecordWriteOptions) {
       const expiresAt =
-        options?.ttl !== undefined && options.ttl > 0
-          ? new Date(Date.now() + options.ttl)
+        options?.ttlMs !== undefined
+          ? new Date(Date.now() + options.ttlMs)
           : null
 
       await pool.query(
@@ -101,44 +104,81 @@ export function postgresDataStore(pool: Queryable): DataStore {
       )
     },
 
+    async create(key, value, options?: RecordWriteOptions) {
+      const expiresAt =
+        options?.ttlMs !== undefined
+          ? new Date(Date.now() + options.ttlMs)
+          : null
+
+      const result = await pool.query<{ key: string }>(
+        `
+        insert into crux_records (key, value, expires_at, updated_at)
+        values ($1, $2::jsonb, $3, now())
+        on conflict (key) do nothing
+        returning key
+        `,
+        [key, JSON.stringify(value), expiresAt],
+      )
+
+      return result.rows.length === 1
+    },
+
     async delete(key) {
       await pool.query('delete from crux_records where key = $1', [key])
     },
 
-    async list(prefix, options?: ListOptions): Promise<ListResult> {
+    async list(prefix, options?: RecordListOptions): Promise<RecordPage> {
       const limit = options?.limit ?? 100
-      const rows = await pool.query<Row>(
-        `
-        select key, value
-        from crux_records
-        where key like $1
-          escape '\\'
-          and ($2::text is null or key > $2)
-          and (expires_at is null or expires_at > now())
-        order by key asc
-        limit $3
-        `,
-        [`${escapeLike(prefix)}%`, options?.cursor ?? null, limit + 1],
-      )
+      if (limit === 0) return { entries: [] }
 
-      const visibleRows = options?.filter
-        ? rows.rows.filter((row) => matchesTopLevelFilter(row.value, options.filter!))
-        : rows.rows
+      const entries: { key: string; value: JsonObject }[] = []
+      let cursor = options?.cursor ?? null
+      let hasMore = false
 
-      const entries = visibleRows.slice(0, limit).map((row) => ({
-        key: row.key,
-        value: row.value,
-      }))
+      while (entries.length < limit) {
+        const rows = await pool.query<Row>(
+          `
+          select key, value
+          from crux_records
+          where key like $1
+            escape '\\'
+            and ($2::text is null or key > $2)
+            and (expires_at is null or expires_at > now())
+          order by key asc
+          limit $3
+          `,
+          [`${escapeLike(prefix)}%`, cursor, Math.max(limit + 1, 100)],
+        )
 
-      return {
-        entries,
-        cursor: visibleRows.length > limit ? entries.at(-1)?.key : undefined,
+        const pageHasMore = rows.rows.length === Math.max(limit + 1, 100)
+        const scannedRows = pageHasMore ? rows.rows.slice(0, -1) : rows.rows
+
+        for (let index = 0; index < scannedRows.length; index++) {
+          const row = scannedRows[index]!
+          cursor = row.key
+          if (!options?.filter || matchesTopLevelFilter(row.value, options.filter)) {
+            entries.push({ key: row.key, value: row.value })
+          }
+          if (entries.length >= limit) {
+            hasMore = pageHasMore || index < scannedRows.length - 1
+            break
+          }
+        }
+
+        if (hasMore || !pageHasMore || scannedRows.length === 0) break
       }
+
+      return entries.length >= limit && hasMore
+        ? { entries, cursor: cursor ?? undefined }
+        : { entries }
     },
 
-    supportsTtl() {
-      return true
-    },
+    capabilities: () => ({
+      ttl: 'native',
+      filter: 'scan',
+      watch: false,
+      batch: false,
+    }),
   }
 }
 
@@ -148,11 +188,11 @@ function escapeLike(value: string): string {
 
 function matchesTopLevelFilter(
   value: JsonObject,
-  filter: Record<string, unknown>,
+  filter: ExactFilter,
 ): boolean {
   return Object.entries(filter).every(([key, expected]) => {
     const actual = value[key]
-    return expected === null ? actual === null || actual === undefined : actual === expected
+    return expected === null ? actual === null : actual === expected
   })
 }
 ```
@@ -232,11 +272,8 @@ export function postgresVectorStore(pool: Queryable): VectorStore {
     },
 
     async search(query: VectorSearchQuery): Promise<readonly VectorHit[]> {
-      if (!query.dense) {
+      if (query.mode !== 'dense') {
         throw new Error('postgresVectorStore() supports dense search only.')
-      }
-      if (query.sparse) {
-        throw new Error('postgresVectorStore() does not support sparse or hybrid search.')
       }
 
       const limit = query.limit ?? 10
@@ -270,7 +307,14 @@ export function postgresVectorStore(pool: Queryable): VectorStore {
     },
 
     capabilities() {
-      return { dense: true, sparse: false, hybrid: false }
+      return {
+        dense: true,
+        sparse: false,
+        hybrid: false,
+        fusion: [],
+        filter: 'pre',
+        consistency: 'strong',
+      }
     },
   }
 }
@@ -293,13 +337,13 @@ function toPgVector(vector: readonly number[]): string {
 Use it with indexing and retrieval:
 
 ```ts
-const data = postgresDataStore(pool)
+const records = postgresRecordStore(pool)
 const vectors = postgresVectorStore(pool)
 
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'docs',
-  data,
+  records,
   vectors,
   dense,
 })
@@ -307,7 +351,7 @@ const docsIndexer = indexer({
 const docs = retriever({
   id: 'docs',
   namespace: 'docs',
-  data,
+  records,
   vectors,
   dense,
   search: { mode: 'dense', limit: 8 },
@@ -404,7 +448,11 @@ export function postgresBlobStore(pool: Queryable): BlobStore {
     },
 
     capabilities() {
-      return { maxBytes: 10 * 1024 * 1024 }
+      return {
+        multipart: false,
+        signedUrls: false,
+        maxBytes: 10 * 1024 * 1024,
+      }
     },
   }
 }
@@ -446,7 +494,7 @@ const files = workspace({
   id: 'thread-files',
   namespace: threadId,
   storage: storage({
-    data: postgresDataStore(pool),
+    records: postgresRecordStore(pool),
     blobs: postgresBlobStore(pool),
   }),
 })
@@ -459,28 +507,18 @@ await files.write('/outputs/report.pdf', pdfBytes, {
 ## Use It
 
 ```ts
-import { memory, workingState } from '@use-crux/core/memory'
+import { indexer } from '@use-crux/core/indexing'
+import { retriever } from '@use-crux/core/retrieval'
 import { Pool } from 'pg'
 
-const data = postgresDataStore(
-  new Pool({ connectionString: process.env.DATABASE_URL }),
-)
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+const records = postgresRecordStore(pool)
+const vectors = postgresVectorStore(pool)
 
-const mem = memory({
-  id: 'assistant',
-  namespace: `user:${userId}`,
-  store: data,
-  blocks: [workingState({ id: 'profile', schema })],
-})
-```
-
-For retrieval, pair Postgres data with either the pgvector store above or another vector store:
-
-```ts
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'docs',
-  data,
+  records,
   vectors,
   dense,
 })
@@ -488,7 +526,7 @@ const docsIndexer = indexer({
 const docs = retriever({
   id: 'docs',
   namespace: 'docs',
-  data,
+  records,
   vectors,
   dense,
 })
@@ -516,7 +554,7 @@ For blob storage, keep a hard size limit if you use Postgres `bytea`. Store larg
 ## Related
 
 <Cards>
-  <Card title="DataStore guide" description="The full DataStore contract and adapter expectations." href="/docs/guides/storage/crux-store" />
+  <Card title="RecordStore guide" description="The full RecordStore contract and adapter expectations." href="/docs/guides/storage/crux-store" />
   <Card title="VectorStore guide" description="Pair Postgres records with vector search." href="/docs/guides/storage/vector-store" />
   <Card title="BlobStore guide" description="Store workspace bytes in object storage." href="/docs/guides/storage/blob-storage" />
 </Cards>

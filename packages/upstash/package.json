@@ -1,7 +1,7 @@
 {
   "name": "@use-crux/upstash",
   "version": "0.3.0",
-  "description": "Upstash Vector and Redis CruxStore adapters for Crux — vector retrieval and semantic caching.",
+  "description": "Upstash VectorStore and Redis RecordStore adapters for Crux storage.",
   "license": "Apache-2.0",
   "private": true,
   "author": "Crux",
@@ -28,11 +28,6 @@
       "types": "./index.ts",
       "import": "./index.ts",
       "require": "./index.ts"
-    },
-    "./redis": {
-      "types": "./redis.ts",
-      "import": "./redis.ts",
-      "require": "./redis.ts"
     }
   },
   "dependencies": {

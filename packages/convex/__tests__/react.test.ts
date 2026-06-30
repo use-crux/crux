@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createConvexTransport } from '../react'
-import type { JsonObject } from '@use-crux/core/store'
+import type { JsonObject } from '@use-crux/core/storage'
 
 const api = {
   memory: {
@@ -32,7 +32,7 @@ describe('createConvexTransport document boundary', () => {
       },
     })
 
-    expect(() => malformed.transport.useDocument('memory:bad')).toThrow(/current Crux store format/i)
+    expect(() => malformed.transport.useDocument('memory:bad')).toThrow(/current Crux record format/i)
   })
 
   it('suppresses expired list documents and applies top-level filters', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { z } from 'zod'
-import { inMemoryCruxStore } from '../../store/memory'
+import { inMemoryRecordStore } from '../../storage'
 import { plan } from '../../plan/plans'
 import { task } from '../../plan/task-spec'
 import { getTaskList, tasks } from '../../plan/tasks'
@@ -9,8 +9,8 @@ import { updateRuntime, resetRuntime } from '../../runtime/runtime'
 
 /** Create a fresh store and register it in the runtime. */
 function setup() {
-  const store = inMemoryCruxStore()
-  updateRuntime({ store })
+  const store = inMemoryRecordStore()
+  updateRuntime({ records: store })
   return store
 }
 

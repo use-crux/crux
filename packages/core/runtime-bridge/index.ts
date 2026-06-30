@@ -136,6 +136,9 @@ export const EvalRunCommandPayloadSchema = z.object({
 })
 export type EvalRunCommandPayload = z.infer<typeof EvalRunCommandPayloadSchema>
 
+const ExactFilterValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()])
+const ExactFilterSchema = z.record(z.string(), ExactFilterValueSchema)
+
 export const StoreReadCommandPayloadSchema = z.discriminatedUnion('operation', [
   z.object({
     operation: z.literal('get'),
@@ -148,7 +151,7 @@ export const StoreReadCommandPayloadSchema = z.discriminatedUnion('operation', [
     prefix: z.string().optional(),
     limit: z.number().int().positive().max(500).optional(),
     cursor: z.string().min(1).optional(),
-    filter: z.record(z.string(), z.unknown()).optional(),
+    filter: ExactFilterSchema.optional(),
   }),
 ])
 export type StoreReadCommandPayload = z.infer<typeof StoreReadCommandPayloadSchema>
@@ -226,7 +229,7 @@ export interface RuntimeBridgeManifestInput {
   readonly quality?: {
     readonly id?: string
   }
-  readonly store?: unknown
+  readonly records?: unknown
 }
 
 export interface RuntimeBridgeManifestOptions {
@@ -464,7 +467,7 @@ async function executeStoreRead(input: RuntimeBridgeManifestInput, payload: Stor
       return await explicitResource.read({
         operation: 'get',
         key: payload.key,
-        store: explicitResource.store ?? readableStore(input.store),
+        store: explicitResource.store ?? readableStore(input.records),
       })
     }
     return await explicitResource.read({
@@ -475,13 +478,13 @@ async function executeStoreRead(input: RuntimeBridgeManifestInput, payload: Stor
         cursor: payload.cursor,
         filter: payload.filter,
       },
-      store: explicitResource.store ?? readableStore(input.store),
+      store: explicitResource.store ?? readableStore(input.records),
     })
   }
 
-  const store = explicitResource?.store ?? readableStore(input.store)
-  if (!isReadableCruxStore(store)) {
-    throw new BridgeCommandExecutionError('store_unavailable', 'No readable CruxStore is configured.')
+  const store = explicitResource?.store ?? readableStore(input.records)
+  if (!isReadableRecordStore(store)) {
+    throw new BridgeCommandExecutionError('store_unavailable', 'No readable RecordStore is configured.')
   }
 
   const resolved = explicitResource ?? inferStoreResource(payload.resource)
@@ -508,11 +511,11 @@ async function executeStoreRead(input: RuntimeBridgeManifestInput, payload: Stor
 
 function deriveStoreResources(input: RuntimeBridgeManifestInput): BridgeStoreResource[] {
   const resources = new Map<string, BridgeStoreResource>()
-  if (input.store) {
+  if (input.records) {
     resources.set('crux.store', {
       resource: 'crux.store',
       operations: ['get', 'list'],
-      description: 'Configured CruxStore key-value resources',
+      description: 'Configured record store resources',
       kind: 'store',
     })
   }
@@ -542,10 +545,10 @@ function inferStoreResource(
 }
 
 function readableStore(value: unknown): InspectableReadableStore | undefined {
-  return isReadableCruxStore(value) ? value : undefined
+  return isReadableRecordStore(value) ? value : undefined
 }
 
-function isReadableCruxStore(value: unknown): value is InspectableReadableStore {
+function isReadableRecordStore(value: unknown): value is InspectableReadableStore {
   return (
     !!value &&
     typeof value === 'object' &&

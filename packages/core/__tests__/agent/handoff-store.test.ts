@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { z } from 'zod'
 import { handoff as cruxHandoff } from '../../agent/handoff'
-import { inMemoryCruxStore } from '../../store/memory'
+import { inMemoryRecordStore } from '../../storage'
 import type { GenerateTextFn } from '../../compaction/types'
 
 const inputSchema = z.object({
@@ -36,10 +36,10 @@ function makeHandoff(overrides?: Record<string, unknown>) {
 }
 
 describe('handoff send/receive (store-backed)', () => {
-  let store: ReturnType<typeof inMemoryCruxStore>
+  let store: ReturnType<typeof inMemoryRecordStore>
 
   beforeEach(() => {
-    store = inMemoryCruxStore()
+    store = inMemoryRecordStore()
   })
 
 describe('send()', () => {

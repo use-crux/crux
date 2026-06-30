@@ -12,7 +12,7 @@
  * @module
  */
 
-export type { SparseVector } from '../store/types'
+export type { SparseVector } from '../storage'
 
 export { transform, chunker, indexingPipeline } from './pipeline'
 export { indexer } from './define-indexer'

@@ -1,5 +1,5 @@
 import { observe } from '../observability'
-import type { JsonObject } from '../store/types'
+import type { JsonObject } from '../storage'
 import type { FetchedRegistrySkill } from './registry-fetch'
 
 /**
@@ -27,7 +27,13 @@ export function emitRegistrySkillArtifact(
         name: reference.name,
         contentPreview: reference.content.slice(0, 200),
       })),
-      meta: result.meta,
+      meta: {
+        name: result.meta.name,
+        description: result.meta.description,
+        ...(result.meta.version ? { version: result.meta.version } : {}),
+        ...(result.meta.license ? { license: result.meta.license } : {}),
+        ...(result.meta.tags ? { tags: [...result.meta.tags] } : {}),
+      },
     } satisfies JsonObject,
     attributes: {
       primitive: 'skill.load',

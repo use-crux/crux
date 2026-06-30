@@ -59,11 +59,11 @@ const writerPrompt = prompt({
 
 ## Stored handoff
 
-For distributed agents that run in separate processes, actions, or serverless functions, provide a `store` to enable `send()` and `receive()`. Convex apps use `defineConvexStoreContract().store(ctx)` and Crux-aware action boundaries; see the [Convex storage and boundary guides](/docs/guides/convex/storage-memory-workspaces) for the complete setup.
+For distributed agents that run in separate processes, actions, or serverless functions, provide `records` to enable `send()` and `receive()`. Convex apps use `convexRecordStore({ component, ctx })` and Crux-aware action boundaries; see the [Convex storage and boundary guides](/docs/guides/convex/storage-memory-workspaces) for the complete setup.
 
 <Callout type="warn">
-  `send()` and `receive()` throw if `store` is not configured. The stateless `prepare()` and `asContext()` work without
-  a store.
+  `send()` and `receive()` throw if `records` is not configured. The stateless `prepare()` and `asContext()` work without
+  records.
 </Callout>
 
 ## Instrumentation

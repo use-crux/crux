@@ -7,13 +7,13 @@
  * @example
  * ```tsx
  * import { CruxProvider, usePlan, useTasks } from '@use-crux/react'
- * import { defineConvexStoreContract } from '@use-crux/convex'
+ * import { createConvexTransport } from '@use-crux/convex'
  * import { useQuery } from 'convex/react'
  * import { components } from '../convex/_generated/api'
  *
- * const cruxDocuments = defineConvexStoreContract({ component: components.crux })
+ * const transport = createConvexTransport({ api: components.crux, useQuery })
  *
- * <CruxProvider transport={cruxDocuments.transport({ useQuery })}>
+ * <CruxProvider transport={transport}>
  *   <App />
  * </CruxProvider>
  *

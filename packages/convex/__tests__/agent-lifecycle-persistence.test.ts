@@ -4,7 +4,7 @@ import { resetObservabilityRuntime } from '@use-crux/core/observability'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createProfileBackedAgentLifecycle } from '../agent/lifecycle'
-import { inMemoryCruxStore, memory, recentMessages } from '../memory'
+import { inMemoryRecordStore, memory, recentMessages } from '../memory'
 import { skill } from '../skill'
 import { FakeConvexAgentDriver } from './fixtures/fakeAgentDriver'
 
@@ -16,7 +16,7 @@ describe('profile-backed Convex Agent persistence lifecycle', () => {
 
   it('persists active skill ids and hydrates them into later turns through the active Crux store', async () => {
     const driver = new FakeConvexAgentDriver()
-    const store = inMemoryCruxStore()
+    const store = inMemoryRecordStore()
     driver.onGenerateText = async ({ args }) => {
       const tools = args.tools as Record<
         string,
@@ -51,7 +51,7 @@ describe('profile-backed Convex Agent persistence lifecycle', () => {
       model: {} as LanguageModelV3,
       name: 'Skill Agent',
       prompt: basePrompt,
-      store: () => store,
+      storage: () => store,
     })
 
     await lifecycle.invokeText({
@@ -83,7 +83,7 @@ describe('profile-backed Convex Agent persistence lifecycle', () => {
   it('keeps generated text successful when best-effort memory capture persistence fails', async () => {
     const driver = new FakeConvexAgentDriver()
     const failingStore = {
-      ...inMemoryCruxStore(),
+      ...inMemoryRecordStore(),
       set: async () => {
         throw new Error('store write failed')
       },
@@ -107,7 +107,7 @@ describe('profile-backed Convex Agent persistence lifecycle', () => {
       model: {} as LanguageModelV3,
       name: 'Memory Agent',
       prompt: basePrompt,
-      store: () => failingStore,
+      storage: () => failingStore,
     })
 
     await expect(

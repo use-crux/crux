@@ -2,14 +2,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { taskListKey } from '../../plan/helpers'
 import { getTaskList, tasks } from '../../plan/tasks'
 import { resetRuntime, updateRuntime } from '../../runtime/runtime'
-import type { CruxStore, JsonObject, ListOptions, ListResult, SetOptions } from '../../store'
-import { inMemoryCruxStore } from '../../store/memory'
+import type { JsonObject, RecordListOptions, RecordPage, RecordStore, RecordWriteOptions } from '../../storage'
+import { inMemoryRecordStore } from '../../storage'
 
-/** Create a fresh store and register it in the runtime. */
+/** Create fresh records and register them in the runtime. */
 function setup() {
-  const store = inMemoryCruxStore()
-  updateRuntime({ store })
-  return store
+  const records = inMemoryRecordStore()
+  updateRuntime({ records })
+  return records
 }
 
 /** Expect a typed task lifecycle error without depending on class identity. */
@@ -45,7 +45,7 @@ describe('TaskList state correctness', () => {
 
   it('rejects concurrent duplicate task IDs atomically', async () => {
     const store = createDuplicateInsertRaceStore()
-    updateRuntime({ store })
+    updateRuntime({ records: store })
     const handle = await tasks()
 
     const results = await Promise.allSettled([
@@ -186,7 +186,7 @@ describe('TaskList state correctness', () => {
 
     const key = taskListKey(handle.id)
     const rawList = await store.get(key)
-    await store.set(key, {
+    await store.put(key, {
       ...rawList!,
       status: 'pending',
       counts: {
@@ -218,7 +218,7 @@ describe('TaskList state correctness', () => {
 
     const key = taskListKey(handle.id)
     const rawList = await store.get(key)
-    await store.set(`task:${handle.id}:t2`, {
+    await store.put(`task:${handle.id}:t2`, {
       id: 't2',
       taskListId: handle.id,
       label: 'Task 2',
@@ -234,8 +234,8 @@ describe('TaskList state correctness', () => {
   })
 })
 
-function createDuplicateInsertRaceStore(): CruxStore {
-  const base = inMemoryCruxStore()
+function createDuplicateInsertRaceStore(): RecordStore {
+  const base = inMemoryRecordStore()
   let taskKey: string | undefined
   let waitingTaskInserts = 0
   let releaseInserts: (() => void) | undefined
@@ -247,10 +247,10 @@ function createDuplicateInsertRaceStore(): CruxStore {
     async get(key: string): Promise<JsonObject | null> {
       return base.get(key)
     },
-    set(key: string, value: JsonObject, options?: SetOptions): Promise<void> {
-      return base.set(key, value, options)
+    put(key: string, value: JsonObject, options?: RecordWriteOptions): Promise<void> {
+      return base.put(key, value, options)
     },
-    async setIfAbsent(key: string, value: JsonObject, options?: SetOptions): Promise<boolean> {
+    async create(key: string, value: JsonObject, options?: RecordWriteOptions): Promise<boolean> {
       if (key.startsWith('task:') && !taskKey) {
         taskKey = key
       }
@@ -259,16 +259,15 @@ function createDuplicateInsertRaceStore(): CruxStore {
         if (waitingTaskInserts === 2) releaseInserts?.()
         await releasePromise
       }
-      return base.setIfAbsent(key, value, options)
+      return base.create(key, value, options)
     },
     delete(key: string): Promise<void> {
       return base.delete(key)
     },
-    list(prefix: string, options?: ListOptions): Promise<ListResult> {
+    list(prefix: string, options?: RecordListOptions): Promise<RecordPage> {
       return base.list(prefix, options)
     },
-    subscribe: base.subscribe?.bind(base),
-    supportsTtl: base.supportsTtl?.bind(base),
-    capabilities: base.capabilities?.bind(base),
+    watch: base.watch?.bind(base),
+    capabilities: base.capabilities,
   }
 }

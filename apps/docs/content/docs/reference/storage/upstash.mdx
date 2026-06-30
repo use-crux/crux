@@ -134,11 +134,7 @@ const docs = retriever({
 
 Filtered retrieval requires a vector store with `capabilities().filter === 'pre'`.
 
-## Compatibility Stores
-
-`cruxRedisStore()` and `cruxUpstashStore()` remain available for callers that have not migrated from the legacy combined `CruxStore` shape. They are not the Storage Beta API.
-
-New code should prefer:
+## Recommended Wiring
 
 - `upstashRedisRecordStore()` for Redis-backed records
 - `upstashVectorStore()` for Upstash Vector search

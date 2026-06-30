@@ -1,9 +1,9 @@
 /**
- * Normalized Convex store document component helpers.
+ * Normalized Convex storage document component helpers.
  *
  * These helpers keep the public contract ergonomic for generated Convex
  * components while giving tests and alternate runtimes a single component
- * substitute that drives server stores and React reads from the same records.
+ * substitute that drives server record storage and React reads from the same records.
  *
  * @module
  */
@@ -11,8 +11,8 @@
 import { createConvexTransport, type UseQueryFn } from './react'
 import type { ConvexCtxPort } from './store'
 import type {
-  ConvexCruxStoreComponent,
-  ConvexCruxStoreMemoryComponent,
+  ConvexCruxStorageComponent,
+  ConvexCruxStorageMemoryComponent,
   ConvexStoreDocumentComponent,
   ConvexStoreDocumentComponentIoOptions,
   ConvexStoreDocumentComponentReadOptions,
@@ -29,13 +29,13 @@ import { STORE_DOC_COMPONENT_SPEC } from './store-doc'
 
 /** Options for `createInMemoryConvexStoreDocumentComponent()`. */
 export interface InMemoryConvexStoreDocumentComponentOptions {
-  /** Initial raw documents available to server stores and React reads. */
+  /** Initial raw documents available to server storage adapters and React reads. */
   readonly docs?: readonly StoreDocRecord[]
   /**
    * Optional dense-search substitute.
    *
    * Return documents in relevance order and include `_score` on records when a
-   * vector score should be surfaced by `CruxStore.searchVectors()`.
+   * vector score should be surfaced by `VectorStore.search()`.
    */
   readonly denseSearch?: (query: StoreDocDenseSearchQuery, docs: readonly StoreDocRecord[]) => readonly StoreDocRecord[]
 }
@@ -44,11 +44,11 @@ export interface InMemoryConvexStoreDocumentComponentOptions {
  * In-memory normalized component for boundary tests.
  *
  * The fake exposes generated-like refs, a server ctx, a `useQuery` substitute,
- * and the normalized component methods expected by `defineConvexStoreContract`.
+ * and the normalized component methods expected by the Convex storage adapters.
  */
 export interface InMemoryConvexStoreDocumentComponent extends ConvexStoreDocumentComponent<ConvexCtxPort> {
   /** Generated-like memory refs, also exposed at the top level for compatibility. */
-  readonly memory: ConvexCruxStoreMemoryComponent
+  readonly memory: ConvexCruxStorageMemoryComponent
   /** Structural Convex ctx substitute backed by the in-memory records. */
   readonly ctx: ConvexCtxPort
   /** Convex `useQuery` substitute backed by the in-memory records. */
@@ -59,7 +59,7 @@ export interface InMemoryConvexStoreDocumentComponent extends ConvexStoreDocumen
 
 /** Return whether a component uses the normalized document component contract. */
 export function isConvexStoreDocumentComponent<TCtx extends ConvexCtxPort>(
-  component: ConvexCruxStoreComponent | ConvexStoreDocumentComponent<TCtx>,
+  component: ConvexCruxStorageComponent | ConvexStoreDocumentComponent<TCtx>,
 ): component is ConvexStoreDocumentComponent<TCtx> {
   return (
     typeof (component as Partial<ConvexStoreDocumentComponent<TCtx>>).io === 'function' &&
@@ -77,7 +77,7 @@ export function isConvexStoreDocumentComponent<TCtx extends ConvexCtxPort>(
 export function createInMemoryConvexStoreDocumentComponent(
   options: InMemoryConvexStoreDocumentComponentOptions = {},
 ): InMemoryConvexStoreDocumentComponent {
-  const refs: ConvexCruxStoreComponent = {
+  const refs: ConvexCruxStorageComponent = {
     memory: {
       get: Symbol('memory.get'),
       list: Symbol('memory.list'),

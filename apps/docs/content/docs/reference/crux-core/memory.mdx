@@ -58,7 +58,7 @@ prompt({
 ```ts
 interface MemoryConfig {
   id: string;
-  store?: CruxStore;
+  store?: RecordStore;
   namespace:
     | string
     | ((ctx: {
@@ -149,7 +149,7 @@ Direct block methods accept:
 
 ```ts
 type MemoryRuntimeOptions = {
-  store: CruxStore;
+  records: RecordStore;
   namespace: string;
   memoryId?: string;
   traceId?: string;

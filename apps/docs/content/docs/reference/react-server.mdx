@@ -1,6 +1,6 @@
 ---
 title: '@use-crux/react/server'
-description: Server-side SSE handler for streaming CruxStore changes to the browser.
+description: Server-side SSE handler for streaming RecordStore changes to the browser.
 ---
 
 ```ts
@@ -10,15 +10,15 @@ import type { CruxSSEHandlerOptions } from '@use-crux/react/server'
 
 ## Overview
 
-The server subpath provides `cruxSSEHandler()` -- a Server-Sent Events endpoint that subscribes to `CruxStore.subscribe()` and streams `data-crux` events to connected clients. Pair it with `createSSETransport()` on the client side for real-time reactive updates.
+The server subpath provides `cruxSSEHandler()` -- a Server-Sent Events endpoint that subscribes to `RecordStore.subscribe()` and streams `data-crux` events to connected clients. Pair it with `createSSETransport()` on the client side for real-time reactive updates.
 
 ## `cruxSSEHandler(options)`
 
-Create an SSE endpoint handler for streaming CruxStore changes. Returns a function compatible with Next.js App Router `GET` handlers, or any framework that expects `(request: Request) => Response`.
+Create an SSE endpoint handler for streaming RecordStore changes. Returns a function compatible with Next.js App Router `GET` handlers, or any framework that expects `(request: Request) => Response`.
 
 | Parameter        | Type        | Description                                                                            |
 | ---------------- | ----------- | -------------------------------------------------------------------------------------- |
-| `options.store`  | `CruxStore` | The CruxStore to subscribe to. Must implement `subscribe()`.                           |
+| `options.store`  | `RecordStore` | The RecordStore to subscribe to. Must implement `subscribe()`.                           |
 | `options.prefix` | `string?`   | Key prefix filter. Only events for matching keys are sent. Default: `''` (all events). |
 
 **Returns:** `(request: Request) => Response`
@@ -99,7 +99,7 @@ import type { CruxSSEHandlerOptions } from '@use-crux/react/server'
 
 | Field    | Type        | Description                                                  |
 | -------- | ----------- | ------------------------------------------------------------ |
-| `store`  | `CruxStore` | The CruxStore to subscribe to. Must implement `subscribe()`. |
+| `store`  | `RecordStore` | The RecordStore to subscribe to. Must implement `subscribe()`. |
 | `prefix` | `string?`   | Key prefix filter. Default: `''`.                            |
 
 ## Related

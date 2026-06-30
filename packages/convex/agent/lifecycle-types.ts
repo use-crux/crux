@@ -1,7 +1,7 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
 import type { ContextEntry, MergedInput, Prompt, PromptConfig, ResolvedPrompt } from '@use-crux/core'
 import type { CruxAttributes } from '@use-crux/core/observability'
-import type { CruxStore } from '@use-crux/core/store'
+import type { RecordStore, Storage } from '@use-crux/core/storage'
 import type { z } from 'zod'
 import type { ComponentApi } from '../src/component/_generated/component'
 import type { ConvexRuntimeTarget } from '../runtime'
@@ -151,17 +151,17 @@ export type ProfileBackedAgentLifecycleBaseConfig<TPrompt extends AnyConvexPromp
             readonly crux: ComponentApi
             readonly agent: unknown
           }
-          /** Request-scoped store factory. */
-          readonly store?: (ctx: unknown) => CruxStore | Promise<CruxStore>
+          /** Request-scoped storage factory. */
+          readonly storage?: (ctx: unknown) => Storage | RecordStore | Promise<Storage | RecordStore>
         }
       | {
-          /** Convex Agent component plus an optional Crux component when a custom store is supplied. */
+          /** Convex Agent component plus an optional Crux component when custom storage is supplied. */
           readonly components: {
             readonly crux?: ComponentApi
             readonly agent: unknown
           }
-          /** Request-scoped store factory. */
-          readonly store: (ctx: unknown) => CruxStore | Promise<CruxStore>
+          /** Request-scoped storage factory. */
+          readonly storage: (ctx: unknown) => Storage | RecordStore | Promise<Storage | RecordStore>
         }
     )
 

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { convexSkillActivationPersistence } from '../skill'
-import { inMemoryCruxStore } from '../memory'
+import { inMemoryRecordStore } from '../memory'
 import { runWithConvexCruxRuntime } from '../runtime'
 
 describe('convexSkillActivationPersistence', () => {
-  it('loads and saves skill activation snapshots through the active Crux store', async () => {
-    const store = inMemoryCruxStore()
+  it('loads and saves skill activation snapshots through the active Crux records', async () => {
+    const records = inMemoryRecordStore()
     const persistence = convexSkillActivationPersistence()
 
-    await runWithConvexCruxRuntime({ ctx: {}, store }, async () => {
+    await runWithConvexCruxRuntime({ ctx: {}, storage: { records }, records }, async () => {
       await persistence.save(
         { threadId: 'thread-1' },
         {
@@ -17,7 +17,7 @@ describe('convexSkillActivationPersistence', () => {
         },
       )
 
-      await expect(store.get('convex-agent:thread-1:skills')).resolves.toMatchObject({
+      await expect(records.get('convex-agent:thread-1:skills')).resolves.toMatchObject({
         activeSkillIds: ['seo'],
         injectedSkillIds: ['seo'],
       })

@@ -1,7 +1,7 @@
 /**
  * Blackboard — shared typed scratchpad for multi-agent coordination.
  *
- * Creates a schema-validated key-value board backed by `CruxStore`.
+ * Creates a schema-validated key-value board backed by `RecordStore`.
  * Multiple agents can read/write individual fields, subscribe to changes,
  * and expose the board as prompt context or focused agent tools.
  *
@@ -9,12 +9,11 @@
  */
 
 import { z } from 'zod'
-import type { CruxStore, ToolConfig } from '../store/types'
+import type { JsonObject, RecordStore } from '../storage'
 import type { Context } from '../prompt/context-types'
 import type { ToolDef } from '../types/tool'
-import { inMemoryCruxStore } from '../store/memory'
+import { inMemoryRecordStore } from '../storage'
 import { context } from '../prompt/context'
-import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
 import { registerInspectableResource } from '../runtime-bridge/resources'
 
@@ -39,6 +38,12 @@ export interface BlackboardToolOptions {
   prefix?: string
 }
 
+/** Description override appended to generated blackboard tools. */
+export interface BlackboardGeneratedToolConfig {
+  /** Extra guidance included in generated tool descriptions. */
+  description: string
+}
+
 /**
  * Configuration for `blackboard()`.
  *
@@ -50,12 +55,12 @@ export interface BlackboardConfig<T extends z.ZodObject<z.ZodRawShape>> {
   id: string
   /** Zod object schema defining the typed fields on the board. */
   schema: T
-  /** Storage backend. Defaults to `inMemoryCruxStore()` (ephemeral). */
-  store?: CruxStore
+  /** Record store backend. Defaults to `inMemoryRecordStore()` (ephemeral). */
+  records?: RecordStore
   /** Optional callback fired after every successful write (for devtools wiring). */
   onUpdate?: Listener
   /** Custom tool guidance appended to generated blackboard tool descriptions. */
-  tool?: ToolConfig
+  tool?: BlackboardGeneratedToolConfig
   /** Focused tool options used by `.asTools()` and direct prompt `use`. */
   tools?: BlackboardToolOptions
 }
@@ -137,14 +142,14 @@ function zodToJsonSchema(schema: unknown): Record<string, unknown> | undefined {
 /**
  * Create a shared blackboard for multi-agent coordination.
  *
- * @param config - Configuration with id, Zod schema, optional store and onUpdate callback.
+ * @param config - Configuration with id, Zod schema, optional records and onUpdate callback.
  * @returns A `Blackboard` with get/set/patch/clear/subscribe/asContext/asTools methods.
  */
 export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: BlackboardConfig<T>): Blackboard<z.infer<T>> {
   type State = z.infer<T>
 
-  const store = config.store ?? inMemoryCruxStore()
-  const storeKey = `blackboard:${config.id}`
+  const records = config.records ?? inMemoryRecordStore()
+  const recordKey = `blackboard:${config.id}`
   const listeners = new Set<Listener>()
   const toolGuidance = config.tool?.description ? `\n\nGuidance:\n${config.tool.description}` : ''
 
@@ -157,13 +162,13 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
     kind: 'blackboard',
     description: `Blackboard: ${config.id}`,
     operations: ['get', 'list'],
-    store,
-    defaultKey: storeKey,
-    defaultPrefix: storeKey,
+    store: records,
+    defaultKey: recordKey,
+    defaultPrefix: recordKey,
     metadata: {
       blackboardId: config.id,
       schema: zodToJsonSchema(config.schema),
-      backend: config.store ? 'configured' : 'inMemory',
+      backend: config.records ? 'configured' : 'inMemory',
     },
   })
 
@@ -255,7 +260,7 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
       operation,
       sourceDefinitionId: `blackboard:${config.id}`,
       schema: zodToJsonSchema(config.schema),
-      backend: config.store ? 'configured' : 'inMemory',
+      backend: config.records ? 'configured' : 'inMemory',
       conflictPolicy: 'last-writer-wins',
       ...extra,
     }
@@ -270,7 +275,7 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
   }
 
   async function rawGetAll(): Promise<Partial<State> | null> {
-    const entry = await store.get(storeKey)
+    const entry = await records.get(recordKey)
     if (!entry) return null
     try {
       const content = entry.content as string
@@ -297,11 +302,11 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
   }
 
   async function writeState(state: Record<string, unknown>): Promise<void> {
-    await store.set(storeKey, {
+    await records.put(recordKey, {
       content: JSON.stringify(state),
       metadata: { type: 'blackboard', memoryId: config.id },
       updatedAt: Date.now(),
-    })
+    } satisfies JsonObject)
   }
 
   const board: Blackboard<State> = {
@@ -393,7 +398,7 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
         },
         async () => {
           const before = await rawGetAll()
-          await store.delete(storeKey)
+          await records.delete(recordKey)
           await notify(['*'])
           emitSnapshot('write', 'clear', null, ['*'], { before, after: null })
         },

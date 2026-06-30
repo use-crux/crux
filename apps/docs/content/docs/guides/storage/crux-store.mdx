@@ -157,7 +157,7 @@ records.watch?.('plan:', (event) => {
 })
 ```
 
-Reactive UI adapters may still expose legacy compatibility paths while React transports migrate. For new storage code, prefer `RecordStore` capabilities and prefix-scoped watches.
+Reactive UI adapters consume the same `RecordStore` records through a transport. Prefer prefix-scoped watches when your backend supports them and polling when it does not.
 
 ## Custom RecordStore
 

@@ -16,16 +16,16 @@ A corpus wraps an indexer with a source ledger. The ledger stores source hashes,
 
 ```ts
 import { corpus, indexer } from '@use-crux/core/indexing'
-import { inMemoryDataStore, inMemoryVectorStore } from '@use-crux/core/storage'
+import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
 import { filesSource } from '@use-crux/ingest/files'
 
-const data = inMemoryDataStore()
+const records = inMemoryRecordStore()
 const vectors = inMemoryVectorStore()
 
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   sparse,
@@ -34,7 +34,7 @@ const docsIndexer = indexer({
 const docsCorpus = corpus({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   indexer: docsIndexer,
 })
 
@@ -253,7 +253,7 @@ Crux compares the source hash and the index hash.
 const docsCorpus = corpus({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   indexer: docsIndexer,
   hash: {
     excludeMetadata: ['mtimeMs', 'lastFetchedAt'],

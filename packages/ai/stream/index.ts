@@ -1,7 +1,7 @@
 /**
  * `@use-crux/ai/stream` — AI SDK stream integration for Crux plans and task lists.
  *
- * **Server:** `createCruxStreamWriter()` subscribes to CruxStore changes and
+ * **Server:** `createCruxStreamWriter()` subscribes to RecordStore changes and
  * injects `data-crux` parts into an active AI SDK UIMessageStream.
  *
  * **Client:** `createStreamTransport()` accumulates stream data parts and

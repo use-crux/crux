@@ -1,10 +1,10 @@
 /**
- * Shared storage helpers for memory store adapters.
+ * Shared storage helpers for memory record adapters.
  *
  * @module
  */
 
-import type { JsonObject } from '../store/types'
+import type { JsonObject } from '../storage'
 
 /**
  * Raw document shape as stored in databases.
@@ -13,14 +13,14 @@ import type { JsonObject } from '../store/types'
 export interface RawMemoryDocument {
   key: string
   content: string
-  metadata?: Record<string, unknown>
+  metadata?: JsonObject
   embedding?: number[]
   createdAt: number
   updatedAt: number
 }
 
 /**
- * Convert a raw database document to a `JsonObject` suitable for `CruxStore.set()`.
+ * Convert a raw database document to a `JsonObject` suitable for `RecordStore.put()`.
  *
  * Handles the common transformations needed by store adapters:
  * - Missing metadata → empty object `{}`
@@ -45,8 +45,3 @@ export function toStoreValue(doc: RawMemoryDocument): JsonObject {
     updatedAt: doc.updatedAt,
   }
 }
-
-/**
- * @deprecated Use `toStoreValue` instead. Kept for backward compatibility during migration.
- */
-export const toMemoryEntry = toStoreValue

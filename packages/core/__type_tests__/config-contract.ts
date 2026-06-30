@@ -1,4 +1,4 @@
-import { config, inMemoryCruxStore, type CruxConfig, type CruxPlugin } from '..'
+import { config, inMemoryRecordStore, type CruxConfig, type CruxPlugin } from '..'
 import type { CruxObservabilityTransport } from '../observability'
 import type { TokenizerFn } from '../shared/tokenizer'
 import type { PromptMiddleware } from '../runtime/types'
@@ -23,7 +23,7 @@ const launchConfig = {
     trust: { mode: 'first-party-only' },
   },
   persistence: {
-    store: inMemoryCruxStore(),
+    records: inMemoryRecordStore(),
   },
   generation: {
     middleware,
@@ -169,8 +169,8 @@ const registriesStayInSource = {
 } satisfies CruxConfig
 
 const storeMustUsePersistenceDomain = {
-  // @ts-expect-error Store configuration belongs under `persistence.store`.
-  store: inMemoryCruxStore(),
+  // @ts-expect-error Record storage configuration belongs under `persistence.records`.
+  records: inMemoryRecordStore(),
 } satisfies CruxConfig
 
 const middlewareMustUseGenerationDomain = {
@@ -204,7 +204,7 @@ const devtoolsDoesNotOwnDeliveryPolicy = {
   },
 } satisfies CruxConfig
 
-void crux.config.persistence?.store
+void crux.config.persistence?.records
 void crux.config.generation?.middleware
 void crux.config.generation?.tokenizer
 void crux

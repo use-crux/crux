@@ -5,7 +5,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '@use-crux/core/observability'
-import { inMemoryCruxStore } from '@use-crux/core/store'
+import { inMemoryRecordStore } from '@use-crux/core/storage'
 import { resetRuntime, updateRuntime } from '@use-crux/core'
 import { action, flow, query } from '../server'
 import { DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS } from '../observability'
@@ -573,7 +573,7 @@ describe('@use-crux/convex/server', () => {
   it('flushes direct Convex flow handler results so suspended flows are visible immediately', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    updateRuntime({ store: inMemoryCruxStore() })
+    updateRuntime({ records: inMemoryRecordStore() })
     const flushSpy = vi.spyOn(observe, 'flush')
 
     const reviewFlow = flow({
@@ -616,7 +616,7 @@ describe('@use-crux/convex/server', () => {
   it('marks suspended Convex flows and schedules resume with the original run context', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    updateRuntime({ store: inMemoryCruxStore() })
+    updateRuntime({ records: inMemoryRecordStore() })
 
     const scheduled: Array<{ delayMs: number; ref: unknown; args: Record<string, unknown> }> = []
     const scheduler = {

@@ -81,7 +81,7 @@ export function normalizeSearchQuery(
     readonly threshold?: unknown
     readonly filter?: unknown
   }
-  const mode = runtimeQuery.mode ?? inferLegacyMode(runtimeQuery.dense, runtimeQuery.sparse)
+  const mode = runtimeQuery.mode
   const limit = normalizeLimit(runtimeQuery.limit)
   const threshold = normalizeThreshold(runtimeQuery.threshold)
   const filter = runtimeQuery.filter === undefined ? undefined : cloneExactFilter(runtimeQuery.filter)
@@ -122,13 +122,6 @@ export function vectorHitMetadata(metadata: Record<string, unknown>): ExactFilte
     ([key, value]) => key !== '_key' && isFilterValue(value),
   ) as [string, string | number | boolean | null][]
   return entries.length > 0 ? Object.fromEntries(entries) : undefined
-}
-
-function inferLegacyMode(dense: unknown, sparse: unknown): NormalizedVectorSearchQuery['mode'] {
-  if (dense !== undefined && sparse !== undefined) return 'hybrid'
-  if (dense !== undefined) return 'dense'
-  if (sparse !== undefined) return 'sparse'
-  throw new StorageError('invalid_value', 'Vector search requires a dense or sparse query vector.')
 }
 
 function normalizeFusion(value: unknown, capabilities: VectorStoreCapabilities): 'rrf' | 'dbsf' | undefined {

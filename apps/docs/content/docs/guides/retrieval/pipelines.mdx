@@ -31,7 +31,7 @@ const advancedDocs = retrievalPipeline(docs, [
     model: queryModel,
     count: 4,
   }),
-  parentExpand({ store: data, maxParentChars: 4000 }),
+  parentExpand({ records, maxParentChars: 4000 }),
   compress({
     generate: generateObjectFn,
     model: compressionModel,
@@ -105,7 +105,7 @@ Use `parentExpand()` with `chunker.parentChild()` when you want small searchable
 const docsIndexer = indexer({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   pipeline: indexingPipeline({
@@ -118,7 +118,7 @@ const docsIndexer = indexer({
 })
 
 const advancedDocs = retrievalPipeline(docs, [
-  parentExpand({ store: data, maxParentChars: 4000, missing: 'warn' }),
+  parentExpand({ records, maxParentChars: 4000, missing: 'warn' }),
 ])
 ```
 
@@ -127,7 +127,7 @@ Child hits keep their `sourceId`, `chunkId`, score, and provenance. Parent conte
 If the retriever id differs from the indexer id that wrote the parent records, pass the writer id:
 
 ```ts
-parentExpand({ store: data, indexerId: 'docs' })
+parentExpand({ records, indexerId: 'docs' })
 ```
 
 ## Compression, Diversity, And Decay
@@ -197,7 +197,7 @@ const promptDocs = retrievalPipeline(
   docs,
   [
     multiQuery({ generate: generateTextFn, model: queryModel, count: 4 }),
-    parentExpand({ store: data, maxParentChars: 4000 }),
+    parentExpand({ records, maxParentChars: 4000 }),
   ],
   {
     inject: 'both',

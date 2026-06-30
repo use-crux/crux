@@ -8,10 +8,11 @@
  */
 
 import type { Plan, PlanHandle, CreatePlanInput, PlanUpdate, JsonValue } from './types'
-import { PLAN_PREFIX, metadataFilter, planKey } from './helpers'
-import { getRuntime, resolveStore } from '../runtime/runtime'
+import { PLAN_PREFIX, matchesMetadataFilter, metadataFilter, planKey } from './helpers'
+import { getRuntime, resolveRecords } from '../runtime/runtime'
 import { observe } from '../observability'
 import { getExecutionContext } from '../runtime/execution-context'
+import type { JsonObject as StorageJsonObject } from '../storage'
 import { planAgent } from './agent'
 import { createPlanCreationTool, type PlanToolOptions } from './creation-tools'
 import { assertTaskJsonValue } from './task-values'
@@ -64,14 +65,14 @@ async function createPlan(input: CreatePlanInput): Promise<PlanHandle> {
       metadataKeys: input.metadata ? Object.keys(input.metadata).sort() : [],
     },
   })
-  const store = resolveStore()
+  const store = resolveRecords()
   const now = Date.now()
   const data: Plan = {
     id: crypto.randomUUID(),
     title: input.title,
     content: input.content ?? '',
     version: 1,
-    metadata: input.metadata,
+    ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
     createdAt: now,
     updatedAt: now,
   }
@@ -84,7 +85,7 @@ async function createPlan(input: CreatePlanInput): Promise<PlanHandle> {
 
   try {
     await span.withContext(async () => {
-      await store.set(planKey(data.id), data as unknown as Record<string, unknown>)
+      await store.put(planKey(data.id), data as unknown as StorageJsonObject)
       emitPlanArtifact(span.spanId, 'create', data)
     })
     const ctx = getExecutionContext()
@@ -152,7 +153,7 @@ export function createPlanHandle(planId: string): PlanHandle {
  * @returns The plan, or `null` if not found.
  */
 export async function getPlan(planId: string): Promise<Plan | null> {
-  const store = resolveStore()
+  const store = resolveRecords()
   const raw = await store.get(planKey(planId))
   if (!raw) return null
   return raw as unknown as Plan
@@ -160,11 +161,12 @@ export async function getPlan(planId: string): Promise<Plan | null> {
 
 /** List persisted plans, optionally filtered by metadata. */
 export async function listPlans(options?: PlanListOptions): Promise<Plan[]> {
-  const result = await resolveStore().list(PLAN_PREFIX, {
-    limit: options?.limit,
-    filter: metadataFilter(options?.metadata),
-  })
-  return result.entries.map((entry) => entry.value as unknown as Plan)
+  const filter = metadataFilter(options?.metadata)
+  const result = await resolveRecords().list(PLAN_PREFIX)
+  const plans = result.entries
+    .map((entry) => entry.value as unknown as Plan)
+    .filter((plan) => matchesMetadataFilter(plan.metadata, filter))
+  return options?.limit === undefined ? plans : plans.slice(0, options.limit)
 }
 
 /**
@@ -188,7 +190,7 @@ export async function updatePlan(planId: string, update: PlanUpdate): Promise<Pl
       changes: planUpdateChanges(update),
     },
   })
-  const store = resolveStore()
+  const store = resolveRecords()
   try {
     const existing = await getPlan(planId)
     if (!existing) {
@@ -213,7 +215,7 @@ export async function updatePlan(planId: string, update: PlanUpdate): Promise<Pl
     }
 
     await span.withContext(async () => {
-      await store.set(planKey(planId), updated as unknown as Record<string, unknown>)
+      await store.put(planKey(planId), updated as unknown as StorageJsonObject)
       emitPlanArtifact(span.spanId, 'update', updated)
     })
 
