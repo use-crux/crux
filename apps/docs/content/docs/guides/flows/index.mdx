@@ -66,7 +66,7 @@ const editPipeline = flow('edit-pipeline', async (flow) => {
 const result = await editPipeline.run()
 ```
 
-`flow` returns a `FlowHandle` with a `.run()` method that returns whatever the handler returns (wrapped in a `FlowResult`). Each `flow.step()` returns the result of its function — use it to thread data between steps.
+`flow` returns a `FlowHandle` with a `.run()` method that returns whatever the handler returns (wrapped in a `FlowResult`). Each `flow.step()` returns the result of its function — use it to thread data between steps. Step labels are durable replay identities for the Flows beta, so keep each label unique and stable. Dynamic labels are advanced; use them only when the generated label is deterministic across retries and resumes.
 
 ## Sessions
 

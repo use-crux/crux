@@ -97,6 +97,8 @@ The scope object passed to the flow handler. Generic over `TInput` (defaults to 
 
 Execute a named step within the flow. Opens a canonical `flow.step` span and restores observability context so generated child spans nest under the step. On resume, completed steps are replayed from cache (skip-replay) and are not re-emitted.
 
+For the Flows beta, `label` is the durable step identity. Each `flow.step()` label must be unique within one flow execution; duplicate labels throw before the runtime reads from the replay cache. Prefer stable literal labels. Dynamic labels are advanced and should only come from deterministic values that will be the same across retries and resumes.
+
 `fn` accepts both plain functions `() => T` and flow-aware functions `(flow: FlowScope) => T`. Flow-aware functions receive the scope automatically, enabling external step definitions that access `flow.input`, `flow.results`, etc.
 
 ### `suspend(name, options?)`
@@ -147,7 +149,7 @@ Persisted flow state stored in `RecordStore` under the `crux:flow:{flowId}` key.
 | `name`           | `string`                                 | Flow name                      |
 | `status`         | `string`                                 | Current status                 |
 | `suspendedAt`    | `string`                                 | Suspend point name             |
-| `completedSteps` | `Record<string, { output, durationMs }>` | Cached step results for replay |
+| `completedSteps` | `Record<string, { output, durationMs }>` | Cached step results keyed by durable step label |
 | `traceContext`   | `Record<string, string \| undefined>`    | Trace context metadata         |
 | `createdAt`      | `number`                                 | Unix timestamp (ms)            |
 | `updatedAt`      | `number`                                 | Unix timestamp (ms)            |

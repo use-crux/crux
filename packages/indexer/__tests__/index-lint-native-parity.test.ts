@@ -133,6 +133,10 @@ const lintParityCases = [
           intelligence: {
             confidence: 'static',
             control: {
+              steps: [
+                { id: 'plan', label: 'plan' },
+                { id: 'plan', label: 'plan' },
+              ],
               suspensionPoints: [
                 { id: 'approval', label: 'approval' },
                 { id: 'approval', label: 'approval' },
@@ -146,6 +150,7 @@ const lintParityCases = [
     expectedRuleIds: [
       'definition.missing_eval_coverage',
       'flow.suspension_without_coverage',
+      'flow.duplicate_step_label',
       'flow.duplicate_suspend_name',
       'flow.undeclared_suspend_signal',
     ],

@@ -52,6 +52,8 @@ import {
   recordDeliveredSignal,
   suspendDeliveryKey,
 } from './suspend-state'
+import { createFlowStepIdentityTracker } from './step-identity'
+import { flowStepRetryOptions } from './retry-control'
 
 // Re-export types and errors so existing internal `../flow/scope` imports
 // keep working while the public flow surface stays centered on `flow()`.
@@ -189,6 +191,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
   for (const [label, cached] of Object.entries(completedSteps)) {
     results[label] = cached.output
   }
+  const stepIdentities = createFlowStepIdentityTracker()
 
   // Create the flow scope
   const scope = {
@@ -201,6 +204,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       stepFn: ((flow: FlowScope<TInput, TSignals>) => Promise<S> | S) | (() => Promise<S> | S),
       stepOptions?: StepOptions,
     ): Promise<S> {
+      stepIdentities.use(label)
       stepCount++
       const stepId = `${slugify(label)}-${stepCount}`
 
@@ -236,7 +240,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       })
       const wrappedFn = () =>
         stepSpan.withContext(() =>
-          runWithExecutionContext(stepContext, () => executeWithRetry(boundStepFn, stepOptions)),
+          runWithExecutionContext(stepContext, () => executeWithRetry(boundStepFn, flowStepRetryOptions(stepOptions))),
         )
 
       try {

@@ -1,11 +1,38 @@
 import type { IndexLintFinding, ProjectDefinition } from '@use-crux/core/project-index'
-import { definitionEvidence, isRecord, suspensionPointLabels } from './finding-helpers'
+import { definitionEvidence, flowStepLabels, isRecord, suspensionPointLabels } from './finding-helpers'
 import { indexLintFinding } from './rules'
 
 /** Built-in lint findings for statically visible flow authoring hazards. */
 export function flowLintFindings(definition: ProjectDefinition): IndexLintFinding[] {
   if (definition.kind !== 'flow') return []
-  return [...duplicateSuspendNameFindings(definition), ...undeclaredSuspendSignalFindings(definition)]
+  return [
+    ...duplicateStepLabelFindings(definition),
+    ...duplicateSuspendNameFindings(definition),
+    ...undeclaredSuspendSignalFindings(definition),
+  ]
+}
+
+function duplicateStepLabelFindings(definition: ProjectDefinition): IndexLintFinding[] {
+  return duplicateLabels(flowStepLabels(definition)).map(({ label, count }) =>
+    indexLintFinding({
+      ruleId: 'flow.duplicate_step_label',
+      key: `${definition.id}:${label}`,
+      message: `Flow "${definition.name}" uses step label "${label}" ${count} times. Step labels are durable replay identities, so repeated labels can return the wrong cached output.`,
+      ...(definition.source ? { source: definition.source } : {}),
+      primaryDefinitionId: definition.id,
+      relatedDefinitionIds: [definition.id],
+      evidence: [
+        definitionEvidence(definition, 'Flow has repeated step labels'),
+        {
+          kind: 'definition',
+          label: 'Duplicate step label',
+          definitionId: definition.id,
+          source: definition.source,
+          data: { stepLabel: label, occurrences: count },
+        },
+      ],
+    }),
+  )
 }
 
 function duplicateSuspendNameFindings(definition: ProjectDefinition): IndexLintFinding[] {

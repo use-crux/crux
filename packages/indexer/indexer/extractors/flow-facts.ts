@@ -126,6 +126,7 @@ export function flowFactsFromEvidence(input: FlowFactProjectionInput): Extracted
           intelligence: primitiveFlowIntelligence(
             runtime,
             input.argsSchema,
+            stepRefs.map((step) => step.name),
             suspensionRefs,
             stepDefinitions.map((stepDefinition) => stepDefinition.id),
           ),
@@ -218,6 +219,7 @@ function dataRelationRefs(
 function primitiveFlowIntelligence(
   runtime: 'convex' | 'node',
   argsSchema: Record<string, unknown> | undefined,
+  stepLabels: readonly string[],
   suspensions: readonly FlowSuspensionEvidence[],
   childDefinitionIds: readonly string[],
 ): Record<string, unknown> {
@@ -225,6 +227,14 @@ function primitiveFlowIntelligence(
     mode: runtime === 'convex' ? 'durable' : 'immediate',
     ordering: 'ordered',
     ...(childDefinitionIds.length > 0 ? { children: [...childDefinitionIds] } : {}),
+    ...(stepLabels.length > 0
+      ? {
+          steps: stepLabels.map((label) => ({
+            id: label,
+            label,
+          })),
+        }
+      : {}),
   }
   if (suspensions.length > 0) {
     control.suspensionPoints = suspensions.map((suspension) => ({

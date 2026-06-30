@@ -694,6 +694,41 @@
     "fidelity": "safe"
   },
   {
+    "id": "flow.duplicate_step_label",
+    "source": "builtin",
+    "severity": "warning",
+    "category": "runtime",
+    "maturity": "preview",
+    "confidence": "high",
+    "profiles": [
+      "recommended",
+      "strict"
+    ],
+    "title": "Flow repeats a step label",
+    "description": "Flow step labels are durable replay identities. Repeating a label in one flow body makes cached output ambiguous across retries, suspension, and resume.",
+    "rationale": "Flow step labels are durable replay identities. Repeating a label in one flow body makes cached output ambiguous across retries, suspension, and resume.",
+    "impact": "A repeated step label can return the wrong cached output or fail at runtime before the flow reaches later work.",
+    "docsUrl": "/docs/reference/crux-core/index-lints/flow-duplicate-step-label",
+    "fixes": [
+      {
+        "title": "Use unique step labels",
+        "description": "Give each flow.step() call a distinct literal label, and encode loop iteration or branch meaning in the label only when it is stable across resumes.",
+        "kind": "manual"
+      }
+    ],
+    "suppression": {
+      "supported": true,
+      "scope": "next-line",
+      "directive": "// crux-lint-disable-next-line flow.duplicate_step_label -- reason"
+    },
+    "phase": "index",
+    "requires": [
+      "definitions",
+      "relations"
+    ],
+    "fidelity": "safe"
+  },
+  {
     "id": "flow.duplicate_suspend_name",
     "source": "builtin",
     "severity": "warning",

@@ -18,4 +18,8 @@ Delivered flow signals are now consumed after validation and replayed from the f
 
 The Project Index now records local flow signal names and emits lint findings for duplicate literal `flow.suspend()` names and literal suspend names missing from a local signal map.
 
+Flow step labels are now enforced as durable replay identities. Duplicate labels throw at runtime, the Project Index records ordered step label metadata, and linting reports duplicate literal `flow.step()` labels.
+
+Flow lifecycle control errors thrown inside `flow.step()` now bypass step retry and fallback handling, preserving suspend, cancel, and expire outcomes.
+
 Refresh OTel package README wording to describe `flow().run()` spans.

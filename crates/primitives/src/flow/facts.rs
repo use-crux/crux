@@ -74,7 +74,13 @@ pub(crate) fn flow_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) 
     );
     metadata.insert(
         "intelligence".to_string(),
-        flow_intelligence(runtime, args_schema.as_ref(), &suspensions, &step_ids),
+        flow_intelligence(
+            runtime,
+            args_schema.as_ref(),
+            &steps,
+            &suspensions,
+            &step_ids,
+        ),
     );
     if runtime == "convex" {
         metadata.insert("runtime".to_string(), Value::String("convex".to_string()));

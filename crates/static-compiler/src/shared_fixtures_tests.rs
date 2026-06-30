@@ -323,6 +323,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "tool.missing_input_schema",
             "tool.output_not_inspectable",
             "flow.suspension_without_coverage",
+            "flow.duplicate_step_label",
             "flow.duplicate_suspend_name",
             "flow.undeclared_suspend_signal",
             "workspace.write_without_guardrail",

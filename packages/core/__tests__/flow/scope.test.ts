@@ -96,13 +96,13 @@ describe('flow.step', () => {
     }).run()
   })
 
-    it('generates unique stepIds for same labels', async () => {
+    it('generates unique stepIds for unique labels', async () => {
     const stepIds: string[] = []
     await makeFlow('test', async (flow) => {
       await flow.step('search', async () => {
         stepIds.push(getExecutionContext()?.stepId ?? '')
       })
-      await flow.step('search', async () => {
+      await flow.step('rank', async () => {
         stepIds.push(getExecutionContext()?.stepId ?? '')
       })
     }).run()

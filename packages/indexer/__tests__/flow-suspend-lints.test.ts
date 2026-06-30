@@ -3,6 +3,24 @@ import { createStaticExtraction, type SourceReader } from '../indexer/static/ext
 import { indexLintFindings } from '../indexer/lints/findings'
 
 describe('flow suspend lint findings', () => {
+  it('reports duplicate literal step labels in one flow body', async () => {
+    const findings = await lintFindingsForSource([
+      "export const review = flow('review', async (flow) => {",
+      "  await flow.step('plan', () => 'first')",
+      "  await flow.step('plan', () => 'second')",
+      '})',
+    ])
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: 'flow.duplicate_step_label',
+          message: expect.stringContaining('"plan"'),
+        }),
+      ]),
+    )
+  })
+
   it('reports duplicate literal suspend names in one flow body', async () => {
     const findings = await lintFindingsForSource([
       "export const review = flow('review', async (flow) => {",

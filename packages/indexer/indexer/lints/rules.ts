@@ -33,6 +33,7 @@ export const indexLintRuleIds = [
   'tool.missing_input_schema',
   'tool.output_not_inspectable',
   'flow.suspension_without_coverage',
+  'flow.duplicate_step_label',
   'flow.duplicate_suspend_name',
   'flow.undeclared_suspend_signal',
   'workspace.write_without_guardrail',
@@ -554,6 +555,28 @@ export const indexLintRules = {
         title: 'Cover suspend and resume',
         description:
           'Add a flow eval that exercises the suspend/resume path, including the expected approval or signal.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'flow.duplicate_step_label': defineIndexLintRule({
+    id: 'flow.duplicate_step_label',
+    severity: 'warning',
+    category: 'runtime',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Flow repeats a step label',
+    rationale:
+      'Flow step labels are durable replay identities. Repeating a label in one flow body makes cached output ambiguous across retries, suspension, and resume.',
+    impact: 'A repeated step label can return the wrong cached output or fail at runtime before the flow reaches later work.',
+    docsSlug: 'flow-duplicate-step-label',
+    fixes: [
+      {
+        title: 'Use unique step labels',
+        description:
+          'Give each flow.step() call a distinct literal label, and encode loop iteration or branch meaning in the label only when it is stable across resumes.',
         kind: 'manual',
       },
     ],

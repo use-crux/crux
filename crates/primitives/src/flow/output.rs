@@ -167,6 +167,7 @@ pub(crate) fn flow_fact_metadata(step_names: &[String], has_args: bool, runtime:
 pub(crate) fn flow_intelligence(
     runtime: &str,
     args_schema: Option<&Value>,
+    steps: &[FlowStep],
     suspensions: &[FlowSuspension],
     step_ids: &[(String, String)],
 ) -> Value {
@@ -187,6 +188,17 @@ pub(crate) fn flow_intelligence(
         control.insert(
             "children".to_string(),
             json!(step_ids.iter().map(|(_, id)| id).collect::<Vec<_>>()),
+        );
+    }
+    if !steps.is_empty() {
+        control.insert(
+            "steps".to_string(),
+            Value::Array(
+                steps
+                    .iter()
+                    .map(|step| json!({ "id": step.name, "label": step.name }))
+                    .collect(),
+            ),
         );
     }
     if !suspensions.is_empty() {

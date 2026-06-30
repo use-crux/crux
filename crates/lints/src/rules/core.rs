@@ -7,7 +7,7 @@ use serde_json::{Map, Value, json};
 use crate::builder::{StaticIndexLintBuilder, StaticIndexLintFindingInput, definition_evidence};
 use crate::contracts::{
     context_requires_input_schema, declared_signal_names, flow_requires_args_schema,
-    has_args_schema, has_input_schema, has_output_schema, has_suspension_points,
+    flow_step_labels, has_args_schema, has_input_schema, has_output_schema, has_suspension_points,
     schema_source_evidence, suspension_point_labels, tool_output_needs_adapter,
 };
 use crate::emit::push_definition_finding;
@@ -264,6 +264,35 @@ fn append_flow_suspend_contract_findings(
     definition: &StaticIndexDefinition,
     findings: &mut Vec<StaticIndexLintFinding>,
 ) {
+    let step_labels = flow_step_labels(definition);
+    let mut step_counts = BTreeMap::<String, usize>::new();
+    for label in &step_labels {
+        *step_counts.entry(label.clone()).or_insert(0) += 1;
+    }
+    for (label, count) in step_counts.into_iter().filter(|(_, count)| *count > 1) {
+        push_flow_suspend_finding(
+            builder,
+            findings,
+            "flow.duplicate_step_label",
+            &format!("{}:{}", definition.id, label),
+            definition,
+            format!(
+                "Flow \"{}\" uses step label \"{}\" {} times. Step labels are durable replay identities, so repeated labels can return the wrong cached output.",
+                definition.name, label, count
+            ),
+            vec![
+                definition_evidence(definition, "Flow has repeated step labels"),
+                json!({
+                    "kind": "definition",
+                    "label": "Duplicate step label",
+                    "definitionId": definition.id,
+                    "source": definition.source,
+                    "data": { "stepLabel": label, "occurrences": count },
+                }),
+            ],
+        );
+    }
+
     let labels = suspension_point_labels(definition);
     let mut counts = BTreeMap::<String, usize>::new();
     for label in &labels {
