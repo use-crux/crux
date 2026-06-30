@@ -10,6 +10,10 @@
 
 import type { JsonObject, RecordStore } from "../storage";
 import { analyzeContent, createFileRecord, recordToFile } from "./content";
+import {
+  createFileRecordFromReadResult,
+  readResultToWorkspaceContent,
+} from "./copy-record";
 import { globToRegExp, hasGlob } from "./glob";
 import { instrument } from "./observability";
 import { mountForPath, normalizePath } from "./path";
@@ -17,6 +21,19 @@ import { recordToReadResult } from "./read-result";
 import { fileKey, getRecord, listFileRecords } from "./store";
 import { snapshotContent } from "./version-content";
 import { purgeVersions, recordFileVersion } from "./version-store";
+import { createWorkspaceTextMatcher, grepWorkspaceText } from "./text-search";
+import { grepWorkspaceSourceMounts } from "./source-grep";
+import { writeWorkspaceMountSource } from "./source-write";
+import {
+  assertWorkspaceMountIsLocal,
+  existsWorkspaceMountSource,
+  grepWorkspaceMountSource,
+  hasWorkspaceMountSource,
+  readWorkspaceMountSource,
+  sourceMountForPath,
+  type SourceBackedMount,
+  statWorkspaceMountSource,
+} from "./virtual-source";
 import {
   assertWorkspaceWriteAllowed,
   withWorkspaceWriteLock,
@@ -32,9 +49,11 @@ import type {
   WorkspaceGrepOptions,
   WorkspaceGrepResult,
   WorkspaceLimits,
+  WorkspaceMountWriteOptions,
   WorkspaceMoveOptions,
   WorkspaceNamespaceOption,
   WorkspacePath,
+  WorkspaceReadResult,
   WorkspaceRetention,
   WorkspaceVersioning,
 } from "./types";
@@ -105,7 +124,10 @@ export function createWorkspaceFilesystemOps(
       { workspaceId: config.workspaceId, operation: "exists", namespace, path },
       async () => {
         const normalized = normalizePath(path);
-        mountForPath(normalized, config.mounts, "read");
+        const mount = mountForPath(normalized, config.mounts, "read");
+        if (hasWorkspaceMountSource(mount)) {
+          return existsWorkspaceMountSource(mount, normalized);
+        }
         return (
           (await getRecord(
             config.store,
@@ -127,7 +149,10 @@ export function createWorkspaceFilesystemOps(
       { workspaceId: config.workspaceId, operation: "stat", namespace, path },
       async () => {
         const normalized = normalizePath(path);
-        mountForPath(normalized, config.mounts, "read");
+        const mount = mountForPath(normalized, config.mounts, "read");
+        if (hasWorkspaceMountSource(mount)) {
+          return statWorkspaceMountSource(mount, normalized);
+        }
         const record = await getRecord(
           config.store,
           config.workspaceId,
@@ -154,6 +179,30 @@ export function createWorkspaceFilesystemOps(
           async () => {
             const normalized = normalizePath(path);
             const mount = mountForPath(normalized, config.mounts, "write");
+            if (hasWorkspaceMountSource(mount)) {
+              const current = await readWorkspaceMountSource(
+                mount,
+                normalized,
+                { maxInlineBytes: Number.MAX_SAFE_INTEGER },
+              );
+              if (current && current.kind !== "text") {
+                throw new Error(
+                  `workspace.append(): only text files can be appended. "${path}" is ${current.kind}.`,
+                );
+              }
+              if (current?.truncated) {
+                throw new Error(
+                  `workspace.append(): source-backed file "${path}" was truncated and cannot be appended.`,
+                );
+              }
+              return writeWorkspaceMountSource(
+                mount,
+                normalized,
+                `${current?.content ?? ""}${content}`,
+                mountAppendOptions(current, options),
+              );
+            }
+            assertWorkspaceMountIsLocal(mount, "append");
             const existing = await getRecord(
               config.store,
               config.workspaceId,
@@ -248,8 +297,10 @@ export function createWorkspaceFilesystemOps(
       async () => {
         const fromPath = normalizePath(from);
         const toPath = normalizePath(to);
-        mountForPath(fromPath, config.mounts, "write");
+        const fromMount = mountForPath(fromPath, config.mounts, "write");
+        assertWorkspaceMountIsLocal(fromMount, operation);
         const toMount = mountForPath(toPath, config.mounts, "write");
+        assertWorkspaceMountIsLocal(toMount, operation);
         return withWorkspaceWriteLock(
           config.workspaceId,
           namespace,
@@ -342,22 +393,74 @@ export function createWorkspaceFilesystemOps(
       async () => {
         const fromPath = normalizePath(from);
         const toPath = normalizePath(to);
-        mountForPath(fromPath, config.mounts, "read");
+        const fromMount = mountForPath(fromPath, config.mounts, "read");
+        const sourceMount = hasWorkspaceMountSource(fromMount)
+          ? fromMount
+          : undefined;
         const toMount = mountForPath(toPath, config.mounts, "write");
+        const destinationMount = hasWorkspaceMountSource(toMount)
+          ? toMount
+          : undefined;
+        if (!destinationMount) assertWorkspaceMountIsLocal(toMount, "copy");
         return withWorkspaceWriteLock(
           config.workspaceId,
           namespace,
           async () => {
-            const source = await getRecord(
-              config.store,
-              config.workspaceId,
-              namespace,
-              fromPath,
-            );
-            if (!source)
-              throw new Error(
-                `workspace.copy(): source file not found: "${fromPath}".`,
+            const sourceInput = sourceMount
+              ? await getCopySourceRead(sourceMount, fromPath)
+              : ({
+                  kind: "record",
+                  record: await getCopySourceRecord(namespace, fromPath),
+                } as const);
+            const sourceSize =
+              sourceInput.kind === "read"
+                ? sourceInput.result.size
+                : sourceInput.record.size;
+            if (destinationMount) {
+              const destinationExists = await existsWorkspaceMountSource(
+                destinationMount,
+                toPath,
               );
+              if (destinationExists && !options?.overwrite) {
+                throw new Error(
+                  `workspace.copy(): destination file already exists: "${toPath}".`,
+                );
+              }
+              const sourceContent =
+                sourceInput.kind === "read"
+                  ? readResultToWorkspaceContent(sourceInput.result)
+                  : await snapshotContent(sourceInput.record, config.blobs);
+              const sourceMimeType =
+                sourceInput.kind === "read"
+                  ? sourceInput.result.mimeType
+                  : sourceInput.record.mimeType;
+              const sourceMetadata =
+                sourceInput.kind === "read"
+                  ? sourceInput.result.metadata
+                  : sourceInput.record.metadata;
+              const sourceStatus =
+                sourceInput.kind === "read"
+                  ? sourceInput.result.status
+                  : sourceInput.record.status;
+              const sourceKind =
+                sourceInput.kind === "read"
+                  ? sourceInput.result.artifactKind
+                  : sourceInput.record.kind;
+              return writeWorkspaceMountSource(
+                destinationMount,
+                toPath,
+                sourceContent,
+                {
+                  mimeType: sourceMimeType,
+                  ...(sourceMetadata !== undefined
+                    ? { metadata: sourceMetadata }
+                    : {}),
+                  ...(sourceStatus !== undefined ? { status: sourceStatus } : {}),
+                  ...(sourceKind !== undefined ? { kind: sourceKind } : {}),
+                  operation: "copy",
+                },
+              );
+            }
             const destination = await getRecord(
               config.store,
               config.workspaceId,
@@ -374,16 +477,23 @@ export function createWorkspaceFilesystemOps(
               workspaceId: config.workspaceId,
               namespace,
               path: toPath,
-              nextSize: source.size,
+              nextSize: sourceSize,
               existing: destination,
               limits: config.limits,
             });
-            const copied = await freshRecordFromSource(
-              namespace,
-              source,
-              toPath,
-              toMount.path,
-            );
+            const copied = sourceInput.kind === "read"
+              ? await freshRecordFromReadResult(
+                  namespace,
+                  sourceInput.result,
+                  toPath,
+                  toMount.path,
+                )
+              : await freshRecordFromSource(
+                  namespace,
+                  sourceInput.record,
+                  toPath,
+                  toMount.path,
+                );
             if (destination) {
               await purgeVersions(
                 config.store,
@@ -423,11 +533,26 @@ export function createWorkspaceFilesystemOps(
         if (!query)
           throw new Error("workspace.grep(): query must be non-empty.");
         const scope = options?.path ? normalizePath(options.path) : undefined;
+        const sourceMount = scope
+          ? sourceMountForPath(scope, config.mounts)
+          : undefined;
+        if (sourceMount) {
+          return grepWorkspaceMountSource(sourceMount, query, {
+            ...(options?.path ? { path: scope } : {}),
+            ...(options?.ignoreCase !== undefined
+              ? { ignoreCase: options.ignoreCase }
+              : {}),
+            ...(options?.regex !== undefined ? { regex: options.regex } : {}),
+            ...(options?.maxResults !== undefined
+              ? { maxResults: options.maxResults }
+              : {}),
+          });
+        }
         if (scope && !hasGlob(scope))
           mountForPath(scope, config.mounts, "read");
         const scopePattern =
           scope && hasGlob(scope) ? globToRegExp(scope) : undefined;
-        const matcher = createMatcher(query, options);
+        const matcher = createWorkspaceTextMatcher(query, options);
         const records = (
           await listFileRecords(config.store, config.workspaceId, namespace)
         )
@@ -445,10 +570,20 @@ export function createWorkspaceFilesystemOps(
         for (const record of records) {
           const text = await readRecordText(record);
           if (text === undefined) continue;
-          for (const match of grepText(record.path, text, matcher)) {
+          for (const match of grepWorkspaceText(record.path, text, matcher)) {
             matches.push(match);
             if (matches.length >= maxResults) return { matches };
           }
+        }
+        if (!scope && matches.length < maxResults) {
+          matches.push(
+            ...(await grepWorkspaceSourceMounts({
+              mounts: config.mounts,
+              query,
+              options,
+              usedResults: matches.length,
+            })),
+          );
         }
         return { matches };
       },
@@ -479,6 +614,25 @@ export function createWorkspaceFilesystemOps(
       maxInlineBytes: Number.MAX_SAFE_INTEGER,
     });
     return current.kind === "text" ? current.content : undefined;
+  }
+
+  function mountAppendOptions(
+    current: WorkspaceReadResult | null,
+    options: WorkspaceAppendOptions | undefined,
+  ): WorkspaceMountWriteOptions {
+    return {
+      ...(options?.mimeType !== undefined
+        ? { mimeType: options.mimeType }
+        : current?.mimeType !== undefined
+          ? { mimeType: current.mimeType }
+          : {}),
+      ...(current?.metadata !== undefined ? { metadata: current.metadata } : {}),
+      ...(current?.status !== undefined ? { status: current.status } : {}),
+      ...(current?.artifactKind !== undefined
+        ? { kind: current.artifactKind }
+        : {}),
+      operation: "append",
+    };
   }
 
   return { exists, stat, append, rename, move, copy, grep };
@@ -515,6 +669,57 @@ export function createWorkspaceFilesystemOps(
       existing: null,
       now: Date.now(),
       version: 1,
+      inlineTextBelowBytes: config.inlineTextBelowBytes,
+      blobs: config.blobs,
+    });
+  }
+
+  async function getCopySourceRecord(
+    namespace: string,
+    path: WorkspacePath,
+  ): Promise<WorkspaceFileRecord> {
+    const source = await getRecord(
+      config.store,
+      config.workspaceId,
+      namespace,
+      path,
+    );
+    if (!source) {
+      throw new Error(`workspace.copy(): source file not found: "${path}".`);
+    }
+    return source;
+  }
+
+  async function getCopySourceRead(
+    mount: SourceBackedMount,
+    path: WorkspacePath,
+  ): Promise<{ readonly kind: "read"; readonly result: WorkspaceReadResult }> {
+    const result = await readWorkspaceMountSource(mount, path, {
+      maxInlineBytes: Number.MAX_SAFE_INTEGER,
+    });
+    if (!result) {
+      throw new Error(`workspace.copy(): source file not found: "${path}".`);
+    }
+    if (result.kind === "text" && result.truncated) {
+      throw new Error(
+        `workspace.copy(): source-backed file "${path}" was truncated and cannot be copied.`,
+      );
+    }
+    return { kind: "read", result };
+  }
+
+  async function freshRecordFromReadResult(
+    namespace: string,
+    result: WorkspaceReadResult,
+    path: WorkspacePath,
+    mount: WorkspacePath,
+  ): Promise<WorkspaceFileRecord> {
+    return createFileRecordFromReadResult({
+      workspaceId: config.workspaceId,
+      namespace,
+      path,
+      mount,
+      result,
       inlineTextBelowBytes: config.inlineTextBelowBytes,
       blobs: config.blobs,
     });
@@ -576,43 +781,4 @@ function isReadableRecord(
   } catch {
     return false;
   }
-}
-
-function createMatcher(
-  query: string,
-  options: WorkspaceGrepOptions | undefined,
-): RegExp {
-  return new RegExp(
-    options?.regex ? query : escapeRegExp(query),
-    options?.ignoreCase ? "gi" : "g",
-  );
-}
-
-function grepText(
-  path: string,
-  content: string,
-  matcher: RegExp,
-): WorkspaceGrepMatch[] {
-  const matches: WorkspaceGrepMatch[] = [];
-  const lines = content.split(/\r?\n/);
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex]!;
-    matcher.lastIndex = 0;
-    let match = matcher.exec(line);
-    while (match) {
-      matches.push({
-        path,
-        line: lineIndex + 1,
-        column: match.index + 1,
-        text: line,
-      });
-      if (match[0].length === 0) matcher.lastIndex += 1;
-      match = matcher.exec(line);
-    }
-  }
-  return matches;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

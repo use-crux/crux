@@ -9,7 +9,8 @@
 
 import type { BlobContent } from "../storage";
 import type { JsonValue } from "../types/tool";
-import { recordArtifactFields, byteLength } from "./content";
+import { recordArtifactFields } from "./content";
+import { workspaceTextByteWindow } from "./text-window";
 import {
   DEFAULT_INLINE_TEXT_BYTES,
   type WorkspaceBlobStore,
@@ -87,7 +88,7 @@ function textReadResult(
   maxInlineBytes: number,
   offset: number | undefined,
 ): Extract<WorkspaceReadResult, { kind: "text" }> {
-  const window = textByteWindow(content, maxInlineBytes, offset);
+  const window = workspaceTextByteWindow(content, maxInlineBytes, offset);
   return {
     kind: "text",
     path: record.path,
@@ -98,47 +99,6 @@ function textReadResult(
     ...(window.truncated ? { truncated: true } : {}),
     ...(window.offset > 0 ? { offset: window.offset } : {}),
     ...(record.metadata ? { metadata: record.metadata } : {}),
-  };
-}
-
-function textByteWindow(
-  content: string,
-  maxInlineBytes: number,
-  offset: number | undefined,
-): {
-  readonly content: string;
-  readonly offset: number;
-  readonly truncated: boolean;
-} {
-  const size = byteLength(content);
-  const safeMax = Math.max(0, Math.floor(maxInlineBytes));
-  const start = Math.min(Math.max(0, Math.floor(offset ?? 0)), size);
-  if (start === 0 && size <= safeMax) {
-    return { content, offset: 0, truncated: false };
-  }
-
-  let byteIndex = 0;
-  let selected = "";
-  let selectedBytes = 0;
-  let actualStart = start;
-  for (const char of content) {
-    const charBytes = byteLength(char);
-    const nextByteIndex = byteIndex + charBytes;
-    if (nextByteIndex <= start) {
-      byteIndex = nextByteIndex;
-      continue;
-    }
-    if (selectedBytes + charBytes > safeMax) break;
-    if (selectedBytes === 0) actualStart = byteIndex;
-    selected += char;
-    selectedBytes += charBytes;
-    byteIndex = nextByteIndex;
-  }
-
-  return {
-    content: selected,
-    offset: selected ? actualStart : start,
-    truncated: start > 0 || actualStart + selectedBytes < size,
   };
 }
 

@@ -145,6 +145,7 @@ export {
   workspace,
   memoryWorkspaceBlobStore,
   workspaceToolNames,
+  retrieverWorkspaceMountSource,
 } from "./workspace";
 export {
   inMemoryBlobStore,
@@ -181,8 +182,15 @@ export type {
   WorkspaceListOptions,
   WorkspaceListResult,
   WorkspaceLimits,
+  WorkspaceCustomMountSource,
+  WorkspaceMountGrepOptions,
+  WorkspaceMountListOptions,
+  WorkspaceMountPathOptions,
+  WorkspaceMountReadOptions,
+  WorkspaceMountWriteOptions,
   WorkspaceMount,
   WorkspaceMountAccess,
+  WorkspaceMountSource,
   WorkspaceMoveOptions,
   WorkspaceNamespaceOption,
   WorkspaceOperation,
@@ -194,6 +202,10 @@ export type {
   WorkspaceTools,
   WorkspaceToolNames,
   WorkspaceWriteOptions,
+  WorkspaceRetrieverMountOperation,
+  WorkspaceRetrieverMountQueryInput,
+  WorkspaceRetrieverMountSource,
+  WorkspaceRetrieverMountSourceOptions,
 } from "./workspace";
 export type {
   BlobReadResult,

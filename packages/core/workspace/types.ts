@@ -51,6 +51,7 @@ import type {
   WorkspaceVersion,
   WorkspaceVersioning,
 } from "./version-types";
+import type { WorkspaceRetrieverMountSource } from "./retriever-source-types";
 
 export type {
   WorkspaceAppendOptions,
@@ -113,11 +114,136 @@ export type WorkspaceOperation =
   | "artifacts"
   | "finalize";
 
+/** Options passed to a source-backed mount when reading virtual file content. */
+export interface WorkspaceMountReadOptions {
+  /** Maximum text bytes to return inline before windowing. */
+  readonly maxInlineBytes?: number;
+  /** Byte offset for text windowing. */
+  readonly offset?: number;
+  /** Normalized path of the mount that owns this source call. */
+  readonly mountPath?: string;
+}
+
+/** Options passed to a source-backed mount when listing virtual entries. */
+export interface WorkspaceMountListOptions {
+  /** Maximum number of entries the source should return. */
+  readonly limit?: number;
+  /** Source-owned cursor returned by a previous list call. */
+  readonly cursor?: string;
+  /** Normalized path of the mount that owns this source call. */
+  readonly mountPath?: string;
+}
+
+/** Options passed to a source-backed mount when searching virtual entries. */
+export interface WorkspaceMountGrepOptions extends Pick<
+  WorkspaceGrepOptions,
+  "ignoreCase" | "maxResults" | "path" | "regex"
+> {
+  /** Normalized path of the mount that owns this source call. */
+  readonly mountPath?: string;
+}
+
+/** Options passed to source-backed mount metadata checks. */
+export interface WorkspaceMountPathOptions {
+  /** Normalized path of the mount that owns this source call. */
+  readonly mountPath?: string;
+}
+
+/** Options passed to source-backed mount write hooks. */
+export interface WorkspaceMountWriteOptions extends WorkspaceMountPathOptions {
+  /** MIME type requested by the workspace write call, when provided. */
+  readonly mimeType?: string;
+  /** App metadata requested by the workspace write call, when provided. */
+  readonly metadata?: Record<string, JsonValue>;
+  /** Artifact lifecycle status requested by the workspace write call, when provided. */
+  readonly status?: WorkspaceArtifactStatus;
+  /** App-facing artifact classifier requested by the workspace write call. */
+  readonly kind?: string;
+  /** Workspace mutation that produced this write. */
+  readonly operation?: "write" | "edit" | "append" | "copy";
+}
+
+/**
+ * A custom source that backs a workspace mount.
+ *
+ * Custom sources receive already-normalized workspace paths, so providers never
+ * need to parse raw user input. Return `null` from `read()` when the normalized
+ * path does not exist in the provider namespace. Mutation hooks are opt-in:
+ * source-backed mounts stay read-only unless the mount has `access:
+ * "readwrite"` and the source implements the matching hook.
+ */
+export interface WorkspaceCustomMountSource {
+  readonly kind: "custom";
+  /** List virtual entries under a normalized workspace path or glob. */
+  list(
+    path: string,
+    options?: WorkspaceMountListOptions,
+  ): Promise<WorkspaceListResult> | WorkspaceListResult;
+  /** Read virtual file content for a normalized workspace path, or `null` when absent. */
+  read(
+    path: string,
+    options?: WorkspaceMountReadOptions,
+  ): Promise<WorkspaceReadResult | null> | WorkspaceReadResult | null;
+  /** Search virtual text files. When omitted, workspace grep falls back to list + read. */
+  grep?(
+    query: string,
+    options?: WorkspaceMountGrepOptions,
+  ): Promise<WorkspaceGrepResult> | WorkspaceGrepResult;
+  /** Check whether a normalized virtual file path exists. */
+  exists?(
+    path: string,
+    options?: WorkspaceMountPathOptions,
+  ): Promise<boolean> | boolean;
+  /** Return virtual file metadata for a normalized path, or `null` when absent. */
+  stat?(
+    path: string,
+    options?: WorkspaceMountPathOptions,
+  ): Promise<WorkspaceFile | null> | WorkspaceFile | null;
+  /**
+   * Write virtual file content back to the provider.
+   *
+   * Return a {@link WorkspaceFile} or {@link WorkspaceReadResult} when the
+   * provider can cheaply report the updated file. If omitted, `write`, `edit`,
+   * `append`, and provider-destination `copy` reject for this mount.
+   */
+  write?(
+    path: string,
+    content: WorkspaceContent,
+    options?: WorkspaceMountWriteOptions,
+  ):
+    | Promise<WorkspaceFile | WorkspaceReadResult | null | void>
+    | WorkspaceFile
+    | WorkspaceReadResult
+    | null
+    | void;
+  /**
+   * Delete a virtual file from the provider.
+   *
+   * If omitted, `delete` rejects for this mount.
+   */
+  delete?(
+    path: string,
+    options?: WorkspaceMountPathOptions,
+  ): Promise<void> | void;
+}
+
+/**
+ * Provider-backed content for a virtual workspace mount.
+ *
+ * Retriever sources project retrieval hits as virtual text files. Custom
+ * sources provide the low-level path-addressed contract for other providers
+ * such as MCP resources, project indexes, and connected drives.
+ */
+export type WorkspaceMountSource =
+  | WorkspaceCustomMountSource
+  | WorkspaceRetrieverMountSource;
+
 /** A mounted root within a workspace. */
 export interface WorkspaceMount {
   readonly path: string;
   readonly access: WorkspaceMountAccess;
   readonly description?: string;
+  readonly source?: WorkspaceMountSource;
 }
 
 /** Inline-vs-blob content thresholds. */
@@ -232,7 +358,8 @@ export interface WorkspaceFile {
   readonly mimeType: string;
   readonly size: number;
   readonly mount: string;
-  readonly storage: "inline" | "blob";
+  /** Byte ownership for listing/stat; `virtual` means the bytes live behind a mount source. */
+  readonly storage: "inline" | "blob" | "virtual";
   readonly uri?: string;
   readonly preview?: string;
   readonly metadata?: Record<string, JsonValue>;

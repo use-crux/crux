@@ -195,6 +195,73 @@ edit, rename, and grep. Programmatic methods also include `exists`, `stat`,
 a URI for app-side fetching. Every operation accepts a `{ namespace }` override
 for direct calls and manually created tools.
 
+Mounts can also expose virtual roots backed by a retriever or custom source. The
+workspace still owns path normalization. Source-backed files can be listed,
+read, grepped, statted, and included with `asContext({ include })` without
+copying provider bytes into the workspace store. Retriever mounts and custom
+sources without write hooks are read-only by default; a custom source can opt
+into `write`/`edit`/`append`, provider-destination `copy`, and `delete` by
+using `access: "readwrite"` and implementing `write` and/or `delete`. Explicit
+`copy()` calls can materialize readable virtual text/JSON files into writable
+local mounts or into provider mounts with write hooks.
+
+```ts
+import { retrieverWorkspaceMountSource } from "@use-crux/core/workspace";
+
+const wsWithSources = workspace({
+  id: "research",
+  namespace: "thread:123",
+  mounts: [
+    { path: "/workspace", access: "readwrite" },
+    {
+      path: "/sources",
+      access: "read",
+      source: {
+        kind: "custom",
+        list: async () => ({
+          entries: [
+            {
+              kind: "file",
+              path: "/sources/brief.md",
+              mount: "/sources",
+              mimeType: "text/markdown",
+              size: 128,
+              storage: "virtual",
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            },
+          ],
+        }),
+        read: async (path) => ({
+          kind: "text",
+          path,
+          mimeType: "text/markdown",
+          content: "# Brief",
+          size: 7,
+        }),
+      },
+    },
+    {
+      path: "/knowledge",
+      access: "read",
+      // myRetriever is any Retriever from @use-crux/core/retrieval.
+      source: {
+        kind: "retriever",
+        retriever: myRetriever,
+        query: "current project sources",
+      },
+    },
+    {
+      path: "/legacy-knowledge",
+      access: "read",
+      source: retrieverWorkspaceMountSource(myRetriever, {
+        query: "legacy source mapping",
+      }),
+    },
+  ],
+});
+```
+
 Workspace operations are visible in devtools, OTel, and Project Index without
 exporting raw paths to OTel. OTel receives `crux.workspace.operation` and
 `crux.workspace.path_hash`; devtools use a stable `hash:<pathHash>` label when

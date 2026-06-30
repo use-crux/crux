@@ -9,6 +9,7 @@
  */
 
 export { workspace, memoryWorkspaceBlobStore } from './define-workspace'
+export { retrieverWorkspaceMountSource } from './retriever-source'
 export { workspaceToolNames } from './tool-io'
 
 export type {
@@ -18,6 +19,13 @@ export type {
   WorkspaceFinalizeOptions,
   WorkspaceProvenance,
 } from './artifact-types'
+
+export type {
+  WorkspaceRetrieverMountOperation,
+  WorkspaceRetrieverMountQueryInput,
+  WorkspaceRetrieverMountSource,
+  WorkspaceRetrieverMountSourceOptions,
+} from './retriever-source'
 
 export type {
   Workspace,
@@ -41,8 +49,15 @@ export type {
   WorkspaceListOptions,
   WorkspaceListResult,
   WorkspaceLimits,
+  WorkspaceCustomMountSource,
+  WorkspaceMountGrepOptions,
+  WorkspaceMountListOptions,
+  WorkspaceMountPathOptions,
+  WorkspaceMountReadOptions,
+  WorkspaceMountWriteOptions,
   WorkspaceMount,
   WorkspaceMountAccess,
+  WorkspaceMountSource,
   WorkspaceMoveOptions,
   WorkspaceNamespaceOption,
   WorkspaceOperation,
