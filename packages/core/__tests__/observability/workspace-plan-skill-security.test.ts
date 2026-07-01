@@ -50,6 +50,11 @@ describe("canonical workspace, plan-task, skill, and security observability", ()
       mimeType: "text/markdown",
     });
     await ws.read("/workspace/notes.md");
+    await ws.transaction(async (tx) => {
+      await tx.write("/workspace/notes.md", "updated notes", {
+        mimeType: "text/markdown",
+      });
+    });
     await observe.flush();
 
     expect(transport.records).toContainEqual(
@@ -95,6 +100,19 @@ describe("canonical workspace, plan-task, skill, and security observability", ()
           operation: "read",
           resultKind: "text",
           size: 13,
+        }),
+      }),
+    );
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: "span:start",
+        primitive: "workspace.operation",
+        name: "workspace.transaction",
+        attributes: expect.objectContaining({
+          workspaceId: "research",
+          operation: "transaction",
+          namespaceHash: expect.any(String),
+          pathHash: expect.stringMatching(/^fnv1a:/),
         }),
       }),
     );

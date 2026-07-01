@@ -41,6 +41,7 @@ const writeMethods = new Set([
   "copy",
   "undo",
   "finalize",
+  "transaction",
 ]);
 
 const exactOperations = new Set([
@@ -55,6 +56,7 @@ const exactOperations = new Set([
   "diff",
   "undo",
   "finalize",
+  "transaction",
 ]);
 
 const targetKindDeclarations = [

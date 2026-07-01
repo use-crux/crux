@@ -57,6 +57,10 @@ await ws.diff("/outputs/report.md", { from: 1, to: 2 });
 await ws.undo("/outputs/report.md");
 await ws.finalize("/workspace/final-report.md", { kind: "report" });
 await ws.artifacts({ status: "final" });
+await ws.transaction(async (tx) => {
+  await tx.write("/outputs/report.md", "# Report");
+  await tx.write("/outputs/data.csv", "name,value\nalpha,1\n");
+});
 await ws.delete("/outputs/report.md");
 ```
 
@@ -71,6 +75,65 @@ const tools = ws.asTools({ namespace: "thread:123", prefix: "research" });
 
 `deleteWorkspaceFile` and `undoWorkspaceFile` are not auto-injected unless
 `tools.delete` / `tools.undo` are enabled.
+
+## Transactions
+
+```ts
+const artifact = await ws.transaction(async (tx) => {
+  await tx.write("/outputs/report.md", "# Report", { status: "draft" });
+  await tx.write("/outputs/data.csv", "name,value\nalpha,1\n");
+
+  return tx.finalize("/outputs/report.md", { kind: "report" });
+});
+```
+
+`transaction()` stages changes in a private namespace, gives the callback
+read-your-own-writes behavior through `tx`, and commits only touched paths when
+the callback returns. If the callback throws, staged changes are discarded. If
+commit fails part-way through, Crux rolls back the touched live paths it changed.
+
+The transaction-scoped surface is:
+
+```ts
+type WorkspaceTransaction = Pick<
+  Workspace,
+  | "list"
+  | "read"
+  | "write"
+  | "edit"
+  | "delete"
+  | "exists"
+  | "stat"
+  | "append"
+  | "rename"
+  | "move"
+  | "copy"
+  | "grep"
+  | "artifacts"
+  | "finalize"
+>;
+```
+
+Transactions are namespace-local and accept the same `{ namespace }` override:
+
+```ts
+await ws.transaction(
+  async (tx) => {
+    await tx.write("/outputs/report.md", "# Report");
+  },
+  { namespace: "thread:123" },
+);
+```
+
+Transaction mutations are local-workspace only. Source-backed mounts are rejected
+before their provider `write()` or `delete()` hooks run.
+
+The implementation uses only the generic `RecordStore` contract for local
+workspace mounts, so it works with the in-memory store, Convex record store,
+Upstash Redis record store, and custom conforming stores. Observed commit
+failures roll back touched live paths. Crash-proof multi-key durability depends
+on the backing store/runtime; `transaction()` is not a distributed transaction
+across stores.
 
 ## Prompt Injection
 

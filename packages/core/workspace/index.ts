@@ -68,6 +68,8 @@ export type {
   WorkspaceTools,
   WorkspaceToolNames,
   WorkspaceToolOptions,
+  WorkspaceTransaction,
+  WorkspaceTransactionOptions,
   WorkspaceWriteOptions,
   WorkspaceDiff,
   WorkspaceDiffHunk,

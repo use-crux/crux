@@ -854,6 +854,7 @@ export function IndexData({ def }: { def: ViewDef }) {
     append: 'iris',
     query: 'crux',
     delete: 'danger',
+    transaction: 'danger',
   }
   const Access = ({ items, title }: { items: DataFacts['reads']; title: string }) => (
     <div>

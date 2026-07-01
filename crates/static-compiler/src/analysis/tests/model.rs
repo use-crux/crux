@@ -1,7 +1,9 @@
 use serde_json::json;
 
 use crate::analysis::run::analyze_static_index_facts;
-use crate::finalizer::run::finalize_static_index_values_with_policies;
+use crate::finalizer::run::{
+    finalize_static_index_values, finalize_static_index_values_with_policies,
+};
 use crate::protocol::static_index::{
     STATIC_INDEX_PROTOCOL_VERSION, StaticIndexAnalyzeFile, StaticIndexAnalyzeRequest,
     StaticIndexDigestIdentity, StaticIndexMethod, StaticIndexPlan, StaticIndexRunIdentity,
@@ -192,6 +194,63 @@ fn analyze_relation_refs_are_finalize_compatible() {
             .definitions
             .iter()
             .any(|definition| definition.id == "agent:support-agent")
+    );
+}
+
+#[test]
+fn analyze_rust_workspace_transaction_as_write_access() {
+    let source = [
+        "const scratch = workspace({ id: 'scratch' })",
+        "export const writer = tool({",
+        "  name: 'writer',",
+        "  execute: async () => {",
+        "    await scratch.transaction(async (tx) => {",
+        "      await tx.write('/draft.md', 'draft')",
+        "    })",
+        "  },",
+        "})",
+    ]
+    .join("\n");
+    let facts = analyze_static_index_facts(&request_with_root_file_and_call_names(
+        "/workspace/acme".to_string(),
+        "src/tools/writer.ts".to_string(),
+        vec!["tool".to_string(), "workspace".to_string()],
+        &source,
+    ));
+    let facts = facts.into_wire_values();
+    let tool_group = facts
+        .iter()
+        .find(|fact| fact["definitions"][0]["id"] == "tool:writer")
+        .expect("tool fact group");
+
+    assert!(
+        tool_group["definitions"][0]["metadata"]["intelligence"]["data"]["writes"]
+            .as_array()
+            .is_some_and(|writes| {
+                writes.iter().any(|write| {
+                    write["targetVariable"] == "scratch" && write["operation"] == "transaction"
+                })
+            }),
+        "Rust extraction should classify workspace.transaction() as a write operation"
+    );
+    assert!(
+        tool_group["relationRefs"].as_array().is_some_and(|refs| {
+            refs.iter().any(|reference| {
+                reference["toVariable"] == "scratch"
+                    && reference["typeByTargetKind"]["workspace"] == "tool.writes_workspace"
+            })
+        }),
+        "Rust extraction should emit a workspace-capable write relation ref"
+    );
+
+    let output = finalize_static_index_values(&facts, &[]);
+    assert!(
+        output.model.facts.relations.iter().any(|relation| {
+            relation.r#type == "tool.writes_workspace"
+                && relation.from == "tool:writer"
+                && relation.to == "workspace:scratch"
+        }),
+        "Rust finalization should resolve transaction writes to the workspace definition"
     );
 }
 

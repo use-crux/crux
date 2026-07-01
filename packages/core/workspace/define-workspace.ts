@@ -33,6 +33,7 @@ import { recordToReadResult } from "./read-result";
 import { createWorkspaceFilesystemOps } from "./fs-ops";
 import { createWorkspaceArtifactOps } from "./artifacts";
 import { createWorkspaceContextAdapters } from "./context-adapters";
+import { createWorkspaceTransaction } from "./transaction";
 import {
   assertWorkspaceMountIsLocal,
   hasWorkspaceMountSource,
@@ -454,6 +455,33 @@ export function workspace<const Config extends WorkspaceConfig>(
     retention: config.retention,
     resolveNamespace,
   });
+  const transaction = createWorkspaceTransaction({
+    workspaceId: config.id,
+    store,
+    blobs,
+    mounts,
+    retention: config.retention,
+    resolveNamespace,
+    write: (namespace, path, content, options, producedBy) =>
+      writeForNamespace(namespace, path, content, options, producedBy),
+    remove: removeForNamespace,
+    ops: {
+      list,
+      read,
+      write,
+      edit,
+      delete: remove,
+      exists: fsOps.exists,
+      stat: fsOps.stat,
+      append: fsOps.append,
+      rename: fsOps.rename,
+      move: fsOps.move,
+      copy: fsOps.copy,
+      grep: fsOps.grep,
+      artifacts: artifactOps.artifacts,
+      finalize: artifactOps.finalize,
+    },
+  });
   const asTools = createWorkspaceTools<Config["tools"]>({
     workspaceId: config.id,
     defaultToolOptions: config.tools,
@@ -498,6 +526,7 @@ export function workspace<const Config extends WorkspaceConfig>(
     undo: versionOps.undo,
     artifacts: artifactOps.artifacts,
     finalize: artifactOps.finalize,
+    transaction,
     asContext: contextAdapters.asContext,
     asTools: <
       const Options extends WorkspaceToolOptions & WorkspaceNamespaceOption =

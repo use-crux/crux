@@ -228,7 +228,8 @@ export interface DataAccessFact {
     | "history"
     | "diff"
     | "undo"
-    | "finalize";
+    | "finalize"
+    | "transaction";
   source?: SourceLocation;
 }
 
@@ -1464,6 +1465,7 @@ export const DataAccessFactSchema = z.object({
       "diff",
       "undo",
       "finalize",
+      "transaction",
     ])
     .optional(),
   source: SourceLocationSchema.optional(),

@@ -112,7 +112,8 @@ export type WorkspaceOperation =
   | "diff"
   | "undo"
   | "artifacts"
-  | "finalize";
+  | "finalize"
+  | "transaction";
 
 /** Options passed to a source-backed mount when reading virtual file content. */
 export interface WorkspaceMountReadOptions {
@@ -422,6 +423,35 @@ export type WorkspaceReadResult =
       readonly metadata?: Record<string, JsonValue>;
     };
 
+/** Options for {@link Workspace.transaction}. */
+export type WorkspaceTransactionOptions = WorkspaceNamespaceOption;
+
+/**
+ * Workspace operations available inside {@link Workspace.transaction}.
+ *
+ * The transaction surface intentionally excludes prompt adapters such as
+ * `asContext()`, `asTools()`, and `inject()`, plus version/history operations
+ * such as `history()`, `diff()`, and `undo()`. A callback should describe file
+ * mutations that either commit together or are discarded together.
+ */
+export type WorkspaceTransaction = Pick<
+  Workspace,
+  | "list"
+  | "read"
+  | "write"
+  | "edit"
+  | "delete"
+  | "exists"
+  | "stat"
+  | "append"
+  | "rename"
+  | "move"
+  | "copy"
+  | "grep"
+  | "artifacts"
+  | "finalize"
+>;
+
 /** Re-export of the store blob reference type, for workspace consumers. */
 export type WorkspaceBlobRef = BlobRef;
 /** Re-export of the store blob read-result type, for workspace consumers. */
@@ -519,6 +549,26 @@ export interface Workspace<
     path: string,
     options?: WorkspaceFinalizeOptions,
   ): Promise<WorkspaceArtifact>;
+  /**
+   * Commit a coherent set of workspace mutations as one unit.
+   *
+   * The callback receives a transaction-scoped workspace view. Reads inside the
+   * callback see the namespace as it existed when the transaction started plus
+   * writes already made through `tx`. If the callback throws, staged mutations
+   * are discarded and the live namespace is not updated. When the callback
+   * returns, touched paths are committed to the live namespace and the callback's
+   * return value is preserved. If committing touched paths fails partway
+   * through, previously applied live paths, version records, and blobs are
+   * rolled back to their pre-commit state.
+   *
+   * @param run - Function that performs staged workspace mutations.
+   * @param options - Optional namespace override for the transaction.
+   * @returns The value returned by `run`.
+   */
+  transaction<T>(
+    run: (tx: WorkspaceTransaction) => Promise<T> | T,
+    options?: WorkspaceTransactionOptions,
+  ): Promise<T>;
   asContext(options?: WorkspaceContextOptions): Context<z.ZodObject<{}>>;
   asTools<
     const Options extends WorkspaceToolOptions & WorkspaceNamespaceOption = {},

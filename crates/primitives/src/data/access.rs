@@ -205,7 +205,8 @@ fn data_access_kind(method: &str) -> Option<&'static str> {
         "get" | "read" | "query" | "find" | "search" | "list" | "readFile" | "load" | "grep"
         | "artifacts" | "stat" | "exists" | "history" | "diff" => Some("read"),
         "set" | "write" | "update" | "append" | "delete" | "put" | "writeFile" | "edit"
-        | "deleteFile" | "save" | "rename" | "move" | "copy" | "undo" | "finalize" => Some("write"),
+        | "deleteFile" | "save" | "rename" | "move" | "copy" | "undo" | "finalize"
+        | "transaction" => Some("write"),
         _ => None,
     }
 }
@@ -223,6 +224,7 @@ fn data_access_operation(method: &str, kind: &str) -> &'static str {
         "diff" => "diff",
         "undo" => "undo",
         "finalize" => "finalize",
+        "transaction" => "transaction",
         "query" | "find" | "search" | "list" => "query",
         "append" | "put" | "save" => "append",
         "update" | "edit" => "update",

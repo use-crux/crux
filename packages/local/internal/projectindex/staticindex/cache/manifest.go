@@ -12,7 +12,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-const Epoch = "static-parse-v44"
+const Epoch = "static-parse-v45"
 
 type Status struct {
 	CacheHits    []string

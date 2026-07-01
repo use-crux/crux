@@ -353,6 +353,9 @@ describe("first-party extractor fixtures", () => {
             await scratch.copy('/workspace/c.md', '/outputs/report-copy.md')
             await scratch.undo('/workspace/c.md')
             await scratch.finalize('/outputs/report.md')
+            await scratch.transaction(async (tx) => {
+              await tx.write('/workspace/d.md', 'draft')
+            })
             return 'done'
           },
         })
@@ -502,6 +505,10 @@ describe("first-party extractor fixtures", () => {
             expect.objectContaining({
               targetVariable: "scratch",
               operation: "finalize",
+            }),
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "transaction",
             }),
           ]),
         }),
