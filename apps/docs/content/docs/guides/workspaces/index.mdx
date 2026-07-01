@@ -168,6 +168,69 @@ const ws = workspace({
 The `undoWorkspaceFile` tool is opt-in via `tools: { undo: true }`, like
 `deleteWorkspaceFile`.
 
+## Transactions
+
+Use `transaction()` when one deliverable spans several files and partial output
+would be misleading. The callback writes to a staged workspace view first. If
+the callback throws, the live namespace is unchanged; when it returns, Crux
+commits the touched paths and returns the callback result.
+
+```ts
+const artifact = await ws.transaction(async (tx) => {
+  await tx.write("/outputs/report.md", "# Report", { status: "draft" });
+  await tx.write("/outputs/data.csv", "name,value\nalpha,1\n");
+
+  return tx.finalize("/outputs/report.md", { kind: "report" });
+});
+```
+
+Reads inside the callback see staged changes, while ordinary `ws` reads still
+see the live namespace until commit:
+
+```ts
+await ws.write("/workspace/notes.md", "draft");
+
+await ws.transaction(async (tx) => {
+  await tx.edit("/workspace/notes.md", {
+    find: "draft",
+    replace: "final",
+  });
+
+  await tx.read("/workspace/notes.md"); // "final"
+  await ws.read("/workspace/notes.md"); // "draft"
+});
+
+await ws.read("/workspace/notes.md"); // "final"
+```
+
+The transaction surface is file-focused: `list`, `read`, `write`, `edit`,
+`delete`, `exists`, `stat`, `append`, `rename`, `move`, `copy`, `grep`,
+`artifacts`, and `finalize`. It intentionally does not include prompt adapters
+such as `asContext()`, `asTools()`, or `inject()`.
+
+Transactions are namespace-local. Pass `{ namespace }` to target a specific
+namespace outside prompt resolution:
+
+```ts
+await ws.transaction(
+  async (tx) => {
+    await tx.write("/outputs/report.md", "# Report");
+  },
+  { namespace: "thread:123" },
+);
+```
+
+Source-backed mount mutations are rejected before provider hooks run. Copy a
+provider-backed file into `/workspace` or `/outputs` first if you need it inside
+a transaction.
+
+Transactions are implemented over the generic `RecordStore` contract, so the
+same API works with in-memory storage, Convex record storage, Upstash Redis, and
+custom conforming stores. The generic implementation rolls back touched live
+paths when it observes a commit failure. Crash-proof multi-key durability still
+depends on the underlying store or runtime; `transaction()` is not a distributed
+transaction across stores.
+
 ## Storage Rules
 
 Workspaces use two storage layers:

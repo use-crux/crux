@@ -260,7 +260,11 @@ export interface DataAccessFact {
     | 'rename'
     | 'move'
     | 'copy'
+    | 'history'
+    | 'diff'
+    | 'undo'
     | 'finalize'
+    | 'transaction'
   source?: { file: string; line: number; column?: number; function?: string }
 }
 
@@ -2334,6 +2338,7 @@ export interface WorkspaceOperationEvent {
     | 'grep'
     | 'artifacts'
     | 'finalize'
+    | 'transaction'
     | string
   path: string
   pathHash?: string

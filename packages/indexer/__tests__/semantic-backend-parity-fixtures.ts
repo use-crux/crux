@@ -457,6 +457,33 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
     },
     {
+      name: "workspace-transaction-write-relation",
+      files: {
+        "src/resources.ts": `
+        import { workspace } from '@use-crux/core'
+
+        export const scratch = workspace({ id: 'scratch', mounts: [{ path: '/drafts', access: 'readwrite' }] })
+      `,
+        "src/app.ts": `
+        import { tool } from '@use-crux/core'
+        import { scratch } from './resources'
+
+        export const transactionTool = tool({
+          name: 'transactionTool',
+          execute: async () => {
+            await scratch.transaction(async (tx) => {
+              await tx.write('/drafts/article.md', 'draft')
+            })
+          },
+        })
+      `,
+      },
+      expect: {
+        definitionIds: ["workspace:scratch"],
+        relationTypes: ["tool.writes_workspace"],
+      },
+    },
+    {
       name: "data-access-relations-and-lint-facts",
       files: {
         "src/resources.ts": `

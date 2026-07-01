@@ -201,6 +201,8 @@ export type {
   WorkspaceToolOptions,
   WorkspaceTools,
   WorkspaceToolNames,
+  WorkspaceTransaction,
+  WorkspaceTransactionOptions,
   WorkspaceWriteOptions,
   WorkspaceRetrieverMountOperation,
   WorkspaceRetrieverMountQueryInput,

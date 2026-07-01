@@ -188,12 +188,30 @@ many revisions are kept per file. The `undoWorkspaceFile` tool is opt-in via
 create new draft versions, but `artifacts()` and the manifest keep surfacing the
 pinned revision (`WorkspaceArtifact.version`) until you `finalize()` again.
 
+Use `transaction()` when a deliverable spans multiple files and should appear as
+a coherent set. The callback writes to a staged view first; throwing discards
+the staged changes, and a successful callback commits the touched paths together.
+Transactions use the generic `RecordStore` contract, so they work with in-memory,
+Convex, Upstash Redis, and custom conforming record stores for local workspace
+mounts. Crash-proof multi-key durability still depends on the backing store.
+
+```ts
+const artifact = await ws.transaction(
+  async (tx) => {
+    await tx.write("/outputs/report.md", "# Report", { status: "draft" });
+    await tx.write("/outputs/data.csv", "name,value\nalpha,1\n");
+    return tx.finalize("/outputs/report.md", { kind: "report" });
+  },
+  { namespace: "thread:123" },
+);
+```
+
 Injected workspaces add a bounded manifest plus file tools for list, read, write,
 edit, rename, and grep. Programmatic methods also include `exists`, `stat`,
-`append`, `move`, `copy`, `delete`, `history`, `diff`, `undo`, `artifacts`, and
-`finalize`. Blob-backed text and JSON read back as text/JSON; binary files return
-a URI for app-side fetching. Every operation accepts a `{ namespace }` override
-for direct calls and manually created tools.
+`append`, `move`, `copy`, `delete`, `history`, `diff`, `undo`, `artifacts`,
+`finalize`, and `transaction`. Blob-backed text and JSON read back as text/JSON;
+binary files return a URI for app-side fetching. Every operation accepts a
+`{ namespace }` override for direct calls and manually created tools.
 
 Mounts can also expose virtual roots backed by a retriever or custom source. The
 workspace still owns path normalization. Source-backed files can be listed,

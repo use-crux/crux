@@ -20,6 +20,8 @@ import type {
   WorkspaceRetrieverMountSource,
   WorkspaceRetrieverMountSourceOptions,
   WorkspaceMountSource,
+  WorkspaceTransaction,
+  WorkspaceTransactionOptions,
   WorkspaceTools,
 } from "../workspace";
 
@@ -87,6 +89,20 @@ expectTypeOf<{
   maxNamespaceBytes: 2;
 }>().toExtend<WorkspaceLimits>();
 expectTypeOf<{ ttlMs: 1 }>().toExtend<WorkspaceRetention>();
+expectTypeOf<{ namespace: "thread:2" }>().toExtend<
+  WorkspaceTransactionOptions
+>();
+expectTypeOf(
+  ws.transaction(async (tx) => {
+    expectTypeOf(tx).toEqualTypeOf<WorkspaceTransaction>();
+    expectTypeOf<
+      Awaited<ReturnType<typeof tx.write>>
+    >().toExtend<{ path: string }>();
+    // @ts-expect-error — transaction callbacks cannot create prompt adapters.
+    tx.asContext();
+    return { ok: true as const };
+  }),
+).resolves.toEqualTypeOf<{ ok: true }>();
 
 expectTypeOf<{
   kind: "custom";

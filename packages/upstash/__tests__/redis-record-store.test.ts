@@ -1,10 +1,35 @@
 import { describeRecordStoreConformance } from '@use-crux/core/storage/testing/vitest'
+import { workspace } from '@use-crux/core/workspace'
 import { describe, expect, it, vi } from 'vitest'
 import { upstashRedisRecordStore, type RedisRecordClient, type RedisSubscriber } from '../redis-record-store'
 
 describeRecordStoreConformance({
   name: 'upstashRedisRecordStore',
   prepare: () => upstashRedisRecordStore({ redis: createRedisRecordClient() }),
+})
+
+describe('upstashRedisRecordStore workspace transactions', () => {
+  it('supports staged multi-file workspace commits through the generic RecordStore contract', async () => {
+    const ws = workspace({
+      id: 'research',
+      namespace: 'thread:1',
+      records: upstashRedisRecordStore({ redis: createRedisRecordClient() }),
+    })
+
+    await ws.transaction(async (tx) => {
+      await tx.write('/outputs/report.md', '# Report')
+      await tx.write('/outputs/data.csv', 'name,value\nalpha,1\n')
+    })
+
+    await expect(ws.read('/outputs/report.md')).resolves.toMatchObject({
+      kind: 'text',
+      content: '# Report',
+    })
+    await expect(ws.read('/outputs/data.csv')).resolves.toMatchObject({
+      kind: 'text',
+      content: 'name,value\nalpha,1\n',
+    })
+  })
 })
 
 describe('upstashRedisRecordStore subscriptions', () => {
