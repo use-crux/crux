@@ -107,7 +107,9 @@ Suspend the flow and wait for an external signal. Throws internally to unwind th
 
 ### `waitUntil(name, conditionFn, options?)`
 
-Suspend the flow until a condition function returns `true`. On each resume, re-evaluates the condition. If true, continues; if false, re-suspends.
+Suspend the flow until a condition function returns `true`. Core evaluates the condition during the initial run and
+again only when your app explicitly resumes the flow. If the condition is true, execution continues; if false, the
+flow re-suspends. Core does not poll, schedule, or wake flows in the background.
 
 ## `SuspendOptions<T>`
 
@@ -162,6 +164,7 @@ Persisted flow state stored in `RecordStore` under the `crux:flow:{flowId}` key.
   **Low-level primitive.** `signalFlow()` only writes the signal to the RecordStore -- it does NOT trigger the flow to
   resume. Prefer `handle.signal()` which delegates to this internally. In Convex mutation-only modules, pair
   `signalFlow()` with `ctx.scheduler.runAfter()` in an app-local helper that also schedules the resume action.
+  For flows with local signal maps, prefer `handle.signal()` so declared schemas validate before persistence.
 </Callout>
 
 Write a signal payload to the store at `crux:signal:{flowId}:{name}`. The signal is picked up on the next resume.

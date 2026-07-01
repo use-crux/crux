@@ -84,7 +84,9 @@ export async function handleEmailVerified(flowId: string, verifiedAt: string) {
 
 ### Wait for a condition, not a signal
 
-Use `flow.waitUntil('name', conditionFn)` to suspend until a condition function returns `true`. The flow will be checked periodically (typically by a scheduler).
+Use `flow.waitUntil('name', conditionFn)` to suspend until a condition function returns `true`. Core rechecks the
+condition only when the flow is explicitly resumed; if you want periodic checks, schedule resume attempts in your
+adapter or application code.
 
 ### Retry transient failures
 

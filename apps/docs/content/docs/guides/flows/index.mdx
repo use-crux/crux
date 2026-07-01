@@ -168,7 +168,7 @@ See the [Quality guide](/docs/guides/quality) for variants, gates, and replay.
 
 ## Signaling Handles
 
-Prefer `pipeline.signal(flowId, name, payload)` on the flow handle. The bare `signalFlow()` export is a low-level primitive that only writes the signal payload — see [Suspend and resume](/docs/guides/flows/suspend-and-resume#signaling-a-suspended-flow) for the full picture.
+Prefer `flowHandle.signal(flowId, name, payload)` on the flow handle. The bare `signalFlow()` export is a low-level primitive that only writes the signal payload — see [Suspend and resume](/docs/guides/flows/suspend-and-resume#signaling-a-suspended-flow) for the full picture.
 
 ## Where to Next
 

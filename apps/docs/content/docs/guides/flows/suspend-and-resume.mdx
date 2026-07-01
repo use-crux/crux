@@ -142,7 +142,9 @@ await flow.waitUntil(
 )
 ```
 
-`waitUntil` re-suspends if the condition is still false on resume. The flow only continues once the condition returns `true`.
+`waitUntil` re-suspends if the condition is still false on resume. Core does not poll, schedule, or wake the
+flow in the background; the condition is checked again only when your app explicitly calls `handle.resume(flowId)`.
+Adapters such as Convex can schedule that resume action, but scheduling is adapter behavior, not a core guarantee.
 
 ## How It Works
 

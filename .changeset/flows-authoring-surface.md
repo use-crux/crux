@@ -1,5 +1,6 @@
 ---
 "@use-crux/core": minor
+"@use-crux/convex": minor
 "@use-crux/indexer": minor
 "@use-crux/otel": patch
 ---
@@ -23,5 +24,7 @@ Flow step labels are now enforced as durable replay identities. Duplicate labels
 Flow lifecycle control errors thrown inside `flow.step()` now bypass step retry and fallback handling, preserving suspend, cancel, and expire outcomes.
 
 Persisted flow input, step outputs, signal payloads, and terminal snapshot metadata are now validated as JSON-serializable before flow state is written.
+
+Convex flow actions now start and resume through the accepted core `run(input)` and `resume(flowId)` handle APIs. Convex flows can also declare local signal maps, and `.signal()` validates declared payload schemas before writing a pending signal or scheduling the resume action.
 
 Refresh OTel package README wording to describe `flow().run()` spans.

@@ -8,9 +8,21 @@ import {
   type CruxPrimitiveName,
   type ObserveSpanOptions,
 } from '@use-crux/core/observability'
-import { flow as coreFlow, getFlowSnapshot, signalFlow, type FlowResult, type FlowScope } from '@use-crux/core/flow'
-import type { JsonObject } from '@use-crux/core/storage'
+import {
+  getFlowSnapshot,
+  signalFlow,
+  type FlowResult,
+  type FlowScope,
+} from '@use-crux/core/flow'
+import type { JsonValue } from '@use-crux/core/storage'
 import { flushObservability } from './observability'
+import {
+  createConvexCoreFlowHandle,
+  createConvexFlowSignalSender,
+  type ConvexFlowSignalArgs,
+  type ConvexFlowSignalName,
+  type ConvexFlowSignals,
+} from './server-flow'
 
 const CRUX_ARG = '__crux'
 const CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS = 1000
@@ -115,24 +127,74 @@ type ConvexValidatorDefinition<TCtx, TArgsValidators extends PropertyValidators,
   args?: TArgsValidators
 }
 
-export interface CruxServerFlowDefinition<TCtx, TArgs extends Record<string, unknown>, TResult> {
+/**
+ * Definition object for a durable Convex flow.
+ *
+ * Convex flows keep the app-facing action wrapper shape while delegating
+ * lifecycle, persistence, signal validation, and result semantics to the core
+ * `flow()` runtime. `signals` is optional metadata; when present it types both
+ * `scope.suspend()` in the handler and `handle.signal()` at call sites.
+ *
+ * @typeParam TCtx - Convex action context shape.
+ * @typeParam TArgs - Public action arguments, also passed as flow input.
+ * @typeParam TResult - Completed flow output.
+ * @typeParam TSignals - Optional local signal map shared with core flows.
+ */
+export interface CruxServerFlowDefinition<
+  TCtx,
+  TArgs extends Record<string, unknown>,
+  TResult,
+  TSignals extends ConvexFlowSignals = undefined,
+> {
+  /** Human-readable flow name used for tracing and persisted snapshots. */
   name: string
+  /** Convex action argument validators exposed by the generated action. */
   args: Record<string, unknown>
-  handler: (flow: FlowScope<TArgs>, args: TArgs, ctx: CruxAugmentedCtx<TCtx>) => TResult | Promise<TResult>
+  /** Optional local signal contracts shared by suspend and signal calls. */
+  signals?: TSignals
+  /**
+   * Procedural flow body.
+   *
+   * The `args` value is also available as `flow.input`; both are restored from
+   * the persisted core snapshot when a Convex resume action runs.
+   */
+  handler: (flow: FlowScope<TArgs, TSignals>, args: TArgs, ctx: CruxAugmentedCtx<TCtx>) => TResult | Promise<TResult>
+  /** Override or disable the observability flush after each flow action run. */
   observabilityFlushTimeoutMs?: number | false
 }
 
-export interface CruxServerFlowHandle<TCtx, TArgs extends Record<string, unknown>, TResult> {
+/**
+ * Handle returned by the Convex `flow()` adapter.
+ *
+ * The handle exposes a generated internal action plus direct helpers for tests,
+ * wrappers, and mutation-side signal scheduling.
+ */
+export interface CruxServerFlowHandle<
+  TCtx,
+  TArgs extends Record<string, unknown>,
+  TResult,
+  TSignals extends ConvexFlowSignals = undefined,
+> {
+  /** Human-readable flow name. */
   readonly name: string
+  /** Public action argument validators without the internal `resume` field. */
   readonly args: Record<string, unknown>
+  /** Direct handler used by the generated action and by focused tests. */
   readonly handler: (ctx: CruxAugmentedCtx<TCtx>, args: TArgs & { resume?: string }) => Promise<FlowResult<TResult>>
+  /** Convex internal action that starts or resumes the flow. */
   readonly action: WrappedConvexFunction<TCtx, TArgs & { resume?: string }, FlowResult<TResult>>
-  signal(
+  /**
+   * Persist a signal payload and schedule the resume action.
+   *
+   * When the flow declares `signals`, payloads are validated by the core flow
+   * handle before the pending signal is written.
+   */
+  signal<TName extends ConvexFlowSignalName<TSignals>>(
     ctx: { scheduler?: ConvexSchedulerLike; crux?: CruxConvexContext },
     actionRef: unknown,
     flowId: string,
-    signalName: string,
-    payload?: Record<string, unknown>,
+    signalName: TName,
+    ...payload: ConvexFlowSignalArgs<TSignals, TName>
   ): Promise<void>
 }
 
@@ -506,24 +568,32 @@ export function cruxArgs(args: Record<string, unknown> = {}): Record<string, unk
   return withCruxArg(args)
 }
 
-export function flow<TCtx extends ConvexLikeCtx, TArgs extends Record<string, unknown>, TResult>(
-  definition: CruxServerFlowDefinition<TCtx, TArgs, TResult>,
-): CruxServerFlowHandle<TCtx, TArgs, TResult> {
+export function flow<
+  TCtx extends ConvexLikeCtx,
+  TArgs extends Record<string, unknown>,
+  TResult,
+  const TSignals extends ConvexFlowSignals = undefined,
+>(
+  definition: CruxServerFlowDefinition<TCtx, TArgs, TResult, TSignals>,
+): CruxServerFlowHandle<TCtx, TArgs, TResult, TSignals> {
   const args = {
     ...definition.args,
     resume: v.optional(v.string()),
   }
+  const signals = definition.signals as TSignals
+  const signalSender = createConvexFlowSignalSender(definition.name, signals)
 
   const handler = async (
     ctx: CruxAugmentedCtx<TCtx>,
     actionArgs: TArgs & { resume?: string },
   ): Promise<FlowResult<TResult>> => {
     const { resume, ...input } = actionArgs
-    const flowHandle = coreFlow<TResult, TArgs>(definition.name, (scope) => definition.handler(scope, scope.input, ctx))
-    const result = await flowHandle.run({
-      input: input as TArgs,
-      ...(resume ? { resume } : {}),
-    })
+    const flowHandle = createConvexCoreFlowHandle<TArgs, TResult, TSignals>(
+      definition.name,
+      signals,
+      (scope, flowInput) => definition.handler(scope, flowInput, ctx),
+    )
+    const result = resume ? await flowHandle.resume(resume) : await flowHandle.run(input as TArgs)
     await flushConvexObservability(definition.observabilityFlushTimeoutMs)
     if (resume) {
       const status = runStatusFromResult(result)
@@ -541,14 +611,18 @@ export function flow<TCtx extends ConvexLikeCtx, TArgs extends Record<string, un
     observabilityFlushTimeoutMs: definition.observabilityFlushTimeoutMs,
   })
 
-  const handle: CruxServerFlowHandle<TCtx, TArgs, TResult> = {
+  const handle: CruxServerFlowHandle<TCtx, TArgs, TResult, TSignals> = {
     name: definition.name,
     args: definition.args,
     handler,
     action: actionDefinition,
 
-    async signal(ctx, actionRef, flowId, signalName, payload = {}) {
-      await signalFlow(flowId, signalName, payload as JsonObject)
+    async signal(ctx, actionRef, flowId, signalName, ...payload) {
+      if (signalSender) {
+        await signalSender.signal(flowId, signalName, ...(payload as JsonValue[]))
+      } else {
+        await signalFlow(flowId, signalName, (payload[0] ?? {}) as JsonValue)
+      }
       const snapshot = await getFlowSnapshot(flowId)
       const resumeObservability = snapshot?.observabilityContext as CapturedObservabilityContext | undefined
       if (ctx.crux?.scheduler) {
