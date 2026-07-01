@@ -212,6 +212,9 @@ describe('flow handle surface', () => {
     expect(completedSuspension.status).toBe('suspended')
     await review.signal(completedSuspension.flowId, 'approval')
     await expect(review.resume(completedSuspension.flowId)).resolves.toMatchObject({ status: 'completed' })
+    const completedSnapshot = await store.get(`crux:flow:${completedSuspension.flowId}`)
+    await cancelFlow(completedSuspension.flowId, 'Too late')
+    await expect(store.get(`crux:flow:${completedSuspension.flowId}`)).resolves.toEqual(completedSnapshot)
 
     const cancelledSuspension = await review.run({ flowId: 'flow-terminal-cancelled' })
     expect(cancelledSuspension.status).toBe('suspended')

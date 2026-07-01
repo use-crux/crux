@@ -273,6 +273,7 @@ export {
   FlowSuspendedError,
   FlowCancelledError,
   FlowExpiredError,
+  InvalidSignalPayloadError,
   FlowSerializationError,
   noPayload,
 } from "./flow/scope";

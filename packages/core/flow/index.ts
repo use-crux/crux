@@ -40,7 +40,7 @@ export type {
   SuspendOptions,
   StepOptions,
 } from './types'
-export { noPayload } from './signals'
+export { InvalidSignalPayloadError, noPayload } from './signals'
 export type {
   FlowDefinitionOptions,
   FlowSignalMap,

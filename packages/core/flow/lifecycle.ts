@@ -157,19 +157,21 @@ export async function listFlows(options?: ListFlowsOptions): Promise<FlowSummary
 export async function cancelFlow(flowId: string, reason?: string): Promise<void> {
   const store = resolveRecords()
   const snapshot = await store.get(`${FLOW_KEY_PREFIX}${flowId}`)
-  if (snapshot) {
-    const cancelledAt = Date.now()
-    if (reason !== undefined) {
-      assertFlowJsonValue(reason, { boundary: 'flow snapshot metadata', path: '$.cancelReason' })
-    }
-    const cancelledSnapshot = {
-      ...snapshot,
-      status: 'cancelled',
-      ...(reason !== undefined ? { cancelReason: reason } : {}),
-      cancelledAt,
-      updatedAt: cancelledAt,
-    } as FlowSnapshot
-    assertFlowSnapshotMetadata(cancelledSnapshot)
-    await store.put(`${FLOW_KEY_PREFIX}${flowId}`, cancelledSnapshot)
+  if (!snapshot || isTerminalFlowStatus(snapshot.status)) {
+    return
   }
+
+  const cancelledAt = Date.now()
+  if (reason !== undefined) {
+    assertFlowJsonValue(reason, { boundary: 'flow snapshot metadata', path: '$.cancelReason' })
+  }
+  const cancelledSnapshot = {
+    ...snapshot,
+    status: 'cancelled',
+    ...(reason !== undefined ? { cancelReason: reason } : {}),
+    cancelledAt,
+    updatedAt: cancelledAt,
+  } as FlowSnapshot
+  assertFlowSnapshotMetadata(cancelledSnapshot)
+  await store.put(`${FLOW_KEY_PREFIX}${flowId}`, cancelledSnapshot)
 }

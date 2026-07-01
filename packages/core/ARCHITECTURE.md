@@ -1162,7 +1162,7 @@ flow.suspend('approval')
 
 On resume (`handle.resume(flowId)`), the snapshot is loaded from the store. All previously completed steps return their cached output without re-executing:
 
-```
+```text
 handle.resume('flow-123')
   → load snapshot from store
     → flow.step('plan', ...) → return cached output (no execution)

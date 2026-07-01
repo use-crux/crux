@@ -214,8 +214,8 @@ These errors are used internally for control flow -- they are caught by the flow
 import { flow, signalFlow } from '@use-crux/core/flow'
 import { z } from 'zod'
 
-const approvalFlow = flow('content-approval', async (flow) => {
-  const draft = await flow.step('draft', () => generate(writer, { model, input: flow.input }))
+const approvalFlow = flow('content-approval', async (flow, input: { topic: string }) => {
+  const draft = await flow.step('draft', () => generate(writer, { model, input }))
 
   // Suspend and wait for human approval
   const approval = await flow.suspend('review', {

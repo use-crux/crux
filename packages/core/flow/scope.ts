@@ -31,8 +31,9 @@ import type {
   FlowSummary,
 } from './types'
 import { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from './types'
-import { noPayload, signalSchemaFor, validateSignalPayload } from './signals'
+import { InvalidSignalPayloadError, noPayload, signalSchemaFor, validateSignalPayload } from './signals'
 import type { FlowDefinitionOptions, FlowSignalMap } from './signals'
+import { flowHandlerAcceptsInput } from './handler-arity'
 import {
   createFlowId,
   signalFlow,
@@ -70,7 +71,17 @@ export type {
   ListFlowsOptions,
   FlowSummary,
 }
-export { FlowSuspendedError, FlowCancelledError, FlowExpiredError, createFlowId, signalFlow, cancelFlow, listFlows, noPayload }
+export {
+  FlowSuspendedError,
+  FlowCancelledError,
+  FlowExpiredError,
+  createFlowId,
+  signalFlow,
+  cancelFlow,
+  listFlows,
+  InvalidSignalPayloadError,
+  noPayload,
+}
 export { FlowSerializationError } from './serialization'
 export type { FlowPersistenceBoundary } from './serialization'
 
@@ -151,10 +162,6 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
     ? { ...snapshot.completedSteps }
     : {}
   const deliveredSignals = cloneDeliveredSignals(snapshot)
-
-  // Emit flow resume hook (before flow start, so timeline ordering is correct)
-  if (isResume) {
-  }
 
   // Resolve input: on resume, restore from snapshot; otherwise use options
   const flowInput = (isResume && snapshot?.input !== undefined ? snapshot.input : options?.input) as TInput
@@ -299,13 +306,15 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
     async suspend<S>(_name: string, _options?: SuspendOptions<S>): Promise<S> {
       suspendCount++
       const deliveryKey = suspendDeliveryKey(suspendCount, _name)
-      const localSchema = signalSchemaFor(options?.signals?.[_name])
+      const localSignalSpec = options?.signals?.[_name]
+      const localSchema = signalSchemaFor(localSignalSpec)
       const suspendOptions = (localSchema ? { ..._options, schema: localSchema } : _options) as
         | SuspendOptions<S>
         | undefined
+      const payloadSpec = localSignalSpec ?? suspendOptions?.schema
       const replayPayload = deliveredSignalPayload(deliveredSignals, deliveryKey)
       if (isResume && replayPayload !== undefined) {
-        return validateSignalPayload(_name, suspendOptions?.schema, replayPayload) as S
+        return validateSignalPayload(_name, payloadSpec, replayPayload) as S
       }
 
       // On resume, first check for expiration
@@ -325,7 +334,8 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           const signalDoc = await store.get(signalKey)
           if (signalDoc) {
             // Signal found — emit hook and return payload
-            const payload = validateSignalPayload(_name, suspendOptions?.schema, signalDoc.payload ?? {}) as S
+            const rawPayload = 'payload' in signalDoc ? signalDoc.payload : {}
+            const payload = validateSignalPayload(_name, payloadSpec, rawPayload) as S
             assertFlowJsonValue(payload, { boundary: 'signal payload' })
             recordDeliveredSignal(deliveredSignals, deliveryKey, _name, payload as JsonValue)
             await consumeFlowSignal(store, flowId, _name)
@@ -388,7 +398,6 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       runWithExecutionContext({ ...existing, flowId, parentFlowId }, () => fn(scope, flowInput)),
     )
 
-
     if (isResume && store && snapshot) {
       const completedAt = Date.now()
       const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
@@ -436,7 +445,6 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
       }
 
-
       await flowSpan.withContext(async () => {
         await emitFlowSuspensionMarker(error.suspendPoint, {
           flowId,
@@ -483,8 +491,6 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
       }
 
-
-
       flowSpan.end({
         status: 'cancelled',
         attributes: { cancelReason: error.reason ?? null, totalSteps: stepCount },
@@ -497,9 +503,12 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       const flowStore = store ?? getRuntime().records
       if (flowStore) {
         const expiredAt = Date.now()
+        const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
         const snapshotData = {
           ...(snapshot ?? {}),
           status: 'expired',
+          completedSteps: completedStepsForSnapshot(completedSteps),
+          ...(deliveredSignalsSnapshot ? { deliveredSignals: deliveredSignalsSnapshot } : {}),
           expiredAt,
           updatedAt: expiredAt,
         } as FlowSnapshot
@@ -507,12 +516,9 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
       }
 
-
-
       flowSpan.error(error, { flowStatus: 'expired', suspendedAt: error.suspendPoint, totalSteps: stepCount })
       return { status: 'expired', flowId, suspendedAt: error.suspendPoint }
     }
-
 
     flowSpan.error(error, { totalSteps: stepCount })
     throw error
@@ -637,7 +643,7 @@ export function flow(
     throw new TypeError('flow() requires a handler function.')
   }
 
-  const handlerExpectsInput = handler.length >= 2
+  const handlerExpectsInput = flowHandlerAcceptsInput(handler)
   const runtimeHandler = handler as (
     flow: FlowScope<unknown, FlowSignalMap | undefined>,
     input?: unknown,

@@ -131,9 +131,9 @@ await flow.step('summarize', () => generate(summarizer, { model: premiumModel, i
 Run independent pipelines concurrently:
 
 ```ts
-const topicResearch = flow('research', async (flow) => {
-  await flow.step('plan', () => generate(planner, { model, input: { query: q } }))
-  await flow.step('search', () => generate(searcher, { model, input }))
+const topicResearch = flow('research', async (flow, input: { query: string }) => {
+  const plan = await flow.step('plan', () => generate(planner, { model, input: { query: input.query } }))
+  await flow.step('search', () => generate(searcher, { model, input: { query: input.query, plan } }))
 })
 
 await withSession(sessionId, () => Promise.all(queries.map((q) => topicResearch.run({ query: q }))))

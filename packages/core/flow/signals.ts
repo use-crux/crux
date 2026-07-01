@@ -8,7 +8,7 @@
  */
 
 import type { JsonValue } from '../storage'
-import type { ZodType } from 'zod'
+import type { ZodError, ZodType } from 'zod'
 
 const NO_PAYLOAD_SIGNAL_TAG = 'crux.flow.no_payload' as const
 
@@ -87,6 +87,22 @@ export function signalSchemaFor(spec: FlowSignalSpec | undefined): ZodType<unkno
 }
 
 /**
+ * Error thrown when a delivered signal payload does not match its declaration.
+ *
+ * Callers can branch on this class when they want to distinguish malformed
+ * signal delivery from flow lifecycle control errors.
+ */
+export class InvalidSignalPayloadError extends Error {
+  readonly signalName: string
+
+  constructor(signalName: string, detail: string) {
+    super(`Invalid signal payload for "${signalName}": ${detail}`)
+    this.name = 'InvalidSignalPayloadError'
+    this.signalName = signalName
+  }
+}
+
+/**
  * Validate a payload against a declared local signal schema.
  *
  * Local signal maps are runtime contracts as well as type contracts. This
@@ -103,11 +119,38 @@ export function validateSignalPayload(
   spec: FlowSignalSpec | undefined,
   payload: unknown,
 ): unknown {
+  if (isNoPayloadSignal(spec)) {
+    if (isEmptySignalPayload(payload)) return payload
+    throw new InvalidSignalPayloadError(signalName, 'expected no payload')
+  }
+
   const schema = signalSchemaFor(spec)
   if (!schema) return payload
 
   const result = schema.safeParse(payload)
   if (result.success) return result.data
 
-  throw new Error(`Invalid signal payload for "${signalName}": ${result.error.message}`)
+  throw new InvalidSignalPayloadError(signalName, formatSignalPayloadIssues(result.error))
+}
+
+function isEmptySignalPayload(payload: unknown): boolean {
+  if (payload === undefined || payload === null) return true
+  if (!isPlainRecord(payload)) return false
+  return Object.keys(payload).length === 0
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+function formatSignalPayloadIssues(error: ZodError<unknown>): string {
+  if (error.issues.length === 0) return error.message
+  return error.issues.map(formatSignalPayloadIssue).join('; ')
+}
+
+function formatSignalPayloadIssue(issue: ZodError<unknown>['issues'][number]): string {
+  const path = issue.path.length > 0 ? ` at ${issue.path.join('.')}` : ''
+  return `${issue.message}${path}`
 }

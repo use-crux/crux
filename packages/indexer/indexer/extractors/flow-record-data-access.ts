@@ -17,6 +17,7 @@ import type { PrimitiveDataAccessRef } from "./data-access";
 import {
   dataAccessKindForMethod,
   dataAccessOperationForMethod,
+  dataAccessTargetKindForVariable,
 } from "./data-access-manifest";
 
 /** Returns data-access evidence visible from a statically resolved flow step target. */
@@ -79,7 +80,7 @@ function dataAccessRefsFromCalls(
         kind,
         targetVariable,
         operation: dataAccessOperationForMethod(call.callee.name, kind),
-        targetKind: dataAccessTargetKind(targetVariable),
+        targetKind: dataAccessTargetKindForVariable(targetVariable),
         ...(key ? { key } : {}),
         source: call.source,
       },
@@ -159,27 +160,4 @@ function dataAccessKey(
   return typeof value.value === "string" || typeof value.value === "number"
     ? String(value.value)
     : undefined;
-}
-
-function dataAccessTargetKind(
-  targetVariable: string,
-): NonNullable<PrimitiveDataAccessRef["targetKind"]> | undefined {
-  const normalized = targetVariable.toLowerCase();
-  if (normalized.includes("blackboard") || normalized.includes("board"))
-    return "blackboard";
-  if (
-    normalized.includes("workspace") ||
-    normalized.includes("file") ||
-    normalized.includes("fs")
-  )
-    return "workspace";
-  if (normalized.includes("store")) return "store";
-  if (normalized.includes("block")) return "block";
-  if (
-    normalized.includes("memory") ||
-    normalized.includes("mem") ||
-    normalized.includes("state")
-  )
-    return "memory";
-  return undefined;
 }

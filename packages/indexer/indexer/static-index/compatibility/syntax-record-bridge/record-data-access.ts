@@ -10,6 +10,7 @@ import type { PrimitiveDataAccessRef } from "../../../extractors/data-access";
 import {
   dataAccessKindForMethod,
   dataAccessOperationForMethod,
+  dataAccessTargetKindForVariable,
 } from "../../../extractors/data-access-manifest";
 
 /** Derives visible data-access facts from normalized syntax-record values. */
@@ -71,7 +72,7 @@ function dataAccessRefsFromCalls(
     const targetVariable = receiverIdentifier(call.receiver);
     if (!kind || !targetVariable) return [];
     const key = dataAccessKey(call.args[0]);
-    const targetKind = dataAccessTargetKind(targetVariable);
+    const targetKind = dataAccessTargetKindForVariable(targetVariable);
     return [
       {
         kind,
@@ -128,31 +129,4 @@ function dataAccessKey(
   return typeof value.value === "string" || typeof value.value === "number"
     ? String(value.value)
     : undefined;
-}
-
-function dataAccessTargetKind(
-  targetVariable: string,
-): NonNullable<PrimitiveDataAccessRef["targetKind"]> | undefined {
-  const normalized = targetVariable.toLowerCase();
-  if (normalized.includes("blackboard") || normalized.includes("board"))
-    return "blackboard";
-  if (
-    normalized.includes("workspace") ||
-    normalized.includes("file") ||
-    normalized.includes("fs")
-  )
-    return "workspace";
-  if (normalized.includes("record")) return "storage.recordStore";
-  if (normalized.includes("vector")) return "storage.vectorStore";
-  if (normalized.includes("blob")) return "storage.blobStore";
-  if (normalized.includes("storage")) return "storage.bundle";
-  if (normalized.includes("store")) return "store";
-  if (normalized.includes("block")) return "block";
-  if (
-    normalized.includes("memory") ||
-    normalized.includes("mem") ||
-    normalized.includes("state")
-  )
-    return "memory";
-  return undefined;
 }

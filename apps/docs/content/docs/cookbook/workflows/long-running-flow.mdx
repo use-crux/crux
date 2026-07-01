@@ -25,13 +25,19 @@ import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
-const onboardingFlow = flow('onboarding', async (flow) => {
+type OnboardingInput = {
+  email: string
+  name: string
+  goal: string
+}
+
+const onboardingFlow = flow('onboarding', async (flow, input: OnboardingInput) => {
   // Step 1: send a welcome email immediately
   await flow.step('send-welcome', async () => {
     await emailClient.send({
-      to: flow.input.email,
+      to: input.email,
       template: 'welcome',
-      data: { name: flow.input.name },
+      data: { name: input.name },
     })
   })
 
@@ -45,21 +51,23 @@ const onboardingFlow = flow('onboarding', async (flow) => {
   const plan = await flow.step('first-week-plan', async () => {
     const result = await generate(onboardingPlanPrompt, {
       model: openai('gpt-4o'),
-      input: { name: flow.input.name, signupGoal: flow.input.goal },
+      input: { name: input.name, signupGoal: input.goal },
     })
     return result.text
   })
 
   // Step 4: schedule daily check-in emails
   return flow.step('schedule-checkins', async () => {
-    return scheduleEmails(flow.input.email, plan)
+    return scheduleEmails(input.email, plan)
   })
 })
 
 // Start
 const handle = onboardingFlow
 const { flowId } = await handle.run({
-  input: { email: 'user@example.com', name: 'Henri', goal: 'shipping' },
+  email: 'user@example.com',
+  name: 'Henri',
+  goal: 'shipping',
 })
 // flowId is persisted; can be returned to the caller
 
@@ -68,7 +76,7 @@ export async function handleEmailVerified(flowId: string, verifiedAt: string) {
   await signalFlow(flowId, 'email-verified', { verifiedAt })
 }
 
-// Resume happens automatically on the next flow.resume(flowId) — usually
+// Resume happens automatically on the next handle.resume(flowId) — usually
 // scheduled by the platform (Convex can schedule the resume action from an app-local signal helper).
 ```
 

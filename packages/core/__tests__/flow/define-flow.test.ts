@@ -70,6 +70,18 @@ describe('flow', () => {
     }
   })
 
+    it('.run() passes input to handlers with defaulted input parameters', async () => {
+    const handle = makeFlow('defaulted-input-flow', async (_flow, input: { name: string } = { name: 'Fallback' }) => {
+      return `Hello, ${input.name}`
+    })
+
+    const result = await handle.run({ name: 'World' })
+    expect(result.status).toBe('completed')
+    if (result.status === 'completed') {
+      expect(result.output).toBe('Hello, World')
+    }
+  })
+
     it('.run() passes options through to flow internals', async () => {
     const handle = makeFlow('options-flow', async (flow) => {
       return flow.flowId
