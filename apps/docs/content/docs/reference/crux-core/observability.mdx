@@ -154,7 +154,7 @@ TypeScript API allows custom or unknown values.
 
 Use `observe.run()` for user-facing execution roots and `observe.span()` for inspectable work inside a run. Standalone spans automatically create an implicit run, so helpers like `pipeline`, `consensus`, or `swarm` can be called directly and still produce a complete trace.
 
-Crux's built-in orchestration helpers emit these records automatically. `parallel()` creates sibling `agent.run` spans, `pipeline()` records `flow.step` plus nested `agent.run` spans, `flow()` / `withFlow()` records `flow.run`, step children, and `flow.suspension` timeline markers for intentional waits, `consensus()` records voter `agent.run` spans directly under `composition.consensus`, and `swarm` / `delegate` handoffs create `handoff.prepare` spans, canonical input/output artifacts, `handoff.payload` artifacts, and relation edges.
+Crux's built-in orchestration helpers emit these records automatically. `parallel()` creates sibling `agent.run` spans, `pipeline()` records `flow.step` plus nested `agent.run` spans, `flow()` records `flow.run`, step children, and `flow.suspension` timeline markers for intentional waits, `consensus()` records voter `agent.run` spans directly under `composition.consensus`, and `swarm` / `delegate` handoffs create `handoff.prepare` spans, canonical input/output artifacts, `handoff.payload` artifacts, and relation edges.
 
 Generation and streaming orchestration record operation deadlines when a timeout is configured. `@use-crux/ai` passes `timeoutMs` into core orchestration, which records `timeoutMs` / `deadlineAt` and emits `operation.deadline` before the provider call begins.
 

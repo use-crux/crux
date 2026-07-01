@@ -10,37 +10,57 @@
 import type { RetryOptions } from '../generation/retry'
 import type { JsonObject, JsonValue } from '../storage'
 import type { ZodType } from 'zod'
+import type { FlowSignalMap, FlowSignalPayload, FlowSignalPayloadArgs, UntypedSignalPayloadArgs } from './signals'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────
 
-export interface WithFlowOptions<TInput = void> {
-  /** Use a specific flowId instead of generating one (for cross-action correlation). */
-  flowId?: string
-  /** Explicit parent flow ID for cross-action nesting (when AsyncLocalStorage context is lost). */
-  parentFlowId?: string
-  /** Goal description for devtools display. */
-  goal?: string
-  /** Resume a previously suspended flow by its flowId. */
-  resume?: string
-  /** Typed input data available on `flow.input` within all steps. */
-  input?: TInput
-}
-
-/** Runtime options for `FlowHandle.run()`. Excludes the handler and name (captured at definition time). */
-export interface FlowRunOptions<TInput = void> {
-  /** Typed input data available on `flow.input` within all steps. */
-  input?: TInput
+/**
+ * Runtime options for starting a flow through `FlowHandle.run()`.
+ *
+ * Input-bearing flows receive input as the first `run(input, options?)`
+ * argument. These options only describe execution metadata.
+ */
+export interface FlowRunOptions {
   /** Use a specific flowId instead of generating one. */
   flowId?: string
   /** Explicit parent flow ID for cross-action nesting. */
   parentFlowId?: string
   /** Goal description for devtools display. */
   goal?: string
-  /** Resume a previously suspended flow by its flowId. */
-  resume?: string
 }
+
+/** Runtime options for resuming a suspended flow through `FlowHandle.resume()`. */
+export interface FlowResumeOptions {
+  /** Explicit parent flow ID for cross-action nesting. */
+  parentFlowId?: string
+  /** Goal description for devtools display. */
+  goal?: string
+}
+
+type FlowRunArgs<TInput> = [TInput] extends [void]
+  ? [options?: FlowRunOptions]
+  : [input: TInput, options?: FlowRunOptions]
+
+type FlowSignalName<TSignals> = TSignals extends FlowSignalMap ? keyof TSignals & string : string
+
+type FlowHandleSignal<TSignals> = TSignals extends FlowSignalMap
+  ? <TName extends FlowSignalName<TSignals>>(
+      flowId: string,
+      signalName: TName,
+      ...args: TName extends keyof TSignals ? FlowSignalPayloadArgs<FlowSignalPayload<TSignals[TName]>> : never
+    ) => Promise<void>
+  : (flowId: string, signalName: string, ...args: UntypedSignalPayloadArgs) => Promise<void>
+
+type FlowScopeSuspend<TSignals> = TSignals extends FlowSignalMap
+  ? <TName extends FlowSignalName<TSignals>>(
+      name: TName,
+      options?: TName extends keyof TSignals
+        ? Omit<SuspendOptions<FlowSignalPayload<TSignals[TName]>>, 'schema'>
+        : never,
+    ) => Promise<TName extends keyof TSignals ? FlowSignalPayload<TSignals[TName]> : never>
+  : <TPayload = unknown>(name: string, options?: SuspendOptions<TPayload>) => Promise<TPayload>
 
 /**
  * A frozen handle returned by `flow()`.
@@ -48,17 +68,28 @@ export interface FlowRunOptions<TInput = void> {
  * Separates flow definition from execution — define once, run many times.
  *
  * @typeParam T — The flow's return type (inferred from the handler).
- * @typeParam TInput — The typed input available on `flow.input` (default: `void`).
+ * @typeParam TInput — The typed input passed to `run(input, options?)`.
+ * @typeParam TSignals — Optional local signal map used to type `.signal()`.
  */
-export interface FlowHandle<T, TInput = void> {
+export interface FlowHandle<T, TInput = void, TSignals extends FlowSignalMap | undefined = undefined> {
   /** The flow's registered name. */
   readonly name: string
   /**
-   * Execute the flow with optional input and runtime options.
+   * Execute the flow with runtime options.
    *
    * Delegates to the internal flow execution engine and returns a `FlowResult<T>`.
    */
-  run(options?: FlowRunOptions<TInput>): Promise<FlowResult<T>>
+  run(...args: FlowRunArgs<TInput>): Promise<FlowResult<T>>
+  /**
+   * Resume a suspended flow instance.
+   *
+   * The original input is restored from the persisted flow snapshot and passed
+   * back to the handler. Resume options only describe execution metadata.
+   *
+   * @param flowId - The ID of the suspended flow instance.
+   * @param options - Optional execution metadata for the resumed run.
+   */
+  resume(flowId: string, options?: FlowResumeOptions): Promise<FlowResult<T>>
   /**
    * Send a signal to a suspended instance of this flow.
    *
@@ -69,7 +100,7 @@ export interface FlowHandle<T, TInput = void> {
    * @param signalName — The suspend point name to signal
    * @param payload — Optional JSON payload delivered to the suspend point
    */
-  signal(flowId: string, signalName: string, payload?: JsonObject): Promise<void>
+  signal: FlowHandleSignal<TSignals>
 }
 
 /** Options for `flow.suspend()`. */
@@ -92,6 +123,21 @@ export type FlowResult<T> =
   | { status: 'cancelled'; flowId: string; cancelReason?: string }
   | { status: 'expired'; flowId: string; suspendedAt: string }
 
+/** Persisted, occurrence-keyed signal delivery record used for suspend replay. */
+export interface DeliveredFlowSignal extends JsonObject {
+  /** Signal name that was delivered to a suspend point. */
+  signalName: string
+  /** Validated signal payload replayed for this suspend occurrence. */
+  payload: JsonValue
+  /** Unix timestamp recorded when the pending signal was consumed. */
+  deliveredAt: number
+}
+
+/** Persisted, occurrence-keyed suspend payloads used for resume replay. */
+export interface DeliveredFlowSignals extends JsonObject {
+  [key: string]: DeliveredFlowSignal | undefined
+}
+
 /** Persisted flow snapshot stored in a RecordStore. */
 export interface FlowSnapshot extends JsonObject {
   flowId: string
@@ -105,13 +151,27 @@ export interface FlowSnapshot extends JsonObject {
       durationMs: number
     }
   >
+  /**
+   * Validated suspend payloads that have already crossed the pending-signal
+   * boundary. Keys include the source-order suspend occurrence so repeated
+   * signal names do not accidentally replay stale approvals.
+   */
+  deliveredSignals?: DeliveredFlowSignals
   traceContext: JsonObject
   observabilityContext?: JsonObject
   createdAt: number
   updatedAt: number
+  /** Unix timestamp recorded when the flow reaches `completed`. */
+  completedAt?: number
+  /** Unix timestamp recorded when the flow reaches `cancelled`. */
+  cancelledAt?: number
+  /** Unix timestamp recorded when the flow reaches `expired`. */
+  expiredAt?: number
+  /** Optional cancellation reason stored with terminal cancelled snapshots. */
+  cancelReason?: string
 }
 
-export interface FlowScope<TInput = void> {
+export interface FlowScope<TInput = void, TSignals extends FlowSignalMap | undefined = undefined> {
   /** The flow's unique identifier. */
   readonly flowId: string
 
@@ -137,20 +197,20 @@ export interface FlowScope<TInput = void> {
    */
   step<T>(
     label: string,
-    fn: ((flow: FlowScope<TInput>) => Promise<T> | T) | (() => Promise<T> | T),
+    fn: ((flow: FlowScope<TInput, TSignals>) => Promise<T> | T) | (() => Promise<T> | T),
     options?: StepOptions,
   ): Promise<T>
 
   /**
    * Suspend the flow at a named point and wait for an external signal.
    *
-   * Throws internally to unwind the call stack. `withFlow()` catches this,
+   * Throws internally to unwind the call stack. The flow runtime catches this,
    * persists the flow snapshot to the store, and returns `{ status: 'suspended' }`.
    * No code after `suspend()` executes in the current call.
    *
    * On resume, the signal payload is returned (typed if schema is provided).
    */
-  suspend<T = unknown>(name: string, options?: SuspendOptions<T>): Promise<T>
+  suspend: FlowScopeSuspend<TSignals>
 
   /**
    * Suspend the flow until a condition function returns true.
@@ -173,7 +233,7 @@ export interface FlowScope<TInput = void> {
   /**
    * Cancel the flow with an optional reason.
    *
-   * Throws internally to unwind the call stack. `withFlow()` catches this
+   * Throws internally to unwind the call stack. The flow runtime catches this
    * and returns `{ status: 'cancelled', cancelReason }`.
    */
   cancel(reason?: string): never
@@ -202,7 +262,7 @@ export interface FlowSummary {
 
 /**
  * Thrown by `flow.suspend()` to unwind the call stack.
- * Caught by `withFlow()` — not a user-facing error.
+ * Caught by the flow runtime — not a user-facing error.
  */
 export class FlowSuspendedError extends Error {
   readonly _tag = 'FlowSuspendedError' as const
@@ -217,7 +277,7 @@ export class FlowSuspendedError extends Error {
 
 /**
  * Thrown by `flow.cancel()` to unwind the call stack.
- * Caught by `withFlow()` — not a user-facing error.
+ * Caught by the flow runtime — not a user-facing error.
  */
 export class FlowCancelledError extends Error {
   readonly _tag = 'FlowCancelledError' as const
@@ -229,7 +289,7 @@ export class FlowCancelledError extends Error {
 
 /**
  * Thrown internally when a flow's timeout has been exceeded.
- * Caught by `withFlow()` — not a user-facing error.
+ * Caught by the flow runtime — not a user-facing error.
  */
 export class FlowExpiredError extends Error {
   readonly _tag = 'FlowExpiredError' as const

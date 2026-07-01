@@ -133,16 +133,18 @@ await swarm({
 In flows, you call `generate()` directly inside `flow.step()` — pass `validationRetry` to your generate call:
 
 ```ts
-const result = await withFlow({ goal: 'Extract data' }, async (flow) => {
+const extractData = flow('extract data', async (flow, input: { goal: string }) => {
   const data = await flow.step('extract', async () => {
     return adapter.generate(extractPrompt, {
       model: 'claude-sonnet-4-20250514',
-      input: { text: document },
+      input: { goal: input.goal, text: document },
       validationRetry: { maxRetries: 3 },
     })
   })
   return data
 })
+
+const result = await extractData.run({ goal: 'Extract data' })
 ```
 
 Flow steps also support `step.retry` for transient failures (network errors, rate limits). Both layers compose naturally — `step.retry` wraps the entire step, `validationRetry` operates inside `generate()`.

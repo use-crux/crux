@@ -77,7 +77,7 @@ Every instrumented Crux event produces a span:
 | ------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `generate()` / `stream()` | `crux.generate`                 | `gen_ai.system`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.client.duration_ms`, `gen_ai.client.time_to_first_token_ms`, `gen_ai.client.output_tokens_per_second`, `gen_ai.client.time_per_output_chunk_ms`, `crux.cost` |
 | Tool execution            | `crux.tool.{name}`              | `crux.tool.name`, `crux.tool.call_id`, `crux.tool.model_output.type`, `crux.tool.output.size`, `crux.tool.model_output.size`, `crux.tool.token_savings_estimate`, `crux.tool.estimated` |
-| `withFlow()`              | `crux.flow`                     | `crux.flow.id`, `crux.flow.name`, `crux.flow.parent_id`                                                         |
+| `flow().run()`            | `crux.flow`                     | `crux.flow.id`, `crux.flow.name`, `crux.flow.parent_id`                                                         |
 | `flow.step()`             | `crux.flow.step`                | `crux.step.id`, `crux.step.label`                                                                               |
 | `flow.suspend()`          | Event on `crux.flow` + span end | `crux.flow.suspend_point`                                                                                       |
 | Resume                    | `crux.flow.resume`              | `crux.flow.id`, `crux.flow.name` (fresh span, correlated by flow ID)                                            |

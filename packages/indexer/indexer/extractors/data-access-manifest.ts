@@ -4,6 +4,9 @@ export type PrimitiveDataAccessKind = "read" | "write";
 export type PrimitiveDataAccessOperation = NonNullable<
   DataAccessFact["operation"]
 >;
+export type PrimitiveDataAccessTargetKind = NonNullable<
+  DataAccessFact["targetKind"]
+>;
 
 const readMethods = new Set([
   "get",
@@ -54,6 +57,48 @@ const exactOperations = new Set([
   "finalize",
 ]);
 
+const targetKindDeclarations = [
+  {
+    kind: "blackboard",
+    aliases: ["blackboard", "board"],
+  },
+  {
+    kind: "workspace",
+    aliases: ["workspace", "file", "fs"],
+  },
+  {
+    kind: "storage.recordStore",
+    aliases: ["record"],
+  },
+  {
+    kind: "storage.vectorStore",
+    aliases: ["vector"],
+  },
+  {
+    kind: "storage.blobStore",
+    aliases: ["blob"],
+  },
+  {
+    kind: "storage.bundle",
+    aliases: ["storage"],
+  },
+  {
+    kind: "store",
+    aliases: ["store"],
+  },
+  {
+    kind: "block",
+    aliases: ["block"],
+  },
+  {
+    kind: "memory",
+    aliases: ["memory", "mem", "state"],
+  },
+] satisfies readonly {
+  readonly kind: PrimitiveDataAccessTargetKind;
+  readonly aliases: readonly string[];
+}[];
+
 /** Classifies first-party primitive method names as read or write accesses. */
 export function dataAccessKindForMethod(
   method: string,
@@ -82,4 +127,22 @@ export function dataAccessOperationForMethod(
   if (method === "update" || method === "edit") return "update";
   if (method === "delete" || method === "deleteFile") return "delete";
   return kind;
+}
+
+/** Maps authored target variable names onto normalized Project Index target kinds. */
+export function dataAccessTargetKindForVariable(
+  targetVariable: string,
+): PrimitiveDataAccessTargetKind | undefined {
+  const tokens = identifierTokens(targetVariable);
+  return targetKindDeclarations.find((declaration) =>
+    declaration.aliases.some((alias) => tokens.includes(alias)),
+  )?.kind;
+}
+
+function identifierTokens(identifier: string): readonly string[] {
+  return identifier
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
 }

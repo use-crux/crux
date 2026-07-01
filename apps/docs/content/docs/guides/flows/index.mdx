@@ -66,7 +66,7 @@ const editPipeline = flow('edit-pipeline', async (flow) => {
 const result = await editPipeline.run()
 ```
 
-`flow` returns a `FlowHandle` with a `.run()` method that returns whatever the handler returns (wrapped in a `FlowResult`). Each `flow.step()` returns the result of its function — use it to thread data between steps.
+`flow` returns a `FlowHandle` with a `.run()` method that returns whatever the handler returns (wrapped in a `FlowResult`). Each `flow.step()` returns the result of its function — use it to thread data between steps. Step labels are durable replay identities for the Flows beta, so keep each label unique and stable. Dynamic labels are advanced; use them only when the generated label is deterministic across retries and resumes.
 
 ## Sessions
 
@@ -131,12 +131,12 @@ await flow.step('summarize', () => generate(summarizer, { model: premiumModel, i
 Run independent pipelines concurrently:
 
 ```ts
-const topicResearch = flow('research', async (flow) => {
-  await flow.step('plan', () => generate(planner, { model, input: { query: q } }))
-  await flow.step('search', () => generate(searcher, { model, input }))
+const topicResearch = flow('research', async (flow, input: { query: string }) => {
+  const plan = await flow.step('plan', () => generate(planner, { model, input: { query: input.query } }))
+  await flow.step('search', () => generate(searcher, { model, input: { query: input.query, plan } }))
 })
 
-await withSession(sessionId, () => Promise.all(queries.map((q) => topicResearch.run({ input: { query: q } }))))
+await withSession(sessionId, () => Promise.all(queries.map((q) => topicResearch.run({ query: q }))))
 ```
 
 Each `.run()` call gets its own `flowId` and groups independently in devtools.
@@ -166,30 +166,9 @@ export default evaluate('research.pipeline', {
 
 See the [Quality guide](/docs/guides/quality) for variants, gates, and replay.
 
-## Migration from `withFlow`
+## Signaling Handles
 
-`flow` replaces the previous `withFlow(name, fn, options)` API. The migration is mechanical — define the flow once at module level, call `.run()` at each call site:
-
-```ts
-// Before
-import { withFlow } from '@use-crux/core'
-const result = await withFlow(
-  'pipeline',
-  async (flow) => {
-    /* steps */
-  },
-  { input, resume },
-)
-
-// After
-import { flow } from '@use-crux/core'
-const pipeline = flow('pipeline', async (flow) => {
-  /* steps */
-})
-const result = await pipeline.run({ input, resume })
-```
-
-The other notable change is signaling: prefer `pipeline.signal(flowId, name, payload)` on the handle. The bare `signalFlow()` export is now a low-level primitive that only writes the signal payload — see [Suspend and resume](/docs/guides/flows/suspend-and-resume#signaling-a-suspended-flow) for the full picture.
+Prefer `flowHandle.signal(flowId, name, payload)` on the flow handle. The bare `signalFlow()` export is a low-level primitive that only writes the signal payload — see [Suspend and resume](/docs/guides/flows/suspend-and-resume#signaling-a-suspended-flow) for the full picture.
 
 ## Where to Next
 

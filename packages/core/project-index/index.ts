@@ -105,6 +105,12 @@ export interface PrimitiveSuspensionPoint {
   resumesDefinitionId?: string;
 }
 
+export interface PrimitiveControlStep {
+  id: string;
+  label: string;
+  source?: SourceLocation;
+}
+
 export interface SourceRefSummary {
   id?: string;
   role?: ProjectSourceRefRole;
@@ -168,6 +174,7 @@ export interface ControlFacts {
     | "conditional"
     | "unknown";
   children?: string[];
+  steps?: PrimitiveControlStep[];
   retryPolicy?: {
     maxAttempts?: number;
     backoff?: string;
@@ -1297,6 +1304,12 @@ export const PrimitiveSuspensionPointSchema = z.object({
   resumesDefinitionId: z.string().optional(),
 }) satisfies z.ZodType<PrimitiveSuspensionPoint>;
 
+export const PrimitiveControlStepSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  source: SourceLocationSchema.optional(),
+}) satisfies z.ZodType<PrimitiveControlStep>;
+
 export const SourceRefSummarySchema = z.object({
   id: z.string().optional(),
   role: ProjectSourceRefRoleSchema.optional(),
@@ -1386,6 +1399,7 @@ export const ControlFactsSchema = z.object({
     .enum(["ordered", "concurrent", "event-driven", "conditional", "unknown"])
     .optional(),
   children: z.array(z.string()).optional(),
+  steps: z.array(PrimitiveControlStepSchema).optional(),
   retryPolicy: z
     .object({
       maxAttempts: z.number().optional(),

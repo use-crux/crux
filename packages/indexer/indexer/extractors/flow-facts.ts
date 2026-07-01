@@ -58,6 +58,8 @@ export interface FlowFactProjectionInput {
   readonly argsSchema?: Record<string, unknown>
   /** Whether an args contract property is present. */
   readonly hasArgs: boolean
+  /** Local signal names declared on the flow definition, when statically visible. */
+  readonly signalNames?: readonly string[]
   /** Normalized traversal evidence from the selected syntax frontend. */
   readonly traversal: FlowTraversalEvidence
   /** Compiler-owned id sanitizer. */
@@ -113,15 +115,18 @@ export function flowFactsFromEvidence(input: FlowFactProjectionInput): Extracted
           args: input.args,
           argsSchema: input.argsSchema,
           hasArgs: input.hasArgs,
+          signalNames: input.signalNames,
           facts: {
             kind: 'flow',
             stepNames,
             hasArgs: input.hasArgs,
+            signalNames: input.signalNames,
             runtime,
           },
           intelligence: primitiveFlowIntelligence(
             runtime,
             input.argsSchema,
+            stepRefs.map((step) => step.name),
             suspensionRefs,
             stepDefinitions.map((stepDefinition) => stepDefinition.id),
           ),
@@ -214,6 +219,7 @@ function dataRelationRefs(
 function primitiveFlowIntelligence(
   runtime: 'convex' | 'node',
   argsSchema: Record<string, unknown> | undefined,
+  stepLabels: readonly string[],
   suspensions: readonly FlowSuspensionEvidence[],
   childDefinitionIds: readonly string[],
 ): Record<string, unknown> {
@@ -221,6 +227,14 @@ function primitiveFlowIntelligence(
     mode: runtime === 'convex' ? 'durable' : 'immediate',
     ordering: 'ordered',
     ...(childDefinitionIds.length > 0 ? { children: [...childDefinitionIds] } : {}),
+    ...(stepLabels.length > 0
+      ? {
+          steps: stepLabels.map((label) => ({
+            id: label,
+            label,
+          })),
+        }
+      : {}),
   }
   if (suspensions.length > 0) {
     control.suspensionPoints = suspensions.map((suspension) => ({

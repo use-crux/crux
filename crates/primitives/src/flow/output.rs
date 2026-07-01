@@ -155,18 +155,27 @@ pub(crate) fn step_target_source_refs(
     Some(refs)
 }
 
-pub(crate) fn flow_fact_metadata(step_names: &[String], has_args: bool, runtime: &str) -> Value {
-    json!({
-        "kind": "flow",
-        "stepNames": step_names,
-        "hasArgs": has_args,
-        "runtime": runtime,
-    })
+pub(crate) fn flow_fact_metadata(
+    step_names: &[String],
+    has_args: bool,
+    runtime: &str,
+    signal_names: Option<&[String]>,
+) -> Value {
+    let mut facts = Map::new();
+    facts.insert("kind".to_string(), Value::String("flow".to_string()));
+    facts.insert("stepNames".to_string(), json!(step_names));
+    facts.insert("hasArgs".to_string(), Value::Bool(has_args));
+    if let Some(names) = signal_names {
+        facts.insert("signalNames".to_string(), json!(names));
+    }
+    facts.insert("runtime".to_string(), Value::String(runtime.to_string()));
+    Value::Object(facts)
 }
 
 pub(crate) fn flow_intelligence(
     runtime: &str,
     args_schema: Option<&Value>,
+    steps: &[FlowStep],
     suspensions: &[FlowSuspension],
     step_ids: &[(String, String)],
 ) -> Value {
@@ -187,6 +196,17 @@ pub(crate) fn flow_intelligence(
         control.insert(
             "children".to_string(),
             json!(step_ids.iter().map(|(_, id)| id).collect::<Vec<_>>()),
+        );
+    }
+    if !steps.is_empty() {
+        control.insert(
+            "steps".to_string(),
+            Value::Array(
+                steps
+                    .iter()
+                    .map(|step| json!({ "id": step.name, "label": step.name }))
+                    .collect(),
+            ),
         );
     }
     if !suspensions.is_empty() {

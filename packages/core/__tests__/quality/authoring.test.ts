@@ -13,7 +13,7 @@ const supportPrompt = prompt({
   system: 'Answer support questions.',
 })
 
-const summarizeFlow = flow<{ summary: string }, { topic: string }>('summarize', async () => ({ summary: '' }))
+const summarizeFlow = flow('summarize', async (_scope, _input: { topic: string }) => ({ summary: '' }))
 
 const supportAgent = agent({ id: 'support-agent', prompt: supportPrompt })
 

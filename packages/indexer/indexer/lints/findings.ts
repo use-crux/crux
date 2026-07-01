@@ -16,6 +16,7 @@ import {
   schemaProperties,
   schemaRequiredFields,
 } from '../static/injection-read-model'
+import { flowLintFindings } from './flow'
 import { indexLintFinding } from './rules'
 import {
   childDefinitionsByParent,
@@ -76,6 +77,8 @@ export function indexLintFindings(input: {
   const findings: IndexLintFinding[] = []
 
   for (const definition of input.definitions) {
+    findings.push(...flowLintFindings(definition))
+
     if (definition.kind === 'prompt' && !hasInputSchema(definition)) {
       findings.push(
         indexLintFinding({

@@ -8,6 +8,7 @@ import { resolveIdentifierSourceNode } from "../ast/source-refs";
 import {
   dataAccessKindForMethod,
   dataAccessOperationForMethod,
+  dataAccessTargetKindForVariable,
 } from "./data-access-manifest";
 
 export interface PrimitiveDataAccessRef {
@@ -67,7 +68,7 @@ function primitiveDataAccessRefsForNode(
           kind,
           targetVariable: target.text,
           operation: dataAccessOperationForMethod(method, kind),
-          targetKind: dataAccessTargetKind(target.text),
+          targetKind: dataAccessTargetKindForVariable(target.text),
           ...(key ? { key } : {}),
           source: sourceForNode(sourceFile, child),
         });
@@ -170,33 +171,6 @@ function accessToMetadata(access: PrimitiveDataAccessRef): DataAccessFact {
     ...(access.key ? { key: access.key } : {}),
     ...(access.source ? { source: access.source } : {}),
   };
-}
-
-function dataAccessTargetKind(
-  targetVariable: string,
-): NonNullable<DataAccessFact["targetKind"]> | undefined {
-  const normalized = targetVariable.toLowerCase();
-  if (normalized.includes("blackboard") || normalized.includes("board"))
-    return "blackboard";
-  if (
-    normalized.includes("workspace") ||
-    normalized.includes("file") ||
-    normalized.includes("fs")
-  )
-    return "workspace";
-  if (normalized.includes("record")) return "storage.recordStore";
-  if (normalized.includes("vector")) return "storage.vectorStore";
-  if (normalized.includes("blob")) return "storage.blobStore";
-  if (normalized.includes("storage")) return "storage.bundle";
-  if (normalized.includes("store")) return "store";
-  if (normalized.includes("block")) return "block";
-  if (
-    normalized.includes("memory") ||
-    normalized.includes("mem") ||
-    normalized.includes("state")
-  )
-    return "memory";
-  return undefined;
 }
 
 function dataAccessKey(

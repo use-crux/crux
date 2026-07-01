@@ -309,6 +309,17 @@ export function suspensionPointLabels(definition: ProjectDefinition): string[] {
     .filter((label): label is string => Boolean(label))
 }
 
+/** Returns human-readable labels for recorded flow step calls in source order. */
+export function flowStepLabels(definition: ProjectDefinition): string[] {
+  const intelligence = definition.metadata?.intelligence
+  if (!isRecord(intelligence)) return []
+  const control = intelligence.control
+  if (!isRecord(control) || !Array.isArray(control.steps)) return []
+  return control.steps
+    .map((step) => (isRecord(step) && typeof step.label === 'string' ? step.label : undefined))
+    .filter((label): label is string => Boolean(label))
+}
+
 /** Returns whether workspace metadata grants write-like capabilities. */
 export function workspaceAllowsWrites(definition: ProjectDefinition): boolean {
   const metadata = definition.metadata

@@ -496,6 +496,8 @@ export const research = action({
 ```
 
 `flow({ name, args, handler })` returns `{ name, args, handler, action, signal }`. Export `.action` for internal start/resume, or wrap `.handler` in your own public action for auth. Direct `.handler()` calls perform the same bounded observability flush after a flow result, so suspended flows are visible immediately at their suspend point.
+Optional local `signals` maps mirror core flow semantics: they type `flow.suspend()` and the Convex `.signal()` helper,
+and invalid payloads throw before Convex schedules the resume action.
 
 ```ts
 const researchFlow = flow({

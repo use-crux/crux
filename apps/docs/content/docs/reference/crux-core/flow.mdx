@@ -6,7 +6,6 @@ description: Suspendable, resumable flows with named steps, signals, and devtool
 ```ts
 import {
   flow,
-  withFlow,
   signalFlow,
   cancelFlow,
   listFlows,
@@ -21,45 +20,33 @@ import {
 
 Flows group `generate()` calls into structured pipelines with named steps, automatic devtools tracing, suspend/resume, and retry/fallback. A run opens a canonical `flow.run` span, and each executed `flow.step()` opens a canonical `flow.step` child. Generated spans inside a flow inherit the active observability context for structured pipeline grouping in devtools. Flows can nest; calling `flow().run()` inside another flow preserves the parent-child relationship in the graph.
 
-Flows support suspend/resume for human-in-the-loop workflows. When `flow.suspend()` is called, the flow persists its state to the configured `RecordStore` and returns `{ status: 'suspended' }`. The observability graph records a `flow.suspension` marker linked to the causing step, and `RunDetail` presents that marker beside the other flow steps so successful generations and completed steps do not remain visually stuck. Pass `{ resume: flowId }` to `.run()` to resume a previously suspended flow.
+Flows support suspend/resume for human-in-the-loop workflows. When `flow.suspend()` is called, the flow persists its state to the configured `RecordStore` and returns `{ status: 'suspended' }`. The observability graph records a `flow.suspension` marker linked to the causing step, and `RunDetail` presents that marker beside the other flow steps so successful generations and completed steps do not remain visually stuck. Pass the flow ID to `.resume(flowId)` to resume a previously suspended flow.
 
 ## `flow(name, handler)`
 
-Define a named flow and return a frozen `FlowHandle`. Separates definition from execution: the handler is captured once, then `.run()` can be called repeatedly with different inputs and options.
+Define a named flow and return a frozen `FlowHandle`. Separates definition from execution: the handler is captured once, then `.run()` can be called repeatedly with different inputs and options. Input-bearing flows infer their input type from the handler's second parameter.
 
-| Parameter | Type                                           | Description                                                                   |
-| --------- | ---------------------------------------------- | ----------------------------------------------------------------------------- |
-| `name`    | `string`                                       | Human-readable flow name                                                      |
-| `handler` | `(flow: FlowScope<TInput>) => Promise<T> \| T` | Flow function with access to `flow.step()`, `flow.suspend()`, `flow.cancel()` |
+| Parameter | Type                                                   | Description                                                                                          |
+| --------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `name`    | `string`                                               | Human-readable flow name                                                                             |
+| `handler` | `(flow: FlowScope<TInput>, input?: TInput) => T \| ...` | Flow function with access to `flow.step()`, `flow.suspend()`, `flow.cancel()`, and optional input data |
 
-**Returns:** `FlowHandle<T, TInput>` -- frozen handle with `.run()`, `.signal()`, and `.name`
+**Returns:** `FlowHandle<T, TInput>` -- frozen handle with `.run()`, `.resume()`, `.signal()`, and `.name`
 
 ```ts
 import { flow } from '@use-crux/core/flow'
 import { generate } from '@use-crux/ai'
 
-const researchFlow = flow('research', async (flow) => {
-  const plan = await flow.step('plan', () => generate(planner, { model, input: { topic: flow.input.topic } }))
+const researchFlow = flow('research', async (flow, input: { topic: string }) => {
+  const plan = await flow.step('plan', () => generate(planner, { model, input: { topic: input.topic } }))
   return flow.step('search', () => generate(searcher, { model, input: { plan } }))
 })
 
-const result = await researchFlow.run({ input: { topic: 'TypeScript monorepos' } })
+const result = await researchFlow.run({ topic: 'TypeScript monorepos' })
 if (result.status === 'completed') {
   console.log(result.output)
 }
 ```
-
-## `withFlow(name, fn, options?)`
-
-Execute a function directly within a flow scope. Lower-level alternative to `flow` -- useful for one-off flows or when you need full control over options at the call site.
-
-| Parameter | Type                                           | Description                  |
-| --------- | ---------------------------------------------- | ---------------------------- |
-| `name`    | `string`                                       | Human-readable flow name     |
-| `fn`      | `(flow: FlowScope<TInput>) => Promise<T> \| T` | Flow function                |
-| `options` | `WithFlowOptions<TInput>?`                     | Flow ID, resume, goal, input |
-
-**Returns:** `Promise<FlowResult<T>>`
 
 ## `FlowHandle<T, TInput>`
 
@@ -68,20 +55,29 @@ The frozen handle returned by `flow()`.
 | Property / Method                      | Type                     | Description                                                                    |
 | -------------------------------------- | ------------------------ | ------------------------------------------------------------------------------ |
 | `name`                                 | `string`                 | The flow's registered name                                                     |
-| `run(options?)`                        | `Promise<FlowResult<T>>` | Execute the flow with optional input and runtime options                       |
+| `run(input, options?)`                 | `Promise<FlowResult<T>>` | Execute an input-bearing flow                                                  |
+| `run(options?)`                        | `Promise<FlowResult<T>>` | Execute a no-input flow                                                        |
+| `resume(flowId, options?)`             | `Promise<FlowResult<T>>` | Resume a suspended flow with its persisted input                               |
 | `signal(flowId, signalName, payload?)` | `Promise<void>`          | Send a signal to a suspended instance. Delegates to `signalFlow()` internally. |
 
-## `FlowRunOptions<TInput>`
+## `FlowRunOptions`
 
 Options passed to `handle.run()`.
 
-| Field          | Type      | Description                                                  |
-| -------------- | --------- | ------------------------------------------------------------ |
-| `input`        | `TInput?` | Typed input data, accessible as `flow.input` inside the flow |
-| `flowId`       | `string?` | Use a specific ID for cross-action correlation               |
-| `parentFlowId` | `string?` | Explicit parent flow ID for cross-action nesting             |
-| `goal`         | `string?` | Goal description for devtools display                        |
-| `resume`       | `string?` | Resume a previously suspended flow by its flowId             |
+| Field          | Type      | Description                                      |
+| -------------- | --------- | ------------------------------------------------ |
+| `flowId`       | `string?` | Use a specific ID for cross-action correlation   |
+| `parentFlowId` | `string?` | Explicit parent flow ID for cross-action nesting |
+| `goal`         | `string?` | Goal description for devtools display            |
+
+## `FlowResumeOptions`
+
+Options passed to `handle.resume()`.
+
+| Field          | Type      | Description                                      |
+| -------------- | --------- | ------------------------------------------------ |
+| `parentFlowId` | `string?` | Explicit parent flow ID for cross-action nesting |
+| `goal`         | `string?` | Goal description for devtools display            |
 
 ## `FlowScope<TInput>`
 
@@ -90,7 +86,7 @@ The scope object passed to the flow handler. Generic over `TInput` (defaults to 
 | Property / Method                        | Type                      | Description                                                             |
 | ---------------------------------------- | ------------------------- | ----------------------------------------------------------------------- |
 | `flowId`                                 | `string`                  | The flow's unique identifier                                            |
-| `input`                                  | `TInput`                  | Typed input data passed via run options                                 |
+| `input`                                  | `TInput`                  | Typed input data restored from the run input                             |
 | `results`                                | `Record<string, unknown>` | Auto-populated after each step completes, keyed by step label           |
 | `step(label, fn, options?)`              | `Promise<T>`              | Execute a named step. `fn` can be `() => T` or `(flow: FlowScope) => T` |
 | `suspend(name, options?)`                | `Promise<T>`              | Suspend the flow at a named point and wait for an external signal       |
@@ -101,6 +97,8 @@ The scope object passed to the flow handler. Generic over `TInput` (defaults to 
 
 Execute a named step within the flow. Opens a canonical `flow.step` span and restores observability context so generated child spans nest under the step. On resume, completed steps are replayed from cache (skip-replay) and are not re-emitted.
 
+For the Flows beta, `label` is the durable step identity. Each `flow.step()` label must be unique within one flow execution; duplicate labels throw before the runtime reads from the replay cache. Prefer stable literal labels. Dynamic labels are advanced and should only come from deterministic values that will be the same across retries and resumes.
+
 `fn` accepts both plain functions `() => T` and flow-aware functions `(flow: FlowScope) => T`. Flow-aware functions receive the scope automatically, enabling external step definitions that access `flow.input`, `flow.results`, etc.
 
 ### `suspend(name, options?)`
@@ -109,7 +107,9 @@ Suspend the flow and wait for an external signal. Throws internally to unwind th
 
 ### `waitUntil(name, conditionFn, options?)`
 
-Suspend the flow until a condition function returns `true`. On each resume, re-evaluates the condition. If true, continues; if false, re-suspends.
+Suspend the flow until a condition function returns `true`. Core evaluates the condition during the initial run and
+again only when your app explicitly resumes the flow. If the condition is true, execution continues; if false, the
+flow re-suspends. Core does not poll, schedule, or wake flows in the background.
 
 ## `SuspendOptions<T>`
 
@@ -151,7 +151,7 @@ Persisted flow state stored in `RecordStore` under the `crux:flow:{flowId}` key.
 | `name`           | `string`                                 | Flow name                      |
 | `status`         | `string`                                 | Current status                 |
 | `suspendedAt`    | `string`                                 | Suspend point name             |
-| `completedSteps` | `Record<string, { output, durationMs }>` | Cached step results for replay |
+| `completedSteps` | `Record<string, { output, durationMs }>` | Cached step results keyed by durable step label |
 | `traceContext`   | `Record<string, string \| undefined>`    | Trace context metadata         |
 | `createdAt`      | `number`                                 | Unix timestamp (ms)            |
 | `updatedAt`      | `number`                                 | Unix timestamp (ms)            |
@@ -164,6 +164,7 @@ Persisted flow state stored in `RecordStore` under the `crux:flow:{flowId}` key.
   **Low-level primitive.** `signalFlow()` only writes the signal to the RecordStore -- it does NOT trigger the flow to
   resume. Prefer `handle.signal()` which delegates to this internally. In Convex mutation-only modules, pair
   `signalFlow()` with `ctx.scheduler.runAfter()` in an app-local helper that also schedules the resume action.
+  For flows with local signal maps, prefer `handle.signal()` so declared schemas validate before persistence.
 </Callout>
 
 Write a signal payload to the store at `crux:signal:{flowId}:{name}`. The signal is picked up on the next resume.
@@ -199,7 +200,7 @@ Generates a unique flow ID for cross-boundary correlation. Returns `string`.
 
 ## Error Classes
 
-These errors are used internally for control flow -- they are caught by `withFlow()` and converted to `FlowResult` variants. You should not normally need to catch them.
+These errors are used internally for control flow -- they are caught by the flow runtime and converted to `FlowResult` variants. You should not normally need to catch them.
 
 | Error                | Description                                              |
 | -------------------- | -------------------------------------------------------- |
@@ -213,8 +214,8 @@ These errors are used internally for control flow -- they are caught by `withFlo
 import { flow, signalFlow } from '@use-crux/core/flow'
 import { z } from 'zod'
 
-const approvalFlow = flow('content-approval', async (flow) => {
-  const draft = await flow.step('draft', () => generate(writer, { model, input: flow.input }))
+const approvalFlow = flow('content-approval', async (flow, input: { topic: string }) => {
+  const draft = await flow.step('draft', () => generate(writer, { model, input }))
 
   // Suspend and wait for human approval
   const approval = await flow.suspend('review', {
@@ -231,7 +232,7 @@ const approvalFlow = flow('content-approval', async (flow) => {
 })
 
 // Start the flow
-const result = await approvalFlow.run({ input: { topic: 'AI safety' } })
+const result = await approvalFlow.run({ topic: 'AI safety' })
 // result.status === 'suspended'
 
 // Later, signal the flow to resume
@@ -241,7 +242,7 @@ await approvalFlow.signal(result.flowId, 'review', {
 })
 
 // Resume the flow
-const final = await approvalFlow.run({ resume: result.flowId })
+const final = await approvalFlow.resume(result.flowId)
 // final.status === 'completed'
 ```
 
@@ -250,6 +251,7 @@ const final = await approvalFlow.run({ resume: result.flowId })
 ```ts
 import type {
   FlowHandle,
+  FlowResumeOptions,
   FlowRunOptions,
   FlowScope,
   FlowResult,
@@ -258,7 +260,6 @@ import type {
   ListFlowsOptions,
   SuspendOptions,
   StepOptions,
-  WithFlowOptions,
 } from '@use-crux/core/flow'
 
 import { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from '@use-crux/core/flow'

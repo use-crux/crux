@@ -273,9 +273,14 @@ export {
   FlowSuspendedError,
   FlowCancelledError,
   FlowExpiredError,
+  InvalidSignalPayloadError,
+  FlowSerializationError,
+  noPayload,
 } from "./flow/scope";
 export type {
   FlowHandle,
+  FlowPersistenceBoundary,
+  FlowResumeOptions,
   FlowRunOptions,
   FlowScope,
   FlowResult,
@@ -284,8 +289,14 @@ export type {
   ListFlowsOptions,
   SuspendOptions,
   StepOptions,
-  WithFlowOptions,
 } from "./flow/scope";
+export type {
+  FlowDefinitionOptions,
+  FlowSignalMap,
+  FlowSignalPayload,
+  FlowSignalSpec,
+  NoPayloadSignal,
+} from "./flow";
 
 // Tokenizer
 export { setTokenizer, countTokens } from "./shared/tokenizer";

@@ -19,7 +19,7 @@ const supportPrompt = prompt({
   system: 'Answer support questions.',
 })
 
-const supportFlow = flow<{ answer: string }, { question: string }>('support-flow', async () => ({ answer: '' }))
+const supportFlow = flow('support-flow', async (_flow, _input: { question: string }) => ({ answer: '' }))
 const supportAgent = agent({ id: 'support-agent', prompt: supportPrompt })
 declare const docsRetriever: Retriever
 

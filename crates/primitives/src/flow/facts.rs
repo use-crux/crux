@@ -64,17 +64,27 @@ pub(crate) fn flow_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) 
     if let Some(args) = config.and_then(|config| args_keys(context, config)) {
         metadata.insert("args".to_string(), json!(args));
     }
+    let signal_names = config.and_then(|config| signal_keys(context, config));
+    if let Some(names) = &signal_names {
+        metadata.insert("signalNames".to_string(), json!(names));
+    }
     if let Some(schema) = args_schema.clone() {
         metadata.insert("argsSchema".to_string(), schema);
     }
     metadata.insert("hasArgs".to_string(), Value::Bool(has_args));
     metadata.insert(
         "facts".to_string(),
-        flow_fact_metadata(&step_names, has_args, runtime),
+        flow_fact_metadata(&step_names, has_args, runtime, signal_names.as_deref()),
     );
     metadata.insert(
         "intelligence".to_string(),
-        flow_intelligence(runtime, args_schema.as_ref(), &suspensions, &step_ids),
+        flow_intelligence(
+            runtime,
+            args_schema.as_ref(),
+            &steps,
+            &suspensions,
+            &step_ids,
+        ),
     );
     if runtime == "convex" {
         metadata.insert("runtime".to_string(), Value::String("convex".to_string()));
@@ -176,7 +186,20 @@ fn flow_suspensions(
 }
 
 fn args_keys(context: &PrimitiveContext<'_>, config: &StaticSyntaxValue) -> Option<Vec<String>> {
-    let value = property_value(config, "args")?;
+    object_keys(context, config, "args", true)
+}
+
+fn signal_keys(context: &PrimitiveContext<'_>, config: &StaticSyntaxValue) -> Option<Vec<String>> {
+    object_keys(context, config, "signals", false)
+}
+
+fn object_keys(
+    context: &PrimitiveContext<'_>,
+    config: &StaticSyntaxValue,
+    property_name: &str,
+    collapse_empty: bool,
+) -> Option<Vec<String>> {
+    let value = property_value(config, property_name)?;
     let StaticSyntaxValue::Object { properties, .. } =
         resolve_static_value(value, &context.initializers, &mut Default::default())
     else {
@@ -187,7 +210,11 @@ fn args_keys(context: &PrimitiveContext<'_>, config: &StaticSyntaxValue) -> Opti
         .filter(|property| property.spread != Some(true))
         .map(|property| property.name.clone())
         .collect::<Vec<_>>();
-    (!keys.is_empty()).then_some(keys)
+    if collapse_empty && keys.is_empty() {
+        None
+    } else {
+        Some(keys)
+    }
 }
 
 fn unique_step_names(steps: &[FlowStep]) -> Vec<String> {

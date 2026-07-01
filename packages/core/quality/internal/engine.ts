@@ -426,7 +426,7 @@ function createTaskRunner(task: unknown, detected: DetectedTask, setup: EngineSe
     case 'flow': {
       return async (input) => {
         const handle = primitive as FlowHandle<unknown, unknown>
-        const result = await handle.run({ input })
+        const result = await handle.run(input)
         if (result.status !== 'completed') {
           throw new Error(`flow '${handle.name}' did not complete: status '${result.status}'.`)
         }

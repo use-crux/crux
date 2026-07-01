@@ -19,8 +19,8 @@ import { observe } from '../observability'
 
 // Import from decomposed modules
 import type {
-  WithFlowOptions,
   FlowRunOptions,
+  FlowResumeOptions,
   FlowHandle,
   SuspendOptions,
   StepOptions,
@@ -31,6 +31,9 @@ import type {
   FlowSummary,
 } from './types'
 import { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from './types'
+import { InvalidSignalPayloadError, noPayload, signalSchemaFor, validateSignalPayload } from './signals'
+import type { FlowDefinitionOptions, FlowSignalMap } from './signals'
+import { flowHandlerAcceptsInput } from './handler-arity'
 import {
   createFlowId,
   signalFlow,
@@ -40,13 +43,25 @@ import {
   parseDuration,
   FLOW_KEY_PREFIX,
   SIGNAL_KEY_PREFIX,
+  assertFlowSnapshotResumable,
+  consumeFlowSignal,
 } from './lifecycle'
+import {
+  cloneDeliveredSignals,
+  deliveredSignalPayload,
+  deliveredSignalsForSnapshot,
+  recordDeliveredSignal,
+  suspendDeliveryKey,
+} from './suspend-state'
+import { createFlowStepIdentityTracker } from './step-identity'
+import { flowStepRetryOptions } from './retry-control'
+import { assertFlowJsonValue, assertFlowSnapshotMetadata, completedStepsForSnapshot } from './serialization'
 
-// Re-export types and errors so existing `import { ... } from '../flow/scope'`
-// paths continue to work without any consumer changes.
+// Re-export types and errors so existing internal `../flow/scope` imports
+// keep working while the public flow surface stays centered on `flow()`.
 export type {
-  WithFlowOptions,
   FlowRunOptions,
+  FlowResumeOptions,
   FlowHandle,
   SuspendOptions,
   StepOptions,
@@ -56,30 +71,66 @@ export type {
   ListFlowsOptions,
   FlowSummary,
 }
-export { FlowSuspendedError, FlowCancelledError, FlowExpiredError, createFlowId, signalFlow, cancelFlow, listFlows }
+export {
+  FlowSuspendedError,
+  FlowCancelledError,
+  FlowExpiredError,
+  createFlowId,
+  signalFlow,
+  cancelFlow,
+  listFlows,
+  InvalidSignalPayloadError,
+  noPayload,
+}
+export { FlowSerializationError } from './serialization'
+export type { FlowPersistenceBoundary } from './serialization'
 
 // ─────────────────────────────────────────────────────────────────
-// withFlow
+// Internal flow executor
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Execute a function within a flow scope.
+ * Execute a captured flow handler within a runtime flow scope.
  *
- * Returns a `FlowResult<T>` discriminated union:
- * - `{ status: 'completed', output: T, flowId }` — flow ran to completion
- * - `{ status: 'suspended', flowId, suspendedAt }` — flow paused at a suspend point
+ * This is the implementation behind `flow().run()`. It is intentionally not
+ * exported as an authoring API; users define flows once with `flow()` and run
+ * the returned handle.
  *
- * For resume, pass `{ resume: flowId }` in options. The flow replays
- * cached step outputs and continues from the suspend point.
- *
- * @param name — Human-readable flow name for devtools display
- * @param fn — Flow execution function, receives a `FlowScope` for step tracking
- * @param options — Optional flowId, resume, goal
+ * @param name - Human-readable flow name for devtools display.
+ * @param fn - Flow execution function, receiving a `FlowScope` for step tracking.
+ * @param options - Runtime options supplied by the flow handle.
  */
-export async function withFlow<T, TInput = void>(
+type Awaitable<T> = T | Promise<T>
+
+type InferredFlowHandler<TSignals extends FlowSignalMap | undefined = undefined> = (
+  flow: FlowScope<unknown, TSignals>,
+  ...args: never[]
+) => Awaitable<unknown>
+
+type HandlerInput<THandler> = THandler extends (...args: never[]) => Awaitable<unknown>
+  ? Parameters<THandler> extends [unknown, infer TInput, ...unknown[]]
+    ? TInput
+    : void
+  : void
+
+type HandlerOutput<THandler> = THandler extends (...args: never[]) => Awaitable<infer TOutput>
+  ? Awaited<TOutput>
+  : never
+
+interface FlowExecutionOptions<TInput, TSignals extends FlowSignalMap | undefined = undefined>
+  extends FlowRunOptions, FlowResumeOptions {
+  /** Input persisted for fresh runs and restored on resume. */
+  input?: TInput
+  /** Flow ID for a suspended flow that should be resumed. */
+  resume?: string
+  /** Definition-time local signal declarations. */
+  signals?: TSignals
+}
+
+async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | undefined = undefined>(
   name: string,
-  fn: (flow: FlowScope<TInput>) => Promise<T> | T,
-  options?: WithFlowOptions<TInput>,
+  fn: (flow: FlowScope<TInput, TSignals>, input: TInput) => Promise<T> | T,
+  options?: FlowExecutionOptions<TInput, TSignals>,
 ): Promise<FlowResult<T>> {
   const isResume = !!options?.resume
   const flowId = options?.resume ?? options?.flowId ?? createFlowId()
@@ -97,10 +148,11 @@ export async function withFlow<T, TInput = void>(
     if (!snapshot) {
       throw new Error(`No suspended flow found for flowId: ${flowId}`)
     }
+    assertFlowSnapshotResumable(snapshot)
     if (snapshot.observabilityContext && !observe.captureContext()) {
       return await observe.withContext(
         snapshot.observabilityContext as unknown as CapturedObservabilityContext,
-        () => withFlow(name, fn, options),
+        () => executeFlow(name, fn, options),
       )
     }
   }
@@ -109,10 +161,7 @@ export async function withFlow<T, TInput = void>(
   const completedSteps: Record<string, { output: JsonValue; durationMs: number }> = snapshot?.completedSteps
     ? { ...snapshot.completedSteps }
     : {}
-
-  // Emit flow resume hook (before flow start, so timeline ordering is correct)
-  if (isResume) {
-  }
+  const deliveredSignals = cloneDeliveredSignals(snapshot)
 
   // Resolve input: on resume, restore from snapshot; otherwise use options
   const flowInput = (isResume && snapshot?.input !== undefined ? snapshot.input : options?.input) as TInput
@@ -144,6 +193,7 @@ export async function withFlow<T, TInput = void>(
 
   // Track aggregates across steps
   let stepCount = 0
+  let suspendCount = 0
   const emittedSuspensionMarkers = new Set<string>()
 
   // Accumulated step results — pre-populated from snapshot on resume
@@ -151,18 +201,20 @@ export async function withFlow<T, TInput = void>(
   for (const [label, cached] of Object.entries(completedSteps)) {
     results[label] = cached.output
   }
+  const stepIdentities = createFlowStepIdentityTracker()
 
   // Create the flow scope
-  const scope: FlowScope<TInput> = {
+  const scope = {
     flowId,
     input: flowInput,
     results,
 
     async step<S>(
       label: string,
-      stepFn: ((flow: FlowScope<TInput>) => Promise<S> | S) | (() => Promise<S> | S),
+      stepFn: ((flow: FlowScope<TInput, TSignals>) => Promise<S> | S) | (() => Promise<S> | S),
       stepOptions?: StepOptions,
     ): Promise<S> {
+      stepIdentities.use(label)
       stepCount++
       const stepId = `${slugify(label)}-${stepCount}`
 
@@ -185,7 +237,7 @@ export async function withFlow<T, TInput = void>(
       const stepSource = captureSource()
 
       // Always pass scope to step function — () => T functions ignore the extra arg
-      const boundStepFn = () => (stepFn as (flow: FlowScope<TInput>) => Promise<S> | S)(scope)
+      const boundStepFn = () => (stepFn as (flow: FlowScope<TInput, TSignals>) => Promise<S> | S)(scope)
       const stepSpan = observe.openSpan({
         name: label,
         family: 'flow',
@@ -198,7 +250,7 @@ export async function withFlow<T, TInput = void>(
       })
       const wrappedFn = () =>
         stepSpan.withContext(() =>
-          runWithExecutionContext(stepContext, () => executeWithRetry(boundStepFn, stepOptions)),
+          runWithExecutionContext(stepContext, () => executeWithRetry(boundStepFn, flowStepRetryOptions(stepOptions))),
         )
 
       try {
@@ -252,13 +304,26 @@ export async function withFlow<T, TInput = void>(
     },
 
     async suspend<S>(_name: string, _options?: SuspendOptions<S>): Promise<S> {
+      suspendCount++
+      const deliveryKey = suspendDeliveryKey(suspendCount, _name)
+      const localSignalSpec = options?.signals?.[_name]
+      const localSchema = signalSchemaFor(localSignalSpec)
+      const suspendOptions = (localSchema ? { ..._options, schema: localSchema } : _options) as
+        | SuspendOptions<S>
+        | undefined
+      const payloadSpec = localSignalSpec ?? suspendOptions?.schema
+      const replayPayload = deliveredSignalPayload(deliveredSignals, deliveryKey)
+      if (isResume && replayPayload !== undefined) {
+        return validateSignalPayload(_name, payloadSpec, replayPayload) as S
+      }
+
       // On resume, first check for expiration
       if (isResume && snapshot) {
         const timeoutAt = snapshot.timeoutAt as number | undefined
         if (timeoutAt && Date.now() > timeoutAt) {
           // Flow has expired — invoke callback and throw
-          if (_options?.onExpired) {
-            await _options.onExpired({ flowId, suspendedAt: _name })
+          if (suspendOptions?.onExpired) {
+            await suspendOptions.onExpired({ flowId, suspendedAt: _name })
           }
           throw new FlowExpiredError(_name)
         }
@@ -269,7 +334,11 @@ export async function withFlow<T, TInput = void>(
           const signalDoc = await store.get(signalKey)
           if (signalDoc) {
             // Signal found — emit hook and return payload
-            const payload = (signalDoc.payload ?? {}) as S
+            const rawPayload = 'payload' in signalDoc ? signalDoc.payload : {}
+            const payload = validateSignalPayload(_name, payloadSpec, rawPayload) as S
+            assertFlowJsonValue(payload, { boundary: 'signal payload' })
+            recordDeliveredSignal(deliveredSignals, deliveryKey, _name, payload as JsonValue)
+            await consumeFlowSignal(store, flowId, _name)
             return payload
           }
         }
@@ -282,7 +351,7 @@ export async function withFlow<T, TInput = void>(
       }
 
       // Not resuming or no signal yet — suspend
-      throw new FlowSuspendedError(_name, _options)
+      throw new FlowSuspendedError(_name, suspendOptions)
     },
 
     async waitUntil(
@@ -320,15 +389,30 @@ export async function withFlow<T, TInput = void>(
     cancel(reason?: string): never {
       throw new FlowCancelledError(reason)
     },
-  }
+  } as FlowScope<TInput, TSignals>
 
   // Run the flow function with flow/session metadata while the canonical
   // observability span context is active.
   try {
     const result = await flowSpan.withContext(() =>
-      runWithExecutionContext({ ...existing, flowId, parentFlowId }, () => fn(scope)),
+      runWithExecutionContext({ ...existing, flowId, parentFlowId }, () => fn(scope, flowInput)),
     )
 
+    if (isResume && store && snapshot) {
+      const completedAt = Date.now()
+      const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
+      const completedSnapshot: FlowSnapshot = {
+        ...snapshot,
+        status: 'completed',
+        completedSteps: completedStepsForSnapshot(completedSteps),
+        ...(deliveredSignalsSnapshot ? { deliveredSignals: deliveredSignalsSnapshot } : {}),
+        updatedAt: completedAt,
+        completedAt,
+        observabilityContext: snapshot.observabilityContext ?? (resumeObservabilityContext as unknown as JsonObject),
+      }
+      assertFlowSnapshotMetadata(completedSnapshot)
+      await store.put(`${FLOW_KEY_PREFIX}${flowId}`, completedSnapshot)
+    }
 
     flowSpan.end({ attributes: { flowStatus: 'completed', totalSteps: stepCount } })
     return { status: 'completed', output: result, flowId }
@@ -338,23 +422,28 @@ export async function withFlow<T, TInput = void>(
       const flowStore = store ?? getRuntime().records
       if (flowStore) {
         const timeoutAt = error.options?.timeout ? Date.now() + parseDuration(error.options.timeout) : undefined
+        if (flowInput !== undefined) {
+          assertFlowJsonValue(flowInput, { boundary: 'flow input' })
+        }
 
+        const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
         const snapshotData: FlowSnapshot = {
           flowId,
           name,
           status: 'suspended',
           suspendedAt: error.suspendPoint,
-          completedSteps: completedSteps as FlowSnapshot['completedSteps'],
+          completedSteps: completedStepsForSnapshot(completedSteps),
+          ...(deliveredSignalsSnapshot ? { deliveredSignals: deliveredSignalsSnapshot } : {}),
           traceContext: flowTraceContext(existing?.sessionId, parentFlowId),
           observabilityContext: resumeObservabilityContext as unknown as JsonObject,
           createdAt: snapshot?.createdAt ?? startedAt,
           updatedAt: Date.now(),
           ...(timeoutAt !== undefined ? { timeoutAt } : {}),
-          ...(options?.input !== undefined ? { input: options.input as unknown as JsonObject } : {}),
+          ...(flowInput !== undefined ? { input: flowInput as unknown as JsonValue } : {}),
         }
+        assertFlowSnapshotMetadata(snapshotData)
         await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
       }
-
 
       await flowSpan.withContext(async () => {
         await emitFlowSuspensionMarker(error.suspendPoint, {
@@ -375,22 +464,32 @@ export async function withFlow<T, TInput = void>(
     if (error instanceof FlowCancelledError) {
       const flowStore = store ?? getRuntime().records
       if (flowStore) {
-        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, {
+        const cancelledAt = Date.now()
+        if (error.reason !== undefined) {
+          assertFlowJsonValue(error.reason, { boundary: 'flow snapshot metadata', path: '$.cancelReason' })
+        }
+        if (flowInput !== undefined) {
+          assertFlowJsonValue(flowInput, { boundary: 'flow input' })
+        }
+        const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
+        const snapshotData: FlowSnapshot = {
           flowId,
           name,
           status: 'cancelled',
           suspendedAt: '',
-          completedSteps: completedSteps as FlowSnapshot['completedSteps'],
+          completedSteps: completedStepsForSnapshot(completedSteps),
+          ...(deliveredSignalsSnapshot ? { deliveredSignals: deliveredSignalsSnapshot } : {}),
           traceContext: flowTraceContext(existing?.sessionId, parentFlowId),
           observabilityContext: snapshot?.observabilityContext ?? (resumeObservabilityContext as unknown as JsonObject),
           createdAt: snapshot?.createdAt ?? startedAt,
-          updatedAt: Date.now(),
+          updatedAt: cancelledAt,
+          cancelledAt,
           ...(error.reason !== undefined ? { cancelReason: error.reason } : {}),
-          ...(flowInput !== undefined ? { input: flowInput as unknown as JsonObject } : {}),
-        })
+          ...(flowInput !== undefined ? { input: flowInput as unknown as JsonValue } : {}),
+        }
+        assertFlowSnapshotMetadata(snapshotData)
+        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
       }
-
-
 
       flowSpan.end({
         status: 'cancelled',
@@ -403,19 +502,23 @@ export async function withFlow<T, TInput = void>(
     if (error instanceof FlowExpiredError) {
       const flowStore = store ?? getRuntime().records
       if (flowStore) {
-        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, {
+        const expiredAt = Date.now()
+        const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
+        const snapshotData = {
           ...(snapshot ?? {}),
           status: 'expired',
-          updatedAt: Date.now(),
-        })
+          completedSteps: completedStepsForSnapshot(completedSteps),
+          ...(deliveredSignalsSnapshot ? { deliveredSignals: deliveredSignalsSnapshot } : {}),
+          expiredAt,
+          updatedAt: expiredAt,
+        } as FlowSnapshot
+        assertFlowSnapshotMetadata(snapshotData)
+        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, snapshotData)
       }
-
-
 
       flowSpan.error(error, { flowStatus: 'expired', suspendedAt: error.suspendPoint, totalSteps: stepCount })
       return { status: 'expired', flowId, suspendedAt: error.suspendPoint }
     }
-
 
     flowSpan.error(error, { totalSteps: stepCount })
     throw error
@@ -463,47 +566,119 @@ async function emitFlowSuspensionMarker(
 // flow — definition-time factory
 // ─────────────────────────────────────────────────────────────────
 
+function normalizeRunArgs(args: readonly unknown[], handlerExpectsInput: boolean): FlowExecutionOptions<unknown> {
+  if (handlerExpectsInput) {
+    return {
+      input: args[0],
+      ...(args[1] as FlowRunOptions | undefined),
+    }
+  }
+
+  if (args.length === 0) {
+    return {}
+  }
+
+  const first = args[0]
+  if (isRunOptionsLike(first)) {
+    return first
+  }
+
+  return {
+    input: first,
+    ...(args[1] as FlowRunOptions | undefined),
+  }
+}
+
+function isRunOptionsLike(value: unknown): value is FlowRunOptions {
+  return isRecord(value) && ('flowId' in value || 'parentFlowId' in value || 'goal' in value)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 /**
  * Define a named flow and return a frozen `FlowHandle`.
  *
- * Separates definition from execution: the handler is captured once,
- * then `.run()` can be called repeatedly with different inputs/options.
+ * Separates definition from execution: the handler is captured once, then
+ * `.run()` can be called repeatedly. Input-bearing flows infer input from the
+ * handler's second parameter and expose `run(input, options?)`; no-input flows
+ * expose `run(options?)`. Use `.resume(flowId, options?)` to continue a
+ * suspended flow with its persisted input.
  *
- * @param name — Human-readable flow name for devtools display
- * @param handler — Flow execution function, receives a `FlowScope` for step tracking
- * @returns A frozen `FlowHandle<T, TInput>` with `.run()` and `.signal()` methods
+ * @param name - Human-readable flow name for devtools display.
+ * @param handler - Flow execution function, receiving a `FlowScope` and optional input.
+ * @returns A frozen `FlowHandle` with `.run()`, `.resume()`, and `.signal()` methods.
  *
  * @example
  * ```ts
- * const researchFlow = flow('research', async (flow) => {
- *   const plan = await flow.step('plan', () => generate(planner, { model, input }))
- *   return flow.step('search', () => generate(searcher, { model, input: plan }))
+ * const reviewFlow = flow('review', async (flow, input: { docId: string }) => {
+ *   const draft = await flow.step('load', () => loadDraft(input.docId))
+ *   return flow.step('publish', () => publishDraft(draft))
  * })
  *
- * const result = await researchFlow.run()
+ * const suspended = await reviewFlow.run({ docId: 'doc_123' })
+ * const resumed = await reviewFlow.resume(suspended.flowId)
  * ```
  */
-export function flow<T, TInput = void>(
+export function flow<THandler extends InferredFlowHandler>(
   name: string,
-  handler: (flow: FlowScope<TInput>) => Promise<T> | T,
-): FlowHandle<T, TInput> {
-  const handle: FlowHandle<T, TInput> = {
+  handler: THandler,
+): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>>
+export function flow<const TSignals extends FlowSignalMap, THandler extends InferredFlowHandler<TSignals>>(
+  name: string,
+  options: FlowDefinitionOptions<TSignals>,
+  handler: THandler,
+): FlowHandle<HandlerOutput<THandler>, HandlerInput<THandler>, TSignals>
+export function flow(
+  name: string,
+  optionsOrHandler:
+    | FlowDefinitionOptions<FlowSignalMap>
+    | ((flow: FlowScope<unknown, FlowSignalMap | undefined>, input?: unknown) => Awaitable<unknown>),
+  maybeHandler?: (flow: FlowScope<unknown, FlowSignalMap>, input?: unknown) => Awaitable<unknown>,
+): FlowHandle<unknown, unknown, FlowSignalMap | undefined> {
+  const definitionOptions = isFlowDefinitionOptions(optionsOrHandler) ? optionsOrHandler : undefined
+  const handler = typeof optionsOrHandler === 'function' ? optionsOrHandler : maybeHandler
+  if (typeof handler !== 'function') {
+    throw new TypeError('flow() requires a handler function.')
+  }
+
+  const handlerExpectsInput = flowHandlerAcceptsInput(handler)
+  const runtimeHandler = handler as (
+    flow: FlowScope<unknown, FlowSignalMap | undefined>,
+    input?: unknown,
+  ) => Awaitable<unknown>
+  const executeHandler = (scope: FlowScope<unknown, FlowSignalMap | undefined>, input: unknown) =>
+    runtimeHandler(scope, input)
+
+  const handle = {
     name,
 
-    run(options?: FlowRunOptions<TInput>): Promise<FlowResult<T>> {
-      return withFlow<T, TInput>(name, handler, {
-        input: options?.input,
-        flowId: options?.flowId,
-        parentFlowId: options?.parentFlowId,
-        goal: options?.goal,
-        resume: options?.resume,
+    run(...args: readonly unknown[]): Promise<FlowResult<unknown>> {
+      return executeFlow<unknown, unknown, FlowSignalMap | undefined>(name, executeHandler, {
+        ...normalizeRunArgs(args, handlerExpectsInput),
+        signals: definitionOptions?.signals,
       })
     },
 
-    signal(flowId: string, signalName: string, payload: JsonObject = {}): Promise<void> {
-      return signalFlow(flowId, signalName, payload)
+    resume(flowId: string, options?: FlowResumeOptions): Promise<FlowResult<unknown>> {
+      return executeFlow<unknown, unknown, FlowSignalMap | undefined>(name, executeHandler, {
+        parentFlowId: options?.parentFlowId,
+        goal: options?.goal,
+        resume: flowId,
+        signals: definitionOptions?.signals,
+      })
+    },
+
+    async signal(flowId: string, signalName: string, payload: JsonValue = {}): Promise<void> {
+      const parsedPayload = validateSignalPayload(signalName, definitionOptions?.signals[signalName], payload)
+      await signalFlow(flowId, signalName, parsedPayload as JsonValue)
     },
   }
 
-  return Object.freeze(handle)
+  return Object.freeze(handle) as FlowHandle<unknown, unknown, FlowSignalMap | undefined>
+}
+
+function isFlowDefinitionOptions(value: unknown): value is FlowDefinitionOptions<FlowSignalMap> {
+  return isRecord(value) && isRecord(value.signals)
 }

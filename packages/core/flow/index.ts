@@ -26,8 +26,11 @@
 
 // Types and error classes (decomposed from scope.ts)
 export { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from './types'
+export { FlowSerializationError } from './serialization'
+export type { FlowPersistenceBoundary } from './serialization'
 export type {
   FlowHandle,
+  FlowResumeOptions,
   FlowRunOptions,
   FlowScope,
   FlowResult,
@@ -36,8 +39,15 @@ export type {
   ListFlowsOptions,
   SuspendOptions,
   StepOptions,
-  WithFlowOptions,
 } from './types'
+export { InvalidSignalPayloadError, noPayload } from './signals'
+export type {
+  FlowDefinitionOptions,
+  FlowSignalMap,
+  FlowSignalPayload,
+  FlowSignalSpec,
+  NoPayloadSignal,
+} from './signals'
 
 // Lifecycle utilities (decomposed from scope.ts)
 export { createFlowId, signalFlow, cancelFlow, getFlowSnapshot, listFlows } from './lifecycle'

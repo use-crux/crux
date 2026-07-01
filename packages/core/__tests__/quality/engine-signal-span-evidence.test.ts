@@ -6,7 +6,7 @@ import { runEvaluationWithRunner as run } from './runner-harness'
 
 describe('Quality runner - trace-backed signal span evidence', () => {
   it('records the producing span id on failed signal assertion outcomes', async () => {
-    const draftFlow = flow<{ ok: boolean }, { topic: string }>('draft-check', async () => {
+    const draftFlow = flow('draft-check', async (_scope, _input: { topic: string }) => {
       try {
         await observe.span(
           {

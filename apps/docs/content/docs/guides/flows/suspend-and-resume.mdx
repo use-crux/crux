@@ -46,7 +46,7 @@ This works from API routes, webhook handlers, UI buttons, or any other external 
 
 `handle.signal()` is the recommended API. It delegates to `signalFlow()` internally but is the proper entry point for application code.
 
-`signalFlow()` (exported from `@use-crux/core`) is a **low-level primitive** that only writes the signal payload to the RecordStore. It does NOT trigger the flow to resume — the caller must separately invoke `.run({ resume: flowId })` or, in Convex, schedule the resume action via `ctx.scheduler`. Use it only when you need bare store access without handle-level coordination.
+`signalFlow()` (exported from `@use-crux/core`) is a **low-level primitive** that only writes the signal payload to the RecordStore. It does NOT trigger the flow to resume — the caller must separately invoke `.resume(flowId)` or, in Convex, schedule the resume action via `ctx.scheduler`. Use it only when you need bare store access without handle-level coordination.
 
 In Convex, the `@use-crux/convex/server` flow handle can also schedule the resume action. If a mutation-only module cannot import the handle, create a small app-local helper that calls `signalFlow()` and then `ctx.scheduler.runAfter()`.
 
@@ -54,10 +54,10 @@ In Convex, the `@use-crux/convex/server` flow handle can also schedule the resum
 
 ## Resuming
 
-Resume a suspended flow by passing its `flowId` as the `resume` option to `.run()`. The same handler runs again, but completed steps return their cached output without re-executing:
+Resume a suspended flow by passing its `flowId` to `.resume()`. The same handler runs again, but completed steps return their cached output without re-executing:
 
 ```ts
-const final = await reviewFlow.run({ resume: flowId })
+const final = await reviewFlow.resume(flowId)
 
 // final.status === 'completed'
 // final.output === publish result
@@ -142,7 +142,9 @@ await flow.waitUntil(
 )
 ```
 
-`waitUntil` re-suspends if the condition is still false on resume. The flow only continues once the condition returns `true`.
+`waitUntil` re-suspends if the condition is still false on resume. Core does not poll, schedule, or wake the
+flow in the background; the condition is checked again only when your app explicitly calls `handle.resume(flowId)`.
+Adapters such as Convex can schedule that resume action, but scheduling is adapter behavior, not a core guarantee.
 
 ## How It Works
 
@@ -154,7 +156,7 @@ await flow.waitUntil(
 **Signal** — External code calls `handle.signal(flowId, name, payload)` to deliver the signal. Internally, this writes the payload to the RecordStore as a key-value entry. In Convex, `@use-crux/convex/server` flow handles can also schedule the resume action.
 </Step>
 <Step>
-**Resume** — `handle.run({ resume: flowId })` loads the snapshot, replays completed steps from cache (no re-execution), and when `suspend()` is reached again, it finds the signal in the store and returns the payload instead of throwing.
+**Resume** — `handle.resume(flowId)` loads the snapshot, replays completed steps from cache (no re-execution), and when `suspend()` is reached again, it finds the signal in the store and returns the payload instead of throwing.
 </Step>
 </Steps>
 

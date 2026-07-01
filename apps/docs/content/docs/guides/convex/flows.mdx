@@ -28,12 +28,16 @@ The returned handle exposes:
 import { action, flow } from '@use-crux/convex/server'
 import { internal } from '../_generated/api'
 import { v } from 'convex/values'
+import { z } from 'zod'
 
 export const writerFlow = flow({
   name: 'writer',
   args: {
     draftId: v.id('drafts'),
     brief: v.string(),
+  },
+  signals: {
+    approval: z.object({ approved: z.boolean() }),
   },
   handler: async (scope, args, ctx) => {
     const plan = await scope.step('plan', () =>
@@ -43,7 +47,8 @@ export const writerFlow = flow({
       }),
     )
 
-    await scope.suspend('approval')
+    const approval = await scope.suspend('approval')
+    if (!approval.approved) return { status: 'rejected' as const }
 
     return scope.step('write', () =>
       ctx.crux.runAction('write draft', internal.writer.write, {
@@ -92,6 +97,9 @@ export const approvePlan = action({
   },
 })
 ```
+
+If the flow declares `signals`, `.signal()` uses the same core schema contract as `flow.suspend()`: invalid payloads
+throw before the pending signal is written or the resume action is scheduled.
 
 If a mutation-only module cannot import the flow handle or action reference safely, keep a tiny app-local helper that calls `signalFlow()` and `ctx.scheduler.runAfter()`.
 

@@ -312,6 +312,8 @@ export const research = researchFlow.action
 
 The flow handle exposes `.action`, `.handler`, `.args`, and `.signal()`. Public exposure should be app-owned: wrap `.args` and `.handler` in your own public `action()` when you need auth, tenant checks, or rate limits before starting a flow. Direct `.handler()` calls also flush after each run result, so suspended flows such as `plan-approval` show their completed steps and suspended flow status immediately instead of waiting for the outer action to finish unrelated work.
 
+Convex flows can declare the same local `signals` map as core flows. Declared signal schemas type `scope.suspend()` and `flowHandle.signal()`, and `.signal()` validates payloads before writing the pending signal or scheduling the resume action.
+
 ### `createContextHandler(config)`
 
 Low-level context handler for manually assembled [Convex Agent SDK](https://github.com/get-convex/agent) instances. Profile-backed Crux prompt agents should use `crux.convexAgent({ prompt, prepare })`; that path resolves the prompt, memory, skills, tools, and thread context together. Normal Convex Agent-shaped code can use `Agent`, `convexTools()`, or this handler directly.

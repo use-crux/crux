@@ -1,0 +1,38 @@
+---
+title: flow.duplicate_step_label
+---
+
+## What it checks
+
+Crux emits this finding when one flow body contains the same literal `flow.step("label", ...)` more than once.
+
+## Why it matters
+
+For the Flows beta, a step label is the durable replay identity. Completed step outputs are cached by label so resumed flows can skip work they already finished. Reusing a label makes that cache ambiguous and the runtime rejects the duplicate before it can use the wrong result.
+
+## How to fix
+
+Give each durable step a distinct, stable label:
+
+```ts
+await flow.step("draft-plan", draftPlan)
+await flow.step("publish-plan", publishPlan)
+```
+
+Dynamic labels are an advanced escape hatch. Use them only when the generated value is stable across retries and resumes, such as a deterministic branch or loop key from persisted input.
+
+## When to suppress
+
+Suppress only when the repeated label is intentional and covered by runtime tests:
+
+```ts
+// crux-lint-disable-next-line flow.duplicate_step_label -- duplicate path is intentionally unreachable
+```
+
+## Rule metadata
+
+- Rule id: `flow.duplicate_step_label`
+- Category: `runtime`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

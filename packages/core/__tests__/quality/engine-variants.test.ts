@@ -147,7 +147,7 @@ describe('variant matrix execution', () => {
 
   it('a variant task lacking a capability honest-fails the assertion for that cell only', async () => {
     // The base flow task captures `steps`; the substituted plain fn does not.
-    const baseFlow = flow<{ ok: boolean }, { q: string }>('variants-honest', async (ctx) => {
+    const baseFlow = flow('variants-honest', async (ctx, _input: { q: string }) => {
       await ctx.step('plan', async () => ({ goal: 'x' }))
       return { ok: true }
     })

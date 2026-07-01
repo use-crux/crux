@@ -9,8 +9,9 @@
  */
 
 import { getRuntime, resolveRecords } from '../runtime/runtime'
-import type { JsonObject } from '../storage'
+import type { JsonValue, RecordStore } from '../storage'
 import type { FlowSnapshot, ListFlowsOptions, FlowSummary } from './types'
+import { assertFlowJsonValue, assertFlowSnapshotMetadata } from './serialization'
 
 // ─────────────────────────────────────────────────────────────────
 // Constants
@@ -21,6 +22,12 @@ export const FLOW_KEY_PREFIX = 'crux:flow:'
 
 /** Store key prefix for flow signals. */
 export const SIGNAL_KEY_PREFIX = 'crux:signal:'
+
+/** Flow statuses that close a persisted snapshot and cannot be resumed. */
+export const TERMINAL_FLOW_STATUSES = ['completed', 'cancelled', 'expired'] as const
+
+/** Persisted terminal status values for completed flow instances. */
+export type TerminalFlowStatus = (typeof TERMINAL_FLOW_STATUSES)[number]
 
 // ─────────────────────────────────────────────────────────────────
 // ID generators & utilities
@@ -60,6 +67,28 @@ export function parseDuration(duration: string): number {
   }
 }
 
+/**
+ * Check whether a persisted flow status is terminal.
+ *
+ * Terminal snapshots remain useful for inspection and listing, but they are no
+ * longer executable resume targets.
+ */
+export function isTerminalFlowStatus(status: unknown): status is TerminalFlowStatus {
+  return TERMINAL_FLOW_STATUSES.includes(status as TerminalFlowStatus)
+}
+
+/**
+ * Assert that a loaded snapshot can be resumed.
+ *
+ * This keeps lifecycle rejection ahead of handler execution, so terminal
+ * snapshots cannot accidentally run user code or rewrite their terminal state.
+ */
+export function assertFlowSnapshotResumable(snapshot: FlowSnapshot): void {
+  if (isTerminalFlowStatus(snapshot.status)) {
+    throw new Error(`Flow ${snapshot.flowId} is ${snapshot.status} and cannot be resumed.`)
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Store operations
 // ─────────────────────────────────────────────────────────────────
@@ -68,17 +97,29 @@ export function parseDuration(duration: string): number {
  * Send a signal to a suspended flow.
  *
  * Writes the signal payload to the store. The flow will pick it up
- * on the next `flow().run({ resume })` call.
+ * on the next `flow().resume(flowId)` call.
  *
  * Uses the RecordStore from runtime config (`config({ persistence: { records } })`).
  */
-export async function signalFlow(flowId: string, name: string, payload: JsonObject = {}): Promise<void> {
+export async function signalFlow(flowId: string, name: string, payload: JsonValue = {}): Promise<void> {
   const store = resolveRecords()
+  assertFlowJsonValue(payload, { boundary: 'signal payload' })
   await store.put(`${SIGNAL_KEY_PREFIX}${flowId}:${name}`, {
     payload,
     signaledAt: Date.now(),
     updatedAt: Date.now(),
   })
+}
+
+/**
+ * Consume one pending signal after it has been validated for delivery.
+ *
+ * Delivery is a single-use boundary: once `flow.suspend(name)` accepts a
+ * persisted payload, later same-name suspend points must wait for a fresh
+ * signal instead of observing stale state.
+ */
+export async function consumeFlowSignal(store: RecordStore, flowId: string, name: string): Promise<void> {
+  await store.delete(`${SIGNAL_KEY_PREFIX}${flowId}:${name}`)
 }
 
 /** Load a persisted flow snapshot by ID. */
@@ -116,12 +157,21 @@ export async function listFlows(options?: ListFlowsOptions): Promise<FlowSummary
 export async function cancelFlow(flowId: string, reason?: string): Promise<void> {
   const store = resolveRecords()
   const snapshot = await store.get(`${FLOW_KEY_PREFIX}${flowId}`)
-  if (snapshot) {
-    await store.put(`${FLOW_KEY_PREFIX}${flowId}`, {
-      ...snapshot,
-      status: 'cancelled',
-      cancelReason: reason,
-      updatedAt: Date.now(),
-    })
+  if (!snapshot || isTerminalFlowStatus(snapshot.status)) {
+    return
   }
+
+  const cancelledAt = Date.now()
+  if (reason !== undefined) {
+    assertFlowJsonValue(reason, { boundary: 'flow snapshot metadata', path: '$.cancelReason' })
+  }
+  const cancelledSnapshot = {
+    ...snapshot,
+    status: 'cancelled',
+    ...(reason !== undefined ? { cancelReason: reason } : {}),
+    cancelledAt,
+    updatedAt: cancelledAt,
+  } as FlowSnapshot
+  assertFlowSnapshotMetadata(cancelledSnapshot)
+  await store.put(`${FLOW_KEY_PREFIX}${flowId}`, cancelledSnapshot)
 }

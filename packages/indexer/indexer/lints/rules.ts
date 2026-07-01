@@ -33,6 +33,9 @@ export const indexLintRuleIds = [
   'tool.missing_input_schema',
   'tool.output_not_inspectable',
   'flow.suspension_without_coverage',
+  'flow.duplicate_step_label',
+  'flow.duplicate_suspend_name',
+  'flow.undeclared_suspend_signal',
   'workspace.write_without_guardrail',
   'memory.long_lived_without_retention',
   'resource.write_without_read',
@@ -552,6 +555,72 @@ export const indexLintRules = {
         title: 'Cover suspend and resume',
         description:
           'Add a flow eval that exercises the suspend/resume path, including the expected approval or signal.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'flow.duplicate_step_label': defineIndexLintRule({
+    id: 'flow.duplicate_step_label',
+    severity: 'warning',
+    category: 'runtime',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Flow repeats a step label',
+    rationale:
+      'Flow step labels are durable replay identities. Repeating a label in one flow body makes cached output ambiguous across retries, suspension, and resume.',
+    impact: 'A repeated step label can return the wrong cached output or fail at runtime before the flow reaches later work.',
+    docsSlug: 'flow-duplicate-step-label',
+    fixes: [
+      {
+        title: 'Use unique step labels',
+        description:
+          'Give each flow.step() call a distinct literal label, and encode loop iteration or branch meaning in the label only when it is stable across resumes.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'flow.duplicate_suspend_name': defineIndexLintRule({
+    id: 'flow.duplicate_suspend_name',
+    severity: 'warning',
+    category: 'runtime',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Flow repeats a suspend name',
+    rationale:
+      'Flow signal delivery is keyed by signal name and consumed after one delivery. Repeating a suspend name in one flow body makes later resumes depend on source-order replay rather than a distinct signal contract.',
+    impact: 'A repeated suspend name can make approvals ambiguous and can strand a later wait behind an already-used signal name.',
+    docsSlug: 'flow-duplicate-suspend-name',
+    fixes: [
+      {
+        title: 'Use unique suspend names',
+        description:
+          'Give each suspend point a distinct literal name, or split repeated waits into separate flows until scoped/repeating signal attempts are supported.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'flow.undeclared_suspend_signal': defineIndexLintRule({
+    id: 'flow.undeclared_suspend_signal',
+    severity: 'warning',
+    category: 'contracts',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Flow suspends on an undeclared signal',
+    rationale:
+      'A local signal map is the public signal contract for a flow. Literal suspend names outside that map cannot be signaled through the typed handle and usually mean the runtime contract drifted from the authored type contract.',
+    impact: 'A flow may suspend at a signal that callers cannot discover or type-check through the flow handle.',
+    docsSlug: 'flow-undeclared-suspend-signal',
+    fixes: [
+      {
+        title: 'Declare or rename the signal',
+        description:
+          'Add the suspend name to the flow signals map, or rename the suspend call to one of the declared signal keys.',
         kind: 'manual',
       },
     ],

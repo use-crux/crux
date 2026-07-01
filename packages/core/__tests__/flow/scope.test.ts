@@ -96,13 +96,13 @@ describe('flow.step', () => {
     }).run()
   })
 
-    it('generates unique stepIds for same labels', async () => {
+    it('generates unique stepIds for unique labels', async () => {
     const stepIds: string[] = []
     await makeFlow('test', async (flow) => {
       await flow.step('search', async () => {
         stepIds.push(getExecutionContext()?.stepId ?? '')
       })
-      await flow.step('search', async () => {
+      await flow.step('rank', async () => {
         stepIds.push(getExecutionContext()?.stepId ?? '')
       })
     }).run()
@@ -335,12 +335,12 @@ describe('flow.input', () => {
     it('is accessible within step functions when input is provided', async () => {
     let capturedInput: unknown
 
-    const result = await makeFlow<number, { topic: string; audience: string }>('test-input', async (flow) => {
+    const result = await makeFlow('test-input', async (flow, _input: { topic: string; audience: string }) => {
       capturedInput = flow.input
       return await flow.step('use-input', () => {
         return flow.input.topic.length
       })
-    }).run({ input: { topic: 'AI Safety', audience: 'engineers' } })
+    }).run({ topic: 'AI Safety', audience: 'engineers' })
 
     expect(result.status).toBe('completed')
     expect(capturedInput).toEqual({
@@ -352,7 +352,7 @@ describe('flow.input', () => {
     }
   })
 
-    it('is undefined when no input is provided (backward compat)', async () => {
+    it('is undefined when no input is provided', async () => {
     let capturedInput: unknown = 'sentinel'
 
     await makeFlow('no-input', async (flow) => {
@@ -369,7 +369,7 @@ describe('flow.input', () => {
     type Input = { topic: string; audience: string }
     let inputOnResume: unknown
 
-    const flowFn = async (flow: FlowScope<Input>) => {
+    const flowFn = async (flow: FlowScope<Input>, _input: Input) => {
       await flow.step('plan', () => ({ planId: 'abc' }))
       await flow.suspend('review')
       // This code runs only on resume
@@ -377,17 +377,15 @@ describe('flow.input', () => {
       return flow.input.topic
     }
 
-    const persistFlow = makeFlow<string, Input>('persist-input', flowFn)
+    const persistFlow = makeFlow('persist-input', flowFn)
 
     // First call — suspends
-    const suspended = await persistFlow.run({
-      input: { topic: 'AI Safety', audience: 'engineers' },
-    })
+    const suspended = await persistFlow.run({ topic: 'AI Safety', audience: 'engineers' })
     expect(suspended.status).toBe('suspended')
 
     // Signal and resume
     await signalFlow(suspended.flowId, 'review', {})
-    const resumed = await persistFlow.run({ resume: suspended.flowId })
+    const resumed = await persistFlow.resume(suspended.flowId)
 
     expect(resumed.status).toBe('completed')
     if (resumed.status === 'completed') {
@@ -468,7 +466,7 @@ describe('flow.results', () => {
     await signalFlow(suspended.flowId, 'review', {})
     stepsExecuted.length = 0
 
-    const resumed = await resumeFlow.run({ resume: suspended.flowId })
+    const resumed = await resumeFlow.resume(suspended.flowId)
     expect(resumed.status).toBe('completed')
 
     // plan was skip-replayed, should NOT have re-executed
@@ -512,7 +510,7 @@ describe('flow.step auto-pass', () => {
     }
   })
 
-    it('() => T step functions still work (backward compat)', async () => {
+    it('() => T step functions still work', async () => {
     const result = await makeFlow('compat', async (flow) => {
       const value = await flow.step('plain', () => 42)
       return value
@@ -530,11 +528,11 @@ describe('flow.step auto-pass', () => {
       return flow.input.seed * 2
     }
 
-    const result = await makeFlow<number, { seed: number }>('mixed', async (flow) => {
+    const result = await makeFlow('mixed', async (flow, _input: { seed: number }) => {
       const doubled = await flow.step('double', flowAwareStep)
       const added = await flow.step('add', () => doubled + 10)
       return added
-    }).run({ input: { seed: 5 } })
+    }).run({ seed: 5 })
 
     expect(result.status).toBe('completed')
     if (result.status === 'completed') {
@@ -549,10 +547,10 @@ describe('flow.step auto-pass', () => {
       return `${flow.input.topic}: plan ${planResult.planId}`
     }
 
-    const result = await makeFlow<string, { topic: string }>('full-access', async (flow) => {
+    const result = await makeFlow('full-access', async (flow, _input: { topic: string }) => {
       await flow.step('plan', () => ({ planId: 'p-123' }))
       return flow.step('summary', summaryStep)
-    }).run({ input: { topic: 'AI Safety' } })
+    }).run({ topic: 'AI Safety' })
 
     expect(result.status).toBe('completed')
     if (result.status === 'completed') {

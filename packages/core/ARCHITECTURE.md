@@ -223,7 +223,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   └── types.ts        JudgeConfig, JudgeResult, JudgeInstance, JudgeScoreOptions
 ├── flow/
 │   ├── index.ts        Barrel — flow, signalFlow, cancelFlow, listFlows, createFlowId
-│   └── scope.ts        flow<T, TInput>(), FlowHandle<T, TInput>, FlowRunOptions<TInput>, FlowScope<TInput> — flow.input (typed), flow.results (auto-populated Record<string, unknown>), auto-pass (step fns accepting FlowScope receive it automatically), suspend/resume/cancel — throw-to-unwind pattern with RecordStore persistence
+│   └── scope.ts        flow(name, handler), FlowHandle<T, TInput>, FlowRunOptions, FlowResumeOptions, FlowScope<TInput> — input inferred from the handler's second parameter, flow.input restored for scope-aware helpers, flow.results (auto-populated Record<string, unknown>), auto-pass (step fns accepting FlowScope receive it automatically), suspend/resume/cancel — throw-to-unwind pattern with RecordStore persistence
 ├── agent/
 │   ├── index.ts        Barrel: agent, AnyAgent, InferAgentInput, InferAgentOutput, composition utilities, blackboard, handoff, delegate
 │   ├── agent.ts        agent(), isAgent(), AnyAgent, InferAgentInput, InferAgentOutput — frozen agent definition
@@ -1143,7 +1143,7 @@ Example: a brand alignment judge with `detailSchema: z.object({ notes: z.array(z
 
 ### flow and FlowHandle
 
-`flow(name, handler)` returns a frozen `FlowHandle<T, TInput>` that separates flow definition from execution. The handler is captured once; `.run(options?)` can be called repeatedly with different inputs. `.signal(flowId, name, payload?)` delegates to `signalFlow()` for resume. The internal execution engine (`withFlow()`) remains private — `flow` is the public API.
+`flow(name, handler)` returns a frozen `FlowHandle<T, TInput>` that separates flow definition from execution. The handler is captured once; `.run(options?)` can be called repeatedly with different inputs. `.signal(flowId, name, payload?)` delegates to `signalFlow()` for resume. The internal execution engine remains private — `flow` is the public API.
 
 ### Mechanism
 
@@ -1160,10 +1160,10 @@ flow.suspend('approval')
 
 ### Resume (skip-replay)
 
-On resume (`handle.run({ resume: flowId })`), the snapshot is loaded from the store. All previously completed steps return their cached output without re-executing:
+On resume (`handle.resume(flowId)`), the snapshot is loaded from the store. All previously completed steps return their cached output without re-executing:
 
-```
-handle.run({ resume: 'flow-123' })
+```text
+handle.resume('flow-123')
   → load snapshot from store
     → flow.step('plan', ...) → return cached output (no execution)
     → flow.step('search', ...) → return cached output (no execution)
@@ -1173,7 +1173,7 @@ handle.run({ resume: 'flow-123' })
 ```
 
 The snapshot stores the parent observability context from the original run. If
-resume starts in a fresh worker without active async context, `withFlow()`
+resume starts in a fresh worker without active async context, the flow runtime
 restores that context before opening the resumed `flow.run` span. Convex
 `@use-crux/convex/server` also uses the stored context when `.signal()` schedules
 the resume action, so the resumed action appends to the same run id instead of
@@ -1501,7 +1501,7 @@ external observers and degrades to no-op when `node:diagnostics_channel` is unav
 
 `observe.run()` creates user-facing execution roots. `observe.span()` creates inspectable operations and automatically opens an implicit run when called outside an active run, so compositions such as `pipeline`, `consensus`, `parallel`, and `swarm` remain traceable when used directly. `observe.event()`, `observe.artifact()`, and `observe.edge()` attach timestamped detail, payloads, and relations to the active graph context.
 
-Built-in orchestration primitives write the graph contract through the shared agent composition runtime. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` / `withFlow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. Successful `flow.step` spans also record the step result as an `output` artifact, so step outputs are inspectable from the trace (and back Quality `ctx.step()` access) without re-running the flow. `consensus()` opens `composition.consensus` with voter `agent.run` children directly under that composition span. `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
+Built-in orchestration primitives write the graph contract through the shared agent composition runtime. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. Successful `flow.step` spans also record the step result as an `output` artifact, so step outputs are inspectable from the trace (and back Quality `ctx.step()` access) without re-running the flow. `consensus()` opens `composition.consensus` with voter `agent.run` children directly under that composition span. `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
 
 Prompt/context and safety primitives also write the graph contract directly. `prompt.resolve()` opens `prompt.resolve`; conditional context evaluation emits `context.predicate` spans with `included`, `predicate`, discriminator/branch, and exclusion reason attributes; context text resolution emits `context.resolve` spans plus `context.contribution` artifacts and `produced` edges. Context contributions that provide tools carry `injectedTools` so readers can explain which contribution supplied each request tool; direct injectable, memory, blackboard, and retriever tool producers emit the same preview shape even when they have no resolved text. Included context artifacts are carried through `systemBlocks` and linked to each generation span with `consumed` edges, so the backend can expose the exact context for a call in `inspection.context`. Token-budget drops are recorded in `prompt.budget` artifacts. Generation orchestration emits consumed `messages` artifacts for the prepared request payload. The Safety session's constraint phase opens a grouped `constraint.check` span, runs each constraint check as a child span with pass/fail attributes, records `constraint.report` artifacts, and emits `constraint.retry` spans/edges for combined-feedback regeneration. Its guardrail phases open grouped and per-guard `guardrail.run` spans, record each action as span attributes plus `guardrail.report` artifacts with before/after previews when content changes, and emit `guardrail.blocked` edges for blocking decisions.
 

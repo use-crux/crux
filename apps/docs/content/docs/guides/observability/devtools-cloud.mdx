@@ -99,7 +99,7 @@ await withSession(sessionId, async () => {
 
 ### Flow scope
 
-`flow` adds structured pipeline grouping within a session. Named steps via `flow.step()` tag every nested `generate()` call with a `stepId` and `stepLabel`.
+`flow` adds structured pipeline grouping within a session. Named steps via `flow.step()` tag every nested `generate()` call with a runtime `stepId` and the durable beta `stepLabel`.
 
 ```ts
 import { withSession, flow, createSessionId } from '@use-crux/core'
