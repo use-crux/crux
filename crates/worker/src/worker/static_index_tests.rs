@@ -93,10 +93,10 @@ fn finalize_request_is_accepted_through_worker_path() {
         parsed.events[2]["patch"]["project"]["root"],
         "/workspace/acme"
     );
-    assert_eq!(parsed.events[2]["summary"]["factCount"], 30);
+    assert_eq!(parsed.events[2]["summary"]["factCount"], 33);
     assert_eq!(stage["method"], STATIC_INDEX_FINALIZE_METHOD);
     assert_eq!(stage["telemetry"]["facts"]["definitions"], 1);
-    assert_eq!(stage["telemetry"]["facts"]["ruleDescriptors"], 29);
+    assert_eq!(stage["telemetry"]["facts"]["ruleDescriptors"], 32);
     assert_eq!(stage["telemetry"]["cache"]["writes"], 1);
 }
 
