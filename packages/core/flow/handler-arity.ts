@@ -19,13 +19,55 @@ export function flowHandlerAcceptsInput(handler: FlowHandlerFunction): boolean {
 
 function handlerParameterSource(source: string): string | undefined {
   const trimmed = source.trim()
-  const arrowIndex = trimmed.indexOf('=>')
+  const arrowIndex = topLevelArrowIndex(trimmed)
   if (arrowIndex >= 0) return arrowParameterSource(trimmed.slice(0, arrowIndex))
 
   const openParen = trimmed.indexOf('(')
   if (openParen < 0) return undefined
   const closeParen = matchingCloseParen(trimmed, openParen)
   return closeParen > openParen ? trimmed.slice(openParen + 1, closeParen) : undefined
+}
+
+function topLevelArrowIndex(source: string): number {
+  let depth = 0
+  let quote: string | undefined
+  let escaped = false
+
+  for (let index = 0; index < source.length - 1; index++) {
+    const character = source[index]!
+
+    if (quote) {
+      if (escaped) {
+        escaped = false
+      } else if (character === '\\') {
+        escaped = true
+      } else if (character === quote) {
+        quote = undefined
+      }
+      continue
+    }
+
+    if (character === '"' || character === "'" || character === '`') {
+      quote = character
+      continue
+    }
+
+    if (character === '(' || character === '[' || character === '{') {
+      depth++
+      continue
+    }
+
+    if (character === ')' || character === ']' || character === '}') {
+      depth = Math.max(0, depth - 1)
+      continue
+    }
+
+    if (depth === 0 && character === '=' && source[index + 1] === '>') {
+      return index
+    }
+  }
+
+  return -1
 }
 
 function arrowParameterSource(source: string): string | undefined {

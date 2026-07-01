@@ -133,8 +133,16 @@ export function dataAccessOperationForMethod(
 export function dataAccessTargetKindForVariable(
   targetVariable: string,
 ): PrimitiveDataAccessTargetKind | undefined {
-  const normalized = targetVariable.toLowerCase();
+  const tokens = identifierTokens(targetVariable);
   return targetKindDeclarations.find((declaration) =>
-    declaration.aliases.some((alias) => normalized.includes(alias)),
+    declaration.aliases.some((alias) => tokens.includes(alias)),
   )?.kind;
+}
+
+function identifierTokens(identifier: string): readonly string[] {
+  return identifier
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
 }

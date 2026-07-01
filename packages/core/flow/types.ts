@@ -123,7 +123,7 @@ export type FlowResult<T> =
   | { status: 'cancelled'; flowId: string; cancelReason?: string }
   | { status: 'expired'; flowId: string; suspendedAt: string }
 
-/** Persisted flow snapshot stored in a RecordStore. */
+/** Persisted, occurrence-keyed signal delivery record used for suspend replay. */
 export interface DeliveredFlowSignal extends JsonObject {
   /** Signal name that was delivered to a suspend point. */
   signalName: string

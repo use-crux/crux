@@ -82,6 +82,28 @@ describe('flow', () => {
     }
   })
 
+    it('.run() passes input to handlers with nested default arrow parameters', async () => {
+    const handle = makeFlow(
+      'nested-default-arrow-input-flow',
+      async (
+        _flow,
+        input: { flowId: string; name: string; format?: (name: string) => string } = {
+          flowId: 'fallback-flow',
+          name: 'Fallback',
+          format: (name) => name,
+        },
+      ) => {
+        return `Hello, ${input.format?.(input.name) ?? input.name}`
+      },
+    )
+
+    const result = await handle.run({ flowId: 'input-flow-id', name: 'World' })
+    expect(result.status).toBe('completed')
+    if (result.status === 'completed') {
+      expect(result.output).toBe('Hello, World')
+    }
+  })
+
     it('.run() passes options through to flow internals', async () => {
     const handle = makeFlow('options-flow', async (flow) => {
       return flow.flowId
