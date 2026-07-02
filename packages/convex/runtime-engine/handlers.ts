@@ -2,15 +2,15 @@ import { v } from 'convex/values'
 import { internalMutationGeneric } from 'convex/server'
 import type {
   RuntimeHandlerTarget,
-  RuntimeTarget,
-  RuntimeTargetMap,
   RuntimeTargetRuntimeRef,
   WorkId,
 } from '@use-crux/core/runtime'
 import {
   bindHostRuntime,
-  createRuntimeError,
-  runtimeTargetMap,
+  decodeWakeEnvelope,
+  normalizeRuntimeHandlerTargets,
+  runtimeSignalEventName,
+  type WakeEnvelope,
 } from '@use-crux/core/runtime'
 import { convex, type ConvexRuntimeEngineDefinition } from '../runtime'
 import type { ConvexCtxPort } from '../store'
@@ -71,7 +71,11 @@ export interface ConvexRuntimeHandlers {
 export function createConvexRuntimeHandlers(options: CreateConvexRuntimeHandlersOptions): ConvexRuntimeHandlers {
   const declaration = options.runtime ?? convex({ namespace: options.namespace })
   const runtimeRef: RuntimeTargetRuntimeRef = {}
-  const targets = normalizeTargets(options.targets, runtimeRef)
+  const targets = normalizeRuntimeHandlerTargets({
+    targets: options.targets,
+    runtimeRef,
+    entry: 'createConvexRuntimeHandlers()',
+  })
 
   const bind = (ctx: ConvexSchedulerCtx) => {
     const runtime = bindHostRuntime(declaration, {
@@ -93,9 +97,10 @@ export function createConvexRuntimeHandlers(options: CreateConvexRuntimeHandlers
       args: { envelope: v.any() },
       returns: v.any(),
       handler: async (ctx, { envelope }) => {
+        const wakeEnvelope = decodeConvexWakeEnvelope(envelope)
         const runtime = bind(ctx)
         try {
-          return await runtime.kernel.handleWake(envelope as never)
+          return await runtime.kernel.handleWake(wakeEnvelope)
         } finally {
           runtime.dispose()
         }
@@ -114,7 +119,7 @@ export function createConvexRuntimeHandlers(options: CreateConvexRuntimeHandlers
         try {
           const result = await runtime.kernel.emitEvent({
             namespace: namespace ?? runtime.namespace,
-            name: `crux.signal:${flowId}:${signalName}`,
+            name: runtimeSignalEventName(flowId, signalName),
             payload: (payload ?? {}) as never,
           })
           await runtime.dispatcher.nudge()
@@ -128,9 +133,10 @@ export function createConvexRuntimeHandlers(options: CreateConvexRuntimeHandlers
       args: { envelope: v.any() },
       returns: v.any(),
       handler: async (ctx, { envelope }) => {
+        const wakeEnvelope = decodeConvexWakeEnvelope(envelope)
         const runtime = bind(ctx)
         try {
-          return await runtime.kernel.handleWake(envelope as never)
+          return await runtime.kernel.handleWake(wakeEnvelope)
         } finally {
           runtime.dispose()
         }
@@ -182,36 +188,17 @@ export function createConvexRuntimeHandlers(options: CreateConvexRuntimeHandlers
   return Object.freeze(handlers)
 }
 
-function normalizeTargets(
-  targets: readonly RuntimeHandlerTarget[],
-  runtimeRef: RuntimeTargetRuntimeRef,
-): RuntimeTargetMap {
-  const registeredTargets = runtimeTargetMap(runtimeRef)
-  const entries: Array<[string, RuntimeTarget]> = []
-  const seen = new Set<string>()
-  for (const target of targets) {
-    const name = 'name' in target ? target.name : target.targetId
-    if (seen.has(name)) {
-      throw createRuntimeError({
-        code: 'TARGET_DUPLICATE',
-        whatFailed: `Runtime target \`${name}\` is declared more than once.`,
-        why: 'Convex runtime entries need one stable target for each durable name.',
-        whatStillWorks: 'Other uniquely named runtime targets can still be discovered.',
-        nextStep: 'Rename one target or remove the duplicate export before creating the Convex runtime handlers.',
-      })
-    }
-    seen.add(name)
-    const runtimeTarget = isRuntimeTarget(target) ? target : registeredTargets[name]
-    if (runtimeTarget) entries.push([name, runtimeTarget])
-  }
-  return Object.freeze(Object.fromEntries(entries))
-}
-
-function isRuntimeTarget(target: RuntimeHandlerTarget): target is RuntimeTarget {
-  return 'targetId' in target && 'kind' in target && 'execute' in target && typeof target.execute === 'function'
-}
-
 function createConvexWorkIdGenerator(): () => WorkId {
   let counter = 0
-  return () => `work_convex_${Date.now().toString(36)}_${++counter}` as WorkId
+  return () => `work_convex_${Date.now().toString(36)}_${++counter}_${randomWorkIdSuffix()}` as WorkId
+}
+
+function decodeConvexWakeEnvelope(envelope: unknown): WakeEnvelope {
+  return decodeWakeEnvelope(typeof envelope === 'string' ? envelope : JSON.stringify(envelope))
+}
+
+function randomWorkIdSuffix(): string {
+  const cryptoApi = globalThis.crypto
+  if (cryptoApi?.randomUUID) return cryptoApi.randomUUID()
+  return Math.random().toString(36).slice(2, 12)
 }

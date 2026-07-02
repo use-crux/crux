@@ -68,6 +68,7 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 	rootCmd.AddCommand(commands.NewQualityCmd(f))
 	rootCmd.AddCommand(commands.NewFlowsCmd(f))
 	rootCmd.AddCommand(commands.NewInspectCmd(f))
+	rootCmd.AddCommand(commands.NewRuntimeCmd(f))
 
 	return rootCmd
 }
@@ -119,6 +120,7 @@ func printRootUsage(cmd *cobra.Command, io *output.IO) error {
 	w("index", "List registered prompts, contexts, and tools")
 	w("lint", "Check authored Crux project health")
 	w("inspect", "Show token breakdown for a prompt")
+	w("runtime", "Generate Runtime Engine artifacts")
 	fmt.Fprintln(out)
 	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Server"))
 	w("dev", "Start the devtools server")

@@ -83,6 +83,7 @@ const setWorkPending = mutation<
     work: Record<string, unknown>
     idempotencyKey: string
     now: number
+    from?: string | string[]
   },
   Record<string, unknown> | null
 >('runtime/state:setWorkPending')
@@ -230,6 +231,49 @@ describe('Crux Convex Runtime Engine component', () => {
     expect(work).not.toHaveProperty('notBefore')
     expect(work).not.toHaveProperty('leaseToken')
     expect(work).not.toHaveProperty('lastError')
+  })
+
+  it('honors explicit setWorkPending source statuses', async () => {
+    const t = convexTest({ schema, modules })
+    await t.mutation(createWork, {
+      work: {
+        workId: 'work-blocked',
+        namespace: 'tenant-a',
+        work: { kind: 'flow.resume', flowId: 'flow-1' },
+        targetId: 'review',
+        status: 'blocked',
+        attempt: 8,
+        maxAttempts: 8,
+        idempotencyKey: 'resume:old',
+        lastError: { code: 'ERR', message: 'failed', at: 10 },
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    })
+
+    await expect(
+      t.mutation(setWorkPending, {
+        workId: 'work-blocked',
+        namespace: 'tenant-a',
+        work: { kind: 'flow.resume', flowId: 'flow-1' },
+        idempotencyKey: 'retry:new',
+        now: 20,
+      }),
+    ).resolves.toBeNull()
+    await expect(
+      t.mutation(setWorkPending, {
+        workId: 'work-blocked',
+        namespace: 'tenant-a',
+        work: { kind: 'flow.resume', flowId: 'flow-1' },
+        idempotencyKey: 'retry:new',
+        now: 20,
+        from: 'blocked',
+      }),
+    ).resolves.toMatchObject({
+      status: 'pending',
+      attempt: 1,
+      idempotencyKey: 'retry:new',
+    })
   })
 })
 

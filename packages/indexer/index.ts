@@ -25,6 +25,23 @@ export {
   indexProjectRuntime,
   indexProjectSemantic,
 } from './indexer'
+export {
+  diffRuntimeArtifactDrift,
+  generateRuntimeArtifacts,
+  manifestFromDefinitions,
+} from './indexer/runtime-artifacts'
+export { runRuntimeOperation } from './indexer/runtime-ops'
+export type {
+  GenerateRuntimeArtifactsOptions,
+  RuntimeArtifactGenerationResult,
+  RuntimeArtifactDriftReport,
+  RuntimeArtifactMissingTarget,
+} from './indexer/runtime-artifacts'
+export type {
+  RuntimeOperationKind,
+  RuntimeOperationOptions,
+  RuntimeOperationResult,
+} from './indexer/runtime-ops'
 export type { ResolveProjectModelOptions } from './indexer/project-model'
 export { resolveProjectModel } from './indexer/project-model'
 export type { InspectProjectStaticSyntaxPlanOptions, ProjectStaticSyntaxPlan } from './indexer/static-index/plan'

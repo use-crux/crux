@@ -54,12 +54,18 @@ export function createPostgresWaiterPort(
         values.push(options.namespace)
         filters.push(`namespace = $${values.length}`)
       }
+      if (isJsonObject(payload)) {
+        values.push(encodeJson(payload))
+        filters.push(`$${values.length}::jsonb @> match`)
+      } else {
+        filters.push(`match = '{}'::jsonb`)
+      }
       const result = await db.query(
         `SELECT * FROM ${waiters} WHERE ${filters.join(' AND ')}`,
         values,
       )
       return result.rows.map(decodeWaiter).filter((waiter) => {
-        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        if (!isJsonObject(payload)) {
           return Object.keys(waiter.match).length === 0
         }
         const record = payload as Record<string, unknown>
@@ -136,4 +142,8 @@ export function createPostgresWaiterPort(
       return (result.rowCount ?? 0) > 0
     },
   }
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }

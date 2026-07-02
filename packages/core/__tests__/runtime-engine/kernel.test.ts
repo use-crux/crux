@@ -156,6 +156,72 @@ describe('RuntimeKernel', () => {
     ).resolves.toBe(true)
   })
 
+  it('retries blocked work with a fresh operator idempotency key', async () => {
+    const store = inMemoryRuntimeStore()
+    const kernel = createRuntimeKernel({
+      store,
+      targets: {},
+      newWorkId: () => 'work_task_1' as WorkId,
+      now: () => new Date('2026-07-02T00:00:00.000Z'),
+    })
+    const enqueued = await kernel.enqueueTask({
+      namespace: 'tenant-a',
+      taskId: 'task_1' as TaskId,
+      targetId: 'missing-target' as RuntimeTargetId,
+      idleScope: 'flow:flow_1',
+    })
+    await kernel.handleWake(wakeEnvelopeForWork(enqueued))
+    await expect(
+      store.state.getIdleCount('tenant-a', 'flow:flow_1'),
+    ).resolves.toBe(0)
+    const initialOutbox = await store.outbox.claimPending({
+      namespace: 'tenant-a',
+      now: new Date('2100-01-01T00:00:00.000Z'),
+    })
+    for (const item of initialOutbox) await store.outbox.confirm(item.outboxId)
+
+    await expect(
+      kernel.retryWork({
+        namespace: 'tenant-a',
+        workId: enqueued.workId,
+      }),
+    ).resolves.toMatchObject({
+      retried: true,
+      work: {
+        status: 'pending',
+        attempt: 1,
+        idempotencyKey: 'retry:work_task_1:mr2qmtc0',
+        lastError: undefined,
+        notBefore: undefined,
+      },
+    })
+    await expect(
+      store.state.hasIdempotencyKey('tenant-a', 'task:work_task_1'),
+    ).resolves.toBe(true)
+    await expect(
+      store.state.getIdleCount('tenant-a', 'flow:flow_1'),
+    ).resolves.toBe(1)
+    await expect(
+      store.events.read({ namespace: 'tenant-a' }),
+    ).resolves.toMatchObject({
+      events: expect.arrayContaining([
+        expect.objectContaining({ name: 'crux.retried:work_task_1' }),
+      ]),
+    })
+    await expect(
+      store.outbox.claimPending({
+        namespace: 'tenant-a',
+        now: new Date('2100-01-01T00:00:00.000Z'),
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        envelope: expect.objectContaining({
+          idempotencyKey: 'retry:work_task_1:mr2qmtc0',
+        }),
+      }),
+    ])
+  })
+
   it('returns busy when another worker holds the work lease', async () => {
     const store = inMemoryRuntimeStore()
     const kernel = createRuntimeKernel({
@@ -187,6 +253,58 @@ describe('RuntimeKernel', () => {
     ).resolves.toMatchObject({ status: 'pending', attempt: 1 })
   })
 
+  it('does not deliver task work before its notBefore deadline', async () => {
+    const store = inMemoryRuntimeStore()
+    let executions = 0
+    const kernel = createRuntimeKernel({
+      store,
+      targets: {
+        'embed-document': {
+          targetId: 'embed-document' as RuntimeTargetId,
+          kind: 'task',
+          execute: async () => {
+            executions += 1
+            return { status: 'completed' }
+          },
+        },
+      },
+      newWorkId: () => 'work_task_1' as WorkId,
+      now: () => new Date('2100-01-01T00:00:00.000Z'),
+    })
+    const notBefore = new Date('2100-01-01T00:00:01.000Z')
+    const enqueued = await kernel.enqueueTask({
+      namespace: 'tenant-a',
+      taskId: 'task_1' as TaskId,
+      targetId: 'embed-document' as RuntimeTargetId,
+      notBefore,
+    })
+
+    await expect(
+      store.outbox.claimPending({
+        namespace: 'tenant-a',
+        now: new Date('2100-01-01T00:00:00.999Z'),
+      }),
+    ).resolves.toEqual([])
+    await expect(
+      kernel.handleWake(wakeEnvelopeForWork(enqueued)),
+    ).resolves.toEqual({
+      status: 200,
+      outcome: 'retry-scheduled',
+    })
+    expect(executions).toBe(0)
+    await expect(
+      store.state.getWork('work_task_1' as WorkId, { namespace: 'tenant-a' }),
+    ).resolves.toMatchObject({ status: 'pending', attempt: 1 })
+    const due = await store.outbox.claimPending({
+      namespace: 'tenant-a',
+      now: notBefore,
+    })
+    expect(due).toEqual([
+      expect.objectContaining({ nextAttemptAt: notBefore }),
+      expect.objectContaining({ nextAttemptAt: notBefore }),
+    ])
+  })
+
   it('reschedules retryable failures with backoff and dead-letters exhausted work', async () => {
     const store = inMemoryRuntimeStore()
     const kernel = createRuntimeKernel({
@@ -201,7 +319,7 @@ describe('RuntimeKernel', () => {
         },
       },
       newWorkId: () => 'work_task_1' as WorkId,
-      now: () => new Date('2026-07-02T00:00:00.000Z'),
+      now: () => new Date('2100-01-01T00:00:00.000Z'),
       rng: () => 0,
     })
     const enqueued = await kernel.enqueueTask({
@@ -209,6 +327,11 @@ describe('RuntimeKernel', () => {
       taskId: 'task_1' as TaskId,
       targetId: 'embed-document' as RuntimeTargetId,
     })
+    const initialOutbox = await store.outbox.claimPending({
+      namespace: 'tenant-a',
+      now: new Date('2100-01-01T00:00:00.000Z'),
+    })
+    for (const item of initialOutbox) await store.outbox.confirm(item.outboxId)
 
     await expect(
       kernel.handleWake(wakeEnvelopeForWork(enqueued)),
@@ -221,13 +344,34 @@ describe('RuntimeKernel', () => {
     ).resolves.toMatchObject({
       status: 'pending',
       attempt: 2,
-      notBefore: new Date('2026-07-02T00:00:00.500Z'),
+      notBefore: new Date('2100-01-01T00:00:00.500Z'),
     })
+    await expect(
+      store.outbox.claimPending({
+        namespace: 'tenant-a',
+        now: new Date('2100-01-01T00:00:00.499Z'),
+      }),
+    ).resolves.toEqual([])
+    await expect(
+      store.outbox.claimPending({
+        namespace: 'tenant-a',
+        now: new Date('2100-01-01T00:00:00.500Z'),
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        envelope: expect.objectContaining({ attempt: 2 }),
+        nextAttemptAt: new Date('2100-01-01T00:00:00.500Z'),
+      }),
+    ])
 
     const exhausted = await store.state.getWork('work_task_1' as WorkId, {
       namespace: 'tenant-a',
     })
-    await store.state.putWork({ ...exhausted!, attempt: 8 })
+    await store.state.putWork({
+      ...exhausted!,
+      attempt: 8,
+      notBefore: new Date('2099-01-01T00:00:00.000Z'),
+    })
     await expect(
       kernel.handleWake(wakeEnvelopeForWork(exhausted!)),
     ).resolves.toEqual({

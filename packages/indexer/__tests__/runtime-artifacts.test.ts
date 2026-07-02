@@ -1,0 +1,144 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { afterEach, describe, expect, it } from 'vitest'
+import { diffRuntimeArtifactDrift, generateRuntimeArtifacts } from '../indexer/runtime-artifacts'
+
+const roots: string[] = []
+const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+async function fixtureRoot(): Promise<string> {
+  const root = await mkdtemp(join(testWorkspaceRoot, '.tmp-runtime-artifacts-'))
+  roots.push(root)
+  return root
+}
+
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+})
+
+describe('runtime artifacts', () => {
+  it('discovers exported flow and runtime task targets and writes deterministic artifacts for Next', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/review.ts'),
+      [
+        "import { flow } from '@use-crux/core/flow'",
+        "import { task } from '@use-crux/core/runtime'",
+        '',
+        "export const reviewFlow = flow('review', async (flow) => {",
+        "  await flow.suspend('approved')",
+        '})',
+        '',
+        "export const embedDocument = task('embed-document', {",
+        '  run: async () => undefined,',
+        '})',
+      ].join('\n'),
+    )
+
+    const result = await generateRuntimeArtifacts({ root, host: 'next' })
+    const second = await generateRuntimeArtifacts({ root, host: 'next' })
+
+    expect(result.manifest).toEqual({
+      version: 1,
+      targets: [
+        { name: 'embed-document', kind: 'task', module: './src/review.ts', export: 'embedDocument' },
+        { name: 'review', kind: 'flow', module: './src/review.ts', export: 'reviewFlow' },
+      ],
+    })
+    expect(second.contentHash).toBe(result.contentHash)
+    await expect(readFile(join(root, '.crux/generated/runtime/manifest.json'), 'utf8')).resolves.toBe(
+      `${JSON.stringify(result.manifest, null, 2)}\n`,
+    )
+    await expect(readFile(join(root, 'crux.generated/next.ts'), 'utf8')).resolves.toContain(
+      'createRuntimeHandler({ targets, manifestHash:',
+    )
+    await expect(readFile(join(root, 'convex/crux.ts'), 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT',
+    })
+  })
+
+  it('writes only Convex entry files for a Convex runtime config', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'crux.config.ts'),
+      [
+        "import { config } from '@use-crux/core'",
+        "import { convex } from '@use-crux/convex/runtime'",
+        '',
+        'export default config({ runtime: convex() })',
+      ].join('\n'),
+    )
+    await writeFile(
+      join(root, 'src/review.ts'),
+      [
+        "import { flow } from '@use-crux/core/flow'",
+        '',
+        "export const reviewFlow = flow('review', async () => undefined)",
+      ].join('\n'),
+    )
+
+    const result = await generateRuntimeArtifacts({ root })
+
+    expect(result.writtenFiles).toContain(join(root, 'convex/crux.ts'))
+    expect(result.writtenFiles).not.toContain(join(root, 'crux.generated/next.ts'))
+    await expect(readFile(join(root, 'convex/crux.ts'), 'utf8')).resolves.toContain(
+      "export { deliverSignal, fireTimer, handleWake, resumeFlow, runTask } from './_crux/generated'",
+    )
+  })
+
+  it('refuses to overwrite user-authored entry files without the generated marker', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await mkdir(join(root, 'crux.generated'), { recursive: true })
+    await writeFile(join(root, 'crux.generated/next.ts'), 'export const userAuthored = true\n')
+    await writeFile(
+      join(root, 'src/review.ts'),
+      [
+        "import { flow } from '@use-crux/core/flow'",
+        '',
+        "export const reviewFlow = flow('review', async () => undefined)",
+      ].join('\n'),
+    )
+
+    await expect(generateRuntimeArtifacts({ root, host: 'next' })).rejects.toMatchObject({
+      code: 'ARTIFACTS_STALE',
+    })
+    await expect(readFile(join(root, 'crux.generated/next.ts'), 'utf8')).resolves.toBe('export const userAuthored = true\n')
+  })
+
+  it('rejects runtime targets whose discovered export is not a real named export', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/review.ts'),
+      [
+        "import { flow } from '@use-crux/core/flow'",
+        '',
+        "const reviewFlow = flow('review', async () => undefined)",
+        'export default reviewFlow',
+      ].join('\n'),
+    )
+
+    await expect(generateRuntimeArtifacts({ root, host: 'next' })).rejects.toMatchObject({
+      code: 'TARGET_NOT_EXPORTED',
+    })
+  })
+
+  it('reports non-terminal runtime work whose target disappeared from the manifest', () => {
+    const drift = diffRuntimeArtifactDrift({
+      manifest: {
+        version: 1,
+        targets: [{ name: 'review', kind: 'flow', module: './src/review.ts', export: 'reviewFlow' }],
+      },
+      nonTerminalTargetIds: ['review', 'old-review', 'old-review', 'embed-document'],
+    })
+
+    expect(drift.missingTargets).toEqual([
+      { targetId: 'embed-document', count: 1 },
+      { targetId: 'old-review', count: 2 },
+    ])
+  })
+})

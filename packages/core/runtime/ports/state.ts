@@ -46,6 +46,14 @@ export interface FlowSnapshot {
   readonly fingerprint: readonly string[]
   /** Suspensions currently owned by this snapshot. */
   readonly pendingSuspends: readonly RuntimePendingSuspend[]
+  /**
+   * Event cursors for suspend deliveries already consumed by replay.
+   *
+   * Keys use the source-order delivery key emitted by the flow executor, so
+   * repeated same-label suspends replay the payload that belongs to their
+   * exact occurrence.
+   */
+  readonly deliveredSuspends?: RuntimeDeliveredSuspends
   /** Durable effects already flushed for replay-visible defer/after calls. */
   readonly scheduledEffects?: Readonly<Record<string, RuntimeScheduledEffect>>
   /** Last update time. */
@@ -64,6 +72,8 @@ export interface RuntimeScheduledEffect {
 export interface RuntimePendingSuspend {
   /** User-authored suspend/wait label. */
   readonly label: string
+  /** Source-order replay key for disambiguating repeated labels. */
+  readonly deliveryKey?: string
   /** Waiter registered for event/signal delivery. */
   readonly waiterId?: WaiterId
   /** Timer registered for timeout delivery. */
@@ -76,6 +86,11 @@ export interface RuntimePendingSuspend {
 export interface RuntimeDeliveredSuspend {
   /** Durable event cursor containing the payload to replay. */
   readonly eventId: EventCursor
+}
+
+/** Occurrence-keyed delivered suspend cursors retained across replay barriers. */
+export interface RuntimeDeliveredSuspends {
+  readonly [deliveryKey: string]: RuntimeDeliveredSuspend | undefined
 }
 
 /** Idempotency marker written atomically with completed transitions. */
@@ -122,6 +137,13 @@ export interface SetWorkPendingOptions extends RuntimeStateReadOptions {
   readonly work: RuntimeWork
   /** Stable idempotency key for the fresh delivery intent. */
   readonly idempotencyKey: string
+  /**
+   * Current statuses that may be moved back to pending.
+   *
+   * Defaults to `suspended`, which is the flow waiter/timer resume path.
+   * Operator retry uses `blocked` and `dead-letter` through the same store CAS.
+   */
+  readonly from?: WorkStatus | readonly WorkStatus[]
 }
 
 /** Delivered event metadata to attach to a pending suspend by waiter id. */
@@ -153,6 +175,11 @@ export interface RuntimeStatePort {
    * future trigger/watch deliveries. Flow waiter firing uses
    * {@link RuntimeStatePort.setWorkPending} instead so a flow occurrence keeps
    * one work item for its whole lifecycle.
+   *
+   * When `work.idleScope` is present, adapters must increment that namespace's
+   * idle counter exactly once with the inserted work row. Kernel-owned terminal
+   * transitions decrement the same counter through `putWork()`/transactional
+   * state updates; counters must never go below zero.
    */
   createWork(work: NewWorkItem): Promise<WorkItem>
 

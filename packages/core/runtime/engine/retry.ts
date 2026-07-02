@@ -12,9 +12,11 @@ import { CruxRuntimeError, type CruxRuntimeErrorCode } from './errors'
 
 const DEFAULT_BASE_DELAY_MS = 1_000
 const DEFAULT_MAX_DELAY_MS = 3_600_000
-const DEFAULT_MAX_ATTEMPTS = 8
 const MIN_JITTER = 0.5
 const MAX_JITTER = 1
+
+/** Default number of delivery attempts before runtime work is dead-lettered. */
+export const DEFAULT_RUNTIME_MAX_ATTEMPTS = 8
 
 /** Options for calculating the retry delay for a failed delivery attempt. */
 export interface RetryDelayOptions {
@@ -30,7 +32,7 @@ export interface RetryDelayOptions {
 
 /** Classification input for a failed runtime work attempt. */
 export interface RuntimeFailureClassificationOptions extends RetryDelayOptions {
-  /** Attempts allowed before the work becomes dead-lettered. Defaults to 8. */
+  /** Attempts allowed before the work becomes dead-lettered. Defaults to {@link DEFAULT_RUNTIME_MAX_ATTEMPTS}. */
   readonly maxAttempts?: number
 }
 
@@ -71,7 +73,7 @@ export function classifyRuntimeFailure(
     return { kind: 'terminal', code: error.code }
   }
 
-  const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS
+  const maxAttempts = options.maxAttempts ?? DEFAULT_RUNTIME_MAX_ATTEMPTS
   if (options.attempt >= maxAttempts) {
     return { kind: 'dead-letter' }
   }

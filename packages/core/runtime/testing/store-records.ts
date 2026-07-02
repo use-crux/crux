@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from '../engine/retry'
 import type {
   EventCursor,
   FlowId,
@@ -151,7 +152,7 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
       workId: 'work_task_1',
       status: 'pending',
       attempt: 1,
-      maxAttempts: 8,
+      maxAttempts: DEFAULT_RUNTIME_MAX_ATTEMPTS,
     })
 
     const suspended = makeConformanceWorkItem({
@@ -199,6 +200,37 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
         idempotencyKey: 'resume:work_flow_1:evt_2',
       }),
     ).resolves.toBeNull()
+
+    const blocked = makeConformanceWorkItem({
+      workId: 'work_blocked_1' as WorkId,
+      status: 'blocked',
+      attempt: DEFAULT_RUNTIME_MAX_ATTEMPTS,
+      lastError: {
+        code: 'WORK_DEAD_LETTERED',
+        message: 'previous failure',
+        at: new Date('2026-07-02T00:00:30.000Z'),
+      },
+    })
+    await store.state.putWork(blocked)
+    await expect(
+      store.state.setWorkPending('work_blocked_1' as WorkId, {
+        namespace: 'tenant-a',
+        work: { kind: 'flow.resume', flowId: 'flow_1' as FlowId },
+        idempotencyKey: 'retry:work_blocked_1',
+      }),
+    ).resolves.toBeNull()
+    await expect(
+      store.state.setWorkPending('work_blocked_1' as WorkId, {
+        namespace: 'tenant-a',
+        work: { kind: 'flow.resume', flowId: 'flow_1' as FlowId },
+        idempotencyKey: 'retry:work_blocked_1',
+        from: ['blocked', 'dead-letter'],
+      }),
+    ).resolves.toMatchObject({
+      status: 'pending',
+      attempt: 1,
+      idempotencyKey: 'retry:work_blocked_1',
+    })
   })
 
   it('invariant: work listing and idle counters are namespace-scoped and bounded', async () => {
@@ -259,5 +291,8 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
     await expect(
       store.state.decrementIdle('tenant-a', 'flow:flow_1'),
     ).resolves.toBe(0)
+    await expect(
+      store.state.decrementIdle('tenant-a', 'flow:flow_1'),
+    ).rejects.toThrow('went negative')
   })
 }

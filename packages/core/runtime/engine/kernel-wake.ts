@@ -15,7 +15,10 @@ import type {
   RuntimeWakeResult,
 } from './kernel-types'
 import { recordSuspensionInTransaction } from './kernel-events'
-import { flushScheduledEffectsInTransaction } from './kernel-effects'
+import {
+  flushScheduledEffectsInTransaction,
+  mergeScheduledEffectRecords,
+} from './kernel-effects'
 import {
   isTerminalWork,
   runtimeErrorMessage,
@@ -62,6 +65,19 @@ export async function handleWake(
     return { status: 200, outcome: 'duplicate' }
   }
 
+  const current = await deps.store.state.getWork(envelope.workId, {
+    namespace: envelope.ns,
+  })
+  if (!current || isTerminalWork(current)) {
+    return { status: 200, outcome: 'stale' }
+  }
+  if (current.notBefore && current.notBefore.getTime() > deps.now().getTime()) {
+    await deps.store.outbox.put(wakeEnvelopeForWork(current), {
+      deliverAt: current.notBefore,
+    })
+    return { status: 200, outcome: 'retry-scheduled' }
+  }
+
   const target = deps.targets[envelope.target]
   if (!target) {
     await blockMissingTarget({
@@ -79,13 +95,6 @@ export async function handleWake(
   if (!lease) return { status: 409, outcome: 'busy' }
 
   try {
-    const current = await deps.store.state.getWork(envelope.workId, {
-      namespace: envelope.ns,
-    })
-    if (!current || isTerminalWork(current)) {
-      return { status: 200, outcome: 'stale' }
-    }
-
     const leased = transition(current, {
       status: 'leased',
       leaseToken: lease.token,
@@ -204,7 +213,9 @@ async function failWork(
         notBefore: retryAt,
       })
       await tx.state.putWork(retryWork)
-      await tx.outbox.put(wakeEnvelopeForWork(retryWork))
+      await tx.outbox.put(wakeEnvelopeForWork(retryWork), {
+        deliverAt: retryAt,
+      })
     })
     return { status: 200, outcome: 'retry-scheduled' }
   }
@@ -271,12 +282,14 @@ async function completeWork(options: CompleteWorkOptions): Promise<void> {
     const completed =
       options.outcome.status === 'completed'
         ? transition(options.work, { status: 'completed' })
-        : transition(options.work, {
-            status: 'blocked',
-            lastError: options.outcome.error,
-          })
+        : options.outcome.status === 'cancelled'
+          ? transition(options.work, { status: 'cancelled' })
+          : transition(options.work, {
+              status: 'blocked',
+              lastError: options.outcome.error,
+            })
     if (
-      options.outcome.status === 'completed' &&
+      (options.outcome.status === 'completed' || options.outcome.status === 'cancelled') &&
       'flowSnapshot' in options.outcome
     ) {
       const flushedEffects = await flushScheduledEffectsInTransaction(
@@ -286,15 +299,10 @@ async function completeWork(options: CompleteWorkOptions): Promise<void> {
       )
       await tx.state.putSnapshot({
         ...options.outcome.flowSnapshot,
-        scheduledEffects: {
-          ...(options.outcome.flowSnapshot.scheduledEffects ?? {}),
-          ...Object.fromEntries(
-            flushedEffects.map((effect) => [
-              effect.key,
-              { workId: effect.workId, timerId: effect.timerId },
-            ]),
-          ),
-        },
+        scheduledEffects: mergeScheduledEffectRecords(
+          options.outcome.flowSnapshot.scheduledEffects,
+          flushedEffects,
+        ),
       })
     }
     await putWorkWithIdleAccounting(

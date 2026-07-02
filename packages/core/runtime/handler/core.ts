@@ -37,7 +37,19 @@ export async function handleWakeRequest(
     )
   }
 
-  const envelope = decodeWakeEnvelope(body)
+  let envelope: ReturnType<typeof decodeWakeEnvelope>
+  try {
+    envelope = decodeWakeEnvelope(body)
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        outcome: 'invalid-envelope',
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { status: 400 },
+    )
+  }
   const result = await options.runtime.kernel.handleWake(envelope)
   return wakeResultResponse(result)
 }

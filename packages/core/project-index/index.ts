@@ -410,6 +410,7 @@ export type ProjectDefinitionKind =
   | "agent"
   | "flow"
   | "flow.step"
+  | "task"
   | "composition.parallel"
   | "composition.parallel.branch"
   | "composition.pipeline"
@@ -1199,6 +1200,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "agent",
   "flow",
   "flow.step",
+  "task",
   "composition.parallel",
   "composition.parallel.branch",
   "composition.pipeline",

@@ -59,6 +59,7 @@ describe('qstash() runtime wake adapter', () => {
           },
         }),
         body: '{"ok":true}',
+        rawBody: new TextEncoder().encode('{"ok":true}'),
       }),
     ).resolves.toBe(true)
     expect(seen).toEqual([

@@ -18,14 +18,19 @@ export function createPostgresOutboxPort(
   const outbox = table(schema, 'outbox')
 
   return {
-    async put(envelope: WakeEnvelope): Promise<RuntimeOutboxItem> {
+    async put(envelope: WakeEnvelope, options = {}): Promise<RuntimeOutboxItem> {
       recordWrite(faults)
       const result = await db.query(
         `INSERT INTO ${outbox}
           (outbox_id, namespace, envelope, state, attempts, next_attempt_at)
          VALUES ($1, $2, $3::jsonb, 'pending', 0, $4)
          RETURNING *`,
-        [newRuntimeId('outbox'), envelope.ns, encodeJson(envelope), new Date()],
+        [
+          newRuntimeId('outbox'),
+          envelope.ns,
+          encodeJson(envelope),
+          options.deliverAt ?? new Date(),
+        ],
       )
       return decodeOutbox(result.rows[0])
     },

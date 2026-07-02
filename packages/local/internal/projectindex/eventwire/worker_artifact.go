@@ -24,6 +24,10 @@ const (
 	ProjectIndexArtifactStaticExtensionEvidenceBatch ProjectIndexArtifactKind = "staticExtensionEvidenceBatch"
 	// ProjectIndexArtifactStaticRuleCheck is a TS compatibility rule result.
 	ProjectIndexArtifactStaticRuleCheck ProjectIndexArtifactKind = "staticRuleCheck"
+	// ProjectIndexArtifactRuntimeArtifacts is the Runtime Engine generated artifact result.
+	ProjectIndexArtifactRuntimeArtifacts ProjectIndexArtifactKind = "runtimeArtifacts"
+	// ProjectIndexArtifactRuntimeOperation is a Runtime Engine CLI operation result.
+	ProjectIndexArtifactRuntimeOperation ProjectIndexArtifactKind = "runtimeOperation"
 )
 
 // ProjectIndexArtifactStreamOptions configures host-side validation for a JSON

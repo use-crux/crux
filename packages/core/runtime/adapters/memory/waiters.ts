@@ -120,7 +120,7 @@ function matchesTopLevel(
   match: Readonly<Record<string, JsonValue>>,
   payload: JsonValue,
 ): boolean {
-  if (!isJsonObject(payload)) return false
+  if (!isJsonObject(payload)) return Object.keys(match).length === 0
   return Object.entries(match).every(([key, expected]) =>
     Object.prototype.hasOwnProperty.call(payload, key)
       ? payload[key] === expected

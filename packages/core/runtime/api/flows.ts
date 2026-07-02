@@ -13,9 +13,16 @@ import { getRuntime } from '../runtime'
 import { createRuntime, type ResolvedRuntimeEngine } from './create-runtime'
 import { runtimeRequiredError } from './runtime-required'
 import {
+  runtimeFlowNotFoundError,
+  runtimeFlowNotResumableError,
+  runtimeFlowTargetMismatchError,
+  runtimeFlowWorkNotFoundError,
+} from './flow-errors'
+import {
   runtimeTargetMap,
   type RuntimeTargetRuntimeRef,
 } from './target-registry'
+import { flowManualResumeKey } from '../engine/idempotency'
 import { wakeEnvelopeForWork } from '../engine/kernel'
 import { runtimeSignalEventName } from '../engine/replay'
 import type { FlowId, RuntimeTargetId } from '../ports/ids'
@@ -79,22 +86,34 @@ export function createCruxFlowRuntimeControls(): CruxFlowRuntimeControls {
           namespace: runtime.namespace,
         })
         if (!snapshot) {
-          throw new Error(`No runtime-backed flow found for flowId: ${flowId}`)
+          throw runtimeFlowNotFoundError({
+            api: 'crux.flows.resume()',
+            flowId,
+          })
         }
         if (snapshot.targetId !== (targetName as RuntimeTargetId)) {
-          throw new Error(
-            `Runtime flow ${flowId} belongs to target \`${snapshot.targetId}\`, not \`${targetName}\`.`,
-          )
+          throw runtimeFlowTargetMismatchError({
+            api: 'crux.flows.resume()',
+            flowId,
+            expected: snapshot.targetId,
+            actual: targetName,
+          })
         }
 
         const current = await runtime.store.state.getWork(snapshot.workId, {
           namespace: runtime.namespace,
         })
         if (!current) {
-          throw new Error(`No runtime work found for flowId: ${flowId}`)
+          throw runtimeFlowWorkNotFoundError({
+            api: 'crux.flows.resume()',
+            flowId,
+          })
         }
 
-        const idempotencyKey = `resume:${snapshot.workId}:manual:${Date.now().toString(36)}`
+        const idempotencyKey = flowManualResumeKey(
+          snapshot.workId,
+          runtime.now(),
+        )
         const wakeWork =
           current.status === 'suspended'
             ? await runtime.store.state.setWorkPending(snapshot.workId, {
@@ -104,7 +123,11 @@ export function createCruxFlowRuntimeControls(): CruxFlowRuntimeControls {
               })
             : current
         if (!wakeWork) {
-          throw new Error(`Flow ${flowId} is ${current.status} and cannot be resumed.`)
+          throw runtimeFlowNotResumableError({
+            api: 'crux.flows.resume()',
+            flowId,
+            status: current.status,
+          })
         }
 
         await runtime.kernel.handleWake({
@@ -121,12 +144,18 @@ export function createCruxFlowRuntimeControls(): CruxFlowRuntimeControls {
           namespace: runtime.namespace,
         })
         if (!snapshot) {
-          throw new Error(`No runtime-backed flow found for flowId: ${flowId}`)
+          throw runtimeFlowNotFoundError({
+            api: 'crux.flows.cancel()',
+            flowId,
+          })
         }
         if (snapshot.targetId !== (targetName as RuntimeTargetId)) {
-          throw new Error(
-            `Runtime flow ${flowId} belongs to target \`${snapshot.targetId}\`, not \`${targetName}\`.`,
-          )
+          throw runtimeFlowTargetMismatchError({
+            api: 'crux.flows.cancel()',
+            flowId,
+            expected: snapshot.targetId,
+            actual: targetName,
+          })
         }
         return await runtime.kernel.cancelWork({
           namespace: runtime.namespace,

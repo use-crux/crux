@@ -114,6 +114,11 @@ describe("first-party extractor fixtures", () => {
         fixtureCoverage: "dedicated-fixture",
         staticIndexCoverage: "covered",
       },
+      {
+        extractor: "runtime.task",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "typescript-host",
+      },
     ]);
     expect(
       inventory
@@ -124,9 +129,11 @@ describe("first-party extractor fixtures", () => {
 
   it("records first-party host eligibility and remaining Go-owned Node reasons", () => {
     expect(firstPartyStaticIndexNodeOwnershipAudit()).toEqual({
-      nativeOnlyEligible: true,
+      nativeOnlyEligible: false,
       nodeStartsBecause: [
         "Go asks Node to inspect the static syntax plan before Rust/Oxc parses files.",
+        "Node projects Rust/Oxc syntax records through bundled TypeScript extractors.",
+        "1 bundled extractor families are not fully native-covered.",
       ],
       bundledNativeExtractors: [
         "rag.retriever",
@@ -148,7 +155,7 @@ describe("first-party extractor fixtures", () => {
         "routing",
         "flow",
       ],
-      bundledTypeScriptExtractors: [],
+      bundledTypeScriptExtractors: ["runtime.task"],
       typeScriptRuleCount: 0,
     });
   });

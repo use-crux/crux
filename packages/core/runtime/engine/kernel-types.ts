@@ -40,6 +40,13 @@ export type RuntimeTargetOutcome =
       readonly scheduledEffects?: readonly RuntimeScheduledEffectIntent[]
     }
   | {
+      readonly status: 'cancelled'
+      /** Flow snapshot status to persist atomically with cancelled flow work. */
+      readonly flowSnapshot: RuntimeFlowSnapshot
+      /** Replay-visible durable effects to flush with flow cancellation. */
+      readonly scheduledEffects?: readonly RuntimeScheduledEffectIntent[]
+    }
+  | {
       readonly status: 'suspended'
       /** Flow suspension snapshot and waiter registrations to commit. */
       readonly suspension: RecordSuspensionInput
@@ -105,6 +112,8 @@ export interface EnqueueTaskInput {
 export interface RuntimeSuspendRegistration {
   /** User-authored suspend/wait label. */
   readonly label: string
+  /** Source-order replay key for disambiguating repeated labels. */
+  readonly deliveryKey?: string
   /** Event name that can resume this suspend point. */
   readonly eventName: string
   /** Top-level payload equality match for this waiter. */
@@ -121,6 +130,8 @@ export interface RuntimeSuspensionSnapshotInput {
   readonly completedSteps: Readonly<Record<string, JsonValue>>
   /** Ordered replay labels observed so far. */
   readonly fingerprint: readonly string[]
+  /** Event cursors for already consumed suspend deliveries. */
+  readonly deliveredSuspends?: RuntimeFlowSnapshot['deliveredSuspends']
   /** Durable effects already flushed in prior replay passes. */
   readonly scheduledEffects?: RuntimeFlowSnapshot['scheduledEffects']
 }
@@ -206,6 +217,27 @@ export interface CancelWorkResult {
   /** Whether this call moved a non-terminal work item to cancelled. */
   readonly cancelled: boolean
 }
+
+/** Input for operator retry of blocked or dead-lettered runtime work. */
+export interface RetryWorkInput {
+  /** Runtime namespace. */
+  readonly namespace: string
+  /** Work item to retry. */
+  readonly workId: WorkId
+}
+
+/** Result of an idempotent operator retry attempt. */
+export type RetryWorkResult =
+  | {
+      /** Whether this call moved retryable terminal work to pending. */
+      readonly retried: true
+      /** Fresh pending work record carrying the operator retry idempotency key. */
+      readonly work: WorkItem
+    }
+  | {
+      /** False when the work is missing or not in a retryable terminal state. */
+      readonly retried: false
+    }
 
 /** Input for scheduling store-backed runtime timer records. */
 export interface ScheduleTimerInput {
@@ -310,6 +342,8 @@ export interface RuntimeKernel {
   emitEvent(input: EmitEventInput): Promise<EmitEventResult>
   /** Cancel non-terminal work and its owned waiter/timer registrations. */
   cancelWork(input: CancelWorkInput): Promise<CancelWorkResult>
+  /** Retry blocked or dead-lettered work after an operator believes the cause is fixed. */
+  retryWork(input: RetryWorkInput): Promise<RetryWorkResult>
   /** Persist a store-backed timer record. */
   scheduleTimer(input: ScheduleTimerInput): Promise<RuntimeTimerRecord>
   /** Fire due store-backed timers through the waiter CAS race gate. */

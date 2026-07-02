@@ -10,6 +10,7 @@
  */
 
 import type { RuntimeStoreTransaction } from '../store'
+import type { RuntimeScheduledEffect } from '../ports/state'
 import type {
   RuntimeScheduledEffectFlushRecord,
   RuntimeScheduledEffectIntent,
@@ -60,4 +61,20 @@ export async function flushScheduledEffectsInTransaction(
     records.push({ key: effect.key, timerId: timer.timerId })
   }
   return records
+}
+
+/** Merge newly flushed effect records into the replay-visible snapshot map. */
+export function mergeScheduledEffectRecords(
+  existing: Readonly<Record<string, RuntimeScheduledEffect>> | undefined,
+  flushed: readonly RuntimeScheduledEffectFlushRecord[],
+): Readonly<Record<string, RuntimeScheduledEffect>> {
+  return Object.freeze({
+    ...(existing ?? {}),
+    ...Object.fromEntries(
+      flushed.map((effect) => [
+        effect.key,
+        { workId: effect.workId, timerId: effect.timerId },
+      ]),
+    ),
+  })
 }

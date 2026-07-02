@@ -10,14 +10,13 @@ import type {
   WorkId,
   WorkItem,
 } from '@use-crux/core/runtime'
+import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from '@use-crux/core/runtime'
 import type { PostgresStoreFaults } from './faults'
 import { recordWrite } from './faults'
 import { decodeFlowSnapshot, decodeWorkItem, encodeJson } from './codec'
 import { createPostgresIdleCounterPort } from './idle'
 import type { PgExecutor } from './sql'
 import { table } from './sql'
-
-const DEFAULT_MAX_ATTEMPTS = 8
 
 type ListWorkOptions = Parameters<RuntimeStatePort['listWork']>[0]
 
@@ -47,7 +46,7 @@ export function createPostgresStatePort(
           input.workId,
           encodeJson(input.work),
           input.targetId,
-          input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+          input.maxAttempts ?? DEFAULT_RUNTIME_MAX_ATTEMPTS,
           input.notBefore,
           input.idempotencyKey,
           input.idleScope,
@@ -129,6 +128,7 @@ export function createPostgresStatePort(
       workId: WorkId,
       options: SetWorkPendingOptions,
     ): Promise<WorkItem | null> {
+      const from = allowedStatuses(options.from)
       recordWrite(faults)
       const result = await db.query(
         `UPDATE ${workTable}
@@ -142,13 +142,14 @@ export function createPostgresStatePort(
                 updated_at = now()
           WHERE namespace = $1
             AND work_id = $2
-            AND status = 'suspended'
+            AND status = ANY($5::text[])
           RETURNING *`,
         [
           options.namespace,
           workId,
           encodeJson(options.work),
           options.idempotencyKey,
+          from,
         ],
       )
       return result.rows[0] ? decodeWorkItem(result.rows[0]) : null
@@ -170,8 +171,8 @@ export function createPostgresStatePort(
       await db.query(
         `INSERT INTO ${snapshotTable}
           (namespace, flow_id, work_id, target_id, status, input,
-           completed_steps, fingerprint, pending_suspends, scheduled_effects, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11)
+           completed_steps, fingerprint, pending_suspends, delivered_suspends, scheduled_effects, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12)
          ON CONFLICT (namespace, flow_id) DO UPDATE SET
            work_id = EXCLUDED.work_id,
            target_id = EXCLUDED.target_id,
@@ -180,6 +181,7 @@ export function createPostgresStatePort(
            completed_steps = EXCLUDED.completed_steps,
            fingerprint = EXCLUDED.fingerprint,
            pending_suspends = EXCLUDED.pending_suspends,
+           delivered_suspends = EXCLUDED.delivered_suspends,
            scheduled_effects = EXCLUDED.scheduled_effects,
            updated_at = EXCLUDED.updated_at`,
         [
@@ -192,6 +194,9 @@ export function createPostgresStatePort(
           encodeJson(snapshot.completedSteps),
           encodeJson(snapshot.fingerprint),
           encodeJson(snapshot.pendingSuspends),
+          snapshot.deliveredSuspends
+            ? encodeJson(snapshot.deliveredSuspends)
+            : null,
           snapshot.scheduledEffects
             ? encodeJson(snapshot.scheduledEffects)
             : null,
@@ -217,13 +222,20 @@ export function createPostgresStatePort(
           ? { ...suspend, delivered: { eventId: options.eventId } }
           : suspend,
       )
+      const deliveredSuspends = mergeDeliveredSuspend(snapshot, options)
       recordWrite(faults)
       await db.query(
         `UPDATE ${snapshotTable}
             SET pending_suspends = $3::jsonb,
+                delivered_suspends = $4::jsonb,
                 updated_at = now()
           WHERE namespace = $1 AND flow_id = $2`,
-        [snapshot.namespace, snapshot.flowId, encodeJson(pendingSuspends)],
+        [
+          snapshot.namespace,
+          snapshot.flowId,
+          encodeJson(pendingSuspends),
+          deliveredSuspends ? encodeJson(deliveredSuspends) : null,
+        ],
       )
     },
 
@@ -258,4 +270,24 @@ export function createPostgresStatePort(
     )
     return result.rows[0] ? decodeWorkItem(result.rows[0]) : null
   }
+}
+
+function mergeDeliveredSuspend(
+  snapshot: FlowSnapshot,
+  options: MarkSnapshotDeliveredOptions,
+): FlowSnapshot['deliveredSuspends'] {
+  const suspend = snapshot.pendingSuspends.find((pending) => pending.waiterId === options.waiterId)
+  const deliveryKey = suspend?.deliveryKey ?? suspend?.label
+  if (!deliveryKey) return snapshot.deliveredSuspends
+  return {
+    ...(snapshot.deliveredSuspends ?? {}),
+    [deliveryKey]: { eventId: options.eventId },
+  }
+}
+
+function allowedStatuses(
+  from: SetWorkPendingOptions['from'],
+): readonly WorkItem['status'][] {
+  if (from === undefined) return ['suspended']
+  return typeof from === 'string' ? [from] : from
 }

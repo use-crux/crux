@@ -60,12 +60,15 @@ export function ddlStatements(schema: string): readonly string[] {
       status text NOT NULL,
       input jsonb NOT NULL,
       completed_steps jsonb NOT NULL,
-      fingerprint jsonb NOT NULL,
-      pending_suspends jsonb NOT NULL,
-      scheduled_effects jsonb,
-      updated_at timestamptz NOT NULL,
-      PRIMARY KEY (namespace, flow_id)
-    )`,
+	      fingerprint jsonb NOT NULL,
+	      pending_suspends jsonb NOT NULL,
+	      delivered_suspends jsonb,
+	      scheduled_effects jsonb,
+	      updated_at timestamptz NOT NULL,
+	      PRIMARY KEY (namespace, flow_id)
+	    )`,
+    `ALTER TABLE ${snapshots}
+	      ADD COLUMN IF NOT EXISTS delivered_suspends jsonb`,
     `CREATE TABLE IF NOT EXISTS ${events} (
       event_id bigserial PRIMARY KEY,
       namespace text NOT NULL,
@@ -142,9 +145,11 @@ export function ddlStatements(schema: string): readonly string[] {
       ON ${timers} (work_id)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS ${quoteIndex(schema, 'timers_namespace_idempotency_key_idx')}
       ON ${timers} (namespace, idempotency_key) WHERE idempotency_key IS NOT NULL`,
-    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_pending_next_attempt_idx')}
-      ON ${outbox} (next_attempt_at) WHERE state = 'pending'`,
-  ]
+	    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_pending_next_attempt_idx')}
+	      ON ${outbox} (next_attempt_at) WHERE state = 'pending'`,
+	    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_claimable_next_attempt_idx')}
+	      ON ${outbox} (namespace, next_attempt_at) WHERE state <> 'confirmed'`,
+	  ]
 }
 
 export async function applyDdl(
@@ -188,9 +193,10 @@ export async function checkDdl(
     'work_status_updated_at_idx',
     'timers_scheduled_fire_at_idx',
     'timers_work_id_idx',
-    'timers_namespace_idempotency_key_idx',
-    'outbox_pending_next_attempt_idx',
-  ]
+	    'timers_namespace_idempotency_key_idx',
+	    'outbox_pending_next_attempt_idx',
+	    'outbox_claimable_next_attempt_idx',
+	  ]
   const missingIndexes = requiredIndexes.filter(
     (name) => !existingIndexes.has(name),
   )

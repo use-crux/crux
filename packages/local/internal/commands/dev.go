@@ -46,6 +46,7 @@ func NewDevCmd(f *cli.Factory) *cobra.Command {
 			serverURL := fmt.Sprintf("http://localhost:%d", port)
 			alreadyRunning := server.IsServerRunning(port)
 			tuiMode := !noTUI
+			printRuntimeDevPreflight(ctx)
 
 			if alreadyRunning {
 				startup.SetMode("existing-server")

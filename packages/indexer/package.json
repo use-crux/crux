@@ -95,7 +95,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@use-crux/postgres": "workspace:*",
     "@types/node": "^24.12.4",
+    "@types/pg": "^8.20.0",
+    "embedded-postgres": "18.4.0-beta.17",
+    "pg": "^8.22.0",
     "vitest": "^4.1.7"
   },
   "repository": {

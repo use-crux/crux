@@ -54,4 +54,32 @@ describe('createConvexRuntimeHandlers()', () => {
       }),
     ).toThrowError(/TARGET_DUPLICATE/)
   })
+
+  it('rejects name-only targets that cannot be resolved', () => {
+    expect(() =>
+      createConvexRuntimeHandlers({
+        component,
+        targets: [{ name: 'missing-runtime-target' }],
+      }),
+    ).toThrowError(CruxRuntimeError)
+    expect(() =>
+      createConvexRuntimeHandlers({
+        component,
+        targets: [{ name: 'missing-runtime-target' }],
+      }),
+    ).toThrowError(/TARGET_NOT_FOUND/)
+  })
+
+  it('validates wake envelopes with the core runtime decoder', async () => {
+    const handlers = createConvexRuntimeHandlers({
+      component,
+      targets: [],
+    })
+
+    await expect(
+      handlers.handleWake._handler?.({} as never, {
+        envelope: { v: 2, ns: 'tenant-a' },
+      }),
+    ).rejects.toMatchObject({ code: 'PAYLOAD_NOT_JSON' })
+  })
 })

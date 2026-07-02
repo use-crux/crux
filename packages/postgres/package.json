@@ -22,15 +22,18 @@
     }
   },
   "dependencies": {
-    "@use-crux/core": "workspace:*",
-    "pg": "^8.22.0"
+    "@use-crux/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.12.4",
     "@types/pg": "^8.20.0",
     "embedded-postgres": "18.4.0-beta.17",
+    "pg": "^8.22.0",
     "typescript": "5.9.3",
     "vitest": "^4.1.7"
+  },
+  "peerDependencies": {
+    "pg": "^8.22.0"
   },
   "repository": {
     "type": "git",
@@ -44,5 +47,5 @@
   "bugs": {
     "url": "https://github.com/use-crux/crux/issues"
   },
-  "homepage": "https://cruxjs.dev/docs/reference/runtime/postgres"
+  "homepage": "https://github.com/use-crux/crux/tree/main/packages/postgres"
 }

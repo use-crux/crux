@@ -20,6 +20,8 @@ import type {
   ExtractStaticEvidenceBatchResult,
   LoadStaticExtensionHostManifestResult,
 } from '../extensions'
+import type { RuntimeArtifactGenerationResult } from '../runtime-artifacts'
+import type { RuntimeOperationResult } from '../runtime-ops'
 
 /** Current Project Index worker stream protocol version. */
 export const PROJECT_INDEX_WORKER_PROTOCOL_VERSION = 2 as const
@@ -123,6 +125,10 @@ export interface ProjectIndexArtifactMap {
   readonly staticExtensionEvidenceBatch: ExtractStaticEvidenceBatchResult
   /** TypeScript rule outputs produced from a native-finalized static graph. */
   readonly staticRuleCheck: CheckStaticRulesResult
+  /** Runtime manifest and entry files written by `crux runtime generate`. */
+  readonly runtimeArtifacts: RuntimeArtifactGenerationResult
+  /** Runtime operation result emitted for Crux Local CLI commands. */
+  readonly runtimeOperation: RuntimeOperationResult
 }
 
 /** JSON artifact kinds supported by the V2 worker stream. */

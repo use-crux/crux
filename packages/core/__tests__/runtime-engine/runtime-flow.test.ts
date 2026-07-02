@@ -9,6 +9,7 @@ import {
   type WorkId,
 } from '@use-crux/core/runtime'
 import { runtimeTargetMap } from '../../runtime/api/target-registry'
+import { getExecutionContext } from '../../runtime/execution-context'
 import { resetRuntime } from '../../runtime/runtime'
 
 afterEach(() => {
@@ -429,6 +430,121 @@ describe('runtime-backed flows', () => {
 
     expect(resumed).toMatchObject({ status: 'completed', flowId: suspended.flowId })
     expect(steps).toEqual(['draft', 'publish'])
+
+    crux.dispose()
+  })
+
+  it('propagates runtime flow handler errors to the object-bound run caller', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const brokenFlow = flow('broken-inline-runtime-flow', async () => {
+      throw new Error('handler exploded')
+    })
+
+    await expect(brokenFlow.run()).rejects.toThrow('handler exploded')
+
+    const [work] = await runtime.store.state.listWork({
+      namespace: 'tenant-a',
+      status: 'pending',
+      limit: 1,
+    })
+    expect(work).toMatchObject({
+      targetId: 'broken-inline-runtime-flow' as RuntimeTargetId,
+      status: 'pending',
+      attempt: 2,
+    })
+
+    crux.dispose()
+  })
+
+  it('commits scope.cancel() through the runtime kernel', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const cancelledFlow = flow('cancel-from-handler', async (scope) => {
+      scope.cancel('not needed')
+    })
+
+    const result = await cancelledFlow.run({ flowId: 'flow_cancel_from_handler' })
+
+    expect(result).toEqual({
+      status: 'cancelled',
+      flowId: 'flow_cancel_from_handler',
+      cancelReason: 'not needed',
+    })
+    const snapshot = await runtime.store.state.getSnapshot('flow_cancel_from_handler' as FlowId, {
+      namespace: 'tenant-a',
+    })
+    expect(snapshot).toMatchObject({
+      status: 'cancelled',
+      flowId: 'flow_cancel_from_handler',
+      targetId: 'cancel-from-handler' as RuntimeTargetId,
+    })
+    await expect(
+      runtime.store.state.getWork(snapshot!.workId as WorkId, {
+        namespace: 'tenant-a',
+      }),
+    ).resolves.toMatchObject({ status: 'cancelled' })
+
+    crux.dispose()
+  })
+
+  it('passes resume options into runtime-backed flow replay', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const parentFlowIds: Array<string | undefined> = []
+    const reviewFlow = flow('runtime-resume-options', async (scope) => {
+      await scope.suspend('approval')
+      parentFlowIds.push(getExecutionContext()?.parentFlowId)
+      return 'approved'
+    })
+
+    const suspended = await reviewFlow.run()
+    await reviewFlow.signal(suspended.flowId, 'approval', {}, { resume: false })
+    await expect(
+      reviewFlow.resume(suspended.flowId, {
+        parentFlowId: 'flow_parent_1',
+        goal: 'Resume after approval',
+      }),
+    ).resolves.toMatchObject({ status: 'completed', output: 'approved' })
+
+    expect(parentFlowIds).toEqual(['flow_parent_1'])
+
+    crux.dispose()
+  })
+
+  it('replays repeated same-label runtime suspend payloads by source occurrence', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const reviewFlow = flow('runtime-repeated-signal-labels', async (scope) => {
+      const first = await scope.suspend<{ value: string }>('approval')
+      const second = await scope.suspend<{ value: string }>('approval')
+      return [first.value, second.value]
+    })
+
+    const firstSuspend = await reviewFlow.run()
+    await reviewFlow.signal(firstSuspend.flowId, 'approval', { value: 'first' }, { resume: false })
+    await expect(reviewFlow.resume(firstSuspend.flowId)).resolves.toMatchObject({
+      status: 'suspended',
+      suspendedAt: 'approval',
+    })
+
+    await reviewFlow.signal(firstSuspend.flowId, 'approval', { value: 'second' }, { resume: false })
+    await expect(reviewFlow.resume(firstSuspend.flowId)).resolves.toMatchObject({
+      status: 'completed',
+      output: ['first', 'second'],
+    })
 
     crux.dispose()
   })

@@ -63,6 +63,32 @@ describe('createRuntimeHandler', () => {
     ).resolves.toMatchObject({ status: 'pending' })
   })
 
+  it('returns a terminal client response for verified malformed wake envelopes', async () => {
+    const store = inMemoryRuntimeStore()
+    const { POST } = createRuntimeHandler({
+      runtime: node({
+        store,
+        namespace: 'tenant-a',
+        autoStartMaintenance: false,
+      }),
+      targets: [],
+      verify: async () => true,
+    })
+
+    const response = await POST(
+      new Request('https://example.com/api/crux', {
+        method: 'POST',
+        body: '{bad json',
+      }),
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      outcome: 'invalid-envelope',
+    })
+  })
+
   it('maps processed, duplicate, and busy kernel outcomes to the HTTP protocol', async () => {
     const store = inMemoryRuntimeStore()
     const seenInputs: unknown[] = []
@@ -156,6 +182,31 @@ describe('createRuntimeHandler', () => {
         targets: [first, second],
       }),
     ).toThrow(/Code: TARGET_DUPLICATE/)
+  })
+
+  it('throws TARGET_NOT_FOUND when a name-only target cannot be resolved', () => {
+    const store = inMemoryRuntimeStore()
+
+    expect(() =>
+      createRuntimeHandler({
+        runtime: node({
+          store,
+          namespace: 'tenant-a',
+          autoStartMaintenance: false,
+        }),
+        targets: [{ name: 'missing-runtime-target' }],
+      }),
+    ).toThrow(CruxRuntimeError)
+    expect(() =>
+      createRuntimeHandler({
+        runtime: node({
+          store,
+          namespace: 'tenant-a',
+          autoStartMaintenance: false,
+        }),
+        targets: [{ name: 'missing-runtime-target' }],
+      }),
+    ).toThrow(/Code: TARGET_NOT_FOUND/)
   })
 
   it('uses the configured wake adapter verifier when no override is supplied', async () => {

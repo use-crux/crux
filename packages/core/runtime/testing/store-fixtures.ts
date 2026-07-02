@@ -1,3 +1,4 @@
+import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from '../engine/retry'
 import type { WakeEnvelope } from '../engine/envelope'
 import type { WorkItem } from '../engine/work'
 import type { RuntimeTargetId, TaskId, WorkId } from '../ports'
@@ -17,7 +18,7 @@ export function makeConformanceWorkItem(
     targetId: 'review' as RuntimeTargetId,
     status: 'pending',
     attempt: 1,
-    maxAttempts: 8,
+    maxAttempts: DEFAULT_RUNTIME_MAX_ATTEMPTS,
     idempotencyKey: 'task:work_1',
     createdAt: now,
     updatedAt: now,

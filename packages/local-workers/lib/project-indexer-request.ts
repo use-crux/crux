@@ -55,6 +55,10 @@ export interface ProjectIndexWorkerRequest {
    */
   readonly syntaxRecordsBatch?: readonly StaticSyntaxFileRecord[]
   readonly includeStaticCacheStatus?: boolean
+  /** Runtime operation requested by `crux runtime` CLI commands. */
+  readonly runtimeOperation?: string
+  /** Runtime work id used by inspect/retry/cancel operations. */
+  readonly runtimeWorkId?: string
   /** Internal validated static cache hits supplied by the native parser plan. */
   readonly staticCacheHits?: readonly StaticParseCacheHit[]
   /** Internal native syntax-record fact lane requested by the host. */

@@ -18,26 +18,20 @@ import {
   runtimeHostOnlyError,
   type RuntimeEngineDefinition,
 } from '../api/runtime-definition'
-import {
-  runtimeTargetMap,
-  type RuntimeTargetRuntimeRef,
-} from '../api/target-registry'
+import type { RuntimeTargetRuntimeRef } from '../api/target-registry'
 import { createRuntimeError } from '../engine/errors'
-import type { RuntimeTarget, RuntimeTargetMap } from '../engine/kernel'
 import type { WorkId } from '../ports'
 import { handleWakeRequest } from './core'
+import {
+  normalizeRuntimeHandlerTargets,
+  type RuntimeHandlerTarget,
+} from './targets'
 import {
   allowUnsignedDevWake,
   type RuntimeWakeRequestVerifier,
 } from './verify'
 
-/** Runtime target accepted by generated or hand-written HTTP entry files. */
-export type RuntimeHandlerTarget =
-  | RuntimeTarget
-  | {
-      /** Stable target name returned by `flow()` handles and runtime `task()`. */
-      readonly name: string
-    }
+export type { RuntimeHandlerTarget } from './targets'
 
 /** Options for {@link createRuntimeHandler}. */
 export interface CreateRuntimeHandlerOptions {
@@ -75,7 +69,11 @@ export function createRuntimeHandler(
     })
   }
   const runtimeRef: RuntimeTargetRuntimeRef = {}
-  const targets = normalizeTargets(options.targets, runtimeRef)
+  const targets = normalizeRuntimeHandlerTargets({
+    targets: options.targets,
+    runtimeRef,
+    entry: 'createRuntimeHandler()',
+  })
   const runtime = createRuntime({
     runtime: runtimeDefinition,
     targets,
@@ -101,53 +99,6 @@ export function createRuntimeHandler(
     async POST(request: Request): Promise<Response> {
       return await handleWakeRequest(request, { runtime, verify })
     },
-  })
-}
-
-function normalizeTargets(
-  targets: readonly RuntimeHandlerTarget[],
-  runtimeRef: RuntimeTargetRuntimeRef,
-): RuntimeTargetMap {
-  const registeredTargets = runtimeTargetMap(runtimeRef)
-  const entries: Array<[string, RuntimeTarget]> = []
-  const seen = new Set<string>()
-
-  for (const target of targets) {
-    const name = targetName(target)
-    if (seen.has(name)) throw duplicateTargetError(name)
-    seen.add(name)
-
-    const runtimeTarget = isRuntimeTarget(target)
-      ? target
-      : registeredTargets[name]
-    if (runtimeTarget) entries.push([name, runtimeTarget])
-  }
-
-  return Object.freeze(Object.fromEntries(entries))
-}
-
-function targetName(target: RuntimeHandlerTarget): string {
-  return 'name' in target ? target.name : target.targetId
-}
-
-function isRuntimeTarget(target: RuntimeHandlerTarget): target is RuntimeTarget {
-  return (
-    'targetId' in target &&
-    'kind' in target &&
-    'execute' in target &&
-    typeof target.execute === 'function'
-  )
-}
-
-function duplicateTargetError(name: string): never {
-  throw createRuntimeError({
-    code: 'TARGET_DUPLICATE',
-    whatFailed: `Runtime target \`${name}\` is declared more than once.`,
-    why: 'Generated and hand-written runtime entries need one stable target for each durable name.',
-    whatStillWorks:
-      'Other uniquely named runtime targets can still be discovered.',
-    nextStep:
-      'Rename one target or remove the duplicate export before creating the runtime handler.',
   })
 }
 

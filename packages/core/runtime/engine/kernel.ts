@@ -10,6 +10,7 @@
 import { emitEvent, recordSuspension } from './kernel-events'
 import { cancelWork } from './kernel-cancellation'
 import { enqueueTask } from './kernel-tasks'
+import { retryWork } from './kernel-retry'
 import { scanTimers, scheduleTimer } from './kernel-timers'
 import { maintenanceTick } from './maintenance'
 import type { WakeEnvelope } from './envelope'
@@ -17,6 +18,7 @@ import type {
   EmitEventInput,
   EnqueueTaskInput,
   CancelWorkInput,
+  RetryWorkInput,
   RecordSuspensionInput,
   RuntimeKernel,
   RuntimeKernelOptions,
@@ -31,6 +33,8 @@ const DEFAULT_LEASE_TTL_MS = 60_000
 export type {
   CancelWorkInput,
   CancelWorkResult,
+  RetryWorkInput,
+  RetryWorkResult,
   EmitEventInput,
   EmitEventResult,
   EnqueueTaskInput,
@@ -78,6 +82,7 @@ export function createRuntimeKernel(
       recordSuspension(deps, input),
     emitEvent: (input: EmitEventInput) => emitEvent(deps, input),
     cancelWork: (input: CancelWorkInput) => cancelWork(deps, input),
+    retryWork: (input: RetryWorkInput) => retryWork(deps, input),
     scheduleTimer: (input: ScheduleTimerInput) => scheduleTimer(deps, input),
     scanTimers: (options?: ScanTimersOptions) => scanTimers(deps, options),
     maintenanceTick: (options?: MaintenanceTickOptions) =>

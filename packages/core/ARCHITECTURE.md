@@ -627,6 +627,14 @@ Loaders expose two read modes. `load()` yields `{ ok: true, document } | { ok: f
 
 Corpus and indexing observability write the canonical graph directly. `indexer().chunk()`, `indexer().indexDocuments()`, and `indexer().indexChunks()` open `indexing.pipeline` spans; document transforms, chunkers, and chunk transforms open child `indexing.pipeline` stage spans and attach bounded `indexing.report` artifacts with cache status, hashes, counts, and timings. `corpus().sync()` opens `corpus.sync`, records loader results as `ingest.parse` with `ingest.report`, nests indexing work below the corpus span, and attaches a `corpus.report` source-ledger summary artifact. Parser execution opens `ingest.parse` spans with parser name, format, byte length, part count, warning count, and error status; devtools, subscribers, and `@use-crux/otel` consume those records from the same spine.
 
+## Durable Runtime Engine
+
+The durable Runtime Engine lives under `runtime/` and is provider-agnostic. Public users compose it through `@use-crux/core/runtime` (`node()`, `serverless()`, `createRuntimeHandler()`, `task()`, diagnostics, wake envelopes, and adapter conformance helpers). Provider packages such as `@use-crux/postgres`, `@use-crux/upstash`, and `@use-crux/convex` depend on this surface; core never imports those adapters.
+
+Correctness is centralized in the kernel modules under `runtime/engine/`: task enqueue, suspension/event delivery, timer firing, retry/dead-letter policy, operator retry, cancellation, outbox dispatch, idempotency keys, and wake execution. Stores implement narrow ports only (`state`, `events`, `waiters`, `timers`, `outbox`, `leases`, idle counters, and `transact()`); adapters must not duplicate policy decisions such as retry timing, waiter timeout behavior, or terminal-state handling.
+
+Flow replay remains in `flow/` and bridges to the Runtime Engine through explicit snapshot conversion helpers. Object-bound flows are a permanent baseline mode; runtime-backed execution persists snapshots, pending suspends, delivered suspend payloads, and scheduled effects through the same replay model instead of introducing a second flow interpreter.
+
 ## Middleware Pipeline
 
 Three tiers of hooks handle cross-cutting concerns:

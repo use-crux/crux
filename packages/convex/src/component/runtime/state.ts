@@ -74,14 +74,15 @@ export const setWorkPending = mutation({
     work: v.any(),
     idempotencyKey: v.string(),
     now: v.number(),
+    from: v.optional(v.union(v.string(), v.array(v.string()))),
   },
   returns: v.any(),
-  handler: async (ctx, { workId, namespace, work, idempotencyKey, now }) => {
+  handler: async (ctx, { workId, namespace, work, idempotencyKey, now, from }) => {
     const existing = await ctx.db
       .query('runtimeWork')
       .withIndex('by_work_id', (q) => q.eq('workId', workId))
       .first()
-    if (!existing || existing.namespace !== namespace || existing.status !== 'suspended') {
+    if (!existing || existing.namespace !== namespace || !allowedStatus(existing.status, from)) {
       return null
     }
     const next = {
@@ -99,6 +100,11 @@ export const setWorkPending = mutation({
     return next
   },
 })
+
+function allowedStatus(status: string, from: string | string[] | undefined): boolean {
+  if (from === undefined) return status === 'suspended'
+  return Array.isArray(from) ? from.includes(status) : status === from
+}
 
 export const putSnapshot = mutation({
   args: { snapshot: v.any() },
@@ -138,10 +144,35 @@ export const markSnapshotDelivered = mutation({
     const pendingSuspends = (snapshot.pendingSuspends as Array<Record<string, unknown>>).map((suspend) =>
       suspend.waiterId === waiterId ? { ...suspend, delivered: { eventId } } : suspend,
     )
-    await ctx.db.patch(snapshot._id, { pendingSuspends })
+    const deliveredSuspends = mergeDeliveredSuspend(
+      snapshot.deliveredSuspends as Record<string, unknown> | undefined,
+      snapshot.pendingSuspends as Array<Record<string, unknown>>,
+      waiterId,
+      eventId,
+    )
+    await ctx.db.patch(snapshot._id, { pendingSuspends, deliveredSuspends })
     return null
   },
 })
+
+function mergeDeliveredSuspend(
+  current: Record<string, unknown> | undefined,
+  pendingSuspends: Array<Record<string, unknown>>,
+  waiterId: string,
+  eventId: string,
+): Record<string, unknown> | undefined {
+  const suspend = pendingSuspends.find((pending) => pending.waiterId === waiterId)
+  const deliveryKey = typeof suspend?.deliveryKey === 'string'
+    ? suspend.deliveryKey
+    : typeof suspend?.label === 'string'
+      ? suspend.label
+      : undefined
+  if (!deliveryKey) return current
+  return {
+    ...(current ?? {}),
+    [deliveryKey]: { eventId },
+  }
+}
 
 export const hasIdempotencyKey = mutation({
   args: { namespace: v.string(), key: v.string() },

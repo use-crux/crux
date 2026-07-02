@@ -95,6 +95,12 @@ export interface RuntimeOutboxItem {
   readonly nextAttemptAt: Date
 }
 
+/** Options for persisting a runtime outbox row. */
+export interface PutOutboxOptions {
+  /** Earliest time the outbox row may be claimed for delivery. Defaults to now. */
+  readonly deliverAt?: Date
+}
+
 /** Options for claiming outbox rows. */
 export interface ClaimOutboxOptions {
   /** Namespace to claim. Omit only for maintenance diagnostics. */
@@ -108,7 +114,10 @@ export interface ClaimOutboxOptions {
 /** Store-backed outbox operations used by dispatchers and maintenance. */
 export interface RuntimeOutboxPort {
   /** Persist a wake envelope for delivery after the surrounding transaction commits. */
-  put(envelope: WakeEnvelope): Promise<RuntimeOutboxItem>
+  put(
+    envelope: WakeEnvelope,
+    options?: PutOutboxOptions,
+  ): Promise<RuntimeOutboxItem>
   /** Load an outbox item by id. */
   get(outboxId: string): Promise<RuntimeOutboxItem | null>
   /** Claim pending or unconfirmed eligible rows for delivery. */

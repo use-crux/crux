@@ -1,10 +1,11 @@
-import type { WakeEnvelope } from '@use-crux/core/runtime'
+import { DEFAULT_RUNTIME_MAX_ATTEMPTS, type WakeEnvelope } from '@use-crux/core/runtime'
 import type {
   EventCursor,
   FlowId,
   IdempotencyRecord,
   Lease,
   NewWorkItem,
+  NewRuntimeWaiter,
   RuntimeEvent,
   RuntimeOutboxItem,
   RuntimeTimerRecord,
@@ -12,8 +13,6 @@ import type {
   WorkId,
   WorkItem,
 } from '@use-crux/core/runtime'
-
-const DEFAULT_MAX_ATTEMPTS = 8
 
 export function encodeWorkForCreate(input: NewWorkItem): Record<string, unknown> {
   const now = input.now ?? new Date()
@@ -24,7 +23,7 @@ export function encodeWorkForCreate(input: NewWorkItem): Record<string, unknown>
     targetId: input.targetId,
     status: 'pending',
     attempt: 1,
-    maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+    maxAttempts: input.maxAttempts ?? DEFAULT_RUNTIME_MAX_ATTEMPTS,
     notBefore: input.notBefore?.getTime(),
     idempotencyKey: input.idempotencyKey,
     idleScope: input.idleScope,
@@ -80,6 +79,13 @@ export function decodeEvent(value: unknown): RuntimeEvent {
 export function decodeWaiter(value: unknown): RuntimeWaiter {
   const record = objectRecord(value)
   return clean({ ...record, timeoutAt: numberDate(record.timeoutAt) }) as RuntimeWaiter
+}
+
+export function encodeWaiter(waiter: NewRuntimeWaiter): Record<string, unknown> {
+  return clean({
+    ...waiter,
+    timeoutAt: waiter.timeoutAt?.getTime(),
+  })
 }
 
 export function encodeTimer(timer: object & { readonly fireAt: Date }): Record<string, unknown> {

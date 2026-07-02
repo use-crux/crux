@@ -9,6 +9,11 @@
 
 import type { EventCursor, TimerId, WaiterId, WorkId } from '../ports/ids'
 
+/** Build the idempotency key for the first runtime flow delivery. */
+export function flowStartResumeKey(workId: WorkId): string {
+  return `resume:${workId}:start`
+}
+
 /** Build the idempotency key for a flow resume caused by a durable event. */
 export function flowEventResumeKey(
   workId: WorkId,
@@ -24,6 +29,21 @@ export function flowSignalResumeKey(
   deliveryId: string,
 ): string {
   return `resume:${workId}:signal:${signalName}:${deliveryId}`
+}
+
+/** Build the idempotency key for a manual flow resume request. */
+export function flowManualResumeKey(workId: WorkId, now: Date): string {
+  return `resume:${workId}:manual:${epochMsBase36(now)}`
+}
+
+/** Build the idempotency key for an operator retry request. */
+export function operatorRetryKey(workId: WorkId, now: Date): string {
+  return `retry:${workId}:${epochMsBase36(now)}`
+}
+
+/** Build the durable audit event name for an operator retry request. */
+export function operatorRetryEventName(workId: WorkId): string {
+  return `crux.retried:${workId}`
 }
 
 /** Build the idempotency key for a timer delivery. */
@@ -47,4 +67,8 @@ export function watchDeliverKey(
   cursor: EventCursor,
 ): string {
   return `watch:${subscriptionId}:${cursor}`
+}
+
+function epochMsBase36(now: Date): string {
+  return now.getTime().toString(36)
 }

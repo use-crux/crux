@@ -94,6 +94,8 @@ export interface ResolvedRuntimeEngine<
   readonly dispatcher: RuntimeOutboxDispatcher
   /** Maintenance tick and automatic-loop controls. */
   readonly maintenance: RuntimeMaintenanceController
+  /** Current time source shared with the kernel and runtime API helpers. */
+  readonly now: () => Date
   /** Stop runtime-owned background work. */
   dispose(): void
 }
@@ -156,6 +158,7 @@ export function createRuntime<TStore extends RuntimeStoreAdapter>(
     deliver,
     dispatcher,
     maintenance,
+    now,
     dispose() {
       maintenance.stop()
     },

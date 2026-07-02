@@ -9,6 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from '../engine/retry'
 import type { FlowId, RuntimeTargetId, TaskId, TimerId, WaiterId, WorkId } from '../ports'
 import type { RuntimeStoreAdapter } from '../store'
 import type { RuntimeKernel } from '../engine/kernel'
@@ -173,7 +174,7 @@ function makeSuspendedFlowWork(): WorkItem {
     targetId: 'review' as RuntimeTargetId,
     status: 'leased',
     attempt: 1,
-    maxAttempts: 8,
+    maxAttempts: DEFAULT_RUNTIME_MAX_ATTEMPTS,
     idempotencyKey: 'resume:work_flow_1:start',
     createdAt: now,
     updatedAt: now,

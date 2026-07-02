@@ -63,6 +63,7 @@ export default defineSchema({
     completedSteps: v.any(),
     fingerprint: v.array(v.string()),
     pendingSuspends: v.any(),
+    deliveredSuspends: v.optional(v.any()),
     scheduledEffects: v.optional(v.any()),
     updatedAt: v.number(),
   }).index('by_flow', ['namespace', 'flowId']),

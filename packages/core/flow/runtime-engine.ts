@@ -14,13 +14,16 @@ import type { RuntimeTargetOutcome } from '../runtime/engine/kernel'
 import type { RuntimeScheduledEffectIntent } from '../runtime/engine/kernel'
 import type { ReplayFingerprint } from '../runtime/engine/replay'
 import type { WorkItem } from '../runtime/engine/work'
+import type { FlowResumeOptions } from './types'
 import type {
   EventCursor,
   FlowId as RuntimeFlowId,
   WorkId,
 } from '../runtime/ports/ids'
 import type { RuntimeEvent } from '../runtime/ports/events'
-import type { FlowSnapshot as RuntimeFlowSnapshot } from '../runtime/ports/state'
+import type {
+  FlowSnapshot as RuntimeFlowSnapshot,
+} from '../runtime/ports/state'
 import type { FlowResult } from './types'
 import { assertFlowJsonValue } from './serialization'
 
@@ -34,7 +37,7 @@ export interface RuntimeFlowExecution {
   readonly snapshot: RuntimeFlowSnapshot
   /** Fingerprint checker for deploy-drift detection. */
   readonly fingerprint: ReplayFingerprint
-  /** Delivered event payloads keyed by suspend label. */
+  /** Delivered event payloads keyed by source-order suspend occurrence. */
   readonly deliveredPayloads: ReadonlyMap<string, JsonValue>
   /** Buffered defer/after intents waiting for the next durable barrier. */
   readonly scheduledEffects: RuntimeScheduledEffectIntent[]
@@ -48,11 +51,15 @@ export interface RuntimeFlowExecution {
 export interface RuntimeFlowTargetRef {
   /** Resolved runtime instance. */
   current?: ResolvedRuntimeEngine
+  /** Object-bound run/resume options used while delivering an inline wake. */
+  executionOptions?: FlowResumeOptions
   /** Flow result observed during inline object-bound execution. */
   result?: unknown
+  /** Handler error observed during inline object-bound execution. */
+  error?: unknown
 }
 
-/** Convert a runtime snapshot's output-only step cache into legacy executor cache records. */
+/** Convert a runtime snapshot's output-only step cache into object-bound executor cache records. */
 export function completedStepsFromRuntimeSnapshot(
   snapshot: RuntimeFlowSnapshot,
 ): Record<string, { output: JsonValue; durationMs: number }> {
@@ -63,7 +70,7 @@ export function completedStepsFromRuntimeSnapshot(
   return completedSteps
 }
 
-/** Convert legacy executor cache records into the runtime snapshot shape. */
+/** Convert object-bound executor cache records into the runtime snapshot shape. */
 export function runtimeCompletedSteps(
   completedSteps: Record<string, { output: JsonValue; durationMs: number }>,
 ): Record<string, JsonValue> {
@@ -101,6 +108,7 @@ export function runtimeFlowSnapshot(
     completedSteps: runtimeCompletedSteps(options.completedSteps),
     fingerprint: execution.fingerprint.observed,
     pendingSuspends: [],
+    deliveredSuspends: execution.snapshot.deliveredSuspends,
     scheduledEffects: options.scheduledEffects ?? execution.snapshot.scheduledEffects ?? {},
     updatedAt: new Date(),
   }
@@ -124,13 +132,19 @@ export async function deliveredRuntimePayloads(
   snapshot: RuntimeFlowSnapshot,
 ): Promise<ReadonlyMap<string, JsonValue>> {
   const delivered = new Map<string, JsonValue>()
+  for (const [deliveryKey, delivery] of Object.entries(snapshot.deliveredSuspends ?? {})) {
+    if (!delivery) continue
+    const event = await readRuntimeEvent(runtime, snapshot.namespace, delivery.eventId)
+    if (event) delivered.set(deliveryKey, event.payload)
+  }
   for (const suspend of snapshot.pendingSuspends) {
     if (!suspend.delivered) continue
     const event = await readRuntimeEvent(runtime, snapshot.namespace, suspend.delivered.eventId)
-    if (event) delivered.set(suspend.label, event.payload)
+    if (event) delivered.set(suspend.deliveryKey ?? suspend.label, event.payload)
   }
   return delivered
 }
+
 
 let runtimeWorkCounter = 0
 
@@ -143,11 +157,6 @@ export function runtimeWorkId(): WorkId {
 /** Return the work id generator shape expected by `createRuntime()`. */
 export function createRuntimeWorkIdGenerator(): () => WorkId {
   return runtimeWorkId
-}
-
-/** Build the idempotency key for the first object-bound runtime flow delivery. */
-export function runtimeStartIdempotencyKey(workId: WorkId): string {
-  return `resume:${workId}:start`
 }
 
 /** Build a unique event id for object-bound `FlowHandle.signal()` deliveries. */

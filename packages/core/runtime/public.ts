@@ -16,6 +16,12 @@ export {
 } from './engine/errors'
 export type { CruxRuntimeErrorCode, RuntimeErrorInput } from './engine/errors'
 
+export type {
+  RuntimeArtifactManifest,
+  RuntimeArtifactManifestTarget,
+  RuntimeArtifactTargetKind,
+} from './artifacts'
+
 export {
   MAX_WAKE_ENVELOPE_BYTES,
   decodeWakeEnvelope,
@@ -23,7 +29,11 @@ export {
 } from './engine/envelope'
 export type { WakeEnvelope } from './engine/envelope'
 
-export { classifyRuntimeFailure, retryDelayMs } from './engine/retry'
+export {
+  DEFAULT_RUNTIME_MAX_ATTEMPTS,
+  classifyRuntimeFailure,
+  retryDelayMs,
+} from './engine/retry'
 export type {
   RetryDelayOptions,
   RuntimeFailureClassification,
@@ -48,6 +58,8 @@ export type {
   MaintenanceTickOptions,
   MaintenanceTickResult,
   RecordSuspensionInput,
+  RetryWorkInput,
+  RetryWorkResult,
   RuntimeKernel,
   RuntimeKernelOptions,
   RuntimeScheduledEffectFlushRecord,
@@ -121,11 +133,15 @@ export type {
 } from './composers/wake-adapter'
 
 export { createRuntimeHandler } from './handler/create-runtime-handler'
+export { normalizeRuntimeHandlerTargets } from './handler/targets'
 export type {
   CreateRuntimeHandlerOptions,
   RuntimeFetchHandlers,
-  RuntimeHandlerTarget,
 } from './handler/create-runtime-handler'
+export type {
+  NormalizeRuntimeHandlerTargetsOptions,
+  RuntimeHandlerTarget,
+} from './handler/targets'
 
 export { handleWakeRequest } from './handler/core'
 export type { HandleWakeRequestOptions } from './handler/core'
@@ -154,12 +170,17 @@ export type {
 
 export {
   flowEventResumeKey,
+  flowManualResumeKey,
   flowSignalResumeKey,
+  flowStartResumeKey,
+  operatorRetryEventName,
+  operatorRetryKey,
   taskRunKey,
   timerKey,
   waiterTimeoutKey,
   watchDeliverKey,
 } from './engine/idempotency'
+export { runtimeSignalEventName } from './engine/replay'
 
 export type * from './ports'
 export type * from './store'

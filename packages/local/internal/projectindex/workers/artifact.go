@@ -45,3 +45,23 @@ func (w *Bundle) InspectProjectConfig(ctx context.Context, root, configPath, pro
 	}
 	return resp, nil
 }
+
+// GenerateRuntimeArtifacts runs the TypeScript runtime artifact generator for root.
+func (w *Bundle) GenerateRuntimeArtifacts(ctx context.Context, root string) (json.RawMessage, error) {
+	req := requestwire.Request{
+		Method: "generateRuntimeArtifacts",
+		Root:   root,
+	}
+	return w.streamArtifact(ctx, req, projectindex.ProjectIndexArtifactRuntimeArtifacts)
+}
+
+// RunRuntimeOperation executes a Runtime Engine CLI operation in the TypeScript worker.
+func (w *Bundle) RunRuntimeOperation(ctx context.Context, root, operation, workID string) (json.RawMessage, error) {
+	req := requestwire.Request{
+		Method:           "runRuntimeOperation",
+		Root:             root,
+		RuntimeOperation: operation,
+		RuntimeWorkID:    workID,
+	}
+	return w.streamArtifact(ctx, req, projectindex.ProjectIndexArtifactRuntimeOperation)
+}

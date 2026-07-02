@@ -186,6 +186,10 @@ export function errorContextForMethod(method: string | undefined): ProjectIndexW
       return { kind: 'artifact', method, artifact: 'staticExtensionEvidenceBatch' }
     case 'checkStaticRules':
       return { kind: 'artifact', method, artifact: 'staticRuleCheck' }
+    case 'generateRuntimeArtifacts':
+      return { kind: 'artifact', method, artifact: 'runtimeArtifacts' }
+    case 'runRuntimeOperation':
+      return { kind: 'artifact', method, artifact: 'runtimeOperation' }
     case 'indexProjectAst':
     case 'indexProjectAstFromSyntaxRecords':
     case 'indexProjectSemantic':

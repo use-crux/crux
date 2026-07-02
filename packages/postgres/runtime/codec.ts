@@ -68,6 +68,13 @@ export function decodeFlowSnapshot(row: JsonRecord): FlowSnapshot {
         Object.freeze({ ...suspend }),
       ),
     ),
+    deliveredSuspends: row.delivered_suspends
+      ? Object.freeze(
+          row.delivered_suspends as NonNullable<
+            FlowSnapshot['deliveredSuspends']
+          >,
+        )
+      : undefined,
     scheduledEffects: row.scheduled_effects
       ? Object.freeze(
           row.scheduled_effects as NonNullable<

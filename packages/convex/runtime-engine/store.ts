@@ -28,6 +28,7 @@ import {
   encodeOutboxDate,
   encodeSnapshot,
   encodeTimer,
+  encodeWaiter,
   encodeWakeEnvelope,
   encodeWork,
   encodeWorkForCreate,
@@ -83,6 +84,7 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
         work: pending.work,
         idempotencyKey: pending.idempotencyKey,
         now: now().getTime(),
+        from: pending.from,
       })
       return result ? decodeWork(result) : null
     },
@@ -116,7 +118,7 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
   }
 
   const waiters: RuntimeWaiterStorePort = {
-    register: async (waiter) => decodeWaiter(await run(refs.waiters.register, { waiter })),
+    register: async (waiter) => decodeWaiter(await run(refs.waiters.register, { waiter: encodeWaiter(waiter) })),
     resolve: async (eventName, payload, read = {}) =>
       (await run<readonly unknown[]>(refs.waiters.resolve, { eventName, payload, namespace: read.namespace })).map(
         decodeWaiter,
@@ -145,8 +147,11 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
   }
 
   const outbox: RuntimeOutboxPort = {
-    put: async (envelope) =>
-      decodeOutbox(await run(refs.outbox.put, { envelope: encodeWakeEnvelope(envelope), nextAttemptAt: now().getTime() })),
+    put: async (envelope, options) =>
+      decodeOutbox(await run(refs.outbox.put, {
+        envelope: encodeWakeEnvelope(envelope),
+        nextAttemptAt: (options?.deliverAt ?? now()).getTime(),
+      })),
     get: async (outboxId) => {
       const result = await run<unknown>(refs.outbox.get, { outboxId })
       return result ? decodeOutbox(result) : null

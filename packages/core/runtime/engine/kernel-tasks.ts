@@ -47,7 +47,9 @@ export async function enqueueTask(
       idleScope: input.idleScope,
       now: deps.now(),
     })
-    await tx.outbox.put(wakeEnvelopeForWork(item))
+    await tx.outbox.put(wakeEnvelopeForWork(item), {
+      deliverAt: input.notBefore,
+    })
     return item
   })
 }

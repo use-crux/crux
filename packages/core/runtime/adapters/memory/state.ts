@@ -1,6 +1,7 @@
 import type { JsonValue } from '../../../storage'
+import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from '../../engine/retry'
 import type { WorkItem } from '../../engine/work'
-import type { FlowId, WorkId } from '../../ports/ids'
+import type { EventCursor, FlowId, WorkId } from '../../ports/ids'
 import type {
   FlowSnapshot,
   IdempotencyRecord,
@@ -16,8 +17,6 @@ import type { RuntimeWork } from '../../ports/work'
 import type { MemoryRuntimeData, MemoryWriteRecorder } from './data'
 import { scopedKey } from './data'
 import { cloneJsonValue } from './json'
-
-const DEFAULT_MAX_ATTEMPTS = 8
 
 export function createMemoryStatePort(
   data: MemoryRuntimeData,
@@ -38,7 +37,7 @@ export function createMemoryStatePort(
         targetId: input.targetId,
         status: 'pending',
         attempt: 1,
-        maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+        maxAttempts: input.maxAttempts ?? DEFAULT_RUNTIME_MAX_ATTEMPTS,
         notBefore: input.notBefore ? new Date(input.notBefore) : undefined,
         idempotencyKey: input.idempotencyKey,
         idleScope: input.idleScope,
@@ -84,7 +83,7 @@ export function createMemoryStatePort(
     ): Promise<WorkItem | null> {
       const key = scopedKey(options.namespace, workId)
       const existing = data.work.get(key)
-      if (!existing || existing.status !== 'suspended') return null
+      if (!existing || !statusAllowed(existing.status, options.from)) return null
 
       recordWrite?.()
       const updated: WorkItem = Object.freeze({
@@ -96,6 +95,7 @@ export function createMemoryStatePort(
         attempt: 1,
         maxAttempts: existing.maxAttempts,
         idempotencyKey: options.idempotencyKey,
+        idleScope: existing.idleScope,
         createdAt: new Date(existing.createdAt),
         updatedAt: new Date(),
       })
@@ -138,10 +138,11 @@ export function createMemoryStatePort(
           delivered: { eventId: options.eventId },
         })
       })
+      const deliveredSuspends = mergeDeliveredSuspend(snapshot, options)
       recordWrite?.()
       data.snapshots.set(
         key,
-        cloneFlowSnapshot({ ...snapshot, pendingSuspends }),
+        cloneFlowSnapshot({ ...snapshot, pendingSuspends, deliveredSuspends }),
       )
     },
 
@@ -218,6 +219,15 @@ function incrementCounter(
   return next
 }
 
+function statusAllowed(
+  status: WorkItem['status'],
+  from: SetWorkPendingOptions['from'],
+): boolean {
+  const allowed =
+    from === undefined ? ['suspended'] : Array.isArray(from) ? from : [from]
+  return allowed.includes(status)
+}
+
 export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
   return Object.freeze({
     flowId: snapshot.flowId,
@@ -234,6 +244,16 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     pendingSuspends: snapshot.pendingSuspends.map((suspend) =>
       clonePendingSuspend(suspend),
     ),
+    deliveredSuspends: snapshot.deliveredSuspends
+      ? Object.freeze(
+          Object.fromEntries(
+            Object.entries(snapshot.deliveredSuspends).map(([deliveryKey, delivery]) => [
+              deliveryKey,
+              delivery ? { eventId: delivery.eventId } : undefined,
+            ]),
+          ),
+        )
+      : undefined,
     scheduledEffects: snapshot.scheduledEffects
       ? Object.freeze(
           Object.fromEntries(
@@ -261,11 +281,25 @@ function clonePendingSuspend(
 ): RuntimePendingSuspend {
   return Object.freeze({
     label: suspend.label,
+    deliveryKey: suspend.deliveryKey,
     waiterId: suspend.waiterId,
     timerId: suspend.timerId,
     delivered: suspend.delivered
       ? { eventId: suspend.delivered.eventId }
       : undefined,
+  })
+}
+
+function mergeDeliveredSuspend(
+  snapshot: FlowSnapshot,
+  options: MarkSnapshotDeliveredOptions,
+): FlowSnapshot['deliveredSuspends'] {
+  const suspend = snapshot.pendingSuspends.find((pending) => pending.waiterId === options.waiterId)
+  const deliveryKey = suspend?.deliveryKey ?? suspend?.label
+  if (!deliveryKey) return snapshot.deliveredSuspends
+  return Object.freeze({
+    ...(snapshot.deliveredSuspends ?? {}),
+    [deliveryKey]: { eventId: options.eventId as EventCursor },
   })
 }
 

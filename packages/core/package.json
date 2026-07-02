@@ -73,6 +73,11 @@
       "import": "./runtime/testing/index.ts",
       "require": "./runtime/testing/index.ts"
     },
+    "./runtime/next": {
+      "types": "./runtime/next.ts",
+      "import": "./runtime/next.ts",
+      "require": "./runtime/next.ts"
+    },
     "./observability": {
       "types": "./observability/index.ts",
       "import": "./observability/index.ts",
@@ -231,6 +236,9 @@
       ],
       "runtime/testing": [
         "runtime/testing/index.ts"
+      ],
+      "runtime/next": [
+        "runtime/next.ts"
       ],
       "observability": [
         "observability/index.ts"

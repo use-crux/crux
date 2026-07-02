@@ -54,6 +54,30 @@ export function registerStoreCoordinationTests<
     ).resolves.toEqual([])
   })
 
+  it('invariant: empty waiter matches accept scalar payloads and non-empty matches require objects', async () => {
+    const store = await options.createStore()
+    const waiter = await store.waiters.register({
+      namespace: 'tenant-a',
+      eventName: 'document.ready',
+      match: {},
+      workId: 'work_flow_1' as WorkId,
+      work: { kind: 'flow.resume', flowId: 'flow_1' as FlowId },
+    })
+    await store.waiters.register({
+      namespace: 'tenant-a',
+      eventName: 'document.ready',
+      match: { documentId: 'doc_1' },
+      workId: 'work_flow_2' as WorkId,
+      work: { kind: 'flow.resume', flowId: 'flow_2' as FlowId },
+    })
+
+    await expect(
+      store.waiters.resolve('document.ready', 'ready', {
+        namespace: 'tenant-a',
+      }),
+    ).resolves.toEqual([expect.objectContaining({ waiterId: waiter.waiterId })])
+  })
+
   it('invariant: owned waiter and timer queries are scoped by work and timeout eligibility', async () => {
     const store = await options.createStore()
     const dueAt = new Date('2026-07-02T00:00:10.000Z')
@@ -194,6 +218,32 @@ export function registerStoreCoordinationTests<
       await expect(
         store.timers.transition(timer.timerId, 'scheduled', 'cancelled'),
       ).resolves.toBe(false)
+
+      const delayedOutbox = await store.outbox.put(
+        makeConformanceWakeEnvelope(work),
+        { deliverAt: dueAt },
+      )
+      await expect(
+        store.outbox.claimPending({
+          namespace: 'tenant-a',
+          now: new Date('2026-07-02T00:00:09.999Z'),
+          limit: 1,
+        }),
+      ).resolves.toEqual([])
+      await expect(
+        store.outbox.claimPending({
+          namespace: 'tenant-a',
+          now: dueAt,
+          limit: 1,
+        }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          outboxId: delayedOutbox.outboxId,
+          nextAttemptAt: dueAt,
+          attempts: 1,
+        }),
+      ])
+      await store.outbox.confirm(delayedOutbox.outboxId)
 
       const outbox = await store.outbox.put(makeConformanceWakeEnvelope(work))
       await expect(
