@@ -13,8 +13,11 @@ import { createRuntime } from '../api/create-runtime'
 import type {
   CreateRuntimeOptions,
   ResolvedRuntimeEngine,
-  RuntimeEngineDefinition,
 } from '../api/create-runtime'
+import {
+  runtimeHostOnlyError,
+  type RuntimeEngineDefinition,
+} from '../api/runtime-definition'
 import {
   runtimeTargetMap,
   type RuntimeTargetRuntimeRef,
@@ -64,6 +67,13 @@ export function createRuntimeHandler(
 ): RuntimeFetchHandlers {
   const runtimeDefinition =
     options.runtime ?? getRuntime().runtimeEngine ?? missingRuntime()
+  if (runtimeDefinition.kind === 'host-bound') {
+    throw runtimeHostOnlyError({
+      api: 'createRuntimeHandler()',
+      host: runtimeDefinition.host,
+      entry: runtimeDefinition.entry,
+    })
+  }
   const runtimeRef: RuntimeTargetRuntimeRef = {}
   const targets = normalizeTargets(options.targets, runtimeRef)
   const runtime = createRuntime({

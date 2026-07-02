@@ -12,7 +12,7 @@ import type { CruxEngineCapabilities, RuntimeSetupPort } from '../ports'
 import type { RuntimeStoreAdapter } from '../store'
 import { MAX_WAKE_ENVELOPE_BYTES } from '../engine/envelope'
 import { createRuntimeError } from '../engine/errors'
-import type { RuntimeEngineDefinition } from '../api/create-runtime'
+import type { InProcessRuntimeEngineDefinition } from '../api/runtime-definition'
 import type { RuntimeWakeAdapter } from './wake-adapter'
 
 /** Environment values used by serverless public URL resolution. */
@@ -44,7 +44,7 @@ export interface ServerlessRuntimeOptions<
 /** Create a serverless Runtime Engine composer from store and wake adapters. */
 export function serverless<TStore extends RuntimeStoreAdapter>(
   options: ServerlessRuntimeOptions<TStore>,
-): RuntimeEngineDefinition<TStore> {
+): InProcessRuntimeEngineDefinition<TStore> {
   const env = options.env ?? readProcessEnv()
   const endpoint = normalizeEndpoint(options.endpoint ?? '/api/crux')
   const url = resolveWakeUrl({
@@ -54,6 +54,7 @@ export function serverless<TStore extends RuntimeStoreAdapter>(
   })
 
   return Object.freeze({
+    kind: 'in-process' as const,
     id: `serverless:${options.wake.id}`,
     store: options.store,
     capabilities: serverlessCapabilities(options),

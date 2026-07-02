@@ -10,7 +10,9 @@ import { expectTypeOf } from 'vitest'
 import type {
   EventCursor,
   FlowId,
+  HostBoundRuntimeEngineDefinition,
   InMemoryRuntimeStore,
+  InProcessRuntimeEngineDefinition,
   ResolvedRuntimeEngine,
   RuntimeTaskTarget,
   RuntimeKernel,
@@ -24,6 +26,7 @@ import type {
   WorkId,
 } from '@use-crux/core/runtime'
 import {
+  bindHostRuntime,
   createRuntime,
   createRuntimeKernel,
   flowEventResumeKey,
@@ -126,6 +129,10 @@ const runtimeDefinition = node({
 expectTypeOf(runtimeDefinition).toMatchTypeOf<
   RuntimeEngineDefinition<InMemoryRuntimeStore>
 >()
+expectTypeOf(runtimeDefinition).toMatchTypeOf<
+  InProcessRuntimeEngineDefinition<InMemoryRuntimeStore>
+>()
+expectTypeOf(runtimeDefinition.kind).toEqualTypeOf<'in-process'>()
 const resolvedRuntime = createRuntime({
   runtime: runtimeDefinition,
   targets: {},
@@ -138,6 +145,29 @@ expectTypeOf(resolvedRuntime).toMatchTypeOf<
 expectTypeOf(resolvedRuntime.store).toEqualTypeOf<InMemoryRuntimeStore>()
 expectTypeOf(runtimeRequiredError({ api: 'flow.waitFor()' }).code).toEqualTypeOf<
   'RUNTIME_REQUIRED'
+>()
+
+const hostRuntimeDefinition: HostBoundRuntimeEngineDefinition = {
+  kind: 'host-bound',
+  id: 'convex',
+  host: 'convex',
+  capabilities: runtimeDefinition.capabilities,
+  entry: 'createConvexRuntimeHandlers({ targets }) in convex/crux.ts',
+}
+expectTypeOf(hostRuntimeDefinition).toMatchTypeOf<RuntimeEngineDefinition>()
+expectTypeOf(hostRuntimeDefinition.kind).toEqualTypeOf<'host-bound'>()
+// @ts-expect-error Host-bound declarations are inert and do not expose stores.
+hostRuntimeDefinition.store
+
+const hostBoundRuntime = bindHostRuntime(hostRuntimeDefinition, {
+  store: inMemoryRuntimeStore(),
+  targets: {},
+  newWorkId: () => workId,
+  createWake: () => async () => {},
+  startMaintenance: false,
+})
+expectTypeOf(hostBoundRuntime).toMatchTypeOf<
+  ResolvedRuntimeEngine<InMemoryRuntimeStore>
 >()
 
 runStoreAdapterTests({

@@ -64,23 +64,34 @@ export type {
   ScheduleTimerInput,
 } from './engine/kernel'
 
+export { bindHostRuntime } from './api/bind-host-runtime'
 export { createRuntime } from './api/create-runtime'
+export { runtimeHostOnlyError } from './api/runtime-definition'
 export type {
   CreateRuntimeOptions,
   ResolvedRuntimeEngine,
-  RuntimeEngineDefinition,
   RuntimeMaintenanceController,
   RuntimeMaintenanceHandle,
-  RuntimeMaintenanceLoopOptions,
   RuntimeMaintenanceTickOptions,
-  RuntimeWakeFactoryInput,
 } from './api/create-runtime'
+export type { HostRuntimeBinding } from './api/bind-host-runtime'
+export type {
+  HostBoundRuntimeEngineDefinition,
+  InProcessRuntimeEngineDefinition,
+  RuntimeEngineDefinition,
+  RuntimeHostOnlyErrorOptions,
+  RuntimeMaintenanceLoopOptions,
+  RuntimeWakeFactoryInput,
+} from './api/runtime-definition'
 
 export { runtimeRequiredError } from './api/runtime-required'
 export type {
   RuntimeRequiredError,
   RuntimeRequiredErrorOptions,
 } from './api/runtime-required'
+
+export { runtimeTargetMap } from './api/target-registry'
+export type { RuntimeTargetRuntimeRef } from './api/target-registry'
 
 export { task } from './api/task'
 export type {

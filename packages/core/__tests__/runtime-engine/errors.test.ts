@@ -4,6 +4,7 @@ import {
   RUNTIME_ERROR_CODES,
   createRuntimeError,
 } from '../../runtime/engine/errors'
+import { runtimeHostOnlyError } from '../../runtime/api/runtime-definition'
 import { runtimeRequiredError } from '../../runtime/api/runtime-required'
 
 describe('CruxRuntimeError', () => {
@@ -55,6 +56,28 @@ describe('CruxRuntimeError', () => {
     )
     expect(error.message).toContain(
       'runtime: serverless({ store: postgres(), wake: qstash() })',
+    )
+  })
+
+  it('renders the standard host-bound-runtime template outside the host', () => {
+    const error = runtimeHostOnlyError({
+      api: 'crux.flows.signal()',
+      host: 'convex',
+      entry: 'createConvexRuntimeHandlers({ targets }) in convex/crux.ts',
+    })
+
+    expect(error.code).toBe('RUNTIME_HOST_ONLY')
+    expect(error.message).toContain(
+      'crux.flows.signal() requires the convex runtime host.',
+    )
+    expect(error.message).toContain(
+      'This runtime declaration can only execute inside convex functions.',
+    )
+    expect(error.message).toContain(
+      'Object-bound flow and task definitions still typecheck.',
+    )
+    expect(error.message).toContain(
+      'createConvexRuntimeHandlers({ targets }) in convex/crux.ts',
     )
   })
 })

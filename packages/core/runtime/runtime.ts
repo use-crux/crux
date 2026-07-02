@@ -20,7 +20,7 @@ import type {
 import type { CruxObservabilityTransport, ObservabilityDeliveryOptions } from '../observability'
 import type { CruxObservabilityCapturePolicy } from '../observability/capture-policy'
 import type { RecordStore } from '../storage'
-import type { RuntimeEngineDefinition } from './api/create-runtime'
+import type { RuntimeEngineDefinition } from './api/runtime-definition'
 
 /**
  * The set of global hooks and reporters that instrument Crux primitives.

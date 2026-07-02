@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CruxRuntimeError,
   createRuntime,
   node,
   task,
   type FlowId,
+  type HostBoundRuntimeEngineDefinition,
   type RuntimeTargetId,
   type TaskId,
   type WorkId,
@@ -11,6 +13,31 @@ import {
 } from '@use-crux/core/runtime'
 
 describe('node() Runtime Engine composer', () => {
+  it('rejects host-bound runtime declarations outside their host boundary', () => {
+    const runtimeDefinition: HostBoundRuntimeEngineDefinition = {
+      kind: 'host-bound',
+      id: 'convex',
+      host: 'convex',
+      capabilities: node({ autoStartMaintenance: false }).capabilities,
+      entry: 'createConvexRuntimeHandlers({ targets }) in convex/crux.ts',
+    }
+
+    expect(() =>
+      createRuntime({
+        runtime: runtimeDefinition,
+        targets: {},
+        startMaintenance: false,
+      }),
+    ).toThrowError(CruxRuntimeError)
+    expect(() =>
+      createRuntime({
+        runtime: runtimeDefinition,
+        targets: {},
+        startMaintenance: false,
+      }),
+    ).toThrowError(/RUNTIME_HOST_ONLY/)
+  })
+
   it('runs executable runtime task targets with persisted JSON input', async () => {
     let nextWork = 0
     const runtimeDefinition = node({

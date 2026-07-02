@@ -16,6 +16,7 @@
     "types": ["node", "vitest"],
     "paths": {
       "@use-crux/core": ["../core/index.ts"],
+      "@use-crux/core/runtime": ["../core/runtime/public.ts"],
       "@use-crux/core/*": ["../core/*"],
       "@use-crux/react": ["../react/src/index.ts"],
       "@use-crux/react/*": ["../react/src/*"]

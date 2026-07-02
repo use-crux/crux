@@ -24,50 +24,11 @@ import type {
   RuntimeOutboxDispatcher,
   RuntimeWakeDeliver,
 } from '../engine/outbox'
-import type { RuntimeWakeRequestVerifier } from '../handler/verify'
 import { assertRuntimeCapabilities } from './runtime-capabilities'
-
-/** Options passed to a composer when `createRuntime()` builds wake delivery. */
-export interface RuntimeWakeFactoryInput<
-  TStore extends RuntimeStoreAdapter = RuntimeStoreAdapter,
-> {
-  /** Store used by the resolved runtime. */
-  readonly store: TStore
-  /** Kernel that should receive delivered wake envelopes. */
-  readonly kernel: RuntimeKernel
-  /** Default namespace for maintenance and dispatch. */
-  readonly namespace: string
-  /** Current time source shared with the kernel. */
-  readonly now: () => Date
-}
-
-/** Maintenance-loop defaults supplied by a runtime composer. */
-export interface RuntimeMaintenanceLoopOptions {
-  /** Interval between automatic maintenance ticks in milliseconds. */
-  readonly intervalMs?: number
-  /** Whether `createRuntime()` should start the loop immediately. */
-  readonly autoStart?: boolean
-}
-
-/** Runtime composer output accepted by `config({ runtime })`. */
-export interface RuntimeEngineDefinition<
-  TStore extends RuntimeStoreAdapter = RuntimeStoreAdapter,
-> {
-  /** Stable adapter/composer id used in diagnostics. */
-  readonly id: string
-  /** Store backing runtime state, events, waiters, timers, outbox, and leases. */
-  readonly store: TStore
-  /** Capability declaration used for preflight and runtime diagnostics. */
-  readonly capabilities: CruxEngineCapabilities
-  /** Default namespace for local/runtime-owned operations. */
-  readonly namespace?: string
-  /** Optional automatic maintenance-loop defaults. */
-  readonly maintenance?: RuntimeMaintenanceLoopOptions
-  /** Optional HTTP wake verifier supplied by a wake adapter such as QStash. */
-  readonly verifyWakeRequest?: RuntimeWakeRequestVerifier
-  /** Create wake delivery for this runtime. */
-  createWake(input: RuntimeWakeFactoryInput<TStore>): RuntimeWakeDeliver
-}
+import {
+  runtimeHostOnlyError,
+  type RuntimeEngineDefinition,
+} from './runtime-definition'
 
 /** Options for resolving a runtime composer into an executable kernel. */
 export interface CreateRuntimeOptions<
@@ -141,6 +102,14 @@ export interface ResolvedRuntimeEngine<
 export function createRuntime<TStore extends RuntimeStoreAdapter>(
   options: CreateRuntimeOptions<TStore>,
 ): ResolvedRuntimeEngine<TStore> {
+  if (options.runtime.kind === 'host-bound') {
+    throw runtimeHostOnlyError({
+      api: 'createRuntime()',
+      host: options.runtime.host,
+      entry: options.runtime.entry,
+    })
+  }
+
   assertRuntimeCapabilities(options.runtime)
 
   const namespace = options.namespace ?? options.runtime.namespace ?? 'local'

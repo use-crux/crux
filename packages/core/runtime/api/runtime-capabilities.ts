@@ -10,7 +10,7 @@
 
 import type { CruxEngineCapabilities } from '../ports'
 import { createRuntimeError } from '../engine/errors'
-import type { RuntimeEngineDefinition } from './create-runtime'
+import type { RuntimeEngineDefinition } from './runtime-definition'
 
 /** Throw `CAPABILITY_MISSING` when a runtime composer lacks required support. */
 export function assertRuntimeCapabilities(

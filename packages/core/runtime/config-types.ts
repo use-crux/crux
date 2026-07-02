@@ -20,7 +20,7 @@ import type { QualityConfig } from '../quality/config'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
 import type { RecordStore } from '../storage'
 import type { TokenizerFn } from '../shared/tokenizer'
-import type { RuntimeEngineDefinition } from './api/create-runtime'
+import type { RuntimeEngineDefinition } from './api/runtime-definition'
 import type { PromptMiddleware } from './types'
 
 export type { CruxLintConfig, CruxLintRuleConfig, CruxLintSelectedProfile } from '../lint'

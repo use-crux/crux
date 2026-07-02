@@ -22,6 +22,7 @@ export const RUNTIME_ERROR_CODES = [
   'PAYLOAD_NOT_JSON',
   'WORK_DEAD_LETTERED',
   'NAMESPACE_AMBIGUOUS',
+  'RUNTIME_HOST_ONLY',
 ] as const
 
 /** String-literal discriminant for public Runtime Engine diagnostics. */

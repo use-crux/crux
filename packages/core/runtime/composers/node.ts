@@ -15,9 +15,9 @@ import type { RuntimeWakeDeliver } from '../engine/outbox'
 import { inMemoryRuntimeStore } from '../adapters/memory'
 import type { InMemoryRuntimeStore } from '../adapters/memory'
 import type {
-  RuntimeEngineDefinition,
+  InProcessRuntimeEngineDefinition,
   RuntimeWakeFactoryInput,
-} from '../api/create-runtime'
+} from '../api/runtime-definition'
 
 /** Options for the in-process Node runtime composer. */
 export interface NodeRuntimeOptions<
@@ -41,17 +41,18 @@ export interface NodeRuntimeOptions<
 /** Create the default in-process runtime using the in-memory reference store. */
 export function node(
   options?: Omit<NodeRuntimeOptions<InMemoryRuntimeStore>, 'store'>,
-): RuntimeEngineDefinition<InMemoryRuntimeStore>
+): InProcessRuntimeEngineDefinition<InMemoryRuntimeStore>
 
 /** Create an in-process runtime using a caller-supplied store adapter. */
 export function node<TStore extends RuntimeStoreAdapter>(
   options: NodeRuntimeOptions<TStore> & { readonly store: TStore },
-): RuntimeEngineDefinition<TStore>
+): InProcessRuntimeEngineDefinition<TStore>
 
 export function node<TStore extends RuntimeStoreAdapter>(
   options?: NodeRuntimeOptions<TStore>,
-): RuntimeEngineDefinition<TStore | InMemoryRuntimeStore> {
+): InProcessRuntimeEngineDefinition<TStore | InMemoryRuntimeStore> {
   return Object.freeze({
+    kind: 'in-process' as const,
     id: 'node',
     store: options?.store ?? inMemoryRuntimeStore(),
     capabilities: NODE_RUNTIME_CAPABILITIES,
