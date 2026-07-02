@@ -8,6 +8,7 @@ import type {
 } from '../../ports/waiters'
 import type { MemoryRuntimeData, MemoryWriteRecorder } from './data'
 import { cloneJsonValue } from './json'
+import { cloneRuntimeWork } from './state'
 
 export type RuntimeWaiterState = RuntimeWaiter['state']
 
@@ -29,10 +30,9 @@ export function createMemoryWaiterPort(
         namespace: waiter.namespace,
         eventName: waiter.eventName,
         match: cloneJsonValue(waiter.match, 'waiter match'),
-        work: waiter.work,
-        timeoutAt: waiter.timeoutAt
-          ? new Date(waiter.timeoutAt)
-          : undefined,
+        workId: waiter.workId,
+        work: cloneRuntimeWork(waiter.work),
+        timeoutAt: waiter.timeoutAt ? new Date(waiter.timeoutAt) : undefined,
         waiterId: `waiter_${data.nextWaiterId}` as WaiterId,
         state: 'armed',
       })
@@ -105,7 +105,8 @@ function cloneRuntimeWaiter(waiter: RuntimeWaiter): RuntimeWaiter {
     namespace: waiter.namespace,
     eventName: waiter.eventName,
     match: cloneJsonValue(waiter.match, 'waiter match'),
-    work: waiter.work,
+    workId: waiter.workId,
+    work: cloneRuntimeWork(waiter.work),
     timeoutAt: waiter.timeoutAt ? new Date(waiter.timeoutAt) : undefined,
     waiterId: waiter.waiterId,
     timerId: waiter.timerId,

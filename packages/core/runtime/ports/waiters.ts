@@ -10,7 +10,7 @@
  */
 
 import type { JsonValue } from '../../storage'
-import type { TimerId, WaiterId } from './ids'
+import type { TimerId, WaiterId, WorkId } from './ids'
 import type { RuntimeWork } from './work'
 
 /** New waiter registration. */
@@ -21,7 +21,9 @@ export interface NewRuntimeWaiter {
   readonly eventName: string
   /** Top-level payload equality match. */
   readonly match: Readonly<Record<string, JsonValue>>
-  /** Work to enqueue when this waiter fires. */
+  /** Owning suspended work item; absent means firing mints new work. */
+  readonly workId?: WorkId
+  /** Work payload used when this waiter fires or creates a new item. */
   readonly work: RuntimeWork
   /** Optional timeout deadline. */
   readonly timeoutAt?: Date

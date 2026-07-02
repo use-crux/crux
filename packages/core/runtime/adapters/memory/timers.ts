@@ -28,6 +28,7 @@ export function createMemoryTimerStore(
       const stored: RuntimeTimerRecord = Object.freeze({
         namespace: timer.namespace,
         fireAt: new Date(timer.fireAt),
+        workId: timer.workId,
         work: cloneRuntimeWork(timer.work),
         idempotencyKey: timer.idempotencyKey,
         timerId: `timer_${data.nextTimerId}` as TimerId,
@@ -73,10 +74,13 @@ export function createMemoryTimerStore(
   }
 }
 
-export function cloneTimerRecord(timer: RuntimeTimerRecord): RuntimeTimerRecord {
+export function cloneTimerRecord(
+  timer: RuntimeTimerRecord,
+): RuntimeTimerRecord {
   return Object.freeze({
     namespace: timer.namespace,
     fireAt: new Date(timer.fireAt),
+    workId: timer.workId,
     work: cloneRuntimeWork(timer.work),
     idempotencyKey: timer.idempotencyKey,
     timerId: timer.timerId,

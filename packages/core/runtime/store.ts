@@ -12,7 +12,7 @@
 import type { WakeEnvelope } from './engine/envelope'
 import type { DurableEventPort } from './ports/events'
 import type { LeasePort } from './ports/leases'
-import type { TimerId } from './ports/ids'
+import type { TimerId, WorkId } from './ports/ids'
 import type { RuntimeStatePort } from './ports/state'
 import type { RuntimeWork } from './ports/work'
 import type { RuntimeWaiter, WaiterPort } from './ports/waiters'
@@ -29,6 +29,8 @@ export interface NewRuntimeTimerRecord {
   readonly namespace: string
   /** Deadline when the timer becomes eligible to fire. */
   readonly fireAt: Date
+  /** Owning suspended work item; absent means firing mints new work. */
+  readonly workId?: WorkId
   /** Work to enqueue when the timer fires. */
   readonly work: RuntimeWork
   /** Optional stable duplicate scheduling key. */
@@ -60,7 +62,9 @@ export interface RuntimeTimerStorePort {
   /** Load a timer record by id. */
   get(timerId: TimerId): Promise<RuntimeTimerRecord | null>
   /** Claim due scheduled timers for a scanner pass. */
-  claimDue(options: ClaimDueTimersOptions): Promise<readonly RuntimeTimerRecord[]>
+  claimDue(
+    options: ClaimDueTimersOptions,
+  ): Promise<readonly RuntimeTimerRecord[]>
   /** Move a timer through one compare-and-set transition. */
   transition(
     timerId: TimerId,
@@ -102,7 +106,9 @@ export interface RuntimeOutboxPort {
   /** Load an outbox item by id. */
   get(outboxId: string): Promise<RuntimeOutboxItem | null>
   /** Claim pending or unconfirmed eligible rows for delivery. */
-  claimPending(options: ClaimOutboxOptions): Promise<readonly RuntimeOutboxItem[]>
+  claimPending(
+    options: ClaimOutboxOptions,
+  ): Promise<readonly RuntimeOutboxItem[]>
   /** Mark a delivered row confirmed. */
   confirm(outboxId: string): Promise<void>
   /** Requeue a row after a delivery failure. */

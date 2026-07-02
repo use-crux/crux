@@ -38,6 +38,39 @@ export type {
   WorkTransition,
 } from './engine/work'
 
+export { createRuntimeKernel, wakeEnvelopeForWork } from './engine/kernel'
+export type {
+  EmitEventInput,
+  EmitEventResult,
+  EnqueueTaskInput,
+  RecordSuspensionInput,
+  RuntimeKernel,
+  RuntimeKernelOptions,
+  RuntimeSuspendRegistration,
+  RuntimeSuspensionSnapshotInput,
+  RuntimeTarget,
+  RuntimeTargetContext,
+  RuntimeTargetMap,
+  RuntimeTargetOutcome,
+  RuntimeWakeResult,
+} from './engine/kernel'
+
+export { createOutboxDispatcher, dispatchBatch } from './engine/outbox'
+export type {
+  DispatchBatchOptions,
+  DispatchBatchResult,
+  RuntimeOutboxDispatcher,
+  RuntimeWakeDeliver,
+} from './engine/outbox'
+
+export {
+  flowEventResumeKey,
+  flowSignalResumeKey,
+  taskRunKey,
+  timerKey,
+  watchDeliverKey,
+} from './engine/idempotency'
+
 export type * from './ports'
 export type * from './store'
 

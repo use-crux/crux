@@ -4,20 +4,49 @@ import type { FlowId, WorkId } from '../../ports/ids'
 import type {
   FlowSnapshot,
   IdempotencyRecord,
+  MarkSnapshotDeliveredOptions,
+  NewWorkItem,
   RuntimePendingSuspend,
   RuntimeStatePort,
   RuntimeStateReadOptions,
+  SetWorkPendingOptions,
 } from '../../ports/state'
 import type { RuntimeWork } from '../../ports/work'
 import type { MemoryRuntimeData, MemoryWriteRecorder } from './data'
 import { scopedKey } from './data'
 import { cloneJsonValue } from './json'
 
+const DEFAULT_MAX_ATTEMPTS = 8
+
 export function createMemoryStatePort(
   data: MemoryRuntimeData,
   recordWrite?: MemoryWriteRecorder,
 ): RuntimeStatePort {
   return {
+    async createWork(input: NewWorkItem): Promise<WorkItem> {
+      const key = scopedKey(input.namespace, input.workId)
+      const existing = data.work.get(key)
+      if (existing) return cloneWorkItem(existing)
+
+      recordWrite?.()
+      const now = input.now ? new Date(input.now) : new Date()
+      const stored: WorkItem = Object.freeze({
+        workId: input.workId,
+        namespace: input.namespace,
+        work: cloneRuntimeWork(input.work),
+        targetId: input.targetId,
+        status: 'pending',
+        attempt: 1,
+        maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+        notBefore: input.notBefore ? new Date(input.notBefore) : undefined,
+        idempotencyKey: input.idempotencyKey,
+        createdAt: now,
+        updatedAt: now,
+      })
+      data.work.set(key, stored)
+      return cloneWorkItem(stored)
+    },
+
     async getWork(
       workId: WorkId,
       options: RuntimeStateReadOptions,
@@ -29,6 +58,31 @@ export function createMemoryStatePort(
     async putWork(work: WorkItem): Promise<void> {
       recordWrite?.()
       data.work.set(scopedKey(work.namespace, work.workId), cloneWorkItem(work))
+    },
+
+    async setWorkPending(
+      workId: WorkId,
+      options: SetWorkPendingOptions,
+    ): Promise<WorkItem | null> {
+      const key = scopedKey(options.namespace, workId)
+      const existing = data.work.get(key)
+      if (!existing || existing.status !== 'suspended') return null
+
+      recordWrite?.()
+      const updated: WorkItem = Object.freeze({
+        workId: existing.workId,
+        namespace: existing.namespace,
+        work: cloneRuntimeWork(options.work),
+        targetId: existing.targetId,
+        status: 'pending',
+        attempt: 1,
+        maxAttempts: existing.maxAttempts,
+        idempotencyKey: options.idempotencyKey,
+        createdAt: new Date(existing.createdAt),
+        updatedAt: new Date(),
+      })
+      data.work.set(key, updated)
+      return cloneWorkItem(updated)
     },
 
     async getSnapshot(
@@ -44,6 +98,32 @@ export function createMemoryStatePort(
       data.snapshots.set(
         scopedKey(snapshot.namespace, snapshot.flowId),
         cloneFlowSnapshot(snapshot),
+      )
+    },
+
+    async markSnapshotDelivered(
+      workId: WorkId,
+      options: MarkSnapshotDeliveredOptions,
+    ): Promise<void> {
+      const entry = [...data.snapshots.entries()].find(
+        ([, snapshot]) =>
+          snapshot.namespace === options.namespace &&
+          snapshot.workId === workId,
+      )
+      if (!entry) return
+
+      const [key, snapshot] = entry
+      const pendingSuspends = snapshot.pendingSuspends.map((suspend) => {
+        if (suspend.waiterId !== options.waiterId) return suspend
+        return Object.freeze({
+          ...clonePendingSuspend(suspend),
+          delivered: { eventId: options.eventId },
+        })
+      })
+      recordWrite?.()
+      data.snapshots.set(
+        key,
+        cloneFlowSnapshot({ ...snapshot, pendingSuspends }),
       )
     },
 
@@ -87,6 +167,7 @@ export function cloneWorkItem(work: WorkItem): WorkItem {
 export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
   return Object.freeze({
     flowId: snapshot.flowId,
+    workId: snapshot.workId,
     targetId: snapshot.targetId,
     namespace: snapshot.namespace,
     status: snapshot.status,
@@ -103,9 +184,7 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
   })
 }
 
-function cloneIdempotencyRecord(
-  record: IdempotencyRecord,
-): IdempotencyRecord {
+function cloneIdempotencyRecord(record: IdempotencyRecord): IdempotencyRecord {
   return Object.freeze({
     namespace: record.namespace,
     key: record.key,
@@ -120,6 +199,9 @@ function clonePendingSuspend(
     label: suspend.label,
     waiterId: suspend.waiterId,
     timerId: suspend.timerId,
+    delivered: suspend.delivered
+      ? { eventId: suspend.delivered.eventId }
+      : undefined,
   })
 }
 

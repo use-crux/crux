@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import type { FlowId } from '../ports'
+import type { FlowId, WorkId } from '../ports'
 import type { RuntimeStoreAdapter } from '../store'
 import {
   makeConformanceWakeEnvelope,
@@ -16,6 +16,7 @@ export function registerStoreCoordinationTests<
       namespace: 'tenant-a',
       eventName: 'document.approved',
       match: { documentId: 'doc_1' },
+      workId: 'work_flow_1' as WorkId,
       work: { kind: 'flow.resume', flowId: 'flow_1' as FlowId },
     })
     await store.waiters.register({
@@ -26,10 +27,15 @@ export function registerStoreCoordinationTests<
     })
 
     await expect(
-      store.waiters.resolve('document.approved', { documentId: 'doc_1' }, {
-        namespace: 'tenant-a',
-      }),
+      store.waiters.resolve(
+        'document.approved',
+        { documentId: 'doc_1' },
+        {
+          namespace: 'tenant-a',
+        },
+      ),
     ).resolves.toEqual([expect.objectContaining({ waiterId: waiter.waiterId })])
+    expect(waiter.workId).toBe('work_flow_1')
 
     await expect(
       Promise.all([
@@ -38,9 +44,13 @@ export function registerStoreCoordinationTests<
       ]),
     ).resolves.toEqual([true, false])
     await expect(
-      store.waiters.resolve('document.approved', { documentId: 'doc_1' }, {
-        namespace: 'tenant-a',
-      }),
+      store.waiters.resolve(
+        'document.approved',
+        { documentId: 'doc_1' },
+        {
+          namespace: 'tenant-a',
+        },
+      ),
     ).resolves.toEqual([])
   })
 
@@ -90,6 +100,7 @@ export function registerStoreCoordinationTests<
       const timer = await store.timers.put({
         namespace: 'tenant-a',
         fireAt: dueAt,
+        workId: work.workId,
         work: work.work,
       })
       await expect(
@@ -100,7 +111,12 @@ export function registerStoreCoordinationTests<
       ).resolves.toEqual([])
       await expect(
         store.timers.claimDue({ namespace: 'tenant-a', now: dueAt }),
-      ).resolves.toEqual([expect.objectContaining({ timerId: timer.timerId })])
+      ).resolves.toEqual([
+        expect.objectContaining({
+          timerId: timer.timerId,
+          workId: work.workId,
+        }),
+      ])
       await expect(
         store.timers.transition(timer.timerId, 'scheduled', 'fired'),
       ).resolves.toBe(true)

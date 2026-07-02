@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest'
-import type { FlowId, RuntimeTargetId } from '../ports'
+import type {
+  EventCursor,
+  FlowId,
+  RuntimeTargetId,
+  TaskId,
+  WaiterId,
+  WorkId,
+} from '../ports'
 import type { RuntimeStoreAdapter } from '../store'
 import { makeConformanceWorkItem } from './store-fixtures'
 import type { RunStoreAdapterTestsOptions } from './store-types'
@@ -36,20 +43,22 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
     })
 
     expect(duplicate).toEqual(first)
-    await expect(store.events.read({ namespace: 'tenant-a' })).resolves.toEqual({
-      events: [
-        expect.objectContaining({
-          eventId: first.eventId,
-          name: 'document.approved',
-          payload: { documentId: 'doc_1', nested: { approved: true } },
-        }),
-        expect.objectContaining({
-          eventId: second.eventId,
-          name: 'document.archived',
-        }),
-      ],
-      cursor: second.eventId,
-    })
+    await expect(store.events.read({ namespace: 'tenant-a' })).resolves.toEqual(
+      {
+        events: [
+          expect.objectContaining({
+            eventId: first.eventId,
+            name: 'document.approved',
+            payload: { documentId: 'doc_1', nested: { approved: true } },
+          }),
+          expect.objectContaining({
+            eventId: second.eventId,
+            name: 'document.archived',
+          }),
+        ],
+        cursor: second.eventId,
+      },
+    )
     await expect(
       store.events.read({ namespace: 'tenant-a', after: first.eventId }),
     ).resolves.toEqual({
@@ -74,19 +83,34 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
 
     await store.state.putSnapshot({
       flowId: 'flow_1' as FlowId,
+      workId: 'work_flow_1' as WorkId,
       targetId: 'review' as RuntimeTargetId,
       namespace: 'tenant-a',
       status: 'suspended',
       input: { documentId: 'doc_1' },
       completedSteps: { load: { ok: true } },
       fingerprint: ['step:load', 'suspend:approval'],
-      pendingSuspends: [{ label: 'approval' }],
+      pendingSuspends: [
+        { label: 'approval', waiterId: 'waiter_1' as WaiterId },
+      ],
       updatedAt: new Date('2026-07-02T00:00:00.000Z'),
+    })
+    await store.state.markSnapshotDelivered('work_flow_1' as WorkId, {
+      namespace: 'tenant-a',
+      waiterId: 'waiter_1' as WaiterId,
+      eventId: 'evt_1' as EventCursor,
     })
     const snapshot = await store.state.getSnapshot('flow_1' as FlowId, {
       namespace: 'tenant-a',
     })
     expect(snapshot?.completedSteps).toEqual({ load: { ok: true } })
+    expect(snapshot?.pendingSuspends).toEqual([
+      {
+        label: 'approval',
+        waiterId: 'waiter_1',
+        delivered: { eventId: 'evt_1' },
+      },
+    ])
     ;(
       snapshot as unknown as { completedSteps: { load: { ok: boolean } } }
     ).completedSteps.load.ok = false
@@ -108,5 +132,72 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
     await expect(
       store.state.hasIdempotencyKey('tenant-b', 'resume:work_1:event_1'),
     ).resolves.toBe(false)
+  })
+
+  it('invariant: work composites create new work and resume existing suspended work only once', async () => {
+    const store = await options.createStore()
+    const created = await store.state.createWork({
+      workId: 'work_task_1' as WorkId,
+      namespace: 'tenant-a',
+      work: {
+        kind: 'task.run',
+        taskId: 'task_1' as TaskId,
+        targetId: 'embed-document' as RuntimeTargetId,
+      },
+      targetId: 'embed-document' as RuntimeTargetId,
+      idempotencyKey: 'task:work_task_1',
+    })
+    expect(created).toMatchObject({
+      workId: 'work_task_1',
+      status: 'pending',
+      attempt: 1,
+      maxAttempts: 8,
+    })
+
+    const suspended = makeConformanceWorkItem({
+      workId: 'work_flow_1' as WorkId,
+      work: { kind: 'flow.resume', flowId: 'flow_1' as FlowId },
+      status: 'suspended',
+      attempt: 4,
+      notBefore: new Date('2026-07-02T00:01:00.000Z'),
+      lastError: {
+        code: 'WORK_DEAD_LETTERED',
+        message: 'previous failure',
+        at: new Date('2026-07-02T00:00:30.000Z'),
+      },
+    })
+    await store.state.putWork(suspended)
+
+    const resumed = await store.state.setWorkPending('work_flow_1' as WorkId, {
+      namespace: 'tenant-a',
+      work: {
+        kind: 'flow.timeout',
+        flowId: 'flow_1' as FlowId,
+        suspendPoint: 'approval',
+      },
+      idempotencyKey: 'timer:timer_1',
+    })
+    expect(resumed).toMatchObject({
+      workId: 'work_flow_1',
+      status: 'pending',
+      attempt: 1,
+      idempotencyKey: 'timer:timer_1',
+      work: {
+        kind: 'flow.timeout',
+        flowId: 'flow_1',
+        suspendPoint: 'approval',
+      },
+    })
+    expect(resumed?.notBefore).toBeUndefined()
+    expect(resumed?.lastError).toBeUndefined()
+
+    await store.state.putWork({ ...resumed!, status: 'completed' })
+    await expect(
+      store.state.setWorkPending('work_flow_1' as WorkId, {
+        namespace: 'tenant-a',
+        work: { kind: 'flow.resume', flowId: 'flow_1' as FlowId },
+        idempotencyKey: 'resume:work_flow_1:evt_2',
+      }),
+    ).resolves.toBeNull()
   })
 }

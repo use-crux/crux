@@ -11,20 +11,32 @@ import type {
   EventCursor,
   FlowId,
   InMemoryRuntimeStore,
+  RuntimeKernel,
+  RuntimePendingSuspend,
   RuntimeTargetId,
   RuntimeStoreAdapter,
   RuntimeWork,
   TaskId,
+  WaiterId,
   WorkId,
 } from '@use-crux/core/runtime'
-import { inMemoryRuntimeStore } from '@use-crux/core/runtime'
-import { runStoreAdapterTests } from '@use-crux/core/runtime/testing'
+import {
+  createRuntimeKernel,
+  flowEventResumeKey,
+  inMemoryRuntimeStore,
+  taskRunKey,
+} from '@use-crux/core/runtime'
+import {
+  runRuntimeEngineAdapterTests,
+  runStoreAdapterTests,
+} from '@use-crux/core/runtime/testing'
 
 declare const workId: WorkId
 declare const flowId: FlowId
 declare const taskId: TaskId
 declare const targetId: RuntimeTargetId
 declare const cursor: EventCursor
+declare const waiterId: WaiterId
 
 expectTypeOf(workId).toMatchTypeOf<string>()
 expectTypeOf(flowId).toMatchTypeOf<string>()
@@ -62,6 +74,30 @@ void badTaskWork
 
 expectTypeOf(inMemoryRuntimeStore()).toMatchTypeOf<RuntimeStoreAdapter>()
 
+const deliveredSuspend: RuntimePendingSuspend = {
+  label: 'approval',
+  waiterId,
+  delivered: { eventId: cursor },
+}
+expectTypeOf(deliveredSuspend.delivered?.eventId).toEqualTypeOf<
+  EventCursor | undefined
+>()
+
+const kernel = createRuntimeKernel({
+  store: inMemoryRuntimeStore(),
+  targets: {
+    review: {
+      targetId,
+      kind: 'task',
+      execute: async () => ({ status: 'completed' }),
+    },
+  },
+  newWorkId: () => workId,
+})
+expectTypeOf(kernel).toEqualTypeOf<RuntimeKernel>()
+expectTypeOf(flowEventResumeKey(workId, cursor)).toEqualTypeOf<string>()
+expectTypeOf(taskRunKey(workId)).toEqualTypeOf<string>()
+
 runStoreAdapterTests({
   name: 'type-only-memory-store',
   createStore: () => inMemoryRuntimeStore(),
@@ -72,4 +108,15 @@ runStoreAdapterTests({
   crashBeforeOutboxConfirm: (store) => {
     expectTypeOf(store).toEqualTypeOf<InMemoryRuntimeStore>()
   },
+})
+
+runRuntimeEngineAdapterTests({
+  name: 'type-only-runtime-engine',
+  createHarness: () => ({
+    store: inMemoryRuntimeStore(),
+    kernel,
+    targetId,
+    taskId,
+    readExecutionCount: async () => 0,
+  }),
 })

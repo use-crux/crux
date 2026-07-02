@@ -120,7 +120,7 @@ export function transition(work: WorkItem, next: WorkTransition): WorkItem {
 function isLegalTransition(from: WorkStatus, to: WorkStatus): boolean {
   switch (from) {
     case 'pending':
-      return to === 'leased' || to === 'cancelled'
+      return to === 'leased' || to === 'blocked' || to === 'cancelled'
     case 'leased':
       return (
         to === 'completed' ||
