@@ -28,6 +28,11 @@
       "types": "./index.ts",
       "import": "./index.ts",
       "require": "./index.ts"
+    },
+    "./runtime": {
+      "types": "./runtime.ts",
+      "import": "./runtime.ts",
+      "require": "./runtime.ts"
     }
   },
   "dependencies": {
@@ -35,14 +40,19 @@
   },
   "devDependencies": {
     "@types/node": "^24.12.4",
+    "@upstash/qstash": "^2.11.1",
     "typescript": "5.9.3",
     "vitest": "^4.1.7"
   },
   "peerDependencies": {
-    "@upstash/vector": "^1.0.0",
-    "@upstash/redis": "^1.0.0"
+    "@upstash/qstash": "^2.11.1",
+    "@upstash/redis": "^1.0.0",
+    "@upstash/vector": "^1.0.0"
   },
   "peerDependenciesMeta": {
+    "@upstash/qstash": {
+      "optional": true
+    },
     "@upstash/redis": {
       "optional": true
     }

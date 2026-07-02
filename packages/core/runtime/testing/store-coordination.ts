@@ -82,15 +82,17 @@ export function registerStoreCoordinationTests<
     })
     await store.waiters.attachTimer(waiter.waiterId, timer.timerId)
 
-    await expect(
-      store.waiters.listByWork('work_flow_1' as WorkId),
-    ).resolves.toEqual([
+    const waitersByWork = await store.waiters.listByWork(
+      'work_flow_1' as WorkId,
+    )
+    expect(waitersByWork).toHaveLength(2)
+    expect(waitersByWork).toEqual(expect.arrayContaining([
       expect.objectContaining({
         waiterId: waiter.waiterId,
         timerId: timer.timerId,
       }),
       expect.objectContaining({ namespace: 'tenant-b' }),
-    ])
+    ]))
     await expect(
       store.timers.listByWork('work_flow_1' as WorkId),
     ).resolves.toEqual([

@@ -93,6 +93,46 @@ export type {
 export { node } from './composers/node'
 export type { NodeRuntimeOptions } from './composers/node'
 
+export { serverless } from './composers/serverless'
+export type {
+  ServerlessRuntimeEnvironment,
+  ServerlessRuntimeOptions,
+} from './composers/serverless'
+
+export { genericQueue } from './composers/generic-queue'
+export type { GenericQueueWakeOptions } from './composers/generic-queue'
+
+export type {
+  RuntimeWakeAdapter,
+  RuntimeWakeAdapterCapabilities,
+  RuntimeWakeAdapterInput,
+  RuntimeWakeMessage,
+} from './composers/wake-adapter'
+
+export { createRuntimeHandler } from './handler/create-runtime-handler'
+export type {
+  CreateRuntimeHandlerOptions,
+  RuntimeFetchHandlers,
+  RuntimeHandlerTarget,
+} from './handler/create-runtime-handler'
+
+export { handleWakeRequest } from './handler/core'
+export type { HandleWakeRequestOptions } from './handler/core'
+
+export {
+  CRUX_WAKE_SIGNATURE_HEADER,
+  allowUnsignedDevWake,
+  assertWakeSecret,
+  devWakeSecret,
+  hmacWakeVerifier,
+  signWakeBody,
+} from './handler/verify'
+export type {
+  HmacWakeVerifierOptions,
+  RuntimeWakeRequestVerifier,
+  RuntimeWakeVerificationInput,
+} from './handler/verify'
+
 export { createOutboxDispatcher, dispatchBatch } from './engine/outbox'
 export type {
   DispatchBatchOptions,

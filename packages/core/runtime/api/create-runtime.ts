@@ -24,6 +24,7 @@ import type {
   RuntimeOutboxDispatcher,
   RuntimeWakeDeliver,
 } from '../engine/outbox'
+import type { RuntimeWakeRequestVerifier } from '../handler/verify'
 import { assertRuntimeCapabilities } from './runtime-capabilities'
 
 /** Options passed to a composer when `createRuntime()` builds wake delivery. */
@@ -62,6 +63,8 @@ export interface RuntimeEngineDefinition<
   readonly namespace?: string
   /** Optional automatic maintenance-loop defaults. */
   readonly maintenance?: RuntimeMaintenanceLoopOptions
+  /** Optional HTTP wake verifier supplied by a wake adapter such as QStash. */
+  readonly verifyWakeRequest?: RuntimeWakeRequestVerifier
   /** Create wake delivery for this runtime. */
   createWake(input: RuntimeWakeFactoryInput<TStore>): RuntimeWakeDeliver
 }

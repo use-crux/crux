@@ -380,6 +380,27 @@ The `Crux` object returned by `config()` also exposes name-bound
 `crux.flows.signal()`, `crux.flows.resume()`, and `crux.flows.cancel()` for
 runtime-backed flows when the object-bound flow handle is not available.
 
+Serverless entry files use the stable fetch-compatible handler API. Generated
+files target the same shape that users can write by hand:
+
+```ts
+import { createRuntimeHandler, serverless } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+import { qstash } from "@use-crux/upstash/runtime";
+import { reviewFlow } from "@/flows/review";
+import { embedDocument } from "@/tasks/embed-document";
+
+const runtime = serverless({
+  store: postgres(),
+  wake: qstash(),
+});
+
+export const { GET, POST } = createRuntimeHandler({
+  runtime,
+  targets: [reviewFlow, embedDocument],
+});
+```
+
 Advanced and generated entry files can resolve a composer explicitly with
 `createRuntime({ runtime, targets })`. The `@use-crux/core/runtime/testing`
 subpath exposes the shared store and kernel conformance suites for adapter
