@@ -12,6 +12,21 @@
 import { runWithExecutionContext, getExecutionContext } from '../runtime/execution-context'
 import { captureSource } from '../project-index/source'
 import { getRuntime, resolveRecords } from '../runtime/runtime'
+import {
+  createRuntime,
+  type ResolvedRuntimeEngine,
+} from '../runtime/api/create-runtime'
+import type { RuntimeTarget, RuntimeTargetOutcome } from '../runtime/engine/kernel'
+import { wakeEnvelopeForWork } from '../runtime/engine/kernel'
+import {
+  createReplayFingerprint,
+  runtimeSignalEventName,
+} from '../runtime/engine/replay'
+import type { WorkItem } from '../runtime/engine/work'
+import type {
+  FlowId as RuntimeFlowId,
+  RuntimeTargetId,
+} from '../runtime/ports/ids'
 import { executeWithRetry } from '../generation/retry'
 import type { JsonObject, JsonValue, RecordStore } from '../storage'
 import type { CapturedObservabilityContext } from '../observability'
@@ -27,11 +42,12 @@ import type {
   FlowResult,
   FlowSnapshot,
   FlowScope,
+  FlowSignalOptions,
   ListFlowsOptions,
   FlowSummary,
 } from './types'
 import { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from './types'
-import { InvalidSignalPayloadError, noPayload, signalSchemaFor, validateSignalPayload } from './signals'
+import { InvalidSignalPayloadError, isNoPayloadSignal, noPayload, signalSchemaFor, validateSignalPayload } from './signals'
 import type { FlowDefinitionOptions, FlowSignalMap } from './signals'
 import { flowHandlerAcceptsInput } from './handler-arity'
 import {
@@ -56,6 +72,20 @@ import {
 import { createFlowStepIdentityTracker } from './step-identity'
 import { flowStepRetryOptions } from './retry-control'
 import { assertFlowJsonValue, assertFlowSnapshotMetadata, completedStepsForSnapshot } from './serialization'
+import {
+  completedStepsFromRuntimeSnapshot,
+  createRuntimeWorkIdGenerator,
+  deliveredRuntimePayloads,
+  flowIdForRuntimeWork,
+  runtimeCompletedSteps,
+  runtimeFlowSnapshot,
+  runtimeInputValue,
+  runtimeSignalEventId,
+  runtimeStartIdempotencyKey,
+  runtimeWorkId,
+  type RuntimeFlowExecution,
+  type RuntimeFlowTargetRef,
+} from './runtime-engine'
 
 // Re-export types and errors so existing internal `../flow/scope` imports
 // keep working while the public flow surface stays centered on `flow()`.
@@ -68,6 +98,7 @@ export type {
   FlowResult,
   FlowSnapshot,
   FlowScope,
+  FlowSignalOptions,
   ListFlowsOptions,
   FlowSummary,
 }
@@ -125,15 +156,20 @@ interface FlowExecutionOptions<TInput, TSignals extends FlowSignalMap | undefine
   resume?: string
   /** Definition-time local signal declarations. */
   signals?: TSignals
+  /** Runtime Engine execution context when a flow target is running from durable work. */
+  runtime?: RuntimeFlowExecution
 }
+
 
 async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | undefined = undefined>(
   name: string,
   fn: (flow: FlowScope<TInput, TSignals>, input: TInput) => Promise<T> | T,
   options?: FlowExecutionOptions<TInput, TSignals>,
 ): Promise<FlowResult<T>> {
-  const isResume = !!options?.resume
-  const flowId = options?.resume ?? options?.flowId ?? createFlowId()
+  const runtimeExecution = options?.runtime
+  const isRuntimeExecution = runtimeExecution !== undefined
+  const isResume = !!options?.resume || (isRuntimeExecution && runtimeExecution.snapshot.status !== 'running')
+  const flowId = runtimeExecution?.snapshot.flowId ?? options?.resume ?? options?.flowId ?? createFlowId()
   const existing = getExecutionContext()
   const parentFlowId = options?.parentFlowId ?? existing?.flowId
   const startedAt = Date.now()
@@ -141,7 +177,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
   // Load snapshot for resume
   let snapshot: FlowSnapshot | null = null
   let store: RecordStore | undefined
-  if (isResume) {
+  if (!isRuntimeExecution && isResume) {
     store = resolveRecords()
     const raw = await store.get(`${FLOW_KEY_PREFIX}${flowId}`)
     snapshot = raw as FlowSnapshot | null
@@ -158,13 +194,21 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
   }
 
   // Completed step cache (for skip-replay on resume)
-  const completedSteps: Record<string, { output: JsonValue; durationMs: number }> = snapshot?.completedSteps
-    ? { ...snapshot.completedSteps }
-    : {}
-  const deliveredSignals = cloneDeliveredSignals(snapshot)
+  const completedSteps: Record<string, { output: JsonValue; durationMs: number }> = runtimeExecution
+    ? completedStepsFromRuntimeSnapshot(runtimeExecution.snapshot)
+    : snapshot?.completedSteps
+      ? { ...snapshot.completedSteps }
+      : {}
+  const deliveredSignals = runtimeExecution ? {} : cloneDeliveredSignals(snapshot)
 
   // Resolve input: on resume, restore from snapshot; otherwise use options
-  const flowInput = (isResume && snapshot?.input !== undefined ? snapshot.input : options?.input) as TInput
+  const flowInput = (
+    runtimeExecution
+      ? runtimeExecution.snapshot.input
+      : isResume && snapshot?.input !== undefined
+        ? snapshot.input
+        : options?.input
+  ) as TInput
 
   // Open the flow span: every child trace started inside the flow
   // (e.g. via @use-crux/convex/server ctx.crux.runAction) captures this spanId as
@@ -214,6 +258,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       stepFn: ((flow: FlowScope<TInput, TSignals>) => Promise<S> | S) | (() => Promise<S> | S),
       stepOptions?: StepOptions,
     ): Promise<S> {
+      runtimeExecution?.fingerprint.observe(`step:${label}`)
       stepIdentities.use(label)
       stepCount++
       const stepId = `${slugify(label)}-${stepCount}`
@@ -306,13 +351,15 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
     async suspend<S>(_name: string, _options?: SuspendOptions<S>): Promise<S> {
       suspendCount++
       const deliveryKey = suspendDeliveryKey(suspendCount, _name)
+      runtimeExecution?.fingerprint.observe(`suspend:${_name}`)
       const localSignalSpec = options?.signals?.[_name]
       const localSchema = signalSchemaFor(localSignalSpec)
       const suspendOptions = (localSchema ? { ..._options, schema: localSchema } : _options) as
         | SuspendOptions<S>
         | undefined
       const payloadSpec = localSignalSpec ?? suspendOptions?.schema
-      const replayPayload = deliveredSignalPayload(deliveredSignals, deliveryKey)
+      const replayPayload =
+        runtimeExecution?.deliveredPayloads.get(_name) ?? deliveredSignalPayload(deliveredSignals, deliveryKey)
       if (isResume && replayPayload !== undefined) {
         return validateSignalPayload(_name, payloadSpec, replayPayload) as S
       }
@@ -342,6 +389,10 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
             return payload
           }
         }
+      }
+
+      if (runtimeExecution) {
+        throw new FlowSuspendedError(_name, suspendOptions)
       }
 
       // Verify store is available before suspending
@@ -398,6 +449,19 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       runWithExecutionContext({ ...existing, flowId, parentFlowId }, () => fn(scope, flowInput)),
     )
 
+    if (runtimeExecution) {
+      runtimeExecution.fingerprint.complete()
+      runtimeExecution.outcome = {
+        status: 'completed',
+        flowSnapshot: runtimeFlowSnapshot(runtimeExecution, {
+          status: 'completed',
+          input: flowInput,
+          completedSteps,
+        }),
+      }
+      runtimeExecution.result = { status: 'completed', output: result, flowId }
+    }
+
     if (isResume && store && snapshot) {
       const completedAt = Date.now()
       const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
@@ -419,6 +483,51 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
   } catch (error) {
     // Handle suspension — persist state and return suspended result
     if (error instanceof FlowSuspendedError) {
+      if (runtimeExecution) {
+        runtimeExecution.fingerprint.complete()
+        const timeoutAt = error.options?.timeout ? new Date(Date.now() + parseDuration(error.options.timeout)) : undefined
+        if (flowInput !== undefined) {
+          assertFlowJsonValue(flowInput, { boundary: 'flow input' })
+        }
+        runtimeExecution.outcome = {
+          status: 'suspended',
+          suspension: {
+            namespace: runtimeExecution.work.namespace,
+            workId: runtimeExecution.work.workId,
+            flowId: flowId as RuntimeFlowId,
+            targetId: runtimeExecution.work.targetId,
+            snapshot: {
+              input: runtimeInputValue(flowInput),
+              completedSteps: runtimeCompletedSteps(completedSteps),
+              fingerprint: runtimeExecution.fingerprint.observed,
+            },
+            suspends: [
+              {
+                label: error.suspendPoint,
+                eventName: runtimeSignalEventName(flowId, error.suspendPoint),
+                match: {},
+                timeoutAt,
+              },
+            ],
+          },
+        }
+        runtimeExecution.result = { status: 'suspended', flowId, suspendedAt: error.suspendPoint }
+
+        await flowSpan.withContext(async () => {
+          await emitFlowSuspensionMarker(error.suspendPoint, {
+            flowId,
+            timeout: error.options?.timeout,
+            emittedSuspensionMarkers,
+          })
+        })
+
+        flowSpan.end({
+          status: 'suspended',
+          attributes: { suspendedAt: error.suspendPoint, totalSteps: stepCount },
+        })
+        return runtimeExecution.result as FlowResult<T>
+      }
+
       const flowStore = store ?? getRuntime().records
       if (flowStore) {
         const timeoutAt = error.options?.timeout ? Date.now() + parseDuration(error.options.timeout) : undefined
@@ -651,17 +760,191 @@ export function flow(
   const executeHandler = (scope: FlowScope<unknown, FlowSignalMap | undefined>, input: unknown) =>
     runtimeHandler(scope, input)
 
+  const createRuntimeTarget = (runtimeRef: RuntimeFlowTargetRef): RuntimeTarget => ({
+    targetId: name as RuntimeTargetId,
+    kind: 'flow' as const,
+    async execute({ work }): Promise<RuntimeTargetOutcome> {
+      const runtime = runtimeRef.current
+      if (!runtime) {
+        return {
+          status: 'blocked',
+          error: {
+            code: 'TARGET_NOT_FOUND',
+            message: `Runtime target \`${name}\` was invoked before its runtime was resolved.`,
+            at: new Date(),
+          },
+        }
+      }
+      const runtimeFlowId = flowIdForRuntimeWork(work)
+      const runtimeSnapshot = await runtime.store.state.getSnapshot(runtimeFlowId, {
+        namespace: work.namespace,
+      })
+      if (!runtimeSnapshot) {
+        return {
+          status: 'blocked',
+          error: {
+            code: 'TARGET_NOT_FOUND',
+            message: `Runtime flow snapshot \`${runtimeFlowId}\` could not be found.`,
+            at: new Date(),
+          },
+        }
+      }
+      const runtimeExecution: RuntimeFlowExecution = {
+        runtime,
+        work,
+        snapshot: runtimeSnapshot,
+        fingerprint: createReplayFingerprint({
+          recorded: runtimeSnapshot.status === 'running' ? [] : runtimeSnapshot.fingerprint,
+        }),
+        deliveredPayloads: await deliveredRuntimePayloads(runtime, runtimeSnapshot),
+      }
+      await executeFlow<unknown, unknown, FlowSignalMap | undefined>(name, executeHandler, {
+        runtime: runtimeExecution,
+        signals: definitionOptions?.signals,
+      })
+      runtimeRef.result = runtimeExecution.result
+      return runtimeExecution.outcome ?? { status: 'completed' }
+    },
+  })
+
+  async function withRuntime<T>(
+    useRuntime: (runtime: ResolvedRuntimeEngine, runtimeRef: RuntimeFlowTargetRef) => Promise<T>,
+  ): Promise<T> {
+    const runtimeDefinition = getRuntime().runtimeEngine
+    if (!runtimeDefinition) {
+      throw new Error('No Crux runtime engine is configured.')
+    }
+    const runtimeRef: RuntimeFlowTargetRef = {}
+    const runtime = createRuntime({
+      runtime: runtimeDefinition,
+      targets: { [name]: createRuntimeTarget(runtimeRef) },
+      newWorkId: createRuntimeWorkIdGenerator(),
+      startMaintenance: false,
+    })
+    runtimeRef.current = runtime
+    try {
+      return await useRuntime(runtime, runtimeRef)
+    } finally {
+      runtime.dispose()
+    }
+  }
+
+  async function runWithRuntime(
+    runOptions: FlowExecutionOptions<unknown, FlowSignalMap | undefined>,
+  ): Promise<FlowResult<unknown>> {
+    return await withRuntime(async (runtime, runtimeRef) => {
+      const flowId = (runOptions.flowId ?? createFlowId()) as RuntimeFlowId
+      const workId = runtimeWorkId()
+      const input = runtimeInputValue(runOptions.input)
+      const work = await runtime.store.transact(async (tx) => {
+        const created = await tx.state.createWork({
+          workId,
+          namespace: runtime.namespace,
+          work: { kind: 'flow.resume', flowId },
+          targetId: name as RuntimeTargetId,
+          idempotencyKey: runtimeStartIdempotencyKey(workId),
+          now: new Date(),
+        })
+        await tx.state.putSnapshot({
+          flowId,
+          workId,
+          targetId: name as RuntimeTargetId,
+          namespace: runtime.namespace,
+          status: 'running',
+          input,
+          completedSteps: {},
+          fingerprint: [],
+          pendingSuspends: [],
+          updatedAt: new Date(),
+        })
+        return created
+      })
+
+      await runtime.kernel.handleWake(wakeEnvelopeForWork(work))
+      return runtimeRef.result ?? { status: 'suspended', flowId, suspendedAt: '' }
+    })
+  }
+
+  async function resumeWithRuntime(flowId: string): Promise<FlowResult<unknown>> {
+    return await withRuntime(async (runtime, runtimeRef) => {
+      const snapshot = await runtime.store.state.getSnapshot(flowId as RuntimeFlowId, {
+        namespace: runtime.namespace,
+      })
+      if (!snapshot) {
+        throw new Error(`No runtime-backed flow found for flowId: ${flowId}`)
+      }
+      const current = await runtime.store.state.getWork(snapshot.workId, {
+        namespace: runtime.namespace,
+      })
+      if (!current) {
+        throw new Error(`No runtime work found for flowId: ${flowId}`)
+      }
+      const idempotencyKey = `resume:${snapshot.workId}:manual:${runtimeSignalEventId(flowId, 'resume')}`
+      const wakeWork =
+        current.status === 'suspended'
+          ? await runtime.store.state.setWorkPending(snapshot.workId, {
+              namespace: runtime.namespace,
+              work: { kind: 'flow.resume', flowId: snapshot.flowId },
+              idempotencyKey,
+            })
+          : current
+      if (!wakeWork) {
+        throw new Error(`Flow ${flowId} is ${current.status} and cannot be resumed.`)
+      }
+
+      await runtime.kernel.handleWake({
+        ...wakeEnvelopeForWork(wakeWork),
+        idempotencyKey:
+          current.status === 'suspended' ? idempotencyKey : wakeWork.idempotencyKey,
+      })
+      return runtimeRef.result ?? { status: 'suspended', flowId, suspendedAt: '' }
+    })
+  }
+
+  async function signalWithRuntime(
+    flowId: string,
+    signalName: string,
+    payload: JsonValue,
+    options?: FlowSignalOptions,
+  ): Promise<void> {
+    await withRuntime(async (runtime) => {
+      await runtime.kernel.emitEvent({
+        namespace: runtime.namespace,
+        name: runtimeSignalEventName(flowId, signalName),
+        payload,
+        eventId: runtimeSignalEventId(flowId, signalName),
+      })
+      if (options?.resume !== false) {
+        await runtime.dispatcher.nudge()
+      }
+    })
+  }
+
   const handle = {
     name,
 
     run(...args: readonly unknown[]): Promise<FlowResult<unknown>> {
-      return executeFlow<unknown, unknown, FlowSignalMap | undefined>(name, executeHandler, {
-        ...normalizeRunArgs(args, handlerExpectsInput),
-        signals: definitionOptions?.signals,
-      })
+      const runOptions = normalizeRunArgs(args, handlerExpectsInput)
+      if (getRuntime().runtimeEngine) {
+        return runWithRuntime({
+          ...runOptions,
+          signals: definitionOptions?.signals,
+        })
+      }
+      return executeFlow<unknown, unknown, FlowSignalMap | undefined>(
+        name,
+        executeHandler,
+        {
+          ...runOptions,
+          signals: definitionOptions?.signals,
+        },
+      )
     },
 
     resume(flowId: string, options?: FlowResumeOptions): Promise<FlowResult<unknown>> {
+      if (getRuntime().runtimeEngine) {
+        return resumeWithRuntime(flowId)
+      }
       return executeFlow<unknown, unknown, FlowSignalMap | undefined>(name, executeHandler, {
         parentFlowId: options?.parentFlowId,
         goal: options?.goal,
@@ -670,8 +953,21 @@ export function flow(
       })
     },
 
-    async signal(flowId: string, signalName: string, payload: JsonValue = {}): Promise<void> {
-      const parsedPayload = validateSignalPayload(signalName, definitionOptions?.signals[signalName], payload)
+    async signal(
+      flowId: string,
+      signalName: string,
+      payload: JsonValue | FlowSignalOptions = {},
+      options?: FlowSignalOptions,
+    ): Promise<void> {
+      const signalSpec = definitionOptions?.signals[signalName]
+      const payloadIsOptions = isNoPayloadSignal(signalSpec) && isFlowSignalOptions(payload)
+      const signalOptions = payloadIsOptions && options === undefined ? payload : options
+      const signalPayload = payloadIsOptions ? {} : payload
+      const parsedPayload = validateSignalPayload(signalName, signalSpec, signalPayload)
+      if (getRuntime().runtimeEngine) {
+        await signalWithRuntime(flowId, signalName, parsedPayload as JsonValue, signalOptions)
+        return
+      }
       await signalFlow(flowId, signalName, parsedPayload as JsonValue)
     },
   }
@@ -681,4 +977,8 @@ export function flow(
 
 function isFlowDefinitionOptions(value: unknown): value is FlowDefinitionOptions<FlowSignalMap> {
   return isRecord(value) && isRecord(value.signals)
+}
+
+function isFlowSignalOptions(value: unknown): value is FlowSignalOptions {
+  return isRecord(value) && typeof value.resume === 'boolean'
 }

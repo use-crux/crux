@@ -38,11 +38,25 @@ export interface FlowDefinitionOptions<TSignals extends FlowSignalMap = FlowSign
 export type FlowSignalPayload<TSpec> =
   TSpec extends ZodType<infer TPayload> ? TPayload : TSpec extends NoPayloadSignal ? void : never
 
+/** Options for object-bound flow signal delivery. */
+export interface FlowSignalOptions {
+  /**
+   * Whether the configured Runtime Engine should be nudged immediately.
+   *
+   * Set to `false` to durably record the signal and resume later with
+   * `FlowHandle.resume(flowId)`.
+   *
+   */
+  readonly resume: boolean
+}
+
 /** Call arguments for payload-bearing versus no-payload signal sends. */
-export type FlowSignalPayloadArgs<TPayload> = [TPayload] extends [void] ? [] : [payload: TPayload]
+export type FlowSignalPayloadArgs<TPayload> = [TPayload] extends [void]
+  ? [options?: FlowSignalOptions]
+  : [payload: TPayload, options?: FlowSignalOptions]
 
 /** Untyped signal sends stay available for flows without a local signal map. */
-export type UntypedSignalPayloadArgs = [payload?: JsonValue]
+export type UntypedSignalPayloadArgs = [payload?: JsonValue, options?: FlowSignalOptions]
 
 const NO_PAYLOAD_SIGNAL = Object.freeze({
   _tag: NO_PAYLOAD_SIGNAL_TAG,

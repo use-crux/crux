@@ -286,6 +286,7 @@ export type {
   FlowResumeOptions,
   FlowRunOptions,
   FlowScope,
+  FlowSignalOptions,
   FlowResult,
   FlowSnapshot,
   FlowSummary,

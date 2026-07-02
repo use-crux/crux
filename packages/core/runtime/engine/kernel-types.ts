@@ -10,6 +10,7 @@
 import type { JsonValue } from '../../storage'
 import type { RuntimeEvent } from '../ports/events'
 import type { Lease } from '../ports/leases'
+import type { FlowSnapshot as RuntimeFlowSnapshot } from '../ports/state'
 import type {
   FlowId,
   RuntimeTargetId,
@@ -30,6 +31,16 @@ import type { WorkItem, WorkItemError } from './work'
 /** Result returned by a runtime target execution. */
 export type RuntimeTargetOutcome =
   | { readonly status: 'completed' }
+  | {
+      readonly status: 'completed'
+      /** Flow snapshot status to persist atomically with completed flow work. */
+      readonly flowSnapshot: RuntimeFlowSnapshot
+    }
+  | {
+      readonly status: 'suspended'
+      /** Flow suspension snapshot and waiter registrations to commit. */
+      readonly suspension: RecordSuspensionInput
+    }
   | { readonly status: 'blocked'; readonly error: WorkItemError }
 
 /** Execution context passed to a runtime target. */

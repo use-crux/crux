@@ -84,7 +84,9 @@ expectTypeOf<SignaledReviewSignalName>().toEqualTypeOf<'approval' | 'cancel'>()
 await signaledReview.run({ docId: 'doc_123' })
 await signaledReview.resume('flow_123')
 await signaledReview.signal('flow_123', 'approval', { approved: true })
+await signaledReview.signal('flow_123', 'approval', { approved: true }, { resume: false })
 await signaledReview.signal('flow_123', 'cancel')
+await signaledReview.signal('flow_123', 'cancel', { resume: false })
 
 // @ts-expect-error — payload-bearing signals require their payload.
 await signaledReview.signal('flow_123', 'approval')
@@ -92,5 +94,7 @@ await signaledReview.signal('flow_123', 'approval')
 await signaledReview.signal('flow_123', 'approval', { approved: 'yes' })
 // @ts-expect-error — noPayload() signals do not accept a payload.
 await signaledReview.signal('flow_123', 'cancel', {})
+// @ts-expect-error — signal options must name the resume behavior when present.
+await signaledReview.signal('flow_123', 'cancel', { other: false })
 // @ts-expect-error — typed signal maps reject unknown signal names.
 await signaledReview.signal('flow_123', 'approvl', { approved: true })

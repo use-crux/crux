@@ -19,7 +19,11 @@ import type {
   RecordSuspensionInput,
   RuntimeSuspendRegistration,
 } from './kernel-types'
-import { targetIdForNewWork, wakeEnvelopeForWork } from './kernel-shared'
+import {
+  isTerminalWork,
+  targetIdForNewWork,
+  wakeEnvelopeForWork,
+} from './kernel-shared'
 import { scheduleTimerInTransaction } from './kernel-timers'
 import { transition, type WorkItem } from './work'
 
@@ -43,35 +47,44 @@ export async function recordSuspension(
   input: RecordSuspensionInput,
 ): Promise<void> {
   await deps.store.transact(async (tx) => {
-    const current = await tx.state.getWork(input.workId, {
-      namespace: input.namespace,
-    })
-    if (current && current.status !== 'suspended') {
-      await tx.state.putWork(transition(current, { status: 'suspended' }))
-    }
+    await recordSuspensionInTransaction(tx, deps, input)
+  })
+}
 
-    const pendingSuspends = await input.suspends.reduce<
-      Promise<readonly RuntimePendingSuspend[]>
-    >(
-      async (previous, suspend) => [
-        ...(await previous),
-        await registerSuspend(tx, input, suspend),
-      ],
-      Promise.resolve([]),
-    )
+/** Persist a flow suspension inside an existing kernel transaction. */
+export async function recordSuspensionInTransaction(
+  tx: RuntimeStoreTransaction,
+  deps: EmitEventInTransactionDeps,
+  input: RecordSuspensionInput,
+): Promise<void> {
+  const current = await tx.state.getWork(input.workId, {
+    namespace: input.namespace,
+  })
+  if (current && current.status !== 'suspended') {
+    await tx.state.putWork(transition(current, { status: 'suspended' }))
+  }
 
-    await tx.state.putSnapshot({
-      flowId: input.flowId,
-      workId: input.workId,
-      targetId: input.targetId,
-      namespace: input.namespace,
-      status: 'suspended',
-      input: input.snapshot.input,
-      completedSteps: input.snapshot.completedSteps,
-      fingerprint: input.snapshot.fingerprint,
-      pendingSuspends,
-      updatedAt: deps.now(),
-    })
+  const pendingSuspends = await input.suspends.reduce<
+    Promise<readonly RuntimePendingSuspend[]>
+  >(
+    async (previous, suspend) => [
+      ...(await previous),
+      await registerSuspend(tx, input, suspend),
+    ],
+    Promise.resolve([]),
+  )
+
+  await tx.state.putSnapshot({
+    flowId: input.flowId,
+    workId: input.workId,
+    targetId: input.targetId,
+    namespace: input.namespace,
+    status: 'suspended',
+    input: input.snapshot.input,
+    completedSteps: input.snapshot.completedSteps,
+    fingerprint: input.snapshot.fingerprint,
+    pendingSuspends,
+    updatedAt: deps.now(),
   })
 }
 
@@ -173,25 +186,40 @@ async function fireWaiter(
     )
   }
 
-  const work = options.waiter.workId
-    ? await options.tx.state.setWorkPending(options.waiter.workId, {
+  if (options.waiter.workId) {
+    const idempotencyKey = flowEventResumeKey(
+      options.waiter.workId,
+      options.eventId,
+    )
+    const transitioned = await options.tx.state.setWorkPending(
+      options.waiter.workId,
+      {
         namespace: options.waiter.namespace,
         work: options.waiter.work,
-        idempotencyKey: flowEventResumeKey(
-          options.waiter.workId,
-          options.eventId,
-        ),
-      })
-    : await createUnownedWork(options)
+        idempotencyKey,
+      },
+    )
+    const wakeWork =
+      transitioned ??
+      (await options.tx.state.getWork(options.waiter.workId, {
+        namespace: options.waiter.namespace,
+      }))
+    if (!wakeWork || isTerminalWork(wakeWork)) return []
 
-  if (!work) return []
-  if (options.waiter.workId) {
     await options.tx.state.markSnapshotDelivered(options.waiter.workId, {
       namespace: options.waiter.namespace,
       waiterId: options.waiter.waiterId,
       eventId: options.eventId,
     })
+    return [
+      await options.tx.outbox.put({
+        ...wakeEnvelopeForWork(wakeWork),
+        idempotencyKey,
+      }),
+    ]
   }
+
+  const work = await createUnownedWork(options)
   return [await options.tx.outbox.put(wakeEnvelopeForWork(work))]
 }
 

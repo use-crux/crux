@@ -10,7 +10,13 @@
 import type { RetryOptions } from '../generation/retry'
 import type { JsonObject, JsonValue } from '../storage'
 import type { ZodType } from 'zod'
-import type { FlowSignalMap, FlowSignalPayload, FlowSignalPayloadArgs, UntypedSignalPayloadArgs } from './signals'
+import type {
+  FlowSignalMap,
+  FlowSignalOptions,
+  FlowSignalPayload,
+  FlowSignalPayloadArgs,
+  UntypedSignalPayloadArgs,
+} from './signals'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -99,9 +105,12 @@ export interface FlowHandle<T, TInput = void, TSignals extends FlowSignalMap | u
    * @param flowId — The ID of the suspended flow instance
    * @param signalName — The suspend point name to signal
    * @param payload — Optional JSON payload delivered to the suspend point
+   * @param options — Runtime delivery options. Use `{ resume: false }` to store the signal without nudging resume.
    */
   signal: FlowHandleSignal<TSignals>
 }
+
+export type { FlowSignalOptions }
 
 /** Options for `flow.suspend()`. */
 export interface SuspendOptions<T = unknown> {

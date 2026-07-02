@@ -356,6 +356,10 @@ export default config({
 });
 ```
 
+With a runtime configured, existing flow handles can persist `flow.suspend()`
+state in the Runtime Engine and auto-resume when `reviewFlow.signal(...)`
+delivers the matching signal event.
+
 Advanced and generated entry files can resolve a composer explicitly with
 `createRuntime({ runtime, targets })`. The `@use-crux/core/runtime/testing`
 subpath exposes the shared store and kernel conformance suites for adapter

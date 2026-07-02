@@ -14,6 +14,7 @@ import type {
   RuntimeTargetOutcome,
   RuntimeWakeResult,
 } from './kernel-types'
+import { recordSuspensionInTransaction } from './kernel-events'
 import {
   isTerminalWork,
   runtimeErrorMessage,
@@ -252,6 +253,20 @@ interface CompleteWorkOptions {
 
 async function completeWork(options: CompleteWorkOptions): Promise<void> {
   await options.store.transact(async (tx) => {
+    if (options.outcome.status === 'suspended') {
+      await recordSuspensionInTransaction(
+        tx,
+        { newWorkId: options.newWorkId, now: options.now },
+        options.outcome.suspension,
+      )
+      await tx.state.putIdempotencyKey({
+        namespace: options.work.namespace,
+        key: options.idempotencyKey,
+        completedAt: options.now(),
+      })
+      return
+    }
+
     const completed =
       options.outcome.status === 'completed'
         ? transition(options.work, { status: 'completed' })
@@ -259,6 +274,12 @@ async function completeWork(options: CompleteWorkOptions): Promise<void> {
             status: 'blocked',
             lastError: options.outcome.error,
           })
+    if (
+      options.outcome.status === 'completed' &&
+      'flowSnapshot' in options.outcome
+    ) {
+      await tx.state.putSnapshot(options.outcome.flowSnapshot)
+    }
     await putWorkWithIdleAccounting(
       tx,
       { newWorkId: options.newWorkId, now: options.now },
