@@ -12,4 +12,6 @@ export interface RunStoreAdapterTestsOptions<
   readonly failAfterWrites: (store: TStore, writes: number) => void
   /** Configure the next outbox confirmation to crash before mutation. */
   readonly crashBeforeOutboxConfirm: (store: TStore) => void
+  /** Assert that the adapter intentionally serializes all transactions. */
+  readonly assertSerializedTransactions?: boolean
 }

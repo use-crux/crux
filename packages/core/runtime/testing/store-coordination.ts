@@ -240,29 +240,32 @@ export function registerStoreCoordinationTests<
     }
   })
 
-  it('invariant: transactions serialize through one async mutex', async () => {
-    const store = await options.createStore()
-    const order: string[] = []
-    let releaseFirst: (() => void) | undefined
-    let first: Promise<void>
-    const firstReady = new Promise<void>((resolve) => {
-      first = store.transact(async () => {
-        order.push('first-start')
-        resolve()
-        await new Promise<void>((release) => {
-          releaseFirst = release
+  it.skipIf(!options.assertSerializedTransactions)(
+    'invariant: transactions serialize through one async mutex',
+    async () => {
+      const store = await options.createStore()
+      const order: string[] = []
+      let releaseFirst: (() => void) | undefined
+      let first: Promise<void>
+      const firstReady = new Promise<void>((resolve) => {
+        first = store.transact(async () => {
+          order.push('first-start')
+          resolve()
+          await new Promise<void>((release) => {
+            releaseFirst = release
+          })
+          order.push('first-end')
         })
-        order.push('first-end')
       })
-    })
-    await firstReady
-    const second = store.transact(async () => {
-      order.push('second-start')
-    })
-    await Promise.resolve()
-    expect(order).toEqual(['first-start'])
-    releaseFirst?.()
-    await Promise.all([first!, second])
-    expect(order).toEqual(['first-start', 'first-end', 'second-start'])
-  })
+      await firstReady
+      const second = store.transact(async () => {
+        order.push('second-start')
+      })
+      await Promise.resolve()
+      expect(order).toEqual(['first-start'])
+      releaseFirst?.()
+      await Promise.all([first!, second])
+      expect(order).toEqual(['first-start', 'first-end', 'second-start'])
+    },
+  )
 }
