@@ -39,3 +39,10 @@ export type {
 } from './engine/work'
 
 export type * from './ports'
+export type * from './store'
+
+export { inMemoryRuntimeStore } from './adapters/memory'
+export type {
+  InMemoryRuntimeStore,
+  InMemoryRuntimeStoreTesting,
+} from './adapters/memory'

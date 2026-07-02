@@ -10,11 +10,15 @@ import { expectTypeOf } from 'vitest'
 import type {
   EventCursor,
   FlowId,
+  InMemoryRuntimeStore,
   RuntimeTargetId,
+  RuntimeStoreAdapter,
   RuntimeWork,
   TaskId,
   WorkId,
 } from '@use-crux/core/runtime'
+import { inMemoryRuntimeStore } from '@use-crux/core/runtime'
+import { runStoreAdapterTests } from '@use-crux/core/runtime/testing'
 
 declare const workId: WorkId
 declare const flowId: FlowId
@@ -55,3 +59,17 @@ for (const work of workItems) {
 // @ts-expect-error Task work needs a task id, not a flow id.
 const badTaskWork: RuntimeWork = { kind: 'task.run', taskId: flowId, targetId }
 void badTaskWork
+
+expectTypeOf(inMemoryRuntimeStore()).toMatchTypeOf<RuntimeStoreAdapter>()
+
+runStoreAdapterTests({
+  name: 'type-only-memory-store',
+  createStore: () => inMemoryRuntimeStore(),
+  failAfterWrites: (store, writes) => {
+    expectTypeOf(store).toEqualTypeOf<InMemoryRuntimeStore>()
+    expectTypeOf(writes).toEqualTypeOf<number>()
+  },
+  crashBeforeOutboxConfirm: (store) => {
+    expectTypeOf(store).toEqualTypeOf<InMemoryRuntimeStore>()
+  },
+})

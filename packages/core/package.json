@@ -68,6 +68,11 @@
       "import": "./runtime/public.ts",
       "require": "./runtime/public.ts"
     },
+    "./runtime/testing": {
+      "types": "./runtime/testing/index.ts",
+      "import": "./runtime/testing/index.ts",
+      "require": "./runtime/testing/index.ts"
+    },
     "./observability": {
       "types": "./observability/index.ts",
       "import": "./observability/index.ts",
@@ -223,6 +228,9 @@
       ],
       "runtime": [
         "runtime/public.ts"
+      ],
+      "runtime/testing": [
+        "runtime/testing/index.ts"
       ],
       "observability": [
         "observability/index.ts"
