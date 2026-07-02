@@ -345,17 +345,18 @@ Disabled input/output artifacts are still emitted as references with `sizeBytes`
 
 `@use-crux/core` exposes SDK-agnostic primitives through focused subpaths:
 
-| Import                         | Area                                                                                |
-| ------------------------------ | ----------------------------------------------------------------------------------- |
-| `@use-crux/core`               | Prompts, contexts, config, runtime helpers, common types.                           |
-| `@use-crux/core/memory`        | Memory blocks, stores, capture, recall, and compaction hooks.                       |
-| `@use-crux/core/retrieval`     | Retrievers, rerankers, grounding inputs, and RAG pipelines.                         |
-| `@use-crux/core/safety`        | Guardrails, constraints, safety plugins, and validation retry.                      |
-| `@use-crux/core/quality`       | Evaluations, suites, assertions, scorers, gates, variants, and baselines.           |
-| `@use-crux/core/agent`         | Agents, blackboards, handoffs, delegates, parallel, pipeline, consensus, and swarm. |
-| `@use-crux/core/flow`          | Suspendable typed workflows.                                                        |
-| `@use-crux/core/observability` | Canonical graph records, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model.  |
-| `@use-crux/core/project-index` | Public Project Index contracts for local devtools and source intelligence.          |
+| Import                         | Area                                                                                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@use-crux/core`               | Prompts, contexts, config, runtime helpers, common types.                                                                                    |
+| `@use-crux/core/memory`        | Memory blocks, stores, capture, recall, and compaction hooks.                                                                                |
+| `@use-crux/core/retrieval`     | Retrievers, rerankers, grounding inputs, and RAG pipelines.                                                                                  |
+| `@use-crux/core/safety`        | Guardrails, constraints, safety plugins, and validation retry.                                                                               |
+| `@use-crux/core/quality`       | Evaluations, suites, assertions, scorers, gates, variants, and baselines.                                                                    |
+| `@use-crux/core/agent`         | Agents, blackboards, handoffs, delegates, parallel, pipeline, consensus, and swarm.                                                          |
+| `@use-crux/core/flow`          | Suspendable typed workflows.                                                                                                                 |
+| `@use-crux/core/runtime`       | Runtime Engine port contracts, diagnostics, wake envelopes, and pure retry/state helpers.                                                    |
+| `@use-crux/core/observability` | Canonical graph records, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model. |
+| `@use-crux/core/project-index` | Public Project Index contracts for local devtools and source intelligence.                                                                   |
 
 See the full [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) for every subpath and API.
 
