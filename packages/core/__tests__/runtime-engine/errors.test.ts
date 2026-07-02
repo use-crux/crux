@@ -4,6 +4,7 @@ import {
   RUNTIME_ERROR_CODES,
   createRuntimeError,
 } from '../../runtime/engine/errors'
+import { runtimeRequiredError } from '../../runtime/api/runtime-required'
 
 describe('CruxRuntimeError', () => {
   it('renders every public error code with the six diagnostic contract elements', () => {
@@ -37,5 +38,23 @@ describe('CruxRuntimeError', () => {
         `Docs: https://usecrux.dev/docs/errors/${code}`,
       )
     }
+  })
+
+  it('renders the standard missing-runtime template for runtime-bound APIs', () => {
+    const error = runtimeRequiredError({ api: 'flow.waitFor()' })
+
+    expect(error.code).toBe('RUNTIME_REQUIRED')
+    expect(error.message).toContain(
+      'flow.waitFor() requires a Crux runtime engine.',
+    )
+    expect(error.message).toContain(
+      'This flow can still use flow.suspend() with manual resume:',
+    )
+    expect(error.message).toContain(
+      'await reviewFlow.signal(flowId, "approval", payload)',
+    )
+    expect(error.message).toContain(
+      'runtime: serverless({ store: postgres(), wake: qstash() })',
+    )
   })
 })

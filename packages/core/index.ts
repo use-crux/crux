@@ -255,6 +255,7 @@ export type {
   CruxLintSelectedProfile,
   CruxObservabilityConfig,
   CruxPersistenceConfig,
+  CruxRuntimeConfig,
 } from "./runtime";
 export type { QualityConfig } from "./quality/config";
 export type { PromptRegistry } from "./runtime";

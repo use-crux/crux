@@ -5,6 +5,7 @@
  */
 
 import type { RuntimeTargetId } from '../ports/ids'
+import type { RuntimeWork } from '../ports/work'
 import type { WakeEnvelope } from './envelope'
 import { createRuntimeError } from './errors'
 import type { WorkItem } from './work'
@@ -48,5 +49,18 @@ export function targetNotFoundError(
     whatStillWorks:
       'Other runtime targets in the same entry file can still run.',
     nextStep: `Export target \`${target}\` from the runtime entry file or run \`crux runtime generate\`.`,
+  })
+}
+
+/** Return the target id for work kinds that can mint a fresh work item. */
+export function targetIdForNewWork(work: RuntimeWork): RuntimeTargetId {
+  if (work.kind === 'task.run') return work.targetId
+  throw createRuntimeError({
+    code: 'CAPABILITY_MISSING',
+    whatFailed: `Runtime work kind \`${work.kind}\` cannot mint a new work item yet.`,
+    why: 'Only task.run work carries a target id for new work creation in this phase.',
+    whatStillWorks: 'Owned flow waiters and timers can still resume existing work items.',
+    nextStep:
+      'Add the target identity to the future work kind before allowing unowned firing.',
   })
 }

@@ -4,16 +4,14 @@
  * @module
  */
 
-import type { EventCursor, RuntimeTargetId, WorkId } from '../ports/ids'
+import type { EventCursor, WorkId } from '../ports/ids'
 import type { RuntimePendingSuspend } from '../ports/state'
 import type { RuntimeWaiter } from '../ports/waiters'
-import type { RuntimeWork } from '../ports/work'
 import type {
   RuntimeOutboxItem,
   RuntimeStoreAdapter,
   RuntimeStoreTransaction,
 } from '../store'
-import { createRuntimeError } from './errors'
 import { flowEventResumeKey, taskRunKey } from './idempotency'
 import type {
   EmitEventInput,
@@ -21,17 +19,22 @@ import type {
   RecordSuspensionInput,
   RuntimeSuspendRegistration,
 } from './kernel-types'
-import { wakeEnvelopeForWork } from './kernel-shared'
+import { targetIdForNewWork, wakeEnvelopeForWork } from './kernel-shared'
+import { scheduleTimerInTransaction } from './kernel-timers'
 import { transition, type WorkItem } from './work'
 
 /** Dependencies for event/suspension kernel operations. */
-export interface KernelEventDeps {
-  /** Durable runtime store. */
-  readonly store: RuntimeStoreAdapter
+export interface EmitEventInTransactionDeps {
   /** Kernel-owned work id generator for unowned waiter firings. */
   readonly newWorkId: () => WorkId
   /** Current time source. */
   readonly now: () => Date
+}
+
+/** Dependencies for event/suspension kernel operations. */
+export interface KernelEventDeps extends EmitEventInTransactionDeps {
+  /** Durable runtime store. */
+  readonly store: RuntimeStoreAdapter
 }
 
 /** Persist a flow suspension and owned waiter registrations atomically. */
@@ -77,27 +80,36 @@ export async function emitEvent(
   deps: KernelEventDeps,
   input: EmitEventInput,
 ): Promise<EmitEventResult> {
-  return await deps.store.transact(async (tx) => {
-    const event = await tx.events.append({
-      namespace: input.namespace,
-      name: input.name,
-      payload: input.payload,
-      eventId: input.eventId,
-    })
-    const matched = await tx.waiters.resolve(input.name, input.payload, {
-      namespace: input.namespace,
-    })
-    const outboxItems = await matched.reduce<
-      Promise<readonly RuntimeOutboxItem[]>
-    >(
-      async (previous, waiter) => [
-        ...(await previous),
-        ...(await fireWaiter({ tx, deps, waiter, eventId: event.eventId })),
-      ],
-      Promise.resolve([]),
-    )
-    return { event, outboxItems }
+  return await deps.store.transact((tx) =>
+    emitEventInTransaction(tx, deps, input),
+  )
+}
+
+/** Append an event and fire matching waiters inside an existing transaction. */
+export async function emitEventInTransaction(
+  tx: RuntimeStoreTransaction,
+  deps: EmitEventInTransactionDeps,
+  input: EmitEventInput,
+): Promise<EmitEventResult> {
+  const event = await tx.events.append({
+    namespace: input.namespace,
+    name: input.name,
+    payload: input.payload,
+    eventId: input.eventId,
   })
+  const matched = await tx.waiters.resolve(input.name, input.payload, {
+    namespace: input.namespace,
+  })
+  const outboxItems = await matched.reduce<
+    Promise<readonly RuntimeOutboxItem[]>
+  >(
+    async (previous, waiter) => [
+      ...(await previous),
+      ...(await fireWaiter({ tx, deps, waiter, eventId: event.eventId })),
+    ],
+    Promise.resolve([]),
+  )
+  return { event, outboxItems }
 }
 
 async function registerSuspend(
@@ -111,13 +123,34 @@ async function registerSuspend(
     match: suspend.match,
     workId: input.workId,
     work: { kind: 'flow.resume', flowId: input.flowId },
+    timeoutAt: suspend.timeoutAt,
   })
-  return { label: suspend.label, waiterId: waiter.waiterId }
+  const timer = suspend.timeoutAt
+    ? await scheduleTimerInTransaction(tx, {
+        namespace: input.namespace,
+        fireAt: suspend.timeoutAt,
+        workId: input.workId,
+        waiterId: waiter.waiterId,
+        work: {
+          kind: 'flow.timeout',
+          flowId: input.flowId,
+          suspendPoint: suspend.label,
+        },
+      })
+    : undefined
+  if (timer) {
+    await tx.waiters.attachTimer(waiter.waiterId, timer.timerId)
+  }
+  return {
+    label: suspend.label,
+    waiterId: waiter.waiterId,
+    timerId: timer?.timerId,
+  }
 }
 
 interface FireWaiterOptions {
   readonly tx: RuntimeStoreTransaction
-  readonly deps: KernelEventDeps
+  readonly deps: EmitEventInTransactionDeps
   readonly waiter: RuntimeWaiter
   readonly eventId: EventCursor
 }
@@ -174,17 +207,5 @@ async function createUnownedWork(
     targetId,
     idempotencyKey: taskRunKey(workId),
     now: options.deps.now(),
-  })
-}
-
-function targetIdForNewWork(work: RuntimeWork): RuntimeTargetId {
-  if (work.kind === 'task.run') return work.targetId
-  throw createRuntimeError({
-    code: 'CAPABILITY_MISSING',
-    whatFailed: `Runtime work kind \`${work.kind}\` cannot mint a new work item yet.`,
-    why: 'Only task.run work carries a target id for new work creation in this phase.',
-    whatStillWorks: 'Owned flow waiters can still resume existing work items.',
-    nextStep:
-      'Add the target identity to the future work kind before allowing unowned waiter firing.',
   })
 }

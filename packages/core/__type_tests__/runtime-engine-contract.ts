@@ -11,7 +11,9 @@ import type {
   EventCursor,
   FlowId,
   InMemoryRuntimeStore,
+  ResolvedRuntimeEngine,
   RuntimeKernel,
+  RuntimeEngineDefinition,
   RuntimePendingSuspend,
   RuntimeTargetId,
   RuntimeStoreAdapter,
@@ -21,10 +23,14 @@ import type {
   WorkId,
 } from '@use-crux/core/runtime'
 import {
+  createRuntime,
   createRuntimeKernel,
   flowEventResumeKey,
   inMemoryRuntimeStore,
+  node,
+  runtimeRequiredError,
   taskRunKey,
+  waiterTimeoutKey,
 } from '@use-crux/core/runtime'
 import {
   runRuntimeEngineAdapterTests,
@@ -97,6 +103,29 @@ const kernel = createRuntimeKernel({
 expectTypeOf(kernel).toEqualTypeOf<RuntimeKernel>()
 expectTypeOf(flowEventResumeKey(workId, cursor)).toEqualTypeOf<string>()
 expectTypeOf(taskRunKey(workId)).toEqualTypeOf<string>()
+expectTypeOf(waiterTimeoutKey(waiterId)).toEqualTypeOf<string>()
+
+const runtimeDefinition = node({
+  store: inMemoryRuntimeStore(),
+  namespace: 'tenant-a',
+  autoStartMaintenance: false,
+})
+expectTypeOf(runtimeDefinition).toMatchTypeOf<
+  RuntimeEngineDefinition<InMemoryRuntimeStore>
+>()
+const resolvedRuntime = createRuntime({
+  runtime: runtimeDefinition,
+  targets: {},
+  newWorkId: () => workId,
+  startMaintenance: false,
+})
+expectTypeOf(resolvedRuntime).toMatchTypeOf<
+  ResolvedRuntimeEngine<InMemoryRuntimeStore>
+>()
+expectTypeOf(resolvedRuntime.store).toEqualTypeOf<InMemoryRuntimeStore>()
+expectTypeOf(runtimeRequiredError({ api: 'flow.waitFor()' }).code).toEqualTypeOf<
+  'RUNTIME_REQUIRED'
+>()
 
 runStoreAdapterTests({
   name: 'type-only-memory-store',

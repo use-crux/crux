@@ -20,6 +20,7 @@ import type { QualityConfig } from '../quality/config'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
 import type { RecordStore } from '../storage'
 import type { TokenizerFn } from '../shared/tokenizer'
+import type { RuntimeEngineDefinition } from './api/create-runtime'
 import type { PromptMiddleware } from './types'
 
 export type { CruxLintConfig, CruxLintRuleConfig, CruxLintSelectedProfile } from '../lint'
@@ -223,6 +224,15 @@ export interface CruxGenerationConfig {
 }
 
 /**
+ * Runtime Engine configuration.
+ *
+ * Use a composer such as `node()` or a future `serverless()`/`convex()` adapter
+ * to declare how durable work, wake delivery, timers, and maintenance should
+ * run for runtime-bound APIs.
+ */
+export type CruxRuntimeConfig = RuntimeEngineDefinition
+
+/**
  * Configuration object for `config()`.
  *
  * The top-level keys are domain names. Config controls explicit policy,
@@ -252,6 +262,8 @@ export interface CruxConfig {
   readonly experimental?: CruxExperimentalConfig
   /** Explicit persistence backend choices. */
   readonly persistence?: CruxPersistenceConfig
+  /** Durable Runtime Engine composer for runtime-bound APIs. */
+  readonly runtime?: CruxRuntimeConfig
   /** Cross-cutting generation behavior. Model choices belong in eval/agent code. */
   readonly generation?: CruxGenerationConfig
   /** Non-default local, tunnel, remote, or bridge devtools behavior. */

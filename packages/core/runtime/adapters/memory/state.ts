@@ -4,6 +4,7 @@ import type { FlowId, WorkId } from '../../ports/ids'
 import type {
   FlowSnapshot,
   IdempotencyRecord,
+  ListWorkOptions,
   MarkSnapshotDeliveredOptions,
   NewWorkItem,
   RuntimePendingSuspend,
@@ -40,10 +41,14 @@ export function createMemoryStatePort(
         maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
         notBefore: input.notBefore ? new Date(input.notBefore) : undefined,
         idempotencyKey: input.idempotencyKey,
+        idleScope: input.idleScope,
         createdAt: now,
         updatedAt: now,
       })
       data.work.set(key, stored)
+      if (input.idleScope) {
+        incrementCounter(data, input.namespace, input.idleScope)
+      }
       return cloneWorkItem(stored)
     },
 
@@ -58,6 +63,19 @@ export function createMemoryStatePort(
     async putWork(work: WorkItem): Promise<void> {
       recordWrite?.()
       data.work.set(scopedKey(work.namespace, work.workId), cloneWorkItem(work))
+    },
+
+    async listWork(options: ListWorkOptions): Promise<readonly WorkItem[]> {
+      const work = [...data.work.values()]
+        .filter(
+          (item) =>
+            item.namespace === options.namespace &&
+            item.status === options.status &&
+            (options.updatedBefore === undefined ||
+              item.updatedAt.getTime() < options.updatedBefore.getTime()),
+        )
+        .slice(0, options.limit)
+      return work.map((item) => cloneWorkItem(item))
     },
 
     async setWorkPending(
@@ -137,6 +155,30 @@ export function createMemoryStatePort(
       recordWrite?.()
       data.idempotency.set(key, cloneIdempotencyRecord(record))
     },
+
+    async incrementIdle(namespace: string, scope: string): Promise<number> {
+      recordWrite?.()
+      return incrementCounter(data, namespace, scope)
+    },
+
+    async decrementIdle(namespace: string, scope: string): Promise<number> {
+      const key = scopedKey(namespace, scope)
+      const next = (data.idleCounters.get(key) ?? 0) - 1
+      if (next < 0) {
+        throw new Error(`Runtime idle counter ${scope} went negative.`)
+      }
+      recordWrite?.()
+      if (next === 0) {
+        data.idleCounters.delete(key)
+      } else {
+        data.idleCounters.set(key, next)
+      }
+      return next
+    },
+
+    async getIdleCount(namespace: string, scope: string): Promise<number> {
+      return data.idleCounters.get(scopedKey(namespace, scope)) ?? 0
+    },
   }
 }
 
@@ -151,6 +193,7 @@ export function cloneWorkItem(work: WorkItem): WorkItem {
     maxAttempts: work.maxAttempts,
     notBefore: work.notBefore ? new Date(work.notBefore) : undefined,
     idempotencyKey: work.idempotencyKey,
+    idleScope: work.idleScope,
     leaseToken: work.leaseToken,
     lastError: work.lastError
       ? {
@@ -162,6 +205,17 @@ export function cloneWorkItem(work: WorkItem): WorkItem {
     createdAt: new Date(work.createdAt),
     updatedAt: new Date(work.updatedAt),
   })
+}
+
+function incrementCounter(
+  data: MemoryRuntimeData,
+  namespace: string,
+  scope: string,
+): number {
+  const key = scopedKey(namespace, scope)
+  const next = (data.idleCounters.get(key) ?? 0) + 1
+  data.idleCounters.set(key, next)
+  return next
 }
 
 export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {

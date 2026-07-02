@@ -43,6 +43,7 @@ export async function enqueueTask(
       targetId: input.targetId,
       idempotencyKey,
       notBefore: input.notBefore,
+      idleScope: input.idleScope,
       now: deps.now(),
     })
     await tx.outbox.put(wakeEnvelopeForWork(item))

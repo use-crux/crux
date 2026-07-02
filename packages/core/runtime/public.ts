@@ -40,9 +40,13 @@ export type {
 
 export { createRuntimeKernel, wakeEnvelopeForWork } from './engine/kernel'
 export type {
+  CancelWorkInput,
+  CancelWorkResult,
   EmitEventInput,
   EmitEventResult,
   EnqueueTaskInput,
+  MaintenanceTickOptions,
+  MaintenanceTickResult,
   RecordSuspensionInput,
   RuntimeKernel,
   RuntimeKernelOptions,
@@ -53,7 +57,31 @@ export type {
   RuntimeTargetMap,
   RuntimeTargetOutcome,
   RuntimeWakeResult,
+  ScanTimersOptions,
+  ScanTimersResult,
+  ScheduleTimerInput,
 } from './engine/kernel'
+
+export { createRuntime } from './api/create-runtime'
+export type {
+  CreateRuntimeOptions,
+  ResolvedRuntimeEngine,
+  RuntimeEngineDefinition,
+  RuntimeMaintenanceController,
+  RuntimeMaintenanceHandle,
+  RuntimeMaintenanceLoopOptions,
+  RuntimeMaintenanceTickOptions,
+  RuntimeWakeFactoryInput,
+} from './api/create-runtime'
+
+export { runtimeRequiredError } from './api/runtime-required'
+export type {
+  RuntimeRequiredError,
+  RuntimeRequiredErrorOptions,
+} from './api/runtime-required'
+
+export { node } from './composers/node'
+export type { NodeRuntimeOptions } from './composers/node'
 
 export { createOutboxDispatcher, dispatchBatch } from './engine/outbox'
 export type {
@@ -68,6 +96,7 @@ export {
   flowSignalResumeKey,
   taskRunKey,
   timerKey,
+  waiterTimeoutKey,
   watchDeliverKey,
 } from './engine/idempotency'
 

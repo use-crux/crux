@@ -51,6 +51,8 @@ export interface WorkItem {
   readonly notBefore?: Date
   /** Stable idempotency key for the current delivery. */
   readonly idempotencyKey: string
+  /** Scoped-idle counter group this item keeps busy until terminal. */
+  readonly idleScope?: string
   /** Lease token while a worker owns this item. */
   readonly leaseToken?: LeaseToken
   /** Last user-facing runtime error attached to this item. */

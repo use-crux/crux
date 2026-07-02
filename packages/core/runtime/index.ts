@@ -35,6 +35,7 @@ export type {
   CruxLintSelectedProfile,
   CruxObservabilityConfig,
   CruxPersistenceConfig,
+  CruxRuntimeConfig,
 } from './config'
 export type { PromptRegistry } from './configure'
 

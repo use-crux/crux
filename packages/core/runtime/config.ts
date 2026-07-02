@@ -56,6 +56,7 @@ export type {
   CruxLintSelectedProfile,
   CruxObservabilityConfig,
   CruxPersistenceConfig,
+  CruxRuntimeConfig,
 } from './config-types'
 
 /**

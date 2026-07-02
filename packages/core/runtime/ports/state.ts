@@ -19,6 +19,7 @@ import type {
   WorkId,
 } from './ids'
 import type { RuntimeWork } from './work'
+import type { WorkStatus } from '../engine/work'
 
 /** Flow snapshot shape persisted by runtime-backed flow replay. */
 export interface FlowSnapshot {
@@ -101,6 +102,8 @@ export interface NewWorkItem {
   readonly maxAttempts?: number
   /** Timestamp override for deterministic tests. Defaults to now. */
   readonly now?: Date
+  /** Scoped-idle counter group this work keeps busy until terminal. */
+  readonly idleScope?: string
 }
 
 /** Options for moving an existing suspended item back to pending. */
@@ -117,6 +120,18 @@ export interface MarkSnapshotDeliveredOptions extends RuntimeStateReadOptions {
   readonly waiterId: WaiterId
   /** Durable event cursor containing the delivered payload. */
   readonly eventId: EventCursor
+}
+
+/** Bounded work-listing options used by kernel-owned maintenance. */
+export interface ListWorkOptions {
+  /** Runtime namespace to list within. */
+  readonly namespace: string
+  /** Work status to list. */
+  readonly status: WorkStatus
+  /** Only include records updated before this time. */
+  readonly updatedBefore?: Date
+  /** Maximum number of records to return. */
+  readonly limit?: number
 }
 
 /** Durable state port used by the runtime kernel. */
@@ -148,6 +163,14 @@ export interface RuntimeStatePort {
    * Adapters must not perform their own status transitions or retry decisions.
    */
   putWork(work: WorkItem): Promise<void>
+
+  /**
+   * List bounded work records for kernel-owned maintenance.
+   *
+   * Adapters only filter and return records; expiry-vs-failure decisions,
+   * cancellation legality, retry, and retention policy stay in the kernel.
+   */
+  listWork(options: ListWorkOptions): Promise<readonly WorkItem[]>
 
   /**
    * Move an existing suspended work item back to pending.
@@ -206,4 +229,28 @@ export interface RuntimeStatePort {
    * crash can never record one without the other.
    */
   putIdempotencyKey(record: IdempotencyRecord): Promise<void>
+
+  /**
+   * Increment a scoped-idle counter and return the new count.
+   *
+   * Called from work creation transactions when a newly minted item carries an
+   * idle scope. The counter represents non-terminal work in that scope.
+   */
+  incrementIdle(namespace: string, scope: string): Promise<number>
+
+  /**
+   * Decrement a scoped-idle counter and return the new count.
+   *
+   * Called by kernel terminal transitions. Implementations should reject
+   * negative counts because that indicates a kernel accounting bug.
+   */
+  decrementIdle(namespace: string, scope: string): Promise<number>
+
+  /**
+   * Read the current scoped-idle counter.
+   *
+   * Used by future `untilIdle` registration to avoid lost wakeups when the
+   * scope is already idle.
+   */
+  getIdleCount(namespace: string, scope: string): Promise<number>
 }

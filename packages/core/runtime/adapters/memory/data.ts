@@ -18,6 +18,7 @@ export interface MemoryRuntimeData {
   timers: Map<string, RuntimeTimerRecord>
   timerDuplicateKeys: Map<string, RuntimeTimerRecord>
   outbox: Map<string, RuntimeOutboxItem>
+  idleCounters: Map<string, number>
   nextEventId: number
   nextWaiterId: number
   nextLeaseId: number
@@ -37,6 +38,7 @@ export function createMemoryRuntimeData(): MemoryRuntimeData {
     timers: new Map(),
     timerDuplicateKeys: new Map(),
     outbox: new Map(),
+    idleCounters: new Map(),
     nextEventId: 1,
     nextWaiterId: 1,
     nextLeaseId: 1,
@@ -57,6 +59,7 @@ export function cloneMemoryRuntimeData(data: MemoryRuntimeData): MemoryRuntimeDa
     timers: new Map(data.timers),
     timerDuplicateKeys: new Map(data.timerDuplicateKeys),
     outbox: new Map(data.outbox),
+    idleCounters: new Map(data.idleCounters),
     nextEventId: data.nextEventId,
     nextWaiterId: data.nextWaiterId,
     nextLeaseId: data.nextLeaseId,
@@ -79,6 +82,7 @@ export function replaceMemoryRuntimeData(
   target.timers = source.timers
   target.timerDuplicateKeys = source.timerDuplicateKeys
   target.outbox = source.outbox
+  target.idleCounters = source.idleCounters
   target.nextEventId = source.nextEventId
   target.nextWaiterId = source.nextWaiterId
   target.nextLeaseId = source.nextLeaseId

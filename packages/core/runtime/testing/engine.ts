@@ -9,11 +9,12 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import type { RuntimeTargetId, TaskId } from '../ports'
+import type { FlowId, RuntimeTargetId, TaskId, TimerId, WaiterId, WorkId } from '../ports'
 import type { RuntimeStoreAdapter } from '../store'
 import type { RuntimeKernel } from '../engine/kernel'
 import { wakeEnvelopeForWork } from '../engine/kernel'
 import { createOutboxDispatcher } from '../engine/outbox'
+import type { WorkItem } from '../engine/work'
 
 /** Harness supplied by a runtime engine adapter conformance test. */
 export interface RuntimeEngineAdapterTestHarness<
@@ -93,5 +94,88 @@ export function runRuntimeEngineAdapterTests<
         lastError: { code: 'TARGET_NOT_FOUND' },
       })
     })
+
+    it('invariant: timers mint task work, scoped idle reaches zero, and cancellation owns registrations', async () => {
+      const harness = await options.createHarness()
+      const dueAt = new Date('2026-07-02T00:00:10.000Z')
+
+      await harness.kernel.scheduleTimer({
+        namespace: 'tenant-a',
+        fireAt: dueAt,
+        work: {
+          kind: 'task.run',
+          taskId: harness.taskId,
+          targetId: harness.targetId,
+        },
+        idleScope: 'flow:flow_1',
+      })
+      await expect(
+        harness.kernel.scanTimers({ namespace: 'tenant-a', now: dueAt }),
+      ).resolves.toMatchObject({ fired: 1, skipped: 0 })
+      await createOutboxDispatcher({
+        store: harness.store,
+        deliver: (envelope) =>
+          harness.kernel.handleWake(envelope).then(() => {}),
+      }).nudge()
+
+      await expect(harness.readExecutionCount()).resolves.toBe(1)
+      await expect(
+        harness.store.state.getIdleCount('tenant-a', 'flow:flow_1'),
+      ).resolves.toBe(0)
+
+      await harness.store.state.putWork(makeSuspendedFlowWork())
+      await harness.kernel.recordSuspension({
+        namespace: 'tenant-a',
+        workId: 'work_flow_1' as WorkId,
+        flowId: 'flow_1' as FlowId,
+        targetId: 'review' as RuntimeTargetId,
+        snapshot: { input: {}, completedSteps: {}, fingerprint: [] },
+        suspends: [
+          {
+            label: 'approval',
+            eventName: 'document.approved',
+            match: {},
+            timeoutAt: new Date('2026-07-02T00:01:00.000Z'),
+          },
+        ],
+      })
+
+      await expect(
+        harness.kernel.cancelWork({
+          namespace: 'tenant-a',
+          workId: 'work_flow_1' as WorkId,
+        }),
+      ).resolves.toEqual({ cancelled: true })
+      await expect(
+        harness.store.waiters.transition(
+          'waiter_1' as WaiterId,
+          'armed',
+          'fired',
+        ),
+      ).resolves.toBe(false)
+      await expect(
+        harness.store.timers.transition(
+          'timer_1' as TimerId,
+          'scheduled',
+          'fired',
+        ),
+      ).resolves.toBe(false)
+    })
   })
+}
+
+function makeSuspendedFlowWork(): WorkItem {
+  const now = new Date('2026-07-02T00:00:00.000Z')
+  return {
+    workId: 'work_flow_1' as WorkId,
+    namespace: 'tenant-a',
+    work: { kind: 'flow.resume', flowId: 'flow_1' as FlowId },
+    targetId: 'review' as RuntimeTargetId,
+    status: 'leased',
+    attempt: 1,
+    maxAttempts: 8,
+    idempotencyKey: 'resume:work_flow_1:start',
+    createdAt: now,
+    updatedAt: now,
+  }
 }

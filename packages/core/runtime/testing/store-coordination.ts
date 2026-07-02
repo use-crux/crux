@@ -54,6 +54,75 @@ export function registerStoreCoordinationTests<
     ).resolves.toEqual([])
   })
 
+  it('invariant: owned waiter and timer queries are scoped by work and timeout eligibility', async () => {
+    const store = await options.createStore()
+    const dueAt = new Date('2026-07-02T00:00:10.000Z')
+    const waiter = await store.waiters.register({
+      namespace: 'tenant-a',
+      eventName: 'document.approved',
+      match: {},
+      workId: 'work_flow_1' as WorkId,
+      work: { kind: 'flow.timeout', flowId: 'flow_1' as FlowId, suspendPoint: 'approval' },
+      timeoutAt: dueAt,
+    })
+    await store.waiters.register({
+      namespace: 'tenant-b',
+      eventName: 'document.approved',
+      match: {},
+      workId: 'work_flow_1' as WorkId,
+      work: { kind: 'flow.resume', flowId: 'flow_2' as FlowId },
+      timeoutAt: dueAt,
+    })
+    const timer = await store.timers.put({
+      namespace: 'tenant-a',
+      fireAt: dueAt,
+      workId: 'work_flow_1' as WorkId,
+      waiterId: waiter.waiterId,
+      work: { kind: 'flow.timeout', flowId: 'flow_1' as FlowId, suspendPoint: 'approval' },
+    })
+    await store.waiters.attachTimer(waiter.waiterId, timer.timerId)
+
+    await expect(
+      store.waiters.listByWork('work_flow_1' as WorkId),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        waiterId: waiter.waiterId,
+        timerId: timer.timerId,
+      }),
+      expect.objectContaining({ namespace: 'tenant-b' }),
+    ])
+    await expect(
+      store.timers.listByWork('work_flow_1' as WorkId),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        timerId: timer.timerId,
+        waiterId: waiter.waiterId,
+      }),
+    ])
+    await expect(
+      store.waiters.claimExpired({
+        namespace: 'tenant-a',
+        now: new Date('2026-07-02T00:00:09.999Z'),
+      }),
+    ).resolves.toEqual([])
+    await expect(
+      store.waiters.claimExpired({
+        namespace: 'tenant-a',
+        now: dueAt,
+        limit: 1,
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        waiterId: waiter.waiterId,
+        timerId: timer.timerId,
+      }),
+    ])
+    await store.waiters.transition(waiter.waiterId, 'armed', 'timed-out')
+    await expect(
+      store.waiters.claimExpired({ namespace: 'tenant-a', now: dueAt }),
+    ).resolves.toEqual([])
+  })
+
   it('invariant: leases exclude concurrent owners and expire cleanly', async () => {
     vi.useFakeTimers()
     try {

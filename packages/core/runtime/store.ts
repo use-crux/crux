@@ -12,7 +12,7 @@
 import type { WakeEnvelope } from './engine/envelope'
 import type { DurableEventPort } from './ports/events'
 import type { LeasePort } from './ports/leases'
-import type { TimerId, WorkId } from './ports/ids'
+import type { TimerId, WaiterId, WorkId } from './ports/ids'
 import type { RuntimeStatePort } from './ports/state'
 import type { RuntimeWork } from './ports/work'
 import type { RuntimeWaiter, WaiterPort } from './ports/waiters'
@@ -31,6 +31,10 @@ export interface NewRuntimeTimerRecord {
   readonly fireAt: Date
   /** Owning suspended work item; absent means firing mints new work. */
   readonly workId?: WorkId
+  /** Linked waiter whose timeout race must be resolved when this timer fires. */
+  readonly waiterId?: WaiterId
+  /** Scoped-idle counter group to stamp onto work minted by this timer. */
+  readonly idleScope?: string
   /** Work to enqueue when the timer fires. */
   readonly work: RuntimeWork
   /** Optional stable duplicate scheduling key. */
@@ -65,6 +69,8 @@ export interface RuntimeTimerStorePort {
   claimDue(
     options: ClaimDueTimersOptions,
   ): Promise<readonly RuntimeTimerRecord[]>
+  /** List timer records owned by one work item for cancellation and retention. */
+  listByWork(workId: WorkId): Promise<readonly RuntimeTimerRecord[]>
   /** Move a timer through one compare-and-set transition. */
   transition(
     timerId: TimerId,
@@ -117,12 +123,28 @@ export interface RuntimeOutboxPort {
 
 /** Waiter store operations needed in addition to the public waiter port. */
 export interface RuntimeWaiterStorePort extends WaiterPort {
+  /** Attach a timeout timer after both waiter and timer ids exist in a transaction. */
+  attachTimer(waiterId: WaiterId, timerId: TimerId): Promise<void>
+  /** List waiter records owned by one work item for cancellation and retention. */
+  listByWork(workId: WorkId): Promise<readonly RuntimeWaiter[]>
+  /** Claim armed waiters whose timeout passed when no native timer fired them. */
+  claimExpired(options: ClaimExpiredWaitersOptions): Promise<readonly RuntimeWaiter[]>
   /** Move a waiter through one compare-and-set race transition. */
   transition(
     waiterId: RuntimeWaiter['waiterId'],
     from: RuntimeWaiter['state'],
     to: RuntimeWaiter['state'],
   ): Promise<boolean>
+}
+
+/** Options for claiming expired waiter registrations. */
+export interface ClaimExpiredWaitersOptions {
+  /** Namespace to scan. Omit only for maintenance diagnostics. */
+  readonly namespace?: string
+  /** Current time for timeout eligibility. */
+  readonly now: Date
+  /** Maximum number of waiters to return. */
+  readonly limit?: number
 }
 
 /** Transaction-bound view of a runtime store. */

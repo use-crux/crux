@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { EventCursor, TimerId, WorkId } from '../ports/ids'
+import type { EventCursor, TimerId, WaiterId, WorkId } from '../ports/ids'
 
 /** Build the idempotency key for a flow resume caused by a durable event. */
 export function flowEventResumeKey(
@@ -29,6 +29,11 @@ export function flowSignalResumeKey(
 /** Build the idempotency key for a timer delivery. */
 export function timerKey(timerId: TimerId): string {
   return `timer:${timerId}`
+}
+
+/** Build the idempotency key for a waiter timeout with no timer record. */
+export function waiterTimeoutKey(waiterId: WaiterId): string {
+  return `timer:${waiterId}`
 }
 
 /** Build the idempotency key for a task work item. */

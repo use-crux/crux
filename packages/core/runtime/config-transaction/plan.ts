@@ -21,6 +21,7 @@ export function planRuntimeConfig(input: RuntimeConfigTransactionInput): Runtime
 
   const runtimePatch: Partial<CruxRuntime> = {
     ...(records ? { records } : {}),
+    ...(config.runtime ? { runtimeEngine: config.runtime } : {}),
     ...(config.generation?.middleware ? { middleware: config.generation.middleware } : {}),
     ...(ownsObservability
       ? {

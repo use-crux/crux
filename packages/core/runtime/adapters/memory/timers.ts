@@ -1,4 +1,4 @@
-import type { TimerId } from '../../ports/ids'
+import type { TimerId, WorkId } from '../../ports/ids'
 import type {
   ClaimDueTimersOptions,
   NewRuntimeTimerRecord,
@@ -29,6 +29,8 @@ export function createMemoryTimerStore(
         namespace: timer.namespace,
         fireAt: new Date(timer.fireAt),
         workId: timer.workId,
+        waiterId: timer.waiterId,
+        idleScope: timer.idleScope,
         work: cloneRuntimeWork(timer.work),
         idempotencyKey: timer.idempotencyKey,
         timerId: `timer_${data.nextTimerId}` as TimerId,
@@ -60,6 +62,12 @@ export function createMemoryTimerStore(
       return due.map((timer) => cloneTimerRecord(timer))
     },
 
+    async listByWork(workId: WorkId): Promise<readonly RuntimeTimerRecord[]> {
+      return [...data.timers.values()]
+        .filter((timer) => timer.workId === workId)
+        .map((timer) => cloneTimerRecord(timer))
+    },
+
     async transition(
       timerId: TimerId,
       from: RuntimeTimerState,
@@ -81,6 +89,8 @@ export function cloneTimerRecord(
     namespace: timer.namespace,
     fireAt: new Date(timer.fireAt),
     workId: timer.workId,
+    waiterId: timer.waiterId,
+    idleScope: timer.idleScope,
     work: cloneRuntimeWork(timer.work),
     idempotencyKey: timer.idempotencyKey,
     timerId: timer.timerId,

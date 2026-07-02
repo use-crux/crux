@@ -1,10 +1,13 @@
 import type { JsonValue } from '../../../storage'
-import type { WaiterId } from '../../ports/ids'
+import type { TimerId, WaiterId, WorkId } from '../../ports/ids'
+import type {
+  ClaimExpiredWaitersOptions,
+  RuntimeWaiterStorePort,
+} from '../../store'
 import type {
   NewRuntimeWaiter,
   ResolveWaiterOptions,
   RuntimeWaiter,
-  WaiterPort,
 } from '../../ports/waiters'
 import type { MemoryRuntimeData, MemoryWriteRecorder } from './data'
 import { cloneJsonValue } from './json'
@@ -12,7 +15,7 @@ import { cloneRuntimeWork } from './state'
 
 export type RuntimeWaiterState = RuntimeWaiter['state']
 
-export interface MemoryWaiterPort extends WaiterPort {
+export interface MemoryWaiterPort extends RuntimeWaiterStorePort {
   transition(
     waiterId: WaiterId,
     from: RuntimeWaiterState,
@@ -65,6 +68,38 @@ export function createMemoryWaiterPort(
       if (!waiter || waiter.state !== 'armed') return
       recordWrite?.()
       data.waiters.set(waiterId, cloneWithState(waiter, 'cancelled'))
+    },
+
+    async attachTimer(waiterId: WaiterId, timerId: TimerId): Promise<void> {
+      const waiter = data.waiters.get(waiterId)
+      if (!waiter) return
+      recordWrite?.()
+      data.waiters.set(
+        waiterId,
+        Object.freeze({ ...cloneRuntimeWaiter(waiter), timerId }),
+      )
+    },
+
+    async listByWork(workId: WorkId): Promise<readonly RuntimeWaiter[]> {
+      return [...data.waiters.values()]
+        .filter((waiter) => waiter.workId === workId)
+        .map((waiter) => cloneRuntimeWaiter(waiter))
+    },
+
+    async claimExpired(
+      options: ClaimExpiredWaitersOptions,
+    ): Promise<readonly RuntimeWaiter[]> {
+      return [...data.waiters.values()]
+        .filter(
+          (waiter) =>
+            waiter.state === 'armed' &&
+            waiter.timeoutAt !== undefined &&
+            waiter.timeoutAt.getTime() <= options.now.getTime() &&
+            (options.namespace === undefined ||
+              waiter.namespace === options.namespace),
+        )
+        .slice(0, options.limit)
+        .map((waiter) => cloneRuntimeWaiter(waiter))
     },
 
     async transition(

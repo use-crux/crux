@@ -20,6 +20,7 @@ import {
   targetNotFoundError,
   wakeEnvelopeForWork,
 } from './kernel-shared'
+import { putWorkWithIdleAccounting } from './kernel-idle'
 import { classifyRuntimeFailure } from './retry'
 import { transition, type WorkItem } from './work'
 
@@ -33,6 +34,8 @@ export interface HandleWakeDeps {
   readonly verifyWake: NonNullable<RuntimeKernelOptions['verifyWake']>
   /** Current time source. */
   readonly now: () => Date
+  /** Kernel-owned work id generator for waiter firings during terminal events. */
+  readonly newWorkId: () => WorkId
   /** Retry jitter source. */
   readonly rng?: () => number
   /** Lease TTL in milliseconds. */
@@ -59,7 +62,12 @@ export async function handleWake(
 
   const target = deps.targets[envelope.target]
   if (!target) {
-    await blockMissingTarget({ store: deps.store, envelope, now: deps.now })
+    await blockMissingTarget({
+      store: deps.store,
+      envelope,
+      now: deps.now,
+      newWorkId: deps.newWorkId,
+    })
     return { status: 200, outcome: 'blocked' }
   }
 
@@ -90,6 +98,7 @@ export async function handleWake(
         outcome,
         idempotencyKey: envelope.idempotencyKey,
         now: deps.now,
+        newWorkId: deps.newWorkId,
       })
       return { status: 200, outcome: 'processed' }
     } catch (error) {
@@ -98,6 +107,7 @@ export async function handleWake(
         work: await loadLeasedWork(deps.store, envelope, lease),
         error,
         now: deps.now,
+        newWorkId: deps.newWorkId,
         rng: deps.rng,
       })
     }
@@ -131,6 +141,7 @@ interface BlockMissingTargetOptions {
   readonly store: RuntimeStoreAdapter
   readonly envelope: WakeEnvelope
   readonly now: () => Date
+  readonly newWorkId: () => WorkId
 }
 
 async function blockMissingTarget(
@@ -142,7 +153,10 @@ async function blockMissingTarget(
       namespace: options.envelope.ns,
     })
     if (current && !isTerminalWork(current)) {
-      await tx.state.putWork(
+      await putWorkWithIdleAccounting(
+        tx,
+        { newWorkId: options.newWorkId, now: options.now },
+        current,
         transition(current, {
           status: 'blocked',
           lastError: {
@@ -166,6 +180,7 @@ interface FailWorkOptions {
   readonly work: WorkItem
   readonly error: unknown
   readonly now: () => Date
+  readonly newWorkId: () => WorkId
   readonly rng?: () => number
 }
 
@@ -211,7 +226,14 @@ async function failWork(
           },
         })
 
-  await options.store.state.putWork(failedWork)
+  await options.store.transact(async (tx) => {
+    await putWorkWithIdleAccounting(
+      tx,
+      { newWorkId: options.newWorkId, now: options.now },
+      options.work,
+      failedWork,
+    )
+  })
   return {
     status: 200,
     outcome:
@@ -225,6 +247,7 @@ interface CompleteWorkOptions {
   readonly outcome: RuntimeTargetOutcome
   readonly idempotencyKey: string
   readonly now: () => Date
+  readonly newWorkId: () => WorkId
 }
 
 async function completeWork(options: CompleteWorkOptions): Promise<void> {
@@ -236,7 +259,12 @@ async function completeWork(options: CompleteWorkOptions): Promise<void> {
             status: 'blocked',
             lastError: options.outcome.error,
           })
-    await tx.state.putWork(completed)
+    await putWorkWithIdleAccounting(
+      tx,
+      { newWorkId: options.newWorkId, now: options.now },
+      options.work,
+      completed,
+    )
     await tx.state.putIdempotencyKey({
       namespace: options.work.namespace,
       key: options.idempotencyKey,

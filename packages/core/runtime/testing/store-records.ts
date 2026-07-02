@@ -200,4 +200,64 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
       }),
     ).resolves.toBeNull()
   })
+
+  it('invariant: work listing and idle counters are namespace-scoped and bounded', async () => {
+    const store = await options.createStore()
+    await store.state.createWork({
+      workId: 'work_idle_1' as WorkId,
+      namespace: 'tenant-a',
+      work: {
+        kind: 'task.run',
+        taskId: 'task_1' as TaskId,
+        targetId: 'embed-document' as RuntimeTargetId,
+      },
+      targetId: 'embed-document' as RuntimeTargetId,
+      idempotencyKey: 'task:work_idle_1',
+      idleScope: 'flow:flow_1',
+      now: new Date('2026-07-02T00:00:00.000Z'),
+    })
+    await store.state.putWork(
+      makeConformanceWorkItem({
+        workId: 'work_old_1' as WorkId,
+        status: 'leased',
+        updatedAt: new Date('2026-07-02T00:00:00.000Z'),
+      }),
+    )
+    await store.state.putWork(
+      makeConformanceWorkItem({
+        workId: 'work_new_1' as WorkId,
+        status: 'leased',
+        updatedAt: new Date('2026-07-02T00:01:00.000Z'),
+      }),
+    )
+    await store.state.putWork(
+      makeConformanceWorkItem({
+        workId: 'work_other_tenant_1' as WorkId,
+        namespace: 'tenant-b',
+        status: 'leased',
+        updatedAt: new Date('2026-07-02T00:00:00.000Z'),
+      }),
+    )
+
+    await expect(
+      store.state.listWork({
+        namespace: 'tenant-a',
+        status: 'leased',
+        updatedBefore: new Date('2026-07-02T00:00:30.000Z'),
+        limit: 1,
+      }),
+    ).resolves.toEqual([expect.objectContaining({ workId: 'work_old_1' })])
+    await expect(
+      store.state.getIdleCount('tenant-a', 'flow:flow_1'),
+    ).resolves.toBe(1)
+    await expect(
+      store.state.incrementIdle('tenant-a', 'flow:flow_1'),
+    ).resolves.toBe(2)
+    await expect(
+      store.state.decrementIdle('tenant-a', 'flow:flow_1'),
+    ).resolves.toBe(1)
+    await expect(
+      store.state.decrementIdle('tenant-a', 'flow:flow_1'),
+    ).resolves.toBe(0)
+  })
 }

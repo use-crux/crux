@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { CruxObservabilityTransport } from '../observability'
 import type { CruxPlugin } from '../runtime/plugin'
 import type { CruxRuntime } from '../runtime/runtime'
+import { node } from '../runtime/public'
 import { inMemoryRecordStore } from '../storage'
 import {
   createRuntimeConfigTransaction,
@@ -109,6 +110,14 @@ describe('runtime config transaction', () => {
     expect(plan.tokenizer).toBe(tokenizer)
     expect(plan.configureOptions.autoEscape).toBe(false)
     expect(plan.configureOptions.securityWarnings).toBe(false)
+  })
+
+  it('plans top-level runtime as an installed Runtime Engine definition', () => {
+    const runtime = node({ autoStartMaintenance: false })
+
+    const plan = planRuntimeConfig({ config: { runtime } })
+
+    expect(plan.runtimePatch.runtimeEngine).toBe(runtime)
   })
 
   it('applies persistence and explicit observability before plugins run through ports', () => {

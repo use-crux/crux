@@ -10,9 +10,21 @@
 import type { JsonValue } from '../../storage'
 import type { RuntimeEvent } from '../ports/events'
 import type { Lease } from '../ports/leases'
-import type { FlowId, RuntimeTargetId, TaskId, WorkId } from '../ports/ids'
-import type { RuntimeOutboxItem, RuntimeStoreAdapter } from '../store'
+import type {
+  FlowId,
+  RuntimeTargetId,
+  TaskId,
+  WaiterId,
+  WorkId,
+} from '../ports/ids'
+import type { RuntimeWork } from '../ports/work'
+import type {
+  RuntimeOutboxItem,
+  RuntimeStoreAdapter,
+  RuntimeTimerRecord,
+} from '../store'
 import type { WakeEnvelope } from './envelope'
+import type { RuntimeWakeDeliver } from './outbox'
 import type { WorkItem, WorkItemError } from './work'
 
 /** Result returned by a runtime target execution. */
@@ -69,6 +81,8 @@ export interface EnqueueTaskInput {
   readonly targetId: RuntimeTargetId
   /** Earliest time the task may run. */
   readonly notBefore?: Date
+  /** Scoped-idle counter group this task keeps busy until terminal. */
+  readonly idleScope?: string
 }
 
 /** One suspend/wait registration produced by replay. */
@@ -79,6 +93,8 @@ export interface RuntimeSuspendRegistration {
   readonly eventName: string
   /** Top-level payload equality match for this waiter. */
   readonly match: Readonly<Record<string, JsonValue>>
+  /** Optional timeout deadline that should resume the work with flow.timeout. */
+  readonly timeoutAt?: Date
 }
 
 /** Snapshot data supplied when a flow parks on suspend/wait. */
@@ -127,6 +143,98 @@ export interface EmitEventResult {
   readonly outboxItems: readonly RuntimeOutboxItem[]
 }
 
+/** Input for cancelling durable runtime work. */
+export interface CancelWorkInput {
+  /** Runtime namespace. */
+  readonly namespace: string
+  /** Work item to cancel. */
+  readonly workId: WorkId
+}
+
+/** Result of an idempotent cancellation attempt. */
+export interface CancelWorkResult {
+  /** Whether this call moved a non-terminal work item to cancelled. */
+  readonly cancelled: boolean
+}
+
+/** Input for scheduling store-backed runtime timer records. */
+export interface ScheduleTimerInput {
+  /** Runtime namespace. */
+  readonly namespace: string
+  /** Deadline when the timer becomes eligible to fire. */
+  readonly fireAt: Date
+  /** Work to carry when the timer fires. */
+  readonly work: RuntimeWork
+  /** Existing suspended work item to resume, when present. */
+  readonly workId?: WorkId
+  /** Linked waiter whose timeout CAS must win before work is produced. */
+  readonly waiterId?: WaiterId
+  /** Scoped-idle counter group to stamp onto work minted by the timer. */
+  readonly idleScope?: string
+}
+
+/** Options for scanning due store-backed timers. */
+export interface ScanTimersOptions {
+  /** Namespace to scan. Omit only for maintenance diagnostics. */
+  readonly namespace?: string
+  /** Time used to decide whether a timer is due. */
+  readonly now?: Date
+  /** Maximum number of due timers to process. */
+  readonly limit?: number
+}
+
+/** Result of one store-backed timer scan. */
+export interface ScanTimersResult {
+  /** Timers that won their race and produced wake work. */
+  readonly fired: number
+  /** Timers that were already handled, cancelled, or lost the waiter race. */
+  readonly skipped: number
+  /** Wake outbox rows produced by the scan. */
+  readonly outboxItems: readonly RuntimeOutboxItem[]
+}
+
+/** Transaction helper result for firing one timer record. */
+export interface FireTimerRecordResult {
+  /** Whether this timer produced runnable work. */
+  readonly fired: boolean
+  /** Outbox item produced for the runnable work, when any. */
+  readonly outboxItem?: RuntimeOutboxItem
+}
+
+/** Options for one kernel-owned maintenance pass. */
+export interface MaintenanceTickOptions {
+  /** Namespace to maintain. Omit only for diagnostics and local tests. */
+  readonly namespace?: string
+  /** Time source for due timers and outbox eligibility. */
+  readonly now?: Date
+  /** Maximum timers to scan. */
+  readonly timerLimit?: number
+  /** Maximum leased work records to inspect for reclaim. */
+  readonly workLimit?: number
+  /** Maximum expired waiter registrations to inspect. */
+  readonly waiterLimit?: number
+  /** Optional wake delivery function for the outbox dispatch backstop. */
+  readonly deliver?: RuntimeWakeDeliver
+}
+
+/** Summary of a kernel-owned maintenance pass. */
+export interface MaintenanceTickResult {
+  /** Outbox rows delivered by the backstop dispatcher. */
+  readonly outboxDelivered: number
+  /** Outbox rows that failed delivery and were requeued. */
+  readonly outboxFailed: number
+  /** Timers that produced runnable work. */
+  readonly timersFired: number
+  /** Timers skipped because another race already won. */
+  readonly timersSkipped: number
+  /** Leased work moved back to pending after lease expiry. */
+  readonly leasesReclaimed: number
+  /** Waiters expired by the no-native-timer backstop. */
+  readonly waitersExpired: number
+  /** Retention records removed. I4 has no retention policy yet. */
+  readonly retainedRecordsRemoved: number
+}
+
 /** Outcome of a wake handling attempt. */
 export type RuntimeWakeResult =
   | {
@@ -150,6 +258,16 @@ export interface RuntimeKernel {
   recordSuspension(input: RecordSuspensionInput): Promise<void>
   /** Append an event and resume all matching waiters that win the CAS race. */
   emitEvent(input: EmitEventInput): Promise<EmitEventResult>
+  /** Cancel non-terminal work and its owned waiter/timer registrations. */
+  cancelWork(input: CancelWorkInput): Promise<CancelWorkResult>
+  /** Persist a store-backed timer record. */
+  scheduleTimer(input: ScheduleTimerInput): Promise<RuntimeTimerRecord>
+  /** Fire due store-backed timers through the waiter CAS race gate. */
+  scanTimers(options?: ScanTimersOptions): Promise<ScanTimersResult>
+  /** Run one kernel-owned maintenance pass. */
+  maintenanceTick(
+    options?: MaintenanceTickOptions,
+  ): Promise<MaintenanceTickResult>
   /** Handle one verified wake envelope through lease, execution, and commit. */
   handleWake(envelope: WakeEnvelope): Promise<RuntimeWakeResult>
 }

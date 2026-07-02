@@ -341,6 +341,26 @@ config({
 
 Disabled input/output artifacts are still emitted as references with `sizeBytes` and `hash`, so devtools, subscribers, diagnostics-channel consumers, and OTel all see the same privacy policy.
 
+## Runtime Engine
+
+Runtime-bound APIs use a configured Runtime Engine for durable work, timers,
+event waiters, wake delivery, and maintenance. For local development and tests,
+use the in-process `node()` composer:
+
+```ts
+import { config } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
+
+export default config({
+  runtime: node(),
+});
+```
+
+Advanced and generated entry files can resolve a composer explicitly with
+`createRuntime({ runtime, targets })`. The `@use-crux/core/runtime/testing`
+subpath exposes the shared store and kernel conformance suites for adapter
+authors.
+
 ## Import Paths
 
 `@use-crux/core` exposes SDK-agnostic primitives through focused subpaths:
@@ -354,7 +374,7 @@ Disabled input/output artifacts are still emitted as references with `sizeBytes`
 | `@use-crux/core/quality`       | Evaluations, suites, assertions, scorers, gates, variants, and baselines.                                                                    |
 | `@use-crux/core/agent`         | Agents, blackboards, handoffs, delegates, parallel, pipeline, consensus, and swarm.                                                          |
 | `@use-crux/core/flow`          | Suspendable typed workflows.                                                                                                                 |
-| `@use-crux/core/runtime`       | Runtime Engine port contracts, diagnostics, wake envelopes, kernel composites, outbox dispatch, pure retry/state helpers, and the in-memory runtime store. |
+| `@use-crux/core/runtime`       | Runtime Engine composers, port contracts, diagnostics, wake envelopes, kernel composites, outbox dispatch, pure retry/state helpers, and the in-memory runtime store. |
 | `@use-crux/core/runtime/testing` | Runtime Engine store and kernel conformance suites for adapter authors.                                                                    |
 | `@use-crux/core/observability` | Canonical graph records, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model. |
 | `@use-crux/core/project-index` | Public Project Index contracts for local devtools and source intelligence.                                                                   |

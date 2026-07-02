@@ -1,4 +1,5 @@
 import { config, inMemoryRecordStore, type CruxConfig, type CruxPlugin } from '..'
+import { node, type RuntimeEngineDefinition } from '@use-crux/core/runtime'
 import type { CruxObservabilityTransport } from '../observability'
 import type { TokenizerFn } from '../shared/tokenizer'
 import type { PromptMiddleware } from '../runtime/types'
@@ -183,10 +184,11 @@ const tokenizerMustUseGenerationDomain = {
   tokenizer,
 } satisfies CruxConfig
 
-const runtimeIsNotAUserFacingBucket = {
-  // @ts-expect-error Runtime is an internal mapping, not a user-facing config domain.
-  runtime: {},
+const runtimeConfigIsStable = {
+  runtime: node(),
 } satisfies CruxConfig
+
+const runtimeDefinition: RuntimeEngineDefinition = runtimeConfigIsStable.runtime
 
 const devtoolsDoesNotOwnExportTransport = {
   devtools: {
@@ -224,6 +226,7 @@ void registriesStayInSource
 void storeMustUsePersistenceDomain
 void middlewareMustUseGenerationDomain
 void tokenizerMustUseGenerationDomain
-void runtimeIsNotAUserFacingBucket
+void runtimeConfigIsStable
+void runtimeDefinition
 void devtoolsDoesNotOwnExportTransport
 void devtoolsDoesNotOwnDeliveryPolicy
