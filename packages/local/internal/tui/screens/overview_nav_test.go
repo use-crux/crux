@@ -3,7 +3,7 @@ package screens
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
@@ -25,25 +25,25 @@ func TestOverviewCursorCyclesInsights(t *testing.T) {
 	}
 
 	// `j` moves down.
-	o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}, nil)
+	o.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 	if got := o.SelectedInsightID(); got != "INS-2" {
 		t.Errorf("after j, SelectedInsightID = %q, want %q", got, "INS-2")
 	}
 
 	// `j` again → INS-3.
-	o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}, nil)
+	o.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 	if got := o.SelectedInsightID(); got != "INS-3" {
 		t.Errorf("after second j, SelectedInsightID = %q, want %q", got, "INS-3")
 	}
 
 	// `j` at end stays at the last row (bounded).
-	o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}, nil)
+	o.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 	if got := o.SelectedInsightID(); got != "INS-3" {
 		t.Errorf("j at end should clamp; SelectedInsightID = %q, want %q", got, "INS-3")
 	}
 
 	// `k` moves up.
-	o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}, nil)
+	o.Update(tea.KeyPressMsg(tea.Key{Text: "k", Code: 'k'}), nil)
 	if got := o.SelectedInsightID(); got != "INS-2" {
 		t.Errorf("after k, SelectedInsightID = %q, want %q", got, "INS-2")
 	}
@@ -67,9 +67,9 @@ func TestOverviewLTogglesToRunsPanel(t *testing.T) {
 	}
 
 	// `l` → focus runs.
-	o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}, nil)
+	o.Update(tea.KeyPressMsg(tea.Key{Text: "l", Code: 'l'}), nil)
 	// `j` should move the runs cursor now, NOT the insights cursor.
-	o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}, nil)
+	o.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 
 	if got := o.SelectedRunID(); got != "RUN-2" {
 		t.Errorf("after l+j, SelectedRunID = %q, want %q", got, "RUN-2")
@@ -79,8 +79,8 @@ func TestOverviewLTogglesToRunsPanel(t *testing.T) {
 	}
 
 	// `h` → focus back to insights.
-	o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}}, nil)
-	o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}, nil)
+	o.Update(tea.KeyPressMsg(tea.Key{Text: "h", Code: 'h'}), nil)
+	o.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
 
 	if got := o.SelectedInsightID(); got != "INS-2" {
 		t.Errorf("after h+j, SelectedInsightID = %q, want %q", got, "INS-2")
@@ -101,7 +101,7 @@ func TestOverviewEnterOnInsightEmitsNavigateRequest(t *testing.T) {
 		{InsightID: "INS-014"},
 	}
 
-	cmd := o.Update(tea.KeyMsg{Type: tea.KeyEnter}, nil)
+	cmd := o.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
 	if cmd == nil {
 		t.Fatal("Enter on focused insight returned nil cmd — expected a NavigateRequest emitter")
 	}
@@ -129,9 +129,9 @@ func TestOverviewEnterOnRunEmitsNavigateRequest(t *testing.T) {
 	o.runs = []api.QualityRunRecord{
 		{TraceID: "8af2f1c"},
 	}
-	o.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}}, nil)
+	o.Update(tea.KeyPressMsg(tea.Key{Text: "l", Code: 'l'}), nil)
 
-	cmd := o.Update(tea.KeyMsg{Type: tea.KeyEnter}, nil)
+	cmd := o.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
 	if cmd == nil {
 		t.Fatal("Enter on focused run returned nil cmd")
 	}

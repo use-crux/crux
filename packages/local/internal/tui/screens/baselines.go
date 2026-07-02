@@ -9,9 +9,11 @@ import (
 	"sort"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -30,6 +32,9 @@ func NewBaselines() *Baselines { return &Baselines{} }
 func (s *Baselines) ID() string                { return "baselines" }
 func (s *Baselines) Init(c DataClient) tea.Cmd { return fetchPromotedBaselines(c) }
 func (s *Baselines) Counts() map[string]int    { return map[string]int{"baselines": len(s.items)} }
+func (s *Baselines) Interested(domains bridge.Domains) bool {
+	return domains.Has(bridge.DomainBaselines)
+}
 
 func (s *Baselines) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
@@ -43,7 +48,7 @@ func (s *Baselines) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		return fetchPromotedBaselines(c)
 	case dataErrMsg:
 		s.err = string(m)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch m.String() {
 		case "j", "down":
 			s.move(1)
@@ -115,9 +120,9 @@ func (s *Baselines) Breadcrumb() ([]string, string) {
 
 func (s *Baselines) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
-		{"j/k", "move"}, {"↵", "open experiment"},
-		{"e", "export"},
-		{":", "cmd"}, {"?", "help"},
+		shell.Bind("j/k", "move"), shell.Bind("↵", "open experiment"),
+		shell.Bind("e", "export"),
+		shell.Bind(":", "cmd"), shell.Bind("?", "help"),
 	}
 }
 
@@ -135,9 +140,9 @@ func (s *Baselines) View(size Size) string {
 	detailW := size.Width - listW - 1
 	list := s.renderList(listW, size.Height)
 	detail := s.renderDetail(detailW, size.Height)
-	return shell.Compose(
-		shell.PadColumnHeight(list, listW, size.Height),
-		shell.PadColumnHeight(detail, detailW, size.Height),
+	return kit.ComposeColumns(
+		kit.PadBlock(list, listW, size.Height),
+		kit.PadBlock(detail, detailW, size.Height),
 	)
 }
 
@@ -208,11 +213,11 @@ func (s *Baselines) renderDetail(width, height int) string {
 	}
 
 	footer := shell.PaneFooter(width, []shell.Keybind{
-		{"↵", "open experiment"}, {"e", "export"},
+		shell.Bind("↵", "open experiment"), shell.Bind("e", "export"),
 	})
 	hdrH := strings.Count(header, "\n") + 1
 	footerH := strings.Count(footer, "\n") + 1
-	body := shell.PadColumnHeight(b.String(), width, height-hdrH-footerH+1)
+	body := kit.PadBlock(b.String(), width, height-hdrH-footerH+1)
 	return body + "\n" + footer
 }
 

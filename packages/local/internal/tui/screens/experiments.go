@@ -6,10 +6,11 @@ import (
 	"sort"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
-	"github.com/use-crux/crux/packages/local/internal/tui/components"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -46,6 +47,10 @@ const (
 func NewExperiments() *Experiments { return &Experiments{} }
 
 func (s *Experiments) ID() string { return "experiments" }
+
+func (s *Experiments) Interested(domains bridge.Domains) bool {
+	return domains.Has(bridge.DomainExperiments)
+}
 
 func (s *Experiments) Init(c DataClient) tea.Cmd {
 	return tea.Batch(fetchExperimentSummaries(c), s.fetchDetail(c))
@@ -85,7 +90,7 @@ func (s *Experiments) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		return tea.Batch(fetchExperimentSummaries(c), s.fetchDetail(c))
 	case dataErrMsg:
 		s.err = string(m)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch m.String() {
 		case "j", "down":
 			if s.focus == expFocusDetail {
@@ -211,9 +216,9 @@ func (s *Experiments) Breadcrumb() ([]string, string) {
 
 func (s *Experiments) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
-		{"j/k", "move"}, {"h/l", "pane"},
-		{"↵", "open run"}, {"p", "promote"},
-		{":", "cmd"}, {"?", "help"},
+		shell.Bind("j/k", "move"), shell.Bind("h/l", "pane"),
+		shell.Bind("↵", "open run"), shell.Bind("p", "promote"),
+		shell.Bind(":", "cmd"), shell.Bind("?", "help"),
 	}
 }
 
@@ -241,9 +246,9 @@ func (s *Experiments) View(size Size) string {
 	list := s.renderList(listW, size.Height)
 	detail := s.renderDetail(detailW, size.Height)
 
-	return shell.Compose(
-		shell.PadColumnHeight(list, listW, size.Height),
-		shell.PadColumnHeight(detail, detailW, size.Height),
+	return kit.ComposeColumns(
+		kit.PadBlock(list, listW, size.Height),
+		kit.PadBlock(detail, detailW, size.Height),
 	)
 }
 
@@ -274,7 +279,7 @@ func (s *Experiments) renderListRow(e api.QualityExperimentSummary, width int, s
 	if e.Passed {
 		status = "pass"
 	}
-	dot := components.StatusDot(status)
+	dot := kit.StatusDot(status)
 	bar := " "
 	if selected {
 		bar = lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("▌")
@@ -363,11 +368,11 @@ func (s *Experiments) renderDetail(width, height int) string {
 	}
 
 	footer := shell.PaneFooter(width, []shell.Keybind{
-		{"j/k", "cell"}, {"↵", "open run"}, {"p", "promote"},
+		shell.Bind("j/k", "cell"), shell.Bind("↵", "open run"), shell.Bind("p", "promote"),
 	})
 	hdrH := strings.Count(header, "\n") + 1
 	footerH := strings.Count(footer, "\n") + 1
-	body := shell.PadColumnHeight(b.String(), width, height-hdrH-footerH+1)
+	body := kit.PadBlock(b.String(), width, height-hdrH-footerH+1)
 	return body + "\n" + footer
 }
 
@@ -531,7 +536,7 @@ func (s *Experiments) renderFailingCells(cells []api.QualityExperimentCell, widt
 			trace = shortID(cell.TraceIDs[0], 10)
 		}
 		line1 := fmt.Sprintf("%s%s %s  %s  %s  %s", bar,
-			components.StatusDot(cell.Status),
+			kit.StatusDot(cell.Status),
 			shell.Text.Render(truncate(cell.CaseID, 28)),
 			shell.TextDim.Render(truncate(cell.VariantName, 16)),
 			shell.Rose.Render(cell.Status),

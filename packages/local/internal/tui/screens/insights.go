@@ -8,10 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
-	"github.com/use-crux/crux/packages/local/internal/tui/components"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -33,6 +34,10 @@ func NewInsights() *Insights { return &Insights{tab: "diagnosis"} }
 
 func (s *Insights) ID() string { return "insights" }
 
+func (s *Insights) Interested(domains bridge.Domains) bool {
+	return domains.Has(bridge.DomainInsights)
+}
+
 func (s *Insights) Init(client DataClient) tea.Cmd {
 	return fetchInsightsList(client)
 }
@@ -50,7 +55,7 @@ func (s *Insights) Update(msg tea.Msg, client DataClient) tea.Cmd {
 		return fetchInsightsList(client)
 	case dataErrMsg:
 		s.err = string(m)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch m.String() {
 		case "j", "down":
 			s.moveSelection(1)
@@ -231,13 +236,13 @@ func (s *Insights) Breadcrumb() ([]string, string) {
 
 func (s *Insights) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
-		{"j/k", "move"}, {"tab", "section"},
-		{"t", "linked traces"}, {"s", "save cases"},
-		{"r", "run variant"}, {"c", "compare"},
-		{"p", "promote fix"}, {"f", "mark fixed"},
-		{"x", "dismiss"}, {"e", "export"},
-		{"o", "open in viewer"},
-		{":", "cmd"}, {"?", "help"},
+		shell.Bind("j/k", "move"), shell.Bind("tab", "section"),
+		shell.Bind("t", "linked traces"), shell.Bind("s", "save cases"),
+		shell.Bind("r", "run variant"), shell.Bind("c", "compare"),
+		shell.Bind("p", "promote fix"), shell.Bind("f", "mark fixed"),
+		shell.Bind("x", "dismiss"), shell.Bind("e", "export"),
+		shell.Bind("o", "open in viewer"),
+		shell.Bind(":", "cmd"), shell.Bind("?", "help"),
 	}
 }
 
@@ -271,9 +276,9 @@ func (s *Insights) View(size Size) string {
 	left := s.renderList(leftW, size.Height)
 	right := s.renderDetail(rightW, size.Height)
 
-	return shell.Compose(
-		shell.PadColumnHeight(left, leftW, size.Height),
-		shell.PadColumnHeight(right, rightW, size.Height),
+	return kit.ComposeColumns(
+		kit.PadBlock(left, leftW, size.Height),
+		kit.PadBlock(right, rightW, size.Height),
 	)
 }
 
@@ -333,7 +338,7 @@ func (s *Insights) renderList(width, height int) string {
 }
 
 func (s *Insights) renderListRow(it api.QualityInsightRecord, width int, selected bool) string {
-	sev := components.SeverityDot(it.Severity)
+	sev := kit.SeverityDot(it.Severity)
 	id := shell.TextMuted.Render(truncate(it.InsightID, 8))
 	tag := ""
 	if len(it.Tags) > 0 {
@@ -354,7 +359,7 @@ func (s *Insights) renderListRow(it api.QualityInsightRecord, width int, selecte
 
 	spark := ""
 	if it.DetailStats != nil && len(it.DetailStats.TokensSpark) > 0 {
-		spark = components.Sparkline(it.DetailStats.TokensSpark, 8, shell.SeverityColor(it.Severity))
+		spark = kit.Sparkline(it.DetailStats.TokensSpark, 8, shell.SeverityColor(it.Severity))
 	}
 
 	line1 := fmt.Sprintf("%s%s %s  %s  %s", leftBar, sev, id, tag, title)
@@ -383,12 +388,12 @@ func (s *Insights) renderDetail(width, height int) string {
 	// Header: chips + headline. Severity uses the filled pill; tags use
 	// the muted ChipTag style.
 	sev := shell.SeverityColor(current.Severity)
-	chips := components.Chip(current.Severity, sev)
+	chips := kit.Chip(current.Severity, sev)
 	for i, tag := range current.Tags {
 		if i >= 3 {
 			break
 		}
-		chips += "  " + components.ChipDim(tag)
+		chips += "  " + kit.ChipDim(tag)
 	}
 	meta := shell.TextMuted.Render(fmt.Sprintf("%s · updated %s · %d occurrences",
 		current.InsightID, relTime(current.UpdatedAt), current.OccurrenceCount))
@@ -416,11 +421,11 @@ func (s *Insights) renderDetail(width, height int) string {
 	bodyBuilder.WriteString(s.renderTabBody(*current, width))
 
 	footer := shell.PaneFooter(width, []shell.Keybind{
-		{"t", "traces"}, {"s", "save cases"}, {"r", "run variant"},
-		{"c", "compare"}, {"p", "promote fix"}, {"x", "dismiss"},
+		shell.Bind("t", "traces"), shell.Bind("s", "save cases"), shell.Bind("r", "run variant"),
+		shell.Bind("c", "compare"), shell.Bind("p", "promote fix"), shell.Bind("x", "dismiss"),
 	})
 	bodyHeight := height - strings.Count(footer, "\n") - 1
-	body := shell.PadColumnHeight(bodyBuilder.String(), width, bodyHeight)
+	body := kit.PadBlock(bodyBuilder.String(), width, bodyHeight)
 	return body + "\n" + footer
 }
 
@@ -469,7 +474,7 @@ func (s *Insights) renderDiagnosisTab(ins api.QualityInsightRecord, width int) s
 		stat1 := s.renderStatCard("Tokens / run", fmt.Sprintf("%.1fk", ds.TokensPerRun/1000), ds.TokensDeltaVsBaseline, ds.TokensSpark, colW)
 		stat2 := s.renderStatCard("Latency p95", latencyMs(ds.LatencyP95Ms), ds.LatencyDeltaVsBaseline, ds.LatencySpark, colW)
 		stat3 := s.renderStatCard("Cost / 100", fmt.Sprintf("$%.2f", ds.CostPer100), ds.CostDeltaVsBaseline, ds.CostSpark, colW)
-		b.WriteString(shell.Compose(stat1, stat2, stat3))
+		b.WriteString(kit.ComposeColumns(stat1, stat2, stat3))
 	}
 	return b.String()
 }
@@ -478,8 +483,8 @@ func (s *Insights) renderStatCard(label, value, delta string, spark []float64, w
 	lbl := shell.SectionTag.Render(label)
 	val := lipgloss.NewStyle().Foreground(shell.ColorText).Bold(true).Render(value)
 	d := shell.Amber.Render(delta)
-	sk := components.Sparkline(spark, width-2, shell.ColorAmber)
-	return shell.PadColumnHeight(
+	sk := kit.Sparkline(spark, width-2, shell.ColorAmber)
+	return kit.PadBlock(
 		fmt.Sprintf(" %s\n %s  %s\n %s", lbl, val, d, sk),
 		width, 4,
 	)

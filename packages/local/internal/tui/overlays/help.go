@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -52,7 +53,7 @@ func (h *Help) SetScreenKeybinds(screenID string, binds []shell.Keybind) {
 }
 
 // Update handles keys while the overlay is open.
-func (h *Help) Update(msg tea.KeyMsg) tea.Cmd {
+func (h *Help) Update(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc", "?":
 		h.Close()
@@ -61,8 +62,8 @@ func (h *Help) Update(msg tea.KeyMsg) tea.Cmd {
 			h.filter = h.filter[:len(h.filter)-1]
 		}
 	default:
-		if len(msg.String()) == 1 && msg.String()[0] >= 0x20 {
-			h.filter += msg.String()
+		if msg.Text != "" {
+			h.filter += msg.Text
 		}
 	}
 	return nil
@@ -185,10 +186,10 @@ func (h *Help) View(viewportWidth, viewportHeight int) string {
 		}
 	}
 
-	colA := shell.PadColumnHeight(colStr[0], colW, maxH)
-	colB := shell.PadColumnHeight(colStr[1], colW, maxH)
-	colC := shell.PadColumnHeight(colStr[2], colW, maxH)
-	body := shell.Compose(colA, colB, colC)
+	colA := kit.PadBlock(colStr[0], colW, maxH)
+	colB := kit.PadBlock(colStr[1], colW, maxH)
+	colC := kit.PadBlock(colStr[2], colW, maxH)
+	body := kit.ComposeColumns(colA, colB, colC)
 
 	footer := " " + shell.TextMuted.Render(
 		"config: "+shell.Text.Render(".crux/keybinds.toml")+

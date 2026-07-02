@@ -3,13 +3,15 @@ package screens
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
-	"github.com/use-crux/crux/packages/local/internal/tui/components"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -29,6 +31,8 @@ type Overview struct {
 	focusedPanel overviewPanel
 	insightCur   int
 	runCur       int
+	insightList  kit.VList[api.QualityInsightRecord]
+	runList      kit.VList[api.QualityRunRecord]
 }
 
 type overviewPanel int
@@ -67,9 +71,26 @@ func (o *Overview) recentRunsList() []api.QualityRunRecord {
 }
 
 // NewOverview constructs an empty Overview screen.
-func NewOverview() *Overview { return &Overview{} }
+func NewOverview() *Overview {
+	o := &Overview{}
+	o.insightList.SetIdentity(func(ins api.QualityInsightRecord) string { return ins.InsightID })
+	o.runList.SetIdentity(func(run api.QualityRunRecord) string { return run.TraceID })
+	return o
+}
 
 func (o *Overview) ID() string { return "overview" }
+
+func (o *Overview) Interested(domains bridge.Domains) bool {
+	return domains.Intersects(bridge.NewDomains(
+		bridge.DomainRuns,
+		bridge.DomainInsights,
+		bridge.DomainExperiments,
+		bridge.DomainBaselines,
+		bridge.DomainFeedback,
+		bridge.DomainCassettes,
+		bridge.DomainActivity,
+	))
+}
 
 func (o *Overview) Init(client DataClient) tea.Cmd {
 	return tea.Batch(
@@ -85,10 +106,13 @@ func (o *Overview) Update(msg tea.Msg, client DataClient) tea.Cmd {
 	case overviewLoadedMsg:
 		o.overview = api.QualityOverviewRecord(m.rec)
 		o.loaded = true
+		o.syncLists()
 	case insightsLoadedMsg:
 		o.insights = []api.QualityInsightRecord(m)
+		o.syncLists()
 	case runsLoadedMsg:
 		o.runs = []api.QualityRunRecord(m)
+		o.syncLists()
 	case activityLoadedMsg:
 		o.activity = []api.QualityActivityEvent(m)
 	case dataErrMsg:
@@ -101,7 +125,7 @@ func (o *Overview) Update(msg tea.Msg, client DataClient) tea.Cmd {
 			fetchOverview(client),
 			fetchActivity(client, 12),
 		)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return o.handleKey(m)
 	}
 	return nil
@@ -110,7 +134,7 @@ func (o *Overview) Update(msg tea.Msg, client DataClient) tea.Cmd {
 // handleKey owns the navigable-Overview keymap. j/k cycles within the
 // focused panel; h/l toggles focus between Top Insights and Recent Runs.
 // See S6 in the implementation plan.
-func (o *Overview) handleKey(msg tea.KeyMsg) tea.Cmd {
+func (o *Overview) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "j", "down":
 		o.moveCursor(+1)
@@ -154,30 +178,42 @@ func (o *Overview) drill() tea.Cmd {
 func (o *Overview) moveCursor(delta int) {
 	switch o.focusedPanel {
 	case panelInsights:
-		next := o.insightCur + delta
-		if next < 0 {
-			next = 0
+		o.insightList.SetItems(o.insights)
+		o.insightList.SetCursorByIdentity(o.SelectedInsightID())
+		if delta > 0 {
+			o.insightList.CursorDown()
+		} else {
+			o.insightList.CursorUp()
 		}
-		if next >= len(o.insights) {
-			next = len(o.insights) - 1
+		_, idx, ok := o.insightList.Cursor()
+		if ok {
+			o.insightCur = idx
 		}
-		if next < 0 {
-			next = 0
-		}
-		o.insightCur = next
 	case panelRuns:
 		runs := o.recentRunsList()
-		next := o.runCur + delta
-		if next < 0 {
-			next = 0
+		o.runList.SetItems(runs)
+		o.runList.SetCursorByIdentity(o.SelectedRunID())
+		if delta > 0 {
+			o.runList.CursorDown()
+		} else {
+			o.runList.CursorUp()
 		}
-		if next >= len(runs) {
-			next = len(runs) - 1
+		_, idx, ok := o.runList.Cursor()
+		if ok {
+			o.runCur = idx
 		}
-		if next < 0 {
-			next = 0
-		}
-		o.runCur = next
+	}
+}
+
+func (o *Overview) syncLists() {
+	o.insightList.SetItems(o.insights)
+	if o.insightCur < len(o.insights) {
+		o.insightList.SetCursorByIdentity(o.SelectedInsightID())
+	}
+	runs := o.recentRunsList()
+	o.runList.SetItems(runs)
+	if o.runCur < len(runs) {
+		o.runList.SetCursorByIdentity(o.SelectedRunID())
 	}
 }
 
@@ -240,6 +276,9 @@ func (o *Overview) View(size Size) string {
 	if o.err != "" {
 		return centerMsg(size, "error: "+o.err)
 	}
+	if size.Width < 120 {
+		return o.renderCompact(size)
+	}
 
 	kpi := o.renderKPIStrip(size.Width)
 	kpiLines := strings.Count(kpi, "\n") + 1
@@ -254,16 +293,54 @@ func (o *Overview) View(size Size) string {
 	left := panelRect(o.renderLeftColumn(leftW, bodyH), leftW, bodyH)
 	right := panelRect(o.renderRightColumn(rightW, bodyH), rightW, bodyH)
 
-	body := shell.Compose(
-		shell.PadColumnHeight(left, leftW, bodyH),
-		shell.PadColumnHeight(right, rightW, bodyH),
+	body := kit.ComposeColumns(
+		kit.PadBlock(left, leftW, bodyH),
+		kit.PadBlock(right, rightW, bodyH),
 	)
 	return kpi + "\n" + body
 }
 
+func (o *Overview) renderCompact(size Size) string {
+	lines := make([]string, 0, size.Height)
+	appendBlock := func(block string) {
+		lines = append(lines, strings.Split(block, "\n")...)
+	}
+	appendBlock(shell.PaneHeader(size.Width, "Overview", "", shell.TextMuted.Render("compact")))
+	appendBlock(padRow(" "+shell.Text.Render(fmt.Sprintf("insights %d", o.overview.InsightCount))+"  "+shell.TextDim.Render(fmt.Sprintf("%dH %dM %dL", o.overview.OpenInsightSeverityCounts["high"], o.overview.OpenInsightSeverityCounts["medium"], o.overview.OpenInsightSeverityCounts["low"])), size.Width))
+	appendBlock(padRow(" "+shell.Text.Render("pass rate")+"  "+shell.Green.Render(percent(o.overview.PassRate)), size.Width))
+	appendBlock(padRow(" "+shell.Text.Render("cost / 100")+"  "+shell.Amber.Render(dollars(o.overview.CostPer100Runs)), size.Width))
+	appendBlock(padRow(" "+shell.Text.Render("p95 latency")+"  "+shell.Amber.Render(latency(o.overview.P95LatencyMs)), size.Width))
+	appendBlock(shell.PaneHeader(size.Width, "Top insight", "", ""))
+	if len(o.insights) == 0 {
+		appendBlock(padRow(" "+shell.TextMuted.Render("no insights"), size.Width))
+	} else {
+		ins := o.insights[0]
+		appendBlock(padRow(" "+kit.SeverityDot(ins.Severity)+" "+shell.Text.Render(truncate(ins.Title, size.Width-8)), size.Width))
+		appendBlock(padRow("   "+shell.TextDim.Render(truncate(ins.Summary, size.Width-4)), size.Width))
+	}
+	appendBlock(shell.PaneHeader(size.Width, "Recent run", "", ""))
+	if runs := o.recentRunsList(); len(runs) > 0 {
+		run := runs[0]
+		appendBlock(padRow(" "+kit.StatusDot(run.Status)+" "+shell.Text.Render(truncate(run.TraceID, 10))+"  "+shell.TextDim.Render(truncate(run.TargetID, size.Width-18)), size.Width))
+	} else {
+		appendBlock(padRow(" "+shell.TextMuted.Render("no runs"), size.Width))
+	}
+	if len(lines) > size.Height {
+		lines = lines[:size.Height]
+	}
+	for len(lines) < size.Height {
+		lines = append(lines, strings.Repeat(" ", size.Width))
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (o *Overview) renderKPIStrip(width int) string {
-	cellW := width / 4
-	rem := width - cellW*4
+	contentW := width - 3
+	if contentW < 4 {
+		contentW = 4
+	}
+	cellW := contentW / 4
+	rem := contentW - cellW*4
 
 	// KPI accent colors match the design's visual coding:
 	//   Open insights → teal (neutral trend; severity counts carry the
@@ -304,10 +381,10 @@ func (o *Overview) renderKPIStrip(width int) string {
 	// The body panes' headers carry their own top divider now (see
 	// PaneHeader); skipping the explicit one here avoids a double rule
 	// between the KPI strip and the first body section.
-	return shell.Compose(o1, o2, o3, o4)
+	return kit.ComposeColumns(o1, o2, o3, o4)
 }
 
-func (o *Overview) kpiCell(width int, label, value, delta string, deltaColor lipgloss.Color, spark []float64, sparkColor lipgloss.Color) string {
+func (o *Overview) kpiCell(width int, label, value, delta string, deltaColor color.Color, spark []float64, sparkColor color.Color) string {
 	lbl := shell.SectionTag.Render(label)
 	val := lipgloss.NewStyle().
 		Foreground(shell.ColorText).
@@ -323,7 +400,7 @@ func (o *Overview) kpiCell(width int, label, value, delta string, deltaColor lip
 		sparkCols = 8
 	}
 	if len(spark) > 0 {
-		sk = components.SparklineFilled(spark, sparkCols, sparkColor)
+		sk = kit.SparklineFilled(spark, sparkCols, sparkColor)
 	} else {
 		sk = lipgloss.NewStyle().Foreground(shell.ColorBorder).Render(strings.Repeat("·", sparkCols))
 	}
@@ -375,26 +452,16 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 		return header + "\n" + strings.Join(rows, "\n")
 	}
 
-	// One row per insight — screenshot 1 packs the Top Insights list
-	// tightly (severity · id · tag · title · target · age · sparkline
-	// on a single line). Previous code budgeted 2 rows + a blank row
-	// between, which read as airy compared to the design.
-	limit := bodyRows
-	if limit > len(o.insights) {
-		limit = len(o.insights)
-	}
-
-	rows := make([]string, 0, bodyRows)
-	for i := 0; i < limit; i++ {
-		ins := o.insights[i]
-		selected := i == 0
-
+	o.insightList.SetItems(o.insights)
+	o.insightList.SetHeight(bodyRows)
+	o.insightList.SetCursorByIdentity(o.SelectedInsightID())
+	rows := o.insightList.Render(width, func(ins api.QualityInsightRecord, _ int, selected bool, rowW int) string {
 		// Row 1: bar + severity dot + ID + tag chip + title + target + age.
 		bar := "  "
 		if selected {
 			bar = shell.SelectionBar(shell.SeverityColor(ins.Severity)) + " "
 		}
-		sev := components.SeverityDot(ins.Severity)
+		sev := kit.SeverityDot(ins.Severity)
 		id := shell.TextMuted.Render(padString3(truncate(ins.InsightID, 7), 7))
 		tag := ""
 		if len(ins.Tags) > 0 {
@@ -408,11 +475,11 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 		// Sparkline column on the right; trim title accordingly.
 		sk := ""
 		if len(ins.Trend) > 0 {
-			sk = components.Sparkline(ins.Trend, 6, shell.SeverityColor(ins.Severity))
+			sk = kit.Sparkline(ins.Trend, 6, shell.SeverityColor(ins.Severity))
 		}
 		skW := lipgloss.Width(sk)
 
-		titleBudget := width - 8 - 7 - 13 - 13 - 5 - skW - 6
+		titleBudget := rowW - 8 - 7 - 13 - 13 - 5 - skW - 6
 		if titleBudget < 12 {
 			titleBudget = 12
 		}
@@ -424,8 +491,8 @@ func (o *Overview) renderInsightsBlock(width, height int) string {
 		}
 		line1 := strings.Join(line1Parts, "")
 
-		rows = append(rows, padRow(line1, width))
-	}
+		return padRow(line1, rowW)
+	})
 	for len(rows) < bodyRows {
 		rows = append(rows, strings.Repeat(" ", width))
 	}
@@ -444,17 +511,23 @@ func (o *Overview) renderRecentRunsBlock(width, height int) string {
 	if bodyRows < 1 {
 		bodyRows = 1
 	}
-	rows := make([]string, 0, bodyRows)
-	for i := 0; i < bodyRows && i < len(runs); i++ {
-		r := runs[i]
-		dot := components.StatusDot(r.Status)
+	o.runList.SetItems(runs)
+	o.runList.SetHeight(bodyRows)
+	o.runList.SetCursorByIdentity(o.SelectedRunID())
+	rows := o.runList.Render(width, func(r api.QualityRunRecord, _ int, selected bool, rowW int) string {
+		prefix := " "
+		if selected && o.focusedPanel == panelRuns {
+			prefix = shell.SelectionBar(shell.ColorTeal) + " "
+		}
+		dot := kit.StatusDot(r.Status)
 		id := shortID(r.TraceID, 7)
 		target := truncate(r.TargetID, 14)
 		lat := durStr(r.DurationMs)
 		tok := formatTokensShort(r.TokenCount)
 		ago := relTimeUnix(r.StartedAt)
 		// Single-line row matching the design's run/<id> <target> <lat>·<tok> tok … <ago>
-		row := fmt.Sprintf(" %s  %s  %s   %s · %s tok",
+		row := fmt.Sprintf("%s%s  %s  %s   %s · %s tok",
+			prefix,
 			dot,
 			shell.Text.Render(padString3("run/"+id, 16)),
 			shell.TextDim.Render(padString3(target, 14)),
@@ -464,13 +537,13 @@ func (o *Overview) renderRecentRunsBlock(width, height int) string {
 		// Right-align age.
 		rightStr := shell.TextMuted.Render(ago)
 		used := lipgloss.Width(row)
-		pad := width - used - lipgloss.Width(rightStr) - 1
+		pad := rowW - used - lipgloss.Width(rightStr) - 1
 		if pad < 1 {
 			pad = 1
 		}
 		row = row + strings.Repeat(" ", pad) + rightStr + " "
-		rows = append(rows, padRow(row, width))
-	}
+		return padRow(row, rowW)
+	})
 	if len(runs) == 0 {
 		rows = append(rows, " "+shell.TextMuted.Render("no runs yet — start a flow or prompt to see traces here."))
 	}
@@ -495,7 +568,7 @@ func padString3(s string, width int) string {
 // the same body bg, separated only by the vertical/horizontal dividers
 // already rendered by Compose / horizontalRuleDim.
 func panelRect(body string, width, height int) string {
-	return shell.PadColumnHeight(body, width, height)
+	return kit.PadBlock(body, width, height)
 }
 
 func recentRunsMeta(runs []api.QualityRunRecord) string {
@@ -587,7 +660,7 @@ func (o *Overview) renderPassRateChart(width, height int) string {
 	if dataMax > yMax {
 		yMax = dataMax
 	}
-	chart := components.ASCIIChart(scaled, yMin, yMax, len(scaled), bodyRows, "%d%%", 96, false)
+	chart := kit.ASCIIChart(scaled, yMin, yMax, len(scaled), bodyRows, "%d%%", 96, false)
 	// X-axis legend matching the design: `14d ago   baseline = N%   now`.
 	// Three labels distributed left / center / right under the chart.
 	axisRow := renderPassRateAxis(width, o.overview.LatestExperimentPassRate)
@@ -945,8 +1018,10 @@ func relTimeUnix(ms int64) string {
 	return relTimeFrom(time.UnixMilli(ms))
 }
 
+var relTimeNow = time.Now
+
 func relTimeFrom(t time.Time) string {
-	d := time.Since(t)
+	d := relTimeNow().Sub(t)
 	switch {
 	case d < time.Minute:
 		return "now"
@@ -959,7 +1034,7 @@ func relTimeFrom(t time.Time) string {
 	}
 }
 
-func activityColor(severity, kind string) lipgloss.Color {
+func activityColor(severity, kind string) color.Color {
 	switch severity {
 	case "error":
 		return shell.ColorRose

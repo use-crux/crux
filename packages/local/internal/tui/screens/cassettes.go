@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -33,6 +35,9 @@ func NewCassettes() *Cassettes { return &Cassettes{} }
 func (s *Cassettes) ID() string                { return "cassettes" }
 func (s *Cassettes) Init(c DataClient) tea.Cmd { return fetchCassetteFiles(c) }
 func (s *Cassettes) Counts() map[string]int    { return map[string]int{"cassettes": len(s.items)} }
+func (s *Cassettes) Interested(domains bridge.Domains) bool {
+	return domains.Has(bridge.DomainCassettes)
+}
 
 func (s *Cassettes) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
@@ -46,7 +51,7 @@ func (s *Cassettes) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		return fetchCassetteFiles(c)
 	case dataErrMsg:
 		s.err = string(m)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch m.String() {
 		case "j", "down":
 			s.move(1)
@@ -67,8 +72,8 @@ func (s *Cassettes) Breadcrumb() ([]string, string) {
 
 func (s *Cassettes) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
-		{"j/k", "move"},
-		{":", "cmd"}, {"?", "help"},
+		shell.Bind("j/k", "move"),
+		shell.Bind(":", "cmd"), shell.Bind("?", "help"),
 	}
 }
 
@@ -89,9 +94,9 @@ func (s *Cassettes) View(size Size) string {
 	detailW := size.Width - listW - 1
 	list := s.renderList(listW, size.Height)
 	detail := s.renderDetail(detailW, size.Height)
-	return shell.Compose(
-		shell.PadColumnHeight(list, listW, size.Height),
-		shell.PadColumnHeight(detail, detailW, size.Height),
+	return kit.ComposeColumns(
+		kit.PadBlock(list, listW, size.Height),
+		kit.PadBlock(detail, detailW, size.Height),
 	)
 }
 
@@ -190,7 +195,7 @@ func (s *Cassettes) renderDetail(width, height int) string {
 	}
 
 	hdrH := strings.Count(header, "\n") + 1
-	return shell.PadColumnHeight(b.String(), width, height-hdrH+1)
+	return kit.PadBlock(b.String(), width, height-hdrH+1)
 }
 
 func formatBytes(n int64) string {

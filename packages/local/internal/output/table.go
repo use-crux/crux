@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Table renders a simple aligned table to stdout.
@@ -59,7 +59,7 @@ func (t *Table) Render() string {
 			if i > 0 {
 				sb.WriteString("  ")
 			}
-			sb.WriteString(Bold.Render(padRight(h, widths[i])))
+			sb.WriteString(padRight(h, widths[i]))
 		}
 		sb.WriteString("\n")
 		// Separator.
@@ -67,7 +67,7 @@ func (t *Table) Render() string {
 			if i > 0 {
 				sb.WriteString("  ")
 			}
-			sb.WriteString(Dim.Render(strings.Repeat("─", w)))
+			sb.WriteString(strings.Repeat("─", w))
 		}
 		sb.WriteString("\n")
 	}

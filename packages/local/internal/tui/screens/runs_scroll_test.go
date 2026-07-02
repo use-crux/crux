@@ -19,8 +19,8 @@ func TestRunsListScrollsWithCursor(t *testing.T) {
 		r.runs = append(r.runs, api.QualityRunRecord{TraceID: tabbedID(i)})
 	}
 	r.selRun = r.runs[0].TraceID
-	r.listCapacity = 3
-	// Render-time would set listCapacity; we set it directly for the test.
+	r.runList.SetItems(r.runs)
+	r.runList.SetHeight(6)
 
 	// Move cursor down 5 times — past the visible window (capacity 3).
 	for i := 0; i < 5; i++ {
@@ -33,11 +33,11 @@ func TestRunsListScrollsWithCursor(t *testing.T) {
 	// After 5 down-moves with capacity 3, scroll should have advanced
 	// enough to keep index 5 visible — i.e. scroll >= 3 (so index 5 is
 	// inside [scroll, scroll+3)).
-	if r.listScroll < 3 {
-		t.Errorf("listScroll = %d, want >= 3 (cursor at index 5 must be visible)", r.listScroll)
+	if got := r.runList.Offset(); got < 3 {
+		t.Errorf("offset = %d, want >= 3 (cursor at index 5 must be visible)", got)
 	}
-	if r.listScroll > 5 {
-		t.Errorf("listScroll = %d, want <= 5 (no need to scroll past cursor)", r.listScroll)
+	if got := r.runList.Offset(); got > 5 {
+		t.Errorf("offset = %d, want <= 5 (no need to scroll past cursor)", got)
 	}
 }
 
@@ -50,8 +50,9 @@ func TestRunsListScrollsBackUp(t *testing.T) {
 		r.runs = append(r.runs, api.QualityRunRecord{TraceID: tabbedID(i)})
 	}
 	r.selRun = r.runs[8].TraceID
-	r.listCapacity = 3
-	r.listScroll = 6
+	r.runList.SetItems(r.runs)
+	r.runList.SetHeight(6)
+	r.runList.SetCursorByIdentity(r.selRun)
 
 	// Cursor back up to index 1 — scroll should follow.
 	for i := 0; i < 7; i++ {
@@ -61,8 +62,8 @@ func TestRunsListScrollsBackUp(t *testing.T) {
 	if r.selRun != r.runs[1].TraceID {
 		t.Errorf("cursor index = %q, want %q", r.selRun, r.runs[1].TraceID)
 	}
-	if r.listScroll > 1 {
-		t.Errorf("listScroll = %d, want <= 1 (cursor at index 1 must be visible)", r.listScroll)
+	if got := r.runList.Offset(); got > 1 {
+		t.Errorf("offset = %d, want <= 1 (cursor at index 1 must be visible)", got)
 	}
 }
 

@@ -1,12 +1,12 @@
-package components
+package kit
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
-	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
 // WaterfallSpan is the renderable form of one span row.
@@ -56,17 +56,17 @@ func Waterfall(spans []WaterfallSpan, totalMs float64, width int) string {
 		default:
 			glyph = "├"
 		}
-		glyphRendered := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(glyph)
+		glyphRendered := lipgloss.NewStyle().Foreground(adapterPalette.Mut).Render(glyph)
 
 		op := opStyle(s.Op).Render(padString(s.Op, opCol))
 		name := padString(s.Name, nameCol)
-		nameStyled := shell.Text.Render(name)
+		nameStyled := adapterStyles.Regular.Render(name)
 		if s.Duplicate {
-			nameStyled = shell.Rose.Render(name)
+			nameStyled = adapterStyles.Red.Render(name)
 		}
 
 		dur := padString(formatDuration(s.DurationMs), durCol)
-		durStyled := shell.TextDim.Render(dur)
+		durStyled := adapterStyles.Dim.Render(dur)
 
 		// Bar.
 		offsetFrac := s.StartedMs / totalMs
@@ -155,26 +155,26 @@ func FromAPISpans(apiSpans []api.QualityRunSpan, traceStartMs int64, selectedID 
 // uses this for both the waterfall bar and the op-chip text. Mirrors the
 // design's palette: agent=teal, llm=violet, tool=amber, plus distinct
 // hues for compositions and flow boundaries.
-func PrimitiveColor(primitive string) lipgloss.Color {
+func PrimitiveColor(primitive string) color.Color {
 	switch primitive {
 	case "trace", "generation", "agent":
-		return shell.ColorTeal
+		return adapterPalette.Teal
 	case "tool":
-		return shell.ColorAmber
+		return adapterPalette.Amber
 	case "flow", "flow.step", "eval.flow":
-		return shell.ColorViolet
+		return adapterPalette.Violet
 	case "pipeline", "parallel", "consensus", "swarm":
-		return shell.ColorViolet
+		return adapterPalette.Violet
 	case "delegate", "handoff":
-		return shell.ColorTeal
+		return adapterPalette.Teal
 	case "retrieval", "retrieval.stage", "embed":
-		return shell.ColorAmber
+		return adapterPalette.Amber
 	case "judge", "plan", "task":
-		return shell.ColorGreen
+		return adapterPalette.Green
 	case "memory", "blackboard", "compact":
-		return shell.ColorTextDim
+		return adapterPalette.Dim
 	default:
-		return shell.ColorTextDim
+		return adapterPalette.Dim
 	}
 }
 
@@ -193,176 +193,4 @@ func spanOp(s api.QualityRunSpan) string {
 		return s.EventType
 	}
 	return s.Kind
-}
-
-func opColor(op string) lipgloss.Color {
-	switch op {
-	case "agent":
-		return shell.ColorTeal
-	case "llm":
-		return shell.ColorViolet
-	case "tool":
-		return shell.ColorAmber
-	default:
-		return shell.ColorTextDim
-	}
-}
-
-func opStyle(op string) lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(opColor(op))
-}
-
-func selectionPrefix(selected bool) string {
-	if selected {
-		return lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("▌")
-	}
-	return " "
-}
-
-func makeBar(width int, offsetFrac, widthFrac float64, color lipgloss.Color, selected bool) string {
-	if width <= 0 {
-		return ""
-	}
-	// Clamp to [0, 1] to defend against malformed offsets (e.g. absolute
-	// timestamps slipping through, NaN, division-by-zero artifacts).
-	if offsetFrac < 0 || offsetFrac != offsetFrac { // NaN check via self-compare
-		offsetFrac = 0
-	}
-	if offsetFrac > 1 {
-		offsetFrac = 1
-	}
-	if widthFrac < 0 || widthFrac != widthFrac {
-		widthFrac = 0
-	}
-	if widthFrac > 1 {
-		widthFrac = 1
-	}
-	offset := int(offsetFrac * float64(width))
-	if offset < 0 {
-		offset = 0
-	}
-	if offset >= width {
-		offset = width - 1
-	}
-	bw := int(widthFrac * float64(width))
-	if bw < 1 {
-		bw = 1
-	}
-	if offset+bw > width {
-		bw = width - offset
-		if bw < 1 {
-			bw = 1
-		}
-	}
-	pre := strings.Repeat(" ", offset)
-	barChar := "█"
-	// Selection in the waterfall is conveyed by the row-level `▌`
-	// marker; no extra bg fill on the bar (was `ColorPanelAlt`, read
-	// as a darker block around the colored bar).
-	style := lipgloss.NewStyle().Foreground(color)
-	_ = selected
-	bar := style.Render(strings.Repeat(barChar, bw))
-	post := ""
-	if rem := width - offset - bw; rem > 0 {
-		post = strings.Repeat(" ", rem)
-	}
-	return pre + bar + post
-}
-
-func padString(s string, width int) string {
-	if len(s) >= width {
-		if width <= 1 {
-			return s[:width]
-		}
-		return s[:width-1] + "…"
-	}
-	return s + strings.Repeat(" ", width-len(s))
-}
-
-func padRowToWidth(s string, width int) string {
-	w := lipgloss.Width(s)
-	if w >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-w)
-}
-
-func formatDuration(ms float64) string {
-	if ms >= 1000 {
-		return fmt.Sprintf("%.2fs", ms/1000)
-	}
-	return fmt.Sprintf("%dms", int(ms))
-}
-
-// WaterfallRuler renders the time ruler shown above the waterfall in the
-// design — `0s  1s  2s  …  Ns` ticks across the bar column with the trace's
-// total duration on the right. The label columns to the left of the bar are
-// reserved with whitespace so ticks align with the bars below.
-func WaterfallRuler(totalMs float64, width int) string {
-	if totalMs <= 0 || width <= 0 {
-		return strings.Repeat(" ", width)
-	}
-	const labelCols = 2 + 1 + 6 + 1 + 28 + 1 // glyph + space + op + space + name + space
-	barCol := width - labelCols - 7 - 1      // duration col (7) + selection col (1)
-	if barCol < 8 {
-		barCol = 8
-	}
-
-	// Decide tick interval so we end up with roughly 8–14 ticks visible.
-	totalSec := totalMs / 1000.0
-	step := 1.0
-	switch {
-	case totalSec > 30:
-		step = 5
-	case totalSec > 15:
-		step = 2
-	case totalSec > 8:
-		step = 1
-	case totalSec > 3:
-		step = 0.5
-	default:
-		step = 0.2
-	}
-
-	ruler := make([]rune, barCol)
-	for i := range ruler {
-		ruler[i] = ' '
-	}
-	tickStyle := lipgloss.NewStyle().Foreground(shell.ColorTextMuted)
-	endStyle := lipgloss.NewStyle().Foreground(shell.ColorTextDim)
-	var marks []string
-	for t := 0.0; t <= totalSec; t += step {
-		pos := int((t / totalSec) * float64(barCol))
-		if pos < 0 || pos >= barCol {
-			continue
-		}
-		label := fmt.Sprintf("%gs", t)
-		marks = append(marks, fmt.Sprintf("%d:%s", pos, label))
-	}
-
-	// Render label row above the bar column.
-	labelRow := make([]rune, barCol)
-	for i := range labelRow {
-		labelRow[i] = ' '
-	}
-	for _, m := range marks {
-		var pos int
-		var label string
-		fmt.Sscanf(m, "%d:%s", &pos, &label)
-		for i, r := range label {
-			if pos+i >= barCol {
-				break
-			}
-			labelRow[pos+i] = r
-		}
-	}
-
-	rulerStr := tickStyle.Render(string(labelRow))
-	end := endStyle.Render(fmt.Sprintf("%.1fs", totalSec))
-	prefix := strings.Repeat(" ", labelCols)
-	rendered := prefix + rulerStr + "  " + end
-	if w := lipgloss.Width(rendered); w < width {
-		rendered += strings.Repeat(" ", width-w)
-	}
-	return rendered
 }

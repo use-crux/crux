@@ -1,10 +1,11 @@
-package components
+package kit
 
 import (
+	"image/color"
 	"math"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Box-character fallback (kept for the rare row sparkline that only has
@@ -17,7 +18,7 @@ var sparkChars = []rune{'▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
 // it caps the number of glyph columns from the right (so the rendered
 // string is at most `width` characters wide; effective sample count is
 // `width * 2`).
-func Sparkline(values []float64, width int, color lipgloss.Color) string {
+func Sparkline(values []float64, width int, c color.Color) string {
 	if len(values) == 0 {
 		return ""
 	}
@@ -58,13 +59,13 @@ func Sparkline(values []float64, width int, color lipgloss.Color) string {
 		}
 		b.WriteRune(brailleGlyph(left, right))
 	}
-	return lipgloss.NewStyle().Foreground(color).Render(b.String())
+	return lipgloss.NewStyle().Foreground(c).Render(b.String())
 }
 
 // SparklineFilled renders an area-fill sparkline using braille glyphs: every
 // dot at-or-below the data row is set, producing the filled-curve look the
 // V1 design uses for KPI cards.
-func SparklineFilled(values []float64, width int, color lipgloss.Color) string {
+func SparklineFilled(values []float64, width int, c color.Color) string {
 	if len(values) == 0 {
 		return ""
 	}
@@ -103,7 +104,7 @@ func SparklineFilled(values []float64, width int, color lipgloss.Color) string {
 		}
 		b.WriteRune(brailleGlyphFilled(left, right))
 	}
-	return lipgloss.NewStyle().Foreground(color).Render(b.String())
+	return lipgloss.NewStyle().Foreground(c).Render(b.String())
 }
 
 // brailleGlyph returns the braille char (U+2800..U+28FF) with two dots set:
@@ -161,7 +162,7 @@ func bitForRow(row int, right bool) uint {
 
 // SparklineBlock keeps the old 8-step box-character renderer for places where
 // braille is too dense (e.g. inline 1-cell tags).
-func SparklineBlock(values []float64, width int, color lipgloss.Color) string {
+func SparklineBlock(values []float64, width int, c color.Color) string {
 	if len(values) == 0 {
 		return ""
 	}
@@ -192,11 +193,11 @@ func SparklineBlock(values []float64, width int, color lipgloss.Color) string {
 		}
 		b.WriteRune(sparkChars[idx])
 	}
-	return lipgloss.NewStyle().Foreground(color).Render(b.String())
+	return lipgloss.NewStyle().Foreground(c).Render(b.String())
 }
 
 // SparklineInt is a convenience wrapper around Sparkline for int slices.
-func SparklineInt(values []int, width int, color lipgloss.Color) string {
+func SparklineInt(values []int, width int, c color.Color) string {
 	if len(values) == 0 {
 		return ""
 	}
@@ -204,5 +205,5 @@ func SparklineInt(values []int, width int, color lipgloss.Color) string {
 	for i, v := range values {
 		f[i] = float64(v)
 	}
-	return Sparkline(f, width, color)
+	return Sparkline(f, width, c)
 }

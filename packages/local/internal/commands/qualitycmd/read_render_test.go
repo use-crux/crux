@@ -6,20 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
-// forceAsciiProfile pins lipgloss's global color profile to Ascii for a test so
-// the colorless invariant holds regardless of the host's detected profile (the
-// progress table styles its header/separator through lipgloss directly).
 func forceAsciiProfile(t *testing.T) {
 	t.Helper()
-	prev := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.Ascii)
-	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
 }
 
 func f64(v float64) *float64 { return &v }

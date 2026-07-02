@@ -1,23 +1,23 @@
 // Package components contains small render-only widgets reused across the
 // Quality screens — chips/pills, sparklines, status dots, ASCII charts. None
 // of these own state; they take inputs and return a string.
-package components
+package kit
 
 import (
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/use-crux/crux/packages/local/internal/tui/shell"
+	"charm.land/lipgloss/v2"
 )
 
 // Chip renders a filled-background pill with an UPPERCASE label —
 // matches the design for category labels (`HIGH`, `RETRIEVAL`, `INS-014`).
 // `bg` is the rectangle color; foreground is the panel background tone
 // so the label pops out of the chip.
-func Chip(label string, bg lipgloss.Color) string {
+func Chip(label string, bg color.Color) string {
 	return lipgloss.NewStyle().
 		Background(bg).
-		Foreground(shell.ColorBG).
+		Foreground(adapterPalette.Bg).
 		Bold(true).
 		Padding(0, 1).
 		Render(strings.ToUpper(label))
@@ -27,10 +27,10 @@ func Chip(label string, bg lipgloss.Color) string {
 // matches the design for state markers (`changed`, `curated`, `pinned`,
 // `draft`, `live`, `snapshot`, `frozen`) and other lowercase status
 // labels. Identical to Chip but without the uppercase pass.
-func ChipState(label string, bg lipgloss.Color) string {
+func ChipState(label string, bg color.Color) string {
 	return lipgloss.NewStyle().
 		Background(bg).
-		Foreground(shell.ColorBG).
+		Foreground(adapterPalette.Bg).
 		Bold(true).
 		Padding(0, 1).
 		Render(label)
@@ -41,8 +41,8 @@ func ChipState(label string, bg lipgloss.Color) string {
 // Preserves label case (tags in the design are mixed-case).
 func ChipTag(label string) string {
 	return lipgloss.NewStyle().
-		Background(shell.ColorSurface).
-		Foreground(shell.ColorTextDim).
+		Background(adapterPalette.Bg2).
+		Foreground(adapterPalette.Dim).
 		Padding(0, 1).
 		Render(label)
 }

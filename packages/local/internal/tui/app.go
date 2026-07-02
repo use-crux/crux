@@ -12,9 +12,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
 )
@@ -109,6 +109,10 @@ func (a *App) SendQualityEvent(ev api.QualityEvent) { a.sendMsg(qualityEventMsg(
 // payload is ignored in V1 Panels; screens listen via SendQualityEvent.
 func (a *App) SendWSEvent(_ json.RawMessage) { a.sendMsg(storeChangedMsg{}) }
 
+// SendMsg injects an already-typed Bubble Tea message into the TUI event loop.
+// It is the bridge entrypoint for batched, revision-tagged live updates.
+func (a *App) SendMsg(msg tea.Msg) { a.sendMsg(msg) }
+
 func (a *App) SendBootPhase(phase string)       { a.sendMsg(bootPhaseMsg{phase: phase}) }
 func (a *App) SendBootLog(stream, text string)  { a.sendMsg(bootLogMsg{stream: stream, text: text}) }
 func (a *App) SendLiveReady()                   { a.sendMsg(liveReadyMsg{}) }
@@ -186,7 +190,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.maybeNotifyDashboardVisible()
 		return a, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if !a.bootComplete || a.bootError != "" {
 			switch m.String() {
 			case "q", "ctrl+c":
@@ -255,7 +259,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-func (a *App) View() string {
+func (a *App) View() tea.View {
+	content := a.viewContent()
+	view := tea.NewView(content)
+	view.AltScreen = true
+	return view
+}
+
+func (a *App) viewContent() string {
 	if !a.ready {
 		return fmt.Sprintf("\n  %s Loading...\n", a.spinner.View())
 	}

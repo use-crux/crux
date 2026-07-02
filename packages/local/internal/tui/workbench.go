@@ -6,15 +6,21 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/theme"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/overlays"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
 func timeNowMs() int64 { return time.Now().UnixMilli() }
+
+var workbenchStyles = theme.NewStyles(theme.Resolve(colorprofile.TrueColor))
 
 // osc8Link wraps `text` in an OSC 8 hyperlink escape so terminals that
 // support the protocol render `text` as a clickable link to `url`.
@@ -43,6 +49,7 @@ type Workbench struct {
 	activeNav  string
 	screens    map[string]screens.Screen
 	counts     map[string]int
+	stale      map[string]bridge.Domains
 	devContext api.DevtoolsContext
 
 	pendingPrefix string // for `g…` two-key sequences
@@ -65,6 +72,7 @@ func NewWorkbench(client screens.DataClient, rawClient DataClient, serverURL str
 		serverURL: serverURL,
 		activeNav: "overview",
 		counts:    map[string]int{},
+		stale:     map[string]bridge.Domains{},
 		palette:   overlays.NewPalette(),
 		help:      overlays.NewHelp(),
 		inspect:   overlays.NewInspect(),
@@ -111,7 +119,7 @@ func (w *Workbench) Resize(width, height int) {
 // Update routes a tea.Msg through the active screen and handles global keys.
 func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
 	switch m := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return w.handleKey(m)
 	case screens.NavigateRequest:
 		// A screen asked to drill cross-screen. Stage the selection (if
@@ -126,26 +134,20 @@ func (w *Workbench) Update(msg tea.Msg) tea.Cmd {
 	case devCtxLoadedMsg:
 		w.devContext = api.DevtoolsContext(m)
 		return nil
+	case bridge.Batch:
+		return w.handleBridgeBatch(m)
 	case qualityEventMsg:
-		// Forward the typed event to the active screen so it can update
-		// selectively (e.g. the Overview activity tail), then refresh the
-		// nav-rail context. The screen decides whether it needs to re-fetch.
 		ev := api.QualityEvent(m)
-		cmd := w.activeScreen().Update(ev, w.client)
-		w.refreshCounts()
-		return tea.Batch(cmd, w.fetchContext())
+		var revs bridge.Revisions
+		changed := revs.BumpQuality(ev)
+		return w.handleBridgeBatch(bridge.Batch{
+			Quality: []api.QualityEvent{ev},
+			Revs:    revs,
+			Changed: changed,
+		})
 	case storeChangedMsg:
-		// Generic "store changed" — synthesize a refresh QualityEvent so
-		// every screen that already handles api.QualityEvent live-updates
-		// without needing an extra message type.
-		ev := api.QualityEvent{
-			Tag:       "QualityEvent",
-			Timestamp: timeNowMs(),
-			Kind:      "refresh",
-		}
-		cmd := w.activeScreen().Update(ev, w.client)
-		w.refreshCounts()
-		return tea.Batch(cmd, w.fetchContext())
+		var revs bridge.Revisions
+		return w.handleBridgeBatch(bridge.Batch{StoreChanged: true, Revs: revs})
 	case screens.InspectRequest:
 		w.inspect.Open(m.Title, m.Subtitle, m.Payload)
 		return nil
@@ -190,13 +192,15 @@ func (w *Workbench) View() string {
 		return ""
 	}
 
+	root := kit.Rect{W: w.width, H: w.height}
+	regions := kit.SplitV(root, kit.Fill(), kit.Fixed(1))
+	bodyRect := regions[0]
+	statusRect := regions[1]
+
 	// The status bar reflects only the focused screen's keybinds — no mode
 	// chip. See ADR-0050.
-	statusBar := shell.StatusBar(w.width, w.activeScreen().Keybinds(), ".crux/quality")
+	statusBar := shell.StatusBar(statusRect.W, w.activeScreen().Keybinds(), ".crux/quality")
 
-	bodyH := w.height - 1 // 1 for status bar
-
-	innerW := w.width - shell.NavRailWidth - 1
 	path, right := w.activeScreen().Breadcrumb()
 	if right == "" {
 		right = w.contextMeta()
@@ -207,35 +211,10 @@ func (w *Workbench) View() string {
 	if proj, tgt := w.devContext.Project.Name, w.devContext.Target.ID; proj != "" && tgt != "" {
 		path = append([]string{proj + ":" + tgt}, path...)
 	}
-	breadcrumb := shell.Breadcrumb(innerW, path, right)
-	breadcrumbH := strings.Count(breadcrumb, "\n") + 1
-	screenH := bodyH - breadcrumbH
 
-	navItems := w.navWithCounts()
-	rail := shell.NavRail(bodyH, navItems, w.activeNav, shell.NavRailFooter{
-		TargetID:         w.devContext.Target.ID,
-		TargetKind:       w.devContext.Target.Kind,
-		TargetModel:      w.devContext.Target.Model,
-		BaselineLabel:    w.devContext.Baseline.Label,
-		BaselineRelative: w.devContext.Baseline.PromotedAtRelative,
-	})
+	bodyLines := w.layoutBody(bodyRect, path, right)
+	base := strings.Join(append(bodyLines, statusBar), "\n")
 
-	screenView := w.activeScreen().View(screens.Size{
-		Width:  innerW,
-		Height: screenH,
-	})
-
-	rightCol := breadcrumb + "\n" + screenView
-	body := shell.Compose(
-		shell.PadColumnHeight(rail, shell.NavRailWidth, bodyH),
-		shell.PadColumnHeight(rightCol, w.width-shell.NavRailWidth-1, bodyH),
-	)
-
-	base := strings.Join([]string{body, statusBar}, "\n")
-
-	// Overlay rendering — composited by line replacement. Bubbletea's
-	// lipgloss has no z-index, so we splice the overlay block into the
-	// base lines. Overlays now start at row 1 (no tab strip above).
 	if w.palette.IsOpen() {
 		return overlayOnto(base, w.palette.View(w.width, w.height), w.width, 1)
 	}
@@ -246,6 +225,42 @@ func (w *Workbench) View() string {
 		return overlayOnto(base, w.inspect.View(w.width, w.height), w.width, 0)
 	}
 	return base
+}
+
+func (w *Workbench) layoutBody(bodyRect kit.Rect, path []string, right string) []string {
+	if kit.Classify(bodyRect.W) == kit.LayoutSingle {
+		return w.layoutScreenColumn(bodyRect, path, right)
+	}
+
+	navItems := w.navWithCounts()
+	panes := kit.SplitH(bodyRect, kit.Fixed(shell.NavRailWidth), kit.Fill())
+	rail := shell.NavRail(panes[0].H, navItems, w.activeNav, shell.NavRailFooter{
+		TargetID:         w.devContext.Target.ID,
+		TargetKind:       w.devContext.Target.Kind,
+		TargetModel:      w.devContext.Target.Model,
+		BaselineLabel:    w.devContext.Baseline.Label,
+		BaselineRelative: w.devContext.Baseline.PromotedAtRelative,
+	})
+	screen := w.layoutScreenColumn(panes[1], path, right)
+
+	return kit.ComposeStyled(panes, [][]string{
+		blockLines(rail),
+		screen,
+	}, workbenchStyles)
+}
+
+func (w *Workbench) layoutScreenColumn(r kit.Rect, path []string, right string) []string {
+	if r.W <= 0 || r.H <= 0 {
+		return nil
+	}
+	breadcrumb := shell.Breadcrumb(r.W, path, right)
+	breadcrumbH := len(blockLines(breadcrumb))
+	screenH := r.H - breadcrumbH
+	if screenH < 0 {
+		screenH = 0
+	}
+	screenView := w.activeScreen().View(screens.Size{Width: r.W, Height: screenH})
+	return blockLines(kit.PadBlock(breadcrumb+"\n"+screenView, r.W, r.H))
 }
 
 // overlayOnto splices `overlay` into `base` starting at top-line `top`, with
@@ -269,30 +284,21 @@ func overlayOnto(base, overlay string, width, top int) string {
 	if leftPad < 1 {
 		leftPad = 1
 	}
-	for i, ln := range overlayLines {
-		row := top + i
-		if row >= len(baseLines) {
-			break
-		}
-		// Replace the row content at the overlay rect, preserving the
-		// background outside it.
-		under := baseLines[row]
-		baseLines[row] = spliceLine(under, ln, leftPad, width)
+	height := len(baseLines)
+	if overlayH := top + len(overlayLines); overlayH > height {
+		height = overlayH
 	}
-	return strings.Join(baseLines, "\n")
+	canvas := lipgloss.NewCanvas(width, height)
+	canvas.Compose(lipgloss.NewLayer(base))
+	canvas.Compose(lipgloss.NewLayer(overlay).X(leftPad).Y(top).Z(1))
+	return canvas.Render()
 }
 
-func spliceLine(under, overlay string, at, width int) string {
-	// Render `overlay` with `at` cols of `under` prefix, then `overlay`,
-	// then enough of `under` suffix to fill `width`. We approximate by
-	// using the lipgloss MaxWidth helper rather than a true grapheme split,
-	// since the V1 design's overlay rows are ASCII-heavy.
-	left := lipgloss.NewStyle().MaxWidth(at).Render(under)
-	pad := at - lipgloss.Width(left)
-	if pad > 0 {
-		left += strings.Repeat(" ", pad)
+func blockLines(s string) []string {
+	if s == "" {
+		return nil
 	}
-	return left + overlay
+	return strings.Split(strings.TrimRight(s, "\n"), "\n")
 }
 
 // contextMeta composes the right-side block of the breadcrumb row.
@@ -379,7 +385,7 @@ var navIDByGoKey = map[string]string{
 	"d": "index",     // `g d` = definitions (the Project Index screen)
 }
 
-func (w *Workbench) handleKey(msg tea.KeyMsg) tea.Cmd {
+func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	key := msg.String()
 
 	// If the active screen owns an embedded editor (Suites case editor),
@@ -466,6 +472,7 @@ func (w *Workbench) gotoNav(id string) tea.Cmd {
 		return nil
 	}
 	w.activeNav = id
+	delete(w.stale, id)
 	// Best-effort cross-screen selection routing. If a record of the
 	// destination screen's primary Kind is staged, hand it to the screen
 	// before init.

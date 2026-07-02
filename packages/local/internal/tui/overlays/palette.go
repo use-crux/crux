@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -58,7 +58,7 @@ func (p *Palette) IsOpen() bool { return p.open }
 //   - the literal input string parsed via ParseInput (if they did type)
 //
 // Callers should call ParseChosen() to get a structured Command.
-func (p *Palette) Update(msg tea.KeyMsg) (chosen Chosen, cmd tea.Cmd) {
+func (p *Palette) Update(msg tea.KeyPressMsg) (chosen Chosen, cmd tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		p.Close()
@@ -84,8 +84,8 @@ func (p *Palette) Update(msg tea.KeyMsg) (chosen Chosen, cmd tea.Cmd) {
 			p.refilter()
 		}
 	default:
-		if len(msg.String()) == 1 && msg.String()[0] >= 0x20 {
-			p.input += msg.String()
+		if msg.Text != "" {
+			p.input += msg.Text
 			p.refilter()
 		}
 	}

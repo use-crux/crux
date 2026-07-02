@@ -1,6 +1,7 @@
-package components
+package kit
 
 import (
+	"image/color"
 	"math"
 	"strings"
 	"testing"
@@ -57,7 +58,7 @@ func TestMakeBarClampsBogusFractions(t *testing.T) {
 			t.Fatalf("makeBar panicked: %v", r)
 		}
 	}()
-	_ = makeBar(40, 99.0, 99.0, "#ffffff", false)             // wildly out of range
-	_ = makeBar(40, -10.0, -10.0, "#ffffff", false)           // negative
-	_ = makeBar(40, math.NaN(), math.NaN(), "#ffffff", false) // NaN
+	_ = makeBar(40, 99.0, 99.0, color.White, false)             // wildly out of range
+	_ = makeBar(40, -10.0, -10.0, color.White, false)           // negative
+	_ = makeBar(40, math.NaN(), math.NaN(), color.White, false) // NaN
 }

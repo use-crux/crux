@@ -1,11 +1,10 @@
-package components
+package kit
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/use-crux/crux/packages/local/internal/tui/shell"
+	"charm.land/lipgloss/v2"
 )
 
 // ASCIIChart renders a multi-row line chart of `values` against `min`/`max`.
@@ -28,13 +27,13 @@ func ASCIIChart(values []float64, min, max float64, width, rows int, unitFmt str
 		rng = 1
 	}
 
-	point := lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("●")
-	pointWarn := lipgloss.NewStyle().Foreground(shell.ColorAmber).Render("●")
-	pointFail := lipgloss.NewStyle().Foreground(shell.ColorRose).Render("●")
-	tween := lipgloss.NewStyle().Foreground(shell.ColorTextDim).Render("─")
+	point := lipgloss.NewStyle().Foreground(adapterPalette.Teal).Render("●")
+	pointWarn := lipgloss.NewStyle().Foreground(adapterPalette.Amber).Render("●")
+	pointFail := lipgloss.NewStyle().Foreground(adapterPalette.Red).Render("●")
+	tween := lipgloss.NewStyle().Foreground(adapterPalette.Dim).Render("─")
 	blank := " "
-	axisLabel := lipgloss.NewStyle().Foreground(shell.ColorTextMuted)
-	baselineLine := lipgloss.NewStyle().Foreground(shell.ColorTextMuted)
+	axisLabel := lipgloss.NewStyle().Foreground(adapterPalette.Mut)
+	baselineLine := lipgloss.NewStyle().Foreground(adapterPalette.Mut)
 
 	var out strings.Builder
 	for r := 0; r < rows; r++ {

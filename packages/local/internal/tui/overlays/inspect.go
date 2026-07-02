@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -44,7 +44,7 @@ func (i *Inspect) IsOpen() bool { return i.open }
 
 // Update handles keys while the overlay is open. Returns a tea.Cmd (none
 // generated today; reserved for future copy/export actions).
-func (i *Inspect) Update(msg tea.KeyMsg) tea.Cmd {
+func (i *Inspect) Update(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc", "o", "q":
 		i.Close()

@@ -4,39 +4,44 @@ package output
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/use-crux/crux/packages/local/internal/theme"
 )
 
 // ── Brand Colors ──────────────────────────────────────────────────
 
 var (
-	AccentColor    = lipgloss.Color("#00D4AA")
-	AccentDimColor = lipgloss.Color("#007766")
-	GreenColor     = lipgloss.Color("#4ADE80")
-	RedColor       = lipgloss.Color("#F87171")
-	YellowColor    = lipgloss.Color("#FBBF24")
-	WhiteColor     = lipgloss.Color("#FFFFFF")
-	FgColor        = lipgloss.Color("#C8C8C8")
-	DimColor       = lipgloss.Color("#666666")
-	BorderColor    = lipgloss.Color("#444444")
+	outputPalette = theme.Resolve(colorprofile.TrueColor)
+	outputStyles  = theme.NewStyles(outputPalette)
+
+	AccentColor    = outputPalette.Teal
+	AccentDimColor = outputPalette.Blue
+	GreenColor     = outputPalette.Green
+	RedColor       = outputPalette.Red
+	YellowColor    = outputPalette.Amber
+	WhiteColor     = outputPalette.Fg
+	FgColor        = outputPalette.Fg
+	DimColor       = outputPalette.Dim
+	BorderColor    = outputPalette.Border
 )
 
 // ── Styles ────────────────────────────────────────────────────────
 
 var (
-	Accent    = lipgloss.NewStyle().Foreground(AccentColor)
-	AccentDim = lipgloss.NewStyle().Foreground(AccentDimColor)
-	Green     = lipgloss.NewStyle().Foreground(GreenColor)
-	Red       = lipgloss.NewStyle().Foreground(RedColor)
-	Yellow    = lipgloss.NewStyle().Foreground(YellowColor)
+	Accent    = outputStyles.Accent
+	AccentDim = outputStyles.Blue
+	Green     = outputStyles.Green
+	Red       = outputStyles.Red
+	Yellow    = outputStyles.Amber
 	Cyan      = Accent // Alias for backwards compat.
-	Blue      = lipgloss.NewStyle().Foreground(lipgloss.Color("#6699FF"))
-	Magenta   = lipgloss.NewStyle().Foreground(lipgloss.Color("#C084FC"))
-	Dim       = lipgloss.NewStyle().Foreground(DimColor)
-	Fg        = lipgloss.NewStyle().Foreground(FgColor)
+	Blue      = outputStyles.Blue
+	Magenta   = outputStyles.Violet
+	Dim       = outputStyles.Dim
+	Fg        = outputStyles.Regular
 	Bold      = lipgloss.NewStyle().Bold(true)
-	BoldCyan  = lipgloss.NewStyle().Bold(true).Foreground(AccentColor)
-	Divider   = lipgloss.NewStyle().Foreground(BorderColor)
+	BoldCyan  = outputStyles.AccentHeader
+	Divider   = outputStyles.Border
 )
 
 // ── Logo ──────────────────────────────────────────────────────────

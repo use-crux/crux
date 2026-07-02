@@ -4,16 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
-	"github.com/use-crux/crux/packages/local/internal/tui/components"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -43,14 +45,7 @@ type Runs struct {
 	err     string
 	loading bool
 
-	// listScroll is the run-index at the top of the visible list pane.
-	// listCapacity is how many runs fit in the pane (set during render
-	// from bodyRows / 2 — each run is two rows). Together they let
-	// cycleRun keep the cursor in view as it walks past the visible
-	// window: when selRun's index moves below `listScroll+listCapacity`
-	// the offset advances; when it moves above `listScroll` it retreats.
-	listScroll   int
-	listCapacity int
+	runList kit.VList[api.QualityRunRecord]
 }
 
 type runsFocus int
@@ -61,9 +56,18 @@ const (
 	focusSpanDetail
 )
 
-func NewRuns() *Runs { return &Runs{} }
+func NewRuns() *Runs {
+	r := &Runs{}
+	r.runList.SetIdentity(func(run api.QualityRunRecord) string { return run.TraceID })
+	r.runList.SetRowHeight(func(api.QualityRunRecord) int { return 2 })
+	return r
+}
 
 func (s *Runs) ID() string { return "runs" }
+
+func (s *Runs) Interested(domains bridge.Domains) bool {
+	return domains.Has(bridge.DomainRuns)
+}
 
 func (s *Runs) Init(c DataClient) tea.Cmd { return fetchRunsList(c) }
 
@@ -71,11 +75,14 @@ func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case runsListLoadedMsg:
 		s.runs = []api.QualityRunRecord(m)
+		s.runList.SetItems(s.runs)
 		s.loaded = true
 		if s.selRun == "" && len(s.runs) > 0 {
 			s.selRun = s.runs[0].TraceID
+			s.runList.SetCursorByIdentity(s.selRun)
 			return fetchRunDetail(c, s.selRun)
 		}
+		s.runList.SetCursorByIdentity(s.selRun)
 	case runDetailLoadedMsg:
 		d := api.QualityRunDetailRecord(m)
 		// Preserve the user's span selection across refetches when the
@@ -101,7 +108,7 @@ func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		// "store changed" signal — kind=="refresh"). Refresh the run list
 		// and refetch the active trace's detail when relevant.
 		return s.liveRefresh(c, m.RefID)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch m.String() {
 		case "j", "down":
 			return s.moveDown(c)
@@ -215,50 +222,23 @@ func (s *Runs) cycleRun(c DataClient, delta int) tea.Cmd {
 	if len(s.runs) == 0 {
 		return nil
 	}
-	idx := 0
-	for i, r := range s.runs {
-		if r.TraceID == s.selRun {
-			idx = i
-			break
-		}
+	s.runList.SetItems(s.runs)
+	s.runList.SetCursorByIdentity(s.selRun)
+	if delta > 0 {
+		s.runList.CursorDown()
+	} else {
+		s.runList.CursorUp()
 	}
-	idx += delta
-	if idx < 0 {
-		idx = 0
-	}
-	if idx >= len(s.runs) {
-		idx = len(s.runs) - 1
-	}
-	if s.runs[idx].TraceID == s.selRun {
+	run, _, ok := s.runList.Cursor()
+	if !ok || run.TraceID == s.selRun {
 		// Cursor didn't move — already at the boundary. No need to
 		// re-fetch or rescroll.
 		return nil
 	}
-	s.selRun = s.runs[idx].TraceID
-	s.ensureCursorVisible(idx)
+	s.selRun = run.TraceID
 	s.loading = true
 	s.detail = nil
 	return fetchRunDetail(c, s.selRun)
-}
-
-// ensureCursorVisible adjusts listScroll so the run at `idx` sits
-// inside the visible window [listScroll, listScroll+listCapacity).
-// Called after the cursor moves so the list scrolls to follow.
-func (s *Runs) ensureCursorVisible(idx int) {
-	cap := s.listCapacity
-	if cap <= 0 {
-		return
-	}
-	if idx < s.listScroll {
-		s.listScroll = idx
-		return
-	}
-	if idx >= s.listScroll+cap {
-		s.listScroll = idx - cap + 1
-	}
-	if s.listScroll < 0 {
-		s.listScroll = 0
-	}
 }
 
 func (s *Runs) cycleSpan(delta int) tea.Cmd {
@@ -304,14 +284,14 @@ func (s *Runs) Keybinds() []shell.Keybind {
 		jkLabel = "run"
 	}
 	return []shell.Keybind{
-		{"j/k", jkLabel},
-		{"h/l", "pane"},
-		{"↵", focusActionLabel(s.focus)},
-		{"i", "inspect raw"},
-		{"o", "open in viewer"},
-		{":", "cmd"},
-		{"?", "help"},
-		{"q", "quit"},
+		shell.Bind("j/k", jkLabel),
+		shell.Bind("h/l", "pane"),
+		shell.Bind("↵", focusActionLabel(s.focus)),
+		shell.Bind("i", "inspect raw"),
+		shell.Bind("o", "open in viewer"),
+		shell.Bind(":", "cmd"),
+		shell.Bind("?", "help"),
+		shell.Bind("q", "quit"),
 	}
 }
 
@@ -371,10 +351,10 @@ func (s *Runs) View(size Size) string {
 	waterfall := s.renderWaterfall(waterfallW, size.Height)
 	detail := s.renderSpanDetail(detailW, size.Height)
 
-	body := shell.Compose(
-		shell.PadColumnHeight(list, listW, size.Height),
-		shell.PadColumnHeight(waterfall, waterfallW, size.Height),
-		shell.PadColumnHeight(detail, detailW, size.Height),
+	body := kit.ComposeColumns(
+		kit.PadBlock(list, listW, size.Height),
+		kit.PadBlock(waterfall, waterfallW, size.Height),
+		kit.PadBlock(detail, detailW, size.Height),
 	)
 	return body
 }
@@ -405,45 +385,20 @@ func (s *Runs) renderList(width, height int) string {
 		return strings.TrimRight(b.String(), "\n")
 	}
 
-	// Record how many runs fit in the pane so cycleRun's
-	// ensureCursorVisible() can keep the cursor in-window as it walks.
-	// Each run takes 2 rows.
-	capacity := bodyRows / 2
-	if capacity < 1 {
-		capacity = 1
-	}
-	s.listCapacity = capacity
-
-	// Clamp scroll offset to a legal window. If the user resized the
-	// terminal smaller, listScroll may now be past the last possible
-	// window — pull it back so we still see the cursor.
-	maxScroll := len(s.runs) - capacity
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	if s.listScroll > maxScroll {
-		s.listScroll = maxScroll
-	}
-	if s.listScroll < 0 {
-		s.listScroll = 0
-	}
-
-	count := 0
-	for i := s.listScroll; i < len(s.runs); i++ {
-		if count+2 > bodyRows { // each run takes 2 rows
-			break
-		}
-		r := s.runs[i]
-		row1, row2 := s.renderRunRow(r, width, r.TraceID == s.selRun)
-		b.WriteString(row1)
+	s.runList.SetItems(s.runs)
+	s.runList.SetHeight(bodyRows)
+	s.runList.SetCursorByIdentity(s.selRun)
+	rows := s.runList.Render(width, func(r api.QualityRunRecord, _ int, selected bool, rowW int) string {
+		row1, row2 := s.renderRunRow(r, rowW, selected)
+		return row1 + "\n" + row2
+	})
+	for _, row := range rows {
+		b.WriteString(row)
 		b.WriteString("\n")
-		b.WriteString(row2)
-		b.WriteString("\n")
-		count += 2
 	}
-	for count < bodyRows {
+	for len(rows) < bodyRows {
 		b.WriteString(strings.Repeat(" ", width) + "\n")
-		count++
+		rows = append(rows, "")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -453,7 +408,7 @@ func (s *Runs) renderRunRow(r api.QualityRunRecord, width int, selected bool) (s
 	if selected {
 		bar = lipgloss.NewStyle().Foreground(shell.ColorTeal).Render("▌")
 	}
-	dot := components.StatusDot(r.Status)
+	dot := kit.StatusDot(r.Status)
 
 	idCol := shell.Text.Render(padString2(shortID(r.TraceID, 7), 7))
 	targetCol := shell.TextDim.Render(truncate(r.TargetID, 12))
@@ -516,10 +471,10 @@ func (s *Runs) renderWaterfall(width, height int) string {
 	hdrH := strings.Count(header, "\n") + 1
 
 	footer := shell.PaneFooter(width, []shell.Keybind{
-		{"↵", "expand"},
-		{"i", "inspect raw"},
-		{"o", "open in viewer"},
-		{"e", "export"},
+		shell.Bind("↵", "expand"),
+		shell.Bind("i", "inspect raw"),
+		shell.Bind("o", "open in viewer"),
+		shell.Bind("e", "export"),
 		// Note: `f flame chart` and `t timeline` are intentionally absent —
 		// they were aspirational footer labels that never had handlers. Per
 		// the KEYBINDS.md contract, footer/status hints must reflect what
@@ -551,7 +506,7 @@ func (s *Runs) renderWaterfall(width, height int) string {
 	}
 	labelPrefix := glyphCol + 1 + opCol + 1 + nameCol + 1 // cols before the bar
 
-	rows := components.FromAPISpans(s.detail.Spans, s.detail.Trace.StartedAt, s.selSpan)
+	rows := kit.FromAPISpans(s.detail.Spans, s.detail.Trace.StartedAt, s.selSpan)
 	wfLines := renderWaterfallSpans(rows, totalMs, width, labelPrefix, barCol)
 
 	rulerLine := renderTimeRuler(totalMs, labelPrefix, barCol, width)
@@ -650,7 +605,7 @@ func renderTraceChips(d *api.QualityRunDetailRecord) string {
 				continue
 			}
 			seen[id] = true
-			chips = append(chips, components.Chip(id, shell.ColorRose))
+			chips = append(chips, kit.Chip(id, shell.ColorRose))
 			if len(chips) >= 2 {
 				break
 			}
@@ -751,7 +706,7 @@ func tickStep(totalSec float64, maxTicks int) float64 {
 //
 // Last-child sibling detection drives ├ vs └ glyphs: walking the parent
 // chain in time order, the final child of each parent gets └.
-func renderWaterfallSpans(rows []components.WaterfallSpan, totalMs float64, width, labelPrefix, barCol int) []string {
+func renderWaterfallSpans(rows []kit.WaterfallSpan, totalMs float64, width, labelPrefix, barCol int) []string {
 	if totalMs <= 0 {
 		totalMs = 1
 	}
@@ -773,7 +728,7 @@ func renderWaterfallSpans(rows []components.WaterfallSpan, totalMs float64, widt
 		if primitive == "" {
 			primitive = sp.Op
 		}
-		color := components.PrimitiveColor(primitive)
+		color := kit.PrimitiveColor(primitive)
 
 		// Indent goes at the START of the line so the whole glyph→op→name
 		// block shifts right with depth. Root + direct children at col 0;
@@ -848,7 +803,7 @@ func renderWaterfallSpans(rows []components.WaterfallSpan, totalMs float64, widt
 
 // textColorFor picks the row text color: rose for duplicate spans
 // (matches the design's "+ N more · dup" rendering), default text otherwise.
-func textColorFor(sp components.WaterfallSpan) lipgloss.Color {
+func textColorFor(sp kit.WaterfallSpan) color.Color {
 	if sp.Duplicate {
 		return shell.ColorRose
 	}
@@ -859,7 +814,7 @@ func textColorFor(sp components.WaterfallSpan) lipgloss.Color {
 // (the second column of the waterfall row). For compositions we show
 // the composition type (pipeline/parallel/consensus/swarm) instead of
 // the generic "composition" word.
-func primitiveLabel(sp components.WaterfallSpan) string {
+func primitiveLabel(sp kit.WaterfallSpan) string {
 	switch sp.Primitive {
 	case "pipeline", "parallel", "consensus", "swarm":
 		return sp.Primitive
@@ -876,7 +831,7 @@ func primitiveLabel(sp components.WaterfallSpan) string {
 	}
 }
 
-func spanOpColor(op string) lipgloss.Color {
+func spanOpColor(op string) color.Color {
 	switch op {
 	case "agent":
 		return shell.ColorTeal
@@ -892,7 +847,7 @@ func spanOpColor(op string) lipgloss.Color {
 // makeSpanBar renders the single-cell bar column for a span. Width-frac and
 // offset-frac are clamped defensively (the API can emit pathological values
 // for malformed traces).
-func makeSpanBar(width int, offsetFrac, widthFrac float64, color lipgloss.Color, selected bool) string {
+func makeSpanBar(width int, offsetFrac, widthFrac float64, c color.Color, selected bool) string {
 	if width <= 0 {
 		return ""
 	}
@@ -934,7 +889,7 @@ func makeSpanBar(width int, offsetFrac, widthFrac float64, color lipgloss.Color,
 	// waterfall bar. The previous `Background(SelectedRowBG())` on a
 	// selected span's bar painted a saturated dark-teal block around
 	// the colored bar — read as a "glow" rather than a row highlight.
-	barStyle := lipgloss.NewStyle().Foreground(color)
+	barStyle := lipgloss.NewStyle().Foreground(c)
 	bar := barStyle.Render(strings.Repeat("█", bw))
 
 	post := ""
@@ -1068,7 +1023,7 @@ func (s *Runs) renderSpanDetail(width, height int) string {
 	}
 
 	hdrH := strings.Count(header, "\n") + 1
-	return shell.PadColumnHeight(b.String(), width, height-hdrH+1)
+	return kit.PadBlock(b.String(), width, height-hdrH+1)
 }
 
 func (s *Runs) section(label string) string {
@@ -1204,7 +1159,7 @@ func formatSpanStart(spanStart, traceStart int64) string {
 	return fmt.Sprintf("+%dms", delta)
 }
 
-func durationColor(spanDur, traceDur *float64) lipgloss.Color {
+func durationColor(spanDur, traceDur *float64) color.Color {
 	if spanDur == nil || traceDur == nil || *traceDur == 0 {
 		return shell.ColorText
 	}
@@ -1219,7 +1174,7 @@ func durationColor(spanDur, traceDur *float64) lipgloss.Color {
 	}
 }
 
-func tokenColor(n int) lipgloss.Color {
+func tokenColor(n int) color.Color {
 	switch {
 	case n >= 10_000:
 		return shell.ColorAmber
@@ -1297,10 +1252,10 @@ func kvRow(k, v string, width int) string {
 }
 
 // kvRowColored is kvRow with a colored value.
-func kvRowColored(k, v string, color lipgloss.Color, width int) string {
+func kvRowColored(k, v string, c color.Color, width int) string {
 	kCol := 14
 	key := lipgloss.NewStyle().Foreground(shell.ColorTextMuted).Render(padString2(k, kCol))
-	val := lipgloss.NewStyle().Foreground(color).Render(v)
+	val := lipgloss.NewStyle().Foreground(c).Render(v)
 	row := fmt.Sprintf(" %s %s", key, val)
 	return padRow(row, width) + "\n"
 }

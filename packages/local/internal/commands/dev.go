@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/assets"
@@ -22,6 +22,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/server"
 	qualityserver "github.com/use-crux/crux/packages/local/internal/server/quality"
 	"github.com/use-crux/crux/packages/local/internal/tui"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 )
 
 type startupTracker struct {
@@ -339,42 +340,20 @@ func runTUI(devSrv *server.DevServer, serverURL string, port int, startup *start
 	// Mark boot as complete immediately — server is already up.
 	app.MarkBootComplete()
 
-	p := tea.NewProgram(app, tea.WithAltScreen())
+	p := tea.NewProgram(app)
 	app.SetProgram(p)
 
-	// Pipe local store and quality events into the TUI without a WebSocket round-trip.
-	// The store-change channel covers generic state writes; the quality event
-	// bus carries typed Quality events (insight added, experiment completed,
-	// feedback received, …) that screens can react to selectively.
-	go func() {
-		sub := devSrv.Devtools.SubscribeChanges()
-		for range sub {
-			app.SendStoreChanged()
-		}
-	}()
-	go func() {
-		events := devSrv.Devtools.Quality().Events().Subscribe(context.Background())
-		for ev := range events {
-			app.SendQualityEvent(ev)
-		}
-	}()
-	if devSrv.Observability != nil {
-		go func() {
-			events := devSrv.Observability.Events().Subscribe(context.Background())
-			for ev := range events {
-				app.SendQualityEvent(api.QualityEvent{
-					Tag:       "QualityEvent",
-					ID:        ev.ID,
-					Timestamp: ev.Timestamp,
-					Kind:      "observability",
-					Action:    ev.Action,
-					Severity:  ev.Severity,
-					RefID:     ev.RefID,
-					Payload:   ev.Payload,
-				})
-			}
-		}()
+	// Pipe in-process event buses into the TUI without a WebSocket round-trip.
+	bridgeCtx, stopBridge := context.WithCancel(context.Background())
+	sources := bridge.Sources{
+		StoreChanged: devSrv.Devtools.SubscribeChanges(),
+		Quality:      devSrv.Devtools.Quality().Events().Subscribe(bridgeCtx),
+		IndexChanged: devSrv.Devtools.IndexEvents().Subscribe(bridgeCtx),
 	}
+	if devSrv.Observability != nil {
+		sources.Observability = devSrv.Observability.Events().Subscribe(bridgeCtx)
+	}
+	bridge.Start(bridgeCtx, sources, app.SendMsg)
 
 	// Send tunnel URL to TUI when it's ready.
 	if tunnelReady != nil {
@@ -403,6 +382,7 @@ func runTUI(devSrv *server.DevServer, serverURL string, port int, startup *start
 	}()
 
 	_, err := p.Run()
+	stopBridge()
 	// Make sure the listener is released even on a clean tea exit.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

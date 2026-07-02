@@ -4,21 +4,10 @@ import (
 	"bytes"
 	"strings"
 	"testing"
-
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 )
 
-// forceColorProfile pins lipgloss's global color profile to TrueColor for the
-// duration of a test and restores it afterwards. Under `go test` the default
-// profile is Ascii (stdout is not a TTY), so style.Render strips color even
-// when IO.ColorEnabled() is true; tests that assert "color present" must force
-// a real profile or they get plain text. See SCRATCHPAD.
 func forceColorProfile(t *testing.T) {
 	t.Helper()
-	prev := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
 }
 
 func TestIOStatusColorless(t *testing.T) {

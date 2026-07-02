@@ -1,0 +1,22 @@
+[1;38;5;86mCRUX PALETTE[m
+[38;5;233m●[m Bg
+[38;5;234m●[m Bg2
+[38;5;252m●[m Fg
+[38;5;244m●[m Dim
+[38;5;240m●[m Mut
+[38;5;86m●[m Teal
+[38;5;114m●[m Green
+[38;5;179m●[m Amber
+[38;5;203m●[m Red
+[38;5;139m●[m Violet
+[38;5;75m●[m Blue
+[38;5;238m●[m Border
+[38;5;236m●[m SelBg
+
+[1;38;5;252mBold[m [38;5;252mRegular[m [38;5;244mDim[m [1;38;5;86mAccent[m
+[38;5;114m●[m passed
+[38;5;203m●[m failed
+[38;5;179m▲[m warn
+[38;5;86m◆[m running
+[38;5;244m○[m skipped
+[38;5;139m◆[m new

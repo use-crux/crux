@@ -1,0 +1,15 @@
+{
+  "_tag": "QualityOverviewRecord",
+  "runCount": 42,
+  "experimentCount": 4,
+  "baselineCount": 3,
+  "feedbackCount": 6,
+  "cassetteCount": 98,
+  "insightCount": 8,
+  "latestExperimentId": "exp-043",
+  "passRate": 0.88,
+  "costPer100Runs": 2.41,
+  "passRateHistory": [0.96, 0.94, 0.91, 0.88],
+  "openInsightsHistory": [2, 4, 5, 8]
+}
+

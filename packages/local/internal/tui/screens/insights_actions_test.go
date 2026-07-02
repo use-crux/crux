@@ -3,7 +3,7 @@ package screens
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
@@ -26,7 +26,7 @@ func TestInsightsTKeyDrillsToLinkedTrace(t *testing.T) {
 	i.selectedID = "INS-014"
 	i.loaded = true
 
-	cmd := i.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}, nil)
+	cmd := i.Update(tea.KeyPressMsg(tea.Key{Text: "t", Code: 't'}), nil)
 	if cmd == nil {
 		t.Fatal("pressing `t` returned nil; expected NavigateRequest")
 	}
@@ -47,7 +47,7 @@ func TestInsightsTKeyNoopWhenNoLinkedTraces(t *testing.T) {
 	i.selectedID = "INS-99"
 	i.loaded = true
 
-	cmd := i.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}, nil)
+	cmd := i.Update(tea.KeyPressMsg(tea.Key{Text: "t", Code: 't'}), nil)
 	if cmd != nil {
 		t.Errorf("pressing `t` with no linked traces returned non-nil %v; expected no-op", cmd)
 	}
@@ -61,7 +61,7 @@ func TestInsightsExportEmitsCmd(t *testing.T) {
 	i.selectedID = "INS-014"
 	i.loaded = true
 
-	cmd := i.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}}, nil)
+	cmd := i.Update(tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
 	if cmd == nil {
 		t.Error("pressing `e` returned nil; expected export cmd")
 	}
@@ -87,7 +87,7 @@ func TestInsightsActionStubsEmitCmds(t *testing.T) {
 			i.selectedID = "INS-014"
 			i.loaded = true
 
-			cmd := i.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{tc.key}}, nil)
+			cmd := i.Update(tea.KeyPressMsg(tea.Key{Text: string(tc.key), Code: tc.key}), nil)
 			if cmd == nil {
 				t.Errorf("pressing %q returned nil; expected stub cmd", tc.key)
 			}

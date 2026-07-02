@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -36,6 +38,9 @@ func NewFeedback() *Feedback { return &Feedback{} }
 func (s *Feedback) ID() string                { return "feedback" }
 func (s *Feedback) Init(c DataClient) tea.Cmd { return fetchFeedback(c) }
 func (s *Feedback) Counts() map[string]int    { return map[string]int{"feedback": len(s.items)} }
+func (s *Feedback) Interested(domains bridge.Domains) bool {
+	return domains.Has(bridge.DomainFeedback)
+}
 
 func (s *Feedback) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
@@ -49,7 +54,7 @@ func (s *Feedback) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		return fetchFeedback(c)
 	case dataErrMsg:
 		s.err = string(m)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch m.String() {
 		case "j", "down":
 			s.move(1)
@@ -120,10 +125,10 @@ func (s *Feedback) Breadcrumb() ([]string, string) {
 
 func (s *Feedback) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
-		{"j/k", "move"}, {"↵", "open run"},
-		{"f", "filter"}, {"x", "dismiss"},
-		{"o", "open in viewer"},
-		{":", "cmd"}, {"?", "help"},
+		shell.Bind("j/k", "move"), shell.Bind("↵", "open run"),
+		shell.Bind("f", "filter"), shell.Bind("x", "dismiss"),
+		shell.Bind("o", "open in viewer"),
+		shell.Bind(":", "cmd"), shell.Bind("?", "help"),
 	}
 }
 
@@ -141,9 +146,9 @@ func (s *Feedback) View(size Size) string {
 	detailW := size.Width - listW - 1
 	list := s.renderList(listW, size.Height)
 	detail := s.renderDetail(detailW, size.Height)
-	body := shell.Compose(
-		shell.PadColumnHeight(list, listW, size.Height),
-		shell.PadColumnHeight(detail, detailW, size.Height),
+	body := kit.ComposeColumns(
+		kit.PadBlock(list, listW, size.Height),
+		kit.PadBlock(detail, detailW, size.Height),
 	)
 	return body
 }
@@ -246,11 +251,11 @@ func (s *Feedback) renderDetail(width, height int) string {
 	}
 
 	footer := shell.PaneFooter(width, []shell.Keybind{
-		{"↵", "open run"}, {"f", "filter"}, {"x", "dismiss"},
+		shell.Bind("↵", "open run"), shell.Bind("f", "filter"), shell.Bind("x", "dismiss"),
 	})
 	hdrH := strings.Count(header, "\n") + 1
 	footerH := strings.Count(footer, "\n") + 1
-	body := shell.PadColumnHeight(b.String(), width, height-hdrH-footerH+1)
+	body := kit.PadBlock(b.String(), width, height-hdrH-footerH+1)
 	return body + "\n" + footer
 }
 

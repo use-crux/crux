@@ -3,7 +3,7 @@ package screens
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
@@ -24,7 +24,7 @@ func TestFeedbackEnterDrillsToSourceRun(t *testing.T) {
 	f.selectedID = "fb-1"
 	f.loaded = true
 
-	cmd := f.Update(tea.KeyMsg{Type: tea.KeyEnter}, nil)
+	cmd := f.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), nil)
 	if cmd == nil {
 		t.Fatal("Enter returned nil cmd; expected NavigateRequest")
 	}
@@ -46,7 +46,7 @@ func TestFeedbackXDismissStubEmitsCmd(t *testing.T) {
 	f.selectedID = "fb-1"
 	f.loaded = true
 
-	cmd := f.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}, nil)
+	cmd := f.Update(tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}), nil)
 	if cmd == nil {
 		t.Error("pressing `x` returned nil; expected dismiss stub")
 	}
@@ -65,7 +65,7 @@ func TestFeedbackFCyclesFilter(t *testing.T) {
 
 	expected := []string{"resolved", "dismissed", "all", "open"}
 	for _, want := range expected {
-		f.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}}, nil)
+		f.Update(tea.KeyPressMsg(tea.Key{Text: "f", Code: 'f'}), nil)
 		if got := f.StatusFilter(); got != want {
 			t.Errorf("after one `f`, filter = %q, want %q", got, want)
 		}
