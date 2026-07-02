@@ -13,6 +13,7 @@ import type {
   RuntimeStoreTransaction,
 } from '../store'
 import { flowEventResumeKey, taskRunKey } from './idempotency'
+import { flushScheduledEffectsInTransaction } from './kernel-effects'
 import type {
   EmitEventInput,
   EmitEventResult,
@@ -73,6 +74,11 @@ export async function recordSuspensionInTransaction(
     ],
     Promise.resolve([]),
   )
+  const flushedEffects = await flushScheduledEffectsInTransaction(
+    tx,
+    input.scheduledEffects,
+    deps.now,
+  )
 
   await tx.state.putSnapshot({
     flowId: input.flowId,
@@ -84,7 +90,29 @@ export async function recordSuspensionInTransaction(
     completedSteps: input.snapshot.completedSteps,
     fingerprint: input.snapshot.fingerprint,
     pendingSuspends,
+    scheduledEffects: mergeScheduledEffects(
+      input.snapshot.scheduledEffects,
+      flushedEffects,
+    ),
     updatedAt: deps.now(),
+  })
+}
+
+function mergeScheduledEffects(
+  existing: RecordSuspensionInput['snapshot']['scheduledEffects'],
+  flushed: Awaited<ReturnType<typeof flushScheduledEffectsInTransaction>>,
+) {
+  return Object.freeze({
+    ...(existing ?? {}),
+    ...Object.fromEntries(
+      flushed.map((effect) => [
+        effect.key,
+        {
+          workId: effect.workId,
+          timerId: effect.timerId,
+        },
+      ]),
+    ),
   })
 }
 

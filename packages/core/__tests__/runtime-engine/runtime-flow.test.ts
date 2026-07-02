@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { config, flow } from '@use-crux/core'
 import {
+  createRuntime,
   node,
+  task,
   type FlowId,
   type RuntimeTargetId,
   type WorkId,
 } from '@use-crux/core/runtime'
+import { runtimeTargetMap } from '../../runtime/api/target-registry'
 import { resetRuntime } from '../../runtime/runtime'
 
 afterEach(() => {
@@ -13,6 +16,305 @@ afterEach(() => {
 })
 
 describe('runtime-backed flows', () => {
+  it('flushes flow.defer at a suspension barrier and skips it on replay', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const embedded: unknown[] = []
+    const embedDocument = task('embed-document', {
+      run: async (input: { documentId: string }) => {
+        embedded.push(input)
+      },
+    })
+    const reviewFlow = flow('review', async (scope, input: { documentId: string }) => {
+      const child = await scope.defer(embedDocument, { documentId: input.documentId })
+      await scope.suspend('approval')
+      return child.workId
+    })
+    const runtimeRef = {}
+    const resolvedRuntime = createRuntime({
+      runtime,
+      targets: runtimeTargetMap(runtimeRef),
+      startMaintenance: false,
+    })
+    Object.assign(runtimeRef, { current: resolvedRuntime })
+
+    const suspended = await reviewFlow.run({ documentId: 'doc_1' })
+    await resolvedRuntime.dispatcher.nudge()
+
+    expect(embedded).toEqual([{ documentId: 'doc_1' }])
+    const snapshot = await runtime.store.state.getSnapshot(
+      suspended.flowId as FlowId,
+      { namespace: 'tenant-a' },
+    )
+    const deferredWorkId = snapshot?.scheduledEffects?.['defer:1']?.workId
+    expect(deferredWorkId).toEqual(expect.any(String))
+
+    await reviewFlow.signal(suspended.flowId, 'approval', {})
+
+    expect(embedded).toEqual([{ documentId: 'doc_1' }])
+    await expect(
+      runtime.store.state.getSnapshot(suspended.flowId as FlowId, {
+        namespace: 'tenant-a',
+      }),
+    ).resolves.toMatchObject({
+      status: 'completed',
+      scheduledEffects: {
+        'defer:1': { workId: deferredWorkId },
+      },
+    })
+
+    resolvedRuntime.dispose()
+    crux.dispose()
+  })
+
+  it('flushes flow.after at a suspension barrier and skips timer scheduling on replay', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const reminders: unknown[] = []
+    const sendReminder = task('send-reminder', {
+      run: async (input: { userId: string }) => {
+        reminders.push(input)
+      },
+    })
+    const reviewFlow = flow('review', async (scope) => {
+      await scope.after(sendReminder, '1s', { userId: 'user_1' })
+      await scope.suspend('approval')
+      return 'done'
+    })
+    const runtimeRef = {}
+    const resolvedRuntime = createRuntime({
+      runtime,
+      targets: runtimeTargetMap(runtimeRef),
+      startMaintenance: false,
+    })
+    Object.assign(runtimeRef, { current: resolvedRuntime })
+
+    const suspended = await reviewFlow.run()
+    const snapshot = await runtime.store.state.getSnapshot(
+      suspended.flowId as FlowId,
+      { namespace: 'tenant-a' },
+    )
+    expect(snapshot?.scheduledEffects?.['after:1']?.timerId).toEqual(expect.any(String))
+
+    await resolvedRuntime.maintenance.tick({
+      now: new Date(Date.now() + 1_100),
+    })
+    await resolvedRuntime.dispatcher.nudge()
+    expect(reminders).toEqual([{ userId: 'user_1' }])
+
+    await reviewFlow.signal(suspended.flowId, 'approval', {})
+    await resolvedRuntime.maintenance.tick({
+      now: new Date(Date.now() + 2_200),
+    })
+    await resolvedRuntime.dispatcher.nudge()
+
+    expect(reminders).toEqual([{ userId: 'user_1' }])
+    resolvedRuntime.dispose()
+    crux.dispose()
+  })
+
+  it('waits until current-flow deferred children reach idle', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const embedded: unknown[] = []
+    const embedDocument = task('embed-for-idle', {
+      run: async (input: { documentId: string }) => {
+        embedded.push(input)
+      },
+    })
+    const reviewFlow = flow('review-idle', async (scope) => {
+      await scope.defer(embedDocument, { documentId: 'doc_1' })
+      await scope.untilIdle({ scope: 'current-flow' })
+      return 'idle'
+    })
+    const runtimeRef = {}
+    const resolvedRuntime = createRuntime({
+      runtime,
+      targets: runtimeTargetMap(runtimeRef),
+      startMaintenance: false,
+    })
+    Object.assign(runtimeRef, { current: resolvedRuntime })
+
+    const suspended = await reviewFlow.run()
+    expect(suspended).toMatchObject({
+      status: 'suspended',
+      suspendedAt: expect.stringContaining('untilIdle:flow:'),
+    })
+
+    await resolvedRuntime.dispatcher.nudge()
+    await resolvedRuntime.dispatcher.nudge()
+
+    expect(embedded).toEqual([{ documentId: 'doc_1' }])
+    await expect(
+      runtime.store.state.getSnapshot(suspended.flowId as FlowId, {
+        namespace: 'tenant-a',
+      }),
+    ).resolves.toMatchObject({ status: 'completed' })
+
+    resolvedRuntime.dispose()
+    crux.dispose()
+  })
+
+  it('waits for a durable event and resumes with the typed event payload', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const steps: string[] = []
+
+    const reviewFlow = flow('review', async (scope, input: { documentId: string }) => {
+      await scope.step('draft', () => {
+        steps.push('draft')
+        return 'drafted'
+      })
+      const approval = await scope.waitFor<{ documentId: string; approvedBy: string }>(
+        'document.approved',
+        {
+          match: { documentId: input.documentId },
+          timeout: '1h',
+        },
+      )
+      return await scope.step('publish', () => {
+        steps.push('publish')
+        return approval.approvedBy
+      })
+    })
+    const runtimeRef = {}
+    const resolvedRuntime = createRuntime({
+      runtime,
+      targets: runtimeTargetMap(runtimeRef),
+      startMaintenance: false,
+    })
+    Object.assign(runtimeRef, { current: resolvedRuntime })
+
+    const suspended = await reviewFlow.run({ documentId: 'doc_1' })
+
+    expect(suspended).toMatchObject({
+      status: 'suspended',
+      suspendedAt: 'waitFor:document.approved',
+    })
+    expect(steps).toEqual(['draft'])
+
+    await resolvedRuntime.kernel.emitEvent({
+      namespace: 'tenant-a',
+      name: 'document.approved',
+      payload: { documentId: 'doc_1', approvedBy: 'henri' },
+    })
+    await resolvedRuntime.dispatcher.nudge()
+
+    expect(steps).toEqual(['draft', 'publish'])
+    const snapshot = await runtime.store.state.getSnapshot(
+      suspended.flowId as FlowId,
+      { namespace: 'tenant-a' },
+    )
+    expect(snapshot).toMatchObject({
+      status: 'completed',
+      fingerprint: ['step:draft', 'waitFor:document.approved', 'step:publish'],
+    })
+
+    resolvedRuntime.dispose()
+    crux.dispose()
+  })
+
+  it('signals, resumes, and cancels runtime flows through the configured crux instance', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const steps: string[] = []
+
+    const reviewFlow = flow('review', async (scope) => {
+      await scope.step('draft', () => {
+        steps.push('draft')
+        return 'drafted'
+      })
+      await scope.suspend('approval')
+      return await scope.step('publish', () => {
+        steps.push('publish')
+        return 'published'
+      })
+    })
+    const manualFlow = flow('manual-review', async (scope) => {
+      await scope.suspend('approval')
+      return 'done'
+    })
+
+    const suspended = await reviewFlow.run()
+    await crux.flows.signal('review', suspended.flowId, 'approval', {})
+    expect(steps).toEqual(['draft', 'publish'])
+
+    const manual = await manualFlow.run()
+    await manualFlow.signal(manual.flowId, 'approval', {}, { resume: false })
+    await expect(crux.flows.resume('manual-review', manual.flowId)).resolves.toMatchObject({
+      status: 'completed',
+      flowId: manual.flowId,
+    })
+
+    const cancellable = await reviewFlow.run({ flowId: 'flow_cancel_via_crux' })
+    await expect(crux.flows.cancel('review', cancellable.flowId)).resolves.toEqual({
+      cancelled: true,
+    })
+
+    crux.dispose()
+  })
+
+  it('throws the standard runtime-required diagnostic for runtime-only flow APIs', async () => {
+    const crux = config({})
+    const embedDocument = task('missing-runtime-embed', {
+      run: async (_input: { documentId: string }) => undefined,
+    })
+    const reviewFlow = flow('review', async (scope) => {
+      await scope.waitFor('document.approved')
+      return 'done'
+    })
+
+    await expect(reviewFlow.run()).rejects.toMatchObject({
+      code: 'RUNTIME_REQUIRED',
+      message: expect.stringContaining('flow.waitFor() requires a Crux runtime engine.'),
+    })
+    await expect(crux.flows.signal('review', 'flow_1', 'approval', {})).rejects.toMatchObject({
+      code: 'RUNTIME_REQUIRED',
+      message: expect.stringContaining('crux.flows.signal() requires a Crux runtime engine.'),
+    })
+    await expect(
+      flow('defer-without-runtime', async (scope) => {
+        await scope.defer(embedDocument, { documentId: 'doc_1' })
+      }).run(),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME_REQUIRED',
+      message: expect.stringContaining('flow.defer() requires a Crux runtime engine.'),
+    })
+    await expect(
+      flow('after-without-runtime', async (scope) => {
+        await scope.after(embedDocument, '1h', { documentId: 'doc_1' })
+      }).run(),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME_REQUIRED',
+      message: expect.stringContaining('flow.after() requires a Crux runtime engine.'),
+    })
+    await expect(
+      flow('idle-without-runtime', async (scope) => {
+        await scope.untilIdle({ scope: 'current-flow' })
+      }).run(),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME_REQUIRED',
+      message: expect.stringContaining('flow.untilIdle() requires a Crux runtime engine.'),
+    })
+
+    crux.dispose()
+  })
+
   it('suspends into runtime state and auto-resumes when the flow handle signals', async () => {
     const runtime = node({
       namespace: 'tenant-a',

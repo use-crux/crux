@@ -8,6 +8,7 @@
  * @module
  */
 
+import type { JsonValue } from '../../storage'
 import type { EventCursor, FlowId, RuntimeTargetId, TaskId } from './ids'
 
 /** Durable work the Runtime Engine can schedule, lease, and execute. */
@@ -22,6 +23,8 @@ export type RuntimeWork =
       readonly kind: 'task.run'
       readonly taskId: TaskId
       readonly targetId: RuntimeTargetId
+      /** JSON input persisted with the durable work item, never sent in wake envelopes. */
+      readonly input?: JsonValue
     }
   | {
       readonly kind: 'watch.deliver'

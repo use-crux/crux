@@ -15,6 +15,7 @@ import type {
   RuntimeWakeResult,
 } from './kernel-types'
 import { recordSuspensionInTransaction } from './kernel-events'
+import { flushScheduledEffectsInTransaction } from './kernel-effects'
 import {
   isTerminalWork,
   runtimeErrorMessage,
@@ -278,7 +279,23 @@ async function completeWork(options: CompleteWorkOptions): Promise<void> {
       options.outcome.status === 'completed' &&
       'flowSnapshot' in options.outcome
     ) {
-      await tx.state.putSnapshot(options.outcome.flowSnapshot)
+      const flushedEffects = await flushScheduledEffectsInTransaction(
+        tx,
+        options.outcome.scheduledEffects,
+        options.now,
+      )
+      await tx.state.putSnapshot({
+        ...options.outcome.flowSnapshot,
+        scheduledEffects: {
+          ...(options.outcome.flowSnapshot.scheduledEffects ?? {}),
+          ...Object.fromEntries(
+            flushedEffects.map((effect) => [
+              effect.key,
+              { workId: effect.workId, timerId: effect.timerId },
+            ]),
+          ),
+        },
+      })
     }
     await putWorkWithIdleAccounting(
       tx,

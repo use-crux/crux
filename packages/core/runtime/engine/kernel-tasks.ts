@@ -32,6 +32,7 @@ export async function enqueueTask(
     kind: 'task.run',
     taskId: input.taskId,
     targetId: input.targetId,
+    input: input.input,
   }
   const idempotencyKey = taskRunKey(workId)
 

@@ -16,6 +16,11 @@ import {
   createRuntime,
   type ResolvedRuntimeEngine,
 } from '../runtime/api/create-runtime'
+import { runtimeRequiredError } from '../runtime/api/runtime-required'
+import {
+  registerRuntimeTarget,
+  runtimeTargetMap,
+} from '../runtime/api/target-registry'
 import type { RuntimeTarget, RuntimeTargetOutcome } from '../runtime/engine/kernel'
 import { wakeEnvelopeForWork } from '../runtime/engine/kernel'
 import {
@@ -26,7 +31,9 @@ import type { WorkItem } from '../runtime/engine/work'
 import type {
   FlowId as RuntimeFlowId,
   RuntimeTargetId,
+  TaskId,
 } from '../runtime/ports/ids'
+import type { RuntimeTaskInput, RuntimeTaskTarget } from '../runtime/api/task'
 import { executeWithRetry } from '../generation/retry'
 import type { JsonObject, JsonValue, RecordStore } from '../storage'
 import type { CapturedObservabilityContext } from '../observability'
@@ -45,6 +52,10 @@ import type {
   FlowSignalOptions,
   ListFlowsOptions,
   FlowSummary,
+  FlowWaitForEvent,
+  FlowWaitForOptions,
+  FlowUntilIdleOptions,
+  RuntimeFlowSuspendMetadata,
 } from './types'
 import { FlowSuspendedError, FlowCancelledError, FlowExpiredError } from './types'
 import { InvalidSignalPayloadError, isNoPayloadSignal, noPayload, signalSchemaFor, validateSignalPayload } from './signals'
@@ -99,6 +110,9 @@ export type {
   FlowSnapshot,
   FlowScope,
   FlowSignalOptions,
+  FlowUntilIdleOptions,
+  FlowWaitForEvent,
+  FlowWaitForOptions,
   ListFlowsOptions,
   FlowSummary,
 }
@@ -238,6 +252,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
   // Track aggregates across steps
   let stepCount = 0
   let suspendCount = 0
+  let durableEffectCount = 0
   const emittedSuspensionMarkers = new Set<string>()
 
   // Accumulated step results — pre-populated from snapshot on resume
@@ -437,6 +452,121 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       throw new FlowSuspendedError(_name, _options as SuspendOptions)
     },
 
+    async waitFor<TPayload = JsonValue>(
+      event: string | FlowWaitForEvent<TPayload>,
+      waitOptions?: FlowWaitForOptions,
+    ): Promise<TPayload> {
+      const eventSpec = normalizeWaitForEvent(event)
+      const suspendPoint = `waitFor:${eventSpec.name}`
+      runtimeExecution?.fingerprint.observe(`waitFor:${eventSpec.name}`)
+      const replayPayload = runtimeExecution?.deliveredPayloads.get(suspendPoint)
+      if (isResume && replayPayload !== undefined) {
+        return validateWaitForPayload(eventSpec, replayPayload)
+      }
+
+      if (!runtimeExecution) {
+        throw runtimeRequiredError({ api: 'flow.waitFor()' })
+      }
+
+      const metadata: RuntimeFlowSuspendMetadata = {
+        eventName: eventSpec.name,
+        match: waitOptions?.match ?? {},
+        fingerprint: `waitFor:${eventSpec.name}`,
+      }
+      throw new FlowSuspendedError(
+        suspendPoint,
+        { timeout: waitOptions?.timeout },
+        metadata,
+      )
+    },
+
+    async defer<TTask extends RuntimeTaskTarget>(
+      taskTarget: TTask,
+      input: RuntimeTaskInput<TTask>,
+    ): Promise<{ workId: string }> {
+      if (!runtimeExecution) {
+        throw runtimeRequiredError({ api: 'flow.defer()' })
+      }
+      durableEffectCount++
+      runtimeExecution.fingerprint.observe(`defer:${taskTarget.name}`)
+      const key = `defer:${durableEffectCount}`
+      const recorded = runtimeExecution.snapshot.scheduledEffects?.[key]
+      if (recorded?.workId) return { workId: recorded.workId }
+
+      assertFlowJsonValue(input, { boundary: 'flow snapshot metadata' })
+      const workId = runtimeWorkId()
+      runtimeExecution.scheduledEffects.push({
+        kind: 'defer',
+        key,
+        namespace: runtimeExecution.work.namespace,
+        targetId: taskTarget.targetId,
+        taskId: workId as unknown as TaskId,
+        workId,
+        input: input as JsonValue,
+        idleScope: `flow:${flowId}`,
+      })
+      return { workId }
+    },
+
+    async after<TTask extends RuntimeTaskTarget>(
+      taskTarget: TTask,
+      delay: string,
+      input: RuntimeTaskInput<TTask>,
+    ): Promise<void> {
+      if (!runtimeExecution) {
+        throw runtimeRequiredError({ api: 'flow.after()' })
+      }
+      durableEffectCount++
+      runtimeExecution.fingerprint.observe(`after:${taskTarget.name}`)
+      const key = `after:${durableEffectCount}`
+      if (runtimeExecution.snapshot.scheduledEffects?.[key]) return
+
+      assertFlowJsonValue(input, { boundary: 'flow snapshot metadata' })
+      runtimeExecution.scheduledEffects.push({
+        kind: 'after',
+        key,
+        namespace: runtimeExecution.work.namespace,
+        targetId: taskTarget.targetId,
+        taskId: `${flowId}:${key}:${taskTarget.name}` as TaskId,
+        fireAt: new Date(Date.now() + parseDuration(delay)),
+        input: input as JsonValue,
+        idleScope: `flow:${flowId}`,
+      })
+    },
+
+    async untilIdle(options: FlowUntilIdleOptions): Promise<void> {
+      if (!runtimeExecution) {
+        throw runtimeRequiredError({ api: 'flow.untilIdle()' })
+      }
+      if (options.scope !== 'current-flow') {
+        throw new Error('flow.untilIdle() only supports { scope: "current-flow" } in v1.')
+      }
+      const idleScope = `flow:${flowId}`
+      const eventName = `crux.idle:${idleScope}`
+      const suspendPoint = `untilIdle:${idleScope}`
+      runtimeExecution.fingerprint.observe(`waitFor:${eventName}`)
+      if (runtimeExecution.deliveredPayloads.has(suspendPoint)) return
+
+      const count = await runtimeExecution.runtime.store.state.getIdleCount(
+        runtimeExecution.work.namespace,
+        idleScope,
+      )
+      const bufferedDeferCount = runtimeExecution.scheduledEffects.filter(
+        (effect) => effect.kind === 'defer' && effect.idleScope === idleScope,
+      ).length
+      if (count === 0 && bufferedDeferCount === 0) return
+
+      throw new FlowSuspendedError(
+        suspendPoint,
+        undefined,
+        {
+          eventName,
+          match: {},
+          fingerprint: `waitFor:${eventName}`,
+        },
+      )
+    },
+
     cancel(reason?: string): never {
       throw new FlowCancelledError(reason)
     },
@@ -457,7 +587,9 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           status: 'completed',
           input: flowInput,
           completedSteps,
+          scheduledEffects: runtimeExecution.snapshot.scheduledEffects,
         }),
+        scheduledEffects: runtimeExecution.scheduledEffects,
       }
       runtimeExecution.result = { status: 'completed', output: result, flowId }
     }
@@ -500,15 +632,19 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
               input: runtimeInputValue(flowInput),
               completedSteps: runtimeCompletedSteps(completedSteps),
               fingerprint: runtimeExecution.fingerprint.observed,
+              scheduledEffects: runtimeExecution.snapshot.scheduledEffects,
             },
             suspends: [
               {
                 label: error.suspendPoint,
-                eventName: runtimeSignalEventName(flowId, error.suspendPoint),
-                match: {},
+                eventName:
+                  error.runtime?.eventName ??
+                  runtimeSignalEventName(flowId, error.suspendPoint),
+                match: error.runtime?.match ?? {},
                 timeoutAt,
               },
             ],
+            scheduledEffects: runtimeExecution.scheduledEffects,
           },
         }
         runtimeExecution.result = { status: 'suspended', flowId, suspendedAt: error.suspendPoint }
@@ -706,6 +842,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function normalizeWaitForEvent<TPayload>(
+  event: string | FlowWaitForEvent<TPayload>,
+): FlowWaitForEvent<TPayload> {
+  return typeof event === 'string' ? { name: event } : event
+}
+
+function validateWaitForPayload<TPayload>(
+  event: FlowWaitForEvent<TPayload>,
+  payload: JsonValue,
+): TPayload {
+  if (!event.schema) return payload as TPayload
+  return event.schema.parse(payload)
+}
+
 /**
  * Define a named flow and return a frozen `FlowHandle`.
  *
@@ -797,6 +947,7 @@ export function flow(
           recorded: runtimeSnapshot.status === 'running' ? [] : runtimeSnapshot.fingerprint,
         }),
         deliveredPayloads: await deliveredRuntimePayloads(runtime, runtimeSnapshot),
+        scheduledEffects: [],
       }
       await executeFlow<unknown, unknown, FlowSignalMap | undefined>(name, executeHandler, {
         runtime: runtimeExecution,
@@ -817,7 +968,7 @@ export function flow(
     const runtimeRef: RuntimeFlowTargetRef = {}
     const runtime = createRuntime({
       runtime: runtimeDefinition,
-      targets: { [name]: createRuntimeTarget(runtimeRef) },
+        targets: runtimeTargetMap(runtimeRef),
       newWorkId: createRuntimeWorkIdGenerator(),
       startMaintenance: false,
     })
@@ -855,13 +1006,14 @@ export function flow(
           completedSteps: {},
           fingerprint: [],
           pendingSuspends: [],
+          scheduledEffects: {},
           updatedAt: new Date(),
         })
         return created
       })
 
       await runtime.kernel.handleWake(wakeEnvelopeForWork(work))
-      return runtimeRef.result ?? { status: 'suspended', flowId, suspendedAt: '' }
+      return (runtimeRef.result as FlowResult<unknown> | undefined) ?? { status: 'suspended', flowId, suspendedAt: '' }
     })
   }
 
@@ -897,7 +1049,7 @@ export function flow(
         idempotencyKey:
           current.status === 'suspended' ? idempotencyKey : wakeWork.idempotencyKey,
       })
-      return runtimeRef.result ?? { status: 'suspended', flowId, suspendedAt: '' }
+      return (runtimeRef.result as FlowResult<unknown> | undefined) ?? { status: 'suspended', flowId, suspendedAt: '' }
     })
   }
 
@@ -919,6 +1071,8 @@ export function flow(
       }
     })
   }
+
+  registerRuntimeTarget(name, createRuntimeTarget)
 
   const handle = {
     name,

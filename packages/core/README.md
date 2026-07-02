@@ -356,9 +356,29 @@ export default config({
 });
 ```
 
-With a runtime configured, existing flow handles can persist `flow.suspend()`
-state in the Runtime Engine and auto-resume when `reviewFlow.signal(...)`
-delivers the matching signal event.
+With a runtime configured, flow handles can persist `flow.suspend()` and
+`flow.waitFor(...)` state in the Runtime Engine, auto-resume when
+`reviewFlow.signal(...)` or a durable event arrives, enqueue durable background
+work with `flow.defer(task, input)`, schedule task timers with
+`flow.after(task, delay, input)`, and wait for child work with
+`flow.untilIdle({ scope: "current-flow" })`.
+
+Executable durable task targets are defined from the runtime subpath, not the
+root Plans & Tasks ledger `task()` helper:
+
+```ts
+import { task } from "@use-crux/core/runtime";
+
+export const embedDocument = task("embed-document", {
+  run: async ({ documentId }: { documentId: string }) => {
+    await embed(documentId);
+  },
+});
+```
+
+The `Crux` object returned by `config()` also exposes name-bound
+`crux.flows.signal()`, `crux.flows.resume()`, and `crux.flows.cancel()` for
+runtime-backed flows when the object-bound flow handle is not available.
 
 Advanced and generated entry files can resolve a composer explicitly with
 `createRuntime({ runtime, targets })`. The `@use-crux/core/runtime/testing`

@@ -234,6 +234,16 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     pendingSuspends: snapshot.pendingSuspends.map((suspend) =>
       clonePendingSuspend(suspend),
     ),
+    scheduledEffects: snapshot.scheduledEffects
+      ? Object.freeze(
+          Object.fromEntries(
+            Object.entries(snapshot.scheduledEffects).map(([key, effect]) => [
+              key,
+              { workId: effect.workId, timerId: effect.timerId },
+            ]),
+          ),
+        )
+      : undefined,
     updatedAt: new Date(snapshot.updatedAt),
   })
 }
@@ -274,6 +284,10 @@ export function cloneRuntimeWork(work: RuntimeWork): RuntimeWork {
         kind: work.kind,
         taskId: work.taskId,
         targetId: work.targetId,
+        input:
+          work.input === undefined
+            ? undefined
+            : cloneJsonValue(work.input, 'runtime task input'),
       }
     case 'watch.deliver':
       return {

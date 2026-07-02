@@ -33,6 +33,7 @@ import type { PromptRegistry } from './configure'
 import type { CruxConfig } from './config-types'
 import { configure } from './configure'
 import { createRuntimeConfigTransaction } from './config-transaction'
+import type { CruxFlowRuntimeControls } from './api/flows'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -66,6 +67,8 @@ export type {
 export interface Crux extends PromptRegistry {
   /** The raw config, for tooling to read quality settings etc. */
   readonly config: Readonly<CruxConfig>
+  /** Name-bound Runtime Engine flow controls. */
+  readonly flows: CruxFlowRuntimeControls
 }
 
 // ─────────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@
 import type { JsonValue } from '../storage'
 import type { ResolvedRuntimeEngine } from '../runtime/api/create-runtime'
 import type { RuntimeTargetOutcome } from '../runtime/engine/kernel'
+import type { RuntimeScheduledEffectIntent } from '../runtime/engine/kernel'
 import type { ReplayFingerprint } from '../runtime/engine/replay'
 import type { WorkItem } from '../runtime/engine/work'
 import type {
@@ -35,6 +36,8 @@ export interface RuntimeFlowExecution {
   readonly fingerprint: ReplayFingerprint
   /** Delivered event payloads keyed by suspend label. */
   readonly deliveredPayloads: ReadonlyMap<string, JsonValue>
+  /** Buffered defer/after intents waiting for the next durable barrier. */
+  readonly scheduledEffects: RuntimeScheduledEffectIntent[]
   /** Kernel outcome produced by the flow executor. */
   outcome?: RuntimeTargetOutcome
   /** Object-bound result returned to the caller when execution is inline. */
@@ -46,7 +49,7 @@ export interface RuntimeFlowTargetRef {
   /** Resolved runtime instance. */
   current?: ResolvedRuntimeEngine
   /** Flow result observed during inline object-bound execution. */
-  result?: FlowResult<unknown>
+  result?: unknown
 }
 
 /** Convert a runtime snapshot's output-only step cache into legacy executor cache records. */
@@ -85,6 +88,7 @@ export function runtimeFlowSnapshot(
     readonly status: RuntimeFlowSnapshot['status']
     readonly input: unknown
     readonly completedSteps: Record<string, { output: JsonValue; durationMs: number }>
+    readonly scheduledEffects?: RuntimeFlowSnapshot['scheduledEffects']
   },
 ): RuntimeFlowSnapshot {
   return {
@@ -97,6 +101,7 @@ export function runtimeFlowSnapshot(
     completedSteps: runtimeCompletedSteps(options.completedSteps),
     fingerprint: execution.fingerprint.observed,
     pendingSuspends: [],
+    scheduledEffects: options.scheduledEffects ?? execution.snapshot.scheduledEffects ?? {},
     updatedAt: new Date(),
   }
 }

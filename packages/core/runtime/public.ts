@@ -50,6 +50,8 @@ export type {
   RecordSuspensionInput,
   RuntimeKernel,
   RuntimeKernelOptions,
+  RuntimeScheduledEffectFlushRecord,
+  RuntimeScheduledEffectIntent,
   RuntimeSuspendRegistration,
   RuntimeSuspensionSnapshotInput,
   RuntimeTarget,
@@ -79,6 +81,14 @@ export type {
   RuntimeRequiredError,
   RuntimeRequiredErrorOptions,
 } from './api/runtime-required'
+
+export { task } from './api/task'
+export type {
+  RuntimeTaskContext,
+  RuntimeTaskInput,
+  RuntimeTaskOptions,
+  RuntimeTaskTarget,
+} from './api/task'
 
 export { node } from './composers/node'
 export type { NodeRuntimeOptions } from './composers/node'

@@ -15,6 +15,7 @@ import type {
   FlowId,
   RuntimeTargetId,
   TaskId,
+  TimerId,
   WaiterId,
   WorkId,
 } from '../ports/ids'
@@ -35,6 +36,8 @@ export type RuntimeTargetOutcome =
       readonly status: 'completed'
       /** Flow snapshot status to persist atomically with completed flow work. */
       readonly flowSnapshot: RuntimeFlowSnapshot
+      /** Replay-visible durable effects to flush with flow completion. */
+      readonly scheduledEffects?: readonly RuntimeScheduledEffectIntent[]
     }
   | {
       readonly status: 'suspended'
@@ -94,6 +97,8 @@ export interface EnqueueTaskInput {
   readonly notBefore?: Date
   /** Scoped-idle counter group this task keeps busy until terminal. */
   readonly idleScope?: string
+  /** JSON input persisted with the task work item. */
+  readonly input?: JsonValue
 }
 
 /** One suspend/wait registration produced by replay. */
@@ -116,6 +121,38 @@ export interface RuntimeSuspensionSnapshotInput {
   readonly completedSteps: Readonly<Record<string, JsonValue>>
   /** Ordered replay labels observed so far. */
   readonly fingerprint: readonly string[]
+  /** Durable effects already flushed in prior replay passes. */
+  readonly scheduledEffects?: RuntimeFlowSnapshot['scheduledEffects']
+}
+
+/** Buffered replay-visible durable effect produced by `flow.defer()`/`after()`. */
+export type RuntimeScheduledEffectIntent =
+  | {
+      readonly kind: 'defer'
+      readonly key: string
+      readonly namespace: string
+      readonly targetId: RuntimeTargetId
+      readonly taskId: TaskId
+      readonly workId: WorkId
+      readonly input: JsonValue
+      readonly idleScope: string
+    }
+  | {
+      readonly kind: 'after'
+      readonly key: string
+      readonly namespace: string
+      readonly targetId: RuntimeTargetId
+      readonly taskId: TaskId
+      readonly fireAt: Date
+      readonly input: JsonValue
+      readonly idleScope: string
+    }
+
+/** Committed metadata produced by flushing one durable effect. */
+export interface RuntimeScheduledEffectFlushRecord {
+  readonly key: string
+  readonly workId?: WorkId
+  readonly timerId?: TimerId
 }
 
 /** Input for recording a flow suspension. */
@@ -132,6 +169,8 @@ export interface RecordSuspensionInput {
   readonly snapshot: RuntimeSuspensionSnapshotInput
   /** Waiters to register before the suspension commits. */
   readonly suspends: readonly RuntimeSuspendRegistration[]
+  /** Replay-visible durable effects to flush with this suspension. */
+  readonly scheduledEffects?: readonly RuntimeScheduledEffectIntent[]
 }
 
 /** Input for appending an event and firing matching waiters. */

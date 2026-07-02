@@ -1,6 +1,7 @@
 import type { PromptRegistry } from '../configure'
 import type { Crux } from '../config'
 import type { CruxConfig } from '../config-types'
+import { createCruxFlowRuntimeControls } from '../api/flows'
 
 export type { Crux } from '../config'
 
@@ -17,11 +18,13 @@ export const defaultRuntimeConfigCruxFactory: RuntimeConfigCruxFactory = {
   create(config, registry) {
     return Object.freeze({
       ...registry,
+      flows: createCruxFlowRuntimeControls(),
       config: Object.freeze({ ...config }),
     }) as Crux
   },
   createInert(config) {
     return Object.freeze({
+      flows: createCruxFlowRuntimeControls(),
       prompts: Object.freeze([]),
       contexts: Object.freeze([]),
       get(id: string) {

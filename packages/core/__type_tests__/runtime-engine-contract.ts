@@ -12,6 +12,7 @@ import type {
   FlowId,
   InMemoryRuntimeStore,
   ResolvedRuntimeEngine,
+  RuntimeTaskTarget,
   RuntimeKernel,
   RuntimeEngineDefinition,
   RuntimePendingSuspend,
@@ -29,9 +30,11 @@ import {
   inMemoryRuntimeStore,
   node,
   runtimeRequiredError,
+  task,
   taskRunKey,
   waiterTimeoutKey,
 } from '@use-crux/core/runtime'
+import { task as planTask } from '@use-crux/core'
 import {
   runRuntimeEngineAdapterTests,
   runStoreAdapterTests,
@@ -54,7 +57,7 @@ void wrongFlowId
 const workItems: readonly RuntimeWork[] = [
   { kind: 'flow.resume', flowId },
   { kind: 'flow.timeout', flowId, suspendPoint: 'approval' },
-  { kind: 'task.run', taskId, targetId },
+  { kind: 'task.run', taskId, targetId, input: { documentId: 'doc_1' } },
   { kind: 'watch.deliver', subscriptionId: 'workspace', cursor },
 ]
 
@@ -77,6 +80,16 @@ for (const work of workItems) {
 // @ts-expect-error Task work needs a task id, not a flow id.
 const badTaskWork: RuntimeWork = { kind: 'task.run', taskId: flowId, targetId }
 void badTaskWork
+
+const runtimeTask = task('embed-document', {
+  run: async (input: { documentId: string }) => input.documentId,
+})
+expectTypeOf(runtimeTask).toMatchTypeOf<RuntimeTaskTarget<{ documentId: string }, string>>()
+expectTypeOf(runtimeTask.kind).toEqualTypeOf<'task'>()
+const ledgerTask = planTask('Draft launch plan')
+// @ts-expect-error Plans & Tasks ledger specs are not executable runtime targets.
+const wrongRuntimeTask: RuntimeTaskTarget = ledgerTask
+void wrongRuntimeTask
 
 expectTypeOf(inMemoryRuntimeStore()).toMatchTypeOf<RuntimeStoreAdapter>()
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createRuntime,
   node,
+  task,
   type FlowId,
   type RuntimeTargetId,
   type TaskId,
@@ -10,6 +11,36 @@ import {
 } from '@use-crux/core/runtime'
 
 describe('node() Runtime Engine composer', () => {
+  it('runs executable runtime task targets with persisted JSON input', async () => {
+    let nextWork = 0
+    const runtimeDefinition = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const seenInputs: unknown[] = []
+    const embedDocument = task('embed-document', {
+      run: async (input: { documentId: string }) => {
+        seenInputs.push(input)
+      },
+    })
+    const runtime = createRuntime({
+      runtime: runtimeDefinition,
+      targets: { [embedDocument.name]: embedDocument },
+      newWorkId: () => `work_task_${++nextWork}` as WorkId,
+    })
+
+    await runtime.kernel.enqueueTask({
+      namespace: 'tenant-a',
+      taskId: 'task_1' as TaskId,
+      targetId: embedDocument.targetId,
+      input: { documentId: 'doc_1' },
+    })
+    await runtime.dispatcher.nudge()
+
+    expect(seenInputs).toEqual([{ documentId: 'doc_1' }])
+    runtime.dispose()
+  })
+
   it('runs task, event, timer, cancellation, and scoped-idle paths in-process', async () => {
     let nextWork = 0
     const flowRuns: string[] = []

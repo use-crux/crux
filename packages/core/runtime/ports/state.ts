@@ -46,8 +46,18 @@ export interface FlowSnapshot {
   readonly fingerprint: readonly string[]
   /** Suspensions currently owned by this snapshot. */
   readonly pendingSuspends: readonly RuntimePendingSuspend[]
+  /** Durable effects already flushed for replay-visible defer/after calls. */
+  readonly scheduledEffects?: Readonly<Record<string, RuntimeScheduledEffect>>
   /** Last update time. */
   readonly updatedAt: Date
+}
+
+/** Committed replay-visible durable effect metadata. */
+export interface RuntimeScheduledEffect {
+  /** Child work id for `flow.defer()` effects. */
+  readonly workId?: WorkId
+  /** Timer id for `flow.after()` effects. */
+  readonly timerId?: TimerId
 }
 
 /** Suspension metadata stored with a flow snapshot. */

@@ -44,6 +44,8 @@ export type {
   ScheduleTimerInput,
   RuntimeSuspendRegistration,
   RuntimeSuspensionSnapshotInput,
+  RuntimeScheduledEffectIntent,
+  RuntimeScheduledEffectFlushRecord,
   RuntimeTarget,
   RuntimeTargetContext,
   RuntimeTargetMap,

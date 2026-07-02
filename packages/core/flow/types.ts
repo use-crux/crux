@@ -9,6 +9,7 @@
 
 import type { RetryOptions } from '../generation/retry'
 import type { JsonObject, JsonValue } from '../storage'
+import type { RuntimeTaskInput, RuntimeTaskTarget } from '../runtime/api/task'
 import type { ZodType } from 'zod'
 import type {
   FlowSignalMap,
@@ -67,6 +68,38 @@ type FlowScopeSuspend<TSignals> = TSignals extends FlowSignalMap
         : never,
     ) => Promise<TName extends keyof TSignals ? FlowSignalPayload<TSignals[TName]> : never>
   : <TPayload = unknown>(name: string, options?: SuspendOptions<TPayload>) => Promise<TPayload>
+
+/** Event definition accepted by runtime-backed `flow.waitFor()`. */
+export interface FlowWaitForEvent<TPayload = JsonValue> {
+  /** Durable event name appended to the Runtime Engine event log. */
+  readonly name: string
+  /** Optional schema used to validate the event payload when replay resumes. */
+  readonly schema?: ZodType<TPayload>
+}
+
+/** Runtime wait options for `flow.waitFor()`. */
+export interface FlowWaitForOptions {
+  /** Top-level event payload fields that must equal these JSON values. */
+  readonly match?: Readonly<Record<string, JsonValue>>
+  /** Timeout duration string (for example, '24h', '30m', '0ms'). */
+  readonly timeout?: string
+}
+
+/** Options for scoped idle waiting. */
+export interface FlowUntilIdleOptions {
+  /** v1 supports waiting for child work in the current flow only. */
+  readonly scope: 'current-flow'
+}
+
+/** Internal runtime metadata carried by flow suspension control errors. */
+export interface RuntimeFlowSuspendMetadata {
+  /** Durable event name registered with the waiter port. */
+  readonly eventName: string
+  /** Top-level payload equality match registered with the waiter port. */
+  readonly match: Readonly<Record<string, JsonValue>>
+  /** Replay fingerprint entry emitted for this suspension. */
+  readonly fingerprint: string
+}
 
 /**
  * A frozen handle returned by `flow()`.
@@ -240,6 +273,52 @@ export interface FlowScope<TInput = void, TSignals extends FlowSignalMap | undef
   ): Promise<void>
 
   /**
+   * Suspend the flow until a durable Runtime Engine event arrives.
+   *
+   * This is runtime-bound sugar over the waiter port. On first execution it
+   * registers a durable waiter and unwinds the flow. On replay, the same
+   * `await` resolves with the event payload that won the waiter race.
+   */
+  waitFor<TPayload = JsonValue>(
+    event: string | FlowWaitForEvent<TPayload>,
+    options?: FlowWaitForOptions,
+  ): Promise<TPayload>
+
+  /**
+   * Buffer a durable task to run independently at the next flow progress
+   * barrier.
+   *
+   * The task becomes durable together with the next suspension or completion
+   * snapshot. On replay, a previously flushed occurrence returns the recorded
+   * child work id instead of enqueueing again.
+   */
+  defer<TTask extends RuntimeTaskTarget>(
+    task: TTask,
+    input: RuntimeTaskInput<TTask>,
+  ): Promise<{ workId: string }>
+
+  /**
+   * Buffer a durable task timer to be scheduled at the next flow progress
+   * barrier.
+   *
+   * The timer is independent of the parent flow and contributes to
+   * `untilIdle({ scope: "current-flow" })` once it fires.
+   */
+  after<TTask extends RuntimeTaskTarget>(
+    task: TTask,
+    delay: string,
+    input: RuntimeTaskInput<TTask>,
+  ): Promise<void>
+
+  /**
+   * Suspend until child work in the requested scope reaches terminal state.
+   *
+   * v1 only supports the current flow's child scope. Global idle is not a
+   * runtime primitive.
+   */
+  untilIdle(options: FlowUntilIdleOptions): Promise<void>
+
+  /**
    * Cancel the flow with an optional reason.
    *
    * Throws internally to unwind the call stack. The flow runtime catches this
@@ -278,6 +357,7 @@ export class FlowSuspendedError extends Error {
   constructor(
     public readonly suspendPoint: string,
     public readonly options?: SuspendOptions,
+    public readonly runtime?: RuntimeFlowSuspendMetadata,
   ) {
     super(`Flow suspended at: ${suspendPoint}`)
     this.name = 'FlowSuspendedError'
