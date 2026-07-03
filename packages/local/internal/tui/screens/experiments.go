@@ -164,7 +164,7 @@ func (s *Experiments) Keybinds() []shell.Keybind {
 		shell.Bind("h/l", "pane"),
 		shell.Bind("↵", "open run"),
 		shell.Bind("p", "promote"),
-		shell.Bind("e", "export JSON"),
+		shell.Bind("e", "export CSV"),
 		shell.Bind(":", "cmd"),
 		shell.Bind("?", "help"),
 	}

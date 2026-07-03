@@ -1,11 +1,13 @@
 package screens
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/uitest"
 )
 
 func sampleInsight() api.QualityInsightRecord {
@@ -112,6 +114,27 @@ func TestInsightsUnsupportedActionsDoNotEmitStubs(t *testing.T) {
 	}
 }
 
+func TestInsightsPromoteUsesLinkedExperimentWinner(t *testing.T) {
+	client := &insightPromoteClient{FixtureClient: uitest.NewFixtureClient()}
+	i := NewInsights()
+	insight := sampleInsight()
+	insight.LinkedExperimentIDs = []string{"exp-043"}
+	i.items = []api.QualityInsightRecord{insight}
+	i.selectedID = "INS-014"
+	i.loaded = true
+
+	cmd := i.Update(tea.KeyPressMsg(tea.Key{Text: "p", Code: 'p'}), client)
+	if cmd == nil {
+		t.Fatal("p returned nil; expected promote command")
+	}
+	if _, ok := cmd().(insightPromotedMsg); !ok {
+		t.Fatalf("p returned %T, want insightPromotedMsg", cmd())
+	}
+	if client.gotExperimentID != "exp-043" || client.gotVariant != "maxIter+dedupe" {
+		t.Fatalf("promote args = %q/%q, want exp-043/maxIter+dedupe", client.gotExperimentID, client.gotVariant)
+	}
+}
+
 func TestInsightsKeybindsOnlyAdvertiseWiredActions(t *testing.T) {
 	i := NewInsights()
 	got := make([]string, 0)
@@ -129,4 +152,40 @@ func TestInsightsKeybindsOnlyAdvertiseWiredActions(t *testing.T) {
 			t.Fatalf("keybinds advertised blocked action %q: %s", blocked, text)
 		}
 	}
+}
+
+func TestInsightsKeybindsAdvertisePromoteForLinkedExperiment(t *testing.T) {
+	i := NewInsights()
+	insight := sampleInsight()
+	insight.LinkedExperimentIDs = []string{"exp-043"}
+	i.items = []api.QualityInsightRecord{insight}
+	i.selectedID = "INS-014"
+	i.loaded = true
+
+	got := make([]string, 0)
+	for _, bind := range i.Keybinds() {
+		got = append(got, bind.Key+" "+bind.Label)
+	}
+	text := strings.Join(got, " · ")
+	if !strings.Contains(text, "p promote") {
+		t.Fatalf("keybinds missing linked-experiment promote action: %s", text)
+	}
+}
+
+type insightPromoteClient struct {
+	*uitest.FixtureClient
+	gotExperimentID string
+	gotVariant      string
+}
+
+func (c *insightPromoteClient) PromoteBaseline(_ context.Context, experimentID, variant, _ string) (api.QualityPromoteResult, error) {
+	c.gotExperimentID = experimentID
+	c.gotVariant = variant
+	return api.QualityPromoteResult{
+		BaselineID:   "baseline-015",
+		EvaluationID: "agent-loops",
+		ExperimentID: experimentID,
+		VariantName:  variant,
+		Path:         ".crux/quality/baselines/agent-loops.json",
+	}, nil
 }

@@ -138,15 +138,10 @@ func (s *Experiments) baselineVariant() string {
 }
 
 func (s *Experiments) winnerVariant() string {
-	bestName := ""
-	bestPass := -1.0
-	for name, agg := range s.detailAggregates() {
-		if agg.PassRate > bestPass {
-			bestName = name
-			bestPass = agg.PassRate
-		}
+	if s.detail == nil {
+		return ""
 	}
-	return bestName
+	return bestExperimentVariant(*s.detail)
 }
 
 func (s *Experiments) detailAggregates() map[string]api.QualityVariantAggregate {

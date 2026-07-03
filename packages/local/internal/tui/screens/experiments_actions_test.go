@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -44,7 +45,7 @@ func TestExperimentsPromoteUsesWinnerVariant(t *testing.T) {
 	}
 }
 
-func TestExperimentsExportWritesJSON(t *testing.T) {
+func TestExperimentsExportWritesCSV(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	screen, _ := fixtureExperiments(t)
@@ -60,8 +61,39 @@ func TestExperimentsExportWritesJSON(t *testing.T) {
 	if msg.experimentID != "exp-043" {
 		t.Fatalf("exported experiment = %q, want exp-043", msg.experimentID)
 	}
-	if _, err := os.Stat(filepath.Join(home, ".crux", "exports", "experiment-exp-043.json")); err != nil {
+	path := filepath.Join(home, ".crux", "exports", "experiment-exp-043.csv")
+	body, err := os.ReadFile(path)
+	if err != nil {
 		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"experiment_id,evaluation_id,variant,cells,passed,failed,pass_rate,score_mean,latency_p95_ms,cost_usd",
+		"exp-043,agent-loops,maxIter+dedupe,4,4,0,0.9700,0.8200,4100.0,0.4900",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("CSV export missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestExperimentsUnsupportedActionsDoNotEmitStubs(t *testing.T) {
+	cases := []struct {
+		name string
+		key  rune
+	}{
+		{"compare selected variants", 'c'},
+		{"re-run experiment", 'r'},
+		{"new experiment", 'n'},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			screen, _ := fixtureExperiments(t)
+			cmd := screen.Update(tea.KeyPressMsg(tea.Key{Text: string(tc.key), Code: tc.key}), nil)
+			if cmd != nil {
+				t.Fatalf("pressing %q returned a command; missing experiment action surfaces must stay hidden", tc.key)
+			}
+		})
 	}
 }
 

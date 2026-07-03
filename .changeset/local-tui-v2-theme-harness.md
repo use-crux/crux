@@ -21,3 +21,7 @@ Add the Datasets TUI screen with fixture-backed dataset/case/editor rendering, l
 Route CLI command styling and live terminal control through the shared output IO gate, add a guard test for direct command `.Render()` calls, and keep command table rendering behind output-owned helpers so no-color and piped output stay ANSI-clean.
 
 Complete the final TUI sweep by deleting retired marker files, bounding boot and overlay rendering under resize fuzz, memoizing Runs and Overview pane renders, adding deterministic VHS review tape sources, and documenting the current theme/kit/bridge/screen architecture while replacing the stale V1 plan with a superseded pointer.
+
+Wire the Insights `p` action for insights linked to experiments so it promotes the linked experiment's winning variant through the existing baseline promotion surface, while keeping unavailable save/run/compare actions hidden.
+
+Replace the Experiments JSON export fallback with CSV export generated from loaded experiment detail metrics, while keeping unavailable compare, re-run, and new-experiment actions hidden.

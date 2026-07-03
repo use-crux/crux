@@ -50,16 +50,17 @@ func (c *FixtureClient) Overview(context.Context) (api.QualityOverviewRecord, er
 func (c *FixtureClient) Insights(context.Context) ([]api.QualityInsightRecord, error) {
 	return []api.QualityInsightRecord{
 		{
-			Tag:            "QualityInsightRecord",
-			InsightID:      "INS-014",
-			Title:          "docs_agent loops on retrieval",
-			Severity:       "high",
-			Tags:           []string{"agent-loop", "retrieval"},
-			Summary:        "docs_agent loops 5-16 iterations with duplicate rag.search calls.",
-			TargetID:       "docs_agent",
-			LinkedTraceIDs: []string{"8af2f1c"},
-			LinkedCaseIDs:  []string{"rag/typed_prompts_definition"},
-			SuspectedCause: "docs_agent.run\n  retrieve(loop x16) hits=10 dup .94\n    rag.search repeats the same query after novelty drops below 0.2",
+			Tag:                 "QualityInsightRecord",
+			InsightID:           "INS-014",
+			Title:               "docs_agent loops on retrieval",
+			Severity:            "high",
+			Tags:                []string{"agent-loop", "retrieval"},
+			Summary:             "docs_agent loops 5-16 iterations with duplicate rag.search calls.",
+			TargetID:            "docs_agent",
+			LinkedTraceIDs:      []string{"8af2f1c"},
+			LinkedExperimentIDs: []string{"exp-043"},
+			LinkedCaseIDs:       []string{"rag/typed_prompts_definition"},
+			SuspectedCause:      "docs_agent.run\n  retrieve(loop x16) hits=10 dup .94\n    rag.search repeats the same query after novelty drops below 0.2",
 			ProposedFixConfig: &api.QualityInsightFixConfig{
 				YAML: "agent.retrieve.maxIterations: 3\nretrieval.dedupe.embedding: 0.92\nearlyStop.novelDocsRatio: 0.2\n# approx 85% fewer tokens",
 				ConfigKeys: []string{

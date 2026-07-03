@@ -61,6 +61,8 @@ func (s *Insights) Update(msg tea.Msg, client DataClient) tea.Cmd {
 	switch m := msg.(type) {
 	case insightsListLoadedMsg:
 		s.applyInsights([]api.QualityInsightRecord(m))
+	case insightPromotedMsg:
+		return fetchInsightsList(client)
 	case api.QualityEvent:
 		return fetchInsightsList(client)
 	case dataErrMsg:
@@ -93,6 +95,8 @@ func (s *Insights) updateKey(msg tea.KeyPressMsg, client DataClient) tea.Cmd {
 		return s.markFixed(client)
 	case "t":
 		return s.openLinkedTrace()
+	case "p":
+		return s.promoteFix(client)
 	case "e":
 		return s.exportInsight()
 	}
@@ -163,7 +167,7 @@ func (s *Insights) Breadcrumb() ([]string, string) {
 }
 
 func (s *Insights) Keybinds() []shell.Keybind {
-	return []shell.Keybind{
+	binds := []shell.Keybind{
 		shell.Bind("j/k", "move"),
 		shell.Bind("h/l", "pane"),
 		shell.Bind("[/]", "tabs"),
@@ -171,9 +175,12 @@ func (s *Insights) Keybinds() []shell.Keybind {
 		shell.Bind("f", "mark fixed"),
 		shell.Bind("x", "dismiss"),
 		shell.Bind("e", "export"),
-		shell.Bind(":", "cmd"),
-		shell.Bind("?", "help"),
 	}
+	if cur := s.currentInsight(); cur != nil && len(cur.LinkedExperimentIDs) > 0 {
+		binds = append(binds, shell.Bind("p", "promote"))
+	}
+	binds = append(binds, shell.Bind(":", "cmd"), shell.Bind("?", "help"))
+	return binds
 }
 
 func (s *Insights) Counts() map[string]int {
