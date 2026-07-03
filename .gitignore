@@ -25,6 +25,7 @@ packages/local/internal/assets/embed/*
 !packages/local/internal/assets/embed/.gitkeep
 packages/local/internal/assets/ui-embed/*
 !packages/local/internal/assets/ui-embed/.gitkeep
+packages/local/tapes/out/
 
 # Release staging outputs
 .tmp/

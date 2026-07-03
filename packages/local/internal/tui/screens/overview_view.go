@@ -29,16 +29,22 @@ func (o *Overview) View(size Size) string {
 	leftRect := cols[0]
 	rightRect := cols[1]
 
-	kpi := panelRect(o.renderKPIStrip(kpiRect.W), kpiRect.W, kpiRect.H)
-	left := panelRect(o.renderLeftColumn(leftRect.W, leftRect.H), leftRect.W, leftRect.H)
-	right := panelRect(o.renderRightColumn(rightRect.W, rightRect.H), rightRect.W, rightRect.H)
+	kpi := o.memoLines("kpi", kpiRect, func() string {
+		return panelRect(o.renderKPIStrip(kpiRect.W), kpiRect.W, kpiRect.H)
+	})
+	left := o.memoLines(o.leftMemoFocus(), leftRect, func() string {
+		return panelRect(o.renderLeftColumn(leftRect.W, leftRect.H), leftRect.W, leftRect.H)
+	})
+	right := o.memoLines(o.rightMemoFocus(), rightRect, func() string {
+		return panelRect(o.renderRightColumn(rightRect.W, rightRect.H), rightRect.W, rightRect.H)
+	})
 
 	bodyLines := kit.Compose(
 		[]kit.Rect{leftRect, rightRect},
-		[][]string{strings.Split(left, "\n"), strings.Split(right, "\n")},
+		[][]string{left, right},
 	)
 	body := strings.Join(bodyLines, "\n")
-	return kpi + "\n" + body
+	return strings.Join(kpi, "\n") + "\n" + body
 }
 
 func (o *Overview) renderCompact(size Size) string {

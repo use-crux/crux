@@ -19,3 +19,5 @@ Rebuild the Cassettes, Feedback, and Baselines screens with deterministic fixtur
 Add the Datasets TUI screen with fixture-backed dataset/case/editor rendering, local dirty tracking, undo/discard behavior, in-memory duplicate/assertion edits, deterministic goldens, and resize-fuzz coverage. Service-backed suite/case save and trace-derived case creation remain hidden until the dataset write surface is added.
 
 Route CLI command styling and live terminal control through the shared output IO gate, add a guard test for direct command `.Render()` calls, and keep command table rendering behind output-owned helpers so no-color and piped output stay ANSI-clean.
+
+Complete the final TUI sweep by deleting retired marker files, bounding boot and overlay rendering under resize fuzz, memoizing Runs and Overview pane renders, adding deterministic VHS review tape sources, and documenting the current theme/kit/bridge/screen architecture while replacing the stale V1 plan with a superseded pointer.

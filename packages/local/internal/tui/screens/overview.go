@@ -27,8 +27,10 @@ type Overview struct {
 	// activityScroll is zero when the activity feed is pinned to newest rows.
 	// Positive values latch the feed onto older rows while live events arrive.
 	activityScroll int
-	insightList  kit.VList[api.QualityInsightRecord]
-	runList      kit.VList[api.QualityRunRecord]
+	insightList    kit.VList[api.QualityInsightRecord]
+	runList        kit.VList[api.QualityRunRecord]
+	renderRev      uint64
+	memo           kit.Memo
 }
 
 type overviewPanel int
@@ -104,16 +106,21 @@ func (o *Overview) Update(msg tea.Msg, client DataClient) tea.Cmd {
 		o.overview = api.QualityOverviewRecord(m.rec)
 		o.loaded = true
 		o.syncLists()
+		o.bumpRenderRev()
 	case insightsLoadedMsg:
 		o.insights = []api.QualityInsightRecord(m)
 		o.syncLists()
+		o.bumpRenderRev()
 	case runsLoadedMsg:
 		o.runs = []api.QualityRunRecord(m)
 		o.syncLists()
+		o.bumpRenderRev()
 	case activityLoadedMsg:
 		o.activity = []api.QualityActivityEvent(m)
+		o.bumpRenderRev()
 	case dataErrMsg:
 		o.err = string(m)
+		o.bumpRenderRev()
 	case api.QualityEvent:
 		// A typed event arrived from the bus. Optimistically prepend it as
 		// an activity row + re-fetch in the background.
@@ -121,6 +128,7 @@ func (o *Overview) Update(msg tea.Msg, client DataClient) tea.Cmd {
 		if o.activityScroll > 0 {
 			o.activityScroll++
 		}
+		o.bumpRenderRev()
 		return tea.Batch(
 			fetchOverview(client),
 			fetchActivity(client, 12),
@@ -238,29 +246,6 @@ func (o *Overview) syncLists() {
 	if o.runCur < len(runs) {
 		o.runList.SetCursorByIdentity(o.SelectedRunID())
 	}
-}
-
-func activityFromEvent(ev api.QualityEvent) api.QualityActivityEvent {
-	summary := ev.Action
-	if ev.Kind != "" {
-		summary = ev.Kind + " " + ev.RefID
-	}
-	return api.QualityActivityEvent{
-		Tag:       "QualityActivityEvent",
-		Timestamp: ev.Timestamp,
-		Kind:      ev.Kind,
-		Severity:  ev.Severity,
-		Summary:   summary,
-		RefID:     ev.RefID,
-	}
-}
-
-func prependActivity(existing []api.QualityActivityEvent, ev api.QualityActivityEvent, limit int) []api.QualityActivityEvent {
-	out := append([]api.QualityActivityEvent{ev}, existing...)
-	if len(out) > limit {
-		out = out[:limit]
-	}
-	return out
 }
 
 func (o *Overview) Breadcrumb() ([]string, string) {

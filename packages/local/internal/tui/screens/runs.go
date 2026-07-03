@@ -46,6 +46,8 @@ type Runs struct {
 	runQuery       string
 	runStatusIndex int
 	expandedDups   map[string]bool
+	renderRev      uint64
+	memo           kit.Memo
 }
 
 type runsFocus int
@@ -77,6 +79,7 @@ func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		s.runs = []api.QualityRunRecord(m)
 		s.runList.SetItems(s.runs)
 		s.loaded = true
+		s.bumpRenderRev()
 		if s.selRun == "" && len(s.runs) > 0 {
 			s.selRun = s.runs[0].TraceID
 			s.runList.SetCursorByIdentity(s.selRun)
@@ -100,9 +103,11 @@ func (s *Runs) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		if s.selSpan == "" && len(d.Spans) > 0 {
 			s.selSpan = d.Spans[0].ID
 		}
+		s.bumpRenderRev()
 	case dataErrMsg:
 		s.err = string(m)
 		s.loading = false
+		s.bumpRenderRev()
 	case api.QualityEvent:
 		// Typed live event from the bus (also used for the synthesized
 		// "store changed" signal — kind=="refresh"). Refresh the run list

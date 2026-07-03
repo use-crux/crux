@@ -182,7 +182,7 @@ func (p *Palette) View(viewportWidth, viewportHeight int) string {
 	if pad < 1 {
 		pad = 1
 	}
-	hint := left + strings.Repeat(" ", pad) + right
+	hint := fitToWidth(left+strings.Repeat(" ", pad)+right, w)
 
 	border := lipgloss.NewStyle().
 		Background(shell.ColorPanel).
@@ -230,11 +230,7 @@ func defaultCommands() []Command {
 }
 
 func padTo(s string, width int) string {
-	w := lipgloss.Width(s)
-	if w >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-w)
+	return fitToWidth(s, width)
 }
 
 func maxInt(a, b int) int {

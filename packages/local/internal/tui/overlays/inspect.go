@@ -165,11 +165,7 @@ func prettyJSON(raw json.RawMessage) string {
 }
 
 func padToWidth(s string, width int) string {
-	w := lipgloss.Width(s)
-	if w >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-w)
+	return fitToWidth(s, width)
 }
 
 func truncateRight(s string, width int) string {

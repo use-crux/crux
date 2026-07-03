@@ -125,8 +125,8 @@ func (h *Help) View(viewportWidth, viewportHeight int) string {
 		w = viewportWidth - 4
 	}
 	colW := (w - 4) / 3
-	if colW < 24 {
-		colW = 24
+	if colW < 1 {
+		colW = 1
 	}
 
 	header := " " + shell.TealBold.Render("? help") + "  " +

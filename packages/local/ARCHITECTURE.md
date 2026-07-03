@@ -128,6 +128,37 @@ Keep the insight files split by concern:
   filtering.
 - `quality_insight_derivation_test.go`: table-driven tests over the pure derivation boundary.
 
+## TUI Architecture
+
+The local TUI is an in-process Bubble Tea surface over the same services that power the browser
+devtools. It must not add WebSocket or HTTP paths for its own reads. Domain services publish typed
+events on local channels; `internal/tui/bridge` coalesces those events into revision-tagged batches;
+`internal/tui/workbench.go` routes each batch to the active screen and marks inactive interested
+screens stale for one refetch on focus.
+
+Rendering is layered:
+
+- `internal/theme` owns the shared palette, tone mapping, glyphs, and immutable style sets for both
+  CLI and TUI output.
+- `internal/tui/kit` owns geometry, composition, virtualized lists/tables, bounded components, and
+  small render caches. Screens render inside the `Size`/rect they are given and must not render
+  beyond it.
+- `internal/tui/shell` owns chrome shared by every screen: nav rail, breadcrumb, panes, and status
+  bar.
+- `internal/tui/screens` owns screen state, DataClient calls, key handling, and pure view assembly.
+- `internal/tui/overlays` owns modal palette, help, and inspect surfaces; overlays must satisfy the
+  same resize-fuzz bounds as screens.
+
+The screen data boundary is `internal/tui/screens.DataClient`, implemented by
+`internal/devtools.DirectClient` for production and `internal/tui/uitest.FixtureClient` for tests.
+If a screen action needs a service method that does not exist, do not invent a placeholder command or
+new transport path. Record the gap and resolve the service contract first.
+
+Every screen and overlay should have deterministic fixture-backed resize fuzz coverage. Goldens live
+next to the screen tests and are refreshed intentionally with the package-specific `-update` tests.
+Manual terminal smoke is still useful for feel and performance, but width, height, and truncation
+claims should be enforced by tests.
+
 ## qualityfs File Layout
 
 Keep `internal/qualityfs` split by concern:
