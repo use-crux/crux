@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -53,6 +54,23 @@ func TestInsightsTKeyNoopWhenNoLinkedTraces(t *testing.T) {
 	}
 }
 
+func TestInsightsBracketKeysSwitchTabs(t *testing.T) {
+	i := NewInsights()
+	i.items = []api.QualityInsightRecord{sampleInsight()}
+	i.selectedID = "INS-014"
+	i.loaded = true
+
+	i.Update(tea.KeyPressMsg(tea.Key{Text: "]", Code: ']'}), nil)
+	if i.tab != "traces" {
+		t.Fatalf("] should advance to traces tab, got %q", i.tab)
+	}
+
+	i.Update(tea.KeyPressMsg(tea.Key{Text: "[", Code: '['}), nil)
+	if i.tab != "diagnosis" {
+		t.Fatalf("[ should return to diagnosis tab, got %q", i.tab)
+	}
+}
+
 // TestInsightsExportEmitsCmd asserts `e` returns a non-nil cmd that
 // writes the focused insight to ~/.crux/exports/insight-{id}.json.
 func TestInsightsExportEmitsCmd(t *testing.T) {
@@ -67,10 +85,9 @@ func TestInsightsExportEmitsCmd(t *testing.T) {
 	}
 }
 
-// TestInsightsActionStubsEmitCmds asserts the action chords whose
-// backends are still gaps return non-nil stub cmds — so the workbench
-// can surface "backend pending" toasts via activity feed.
-func TestInsightsActionStubsEmitCmds(t *testing.T) {
+// TestInsightsUnsupportedActionsDoNotEmitStubs asserts action chords whose
+// backend write surfaces are missing do not fabricate placeholder commands.
+func TestInsightsUnsupportedActionsDoNotEmitStubs(t *testing.T) {
 	cases := []struct {
 		name string
 		key  rune
@@ -88,9 +105,28 @@ func TestInsightsActionStubsEmitCmds(t *testing.T) {
 			i.loaded = true
 
 			cmd := i.Update(tea.KeyPressMsg(tea.Key{Text: string(tc.key), Code: tc.key}), nil)
-			if cmd == nil {
-				t.Errorf("pressing %q returned nil; expected stub cmd", tc.key)
+			if cmd != nil {
+				t.Errorf("pressing %q returned a stub command; missing backend actions must stay blocked", tc.key)
 			}
 		})
+	}
+}
+
+func TestInsightsKeybindsOnlyAdvertiseWiredActions(t *testing.T) {
+	i := NewInsights()
+	got := make([]string, 0)
+	for _, bind := range i.Keybinds() {
+		got = append(got, bind.Key+" "+bind.Label)
+	}
+	text := strings.Join(got, " · ")
+	for _, want := range []string{"t linked traces", "x dismiss"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("keybinds missing wired action %q: %s", want, text)
+		}
+	}
+	for _, blocked := range []string{"s save cases", "r run variant", "c compare", "p promote fix"} {
+		if strings.Contains(text, blocked) {
+			t.Fatalf("keybinds advertised blocked action %q: %s", blocked, text)
+		}
 	}
 }

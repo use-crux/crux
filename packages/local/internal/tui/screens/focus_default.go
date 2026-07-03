@@ -7,7 +7,6 @@ package screens
 // added the Focus interface method small — one file instead of nine.
 
 func (o *Overview) Focus(_, _ string)  {}
-func (s *Insights) Focus(_, _ string)  {}
 func (s *Runs) Focus(_, _ string)      {}
 func (s *Baselines) Focus(_, _ string) {}
 func (s *Feedback) Focus(_, _ string)  {}
