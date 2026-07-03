@@ -1,0 +1,21 @@
+{
+  "title": "Errors",
+  "description": "Stable Crux runtime diagnostic codes and fixes.",
+  "pages": [
+    "index",
+    "RUNTIME_REQUIRED",
+    "CAPABILITY_MISSING",
+    "TARGET_NOT_FOUND",
+    "TARGET_DUPLICATE",
+    "TARGET_NOT_EXPORTED",
+    "REPLAY_DIVERGED",
+    "ARTIFACTS_STALE",
+    "WAKE_UNVERIFIED",
+    "PUBLIC_URL_UNRESOLVED",
+    "SETUP_REQUIRED",
+    "PAYLOAD_NOT_JSON",
+    "WORK_DEAD_LETTERED",
+    "NAMESPACE_AMBIGUOUS",
+    "RUNTIME_HOST_ONLY"
+  ]
+}

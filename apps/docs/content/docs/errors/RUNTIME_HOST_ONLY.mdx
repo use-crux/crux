@@ -1,0 +1,27 @@
+---
+title: RUNTIME_HOST_ONLY
+description: A host-bound runtime was used outside its required host boundary.
+---
+
+## What failed
+
+A runtime-backed API was called from a process that only has a host-bound runtime declaration, such as `runtime: convex()`.
+
+## Why
+
+Host-bound runtimes need request-scoped host context to bind store and wake ports. Crux cannot safely fall back to object-bound storage without violating the one-writer runtime rule.
+
+## What still works
+
+Object-bound authoring still typechecks. Runtime-backed operations work inside the host entry.
+
+## Fix
+
+Run the operation inside the host boundary, such as a generated Convex entry:
+
+```ts
+createConvexRuntimeHandlers({
+  component: components.crux,
+  targets: [reviewFlow, embedDocument],
+})
+```

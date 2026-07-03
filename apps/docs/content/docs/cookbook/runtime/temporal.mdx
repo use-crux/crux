@@ -1,0 +1,110 @@
+---
+title: Temporal Runtime Mapping
+description: Recipe-only code sketch for mapping Crux flows and tasks onto Temporal workflows and activities.
+---
+
+Temporal can own much of durable execution, but it is recipe guidance in v1, not a bundled first-party Crux runtime adapter. A Temporal adapter should preserve Crux target names and diagnostics while mapping execution onto workflows, signals, timers, and activities.
+
+## Crux target declarations
+
+Keep user code in Crux terms. A future adapter can discover these exported targets and register Temporal workers from the manifest.
+
+```ts
+import { flow } from '@use-crux/core/flow'
+import { task } from '@use-crux/core/runtime'
+
+export const chargeCustomer = task('charge-customer', {
+  run: async ({ invoiceId }: { invoiceId: string }) => {
+    await billing.charge(invoiceId)
+  },
+})
+
+export const invoiceFlow = flow('invoice', async (flow, input: { invoiceId: string }) => {
+  await flow.after(chargeCustomer, '1d', { invoiceId: input.invoiceId })
+
+  return flow.waitFor(
+    { name: 'invoice.paid' },
+    { match: { invoiceId: input.invoiceId }, timeout: '7d' },
+  )
+})
+```
+
+## Temporal workflow sketch
+
+One mapping is one Temporal workflow per Crux flow occurrence, with Crux event waits represented as Temporal signals.
+
+```ts
+import { condition, defineSignal, proxyActivities, setHandler, sleep } from '@temporalio/workflow'
+
+const invoicePaid = defineSignal<[payload: { invoiceId: string; paidAt: string }]>('invoice.paid')
+
+const activities = proxyActivities<{
+  runCruxTask(targetName: string, input: unknown): Promise<void>
+}>({
+  startToCloseTimeout: '5 minutes',
+})
+
+export async function invoiceWorkflow(input: { invoiceId: string }) {
+  let paid: { invoiceId: string; paidAt: string } | undefined
+
+  setHandler(invoicePaid, (payload) => {
+    if (payload.invoiceId === input.invoiceId) paid = payload
+  })
+
+  await sleep('1 day')
+  await activities.runCruxTask('charge-customer', { invoiceId: input.invoiceId })
+
+  await condition(() => paid !== undefined, '7 days')
+  if (!paid) throw new Error('invoice.paid timed out')
+
+  return paid
+}
+```
+
+## Worker activity sketch
+
+The activity resolves a Crux runtime task target by durable target name. A real adapter should use generated artifacts rather than a hand-written map.
+
+```ts
+import { Worker } from '@temporalio/worker'
+import { chargeCustomer } from './targets'
+
+const targets = {
+  'charge-customer': chargeCustomer,
+}
+
+await Worker.create({
+  workflowsPath: require.resolve('./workflows'),
+  taskQueue: 'crux-runtime',
+  activities: {
+    async runCruxTask(targetName: keyof typeof targets, input: unknown) {
+      const target = targets[targetName]
+      if (!target) {
+        throw new Error(`TARGET_NOT_FOUND: ${targetName}`)
+      }
+
+      await target.execute({
+        work: makeTemporalWorkItem(targetName, input),
+        lease: makeTemporalLease(),
+      })
+    },
+  },
+})
+```
+
+## Mapping notes
+
+| Runtime concern | Temporal substrate |
+| --- | --- |
+| Flow runtime | Temporal workflow |
+| Runtime task target | Temporal activity |
+| Signals | Temporal signals or updates |
+| Timers | Temporal timers |
+| Read-only inspection | Temporal queries plus Crux metadata |
+
+The adapter must define which Crux primitives are represented as workflows versus activities, and it must keep Crux diagnostics visible for replay drift, missing targets, and non-JSON payloads.
+
+## Related
+
+- Guide: [Runtime Adapter Authoring](/docs/guides/runtime/custom-adapters)
+- Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)

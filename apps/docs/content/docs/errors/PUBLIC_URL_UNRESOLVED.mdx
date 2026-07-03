@@ -1,0 +1,30 @@
+---
+title: PUBLIC_URL_UNRESOLVED
+description: Production serverless wake has no stable public URL.
+---
+
+## What failed
+
+`serverless()` could not resolve an absolute runtime wake URL in production.
+
+## Why
+
+External wake providers need a stable URL to call after the original request exits.
+
+## What still works
+
+Local `node()` runtime execution and object-bound flow APIs still work.
+
+## Fix
+
+Set a public base URL:
+
+```bash
+CRUX_PUBLIC_URL=https://app.example.com
+```
+
+Or pass it explicitly:
+
+```ts
+serverless({ store, wake, publicUrl: 'https://app.example.com' })
+```

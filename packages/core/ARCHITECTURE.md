@@ -635,6 +635,10 @@ Correctness is centralized in the kernel modules under `runtime/engine/`: task e
 
 Flow replay remains in `flow/` and bridges to the Runtime Engine through explicit snapshot conversion helpers. Object-bound flows are a permanent baseline mode; runtime-backed execution persists snapshots, pending suspends, delivered suspend payloads, and scheduled effects through the same replay model instead of introducing a second flow interpreter.
 
+Generated and hand-written wake entries meet the kernel through `createRuntimeHandler({ targets })`, which normalizes exported flow/task targets, verifies HTTP wake requests before envelope decode, and returns fetch-compatible `GET`/`POST` handlers. Host-bound adapters such as Convex use `bindHostRuntime()` to supply request-scoped store and wake bindings while still delegating to `createRuntime()` and the same kernel path.
+
+Public Runtime Engine failures cross package boundaries only as `CruxRuntimeError` diagnostics. The stable code set is `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`, `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`, `ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`, `SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`, `NAMESPACE_AMBIGUOUS`, and `RUNTIME_HOST_ONLY`; raw adapter errors stay as causes.
+
 ## Middleware Pipeline
 
 Three tiers of hooks handle cross-cutting concerns:

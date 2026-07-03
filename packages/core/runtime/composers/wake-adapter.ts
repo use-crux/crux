@@ -42,7 +42,7 @@ export interface RuntimeWakeAdapterInput {
   readonly url: string
 }
 
-/** Composable wake adapter accepted by `serverless()` and `node({ wake })`. */
+/** Composable wake adapter accepted by `serverless({ wake })`. */
 export interface RuntimeWakeAdapter {
   /** Stable wake adapter id used in diagnostics. */
   readonly id: string

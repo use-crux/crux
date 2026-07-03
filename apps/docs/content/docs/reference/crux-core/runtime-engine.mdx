@@ -1,0 +1,162 @@
+---
+title: Runtime Engine
+description: API reference for @use-crux/core/runtime durable execution contracts, composers, handlers, diagnostics, and conformance helpers.
+---
+
+```ts
+import {
+  node,
+  serverless,
+  genericQueue,
+  createRuntimeHandler,
+  createRuntime,
+  bindHostRuntime,
+  task,
+  CruxRuntimeError,
+} from '@use-crux/core/runtime'
+```
+
+The Runtime Engine is the durable execution layer for event waits, timers, background tasks, automatic flow resume, HTTP wake delivery, and runtime inspection. Object-bound flow APIs keep working without it; name-bound, event-bound, time-bound, and background APIs require a configured runtime.
+
+## Composers
+
+| Export | Use |
+| --- | --- |
+| `node(options?)` | In-process local/test runtime. Defaults to an in-memory store and microtask wake. Pass `store: postgres()` for long-lived Node processes that need durable state. |
+| `serverless({ store, wake, endpoint, publicUrl, namespace })` | Durable store plus HTTP wake adapter for Next/Vercel-style deployments. `endpoint` defaults to `/api/crux`; production requires a stable public URL. |
+| `genericQueue({ enqueue, secret, devSecret, maxDelayMs })` | Dependency-free wake adapter for user-owned queues. With `secret`, messages include `x-crux-signature: sha256=<hmac>` headers for HTTP forwarding. |
+| `createRuntime({ runtime, targets })` | Resolve an in-process runtime definition for advanced host code and tests. Host-bound declarations such as `convex()` throw `RUNTIME_HOST_ONLY` here. |
+| `bindHostRuntime(definition, binding)` | Host adapter path for platforms whose store/wake require request context, such as Convex. It delegates through the same kernel as `createRuntime()`. |
+| `withCrux(nextConfig, options?)` | `@use-crux/core/runtime/next` wrapper that runs `crux runtime generate` while Next evaluates config, covering Webpack and Turbopack builds. |
+
+```ts
+import { config } from '@use-crux/core'
+import { serverless } from '@use-crux/core/runtime'
+import { postgres } from '@use-crux/postgres/runtime'
+import { qstash } from '@use-crux/upstash/runtime'
+
+export default config({
+  runtime: serverless({
+    store: postgres(),
+    wake: qstash(),
+  }),
+})
+```
+
+## Runtime targets
+
+`task(name, { run })` defines executable durable background work. Import it from `@use-crux/core/runtime`; it is intentionally separate from the plan-ledger `task()` exported by `@use-crux/core/tasks`.
+
+```ts
+import { task } from '@use-crux/core/runtime'
+
+export const embedDocument = task('embed-document', {
+  run: async ({ documentId }: { documentId: string }) => {
+    await embed(documentId)
+  },
+})
+```
+
+Runtime targets must be top-level named exports with literal names so generated entry files can import them. `flow.defer()`, `flow.after()`, and `createRuntimeHandler({ targets })` accept runtime task targets and exported flow handles.
+
+## HTTP handler
+
+`createRuntimeHandler({ targets, runtime?, verify?, manifestHash? })` returns fetch-compatible `{ GET, POST }` handlers. Generated Next artifacts and hand-written entry files use the same public API.
+
+```ts
+import { createRuntimeHandler } from '@use-crux/core/runtime'
+import { reviewFlow } from '@/flows/review'
+import { embedDocument } from '@/tasks/embed-document'
+
+export const { GET, POST } = createRuntimeHandler({
+  targets: [reviewFlow, embedDocument],
+})
+```
+
+`GET` returns health metadata without secrets. `POST` verifies the wake request before decoding the envelope or touching durable state. Failed verification returns `WAKE_UNVERIFIED`; malformed envelopes return terminal client responses so queues do not poison-loop.
+
+## Artifact generation
+
+Next projects can use the lightweight config wrapper:
+
+```ts
+import { withCrux } from '@use-crux/core/runtime/next'
+
+export default withCrux({
+  experimental: {
+    typedRoutes: true,
+  },
+})
+```
+
+The wrapper delegates source discovery and file writing to `crux runtime generate`. It fails builds with `ARTIFACTS_STALE` when generation fails.
+
+## Flow runtime APIs
+
+With `config({ runtime })`, flows can use:
+
+| API | Durable behavior |
+| --- | --- |
+| `flow.waitFor(event, { match, timeout })` | Registers a waiter and resumes when a matching durable event arrives or the timeout fires. |
+| `flow.defer(task, input)` | Buffers a child task until the next suspension/completion barrier and returns its work id. |
+| `flow.after(task, delay, input)` | Schedules a child task at the next barrier. |
+| `flow.untilIdle({ scope: 'current-flow' })` | Suspends until the current flow's child work scope reaches zero. |
+| `crux.flows.signal/resume/cancel(name, flowId, ...)` | Name-bound operations for code that does not have the original flow handle. |
+
+Durable payloads must be JSON-compatible. Complex data should live in application storage with ids or URLs passed through runtime payloads.
+
+## Diagnostics
+
+Public runtime failures throw `CruxRuntimeError` with a stable `code`, a user-facing explanation, the exact next step, and a docs URL. Current runtime codes are documented under [Errors](/docs/errors).
+
+Use the code discriminant for application-specific handling:
+
+```ts
+try {
+  await flow.waitFor(event)
+} catch (error) {
+  if (error instanceof CruxRuntimeError && error.code === 'RUNTIME_REQUIRED') {
+    // Show runtime setup guidance.
+  }
+}
+```
+
+## Operator commands
+
+The local runtime exposes operator commands over the same runtime status/inspection layer used by devtools:
+
+```bash
+crux runtime setup --check
+crux runtime setup --apply
+crux runtime generate
+crux runtime status
+crux runtime inspect <workId>
+crux runtime retry <workId>
+crux runtime cancel <workId>
+```
+
+`retry` only moves blocked or dead-lettered work back to pending after you have fixed the cause. It mints a fresh idempotency key and resets the attempt budget.
+
+## Adapter author surface
+
+`@use-crux/core/runtime` exports provider-agnostic port contracts, branded ids, wake envelope helpers, retry/state helpers, the in-memory reference store, and kernel APIs. Community adapters should keep correctness in the kernel and implement only persistence/delivery ports.
+
+The conformance helpers live on `@use-crux/core/runtime/testing`:
+
+```ts
+import {
+  runStoreAdapterTests,
+  runRuntimeEngineAdapterTests,
+} from '@use-crux/core/runtime/testing'
+```
+
+Use them for store adapters and full runtime adapters. Tests cover namespace isolation, idempotency, leases, waiter races, timers, outbox recovery, retry source guards, and idle-counter invariants.
+
+## Related
+
+- Guide: [Next/Vercel Runtime](/docs/guides/runtime/next-vercel)
+- Guide: [Long-lived Node Runtime](/docs/guides/runtime/node)
+- Guide: [Convex Runtime](/docs/guides/runtime/convex)
+- Reference: [@use-crux/postgres](/docs/reference/postgres)
+- Reference: [@use-crux/upstash](/docs/reference/storage/upstash)
+- Reference: [@use-crux/convex](/docs/reference/storage/convex)

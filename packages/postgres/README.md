@@ -22,4 +22,8 @@ outbox rows, idempotency keys, leases, and scoped-idle counters in a Crux-owned
 Postgres schema. It also exposes `store.setup.check()` and
 `store.setup.apply()` for non-mutating verification and safe additive setup.
 
-Full runtime recipes and setup CLI docs land with the Runtime Engine docs pass.
+See the Runtime Engine docs for setup and deployment recipes:
+
+- Reference: https://cruxjs.dev/docs/reference/postgres
+- Next/Vercel runtime: https://cruxjs.dev/docs/guides/runtime/next-vercel
+- Long-lived Node runtime: https://cruxjs.dev/docs/guides/runtime/node

@@ -46,6 +46,36 @@ import { tool } from '@use-crux/convex/tools'
 
 The package root is curated. It exports Convex APIs plus common prompt authoring helpers (`prompt`, `context`, `createPrompts`, `createContexts`, and sanitization helpers), but it does not blanket re-export every `@use-crux/core` API. If a Convex mirror exists, prefer it; if no mirror exists yet, import the SDK-agnostic primitive from `@use-crux/core`.
 
+## Runtime Engine Host
+
+`@use-crux/convex/runtime` declares Convex as a host-bound Runtime Engine. `convex()` belongs in `crux.config.ts`; executable store and wake bindings are attached inside generated or hand-written Convex functions.
+
+```ts
+import { config } from '@use-crux/core'
+import { convex } from '@use-crux/convex/runtime'
+
+export default config({
+  runtime: convex(),
+})
+```
+
+Generated `convex/crux.ts` files target `createConvexRuntimeHandlers()`:
+
+```ts
+import { createConvexRuntimeHandlers } from '@use-crux/convex/runtime'
+import { components } from './_generated/api'
+import { reviewFlow } from '../src/review'
+import { embedDocument } from '../src/embed'
+
+export const { handleWake, deliverSignal, resumeFlow, runTask, fireTimer } =
+  createConvexRuntimeHandlers({
+    component: components.crux,
+    targets: [reviewFlow, embedDocument],
+  })
+```
+
+Because `convex()` is host-bound, runtime-backed APIs called from a non-Convex process throw `RUNTIME_HOST_ONLY`. App-facing Convex functions should call Crux APIs inside the Convex host boundary.
+
 ### `createCruxConvex(options)`
 
 Create a reusable Convex runtime profile from the Crux Convex component and Convex Agent component:

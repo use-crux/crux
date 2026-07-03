@@ -9,6 +9,7 @@
     "indexer",
     "indexer-extensions",
     "local",
+    "postgres",
     "adapters",
     "storage",
     "plugins",

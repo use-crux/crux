@@ -1,0 +1,39 @@
+---
+title: Runtime Engine
+description: Configure durable execution for flow waits, timers, background tasks, and runtime wake delivery.
+---
+
+The Runtime Engine is needed when Crux must find or resume work after the current call exits: `flow.waitFor()`, `flow.defer()`, `flow.after()`, `flow.untilIdle()`, name-bound `crux.flows.*`, generated runtime handlers, and runtime operator tooling.
+
+Object-bound flows remain the baseline. `flow.suspend()`, `reviewFlow.signal(...)`, and `reviewFlow.run({ resume })` work without runtime config when your code already has the flow handle and resumes explicitly.
+
+## Choose a runtime shape
+
+| Shape | Use when |
+| --- | --- |
+| `node()` | Local development, tests, single-process demos. |
+| `node({ store: postgres() })` | Long-lived Node processes that need durable state across restarts or multiple workers. |
+| `serverless({ store: postgres(), wake: qstash() })` | Next/Vercel-style apps where a cold function needs an external wake. |
+| `convex()` | Convex apps that want runtime work to execute inside Convex functions and scheduler. |
+| `genericQueue()` | You own a queue and want to adapt it without a bundled Crux package. |
+
+Deferred adapters such as SQLite, RabbitMQ, Upstash Redis store, Cloudflare, Inngest, and Temporal are not first-party runtime packages in v1. They are documented as recipes or future adapter shapes only.
+
+## Runtime-bound APIs
+
+```ts
+await flow.waitFor(events.documentApproved, { match: { documentId } })
+await flow.defer(embedDocument, { documentId })
+await flow.after(sendReminder, '2d', { userId })
+await flow.untilIdle({ scope: 'current-flow' })
+await crux.flows.signal('review', flowId, 'approval', payload)
+```
+
+Durable payloads must be JSON-compatible. Pass ids, URLs, or application storage keys for large or complex values.
+
+## Related
+
+- Guide: [Next/Vercel Runtime](/docs/guides/runtime/next-vercel)
+- Guide: [Long-lived Node Runtime](/docs/guides/runtime/node)
+- Guide: [Convex Runtime](/docs/guides/runtime/convex)
+- Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)

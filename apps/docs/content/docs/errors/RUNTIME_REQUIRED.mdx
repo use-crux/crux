@@ -1,0 +1,26 @@
+---
+title: RUNTIME_REQUIRED
+description: A runtime-bound API was called without a configured Runtime Engine.
+---
+
+## What failed
+
+A runtime-bound API such as `flow.waitFor()`, `flow.defer()`, `flow.after()`, `flow.untilIdle()`, `crux.flows.*`, or `createRuntimeHandler()` was called without `config({ runtime })`.
+
+## Why
+
+Crux needs a runtime to resolve durable target names, persist waiter/timer/task state, and wake work after the current call exits.
+
+## What still works
+
+Object-bound flow APIs still work when your code has the flow handle: `flow.suspend()`, `reviewFlow.signal(...)`, and `reviewFlow.run({ resume: flowId })`.
+
+## Fix
+
+Add a runtime in `crux.config.ts`:
+
+```ts
+runtime: serverless({ store: postgres(), wake: qstash() })
+```
+
+Use `runtime: node()` for local development and tests.

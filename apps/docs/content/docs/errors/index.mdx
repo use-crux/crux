@@ -1,0 +1,37 @@
+---
+title: Runtime Errors
+description: Stable Runtime Engine diagnostic codes, causes, and fixes.
+---
+
+Runtime Engine public failures use `CruxRuntimeError`. Every error has a stable `code`, a user-facing explanation, what still works, and an exact next step.
+
+```ts
+import { CruxRuntimeError } from '@use-crux/core/runtime'
+
+try {
+  await flow.waitFor(event)
+} catch (error) {
+  if (error instanceof CruxRuntimeError) {
+    console.error(error.code, error.nextStep)
+  }
+}
+```
+
+## Codes
+
+| Code | Meaning |
+| --- | --- |
+| [`RUNTIME_REQUIRED`](/docs/errors/RUNTIME_REQUIRED) | A runtime-bound API was called without `config({ runtime })`. |
+| [`CAPABILITY_MISSING`](/docs/errors/CAPABILITY_MISSING) | The configured stack cannot support a used runtime feature. |
+| [`TARGET_NOT_FOUND`](/docs/errors/TARGET_NOT_FOUND) | A wake named a target missing from the runtime entry. |
+| [`TARGET_DUPLICATE`](/docs/errors/TARGET_DUPLICATE) | Two runtime targets share one durable name. |
+| [`TARGET_NOT_EXPORTED`](/docs/errors/TARGET_NOT_EXPORTED) | A discovered target cannot be imported as a named export. |
+| [`REPLAY_DIVERGED`](/docs/errors/REPLAY_DIVERGED) | Flow replay no longer matches the suspended snapshot fingerprint. |
+| [`ARTIFACTS_STALE`](/docs/errors/ARTIFACTS_STALE) | Generated runtime artifacts are stale. |
+| [`WAKE_UNVERIFIED`](/docs/errors/WAKE_UNVERIFIED) | HTTP wake verification failed before durable state was touched. |
+| [`PUBLIC_URL_UNRESOLVED`](/docs/errors/PUBLIC_URL_UNRESOLVED) | Production HTTP wake has no stable public URL. |
+| [`SETUP_REQUIRED`](/docs/errors/SETUP_REQUIRED) | Required adapter resources are missing or mismatched. |
+| [`PAYLOAD_NOT_JSON`](/docs/errors/PAYLOAD_NOT_JSON) | A durable runtime payload is not JSON-compatible. |
+| [`WORK_DEAD_LETTERED`](/docs/errors/WORK_DEAD_LETTERED) | Work exhausted retries and is terminal until operator retry. |
+| [`NAMESPACE_AMBIGUOUS`](/docs/errors/NAMESPACE_AMBIGUOUS) | The inferred runtime namespace is unsafe or ambiguous. |
+| [`RUNTIME_HOST_ONLY`](/docs/errors/RUNTIME_HOST_ONLY) | A host-bound runtime was used outside its host boundary. |

@@ -1,0 +1,32 @@
+---
+title: SETUP_REQUIRED
+description: Runtime adapter resources are missing or mismatched.
+---
+
+## What failed
+
+An adapter needs Crux-owned resources such as tables, indexes, queues, component schema, or signing configuration before runtime work can execute.
+
+## Why
+
+Runtime durability depends on those resources existing with the expected shape.
+
+## What still works
+
+Non-runtime APIs and object-bound flows can continue. Runtime work should not be deployed until setup passes.
+
+## Fix
+
+Check setup:
+
+```bash
+crux runtime setup --check
+```
+
+Apply additive setup when appropriate:
+
+```bash
+crux runtime setup --apply
+```
+
+Production auto-create requires explicit opt-in.

@@ -1,0 +1,116 @@
+---
+title: Cloudflare Runtime Mapping
+description: Recipe-only code sketch for mapping Cloudflare Queues, Durable Objects, D1, and alarms to Runtime Engine concepts.
+---
+
+Cloudflare is a recipe in v1, not a bundled first-party Crux runtime adapter. The examples below show the shape an adapter author can build: Crux still owns target identity, payload JSON, idempotency, and wake handling; Cloudflare provides queue delivery and storage primitives.
+
+## Runtime config sketch
+
+Use `genericQueue()` when your Cloudflare Queue worker forwards wake messages to a deployed Crux runtime endpoint. The store below is a placeholder for a future Cloudflare/D1 or Durable Object store adapter.
+
+```ts
+import { config } from '@use-crux/core'
+import { genericQueue, serverless } from '@use-crux/core/runtime'
+import { cloudflareStore } from './cloudflare-runtime-store'
+
+export default config({
+  runtime: serverless({
+    store: cloudflareStore({
+      d1Binding: 'CRUX_RUNTIME_DB',
+      namespace: process.env.CRUX_RUNTIME_NAMESPACE,
+    }),
+    wake: genericQueue({
+      secret: process.env.CRUX_RUNTIME_WAKE_SECRET!,
+      maxDelayMs: 15 * 60 * 1000,
+      enqueue: async (message) => {
+        await env.CRUX_WAKE_QUEUE.send(message, {
+          delaySeconds: Math.min(message.envelope.notBeforeDelayMs ?? 0, 900) / 1000,
+        })
+      },
+    }),
+    publicUrl: process.env.CRUX_PUBLIC_URL,
+  }),
+})
+```
+
+## Queue consumer
+
+The worker receives Crux wake messages from Cloudflare Queues and forwards the signed body and headers exactly as produced by `genericQueue()`.
+
+```ts
+export default {
+  async queue(batch: MessageBatch<RuntimeWakeMessage>, env: Env) {
+    for (const message of batch.messages) {
+      const response = await fetch(message.body.url, {
+        method: 'POST',
+        headers: message.body.headers,
+        body: message.body.body,
+      })
+
+      if (response.status >= 500 || response.status === 409) {
+        message.retry()
+        continue
+      }
+
+      message.ack()
+    }
+  },
+}
+
+interface RuntimeWakeMessage {
+  id: string
+  url: string
+  body: string
+  headers: Record<string, string>
+  envelope: {
+    idempotencyKey: string
+    notBeforeDelayMs?: number
+  }
+}
+```
+
+## Store boundary sketch
+
+A real adapter would implement `RuntimeStoreAdapter` against D1 tables or Durable Object state, then run the shared conformance suite.
+
+```ts
+import type { RuntimeStoreAdapter } from '@use-crux/core/runtime'
+
+export function cloudflareStore(options: {
+  d1Binding: string
+  namespace?: string
+}): RuntimeStoreAdapter {
+  return {
+    id: 'cloudflare-d1',
+    capabilities: {
+      transactions: 'serializable',
+    },
+    async transact(fn) {
+      // Use D1 transactions or Durable Object serialization here.
+      // The callback receives state/events/waiters/timers/outbox/leases ports.
+      return d1Transaction(options.d1Binding, fn)
+    },
+    setup: {
+      check: async () => checkD1RuntimeSchema(options.d1Binding),
+      apply: async () => applyD1RuntimeSchema(options.d1Binding),
+    },
+  }
+}
+```
+
+## Mapping notes
+
+| Runtime concern | Cloudflare substrate |
+| --- | --- |
+| Wake/task delivery | Cloudflare Queues |
+| State/events/leases | Durable Objects or D1 |
+| Timers | Durable Object alarms, Queue delays, or store-backed scans |
+| Live updates | Durable Object WebSockets or SSE |
+
+Queue delivery is at least once. Keep Crux idempotency keys as the durable identity and acknowledge only after the runtime endpoint accepts the wake.
+
+## Related
+
+- Guide: [Runtime Adapter Authoring](/docs/guides/runtime/custom-adapters)
+- Recipe: [Generic Queue and BullMQ](/docs/cookbook/runtime/generic-queue-bullmq)

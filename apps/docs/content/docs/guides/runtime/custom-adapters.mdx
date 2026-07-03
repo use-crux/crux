@@ -1,0 +1,51 @@
+---
+title: Runtime Adapter Authoring
+description: Build Runtime Engine store, wake, live, or full host adapters with the shared contracts and conformance tests.
+---
+
+Most runtime adapters should implement one composable piece rather than a whole engine. Keep correctness in the core kernel; adapters persist rows, deliver wake messages, verify setup, and expose honest capabilities.
+
+## Adapter shapes
+
+| Shape | Implement when |
+| --- | --- |
+| Store adapter | You provide durable state/events/waiters/timers/outbox/leases, such as Postgres or DynamoDB. |
+| Wake adapter | You provide at-least-once delivery or HTTP wake, such as QStash or a queue. |
+| Live adapter | You provide best-effort realtime delivery. Live is never correctness. |
+| Host-bound runtime | Store and wake require host context, such as Convex. |
+
+## Conformance tests
+
+Use `@use-crux/core/runtime/testing` for adapter CI:
+
+```ts
+import { runStoreAdapterTests } from '@use-crux/core/runtime/testing'
+
+runStoreAdapterTests({
+  name: 'acme-store',
+  createStore: async () => acmeStore({ namespace: 'test' }),
+})
+```
+
+Full runtime adapters can use `runRuntimeEngineAdapterTests()` to verify wake, retry, leases, timers, waiter races, and idempotency through the public kernel.
+
+## Capability rules
+
+Capabilities are diagnostic-facing contracts. Report only what the adapter really supports:
+
+- `wake.signed` only when incoming wake verification is enforced.
+- `timers.maxDelayMs` only when native delayed delivery is bounded.
+- `setup.canCheck` and `setup.canApply` only when those operations exist and follow the setup contract.
+- Edge/serverless/multi-process support must be explicit.
+
+Missing capability should fail early with `CAPABILITY_MISSING`; it must not silently downgrade durability.
+
+## Setup rules
+
+`setup.check()` never mutates resources. `setup.apply()` may perform safe additive setup only. Do not create paid services or perform destructive migrations automatically.
+
+## Related
+
+- Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)
+- Guide: [Building Custom Adapters](/docs/guides/advanced/building-adapters)
+- Recipe: [Generic Queue and BullMQ](/docs/cookbook/runtime/generic-queue-bullmq)

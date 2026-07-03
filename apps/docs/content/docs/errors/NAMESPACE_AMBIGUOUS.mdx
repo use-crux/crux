@@ -1,0 +1,26 @@
+---
+title: NAMESPACE_AMBIGUOUS
+description: The inferred runtime namespace is ambiguous.
+---
+
+## What failed
+
+Crux inferred a namespace that may not safely separate production, preview, local, or shared-substrate environments.
+
+## Why
+
+Every durable row, cursor, idempotency key, and wake message includes a namespace. Ambiguous namespace inference can make environments share runtime state accidentally.
+
+## What still works
+
+The configured runtime may still operate, but setup/preflight warns so you can pin the environment boundary before deployment.
+
+## Fix
+
+Set an explicit namespace:
+
+```bash
+CRUX_RUNTIME_NAMESPACE=production
+```
+
+Or pass `namespace` in the runtime config.

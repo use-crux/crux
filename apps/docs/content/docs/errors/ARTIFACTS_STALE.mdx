@@ -1,0 +1,26 @@
+---
+title: ARTIFACTS_STALE
+description: Generated runtime artifacts do not match current source.
+---
+
+## What failed
+
+Runtime manifest or entry files are older than the current discovered flow/task targets.
+
+## Why
+
+Fresh serverless and host-bound invocations rely on static imports. Stale artifacts can strand pending work or omit targets.
+
+## What still works
+
+Hand-written runtime entries can still work if they include the correct targets.
+
+## Fix
+
+Regenerate artifacts:
+
+```bash
+crux runtime generate
+```
+
+Run generation before framework build in CI and deployment.

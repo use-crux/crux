@@ -63,6 +63,7 @@ interface CruxConfig {
   lint?: CruxLintConfig
   indexer?: CruxIndexerConfig
   experimental?: CruxExperimentalConfig
+  runtime?: RuntimeEngineDefinition
   persistence?: CruxPersistenceConfig
   generation?: CruxGenerationConfig
   devtools?: CruxDevtoolsConfig
@@ -77,6 +78,7 @@ interface CruxConfig {
 | `lint`          | `CruxLintConfig`          | `{ profile: 'recommended' }`                             | Project Index lint, `crux lint`, devtools |
 | `indexer`       | `CruxIndexerConfig`       | no third-party extensions                                | `@use-crux/indexer`                       |
 | `experimental`  | `CruxExperimentalConfig`  | no experimental flags                                    | `@use-crux/indexer`, `@use-crux/local`    |
+| `runtime`       | `RuntimeEngineDefinition` | no durable Runtime Engine                                | Runtime Engine APIs, wake handlers, CLI   |
 | `persistence`   | `CruxPersistenceConfig`   | no global store                                          | flows, plans, tasks, Runtime Bridge reads |
 | `generation`    | `CruxGenerationConfig`    | `autoEscape: true`; `securityWarnings` in development    | prompt resolution and generation          |
 | `devtools`      | `CruxDevtoolsConfig`      | no runtime devtools transport unless installed elsewhere | local devtools plugin and Runtime Bridge  |
@@ -250,6 +252,28 @@ export default config({
 ```
 
 See [Prompt execution](/docs/guides/prompts/execution) and [Security warnings](/docs/guides/safety/security).
+
+## `runtime`
+
+Runtime config installs the durable Runtime Engine used by name-bound, event-bound, time-bound, and background APIs.
+
+```ts title="crux.config.ts"
+import { config } from '@use-crux/core'
+import { serverless } from '@use-crux/core/runtime'
+import { postgres } from '@use-crux/postgres/runtime'
+import { qstash } from '@use-crux/upstash/runtime'
+
+export default config({
+  runtime: serverless({
+    store: postgres(),
+    wake: qstash(),
+  }),
+})
+```
+
+Use `node()` for local/test execution, `serverless({ store, wake })` for HTTP-woken deployments, or `convex()` from `@use-crux/convex/runtime` for Convex-hosted runtime work. Runtime config is a stable top-level domain, not `experimental.runtime`.
+
+See [Runtime Engine](/docs/reference/crux-core/runtime-engine) for the API reference and [Runtime guides](/docs/guides/runtime) for deployment shapes.
 
 ## `persistence`
 

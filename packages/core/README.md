@@ -380,6 +380,11 @@ The `Crux` object returned by `config()` also exposes name-bound
 `crux.flows.signal()`, `crux.flows.resume()`, and `crux.flows.cancel()` for
 runtime-backed flows when the object-bound flow handle is not available.
 
+Object-bound flow APIs remain the baseline: `reviewFlow.signal(...)` and
+`reviewFlow.run({ resume: flowId })` work without runtime config when your code
+already has the handle. Name-bound, event-bound, time-bound, and background APIs
+fail with `RUNTIME_REQUIRED` until a runtime is configured.
+
 Serverless entry files use the stable fetch-compatible handler API. Generated
 files target the same shape that users can write by hand:
 
@@ -405,6 +410,13 @@ Advanced and generated entry files can resolve a composer explicitly with
 `createRuntime({ runtime, targets })`. The `@use-crux/core/runtime/testing`
 subpath exposes the shared store and kernel conformance suites for adapter
 authors.
+
+Runtime diagnostics throw `CruxRuntimeError` with stable codes:
+`RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`,
+`TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`,
+`ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`,
+`SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`,
+`NAMESPACE_AMBIGUOUS`, and `RUNTIME_HOST_ONLY`.
 
 ## Import Paths
 
@@ -435,6 +447,7 @@ See the full [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux
 - [Crux docs](https://cruxjs.dev)
 - [Get started](https://cruxjs.dev/docs/getting-started)
 - [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core)
+- [Runtime Engine reference](https://cruxjs.dev/docs/reference/crux-core/runtime-engine)
 - [Mental model](https://cruxjs.dev/docs/foundations/mental-model)
 - [Examples](https://github.com/use-crux/crux/tree/main/examples)
 - [GitHub repository](https://github.com/use-crux/crux)
