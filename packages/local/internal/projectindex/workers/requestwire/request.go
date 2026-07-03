@@ -48,6 +48,7 @@ type Request struct {
 	IncludeStaticCacheStatus      bool                                     `json:"includeStaticCacheStatus,omitempty"`
 	RuntimeOperation              string                                   `json:"runtimeOperation,omitempty"`
 	RuntimeWorkID                 string                                   `json:"runtimeWorkId,omitempty"`
+	RuntimeIncludeDetails         bool                                     `json:"runtimeIncludeDetails,omitempty"`
 	StaticCacheHits               []projectindex.StaticCacheHit            `json:"staticCacheHits,omitempty"`
 	NativeCompilerProtocolVersion int                                      `json:"nativeCompilerProtocolVersion,omitempty"`
 }

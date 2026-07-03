@@ -112,7 +112,7 @@ func runRuntimeOperationWithWorker(ctx context.Context, root, operation, workID 
 		ctx, cancel = context.WithTimeout(ctx, runtimeGenerateTimeout)
 		defer cancel()
 	}
-	return worker.RunRuntimeOperation(ctx, root, operation, workID)
+	return worker.RunRuntimeOperation(ctx, root, operation, workID, false)
 }
 
 func printRuntimeGenerateResult(io *output.IO, raw json.RawMessage) error {

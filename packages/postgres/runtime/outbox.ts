@@ -70,6 +70,24 @@ export function createPostgresOutboxPort(
       return result.rows.map(decodeOutbox)
     },
 
+    async list(options): Promise<readonly RuntimeOutboxItem[]> {
+      const values: unknown[] = [options.namespace]
+      const filters = ['namespace = $1']
+      if (options.state) {
+        values.push(options.state)
+        filters.push(`state = $${values.length}`)
+      }
+      values.push(options.limit ?? 100)
+      const result = await db.query(
+        `SELECT * FROM ${outbox}
+          WHERE ${filters.join(' AND ')}
+          ORDER BY next_attempt_at ASC
+          LIMIT $${values.length}`,
+        values,
+      )
+      return result.rows.map(decodeOutbox)
+    },
+
     async confirm(outboxId: string): Promise<void> {
       if (faults.crashBeforeConfirm) {
         faults.crashBeforeConfirm = false

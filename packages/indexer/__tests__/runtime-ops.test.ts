@@ -68,6 +68,7 @@ describe('runtime operations', () => {
     try {
       await seedReplayDivergedWork(seedStore)
       await seedCancellableWork(seedStore)
+      await seedTimerAndOutbox(seedStore)
     } finally {
       await seedStore.close()
     }
@@ -86,6 +87,37 @@ describe('runtime operations', () => {
           status: 'pending',
           targetId: 'runtime-ops-cancel',
           count: 1,
+        }),
+      ]),
+    })
+
+    const detailedStatus = await runRuntimeOperation({
+      root,
+      operation: 'status',
+      includeDetails: true,
+    })
+    expect(detailedStatus).toMatchObject({
+      operation: 'status',
+      ok: true,
+      work: expect.arrayContaining([
+        expect.objectContaining({
+          workId: 'work_runtime_ops_replay',
+          status: 'blocked',
+          targetId: 'runtime-ops-review',
+        }),
+      ]),
+      timers: expect.arrayContaining([
+        expect.objectContaining({
+          timerId: expect.any(String),
+          state: 'scheduled',
+          namespace: 'local',
+        }),
+      ]),
+      outbox: expect.arrayContaining([
+        expect.objectContaining({
+          outboxId: expect.any(String),
+          state: 'pending',
+          namespace: 'local',
         }),
       ]),
     })
@@ -252,4 +284,29 @@ async function seedCancellableWork(store: PostgresRuntimeStore): Promise<void> {
     idempotencyKey: 'task:work_runtime_ops_cancel',
     now: new Date('2026-07-03T00:00:00.000Z'),
   })
+}
+
+async function seedTimerAndOutbox(store: PostgresRuntimeStore): Promise<void> {
+  await store.timers.put({
+    namespace: 'local',
+    fireAt: new Date('2026-07-04T00:00:00.000Z'),
+    work: {
+      kind: 'task.run',
+      taskId: 'task_runtime_ops_timer' as TaskId,
+      targetId: 'runtime-ops-timer' as RuntimeTargetId,
+      input: {},
+    },
+  })
+  await store.outbox.put(
+    {
+      v: 1,
+      ns: 'local',
+      workId: 'work_runtime_ops_cancel' as WorkId,
+      target: 'runtime-ops-cancel' as RuntimeTargetId,
+      kind: 'task.run',
+      idempotencyKey: 'task:work_runtime_ops_cancel',
+      attempt: 1,
+    },
+    { deliverAt: new Date('2026-07-04T00:00:00.000Z') },
+  )
 }

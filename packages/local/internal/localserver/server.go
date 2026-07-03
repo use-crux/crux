@@ -79,6 +79,7 @@ func New(options Options) http.Handler {
 	registerResourceRoutes(mux, resourceInspection)
 	registerObservabilityRoutes(mux, options.Observability, qualityEvents(options.Quality))
 	registerIndexRoutes(mux, options.Devtools)
+	registerRuntimeRoutes(mux, options.Devtools, options.ProjectRoot)
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)

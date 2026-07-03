@@ -37,6 +37,21 @@ export const claimDue = mutation({
   },
 })
 
+export const list = mutation({
+  args: { namespace: v.string(), state: v.optional(v.string()), limit: v.optional(v.number()) },
+  returns: v.any(),
+  handler: async (ctx, { namespace, state, limit }) => {
+    const rows =
+      state === undefined
+        ? await ctx.db.query('runtimeTimers').collect()
+        : await ctx.db
+            .query('runtimeTimers')
+            .withIndex('by_namespace_state_fire', (q) => q.eq('namespace', namespace).eq('state', state))
+            .collect()
+    return limitRows(rows.filter((row) => row.namespace === namespace), limit)
+  },
+})
+
 export const listByWork = mutation({
   args: { workId: v.string() },
   returns: v.any(),

@@ -44,6 +44,21 @@ export const claimPending = mutation({
   },
 })
 
+export const list = mutation({
+  args: { namespace: v.string(), state: v.optional(v.string()), limit: v.optional(v.number()) },
+  returns: v.any(),
+  handler: async (ctx, { namespace, state, limit }) => {
+    const rows =
+      state === undefined
+        ? await ctx.db.query('runtimeOutbox').collect()
+        : await ctx.db
+            .query('runtimeOutbox')
+            .withIndex('by_namespace_state_next', (q) => q.eq('namespace', namespace).eq('state', state))
+            .collect()
+    return limitRows(rows.filter((row) => row.namespace === namespace), limit)
+  },
+})
+
 export const confirm = mutation({
   args: { outboxId: v.string() },
   returns: v.null(),

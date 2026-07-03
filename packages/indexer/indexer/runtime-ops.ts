@@ -56,12 +56,19 @@ export async function runRuntimeOperation(
     case 'setup-apply':
       return setupResult('setup-apply', await setupPort(runtimeDefinition).apply())
     case 'status':
-      return await withRuntime(options.root, runtimeDefinition, false, async (runtime) => ({
-        operation: 'status',
-        ok: true,
-        namespace: runtime.namespace,
-        counts: await statusCounts(runtime),
-      }))
+      return await withRuntime(options.root, runtimeDefinition, false, async (runtime) => {
+        const base = {
+          operation: 'status' as const,
+          ok: true as const,
+          namespace: runtime.namespace,
+          counts: await statusCounts(runtime),
+        }
+        if (!options.includeDetails) return base
+        return {
+          ...base,
+          ...(await statusDetails(runtime)),
+        }
+      })
     case 'inspect':
       return await withRuntime(options.root, runtimeDefinition, false, async (runtime) =>
         inspectWork(runtime, requiredWorkId(options)),
@@ -186,10 +193,46 @@ async function statusCounts(runtime: ResolvedRuntimeEngine): Promise<readonly Ru
   }
   return [...counts.values()].sort(
     (a, b) =>
-      a.namespace.localeCompare(b.namespace) ||
-      a.status.localeCompare(b.status) ||
-      a.targetId.localeCompare(b.targetId),
+      codepointCompare(a.namespace, b.namespace) ||
+      codepointCompare(a.status, b.status) ||
+      codepointCompare(a.targetId, b.targetId),
   )
+}
+
+async function statusDetails(runtime: ResolvedRuntimeEngine) {
+  const work = (
+    await Promise.all(
+      WORK_STATUSES.map((status) =>
+        runtime.store.state.listWork({
+          namespace: runtime.namespace,
+          status,
+          limit: 200,
+        }),
+      ),
+    )
+  ).flat()
+  return {
+    work: work.sort(
+      (a, b) =>
+        codepointCompare(a.status, b.status) ||
+        codepointCompare(a.targetId, b.targetId) ||
+        codepointCompare(a.workId, b.workId),
+    ),
+    timers: await runtime.store.timers.list({
+      namespace: runtime.namespace,
+      limit: 200,
+    }),
+    outbox: await runtime.store.outbox.list({
+      namespace: runtime.namespace,
+      limit: 200,
+    }),
+  }
+}
+
+function codepointCompare(left: string, right: string): number {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
 }
 
 async function inspectWork(

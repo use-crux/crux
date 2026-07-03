@@ -13,6 +13,8 @@ export function navTarget(view: QwViewId | 'scorers'): NavState {
       return { view: 'insights' }
     case 'runs':
       return { view: 'runs' }
+    case 'runtime':
+      return { view: 'runtime' }
     case 'evaluations':
       return { view: 'evaluations' }
     case 'experiments':
@@ -62,6 +64,8 @@ export function sidebarIdForView(view: NavState['view']): QwViewId | null {
     case 'sessions':
     case 'constraints':
       return 'runs'
+    case 'runtime':
+      return 'runtime'
     case 'feedback':
       return 'feedback'
     case 'evaluations':
@@ -108,6 +112,8 @@ export function breadcrumbTarget(label: string): NavState | null {
       return { view: 'insights' }
     case 'Runs':
       return { view: 'runs' }
+    case 'Runtime':
+      return { view: 'runtime' }
     case 'Evaluations':
       return { view: 'evaluations' }
     case 'Experiments':

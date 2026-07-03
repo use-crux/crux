@@ -59,6 +59,16 @@ export interface ClaimDueTimersOptions {
   readonly limit?: number
 }
 
+/** Bounded timer listing options for operator/devtools inspection. */
+export interface ListTimerRecordsOptions {
+  /** Namespace to list within. */
+  readonly namespace: string
+  /** Current timer state to include. Omit to include every state. */
+  readonly state?: RuntimeTimerState
+  /** Maximum number of timers to return. */
+  readonly limit?: number
+}
+
 /** Store-backed timer record operations used by the kernel. */
 export interface RuntimeTimerStorePort {
   /** Persist a scheduled timer record idempotently. */
@@ -69,6 +79,8 @@ export interface RuntimeTimerStorePort {
   claimDue(
     options: ClaimDueTimersOptions,
   ): Promise<readonly RuntimeTimerRecord[]>
+  /** List bounded timer records for operator/devtools inspection. */
+  list(options: ListTimerRecordsOptions): Promise<readonly RuntimeTimerRecord[]>
   /** List timer records owned by one work item for cancellation and retention. */
   listByWork(workId: WorkId): Promise<readonly RuntimeTimerRecord[]>
   /** Move a timer through one compare-and-set transition. */
@@ -111,6 +123,16 @@ export interface ClaimOutboxOptions {
   readonly limit?: number
 }
 
+/** Bounded outbox listing options for operator/devtools inspection. */
+export interface ListOutboxOptions {
+  /** Namespace to list within. */
+  readonly namespace: string
+  /** Current outbox state to include. Omit to include every state. */
+  readonly state?: RuntimeOutboxState
+  /** Maximum number of rows to return. */
+  readonly limit?: number
+}
+
 /** Store-backed outbox operations used by dispatchers and maintenance. */
 export interface RuntimeOutboxPort {
   /** Persist a wake envelope for delivery after the surrounding transaction commits. */
@@ -124,6 +146,8 @@ export interface RuntimeOutboxPort {
   claimPending(
     options: ClaimOutboxOptions,
   ): Promise<readonly RuntimeOutboxItem[]>
+  /** List bounded outbox rows for operator/devtools inspection. */
+  list(options: ListOutboxOptions): Promise<readonly RuntimeOutboxItem[]>
   /** Mark a delivered row confirmed. */
   confirm(outboxId: string): Promise<void>
   /** Requeue a row after a delivery failure. */

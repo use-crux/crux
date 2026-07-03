@@ -62,6 +62,17 @@ export function createMemoryTimerStore(
       return due.map((timer) => cloneTimerRecord(timer))
     },
 
+    async list(options): Promise<readonly RuntimeTimerRecord[]> {
+      const rows = [...data.timers.values()]
+        .filter(
+          (timer) =>
+            timer.namespace === options.namespace &&
+            (options.state === undefined || timer.state === options.state),
+        )
+        .slice(0, options.limit)
+      return rows.map((timer) => cloneTimerRecord(timer))
+    },
+
     async listByWork(workId: WorkId): Promise<readonly RuntimeTimerRecord[]> {
       return [...data.timers.values()]
         .filter((timer) => timer.workId === workId)

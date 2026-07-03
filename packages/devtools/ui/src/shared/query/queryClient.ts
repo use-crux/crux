@@ -77,6 +77,11 @@ export const qk = {
     run: (runId: string | null | undefined) => ['observability', 'run', runId] as const,
     resource: (family: string) => ['observability', 'resource', family] as const,
   },
+  runtime: {
+    all: ['runtime'] as const,
+    status: () => ['runtime', 'status'] as const,
+    work: (workId: string | null | undefined) => ['runtime', 'work', workId] as const,
+  },
   memory: {
     all: ['memory'] as const,
     stores: () => ['memory', 'stores'] as const,

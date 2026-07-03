@@ -1,5 +1,7 @@
 import type {
+  RuntimeOutboxItem,
   RuntimeSetupPort,
+  RuntimeTimerRecord,
   WorkItem,
   WorkStatus,
 } from '@use-crux/core/runtime'
@@ -21,6 +23,8 @@ export interface RuntimeOperationOptions {
   readonly operation: RuntimeOperationKind
   /** Work id for `inspect`, `retry`, and `cancel`. */
   readonly workId?: string
+  /** Include bounded work/timer/outbox rows with `status` for devtools views. */
+  readonly includeDetails?: boolean
 }
 
 /** JSON-safe result for one Runtime Engine operation. */
@@ -42,6 +46,9 @@ export interface RuntimeStatusOperationResult {
   readonly ok: true
   readonly namespace: string
   readonly counts: readonly RuntimeStatusCount[]
+  readonly work?: readonly WorkItem[]
+  readonly timers?: readonly RuntimeTimerRecord[]
+  readonly outbox?: readonly RuntimeOutboxItem[]
 }
 
 export interface RuntimeStatusCount {

@@ -142,6 +142,7 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     },
     claimDue: async (query: ClaimDueTimersOptions) =>
       (await run<readonly unknown[]>(refs.timers.claimDue, { ...query, now: query.now.getTime() })).map(decodeTimer),
+    list: async (query) => (await run<readonly unknown[]>(refs.timers.list, { ...query })).map(decodeTimer),
     listByWork: async (workId) => (await run<readonly unknown[]>(refs.timers.listByWork, { workId })).map(decodeTimer),
     transition: (timerId, from, to) => run(refs.timers.transition, { timerId, from, to }),
   }
@@ -161,6 +162,8 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
         ...query,
         now: query.now.getTime(),
       })).map(decodeOutbox) as readonly RuntimeOutboxItem[],
+    list: async (query) =>
+      (await run<readonly unknown[]>(refs.outbox.list, { ...query })).map(decodeOutbox) as readonly RuntimeOutboxItem[],
     confirm: (outboxId) => run(refs.outbox.confirm, { outboxId }).then(noop),
     retryLater: (outboxId, nextAttemptAt) =>
       run(refs.outbox.retryLater, { outboxId, nextAttemptAt: encodeOutboxDate(nextAttemptAt) }).then(noop),

@@ -196,6 +196,7 @@ async function runAssembledRequest(
             root: req.root,
             operation: req.runtimeOperation,
             workId: req.runtimeWorkId,
+            includeDetails: req.runtimeIncludeDetails === true,
           })
           await writeArtifactEvent(writeResponse, 'runtimeOperation', result, req.root)
           break

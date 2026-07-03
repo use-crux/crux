@@ -97,6 +97,7 @@ export type NavState =
       has?: 'feedback' | 'experiment'
       search?: string
     }
+  | { view: 'runtime' }
   | { view: 'run-detail'; traceId: string; lens?: RunLens; spanId?: string; summary?: boolean }
   | { view: 'evaluations' }
   | { view: 'experiments' }
@@ -156,6 +157,8 @@ export function pathFromState(state: NavState): string {
       const qs = params.toString()
       return `/runs${qs ? `?${qs}` : ''}`
     }
+    case 'runtime':
+      return '/runtime'
     case 'run-detail': {
       const params: string[] = []
       // `tree` is the default lens — omitted from the URL to keep links clean.
@@ -329,6 +332,8 @@ export function stateFromPath(path: string, search?: string): NavState {
         ...(search ? { search } : {}),
       }
     }
+    case 'runtime':
+      return { view: 'runtime' }
     case 'evaluations':
       return { view: 'evaluations' }
     case 'experiments':
