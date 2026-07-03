@@ -59,6 +59,14 @@ async function findDuplicate(
       .withIndex('by_namespace_event_key', (q) => q.eq('namespace', namespace).eq('eventKey', eventKey))
       .first()
     if (existing) return existing
+    const eventId = Number(eventKey)
+    if (Number.isFinite(eventId)) {
+      const event = await ctx.db
+        .query('runtimeEvents')
+        .withIndex('by_namespace_event_id', (q) => q.eq('namespace', namespace).eq('eventId', eventId))
+        .first()
+      if (event) return event
+    }
   }
   if (idempotencyKey) {
     return await ctx.db

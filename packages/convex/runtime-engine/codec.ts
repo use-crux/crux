@@ -44,14 +44,14 @@ export function encodeWork(work: WorkItem): Record<string, unknown> {
 
 export function decodeWork(value: unknown): WorkItem {
   const record = objectRecord(value)
-  return clean({
+  return Object.freeze(clean({
     ...record,
     workId: record.workId as WorkId,
     notBefore: numberDate(record.notBefore),
     lastError: decodeLastError(record.lastError),
     createdAt: requiredDate(record.createdAt),
     updatedAt: requiredDate(record.updatedAt),
-  }) as WorkItem
+  }) as WorkItem)
 }
 
 export function encodeSnapshot(snapshot: object & { readonly updatedAt: Date }): Record<string, unknown> {
@@ -69,10 +69,12 @@ export function encodeEvent(event: object): Record<string, unknown> {
 
 export function decodeEvent(value: unknown): RuntimeEvent {
   const record = objectRecord(value)
+  const { eventKey, ...event } = record
+  void eventKey
   return clean({
-    ...record,
-    eventId: String(record.eventId) as EventCursor,
-    appendedAt: requiredDate(record.appendedAt),
+    ...event,
+    eventId: String(event.eventId) as EventCursor,
+    appendedAt: requiredDate(event.appendedAt),
   }) as RuntimeEvent
 }
 
@@ -116,6 +118,10 @@ export function decodeLease(value: unknown): Lease | null {
   return clean({ ...record, expiresAt: requiredDate(record.expiresAt) }) as Lease
 }
 
+export function encodeLease(lease: Lease): Record<string, unknown> {
+  return clean({ ...lease, expiresAt: lease.expiresAt.getTime() })
+}
+
 export function encodeWakeEnvelope(envelope: WakeEnvelope): Record<string, unknown> {
   return { ...envelope }
 }
@@ -142,7 +148,10 @@ function requiredDate(value: unknown): Date {
 
 function objectRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object') throw new Error('Expected runtime record.')
-  return value as Record<string, unknown>
+  const { _id, _creationTime, ...record } = value as Record<string, unknown>
+  void _id
+  void _creationTime
+  return record
 }
 
 function clean<T extends Record<string, unknown>>(record: T): T {

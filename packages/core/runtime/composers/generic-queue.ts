@@ -77,7 +77,7 @@ export function genericQueue(
           envelope,
           body,
           headers: secret
-            ? { [CRUX_WAKE_SIGNATURE_HEADER]: signWakeBody(body, secret) }
+            ? { [CRUX_WAKE_SIGNATURE_HEADER]: await signWakeBody(body, secret) }
             : {},
         })
       }
