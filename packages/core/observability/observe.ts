@@ -38,9 +38,17 @@ import type { CruxObservabilityTransport } from './transport'
 import { validateRecordForEmission } from './validate-record'
 import { createDeliveryEngine } from './delivery/engine'
 import type { ObservabilityDeliveryOptions, ObservabilityFlushOptions } from './delivery/options'
+import {
+  currentObservabilityContext,
+  withObservabilityContext,
+  type CapturedObservabilityContext,
+  type ObservabilityContext,
+} from './context'
 
 export { subscribeObservability, type CruxObservabilitySubscriber } from './subscribers'
 export { hasObservabilitySubscribers } from './subscribers'
+export { __setAlsForTesting } from './context'
+export type { CapturedObservabilityContext } from './context'
 export type { ObservabilityDeliveryOptions, ObservabilityFlushOptions } from './delivery/options'
 
 export interface ConfigureObservabilityOptions {
@@ -52,6 +60,7 @@ export interface ObservabilityDiagnostics {
   readonly pendingDeliveries: number
   readonly droppedRecords: number
   readonly invalidRecords: number
+  readonly contextlessRecords: number
   readonly deliveryErrors: readonly unknown[]
   readonly subscriberErrors: number
 }
@@ -155,28 +164,11 @@ export interface ObserveEdgeOptions {
   attributes?: CruxAttributes
 }
 
-interface ObservabilityContext {
-  runId: CruxRunId
-  traceId: CruxTraceId
-  startedAtMs?: number
-  spanStack: readonly CruxSpanId[]
-}
-
-export interface CapturedObservabilityContext extends ObservabilityContext {
-  currentSpanId?: CruxSpanId
-}
-
-type AsyncLocalStorageLike<T> = {
-  run<R>(store: T, fn: () => R): R
-  getStore(): T | undefined
-}
-
-let als: AsyncLocalStorageLike<ObservabilityContext> | null = null
-let alsInitialized = false
-
 const deliveryEngine = createDeliveryEngine()
 let invalidRecords = 0
+let contextlessRecords = 0
 let warnedAboutInvalidRecord = false
+let warnedAboutContextlessRecord = false
 
 interface ObservabilityConfigurationLayer {
   readonly token: number
@@ -191,37 +183,13 @@ const configurationParents = new Map<number, number>()
 
 const maxEndedRunIds = 10_000
 const endedRunIds = new Set<CruxRunId>()
-function getAls(): AsyncLocalStorageLike<ObservabilityContext> | null {
-  if (!alsInitialized) {
-    alsInitialized = true
-    try {
-      // `process.getBuiltinModule` works in BOTH module systems (Node ≥ 20.16);
-      // bare `require` only exists in CJS — under ESM loaders (tsx, plain
-      // node ESM) it throws ReferenceError, which used to silently disable
-      // context propagation here. Keep `require` as the CJS fallback.
-      const getBuiltinModule = (
-        globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }
-      ).process?.getBuiltinModule
-      const hooks = (getBuiltinModule?.('node:async_hooks') ??
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        require('node:async_hooks')) as typeof import('node:async_hooks')
-      als = new hooks.AsyncLocalStorage<ObservabilityContext>()
-    } catch {
-      als = null
-    }
-  }
-  return als
-}
 
 function currentContext(): ObservabilityContext | undefined {
-  return getAls()?.getStore()
+  return currentObservabilityContext()
 }
 
 function withContext<R>(context: ObservabilityContext, fn: () => R): R {
-  const storage = getAls()
-  if (storage) return storage.run(context, fn)
-  return fn()
+  return withObservabilityContext(context, fn)
 }
 
 function now(): string {
@@ -269,6 +237,14 @@ function recordInvalidRecord(issues: readonly string[]): void {
 }
 
 function shouldWarnAboutInvalidRecords(): boolean {
+  const runtime = globalThis as typeof globalThis & {
+    process?: { env?: Readonly<Record<string, string | undefined>> }
+  }
+  const nodeEnv = runtime.process?.env?.NODE_ENV
+  return nodeEnv !== 'production' && nodeEnv !== 'test'
+}
+
+function shouldWarnAboutRuntimeLimitations(): boolean {
   const runtime = globalThis as typeof globalThis & {
     process?: { env?: Readonly<Record<string, string | undefined>> }
   }
@@ -435,7 +411,9 @@ export function resetObservabilityRuntime(): void {
   nextConfigurationToken = 0
   configurationParents.clear()
   invalidRecords = 0
+  contextlessRecords = 0
   warnedAboutInvalidRecord = false
+  warnedAboutContextlessRecord = false
   endedRunIds.clear()
 }
 
@@ -449,6 +427,7 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
     pendingDeliveries: deliveryDiagnostics.pendingDeliveries,
     droppedRecords: deliveryDiagnostics.droppedRecords,
     invalidRecords,
+    contextlessRecords,
     deliveryErrors: deliveryDiagnostics.deliveryErrors,
     subscriberErrors: observabilitySubscriberErrorCount(),
   }
@@ -811,7 +790,11 @@ export const observe = {
   event(options: ObserveEventOptions): void {
     const context = currentContext()
     const spanId = context?.spanStack[context.spanStack.length - 1]
-    if (!context || !spanId) return
+    if (!context) {
+      recordContextlessRecord('event')
+      return
+    }
+    if (!spanId) return
 
     emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -829,7 +812,10 @@ export const observe = {
 
   artifact(options: ObserveArtifactOptions): CruxArtifactId | undefined {
     const context = currentContext()
-    if (!context) return undefined
+    if (!context) {
+      recordContextlessRecord('artifact')
+      return undefined
+    }
 
     const artifactId = options.artifactId ?? createCruxArtifactId()
     emitObserved(() => {
@@ -859,7 +845,10 @@ export const observe = {
 
   edge(options: ObserveEdgeOptions): void {
     const context = currentContext()
-    if (!context) return
+    if (!context) {
+      recordContextlessRecord('edge')
+      return
+    }
 
     emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -915,4 +904,12 @@ function rememberEndedRunId(runId: CruxRunId): void {
   if (endedRunIds.size <= maxEndedRunIds) return
   const oldestRunId = endedRunIds.keys().next().value
   if (oldestRunId) endedRunIds.delete(oldestRunId)
+}
+
+function recordContextlessRecord(kind: 'event' | 'artifact' | 'edge'): void {
+  contextlessRecords += 1
+  if (warnedAboutContextlessRecord) return
+  if (!shouldWarnAboutRuntimeLimitations()) return
+  warnedAboutContextlessRecord = true
+  console.warn(`[crux] observability ${kind} skipped because no active observability context is available.`)
 }

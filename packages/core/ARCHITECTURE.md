@@ -150,7 +150,8 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── turn-decision-report/  Per-turn TurnDecisionReport explanation read model (report/items/evidence/source-coverage/targets/shared), barrelled by turn-decision-report.ts
 │   ├── schema.ts       Zod schemas for graph records and batches
 │   ├── ids.ts          Runtime-owned public graph ID helpers
-│   ├── observe.ts      Non-blocking runtime emitters with a zero-listener fast path, manual/open run lifecycles for serverless resumes, AsyncLocalStorage context propagation, flush/shutdown
+│   ├── observe.ts      Non-blocking runtime emitters with a zero-listener fast path, manual/open run lifecycles for serverless resumes, AsyncLocalStorage context propagation with synchronous no-ALS degradation, flush/shutdown
+│   ├── context.ts      AsyncLocalStorage acquisition, synchronous fallback context frames, and the internal no-ALS test hook
 │   ├── delivery/       Functional delivery engine, option normalization, batching/chunking, retry timers, lifecycle hooks, and flush timeouts
 │   ├── errors.ts       Normalized observed error summaries, safe raw capture, stack/cause extraction, redaction, and truncation
 │   ├── transport.ts    Transport interface plus in-memory and HTTP graph transports
@@ -727,6 +728,11 @@ functional closure. It starts live delivery immediately, bounds in-flight sends 
 drops the oldest queued records when `maxQueuedRecords` is exceeded, counts discarded records in
 `observabilityDiagnostics().droppedRecords`, and records transport failures without throwing into
 the code that emitted the records.
+
+When `AsyncLocalStorage` is unavailable, the runtime degrades to a synchronous `withContext()` frame
+instead of disabling observability outright. Run lifecycles and synchronous nested spans still emit
+balanced graphs; contextless events, artifacts, and edges are skipped and counted in
+`observabilityDiagnostics().contextlessRecords` with a development warning.
 
 **Event flow for integrations:**
 

@@ -9,6 +9,7 @@ import {
   setObservabilityTransport,
 } from '../../observability'
 import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { expectBalancedGraph } from './helpers/expect-balanced-graph'
 
 describe('generation observability', () => {
   afterEach(() => {
@@ -66,6 +67,7 @@ describe('generation observability', () => {
     })
     expect(generationEnd && 'metrics' in generationEnd ? generationEnd.metrics?.['gen.duration_ms'] : undefined)
       .toBeGreaterThanOrEqual(0)
+    expectBalancedGraph(transport.records)
   })
 
     it('omits generation input and output previews when capture policy disables them', async () => {

@@ -49,6 +49,8 @@ await observe.span({ name: 'handoff', family: 'handoff', primitive: 'handoff.pre
 
 In-process this works automatically via AsyncLocalStorage. You don't write code for this unless you are authoring a custom boundary primitive.
 
+When AsyncLocalStorage is not available, such as in browser-like or edge runtimes, Crux still records run lifecycles and synchronous `withContext()` spans. Contextless `observe.event()`, `observe.artifact()`, and `observe.edge()` calls are skipped and counted in `observabilityDiagnostics().contextlessRecords` instead of throwing.
+
 ### 3. Cross-boundary transports pack and unpack the context explicitly
 
 `AsyncLocalStorage` does **not** survive process boundaries — `ctx.runAction()` in Convex, edge-worker `fetch()`, AWS Lambda invocation, an HTTP call to another service. Cross-boundary transports must pack the captured observability context into the call payload and the receiving side must restore it before any SDK call.

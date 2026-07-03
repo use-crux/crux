@@ -15,6 +15,7 @@ import {
   subscribeObservability,
 } from '../../observability'
 import { chaosTransport } from './helpers/chaos-transport'
+import { expectBalancedGraph } from './helpers/expect-balanced-graph'
 
 describe('observe runtime', () => {
   afterEach(() => {
@@ -407,6 +408,7 @@ describe('observe runtime', () => {
     expect(transport.records[2]).toMatchObject({ type: 'span:event', name: 'phase' })
     expect(transport.records[3]).toMatchObject({ type: 'artifact', kind: 'output' })
     expect(transport.records[4]).toMatchObject({ type: 'edge', edgeType: 'produced' })
+    expectBalancedGraph(transport.records)
   })
 
   it('records transport failures without throwing user code', async () => {
