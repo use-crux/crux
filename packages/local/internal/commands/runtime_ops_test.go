@@ -116,23 +116,44 @@ func TestRuntimeSetupRequiresExactlyOneMode(t *testing.T) {
 	}
 }
 
+func TestRuntimeStatusPrintsTruncatedCountMarkers(t *testing.T) {
+	var out, errOut bytes.Buffer
+	io := output.NewTestIO(&out, &errOut, output.TestIOOptions{ColorEnabled: false})
+
+	err := printRuntimeStatusResult(io, json.RawMessage(`{
+	  "operation": "status",
+	  "ok": true,
+	  "namespace": "local",
+	  "counts": [
+	    { "status": "pending", "targetId": "review", "count": 2000, "truncated": true },
+	    { "status": "blocked", "targetId": "review", "count": 1 }
+	  ]
+	}`))
+	if err != nil {
+		t.Fatalf("print runtime status: %v", err)
+	}
+	text := out.String()
+	if !strings.Contains(text, "2000+") {
+		t.Fatalf("truncated marker missing from status output:\n%s", text)
+	}
+	if !strings.Contains(text, "blocked") || !strings.Contains(text, "1") {
+		t.Fatalf("exact count missing from status output:\n%s", text)
+	}
+}
+
 func TestRuntimeGeneratePreflightReportsMissingNonTerminalTargets(t *testing.T) {
 	oldRunner := runRuntimeOperationForCommand
 	defer func() { runRuntimeOperationForCommand = oldRunner }()
 
 	runRuntimeOperationForCommand = func(_ context.Context, _, operation, _ string) (json.RawMessage, error) {
 		switch operation {
-		case "setup-check":
-			return json.RawMessage(`{"operation":"setup-check","ok":true,"setup":{"ok":true,"findings":[]}}`), nil
-		case "status":
+		case "preflight":
 			return json.RawMessage(`{
-			  "operation": "status",
-			  "ok": true,
-			  "namespace": "local",
-			  "counts": [
-			    { "status": "pending", "targetId": "old-review", "count": 2 },
-			    { "status": "blocked", "targetId": "blocked-old-review", "count": 1 },
-			    { "status": "suspended", "targetId": "review", "count": 1 }
+			  "operation": "preflight",
+			  "ok": false,
+			  "setup": { "ok": true, "findings": [] },
+			  "missingTargets": [
+			    { "targetId": "old-review", "count": 2 }
 			  ]
 			}`), nil
 		default:

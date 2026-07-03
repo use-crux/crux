@@ -313,6 +313,8 @@ export interface MaintenanceTickResult {
   readonly leasesReclaimed: number
   /** Waiters expired by the no-native-timer backstop. */
   readonly waitersExpired: number
+  /** Pending work rows with no live outbox wake that maintenance re-enqueued. */
+  readonly pendingRequeued: number
   /** Retention records removed. I4 has no retention policy yet. */
   readonly retainedRecordsRemoved: number
 }

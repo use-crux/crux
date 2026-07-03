@@ -11,7 +11,9 @@ export function matchesTopLevel(
   payload: unknown,
   match: Record<string, unknown>,
 ): boolean {
-  if (!payload || typeof payload !== 'object') return Object.keys(match).length === 0
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return Object.keys(match).length === 0
+  }
   const record = payload as Record<string, unknown>
   return Object.entries(match).every(([key, value]) => Object.is(record[key], value))
 }

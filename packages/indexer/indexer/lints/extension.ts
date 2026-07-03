@@ -25,5 +25,5 @@ export const cruxIndexLintRule: IndexRule = {
   messages: {
     finding: 'Project Index lint finding.',
   },
-  check: ({ definitions, relations }) => indexLintFindings({ definitions, relations }),
+  check: ({ definitions, relations, runtime }) => indexLintFindings({ definitions, relations, runtime }),
 }

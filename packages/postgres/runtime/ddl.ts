@@ -18,6 +18,80 @@ const TABLES = [
 
 export type RuntimePostgresTable = (typeof TABLES)[number]
 
+export const REQUIRED_COLUMNS: Readonly<Record<RuntimePostgresTable, readonly string[]>> = {
+  work: [
+    'namespace',
+    'work_id',
+    'work',
+    'target_id',
+    'status',
+    'attempt',
+    'max_attempts',
+    'not_before',
+    'idempotency_key',
+    'idle_scope',
+    'lease_token',
+    'last_error',
+    'created_at',
+    'updated_at',
+  ],
+  snapshots: [
+    'namespace',
+    'flow_id',
+    'work_id',
+    'target_id',
+    'status',
+    'input',
+    'completed_steps',
+    'fingerprint',
+    'pending_suspends',
+    'delivered_suspends',
+    'scheduled_effects',
+    'updated_at',
+  ],
+  events: [
+    'event_id',
+    'namespace',
+    'name',
+    'payload',
+    'duplicate_key',
+    'appended_at',
+  ],
+  waiters: [
+    'waiter_id',
+    'namespace',
+    'event_name',
+    'match',
+    'work_id',
+    'work',
+    'timeout_at',
+    'timer_id',
+    'state',
+  ],
+  timers: [
+    'timer_id',
+    'namespace',
+    'fire_at',
+    'work_id',
+    'waiter_id',
+    'idle_scope',
+    'work',
+    'idempotency_key',
+    'state',
+  ],
+  outbox: [
+    'outbox_id',
+    'namespace',
+    'envelope',
+    'state',
+    'attempts',
+    'next_attempt_at',
+  ],
+  idempotency: ['namespace', 'key', 'completed_at'],
+  leases: ['resource', 'token', 'expires_at', 'owner_id'],
+  idle_counters: ['namespace', 'scope', 'count'],
+}
+
 export function createSchemaSql(schema: string): string {
   return `CREATE SCHEMA IF NOT EXISTS ${quoteSchema(schema)}`
 }
@@ -178,6 +252,30 @@ export async function checkDdl(
   const existingTables = new Set(tableResult.rows.map((row) => row.table_name))
   const missingTables = TABLES.filter((name) => !existingTables.has(name))
 
+  const columnResult = await client.query<{
+    table_name: RuntimePostgresTable
+    column_name: string
+  }>(
+    `SELECT table_name, column_name
+       FROM information_schema.columns
+      WHERE table_schema = $1
+        AND table_name = ANY($2::text[])`,
+    [schema, TABLES],
+  )
+  const columnsByTable = new Map<RuntimePostgresTable, Set<string>>()
+  for (const row of columnResult.rows) {
+    const columns = columnsByTable.get(row.table_name) ?? new Set<string>()
+    columns.add(row.column_name)
+    columnsByTable.set(row.table_name, columns)
+  }
+  const missingColumns = TABLES.flatMap((tableName) => {
+    if (missingTables.includes(tableName)) return []
+    const columns = columnsByTable.get(tableName) ?? new Set<string>()
+    return REQUIRED_COLUMNS[tableName]
+      .filter((columnName) => !columns.has(columnName))
+      .map((columnName) => ({ tableName, columnName }))
+  })
+
   const indexResult = await client.query<{ indexname: string }>(
     `SELECT indexname FROM pg_indexes WHERE schemaname = $1`,
     [schema],
@@ -213,6 +311,13 @@ export async function checkDdl(
       setupFinding(
         `schema ${schema} index ${name}`,
         `Postgres schema ${schema} is missing Crux runtime index ${name}.`,
+        schema,
+      ),
+    ),
+    ...missingColumns.map(({ tableName, columnName }) =>
+      setupFinding(
+        `schema ${schema} table ${tableName} column ${columnName}`,
+        `Postgres schema ${schema} is missing Crux runtime column ${tableName}.${columnName}.`,
         schema,
       ),
     ),

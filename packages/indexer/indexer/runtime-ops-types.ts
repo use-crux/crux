@@ -10,6 +10,7 @@ import type {
 export type RuntimeOperationKind =
   | 'setup-check'
   | 'setup-apply'
+  | 'preflight'
   | 'status'
   | 'inspect'
   | 'retry'
@@ -30,6 +31,7 @@ export interface RuntimeOperationOptions {
 /** JSON-safe result for one Runtime Engine operation. */
 export type RuntimeOperationResult =
   | RuntimeSetupOperationResult
+  | RuntimePreflightOperationResult
   | RuntimeStatusOperationResult
   | RuntimeInspectOperationResult
   | RuntimeRetryOperationResult
@@ -39,6 +41,19 @@ export interface RuntimeSetupOperationResult {
   readonly operation: 'setup-check' | 'setup-apply'
   readonly ok: boolean
   readonly setup: Awaited<ReturnType<RuntimeSetupPort['check']>>
+}
+
+export interface RuntimePreflightOperationResult {
+  readonly operation: 'preflight'
+  readonly ok: boolean
+  readonly namespace?: string
+  readonly setup: Awaited<ReturnType<RuntimeSetupPort['check']>>
+  readonly missingTargets: readonly RuntimePreflightMissingTarget[]
+}
+
+export interface RuntimePreflightMissingTarget {
+  readonly targetId: string
+  readonly count: number
 }
 
 export interface RuntimeStatusOperationResult {
@@ -56,6 +71,7 @@ export interface RuntimeStatusCount {
   readonly namespace: string
   readonly targetId: string
   readonly count: number
+  readonly truncated?: boolean
 }
 
 export interface RuntimeInspectOperationResult {

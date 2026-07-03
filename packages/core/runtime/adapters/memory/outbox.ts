@@ -13,6 +13,16 @@ export function createMemoryOutboxPort(
 ): RuntimeOutboxPort {
   return {
     async put(envelope: WakeEnvelope, options = {}): Promise<RuntimeOutboxItem> {
+      const deliverAt = new Date(options.deliverAt ?? new Date())
+      const existing = [...data.outbox.values()].find(
+        (item) =>
+          item.state === 'pending' &&
+          item.namespace === envelope.ns &&
+          item.envelope.idempotencyKey === envelope.idempotencyKey &&
+          item.nextAttemptAt.getTime() === deliverAt.getTime(),
+      )
+      if (existing) return cloneOutboxItem(existing)
+
       recordWrite?.()
       const stored: RuntimeOutboxItem = Object.freeze({
         outboxId: `outbox_${data.nextOutboxId}`,
@@ -20,7 +30,7 @@ export function createMemoryOutboxPort(
         envelope: cloneWakeEnvelope(envelope),
         state: 'pending',
         attempts: 0,
-        nextAttemptAt: new Date(options.deliverAt ?? new Date()),
+        nextAttemptAt: deliverAt,
       })
       data.nextOutboxId += 1
       data.outbox.set(stored.outboxId, stored)

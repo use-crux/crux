@@ -58,6 +58,10 @@ const claimDueTimers = mutation<
   { namespace?: string; now: number; limit?: number },
   Array<{ timerId: string; state: string }>
 >('runtime/timers:claimDue')
+const listTimers = mutation<
+  { namespace: string; state?: string; limit?: number },
+  Array<{ timerId: string; state: string }>
+>('runtime/timers:list')
 const transitionTimer = mutation<
   { timerId: string; from: string; to: string },
   boolean
@@ -71,6 +75,10 @@ const claimOutbox = mutation<
   { namespace?: string; now: number; limit?: number },
   Array<{ outboxId: string; state: string; attempts: number }>
 >('runtime/outbox:claimPending')
+const listOutbox = mutation<
+  { namespace: string; state?: string; limit?: number },
+  Array<{ outboxId: string; state: string }>
+>('runtime/outbox:list')
 const confirmOutbox = mutation<{ outboxId: string }, null>('runtime/outbox:confirm')
 
 const createWork = mutation<{ work: Record<string, unknown> }, Record<string, unknown>>(
@@ -91,6 +99,10 @@ const getWork = mutation<
   { workId: string; namespace: string },
   Record<string, unknown> | null
 >('runtime/state:getWork')
+const countWork = mutation<
+  { namespace: string },
+  Array<{ namespace: string; status: string; targetId: string; count: number; truncated?: boolean }>
+>('runtime/state:countWork')
 
 describe('Crux Convex Runtime Engine component', () => {
   it('deduplicates durable events by event id and idempotency key', async () => {
@@ -190,6 +202,95 @@ describe('Crux Convex Runtime Engine component', () => {
     })
     await t.mutation(confirmOutbox, { outboxId: outbox.outboxId })
     await expect(t.mutation(claimOutbox, { now: 10 })).resolves.toEqual([])
+    await expect(t.mutation(listOutbox, { namespace: 'tenant-a' })).resolves.toEqual([
+      expect.objectContaining({ outboxId: outbox.outboxId, state: 'confirmed' }),
+    ])
+  })
+
+  it('deduplicates pending outbox rows but allows re-enqueue after dispatch', async () => {
+    const t = convexTest({ schema, modules })
+    const envelope = {
+      ns: 'tenant-a',
+      workId: 'work-1',
+      target: 'review',
+      kind: 'task.run',
+      idempotencyKey: 'task:work-1',
+      attempt: 1,
+    }
+
+    const first = await t.mutation(putOutbox, { envelope, nextAttemptAt: 10 })
+    await expect(t.mutation(putOutbox, { envelope, nextAttemptAt: 10 })).resolves.toMatchObject({
+      outboxId: first.outboxId,
+    })
+
+    await expect(t.mutation(claimOutbox, { namespace: 'tenant-a', now: 10, limit: 1 })).resolves.toEqual([
+      expect.objectContaining({ outboxId: first.outboxId, state: 'dispatched' }),
+    ])
+    const second = await t.mutation(putOutbox, { envelope, nextAttemptAt: 10 })
+    expect(second.outboxId).not.toBe(first.outboxId)
+    await t.mutation(confirmOutbox, { outboxId: first.outboxId })
+
+    await expect(t.mutation(claimOutbox, { namespace: 'tenant-a', now: 10, limit: 2 })).resolves.toEqual([
+      expect.objectContaining({ outboxId: second.outboxId, state: 'dispatched' }),
+    ])
+  })
+
+  it('matches array waiter payloads only when no top-level object keys are required', async () => {
+    const t = convexTest({ schema, modules })
+
+    await t.mutation(registerWaiter, {
+      waiter: {
+        namespace: 'tenant-a',
+        eventName: 'document.batch',
+        match: { length: 2 },
+        work: { kind: 'flow.resume', flowId: 'flow-1' },
+      },
+    })
+    await expect(
+      t.mutation(resolveWaiters, {
+        eventName: 'document.batch',
+        payload: ['doc-1', 'doc-2'],
+        namespace: 'tenant-a',
+      }),
+    ).resolves.toEqual([])
+
+    await t.mutation(registerWaiter, {
+      waiter: {
+        namespace: 'tenant-a',
+        eventName: 'document.any-batch',
+        match: {},
+        work: { kind: 'flow.resume', flowId: 'flow-1' },
+      },
+    })
+    await expect(
+      t.mutation(resolveWaiters, {
+        eventName: 'document.any-batch',
+        payload: ['doc-1', 'doc-2'],
+        namespace: 'tenant-a',
+      }),
+    ).resolves.toHaveLength(1)
+  })
+
+  it('lists timers through namespace/state indexes when no state filter is supplied', async () => {
+    const t = convexTest({ schema, modules })
+    const timer = await t.mutation(putTimer, {
+      timer: {
+        namespace: 'tenant-a',
+        fireAt: 10,
+        work: { kind: 'flow.timeout', flowId: 'flow-1', suspendPoint: 'approval' },
+      },
+    })
+    await t.mutation(putTimer, {
+      timer: {
+        namespace: 'tenant-b',
+        fireAt: 10,
+        work: { kind: 'flow.timeout', flowId: 'flow-2', suspendPoint: 'approval' },
+      },
+    })
+
+    await expect(t.mutation(listTimers, { namespace: 'tenant-a' })).resolves.toEqual([
+      expect.objectContaining({ timerId: timer.timerId, state: 'scheduled' }),
+    ])
   })
 
   it('replaces work rows when moving suspended work back to pending', async () => {
@@ -275,8 +376,44 @@ describe('Crux Convex Runtime Engine component', () => {
       idempotencyKey: 'retry:new',
     })
   })
+
+  it('counts work rows by namespace, status, and target id', async () => {
+    const t = convexTest({ schema, modules })
+    await t.mutation(createWork, {
+      work: workRow('work-1', 'tenant-a', 'pending', 'review'),
+    })
+    await t.mutation(createWork, {
+      work: workRow('work-2', 'tenant-a', 'pending', 'review'),
+    })
+    await t.mutation(createWork, {
+      work: workRow('work-3', 'tenant-a', 'leased', 'review'),
+    })
+    await t.mutation(createWork, {
+      work: workRow('work-4', 'tenant-b', 'pending', 'review'),
+    })
+
+    await expect(t.mutation(countWork, { namespace: 'tenant-a' })).resolves.toEqual([
+      { namespace: 'tenant-a', status: 'pending', targetId: 'review', count: 2 },
+      { namespace: 'tenant-a', status: 'leased', targetId: 'review', count: 1 },
+    ])
+  })
 })
 
 function mutation<TArgs extends MutationArgs, TResult>(path: string) {
   return makeFunctionReference<'mutation', TArgs, TResult>(path)
+}
+
+function workRow(workId: string, namespace: string, status: string, targetId: string) {
+  return {
+    workId,
+    namespace,
+    work: { kind: 'flow.resume', flowId: `${workId}-flow` },
+    targetId,
+    status,
+    attempt: 1,
+    maxAttempts: 8,
+    idempotencyKey: `${status}:${workId}`,
+    createdAt: 1,
+    updatedAt: 1,
+  }
 }

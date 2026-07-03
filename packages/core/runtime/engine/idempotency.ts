@@ -33,12 +33,12 @@ export function flowSignalResumeKey(
 
 /** Build the idempotency key for a manual flow resume request. */
 export function flowManualResumeKey(workId: WorkId, now: Date): string {
-  return `resume:${workId}:manual:${epochMsBase36(now)}`
+  return `resume:${workId}:manual:${uniqueInvocationSuffix(now)}`
 }
 
 /** Build the idempotency key for an operator retry request. */
 export function operatorRetryKey(workId: WorkId, now: Date): string {
-  return `retry:${workId}:${epochMsBase36(now)}`
+  return `retry:${workId}:${uniqueInvocationSuffix(now)}`
 }
 
 /** Build the durable audit event name for an operator retry request. */
@@ -71,4 +71,25 @@ export function watchDeliverKey(
 
 function epochMsBase36(now: Date): string {
   return now.getTime().toString(36)
+}
+
+let invocationCounter = 0
+const invocationNonce = createInvocationNonce()
+
+function uniqueInvocationSuffix(now: Date): string {
+  invocationCounter += 1
+  return `${epochMsBase36(now)}:${invocationNonce}:${invocationCounter.toString(36)}`
+}
+
+function createInvocationNonce(): string {
+  const crypto = globalThis.crypto
+  if (crypto && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(8)
+    crypto.getRandomValues(bytes)
+    return [...bytes].map((byte) => byte.toString(36).padStart(2, '0')).join('')
+  }
+  if (crypto && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replaceAll('-', '').slice(0, 16)
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 }

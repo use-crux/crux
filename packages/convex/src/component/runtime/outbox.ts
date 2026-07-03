@@ -3,10 +3,21 @@ import { mutation } from '../_generated/server.js'
 import type { MutationCtx } from '../_generated/server.js'
 import { limitRows, randomId } from './shared'
 
+const OUTBOX_STATES = ['pending', 'dispatched', 'confirmed'] as const
+
 export const put = mutation({
   args: { envelope: v.any(), nextAttemptAt: v.number() },
   returns: v.any(),
   handler: async (ctx, { envelope, nextAttemptAt }) => {
+    const existing = await ctx.db
+      .query('runtimeOutbox')
+      .withIndex('by_namespace_state_next', (q) =>
+        q.eq('namespace', envelope.ns).eq('state', 'pending').eq('nextAttemptAt', nextAttemptAt),
+      )
+      .filter((q) => q.eq(q.field('envelope.idempotencyKey'), envelope.idempotencyKey))
+      .first()
+    if (existing) return existing
+
     const record = {
       outboxId: randomId('outbox'),
       namespace: envelope.ns,
@@ -48,14 +59,20 @@ export const list = mutation({
   args: { namespace: v.string(), state: v.optional(v.string()), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, { namespace, state, limit }) => {
-    const rows =
-      state === undefined
-        ? await ctx.db.query('runtimeOutbox').collect()
-        : await ctx.db
+    const states = state === undefined ? OUTBOX_STATES : [state]
+    const rows = (
+      await Promise.all(
+        states.map((rowState) =>
+          ctx.db
             .query('runtimeOutbox')
-            .withIndex('by_namespace_state_next', (q) => q.eq('namespace', namespace).eq('state', state))
-            .collect()
-    return limitRows(rows.filter((row) => row.namespace === namespace), limit)
+            .withIndex('by_namespace_state_next', (q) =>
+              q.eq('namespace', namespace).eq('state', rowState),
+            )
+            .take(limit ?? 1_000),
+        ),
+      )
+    ).flat()
+    return limitRows(rows, limit)
   },
 })
 

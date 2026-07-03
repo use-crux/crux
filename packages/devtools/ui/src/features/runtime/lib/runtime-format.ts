@@ -1,5 +1,10 @@
 import type { ChipTone } from '@/qw/shell/primitives'
-import type { RuntimeWorkFilters, RuntimeWorkRow, RuntimeWorkStatus } from '../types'
+import type {
+  RuntimeStatusCount,
+  RuntimeWorkFilters,
+  RuntimeWorkRow,
+  RuntimeWorkStatus,
+} from '../types'
 
 export function filterRuntimeWork(
   rows: readonly RuntimeWorkRow[],
@@ -28,6 +33,28 @@ export function runtimeStatusTone(status: RuntimeWorkStatus): ChipTone {
     case 'cancelled':
       return 'muted'
   }
+}
+
+export function runtimeCountsByStatus(
+  counts: readonly RuntimeStatusCount[],
+): ReadonlyMap<RuntimeWorkStatus, RuntimeStatusCount> {
+  const byStatus = new Map<RuntimeWorkStatus, RuntimeStatusCount>()
+  for (const count of counts) {
+    const previous = byStatus.get(count.status)
+    byStatus.set(count.status, {
+      namespace: count.namespace,
+      status: count.status,
+      targetId: previous?.targetId ?? count.targetId,
+      count: (previous?.count ?? 0) + count.count,
+      truncated: Boolean(previous?.truncated || count.truncated),
+    })
+  }
+  return byStatus
+}
+
+export function runtimeCountLabel(count: RuntimeStatusCount | undefined): string {
+  if (!count) return '0'
+  return `${count.count}${count.truncated ? '+' : ''}`
 }
 
 export function fmtRuntimeDate(value: string | undefined): string {

@@ -145,8 +145,9 @@ function flowSuspensionForCall(
 function runtimeUsages(
   root: StaticFunctionValue,
 ): readonly FlowRuntimeUsageEvidence[] {
+  const runtimeBindings = firstParameterRuntimeBindings(root)
   return root.calls.flatMap((call): readonly FlowRuntimeUsageEvidence[] => {
-    const method = runtimeMethod(call);
+    const method = runtimeMethod(call, runtimeBindings);
     if (!method) return [];
     const payload =
       method === "defer" ? call.args[1] : method === "after" ? call.args[2] : undefined;
@@ -167,12 +168,42 @@ function runtimeUsages(
 
 function runtimeMethod(
   call: StaticFunctionCallValue,
+  runtimeBindings: ReadonlyMap<string, FlowRuntimeUsageEvidence["method"] | "scope">,
 ): FlowRuntimeUsageEvidence["method"] | undefined {
+  const receiver = staticIdentifierName(call.receiver);
+  if (receiver && runtimeBindings.get(receiver) !== "scope") return undefined;
+  if (!receiver) {
+    const directBinding = runtimeBindings.get(call.callee.localName ?? call.callee.name);
+    return directBinding && directBinding !== "scope" ? directBinding : undefined;
+  }
   return call.callee.name === "waitFor" ||
     call.callee.name === "defer" ||
     call.callee.name === "after" ||
     call.callee.name === "untilIdle"
     ? call.callee.name
+    : undefined;
+}
+
+function firstParameterRuntimeBindings(
+  root: StaticFunctionValue,
+): ReadonlyMap<string, FlowRuntimeUsageEvidence["method"] | "scope"> {
+  const bindings = new Map<string, FlowRuntimeUsageEvidence["method"] | "scope">();
+  for (const binding of root.firstParameterBindings ?? []) {
+    const method = runtimeBindingMethod(binding.propertyName ?? binding.name);
+    if (method) {
+      bindings.set(binding.name, method);
+    } else if (!binding.propertyName) {
+      bindings.set(binding.name, "scope");
+    }
+  }
+  return bindings;
+}
+
+function runtimeBindingMethod(
+  name: string | undefined,
+): FlowRuntimeUsageEvidence["method"] | undefined {
+  return name === "waitFor" || name === "defer" || name === "after" || name === "untilIdle"
+    ? name
     : undefined;
 }
 

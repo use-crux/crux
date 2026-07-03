@@ -7,6 +7,7 @@ import type {
   RuntimeStatePort,
   RuntimeStateReadOptions,
   SetWorkPendingOptions,
+  WorkStatusCount,
   WorkId,
   WorkItem,
 } from '@use-crux/core/runtime'
@@ -122,6 +123,23 @@ export function createPostgresStatePort(
         values,
       )
       return result.rows.map(decodeWorkItem)
+    },
+
+    async countWork(options): Promise<readonly WorkStatusCount[]> {
+      const result = await db.query(
+        `SELECT namespace, status, target_id, COUNT(*)::int AS count
+           FROM ${workTable}
+          WHERE namespace = $1
+          GROUP BY namespace, status, target_id
+          ORDER BY namespace ASC, status ASC, target_id ASC`,
+        [options.namespace],
+      )
+      return result.rows.map((row) => ({
+        namespace: String(row.namespace),
+        status: row.status,
+        targetId: row.target_id,
+        count: Number(row.count),
+      }))
     },
 
     async setWorkPending(

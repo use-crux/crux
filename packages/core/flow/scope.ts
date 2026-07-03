@@ -381,10 +381,17 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         | SuspendOptions<S>
         | undefined
       const payloadSpec = localSignalSpec ?? suspendOptions?.schema
+      const runtimeReplayPayload = runtimeExecution
+        ? deliveredRuntimePayload(
+            runtimeExecution.deliveredPayloads,
+            deliveryKey,
+            _name,
+          )
+        : undefined
       const replayPayload =
-        runtimeExecution?.deliveredPayloads.get(deliveryKey) ??
-        runtimeExecution?.deliveredPayloads.get(_name) ??
-        deliveredSignalPayload(deliveredSignals, deliveryKey)
+        runtimeReplayPayload !== undefined
+          ? runtimeReplayPayload
+          : deliveredSignalPayload(deliveredSignals, deliveryKey)
       if (isResume && replayPayload !== undefined) {
         return validateSignalPayload(_name, payloadSpec, replayPayload) as S
       }
@@ -471,9 +478,13 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       suspendCount++
       const deliveryKey = suspendDeliveryKey(suspendCount, suspendPoint)
       runtimeExecution?.fingerprint.observe(`waitFor:${eventSpec.name}`)
-      const replayPayload =
-        runtimeExecution?.deliveredPayloads.get(deliveryKey) ??
-        runtimeExecution?.deliveredPayloads.get(suspendPoint)
+      const replayPayload = runtimeExecution
+        ? deliveredRuntimePayload(
+            runtimeExecution.deliveredPayloads,
+            deliveryKey,
+            suspendPoint,
+          )
+        : undefined
       if (isResume && replayPayload !== undefined) {
         return validateWaitForPayload(eventSpec, replayPayload)
       }
@@ -1197,6 +1208,16 @@ export function flow(
   }
 
   return Object.freeze(handle) as FlowHandle<unknown, unknown, FlowSignalMap | undefined>
+}
+
+function deliveredRuntimePayload(
+  deliveredPayloads: ReadonlyMap<string, JsonValue>,
+  primaryKey: string,
+  fallbackKey: string,
+): JsonValue | undefined {
+  if (deliveredPayloads.has(primaryKey)) return deliveredPayloads.get(primaryKey)
+  if (deliveredPayloads.has(fallbackKey)) return deliveredPayloads.get(fallbackKey)
+  return undefined
 }
 
 function isFlowDefinitionOptions(value: unknown): value is FlowDefinitionOptions<FlowSignalMap> {

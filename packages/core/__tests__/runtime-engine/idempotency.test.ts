@@ -7,7 +7,9 @@ import type {
 } from '../../runtime/ports'
 import {
   flowEventResumeKey,
+  flowManualResumeKey,
   flowSignalResumeKey,
+  operatorRetryKey,
   taskRunKey,
   timerKey,
   waiterTimeoutKey,
@@ -28,5 +30,20 @@ describe('runtime idempotency key builders', () => {
     expect(watchDeliverKey('workspace', 'evt_100' as EventCursor)).toBe(
       'watch:workspace:evt_100',
     )
+  })
+
+  it('makes manual resume and operator retry keys unique per invocation', () => {
+    const now = new Date('2026-07-02T00:00:00.000Z')
+    const manualA = flowManualResumeKey('work_1' as WorkId, now)
+    const manualB = flowManualResumeKey('work_1' as WorkId, now)
+    const retryA = operatorRetryKey('work_1' as WorkId, now)
+    const retryB = operatorRetryKey('work_1' as WorkId, now)
+
+    expect(manualA).toMatch(/^resume:work_1:manual:mr2qmtc0:[a-z0-9]+:/)
+    expect(manualB).toMatch(/^resume:work_1:manual:mr2qmtc0:[a-z0-9]+:/)
+    expect(manualA).not.toBe(manualB)
+    expect(retryA).toMatch(/^retry:work_1:mr2qmtc0:[a-z0-9]+:/)
+    expect(retryB).toMatch(/^retry:work_1:mr2qmtc0:[a-z0-9]+:/)
+    expect(retryA).not.toBe(retryB)
   })
 })

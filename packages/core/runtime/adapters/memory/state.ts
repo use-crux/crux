@@ -12,6 +12,7 @@ import type {
   RuntimeStatePort,
   RuntimeStateReadOptions,
   SetWorkPendingOptions,
+  WorkStatusCount,
 } from '../../ports/state'
 import type { RuntimeWork } from '../../ports/work'
 import type { MemoryRuntimeData, MemoryWriteRecorder } from './data'
@@ -75,6 +76,22 @@ export function createMemoryStatePort(
         )
         .slice(0, options.limit)
       return work.map((item) => cloneWorkItem(item))
+    },
+
+    async countWork(options): Promise<readonly WorkStatusCount[]> {
+      const counts = new Map<string, WorkStatusCount>()
+      for (const item of data.work.values()) {
+        if (item.namespace !== options.namespace) continue
+        const key = `${item.namespace}:${item.status}:${item.targetId}`
+        const previous = counts.get(key)
+        counts.set(key, {
+          namespace: item.namespace,
+          status: item.status,
+          targetId: item.targetId,
+          count: (previous?.count ?? 0) + 1,
+        })
+      }
+      return [...counts.values()]
     },
 
     async setWorkPending(

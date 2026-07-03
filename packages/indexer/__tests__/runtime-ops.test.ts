@@ -91,6 +91,18 @@ describe('runtime operations', () => {
       ]),
     })
 
+    await expect(runRuntimeOperation({ root, operation: 'preflight' })).resolves.toMatchObject({
+      operation: 'preflight',
+      ok: false,
+      setup: { ok: true },
+      missingTargets: [
+        {
+          targetId: 'runtime-ops-cancel',
+          count: 1,
+        },
+      ],
+    })
+
     const detailedStatus = await runRuntimeOperation({
       root,
       operation: 'status',
@@ -179,6 +191,53 @@ describe('runtime operations', () => {
       operation: 'cancel',
       ok: true,
       cancelled: true,
+    })
+  }, 30_000)
+
+  it('reports exact status counts beyond the status detail page size', async () => {
+    const schema = `crux_runtime_ops_counts_${Date.now()}`
+    schemas.push(schema)
+    const root = await runtimeOpsFixtureRoot({ schema })
+
+    await expect(runRuntimeOperation({ root, operation: 'setup-apply' }))
+      .resolves.toMatchObject({ operation: 'setup-apply', ok: true })
+
+    const seedStore = postgres({
+      url: database.url,
+      schema,
+      poolOptions: { allowExitOnIdle: true },
+    })
+    try {
+      const now = new Date('2026-07-03T00:00:00.000Z')
+      for (let index = 0; index < 1_005; index += 1) {
+        await seedStore.state.createWork({
+          workId: `work_runtime_ops_count_${index}` as WorkId,
+          namespace: 'local',
+          work: {
+            kind: 'task.run',
+            taskId: `task_runtime_ops_count_${index}` as TaskId,
+            targetId: 'runtime-ops-counted' as RuntimeTargetId,
+            input: {},
+          },
+          targetId: 'runtime-ops-counted' as RuntimeTargetId,
+          idempotencyKey: `task:work_runtime_ops_count_${index}`,
+          now,
+        })
+      }
+    } finally {
+      await seedStore.close()
+    }
+
+    await expect(runRuntimeOperation({ root, operation: 'status' })).resolves.toMatchObject({
+      operation: 'status',
+      ok: true,
+      counts: expect.arrayContaining([
+        expect.objectContaining({
+          status: 'pending',
+          targetId: 'runtime-ops-counted',
+          count: 1_005,
+        }),
+      ]),
     })
   }, 30_000)
 })

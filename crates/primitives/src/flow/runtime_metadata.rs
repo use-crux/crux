@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::protocol::{SourceLocation, StaticFunctionCallValue, StaticSyntaxValue};
 
 #[derive(serde::Serialize)]
@@ -20,28 +22,28 @@ struct FlowNondeterministicCall {
 
 pub(crate) fn flow_runtime_usages(roots: &[&StaticSyntaxValue]) -> Vec<impl serde::Serialize> {
     let mut usages = Vec::new();
-    for call in roots
-        .iter()
-        .flat_map(|root| crate::flow::facts::function_calls(root))
-    {
-        let Some(method) = runtime_method(call) else {
-            continue;
-        };
-        let payload = match method {
-            "defer" => call.args.get(1),
-            "after" => call.args.get(2),
-            _ => None,
-        };
-        usages.push(FlowRuntimeUsage {
-            method: method.to_string(),
-            source: call.source.clone(),
-            closure_target: if method == "defer" && is_function_value(call.args.first()) {
-                Some(true)
-            } else {
-                None
-            },
-            non_serializable_payload: payload.and_then(non_serializable_payload),
-        });
+    for root in roots {
+        let runtime_bindings = function_runtime_bindings(root);
+        for call in crate::flow::facts::function_calls(root) {
+            let Some(method) = runtime_method(call, &runtime_bindings) else {
+                continue;
+            };
+            let payload = match method {
+                "defer" => call.args.get(1),
+                "after" => call.args.get(2),
+                _ => None,
+            };
+            usages.push(FlowRuntimeUsage {
+                method: method.to_string(),
+                source: call.source.clone(),
+                closure_target: if method == "defer" && is_function_value(call.args.first()) {
+                    Some(true)
+                } else {
+                    None
+                },
+                non_serializable_payload: payload.and_then(non_serializable_payload),
+            });
+        }
     }
     usages
 }
@@ -70,14 +72,64 @@ pub(crate) fn flow_nondeterministic_calls(
     calls
 }
 
-fn runtime_method(call: &StaticFunctionCallValue) -> Option<&'static str> {
-    match call.callee.name.as_str() {
+fn runtime_method(
+    call: &StaticFunctionCallValue,
+    runtime_bindings: &HashMap<String, RuntimeBinding>,
+) -> Option<&'static str> {
+    if let Some(receiver) = receiver_identifier(call) {
+        if runtime_bindings.get(receiver) != Some(&RuntimeBinding::Scope) {
+            return None;
+        }
+        return runtime_method_name(&call.callee.name);
+    }
+    let local_name = call
+        .callee
+        .local_name
+        .as_deref()
+        .unwrap_or(&call.callee.name);
+    match runtime_bindings.get(local_name) {
+        Some(RuntimeBinding::Method(method)) => Some(method),
+        _ => None,
+    }
+}
+
+fn runtime_method_name(name: &str) -> Option<&'static str> {
+    match name {
         "waitFor" => Some("waitFor"),
         "defer" => Some("defer"),
         "after" => Some("after"),
         "untilIdle" => Some("untilIdle"),
         _ => None,
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RuntimeBinding {
+    Scope,
+    Method(&'static str),
+}
+
+fn function_runtime_bindings(root: &StaticSyntaxValue) -> HashMap<String, RuntimeBinding> {
+    let mut bindings = HashMap::new();
+    if let StaticSyntaxValue::Function {
+        first_parameter_bindings,
+        ..
+    } = root
+    {
+        for binding in first_parameter_bindings {
+            if let Some(method) = runtime_method_name(
+                binding
+                    .property_name
+                    .as_deref()
+                    .unwrap_or(binding.name.as_str()),
+            ) {
+                bindings.insert(binding.name.clone(), RuntimeBinding::Method(method));
+            } else if binding.property_name.is_none() {
+                bindings.insert(binding.name.clone(), RuntimeBinding::Scope);
+            }
+        }
+    }
+    bindings
 }
 
 fn receiver_identifier(call: &StaticFunctionCallValue) -> Option<&str> {

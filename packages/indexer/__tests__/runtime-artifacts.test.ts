@@ -65,10 +65,12 @@ describe('runtime artifacts', () => {
     await writeFile(
       join(root, 'crux.config.ts'),
       [
-        "import { config } from '@use-crux/core'",
-        "import { convex } from '@use-crux/convex/runtime'",
-        '',
-        'export default config({ runtime: convex() })',
+        'export default {',
+        "  config: { runtime: { kind: 'host-bound', host: 'convex', id: 'convex', capabilities: {} } },",
+        '  prompts: [],',
+        '  contexts: [],',
+        '  get() { return undefined },',
+        '}',
       ].join('\n'),
     )
     await writeFile(
@@ -87,6 +89,82 @@ describe('runtime artifacts', () => {
     await expect(readFile(join(root, 'convex/crux.ts'), 'utf8')).resolves.toContain(
       "export { deliverSignal, fireTimer, handleWake, resumeFlow, runTask } from './_crux/generated'",
     )
+  })
+
+  it('does not infer Convex host from commented config source', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'crux.config.ts'),
+      [
+        "import { config } from '@use-crux/core'",
+        "import { node } from '@use-crux/core/runtime'",
+        '',
+        '// runtime: convex()',
+        'export default config({ runtime: node() })',
+      ].join('\n'),
+    )
+    await writeFile(
+      join(root, 'src/review.ts'),
+      [
+        "import { flow } from '@use-crux/core/flow'",
+        '',
+        "export const reviewFlow = flow('review', async () => undefined)",
+      ].join('\n'),
+    )
+
+    const result = await generateRuntimeArtifacts({ root })
+
+    expect(result.writtenFiles).toContain(join(root, 'crux.generated/next.ts'))
+    expect(result.writtenFiles).not.toContain(join(root, 'convex/crux.ts'))
+  })
+
+  it('regenerates byte-identical artifacts across process locale settings', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/review.ts'),
+      [
+        "import { flow } from '@use-crux/core/flow'",
+        "import { task } from '@use-crux/core/runtime'",
+        '',
+        "export const zeta = flow('zeta', async () => undefined)",
+        "export const alpha = task('alpha', { run: async () => undefined })",
+      ].join('\n'),
+    )
+    const previousLang = process.env.LANG
+    try {
+      process.env.LANG = 'C'
+      await generateRuntimeArtifacts({ root, host: 'next' })
+      const cManifest = await readFile(join(root, '.crux/generated/runtime/manifest.json'), 'utf8')
+      const cEntry = await readFile(join(root, 'crux.generated/next.ts'), 'utf8')
+
+      process.env.LANG = 'en_US.UTF-8'
+      await generateRuntimeArtifacts({ root, host: 'next' })
+      await expect(readFile(join(root, '.crux/generated/runtime/manifest.json'), 'utf8')).resolves.toBe(cManifest)
+      await expect(readFile(join(root, 'crux.generated/next.ts'), 'utf8')).resolves.toBe(cEntry)
+    } finally {
+      if (previousLang === undefined) delete process.env.LANG
+      else process.env.LANG = previousLang
+    }
+  })
+
+  it('fails loudly when a present config cannot resolve a runtime host', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(join(root, 'crux.config.ts'), 'export default { runtime: "convex" }\n')
+    await writeFile(
+      join(root, 'src/review.ts'),
+      [
+        "import { flow } from '@use-crux/core/flow'",
+        '',
+        "export const reviewFlow = flow('review', async () => undefined)",
+      ].join('\n'),
+    )
+
+    await expect(generateRuntimeArtifacts({ root })).rejects.toMatchObject({
+      code: 'SETUP_REQUIRED',
+    })
   })
 
   it('refuses to overwrite user-authored entry files without the generated marker', async () => {

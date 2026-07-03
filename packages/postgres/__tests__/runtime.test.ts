@@ -10,6 +10,7 @@ import type {
 } from '@use-crux/core/runtime'
 import { Pool } from 'pg'
 import { postgres, type PostgresRuntimeStore } from '../runtime'
+import { ddlStatements, REQUIRED_COLUMNS } from '../runtime/ddl'
 import {
   startPostgresTestDatabase,
   type PostgresTestDatabase,
@@ -57,6 +58,17 @@ describe('@use-crux/postgres runtime', () => {
 
   runStoreAdapterTests(options)
 
+  it('keeps setup-check required columns aligned with create-table DDL', () => {
+    const statements = ddlStatements('crux_runtime_test')
+    for (const [tableName, expectedColumns] of Object.entries(REQUIRED_COLUMNS)) {
+      const statement = statements.find((item) =>
+        item.includes(`CREATE TABLE IF NOT EXISTS "crux_runtime_test"."${tableName}"`),
+      )
+      expect(statement, `${tableName} create table statement`).toBeDefined()
+      expect(columnsFromCreateTable(statement!)).toEqual(expectedColumns)
+    }
+  })
+
   it('setup check reports missing resources and apply is idempotent', async () => {
     const schema = `crux_runtime_setup_${Date.now()}`
     schemas.push(schema)
@@ -80,6 +92,33 @@ describe('@use-crux/postgres runtime', () => {
     await expect(store.setup.check()).resolves.toEqual({
       ok: true,
       findings: [],
+    })
+  })
+
+  it('setup check reports missing additive migration columns', async () => {
+    const schema = `crux_runtime_setup_columns_${Date.now()}`
+    schemas.push(schema)
+    const store = postgres({ url: testDatabase.url, schema })
+    stores.push(store)
+    await store.setup.apply()
+
+    const pool = new Pool({ connectionString: testDatabase.url })
+    try {
+      await pool.query(
+        `ALTER TABLE ${quoteIdent(schema)}.snapshots DROP COLUMN delivered_suspends`,
+      )
+    } finally {
+      await pool.end()
+    }
+
+    await expect(store.setup.check()).resolves.toEqual({
+      ok: false,
+      findings: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'SETUP_REQUIRED',
+          resource: `schema ${schema} table snapshots column delivered_suspends`,
+        }),
+      ]),
     })
   })
 
@@ -141,4 +180,12 @@ describe('@use-crux/postgres runtime', () => {
 
 function quoteIdent(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`
+}
+
+function columnsFromCreateTable(statement: string): readonly string[] {
+  return statement
+    .split('\n')
+    .map((line) => line.trim())
+    .map((line) => line.match(/^([a-z_]+)\s/)?.[1])
+    .filter((column): column is string => Boolean(column) && column !== 'PRIMARY')
 }

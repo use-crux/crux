@@ -3,6 +3,9 @@ import { mutation } from '../_generated/server.js'
 import type { MutationCtx } from '../_generated/server.js'
 import { limitRows } from './shared'
 
+const WORK_STATUSES = ['pending', 'leased', 'suspended', 'completed', 'cancelled', 'blocked', 'dead-letter'] as const
+const COUNT_STATUS_LIMIT = 2_000
+
 export const createWork = mutation({
   args: { work: v.any() },
   returns: v.any(),
@@ -64,6 +67,34 @@ export const listWork = mutation({
       rows.filter((row) => updatedBefore === undefined || row.updatedAt < updatedBefore),
       limit,
     )
+  },
+})
+
+export const countWork = mutation({
+  args: {
+    namespace: v.string(),
+  },
+  returns: v.any(),
+  handler: async (ctx, { namespace }) => {
+    const counts = new Map<string, { namespace: string; status: string; targetId: string; count: number; truncated?: boolean }>()
+    for (const status of WORK_STATUSES) {
+      const rows = await ctx.db
+        .query('runtimeWork')
+        .withIndex('by_namespace_status_updated', (q) => q.eq('namespace', namespace).eq('status', status))
+        .take(COUNT_STATUS_LIMIT)
+      for (const row of rows) {
+        const key = `${row.namespace}:${row.status}:${row.targetId}`
+        const previous = counts.get(key)
+        counts.set(key, {
+          namespace: row.namespace,
+          status: row.status,
+          targetId: row.targetId,
+          count: (previous?.count ?? 0) + 1,
+          ...(rows.length === COUNT_STATUS_LIMIT ? { truncated: true } : {}),
+        })
+      }
+    }
+    return [...counts.values()]
   },
 })
 

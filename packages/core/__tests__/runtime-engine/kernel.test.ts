@@ -71,6 +71,66 @@ describe('RuntimeKernel', () => {
     })
   })
 
+  it('does not resurrect terminal work when a duplicate wake read stale pending state before leasing', async () => {
+    const store = inMemoryRuntimeStore()
+    let executions = 0
+    const kernel = createRuntimeKernel({
+      store,
+      targets: {
+        'embed-document': {
+          targetId: 'embed-document' as RuntimeTargetId,
+          kind: 'task',
+          execute: async () => {
+            executions += 1
+            return { status: 'completed' }
+          },
+        },
+      },
+      newWorkId: () => 'work_task_1' as WorkId,
+    })
+    const enqueued = await kernel.enqueueTask({
+      namespace: 'tenant-a',
+      taskId: 'task_1' as TaskId,
+      targetId: 'embed-document' as RuntimeTargetId,
+    })
+    const envelope = wakeEnvelopeForWork(enqueued)
+    const originalClaim = store.leases.claim.bind(store.leases)
+    let releaseFirstClaim!: () => void
+    const firstClaimReached = new Promise<void>((resolve) => {
+      let claimCalls = 0
+      ;(store.leases as unknown as typeof store.leases & {
+        claim: typeof store.leases.claim
+      }).claim = async (...args) => {
+        claimCalls += 1
+        if (claimCalls === 1) {
+          resolve()
+          await new Promise<void>((release) => {
+            releaseFirstClaim = release
+          })
+        }
+        return originalClaim(...args)
+      }
+    })
+
+    const staleDelivery = kernel.handleWake(envelope)
+    await firstClaimReached
+    await expect(kernel.handleWake(envelope)).resolves.toEqual({
+      status: 200,
+      outcome: 'processed',
+    })
+    expect(executions).toBe(1)
+
+    releaseFirstClaim()
+    await expect(staleDelivery).resolves.toEqual({
+      status: 200,
+      outcome: 'duplicate',
+    })
+    expect(executions).toBe(1)
+    await expect(
+      store.state.getWork(enqueued.workId, { namespace: 'tenant-a' }),
+    ).resolves.toMatchObject({ status: 'completed' })
+  })
+
   it('redelivers an outbox row after confirm crashes without executing work twice', async () => {
     const store = inMemoryRuntimeStore()
     const kernel = createRuntimeKernel({
@@ -190,7 +250,7 @@ describe('RuntimeKernel', () => {
       work: {
         status: 'pending',
         attempt: 1,
-        idempotencyKey: 'retry:work_task_1:mr2qmtc0',
+        idempotencyKey: expect.stringMatching(/^retry:work_task_1:mr2qmtc0:/),
         lastError: undefined,
         notBefore: undefined,
       },
@@ -216,7 +276,7 @@ describe('RuntimeKernel', () => {
     ).resolves.toEqual([
       expect.objectContaining({
         envelope: expect.objectContaining({
-          idempotencyKey: 'retry:work_task_1:mr2qmtc0',
+          idempotencyKey: expect.stringMatching(/^retry:work_task_1:mr2qmtc0:/),
         }),
       }),
     ])
@@ -300,7 +360,6 @@ describe('RuntimeKernel', () => {
       now: notBefore,
     })
     expect(due).toEqual([
-      expect.objectContaining({ nextAttemptAt: notBefore }),
       expect.objectContaining({ nextAttemptAt: notBefore }),
     ])
   })

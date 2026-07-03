@@ -6,6 +6,7 @@ export type {
   StaticCallSourceMatch,
   StaticCallValue,
   StaticFunctionCallValue,
+  StaticFunctionParameterBinding,
   StaticFunctionValue,
   StaticIdentifierValue,
   StaticLiteralValue,

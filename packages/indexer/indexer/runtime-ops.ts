@@ -19,9 +19,11 @@ import type {
   RuntimeInspectOperationResult,
   RuntimeOperationOptions,
   RuntimeOperationResult,
+  RuntimePreflightMissingTarget,
   RuntimeSetupOperationResult,
   RuntimeStatusCount,
 } from './runtime-ops-types'
+import type { RuntimeArtifactManifest } from '@use-crux/core/runtime'
 
 export type {
   RuntimeCancelOperationResult,
@@ -55,6 +57,8 @@ export async function runRuntimeOperation(
       return setupResult('setup-check', await setupPort(runtimeDefinition).check())
     case 'setup-apply':
       return setupResult('setup-apply', await setupPort(runtimeDefinition).apply())
+    case 'preflight':
+      return await preflightRuntime(options.root, runtimeDefinition)
     case 'status':
       return await withRuntime(options.root, runtimeDefinition, false, async (runtime) => {
         const base = {
@@ -173,30 +177,66 @@ async function importGeneratedTargetModules(root: string): Promise<void> {
 }
 
 async function statusCounts(runtime: ResolvedRuntimeEngine): Promise<readonly RuntimeStatusCount[]> {
-  const counts = new Map<string, RuntimeStatusCount>()
-  for (const status of WORK_STATUSES) {
-    const rows = await runtime.store.state.listWork({
-      namespace: runtime.namespace,
-      status,
-      limit: 1_000,
-    })
-    for (const work of rows) {
-      const key = `${work.status}:${work.namespace}:${work.targetId}`
-      const previous = counts.get(key)
-      counts.set(key, {
-        status: work.status,
-        namespace: work.namespace,
-        targetId: work.targetId,
-        count: (previous?.count ?? 0) + 1,
-      })
-    }
-  }
-  return [...counts.values()].sort(
+  return [...await runtime.store.state.countWork({ namespace: runtime.namespace })].sort(
     (a, b) =>
       codepointCompare(a.namespace, b.namespace) ||
       codepointCompare(a.status, b.status) ||
       codepointCompare(a.targetId, b.targetId),
   )
+}
+
+async function preflightRuntime(
+  root: string,
+  runtimeDefinition: RuntimeEngineDefinition,
+): Promise<RuntimeOperationResult> {
+  const setup = await setupPort(runtimeDefinition).check()
+  if (!setup.ok) {
+    return {
+      operation: 'preflight',
+      ok: false,
+      setup,
+      missingTargets: [],
+    }
+  }
+  return await withRuntime(root, runtimeDefinition, false, async (runtime) => {
+    const manifest = await readRuntimeArtifactManifest(root)
+    const counts = await statusCounts(runtime)
+    const missingTargets = missingRuntimeTargets(manifest, counts)
+    return {
+      operation: 'preflight',
+      ok: missingTargets.length === 0,
+      namespace: runtime.namespace,
+      setup,
+      missingTargets,
+    }
+  })
+}
+
+async function readRuntimeArtifactManifest(root: string): Promise<RuntimeArtifactManifest> {
+  return JSON.parse(
+    await readFile(join(root, '.crux/generated/runtime/manifest.json'), 'utf8'),
+  ) as RuntimeArtifactManifest
+}
+
+function missingRuntimeTargets(
+  manifest: RuntimeArtifactManifest,
+  counts: readonly RuntimeStatusCount[],
+): readonly RuntimePreflightMissingTarget[] {
+  const known = new Set(manifest.targets.map((target) => target.name))
+  const missing = new Map<string, number>()
+  for (const count of counts) {
+    if (isTerminalRuntimeStatus(count.status) || known.has(count.targetId)) {
+      continue
+    }
+    missing.set(count.targetId, (missing.get(count.targetId) ?? 0) + count.count)
+  }
+  return [...missing]
+    .map(([targetId, count]) => ({ targetId, count }))
+    .sort((a, b) => codepointCompare(a.targetId, b.targetId))
+}
+
+function isTerminalRuntimeStatus(status: RuntimeStatusCount['status']): boolean {
+  return status === 'completed' || status === 'cancelled' || status === 'blocked' || status === 'dead-letter'
 }
 
 async function statusDetails(runtime: ResolvedRuntimeEngine) {

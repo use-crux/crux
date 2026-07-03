@@ -549,6 +549,34 @@ describe('runtime-backed flows', () => {
     crux.dispose()
   })
 
+  it('replays a delivered runtime null payload instead of suspending again', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const reviewFlow = flow('runtime-null-signal-payload', async (scope) => {
+      return await scope.suspend<null>('approval')
+    })
+
+    const suspended = await reviewFlow.run()
+    await reviewFlow.signal(suspended.flowId, 'approval', null, { resume: false })
+    await expect(reviewFlow.resume(suspended.flowId)).resolves.toMatchObject({
+      status: 'completed',
+      output: null,
+    })
+
+    await expect(
+      runtime.store.state.getSnapshot(suspended.flowId as FlowId, {
+        namespace: 'tenant-a',
+      }),
+    ).resolves.toMatchObject({
+      status: 'completed',
+    })
+
+    crux.dispose()
+  })
+
   it('blocks runtime work when replay fingerprint diverges before a cached step', async () => {
     const runtime = node({
       namespace: 'tenant-a',

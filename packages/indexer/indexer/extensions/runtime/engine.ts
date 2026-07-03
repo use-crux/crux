@@ -162,6 +162,9 @@ export interface StaticExtractionProjectionInput {
 export interface ExtensionRuleInput {
   readonly definitions: readonly ProjectDefinition[]
   readonly relations: readonly ProjectRelation[]
+  readonly runtime?: {
+    readonly configured?: boolean
+  }
   readonly availableFacts?: readonly IndexFactKind[]
   readonly semantic?: SemanticReadModel
 }

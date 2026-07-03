@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterRuntimeWork } from './runtime-format'
+import { filterRuntimeWork, runtimeCountLabel, runtimeCountsByStatus } from './runtime-format'
 import type { RuntimeWorkRow } from '../types'
 
 describe('runtime view filtering', () => {
@@ -17,6 +17,18 @@ describe('runtime view filtering', () => {
         targetId: 'embed',
       }).map((row) => row.workId),
     ).toEqual(['work_c'])
+  })
+
+  it('rolls up status counts from server buckets and preserves truncation markers', () => {
+    const counts = runtimeCountsByStatus([
+      { namespace: 'local', status: 'pending', targetId: 'review', count: 2000, truncated: true },
+      { namespace: 'local', status: 'pending', targetId: 'embed', count: 3 },
+      { namespace: 'local', status: 'blocked', targetId: 'review', count: 1 },
+    ])
+
+    expect(runtimeCountLabel(counts.get('pending'))).toBe('2003+')
+    expect(runtimeCountLabel(counts.get('blocked'))).toBe('1')
+    expect(runtimeCountLabel(counts.get('completed'))).toBe('0')
   })
 })
 

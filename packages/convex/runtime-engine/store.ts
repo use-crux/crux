@@ -77,6 +77,7 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
         ...query,
         updatedBefore: query.updatedBefore?.getTime(),
       })).map(decodeWork),
+    countWork: (query) => run(refs.state.countWork, { ...query }),
     setWorkPending: async (workId, pending) => {
       const result = await run<unknown>(refs.state.setWorkPending, {
         workId,

@@ -69,7 +69,12 @@ describe('index lint rule registry', () => {
 
     expect(coverage.requiredEvidence).toEqual(['positive', 'negative'])
     expect(coverage.policyFixture).toBe('index-lint-native-policy-parity.test.ts')
-    expect(coverage.rules.map((rule) => rule.ruleId)).toEqual(indexLintRuleIds)
+    const coveredRuleIds = coverage.rules.map((rule) => rule.ruleId)
+    const typeScriptOnlyRuleIds = (coverage.typeScriptOnlyRules ?? []).map((rule) => rule.ruleId)
+
+    expect([...coveredRuleIds, ...typeScriptOnlyRuleIds].sort()).toEqual([...indexLintRuleIds].sort())
+    expect(typeScriptOnlyRuleIds).toEqual(['runtime.missing_runtime_config'])
+    expect(coverage.typeScriptOnlyRules?.[0]?.reason).toContain('crux.config.ts')
 
     for (const rule of coverage.rules) {
       expect(rule.positiveFixture, `${rule.ruleId} positive fixture`).toMatch(

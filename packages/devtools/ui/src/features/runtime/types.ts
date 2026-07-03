@@ -15,6 +15,7 @@ export interface RuntimeStatusCount {
   readonly namespace: string
   readonly targetId: string
   readonly count: number
+  readonly truncated?: boolean
 }
 
 export interface RuntimeLastError {

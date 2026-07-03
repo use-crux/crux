@@ -65,6 +65,25 @@ describe('first-party Phase 7 flow native fixtures', () => {
     },
     30_000,
   )
+
+  itWithRustOxc(
+    'emits exact native shorthand receiver flow runtime facts from Rust/Oxc records',
+    async () => {
+      const source = [
+        "export const reviewFlow = flow('review', async ({ ctx }) => {",
+        "  await ctx.waitFor('approval')",
+        '})',
+      ].join('\n')
+      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
+        source,
+        callNames: ['flow'],
+      })
+
+      expect(nativeFactCount(record, 'flow')).toBe(1)
+      expectNativeExtractionParity(nativeOut, fallbackOut)
+    },
+    30_000,
+  )
 })
 
 /** Counts native fact packets that replace one bundled first-party extractor. */

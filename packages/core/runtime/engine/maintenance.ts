@@ -54,6 +54,11 @@ export async function maintenanceTick(
     now,
     limit: options.waiterLimit,
   })
+  const pendingRequeued = await requeueOrphanedPendingWork(deps, {
+    namespace: options.namespace,
+    now,
+    limit: options.workLimit,
+  })
 
   return {
     outboxDelivered: outbox.delivered,
@@ -62,6 +67,7 @@ export async function maintenanceTick(
     timersSkipped: timers.skipped,
     leasesReclaimed,
     waitersExpired,
+    pendingRequeued,
     retainedRecordsRemoved: 0,
   }
 }
@@ -108,6 +114,60 @@ async function reclaimLeasedWork(
     const pending = transition(current, { status: 'pending' })
     await tx.state.putWork(pending)
     await tx.outbox.put(wakeEnvelopeForWork(pending))
+    return true
+  })
+}
+
+async function requeueOrphanedPendingWork(
+  deps: Pick<KernelMaintenanceDeps, 'store'>,
+  options: {
+    readonly namespace?: string
+    readonly now: Date
+    readonly limit?: number
+  },
+): Promise<number> {
+  if (!options.namespace) return 0
+  const pending = await deps.store.state.listWork({
+    namespace: options.namespace,
+    status: 'pending',
+    updatedBefore: options.now,
+    limit: options.limit,
+  })
+  let requeued = 0
+  for (const work of pending) {
+    if (work.notBefore && work.notBefore.getTime() > options.now.getTime()) {
+      continue
+    }
+    if (await requeuePendingWorkIfStillOrphaned(deps.store, work)) {
+      requeued += 1
+    }
+  }
+  return requeued
+}
+
+async function requeuePendingWorkIfStillOrphaned(
+  store: RuntimeStoreAdapter,
+  work: WorkItem,
+): Promise<boolean> {
+  return await store.transact(async (tx) => {
+    const current = await tx.state.getWork(work.workId, {
+      namespace: work.namespace,
+    })
+    if (!current || current.status !== 'pending') return false
+    const before = await tx.outbox.list({
+      namespace: current.namespace,
+      state: 'pending',
+      limit: 1_000,
+    })
+    const hasPendingWake = before.some(
+      (item) =>
+        item.envelope.workId === current.workId &&
+        item.envelope.idempotencyKey === current.idempotencyKey,
+    )
+    if (hasPendingWake) return false
+    await tx.outbox.put(wakeEnvelopeForWork(current), {
+      deliverAt: current.notBefore ?? current.updatedAt,
+    })
     return true
   })
 }

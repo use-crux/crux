@@ -489,6 +489,7 @@ function createInitialCompilerInput(input: {
       root: input.root,
       ...(input.input.projectName ? { name: input.input.projectName } : {}),
       ...(input.loaded.configFile ? { configFile: input.loaded.configFile } : {}),
+      ...runtimeProjectIdentity(input.loaded),
     },
     facts: {
       prompts: index.prompts,
@@ -526,6 +527,7 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
     extensionRuntime: input.extensionRuntime,
     definitions: merged.definitions,
     relations: merged.relations,
+    runtime: runtimeLintContext(loaded),
   })
   const ruleDescriptors = compilerRuleDescriptors(input.extensionRuntime)
   const lintPolicy = applyCompilerLintPolicy({
@@ -620,21 +622,34 @@ function runCompilerIndexRules(input: {
   readonly extensionRuntime: ExtensionRuntime
   readonly definitions: readonly ProjectDefinition[]
   readonly relations: readonly ProjectRelation[]
+  readonly runtime?: { readonly configured?: boolean }
 }) {
   const extensionRules = input.extensionRuntime.checkRules({
     definitions: input.definitions,
     relations: input.relations,
+    ...(input.runtime ? { runtime: input.runtime } : {}),
   })
   return {
     outputs: [
       ...indexLintFindings({
         definitions: input.definitions,
         relations: input.relations,
+        ...(input.runtime ? { runtime: input.runtime } : {}),
       }),
       ...extensionRules.outputs,
     ],
     diagnostics: extensionRules.diagnostics,
   }
+}
+
+function runtimeLintContext(loaded: LoadedProjectConfig): { readonly configured: boolean } | undefined {
+  if (loaded.importFailed) return undefined
+  return { configured: Boolean(loaded.crux?.config.runtime) }
+}
+
+function runtimeProjectIdentity(loaded: LoadedProjectConfig): Pick<ProjectIdentity, 'runtimeConfigured'> {
+  if (loaded.importFailed) return {}
+  return { runtimeConfigured: Boolean(loaded.crux?.config.runtime) }
 }
 
 function applyCompilerLintPolicy(input: {

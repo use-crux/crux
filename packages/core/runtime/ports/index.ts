@@ -37,11 +37,13 @@ export type {
 export type {
   FlowSnapshot,
   IdempotencyRecord,
+  CountWorkOptions,
   MarkSnapshotDeliveredOptions,
   NewWorkItem,
   RuntimeDeliveredSuspend,
   RuntimePendingSuspend,
   SetWorkPendingOptions,
+  WorkStatusCount,
   RuntimeStatePort,
   RuntimeStateReadOptions,
 } from './state'

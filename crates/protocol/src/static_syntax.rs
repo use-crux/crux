@@ -222,6 +222,10 @@ pub enum StaticSyntaxValue {
         expressions: Vec<StaticSyntaxValue>,
     },
     Function {
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        parameter_names: Vec<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        first_parameter_bindings: Vec<StaticFunctionParameterBinding>,
         calls: Vec<StaticFunctionCallValue>,
         returns: Vec<StaticSyntaxValue>,
         local_initializers: Vec<StaticInitializerRecord>,
@@ -233,6 +237,14 @@ pub enum StaticSyntaxValue {
         syntax_kind: String,
         source: SourceLocation,
     },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticFunctionParameterBinding {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub property_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

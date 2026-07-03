@@ -270,6 +270,35 @@ export function registerStoreCoordinationTests<
       ])
       await store.outbox.confirm(outbox.outboxId)
 
+      const dedupeEnvelope = makeConformanceWakeEnvelope(
+        makeConformanceWorkItem({
+          workId: 'work_dedupe_1' as WorkId,
+          idempotencyKey: 'task:work_dedupe_1',
+        }),
+      )
+      const firstDedupe = await store.outbox.put(dedupeEnvelope, {
+        deliverAt: dueAt,
+      })
+      await expect(
+        store.outbox.put(dedupeEnvelope, { deliverAt: dueAt }),
+      ).resolves.toMatchObject({ outboxId: firstDedupe.outboxId })
+      await expect(
+        store.outbox.claimPending({ namespace: 'tenant-a', now: dueAt, limit: 1 }),
+      ).resolves.toEqual([
+        expect.objectContaining({ outboxId: firstDedupe.outboxId }),
+      ])
+      const requeuedWhileDispatched = await store.outbox.put(dedupeEnvelope, {
+        deliverAt: dueAt,
+      })
+      expect(requeuedWhileDispatched.outboxId).not.toBe(firstDedupe.outboxId)
+      await store.outbox.confirm(firstDedupe.outboxId)
+      await expect(
+        store.outbox.claimPending({ namespace: 'tenant-a', now: dueAt, limit: 2 }),
+      ).resolves.toEqual([
+        expect.objectContaining({ outboxId: requeuedWhileDispatched.outboxId }),
+      ])
+      await store.outbox.confirm(requeuedWhileDispatched.outboxId)
+
       options.failAfterWrites(store, 1)
       await expect(
         store.transact(async (tx) => {

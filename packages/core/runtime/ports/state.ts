@@ -166,6 +166,26 @@ export interface ListWorkOptions {
   readonly limit?: number
 }
 
+/** Grouped work-count query used by operator status surfaces. */
+export interface CountWorkOptions {
+  /** Runtime namespace to count within. */
+  readonly namespace: string
+}
+
+/** Count of work rows grouped by status and target. */
+export interface WorkStatusCount {
+  /** Runtime namespace for this count bucket. */
+  readonly namespace: string
+  /** Work status for this count bucket. */
+  readonly status: WorkStatus
+  /** Runtime target id for this count bucket. */
+  readonly targetId: RuntimeTargetId
+  /** Number of rows in this bucket. */
+  readonly count: number
+  /** True when an adapter hit a bounded-read cap before proving the exact count. */
+  readonly truncated?: boolean
+}
+
 /** Durable state port used by the runtime kernel. */
 export interface RuntimeStatePort {
   /**
@@ -208,6 +228,15 @@ export interface RuntimeStatePort {
    * cancellation legality, retry, and retention policy stay in the kernel.
    */
   listWork(options: ListWorkOptions): Promise<readonly WorkItem[]>
+
+  /**
+   * Count work records for operator/devtools status without sampling rows.
+   *
+   * SQL-style adapters should return exact grouped counts. Bounded platforms may
+   * set `truncated` when they hit a platform read cap before proving the exact
+   * count, so callers never mistake a capped sample for an exact total.
+   */
+  countWork(options: CountWorkOptions): Promise<readonly WorkStatusCount[]>
 
   /**
    * Move an existing suspended work item back to pending.

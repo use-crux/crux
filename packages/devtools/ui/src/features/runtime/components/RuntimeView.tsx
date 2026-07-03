@@ -16,6 +16,8 @@ import {
 import {
   distinctSorted,
   filterRuntimeWork,
+  runtimeCountLabel,
+  runtimeCountsByStatus,
 } from '../lib/runtime-format'
 import {
   RuntimeOutboxTable,
@@ -59,10 +61,8 @@ export function RuntimeView() {
   const namespaces = useMemo(() => distinctSorted(workRows.map((row) => row.namespace)), [workRows])
   const targets = useMemo(() => distinctSorted(workRows.map((row) => row.targetId)), [workRows])
   const counts = useMemo(() => {
-    const byStatus = new Map<string, number>()
-    for (const row of workRows) byStatus.set(row.status, (byStatus.get(row.status) ?? 0) + 1)
-    return byStatus
-  }, [workRows])
+    return runtimeCountsByStatus(status?.counts ?? [])
+  }, [status?.counts])
 
   async function retryWork(workId: string) {
     try {
@@ -118,10 +118,10 @@ export function RuntimeView() {
     >
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-8 py-5">
         <div className="grid gap-3 md:grid-cols-4">
-          <Kpi label="Pending" value={String(counts.get('pending') ?? 0)} />
-          <Kpi label="Suspended" value={String(counts.get('suspended') ?? 0)} />
-          <Kpi label="Blocked" value={String(counts.get('blocked') ?? 0)} />
-          <Kpi label="Dead-letter" value={String(counts.get('dead-letter') ?? 0)} />
+          <Kpi label="Pending" value={runtimeCountLabel(counts.get('pending'))} />
+          <Kpi label="Suspended" value={runtimeCountLabel(counts.get('suspended'))} />
+          <Kpi label="Blocked" value={runtimeCountLabel(counts.get('blocked'))} />
+          <Kpi label="Dead-letter" value={runtimeCountLabel(counts.get('dead-letter'))} />
         </div>
 
         <div className="rounded-[8px]" style={{ border: '1px solid var(--qw-border)', background: 'var(--qw-bg-elev)' }}>

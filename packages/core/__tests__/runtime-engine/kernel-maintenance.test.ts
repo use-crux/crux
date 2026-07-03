@@ -58,6 +58,77 @@ describe('RuntimeKernel maintenance and cancellation composites', () => {
     }
   })
 
+  it('re-enqueues orphaned due pending work that has no pending outbox row', async () => {
+    const store = inMemoryRuntimeStore()
+    const kernel = createRuntimeKernel({
+      store,
+      targets: {},
+      newWorkId: () => 'unused' as WorkId,
+      now: () => new Date('2026-07-02T00:00:00.000Z'),
+    })
+    const work = makeTaskWork({
+      notBefore: new Date('2026-07-02T00:00:10.000Z'),
+      updatedAt: new Date('2026-07-02T00:00:09.000Z'),
+    })
+    await store.state.putWork(work)
+    const dispatched = await store.outbox.put(wakeEnvelopeForWork(work), {
+      deliverAt: new Date('2026-07-02T00:00:10.000Z'),
+    })
+    await store.outbox.claimPending({
+      namespace: 'tenant-a',
+      now: new Date('2026-07-02T00:00:10.000Z'),
+      limit: 1,
+    })
+    await store.outbox.confirm(dispatched.outboxId)
+
+    await expect(
+      kernel.maintenanceTick({
+        namespace: 'tenant-a',
+        now: new Date('2026-07-02T00:00:11.000Z'),
+      }),
+    ).resolves.toMatchObject({ pendingRequeued: 1 })
+    await expect(
+      store.outbox.claimPending({
+        namespace: 'tenant-a',
+        now: new Date('2026-07-02T00:00:11.000Z'),
+        limit: 1,
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        envelope: expect.objectContaining({ workId: 'work_task_1' }),
+        state: 'dispatched',
+      }),
+    ])
+  })
+
+  it('does not re-enqueue future pending work before notBefore passes', async () => {
+    const store = inMemoryRuntimeStore()
+    const kernel = createRuntimeKernel({
+      store,
+      targets: {},
+      newWorkId: () => 'unused' as WorkId,
+    })
+    await store.state.putWork(
+      makeTaskWork({
+        notBefore: new Date('2026-07-02T00:00:10.000Z'),
+        updatedAt: new Date('2026-07-02T00:00:00.000Z'),
+      }),
+    )
+
+    await expect(
+      kernel.maintenanceTick({
+        namespace: 'tenant-a',
+        now: new Date('2026-07-02T00:00:09.999Z'),
+      }),
+    ).resolves.toMatchObject({ pendingRequeued: 0 })
+    await expect(
+      store.outbox.claimPending({
+        namespace: 'tenant-a',
+        now: new Date('2026-07-02T00:00:10.000Z'),
+      }),
+    ).resolves.toEqual([])
+  })
+
   it('expires timed-out waiters when no timer record fired them', async () => {
     const store = inMemoryRuntimeStore()
     const kernel = createRuntimeKernel({

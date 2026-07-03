@@ -71,6 +71,9 @@ export async function handleWake(
   if (!current || isTerminalWork(current)) {
     return { status: 200, outcome: 'stale' }
   }
+  if (current.status === 'leased') {
+    return { status: 409, outcome: 'busy' }
+  }
   if (current.notBefore && current.notBefore.getTime() > deps.now().getTime()) {
     await deps.store.outbox.put(wakeEnvelopeForWork(current), {
       deliverAt: current.notBefore,
@@ -95,7 +98,32 @@ export async function handleWake(
   if (!lease) return { status: 409, outcome: 'busy' }
 
   try {
-    const leased = transition(current, {
+    if (
+      await deps.store.state.hasIdempotencyKey(
+        envelope.ns,
+        envelope.idempotencyKey,
+      )
+    ) {
+      return { status: 200, outcome: 'duplicate' }
+    }
+
+    const fresh = await deps.store.state.getWork(envelope.workId, {
+      namespace: envelope.ns,
+    })
+    if (!fresh || isTerminalWork(fresh)) {
+      return { status: 200, outcome: 'stale' }
+    }
+    if (fresh.status === 'leased') {
+      return { status: 409, outcome: 'busy' }
+    }
+    if (fresh.notBefore && fresh.notBefore.getTime() > deps.now().getTime()) {
+      await deps.store.outbox.put(wakeEnvelopeForWork(fresh), {
+        deliverAt: fresh.notBefore,
+      })
+      return { status: 200, outcome: 'retry-scheduled' }
+    }
+
+    const leased = transition(fresh, {
       status: 'leased',
       leaseToken: lease.token,
     })

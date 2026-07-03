@@ -3,6 +3,8 @@ import { mutation } from '../_generated/server.js'
 import type { MutationCtx } from '../_generated/server.js'
 import { limitRows, randomId } from './shared'
 
+const TIMER_STATES = ['scheduled', 'fired', 'cancelled'] as const
+
 export const put = mutation({
   args: { timer: v.any() },
   returns: v.any(),
@@ -41,14 +43,20 @@ export const list = mutation({
   args: { namespace: v.string(), state: v.optional(v.string()), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, { namespace, state, limit }) => {
-    const rows =
-      state === undefined
-        ? await ctx.db.query('runtimeTimers').collect()
-        : await ctx.db
+    const states = state === undefined ? TIMER_STATES : [state]
+    const rows = (
+      await Promise.all(
+        states.map((rowState) =>
+          ctx.db
             .query('runtimeTimers')
-            .withIndex('by_namespace_state_fire', (q) => q.eq('namespace', namespace).eq('state', state))
-            .collect()
-    return limitRows(rows.filter((row) => row.namespace === namespace), limit)
+            .withIndex('by_namespace_state_fire', (q) =>
+              q.eq('namespace', namespace).eq('state', rowState),
+            )
+            .take(limit ?? 1_000),
+        ),
+      )
+    ).flat()
+    return limitRows(rows, limit)
   },
 })
 

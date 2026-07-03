@@ -155,9 +155,10 @@ func printRuntimeStatusResult(io *output.IO, raw json.RawMessage) error {
 	var result struct {
 		Namespace string `json:"namespace"`
 		Counts    []struct {
-			Status   string `json:"status"`
-			TargetID string `json:"targetId"`
-			Count    int    `json:"count"`
+			Status    string `json:"status"`
+			TargetID  string `json:"targetId"`
+			Count     int    `json:"count"`
+			Truncated bool   `json:"truncated,omitempty"`
 		} `json:"counts"`
 	}
 	if err := json.Unmarshal(raw, &result); err != nil {
@@ -169,9 +170,16 @@ func printRuntimeStatusResult(io *output.IO, raw json.RawMessage) error {
 		return nil
 	}
 	for _, count := range result.Counts {
-		fmt.Fprintf(io.Out, "%-12s %-24s %d\n", count.Status, count.TargetID, count.Count)
+		fmt.Fprintf(io.Out, "%-12s %-24s %s\n", count.Status, count.TargetID, runtimeCountLabel(count.Count, count.Truncated))
 	}
 	return nil
+}
+
+func runtimeCountLabel(count int, truncated bool) string {
+	if truncated {
+		return fmt.Sprintf("%d+", count)
+	}
+	return fmt.Sprintf("%d", count)
 }
 
 func printRuntimeInspectResult(io *output.IO, raw json.RawMessage) error {

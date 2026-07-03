@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { IndexDiagnostic, ProjectDefinition } from '@use-crux/core/project-index'
+import { compileProjectIndex } from '../indexer/compiler'
 import { createStaticExtraction } from '../indexer/static/extraction/engine'
 import { indexLintFindings } from '../indexer/lints/findings'
 import { applyIndexLintSuppressions } from '../indexer/lints/suppressions'
@@ -126,6 +127,123 @@ describe('runtime lint rules', () => {
           'runtime.non_serializable_payload',
         ]),
       )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('does not treat unrelated defer/waitFor helpers as flow runtime APIs', async () => {
+    const root = await mkdtemp(join(process.cwd(), '.tmp-runtime-lints-'))
+    try {
+      const file = join(root, 'flow.ts')
+      await writeFile(
+        file,
+        [
+          "import { flow } from '@use-crux/core/flow'",
+          "import { defer } from 'lodash'",
+          '',
+          "const emitter = { waitFor: async (_name: string) => undefined }",
+          "export const reviewFlow = flow('review', async (scope) => {",
+          '  defer(() => undefined)',
+          "  await emitter.waitFor('approved')",
+          "  await scope.waitFor('approved')",
+          '})',
+        ].join('\n'),
+      )
+
+      const extraction = createStaticExtraction({ root, cache: 'none' })
+      const extracted = await extraction.extractFiles([file])
+      const flowDefinition = extracted.flatMap((item) => item.definitions).find((definition) => definition.kind === 'flow')
+
+      expect(flowDefinition?.metadata?.runtimeUsages).toEqual([
+        expect.objectContaining({ method: 'waitFor' }),
+      ])
+
+      const findings = indexLintFindings({
+        definitions: extracted.flatMap((item) => item.definitions),
+        relations: [],
+        runtime: { configured: false },
+      })
+
+      expect(findings.map((finding) => finding.ruleId)).toContain('runtime.missing_runtime_config')
+      expect(findings.map((finding) => finding.ruleId)).not.toContain('runtime.closure_defer')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('uses loaded project runtime config when compiler-owned lint rules run', async () => {
+    const root = await mkdtemp(join(process.cwd(), '.tmp-runtime-lints-'))
+    try {
+      await writeFile(
+        join(root, 'crux.config.ts'),
+        ["import { config } from '@use-crux/core'", '', 'export default config({})'].join('\n'),
+      )
+      await writeFile(
+        join(root, 'flow.ts'),
+        [
+          "import { flow } from '@use-crux/core/flow'",
+          '',
+          "export const reviewFlow = flow('review', async (scope) => {",
+          "  await scope.waitFor('approved')",
+          '})',
+        ].join('\n'),
+      )
+
+      const result = await compileProjectIndex({ root, mode: 'runtime-rich' })
+
+      expect(result.lintFindings.map((finding) => finding.ruleId)).toContain('runtime.missing_runtime_config')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('uses missing runtime config state when no crux config file exists', async () => {
+    const root = await mkdtemp(join(process.cwd(), '.tmp-runtime-lints-no-config-'))
+    try {
+      await writeFile(
+        join(root, 'flow.ts'),
+        [
+          "import { flow } from '@use-crux/core/flow'",
+          '',
+          "export const reviewFlow = flow('review', async ({ waitFor }) => {",
+          "  await waitFor('approved')",
+          '})',
+        ].join('\n'),
+      )
+
+      const result = await compileProjectIndex({ root })
+
+      expect(result.project.runtimeConfigured).toBe(false)
+      expect(result.lintFindings.map((finding) => finding.ruleId)).toContain('runtime.missing_runtime_config')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('does not report missing runtime config when config loading failed', async () => {
+    const root = await mkdtemp(join(process.cwd(), '.tmp-runtime-lints-bad-config-'))
+    try {
+      await writeFile(
+        join(root, 'crux.config.ts'),
+        ["import { config } from '@use-crux/core'", '', 'export default config({ runtime:'].join('\n'),
+      )
+      await writeFile(
+        join(root, 'flow.ts'),
+        [
+          "import { flow } from '@use-crux/core/flow'",
+          '',
+          "export const reviewFlow = flow('review', async ({ ctx }) => {",
+          "  await ctx.waitFor('approved')",
+          '})',
+        ].join('\n'),
+      )
+
+      const result = await compileProjectIndex({ root, mode: 'runtime-rich' })
+
+      expect(result.project.runtimeConfigured).toBeUndefined()
+      expect(result.diagnostics.length).toBeGreaterThan(0)
+      expect(result.lintFindings.map((finding) => finding.ruleId)).not.toContain('runtime.missing_runtime_config')
     } finally {
       await rm(root, { recursive: true, force: true })
     }

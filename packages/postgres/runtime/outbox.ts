@@ -20,6 +20,19 @@ export function createPostgresOutboxPort(
   return {
     async put(envelope: WakeEnvelope, options = {}): Promise<RuntimeOutboxItem> {
       recordWrite(faults)
+      const deliverAt = options.deliverAt ?? new Date()
+      const existing = await db.query(
+        `SELECT * FROM ${outbox}
+          WHERE namespace = $1
+            AND state = 'pending'
+            AND envelope->>'idempotencyKey' = $2
+            AND next_attempt_at = $3
+          ORDER BY next_attempt_at ASC
+          LIMIT 1`,
+        [envelope.ns, envelope.idempotencyKey, deliverAt],
+      )
+      if (existing.rows[0]) return decodeOutbox(existing.rows[0])
+
       const result = await db.query(
         `INSERT INTO ${outbox}
           (outbox_id, namespace, envelope, state, attempts, next_attempt_at)
@@ -29,7 +42,7 @@ export function createPostgresOutboxPort(
           newRuntimeId('outbox'),
           envelope.ns,
           encodeJson(envelope),
-          options.deliverAt ?? new Date(),
+          deliverAt,
         ],
       )
       return decodeOutbox(result.rows[0])
