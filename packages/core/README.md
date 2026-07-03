@@ -318,13 +318,15 @@ define -> resolve -> adapt -> observe
 | Define  | Author pure TypeScript definitions: prompts, contexts, memory blocks, tools, agents, flows, tests, and settings.                                  |
 | Resolve | Crux validates input, filters conditional blocks, merges tools/settings, applies token budgets, and produces a provider-agnostic resolved prompt. |
 | Adapt   | An adapter maps that resolved prompt to Vercel AI SDK, OpenAI, Anthropic, Google GenAI, Convex Agent, or another runner.                          |
-| Observe | Graph records emit once, then feed subscribers, the diagnostics channel, devtools transport, and telemetry sinks.                                 |
+| Observe | Graph records emit once, are sanitized and validated fail-open, then feed subscribers, the diagnostics channel, devtools transport, and telemetry sinks. |
 
 This separation lets you inspect what the model will see, run the same prompt through multiple providers, and keep quality checks tied to the definitions they protect.
 
 ## Observability Privacy
 
 Generation, streaming, and tool spans emit canonical graph records with latency and throughput metrics such as `gen.duration_ms`, `gen.time_to_first_token_ms`, `gen.output_tokens_per_second`, and `gen.time_per_output_chunk_ms`.
+
+Metric objects may include optional expressions that evaluate to `undefined`. The observability runtime strips `undefined`, `NaN`, and infinite metric values before records reach subscribers, diagnostics-channel consumers, devtools transports, or OTel, so malformed metrics do not interrupt application code.
 
 By default, request and response artifacts include bounded previews for local inspection. Disable payload previews centrally when traces leave a trusted environment:
 

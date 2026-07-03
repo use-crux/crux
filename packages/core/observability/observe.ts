@@ -26,14 +26,15 @@ import {
   createCruxTraceId,
 } from './ids'
 import { normalizeObservedError, observedErrorSummary } from './errors'
-import { CruxGraphRecordSchema } from './schema'
 import { applyConfiguredObservabilityCapturePolicy } from './capture-policy'
+import { sanitizeRecord } from './sanitize'
 import {
   observabilitySubscriberErrorCount,
   publishObservabilitySubscribers,
   resetObservabilitySubscribers,
 } from './subscribers'
 import type { CruxObservabilityTransport } from './transport'
+import { validateRecordForEmission } from './validate-record'
 
 export { subscribeObservability, type CruxObservabilitySubscriber } from './subscribers'
 export { hasObservabilitySubscribers } from './subscribers'
@@ -55,6 +56,7 @@ export interface ConfigureObservabilityOptions {
 export interface ObservabilityDiagnostics {
   readonly pendingDeliveries: number
   readonly droppedRecords: number
+  readonly invalidRecords: number
   readonly deliveryErrors: readonly unknown[]
   readonly subscriberErrors: number
 }
@@ -173,7 +175,9 @@ const deliveryErrors: unknown[] = []
 const queuedRecords: CruxGraphRecord[] = []
 let dispatchScheduled = false
 let droppedRecords = 0
+let invalidRecords = 0
 let deliveryFailureCount = 0
+let warnedAboutInvalidRecord = false
 const microtaskFallback = Promise.resolve()
 
 const terminalSpanStatuses = new Set<Exclude<CruxSpanStatus, 'running'>>([
@@ -228,16 +232,44 @@ function durationSince(startedAtMs: number): number {
 }
 
 function emit(record: CruxGraphRecord): void {
-  CruxGraphRecordSchema.parse(record)
-  publishObservabilitySubscribers(record)
-  publishObservabilityChannel(record)
+  let validated: ReturnType<typeof validateRecordForEmission>
+  try {
+    validated = validateRecordForEmission(sanitizeRecord(record))
+  } catch (error) {
+    recordInvalidRecord(['Record validation threw unexpectedly', String(error)])
+    return
+  }
+  if (!validated.ok) {
+    recordInvalidRecord(validated.issues)
+    return
+  }
+
+  publishObservabilitySubscribers(validated.record)
+  publishObservabilityChannel(validated.record)
   if (!activeTransport) return
-  queuedRecords.push(record)
+  queuedRecords.push(validated.record)
   if (pendingDeliveries.size === 0) {
     dispatchQueuedRecords()
   } else if (pendingDeliveries.size < deliveryOptions.maxPendingDeliveries) {
     scheduleDispatch()
   }
+}
+
+function recordInvalidRecord(issues: readonly string[]): void {
+  invalidRecords += 1
+  if (warnedAboutInvalidRecord) return
+  if (!shouldWarnAboutInvalidRecords()) return
+
+  warnedAboutInvalidRecord = true
+  console.warn('[crux] invalid observability record dropped; continuing without interrupting execution.', issues)
+}
+
+function shouldWarnAboutInvalidRecords(): boolean {
+  const runtime = globalThis as typeof globalThis & {
+    process?: { env?: Readonly<Record<string, string | undefined>> }
+  }
+  const nodeEnv = runtime.process?.env?.NODE_ENV
+  return nodeEnv !== 'production' && nodeEnv !== 'test'
 }
 
 function scheduleDispatch(): void {
@@ -439,7 +471,9 @@ export function resetObservabilityRuntime(): void {
   pendingDeliveries.clear()
   deliveryErrors.length = 0
   droppedRecords = 0
+  invalidRecords = 0
   deliveryFailureCount = 0
+  warnedAboutInvalidRecord = false
 }
 
 export function observabilityDeliveryErrors(): readonly unknown[] {
@@ -450,6 +484,7 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
   return {
     pendingDeliveries: pendingDeliveries.size,
     droppedRecords,
+    invalidRecords,
     deliveryErrors,
     subscriberErrors: observabilitySubscriberErrorCount(),
   }

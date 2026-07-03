@@ -713,8 +713,10 @@ The plugin system supersedes the previous manual chaining approach. `withDevtool
 
 Detailed tracing uses canonical `@use-crux/core/observability` graph records emitted through
 `observe.*` / `emit()`. Runtime integrations must not introduce ad hoc collectors or reporters at
-primitive call sites. `emit()` is the event spine: records are delivered to in-process subscribers,
-the Node diagnostics channel, and the async devtools transport from the same validated graph record.
+primitive call sites. `emit()` is the event spine: records are sanitized, validated fail-open,
+coerced when the contract defines a safe fallback, and then delivered to in-process subscribers,
+the Node diagnostics channel, and the async devtools transport from the same graph record. Invalid
+records are dropped with diagnostics instead of throwing into user code.
 Generation and streaming spans also carry `gen.*` performance metrics on terminal span records, and
 `observability.recordInputs` / `observability.recordOutputs` controls whether input/output artifacts
 carry previews or only reference metadata.

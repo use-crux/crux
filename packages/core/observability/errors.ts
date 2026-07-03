@@ -127,7 +127,7 @@ function errorToRawRecord(error: Error): Record<string, unknown> {
   const customFields = error as Error & Record<string, unknown>
   const raw: Record<string, unknown> = {
     name: error.name,
-    message: error.message,
+    message: errorMessage(error),
   }
   if (error.stack) raw.stack = error.stack
   if (error.cause !== undefined) raw.cause = toSafeJsonValue(error.cause)
@@ -185,7 +185,7 @@ function errorObjectToSafeJsonValue(
   const customFields = error as Error & Record<string, unknown>
   const result: Record<string, unknown> = {
     name: error.name,
-    message: error.message,
+    message: errorMessage(error),
   }
   if (error.stack) result.stack = truncateString(error.stack, options.maxStringLength)
   if (error.cause !== undefined) {

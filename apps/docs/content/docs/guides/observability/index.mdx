@@ -24,7 +24,7 @@ Without observability:
 - You don't know which prompt, flow, or model is driving spend
 - You can't reproduce a bad output because you don't have the inputs
 
-With observability, every interesting moment in the pipeline emits one graph record. Subscribers, the diagnostics channel, plugins, and devtools can consume that same record without each call site firing separate events.
+With observability, every interesting moment in the pipeline emits one graph record. The runtime sanitizes and validates records before fan-out, so subscribers, the diagnostics channel, plugins, and devtools consume the same JSON-safe record without each call site firing separate events.
 
 ## When should I use which?
 

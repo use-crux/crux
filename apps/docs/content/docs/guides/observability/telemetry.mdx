@@ -140,7 +140,9 @@ events, deliberately configured destinations.
 Payload capture is configured centrally with
 `config({ observability: { recordInputs, recordOutputs } })`, so devtools,
 subscribers, diagnostics-channel listeners, and OTel all observe the same
-redacted or full graph records.
+redacted or full graph records. The same central emit path also converts
+JSON-hostile values and strips invalid optional metrics before records reach
+those consumers.
 
 ## Next steps
 

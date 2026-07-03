@@ -686,6 +686,15 @@ export interface CruxTokenMetrics {
 }
 
 export type CruxAttributes = Record<string, unknown>
+
+/**
+ * Numeric measurements attached to terminal run/span records.
+ *
+ * Metric values may be `undefined` at the TypeScript boundary so callers can
+ * pass natural optional expressions such as `{ inputTokens: usage?.input }`.
+ * The emit pipeline strips `undefined`, `NaN`, and infinite values before a
+ * record reaches subscribers, diagnostics channels, or transports.
+ */
 export type CruxMetrics = CruxTokenMetrics & Record<string, number | undefined>
 
 export interface CruxGenerationCallAttributes {
