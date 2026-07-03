@@ -37,6 +37,7 @@ func (s *Service) Ingest(ctx context.Context, batch Batch) (err error) {
 		if err := ValidateRecord(record); err != nil {
 			return fmt.Errorf("validate observability record %q: %w", record.RecordID, err)
 		}
+		record = s.applyRetentionIngestPolicy(record)
 		if !isKnownRecordType(record.Type) {
 			s.unknownRecordTypes.Add(1)
 		}

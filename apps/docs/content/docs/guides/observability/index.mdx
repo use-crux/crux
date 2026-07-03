@@ -26,6 +26,8 @@ Without observability:
 
 With observability, every interesting moment in the pipeline emits one graph record. The runtime sanitizes and validates records before fan-out, so subscribers, the diagnostics channel, plugins, and devtools consume the same JSON-safe record without each call site firing separate events.
 
+Crux Local keeps that history bounded. The Go server reconciles abandoned running traces from cheap rollup columns, uses recent `last_activity_at` updates such as streaming `token.chunk` records to avoid false stale states, and persists reconciled lifecycle state so crashed runs are not rebuilt on every tick. Local retention defaults to 14 days, 2000 runs, and 256KB artifact previews; override those with `CRUX_OBSERVABILITY_RETENTION_DAYS`, `CRUX_OBSERVABILITY_RETENTION_RUNS`, and `CRUX_OBSERVABILITY_PREVIEW_MAX_BYTES`.
+
 ## When should I use which?
 
 - **Always:** install devtools in dev. It's zero-cost when disabled.

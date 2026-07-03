@@ -55,6 +55,7 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
 			'', '', '',`+countProjection+`,
+			ifnull(r.last_activity_at, ''),
 			r.attributes_json, r.metrics_json, r.error_json
 		FROM runs r
 		WHERE r.run_id = ?
@@ -82,6 +83,7 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 		&run.inputTokens,
 		&run.outputTokens,
 		&run.costUSD,
+		&run.lastActivityAt,
 		&attributes,
 		&metrics,
 		&errorJSON,
@@ -112,7 +114,8 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 			'', '', '',
 			r.record_count, r.span_count, r.event_count, r.artifact_count, r.edge_count,
 			r.total_input_tokens, r.total_output_tokens, r.total_cost_usd,
-				r.attributes_json, r.metrics_json, r.error_json
+			ifnull(r.last_activity_at, ''),
+			r.attributes_json, r.metrics_json, r.error_json
 			FROM runs r`
 	args := []any{}
 	if opts.SessionID != "" {
@@ -155,6 +158,7 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 			&run.inputTokens,
 			&run.outputTokens,
 			&run.costUSD,
+			&run.lastActivityAt,
 			&attributes,
 			&metrics,
 			&errorJSON,
@@ -236,12 +240,6 @@ func (s *Service) DeleteRuns(ctx context.Context, ids []string) ([]string, error
 		return nil, fmt.Errorf("commit observability run delete: %w", err)
 	}
 	committed = true
-
-	s.lifecycleMu.Lock()
-	for _, runID := range deleted {
-		delete(s.lifecycleSignatures, runID)
-	}
-	s.lifecycleMu.Unlock()
 
 	payload, _ := json.Marshal(map[string]any{"runIds": deleted})
 	s.events.Publish(Event{

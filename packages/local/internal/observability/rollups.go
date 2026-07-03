@@ -131,11 +131,13 @@ func updateRunRollups(ctx context.Context, statements *ingestStatements, delta r
 				WHEN last_activity_at IS NULL OR last_activity_at < ? THEN ?
 				ELSE last_activity_at
 			END,
-			lifecycle_status = NULL
+			lifecycle_status = CASE WHEN ? > 0 THEN NULL ELSE lifecycle_status END,
+			lifecycle_checked_at = CASE WHEN ? > 0 THEN NULL ELSE lifecycle_checked_at END
 		WHERE run_id = ?
 	`, delta.recordCount, delta.spanCount, delta.eventCount, delta.artifactCount, delta.edgeCount,
 		delta.totalInputTokens, delta.totalOutputTokens, delta.totalCostUSD,
-		delta.lastActivityAt, delta.lastActivityAt, delta.lastActivityAt, delta.runID)
+		delta.lastActivityAt, delta.lastActivityAt, delta.lastActivityAt,
+		delta.recordCount, delta.recordCount, delta.runID)
 	return err
 }
 

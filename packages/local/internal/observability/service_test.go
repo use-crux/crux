@@ -1942,7 +1942,7 @@ func TestServicePublishesLifecycleReconciliationEvents(t *testing.T) {
 	}
 }
 
-func TestServicePublishesLifecycleForCompletedRunWithStaleDescendant(t *testing.T) {
+func TestServiceLifecycleIgnoresCompletedRunWithStaleDescendant(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	service := newTestService(t)
@@ -1963,21 +1963,10 @@ func TestServicePublishesLifecycleForCompletedRunWithStaleDescendant(t *testing.
 	if err := service.PublishLifecycleReconciliations(ctx); err != nil {
 		t.Fatal(err)
 	}
-
 	select {
 	case event := <-events:
-		if event.Kind != "observability.lifecycle" || event.Action != "reconciled" || event.RefID != "run_completed_with_open_child" {
-			t.Fatalf("event = %#v", event)
-		}
-		var payload map[string]any
-		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			t.Fatal(err)
-		}
-		if payload["status"] != "stale" {
-			t.Fatalf("payload = %#v, want stale lifecycle status", payload)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for stale descendant lifecycle reconciliation event")
+		t.Fatalf("completed run produced lifecycle event = %#v", event)
+	default:
 	}
 }
 
@@ -2165,6 +2154,7 @@ func TestServiceErrorsPreserveCauseWithContext(t *testing.T) {
 }
 
 func TestOpenServicePersistsSQLiteDatabase(t *testing.T) {
+	t.Setenv("CRUX_OBSERVABILITY_RETENTION_DAYS", "36500")
 	ctx := context.Background()
 	path := t.TempDir() + "/observability.sqlite"
 

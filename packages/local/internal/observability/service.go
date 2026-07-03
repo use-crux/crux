@@ -41,13 +41,14 @@ type Service struct {
 	mutationTO    time.Duration
 	maintenanceTO time.Duration
 
+	retentionSettings  retentionSettings
+	lifecycleRunDetail func(context.Context, string) (RunDetail, error)
+
 	tokenMu      sync.Mutex
 	tokenPending map[tokenChunkKey]pendingTokenChunk
 	tokenTimer   *time.Timer
 
-	lifecycleMu         sync.Mutex
-	lifecycleSignatures map[string]string
-	unknownRecordTypes  atomic.Int64
+	unknownRecordTypes atomic.Int64
 }
 
 type Event struct {
@@ -64,6 +65,7 @@ type Event struct {
 type lifecycleReconciliation struct {
 	RunID     string
 	Status    string
+	EndedAt   string
 	Reason    string
 	Severity  string
 	Signature string
@@ -107,30 +109,31 @@ func (b *EventBus) Publish(event Event) {
 }
 
 type RunSummary struct {
-	RunID         string          `json:"runId"`
-	TraceID       string          `json:"traceId"`
-	SessionID     string          `json:"sessionId,omitempty"`
-	UserID        string          `json:"userId,omitempty"`
-	Name          string          `json:"name"`
-	RootPrimitive string          `json:"rootPrimitive"`
-	Status        string          `json:"status"`
-	StartedAt     string          `json:"startedAt"`
-	EndedAt       string          `json:"endedAt"`
-	DurationMs    float64         `json:"durationMs"`
-	Model         string          `json:"model"`
-	Provider      string          `json:"provider"`
-	PromptID      string          `json:"promptId"`
-	RecordCount   int             `json:"recordCount"`
-	SpanCount     int             `json:"spanCount"`
-	EventCount    int             `json:"eventCount"`
-	ArtifactCount int             `json:"artifactCount"`
-	EdgeCount     int             `json:"edgeCount"`
-	inputTokens   int             `json:"-"`
-	outputTokens  int             `json:"-"`
-	costUSD       float64         `json:"-"`
-	Attributes    json.RawMessage `json:"attributes,omitempty"`
-	Metrics       json.RawMessage `json:"metrics,omitempty"`
-	Error         json.RawMessage `json:"error,omitempty"`
+	RunID          string          `json:"runId"`
+	TraceID        string          `json:"traceId"`
+	SessionID      string          `json:"sessionId,omitempty"`
+	UserID         string          `json:"userId,omitempty"`
+	Name           string          `json:"name"`
+	RootPrimitive  string          `json:"rootPrimitive"`
+	Status         string          `json:"status"`
+	StartedAt      string          `json:"startedAt"`
+	EndedAt        string          `json:"endedAt"`
+	DurationMs     float64         `json:"durationMs"`
+	Model          string          `json:"model"`
+	Provider       string          `json:"provider"`
+	PromptID       string          `json:"promptId"`
+	RecordCount    int             `json:"recordCount"`
+	SpanCount      int             `json:"spanCount"`
+	EventCount     int             `json:"eventCount"`
+	ArtifactCount  int             `json:"artifactCount"`
+	EdgeCount      int             `json:"edgeCount"`
+	inputTokens    int             `json:"-"`
+	outputTokens   int             `json:"-"`
+	costUSD        float64         `json:"-"`
+	lastActivityAt string          `json:"-"`
+	Attributes     json.RawMessage `json:"attributes,omitempty"`
+	Metrics        json.RawMessage `json:"metrics,omitempty"`
+	Error          json.RawMessage `json:"error,omitempty"`
 }
 
 type RunListOptions struct {
@@ -615,13 +618,14 @@ func NewService(db *sql.DB) (*Service, error) {
 func newService(ctx context.Context, db *sql.DB, maxOpenConns int) (*Service, error) {
 	configureConnectionPool(db, maxOpenConns)
 	service := &Service{
-		db:                  db,
-		events:              NewEventBus(),
-		queryTO:             defaultQueryTimeout,
-		mutationTO:          defaultMutationTimeout,
-		maintenanceTO:       defaultMaintenanceTimeout,
-		lifecycleSignatures: make(map[string]string),
+		db:                db,
+		events:            NewEventBus(),
+		queryTO:           defaultQueryTimeout,
+		mutationTO:        defaultMutationTimeout,
+		maintenanceTO:     defaultMaintenanceTimeout,
+		retentionSettings: retentionSettingsFromEnv(),
 	}
+	service.lifecycleRunDetail = service.RunDetail
 	ctx, cancel := service.maintenanceContext(ctx)
 	defer cancel()
 
@@ -687,7 +691,12 @@ func OpenService(ctx context.Context, path string) (*Service, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("initialize observability service: %w", err)
 	}
+	if _, err := service.runRetention(ctx, service.retentionSettings, time.Now().UTC()); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("run observability retention: %w", err)
+	}
 	service.StartLifecycleReconciler(ctx, time.Second)
+	service.StartRetention(ctx, 30*time.Minute)
 	return service, nil
 }
 
@@ -742,15 +751,15 @@ func (s *Service) PublishLifecycleReconciliations(ctx context.Context) error {
 		return nil
 	}
 
-	s.lifecycleMu.Lock()
-	defer s.lifecycleMu.Unlock()
-
 	now := time.Now().UnixMilli()
 	for _, reconciliation := range reconciliations {
-		if s.lifecycleSignatures[reconciliation.RunID] == reconciliation.Signature {
+		persisted, err := s.persistLifecycleReconciliation(ctx, reconciliation)
+		if err != nil {
+			return err
+		}
+		if !persisted {
 			continue
 		}
-		s.lifecycleSignatures[reconciliation.RunID] = reconciliation.Signature
 		payload, _ := json.Marshal(map[string]any{
 			"runId":  reconciliation.RunID,
 			"status": reconciliation.Status,
@@ -777,7 +786,10 @@ func (s *Service) lifecycleReconciliations(ctx context.Context) ([]lifecycleReco
 	}
 	reconciliations := make([]lifecycleReconciliation, 0)
 	for _, run := range runs {
-		detail, err := s.RunDetail(ctx, run.RunID)
+		if lifecycleActivityIsFresh(run.LastActivityAt, time.Now()) {
+			continue
+		}
+		detail, err := s.lifecycleRunDetail(ctx, run.RunID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				continue
@@ -801,6 +813,7 @@ func (s *Service) lifecycleReconciliations(ctx context.Context) ([]lifecycleReco
 		reconciliations = append(reconciliations, lifecycleReconciliation{
 			RunID:     run.RunID,
 			Status:    status,
+			EndedAt:   endedAt,
 			Reason:    reason,
 			Severity:  severity,
 			Signature: strings.Join([]string{status, endedAt, reason}, "|"),
@@ -810,29 +823,19 @@ func (s *Service) lifecycleReconciliations(ctx context.Context) ([]lifecycleReco
 }
 
 type lifecycleRunSummary struct {
-	RunID   string
-	Status  string
-	EndedAt string
+	RunID          string
+	Status         string
+	EndedAt        string
+	LastActivityAt string
 }
 
 func (s *Service) lifecycleCandidateRuns(ctx context.Context) ([]lifecycleRunSummary, error) {
-	staleCutoff := time.Now().Add(-30 * time.Second).UTC().Format(time.RFC3339Nano)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT run_id, status, ended_at
-		FROM (
-			SELECT run_id, ifnull(status, '') AS status, ifnull(ended_at, '') AS ended_at, ifnull(started_at, '') AS sort_started_at
-			FROM runs
-			WHERE status = 'running' AND (ended_at IS NULL OR ended_at = '')
-			UNION
-			SELECT DISTINCT r.run_id, ifnull(r.status, '') AS status, ifnull(r.ended_at, '') AS ended_at, ifnull(r.started_at, '') AS sort_started_at
-			FROM runs r
-			INNER JOIN spans s ON s.run_id = r.run_id
-			WHERE s.status = 'running'
-				AND (s.ended_at IS NULL OR s.ended_at = '')
-				AND ifnull(s.started_at, '') < ?
-		)
-		ORDER BY sort_started_at DESC, run_id DESC
-	`, staleCutoff)
+		SELECT run_id, ifnull(status, ''), ifnull(ended_at, ''), ifnull(last_activity_at, '')
+		FROM runs
+		WHERE status = 'running' AND lifecycle_status IS NULL
+		ORDER BY coalesce(last_activity_at, started_at, '') DESC, run_id DESC
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -841,12 +844,47 @@ func (s *Service) lifecycleCandidateRuns(ctx context.Context) ([]lifecycleRunSum
 	var runs []lifecycleRunSummary
 	for rows.Next() {
 		var run lifecycleRunSummary
-		if err := rows.Scan(&run.RunID, &run.Status, &run.EndedAt); err != nil {
+		if err := rows.Scan(&run.RunID, &run.Status, &run.EndedAt, &run.LastActivityAt); err != nil {
 			return nil, err
 		}
 		runs = append(runs, run)
 	}
 	return runs, rows.Err()
+}
+
+func (s *Service) persistLifecycleReconciliation(ctx context.Context, reconciliation lifecycleReconciliation) (bool, error) {
+	status := "reconciled-terminal"
+	if reconciliation.Status == "stale" {
+		status = "reconciled-stale"
+	}
+	checkedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE runs
+		SET lifecycle_status = ?, lifecycle_checked_at = ?
+		WHERE run_id = ? AND lifecycle_status IS NULL
+	`, status, checkedAt, reconciliation.RunID)
+	if err != nil {
+		return false, fmt.Errorf("persist lifecycle reconciliation for %q: %w", reconciliation.RunID, err)
+	}
+	updated, err := rowsAffected(result)
+	if err != nil {
+		return false, fmt.Errorf("inspect lifecycle reconciliation update for %q: %w", reconciliation.RunID, err)
+	}
+	if !updated {
+		return false, nil
+	}
+	return true, nil
+}
+
+func lifecycleActivityIsFresh(timestamp string, now time.Time) bool {
+	if timestamp == "" {
+		return false
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, timestamp)
+	if err != nil {
+		return false
+	}
+	return now.Sub(parsed) <= 60*time.Second
 }
 
 func lifecyclePresentationStatus(run lifecycleRunSummary, detail RunDetail) (string, string) {

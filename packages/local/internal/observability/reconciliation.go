@@ -564,7 +564,7 @@ func stalePresentationGraphAt(graph Graph, now time.Time) Graph {
 	graph.Run = stalePresentationRunAt(graph.Run, len(protected) > 0, now)
 	for i := range graph.Spans {
 		_, protect := protected[graph.Spans[i].SpanID]
-		graph.Spans[i] = stalePresentationSpanAt(graph.Spans[i], protect, now)
+		graph.Spans[i] = stalePresentationSpanAt(graph.Spans[i], protect, graph.Run.lastActivityAt, now)
 	}
 	return graph
 }
@@ -574,7 +574,7 @@ func stalePresentationRun(run RunSummary, protectedByDeadline bool) RunSummary {
 }
 
 func stalePresentationRunAt(run RunSummary, protectedByDeadline bool, now time.Time) RunSummary {
-	if !protectedByDeadline && run.Status == "running" && run.EndedAt == "" && isStaleTimestampAt(run.StartedAt, now) {
+	if !protectedByDeadline && run.Status == "running" && run.EndedAt == "" && isStaleTimestampAt(staleTimestampAnchor(run.lastActivityAt, run.StartedAt), now) {
 		run.Status = "stale"
 		run.DurationMs = durationSinceTimestampAt(run.StartedAt, now)
 	}
@@ -582,15 +582,22 @@ func stalePresentationRunAt(run RunSummary, protectedByDeadline bool, now time.T
 }
 
 func stalePresentationSpan(span SpanSummary, protectedByDeadline bool) SpanSummary {
-	return stalePresentationSpanAt(span, protectedByDeadline, time.Now())
+	return stalePresentationSpanAt(span, protectedByDeadline, "", time.Now())
 }
 
-func stalePresentationSpanAt(span SpanSummary, protectedByDeadline bool, now time.Time) SpanSummary {
-	if !protectedByDeadline && span.Status == "running" && span.EndedAt == "" && isStaleTimestampAt(span.StartedAt, now) {
+func stalePresentationSpanAt(span SpanSummary, protectedByDeadline bool, activityAt string, now time.Time) SpanSummary {
+	if !protectedByDeadline && span.Status == "running" && span.EndedAt == "" && isStaleTimestampAt(staleTimestampAnchor(activityAt, span.StartedAt), now) {
 		span.Status = "stale"
 		span.DurationMs = durationSinceTimestampAt(span.StartedAt, now)
 	}
 	return span
+}
+
+func staleTimestampAnchor(activityAt string, startedAt string) string {
+	if activityAt != "" {
+		return activityAt
+	}
+	return startedAt
 }
 
 func spansProtectedByFutureDeadlines(spans []SpanSummary) map[string]struct{} {
