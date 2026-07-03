@@ -47,6 +47,26 @@ func (t *Table[T]) SetIdentity(fn func(T) string) {
 	t.list.SetIdentity(fn)
 }
 
+// SetCursorByIdentity moves the cursor to id when an identity function is set.
+func (t *Table[T]) SetCursorByIdentity(id string) bool {
+	return t.list.SetCursorByIdentity(id)
+}
+
+// Cursor returns the selected row, its index, and whether a row exists.
+func (t *Table[T]) Cursor() (T, int, bool) {
+	return t.list.Cursor()
+}
+
+// CursorUp moves the table cursor one row up.
+func (t *Table[T]) CursorUp() {
+	t.list.CursorUp()
+}
+
+// CursorDown moves the table cursor one row down.
+func (t *Table[T]) CursorDown() {
+	t.list.CursorDown()
+}
+
 // SetHeight sets the total table height including header and divider rows.
 func (t *Table[T]) SetHeight(h int) {
 	t.list.SetHeight(nonNegative(h) - 2)

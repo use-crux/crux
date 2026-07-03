@@ -29,6 +29,7 @@ type DataClient interface {
 	ProjectIndex(ctx context.Context) (api.IndexData, error)
 	ExperimentSummaries(ctx context.Context) ([]api.QualityExperimentSummary, error)
 	ExperimentDetail(ctx context.Context, experimentID string) (api.QualityExperimentDetail, bool, error)
+	EvaluationProgress(ctx context.Context, evaluationID string, limit int) (api.QualityEvaluationProgress, bool, error)
 	PromotedBaselines(ctx context.Context) ([]api.QualityPromotedBaseline, error)
 	CassetteFiles(ctx context.Context) ([]api.QualityCassetteFileRecord, error)
 	ScorerStats(ctx context.Context) ([]api.QualityScorerStats, error)

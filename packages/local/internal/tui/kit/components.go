@@ -164,10 +164,12 @@ func Matrix(rows []VariantMetrics, r Rect, sel int, styles theme.Styles) []strin
 	}
 	table := NewTable[VariantMetrics]([]Col[VariantMetrics]{
 		{Title: "variant", C: Ratio(2, 5), Value: func(v VariantMetrics) string { return variantName(v) }},
-		{Title: "pass", C: Ratio(1, 6), Align: AlignRight, Value: func(v VariantMetrics) string { return fmt.Sprintf("%.0f%%", v.Pass*100) }},
-		{Title: "score", C: Ratio(1, 6), Align: AlignRight, Value: func(v VariantMetrics) string { return fmt.Sprintf("%.2f", v.Score) }},
-		{Title: "tok", C: Ratio(1, 6), Align: AlignRight, Value: func(v VariantMetrics) string { return fmt.Sprintf("%d", v.Tokens) }},
-		{Title: "delta", C: Fill(), Align: AlignRight, Value: func(v VariantMetrics) string { return v.Delta }},
+		{Title: "pass", C: Ratio(1, 8), Align: AlignRight, Value: func(v VariantMetrics) string { return fmt.Sprintf("%.0f%%", v.Pass*100) }},
+		{Title: "score", C: Ratio(1, 8), Align: AlignRight, Value: func(v VariantMetrics) string { return fmt.Sprintf("%.2f", v.Score) }},
+		{Title: "tok", C: Ratio(1, 8), Align: AlignRight, Value: func(v VariantMetrics) string { return fmt.Sprintf("%d", v.Tokens) }},
+		{Title: "lat", C: Ratio(1, 8), Align: AlignRight, Value: func(v VariantMetrics) string { return v.Latency }},
+		{Title: "cost", C: Ratio(1, 8), Align: AlignRight, Value: func(v VariantMetrics) string { return v.Cost }},
+		{Title: "Δpass", C: Fill(), Align: AlignRight, Value: func(v VariantMetrics) string { return v.Delta }},
 	})
 	table.SetItems(rows)
 	table.SetHeight(r.H)
