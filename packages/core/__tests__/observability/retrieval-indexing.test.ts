@@ -6,7 +6,9 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { retrievalPipeline, retrievalStage, retriever } from '../../retrieval'
+import { retriever } from '../../retrieval'
+import { retrievalPipeline } from '../../retrieval/pipeline'
+import { retrievalStage } from '../../retrieval/stage'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 import type { RetrieverHit } from '../../retrieval'
 

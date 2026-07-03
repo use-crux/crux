@@ -36,7 +36,8 @@ export function createRetrieverEntity(args: {
 }): Retriever {
   const retrieve: Retriever['retrieve'] = (queryOrRequest, options) => {
     const request = normalizeRetrieveRequest(queryOrRequest, options)
-    return args.retrieve(request.query, request)
+    const { query, ...retrieveOptions } = request
+    return args.retrieve(query, retrieveOptions)
   }
 
   return Object.freeze({

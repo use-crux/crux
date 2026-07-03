@@ -4,17 +4,12 @@ import type { GenerateObjectFn, GenerateTextFn } from '../../compaction/types'
 import { indexer as makeIndexer, chunker, indexingPipeline } from '../../indexing'
 import { resetRuntime, updateRuntime } from '../../runtime/runtime'
 import { embedding as makeEmbedding } from '../../embedding'
-import {
-  compress,
-  decay,
-  diversify,
-  multiQuery,
-  parentExpand,
-  queryPlanner,
-  retrievalPipeline,
-  retrievalStage,
-  retriever as makeRetriever,
-} from '../../retrieval'
+import { retriever as makeRetriever } from '../../retrieval'
+import { compress, decay, diversify } from '../../retrieval/built-in-stages'
+import { multiQuery, queryPlanner } from '../../retrieval/query-stages'
+import { parentExpand } from '../../retrieval/parent-expand'
+import { retrievalPipeline } from '../../retrieval/pipeline'
+import { retrievalStage } from '../../retrieval/stage'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 import type { RetrieverHit } from '../../retrieval'
 

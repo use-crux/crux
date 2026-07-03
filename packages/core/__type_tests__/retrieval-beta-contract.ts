@@ -8,7 +8,7 @@
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import type { DenseEmbedding } from '../embedding'
-import type { Corpus } from '../indexing'
+import type { Corpus, CorpusSyncResult, CruxDocument, IndexResult } from '../indexing'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../storage'
 import * as retrieval from '../retrieval'
 import {
@@ -54,6 +54,8 @@ expectTypeOf(docs.scope({ namespace: 'tenant-a' })).toMatchTypeOf<Omit<Knowledge
 expectTypeOf(docs.inspect()).toMatchTypeOf<{
   id: string
   namespace: string
+  lifecycle: { status: 'ready'; indexedSources: number; indexedChunks: number }
+  source: { kind: 'corpus' | 'direct' }
 }>()
 
 const metadataSchema = z.object({
@@ -78,6 +80,20 @@ const configuredRetriever = configuredDocs.retriever({
     rank: 1,
   },
 })
+
+const documentInput = [
+  {
+    namespace: 'configured-docs',
+    sourceId: 'guide.md',
+    content: 'Guide body',
+  },
+] satisfies CruxDocument[]
+expectTypeOf(configuredDocs.index(documentInput)).resolves.toMatchTypeOf<IndexResult | CorpusSyncResult>()
+expectTypeOf(configuredDocs.reindex(documentInput)).resolves.toMatchTypeOf<IndexResult | CorpusSyncResult>()
+expectTypeOf(configuredDocs.remove('guide.md')).resolves.toEqualTypeOf<{
+  sourceId: string
+  deletedCount: number
+}>()
 
 expectTypeOf(configuredRetriever).toEqualTypeOf<
   Retriever<{ readonly section?: 'guide' | 'reference' | 'api'; readonly public?: boolean; readonly rank?: number }>

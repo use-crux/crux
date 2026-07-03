@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { embedding as makeEmbedding } from '../../embedding'
 import { chunker, indexer as makeIndexer, indexingPipeline, transform } from '../../indexing'
-import { parentExpand, retrievalPipeline, retriever as makeRetriever } from '../../retrieval'
+import { retriever as makeRetriever } from '../../retrieval'
+import { parentExpand } from '../../retrieval/parent-expand'
+import { retrievalPipeline } from '../../retrieval/pipeline'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 import type { JsonObject, RecordPage, RecordStore } from '../../storage'
 

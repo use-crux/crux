@@ -10,14 +10,22 @@
  */
 
 import type { z } from 'zod'
-import type { Corpus } from '../indexing'
+import type { ChunkingOptions, Corpus, IndexResult, PipelineCacheConfig } from '../indexing'
 import type { DenseEmbedding, SparseEmbedding } from '../embedding'
 import type { RecordStore, Storage, VectorStore } from '../storage'
 import type { Grounding } from '../citations'
 import type { MetadataFilter } from './request'
-import type { RetrievalToolConfig, Retriever, RetrieverHit, RetrieverTools } from './types'
+import type { RetrievalToolConfig, Retriever, RetrieverTools } from './types'
 import { createRetrieverTools } from './tools'
 import { retrievalNotImplemented } from './errors'
+import { createKnowledgeBaseRuntime } from './knowledge-base-runtime'
+import type {
+  KnowledgeBaseIndexInput,
+  KnowledgeBaseLifecycleState,
+  KnowledgeBaseRemoveResult,
+  KnowledgeBaseSource,
+} from './knowledge-base-runtime'
+import type { CorpusSyncResult } from '../indexing'
 
 /** Runtime scoping configuration for a knowledge base handle. */
 export interface KnowledgeBaseScopeConfig {
@@ -31,8 +39,25 @@ export interface KnowledgeBaseInspection {
   id: string
   /** Structural namespace bound to this handle. */
   namespace: string
-  /** Whether lifecycle runtime is wired for this handle. */
-  lifecycle: 'phase-stub' | 'ready'
+  /** Source strategy backing lifecycle operations. */
+  source: {
+    kind: 'corpus' | 'direct'
+  }
+  /** Configured storage ports available to indexing and retrieval. */
+  storage: {
+    records: boolean
+    vectors: boolean
+  }
+  /** Retrieval and lifecycle capabilities inferred from configured primitives. */
+  capabilities: {
+    dense: boolean
+    sparse: boolean
+    hybrid: boolean
+    delete: boolean
+    filter: 'pre' | 'post' | false
+  }
+  /** Current lifecycle status and active index counters. */
+  lifecycle: KnowledgeBaseLifecycleState
 }
 
 /** Configuration for `knowledgeBase()`. */
@@ -54,6 +79,8 @@ export interface KnowledgeBaseRetrieverConfig<TFilter extends import('../storage
 export interface KnowledgeBaseConfig<TMetadataSchema extends z.ZodType<unknown> | undefined = undefined> {
   /** Stable knowledge base id used for indexer, retriever, and trace identity. */
   id: string
+  /** Optional deferred source input used when `index()` is called without arguments. */
+  source?: KnowledgeBaseSource
   /** Corpus managed by the indexing subsystem. */
   corpus?: Corpus
   /** Explicit storage bundle used by indexing and retrieval primitives. */
@@ -66,10 +93,14 @@ export interface KnowledgeBaseConfig<TMetadataSchema extends z.ZodType<unknown> 
   embeddings?: DenseEmbedding
   /** Sparse embedding model used for sparse or hybrid search. */
   sparseEmbeddings?: SparseEmbedding
+  /** Chunking options forwarded to the indexing pipeline. */
+  chunking?: ChunkingOptions
   /** Metadata schema used to type retrieval filters. */
   metadataSchema?: TMetadataSchema
   /** Lifecycle policy for inactive generations and vector retention. */
   lifecycle?: { retention?: 'cleanup' | 'retain-inactive' }
+  /** Indexing pipeline cache policy. */
+  cache?: PipelineCacheConfig
 }
 
 /** Tenant-scoped knowledge base handle. */
@@ -82,11 +113,11 @@ export interface KnowledgeBase<TMetadataSchema extends z.ZodType<unknown> | unde
   /** Structural namespace bound to this handle. */
   readonly namespace: string
   /** Index sources into the current generation. */
-  index(input?: unknown): Promise<unknown>
+  index(input?: KnowledgeBaseIndexInput): Promise<IndexResult | CorpusSyncResult>
   /** Replace the active generation with freshly indexed sources. */
-  reindex(input?: unknown): Promise<unknown>
+  reindex(input?: KnowledgeBaseIndexInput): Promise<IndexResult | CorpusSyncResult>
   /** Remove a source from active retrieval immediately. */
-  remove(sourceId: string): Promise<unknown>
+  remove(sourceId: string): Promise<KnowledgeBaseRemoveResult>
   /** Return a tenant-scoped handle with structural key-level isolation. */
   scope(config: KnowledgeBaseScopeConfig): ScopedKnowledgeBase
   /** Return this knowledge base as a retriever. */
@@ -105,50 +136,58 @@ export interface KnowledgeBase<TMetadataSchema extends z.ZodType<unknown> | unde
 export function knowledgeBase<const TMetadataSchema extends z.ZodType<unknown> | undefined = undefined>(
   config: KnowledgeBaseConfig<TMetadataSchema>,
 ): KnowledgeBase<TMetadataSchema> {
-  const namespace = config.id
-  return createKnowledgeBaseHandle({ ...config, namespace })
+  if (config.corpus && config.corpus.id !== config.id) {
+    throw new Error(`knowledgeBase("${config.id}") requires corpus.id to match the knowledge base id.`)
+  }
+  const namespace = config.corpus?.namespace ?? config.id
+  return createKnowledgeBaseHandle({ ...config, namespace }, true)
 }
 
 function createKnowledgeBaseHandle<const TMetadataSchema extends z.ZodType<unknown> | undefined>(
   config: KnowledgeBaseConfig<TMetadataSchema> & { namespace: string },
+  includeScope: boolean,
 ): KnowledgeBase<TMetadataSchema> {
-  const retriever = createPhaseStubRetriever<KnowledgeBaseFilter<TMetadataSchema>>(config.id, config.namespace)
+  const runtime = createKnowledgeBaseRuntime(config)
 
-  const handle: KnowledgeBase<TMetadataSchema> = {
+  const handle = {
     id: config.id,
     namespace: config.namespace,
-    index: () => retrievalNotImplemented('phase 2', `knowledgeBase("${config.id}").index()`),
-    reindex: () => retrievalNotImplemented('phase 2', `knowledgeBase("${config.id}").reindex()`),
-    remove: () => retrievalNotImplemented('phase 2', `knowledgeBase("${config.id}").remove()`),
+    index: runtime.index,
+    reindex: runtime.reindex,
+    remove: runtime.remove,
     scope: (scopeConfig: KnowledgeBaseScopeConfig) =>
-      createKnowledgeBaseHandle({ ...config, namespace: scopeConfig.namespace }),
-    retriever: () => retriever,
+      createKnowledgeBaseHandle({ ...config, namespace: scopeConfig.namespace }, false),
+    retriever: (retrieverConfig?: KnowledgeBaseRetrieverConfig<KnowledgeBaseFilter<TMetadataSchema>>) =>
+      runtime.retriever(retrieverConfig),
     recipe: () => retrievalNotImplemented('phase 3a', `knowledgeBase("${config.id}").recipe()`),
-    grounding: () => createPhaseStubGrounding(config.id, retriever),
+    grounding: () => createPhaseStubGrounding(config.id, createPhaseStubRetriever(config.id, config.namespace)),
     tools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
       toolConfig?: TConfig,
-    ): RetrieverTools<TConfig> => retriever.asTools(toolConfig),
+    ): RetrieverTools<TConfig> => runtime.retriever().asTools(toolConfig),
     inspect: () => ({
       id: config.id,
       namespace: config.namespace,
-      lifecycle: 'phase-stub',
+      source: { kind: runtime.sourceKind },
+      storage: runtime.storage,
+      capabilities: runtime.capabilities,
+      lifecycle: { ...runtime.lifecycle },
     }),
   }
-  return Object.freeze(handle)
+  if (!includeScope) {
+    delete (handle as Partial<Pick<KnowledgeBase<TMetadataSchema>, 'scope'>>).scope
+  }
+  return Object.freeze(handle) as KnowledgeBase<TMetadataSchema>
 }
 
-function createPhaseStubRetriever<TFilter extends import('../storage').ExactFilter>(
-  id: string,
-  namespace: string,
-): Retriever<TFilter> {
-  const retrieve = () => retrievalNotImplemented('phase 2', `knowledgeBase("${id}").retriever().retrieve()`)
+function createPhaseStubRetriever(id: string, namespace: string): Retriever {
+  const retrieve = () => retrievalNotImplemented('phase 4', `knowledgeBase("${id}").grounding().retriever.retrieve()`)
   return Object.freeze({
     _tag: 'Retriever' as const,
     id,
     namespace,
     mode: 'custom' as const,
     retrieve,
-    asContext: () => retrievalNotImplemented('phase 4', `knowledgeBase("${id}").retriever().asContext()`),
+    asContext: () => retrievalNotImplemented('phase 4', `knowledgeBase("${id}").grounding().retriever.asContext()`),
     asTools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
       toolConfig?: TConfig,
     ): RetrieverTools<TConfig> =>
@@ -158,7 +197,7 @@ function createPhaseStubRetriever<TFilter extends import('../storage').ExactFilt
         retrieve,
         config: toolConfig,
       }) as RetrieverTools<TConfig>,
-    inject: () => retrievalNotImplemented('phase 4', `knowledgeBase("${id}").retriever().inject()`),
+    inject: () => retrievalNotImplemented('phase 4', `knowledgeBase("${id}").grounding().retriever.inject()`),
   })
 }
 
