@@ -14,6 +14,7 @@ import {
   setObservabilityTransport,
   subscribeObservability,
 } from '../../observability'
+import { chaosTransport } from './helpers/chaos-transport'
 
 describe('observe runtime', () => {
   afterEach(() => {
@@ -586,6 +587,25 @@ describe('observe runtime', () => {
     expect(observabilityDiagnostics().deliveryErrors).toHaveLength(1)
   })
 
+  it('contains synchronous transport throws and keeps the failed batch queued', async () => {
+    const chaos = chaosTransport('sync-throw')
+    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1 })
+
+    await expect(observe.run({ name: 'sync throw transport', rootPrimitive: 'custom.operation' }, async () => 'ok'))
+      .resolves.toBe('ok')
+
+    expect(chaos.sendCount).toBeGreaterThan(0)
+    expect(observabilityDiagnostics().deliveryErrors).toHaveLength(chaos.sendCount)
+
+    chaos.setMode('slow')
+    const flushed = observe.flush()
+    await Promise.resolve()
+    chaos.resolveSlowDeliveries()
+
+    await expect(flushed).resolves.toBe(true)
+    expect(chaos.batches.at(-1)?.map((record) => record.type)).toEqual(['run:start', 'run:end'])
+  })
+
   it('cancels bounded flush timers when delivery completes before the deadline', async () => {
     vi.useFakeTimers()
     try {
@@ -610,23 +630,88 @@ describe('observe runtime', () => {
     }
   })
 
-  it('drops records instead of growing an unbounded delivery queue', async () => {
-    setObservabilityTransport(
-      {
-        async send() {
-          await new Promise(() => undefined)
-        },
-      },
-      { maxPendingDeliveries: 1 },
-    )
+  it('drops the oldest queued records when a hung transport fills the bounded queue', async () => {
+    const chaos = chaosTransport('hang')
+    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1, maxQueuedRecords: 2048 })
 
-    await observe.run({ name: 'pressure', rootPrimitive: 'custom.operation' }, async () => {
-      observe.event({ name: 'ignored-outside-span' })
+    const run = observe.openRun({ name: 'pressure', rootPrimitive: 'custom.operation' })
+    run.withContext(() => {
+      const span = observe.openSpan({ name: 'buffered span', family: 'custom', primitive: 'custom.operation' })
+      span.withContext(() => {
+        for (let index = 0; index < 4997; index += 1) {
+          observe.event({ name: `event ${index}` })
+        }
+      })
+      span.end()
     })
 
     expect(observabilityDiagnostics()).toMatchObject({
       pendingDeliveries: 1,
-      droppedRecords: 0,
+      droppedRecords: 2952,
+    })
+
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport, { maxPendingDeliveries: 2, maxQueuedRecords: 2048 })
+
+    await expect(observe.flush({ timeoutMs: 1 })).resolves.toBe(false)
+    expect(transport.records).toHaveLength(2047)
+    expect(transport.records[0]).toMatchObject({ type: 'span:event', name: 'event 2951' })
+    expect(transport.records.at(-1)).toMatchObject({ type: 'span:end' })
+  })
+
+  it('counts queued records discarded after the transport is removed', async () => {
+    const chaos = chaosTransport('hang')
+    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1, maxQueuedRecords: 16 })
+
+    const run = observe.openRun({ name: 'remove transport', rootPrimitive: 'custom.operation' })
+    run.withContext(() => {
+      const span = observe.openSpan({ name: 'queued', family: 'custom', primitive: 'custom.operation' })
+      span.end()
+    })
+    setObservabilityTransport(undefined)
+
+    await expect(observe.flush({ timeoutMs: 1 })).resolves.toBe(false)
+    expect(observabilityDiagnostics()).toMatchObject({
+      pendingDeliveries: 1,
+      droppedRecords: 2,
+    })
+  })
+
+  it('counts queued records discarded by runtime reset', () => {
+    const chaos = chaosTransport('hang')
+    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1, maxQueuedRecords: 16 })
+
+    const run = observe.openRun({ name: 'reset drops', rootPrimitive: 'custom.operation' })
+    run.withContext(() => {
+      const span = observe.openSpan({ name: 'queued reset span', family: 'custom', primitive: 'custom.operation' })
+      span.end()
+    })
+
+    resetObservabilityRuntime()
+    expect(observabilityDiagnostics()).toMatchObject({
+      pendingDeliveries: 0,
+      droppedRecords: 2,
+    })
+  })
+
+  it('keeps memory bounded during a 100k-record hung-transport soak', () => {
+    const chaos = chaosTransport('hang')
+    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1, maxQueuedRecords: 2048 })
+
+    const run = observe.openRun({ name: 'soak', rootPrimitive: 'custom.operation' })
+    run.withContext(() => {
+      const span = observe.openSpan({ name: 'soak span', family: 'custom', primitive: 'custom.operation' })
+      span.withContext(() => {
+        for (let index = 0; index < 99_997; index += 1) {
+          observe.event({ name: `event ${index}` })
+        }
+      })
+      span.end()
+    })
+
+    expect(observabilityDiagnostics()).toMatchObject({
+      pendingDeliveries: 1,
+      droppedRecords: 97_952,
     })
   })
 

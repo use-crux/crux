@@ -151,6 +151,8 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── schema.ts       Zod schemas for graph records and batches
 │   ├── ids.ts          Runtime-owned public graph ID helpers
 │   ├── observe.ts      Non-blocking runtime emitters, manual/open run lifecycles for serverless resumes, AsyncLocalStorage context propagation, flush/shutdown
+│   ├── delivery-engine.ts  Functional delivery engine factory with bounded queues, sync-throw containment, diagnostics, and flush/shutdown
+│   ├── delivery-options.ts Delivery option types, defaults, and normalization
 │   ├── errors.ts       Normalized observed error summaries, safe raw capture, stack/cause extraction, redaction, and truncation
 │   ├── transport.ts    Transport interface plus in-memory and HTTP graph transports
 │   ├── devtools.ts     withDevtools() plugin + enableDevtools() — installs the canonical observability transport
@@ -720,6 +722,12 @@ records are dropped with diagnostics instead of throwing into user code.
 Generation and streaming spans also carry `gen.*` performance metrics on terminal span records, and
 `observability.recordInputs` / `observability.recordOutputs` controls whether input/output artifacts
 carry previews or only reference metadata.
+
+The delivery engine is created by `createDeliveryEngine()` and keeps transport state behind a
+functional closure. It starts live delivery immediately, bounds in-flight sends and queued records,
+drops the oldest queued records when `maxQueuedRecords` is exceeded, counts discarded records in
+`observabilityDiagnostics().droppedRecords`, and records transport failures without throwing into
+the code that emitted the records.
 
 **Event flow for integrations:**
 
