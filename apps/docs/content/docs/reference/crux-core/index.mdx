@@ -74,6 +74,11 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     href="/docs/reference/crux-core/agent"
   />
   <Card title="Flow" description="flow, signalFlow, cancelFlow, listFlows." href="/docs/reference/crux-core/flow" />
+  <Card
+    title="Runtime Engine"
+    description="node, serverless, createRuntimeHandler, task, runtime diagnostics, and conformance helpers."
+    href="/docs/reference/crux-core/runtime-engine"
+  />
   <Card title="Plan" description="plan, plan handles, list, ref, and creation tools." href="/docs/reference/crux-core/plan" />
   <Card title="Tasks" description="tasks, task, task-ledger handles, and workers." href="/docs/reference/crux-core/tasks" />
   <Card
@@ -136,6 +141,7 @@ import { memory, workingState, episodes, facts, procedures } from '@use-crux/cor
 import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@use-crux/core/compaction'
 import { agent, blackboard, handoff, delegate } from '@use-crux/core/agent'
 import { flow, signalFlow, cancelFlow, listFlows, createFlowId } from '@use-crux/core/flow'
+import { node, serverless, createRuntimeHandler, task as runtimeTask } from '@use-crux/core/runtime'
 import { plan } from '@use-crux/core/plan'
 import { task, tasks } from '@use-crux/core/tasks'
 import { skill } from '@use-crux/core/skill'

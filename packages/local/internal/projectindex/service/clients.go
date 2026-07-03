@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/cache"
@@ -36,6 +37,11 @@ type SemanticPrewarmer interface {
 // RuntimeClient owns explicit runtime-rich Project Index enrichment.
 type RuntimeClient interface {
 	projectindex.ProjectRuntimeIndexer
+}
+
+// RuntimeOperationClient executes Runtime Engine operator/devtools commands.
+type RuntimeOperationClient interface {
+	RunRuntimeOperation(ctx context.Context, root, operation, workID string, includeDetails bool) (json.RawMessage, error)
 }
 
 // LintClient owns post-merge Project Index lint evaluation.

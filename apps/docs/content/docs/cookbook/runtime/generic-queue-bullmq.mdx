@@ -1,0 +1,65 @@
+---
+title: Generic Queue and BullMQ
+description: Use genericQueue() to adapt a user-owned queue to Runtime Engine wake delivery.
+---
+
+`genericQueue()` is the dependency-free wake adapter for queues Crux does not bundle. It signs and enqueues small wake messages; your queue worker later forwards the body and headers to the runtime endpoint or calls your bridge code.
+
+## Runtime config
+
+```ts
+import { config } from '@use-crux/core'
+import { genericQueue, serverless } from '@use-crux/core/runtime'
+import { postgres } from '@use-crux/postgres/runtime'
+
+export default config({
+  runtime: serverless({
+    store: postgres(),
+    wake: genericQueue({
+      secret: process.env.CRUX_RUNTIME_WAKE_SECRET!,
+      maxDelayMs: 86_400_000,
+      enqueue: async (message) => {
+        await queue.add(message.id, message, {
+          jobId: message.id,
+        })
+      },
+    }),
+    publicUrl: process.env.CRUX_PUBLIC_URL,
+  }),
+})
+```
+
+Secrets shorter than 16 characters are rejected. Use at least 32 random bytes for production.
+
+## BullMQ worker sketch
+
+```ts
+import { Worker } from 'bullmq'
+
+const worker = new Worker(queue.name, async (job) => {
+  const message = job.data
+
+  const response = await fetch(message.url, {
+    method: 'POST',
+    headers: message.headers,
+    body: message.body,
+  })
+
+  if (!response.ok && response.status >= 500) {
+    throw new Error(`Crux wake failed with ${response.status}`)
+  }
+})
+```
+
+The queue remains at-least-once. Crux expects duplicates and uses idempotency keys, leases, and terminal-state checks to make duplicate delivery harmless.
+
+## Capability notes
+
+- Set `maxDelayMs` only when the queue can natively delay jobs that long.
+- If your queue cannot delay, rely on store-backed timer scanning instead of claiming native timer support.
+- Acknowledging a queue job is safe only after the runtime handler has accepted the wake response.
+
+## Related
+
+- Guide: [Runtime Adapter Authoring](/docs/guides/runtime/custom-adapters)
+- Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)

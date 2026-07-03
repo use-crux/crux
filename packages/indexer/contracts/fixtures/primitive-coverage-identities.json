@@ -407,6 +407,28 @@
         "positive": "first-party-phase7-flow-native-fixtures.ts",
         "negative": "first-party-native-negative-fixtures.test.ts"
       }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
+      "extractor": "runtime.task",
+      "family": "runtime.task",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "first-party-phase7-flow-native-fixtures.ts",
+        "relations": "first-party-phase7-flow-native-fixtures.ts",
+        "sourceRefs": "first-party-phase7-flow-native-fixtures.ts",
+        "diagnostics": "first-party-phase7-flow-native-fixtures.ts",
+        "dependencies": "first-party-phase7-flow-native-fixtures.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "first-party-phase7-flow-native-fixtures.ts",
+        "sourceGraph": "first-party-phase7-flow-native-fixtures.ts",
+        "runtimeMetadata": "first-party-phase7-flow-native-fixtures.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "first-party-phase7-flow-native-fixtures.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
+      }
     }
   ]
 }

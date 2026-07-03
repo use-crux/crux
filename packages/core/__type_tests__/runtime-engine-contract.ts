@@ -1,0 +1,194 @@
+/**
+ * Type-level contract for `@use-crux/core/runtime`.
+ *
+ * Pins branded runtime ids and `RuntimeWork` narrowing through the public
+ * runtime-engine subpath. These checks run under `tsc --noEmit`; nothing
+ * executes at runtime.
+ */
+
+import { expectTypeOf } from 'vitest'
+import type {
+  EventCursor,
+  FlowId,
+  HostBoundRuntimeEngineDefinition,
+  InMemoryRuntimeStore,
+  InProcessRuntimeEngineDefinition,
+  ResolvedRuntimeEngine,
+  RuntimeTaskTarget,
+  RuntimeKernel,
+  RuntimeEngineDefinition,
+  RuntimePendingSuspend,
+  RuntimeTargetId,
+  RuntimeStoreAdapter,
+  RuntimeWork,
+  TaskId,
+  WaiterId,
+  WorkId,
+} from '@use-crux/core/runtime'
+import {
+  bindHostRuntime,
+  createRuntime,
+  createRuntimeKernel,
+  flowEventResumeKey,
+  inMemoryRuntimeStore,
+  node,
+  runtimeRequiredError,
+  task,
+  taskRunKey,
+  waiterTimeoutKey,
+} from '@use-crux/core/runtime'
+import { task as planTask } from '@use-crux/core'
+import {
+  runRuntimeEngineAdapterTests,
+  runStoreAdapterTests,
+} from '@use-crux/core/runtime/testing'
+
+declare const workId: WorkId
+declare const flowId: FlowId
+declare const taskId: TaskId
+declare const targetId: RuntimeTargetId
+declare const cursor: EventCursor
+declare const waiterId: WaiterId
+
+expectTypeOf(workId).toMatchTypeOf<string>()
+expectTypeOf(flowId).toMatchTypeOf<string>()
+
+// @ts-expect-error Branded runtime ids must not be interchangeable.
+const wrongFlowId: FlowId = workId
+void wrongFlowId
+
+const workItems: readonly RuntimeWork[] = [
+  { kind: 'flow.resume', flowId },
+  { kind: 'flow.timeout', flowId, suspendPoint: 'approval' },
+  { kind: 'task.run', taskId, targetId, input: { documentId: 'doc_1' } },
+  { kind: 'watch.deliver', subscriptionId: 'workspace', cursor },
+]
+
+for (const work of workItems) {
+  switch (work.kind) {
+    case 'task.run':
+      expectTypeOf(work.taskId).toEqualTypeOf<TaskId>()
+      expectTypeOf(work.targetId).toEqualTypeOf<RuntimeTargetId>()
+      break
+    case 'flow.resume':
+    case 'flow.timeout':
+      expectTypeOf(work.flowId).toEqualTypeOf<FlowId>()
+      break
+    case 'watch.deliver':
+      expectTypeOf(work.cursor).toEqualTypeOf<EventCursor>()
+      break
+  }
+}
+
+// @ts-expect-error Task work needs a task id, not a flow id.
+const badTaskWork: RuntimeWork = { kind: 'task.run', taskId: flowId, targetId }
+void badTaskWork
+
+const runtimeTask = task('embed-document', {
+  run: async (input: { documentId: string }) => input.documentId,
+})
+expectTypeOf(runtimeTask).toMatchTypeOf<RuntimeTaskTarget<{ documentId: string }, string>>()
+expectTypeOf(runtimeTask.kind).toEqualTypeOf<'task'>()
+const ledgerTask = planTask('Draft launch plan')
+// @ts-expect-error Plans & Tasks ledger specs are not executable runtime targets.
+const wrongRuntimeTask: RuntimeTaskTarget = ledgerTask
+void wrongRuntimeTask
+
+expectTypeOf(inMemoryRuntimeStore()).toMatchTypeOf<RuntimeStoreAdapter>()
+
+const deliveredSuspend: RuntimePendingSuspend = {
+  label: 'approval',
+  waiterId,
+  delivered: { eventId: cursor },
+}
+expectTypeOf(deliveredSuspend.delivered?.eventId).toEqualTypeOf<
+  EventCursor | undefined
+>()
+
+const kernel = createRuntimeKernel({
+  store: inMemoryRuntimeStore(),
+  targets: {
+    review: {
+      targetId,
+      kind: 'task',
+      execute: async () => ({ status: 'completed' }),
+    },
+  },
+  newWorkId: () => workId,
+})
+expectTypeOf(kernel).toEqualTypeOf<RuntimeKernel>()
+expectTypeOf(flowEventResumeKey(workId, cursor)).toEqualTypeOf<string>()
+expectTypeOf(taskRunKey(workId)).toEqualTypeOf<string>()
+expectTypeOf(waiterTimeoutKey(waiterId)).toEqualTypeOf<string>()
+
+const runtimeDefinition = node({
+  store: inMemoryRuntimeStore(),
+  namespace: 'tenant-a',
+  autoStartMaintenance: false,
+})
+expectTypeOf(runtimeDefinition).toMatchTypeOf<
+  RuntimeEngineDefinition<InMemoryRuntimeStore>
+>()
+expectTypeOf(runtimeDefinition).toMatchTypeOf<
+  InProcessRuntimeEngineDefinition<InMemoryRuntimeStore>
+>()
+expectTypeOf(runtimeDefinition.kind).toEqualTypeOf<'in-process'>()
+const resolvedRuntime = createRuntime({
+  runtime: runtimeDefinition,
+  targets: {},
+  newWorkId: () => workId,
+  startMaintenance: false,
+})
+expectTypeOf(resolvedRuntime).toMatchTypeOf<
+  ResolvedRuntimeEngine<InMemoryRuntimeStore>
+>()
+expectTypeOf(resolvedRuntime.store).toEqualTypeOf<InMemoryRuntimeStore>()
+expectTypeOf(runtimeRequiredError({ api: 'flow.waitFor()' }).code).toEqualTypeOf<
+  'RUNTIME_REQUIRED'
+>()
+
+const hostRuntimeDefinition: HostBoundRuntimeEngineDefinition = {
+  kind: 'host-bound',
+  id: 'convex',
+  host: 'convex',
+  capabilities: runtimeDefinition.capabilities,
+  entry: 'createConvexRuntimeHandlers({ targets }) in convex/crux.ts',
+}
+expectTypeOf(hostRuntimeDefinition).toMatchTypeOf<RuntimeEngineDefinition>()
+expectTypeOf(hostRuntimeDefinition.kind).toEqualTypeOf<'host-bound'>()
+// @ts-expect-error Host-bound declarations are inert and do not expose stores.
+hostRuntimeDefinition.store
+
+const hostBoundRuntime = bindHostRuntime(hostRuntimeDefinition, {
+  store: inMemoryRuntimeStore(),
+  targets: {},
+  newWorkId: () => workId,
+  createWake: () => async () => {},
+  startMaintenance: false,
+})
+expectTypeOf(hostBoundRuntime).toMatchTypeOf<
+  ResolvedRuntimeEngine<InMemoryRuntimeStore>
+>()
+
+runStoreAdapterTests({
+  name: 'type-only-memory-store',
+  createStore: () => inMemoryRuntimeStore(),
+  failAfterWrites: (store, writes) => {
+    expectTypeOf(store).toEqualTypeOf<InMemoryRuntimeStore>()
+    expectTypeOf(writes).toEqualTypeOf<number>()
+  },
+  crashBeforeOutboxConfirm: (store) => {
+    expectTypeOf(store).toEqualTypeOf<InMemoryRuntimeStore>()
+  },
+})
+
+runRuntimeEngineAdapterTests({
+  name: 'type-only-runtime-engine',
+  createHarness: () => ({
+    store: inMemoryRuntimeStore(),
+    kernel,
+    targetId,
+    taskId,
+    readExecutionCount: async () => 0,
+  }),
+})

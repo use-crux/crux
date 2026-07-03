@@ -449,6 +449,7 @@ describe('memory block system', () => {
 
   it('renders extractive blocks with an explicit semantic strategy scoped to namespace and block id', async () => {
     const store = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
     const semanticEmbed = async (text: string) => (text.toLowerCase().includes('billing') ? [1, 0] : [0, 1])
     const factBlock = facts({
       id: 'facts',
@@ -468,20 +469,27 @@ describe('memory block system', () => {
     const mem = memory({
       id: 'semantic-render',
       records: store,
+      vectors,
       namespace: 'user:1',
       blocks: [factBlock],
     })
 
     await factBlock.add(
       { content: 'Billing contact is finance@example.com.' },
-      { records: store, namespace: 'user:1', memoryId: mem.id },
+      { records: store, vectors, namespace: 'user:1', memoryId: mem.id },
     )
-    await factBlock.add({ content: 'Billing contact is someone else.' }, { records: store, namespace: 'user:2', memoryId: mem.id })
+    await factBlock.add(
+      { content: 'Billing contact is someone else.' },
+      { records: store, vectors, namespace: 'user:2', memoryId: mem.id },
+    )
     await otherBlock.add(
       { content: 'Billing contact in another block.' },
-      { records: store, namespace: 'user:1', memoryId: mem.id },
+      { records: store, vectors, namespace: 'user:1', memoryId: mem.id },
     )
-    await factBlock.add({ content: 'Shipping address is Amsterdam.' }, { records: store, namespace: 'user:1', memoryId: mem.id })
+    await factBlock.add(
+      { content: 'Shipping address is Amsterdam.' },
+      { records: store, vectors, namespace: 'user:1', memoryId: mem.id },
+    )
 
     const rendered = await mem.asContext().systemFn({ query: 'billing' })
 

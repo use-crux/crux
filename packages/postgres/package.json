@@ -1,0 +1,51 @@
+{
+  "name": "@use-crux/postgres",
+  "version": "0.3.0",
+  "description": "Postgres Runtime Engine store adapter for Crux.",
+  "license": "Apache-2.0",
+  "author": "Crux",
+  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "main": "./runtime.ts",
+  "types": "./runtime.ts",
+  "exports": {
+    "./runtime": {
+      "types": "./runtime.ts",
+      "import": "./runtime.ts",
+      "require": "./runtime.ts"
+    }
+  },
+  "dependencies": {
+    "@use-crux/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "@types/pg": "^8.20.0",
+    "embedded-postgres": "18.4.0-beta.17",
+    "pg": "^8.22.0",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.7"
+  },
+  "peerDependencies": {
+    "pg": "^8.22.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/use-crux/crux.git",
+    "directory": "packages/postgres"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "bugs": {
+    "url": "https://github.com/use-crux/crux/issues"
+  },
+  "homepage": "https://github.com/use-crux/crux/tree/main/packages/postgres"
+}

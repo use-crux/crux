@@ -1,0 +1,76 @@
+---
+title: Next and Vercel Runtime
+description: Run the Crux Runtime Engine on serverless deployments with Postgres state and QStash wake delivery.
+---
+
+Use the serverless runtime when work must continue after a request ends and the deployment may be cold between wakes.
+
+## Install
+
+```bash
+pnpm add @use-crux/core @use-crux/postgres @use-crux/upstash pg @upstash/qstash
+```
+
+## Configure runtime
+
+```ts
+import { config } from '@use-crux/core'
+import { serverless } from '@use-crux/core/runtime'
+import { postgres } from '@use-crux/postgres/runtime'
+import { qstash } from '@use-crux/upstash/runtime'
+
+export default config({
+  runtime: serverless({
+    store: postgres({ url: process.env.DATABASE_URL }),
+    wake: qstash(),
+    publicUrl: process.env.CRUX_PUBLIC_URL,
+    namespace: process.env.CRUX_RUNTIME_NAMESPACE,
+  }),
+})
+```
+
+`publicUrl` can be omitted when Crux can infer a stable URL from Vercel environment variables. Production setup fails with `PUBLIC_URL_UNRESOLVED` when no stable URL exists.
+
+## Generate the route
+
+Run generation before framework build:
+
+```bash
+crux runtime generate
+```
+
+Generated Next files target the public handler API:
+
+```ts
+import { createRuntimeHandler } from '@use-crux/core/runtime'
+import { reviewFlow } from '@/flows/review'
+import { embedDocument } from '@/tasks/embed-document'
+
+export const { GET, POST } = createRuntimeHandler({
+  targets: [reviewFlow, embedDocument],
+})
+```
+
+`POST` verifies the wake request before durable writes. `GET` returns health metadata for setup and preflight without exposing secrets.
+
+## Verify setup
+
+```bash
+crux runtime setup --check
+crux runtime status
+```
+
+Use `crux runtime setup --apply` only when you want Crux to create missing Crux-owned Postgres resources. It is additive only.
+
+## Production notes
+
+- Keep `DATABASE_URL`, QStash credentials, and `CRUX_PUBLIC_URL` in deployment secrets.
+- Use an explicit `CRUX_RUNTIME_NAMESPACE` when preview and production share the same substrate.
+- Regenerate artifacts in CI and fail builds on `ARTIFACTS_STALE`.
+- Inspect stuck work with `crux runtime inspect <workId>`; retry blocked/dead-letter work with `crux runtime retry <workId>` after fixing the cause.
+
+## Related
+
+- Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)
+- Reference: [@use-crux/postgres](/docs/reference/postgres)
+- Reference: [@use-crux/upstash](/docs/reference/storage/upstash)

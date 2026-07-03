@@ -16,6 +16,9 @@ import {
   inspectProjectStaticSyntaxPlan,
   inspectProjectConfig,
   resolveProjectModel,
+  generateRuntimeArtifacts,
+  runRuntimeOperation,
+  type RuntimeOperationKind,
 } from '@use-crux/indexer'
 import { isProjectModelResolutionMode, type ProjectModelResolutionMode } from '@use-crux/core/project-index'
 import {
@@ -175,6 +178,29 @@ async function runAssembledRequest(
           await writeStaticHostArtifactRequest(writeResponse, req)
           break
         }
+        case 'generateRuntimeArtifacts': {
+          if (!req.root) throw new Error('generateRuntimeArtifacts requires root')
+          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+          const result = await generateRuntimeArtifacts({ root: req.root })
+          await writeArtifactEvent(writeResponse, 'runtimeArtifacts', result, req.root)
+          break
+        }
+        case 'runRuntimeOperation': {
+          if (!req.root) throw new Error('runRuntimeOperation requires root')
+          if (!req.runtimeOperation) throw new Error('runRuntimeOperation requires runtimeOperation')
+          if (!isRuntimeOperationKind(req.runtimeOperation)) {
+            throw new Error(`unknown runtime operation: ${req.runtimeOperation}`)
+          }
+          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+          const result = await runRuntimeOperation({
+            root: req.root,
+            operation: req.runtimeOperation,
+            workId: req.runtimeWorkId,
+            includeDetails: req.runtimeIncludeDetails === true,
+          })
+          await writeArtifactEvent(writeResponse, 'runtimeOperation', result, req.root)
+          break
+        }
         case 'indexProjectAst': {
           if (!req.root) throw new Error('indexProjectAst requires root')
           assertProjectIndexWorkerProtocolV2(req.protocolVersion)
@@ -275,6 +301,17 @@ async function cleanupProjectIndexWorkerRequest(req: ProjectIndexWorkerRequest):
 
 function requestResolutionMode(value: unknown): ProjectModelResolutionMode | undefined {
   return isProjectModelResolutionMode(value) ? value : undefined
+}
+
+function isRuntimeOperationKind(value: string): value is RuntimeOperationKind {
+  return (
+    value === 'setup-check' ||
+    value === 'setup-apply' ||
+    value === 'status' ||
+    value === 'inspect' ||
+    value === 'retry' ||
+    value === 'cancel'
+  )
 }
 
 rl.on('close', () => {

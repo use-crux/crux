@@ -95,6 +95,11 @@ export interface IndexRuleContext {
   readonly definitions: readonly ProjectDefinition[]
   /** Resolved relations visible to the rule. */
   readonly relations: readonly ProjectRelation[]
+  /** Runtime configuration evidence from the active project config, when known. */
+  readonly runtime?: {
+    /** Whether a Crux Runtime Engine was configured for this index run. */
+    readonly configured?: boolean
+  }
   /** Optional type/program-aware read model supplied only when semantic analysis is available. */
   readonly semantic?: SemanticReadModel
 }

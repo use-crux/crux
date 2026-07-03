@@ -1,0 +1,198 @@
+import type {
+  ClaimDueTimersOptions,
+  ClaimExpiredWaitersOptions,
+  ClaimOutboxOptions,
+  DurableEventPort,
+  Lease,
+  LeasePort,
+  RuntimeOutboxPort,
+  RuntimeOutboxItem,
+  RuntimeStatePort,
+  RuntimeStoreAdapter,
+  RuntimeStoreTransaction,
+  RuntimeTimerStorePort,
+  RuntimeWaiterStorePort,
+} from '@use-crux/core/runtime'
+import type { EventCursor } from '@use-crux/core/runtime'
+import type { ConvexCtxPort } from '../store'
+import {
+  decodeEvent,
+  decodeLease,
+  decodeOutbox,
+  decodeSnapshot,
+  decodeTimer,
+  decodeWaiter,
+  decodeWork,
+  encodeEvent,
+  encodeIdempotency,
+  encodeOutboxDate,
+  encodeSnapshot,
+  encodeTimer,
+  encodeWaiter,
+  encodeWakeEnvelope,
+  encodeWork,
+  encodeWorkForCreate,
+} from './codec'
+
+/** Component refs needed by the Runtime Engine store adapter. */
+export interface ConvexRuntimeComponent {
+  readonly runtime: {
+    readonly state: Record<string, unknown>
+    readonly events: Record<string, unknown>
+    readonly waiters: Record<string, unknown>
+    readonly timers: Record<string, unknown>
+    readonly outbox: Record<string, unknown>
+    readonly leases: Record<string, unknown>
+  }
+}
+
+/** Configuration for {@link convexRuntimeStore}. */
+export interface ConvexRuntimeStoreOptions<TCtx extends ConvexCtxPort = ConvexCtxPort> {
+  /** Current Convex mutation ctx. */
+  readonly ctx: TCtx
+  /** Crux Convex component refs, normally `components.crux`. */
+  readonly component: ConvexRuntimeComponent
+  /** Clock used for deterministic tests. */
+  readonly now?: () => Date
+}
+
+/** Create a Runtime Engine store backed by the Crux Convex component. */
+export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
+  options: ConvexRuntimeStoreOptions<TCtx>,
+): RuntimeStoreAdapter {
+  const now = options.now ?? (() => new Date())
+  const run = <TResult>(ref: unknown, args: Record<string, unknown>) =>
+    options.ctx.runMutation<TResult>(ref, cleanArgs(args))
+  const refs = options.component.runtime
+
+  const state: RuntimeStatePort = {
+    createWork: async (work) => decodeWork(await run(refs.state.createWork, { work: encodeWorkForCreate(work) })),
+    getWork: async (workId, read) => {
+      const result = await run<unknown>(refs.state.getWork, { workId, namespace: read.namespace })
+      return result ? decodeWork(result) : null
+    },
+    putWork: (work) => run(refs.state.putWork, { work: encodeWork(work) }).then(noop),
+    listWork: async (query) =>
+      (await run<readonly unknown[]>(refs.state.listWork, {
+        ...query,
+        updatedBefore: query.updatedBefore?.getTime(),
+      })).map(decodeWork),
+    countWork: (query) => run(refs.state.countWork, { ...query }),
+    setWorkPending: async (workId, pending) => {
+      const result = await run<unknown>(refs.state.setWorkPending, {
+        workId,
+        namespace: pending.namespace,
+        work: pending.work,
+        idempotencyKey: pending.idempotencyKey,
+        now: now().getTime(),
+        from: pending.from,
+      })
+      return result ? decodeWork(result) : null
+    },
+    getSnapshot: async (flowId, read) => {
+      const result = await run<unknown>(refs.state.getSnapshot, { flowId, namespace: read.namespace })
+      return result ? decodeSnapshot(result) : null
+    },
+    putSnapshot: (snapshot) => run(refs.state.putSnapshot, { snapshot: encodeSnapshot(snapshot) }).then(noop),
+    markSnapshotDelivered: (workId, delivery) =>
+      run(refs.state.markSnapshotDelivered, { workId, ...delivery }).then(noop),
+    hasIdempotencyKey: (namespace, key) => run(refs.state.hasIdempotencyKey, { namespace, key }),
+    putIdempotencyKey: (record) =>
+      run(refs.state.putIdempotencyKey, { record: encodeIdempotency(record) }).then(noop),
+    incrementIdle: (namespace, scope) => run(refs.state.incrementIdle, { namespace, scope }),
+    decrementIdle: (namespace, scope) => run(refs.state.decrementIdle, { namespace, scope }),
+    getIdleCount: (namespace, scope) => run(refs.state.getIdleCount, { namespace, scope }),
+  }
+
+  const events: DurableEventPort = {
+    append: async (event, eventOptions) =>
+      decodeEvent(
+        await run(refs.events.append, {
+          event: encodeEvent(event),
+          idempotencyKey: eventOptions?.idempotencyKey,
+        }),
+      ),
+    read: async (query) => {
+      const result = await run<{ events: readonly unknown[]; cursor?: string }>(refs.events.read, { ...query })
+      return { events: result.events.map(decodeEvent), cursor: result.cursor as EventCursor | undefined }
+    },
+  }
+
+  const waiters: RuntimeWaiterStorePort = {
+    register: async (waiter) => decodeWaiter(await run(refs.waiters.register, { waiter: encodeWaiter(waiter) })),
+    resolve: async (eventName, payload, read = {}) =>
+      (await run<readonly unknown[]>(refs.waiters.resolve, { eventName, payload, namespace: read.namespace })).map(
+        decodeWaiter,
+      ),
+    cancel: (waiterId) => run(refs.waiters.cancel, { waiterId }).then(noop),
+    attachTimer: (waiterId, timerId) => run(refs.waiters.attachTimer, { waiterId, timerId }).then(noop),
+    listByWork: async (workId) => (await run<readonly unknown[]>(refs.waiters.listByWork, { workId })).map(decodeWaiter),
+    claimExpired: async (query: ClaimExpiredWaitersOptions) =>
+      (await run<readonly unknown[]>(refs.waiters.claimExpired, {
+        ...query,
+        now: query.now.getTime(),
+      })).map(decodeWaiter),
+    transition: (waiterId, from, to) => run(refs.waiters.transition, { waiterId, from, to }),
+  }
+
+  const timers: RuntimeTimerStorePort = {
+    put: async (timer) => decodeTimer(await run(refs.timers.put, { timer: encodeTimer(timer) })),
+    get: async (timerId) => {
+      const result = await run<unknown>(refs.timers.get, { timerId })
+      return result ? decodeTimer(result) : null
+    },
+    claimDue: async (query: ClaimDueTimersOptions) =>
+      (await run<readonly unknown[]>(refs.timers.claimDue, { ...query, now: query.now.getTime() })).map(decodeTimer),
+    list: async (query) => (await run<readonly unknown[]>(refs.timers.list, { ...query })).map(decodeTimer),
+    listByWork: async (workId) => (await run<readonly unknown[]>(refs.timers.listByWork, { workId })).map(decodeTimer),
+    transition: (timerId, from, to) => run(refs.timers.transition, { timerId, from, to }),
+  }
+
+  const outbox: RuntimeOutboxPort = {
+    put: async (envelope, options) =>
+      decodeOutbox(await run(refs.outbox.put, {
+        envelope: encodeWakeEnvelope(envelope),
+        nextAttemptAt: (options?.deliverAt ?? now()).getTime(),
+      })),
+    get: async (outboxId) => {
+      const result = await run<unknown>(refs.outbox.get, { outboxId })
+      return result ? decodeOutbox(result) : null
+    },
+    claimPending: async (query: ClaimOutboxOptions) =>
+      (await run<readonly unknown[]>(refs.outbox.claimPending, {
+        ...query,
+        now: query.now.getTime(),
+      })).map(decodeOutbox) as readonly RuntimeOutboxItem[],
+    list: async (query) =>
+      (await run<readonly unknown[]>(refs.outbox.list, { ...query })).map(decodeOutbox) as readonly RuntimeOutboxItem[],
+    confirm: (outboxId) => run(refs.outbox.confirm, { outboxId }).then(noop),
+    retryLater: (outboxId, nextAttemptAt) =>
+      run(refs.outbox.retryLater, { outboxId, nextAttemptAt: encodeOutboxDate(nextAttemptAt) }).then(noop),
+  }
+
+  const leases: LeasePort = {
+    claim: (resource, lease) =>
+      run<unknown>(refs.leases.claim, { ...lease, resource, now: now().getTime() }).then(decodeLease),
+    extend: async (lease: Lease, ttlMs) => {
+      const result = await run<unknown>(refs.leases.extend, { lease, ttlMs, now: now().getTime() })
+      const next = decodeLease(result)
+      if (!next) throw new Error(`Runtime lease ${lease.resource} could not be extended.`)
+      return next
+    },
+    release: (lease) => run(refs.leases.release, { lease }).then(noop),
+  }
+
+  const transaction: RuntimeStoreTransaction = { state, events, waiters, timers, outbox }
+  return Object.freeze({
+    id: 'convex',
+    ...transaction,
+    leases,
+    transact: <T>(fn: (tx: RuntimeStoreTransaction) => Promise<T>) => fn(transaction),
+  })
+}
+
+function noop(): void {}
+
+function cleanArgs<T extends Record<string, unknown>>(args: T): T {
+  return Object.fromEntries(Object.entries(args).filter(([, value]) => value !== undefined)) as T
+}

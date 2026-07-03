@@ -33,6 +33,7 @@ mod eval {
 mod flow {
     pub(crate) mod facts;
     pub(crate) mod output;
+    pub(crate) mod runtime_metadata;
 }
 mod injection {
     pub(crate) mod injectable;
@@ -73,6 +74,7 @@ mod runtime {
     pub(crate) mod flow;
     pub(crate) mod join;
     pub(crate) mod memory;
+    pub(crate) mod task;
 }
 mod safety {
     pub(crate) mod facts;

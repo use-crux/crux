@@ -1,0 +1,27 @@
+---
+title: PAYLOAD_NOT_JSON
+description: A durable runtime payload is not JSON-compatible.
+---
+
+## What failed
+
+A signal payload, task input, event payload, or persisted step output could not be represented as JSON.
+
+## Why
+
+Runtime payloads may cross processes, stores, and hosts. Functions, class instances, `Map`, `Set`, `Date`, streams, and cyclic objects are not portable runtime payloads.
+
+## What still works
+
+Use ordinary application storage for complex data and pass JSON references through Crux.
+
+## Fix
+
+Pass plain JSON:
+
+```ts
+await flow.defer(embedDocument, {
+  documentId,
+  uploadedAt: uploadedAt.toISOString(),
+})
+```

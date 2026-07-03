@@ -114,6 +114,11 @@ describe("first-party extractor fixtures", () => {
         fixtureCoverage: "dedicated-fixture",
         staticIndexCoverage: "covered",
       },
+      {
+        extractor: "runtime.task",
+        fixtureCoverage: "dedicated-fixture",
+        staticIndexCoverage: "covered",
+      },
     ]);
     expect(
       inventory
@@ -147,6 +152,7 @@ describe("first-party extractor fixtures", () => {
         "blackboard",
         "routing",
         "flow",
+        "runtime.task",
       ],
       bundledTypeScriptExtractors: [],
       typeScriptRuleCount: 0,

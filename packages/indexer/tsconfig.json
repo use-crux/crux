@@ -14,6 +14,9 @@
     "types": ["node", "vitest"],
     "paths": {
       "@use-crux/core": ["../core/index.ts"],
+      "@use-crux/core/runtime": ["../core/runtime/public.ts"],
+      "@use-crux/core/runtime/next": ["../core/runtime/next.ts"],
+      "@use-crux/core/runtime/testing": ["../core/runtime/testing/index.ts"],
       "@use-crux/core/*": ["../core/*"]
     }
   },

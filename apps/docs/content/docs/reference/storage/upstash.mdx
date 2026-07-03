@@ -7,6 +7,7 @@ Peer dependencies:
 
 - `@upstash/vector` >=1.2.2 for `upstashVectorStore()`
 - `@upstash/redis` when you use `upstashRedisRecordStore()`
+- `@upstash/qstash` when you use `qstash()` from `@use-crux/upstash/runtime`
 
 ```ts
 import { upstashRedisRecordStore, upstashVectorStore } from '@use-crux/upstash'
@@ -140,10 +141,32 @@ Filtered retrieval requires a vector store with `capabilities().filter === 'pre'
 - `upstashVectorStore()` for Upstash Vector search
 - `storage({ records, vectors })` to pass a bundle to Crux primitives
 
+## Runtime Wake: `qstash()`
+
+Use `qstash()` from `@use-crux/upstash/runtime` as the first-party HTTP wake adapter for serverless Runtime Engine deployments.
+
+```ts
+import { config } from '@use-crux/core'
+import { serverless } from '@use-crux/core/runtime'
+import { postgres } from '@use-crux/postgres/runtime'
+import { qstash } from '@use-crux/upstash/runtime'
+
+export default config({
+  runtime: serverless({
+    store: postgres(),
+    wake: qstash(),
+  }),
+})
+```
+
+QStash publishes small wake envelopes to the configured runtime endpoint and verifies incoming `Upstash-Signature` headers with the official receiver. Use it with a durable store such as `postgres()`; `@use-crux/upstash/runtime` does not ship an Upstash Redis runtime store in v1.
+
 ## Related
 
 - Guide: [Storage](/docs/guides/storage)
+- Guide: [Next/Vercel Runtime](/docs/guides/runtime/next-vercel)
 - Guide: [RecordStore](/docs/guides/storage/crux-store)
 - Guide: [VectorStore](/docs/guides/storage/vector-store)
+- Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)
 - Reference: [Indexing](/docs/reference/crux-core/indexing)
 - Reference: [Retrieval](/docs/reference/crux-core/retrieval)

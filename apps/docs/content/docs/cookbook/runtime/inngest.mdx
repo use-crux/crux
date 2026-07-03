@@ -1,0 +1,120 @@
+---
+title: Inngest Runtime Mapping
+description: Recipe-only code sketch for mapping Crux runtime targets onto Inngest functions and events.
+---
+
+Inngest is a recipe and adapter-author target in v1, not a bundled Crux runtime package. The goal is to keep Crux authoring stable while an adapter maps wake delivery and retries onto Inngest infrastructure.
+
+## User-authored Crux targets
+
+Users should still write Crux flows and runtime tasks, not Inngest-specific functions.
+
+```ts
+import { flow } from '@use-crux/core/flow'
+import { task } from '@use-crux/core/runtime'
+
+export const embedDocument = task('embed-document', {
+  run: async ({ documentId }: { documentId: string }) => {
+    await embeddings.write(documentId)
+  },
+})
+
+export const reviewFlow = flow('review', async (flow, input: { documentId: string }) => {
+  await flow.defer(embedDocument, { documentId: input.documentId })
+
+  const approval = await flow.waitFor(
+    { name: 'document.approved' },
+    { match: { documentId: input.documentId }, timeout: '24h' },
+  )
+
+  return approval
+})
+```
+
+## Wake bridge sketch
+
+An Inngest-backed wake adapter can publish one event per Crux wake. Use the Crux idempotency key as the event id when the substrate supports it.
+
+```ts
+import { Inngest } from 'inngest'
+import type { RuntimeWakeAdapter } from '@use-crux/core/runtime'
+
+const inngest = new Inngest({ id: 'app' })
+
+export function inngestWake(): RuntimeWakeAdapter {
+  return {
+    id: 'inngest',
+    capabilities: {
+      signed: true,
+      maxPayloadBytes: 4 * 1024,
+      maxDelayMs: 7 * 24 * 60 * 60 * 1000,
+    },
+    createWake({ url }) {
+      return async (envelope) => {
+        await inngest.send({
+          name: 'crux/runtime.wake',
+          id: envelope.idempotencyKey,
+          data: {
+            url,
+            envelope,
+          },
+        })
+      }
+    },
+  }
+}
+```
+
+## Inngest function sketch
+
+The Inngest function acts as a delivery worker. It forwards the wake into the same fetch-compatible Crux handler used by generated serverless entries.
+
+```ts
+import { createRuntimeHandler } from '@use-crux/core/runtime'
+import { embedDocument, reviewFlow } from './targets'
+
+const handler = createRuntimeHandler({
+  targets: [reviewFlow, embedDocument],
+})
+
+export const cruxWake = inngest.createFunction(
+  { id: 'crux-runtime-wake' },
+  { event: 'crux/runtime.wake' },
+  async ({ event, step }) => {
+    const body = JSON.stringify(event.data.envelope)
+
+    const response = await step.run('deliver-to-crux', () =>
+      handler.POST(
+        new Request(event.data.url, {
+          method: 'POST',
+          body,
+          headers: {
+            'content-type': 'application/json',
+            // A real adapter should sign this request or bind directly without HTTP.
+            'x-crux-signature': signCruxWake(body),
+          },
+        }),
+      ),
+    )
+
+    if (response.status >= 500 || response.status === 409) {
+      throw new Error(`Crux wake retryable status ${response.status}`)
+    }
+  },
+)
+```
+
+## Mapping notes
+
+| Runtime concern | Inngest substrate |
+| --- | --- |
+| Wake/tasks/timers/retries | Inngest functions, events, and steps |
+| Event waits | Inngest wait-for-event style waits or Crux waiter state |
+| State/events/leases | Crux store or adapter-owned Inngest-backed state |
+
+Do not split one invariant silently between Crux and Inngest. If Inngest owns retries or timers, the adapter must still surface Crux diagnostics such as `TARGET_NOT_FOUND`, `REPLAY_DIVERGED`, and `WORK_DEAD_LETTERED`.
+
+## Related
+
+- Guide: [Runtime Adapter Authoring](/docs/guides/runtime/custom-adapters)
+- Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)

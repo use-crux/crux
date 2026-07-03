@@ -91,6 +91,9 @@ func finishPatch(
 	plan projectindex.ProjectStaticSyntaxPlan,
 	sourceInput sourceprofile.Input,
 ) {
+	if plan.RuntimeConfigured != nil {
+		patch.Project.RuntimeConfigured = plan.RuntimeConfigured
+	}
 	if sourceInput.SemanticSourceProfile != nil {
 		patch.SemanticSourceProfile = sourceprofile.RequestProfile(sourceInput.SemanticSourceProfile, plan.Files)
 	}

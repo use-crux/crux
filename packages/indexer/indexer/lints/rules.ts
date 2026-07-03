@@ -45,6 +45,13 @@ export const indexLintRuleIds = [
   'routing.router_missing_default',
   'routing.unresolved_target',
   'routing.cascade_unreachable_tier',
+  'runtime.duplicate_target_name',
+  'runtime.non_literal_target_name',
+  'runtime.target_not_exported',
+  'runtime.closure_defer',
+  'runtime.missing_runtime_config',
+  'flow.nondeterministic_code',
+  'runtime.non_serializable_payload',
 ] as const
 
 export type IndexLintRuleId = (typeof indexLintRuleIds)[number]
@@ -562,7 +569,7 @@ export const indexLintRules = {
   }),
   'flow.duplicate_step_label': defineIndexLintRule({
     id: 'flow.duplicate_step_label',
-    severity: 'warning',
+    severity: 'error',
     category: 'runtime',
     maturity: 'preview',
     confidence: 'high',
@@ -827,6 +834,162 @@ export const indexLintRules = {
         title: 'Add evaluator or reorder tiers',
         description:
           'Add evaluate to non-terminal tiers, or move unconditional accept tiers to the end of the cascade.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'runtime.duplicate_target_name': defineIndexLintRule({
+    id: 'runtime.duplicate_target_name',
+    severity: 'error',
+    category: 'runtime',
+    maturity: 'stable',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Runtime target name is duplicated',
+    rationale:
+      'Durable runtime target names are persisted as routing identities. Each flow or runtime task name must resolve to exactly one target so resumed work wakes the intended code.',
+    impact:
+      'Duplicate target names make generated runtime artifacts ambiguous and can block or misroute pending durable work.',
+    docsSlug: 'runtime-duplicate-target-name',
+    fixes: [
+      {
+        title: 'Rename one runtime target',
+        description:
+          'Give each flow() or runtime task() declaration a distinct literal name, then run crux runtime generate.',
+        kind: 'manual',
+        command: 'crux runtime generate',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'runtime.non_literal_target_name': defineIndexLintRule({
+    id: 'runtime.non_literal_target_name',
+    severity: 'error',
+    category: 'runtime',
+    maturity: 'stable',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Runtime target name is not literal',
+    rationale:
+      'Runtime artifacts need a durable target name that can be discovered before deployment. Dynamic names cannot be matched to pending work in a fresh process.',
+    impact: 'Generated manifests cannot safely include the target, so future wakes may fail with TARGET_NOT_FOUND.',
+    docsSlug: 'runtime-non-literal-target-name',
+    fixes: [
+      {
+        title: 'Use a literal durable name',
+        description: 'Change flow(name, ...) or task(name, ...) to a literal string name and regenerate runtime artifacts.',
+        kind: 'manual',
+        command: 'crux runtime generate',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'runtime.target_not_exported': defineIndexLintRule({
+    id: 'runtime.target_not_exported',
+    severity: 'error',
+    category: 'runtime',
+    maturity: 'stable',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Runtime target is not exported',
+    rationale:
+      'Serverless and host-bound runtime entries import targets by named export. Local or nested targets cannot be woken in a later process.',
+    impact: 'The target is visible to local analysis but cannot be wired into generated runtime entry files.',
+    docsSlug: 'runtime-target-not-exported',
+    fixes: [
+      {
+        title: 'Export the target declaration',
+        description:
+          'Move the target to a top-level exported const/function declaration, then run crux runtime generate.',
+        kind: 'manual',
+        command: 'crux runtime generate',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'runtime.closure_defer': defineIndexLintRule({
+    id: 'runtime.closure_defer',
+    severity: 'error',
+    category: 'runtime',
+    maturity: 'stable',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Durable defer target is an inline closure',
+    rationale:
+      'Durable background work must name a runtime task target so Crux can import and wake it in a later process. Inline closures are request-scoped code, not durable targets.',
+    impact: 'The deferred work cannot be represented in generated runtime artifacts or resumed after process exit.',
+    docsSlug: 'runtime-closure-defer',
+    fixes: [
+      {
+        title: 'Use a named runtime task',
+        description:
+          'Move the closure into an exported task() from @use-crux/core/runtime, or use request-scoped defer(callback) when RFC #135 lands.',
+        kind: 'manual',
+        docsUrl: 'https://github.com/use-crux/crux/issues/135',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'runtime.missing_runtime_config': defineIndexLintRule({
+    id: 'runtime.missing_runtime_config',
+    severity: 'warning',
+    category: 'runtime',
+    maturity: 'preview',
+    confidence: 'medium',
+    profiles: ['recommended', 'strict'],
+    title: 'Runtime-bound API used without runtime config',
+    rationale:
+      'Name-bound, time-bound, event-bound, and background APIs need a configured Runtime Engine. Without one, only object-bound flow APIs can keep working.',
+    impact: 'The API will throw RUNTIME_REQUIRED when it executes in a project without runtime configuration.',
+    docsSlug: 'runtime-missing-runtime-config',
+    fixes: [
+      {
+        title: 'Configure a runtime',
+        description: 'Add a runtime entry to crux.config.ts, for example runtime: node() for local development.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'flow.nondeterministic_code': defineIndexLintRule({
+    id: 'flow.nondeterministic_code',
+    severity: 'warning',
+    category: 'runtime',
+    maturity: 'preview',
+    confidence: 'medium',
+    profiles: ['recommended', 'strict'],
+    title: 'Flow body contains nondeterministic code',
+    rationale:
+      'Flow bodies can replay after suspension. Calls like Date.now() and Math.random() outside flow.step() can produce different replay fingerprints or decisions.',
+    impact: 'A resumed flow may diverge from its original execution or block with REPLAY_DIVERGED.',
+    docsSlug: 'flow-nondeterministic-code',
+    fixes: [
+      {
+        title: 'Move nondeterminism into a step',
+        description:
+          'Wrap nondeterministic reads in flow.step() so the first value is cached and replay can reuse it.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'runtime.non_serializable_payload': defineIndexLintRule({
+    id: 'runtime.non_serializable_payload',
+    severity: 'error',
+    category: 'runtime',
+    maturity: 'stable',
+    confidence: 'medium',
+    profiles: ['recommended', 'strict'],
+    title: 'Durable runtime payload is not JSON-serializable',
+    rationale:
+      'Durable runtime boundaries persist payloads as JSON so they can be replayed, inspected, and delivered across adapters.',
+    impact: 'Functions, Maps, Sets, class instances, and other non-JSON values fail at runtime with PAYLOAD_NOT_JSON.',
+    docsSlug: 'runtime-non-serializable-payload',
+    fixes: [
+      {
+        title: 'Pass JSON data',
+        description: 'Replace the payload with plain JSON data, or store complex data elsewhere and pass a reference.',
         kind: 'manual',
       },
     ],

@@ -20,6 +20,7 @@ import type {
 import type { CruxObservabilityTransport, ObservabilityDeliveryOptions } from '../observability'
 import type { CruxObservabilityCapturePolicy } from '../observability/capture-policy'
 import type { RecordStore } from '../storage'
+import type { RuntimeEngineDefinition } from './api/runtime-definition'
 
 /**
  * The set of global hooks and reporters that instrument Crux primitives.
@@ -58,6 +59,8 @@ export interface CruxRuntime {
   observabilityCapture?: CruxObservabilityCapturePolicy
   /** Global record store for flow state persistence (suspend/resume). */
   records?: RecordStore
+  /** Durable Runtime Engine composer configured for runtime-bound APIs. */
+  runtimeEngine?: RuntimeEngineDefinition
   /** Global constraints registered via createConstraintPlugin(). */
   globalConstraints?: import('../safety/constraint/types').Constraint[]
   /** Global guardrails registered via createGuardrailPlugin(). */

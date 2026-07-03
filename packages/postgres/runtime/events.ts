@@ -1,0 +1,96 @@
+import type {
+  AppendEventOptions,
+  DurableEventPort,
+  NewRuntimeEvent,
+  ReadEventsOptions,
+  ReadEventsResult,
+  RuntimeEvent,
+} from '@use-crux/core/runtime'
+import type { PostgresStoreFaults } from './faults'
+import { recordWrite } from './faults'
+import { decodeRuntimeEvent, encodeJson } from './codec'
+import type { PgExecutor } from './sql'
+import { table } from './sql'
+
+export function createPostgresEventPort(
+  db: PgExecutor,
+  schema: string,
+  faults: PostgresStoreFaults,
+): DurableEventPort {
+  const events = table(schema, 'events')
+
+  return {
+    async append(
+      event: NewRuntimeEvent,
+      options?: AppendEventOptions,
+    ): Promise<RuntimeEvent> {
+      const existing = await findDuplicate(event, options)
+      if (existing) return existing
+
+      recordWrite(faults)
+      const result = await db.query(
+        `INSERT INTO ${events} (namespace, name, payload, duplicate_key, appended_at)
+         VALUES ($1, $2, $3::jsonb, $4, now())
+         ON CONFLICT (namespace, duplicate_key) WHERE duplicate_key IS NOT NULL
+         DO UPDATE SET duplicate_key = EXCLUDED.duplicate_key
+         RETURNING *`,
+        [
+          event.namespace,
+          event.name,
+          encodeJson(event.payload),
+          duplicateKey(event, options),
+        ],
+      )
+      return decodeRuntimeEvent(result.rows[0])
+    },
+
+    async read(options: ReadEventsOptions): Promise<ReadEventsResult> {
+      const values: unknown[] = [options.namespace]
+      const filters = ['namespace = $1']
+      if (options.after !== undefined) {
+        values.push(Number(options.after))
+        filters.push(`event_id > $${values.length}`)
+      }
+      values.push(options.limit ?? 100)
+      const result = await db.query(
+        `SELECT * FROM ${events}
+          WHERE ${filters.join(' AND ')}
+          ORDER BY event_id ASC
+          LIMIT $${values.length}`,
+        values,
+      )
+      const readEvents = result.rows.map(decodeRuntimeEvent)
+      const cursor = readEvents.at(-1)?.eventId
+      return cursor ? { events: readEvents, cursor } : { events: readEvents }
+    },
+  }
+
+  async function findDuplicate(
+    event: NewRuntimeEvent,
+    options: AppendEventOptions | undefined,
+  ): Promise<RuntimeEvent | null> {
+    if (event.eventId && /^\d+$/.test(event.eventId)) {
+      const byCursor = await db.query(
+        `SELECT * FROM ${events} WHERE namespace = $1 AND event_id = $2`,
+        [event.namespace, Number(event.eventId)],
+      )
+      if (byCursor.rows[0]) return decodeRuntimeEvent(byCursor.rows[0])
+    }
+    const key = duplicateKey(event, options)
+    if (!key) return null
+    const byKey = await db.query(
+      `SELECT * FROM ${events} WHERE namespace = $1 AND duplicate_key = $2`,
+      [event.namespace, key],
+    )
+    return byKey.rows[0] ? decodeRuntimeEvent(byKey.rows[0]) : null
+  }
+}
+
+function duplicateKey(
+  event: NewRuntimeEvent,
+  options: AppendEventOptions | undefined,
+): string | undefined {
+  if (event.eventId) return `event:${event.eventId}`
+  if (options?.idempotencyKey) return `idempotency:${options.idempotencyKey}`
+  return undefined
+}

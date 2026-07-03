@@ -7,6 +7,12 @@ import {
   primitiveDataAccessRefsWithHelpers,
   type PrimitiveDataAccessRef,
 } from '../../../extractors/data-access'
+import {
+  collectNondeterministicCalls,
+  collectRuntimeUsages,
+  type NondeterministicRef,
+  type RuntimeUsageRef,
+} from './flow-runtime-hazards'
 
 /**
  * Source-local flow step evidence returned by the internal flow traversal facade.
@@ -36,6 +42,8 @@ export interface InternalFlowSuspensionRef {
 export interface InternalFlowTraversalResult {
   readonly steps: readonly InternalFlowStepRef[]
   readonly suspensions: readonly InternalFlowSuspensionRef[]
+  readonly runtimeUsages: readonly RuntimeUsageRef[]
+  readonly nondeterministicCalls: readonly NondeterministicRef[]
 }
 
 /**
@@ -46,14 +54,17 @@ export interface InternalFlowTraversalResult {
  */
 export function internalFlowTraversal(ctx: StaticCallContext, flowDefinitionKey: string): InternalFlowTraversalResult {
   if (!ts.isCallExpression(ctx.call)) {
-    return { steps: [], suspensions: [] }
+    return { steps: [], suspensions: [], runtimeUsages: [], nondeterministicCalls: [] }
   }
   const call = ctx.call
   const steps = flowStepRefs(ctx, flowDefinitionKey, call)
   const stepNames = [...new Set(steps.map((step) => step.name))]
+  const roots = flowTraversalRoots(call)
   return {
     steps,
     suspensions: flowSuspensionRefs(call, stepNames[stepNames.length - 1]),
+    runtimeUsages: roots.flatMap((root) => collectRuntimeUsages(ctx, root)),
+    nondeterministicCalls: roots.flatMap((root) => collectNondeterministicCalls(ctx, root)),
   }
 }
 

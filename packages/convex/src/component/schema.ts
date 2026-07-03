@@ -33,4 +33,118 @@ export default defineSchema({
     .index('by_run_id', ['swarmRunId'])
     .index('by_status', ['status'])
     .index('by_session', ['sessionId']),
+
+  runtimeWork: defineTable({
+    workId: v.string(),
+    namespace: v.string(),
+    work: v.any(),
+    targetId: v.string(),
+    status: v.string(),
+    attempt: v.number(),
+    maxAttempts: v.number(),
+    notBefore: v.optional(v.number()),
+    idempotencyKey: v.string(),
+    idleScope: v.optional(v.string()),
+    leaseToken: v.optional(v.string()),
+    lastError: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_work_id', ['workId'])
+    .index('by_namespace_status_updated', ['namespace', 'status', 'updatedAt']),
+
+  runtimeSnapshots: defineTable({
+    flowId: v.string(),
+    workId: v.string(),
+    targetId: v.string(),
+    namespace: v.string(),
+    status: v.string(),
+    input: v.any(),
+    completedSteps: v.any(),
+    fingerprint: v.array(v.string()),
+    pendingSuspends: v.any(),
+    deliveredSuspends: v.optional(v.any()),
+    scheduledEffects: v.optional(v.any()),
+    updatedAt: v.number(),
+  }).index('by_flow', ['namespace', 'flowId']),
+
+  runtimeEvents: defineTable({
+    eventId: v.number(),
+    eventKey: v.optional(v.string()),
+    idempotencyKey: v.optional(v.string()),
+    namespace: v.string(),
+    name: v.string(),
+    payload: v.any(),
+    appendedAt: v.number(),
+  })
+    .index('by_namespace_event_id', ['namespace', 'eventId'])
+    .index('by_namespace_event_key', ['namespace', 'eventKey'])
+    .index('by_namespace_idempotency_key', ['namespace', 'idempotencyKey'])
+    .index('by_namespace_name', ['namespace', 'name']),
+
+  runtimeWaiters: defineTable({
+    waiterId: v.string(),
+    namespace: v.string(),
+    eventName: v.string(),
+    match: v.any(),
+    workId: v.optional(v.string()),
+    work: v.any(),
+    timeoutAt: v.optional(v.number()),
+    timerId: v.optional(v.string()),
+    state: v.string(),
+  })
+    .index('by_waiter_id', ['waiterId'])
+    .index('by_namespace_event_state', ['namespace', 'eventName', 'state'])
+    .index('by_work', ['workId'])
+    .index('by_namespace_state_timeout', ['namespace', 'state', 'timeoutAt']),
+
+  runtimeTimers: defineTable({
+    timerId: v.string(),
+    namespace: v.string(),
+    fireAt: v.number(),
+    workId: v.optional(v.string()),
+    waiterId: v.optional(v.string()),
+    idleScope: v.optional(v.string()),
+    work: v.any(),
+    state: v.string(),
+    idempotencyKey: v.optional(v.string()),
+  })
+    .index('by_timer_id', ['timerId'])
+    .index('by_namespace_state_fire', ['namespace', 'state', 'fireAt'])
+    .index('by_work', ['workId']),
+
+  runtimeOutbox: defineTable({
+    outboxId: v.string(),
+    namespace: v.string(),
+    envelope: v.any(),
+    state: v.string(),
+    attempts: v.number(),
+    nextAttemptAt: v.number(),
+  })
+    .index('by_outbox_id', ['outboxId'])
+    .index('by_namespace_state_next', ['namespace', 'state', 'nextAttemptAt']),
+
+  runtimeIdempotency: defineTable({
+    namespace: v.string(),
+    key: v.string(),
+    completedAt: v.number(),
+  }).index('by_namespace_key', ['namespace', 'key']),
+
+  runtimeLeases: defineTable({
+    resource: v.string(),
+    token: v.string(),
+    ownerId: v.optional(v.string()),
+    expiresAt: v.number(),
+  }).index('by_resource', ['resource']),
+
+  runtimeIdleCounters: defineTable({
+    namespace: v.string(),
+    scope: v.string(),
+    count: v.number(),
+  }).index('by_namespace_scope', ['namespace', 'scope']),
+
+  runtimeCounters: defineTable({
+    key: v.string(),
+    value: v.number(),
+  }).index('by_key', ['key']),
 })

@@ -74,7 +74,7 @@ describe('static extension host compatibility layer', () => {
     )
   })
 
-  it('reports no Node work for native-covered first-party extractors', async () => {
+  it('reports native-only first-party extractor coverage', async () => {
     const result = await loadStaticExtensionHostManifest({
       root: '/project',
       extensions: [cruxCoreExtension],
@@ -85,7 +85,7 @@ describe('static extension host compatibility layer', () => {
     expect(result.nativeOnlyEligible).toBe(true)
     expect(result.manifest.staticHost).toEqual(
       expect.objectContaining({
-        bundledNativeExtractorCount: 18,
+        bundledNativeExtractorCount: 19,
         bundledTypeScriptExtractorCount: 0,
         extensionTypeScriptExtractorCount: 0,
         requiresCompatibilityEvidence: false,

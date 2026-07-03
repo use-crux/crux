@@ -1,0 +1,28 @@
+---
+title: WAKE_UNVERIFIED
+description: HTTP wake verification failed.
+---
+
+## What failed
+
+The runtime HTTP wake endpoint rejected a request before decoding the envelope or touching durable state.
+
+## Why
+
+The request was missing a valid QStash signature or Crux HMAC header, or the configured verifier rejected it.
+
+## What still works
+
+Valid signed wakes continue processing. Durable state is unchanged for rejected requests.
+
+## Fix
+
+Use the wake adapter's signed delivery path. For `genericQueue()`, forward the generated `body` and `headers` exactly:
+
+```ts
+await fetch(message.url, {
+  method: 'POST',
+  headers: message.headers,
+  body: message.body,
+})
+```

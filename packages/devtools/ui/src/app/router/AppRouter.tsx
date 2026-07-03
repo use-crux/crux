@@ -19,6 +19,7 @@ import { CodeBlock } from '@/shared/components/ai-elements/code-block'
 const OverviewPage = lazy(() => import('@/pages/OverviewPage').then((m) => ({ default: m.OverviewPage })))
 const InsightsPage = lazy(() => import('@/pages/InsightsPage').then((m) => ({ default: m.InsightsPage })))
 const RunsPage = lazy(() => import('@/pages/RunsPage').then((m) => ({ default: m.RunsPage })))
+const RuntimePage = lazy(() => import('@/pages/RuntimePage').then((m) => ({ default: m.RuntimePage })))
 const RunDetailPage = lazy(() => import('@/pages/RunDetailPage').then((m) => ({ default: m.RunDetailPage })))
 const ExperimentsPage = lazy(() => import('@/pages/ExperimentsPage').then((m) => ({ default: m.ExperimentsPage })))
 const ExperimentDetailPage = lazy(() =>
@@ -77,6 +78,8 @@ export function AppRouter({ nav }: { nav: NavState }) {
           }
         />
       )
+    case 'runtime':
+      return <RuntimePage />
     case 'run-detail':
       return <RunDetailPage traceId={nav.traceId} lens={nav.lens} spanId={nav.spanId} summary={nav.summary} />
     case 'detail':

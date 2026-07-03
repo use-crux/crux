@@ -1,0 +1,24 @@
+---
+title: TARGET_DUPLICATE
+description: Two runtime targets use the same durable name.
+---
+
+## What failed
+
+Crux found more than one exported `flow()` or runtime `task()` with the same literal target name.
+
+## Why
+
+Runtime target names are persisted routing identities. A wake must resolve one name to exactly one target.
+
+## What still works
+
+Object-bound calls still work while you fix the duplicate. Runtime artifact generation and handler construction fail.
+
+## Fix
+
+Rename one target and regenerate artifacts:
+
+```bash
+crux runtime generate
+```

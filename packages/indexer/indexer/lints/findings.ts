@@ -18,6 +18,7 @@ import {
 } from '../static/injection-read-model'
 import { flowLintFindings } from './flow'
 import { indexLintFinding } from './rules'
+import { runtimeLintFindings } from './runtime'
 import {
   childDefinitionsByParent,
   compareFindings,
@@ -61,6 +62,9 @@ import { qualityMissingBaselineFinding } from './quality'
 export function indexLintFindings(input: {
   readonly definitions: readonly ProjectDefinition[]
   readonly relations: readonly ProjectRelation[]
+  readonly runtime?: {
+    readonly configured?: boolean
+  }
 }): IndexLintFinding[] {
   const byId = new Map(input.definitions.map((definition) => [definition.id, definition]))
   const injectionModels = buildAllInjectionReadModels(input)
@@ -75,6 +79,8 @@ export function indexLintFindings(input: {
     'cascadeDefinitionId',
   )
   const findings: IndexLintFinding[] = []
+
+  findings.push(...runtimeLintFindings(input.definitions, { runtimeConfigured: input.runtime?.configured }))
 
   for (const definition of input.definitions) {
     findings.push(...flowLintFindings(definition))

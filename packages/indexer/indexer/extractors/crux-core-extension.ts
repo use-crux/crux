@@ -14,6 +14,7 @@ import { injectableIndexExtractor } from "./injectable-extension";
 import { promptIndexExtractor } from "./prompt-extension";
 import { ragRetrieverIndexExtractor } from "./rag-extension";
 import { routingIndexExtractor } from "./routing-extension";
+import { runtimeTaskIndexExtractor } from "./runtime-task-extension";
 import { safetyIndexExtractor } from "./safety-extension";
 import { scorerIndexExtractor } from "./scorer-extension";
 import {
@@ -60,6 +61,7 @@ export const cruxCoreExtension: IndexerExtension = {
     blackboardIndexExtractor,
     routingIndexExtractor,
     flowIndexExtractor,
+    runtimeTaskIndexExtractor,
   ],
   relations: indexRelationPolicies.map(relationSpecFromPolicy),
 };

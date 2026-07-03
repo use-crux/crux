@@ -16,6 +16,9 @@ import type { TaskResultSchema, TaskSpec, TaskSpecOptions } from './types'
  *
  * Use `task()` when task IDs are known ahead of time and callers should get
  * type-safe IDs plus schema-backed completion results from `tasks({ items })`.
+ * This is not the executable durable Runtime Engine task target factory; import
+ * that separate `task()` from `@use-crux/core/runtime` when using
+ * `flow.defer()` or `flow.after()`.
  *
  * @param label - Human-readable task label.
  * @param options - Optional description, assignment, result schema, and metadata.

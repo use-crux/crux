@@ -1,0 +1,27 @@
+---
+title: runtime.target_not_exported
+---
+
+## What it checks
+
+Crux emits this finding when a runtime flow or task target is discovered from local source but cannot be imported as a named export.
+
+## Why it matters
+
+Serverless and host-bound runtime entries import targets in a fresh process. Local or nested declarations cannot be woken durably.
+
+## How to fix
+
+Move the target to a top-level exported declaration and regenerate artifacts.
+
+## When to suppress
+
+Suppress only for local-only targets that are deliberately not part of the durable runtime surface.
+
+## Rule metadata
+
+- Rule id: `runtime.target_not_exported`
+- Category: `runtime`
+- Maturity: `stable`
+- Default profiles: `recommended`, `strict`
+- Default severity: `error`

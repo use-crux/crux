@@ -162,6 +162,9 @@ export interface StaticExtractionProjectionInput {
 export interface ExtensionRuleInput {
   readonly definitions: readonly ProjectDefinition[]
   readonly relations: readonly ProjectRelation[]
+  readonly runtime?: {
+    readonly configured?: boolean
+  }
   readonly availableFacts?: readonly IndexFactKind[]
   readonly semantic?: SemanticReadModel
 }
@@ -495,6 +498,7 @@ export function createExtractContext(
       root: staticCtx.root,
       file: staticCtx.file,
       variableName: staticCtx.variableName,
+      exported: staticCtx.exported,
       localName: staticCtx.localName,
       safeId: staticCtx.safeId,
     },

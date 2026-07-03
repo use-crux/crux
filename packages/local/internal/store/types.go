@@ -746,9 +746,10 @@ type ProjectIndexShard struct {
 
 // ProjectIdentity identifies the workspace that produced a Project Index.
 type ProjectIdentity struct {
-	Root       string `json:"root"`
-	Name       string `json:"name,omitempty"`
-	ConfigFile string `json:"configFile,omitempty"`
+	Root              string `json:"root"`
+	Name              string `json:"name,omitempty"`
+	ConfigFile        string `json:"configFile,omitempty"`
+	RuntimeConfigured *bool  `json:"runtimeConfigured,omitempty"`
 }
 
 type IndexIndexingPhaseStatus struct {

@@ -410,6 +410,7 @@ export type ProjectDefinitionKind =
   | "agent"
   | "flow"
   | "flow.step"
+  | "task"
   | "composition.parallel"
   | "composition.parallel.branch"
   | "composition.pipeline"
@@ -817,6 +818,8 @@ export interface ProjectIdentity {
   root: string;
   name?: string;
   configFile?: string;
+  /** Whether the last config-aware index saw a Runtime Engine configured for this project. */
+  runtimeConfigured?: boolean;
 }
 
 export interface ProjectDefinition {
@@ -1189,6 +1192,7 @@ export const ProjectIdentitySchema = z.object({
   root: z.string(),
   name: z.string().optional(),
   configFile: z.string().optional(),
+  runtimeConfigured: z.boolean().optional(),
 }) satisfies z.ZodType<ProjectIdentity>;
 
 export const ProjectDefinitionKindSchema = z.enum([
@@ -1199,6 +1203,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "agent",
   "flow",
   "flow.step",
+  "task",
   "composition.parallel",
   "composition.parallel.branch",
   "composition.pipeline",

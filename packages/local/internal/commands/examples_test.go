@@ -21,6 +21,7 @@ func TestCommandsLeadWithExamples(t *testing.T) {
 		NewInspectCmd(f),
 		NewTracesCmd(f),
 		NewFlowsCmd(f),
+		NewRuntimeCmd(f),
 	}
 	cmds = append(cmds, NewQualityCmd(f).Commands()...)
 

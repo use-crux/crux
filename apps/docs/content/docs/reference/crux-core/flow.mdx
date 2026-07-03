@@ -91,6 +91,10 @@ The scope object passed to the flow handler. Generic over `TInput` (defaults to 
 | `step(label, fn, options?)`              | `Promise<T>`              | Execute a named step. `fn` can be `() => T` or `(flow: FlowScope) => T` |
 | `suspend(name, options?)`                | `Promise<T>`              | Suspend the flow at a named point and wait for an external signal       |
 | `waitUntil(name, conditionFn, options?)` | `Promise<void>`           | Suspend until a condition function returns `true`                       |
+| `waitFor(event, options?)`               | `Promise<TPayload>`       | Runtime-bound durable event wait                                       |
+| `defer(task, input)`                     | `Promise<{ workId }>`     | Runtime-bound durable child task enqueue at the next barrier           |
+| `after(task, delay, input)`              | `Promise<void>`           | Runtime-bound durable child task timer at the next barrier             |
+| `untilIdle({ scope: 'current-flow' })`   | `Promise<void>`           | Runtime-bound wait for child work in the current flow                  |
 | `cancel(reason?)`                        | `never`                   | Cancel the flow with an optional reason                                 |
 
 ### `step(label, fn, options?)`
@@ -110,6 +114,51 @@ Suspend the flow and wait for an external signal. Throws internally to unwind th
 Suspend the flow until a condition function returns `true`. Core evaluates the condition during the initial run and
 again only when your app explicitly resumes the flow. If the condition is true, execution continues; if false, the
 flow re-suspends. Core does not poll, schedule, or wake flows in the background.
+
+## Runtime-backed flow APIs
+
+These APIs require a configured Runtime Engine. Without `config({ runtime })`, they throw `RUNTIME_REQUIRED`. Object-bound `suspend()`, `signal()`, and `resume()` remain available without runtime config.
+
+### `waitFor(event, options?)`
+
+Suspend until a durable event arrives. On first execution Crux registers a waiter in the runtime store; on replay the same `await` resolves with the event payload.
+
+```ts
+const approval = await flow.waitFor(
+  { name: 'document.approved', schema: approvalSchema },
+  { match: { documentId }, timeout: '24h' },
+)
+```
+
+`match` compares top-level JSON payload fields. `timeout` schedules a durable timeout through the runtime.
+
+### `defer(task, input)`
+
+Buffer an executable runtime task to run independently. The task becomes durable at the next suspension or completion barrier, so replay cannot enqueue it twice.
+
+```ts
+const { workId } = await flow.defer(embedDocument, { documentId })
+```
+
+The target must be a runtime `task()` from `@use-crux/core/runtime`, not a plan-ledger task.
+
+### `after(task, delay, input)`
+
+Buffer a durable child task timer. The timer is independent of the parent flow and becomes durable at the next barrier.
+
+```ts
+await flow.after(sendReminder, '2d', { userId })
+```
+
+### `untilIdle({ scope: 'current-flow' })`
+
+Suspend until child work created by the current flow reaches terminal state.
+
+```ts
+await flow.untilIdle({ scope: 'current-flow' })
+```
+
+Global idle is not a v1 runtime primitive.
 
 ## `SuspendOptions<T>`
 

@@ -49,6 +49,7 @@ func BuildWithExtensionManifest(
 		Root:                     root,
 		ProjectName:              projectName,
 		ConfigFile:               config.ConfigFile,
+		RuntimeConfigured:        config.RuntimeConfigured,
 		CallNames:                append([]string(nil), defaultCallNames...),
 		CallInterests:            defaultCallInterests(),
 		ConstructorNames:         []string{"Agent"},

@@ -17,6 +17,7 @@
     "compaction",
     "agent",
     "flow",
+    "runtime-engine",
     "plan",
     "tasks",
     "skill",

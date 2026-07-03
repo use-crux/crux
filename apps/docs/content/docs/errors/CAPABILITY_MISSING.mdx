@@ -1,0 +1,26 @@
+---
+title: CAPABILITY_MISSING
+description: The configured runtime stack cannot support a used feature.
+---
+
+## What failed
+
+Crux found a runtime-bound feature that the configured adapter capabilities do not support.
+
+## Why
+
+Adapters must report durable timers, wake signing, event cursors, leases, setup, and deployment support honestly. Missing capability is a hard failure, not a silent fallback.
+
+## What still works
+
+Features not requiring the missing capability may continue to work. Object-bound flow APIs still work without durable runtime behavior.
+
+## Fix
+
+Use a stack that supports the feature, such as:
+
+```ts
+runtime: serverless({ store: postgres(), wake: qstash() })
+```
+
+For custom adapters, update capabilities only after implementing the matching behavior and conformance tests.

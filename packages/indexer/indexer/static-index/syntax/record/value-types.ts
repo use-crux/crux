@@ -118,6 +118,10 @@ export interface StaticTemplateValue {
 /** Function-like value retained as source evidence without executable details. */
 export interface StaticFunctionValue {
   readonly kind: 'function'
+  /** Parameter names visible on this function, in declaration order. */
+  readonly parameterNames?: readonly string[]
+  /** Bindings introduced by the first parameter, preserving object-pattern source property names. */
+  readonly firstParameterBindings?: readonly StaticFunctionParameterBinding[]
   /** Ordered call expressions visible inside the function body. */
   readonly calls: readonly StaticFunctionCallValue[]
   /** Return expressions visible directly inside the function body. */
@@ -126,6 +130,14 @@ export interface StaticFunctionValue {
   readonly localInitializers: readonly StaticInitializerRecord[]
   readonly source: SourceLocation
   readonly snippet?: SourceSnippet
+}
+
+/** One binding introduced by a function parameter pattern. */
+export interface StaticFunctionParameterBinding {
+  /** Local identifier name visible inside the function body. */
+  readonly name: string
+  /** Source object property name when this binding came from object destructuring. */
+  readonly propertyName?: string
 }
 
 /** Function-body call evidence normalized without exposing parser AST nodes. */

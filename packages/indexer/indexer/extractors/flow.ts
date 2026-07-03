@@ -24,6 +24,8 @@ export function flowFactsFromStaticContext(ctx: StaticCallContext): ExtractedFac
     localName: ctx.localName,
     callName: ctx.callName,
     explicitName,
+    nameLiteral: explicitName !== undefined,
+    exported: ctx.exported,
     args: ctx.objectArg ? objectPropertyKeys(ctx.objectArg, 'args') : undefined,
     argsSchema,
     hasArgs: ctx.objectArg ? hasProperty(ctx.objectArg, 'args') : false,

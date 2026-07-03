@@ -342,6 +342,7 @@ describe('project index compiler', () => {
       root,
       name: 'fixture',
       configFile: join(root, 'crux.config.ts'),
+      runtimeConfigured: false,
     })
     expect(result.facts.definitions).toContainEqual(
       expect.objectContaining({ id: 'prompt:writer', kind: 'prompt', fidelity: 'resolved' }),

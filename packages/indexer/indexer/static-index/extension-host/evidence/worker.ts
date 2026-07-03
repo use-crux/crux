@@ -129,7 +129,10 @@ export async function checkStaticRulesForProject(
   }
 
   const ruleDescriptors = [...builtInIndexRuleDescriptors(), ...extensionResult.ruleDescriptors]
-  const rawFindings = [...indexLintFindings(input.graph), ...extensionResult.outputs]
+  const rawFindings = [
+    ...indexLintFindings({ ...input.graph, runtime: runtimeInput.runtime }),
+    ...extensionResult.outputs,
+  ]
   const outputs = applyIndexLintConfig({
     config: runtimeInput.lint,
     configFile: runtimeInput.configFile,
@@ -159,6 +162,7 @@ async function staticExtensionRuntimeInputForProject(input: StaticExtensionWorke
     readonly configDiagnostics: Awaited<ReturnType<typeof loadProjectConfig>>['diagnostics']
     readonly configFile?: string
     readonly lint: Awaited<ReturnType<typeof loadProjectConfig>>['loaded']['lint']
+    readonly runtime?: { readonly configured: boolean }
   }
 > {
   const loaded = await loadProjectConfig(input.root, input.configPath, input.resolutionMode ?? 'config-policy')
@@ -168,6 +172,9 @@ async function staticExtensionRuntimeInputForProject(input: StaticExtensionWorke
     configDiagnostics: loaded.diagnostics,
     configFile: loaded.loaded.configFile,
     lint: loaded.loaded.lint,
+    ...(loaded.loaded.importFailed
+      ? {}
+      : { runtime: { configured: Boolean(loaded.loaded.crux?.config.runtime) } }),
   }
 }
 

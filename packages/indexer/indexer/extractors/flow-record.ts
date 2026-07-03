@@ -28,12 +28,15 @@ export function flowFactsFromStaticRecordContext(
     return undefined;
   if (recordCtx.match.kind !== "call") return undefined;
   const explicitName = ctx.args.string(0) ?? ctx.config?.string("name");
+  const nameLiteral = recordFlowNameIsLiteral(recordCtx);
   return flowFactsFromEvidence({
     variableName: ctx.source.variableName,
     localName: ctx.source.localName,
     callName: ctx.match.name,
     runtime: recordFlowRuntime(recordCtx),
     explicitName,
+    nameLiteral,
+    exported: ctx.source.exported === true,
     args: recordArgsKeys(recordCtx),
     argsSchema: ctx.config?.schema("args") as
       | Record<string, unknown>
@@ -55,6 +58,22 @@ export function flowFactsFromStaticRecordContext(
         metadata,
       }).definition,
   });
+}
+
+function recordFlowNameIsLiteral(ctx: InternalStaticRecordContext): boolean {
+  if (ctx.match.kind !== "call") return false;
+  const positionalName = ctx.match.args[0];
+  if (
+    positionalName?.kind === "literal" &&
+    typeof positionalName.value === "string"
+  )
+    return true;
+  if (!isObjectStyleFlowCall(ctx) || !ctx.objectArg) return false;
+  const configuredName = staticObjectPropertyValue(ctx.objectArg, "name");
+  return (
+    configuredName?.kind === "literal" &&
+    typeof configuredName.value === "string"
+  );
 }
 
 function recordFlowRuntime(

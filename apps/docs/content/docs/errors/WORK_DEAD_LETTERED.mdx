@@ -1,0 +1,25 @@
+---
+title: WORK_DEAD_LETTERED
+description: Runtime work exhausted its retry budget.
+---
+
+## What failed
+
+A work item retried until `maxAttempts` and moved to the `dead-letter` terminal state.
+
+## Why
+
+The runtime stops retrying to avoid hot loops and preserve the last error for inspection.
+
+## What still works
+
+Other work continues. The dead-lettered item remains inspectable and can be explicitly retried after the cause is fixed.
+
+## Fix
+
+Inspect, fix the cause, then retry:
+
+```bash
+crux runtime inspect <workId>
+crux runtime retry <workId>
+```

@@ -5,9 +5,10 @@ import "encoding/json"
 // ProjectStaticSyntaxPlan is the Go-owned plan for Static Syntax parsing and
 // Static Index execution.
 type ProjectStaticSyntaxPlan struct {
-	Root        string `json:"root"`
-	ProjectName string `json:"projectName,omitempty"`
-	ConfigFile  string `json:"configFile,omitempty"`
+	Root              string `json:"root"`
+	ProjectName       string `json:"projectName,omitempty"`
+	ConfigFile        string `json:"configFile,omitempty"`
+	RuntimeConfigured *bool  `json:"runtimeConfigured,omitempty"`
 	// Files contains primary extraction files plus support files needed for cross-file record lookups.
 	Files []string `json:"files"`
 	// PrimaryFiles contains extraction targets only. It is Go-internal because

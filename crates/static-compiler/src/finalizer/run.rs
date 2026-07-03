@@ -197,6 +197,9 @@ fn merge_grouped_facts(facts: &mut StaticIndexPatchFacts, grouped: StaticIndexPa
     facts.lint_findings.extend(grouped.lint_findings);
     facts.rule_descriptors.extend(grouped.rule_descriptors);
     facts.sources.extend(grouped.sources);
+    if grouped.project.is_some() {
+        facts.project = grouped.project;
+    }
     if grouped.source_graph.is_some() {
         facts.source_graph = grouped.source_graph;
     }

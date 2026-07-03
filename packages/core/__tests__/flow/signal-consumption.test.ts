@@ -69,6 +69,10 @@ describe('flow signal consumption', () => {
       InvalidSignalPayloadError,
     )
     await expect(store.get(`crux:signal:${suspended.flowId}:release`)).resolves.toBeNull()
+    await expect(
+      sendRelease(suspended.flowId, 'release', { resume: false, unexpected: true }),
+    ).rejects.toBeInstanceOf(InvalidSignalPayloadError)
+    await expect(store.get(`crux:signal:${suspended.flowId}:release`)).resolves.toBeNull()
 
     await signalFlow(suspended.flowId, 'release', { unexpected: true })
     await expect(release.resume(suspended.flowId)).rejects.toBeInstanceOf(InvalidSignalPayloadError)

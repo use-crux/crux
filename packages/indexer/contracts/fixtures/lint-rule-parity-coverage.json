@@ -4,6 +4,12 @@
     "negative"
   ],
   "policyFixture": "index-lint-native-policy-parity.test.ts",
+  "typeScriptOnlyRules": [
+    {
+      "ruleId": "runtime.missing_runtime_config",
+      "reason": "Requires loaded crux.config.ts runtime state, which is not part of native lint fact finalization."
+    }
+  ],
   "rules": [
     {
       "ruleId": "definition.missing_eval_coverage",
@@ -162,6 +168,36 @@
     },
     {
       "ruleId": "routing.cascade_unreachable_tier",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "runtime.duplicate_target_name",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "runtime.non_literal_target_name",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "runtime.target_not_exported",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "runtime.closure_defer",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "flow.nondeterministic_code",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "runtime.non_serializable_payload",
       "positiveFixture": "index-lint-native-parity.test.ts",
       "negativeFixture": "index-lint-native-parity.test.ts"
     }

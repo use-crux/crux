@@ -1,0 +1,67 @@
+---
+title: '@use-crux/postgres'
+description: Postgres Runtime Engine store adapter for durable Crux work, flow snapshots, events, waiters, timers, leases, outbox rows, and setup checks.
+---
+
+Peer dependency: `pg` >=8.22.0
+
+```ts
+import { postgres } from '@use-crux/postgres/runtime'
+```
+
+`@use-crux/postgres/runtime` provides the first-party durable store for the Runtime Engine. Use it with `node({ store })` for long-lived Node processes or with `serverless({ store, wake })` for HTTP-woken deployments.
+
+## `postgres(options?)`
+
+```ts
+import { config } from '@use-crux/core'
+import { serverless } from '@use-crux/core/runtime'
+import { postgres } from '@use-crux/postgres/runtime'
+import { qstash } from '@use-crux/upstash/runtime'
+
+export default config({
+  runtime: serverless({
+    store: postgres({
+      url: process.env.DATABASE_URL,
+      schema: 'crux_runtime',
+    }),
+    wake: qstash(),
+  }),
+})
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `url` | `string` | `DATABASE_URL` | Postgres connection URL. |
+| `schema` | `string` | `'crux_runtime'` | Dedicated schema for Crux-owned runtime tables and indexes. |
+| `pool` | `Pool` | created from `url` | Caller-supplied `pg` pool. |
+| `setup.mode` | `'verify' \| 'create-if-missing'` | production verifies | Controls whether setup may create missing Crux-owned resources. |
+
+The adapter stores work items, flow snapshots, durable events, waiters, timers, outbox rows, idempotency records, leases, and scoped-idle counters. Runtime payloads are JSON data; application blobs and large documents should stay in application storage.
+
+## Setup
+
+`postgres()` exposes a setup port used by `crux runtime setup`:
+
+```bash
+crux runtime setup --check
+crux runtime setup --apply
+```
+
+`--check` never mutates resources. `--apply` performs additive setup only: schema, tables, indexes, and advisory-lock migration state owned by Crux. Destructive migrations are not automatic.
+
+In tests, the package conformance suite can run against `CRUX_TEST_DATABASE_URL`. Local package tests may start an embedded Postgres fallback when no URL is provided.
+
+## Deployment notes
+
+- Use a shared Postgres database for multi-process or serverless deployments.
+- Keep the runtime schema separate from application tables.
+- Pair Postgres with an external wake adapter such as `qstash()` in serverless deployments; a database row cannot wake a cold function by itself.
+- Namespace isolates environments sharing the same database. It is not an authorization boundary.
+
+## Related
+
+- Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)
+- Guide: [Next/Vercel Runtime](/docs/guides/runtime/next-vercel)
+- Guide: [Long-lived Node Runtime](/docs/guides/runtime/node)
+- Error: [SETUP_REQUIRED](/docs/errors/SETUP_REQUIRED)

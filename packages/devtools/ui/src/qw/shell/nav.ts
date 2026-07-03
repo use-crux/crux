@@ -11,6 +11,7 @@ export type QwViewId =
   | 'overview'
   | 'insights'
   | 'runs'
+  | 'runtime'
   | 'feedback'
   | 'evaluations'
   | 'experiments'
@@ -80,6 +81,7 @@ export const QW_NAV: QwNavGroup[] = [
       { id: 'overview', label: 'Overview', iconName: 'home' },
       { id: 'insights', label: 'Insights', iconName: 'sparkle' },
       { id: 'runs', label: 'Runs', iconName: 'trace' },
+      { id: 'runtime', label: 'Runtime', iconName: 'db' },
       { id: 'feedback', label: 'Feedback', iconName: 'inbox' },
     ],
   },

@@ -101,7 +101,9 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^24.12.4",
+    "convex-test": "^0.0.54",
     "vitest": "^4.1.7"
   },
   "peerDependencies": {

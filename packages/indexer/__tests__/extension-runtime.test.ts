@@ -825,6 +825,7 @@ function staticInput(sourceText: string): StaticExtractionInput {
     file,
     sourceFile,
     variableName: 'workflow',
+    exported: true,
     call,
     callName,
     firstArg,

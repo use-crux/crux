@@ -43,6 +43,54 @@ describe('incremental static executor', () => {
       rmSync(root, { force: true, recursive: true })
     }
   })
+
+  it('threads previous runtime config state into partial lint findings', async () => {
+    const root = join(process.cwd(), `.tmp-crux-incremental-static-runtime-${process.pid}-${Date.now()}`)
+    const file = join(root, 'src/flow.ts')
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(
+      join(root, 'crux.config.ts'),
+      ['throw new Error("partial reindex must not import config")'].join('\n'),
+    )
+    writeFileSync(
+      file,
+      [
+        "import { flow } from '@use-crux/core/flow'",
+        '',
+        "export const reviewFlow = flow('review', async (scope) => {",
+        "  await scope.waitFor('approved')",
+        '})',
+      ].join('\n'),
+    )
+
+    try {
+      const result = await indexProjectAstPartial({
+        decision: {
+          kind: 'source-file-reindex',
+          root,
+          changedFiles: [file],
+          deletedFiles: [],
+          affectedFiles: [file],
+          affectedDefinitionIds: [],
+          graphConfidence: 'complete-enough-for-source-closure',
+          explanation: {
+            summary: 'test runtime lint partial reindex',
+            graphAvailable: true,
+            fallbackUsed: false,
+            traversedFiles: [file],
+          },
+        },
+        previousIndex: previousIndex(root, file, { runtimeConfigured: false }),
+        startedAt: '2026-06-23T00:00:00.000Z',
+      })
+
+      expect(result.patch.facts.lintFindings?.map((finding) => finding.ruleId)).toContain(
+        'runtime.missing_runtime_config',
+      )
+    } finally {
+      rmSync(root, { force: true, recursive: true })
+    }
+  })
 })
 
 const extensionRuleDescriptor = {
@@ -52,12 +100,16 @@ const extensionRuleDescriptor = {
   description: 'Requires workflow owner metadata.',
 } satisfies IndexRuleDescriptor
 
-function previousIndex(root: string, file: string): ProjectIndexSnapshot {
+function previousIndex(
+  root: string,
+  file: string,
+  options: { readonly runtimeConfigured?: boolean } = {},
+): ProjectIndexSnapshot {
   return {
     schemaVersion: 1,
     prompts: [],
     contexts: [],
-    project: { root },
+    project: { root, ...(options.runtimeConfigured !== undefined ? { runtimeConfigured: options.runtimeConfigured } : {}) },
     lint: {
       rules: {
         '@acme/rules/require-owner': { enabled: false },

@@ -277,6 +277,68 @@ const lintParityCases = [
     expectedRuleIds: ['definition.missing_eval_coverage', 'routing.cascade_unreachable_tier'],
   },
   {
+    name: 'runtime target identity findings',
+    profile: 'strict',
+    definitions: [
+      definition({
+        id: 'flow:review',
+        kind: 'flow',
+        name: 'review',
+        metadata: { runtimeTarget: { kind: 'flow', nameLiteral: true, exported: true } },
+      }),
+      definition({
+        id: 'task:review',
+        kind: 'task',
+        name: 'review',
+        metadata: { runtimeTarget: { kind: 'task', nameLiteral: true, exported: true } },
+      }),
+      definition({
+        id: 'flow:dynamic',
+        kind: 'flow',
+        name: 'dynamic',
+        metadata: { runtimeTarget: { kind: 'flow', nameLiteral: false, exported: true } },
+      }),
+      definition({
+        id: 'task:local',
+        kind: 'task',
+        name: 'local',
+        metadata: { runtimeTarget: { kind: 'task', nameLiteral: true, exported: false } },
+      }),
+    ],
+    expectedRuleIds: [
+      'definition.missing_eval_coverage',
+      'runtime.duplicate_target_name',
+      'runtime.non_literal_target_name',
+      'runtime.target_not_exported',
+    ],
+  },
+  {
+    name: 'runtime flow body findings',
+    profile: 'strict',
+    definitions: [
+      definition({
+        id: 'flow:runtime-body',
+        kind: 'flow',
+        name: 'runtime-body',
+        metadata: {
+          argsSchema: { type: 'object' },
+          runtimeTarget: { kind: 'flow', nameLiteral: true, exported: true },
+          runtimeUsages: [
+            { method: 'defer', closureTarget: true },
+            { method: 'after', nonSerializablePayload: 'Map' },
+          ],
+          nondeterministicCalls: [{ expression: 'Date.now' }],
+        },
+      }),
+    ],
+    expectedRuleIds: [
+      'definition.missing_eval_coverage',
+      'runtime.closure_defer',
+      'runtime.non_serializable_payload',
+      'flow.nondeterministic_code',
+    ],
+  },
+  {
     name: 'experimental unused injection findings',
     profile: 'experimental',
     definitions: [

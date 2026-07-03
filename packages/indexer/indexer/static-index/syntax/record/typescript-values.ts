@@ -3,6 +3,7 @@ import type {
   StaticArrayValue,
   StaticCalleeRecord,
   StaticFunctionCallValue,
+  StaticFunctionParameterBinding,
   StaticInitializerRecord,
   StaticImportRecord,
   StaticObjectProperty,
@@ -88,14 +89,33 @@ export function staticFunctionValueFromNode(
   node: ts.Node,
   importsByLocalName: ReadonlyMap<string, StaticImportRecord>,
 ): StaticSyntaxValue {
+  const parameterNames = staticFunctionParameterNames(node)
+  const firstParameterBindings = staticFunctionFirstParameterBindings(node)
   return {
     kind: 'function',
+    ...(parameterNames.length > 0 ? { parameterNames } : {}),
+    ...(firstParameterBindings.length > 0 ? { firstParameterBindings } : {}),
     calls: staticFunctionCallsFromNode(sourceFile, node, importsByLocalName),
     returns: staticFunctionReturnsFromNode(sourceFile, node, importsByLocalName),
     localInitializers: staticFunctionInitializersFromNode(sourceFile, node, importsByLocalName),
     source: sourceForNode(sourceFile, node),
     snippet: sourceSnippetForNode(sourceFile, node),
   }
+}
+
+function staticFunctionParameterNames(node: ts.Node): readonly string[] {
+  if (!isFunctionLikeWithParameters(node)) return []
+  return node.parameters.flatMap((parameter) => bindingNames(parameter.name))
+}
+
+function staticFunctionFirstParameterBindings(node: ts.Node): readonly StaticFunctionParameterBinding[] {
+  if (!isFunctionLikeWithParameters(node)) return []
+  const [first] = node.parameters
+  return first ? bindingEntries(first.name) : []
+}
+
+function isFunctionLikeWithParameters(node: ts.Node): node is ts.FunctionLikeDeclaration {
+  return 'parameters' in node && Array.isArray((node as { parameters?: unknown }).parameters)
 }
 
 /** Converts an object literal into a record-backed object value. */
@@ -250,10 +270,20 @@ export function staticInitializerRecordsFromDeclaration(
 }
 
 function bindingNames(name: ts.BindingName): readonly string[] {
-  if (ts.isIdentifier(name)) return [name.text]
-  return name.elements.flatMap((element): readonly string[] => {
+  return bindingEntries(name).map((binding) => binding.name)
+}
+
+function bindingEntries(name: ts.BindingName, property?: string): readonly StaticFunctionParameterBinding[] {
+  if (ts.isIdentifier(name)) {
+    return [{ name: name.text, ...(property ? { propertyName: property } : {}) }]
+  }
+  return name.elements.flatMap((element): readonly StaticFunctionParameterBinding[] => {
     if (ts.isOmittedExpression(element)) return []
-    return bindingNames(element.name)
+    const elementProperty =
+      ts.isBindingElement(element) && element.propertyName
+        ? propertyName(element.propertyName)
+        : undefined
+    return bindingEntries(element.name, elementProperty)
   })
 }
 

@@ -1,0 +1,27 @@
+---
+title: runtime.closure_defer
+---
+
+## What it checks
+
+Crux emits this finding when `flow.defer()` receives an inline function instead of an exported runtime `task()` target.
+
+## Why it matters
+
+Durable background work must be importable and wakeable after the current process exits. Inline closures are request-scoped code.
+
+## How to fix
+
+Move the work into `task("name", { run })` from `@use-crux/core/runtime`, or use request-scoped `defer(callback)` when RFC #135 lands.
+
+## When to suppress
+
+Suppress only while migrating code that is covered by runtime tests and not deployed with durable wake.
+
+## Rule metadata
+
+- Rule id: `runtime.closure_defer`
+- Category: `runtime`
+- Maturity: `stable`
+- Default profiles: `recommended`, `strict`
+- Default severity: `error`

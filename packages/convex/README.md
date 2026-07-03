@@ -117,6 +117,35 @@ await runtime.run(ctx, { threadId }, async ({ records }) => {
 
 If you also want the profile-backed Crux prompt lifecycle, prefer `createCruxConvex()`. Its `storage()`, `run()`, and `bridge()` methods delegate to this lower-level runtime bridge.
 
+### Runtime Engine host
+
+Use `convex()` in `crux.config.ts` to declare Convex as the durable Runtime
+Engine host. The declaration is host-bound: runtime work executes inside
+generated or hand-written Convex functions, not from ordinary Node processes.
+
+```ts
+import { config } from '@use-crux/core'
+import { convex } from '@use-crux/convex/runtime'
+
+export default config({
+  runtime: convex(),
+})
+```
+
+Generated `convex/crux.ts` files target `createConvexRuntimeHandlers()`:
+
+```ts
+import { createConvexRuntimeHandlers } from '@use-crux/convex/runtime'
+import { components } from './_generated/api'
+import { reviewFlow } from '../src/review'
+
+export const { handleWake, deliverSignal, resumeFlow, runTask, fireTimer } =
+  createConvexRuntimeHandlers({
+    component: components.crux,
+    targets: [reviewFlow],
+  })
+```
+
 ### Storage Beta adapters
 
 Use `convexRecordStore()`, `convexVectorStore()`, and `convexStorage()` for component-backed Crux records and dense vector search. No manual schema or function definitions needed.

@@ -53,6 +53,7 @@ const firstPartyFixtureCoverageByExtractor: Readonly<Record<string, FirstPartyFi
   blackboard: 'dedicated-fixture',
   routing: 'dedicated-fixture',
   flow: 'dedicated-fixture',
+  'runtime.task': 'dedicated-fixture',
 }
 
 /**

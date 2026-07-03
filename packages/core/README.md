@@ -341,21 +341,100 @@ config({
 
 Disabled input/output artifacts are still emitted as references with `sizeBytes` and `hash`, so devtools, subscribers, diagnostics-channel consumers, and OTel all see the same privacy policy.
 
+## Runtime Engine
+
+Runtime-bound APIs use a configured Runtime Engine for durable work, timers,
+event waiters, wake delivery, and maintenance. For local development and tests,
+use the in-process `node()` composer:
+
+```ts
+import { config } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
+
+export default config({
+  runtime: node(),
+});
+```
+
+With a runtime configured, flow handles can persist `flow.suspend()` and
+`flow.waitFor(...)` state in the Runtime Engine, auto-resume when
+`reviewFlow.signal(...)` or a durable event arrives, enqueue durable background
+work with `flow.defer(task, input)`, schedule task timers with
+`flow.after(task, delay, input)`, and wait for child work with
+`flow.untilIdle({ scope: "current-flow" })`.
+
+Executable durable task targets are defined from the runtime subpath, not the
+root Plans & Tasks ledger `task()` helper:
+
+```ts
+import { task } from "@use-crux/core/runtime";
+
+export const embedDocument = task("embed-document", {
+  run: async ({ documentId }: { documentId: string }) => {
+    await embed(documentId);
+  },
+});
+```
+
+The `Crux` object returned by `config()` also exposes name-bound
+`crux.flows.signal()`, `crux.flows.resume()`, and `crux.flows.cancel()` for
+runtime-backed flows when the object-bound flow handle is not available.
+
+Object-bound flow APIs remain the baseline: `reviewFlow.signal(...)` and
+`reviewFlow.run({ resume: flowId })` work without runtime config when your code
+already has the handle. Name-bound, event-bound, time-bound, and background APIs
+fail with `RUNTIME_REQUIRED` until a runtime is configured.
+
+Serverless entry files use the stable fetch-compatible handler API. Generated
+files target the same shape that users can write by hand:
+
+```ts
+import { createRuntimeHandler, serverless } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+import { qstash } from "@use-crux/upstash/runtime";
+import { reviewFlow } from "@/flows/review";
+import { embedDocument } from "@/tasks/embed-document";
+
+const runtime = serverless({
+  store: postgres(),
+  wake: qstash(),
+});
+
+export const { GET, POST } = createRuntimeHandler({
+  runtime,
+  targets: [reviewFlow, embedDocument],
+});
+```
+
+Advanced and generated entry files can resolve a composer explicitly with
+`createRuntime({ runtime, targets })`. The `@use-crux/core/runtime/testing`
+subpath exposes the shared store and kernel conformance suites for adapter
+authors.
+
+Runtime diagnostics throw `CruxRuntimeError` with stable codes:
+`RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`,
+`TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`,
+`ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`,
+`SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`,
+`NAMESPACE_AMBIGUOUS`, and `RUNTIME_HOST_ONLY`.
+
 ## Import Paths
 
 `@use-crux/core` exposes SDK-agnostic primitives through focused subpaths:
 
-| Import                         | Area                                                                                |
-| ------------------------------ | ----------------------------------------------------------------------------------- |
-| `@use-crux/core`               | Prompts, contexts, config, runtime helpers, common types.                           |
-| `@use-crux/core/memory`        | Memory blocks, stores, capture, recall, and compaction hooks.                       |
-| `@use-crux/core/retrieval`     | Retrievers, rerankers, grounding inputs, and RAG pipelines.                         |
-| `@use-crux/core/safety`        | Guardrails, constraints, safety plugins, and validation retry.                      |
-| `@use-crux/core/quality`       | Evaluations, suites, assertions, scorers, gates, variants, and baselines.           |
-| `@use-crux/core/agent`         | Agents, blackboards, handoffs, delegates, parallel, pipeline, consensus, and swarm. |
-| `@use-crux/core/flow`          | Suspendable typed workflows.                                                        |
-| `@use-crux/core/observability` | Canonical graph records, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model.  |
-| `@use-crux/core/project-index` | Public Project Index contracts for local devtools and source intelligence.          |
+| Import                         | Area                                                                                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@use-crux/core`               | Prompts, contexts, config, runtime helpers, common types.                                                                                    |
+| `@use-crux/core/memory`        | Memory blocks, stores, capture, recall, and compaction hooks.                                                                                |
+| `@use-crux/core/retrieval`     | Retrievers, rerankers, grounding inputs, and RAG pipelines.                                                                                  |
+| `@use-crux/core/safety`        | Guardrails, constraints, safety plugins, and validation retry.                                                                               |
+| `@use-crux/core/quality`       | Evaluations, suites, assertions, scorers, gates, variants, and baselines.                                                                    |
+| `@use-crux/core/agent`         | Agents, blackboards, handoffs, delegates, parallel, pipeline, consensus, and swarm.                                                          |
+| `@use-crux/core/flow`          | Suspendable typed workflows.                                                                                                                 |
+| `@use-crux/core/runtime`       | Runtime Engine composers, port contracts, diagnostics, wake envelopes, kernel composites, outbox dispatch, pure retry/state helpers, and the in-memory runtime store. |
+| `@use-crux/core/runtime/testing` | Runtime Engine store and kernel conformance suites for adapter authors.                                                                    |
+| `@use-crux/core/observability` | Canonical graph records, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model. |
+| `@use-crux/core/project-index` | Public Project Index contracts for local devtools and source intelligence.                                                                   |
 
 See the full [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) for every subpath and API.
 
@@ -368,6 +447,7 @@ See the full [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux
 - [Crux docs](https://cruxjs.dev)
 - [Get started](https://cruxjs.dev/docs/getting-started)
 - [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core)
+- [Runtime Engine reference](https://cruxjs.dev/docs/reference/crux-core/runtime-engine)
 - [Mental model](https://cruxjs.dev/docs/foundations/mental-model)
 - [Examples](https://github.com/use-crux/crux/tree/main/examples)
 - [GitHub repository](https://github.com/use-crux/crux)

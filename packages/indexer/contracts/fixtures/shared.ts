@@ -155,12 +155,22 @@ export interface LintRuleParityEvidenceFixture {
   readonly negativeFixture: string
 }
 
+/** Built-in lint rule that is intentionally evaluated only by the TypeScript indexer. */
+export interface TypeScriptOnlyLintRuleFixture {
+  /** Built-in rule id omitted from native parity evidence. */
+  readonly ruleId: IndexLintRuleId
+  /** Human-readable reason this rule cannot be evaluated from native facts alone. */
+  readonly reason: string
+}
+
 /** Shared manifest for built-in lint parity coverage claims. */
 export interface LintRuleParityCoverageSharedFixture {
   /** Evidence classes required before native lint coverage can be claimed. */
   readonly requiredEvidence: readonly LintRuleParityEvidenceClass[]
   /** Worker-backed parity fixtures for every built-in finding-producing rule. */
   readonly rules: readonly LintRuleParityEvidenceFixture[]
+  /** Rules that are explicitly TypeScript-only and must not claim native parity. */
+  readonly typeScriptOnlyRules?: readonly TypeScriptOnlyLintRuleFixture[]
   /** Fixture proving config, profile, suppression, and diagnostic behavior through the native worker. */
   readonly policyFixture: string
 }

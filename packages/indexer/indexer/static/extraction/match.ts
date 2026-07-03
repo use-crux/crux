@@ -25,6 +25,7 @@ export function staticFactsFromInitializer(
   initializer: ts.Expression,
   localInitializers: Map<string, ts.Expression>,
   importBindings = new Map<string, ImportBinding>(),
+  exported = false,
 ): ExtractedFacts | undefined {
   if (ts.isObjectLiteralExpression(initializer)) {
     const source = sourceForNode(sourceFile, initializer)
@@ -36,6 +37,7 @@ export function staticFactsFromInitializer(
         file,
         sourceFile,
         variableName,
+        exported,
         call: initializer,
         callName: 'object',
         objectArg: initializer,
@@ -67,6 +69,7 @@ export function staticFactsFromInitializer(
         file,
         sourceFile,
         variableName,
+        exported,
         call: initializer,
         callName,
         firstArg,
@@ -98,8 +101,9 @@ export function staticFactsFromInitializer(
       root,
       file,
       sourceFile,
-      variableName,
-      call: initializer,
+    variableName,
+    exported,
+    call: initializer,
       callName,
       firstArg,
       objectArg,
@@ -144,6 +148,7 @@ export function staticFactsFromCall(
     call,
     localInitializers,
     importBindings,
+    false,
   )
 }
 

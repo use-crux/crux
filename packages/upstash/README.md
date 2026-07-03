@@ -5,11 +5,13 @@ Upstash-backed Storage Beta adapters for Crux.
 ## Install
 
 ```bash
-pnpm add @use-crux/upstash @use-crux/core @upstash/vector
+pnpm add @use-crux/upstash @use-crux/core @upstash/vector @upstash/qstash
 ```
 
-`@upstash/vector` is a required peer dependency. `@upstash/redis` is optional
-and only needed when you use `upstashRedisRecordStore()`.
+`@upstash/vector` is a required peer dependency for vector stores.
+`@upstash/redis` is optional and only needed when you use
+`upstashRedisRecordStore()`. `@upstash/qstash` is optional and only needed for
+the Runtime Engine wake adapter.
 
 ## VectorStore
 
@@ -59,3 +61,26 @@ const appStorage = storage({
 
 Use dedicated vector namespaces for separate workloads such as RAG chunks,
 memory recall, and semantic response cache entries.
+
+## Runtime Wake
+
+Use `qstash()` from `@use-crux/upstash/runtime` as the HTTP wake adapter for
+serverless Runtime Engine deployments.
+
+```ts
+import { config } from '@use-crux/core'
+import { serverless } from '@use-crux/core/runtime'
+import { postgres } from '@use-crux/postgres/runtime'
+import { qstash } from '@use-crux/upstash/runtime'
+
+export default config({
+  runtime: serverless({
+    store: postgres(),
+    wake: qstash(),
+  }),
+})
+```
+
+QStash publishes small signed wake envelopes to the generated Crux runtime
+endpoint and verifies incoming `Upstash-Signature` headers with the official
+`@upstash/qstash` receiver.

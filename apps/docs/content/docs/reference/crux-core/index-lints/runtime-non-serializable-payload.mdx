@@ -1,0 +1,27 @@
+---
+title: runtime.non_serializable_payload
+---
+
+## What it checks
+
+Crux emits this finding for obvious non-JSON values passed across durable runtime boundaries.
+
+## Why it matters
+
+Runtime payloads are persisted and replayed as JSON. Functions, Maps, Sets, and class instances cannot be delivered portably.
+
+## How to fix
+
+Pass plain JSON data, or store complex values elsewhere and pass an id or URL reference.
+
+## When to suppress
+
+Suppress only when a type-level or runtime serializer guarantees a JSON-compatible value.
+
+## Rule metadata
+
+- Rule id: `runtime.non_serializable_payload`
+- Category: `runtime`
+- Maturity: `stable`
+- Default profiles: `recommended`, `strict`
+- Default severity: `error`

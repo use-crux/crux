@@ -10,6 +10,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/resourceinspection"
 	"github.com/use-crux/crux/packages/local/internal/runtimebridge"
@@ -21,6 +22,8 @@ func TestNewMountsLocalRuntimeRouteGroups(t *testing.T) {
 	s := store.NewStore()
 	qualitySvc := quality.NewService(s, quality.Dir(t.TempDir()))
 	devtoolsSvc := devtools.NewService(s, qualitySvc)
+	runtimeIndexer := &recordingRuntimeOperationIndexer{}
+	devtoolsSvc.WithProjectIndexer(runtimeIndexer)
 	observabilitySvc, err := observability.OpenService(ctx, ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -34,6 +37,7 @@ func TestNewMountsLocalRuntimeRouteGroups(t *testing.T) {
 		RuntimeBridge:      runtimeBridge,
 		ResourceInspection: resourceinspection.New(runtimeBridge),
 		Hub:                noopHub{},
+		ProjectRoot:        "/repo/runtime-routes",
 		OriginAllowed:      func(*http.Request) bool { return true },
 		SourceResolver: SourceResolverOptions{
 			EmbeddedScript: []byte(`console.log("unused in invalid-json route test")`),
@@ -46,12 +50,27 @@ func TestNewMountsLocalRuntimeRouteGroups(t *testing.T) {
 	assertStatusAndClose(t, http.MethodGet, ts.URL+"/api/stats", nil, http.StatusOK)
 	assertStatusAndClose(t, http.MethodGet, ts.URL+"/api/runtime/bridge/peers", nil, http.StatusOK)
 	assertStatusAndClose(t, http.MethodGet, ts.URL+"/api/resources/capabilities", nil, http.StatusOK)
+	resp := assertStatus(t, http.MethodGet, ts.URL+"/api/runtime", nil, http.StatusOK)
+	var runtimeStatus struct {
+		Operation string `json:"operation"`
+		OK        bool   `json:"ok"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&runtimeStatus); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if runtimeStatus.Operation != "status" || !runtimeStatus.OK {
+		t.Fatalf("runtime status = %+v, want status ok", runtimeStatus)
+	}
+	if runtimeIndexer.root != "/repo/runtime-routes" || runtimeIndexer.operation != "status" || !runtimeIndexer.includeDetails {
+		t.Fatalf("runtime call = %+v, want detailed status for project root", runtimeIndexer)
+	}
 	assertStatusAndClose(t, http.MethodPost, ts.URL+"/api/observability/records", []byte(`{"records":[]}`), http.StatusAccepted)
 	assertStatusAndClose(t, http.MethodDelete, ts.URL+"/api/quality/runs", []byte(`{"traceIds":[]}`), http.StatusBadRequest)
 	assertStatusAndClose(t, http.MethodPost, ts.URL+"/api/resolve-source", []byte(`{`), http.StatusBadRequest)
 	assertStatusAndClose(t, http.MethodGet, ts.URL+"/api/does-not-exist", nil, http.StatusNotFound)
 
-	resp := assertStatus(t, http.MethodPost, ts.URL+"/api/index/snapshot", []byte(`{"schemaVersion":1,"project":{"name":"routes"}}`), http.StatusNoContent)
+	resp = assertStatus(t, http.MethodPost, ts.URL+"/api/index/snapshot", []byte(`{"schemaVersion":1,"project":{"name":"routes"}}`), http.StatusNoContent)
 	resp.Body.Close()
 
 	resp = assertStatus(t, http.MethodGet, ts.URL+"/api/index", nil, http.StatusOK)
@@ -102,3 +121,22 @@ type noopHub struct{}
 func (noopHub) BroadcastJSON(any) {}
 
 func (noopHub) HandleUpgrade(http.ResponseWriter, *http.Request) {}
+
+type recordingRuntimeOperationIndexer struct {
+	root           string
+	operation      string
+	workID         string
+	includeDetails bool
+}
+
+func (i *recordingRuntimeOperationIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{}, nil
+}
+
+func (i *recordingRuntimeOperationIndexer) RunRuntimeOperation(_ context.Context, root, operation, workID string, includeDetails bool) (json.RawMessage, error) {
+	i.root = root
+	i.operation = operation
+	i.workID = workID
+	i.includeDetails = includeDetails
+	return json.RawMessage(`{"operation":"status","ok":true,"namespace":"local","counts":[],"work":[],"timers":[],"outbox":[]}`), nil
+}

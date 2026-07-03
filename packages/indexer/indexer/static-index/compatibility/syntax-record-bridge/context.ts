@@ -52,6 +52,7 @@ export function createStaticRecordExtractContext(input: StaticRecordExtractConte
       root: input.root,
       file: input.record.file,
       variableName: input.match.variableName,
+      exported: input.match.exported,
       localName: input.match.localName,
       safeId,
     },

@@ -1,0 +1,15 @@
+---
+title: Runtime Recipes
+description: Adapter mappings for queues and durable execution systems.
+---
+
+These recipes show how Runtime Engine pieces map onto external infrastructure. Only `genericQueue()` is a bundled v1 API in this section. BullMQ, Cloudflare, Inngest, and Temporal are recipe or adapter-author guidance unless a future first-party package says otherwise.
+
+## Recipes
+
+<Cards>
+  <Card title="Generic Queue and BullMQ" description="Use genericQueue() with a user-owned queue." href="/docs/cookbook/runtime/generic-queue-bullmq" />
+  <Card title="Cloudflare" description="Map queues, Durable Objects, D1, and alarms to Runtime Engine ports." href="/docs/cookbook/runtime/cloudflare" />
+  <Card title="Inngest" description="Bridge Crux target identities and idempotency onto Inngest functions/events." href="/docs/cookbook/runtime/inngest" />
+  <Card title="Temporal" description="Map Crux flows/tasks/signals onto Temporal workflows and activities." href="/docs/cookbook/runtime/temporal" />
+</Cards>

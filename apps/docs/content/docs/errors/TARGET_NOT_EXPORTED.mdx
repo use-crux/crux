@@ -1,0 +1,28 @@
+---
+title: TARGET_NOT_EXPORTED
+description: A discovered runtime target cannot be imported as a named export.
+---
+
+## What failed
+
+Crux discovered a flow or runtime task declaration that cannot be imported by generated runtime artifacts.
+
+## Why
+
+Serverless and host-bound runtime entries execute in fresh processes. Durable targets must be top-level named exports with literal names.
+
+## What still works
+
+Local object-bound calls can still use the value in the same module. Durable runtime wake cannot target it.
+
+## Fix
+
+Move the target to a top-level named export:
+
+```ts
+export const reviewFlow = flow('review', async (flow) => {
+  // ...
+})
+```
+
+Then run `crux runtime generate`.

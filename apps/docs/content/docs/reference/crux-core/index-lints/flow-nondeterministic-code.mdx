@@ -1,0 +1,27 @@
+---
+title: flow.nondeterministic_code
+---
+
+## What it checks
+
+Crux emits this finding for obvious nondeterministic calls such as `Date.now()` or `Math.random()` in a flow body outside `flow.step()`.
+
+## Why it matters
+
+Flow bodies can replay after suspension. Nondeterminism outside a cached step can make replay diverge from the original execution.
+
+## How to fix
+
+Move the nondeterministic read into `flow.step()` so the first value is recorded and replay can reuse it.
+
+## When to suppress
+
+Suppress only when the nondeterministic value cannot affect durable control flow or payloads.
+
+## Rule metadata
+
+- Rule id: `flow.nondeterministic_code`
+- Category: `runtime`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

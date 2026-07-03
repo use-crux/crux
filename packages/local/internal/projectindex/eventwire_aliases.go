@@ -16,6 +16,8 @@ const (
 	ProjectIndexArtifactStaticExtensionHostManifest  = eventwire.ProjectIndexArtifactStaticExtensionHostManifest
 	ProjectIndexArtifactStaticExtensionEvidenceBatch = eventwire.ProjectIndexArtifactStaticExtensionEvidenceBatch
 	ProjectIndexArtifactStaticRuleCheck              = eventwire.ProjectIndexArtifactStaticRuleCheck
+	ProjectIndexArtifactRuntimeArtifacts             = eventwire.ProjectIndexArtifactRuntimeArtifacts
+	ProjectIndexArtifactRuntimeOperation             = eventwire.ProjectIndexArtifactRuntimeOperation
 )
 
 type ProjectIndexArtifactStreamOptions = eventwire.ProjectIndexArtifactStreamOptions

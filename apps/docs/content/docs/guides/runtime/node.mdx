@@ -1,0 +1,61 @@
+---
+title: Long-lived Node Runtime
+description: Use node() for local development, tests, and durable multi-worker Node processes.
+---
+
+`node()` is the in-process Runtime Engine composer. With no options it uses the in-memory reference store, which is ideal for tests and local development but not durable across process restarts.
+
+## Local development
+
+```ts
+import { config } from '@use-crux/core'
+import { node } from '@use-crux/core/runtime'
+
+export default config({
+  runtime: node(),
+})
+```
+
+This supports runtime-bound APIs in one process: event waits, timers, deferred tasks, scoped idle, and automatic signal resume.
+
+## Durable Node
+
+Use a durable store for long-lived workers or multiple Node processes:
+
+```ts
+import { config } from '@use-crux/core'
+import { node } from '@use-crux/core/runtime'
+import { postgres } from '@use-crux/postgres/runtime'
+
+export default config({
+  runtime: node({
+    store: postgres({ url: process.env.DATABASE_URL }),
+  }),
+})
+```
+
+Run setup before deployment:
+
+```bash
+crux runtime setup --check
+```
+
+## Maintenance
+
+`node()` starts the maintenance loop by default. It dispatches pending outbox rows, scans due timers, reclaims expired leases, expires waiters, and resolves scoped idle.
+
+For tests or custom hosts, disable auto-start and call maintenance explicitly through the resolved runtime:
+
+```ts
+const runtime = createRuntime({
+  runtime: node({ autoStartMaintenance: false }),
+  targets: runtimeTargetMap([reviewFlow, embedDocument]),
+})
+
+await runtime.maintenance.tick()
+```
+
+## Related
+
+- Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)
+- Reference: [@use-crux/postgres](/docs/reference/postgres)

@@ -66,7 +66,11 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
     parsed.dependencies.forEach((dependency) => graphBuilder.addDependency(file, dependency))
   }
   const ruleResult = extraction.rules.check({ definitions, relations })
-  const lintRuleOutputs = [...indexLintFindings({ definitions, relations }), ...ruleResult.outputs]
+  const runtime = runtimeLintContext(input.previousIndex)
+  const lintRuleOutputs = [
+    ...indexLintFindings({ definitions, relations, runtime }),
+    ...ruleResult.outputs,
+  ]
   const ruleDescriptors = mergeRuleDescriptors([
     ...input.previousIndex.ruleDescriptors,
     ...builtInIndexRuleDescriptors(),
@@ -91,6 +95,7 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
       root: input.decision.root,
       ...(input.projectName ? { name: input.projectName } : {}),
       ...(input.configPath ? { configFile: input.configPath } : {}),
+      ...(runtime ? { runtimeConfigured: runtime.configured } : {}),
     },
     indexedAt: input.startedAt,
     lint: input.previousIndex.lint,
@@ -124,6 +129,13 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
       finishedAt: new Date().toISOString(),
     }),
   }
+}
+
+function runtimeLintContext(
+  previousIndex: ProjectIndexSnapshot,
+): { readonly configured: boolean } | undefined {
+  if (previousIndex.project.runtimeConfigured === undefined) return undefined
+  return { configured: previousIndex.project.runtimeConfigured }
 }
 
 function previousSourceForFile(previousIndex: ProjectIndexSnapshot, file: string) {

@@ -4,7 +4,10 @@ use oxc_ast::ast::*;
 use oxc_span::Span;
 
 use crate::{
-    protocol::{StaticImportRecord, StaticInitializerRecord, StaticSyntaxValue},
+    protocol::{
+        StaticFunctionParameterBinding, StaticImportRecord, StaticInitializerRecord,
+        StaticSyntaxValue,
+    },
     syntax::function_calls::function_calls_from_statements,
     syntax::source::SourceView,
     syntax::values::{initializer_records_from_declarator, syntax_value_from_expression},
@@ -20,6 +23,8 @@ pub fn function_value_from_function(
 ) -> StaticSyntaxValue {
     let body = function.body.as_deref();
     StaticSyntaxValue::Function {
+        parameter_names: parameter_names_from_formal_parameters(&function.params),
+        first_parameter_bindings: first_parameter_bindings_from_formal_parameters(&function.params),
         calls: body.map_or_else(Vec::new, |body| {
             function_calls_from_statements(view, &body.statements, imports)
         }),
@@ -49,6 +54,8 @@ pub fn function_value_from_arrow(
         }
     }
     StaticSyntaxValue::Function {
+        parameter_names: parameter_names_from_formal_parameters(&function.params),
+        first_parameter_bindings: first_parameter_bindings_from_formal_parameters(&function.params),
         calls: function_calls_from_statements(view, &function.body.statements, imports),
         returns,
         local_initializers: function_initializers_from_statements(
@@ -58,6 +65,84 @@ pub fn function_value_from_arrow(
         ),
         source: view.location_for_span(function),
         snippet: Some(view.snippet_for_span(function)),
+    }
+}
+
+fn parameter_names_from_formal_parameters(params: &FormalParameters<'_>) -> Vec<String> {
+    params
+        .items
+        .iter()
+        .filter_map(|param| binding_pattern_name(&param.pattern))
+        .collect()
+}
+
+fn first_parameter_bindings_from_formal_parameters(
+    params: &FormalParameters<'_>,
+) -> Vec<StaticFunctionParameterBinding> {
+    params
+        .items
+        .first()
+        .map(|param| binding_entries(&param.pattern, None))
+        .unwrap_or_default()
+}
+
+fn binding_pattern_name(pattern: &BindingPattern<'_>) -> Option<String> {
+    match pattern {
+        BindingPattern::BindingIdentifier(identifier) => Some(identifier.name.to_string()),
+        _ => None,
+    }
+}
+
+fn binding_entries(
+    pattern: &BindingPattern<'_>,
+    property_name: Option<String>,
+) -> Vec<StaticFunctionParameterBinding> {
+    match pattern {
+        BindingPattern::BindingIdentifier(identifier) => vec![StaticFunctionParameterBinding {
+            name: identifier.name.to_string(),
+            property_name,
+        }],
+        BindingPattern::ObjectPattern(pattern) => pattern
+            .properties
+            .iter()
+            .flat_map(|property| {
+                let property_name = if property.shorthand {
+                    None
+                } else {
+                    property_key_name(&property.key)
+                };
+                binding_entries(&property.value, property_name)
+            })
+            .chain(
+                pattern
+                    .rest
+                    .iter()
+                    .flat_map(|rest| binding_entries(&rest.argument, None)),
+            )
+            .collect(),
+        BindingPattern::ArrayPattern(pattern) => pattern
+            .elements
+            .iter()
+            .flatten()
+            .flat_map(|element| binding_entries(element, None))
+            .chain(
+                pattern
+                    .rest
+                    .iter()
+                    .flat_map(|rest| binding_entries(&rest.argument, None)),
+            )
+            .collect(),
+        BindingPattern::AssignmentPattern(pattern) => binding_entries(&pattern.left, property_name),
+    }
+}
+
+fn property_key_name(key: &PropertyKey<'_>) -> Option<String> {
+    match key {
+        PropertyKey::StaticIdentifier(identifier) => Some(identifier.name.as_str().to_string()),
+        PropertyKey::Identifier(identifier) => Some(identifier.name.as_str().to_string()),
+        PropertyKey::StringLiteral(literal) => Some(literal.value.as_str().to_string()),
+        PropertyKey::NumericLiteral(literal) => Some(literal.value.to_string()),
+        _ => None,
     }
 }
 

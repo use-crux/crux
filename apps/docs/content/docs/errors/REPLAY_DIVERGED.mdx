@@ -1,0 +1,26 @@
+---
+title: REPLAY_DIVERGED
+description: A suspended flow replay no longer matches its recorded fingerprint.
+---
+
+## What failed
+
+Crux attempted to resume a runtime-backed flow, but the current flow body produced a different replay fingerprint than the suspended snapshot.
+
+## Why
+
+Renaming, reordering, adding, or removing durable replay points can make completed step outputs or delivered payloads unsafe to reuse.
+
+## What still works
+
+The work is blocked before wrong cached data is used. Other work continues.
+
+## Fix
+
+Inspect the work to compare expected and actual replay labels:
+
+```bash
+crux runtime inspect <workId>
+```
+
+Restore the old target shape, drain affected work, or explicitly retry after deploying compatible code.
