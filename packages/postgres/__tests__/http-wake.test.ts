@@ -29,16 +29,19 @@ describe('Postgres + HTTP wake runtime path', () => {
   })
 
   afterAll(async () => {
-    const cleanup = new Pool({ connectionString: testDatabase.url })
     try {
-      for (const schema of schemas) {
-        await cleanup.query(
-          `DROP SCHEMA IF EXISTS ${quoteIdent(schema)} CASCADE`,
-        )
+      await Promise.all(stores.map((store) => store.close()))
+      const cleanup = new Pool({ connectionString: testDatabase.url })
+      try {
+        for (const schema of schemas) {
+          await cleanup.query(
+            `DROP SCHEMA IF EXISTS ${quoteIdent(schema)} CASCADE`,
+          )
+        }
+      } finally {
+        await cleanup.end()
       }
     } finally {
-      await cleanup.end()
-      await Promise.all(stores.map((store) => store.close()))
       await testDatabase.close()
     }
   })
