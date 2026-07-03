@@ -269,6 +269,7 @@ var canonicalArtifactKinds = map[string]struct{}{
 	"stream.timeline":      {},
 	"score.report":         {},
 	"citation.report":      {},
+	"comparison.report":    {},
 	"composition.report":   {},
 	"routing.report":       {},
 	"cache.report":         {},

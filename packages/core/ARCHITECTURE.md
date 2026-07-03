@@ -178,7 +178,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── experiment.ts   Experiment record types (cells, aggregates, comparison, gate results, assertion outcomes/expressions)
 │   ├── replay.ts       cassette() + ReplayMode
 │   ├── config.ts       QualityConfig — the crux.config.ts quality: block
-│   └── internal/       Engine (never exported, except the @internal runner contract subpath): normalization, cell executor + task lifting, trace-backed signal extraction, expect/assert runtime, score maps, statistics/compare, baselines, cassette store, output cache, persistence, redaction, feedback store
+│   └── internal/       Engine (never exported, except the @internal runner contract subpath): normalization, cell executor + task lifting, trace-backed signal extraction, expect/assert runtime, score maps, statistics/compare, baselines, cassette store, eval/comparison/replay observability edges, output cache, persistence, redaction, feedback store
 ├── project-index/
 │   ├── index.ts        Project Index/state-plane contracts, lint findings, ruleDescriptors metadata, and validation schemas
 │   ├── project-model.ts Resolved Project Model read-model contract with provenance and diagnostics

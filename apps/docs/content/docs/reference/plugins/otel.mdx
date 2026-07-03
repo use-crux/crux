@@ -56,6 +56,8 @@ Ingest parsers emit `crux.ingest.parse` spans. These include parser name, source
 
 Retrieval pipelines emit one `crux.retrieval.stage` span per stage. Stage spans include pipeline id, stage name, stage kind, stage phase, input/output query counts, input/output hit counts, warning count, and status. They intentionally do not include raw query text, hit content, metadata, filters, or embeddings.
 
+Quality evaluations export `crux.eval.run` and `crux.eval.case` spans. Baseline comparison, case membership, and replay provenance are canonical graph edges for local/devtools read models; OTel export keeps those relationships as aggregate span metadata rather than raw case payloads.
+
 ### `UrlExporter`
 
 Configuration for HTTP POST export (ephemeral runtimes).

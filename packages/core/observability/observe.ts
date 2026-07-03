@@ -124,6 +124,13 @@ export interface OpenObservedRun {
 }
 
 export interface ObserveRunOptions {
+  /**
+   * Existing trace identifier to join.
+   *
+   * Use this when a higher-level workflow owns the umbrella trace and starts
+   * multiple run roots inside it. Omit to create a fresh W3C trace id.
+   */
+  traceId?: CruxTraceId
   name: string
   rootPrimitive: CruxPrimitiveName
   attributes?: CruxAttributes
@@ -544,7 +551,7 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
 export const observe = {
   openRun(options: ObserveRunOptions): OpenObservedRun {
     const runId = createCruxRunId()
-    const traceId = createCruxTraceId()
+    const traceId = options.traceId ?? createCruxTraceId()
     const startedAtMs = Date.now()
     const context: ObservabilityContext = {
       runId,

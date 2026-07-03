@@ -148,6 +148,7 @@ export const CRUX_CANONICAL_ARTIFACT_KINDS = [
   'stream.timeline',
   'score.report',
   'citation.report',
+  'comparison.report',
   'composition.report',
   'routing.report',
   'cache.report',
@@ -412,6 +413,24 @@ export interface CruxScoreReportPreview {
   judges?: readonly CruxScoreJudgePreview[]
   expected?: unknown
   actual?: unknown
+}
+
+export interface CruxComparisonReportPreview {
+  kind: 'comparison.report'
+  comparisonKind: 'variant' | 'promoted'
+  baseline: string
+  deltas: readonly {
+    variantName: string
+    scoreName: string
+    meanDelta: number
+    sem: number
+    n: number
+  }[]
+  unmatchedCases: {
+    baselineOnly: readonly string[]
+    candidateOnly: readonly string[]
+  }
+  demoted?: { reason: string }
 }
 
 export interface CruxCompositionBranchPreview {

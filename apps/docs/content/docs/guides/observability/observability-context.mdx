@@ -7,6 +7,8 @@ When you run an agent that delegates work — to a subagent, a flow step, a para
 
 Crux models this on W3C `traceparent`: every span records `parentSpanId` when it is created. The Go backend parents the child directly under that span — no heuristics, no time-window guessing.
 
+When one workflow intentionally owns several run roots, pass `traceId` to `observe.openRun()` for the child roots. Quality uses this for evaluation traces: the `eval.run` umbrella and every `eval.case` run share one trace while staying separate runs.
+
 ## The contract
 
 Three rules keep the tree correct end-to-end:

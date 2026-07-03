@@ -24,6 +24,8 @@ export interface BaselineRecord {
   evaluationId: string
   /** The promoted experiment. */
   experimentId: string
+  /** Observability run identity of the promoted evaluation, when available. */
+  observability?: { runId: string; traceId: string }
   variantName?: string
   promotedAt: string
   /** git user.name, best-effort. */

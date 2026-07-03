@@ -21,7 +21,7 @@ import type { TokenUsage } from '../../generation/types'
 import type { AnyAgent } from '../../agent/agent'
 import type { FlowHandle } from '../../flow/types'
 import type { Retriever, RetrieveOptions } from '../../retrieval'
-import { observe } from '../../observability'
+import { observe, type CruxTraceId } from '../../observability'
 
 import type { AssertContext, CaseContext } from '../expect'
 import type {
@@ -84,6 +84,12 @@ import {
   flushProgrammaticObservability,
 } from './programmatic-runtime'
 import { emptyCellSignals, extractCellSignals, installSignalCapture, type CellSignals } from './signals'
+import {
+  emitComparisonReportEdges,
+  emitEvalCaseOfEdge,
+  emitReplayOfEdge,
+  type QualityObservabilityRunRef,
+} from './observability-edges'
 import { ulid } from './ulid'
 import { MissingQualityModelBindingError } from './errors'
 import type { ProjectModelDiagnosticCode } from '../../project-index'
@@ -722,6 +728,7 @@ async function executeCell(input: {
   capture: ReturnType<typeof installSignalCapture>
   redactPaths: readonly string[]
   evaluationId: string
+  evaluationTraceId: CruxTraceId
   setup?: EngineSetup
   cache?: CellCacheContext
   sourceFrameResolver?: QualitySourceFrameResolver
@@ -765,6 +772,7 @@ async function executeCell(input: {
   }
 
   const run = observe.openRun({
+    traceId: input.evaluationTraceId,
     name: `quality:${input.evaluationId || 'adhoc'}#${plan.resolved.caseId}`,
     rootPrimitive: 'eval.case',
     attributes: { caseId: plan.resolved.caseId, trial: plan.trial, variant: plan.variant.name },
@@ -1526,6 +1534,17 @@ async function runEvaluationInner(
     }
   }
 
+  const evalRun = observe.openRun({
+    name: `quality:${evaluationId || 'adhoc'}`,
+    rootPrimitive: 'eval.run',
+    attributes: {
+      evaluationId,
+      caseCount: selected.length,
+      variantCount: variantContexts.length,
+    },
+  })
+  const evalRunRef: QualityObservabilityRunRef = { runId: evalRun.runId, traceId: evalRun.traceId }
+
   const capture = installSignalCapture()
   const limiter = createLimiter(Math.max(1, concurrency))
   let cells: ExperimentCell<unknown, unknown>[]
@@ -1565,6 +1584,7 @@ async function runEvaluationInner(
               capture,
               redactPaths,
               evaluationId,
+              evaluationTraceId: evalRun.traceId,
               setup: options.setup,
               cache: cacheContext,
               sourceFrameResolver: options.sourceFrameResolver,
@@ -1574,11 +1594,25 @@ async function runEvaluationInner(
           // replay through the same cassette as task calls.
           const cell =
             cassetteSession === undefined ? await execute() : await withCassetteSession(cassetteSession, execute)
+          for (const runId of cell.traceIds) {
+            evalRun.withContext(() => {
+              emitEvalCaseOfEdge({ caseRunId: runId, evalRunId: evalRun.runId })
+              if (replay.mode === 'replay-strict' && cassetteSession?.recorded !== undefined) {
+                emitReplayOfEdge({
+                  replay: { runId, traceId: evalRun.traceId },
+                  recorded: cassetteSession.recorded,
+                })
+              }
+            })
+          }
           options.events?.onCellDone?.(cell)
           return cell
         }),
       ),
     )
+  } catch (error) {
+    evalRun.error(error)
+    throw error
   } finally {
     capture.dispose()
   }
@@ -1625,6 +1659,16 @@ async function runEvaluationInner(
   }
   const comparisonBlocking = comparison !== undefined && comparison.demoted === undefined
 
+  if (comparison !== undefined) {
+    evalRun.withContext(() => {
+      emitComparisonReportEdges({
+        comparison,
+        candidate: evalRunRef,
+        ...(baselineRecord?.observability !== undefined ? { baseline: baselineRecord.observability } : {}),
+      })
+    })
+  }
+
   // ── Gates: per non-baseline variant (single default keeps Phase 2 shape) ──
   const gateVariantNames = variantsDeclared
     ? selectedVariantNames.filter((name) => name !== definition.baseline)
@@ -1653,6 +1697,7 @@ async function runEvaluationInner(
     endedAt: new Date().toISOString(),
     configFingerprint,
     taskFingerprint,
+    observability: evalRunRef,
     filteredRun,
     replay: {
       mode: replay.mode,
@@ -1703,6 +1748,7 @@ async function runEvaluationInner(
         baselineId: ulid(),
         evaluationId: baselineEvaluationId,
         experimentId: experiment.experimentId,
+        observability: experiment.observability,
         ...(variantsDeclared ? { variantName } : {}),
         promotedAt: new Date().toISOString(),
         ...(gitUserName(rootDir) !== undefined ? { promotedBy: gitUserName(rootDir) } : {}),
@@ -1717,5 +1763,6 @@ async function runEvaluationInner(
   if (options.persist !== false) {
     await persistExperiment(experiment, qualityDir)
   }
+  evalRun.end({ attributes: { experimentId: experiment.experimentId, passed: experiment.passed } })
   return experiment
 }

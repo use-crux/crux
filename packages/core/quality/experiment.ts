@@ -374,6 +374,8 @@ export interface Experiment<
   configFingerprint: string
   /** Hash of the task itself; keys the watch-mode output cache. */
   taskFingerprint: string
+  /** Observability run identity for the evaluation umbrella trace. */
+  observability?: { runId: string; traceId: string }
   /** True when --case/--variant filters ran a subset (gates informational). */
   filteredRun: boolean
   replay: {
