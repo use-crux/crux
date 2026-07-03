@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -43,6 +44,20 @@ func TestOverviewFuzzResize(t *testing.T) {
 	uitest.FuzzResize(t, func(width, height int) string {
 		return overview.View(Size{Width: width, Height: height})
 	})
+}
+
+func TestOverviewLayoutTwoKeepsChartAndActivity(t *testing.T) {
+	overview, now := fixtureOverview()
+	prevNow := relTimeNow
+	relTimeNow = func() time.Time { return now }
+	defer func() { relTimeNow = prevNow }()
+
+	view := overview.View(Size{Width: 100, Height: 30})
+	for _, want := range []string{"Pass rate", "Activity"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("100-column Overview should render %q pane, view:\n%s", want, view)
+		}
+	}
 }
 
 func fixtureOverview() (*Overview, time.Time) {

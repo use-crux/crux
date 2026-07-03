@@ -143,3 +143,25 @@ func TestOverviewEnterOnRunEmitsNavigateRequest(t *testing.T) {
 		t.Errorf("NavigateRequest = %+v, want {NavID:runs Kind:run ID:8af2f1c}", req)
 	}
 }
+
+func TestOverviewActivityScrollLatchKeepsHistoricalRowsVisible(t *testing.T) {
+	o := NewOverview()
+	o.loaded = true
+	o.focusedPanel = panelActivity
+	o.activity = []api.QualityActivityEvent{
+		{Timestamp: 4000, Kind: "run", Summary: "newest"},
+		{Timestamp: 3000, Kind: "run", Summary: "middle"},
+		{Timestamp: 2000, Kind: "run", Summary: "older"},
+		{Timestamp: 1000, Kind: "run", Summary: "oldest"},
+	}
+
+	o.Update(tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'}), nil)
+	if o.activityScroll != 1 {
+		t.Fatalf("activity scroll after j = %d, want 1", o.activityScroll)
+	}
+
+	o.Update(api.QualityEvent{Timestamp: 5000, Kind: "run", RefID: "fresh", Action: "completed"}, nil)
+	if o.activityScroll != 2 {
+		t.Fatalf("activity scroll after prepended event = %d, want 2 to preserve visible historical rows", o.activityScroll)
+	}
+}
