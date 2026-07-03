@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -26,6 +27,12 @@ type Service struct {
 	dir   string
 	bus   *EventBus
 	obs   *observability.Service
+
+	derivedMu          sync.Mutex
+	insightSignatures  map[string]string
+	cassetteSignatures map[string]string
+	insightsPrimed     bool
+	cassettesPrimed    bool
 }
 
 func toAPI[T any](value any, err error) (T, error) {
@@ -54,9 +61,11 @@ func toRawMessages[T any](records []T) ([]json.RawMessage, error) {
 
 func NewService(s *store.Store, dir string) *Service {
 	return &Service{
-		store: s,
-		dir:   dir,
-		bus:   NewEventBus(dir),
+		store:              s,
+		dir:                dir,
+		bus:                NewEventBus(dir),
+		insightSignatures:  map[string]string{},
+		cassetteSignatures: map[string]string{},
 	}
 }
 
@@ -199,26 +208,6 @@ func (s *Service) DeleteRuns(ctx context.Context, traceIDs []string) (api.Qualit
 		s.publishWriteActivity("run", "run deleted", record.DeletedTraceIDs[0])
 	}
 	return record, nil
-}
-
-func (s *Service) Insights(ctx context.Context) ([]qualityInsightRecord, error) {
-	runs := []qualityRunRecord{}
-	if s.obs != nil {
-		var err error
-		runs, err = buildQualityRunsFromObservability(ctx, s.obs, s.dir, projectRootFromStore(s.store))
-		if err != nil {
-			return nil, err
-		}
-	}
-	insights, err := buildQualityInsightsFromRuns(s.dir, runs)
-	if err != nil {
-		return nil, err
-	}
-	return enrichQualityInsightsWithIndex(insights, s.store.GetIndex(), s.dir, runs)
-}
-
-func (s *Service) InsightsAPI(ctx context.Context) ([]api.QualityInsightRecord, error) {
-	return toAPI[[]api.QualityInsightRecord](s.Insights(ctx))
 }
 
 func (s *Service) SetInsightStatus(ctx context.Context, insightID string, req qualityInsightStatusRequest) (qualityInsightStatusRecord, error) {

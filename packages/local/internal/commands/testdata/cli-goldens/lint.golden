@@ -1,0 +1,9 @@
+◇ crux lint
+
+  Profile: recommended
+  Findings: 1 error  0 warning  0 info
+
+  error Missing description rule.desc
+     my.prompt  a.eval.ts:5
+     what: prompt has no description
+

@@ -3,13 +3,18 @@ package shell
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Keybind is one inline `key  label` hint shown in the status bar.
 type Keybind struct {
 	Key   string
 	Label string
+}
+
+// Bind creates a status-bar key hint.
+func Bind(key, label string) Keybind {
+	return Keybind{Key: key, Label: label}
 }
 
 // layer1Fallback is the minimal global keybind hint set, surfaced when the
@@ -43,9 +48,17 @@ func StatusBar(width int, keybinds []Keybind, path string) string {
 
 	leftW := lipgloss.Width(left)
 	rightW := lipgloss.Width(right)
+	if leftW+rightW > width {
+		maxLeft := width - rightW - 1
+		if maxLeft < 0 {
+			maxLeft = 0
+		}
+		left = lipgloss.NewStyle().MaxWidth(maxLeft).Render(left)
+		leftW = lipgloss.Width(left)
+	}
 	pad := width - leftW - rightW
-	if pad < 1 {
-		pad = 1
+	if pad < 0 {
+		pad = 0
 	}
 
 	bar := left + strings.Repeat(" ", pad) + right

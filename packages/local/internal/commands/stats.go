@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/cli"
@@ -25,7 +26,7 @@ func NewStatsCmd(f *cli.Factory) *cobra.Command {
 			c := f.Client()
 
 			if live {
-				return liveStats(ctx, c, jsonOutput)
+				return liveStats(ctx, c, f.Streams(), jsonOutput)
 			}
 
 			var stats api.Stats
@@ -37,11 +38,12 @@ func NewStatsCmd(f *cli.Factory) *cobra.Command {
 				return output.JSON(stats)
 			}
 
-			printStats(stats)
+			io := f.Streams()
+			printStats(io, stats)
 
 			var usage map[string]api.PromptUsageStat
 			if err := c.GetJSON(ctx, "/api/stats/prompt-usage", &usage); err == nil && len(usage) > 0 {
-				printPromptUsage(usage)
+				printPromptUsage(io, usage)
 			}
 
 			return nil
@@ -53,7 +55,7 @@ func NewStatsCmd(f *cli.Factory) *cobra.Command {
 	return cmd
 }
 
-func liveStats(ctx context.Context, c *api.Client, jsonOut bool) error {
+func liveStats(ctx context.Context, c *api.Client, io *output.IO, jsonOut bool) error {
 	ws, err := api.ConnectWS(c.BaseURL)
 	if err != nil {
 		return err
@@ -64,7 +66,7 @@ func liveStats(ctx context.Context, c *api.Client, jsonOut bool) error {
 	go ws.ReadMessages(ch)
 
 	// Print initial stats.
-	refreshStats(ctx, c, jsonOut)
+	refreshStats(ctx, c, io, jsonOut)
 
 	for {
 		select {
@@ -74,17 +76,16 @@ func liveStats(ctx context.Context, c *api.Client, jsonOut bool) error {
 			if !ok {
 				return nil
 			}
-			if !jsonOut {
-				// Clear screen and reprint.
-				fmt.Print("\033[H\033[2J")
+			if !jsonOut && io.IsStdoutTTY() {
+				io.ClearScreen()
 			}
-			refreshStats(ctx, c, jsonOut)
+			refreshStats(ctx, c, io, jsonOut)
 			time.Sleep(200 * time.Millisecond)
 		}
 	}
 }
 
-func refreshStats(ctx context.Context, c *api.Client, jsonOut bool) {
+func refreshStats(ctx context.Context, c *api.Client, io *output.IO, jsonOut bool) {
 	var stats api.Stats
 	if err := c.GetJSON(ctx, "/api/stats", &stats); err != nil {
 		return
@@ -93,75 +94,80 @@ func refreshStats(ctx context.Context, c *api.Client, jsonOut bool) {
 		output.JSON(stats)
 		return
 	}
-	printStats(stats)
+	printStats(io, stats)
 	var usage map[string]api.PromptUsageStat
 	if err := c.GetJSON(ctx, "/api/stats/prompt-usage", &usage); err == nil && len(usage) > 0 {
-		printPromptUsage(usage)
+		printPromptUsage(io, usage)
 	}
-	fmt.Println(output.Dim.Render("  Live — updates on new events. Ctrl+C to stop."))
+	fmt.Fprintln(io.Out, io.Sprint(output.Dim, "  Live — updates on new events. Ctrl+C to stop."))
 }
 
-func printStats(s api.Stats) {
-	fmt.Printf("%s\n\n", output.Bold.Render("Overview"))
+func printStats(io *output.IO, s api.Stats) {
+	printf := func(format string, args ...any) { fmt.Fprintf(io.Out, format, args...) }
+	println := func(args ...any) { fmt.Fprintln(io.Out, args...) }
+	print := func(args ...any) { fmt.Fprint(io.Out, args...) }
+	style := func(st lipgloss.Style, text string) string { return io.Sprint(st, text) }
+
+	printf("%s\n\n", style(output.Bold, "Overview"))
 
 	// Execution stats.
-	fmt.Printf("  Executions: %s  ", output.BoldCyan.Render(fmt.Sprintf("%d", s.TotalExecutions)))
-	fmt.Printf("%s %d  ", output.Green.Render("✓"), s.SuccessCount)
-	fmt.Printf("%s %d  ", output.Red.Render("✗"), s.ErrorCount)
+	printf("  Executions: %s  ", style(output.BoldCyan, fmt.Sprintf("%d", s.TotalExecutions)))
+	printf("%s %d  ", style(output.Green, "✓"), s.SuccessCount)
+	printf("%s %d  ", style(output.Red, "✗"), s.ErrorCount)
 	if s.RunningCount > 0 {
-		fmt.Printf("%s %d", output.Yellow.Render("●"), s.RunningCount)
+		printf("%s %d", style(output.Yellow, "●"), s.RunningCount)
 	}
-	fmt.Println()
+	println()
 
 	if s.TotalExecutions > 0 {
-		fmt.Printf("  Avg duration: %s\n", output.FormatDuration(s.AvgDurationMs))
+		printf("  Avg duration: %s\n", output.FormatDuration(s.AvgDurationMs))
 		if s.ErrorRate > 0 {
-			fmt.Printf("  Error rate:   %s\n", output.Red.Render(output.FormatPercent(s.ErrorRate)))
+			printf("  Error rate:   %s\n", style(output.Red, output.FormatPercent(s.ErrorRate)))
 		}
 	}
 
 	// Cost & tokens.
-	fmt.Printf("\n  Tokens: %s  Cost: %s\n",
-		output.BoldCyan.Render(output.FormatTokens(s.TotalTokens)),
-		output.BoldCyan.Render(output.FormatCost(s.TotalCost)),
+	printf("\n  Tokens: %s  Cost: %s\n",
+		style(output.BoldCyan, output.FormatTokens(s.TotalTokens)),
+		style(output.BoldCyan, output.FormatCost(s.TotalCost)),
 	)
 	if s.TotalExecutions > 0 {
-		fmt.Printf("  Avg cost: %s/call\n", output.FormatCost(s.AvgCost))
+		printf("  Avg cost: %s/call\n", output.FormatCost(s.AvgCost))
 	}
 
 	// Streaming.
 	if s.StreamingTraceCount > 0 {
-		fmt.Printf("\n  Streaming: %d traces", s.StreamingTraceCount)
+		printf("\n  Streaming: %d traces", s.StreamingTraceCount)
 		if s.AvgTtftMs != nil {
-			fmt.Printf("  Avg TTFT: %s", output.FormatDuration(*s.AvgTtftMs))
+			printf("  Avg TTFT: %s", output.FormatDuration(*s.AvgTtftMs))
 		}
 		if s.AvgThroughput != nil {
-			fmt.Printf("  Avg throughput: %.0f tok/s", *s.AvgThroughput)
+			printf("  Avg throughput: %.0f tok/s", *s.AvgThroughput)
 		}
-		fmt.Println()
+		println()
 	}
 
 	// Memory & budget.
 	if s.MemoryReadCount+s.MemoryWriteCount > 0 {
-		fmt.Printf("\n  Memory: %d reads, %d writes\n", s.MemoryReadCount, s.MemoryWriteCount)
+		printf("\n  Memory: %d reads, %d writes\n", s.MemoryReadCount, s.MemoryWriteCount)
 	}
 	if s.EmbeddingCallCount > 0 {
-		fmt.Printf("  Embeddings: %d calls, %d texts\n", s.EmbeddingCallCount, s.TotalEmbeddingTexts)
+		printf("  Embeddings: %d calls, %d texts\n", s.EmbeddingCallCount, s.TotalEmbeddingTexts)
 		if s.AvgEmbeddingDurationMs != nil || s.TotalEmbeddingTokens > 0 || s.TotalEmbeddingCost > 0 {
-			fmt.Print("    ")
+			print("    ")
 			if s.AvgEmbeddingDurationMs != nil {
-				fmt.Printf("Avg: %s", output.FormatDuration(*s.AvgEmbeddingDurationMs))
+				printf("Avg: %s", output.FormatDuration(*s.AvgEmbeddingDurationMs))
 			}
 			if s.TotalEmbeddingTokens > 0 {
-				fmt.Printf("  Tokens: %s", output.FormatTokens(s.TotalEmbeddingTokens))
+				printf("  Tokens: %s", output.FormatTokens(s.TotalEmbeddingTokens))
 			}
 			if s.TotalEmbeddingCost > 0 {
-				fmt.Printf("  Cost: %s", output.FormatCost(s.TotalEmbeddingCost))
+				printf("  Cost: %s", output.FormatCost(s.TotalEmbeddingCost))
 			}
-			fmt.Println()
+			println()
 		}
 		if s.EmbeddingCacheHitCount+s.EmbeddingCacheMissCount+s.EmbeddingRetryCount+s.EmbeddingTruncatedCount > 0 {
-			fmt.Printf(
+			printf(
 				"    Governance: %d cache hits, %d cache misses, %d retries, %d truncated\n",
 				s.EmbeddingCacheHitCount,
 				s.EmbeddingCacheMissCount,
@@ -171,96 +177,96 @@ func printStats(s api.Stats) {
 		}
 	}
 	if s.RetrievalCallCount > 0 {
-		fmt.Printf("  Retrievals: %d calls, %d hits\n", s.RetrievalCallCount, s.TotalRetrievedHits)
+		printf("  Retrievals: %d calls, %d hits\n", s.RetrievalCallCount, s.TotalRetrievedHits)
 		if s.AvgRetrievalDurationMs != nil || s.RetrievalErrorCount > 0 {
-			fmt.Print("    ")
+			print("    ")
 			if s.AvgRetrievalDurationMs != nil {
-				fmt.Printf("Avg: %s", output.FormatDuration(*s.AvgRetrievalDurationMs))
+				printf("Avg: %s", output.FormatDuration(*s.AvgRetrievalDurationMs))
 			}
 			if s.RetrievalErrorCount > 0 {
-				fmt.Printf("  Errors: %s", output.Red.Render(fmt.Sprintf("%d", s.RetrievalErrorCount)))
+				printf("  Errors: %s", style(output.Red, fmt.Sprintf("%d", s.RetrievalErrorCount)))
 			}
-			fmt.Println()
+			println()
 		}
 		if s.RetrievalStageCount > 0 {
-			fmt.Printf("    Pipeline stages: %d", s.RetrievalStageCount)
+			printf("    Pipeline stages: %d", s.RetrievalStageCount)
 			if s.RetrievalStageErrorCount > 0 {
-				fmt.Printf("  Errors: %s", output.Red.Render(fmt.Sprintf("%d", s.RetrievalStageErrorCount)))
+				printf("  Errors: %s", style(output.Red, fmt.Sprintf("%d", s.RetrievalStageErrorCount)))
 			}
-			fmt.Println()
+			println()
 		}
 	}
 	if s.WorkspaceOperationCount > 0 {
-		fmt.Printf("  Workspace ops: %d", s.WorkspaceOperationCount)
+		printf("  Workspace ops: %d", s.WorkspaceOperationCount)
 		if s.WorkspaceErrorCount > 0 {
-			fmt.Printf("  Errors: %s", output.Red.Render(fmt.Sprintf("%d", s.WorkspaceErrorCount)))
+			printf("  Errors: %s", style(output.Red, fmt.Sprintf("%d", s.WorkspaceErrorCount)))
 		}
-		fmt.Println()
+		println()
 	}
 	if s.IndexOperationCount > 0 {
-		fmt.Printf("  Indexing: %d ops, %d sources, %d chunks\n",
+		printf("  Indexing: %d ops, %d sources, %d chunks\n",
 			s.IndexOperationCount, s.TotalIndexedSources, s.TotalIndexedChunks)
 		if s.AvgIndexDurationMs != nil || s.IndexErrorCount > 0 {
-			fmt.Print("    ")
+			print("    ")
 			if s.AvgIndexDurationMs != nil {
-				fmt.Printf("Avg: %s", output.FormatDuration(*s.AvgIndexDurationMs))
+				printf("Avg: %s", output.FormatDuration(*s.AvgIndexDurationMs))
 			}
 			if s.IndexErrorCount > 0 {
-				fmt.Printf("  Errors: %s", output.Red.Render(fmt.Sprintf("%d", s.IndexErrorCount)))
+				printf("  Errors: %s", style(output.Red, fmt.Sprintf("%d", s.IndexErrorCount)))
 			}
-			fmt.Println()
+			println()
 		}
 	}
 	if s.CompactionCount > 0 {
-		fmt.Printf("  Compactions: %d\n", s.CompactionCount)
+		printf("  Compactions: %d\n", s.CompactionCount)
 	}
 	if s.BudgetLevel != nil {
 		label := *s.BudgetLevel
 		switch label {
 		case "warning":
-			label = output.Yellow.Render(label)
+			label = style(output.Yellow, label)
 		case "critical":
-			label = output.Red.Render(label)
+			label = style(output.Red, label)
 		default:
-			label = output.Green.Render(label)
+			label = style(output.Green, label)
 		}
-		fmt.Printf("  Budget: %s\n", label)
+		printf("  Budget: %s\n", label)
 	}
 
 	// Agent coordination.
 	if s.HandoffCount+s.DelegateCount+s.BlackboardUpdateCount > 0 {
-		fmt.Printf("\n  Handoffs: %d  Delegates: %d  Blackboard updates: %d\n",
+		printf("\n  Handoffs: %d  Delegates: %d  Blackboard updates: %d\n",
 			s.HandoffCount, s.DelegateCount, s.BlackboardUpdateCount)
 	}
 
 	// Tools.
 	if s.ToolExecutionCount+s.ToolApprovalRequestCount > 0 {
-		fmt.Printf("\n  Tool calls: %d", s.ToolExecutionCount)
+		printf("\n  Tool calls: %d", s.ToolExecutionCount)
 		if s.ToolApprovalRequestCount > 0 {
-			fmt.Printf("  approvals: %d", s.ToolApprovalRequestCount)
+			printf("  approvals: %d", s.ToolApprovalRequestCount)
 			if s.ToolApprovalDeniedCount > 0 {
-				fmt.Printf(" (%d denied)", s.ToolApprovalDeniedCount)
+				printf(" (%d denied)", s.ToolApprovalDeniedCount)
 			}
 		}
 		if s.ToolErrorCount > 0 {
-			fmt.Printf("  (%s errors)", output.Red.Render(fmt.Sprintf("%d", s.ToolErrorCount)))
+			printf("  (%s errors)", style(output.Red, fmt.Sprintf("%d", s.ToolErrorCount)))
 		}
 		if s.ToolTokenSavingsEstimate > 0 {
-			fmt.Printf("  shaped -%dB", s.ToolTokenSavingsEstimate)
+			printf("  shaped -%dB", s.ToolTokenSavingsEstimate)
 		}
-		fmt.Println()
+		println()
 	}
 
 	// Security.
 	if s.SecurityWarningCount > 0 {
-		fmt.Printf("\n  %s: %s\n", output.Red.Render("Security warnings"), output.Red.Render(fmt.Sprintf("%d", s.SecurityWarningCount)))
+		printf("\n  %s: %s\n", style(output.Red, "Security warnings"), style(output.Red, fmt.Sprintf("%d", s.SecurityWarningCount)))
 	}
 
-	fmt.Println()
+	println()
 }
 
-func printPromptUsage(usage map[string]api.PromptUsageStat) {
-	fmt.Printf("%s\n\n", output.Bold.Render("Prompt Usage"))
+func printPromptUsage(io *output.IO, usage map[string]api.PromptUsageStat) {
+	fmt.Fprintf(io.Out, "%s\n\n", io.Sprint(output.Bold, "Prompt Usage"))
 
 	tbl := &output.Table{
 		Headers: []string{"PROMPT", "CALLS", "ERRORS", "AVG DURATION", "TOTAL COST"},
@@ -269,12 +275,12 @@ func printPromptUsage(usage map[string]api.PromptUsageStat) {
 	for promptID, stat := range usage {
 		errors := ""
 		if stat.ErrorCount > 0 {
-			errors = output.Red.Render(fmt.Sprintf("%d", stat.ErrorCount))
+			errors = io.Sprint(output.Red, fmt.Sprintf("%d", stat.ErrorCount))
 		} else {
-			errors = output.Dim.Render("0")
+			errors = io.Sprint(output.Dim, "0")
 		}
 		tbl.Rows = append(tbl.Rows, []string{
-			output.Cyan.Render(promptID),
+			io.Sprint(output.Cyan, promptID),
 			fmt.Sprintf("%d", stat.Count),
 			errors,
 			output.FormatDuration(stat.AvgDurationMs),
@@ -282,5 +288,5 @@ func printPromptUsage(usage map[string]api.PromptUsageStat) {
 		})
 	}
 
-	tbl.Print()
+	fmt.Fprint(io.Out, io.RenderTable(tbl))
 }

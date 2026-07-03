@@ -71,3 +71,30 @@ func TestStatusLineTruncatesToWidth(t *testing.T) {
 		t.Errorf("rendered text width = %d, want <= %d", w, io.Width()-1)
 	}
 }
+
+func TestClearScreenTTYOnly(t *testing.T) {
+	t.Run("stdout tty", func(t *testing.T) {
+		var out, err bytes.Buffer
+		io := NewTestIO(&out, &err, TestIOOptions{StdoutTTY: true})
+
+		io.ClearScreen()
+
+		if got := out.String(); got != clearScreen {
+			t.Errorf("ClearScreen() wrote %q, want %q", got, clearScreen)
+		}
+		if err.Len() != 0 {
+			t.Errorf("ClearScreen wrote to Err: %q", err.String())
+		}
+	})
+
+	t.Run("stdout pipe", func(t *testing.T) {
+		var out, err bytes.Buffer
+		io := NewTestIO(&out, &err, TestIOOptions{StdoutTTY: false})
+
+		io.ClearScreen()
+
+		if out.Len() != 0 || err.Len() != 0 {
+			t.Errorf("ClearScreen should be inert for non-TTY stdout, out=%q err=%q", out.String(), err.String())
+		}
+	})
+}

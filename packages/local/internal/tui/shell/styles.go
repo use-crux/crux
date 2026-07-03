@@ -3,21 +3,29 @@
 // three-pane primitives every Quality screen plugs into.
 package shell
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"image/color"
+
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/use-crux/crux/packages/local/internal/theme"
+)
 
 // Crux dark + teal palette, adapted from packages/devtools design bundle
 // (tui-shared.jsx). Keep the pane ladder subtle so borders, not card fills,
 // do the structural work like the target terminal design.
 var (
-	ColorBG       = lipgloss.Color("#0a0c0b")
-	ColorPanel    = lipgloss.Color("#0b0d0d")
-	ColorPanelAlt = lipgloss.Color("#101313")
-	ColorSurface  = lipgloss.Color("#151919")
+	shellPalette = theme.Resolve(colorprofile.TrueColor)
+
+	ColorBG       = shellPalette.Bg
+	ColorPanel    = shellPalette.Bg
+	ColorPanelAlt = shellPalette.Bg2
+	ColorSurface  = shellPalette.Bg2
 	// ColorSelectedNav is a very subtle teal-tinted dark — alpha 0.06
 	// of the teal accent on top of the panel base. Used as the nav-rail
 	// selected-row background so the active item reads at a glance
 	// without the saturated #082b31 "glow" the legacy color produced.
-	ColorSelectedNav = lipgloss.Color("#0d1816")
+	ColorSelectedNav = shellPalette.SelBg
 	// ColorBorder is the workhorse hairline color — used for in-pane
 	// dividers and vertical pane separators. Pure neutral gray so the
 	// hairline doesn't pick up a teal/cyan tint against the (very
@@ -28,21 +36,21 @@ var (
 	//   #242929 → almost invisible + cyan-tinted
 	//   #2d3434 → mid-visibility + cyan-tinted (the "teal border" call-out)
 	//   #3a3a3a → mid-visibility, neutral gray  ← current
-	ColorBorder = lipgloss.Color("#3a3a3a")
+	ColorBorder = shellPalette.Border
 	// ColorBorderBright is the higher-contrast variant — reserved for
 	// modal borders where the overlay's edge needs to read distinctly
 	// against the body behind it. Also pure neutral gray now.
-	ColorBorderBright = lipgloss.Color("#4a4a4a")
-	ColorText         = lipgloss.Color("#d5dcd8")
-	ColorTextDim      = lipgloss.Color("#8c958f")
-	ColorTextMuted    = lipgloss.Color("#636b68")
-	ColorTeal         = lipgloss.Color("#5eead4")
-	ColorTealDim      = lipgloss.Color("#2dd4bf")
-	ColorTealDark     = lipgloss.Color("#0d3f37")
-	ColorAmber        = lipgloss.Color("#fbbf24")
-	ColorRose         = lipgloss.Color("#fb7185")
-	ColorViolet       = lipgloss.Color("#a78bfa")
-	ColorGreen        = lipgloss.Color("#86efac")
+	ColorBorderBright = shellPalette.Mut
+	ColorText         = shellPalette.Fg
+	ColorTextDim      = shellPalette.Dim
+	ColorTextMuted    = shellPalette.Mut
+	ColorTeal         = shellPalette.Teal
+	ColorTealDim      = shellPalette.Blue
+	ColorTealDark     = shellPalette.SelBg
+	ColorAmber        = shellPalette.Amber
+	ColorRose         = shellPalette.Red
+	ColorViolet       = shellPalette.Violet
+	ColorGreen        = shellPalette.Green
 )
 
 // Style is a thin wrapper around lipgloss that exposes the most common
@@ -84,7 +92,7 @@ func toUpper(s string) string {
 }
 
 // SeverityColor returns the palette color for an insight severity level.
-func SeverityColor(severity string) lipgloss.Color {
+func SeverityColor(severity string) color.Color {
 	switch severity {
 	case "high":
 		return ColorRose

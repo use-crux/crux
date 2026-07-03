@@ -8,10 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
-	"github.com/use-crux/crux/packages/local/internal/tui/components"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -53,6 +54,10 @@ func (s *Index) ID() string { return "index" }
 
 func (s *Index) Init(c DataClient) tea.Cmd { return fetchIndex(c) }
 
+func (s *Index) Interested(domains bridge.Domains) bool {
+	return domains.Has(bridge.DomainIndex)
+}
+
 func (s *Index) Counts() map[string]int {
 	return map[string]int{"index": len(s.index.Definitions)}
 }
@@ -67,13 +72,13 @@ func (s *Index) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		return fetchIndex(c)
 	case dataErrMsg:
 		s.err = string(m)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return s.handleKey(m, c)
 	}
 	return nil
 }
 
-func (s *Index) handleKey(m tea.KeyMsg, c DataClient) tea.Cmd {
+func (s *Index) handleKey(m tea.KeyPressMsg, c DataClient) tea.Cmd {
 	switch m.String() {
 	case "j", "down":
 		s.moveCursor(+1)
@@ -178,10 +183,10 @@ func (s *Index) Breadcrumb() ([]string, string) {
 
 func (s *Index) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
-		{"j/k", "move"}, {"↵", "open source"},
-		{"r", "run"}, {"e", "export"},
-		{"o", "open in viewer"},
-		{":", "cmd"}, {"?", "help"},
+		shell.Bind("j/k", "move"), shell.Bind("↵", "open source"),
+		shell.Bind("r", "run"), shell.Bind("e", "export"),
+		shell.Bind("o", "open in viewer"),
+		shell.Bind(":", "cmd"), shell.Bind("?", "help"),
 	}
 }
 
@@ -202,9 +207,9 @@ func (s *Index) View(size Size) string {
 	detailW := size.Width - listW - 1
 	list := s.renderList(listW, size.Height)
 	detail := s.renderDetail(detailW, size.Height)
-	return shell.Compose(
-		shell.PadColumnHeight(list, listW, size.Height),
-		shell.PadColumnHeight(detail, detailW, size.Height),
+	return kit.ComposeColumns(
+		kit.PadBlock(list, listW, size.Height),
+		kit.PadBlock(detail, detailW, size.Height),
 	)
 }
 
@@ -252,7 +257,7 @@ func (s *Index) renderListRow(d api.ProjectDefinition, width int, selected bool)
 	// `changed` chip — subtle but visible. State markers preserve case
 	// per the design (lowercase `changed`, `curated`, `pinned`, etc.).
 	if d.Quality != nil && d.Quality.ChangedSinceBaseline != nil && *d.Quality.ChangedSinceBaseline {
-		parts = append(parts, " ", components.ChipState("changed", shell.ColorAmber))
+		parts = append(parts, " ", kit.ChipState("changed", shell.ColorAmber))
 	}
 	// Affected counts.
 	if d.Quality != nil {
@@ -270,7 +275,7 @@ func (s *Index) renderListRow(d api.ProjectDefinition, width int, selected bool)
 		}
 	}
 	if count := len(s.lintFindingsForDefinition(d.ID)); count > 0 {
-		parts = append(parts, " ", components.ChipState(fmt.Sprintf("lint %d", count), shell.ColorAmber))
+		parts = append(parts, " ", kit.ChipState(fmt.Sprintf("lint %d", count), shell.ColorAmber))
 	}
 	row := strings.Join(parts, "")
 	return padRow(row, width)
@@ -434,11 +439,11 @@ func indexKindGlyph(kind string) string {
 func indexFidelityChip(fidelity string) string {
 	switch fidelity {
 	case "partial":
-		return components.ChipState("partial", shell.ColorAmber)
+		return kit.ChipState("partial", shell.ColorAmber)
 	case "error":
-		return components.ChipState("error", shell.ColorRose)
+		return kit.ChipState("error", shell.ColorRose)
 	default:
-		return components.ChipTag(fidelity)
+		return kit.ChipTag(fidelity)
 	}
 }
 

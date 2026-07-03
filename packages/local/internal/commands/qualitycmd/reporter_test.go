@@ -6,21 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
-// forceColorProfile pins lipgloss's global color profile to TrueColor for a
-// test. Under `go test` the auto-detected profile is Ascii, so style.Render
-// strips color even when IO.ColorEnabled() is true; "color present" assertions
-// must force a real profile (see SCRATCHPAD).
 func forceColorProfile(t *testing.T) {
 	t.Helper()
-	prev := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
 }
 
 // variantAgg builds a one-variant aggregate with the given cell tallies and a

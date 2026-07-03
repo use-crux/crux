@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Table renders a simple aligned table to stdout.
@@ -59,7 +59,7 @@ func (t *Table) Render() string {
 			if i > 0 {
 				sb.WriteString("  ")
 			}
-			sb.WriteString(Bold.Render(padRight(h, widths[i])))
+			sb.WriteString(padRight(h, widths[i]))
 		}
 		sb.WriteString("\n")
 		// Separator.
@@ -67,7 +67,7 @@ func (t *Table) Render() string {
 			if i > 0 {
 				sb.WriteString("  ")
 			}
-			sb.WriteString(Dim.Render(strings.Repeat("─", w)))
+			sb.WriteString(strings.Repeat("─", w))
 		}
 		sb.WriteString("\n")
 	}
@@ -88,6 +88,16 @@ func (t *Table) Render() string {
 	}
 
 	return sb.String()
+}
+
+// RenderTable returns table's formatted text through the command-facing output
+// surface. Commands should use this instead of calling [Table.Render] directly,
+// keeping direct renderer calls inside this package for the Phase 15 guard.
+func (io *IO) RenderTable(table *Table) string {
+	if table == nil {
+		return ""
+	}
+	return table.Render()
 }
 
 // Print renders the table to stdout.

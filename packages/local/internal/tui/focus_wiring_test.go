@@ -3,7 +3,8 @@ package tui
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 	"github.com/use-crux/crux/packages/local/internal/tui/screens"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
@@ -12,19 +13,31 @@ import (
 // assert the workbench's selection-routing wiring works end-to-end.
 type fakeScreen struct {
 	id         string
+	interest   bridge.Domains
+	initCalls  int
+	updateMsgs []tea.Msg
 	focusCalls []focusCall
 }
 
 type focusCall struct{ kind, id string }
 
-func (s *fakeScreen) ID() string                                     { return s.id }
-func (s *fakeScreen) Init(_ screens.DataClient) tea.Cmd              { return nil }
-func (s *fakeScreen) Update(_ tea.Msg, _ screens.DataClient) tea.Cmd { return nil }
-func (s *fakeScreen) View(_ screens.Size) string                     { return "" }
-func (s *fakeScreen) Breadcrumb() ([]string, string)                 { return []string{s.id}, "" }
-func (s *fakeScreen) Keybinds() []shell.Keybind                      { return nil }
-func (s *fakeScreen) Counts() map[string]int                         { return nil }
-func (s *fakeScreen) Focus(kind, id string)                          { s.focusCalls = append(s.focusCalls, focusCall{kind, id}) }
+func (s *fakeScreen) ID() string { return s.id }
+func (s *fakeScreen) Init(_ screens.DataClient) tea.Cmd {
+	return func() tea.Msg {
+		s.initCalls++
+		return nil
+	}
+}
+func (s *fakeScreen) Update(msg tea.Msg, _ screens.DataClient) tea.Cmd {
+	s.updateMsgs = append(s.updateMsgs, msg)
+	return nil
+}
+func (s *fakeScreen) View(_ screens.Size) string             { return "" }
+func (s *fakeScreen) Breadcrumb() ([]string, string)         { return []string{s.id}, "" }
+func (s *fakeScreen) Keybinds() []shell.Keybind              { return nil }
+func (s *fakeScreen) Counts() map[string]int                 { return nil }
+func (s *fakeScreen) Interested(domains bridge.Domains) bool { return s.interest.Intersects(domains) }
+func (s *fakeScreen) Focus(kind, id string)                  { s.focusCalls = append(s.focusCalls, focusCall{kind, id}) }
 
 // TestGotoNavInvokesFocusOnDestination asserts that when the user jumps
 // to a screen via the workbench's nav routing AND a matching record is

@@ -1,10 +1,12 @@
 package output
 
 import (
+	"bytes"
 	"io"
 	"os"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	xterm "github.com/charmbracelet/x/term"
 	"github.com/mattn/go-isatty"
 )
@@ -31,6 +33,7 @@ type IO struct {
 	Err io.Writer
 
 	colorEnabled bool
+	colorProfile colorprofile.Profile
 	stdoutTTY    bool
 	stderrTTY    bool
 	ci           bool
@@ -58,6 +61,7 @@ func NewIO(noColor bool) *IO {
 		Out:          os.Stdout,
 		Err:          os.Stderr,
 		colorEnabled: colorEnabledFor(noColor, stdoutFileTTY || stderrFileTTY),
+		colorProfile: colorprofile.Detect(os.Stdout, os.Environ()),
 		stdoutTTY:    stdoutFileTTY || force,
 		stderrTTY:    stderrFileTTY || force,
 		ci:           detectCI(),
@@ -72,6 +76,7 @@ type TestIOOptions struct {
 	StdoutTTY    bool
 	StderrTTY    bool
 	ColorEnabled bool
+	ColorProfile colorprofile.Profile
 	CI           bool
 	// Width is the reported terminal width. Zero defaults to 80. The value is
 	// still clamped to [40, 200] by Width().
@@ -90,6 +95,7 @@ func NewTestIO(out, err io.Writer, opts TestIOOptions) *IO {
 		Out:          out,
 		Err:          err,
 		colorEnabled: opts.ColorEnabled,
+		colorProfile: testColorProfile(opts.ColorProfile),
 		stdoutTTY:    opts.StdoutTTY,
 		stderrTTY:    opts.StderrTTY,
 		ci:           opts.CI,
@@ -135,7 +141,11 @@ func (io *IO) Sprint(style lipgloss.Style, s string) string {
 	if !io.colorEnabled {
 		return s
 	}
-	return style.Render(s)
+	rendered := style.Render(s)
+	var buf bytes.Buffer
+	writer := &colorprofile.Writer{Forward: &buf, Profile: io.colorProfile}
+	_, _ = writer.WriteString(rendered)
+	return buf.String()
 }
 
 // WithColorDisabled returns a shallow copy of io with color forced off, keeping
@@ -146,6 +156,13 @@ func (io *IO) WithColorDisabled() *IO {
 	clone := *io
 	clone.colorEnabled = false
 	return &clone
+}
+
+func testColorProfile(profile colorprofile.Profile) colorprofile.Profile {
+	if profile == colorprofile.Unknown {
+		return colorprofile.TrueColor
+	}
+	return profile
 }
 
 // Status renders the status glyph for key (✓/✗/●/⊘/…), colored only when color

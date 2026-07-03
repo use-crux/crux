@@ -3,7 +3,7 @@ package shell
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Breadcrumb renders the thin row above each screen body:

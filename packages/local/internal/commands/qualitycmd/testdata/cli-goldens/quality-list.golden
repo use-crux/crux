@@ -1,0 +1,2 @@
+  memory.contracts                              2 cases  score     evals/memory.eval.ts
+  prompt.title                                  1 cases  expect    (colocated prompt tests)

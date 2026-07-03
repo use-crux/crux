@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -26,6 +27,7 @@ func (s *Stub) ID() string                             { return s.id }
 func (s *Stub) Init(_ DataClient) tea.Cmd              { return nil }
 func (s *Stub) Update(_ tea.Msg, _ DataClient) tea.Cmd { return nil }
 func (s *Stub) Counts() map[string]int                 { return nil }
+func (s *Stub) Interested(bridge.Domains) bool         { return false }
 func (s *Stub) Breadcrumb() ([]string, string)         { return []string{s.id}, "" }
 func (s *Stub) Keybinds() []shell.Keybind              { return nil }
 

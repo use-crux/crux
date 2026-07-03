@@ -53,12 +53,12 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 		},
 	}
 
-	rootCmd.SetHelpFunc(rootHelpFunc(rootCmd))
+	rootCmd.SetHelpFunc(rootHelpFunc(rootCmd, f))
 
 	rootCmd.PersistentFlags().IntVar(&f.Port, "port", 4400, "Devtools server port")
 	rootCmd.PersistentFlags().BoolVar(&f.NoColor, "no-color", false, "Disable colored output")
 
-	rootCmd.AddCommand(commands.NewDevCmd())
+	rootCmd.AddCommand(commands.NewDevCmd(f))
 	rootCmd.AddCommand(commands.NewConfigCmd(f))
 	rootCmd.AddCommand(commands.NewTracesCmd(f))
 	rootCmd.AddCommand(commands.NewIndexCmd(f))
@@ -72,13 +72,13 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 	return rootCmd
 }
 
-func rootHelpFunc(rootCmd *cobra.Command) func(*cobra.Command, []string) {
+func rootHelpFunc(rootCmd *cobra.Command, f *cli.Factory) func(*cobra.Command, []string) {
 	return func(cmd *cobra.Command, _ []string) {
 		if cmd != rootCmd {
 			printCommandHelp(cmd)
 			return
 		}
-		_ = printRootUsage(cmd)
+		_ = printRootUsage(cmd, f.Streams())
 	}
 }
 
@@ -94,22 +94,23 @@ func printCommandHelp(cmd *cobra.Command) {
 	fmt.Fprint(out, cmd.UsageString())
 }
 
-func printRootUsage(cmd *cobra.Command) error {
+func printRootUsage(cmd *cobra.Command, io *output.IO) error {
 	out := cmd.OutOrStdout()
 	w := func(cmd, desc string) {
-		fmt.Fprintf(out, "    %-12s %s\n", output.Accent.Render(cmd), desc)
+		fmt.Fprintf(out, "    %-12s %s\n", io.Sprint(output.Accent, cmd), desc)
 	}
 	fl := func(flag, desc string) {
-		fmt.Fprintf(out, "    %-12s %s\n", output.Dim.Render(flag), desc)
+		fmt.Fprintf(out, "    %-12s %s\n", io.Sprint(output.Dim, flag), desc)
 	}
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "  %s\n\n", output.Logo("- context engineering devtools"))
-	fmt.Fprintf(out, "  %s\n", output.Bold.Render("Usage"))
+	logo := io.Sprint(output.Accent.Bold(true), output.LogoMark+" crux")
+	fmt.Fprintf(out, "  %s %s\n\n", logo, io.Sprint(output.Dim, "- context engineering devtools"))
+	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Usage"))
 	fmt.Fprintf(out, "    crux <command> [flags]\n\n")
-	fmt.Fprintf(out, "  %s\n", output.Bold.Render("Quality"))
+	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Quality"))
 	w("quality", "Run source-defined evaluations and inspect experiments")
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "  %s\n", output.Bold.Render("Observe"))
+	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Observe"))
 	w("config", "Inspect resolved config and source discovery")
 	w("traces", "List recent traces or show trace detail")
 	w("flows", "List runtime flow sessions")
@@ -119,14 +120,14 @@ func printRootUsage(cmd *cobra.Command) error {
 	w("lint", "Check authored Crux project health")
 	w("inspect", "Show token breakdown for a prompt")
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "  %s\n", output.Bold.Render("Server"))
+	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Server"))
 	w("dev", "Start the devtools server")
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "  %s\n", output.Bold.Render("Flags"))
+	fmt.Fprintf(out, "  %s\n", io.Sprint(output.Bold, "Flags"))
 	fl("--port", "Devtools server port (default 4400)")
 	fl("--no-color", "Disable colored output")
 	fl("--json", "JSON output (on subcommands)")
 	fmt.Fprintln(out)
-	fmt.Fprintf(out, "  %s\n\n", output.Dim.Render("Run crux quality --help for the evaluation workflow"))
+	fmt.Fprintf(out, "  %s\n\n", io.Sprint(output.Dim, "Run crux quality --help for the evaluation workflow"))
 	return nil
 }

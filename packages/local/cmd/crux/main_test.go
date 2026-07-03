@@ -23,6 +23,9 @@ func TestRootHelpNamesQualityAsCanonicalEvaluationSurface(t *testing.T) {
 	}
 
 	text := out.String()
+	if strings.Contains(text, "\x1b") {
+		t.Fatalf("root help with NO_COLOR contained an ANSI escape:\n%q", text)
+	}
 	for _, want := range []string{
 		"Quality",
 		"quality",

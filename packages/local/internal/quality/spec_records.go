@@ -320,6 +320,10 @@ func (s *Service) OverviewRecordAPI(ctx context.Context, windows ...string) (api
 	if err != nil {
 		return api.QualityOverviewRecord{}, err
 	}
+	s.publishDerivedInsightChanges(insights)
+	if snapshot, err := fs.Snapshot(); err == nil {
+		s.publishCassetteDriftChanges(snapshot.Cassettes)
+	}
 	feedback, err := s.Feedback(ctx)
 	if err != nil {
 		return api.QualityOverviewRecord{}, err

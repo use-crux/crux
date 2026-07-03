@@ -311,16 +311,7 @@ func runQualityList(configPath, cwd string, jsonOut bool) error {
 		}
 		fmt.Println(string(data))
 	} else {
-		if len(manifests) == 0 {
-			fmt.Println("No evaluations discovered.")
-		}
-		for _, manifest := range manifests {
-			location := manifest.File
-			if manifest.Source == "prompt-tests" {
-				location = "(colocated prompt tests)"
-			}
-			fmt.Printf("  %-44s %2d cases  %-9s %s\n", manifest.ID, len(manifest.Cases), manifest.Task.Kind, location)
-		}
+		renderQualityList(os.Stdout, manifests)
 	}
 	for _, collectErr := range collectErrors {
 		fmt.Fprintf(os.Stderr, "ERROR: %s\n", collectErr.Message)
@@ -329,6 +320,20 @@ func runQualityList(configPath, cwd string, jsonOut bool) error {
 		return domain.ExitError{Code: 2}
 	}
 	return nil
+}
+
+func renderQualityList(out io.Writer, manifests []domain.QualityManifest) {
+	if len(manifests) == 0 {
+		fmt.Fprintln(out, "No evaluations discovered.")
+		return
+	}
+	for _, manifest := range manifests {
+		location := manifest.File
+		if manifest.Source == "prompt-tests" {
+			location = "(colocated prompt tests)"
+		}
+		fmt.Fprintf(out, "  %-44s %2d cases  %-9s %s\n", manifest.ID, len(manifest.Cases), manifest.Task.Kind, location)
+	}
 }
 
 func runQualityShow(f *cli.Factory, experimentID, dir string, jsonOut bool) error {

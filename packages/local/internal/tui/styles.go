@@ -1,21 +1,27 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/use-crux/crux/packages/local/internal/theme"
+)
 
 // Centralized style definitions for the TUI.
 // Colors mirror output/color.go but are unexported for internal use.
 
 var (
-	accent    = lipgloss.Color("#00D4AA")
-	accentDim = lipgloss.Color("#007766")
-	white     = lipgloss.Color("#FFFFFF")
-	fg        = lipgloss.Color("#C8C8C8")
-	dim       = lipgloss.Color("#666666")
-	border    = lipgloss.Color("#444444")
-	green     = lipgloss.Color("#4ADE80")
-	red       = lipgloss.Color("#F87171")
-	yellow    = lipgloss.Color("#FBBF24")
-	selectBg  = lipgloss.Color("#1A3A4A")
+	tuiPalette = theme.Resolve(colorprofile.TrueColor)
+
+	accent    = tuiPalette.Teal
+	accentDim = tuiPalette.Blue
+	white     = tuiPalette.Fg
+	fg        = tuiPalette.Fg
+	dim       = tuiPalette.Dim
+	border    = tuiPalette.Border
+	green     = tuiPalette.Green
+	red       = tuiPalette.Red
+	yellow    = tuiPalette.Amber
+	selectBg  = tuiPalette.SelBg
 
 	logoStyle      = lipgloss.NewStyle().Bold(true).Foreground(accent)
 	headerBar      = lipgloss.NewStyle().Foreground(fg).PaddingLeft(1).PaddingBottom(0)

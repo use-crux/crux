@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
@@ -15,7 +15,7 @@ func TestRunsInspectKeyIsI(t *testing.T) {
 	r := buildRunWithSpan()
 
 	// `i` should emit an InspectRequest via the returned tea.Cmd.
-	cmd := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}}, nil)
+	cmd := r.Update(tea.KeyPressMsg(tea.Key{Text: "i", Code: 'i'}), nil)
 	if cmd == nil {
 		t.Fatal("`i` returned nil cmd; expected an InspectRequest emitter")
 	}
@@ -30,7 +30,7 @@ func TestRunsInspectKeyIsI(t *testing.T) {
 func TestRunsOKeyDoesNotInspect(t *testing.T) {
 	r := buildRunWithSpan()
 
-	cmd := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}}, nil)
+	cmd := r.Update(tea.KeyPressMsg(tea.Key{Text: "o", Code: 'o'}), nil)
 	if cmd == nil {
 		return // perfectly fine — `o` is a stub for now
 	}

@@ -3,7 +3,7 @@ package screens
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
 )
 
@@ -20,7 +20,7 @@ func TestRunsExportEmitsCmd(t *testing.T) {
 		Run: api.QualityRunRecord{TraceID: "8af2f1c"},
 	}
 
-	cmd := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}}, nil)
+	cmd := r.Update(tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
 	if cmd == nil {
 		t.Error("pressing `e` returned nil cmd; expected export emitter")
 	}
@@ -34,7 +34,7 @@ func TestRunsExportWithoutSelectionIsNoop(t *testing.T) {
 	r.loaded = true
 	// No detail, no selRun.
 
-	cmd := r.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}}, nil)
+	cmd := r.Update(tea.KeyPressMsg(tea.Key{Text: "e", Code: 'e'}), nil)
 	if cmd != nil {
 		t.Errorf("pressing `e` without a run returned non-nil cmd %v", cmd)
 	}

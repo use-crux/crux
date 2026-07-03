@@ -1,23 +1,35 @@
 package screens
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-// TestExperimentsKeybindsDropUnbuiltNAndR asserts the Experiments
-// screen no longer advertises `n new` and `r re-run` in its Keybinds()
-// output — those depend on `StartExperiment` / `RerunExperiment`
-// backend service methods which don't exist yet. Per KEYBINDS.md the
-// status bar must not lie about what's pressable. The palette still
-// exposes these as commands (which toast "backend pending") so users
-// have a workaround. See S8 in the plan.
-func TestExperimentsKeybindsDropUnbuiltNAndR(t *testing.T) {
+// TestExperimentsKeybindsHideDeferredActions asserts the Experiments screen
+// only advertises actions backed by existing screen or service surfaces.
+func TestExperimentsKeybindsHideDeferredActions(t *testing.T) {
 	e := NewExperiments()
 	binds := e.Keybinds()
 	for _, b := range binds {
-		if b.Key == "n" && b.Label == "new" {
-			t.Errorf("Experiments keybind `n new` is still advertised — backend (StartExperiment) is not wired")
+		for _, deferred := range []string{"n", "r", "c"} {
+			if b.Key == deferred {
+				t.Errorf("Experiments keybind %q is still advertised; deferred actions belong to Phase 18", deferred)
+			}
 		}
-		if b.Key == "r" && b.Label == "re-run" {
-			t.Errorf("Experiments keybind `r re-run` is still advertised — backend (RerunExperiment) is not wired")
-		}
+	}
+}
+
+func TestExperimentsKeybindsAdvertiseCSVExport(t *testing.T) {
+	e := NewExperiments()
+	binds := make([]string, 0, len(e.Keybinds()))
+	for _, b := range e.Keybinds() {
+		binds = append(binds, b.Key+" "+b.Label)
+	}
+	text := strings.Join(binds, " · ")
+	if !strings.Contains(text, "e export CSV") {
+		t.Fatalf("Experiments keybinds should advertise CSV export, got: %s", text)
+	}
+	if strings.Contains(text, "export JSON") {
+		t.Fatalf("Experiments keybinds still advertise JSON fallback: %s", text)
 	}
 }

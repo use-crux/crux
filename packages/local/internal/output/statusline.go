@@ -10,6 +10,17 @@ import (
 // with text-without-newline this overwrites the current line in place, which
 // composes with normal scrollback (unlike a full-screen bubbletea program).
 const eraseLine = "\r\x1b[K"
+const clearScreen = "\x1b[H\x1b[2J"
+
+// ClearScreen clears the primary terminal stream when stdout is interactive.
+// It is intentionally inert for pipes and files, preserving the CLI invariant
+// that machine-readable stdout never receives terminal-control bytes.
+func (io *IO) ClearScreen() {
+	if !io.stdoutTTY {
+		return
+	}
+	fmt.Fprint(io.Out, clearScreen)
+}
 
 // StatusLine is a single, rewritable progress line on the IO's Err (stderr)
 // stream. It is intentionally not a bubbletea program: it owns exactly one line

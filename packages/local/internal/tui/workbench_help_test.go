@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // TestWorkbenchHelpRendersActiveScreenKeybinds asserts that when the user
@@ -19,7 +19,7 @@ func TestWorkbenchHelpRendersActiveScreenKeybinds(t *testing.T) {
 	// short, well-known labels like "insights", "runs", "suites" via the
 	// g-prefix chords. We assert at least one of those labels appears in
 	// the rendered help overlay output.
-	w.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+	w.Update(tea.KeyPressMsg(tea.Key{Text: "?", Code: '?'}))
 	out := w.View()
 
 	if !strings.Contains(out, "? help") {

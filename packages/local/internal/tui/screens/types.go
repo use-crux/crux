@@ -8,8 +8,9 @@ package screens
 import (
 	"context"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -28,6 +29,7 @@ type DataClient interface {
 	ProjectIndex(ctx context.Context) (api.IndexData, error)
 	ExperimentSummaries(ctx context.Context) ([]api.QualityExperimentSummary, error)
 	ExperimentDetail(ctx context.Context, experimentID string) (api.QualityExperimentDetail, bool, error)
+	EvaluationProgress(ctx context.Context, evaluationID string, limit int) (api.QualityEvaluationProgress, bool, error)
 	PromotedBaselines(ctx context.Context) ([]api.QualityPromotedBaseline, error)
 	CassetteFiles(ctx context.Context) ([]api.QualityCassetteFileRecord, error)
 	ScorerStats(ctx context.Context) ([]api.QualityScorerStats, error)
@@ -99,6 +101,10 @@ type Screen interface {
 	// the Insights screen knows the insight count). Keys are nav IDs. Empty
 	// map = no contribution.
 	Counts() map[string]int
+
+	// Interested reports whether a live batch touching domains should refetch
+	// this screen when it is active, or mark it stale while it is hidden.
+	Interested(domains bridge.Domains) bool
 
 	// Focus is called by the workbench before a screen becomes active when
 	// the navigation that produced the activation carried a record reference

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -33,6 +35,9 @@ func NewCassettes() *Cassettes { return &Cassettes{} }
 func (s *Cassettes) ID() string                { return "cassettes" }
 func (s *Cassettes) Init(c DataClient) tea.Cmd { return fetchCassetteFiles(c) }
 func (s *Cassettes) Counts() map[string]int    { return map[string]int{"cassettes": len(s.items)} }
+func (s *Cassettes) Interested(domains bridge.Domains) bool {
+	return domains.Has(bridge.DomainCassettes)
+}
 
 func (s *Cassettes) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
@@ -46,7 +51,7 @@ func (s *Cassettes) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		return fetchCassetteFiles(c)
 	case dataErrMsg:
 		s.err = string(m)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch m.String() {
 		case "j", "down":
 			s.move(1)
@@ -67,8 +72,8 @@ func (s *Cassettes) Breadcrumb() ([]string, string) {
 
 func (s *Cassettes) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
-		{"j/k", "move"},
-		{":", "cmd"}, {"?", "help"},
+		shell.Bind("j/k", "move"),
+		shell.Bind(":", "cmd"), shell.Bind("?", "help"),
 	}
 }
 
@@ -89,9 +94,9 @@ func (s *Cassettes) View(size Size) string {
 	detailW := size.Width - listW - 1
 	list := s.renderList(listW, size.Height)
 	detail := s.renderDetail(detailW, size.Height)
-	return shell.Compose(
-		shell.PadColumnHeight(list, listW, size.Height),
-		shell.PadColumnHeight(detail, detailW, size.Height),
+	return kit.ComposeColumns(
+		kit.PadBlock(list, listW, size.Height),
+		kit.PadBlock(detail, detailW, size.Height),
 	)
 }
 
@@ -146,62 +151,6 @@ func (s *Cassettes) renderListRow(c api.QualityCassetteFileRecord, width int, se
 	}
 	line2 := "    " + meta
 	return padRow(line1, width) + "\n" + padRow(line2, width)
-}
-
-func (s *Cassettes) renderDetail(width, height int) string {
-	cur := s.currentCassette()
-	if cur == nil {
-		return centerMsg(Size{Width: width, Height: height}, "select a cassette")
-	}
-
-	subtitle := fmt.Sprintf("%d entries · %s", cur.EntryCount, formatBytes(cur.SizeBytes))
-	if cur.Stale {
-		subtitle += " · " + shell.Amber.Render("stale")
-	}
-	header := shell.PaneHeader(width, cur.Name, subtitle, "")
-	var b strings.Builder
-	b.WriteString(header)
-	b.WriteString("\n")
-
-	b.WriteString(" " + shell.SectionTag.Render("FILE"))
-	b.WriteString("\n")
-	b.WriteString(kvRow("path", cur.Path, width))
-	b.WriteString(kvRow("recorded", cur.RecordedAt, width))
-	b.WriteString(kvRow("sdk", cur.SdkVersion, width))
-	b.WriteString(kvRow("size", formatBytes(cur.SizeBytes), width))
-	b.WriteString(kvRow("entries", fmt.Sprintf("%d", cur.EntryCount), width))
-
-	if len(cur.Models) > 0 {
-		b.WriteString("\n " + shell.SectionTag.Render("MODELS"))
-		b.WriteString("\n")
-		for _, m := range cur.Models {
-			b.WriteString(padRow(" "+shell.TextDim.Render(m), width))
-			b.WriteString("\n")
-		}
-	}
-
-	if cur.Stale {
-		b.WriteString("\n " + shell.SectionTag.Render("STALENESS"))
-		b.WriteString("\n")
-		b.WriteString(padRow(" "+shell.Amber.Render("recorded more than 90 days ago — replay refuses stale tapes."), width))
-		b.WriteString("\n")
-		b.WriteString(padRow(" "+shell.TextDim.Render("re-record with `crux quality run --replay refresh`."), width))
-		b.WriteString("\n")
-	}
-
-	hdrH := strings.Count(header, "\n") + 1
-	return shell.PadColumnHeight(b.String(), width, height-hdrH+1)
-}
-
-func formatBytes(n int64) string {
-	switch {
-	case n >= 1<<20:
-		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
-	case n >= 1<<10:
-		return fmt.Sprintf("%.1f KB", float64(n)/(1<<10))
-	default:
-		return fmt.Sprintf("%d B", n)
-	}
 }
 
 func (s *Cassettes) move(delta int) {

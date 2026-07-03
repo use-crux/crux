@@ -2,16 +2,15 @@ package screens
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
+	"github.com/use-crux/crux/packages/local/internal/tui/kit"
 	"github.com/use-crux/crux/packages/local/internal/tui/shell"
 )
 
@@ -23,6 +22,7 @@ type Baselines struct {
 	selectedID string
 	loaded     bool
 	err        string
+	notice     string
 }
 
 func NewBaselines() *Baselines { return &Baselines{} }
@@ -30,6 +30,9 @@ func NewBaselines() *Baselines { return &Baselines{} }
 func (s *Baselines) ID() string                { return "baselines" }
 func (s *Baselines) Init(c DataClient) tea.Cmd { return fetchPromotedBaselines(c) }
 func (s *Baselines) Counts() map[string]int    { return map[string]int{"baselines": len(s.items)} }
+func (s *Baselines) Interested(domains bridge.Domains) bool {
+	return domains.Has(bridge.DomainBaselines)
+}
 
 func (s *Baselines) Update(msg tea.Msg, c DataClient) tea.Cmd {
 	switch m := msg.(type) {
@@ -39,70 +42,30 @@ func (s *Baselines) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		if s.currentBaseline() == nil && len(s.items) > 0 {
 			s.selectedID = s.items[0].BaselineID
 		}
+	case baselineReplacedMsg:
+		s.notice = fmt.Sprintf("baseline %s replaced", m.result.BaselineID)
+		return fetchPromotedBaselines(c)
+	case baselineExportedMsg:
+		s.notice = fmt.Sprintf("exported %s -> %s", m.baselineID, m.path)
 	case api.QualityEvent:
 		return fetchPromotedBaselines(c)
 	case dataErrMsg:
 		s.err = string(m)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch m.String() {
 		case "j", "down":
 			s.move(1)
 		case "k", "up":
 			s.move(-1)
-		case "enter":
+		case "enter", "o":
 			return s.drillExperiment()
+		case "R":
+			return s.replaceBaseline(c)
 		case "e":
 			return s.exportBaseline()
 		}
 	}
 	return nil
-}
-
-// drillExperiment emits a NavigateRequest staging the focused baseline's
-// source experiment id so the Experiments screen opens with it selected.
-func (s *Baselines) drillExperiment() tea.Cmd {
-	cur := s.currentBaseline()
-	if cur == nil || cur.ExperimentID == "" {
-		return nil
-	}
-	expID := cur.ExperimentID
-	return func() tea.Msg {
-		return NavigateRequest{NavID: "experiments", Kind: "experiment", ID: expID}
-	}
-}
-
-// exportBaseline writes the focused record to
-// ~/.crux/exports/baseline-{id}.json.
-func (s *Baselines) exportBaseline() tea.Cmd {
-	cur := s.currentBaseline()
-	if cur == nil {
-		return nil
-	}
-	rec := *cur
-	return func() tea.Msg {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return dataErrMsg(err.Error())
-		}
-		dir := filepath.Join(home, ".crux", "exports")
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return dataErrMsg(err.Error())
-		}
-		path := filepath.Join(dir, "baseline-"+truncate(rec.BaselineID, 32)+".json")
-		body, err := json.MarshalIndent(rec, "", "  ")
-		if err != nil {
-			return dataErrMsg(err.Error())
-		}
-		if err := os.WriteFile(path, body, 0o644); err != nil {
-			return dataErrMsg(err.Error())
-		}
-		return baselineExportedMsg{baselineID: rec.BaselineID, path: path}
-	}
-}
-
-type baselineExportedMsg struct {
-	baselineID string
-	path       string
 }
 
 func (s *Baselines) Breadcrumb() ([]string, string) {
@@ -115,9 +78,9 @@ func (s *Baselines) Breadcrumb() ([]string, string) {
 
 func (s *Baselines) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
-		{"j/k", "move"}, {"↵", "open experiment"},
-		{"e", "export"},
-		{":", "cmd"}, {"?", "help"},
+		shell.Bind("j/k", "move"), shell.Bind("o", "open experiment"),
+		shell.Bind("R", "replace"), shell.Bind("e", "export"),
+		shell.Bind(":", "cmd"), shell.Bind("?", "help"),
 	}
 }
 
@@ -135,9 +98,9 @@ func (s *Baselines) View(size Size) string {
 	detailW := size.Width - listW - 1
 	list := s.renderList(listW, size.Height)
 	detail := s.renderDetail(detailW, size.Height)
-	return shell.Compose(
-		shell.PadColumnHeight(list, listW, size.Height),
-		shell.PadColumnHeight(detail, detailW, size.Height),
+	return kit.ComposeColumns(
+		kit.PadBlock(list, listW, size.Height),
+		kit.PadBlock(detail, detailW, size.Height),
 	)
 }
 
@@ -189,6 +152,10 @@ func (s *Baselines) renderDetail(width, height int) string {
 	var b strings.Builder
 	b.WriteString(header)
 	b.WriteString("\n")
+	if s.notice != "" {
+		b.WriteString(padRow(" "+shell.Green.Render(s.notice), width))
+		b.WriteString("\n")
+	}
 	b.WriteString(" " + shell.SectionTag.Render("LINKED"))
 	b.WriteString("\n")
 	b.WriteString(kvRow("baseline", cur.BaselineID, width))
@@ -208,11 +175,11 @@ func (s *Baselines) renderDetail(width, height int) string {
 	}
 
 	footer := shell.PaneFooter(width, []shell.Keybind{
-		{"↵", "open experiment"}, {"e", "export"},
+		shell.Bind("↵", "open experiment"), shell.Bind("e", "export"),
 	})
 	hdrH := strings.Count(header, "\n") + 1
 	footerH := strings.Count(footer, "\n") + 1
-	body := shell.PadColumnHeight(b.String(), width, height-hdrH-footerH+1)
+	body := kit.PadBlock(b.String(), width, height-hdrH-footerH+1)
 	return body + "\n" + footer
 }
 

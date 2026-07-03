@@ -11,6 +11,7 @@ const (
 	KindSpan       Kind = "span"
 	KindInsight    Kind = "insight"
 	KindExperiment Kind = "experiment"
+	KindDataset    Kind = "dataset"
 	KindBaseline   Kind = "baseline"
 	KindFeedback   Kind = "feedback"
 	KindCassette   Kind = "cassette"
