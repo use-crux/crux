@@ -3,7 +3,8 @@
  *
  * Start with {@link knowledgeBase} for common RAG flows, drop down to
  * {@link retriever} for custom read paths, and compose retrieval work with
- * named recipes in later beta phases.
+ * named recipes when retrieval needs fanout, federation, ranking, or
+ * compression.
  *
  * @module
  */
@@ -22,13 +23,22 @@ export type { RetrievalConfigErrorCode, RetrievalRunErrorCode } from './errors'
 export type {
   KnowledgeBase,
   KnowledgeBaseConfig,
+  KnowledgeBaseGroundingConfig,
   KnowledgeBaseInspection,
+  KnowledgeBaseRecipeConfig,
   KnowledgeBaseScopeConfig,
   ScopedKnowledgeBase,
 } from './knowledge-base'
 export type { RetrievalModel } from './model'
 export type { MetadataFilter, RetrieveOptions, RetrieveRequest } from './request'
-export type { RecipeTrace, RetrievalRecipe, RetrievalRecipeConfig, RetrievalRecipeSource, StepTrace } from './recipe/recipe'
+export type {
+  RecipeTrace,
+  RetrievalRecipe,
+  RetrievalRecipeConfig,
+  RetrievalRecipeGroundingConfig,
+  RetrievalRecipeSource,
+  StepTrace,
+} from './recipe/recipe'
 export type {
   PlannedQuery,
   RetrievalSourceTrace,

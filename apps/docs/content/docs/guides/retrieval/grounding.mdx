@@ -1,6 +1,6 @@
 ---
 title: Grounding And Citations
-description: Inject retrieved evidence into prompts and validate that answers cite allowed sources.
+description: Inject retrieved evidence, expose search tools, and validate that answers cite allowed sources.
 ---
 
 Use plain retrieval when a prompt needs helpful background. Use `grounding()` when the answer must cite retrieved evidence and Crux should validate that citation contract.
@@ -11,9 +11,9 @@ import { citationSchema, grounding } from '@use-crux/core/citations'
 import { z } from 'zod'
 
 const groundedDocs = grounding({
-  id: 'docs',
-  retriever: docs,
-  query: ({ input }) => input.question,
+  id: 'docs-grounding',
+  retriever: docs.retriever(),
+  query: ({ input }) => input.question as string,
   limit: 6,
   citations: {
     required: true,
@@ -21,7 +21,7 @@ const groundedDocs = grounding({
   },
 })
 
-const answerDocs = prompt({
+export const answerDocs = prompt({
   id: 'answer-docs',
   use: [groundedDocs],
   input: z.object({ question: z.string() }),
@@ -34,104 +34,121 @@ const answerDocs = prompt({
 })
 ```
 
-`grounding()` can wrap a raw retriever or a retrieval pipeline:
+Knowledge bases and recipes expose convenience forms:
 
 ```ts
-const advancedDocs = retrievalPipeline(docs, [
-  multiQuery({ generate, model, count: 4 }),
-  parentExpand({ records }),
-  compress({ generate, model, mode: 'extractive' }),
-])
+const groundedKnowledgeBase = docs.grounding({
+  query: ({ input }) => input.question as string,
+})
 
-const groundedDocs = grounding({
-  id: 'docs',
-  retriever: advancedDocs,
-  query: ({ input }) => input.question,
+const groundedRecipe = docsAnswer.asGrounding({
+  query: ({ input }) => input.question as string,
   citations: { required: true },
 })
 ```
 
-The boundary is:
-
-```ts
-retriever()                 // search one corpus
-retrievalPipeline(docs, []) // improve which hits are selected
-grounding({ retriever })    // inject evidence and validate citations
-```
-
-## Choose An Injection Mode
+## Injection Modes
 
 Grounding can inject retrieved context directly, expose search tools, or do both.
 
 ```ts
 const baseGrounding = {
-  id: 'docs',
-  retriever: docs,
-  query: ({ input }) => input.question,
+  id: 'docs-grounding',
+  retriever: docs.retriever(),
   citations: { required: true },
 }
 
-grounding({ ...baseGrounding, inject: 'context' })
-grounding({ ...baseGrounding, inject: 'tool' })
-grounding({ ...baseGrounding, inject: 'both' })
+grounding({
+  ...baseGrounding,
+  inject: 'context',
+  query: ({ input }) => input.question as string,
+})
+
+grounding({
+  ...baseGrounding,
+  inject: 'tool',
+  tools: { prefix: 'docs', include: ['search', 'getSource'] },
+})
+
+grounding({
+  ...baseGrounding,
+  inject: 'both',
+  query: ({ input }) => input.question as string,
+  tools: { prefix: 'docs', include: ['search', 'getSource'] },
+})
 ```
 
-Use `inject: 'context'` when the prompt should always receive evidence before generation. This is the most deterministic mode and the best fit for evals.
+Use `context` when the prompt should always receive evidence before generation. Use `tool` when the model should decide whether to search. Use `both` when an assistant should start with likely evidence and still have lookup tools for follow-up questions.
 
-Use `inject: 'tool'` when context would otherwise grow on every call and the model should decide when to search.
+Tool-only grounding does not require a query up front. If the model cites a source before searching, citation validation fails with a clear unknown-hit issue.
 
-Use `inject: 'both'` when an assistant should start with likely evidence and still have search tools for follow-up lookup.
+## Grounding Session
 
-## Control Rendering
+Each grounded generation has a grounding session. The session records:
+
+- hits injected as context
+- hits returned by retrieval tools
+
+Retrieval tools return typed `crux.retrieval.hits` payloads. The tool middleware records those payloads into the session, and citation validation reads the session at validation time. Crux does not parse tool strings or close over mutable hit arrays.
+
+This keeps single-process runtimes and serialized runtimes aligned: adapters can reconstruct the session from persisted typed tool results without maintaining a second evidence table.
+
+## Tool Visibility
+
+The search tool returns lean evidence: source identity, score, content, and URL when present. It does not expose internal provenance by default.
+
+`getSource` has explicit visibility:
+
+```ts
+grounding({
+  id: 'docs-grounding',
+  retriever: docs.retriever(),
+  inject: 'tool',
+  tools: {
+    prefix: 'docs',
+    include: ['search', 'getSource'],
+    getSource: { visibility: 'discovered' },
+  },
+})
+```
+
+| Visibility | Meaning |
+| --- | --- |
+| `discovered` | `getSource` can read only hits already recorded in the grounding session. |
+| `namespace` | `getSource` can read any active indexed chunk in the retriever namespace. |
+
+Use namespace visibility when you want the model to expand known source ids. Use discovered visibility when source access should stay tied to prior search results.
+
+## Rendering
 
 Default rendering is source-oriented and citation friendly. Customize it when your UI needs page numbers, URLs, titles, or domain-specific labels.
 
 ```ts
 const groundedDocs = grounding({
-  id: 'docs',
-  retriever: docs,
-  query: ({ input }) => input.question,
-  renderEvidence: ({ hits }) =>
+  id: 'docs-grounding',
+  retriever: docs.retriever(),
+  query: ({ input }) => input.question as string,
+  render: ({ hits }) =>
     hits
       .map((hit, index) => {
         const label = `${hit.sourceId}/${hit.chunkId}`
-        const page = hit.provenance?.pages?.[0]
-        return `[${index + 1}] ${label}${page ? ` page ${page}` : ''}\n${hit.content}`
+        return `[${index + 1}] ${label}\n${hit.content}`
       })
       .join('\n\n'),
 })
 ```
 
-When using multiple retrieval sources, prefix tools so names do not collide:
-
-```ts
-const productGrounding = grounding({
-  id: 'product-docs',
-  retriever: productDocs,
-  inject: 'tool',
-  tools: { prefix: true },
-})
-
-const supportGrounding = grounding({
-  id: 'support-docs',
-  retriever: supportDocs,
-  inject: 'tool',
-  tools: { prefix: true },
-})
-```
-
 ## What Grounding Validates
 
-Grounding is not a magic truth engine. It validates that the answer follows the citation contract you configured:
+Grounding validates that the answer follows the citation contract:
 
 ```ts
 grounding({
-  id: 'docs',
-  retriever: docs,
+  id: 'docs-grounding',
+  retriever: docs.retriever(),
   citations: {
     required: true,
     quotes: 'required',
-    maxCitations: 6,
   },
 })
 ```
@@ -140,21 +157,16 @@ Typical constraints:
 
 | Setting | Meaning |
 | --- | --- |
-| `required: true` | The answer must cite retrieved evidence. |
+| `required: true` | The answer must cite retrieved or searched evidence. |
 | `quotes: 'required'` | Citations must include quote text from the evidence. |
-| `maxCitations` | Keep outputs bounded for UI and review. |
+| `select` | Read citations from a custom output shape. |
 
-Use normal `retriever()` context when citations are helpful but not contractual. Use `grounding()` when the output schema, review workflow, or user experience depends on citations being structured and checkable.
-
-To keep grounding behavior stable over time, add [RAG evals](/docs/guides/eval/rag-evals)
-for representative questions. They verify expected sources, answer assertions, citation
-validity, and pipeline traces in one report.
+Use normal retriever context when citations are helpful but not contractual. Use grounding when the output schema, review workflow, or user experience depends on citations being structured and checkable.
 
 ## Related
 
 <Cards>
   <Card title="Querying" description="Create retrievers that can be grounded." href="/docs/guides/retrieval/querying" />
-  <Card title="Pipelines" description="Improve evidence selection before citation validation." href="/docs/guides/retrieval/pipelines" />
-  <Card title="RAG evals" description="Evaluate grounded answers, citations, evidence, and retrieval regressions." href="/docs/guides/eval/rag-evals" />
+  <Card title="Recipes" description="Improve evidence selection before citation validation." href="/docs/guides/retrieval/recipes" />
   <Card title="Citations Reference" description="Full `grounding()` and citation API." href="/docs/reference/crux-core/citations" />
 </Cards>

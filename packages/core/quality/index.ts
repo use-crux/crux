@@ -46,6 +46,7 @@ export type {
   FlowParams,
   AgentParams,
   RetrieverTargetOptions,
+  RetrievalRecipeTargetOptions,
   ToolMocks,
   ModelRef,
   ModelSettings,
@@ -57,6 +58,7 @@ export type {
   ExpectedOf,
 } from './target'
 export type { Scorer, ScorerArgs, Score, ScorerFactory, BoundScorerLib, EmbedFn, JudgeBacked } from './scorers'
+export type { RagContextPrecisionOptions, RagMetricOptions } from './internal/rag-metrics'
 export type { Gates, ScoreGate, GateResult } from './gates'
 export type { Dataset } from './dataset'
 export type { Cassette, ReplayMode, NormalizedCall } from './replay'

@@ -8,7 +8,9 @@ import { emptyCellSignals, type CellSignals } from '../../quality/internal/signa
 function judgeStub(object: Record<string, unknown>) {
   const calls: Array<{ system?: string; user?: string }> = []
   const generate: GenerateFn = async (prompt) => {
-    const record = prompt as unknown as { config: { system?: unknown; prompt?: unknown } }
+    const record = prompt as unknown as {
+      config: { system?: unknown; prompt?: unknown }
+    }
     calls.push({
       system: typeof record.config.system === 'string' ? record.config.system : undefined,
       user: typeof record.config.prompt === 'string' ? record.config.prompt : undefined,
@@ -22,12 +24,20 @@ function signalsWithHits(...previews: string[]): CellSignals {
   return {
     ...emptyCellSignals(),
     captured: new Set(['retrieval']),
-    retrievalHits: previews.map((preview, index) => ({ rank: index + 1, sourceId: `s${index}`, preview })),
+    retrievalHits: previews.map((preview, index) => ({
+      rank: index + 1,
+      sourceId: `s${index}`,
+      preview,
+    })),
   }
 }
 
 function ragContext(stub: ReturnType<typeof judgeStub>, signals?: CellSignals): ScorerRunContext {
-  return { generate: stub.generate, judgeModel: 'judge-m', ...(signals !== undefined ? { signals } : {}) }
+  return {
+    generate: stub.generate,
+    judgeModel: 'judge-m',
+    ...(signals !== undefined ? { signals } : {}),
+  }
 }
 
 describe('scorers.rag.faithfulness', () => {
@@ -35,7 +45,11 @@ describe('scorers.rag.faithfulness', () => {
     const stub = judgeStub({ reasoning: 'every claim is supported', score: 1 })
     const score = await invokeScorer(
       scorers.rag.faithfulness(),
-      { input: { query: 'when do refunds land?' }, output: 'Refunds land in 5 days.', expected: undefined },
+      {
+        input: { query: 'when do refunds land?' },
+        output: 'Refunds land in 5 days.',
+        expected: undefined,
+      },
       ragContext(stub, signalsWithHits('Refund policy: refunds settle within 5 business days.')),
     )
 
@@ -79,7 +93,11 @@ describe('scorers.rag.answerRelevancy / contextPrecision / contextRecall', () =>
     const stub = judgeStub({ reasoning: 'on point', score: 0.8 })
     const score = await invokeScorer(
       scorers.rag.answerRelevancy(),
-      { input: { query: 'when do refunds land?' }, output: 'in five days', expected: undefined },
+      {
+        input: { query: 'when do refunds land?' },
+        output: 'in five days',
+        expected: undefined,
+      },
       ragContext(stub),
     )
     expect(score).toMatchObject({ name: 'answerRelevancy', score: 0.8 })
@@ -87,22 +105,30 @@ describe('scorers.rag.answerRelevancy / contextPrecision / contextRecall', () =>
     expect(stub.calls[0]!.user).toContain('in five days')
   })
 
-  it('contextPrecision judges the retrieved chunks against the question', async () => {
+  it('contextPrecision scores the fraction of retrieved chunks matching expected sources', async () => {
     const stub = judgeStub({ reasoning: 'mostly relevant', score: 0.6 })
     const score = await invokeScorer(
       scorers.rag.contextPrecision(),
-      { input: { query: 'refund timing' }, output: 'answer', expected: undefined },
+      {
+        input: { query: 'refund timing' },
+        output: 'answer',
+        expected: { sources: [{ sourceId: 's0' }, { sourceId: 'missing' }] },
+      },
       ragContext(stub, signalsWithHits('refund chunk', 'shipping chunk')),
     )
-    expect(score).toMatchObject({ name: 'contextPrecision', score: 0.6 })
-    expect(stub.calls[0]!.user).toContain('refund chunk')
+    expect(score).toMatchObject({ name: 'rag.contextPrecision', score: 0.5 })
+    expect(stub.calls).toHaveLength(0)
   })
 
   it('contextRecall needs an expected reference and skips honestly without one', async () => {
     const stub = judgeStub({ reasoning: 'covers it', score: 1 })
     const withReference = await invokeScorer(
       scorers.rag.contextRecall(),
-      { input: { query: 'q' }, output: 'a', expected: 'refunds settle in 5 days' },
+      {
+        input: { query: 'q' },
+        output: 'a',
+        expected: 'refunds settle in 5 days',
+      },
       ragContext(stub, signalsWithHits('refund chunk')),
     )
     expect(withReference.score).toBe(1)

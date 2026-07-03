@@ -139,6 +139,28 @@ describe('retrievalRecipe', () => {
     })
   })
 
+  it('creates grounding backed by the recipe retriever', async () => {
+    const { retriever } = baseRetriever({
+      launch: [hit('doc-1/a', 'Launch checklist')],
+    })
+    const recipe = retrievalRecipe({
+      id: 'launch-recipe',
+      retriever,
+      steps: [retrieve({ limit: 5 })],
+    })
+
+    const grounded = recipe.asGrounding({
+      query: ({ input }) => input.question as string,
+      limit: 1,
+    })
+
+    await expect(grounded.resolve({ question: 'launch' })).resolves.toMatchObject({
+      groundingId: 'grounding:launch-recipe',
+      retrieverId: 'launch-recipe',
+      hits: [expect.objectContaining({ sourceId: 'doc-1', content: 'Launch checklist' })],
+    })
+  })
+
   it('runs fanout retrieval concurrently and keeps fused score provenance structured', async () => {
     let inFlight = 0
     let maxInFlight = 0

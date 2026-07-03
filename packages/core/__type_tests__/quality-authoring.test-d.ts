@@ -16,8 +16,8 @@ import { z } from 'zod'
 import { prompt } from '../prompt/prompt'
 import { flow } from '../flow/scope'
 import { agent } from '../agent/agent'
-import type { Retriever, RetrieverHit } from '../retrieval'
-import { evaluate, scorers, dataset } from '../quality'
+import type { RetrievalRecipe, Retriever, RetrieverHit } from '../retrieval'
+import { evaluate, scorers, dataset, target } from '../quality'
 import type { CaseOf, EvaluationCoverageTargetId, InputOf, OutputOf } from '../quality'
 
 // ─────────────────────────────────────────────────────────────────
@@ -67,6 +67,7 @@ const summarizeFlow = flow('summarize', async (_flow, _input: { topic: string })
 const supportAgent = agent({ id: 'support-agent', prompt: supportPrompt })
 
 declare const docsRetriever: Retriever
+declare const docsRecipe: RetrievalRecipe
 
 const classify = async (input: { question: string }): Promise<{ category: string }> => ({
   category: input.question.length > 10 ? 'long' : 'short',
@@ -92,8 +93,14 @@ evaluate({
   covers: ['prompt:support'],
   data: [{ input: { question: 'How do refunds work?', locale: 'en' } }],
   expect: (ctx) => {
-    expectTypeOf(ctx.input).toEqualTypeOf<{ question: string; locale: 'en' | 'nl' }>()
-    expectTypeOf(ctx.output).toEqualTypeOf<{ answer: string; confidence: number }>()
+    expectTypeOf(ctx.input).toEqualTypeOf<{
+      question: string
+      locale: 'en' | 'nl'
+    }>()
+    expectTypeOf(ctx.output).toEqualTypeOf<{
+      answer: string
+      confidence: number
+    }>()
   },
 })
 
@@ -127,9 +134,46 @@ evaluate({
   ],
 })
 
-expectTypeOf<InputOf<typeof supportPrompt>>().toEqualTypeOf<{ question: string; locale: 'en' | 'nl' }>()
-expectTypeOf<OutputOf<typeof supportPrompt>>().toEqualTypeOf<{ answer: string; confidence: number }>()
+expectTypeOf<InputOf<typeof supportPrompt>>().toEqualTypeOf<{
+  question: string
+  locale: 'en' | 'nl'
+}>()
+expectTypeOf<OutputOf<typeof supportPrompt>>().toEqualTypeOf<{
+  answer: string
+  confidence: number
+}>()
 expectTypeOf<OutputOf<typeof summaryPrompt>>().toEqualTypeOf<string>()
+
+evaluate({
+  task: docsRecipe,
+  data: [
+    {
+      input: { query: 'refunds' },
+      expected: { sources: [{ sourceId: 'docs/refunds' }] },
+    },
+  ],
+  scorers: (s) => [s.rag.recallAtK(5), s.rag.mrr(), s.rag.expectedSourceCoverage()],
+  gates: { scores: { 'rag.recall@5': { min: 0.8 }, 'rag.mrr': { min: 0.8 } } },
+  expect: (ctx) => {
+    expectTypeOf(ctx.input).toEqualTypeOf<{ query: string }>()
+    expectTypeOf(ctx.output).toEqualTypeOf<readonly RetrieverHit[]>()
+    ctx.expect.retrieval.count().toBeGreaterThan(0)
+  },
+})
+
+evaluate({
+  task: target.recipe(docsRecipe, {
+    query: (input: { question: string }) => input.question,
+    options: { limit: 3 },
+  }),
+  data: [
+    {
+      input: { question: 'refunds' },
+      expected: { sources: [{ sourceId: 'docs/refunds' }] },
+    },
+  ],
+  scorers: (s) => [s.rag.contextPrecision(), s.rag.citationValidity(), s.rag.traceShapeSnapshot()],
+})
 
 // ─────────────────────────────────────────────────────────────────
 // 2. Bare flow/agent/retriever as task: typed input/output plus the correct
@@ -156,8 +200,14 @@ evaluate({
   task: supportAgent,
   data: [{ input: { question: 'I want a refund', locale: 'en' } }],
   expect: (ctx) => {
-    expectTypeOf(ctx.input).toEqualTypeOf<{ question: string; locale: 'en' | 'nl' }>()
-    expectTypeOf(ctx.output).toEqualTypeOf<{ answer: string; confidence: number }>()
+    expectTypeOf(ctx.input).toEqualTypeOf<{
+      question: string
+      locale: 'en' | 'nl'
+    }>()
+    expectTypeOf(ctx.output).toEqualTypeOf<{
+      answer: string
+      confidence: number
+    }>()
     ctx.expect.toolCalls.toHaveCalled('lookupOrder')
     ctx.expect.handoffs.toHaveHandedOffTo('billing')
     ctx.expect.retrieval.count().toBeGreaterThan(0)
@@ -336,7 +386,10 @@ evaluate({
   task: summaryPrompt,
   data: textCases,
   scorers: [scorers.judge({ name: 'helpful', rubric: 'Is the answer helpful?' })],
-  gates: { passRate: { min: 0.9 }, scores: { helpful: { min: 0.7 }, pass: { min: 1 } } },
+  gates: {
+    passRate: { min: 0.9 },
+    scores: { helpful: { min: 0.7 }, pass: { min: 1 } },
+  },
 })
 
 evaluate({
@@ -407,7 +460,10 @@ evaluate({
       name: 'helpful',
       rubric: 'Helpful?',
       select: (output) => {
-        expectTypeOf(output).toEqualTypeOf<{ answer: string; confidence: number }>()
+        expectTypeOf(output).toEqualTypeOf<{
+          answer: string
+          confidence: number
+        }>()
         return output.answer
       },
     }),
@@ -466,7 +522,10 @@ evaluate({
 // ─────────────────────────────────────────────────────────────────
 
 const sharedCases = [
-  { input: { question: 'q1', locale: 'en' }, expected: { answer: 'a1', confidence: 1 } },
+  {
+    input: { question: 'q1', locale: 'en' },
+    expected: { answer: 'a1', confidence: 1 },
+  },
   { input: { question: 'q2', locale: 'nl' } },
 ] satisfies CaseOf<typeof supportPrompt, { answer: string; confidence: number }>[]
 
@@ -480,7 +539,13 @@ evaluate({ task: supportPrompt, data: sharedCases })
 const bakeoff = evaluate({
   task: supportPrompt,
   data: supportCases,
-  scorers: (s) => [s.judge({ name: 'helpful', rubric: 'Helpful?', select: (output) => output.answer })],
+  scorers: (s) => [
+    s.judge({
+      name: 'helpful',
+      rubric: 'Helpful?',
+      select: (output) => output.answer,
+    }),
+  ],
   variants: { candidate: { prompt: compatiblePrompt } },
   baseline: 'candidate',
 })

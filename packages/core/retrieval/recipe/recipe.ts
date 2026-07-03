@@ -1,13 +1,13 @@
 /**
  * `retrievalRecipe()` — named retrieval composition facade.
  *
- * A recipe is the named, inspectable replacement for the old anonymous
- * retrieval pipeline surface.
+ * A recipe is a named, inspectable composition over one or more retrievers.
  *
  * @module
  */
 
-import type { Grounding } from '../../citations'
+import { grounding } from '../../citations'
+import type { Grounding, GroundingConfig } from '../../citations'
 import type { RetrievalModel } from '../model'
 import type { RetrievalToolConfig, Retriever, RetrieverHit, RetrieverTools, RetrieveOptions, RetrieveRequest } from '../types'
 import { createRetrieverTools } from '../tools'
@@ -41,8 +41,14 @@ export interface RetrievalRecipe {
   ): Promise<{ hits: RetrieverHit[]; trace: import('./trace').RecipeTrace }>
   asRetriever(): Retriever
   asTools<const TConfig extends RetrievalToolConfig | undefined = undefined>(config?: TConfig): RetrieverTools<TConfig>
-  asGrounding(config?: unknown): Grounding
+  asGrounding(config?: RetrievalRecipeGroundingConfig): Grounding
   inspect(): { id: string; stepCount: number; retrieverIds: readonly string[] }
+}
+
+/** Grounding options for {@link RetrievalRecipe.asGrounding}. */
+export type RetrievalRecipeGroundingConfig = Omit<GroundingConfig, 'id' | 'retriever'> & {
+  /** Stable grounding id. Defaults to `grounding:<recipe id>`. */
+  id?: string
 }
 
 /** Create a named retrieval recipe. */
@@ -78,7 +84,12 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
     asTools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
       toolConfig?: TConfig,
     ): RetrieverTools<TConfig> => recipeRetriever.asTools(toolConfig),
-    asGrounding: () => createRecipeGrounding(config.id, recipeRetriever),
+    asGrounding: (groundingConfig?: RetrievalRecipeGroundingConfig) =>
+      grounding({
+        ...(groundingConfig ?? {}),
+        id: groundingConfig?.id ?? `grounding:${config.id}`,
+        retriever: recipeRetriever,
+      }),
     inspect: () => ({
       id: config.id,
       stepCount: config.steps.length,
@@ -145,15 +156,5 @@ function createRecipeRetriever(recipeId: string, base: Retriever, runRecipe: Ret
         config: toolConfig,
       }) as RetrieverTools<TConfig>,
     inject: () => retrievalNotImplemented('phase 4', `retrievalRecipe("${recipeId}").asRetriever().inject()`),
-  })
-}
-
-function createRecipeGrounding(id: string, retriever: Retriever): Grounding {
-  return Object.freeze({
-    _tag: 'Grounding' as const,
-    id: `grounding:${id}`,
-    retriever,
-    resolve: () => retrievalNotImplemented('phase 4', `retrievalRecipe("${id}").asGrounding().resolve()`),
-    inject: () => retrievalNotImplemented('phase 4', `retrievalRecipe("${id}").asGrounding().inject()`),
   })
 }

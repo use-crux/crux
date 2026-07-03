@@ -1,8 +1,7 @@
 /**
  * Retrieval recipe step authoring.
  *
- * Steps are typed by phase so recipes can move from planned queries to hits
- * without exposing the old anonymous pipeline model.
+ * Steps are typed by phase so recipes can move from planned queries to hits.
  *
  * @module
  */

@@ -1,16 +1,15 @@
 ---
 title: Semantic RAG with Upstash
-description: Index a doc corpus into Upstash Vector, rerank the best results, and answer questions with citations.
+description: Index a doc corpus into Upstash Vector, compose a retrieval recipe, and answer questions with citations.
 ---
 
-This recipe sets up a complete production-style RAG pipeline: ingest a directory of docs, chunk + embed + write into Upstash Vector, rerank the best matches, then answer questions with `retriever()` injecting the top hits as context. Hybrid mode gives you both semantic and keyword recall, while reranking improves the final ordering before the prompt sees the results.
+This recipe sets up a complete production-style RAG flow: ingest a directory of docs, chunk + embed + write into Upstash Vector, compose a named retrieval recipe, then answer questions with grounded citations. Hybrid mode gives you both semantic and keyword recall, while recipe steps improve the final evidence before it reaches the prompt.
 
 ## Primitives used
 
 - `@use-crux/ingest` for document loading
 - `@use-crux/core/indexing` — `indexer()` for chunk + embed + write, `corpus()` for incremental sync
-- `@use-crux/core/retrieval` — `retriever()` for query + asContext
-- `@use-crux/ai` — `reranker()` for model-based reranking
+- `@use-crux/core/retrieval` — `retriever()` and `retrievalRecipe()` for query-time evidence selection
 - `@use-crux/convex` and `@use-crux/upstash` — `convexRecordStore()` for JSON records and `upstashVectorStore()` for managed vector search
 - `embedding()` — one dense + one sparse embedding
 
@@ -130,18 +129,11 @@ Run `pnpm tsx lib/rag/index-docs.ts` (or invoke `syncDocs()`) when content chang
 ### `lib/rag/retriever.ts`
 
 ```ts
-import { retriever } from '@use-crux/core/retrieval'
-import { reranker } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
+import { retrievalRecipe, retrieve, rerank, retriever } from '@use-crux/core/retrieval'
 
 import { dense, sparse } from './embedding'
+import { retrievalModel } from './retrieval-model'
 import { records, vectors } from './storage'
-
-const docsReranker = reranker({
-  name: 'product-docs-reranker',
-  model: openai.reranking('gpt-4.1-mini'),
-  topN: 5,
-})
 
 export const docs = retriever({
   id: 'product-docs',
@@ -151,55 +143,19 @@ export const docs = retriever({
   dense,
   sparse,
   search: { mode: 'hybrid', limit: 5, fusion: 'rrf' },
-  rerank: docsReranker,
 })
+
+export const docsAnswer = retrievalRecipe({
+  id: 'product-docs-answer',
+  retriever: docs,
+  model: retrievalModel,
+  steps: [retrieve({ limit: 20 }), rerank({ topK: 5 })],
+})
+
+const { hits, trace } = await docsAnswer.retrieveWithTrace('enterprise SSO setup')
 ```
 
-### Optional: advanced query-time pipeline
-
-If your corpus has long docs, repeated chunks, or time-sensitive content, wrap the retriever with a pipeline. The exported object is still a retriever, so the answer prompt below does not change.
-
-```ts
-import {
-  compress,
-  decay,
-  diversify,
-  multiQuery,
-  parentExpand,
-  retrievalPipeline,
-} from '@use-crux/core/retrieval'
-import { generateObjectFn, generateTextFn } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-
-export const advancedDocs = retrievalPipeline(docs, [
-  multiQuery({
-    generate: generateTextFn,
-    model: openai('gpt-4.1-mini'),
-    count: 4,
-  }),
-  parentExpand({
-    records,
-    maxParentChars: 4000,
-  }),
-  compress({
-    generate: generateObjectFn,
-    model: openai('gpt-4.1-mini'),
-    mode: 'extractive',
-    maxCharsPerHit: 1200,
-  }),
-  diversify({ strategy: 'mmr', limit: 8, sourcePenalty: 0.15 }),
-  decay({
-    field: 'metadata.updatedAt',
-    halfLifeMs: 30 * 24 * 60 * 60 * 1000,
-  }),
-])
-
-const { hits, trace } = await advancedDocs.retrieveWithTrace(
-  'enterprise SSO setup',
-)
-```
-
-Use the plain `docs` retriever when hybrid retrieval plus reranking is enough. Use `advancedDocs` when you need query expansion, parent context, compression, diversity, freshness, or stage-level debugging. If you use the pipeline, change the answer import below to `import { docs } from './retriever'`.
+Use the plain `docs` retriever when hybrid retrieval is enough. Use `docsAnswer` when you need traceable recipe steps such as reranking, parent expansion, compression, or federation.
 
 ### `lib/rag/answer.ts`
 
@@ -210,11 +166,11 @@ import { grounding, citationSchema } from '@use-crux/core/citations'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
-import { docs } from './retriever'
+import { docsAnswer } from './retriever'
 
 const groundedDocs = grounding({
   id: 'product-docs',
-  retriever: docs,
+  retriever: docsAnswer.asRetriever(),
   query: ({ input }) => input.question,
   limit: 5,
   citations: {
@@ -250,10 +206,10 @@ export async function answer(question: string) {
 
 1. **Sync deliberately, query many times.** Syncing is expensive (pipeline work + embedding + writes); querying is cheap. `corpus.sync()` makes repeated syncs safe by skipping unchanged sources and tracking failures.
 2. **Hybrid retrieval combines two strengths.** Dense embeddings catch semantic similarity, while sparse embeddings catch exact terms and rare keywords. RRF (Reciprocal Rank Fusion) merges those rankings without needing manual score normalization.
-3. **The reranker sharpens the final shortlist.** Retrieval gets you candidate chunks. The reranker reorders the top results against the exact user query before they reach the prompt.
+3. **The recipe sharpens the final shortlist.** Retrieval gets candidate chunks. Recipe steps can rerank, expand parents, compress evidence, and produce a structured trace.
 4. **`grounding()` runs retrieval at prompt-resolve time.** Every call to `answer()` re-runs retrieval with the user's question, injects the allowed evidence, and contributes a citation constraint.
 5. **Structured citations are validated.** Each citation captures `sourceId`, `chunkId`, and optional quotes. Crux validates that cited chunks came from the retrieved hit set, and your UI can resolve them back to source URLs or paths via metadata.
-6. **The pipeline ledger explains sync behavior.** Each source record stores stage records for transforms, chunking, cache hits, durations, and chunk counts. In devtools, CLI/TUI, and OTel this is the difference between "RAG feels stale" and knowing exactly which source and stage changed.
+6. **The indexing ledger explains sync behavior.** Each source record stores transform, chunking, cache, duration, and chunk-count records. In devtools, CLI/TUI, and OTel this is the difference between "RAG feels stale" and knowing exactly which source changed.
 
 ## Variations
 

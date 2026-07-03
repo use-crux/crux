@@ -41,7 +41,7 @@ export async function runRetrievalOperation(args: {
   const span = observe.openSpan({
     name: `${args.retrieverId}.retrieve`,
     family: 'retrieval',
-    primitive: 'retrieval.query',
+    primitive: 'retrieval.retrieve',
     attributes: eventBase,
   })
 

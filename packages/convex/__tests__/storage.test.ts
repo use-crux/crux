@@ -1,7 +1,7 @@
 import {
   describeBlobStoreConformance,
   describeRecordStoreConformance,
-  describeVectorStoreConformance,
+  vectorStoreConformanceSuite,
 } from '@use-crux/core/storage/testing/vitest'
 import { workspace } from '@use-crux/core/workspace'
 import { describe, expect, it } from 'vitest'
@@ -87,14 +87,19 @@ describe('convexRecordStore workspace transactions', () => {
   })
 })
 
-describeVectorStoreConformance({
+vectorStoreConformanceSuite({
   name: 'convexVectorStore',
-  prepare: () => {
+  create: () => {
     const component = createInMemoryConvexStoreDocumentComponent({
       denseSearch: searchDenseDocs,
     })
-    return convexVectorStore({ component, ctx: component.ctx })
+    return {
+      records: convexRecordStore({ component, ctx: component.ctx }),
+      vectors: convexVectorStore({ component, ctx: component.ctx }),
+      cleanup: async () => {},
+    }
   },
+  capabilities: { sparse: false, hybrid: false, delete: true },
 })
 
 describeBlobStoreConformance({
@@ -125,6 +130,7 @@ describeBlobStoreConformance({
 
 function searchDenseDocs(query: StoreDocDenseSearchQuery, docs: readonly StoreDocRecord[]): readonly StoreDocRecord[] {
   return docs
+    .filter((doc) => matchesQueryFilter(doc, query))
     .flatMap((doc) => {
       const embedding = Array.isArray(doc.embedding) ? doc.embedding.filter(isNumber) : []
       const score = cosineSimilarity(query.vector, embedding)
@@ -132,6 +138,13 @@ function searchDenseDocs(query: StoreDocDenseSearchQuery, docs: readonly StoreDo
     })
     .sort((left, right) => Number(right._score) - Number(left._score))
     .slice(0, query.limit)
+}
+
+function matchesQueryFilter(doc: StoreDocRecord, query: StoreDocDenseSearchQuery): boolean {
+  if (!query.filter) return true
+  if (typeof doc.content !== 'string') return false
+  const value = JSON.parse(doc.content) as Record<string, unknown>
+  return Object.entries(query.filter).every(([key, expected]) => value[key] === expected)
 }
 
 function cosineSimilarity(left: readonly number[], right: readonly number[]): number {

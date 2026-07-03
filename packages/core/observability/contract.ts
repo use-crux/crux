@@ -62,6 +62,7 @@ export const CRUX_PRIMITIVE_NAMES = [
   'tool.approval',
   'retrieval.pipeline',
   'retrieval.recipe',
+  'retrieval.retrieve',
   'retrieval.query',
   'retrieval.stage',
   'retrieval.step',
@@ -184,6 +185,7 @@ export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   'tool.approval': 'tool',
   'retrieval.pipeline': 'retrieval',
   'retrieval.recipe': 'retrieval',
+  'retrieval.retrieve': 'retrieval',
   'retrieval.query': 'retrieval',
   'retrieval.stage': 'retrieval',
   'retrieval.step': 'retrieval',
@@ -450,7 +452,13 @@ export interface CruxCompositionReportPreview {
   handoffPath?: readonly string[]
   handoffCount?: number
   finalAgentId?: string
-  roster?: readonly { id: string; role?: string; turns?: number; durationMs?: number; tokens?: number }[]
+  roster?: readonly {
+    id: string
+    role?: string
+    turns?: number
+    durationMs?: number
+    tokens?: number
+  }[]
   wallTimeMs?: number
   serialTimeMs?: number
 }

@@ -155,7 +155,11 @@ export function createStoreDocVectorStore(config: StoreDocVectorStoreConfig): Ve
     async search(query) {
       const normalized = normalizeDenseQuery(query)
       if (!config.io.searchDense) return []
-      const docs = await config.io.searchDense({ vector: [...normalized.dense], limit: normalized.limit })
+      const docs = await config.io.searchDense({
+        vector: [...normalized.dense],
+        limit: normalized.limit,
+        ...(normalized.filter === undefined ? {} : { filter: normalized.filter }),
+      })
       const decoded = docs.map((doc) => codec.decode(doc))
       await cleanupExpired(config.io, decoded)
       return decoded
@@ -176,7 +180,7 @@ export function createStoreDocVectorStore(config: StoreDocVectorStoreConfig): Ve
       sparse: false,
       hybrid: false,
       fusion: [],
-      filter: 'post',
+      filter: 'pre',
       consistency: 'strong',
     }),
   }

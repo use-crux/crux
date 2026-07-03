@@ -141,12 +141,29 @@ describe('knowledgeBase', () => {
     })
   })
 
-  it('constructs grounding as a later-phase stub without requiring stores', () => {
-    const docs = knowledgeBase({ id: 'docs' })
+  it('creates grounding backed by the knowledge base retriever', async () => {
+    const docs = knowledgeBase({
+      id: 'docs',
+      storage: inMemoryStorage(),
+      embeddings: createTopicEmbedding(),
+    })
+    await docs.index([
+      {
+        namespace: 'docs',
+        sourceId: 'pricing',
+        content: 'Pricing guide',
+      },
+    ])
 
-    expect(docs.grounding()).toMatchObject({
-      _tag: 'Grounding',
-      id: 'grounding:docs',
+    const grounded = docs.grounding({
+      query: ({ input }) => input.question as string,
+      limit: 1,
+    })
+
+    await expect(grounded.resolve({ question: 'pricing' })).resolves.toMatchObject({
+      groundingId: 'grounding:docs',
+      retrieverId: 'docs',
+      hits: [expect.objectContaining({ sourceId: 'pricing', content: 'Pricing guide' })],
     })
   })
 

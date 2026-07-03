@@ -139,7 +139,7 @@ Create a `GenerateTextFn` bound to a client and model.
 
 This helper is also generated from the native chat profile, so text helper calls and adapter calls share request construction and response extraction.
 
-### Embeddings and rerankers
+### Embeddings
 
 `@use-crux/anthropic` is a generation adapter. It does not export a provider-native `embedding()` helper because Anthropic's direct SDK surface here does not provide the dense embedding API that Crux needs for `embedding()`.
 
@@ -147,9 +147,7 @@ When you want Anthropic for generation plus retrieval/indexing around it, use on
 
 - pair `createAnthropic()` with `embedding()` from `@use-crux/ai`
 - pair it with `embedding()` from `@use-crux/openai` or `@use-crux/google` for the write/query vector side
-- keep Anthropic as the chat model while another provider handles embeddings or reranking
-
-For model-based reranking, use `reranker()` from [`@use-crux/ai`](/docs/reference/adapters/ai).
+- keep Anthropic as the chat model while another provider handles embeddings
 
 ### Types
 

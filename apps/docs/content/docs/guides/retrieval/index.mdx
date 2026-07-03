@@ -1,226 +1,187 @@
 ---
 title: Retrieval & RAG
-description: The full Crux path for loading documents, indexing them, querying them, and injecting evidence into prompts.
+description: Define knowledge bases, retrieve scored evidence, compose retrieval recipes, and validate grounded citations.
 ---
 
-Retrieval is the part of Crux that turns external knowledge into prompt-ready evidence.
-
-The useful mental model is two paths:
+Retrieval turns external knowledge into prompt-ready evidence. The beta API is built around one progressive path:
 
 ```txt
-Write path:
-source -> loader -> corpus.sync() -> indexer() -> records in RecordStore + vectors in VectorStore
-                                      ^
-                                      |
-                                embedding()
-
-Read path:
-question -> retriever() -> hits -> prompt context or tools
-               ^
-               |
-         embedding() + RecordStore + VectorStore
-
-Optional read layers:
-retrievalPipeline(retriever) -> better selected hits
-grounding({ retriever })     -> controlled evidence + validated citations
+knowledgeBase() -> retriever() -> retrievalRecipe() -> grounding()
 ```
 
-Each primitive owns one job:
+Each layer exposes the layer below it. Start with a knowledge base for normal RAG, drop down to a retriever for custom search, use a recipe when one search pass is not enough, and use grounding when an answer must cite allowed evidence.
 
 | Primitive | Job | Start here |
 | --- | --- | --- |
-| `embedding()` | Turn text into dense or sparse vectors. | [Embeddings](/docs/guides/retrieval/embeddings) |
-| `@use-crux/ingest` | Load text, files, folders, and URLs into documents. | [Ingestion](/docs/guides/retrieval/ingestion) |
-| `indexer()` | Chunk documents, embed chunks, and write records. | [Indexing](/docs/guides/retrieval/indexing) |
-| `corpus()` | Keep repeated indexing jobs incremental and safe. | [Corpus sync](/docs/guides/retrieval/corpus-sync) |
-| `retriever()` | Query the corpus directly, as prompt context, or as tools. | [Querying](/docs/guides/retrieval/querying) |
-| `retrievalPipeline()` | Improve query-time retrieval with planning, expansion, compression, diversity, and recency. | [Pipelines](/docs/guides/retrieval/pipelines) |
-| `grounding()` | Inject evidence and validate citation contracts. | [Grounding](/docs/guides/retrieval/grounding) |
+| `knowledgeBase()` | Own indexing, storage, embeddings, lifecycle, retrieval, tools, and scoping. | [Querying](/docs/guides/retrieval/querying) |
+| `retriever()` | Query indexed knowledge or a custom backend and return scored hits. | [Querying](/docs/guides/retrieval/querying) |
+| `retrievalRecipe()` | Compose named query fanout, retrieval, reranking, parent expansion, and compression. | [Recipes](/docs/guides/retrieval/recipes) |
+| `grounding()` | Inject evidence, expose search tools, and validate citations. | [Grounding](/docs/guides/retrieval/grounding) |
+| `corpus()` / `indexer()` | Build lower-level write paths when you need direct control. | [Indexing](/docs/guides/retrieval/indexing) |
 
-## The Normal Product Path
-
-Most apps start with this shape: define embeddings once, index a corpus, then use a retriever directly in a prompt.
+## Minimal RAG
 
 ```ts
 import { prompt } from '@use-crux/core'
 import { embedding } from '@use-crux/openai'
-import { corpus, indexer } from '@use-crux/core/indexing'
-import { retriever } from '@use-crux/core/retrieval'
-import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
-import { filesSource } from '@use-crux/ingest/files'
+import { knowledgeBase } from '@use-crux/core/retrieval'
+import { inMemoryStorage } from '@use-crux/core/storage'
 import { z } from 'zod'
 
-const dense = embedding({
-  name: 'docs',
-  model: 'text-embedding-3-small',
-})
-const records = inMemoryRecordStore()
-const vectors = inMemoryVectorStore()
-
-const docsIndexer = indexer({
+const docs = knowledgeBase({
   id: 'docs',
-  namespace: 'product-docs',
-  records,
-  vectors,
-  dense,
+  storage: inMemoryStorage(),
+  embeddings: embedding({
+    name: 'docs',
+    model: 'text-embedding-3-small',
+  }),
 })
 
-const docsCorpus = corpus({
-  id: 'docs',
-  namespace: 'product-docs',
-  records,
-  indexer: docsIndexer,
-})
-
-await docsCorpus.sync(
-  filesSource({ directory: './docs', recursive: true }, { namespace: 'product-docs' }).load(),
-  { sourceSet: 'complete', stale: 'delete' },
-)
-
-const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
-  records,
-  vectors,
-  dense,
-  context: {
-    query: ({ question }) => question,
-    limit: 6,
+await docs.index([
+  {
+    namespace: 'docs',
+    sourceId: 'refunds.md',
+    content: 'Refunds are available within 30 days of purchase.',
+    metadata: { section: 'policy' },
   },
-})
+])
 
 export const answerDocs = prompt({
   id: 'answer-docs',
-  use: [docs],
+  use: [
+    docs.grounding({
+      query: ({ input }) => input.question as string,
+      citations: { required: true, quotes: 'required' },
+    }),
+  ],
   input: z.object({ question: z.string() }),
-  system: 'Answer from the retrieved product docs.',
+  system: 'Answer only from the retrieved docs.',
   prompt: ({ input }) => input.question,
 })
 ```
 
-You can add sparse embeddings and switch the retriever to hybrid mode without changing the shape:
+## Inspect And Replace Layers
+
+A knowledge base is a facade, not a closed abstraction:
 
 ```ts
-const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'product-docs',
-  records,
-  vectors,
-  dense,
-  sparse,
+const inspection = docs.inspect()
+const direct = docs.retriever({ limit: 6 })
+const recipe = docs.recipe({
+  id: 'docs-answer',
+  steps: [retrieve({ limit: 20 }), rerank({ topK: 8, model })],
 })
+const tools = docs.tools({ prefix: 'docs', include: ['search', 'getSource'] })
+```
 
-const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
-  records,
-  vectors,
-  dense,
-  sparse,
-  search: { mode: 'hybrid', fusion: 'dbsf', limit: 8 },
+You can replace any layer:
+
+```ts
+import { retriever } from '@use-crux/core/retrieval'
+
+const searchApi = retriever({
+  id: 'search-api',
+  namespace: 'docs',
+  async retrieve(query, options) {
+    const results = await internalSearch.search({
+      query,
+      limit: options.limit ?? 5,
+      filter: options.filter,
+    })
+
+    return results.map((result) => ({
+      namespace: 'docs',
+      sourceId: result.documentId,
+      chunkId: result.sectionId,
+      content: result.text,
+      metadata: result.metadata,
+      score: result.score,
+      sourceUrl: result.url,
+    }))
+  },
 })
 ```
 
-Hybrid is retrieval composition over dense and sparse vectors. It is not an embedding kind.
+## Recipes For Stronger Retrieval
 
-## Which Page Should I Read?
+Use a named recipe when a raw retriever needs broader recall, model-backed ranking, parent context, or prompt-budget compression:
 
-If you are new to RAG, read the pages in sidebar order. They follow the real lifecycle: vectors, sources, indexing, querying, advanced read-side behavior, citation contracts, then production sync.
+```ts
+import { compressToBudget, fanout, retrievalRecipe, retrieve, rerank } from '@use-crux/core/retrieval'
 
-If you already know what you need, jump directly:
+const docsAnswer = retrievalRecipe({
+  id: 'docs-answer',
+  retriever: docs.retriever(),
+  model,
+  steps: [
+    fanout({ maxQueries: 4 }),
+    retrieve({ limit: 30 }),
+    rerank({ topK: 8 }),
+    compressToBudget({ tokens: 3500 }),
+  ],
+})
+
+const hits = await docsAnswer.retrieve('How do enterprise refunds work?')
+const { trace } = await docsAnswer.retrieveWithTrace('How do enterprise refunds work?')
+```
+
+Recipes also support federation:
+
+```ts
+const answer = retrievalRecipe({
+  id: 'support-and-docs',
+  retriever: [
+    { retriever: docs.retriever(), weight: 1 },
+    { retriever: supportTickets, weight: 0.5 },
+  ],
+  onSourceError: 'skip-with-warning',
+  steps: [retrieve({ limit: 20 }), rerank({ topK: 8, model })],
+})
+```
+
+## Tenancy And Lifecycle
+
+Use scopes when one knowledge base definition serves multiple namespaces. Isolation is structural: scoped handles bind storage keys to the namespace instead of relying on a runtime filter.
+
+```ts
+const tenantDocs = docs.scope({ namespace: `tenant:${tenantId}` })
+
+await tenantDocs.reindex(sourceDocuments)
+await tenantDocs.remove('old-policy.md')
+
+const status = tenantDocs.inspect().lifecycle
+```
+
+Removed sources become unretrievable immediately. If inactive vector rows are retained by policy or adapter limits, `inspect()` reports that retention.
+
+## Quality
+
+RAG evaluation lives in the Quality system, not in a separate `ragEval` module:
+
+```ts
+import { evaluate, scorers, target } from '@use-crux/core/quality'
+
+await evaluate({
+  task: target.recipe(docsAnswer, {
+    query: ({ question }) => question,
+  }),
+  scorers: [
+    scorers.rag.recallAtK(5),
+    scorers.rag.mrr(),
+    scorers.rag.citationValidity(),
+  ],
+})
+```
+
+## Related
 
 <Cards>
   <Card title="Embeddings" description="Dense, sparse, hybrid, preprocessing, truncation, retries, rate limits, and cache." href="/docs/guides/retrieval/embeddings" />
   <Card title="Ingestion" description="Text, files, URLs, built-in parsers, OCR hooks, and custom loaders." href="/docs/guides/retrieval/ingestion" />
-  <Card title="Indexing" description="Pipelines, transforms, stage cache, and dry runs for the write side of retrieval." href="/docs/guides/retrieval/indexing" />
+  <Card title="Indexing" description="Lower-level indexing, transforms, chunking, cache, and dry runs." href="/docs/guides/retrieval/indexing" />
   <Card title="Chunkers" description="Structured, plain text, parent-child, semantic, and custom chunking strategies." href="/docs/guides/retrieval/chunkers" />
-  <Card title="Querying" description="Dense, sparse, hybrid, prompt `use`, tools, custom retrievers, and rerankers." href="/docs/guides/retrieval/querying" />
-  <Card title="Pipelines" description="Query planning, multi-query, parent expansion, compression, diversity, decay, and custom stages." href="/docs/guides/retrieval/pipelines" />
+  <Card title="Querying" description="Knowledge bases, direct retrievers, search modes, tools, and custom backends." href="/docs/guides/retrieval/querying" />
+  <Card title="Recipes" description="Named query fanout, retrieve, rerank, parent expansion, compression, and federation." href="/docs/guides/retrieval/recipes" />
   <Card title="Grounding" description="When retrieval must become cited, validated evidence." href="/docs/guides/retrieval/grounding" />
   <Card title="Corpus Sync" description="Repeated indexing jobs, stale deletion, dry runs, source ledgers, and cache control." href="/docs/guides/retrieval/corpus-sync" />
 </Cards>
-
-## What To Use When
-
-Use `memory()` for agent state and learned user/project knowledge:
-
-```ts
-const assistantMemory = memory({
-  id: 'assistant',
-  blocks: [recentMessages(), facts({ embed: dense })],
-})
-```
-
-Use retrieval for documents, help centers, source files, tickets, PDFs, spreadsheets, or anything that should be searched as an external corpus:
-
-```ts
-await docsCorpus.sync(loader.load())
-const hits = await docs.retrieve('enterprise SSO setup')
-```
-
-Use `retrievalPipeline()` when the retriever finds candidates but needs better query planning, broader recall, parent context, compression, diversity, or recency scoring:
-
-```ts
-const advancedDocs = retrievalPipeline(docs, [
-  multiQuery({ generate, model, count: 4 }),
-  parentExpand({ records }),
-  diversify({ strategy: 'mmr', limit: 8 }),
-])
-```
-
-Use `grounding()` when the answer must cite retrieved evidence and Crux should validate the citation contract:
-
-```ts
-const groundedDocs = grounding({
-  id: 'docs',
-  retriever: advancedDocs,
-  query: ({ input }) => input.question,
-  citations: { required: true, quotes: 'required' },
-})
-```
-
-Use a Quality suite when you want to prove the setup still works after changing chunking, retrieval, grounding, or prompts:
-
-```ts
-import { expect, quality, suite, target } from '@use-crux/core/quality'
-
-await quality({ id: 'docs-rag' }).evaluate({
-  suite: suite<{ question: string }>('docs', (test) => {
-    test('enterprise SSO', {
-      input: { question: 'How do I configure SSO?' },
-      expect: (ctx) => expect.retrieval(ctx).toContainHit({ sourceId: 'sso.md' }),
-    })
-  }),
-  target: target.retriever(advancedDocs, {
-    query: ({ question }) => question,
-  }),
-})
-```
-
-For the full quality loop, see [RAG Quality](/docs/guides/eval/rag-evals).
-
-## Primitive Boundaries
-
-The boundaries are there so users can swap one layer without rewriting the rest:
-
-```ts
-// Vector generation policy
-embedding({ preprocess, truncate, retry, cache })
-
-// Source loading and parsing
-filesSource({ directory: './docs' }).load()
-
-// Write-time document preparation
-indexer({ pipeline: indexingPipeline({ chunker: chunker.structured() }) })
-
-// Read-time search defaults
-retriever({ search: { mode: 'hybrid', limit: 8 } })
-
-// Query-time result shaping
-retrievalPipeline(docs, [multiQuery(...), compress(...)])
-
-// Evidence injection and citation validation
-grounding({ retriever: docs, citations: { required: true } })
-```
-
-If your backend already has its own search API, use a custom `retriever({ async retrieve() { ... } })`. Crux does not force advanced users through a vector-store abstraction.

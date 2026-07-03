@@ -1,9 +1,27 @@
 ---
 title: Querying
-description: Use retriever() for dense, sparse, hybrid, custom, prompt, and tool-based retrieval.
+description: Query knowledge bases, store-backed retrievers, and custom retrieval backends.
 ---
 
-`retriever()` is the read side of a retrieval corpus. It turns a text query into scored hits and can also inject those hits into prompts or expose search tools to a model.
+`retriever()` is the read side of a corpus. It turns a text query into scored hits and can also contribute prompt context or search tools.
+
+Most apps create retrievers through `knowledgeBase()`:
+
+```ts
+const docs = knowledgeBase({
+  id: 'docs',
+  storage,
+  embeddings: dense,
+  sparseEmbeddings: sparse,
+})
+
+const hits = await docs.retriever({
+  mode: 'hybrid',
+  limit: 8,
+}).retrieve('how do refunds work?')
+```
+
+A store-backed retriever can also be created directly:
 
 ```ts
 import { retriever } from '@use-crux/core/retrieval'
@@ -14,13 +32,12 @@ const docs = retriever({
   records,
   vectors,
   dense,
-  search: { mode: 'dense', limit: 6 },
+  sparse,
+  search: { mode: 'hybrid', limit: 8 },
 })
-
-const hits = await docs.retrieve('how do refunds work?')
 ```
 
-Store-backed retrievers read the indexed chunk/parent records written by `indexer()`. If the retriever id differs from the writer id, pass `indexerId`:
+Store-backed retrievers read indexed chunk and parent records written by `indexer()` or `knowledgeBase().index()`. If the retriever id differs from the writer id, pass `indexerId` so hydration uses the correct read-model keys.
 
 ```ts
 const docs = retriever({
@@ -33,111 +50,85 @@ const docs = retriever({
 })
 ```
 
-Use the same retriever in prompt composition:
+## Search Modes
+
+Dense is the natural-language default:
 
 ```ts
-const promptDocs = retriever({
+await docs.retrieve({ query: 'refund policy', mode: 'dense', limit: 5 })
+```
+
+Sparse is useful for exact terms, codes, identifiers, and product names:
+
+```ts
+await docs.retrieve({ query: 'ERR_BILLING_CREDIT_409', mode: 'sparse' })
+```
+
+Hybrid combines dense and sparse signals when the vector store supports it:
+
+```ts
+await docs.retrieve({
+  query: 'enterprise SSO setup',
+  mode: 'hybrid',
+  fusion: { strategy: 'rrf', k: 60 },
+})
+```
+
+Unsupported combinations fail clearly. Crux does not silently downgrade sparse or hybrid retrieval to dense-only search.
+
+## Typed Filters
+
+When a knowledge base has a metadata schema, filter keys and literal values are inferred:
+
+```ts
+const docs = knowledgeBase({
   id: 'docs',
-  namespace: 'product-docs',
-  records,
-  vectors,
-  dense,
-  context: {
-    query: ({ question }) => question,
-    limit: 6,
-  },
+  storage,
+  embeddings: dense,
+  metadataSchema: z.object({
+    section: z.enum(['guide', 'reference', 'api']),
+    public: z.boolean(),
+  }),
+})
+
+const hits = await docs.retriever({
+  filter: { section: 'guide', public: true },
+}).retrieve('routing')
+```
+
+Tool-exposed filters are opt-in:
+
+```ts
+const tools = docs.tools({
+  prefix: 'docs',
+  include: ['search', 'getSource'],
+  filters: ['section', 'public'],
+  limit: { default: 5, max: 10 },
+})
+```
+
+## Prompt Context Or Tools
+
+Use context injection when the model should always receive retrieved evidence before generation:
+
+```ts
+const promptDocs = docs.retriever({
+  limit: 6,
 })
 
 const answerDocs = prompt({
   id: 'answer-docs',
-  use: [promptDocs],
+  use: [
+    promptDocs.asContext({
+      query: ({ question }) => question,
+    }),
+  ],
   input: z.object({ question: z.string() }),
   system: 'Answer from the retrieved docs.',
-  prompt: ({ input }) => input.question,
 })
 ```
 
-## Choose A Search Mode
-
-Dense is the right default for natural-language semantic similarity:
-
-```ts
-const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
-  records,
-  vectors,
-  dense,
-  search: { mode: 'dense', limit: 5 },
-})
-```
-
-Sparse is useful for exact terms, codes, identifiers, product names, symbols, and short keyword-style queries:
-
-```ts
-const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
-  records,
-  vectors,
-  sparse,
-  search: { mode: 'sparse', limit: 5 },
-})
-
-await docs.retrieve('ERR_BILLING_CREDIT_409')
-```
-
-Hybrid is the recommended production default when your vector store supports it. Dense catches meaning; sparse catches exact terms:
-
-```ts
-const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
-  records,
-  vectors,
-  dense,
-  sparse,
-  search: {
-    mode: 'hybrid',
-    fusion: 'dbsf',
-    limit: 8,
-  },
-})
-```
-
-Mode requirements are explicit:
-
-| Mode | Requires | Vector capability |
-| --- | --- | --- |
-| `dense` | `dense` | `vectors.search({ mode: 'dense', dense })` |
-| `sparse` | `sparse` | `vectors.search({ mode: 'sparse', sparse })` |
-| `hybrid` | `dense` and `sparse` | `vectors.search({ mode: 'hybrid', dense, sparse, fusion? })` |
-
-Unsupported combinations throw. Crux does not silently downgrade sparse or hybrid retrieval to dense-only search.
-
-## Inject Context Or Tools
-
-Use `inject: 'context'` when the model should always receive retrieved context before generation:
-
-```ts
-const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
-  records,
-  vectors,
-  dense,
-  inject: 'context',
-  context: {
-    query: ({ question }) => question,
-    renderContext: (hits) =>
-      hits
-        .map((hit, index) => `[${index + 1}] ${hit.sourceId}/${hit.chunkId}\n${hit.content}`)
-        .join('\n\n'),
-  },
-})
-```
-
-Use `inject: 'tool'` when the model should decide whether to search:
+Use tools when the model should decide whether to search:
 
 ```ts
 const searchableDocs = retriever({
@@ -148,8 +139,9 @@ const searchableDocs = retriever({
   dense,
   inject: 'tool',
   tools: {
-    prefix: true,
+    prefix: 'docs',
     include: ['search', 'getSource'],
+    getSource: { visibility: 'namespace' },
   },
 })
 
@@ -160,49 +152,16 @@ const assistant = prompt({
 })
 ```
 
-Use `inject: 'both'` for assistants that should start with likely evidence and still have search tools available.
-
-Manual helpers remain available for advanced integrations that do not resolve generic `use` entries:
+Manual tools are still available for integrations that do not run Crux prompt resolution:
 
 ```ts
-const docsContext = docs.asContext({ query: ({ question }) => question })
-const docsTools = docs.asTools({ prefix: true })
-```
-
-Prefer `use: [docs]` in normal Crux prompt code.
-
-## Rerank Results
-
-Use a reranker when raw retrieval gets good candidates but not the best order.
-
-```ts
-import { reranker } from '@use-crux/core/retrieval'
-
-const keepRelevant = reranker({
-  name: 'keep-relevant',
-  async rerank({ query, hits }) {
-    const ranked = await rerankWithModel(query, hits)
-    return ranked.slice(0, 5)
-  },
-})
-
-const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
-  records,
-  vectors,
-  dense,
-  sparse,
-  search: { mode: 'hybrid', limit: 20 },
-  rerank: keepRelevant,
+const docsTools = docs.retriever().asTools({
+  prefix: 'docs',
+  include: ['search', 'getSource'],
 })
 ```
 
-Rerankers run before `retrieve()` returns, before prompt context is rendered, and before tool output is returned.
-
-When you change search mode, limits, rerankers, or store adapters, use
-[RAG evals](/docs/guides/eval/rag-evals) to check whether recall, precision, citations,
-and answer quality actually improved.
+For citation validation, prefer [grounding](/docs/guides/retrieval/grounding). It records both injected and tool-discovered hits in the grounding session.
 
 ## Custom Retrieval
 
@@ -226,20 +185,19 @@ const docs = retriever({
       content: result.text,
       metadata: result.metadata,
       score: result.score,
+      provenance: { rawScore: result.score },
       sourceUrl: result.url,
     }))
   },
 })
 ```
 
-This is the supported escape hatch. Users with a mature search backend should not have to force it into a vector-store shape.
+Custom retrievers can be used directly, inside recipes, or as grounded evidence sources.
 
 ## Related
 
 <Cards>
-  <Card title="Embeddings" description="The dense, sparse, and hybrid vector model." href="/docs/guides/retrieval/embeddings" />
-  <Card title="Pipelines" description="Improve query-time retrieval without changing the retriever contract." href="/docs/guides/retrieval/pipelines" />
+  <Card title="Recipes" description="Add fanout, reranking, parent expansion, compression, and federation." href="/docs/guides/retrieval/recipes" />
   <Card title="Grounding" description="Turn retrieved hits into cited, validated evidence." href="/docs/guides/retrieval/grounding" />
-  <Card title="RAG evals" description="Regression-test retrieval quality, grounded answers, citations, and pipeline traces." href="/docs/guides/eval/rag-evals" />
-  <Card title="Retrieval Reference" description="Full retriever API reference." href="/docs/reference/crux-core/retrieval" />
+  <Card title="Retrieval Reference" description="Full Retrieval & RAG API reference." href="/docs/reference/crux-core/retrieval" />
 </Cards>

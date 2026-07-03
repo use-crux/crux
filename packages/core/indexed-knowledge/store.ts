@@ -11,6 +11,8 @@
 import { StorageError } from '../storage'
 import type { ExactFilter, JsonObject, VectorSearchQuery } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
+import { assertValidHydratedChunks, assertVectorHitsHydrated } from './hydration'
+import type { IndexedHydrationMiss } from './hydration'
 import {
   activeChunkFilter,
   asIndexedParentRecord,
@@ -96,10 +98,12 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
   async function searchChunks(query: IndexedChunkSearchQuery): Promise<readonly RetrieverHit[]> {
     const filter = activeChunkFilter(config.namespace, query.filter)
     const scored = await searchScoredEntries(query, filter)
-    return scored.flatMap((entry) => {
+    const hits = scored.flatMap((entry) => {
       const hit = indexedChunkToHit({ value: entry.value, score: entry.score })
       return hit ? [hit] : []
     })
+    assertValidHydratedChunks({ scoredKeys: scored.map((entry) => entry.key), hitCount: hits.length })
+    return hits
   }
 
   async function getParent(ref: IndexedParentRef): Promise<IndexedParentRecord | null> {
@@ -181,11 +185,24 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
       const vectorHits = await config.vectors.search(vectorSearchQuery(query, filter))
       const entries: ScoredEntry[] = []
       const hydrationFilter = activeChunkFilter(config.namespace)
+      const misses: IndexedHydrationMiss[] = []
       for (const hit of vectorHits) {
         const value = await config.records.get(hit.key)
-        if (!value || !matchesExactFilter(value, hydrationFilter)) continue
+        if (!value) {
+          misses.push({ key: hit.key, reason: 'missing_record' })
+          continue
+        }
+        if (!matchesExactFilter(value, hydrationFilter)) {
+          misses.push({ key: hit.key, reason: 'inactive_or_wrong_namespace' })
+          continue
+        }
         entries.push({ key: hit.key, value, score: hit.score })
       }
+      assertVectorHitsHydrated({
+        vectorHitCount: vectorHits.length,
+        hydratedCount: entries.length,
+        misses,
+      })
       return entries
     }
 

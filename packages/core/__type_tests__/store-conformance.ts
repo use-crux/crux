@@ -4,11 +4,13 @@ import {
   describeBlobStoreConformance,
   describeRecordStoreConformance,
   describeVectorStoreConformance,
+  vectorStoreConformanceSuite,
 } from '@use-crux/core/storage/testing/vitest'
 import type {
   DescribeBlobStoreConformanceOptions,
   DescribeRecordStoreConformanceOptions,
   DescribeVectorStoreConformanceOptions,
+  VectorStoreConformanceSuiteOptions,
 } from '@use-crux/core/storage/testing/vitest'
 import type { BlobStore, JsonObject, RecordStore, VectorStore } from '@use-crux/core/storage'
 
@@ -20,6 +22,7 @@ expectTypeOf(describeRecordStoreConformance<ConformanceRecord>)
   .parameter(0)
   .toEqualTypeOf<DescribeRecordStoreConformanceOptions<ConformanceRecord>>()
 expectTypeOf(describeVectorStoreConformance).parameter(0).toEqualTypeOf<DescribeVectorStoreConformanceOptions>()
+expectTypeOf(vectorStoreConformanceSuite).parameter(0).toEqualTypeOf<VectorStoreConformanceSuiteOptions>()
 expectTypeOf(describeBlobStoreConformance).parameter(0).toEqualTypeOf<DescribeBlobStoreConformanceOptions>()
 
 const recordOptions: DescribeRecordStoreConformanceOptions<ConformanceRecord> = {
@@ -37,6 +40,16 @@ const blobOptions: DescribeBlobStoreConformanceOptions = {
   prepare: () => inMemoryBlobStore(),
 }
 
+const vectorSuiteOptions: VectorStoreConformanceSuiteOptions = {
+  name: 'type-test-vector-suite',
+  create: async () => ({
+    records: inMemoryRecordStore(),
+    vectors: inMemoryVectorStore(),
+    cleanup: async () => {},
+  }),
+  capabilities: { sparse: true, hybrid: true, delete: true },
+}
+
 expectTypeOf(recordOptions.prepare()).toEqualTypeOf<RecordStore<ConformanceRecord> | Promise<RecordStore<ConformanceRecord>>>()
 expectTypeOf(vectorOptions.prepare()).toEqualTypeOf<VectorStore | Promise<VectorStore>>()
 expectTypeOf(blobOptions.prepare()).toEqualTypeOf<BlobStore | Promise<BlobStore>>()
@@ -49,5 +62,6 @@ const invalidOptions: DescribeRecordStoreConformanceOptions = {
 
 void recordOptions
 void vectorOptions
+void vectorSuiteOptions
 void blobOptions
 void invalidOptions

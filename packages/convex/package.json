@@ -45,6 +45,10 @@
       "types": "./memory.ts",
       "import": "./memory.ts"
     },
+    "./retrieval": {
+      "types": "./retrieval.ts",
+      "import": "./retrieval.ts"
+    },
     "./react": {
       "types": "./react.ts",
       "import": "./react.ts"

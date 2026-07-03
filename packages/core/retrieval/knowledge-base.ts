@@ -2,9 +2,9 @@
  * `knowledgeBase()` — high-level Retrieval & RAG beta facade.
  *
  * A knowledge base owns the relationship between source/corpus, indexing,
- * storage, embeddings, and retrieval. Phase 1 establishes the public shape;
- * later phases wire the lifecycle and execution paths into existing indexing
- * and indexed-knowledge primitives.
+ * storage, embeddings, and retrieval. The facade composes the existing
+ * indexing, indexed-knowledge, retriever, recipe, and grounding primitives
+ * without hiding the lower-level handles.
  *
  * @module
  */
@@ -13,12 +13,14 @@ import type { z } from 'zod'
 import type { ChunkingOptions, Corpus, IndexResult, PipelineCacheConfig } from '../indexing'
 import type { DenseEmbedding, SparseEmbedding } from '../embedding'
 import type { RecordStore, Storage, VectorStore } from '../storage'
-import type { Grounding } from '../citations'
+import { grounding } from '../citations'
+import type { Grounding, GroundingConfig } from '../citations'
 import type { MetadataFilter } from './request'
 import type { RetrievalToolConfig, Retriever, RetrieverTools } from './types'
-import { createRetrieverTools } from './tools'
-import { retrievalNotImplemented } from './errors'
 import { createKnowledgeBaseRuntime } from './knowledge-base-runtime'
+import { retrievalRecipe, type RetrievalRecipe, type RetrievalRecipeConfig } from './recipe/recipe'
+import { retrieve } from './recipe/steps/built-ins'
+import type { RetrievalStep } from './recipe/step'
 import type {
   KnowledgeBaseIndexInput,
   KnowledgeBaseLifecycleState,
@@ -76,6 +78,18 @@ export interface KnowledgeBaseRetrieverConfig<TFilter extends import('../storage
   mode?: 'dense' | 'sparse' | 'hybrid'
 }
 
+/** Recipe options for {@link KnowledgeBase.recipe}. */
+export type KnowledgeBaseRecipeConfig<TSteps extends readonly RetrievalStep[] = readonly RetrievalStep[]> = Omit<
+  RetrievalRecipeConfig<TSteps>,
+  'retriever'
+>
+
+/** Grounding options for {@link KnowledgeBase.grounding}. */
+export type KnowledgeBaseGroundingConfig = Omit<GroundingConfig, 'id' | 'retriever'> & {
+  /** Stable grounding id. Defaults to `grounding:<knowledge base id>`. */
+  id?: string
+}
+
 export interface KnowledgeBaseConfig<TMetadataSchema extends z.ZodType<unknown> | undefined = undefined> {
   /** Stable knowledge base id used for indexer, retriever, and trace identity. */
   id: string
@@ -123,9 +137,11 @@ export interface KnowledgeBase<TMetadataSchema extends z.ZodType<unknown> | unde
   /** Return this knowledge base as a retriever. */
   retriever(config?: KnowledgeBaseRetrieverConfig<KnowledgeBaseFilter<TMetadataSchema>>): Retriever<KnowledgeBaseFilter<TMetadataSchema>>
   /** Return this knowledge base as a retrieval recipe. */
-  recipe(config?: unknown): unknown
+  recipe<const TSteps extends readonly RetrievalStep[] = readonly [ReturnType<typeof retrieve>]>(
+    config?: KnowledgeBaseRecipeConfig<TSteps>,
+  ): RetrievalRecipe
   /** Return this knowledge base as grounded prompt context/tools. */
-  grounding(config?: unknown): Grounding
+  grounding(config?: KnowledgeBaseGroundingConfig): Grounding
   /** Return this knowledge base as retrieval tools. */
   tools<const TConfig extends RetrievalToolConfig | undefined = undefined>(config?: TConfig): RetrieverTools<TConfig>
   /** Inspect configured parts and lifecycle capabilities. */
@@ -159,8 +175,27 @@ function createKnowledgeBaseHandle<const TMetadataSchema extends z.ZodType<unkno
       createKnowledgeBaseHandle({ ...config, namespace: scopeConfig.namespace }, false),
     retriever: (retrieverConfig?: KnowledgeBaseRetrieverConfig<KnowledgeBaseFilter<TMetadataSchema>>) =>
       runtime.retriever(retrieverConfig),
-    recipe: () => retrievalNotImplemented('phase 3a', `knowledgeBase("${config.id}").recipe()`),
-    grounding: () => createPhaseStubGrounding(config.id, createPhaseStubRetriever(config.id, config.namespace)),
+    recipe: <const TSteps extends readonly RetrievalStep[] = readonly [ReturnType<typeof retrieve>]>(
+      recipeConfig?: KnowledgeBaseRecipeConfig<TSteps>,
+    ): RetrievalRecipe => {
+      if (!recipeConfig) {
+        return retrievalRecipe({
+          id: `${config.id}-recipe`,
+          retriever: runtime.retriever(),
+          steps: [retrieve()],
+        })
+      }
+      return retrievalRecipe({
+        ...recipeConfig,
+        retriever: runtime.retriever(),
+      })
+    },
+    grounding: (groundingConfig?: KnowledgeBaseGroundingConfig): Grounding =>
+      grounding({
+        ...(groundingConfig ?? {}),
+        id: groundingConfig?.id ?? `grounding:${config.id}`,
+        retriever: runtime.retriever(),
+      }),
     tools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
       toolConfig?: TConfig,
     ): RetrieverTools<TConfig> => runtime.retriever().asTools(toolConfig),
@@ -177,36 +212,4 @@ function createKnowledgeBaseHandle<const TMetadataSchema extends z.ZodType<unkno
     delete (handle as Partial<Pick<KnowledgeBase<TMetadataSchema>, 'scope'>>).scope
   }
   return Object.freeze(handle) as KnowledgeBase<TMetadataSchema>
-}
-
-function createPhaseStubRetriever(id: string, namespace: string): Retriever {
-  const retrieve = () => retrievalNotImplemented('phase 4', `knowledgeBase("${id}").grounding().retriever.retrieve()`)
-  return Object.freeze({
-    _tag: 'Retriever' as const,
-    id,
-    namespace,
-    mode: 'custom' as const,
-    retrieve,
-    asContext: () => retrievalNotImplemented('phase 4', `knowledgeBase("${id}").grounding().retriever.asContext()`),
-    asTools: <const TConfig extends RetrievalToolConfig | undefined = undefined>(
-      toolConfig?: TConfig,
-    ): RetrieverTools<TConfig> =>
-      createRetrieverTools({
-        id,
-        namespace,
-        retrieve,
-        config: toolConfig,
-      }) as RetrieverTools<TConfig>,
-    inject: () => retrievalNotImplemented('phase 4', `knowledgeBase("${id}").grounding().retriever.inject()`),
-  })
-}
-
-function createPhaseStubGrounding(id: string, retriever: Retriever): Grounding {
-  return Object.freeze({
-    _tag: 'Grounding' as const,
-    id: `grounding:${id}`,
-    retriever,
-    resolve: () => retrievalNotImplemented('phase 4', `knowledgeBase("${id}").grounding().resolve()`),
-    inject: () => retrievalNotImplemented('phase 4', `knowledgeBase("${id}").grounding().inject()`),
-  })
 }

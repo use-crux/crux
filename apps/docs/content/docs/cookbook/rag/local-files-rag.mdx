@@ -1,9 +1,9 @@
 ---
 title: Local Files RAG
-description: Index a local docs directory, rerank the best hits, and answer questions with citations.
+description: Index a local docs directory, compose a retrieval recipe, and answer questions with citations.
 ---
 
-This recipe is the simplest full retrieval stack that still feels like a real product setup. It loads a local docs folder, indexes it into a store-backed corpus, reranks the retrieved hits, and injects them into a prompt with citations.
+This recipe is the simplest full retrieval stack that still feels like a real product setup. It loads a local docs folder, indexes it into a store-backed corpus, composes a named retrieval recipe, and injects the selected evidence into a prompt with citations.
 
 It is a good starting point when your source material already lives on disk and you want the cleanest path from "folder of docs" to "answer questions against it."
 
@@ -11,8 +11,8 @@ It is a good starting point when your source material already lives on disk and 
 
 - `@use-crux/ingest/files` for loading local documents
 - `@use-crux/core/indexing` for corpus sync, chunking, and write-time embedding
-- `@use-crux/core/retrieval` for query-time search and context injection
-- `@use-crux/ai` for execution and AI SDK reranking
+- `@use-crux/core/retrieval` for query-time search, recipes, and grounding
+- `@use-crux/ai` for prompt execution
 - `inMemoryRecordStore()` and `inMemoryVectorStore()` for a lightweight local corpus
 
 ## Full code
@@ -89,18 +89,11 @@ export async function syncDocs() {
 ### `lib/rag/retriever.ts`
 
 ```ts
-import { retriever } from '@use-crux/core/retrieval'
-import { reranker } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
+import { fanout, retrievalRecipe, retrieve, retriever } from '@use-crux/core/retrieval'
 
 import { dense } from './embedding'
+import { retrievalModel } from './retrieval-model'
 import { records, vectors } from './store'
-
-const docsReranker = reranker({
-  name: 'local-docs-reranker',
-  model: openai.reranking('gpt-4.1-mini'),
-  topN: 5,
-})
 
 export const docs = retriever({
   id: 'local-docs',
@@ -109,30 +102,19 @@ export const docs = retriever({
   vectors,
   dense,
   search: { mode: 'dense', limit: 10 },
-  rerank: docsReranker,
 })
+
+export const docsAnswer = retrievalRecipe({
+  id: 'local-docs-answer',
+  retriever: docs,
+  model: retrievalModel,
+  steps: [fanout({ maxQueries: 3 }), retrieve({ limit: 10 })],
+})
+
+const debug = await docsAnswer.retrieveWithTrace('how do refunds work?')
 ```
 
-If the local corpus starts returning near-duplicate chunks, wrap the retriever with a lightweight pipeline:
-
-```ts
-import { diversify, multiQuery, retrievalPipeline } from '@use-crux/core/retrieval'
-import { generateTextFn } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-
-export const advancedDocs = retrievalPipeline(docs, [
-  multiQuery({
-    generate: generateTextFn,
-    model: openai('gpt-4.1-mini'),
-    count: 3,
-  }),
-  diversify({ strategy: 'mmr', limit: 5, sourcePenalty: 0.1 }),
-])
-
-const debug = await advancedDocs.retrieveWithTrace('how do refunds work?')
-```
-
-Start with `docs`. Switch prompts to `advancedDocs` when you need query expansion, duplicate reduction, or trace output while debugging retrieval.
+Start with `docs`. Switch prompts to `docsAnswer.asRetriever()` when you need query expansion or trace output while debugging retrieval.
 
 ### `lib/rag/answer.ts`
 
@@ -143,11 +125,11 @@ import { grounding, citationSchema } from '@use-crux/core/citations'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 
-import { docs } from './retriever'
+import { docsAnswer } from './retriever'
 
 const groundedDocs = grounding({
   id: 'local-docs',
-  retriever: docs,
+  retriever: docsAnswer.asRetriever(),
   query: ({ input }) => input.question,
   limit: 5,
   citations: {
@@ -190,7 +172,7 @@ That split is what makes the recipe easy to evolve. If you later move from local
 
 ## Variations
 
-If you want the cheapest possible version, skip the reranker and keep the retriever dense-only.
+If you want the cheapest possible version, use the dense retriever directly and skip the recipe.
 
 If you want a persistent local-dev workflow, swap `inMemoryRecordStore()` and `inMemoryVectorStore()` for production adapters and keep the same indexer and retriever shapes.
 

@@ -1,10 +1,10 @@
 ---
 title: '@use-crux/ai'
-description: Vercel AI SDK adapter — generate, stream, dense embedding helpers, reranking helpers, and the SdkGateway test seam.
+description: Vercel AI SDK adapter — generate, stream, dense embedding helpers, and the SdkGateway test seam.
 ---
 
 ```ts
-import { generate, stream, embedding, reranker, aiSdkProviderRuntime } from '@use-crux/ai'
+import { generate, stream, embedding, aiSdkProviderRuntime } from '@use-crux/ai'
 import { generateObjectFn, generateTextFn, createCruxAi, CruxAIError } from '@use-crux/ai'
 import { resolve } from '@use-crux/ai/agent'
 ```
@@ -15,7 +15,7 @@ import { resolve } from '@use-crux/ai/agent'
 
 ## Architecture
 
-`@use-crux/ai` exports `aiSdkProviderRuntime`, a normal Crux provider runtime with `ownership: 'loop-owned'` for the Vercel AI SDK. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, native `needsApproval`, `abortSignal`, `experimental_transform` for streaming guardrails). The bound runtime also exposes AI SDK embedding and reranking extensions through the same `SdkGateway` seam.
+`@use-crux/ai` exports `aiSdkProviderRuntime`, a normal Crux provider runtime with `ownership: 'loop-owned'` for the Vercel AI SDK. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, native `needsApproval`, `abortSignal`, `experimental_transform` for streaming guardrails). The bound runtime also exposes AI SDK embedding through the same `SdkGateway` seam.
 
 The only module that calls AI SDK functions is the `SdkGateway` — inject a scripted one via [`createCruxAi`](#createcruxaioptions) to test without module mocks.
 
@@ -119,7 +119,7 @@ Build a `@use-crux/ai` instance bound to a specific `SdkGateway`. The package-le
 | ----------------- | ------------- | --------------------------------------------------------------------- |
 | `options.gateway` | `SdkGateway?` | The AI SDK gateway to execute against. Defaults to `liveSdkGateway()` |
 
-**Returns:** `CruxAi` — `{ generate, stream, generateTextFn, generateObjectFn, embedding, reranker }`
+**Returns:** `CruxAi` — `{ generate, stream, generateTextFn, generateObjectFn, embedding }`
 
 ```ts
 import { createCruxAi } from '@use-crux/ai'
@@ -166,28 +166,6 @@ For a `GenerateObjectFn` that also runs through full adapter prompt execution se
 Pre-bound `GenerateTextFn` for `@use-crux/core` APIs (summarization, compaction).
 
 **Signature:** `GenerateTextFn` — `(opts: { model, system?, prompt }) => Promise<{ text: string }>`
-
-### `reranker(config)`
-
-Create a retrieval reranker backed by AI SDK `rerank()`.
-
-```ts
-const docsReranker = reranker({
-  name: 'docs-reranker',
-  model: openai.reranking('gpt-4.1-mini'),
-  topN: 5,
-})
-```
-
-Use it with `retriever({ rerank })` when you want model-based reordering after raw retrieval and before prompt injection or tool output.
-
-| Field        | Type               | Description                                           |
-| ------------ | ------------------ | ----------------------------------------------------- |
-| `name`       | `string`           | Stable reranker identifier                            |
-| `model`      | `RerankingModel`   | AI SDK reranking model                                |
-| `topN`       | `number?`          | Limit reranked output                                 |
-| `maxRetries` | `number?`          | Retry budget for the rerank call                      |
-| `document`   | `(hit) => string?` | Optional serializer for the text sent to the reranker |
 
 ### `embedding(config)`
 

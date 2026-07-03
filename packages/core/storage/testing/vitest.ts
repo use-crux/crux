@@ -12,6 +12,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { StorageError } from '../errors'
 import type { BlobStore, JsonObject, RecordEntry, RecordStore, VectorStore } from '../types'
 
+export { vectorStoreConformanceSuite } from './vector'
+export type {
+  VectorStoreConformanceCapabilities,
+  VectorStoreConformanceHarness,
+  VectorStoreConformanceSuiteOptions,
+} from './vector'
+
 /** Options for {@link describeRecordStoreConformance}. */
 export interface DescribeRecordStoreConformanceOptions<T extends JsonObject = JsonObject> {
   /** Human-readable adapter name used for the Vitest `describe()` block. */

@@ -26,6 +26,7 @@ import {
 import type {
   Grounding,
   KnowledgeBase,
+  KnowledgeBaseRecipeConfig,
   RecipeTrace,
   RetrievalModel,
   RetrievalRecipe,
@@ -52,6 +53,7 @@ const docs = knowledgeBase({
 expectTypeOf(docs).toEqualTypeOf<KnowledgeBase>()
 expectTypeOf(docs.id).toEqualTypeOf<string>()
 expectTypeOf(docs.retriever()).toEqualTypeOf<Retriever>()
+expectTypeOf(docs.recipe()).toEqualTypeOf<RetrievalRecipe>()
 expectTypeOf(docs.grounding()).toEqualTypeOf<Grounding>()
 expectTypeOf(docs.tools()).toEqualTypeOf<RetrieverTools>()
 expectTypeOf(docs.scope({ namespace: 'tenant-a' })).toMatchTypeOf<Omit<KnowledgeBase, 'scope'>>()
@@ -167,6 +169,18 @@ const recipe = retrievalRecipe({
 
 expectTypeOf(recipe).toEqualTypeOf<RetrievalRecipe>()
 expectTypeOf(recipe.asRetriever()).toEqualTypeOf<Retriever>()
+expectTypeOf(
+  configuredDocs.recipe({
+    id: 'configured-docs-recipe',
+    steps: [retrieve({ limit: 12 }), customHitStep],
+  }),
+).toEqualTypeOf<RetrievalRecipe>()
+expectTypeOf(
+  {
+    id: 'configured-docs-recipe',
+    steps: [retrieve({ limit: 12 }), customHitStep],
+  } satisfies KnowledgeBaseRecipeConfig,
+).toMatchTypeOf<{ id: string }>()
 expectTypeOf(recipe.retrieveWithTrace('refunds')).resolves.toEqualTypeOf<{
   hits: RetrieverHit[]
   trace: RecipeTrace
