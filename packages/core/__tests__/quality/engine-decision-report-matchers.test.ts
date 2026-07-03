@@ -116,7 +116,7 @@ function decisionReport(): TurnDecisionReport {
 }
 
 const generateWithDecisionReport = (async (_prompt: never, _opts: never) => {
-  await observe.span({ name: 'generate support', family: 'generation', primitive: 'generation.call' }, async () => {
+  await observe.span({ name: 'generate support', primitive: 'generation.call' }, async () => {
     observe.artifact({
       kind: 'custom.turn_decision_report',
       contentType: 'application/json',

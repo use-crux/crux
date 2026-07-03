@@ -176,7 +176,6 @@ export async function resolveRegistrySkill(
 ): Promise<FetchedRegistrySkill> {
   const span = observe.openSpan({
     name: 'skill.registry.load',
-    family: 'skill',
     primitive: 'skill.load',
     attributes: {
       loader: 'registry',

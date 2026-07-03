@@ -73,7 +73,6 @@ export async function orchestrateGenerate<TArgs extends Record<string, unknown>,
 ): Promise<TResult> {
   const span = observe.openSpan({
     name: spec.promptId ? `generate ${spec.promptId}` : 'generate',
-    family: 'generation',
     primitive: 'generation.call',
     attributes: generationAttributes(spec, 'generate'),
   })
@@ -200,7 +199,6 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
 ): Promise<TResult> {
   const span = observe.openSpan({
     name: spec.promptId ? `stream ${spec.promptId}` : 'stream',
-    family: 'generation',
     primitive: 'generation.stream',
     attributes: generationAttributes(spec, 'stream'),
   })

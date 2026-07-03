@@ -209,7 +209,6 @@ export function emitToolApprovalObservation(
 ): void {
   const span = observe.openSpan({
     name: `${args.toolName}.approval.${phase}`,
-    family: 'tool',
     primitive: 'tool.approval',
     attributes: {
       approvalId: args.approvalId,

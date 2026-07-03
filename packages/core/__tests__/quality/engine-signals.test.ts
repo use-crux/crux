@@ -32,7 +32,6 @@ async function emitSignalSpans(): Promise<void> {
   await observe.span(
     {
       name: 'generate support',
-      family: 'generation',
       primitive: 'generation.call',
       attributes: { model: 'stub-model', provider: 'stub' },
     },
@@ -41,7 +40,7 @@ async function emitSignalSpans(): Promise<void> {
     },
   )
   await observe.span(
-    { name: 'search', family: 'tool', primitive: 'tool.call', attributes: { toolName: 'search' } },
+    { name: 'search', primitive: 'tool.call', attributes: { toolName: 'search' } },
     async () => {
       observe.artifact({
         kind: 'tool.args',
@@ -58,11 +57,11 @@ async function emitSignalSpans(): Promise<void> {
     },
   )
   await observe.span(
-    { name: 'lookupOrder', family: 'tool', primitive: 'tool.call', attributes: { toolName: 'lookupOrder' } },
+    { name: 'lookupOrder', primitive: 'tool.call', attributes: { toolName: 'lookupOrder' } },
     async () => {},
   )
   await observe.span(
-    { name: 'plan', family: 'flow', primitive: 'flow.step', attributes: { stepLabel: 'plan' } },
+    { name: 'plan', primitive: 'flow.step', attributes: { stepLabel: 'plan' } },
     async () => {
       observe.artifact({
         kind: 'output',
@@ -72,7 +71,7 @@ async function emitSignalSpans(): Promise<void> {
       })
     },
   )
-  await observe.span({ name: 'handoff', family: 'handoff', primitive: 'handoff.prepare' }, async () => {
+  await observe.span({ name: 'handoff', primitive: 'handoff.prepare' }, async () => {
     observe.artifact({
       kind: 'handoff.payload',
       contentType: 'application/json',
@@ -80,7 +79,7 @@ async function emitSignalSpans(): Promise<void> {
       preview: { kind: 'handoff.payload', fromAgent: 'support-agent', toAgent: 'billing' },
     })
   })
-  await observe.span({ name: 'retrieve', family: 'retrieval', primitive: 'retrieval.query' }, async () => {
+  await observe.span({ name: 'retrieve', primitive: 'retrieval.query' }, async () => {
     observe.artifact({
       kind: 'retrieval.hits',
       contentType: 'application/json',
@@ -96,7 +95,7 @@ async function emitSignalSpans(): Promise<void> {
       },
     })
   })
-  await observe.span({ name: 'citations', family: 'citation', primitive: 'citation.check' }, async () => {
+  await observe.span({ name: 'citations', primitive: 'citation.check' }, async () => {
     observe.artifact({
       kind: 'citation.report',
       contentType: 'application/json',
@@ -108,7 +107,7 @@ async function emitSignalSpans(): Promise<void> {
     })
   })
   await observe.span(
-    { name: 'pii', family: 'guardrail', primitive: 'guardrail.run', attributes: { guardrailId: 'pii' } },
+    { name: 'pii', primitive: 'guardrail.run', attributes: { guardrailId: 'pii' } },
     async () => {
       observe.artifact({
         kind: 'guardrail.report',
@@ -119,7 +118,7 @@ async function emitSignalSpans(): Promise<void> {
     },
   )
   await observe.span(
-    { name: 'tone', family: 'constraint', primitive: 'constraint.check', attributes: { constraintId: 'tone' } },
+    { name: 'tone', primitive: 'constraint.check', attributes: { constraintId: 'tone' } },
     async () => {
       observe.artifact({
         kind: 'constraint.report',
@@ -130,11 +129,11 @@ async function emitSignalSpans(): Promise<void> {
     },
   )
   await observe.span(
-    { name: 'profile.read', family: 'memory', primitive: 'memory.read', attributes: { key: 'profile' } },
+    { name: 'profile.read', primitive: 'memory.read', attributes: { key: 'profile' } },
     async () => {},
   )
   await observe.span(
-    { name: 'summary.write', family: 'memory', primitive: 'memory.write', attributes: { key: 'summary' } },
+    { name: 'summary.write', primitive: 'memory.write', attributes: { key: 'summary' } },
     async () => {
       observe.artifact({
         kind: 'memory.diff',
@@ -144,7 +143,7 @@ async function emitSignalSpans(): Promise<void> {
       })
     },
   )
-  await observe.span({ name: 'route', family: 'routing', primitive: 'routing.router' }, async () => {
+  await observe.span({ name: 'route', primitive: 'routing.router' }, async () => {
     observe.artifact({
       kind: 'routing.report',
       contentType: 'application/json',

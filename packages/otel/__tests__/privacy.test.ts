@@ -47,7 +47,6 @@ describe("workspace OTel privacy", () => {
     await observe.span(
       {
         name: "generate",
-        family: "generation",
         primitive: "generation.call",
         attributes: {
           text: "OTEL-SPAN-TEXT",

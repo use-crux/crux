@@ -7,6 +7,7 @@ import {
   setObservabilityTransport,
   subscribeObservability,
   type CruxGraphRecord,
+  type CruxMetrics,
 } from '../../observability'
 
 describe('observability invariants', () => {
@@ -25,7 +26,6 @@ describe('observability invariants', () => {
     run.withContext(() => {
       const span = observe.openSpan({
         name: 'metric span',
-        family: 'custom',
         primitive: 'custom.operation',
       })
       expect(() => span.end({ metrics: { x: undefined } })).not.toThrow()
@@ -55,7 +55,6 @@ describe('observability invariants', () => {
     run.withContext(() => {
       const span = observe.openSpan({
         name: 'nan metric span',
-        family: 'custom',
         primitive: 'custom.operation',
       })
       expect(() => span.end({ metrics: { x: Number.NaN } })).not.toThrow()
@@ -101,7 +100,6 @@ describe('observability invariants', () => {
         await observe.span(
           {
             name: 'user error span',
-            family: 'custom',
             primitive: 'custom.operation',
           },
           async () => {
@@ -137,19 +135,16 @@ describe('observability invariants', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
-    await expect(
-      observe.span(
-        {
-          name: 'family mismatch',
-          family: 'agent',
-          primitive: 'custom.operation',
-        },
-        async () => 'ok',
-      ),
-    ).resolves.toBe('ok')
+    const run = observe.openRun({ name: 'invalid metrics', rootPrimitive: 'custom.operation' })
+    run.withContext(() => {
+      const span = observe.openSpan({ name: 'invalid metric key', primitive: 'custom.operation' })
+      expect(() => span.end({ metrics: { cacheWaitMs: 1 } as unknown as CruxMetrics })).not.toThrow()
+    })
+    run.end()
     await observe.flush()
 
-    expect(transport.records).not.toContainEqual(expect.objectContaining({ type: 'span:start' }))
+    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'span:start' }))
+    expect(transport.records).not.toContainEqual(expect.objectContaining({ type: 'span:end' }))
     expect(observabilityDiagnostics()).toMatchObject({
       droppedRecords: 0,
       invalidRecords: 1,
@@ -167,7 +162,7 @@ describe('observability invariants', () => {
     cyclic.self = cyclic
 
     await observe.run({ name: 'sanitize before fanout', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'producer', family: 'custom', primitive: 'custom.operation' }, async () => {
+      await observe.span({ name: 'producer', primitive: 'custom.operation' }, async () => {
         observe.artifact({
           kind: 'output',
           contentType: 'application/json',

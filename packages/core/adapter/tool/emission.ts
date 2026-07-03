@@ -167,7 +167,6 @@ export function openToolCallSpan(
 ): ReturnType<typeof observe.openSpan> {
   return observe.openSpan({
     name: toolName,
-    family: 'tool',
     primitive: 'tool.call',
     attributes: {
       toolName,

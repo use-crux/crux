@@ -116,7 +116,6 @@ export function emitSecurityWarningSpan(input: {
 }): void {
   const span = observe.openSpan({
     name: 'security.warning',
-    family: 'security',
     primitive: 'security.warning',
     attributes: {
       promptId: input.promptId,

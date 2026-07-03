@@ -38,6 +38,7 @@ Generation terminal span records use the existing `metrics` field for client-sid
 - `gen.time_per_output_chunk_ms`
 
 These keys do not change the graph shape and do not require a schema-version bump.
+Custom metric keys must use the `custom.*` namespace. Span families are derived from canonical primitive names at emit time, so public span options do not accept a separate `family` field.
 
 ## Correlators
 

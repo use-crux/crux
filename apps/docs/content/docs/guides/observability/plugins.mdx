@@ -64,6 +64,17 @@ const unsubscribe = subscribeObservability((record) => {
 unsubscribe()
 ```
 
+When an integration only needs specific record variants, pass the discriminants first. The callback
+is typed to the selected records and is not called for the rest of the stream:
+
+```ts title="span-end-subscriber.ts"
+const unsubscribeSpanEnds = subscribeObservability(['span:end'] as const, (record) => {
+  queueSpanSummary(record.spanId, record.status)
+})
+
+unsubscribeSpanEnds()
+```
+
 Node-native vendor integrations can also subscribe to the `crux:observability` diagnostics channel
 without installing a Crux plugin.
 

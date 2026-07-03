@@ -11,7 +11,6 @@ describe('Quality runner - trace-backed signal span evidence', () => {
         await observe.span(
           {
             name: 'draft',
-            family: 'flow',
             primitive: 'flow.step',
             attributes: { stepLabel: 'draft' },
           },
@@ -42,6 +41,6 @@ describe('Quality runner - trace-backed signal span evidence', () => {
       matcher: 'steps.toHaveSucceeded',
     })
     expect(outcome?.spanIds).toHaveLength(1)
-    expect(outcome?.spanIds?.[0]).toMatch(/^span_/)
+    expect(outcome?.spanIds?.[0]).toMatch(/^[0-9a-f]{16}$/)
   })
 })

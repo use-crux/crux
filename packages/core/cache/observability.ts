@@ -63,7 +63,6 @@ export function emitSemanticCacheSkipSpan(args: {
 }): void {
   const span = observe.openSpan({
     name: 'semantic-cache.skip',
-    family: 'cache',
     primitive: 'cache.lookup',
     attributes: {
       cacheKind: 'semantic',

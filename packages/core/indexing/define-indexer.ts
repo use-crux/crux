@@ -69,7 +69,6 @@ export function indexer(config: IndexerConfig): Indexer {
     const documents = await collect(documentsInput)
     const span = observe.openSpan({
       name: `${config.id}.chunk`,
-      family: 'indexing',
       primitive: 'indexing.pipeline',
       attributes: {
         indexerId: config.id,
@@ -121,7 +120,6 @@ export function indexer(config: IndexerConfig): Indexer {
     const sourceCount = unique(documents.map((document) => document.sourceId)).length
     const span = observe.openSpan({
       name: `${config.id}.indexDocuments`,
-      family: 'indexing',
       primitive: 'indexing.pipeline',
       attributes: {
         indexerId: config.id,
@@ -194,7 +192,6 @@ export function indexer(config: IndexerConfig): Indexer {
     const sourceCount = unique(chunks.map((chunk) => chunk.sourceId)).length
     const span = observe.openSpan({
       name: `${config.id}.indexChunks`,
-      family: 'indexing',
       primitive: 'indexing.pipeline',
       attributes: {
         indexerId: config.id,

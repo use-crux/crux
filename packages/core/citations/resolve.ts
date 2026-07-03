@@ -45,7 +45,6 @@ export function resolveCitations(
   const allowedHits = dedupeHits(hits)
   const span = observe.openSpan({
     name: 'citation.resolve',
-    family: 'citation',
     primitive: 'citation.check',
     attributes: {
       citationCount: citations.length,

@@ -237,7 +237,6 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
   // the child under the parent's trace boundary.
   const flowSpan = observe.openSpan({
     name,
-    family: 'flow',
     primitive: 'flow.run',
     attributes: {
       flowId,
@@ -306,7 +305,6 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       const boundStepFn = () => (stepFn as (flow: FlowScope<TInput, TSignals>) => Promise<S> | S)(scope)
       const stepSpan = observe.openSpan({
         name: label,
-        family: 'flow',
         primitive: 'flow.step',
         attributes: {
           flowId,
@@ -844,7 +842,6 @@ async function emitFlowSuspensionMarker(
 
   const marker = observe.openSpan({
     name: suspendPoint,
-    family: 'flow',
     primitive: 'flow.suspension',
     attributes: {
       flowId: options.flowId,

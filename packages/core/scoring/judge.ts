@@ -131,7 +131,6 @@ export function llmJudge<TDetail = unknown>(config: JudgeConfig<TDetail>): Judge
     const userPrompt = buildUserPrompt(input)
     const span = observe.openSpan({
       name: `judge.${config.id}`,
-      family: 'scoring',
       primitive: 'scoring.judge',
       attributes: {
         metricId: config.id,

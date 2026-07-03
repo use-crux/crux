@@ -72,7 +72,7 @@ describe('observability property invariants', () => {
               { name: input.name, rootPrimitive: 'custom.operation', attributes: input.attributes },
               async () => {
                 await observe.span(
-                  { name: input.name, family: 'custom', primitive: 'custom.operation', attributes: input.attributes },
+                  { name: input.name, primitive: 'custom.operation', attributes: input.attributes },
                   async () => {
                     observe.event({ name: input.name, attributes: input.attributes })
                     observe.artifact({
@@ -97,7 +97,7 @@ describe('observability property invariants', () => {
               { name: input.name, rootPrimitive: 'custom.operation', attributes: input.attributes },
               async () => {
                 await observe.span(
-                  { name: input.name, family: 'custom', primitive: 'custom.operation', attributes: input.attributes },
+                  { name: input.name, primitive: 'custom.operation', attributes: input.attributes },
                   async () => {
                     observe.event({ name: input.name, attributes: input.attributes })
                     observe.artifact({
@@ -121,7 +121,6 @@ describe('observability property invariants', () => {
           run.withContext(() => {
             const span = observe.openSpan({
               name: input.name,
-              family: 'custom',
               primitive: 'custom.operation',
               attributes: input.attributes,
             })

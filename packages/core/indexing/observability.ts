@@ -40,7 +40,6 @@ export function emitIngestLoadObservation(
   const sourceId = document?.sourceId ?? (isFailedLoadResult(input) ? input.sourceId : '<unknown>')
   const span = observe.openSpan({
     name: `${args.corpusId}.ingest:${sourceId}`,
-    family: 'ingest',
     primitive: 'ingest.parse',
     attributes: {
       syncId: args.syncId,
@@ -336,7 +335,6 @@ export async function runIndexOperation<T extends IndexResult | IndexDryRunResul
       ? undefined
       : observe.openSpan({
           name: `${args.indexerId}.${args.operation}`,
-          family: 'indexing',
           primitive: 'indexing.pipeline',
           attributes: eventBase,
         })

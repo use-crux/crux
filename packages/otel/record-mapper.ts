@@ -22,30 +22,66 @@ const RECENTLY_ENDED_SPAN_MAX_ENTRIES = 1_000
 const OPEN_REGISTRY_MAX_ENTRIES = 10_000
 const OPEN_REGISTRY_MAX_AGE_MS = 10 * 60_000
 
-const primitiveSpanNames: Partial<Record<CruxPrimitiveName, string>> = {
+const primitiveSpanNames = {
+  run: 'crux.run',
   'generation.call': 'crux.generate',
   'generation.stream': 'crux.stream',
+  'prompt.resolve': 'crux.prompt.resolve',
+  'prompt.budget': 'crux.prompt.budget',
+  'context.resolve': 'crux.context.resolve',
+  'context.predicate': 'crux.context.predicate',
+  'context.cache': 'crux.context.cache',
+  'agent.run': 'crux.agent.run',
   'flow.run': 'crux.flow',
   'flow.step': 'crux.flow.step',
+  'flow.suspension': 'crux.flow.suspension',
+  'composition.parallel': 'crux.composition.parallel',
+  'composition.pipeline': 'crux.composition.pipeline',
+  'composition.consensus': 'crux.composition.consensus',
+  'composition.swarm': 'crux.composition.swarm',
+  'composition.branch': 'crux.composition.branch',
+  'composition.join': 'crux.composition.join',
+  'composition.vote': 'crux.composition.vote',
+  'tool.call': 'crux.tool.call',
+  'tool.approval': 'crux.tool.approval',
+  'retrieval.pipeline': 'crux.retrieval.pipeline',
   'embedding.call': 'crux.embedding',
   'retrieval.query': 'crux.retrieval',
   'retrieval.stage': 'crux.retrieval.stage',
-  'retrieval.pipeline': 'crux.retrieval.pipeline',
   'memory.read': 'crux.memory.read',
   'memory.write': 'crux.memory.write',
+  'constraint.check': 'crux.constraint.check',
+  'constraint.retry': 'crux.constraint.retry',
+  'guardrail.run': 'crux.guardrail.run',
+  'routing.router': 'crux.router.select',
+  'routing.cascade': 'crux.cascade.run',
+  'fallback.attempt': 'crux.fallback.attempt',
+  'cache.lookup': 'crux.cache.lookup',
   'compaction.run': 'crux.compact',
+  'eval.run': 'crux.eval.run',
+  'eval.case': 'crux.eval.case',
   'scoring.judge': 'crux.judge',
+  'citation.check': 'crux.citation.check',
+  'handoff.prepare': 'crux.handoff.prepare',
   'delegate.invoke': 'crux.delegate',
+  'plan.operation': 'crux.plan.operation',
+  'task.operation': 'crux.task.operation',
   'workspace.operation': 'crux.workspace',
   'indexing.pipeline': 'crux.indexing',
   'ingest.parse': 'crux.ingest.parse',
   'corpus.sync': 'crux.corpus.sync',
+  'skill.load': 'crux.skill.load',
+  'security.warning': 'crux.security.warning',
   'cost.record': 'crux.cost.record',
-  'routing.router': 'crux.router.select',
-  'routing.cascade': 'crux.cascade.run',
-  'constraint.check': 'crux.constraint.check',
-  'constraint.retry': 'crux.constraint.retry',
-}
+  'feedback.record': 'crux.feedback.record',
+  'runtime.convex.action': 'crux.runtime.convex.action',
+  'runtime.convex.query': 'crux.runtime.convex.query',
+  'runtime.convex.mutation': 'crux.runtime.convex.mutation',
+  'runtime.convex.schedule': 'crux.runtime.convex.schedule',
+  'runtime.convex.resume': 'crux.runtime.convex.resume',
+  'runtime.convex.flush': 'crux.runtime.convex.flush',
+  'custom.operation': 'crux.custom.operation',
+} satisfies Record<CruxPrimitiveName, string>
 
 /**
  * Create a subscriber that maps canonical Crux graph records to OTel spans.
@@ -167,6 +203,8 @@ export function createOtelRecordSubscriber(
         })
         break
       }
+      default:
+        assertNever(record)
     }
   }
 }
@@ -180,7 +218,7 @@ function nameForSpan(record: Extract<CruxGraphRecord, { type: 'span:start' | 'sp
     return `crux.tool.${toolName}`
   }
   if (record.primitive === 'tool.approval') return 'crux.tool.approval'
-  return primitiveSpanNames[record.primitive] ?? `crux.${record.primitive}`
+  return primitiveSpanNames[record.primitive]
 }
 
 function finishSpan(
@@ -224,4 +262,8 @@ function spanRefForNode(
 
 interface SpanRefLookup {
   get(key: string): SpanRef | undefined
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected observability record: ${String(value)}`)
 }

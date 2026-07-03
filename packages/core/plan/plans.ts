@@ -56,7 +56,6 @@ export interface PlanFactory {
 async function createPlan(input: CreatePlanInput): Promise<PlanHandle> {
   const span = observe.openSpan({
     name: 'plan.create',
-    family: 'plan',
     primitive: 'plan.operation',
     attributes: {
       operation: 'create',
@@ -184,7 +183,6 @@ export async function listPlans(options?: PlanListOptions): Promise<Plan[]> {
 export async function updatePlan(planId: string, update: PlanUpdate): Promise<Plan> {
   const span = observe.openSpan({
     name: 'plan.update',
-    family: 'plan',
     primitive: 'plan.operation',
     attributes: {
       operation: 'update',

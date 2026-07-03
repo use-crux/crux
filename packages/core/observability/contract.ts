@@ -673,17 +673,31 @@ export interface CruxSourceLocation {
   function?: string
 }
 
-export interface CruxTokenMetrics {
-  inputTokens?: number
-  outputTokens?: number
-  totalTokens?: number
-  cacheReadTokens?: number
-  cacheWriteTokens?: number
-  reasoningTokens?: number
-  costUsd?: number
-  ttftMs?: number
-  tokensPerSecond?: number
-}
+export const CRUX_TOKEN_METRIC_KEYS = [
+  'inputTokens',
+  'outputTokens',
+  'totalTokens',
+  'cacheReadTokens',
+  'cacheWriteTokens',
+  'reasoningTokens',
+  'costUsd',
+  'ttftMs',
+  'tokensPerSecond',
+] as const
+
+export const CRUX_GENERATION_METRIC_KEYS = [
+  'gen.duration_ms',
+  'gen.time_to_first_token_ms',
+  'gen.output_tokens_per_second',
+  'gen.time_per_output_chunk_ms',
+] as const
+
+export type CruxTokenMetricKey = (typeof CRUX_TOKEN_METRIC_KEYS)[number]
+export type CruxGenerationMetricKey = (typeof CRUX_GENERATION_METRIC_KEYS)[number]
+export type CruxCustomMetricKey = `custom.${string}`
+export type CruxMetricKey = CruxTokenMetricKey | CruxGenerationMetricKey | CruxCustomMetricKey
+export type CruxTokenMetrics = Partial<Record<CruxTokenMetricKey, number>>
+declare const cruxMetricsInputBrand: unique symbol
 
 export type CruxAttributes = Record<string, unknown>
 
@@ -695,7 +709,12 @@ export type CruxAttributes = Record<string, unknown>
  * The emit pipeline strips `undefined`, `NaN`, and infinite values before a
  * record reaches subscribers, diagnostics channels, or transports.
  */
-export type CruxMetrics = CruxTokenMetrics & Record<string, number | undefined>
+export type CruxMetrics = Partial<Record<CruxMetricKey, number | undefined>> & {
+  readonly [cruxMetricsInputBrand]?: true
+}
+
+/** Numeric measurements after runtime validation has stripped invalid values. */
+export type CruxParsedMetrics = Partial<Record<CruxMetricKey, number>>
 
 export interface CruxGenerationCallAttributes {
   mode?: 'text' | 'object' | 'messages'
@@ -723,6 +742,17 @@ export type CruxSpanAttributesByPrimitive = {
   'prompt.resolve': CruxPromptResolveAttributes
   'custom.operation': CruxAttributes
 }
+
+/**
+ * Attribute shape accepted by a span primitive.
+ *
+ * Known Crux primitives get their documented keys typed while still allowing
+ * integration-specific attributes. Primitives without a specialized attribute
+ * interface accept the general `CruxAttributes` record.
+ */
+export type AttributesFor<P extends CruxPrimitiveName> = P extends keyof CruxSpanAttributesByPrimitive
+  ? CruxSpanAttributesByPrimitive[P] & CruxAttributes
+  : CruxAttributes
 
 export interface CruxErrorSummary {
   message: string
@@ -760,7 +790,7 @@ export interface CruxRunEndRecord extends CruxRecordBase {
   endedAt: string
   durationMs?: number
   status: Exclude<CruxRunStatus, 'running'>
-  metrics?: CruxMetrics
+  metrics?: CruxParsedMetrics
   error?: CruxErrorSummary
   attributes?: CruxAttributes
 }
@@ -794,7 +824,7 @@ export interface CruxSpanEndRecord extends CruxRecordBase {
   endedAt: string
   durationMs?: number
   status: Exclude<CruxSpanStatus, 'running'>
-  metrics?: CruxMetrics
+  metrics?: CruxParsedMetrics
   error?: CruxErrorSummary
   attributes?: CruxAttributes
 }
@@ -810,7 +840,7 @@ export interface CruxSpanRecord extends CruxRecordBase {
   endedAt?: string
   durationMs?: number
   status: Exclude<CruxSpanStatus, 'running'>
-  metrics?: CruxMetrics
+  metrics?: CruxParsedMetrics
   error?: CruxErrorSummary
   attributes?: CruxAttributes
   source?: CruxSourceLocation
@@ -900,7 +930,7 @@ export interface CruxRunSummaryView {
   artifactCount: number
   edgeCount: number
   attributes?: CruxAttributes | null
-  metrics?: CruxMetrics | null
+  metrics?: CruxParsedMetrics | null
   error?: CruxErrorSummary | string | null
 }
 
@@ -927,7 +957,7 @@ export interface CruxSpanSummaryView {
   memoryId?: string
   retrieverId?: string
   attributes?: (CruxAttributes & CruxPresentationAttributes) | null
-  metrics?: CruxMetrics | null
+  metrics?: CruxParsedMetrics | null
   error?: CruxErrorSummary | string | null
 }
 

@@ -60,7 +60,6 @@ export async function executeFallbackLoop<M, R>(
     const attemptStart = Date.now()
     const attemptSpan = observe.openSpan({
       name: 'fallback.attempt',
-      family: 'routing',
       primitive: 'fallback.attempt',
       attributes: {
         attempt: i + 1,

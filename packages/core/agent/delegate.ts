@@ -147,7 +147,6 @@ export function delegate<
     return observe.span(
       {
         name: id,
-        family: 'delegate',
         primitive: 'delegate.invoke',
         attributes: { delegateId: id, handoffId: handoff.id, inputSize },
       },

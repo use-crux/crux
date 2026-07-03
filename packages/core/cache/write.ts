@@ -63,7 +63,6 @@ export async function performWrite(call: SemanticCacheCall, result: MiddlewareRe
   const writeStarted = Date.now()
   const writeSpan = observe.openSpan({
     name: 'semantic-cache.write',
-    family: 'cache',
     primitive: 'cache.lookup',
     attributes: {
       cacheKind: 'semantic',

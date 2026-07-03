@@ -31,7 +31,6 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
   const lookupStarted = Date.now()
   const lookupSpan = observe.openSpan({
     name: 'semantic-cache.lookup',
-    family: 'cache',
     primitive: 'cache.lookup',
     attributes: {
       cacheKind: 'semantic',

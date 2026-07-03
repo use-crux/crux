@@ -331,6 +331,9 @@ Manual spans use an explicit terminal API: call `span.end({ attributes, metrics,
 Streaming spans close through a single finalizer. Raw stream drain and provider completion metadata are merged before the terminal `span:end` when both are available; if completion metadata is never awaited, the span closes after a bounded grace window with stream-derived metrics. Early stream cancellation ends the span as `cancelled`.
 
 Metric objects may include optional expressions that evaluate to `undefined`. The observability runtime strips `undefined`, `NaN`, and infinite metric values before records reach subscribers, diagnostics-channel consumers, devtools transports, or OTel, so malformed metrics do not interrupt application code.
+Custom metric keys must use the `custom.*` namespace; built-in generation and token keys are typed.
+
+`observe.span()` derives the span family from its canonical `primitive`, so callers only pass `name`, `primitive`, optional `attributes`, and lifecycle settings. `subscribeObservability()` can subscribe to the whole graph stream or to a narrowed list of record types, with the callback type narrowed to those discriminants.
 
 Observability IDs are W3C-compatible at the trace/span boundary: `traceId` is 32 lowercase hex characters and `spanId` is 16 lowercase hex characters. Every graph record also carries a per-run monotonic `seq` used by transports and the local read model for deterministic ordering.
 

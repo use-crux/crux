@@ -63,7 +63,6 @@ describe('withTelemetry', () => {
     await observe.span(
       {
         name: 'generate',
-        family: 'generation',
         primitive: 'generation.call',
         attributes: { provider: 'openai', model: 'gpt-4o' },
       },
@@ -95,7 +94,7 @@ describe('withTelemetry', () => {
       plugins: [withTelemetry({ exporter: () => {} }), otherPlugin],
     })
 
-    await observe.span({ name: 'test', family: 'tool', primitive: 'tool.call' }, async () => {})
+    await observe.span({ name: 'test', primitive: 'tool.call' }, async () => {})
 
     expect(subscriber).toHaveBeenCalledWith(expect.objectContaining({ type: 'span:start', primitive: 'tool.call' }))
 
@@ -117,7 +116,7 @@ describe('withTelemetry', () => {
       },
     }).install({})
 
-    await observe.span({ name: 'double install', family: 'tool', primitive: 'tool.call' }, async () => {})
+    await observe.span({ name: 'double install', primitive: 'tool.call' }, async () => {})
     second.dispose?.()
     first.dispose?.()
 

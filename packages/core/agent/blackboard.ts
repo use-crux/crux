@@ -289,7 +289,6 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
     return observe.span(
       {
         name: `${config.id}.getAll`,
-        family: 'memory',
         primitive: 'memory.read',
         attributes: spanAttributes('getAll'),
       },
@@ -317,7 +316,6 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
       return observe.span(
         {
           name: `${config.id}.get`,
-          family: 'memory',
           primitive: 'memory.read',
           attributes: spanAttributes('get', { field }),
         },
@@ -340,7 +338,6 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
       await observe.span(
         {
           name: `${config.id}.set`,
-          family: 'memory',
           primitive: 'memory.write',
           attributes: spanAttributes('set', { fieldsChanged: [field] }),
         },
@@ -365,7 +362,6 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
       await observe.span(
         {
           name: `${config.id}.patch`,
-          family: 'memory',
           primitive: 'memory.write',
           attributes: spanAttributes('patch', { fieldsChanged: entries.map(([k]) => k) }),
         },
@@ -392,7 +388,6 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
       await observe.span(
         {
           name: `${config.id}.clear`,
-          family: 'memory',
           primitive: 'memory.write',
           attributes: spanAttributes('clear', { fieldsChanged: ['*'] }),
         },

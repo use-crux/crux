@@ -1,12 +1,13 @@
 import {
   CRUX_OBSERVABILITY_SCHEMA_VERSION,
+  CRUX_PRIMITIVE_FAMILY_BY_NAME,
+  type AttributesFor,
   type CruxAttributes,
   type CruxArtifactId,
   type CruxArtifactKind,
   type CruxEdgeType,
   type CruxGraphNodeRef,
   type CruxMetrics,
-  type CruxPrimitiveFamily,
   type CruxPrimitiveName,
   type CruxRunId,
   type CruxRunStatus,
@@ -135,11 +136,10 @@ export interface EndObservedSpanOptions {
   attributes?: CruxAttributes
 }
 
-export interface ObserveSpanOptions {
+export interface ObserveSpanOptions<P extends CruxPrimitiveName = CruxPrimitiveName> {
   name: string
-  family: CruxPrimitiveFamily
-  primitive: CruxPrimitiveName
-  attributes?: CruxAttributes
+  primitive: P
+  attributes?: AttributesFor<P>
   /**
    * When a span starts outside an active run, `observe.span()` normally opens
    * an implicit run so direct primitive calls remain inspectable. Detail
@@ -379,6 +379,21 @@ function stringField(record: CruxAttributes | undefined, key: string): string | 
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
+function captureContextValue(
+  context: ObservabilityContext,
+  spanStack: readonly CruxSpanId[],
+  currentSpanId?: CruxSpanId,
+): CapturedObservabilityContext {
+  return {
+    runId: context.runId,
+    traceId: context.traceId,
+    ...(context.startedAtMs !== undefined ? { startedAtMs: context.startedAtMs } : {}),
+    ...(context.correlators !== undefined ? { correlators: context.correlators } : {}),
+    spanStack: [...spanStack],
+    ...(currentSpanId ? { currentSpanId } : {}),
+  }
+}
+
 export function configureObservability(options: ConfigureObservabilityOptions): () => void {
   const layer: ObservabilityConfigurationLayer = {
     token: nextConfigurationToken + 1,
@@ -551,7 +566,7 @@ export const observe = {
       runId,
       traceId,
       captureContext(): CapturedObservabilityContext {
-        return { ...context, spanStack: [] }
+        return captureContextValue(context, [])
       },
       withContext<T>(fn: () => T | Promise<T>): T | Promise<T> {
         return withContext(context, fn)
@@ -642,7 +657,7 @@ export const observe = {
     }
   },
 
-  async span<T>(options: ObserveSpanOptions, fn: () => T | Promise<T>): Promise<T> {
+  async span<P extends CruxPrimitiveName, T>(options: ObserveSpanOptions<P>, fn: () => T | Promise<T>): Promise<T> {
     const context = currentContext()
     if (!context) {
       if (options.implicitRun === false) return await fn()
@@ -672,7 +687,7 @@ export const observe = {
       traceId: context.traceId,
       spanId,
       parentSpanId,
-      family: options.family,
+      family: CRUX_PRIMITIVE_FAMILY_BY_NAME[options.primitive],
       primitive: options.primitive,
       name: options.name,
       startedAt: now(),
@@ -713,7 +728,7 @@ export const observe = {
     }
   },
 
-  openSpan(options: ObserveSpanOptions): OpenObservedSpan {
+  openSpan<P extends CruxPrimitiveName>(options: ObserveSpanOptions<P>): OpenObservedSpan {
     let context = currentContext()
     let openedImplicitRun = false
     let implicitRunStartedAtMs = 0
@@ -777,7 +792,7 @@ export const observe = {
       traceId: context.traceId,
       spanId,
       parentSpanId,
-      family: options.family,
+      family: CRUX_PRIMITIVE_FAMILY_BY_NAME[options.primitive],
       primitive: options.primitive,
       name: options.name,
       startedAt: now(),
@@ -943,13 +958,7 @@ export const observe = {
     const context = currentContext()
     if (!context) return undefined
     const currentSpanId = context.spanStack[context.spanStack.length - 1]
-    return {
-      runId: context.runId,
-      traceId: context.traceId,
-      correlators: context.correlators,
-      spanStack: [...context.spanStack],
-      ...(currentSpanId ? { currentSpanId } : {}),
-    }
+    return captureContextValue(context, context.spanStack, currentSpanId)
   },
 
   withContext<T>(context: CapturedObservabilityContext | undefined, fn: () => T | Promise<T>): T | Promise<T> {

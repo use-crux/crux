@@ -157,7 +157,6 @@ async function createTaskList(
 ): Promise<TaskListHandle> {
   const span = observe.openSpan({
     name: 'tasklist.create',
-    family: 'task',
     primitive: 'task.operation',
     attributes: {
       operation: 'tasklist.create',
@@ -256,7 +255,6 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
     async addTask(input: CreateTaskInput): Promise<Task> {
       const span = observe.openSpan({
         name: 'task.add',
-        family: 'task',
         primitive: 'task.operation',
         attributes: {
           operation: 'add',
@@ -318,7 +316,6 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
     async updateTask(taskId: string, update: TaskUpdate): Promise<Task> {
       const span = observe.openSpan({
         name: 'task.update',
-        family: 'task',
         primitive: 'task.operation',
         attributes: {
           operation: 'update',
@@ -404,7 +401,6 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
     async removeTask(taskId: string): Promise<void> {
       const span = observe.openSpan({
         name: 'task.remove',
-        family: 'task',
         primitive: 'task.operation',
         attributes: {
           operation: 'remove',
@@ -452,7 +448,6 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
     async discard(reason?: string): Promise<void> {
       const span = observe.openSpan({
         name: 'tasklist.discard',
-        family: 'task',
         primitive: 'task.operation',
         attributes: {
           operation: 'tasklist.discard',

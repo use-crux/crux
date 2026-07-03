@@ -71,7 +71,7 @@ describe('Crux observability identity', () => {
     })
 
     await observe.run({ name: 'sequenced graph', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'sequenced span', family: 'custom', primitive: 'custom.operation' }, async () => {
+      await observe.span({ name: 'sequenced span', primitive: 'custom.operation' }, async () => {
         observe.event({ name: 'checkpoint' })
         const artifactId = observe.artifact({
           kind: 'output',

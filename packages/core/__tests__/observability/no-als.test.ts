@@ -23,13 +23,11 @@ describe('observe runtime without AsyncLocalStorage', () => {
     run.withContext(() => {
       const parent = observe.openSpan({
         name: 'parent',
-        family: 'custom',
         primitive: 'custom.operation',
       })
       parent.withContext(() => {
         const child = observe.openSpan({
           name: 'child',
-          family: 'custom',
           primitive: 'custom.operation',
         })
         child.end()
@@ -63,7 +61,7 @@ describe('observe runtime without AsyncLocalStorage', () => {
     setObservabilityTransport(transport)
 
     const result = await observe.run({ name: 'sync run', rootPrimitive: 'custom.operation' }, () => {
-      return observe.span({ name: 'sync span', family: 'custom', primitive: 'custom.operation' }, () => 'ok')
+      return observe.span({ name: 'sync span', primitive: 'custom.operation' }, () => 'ok')
     })
 
     await observe.flush()
@@ -78,7 +76,7 @@ describe('observe runtime without AsyncLocalStorage', () => {
     setObservabilityTransport(transport)
 
     const result = await observe.span(
-      { name: 'standalone', family: 'custom', primitive: 'custom.operation' },
+      { name: 'standalone', primitive: 'custom.operation' },
       () => 'ok',
     )
 

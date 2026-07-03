@@ -337,7 +337,6 @@ function emitMemoryObservation(
   const metadata = memoryMetadata(ctx, block, attributes)
   const span = observe.openSpan({
     name: `${block.id}.${operation}`,
-    family: 'memory',
     primitive,
     attributes: {
       memoryId,
@@ -621,7 +620,6 @@ function emitMemoryRenderObservation(
   }
   const span = observe.openSpan({
     name: `${memoryId}.render`,
-    family: 'memory',
     primitive: 'memory.read',
     attributes,
   })

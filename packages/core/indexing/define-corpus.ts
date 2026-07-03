@@ -72,7 +72,6 @@ export function corpus(config: CorpusConfig): Corpus {
     const inputs = await collect(documentsInput)
     const span = observe.openSpan({
       name: `${config.id}.sync`,
-      family: 'corpus',
       primitive: 'corpus.sync',
       attributes: {
         syncId,

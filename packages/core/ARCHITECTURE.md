@@ -923,7 +923,6 @@ The run graph (waterfall in devtools / CLI) is built from canonical observabilit
 
    return observe.span({
      name: 'delegate',
-     family: 'delegate',
      primitive: 'delegate.invoke',
      attributes: { delegateId },
    }, async () => {
@@ -1539,7 +1538,7 @@ the scalar correlators onto every record and projects metadata into capped `meta
 The Go backend stores `session_id` and `user_id` from `run:start`; run-list reads can filter by
 `sessionId` without adding session nodes to the execution graph.
 
-`observe.run()` creates user-facing execution roots. `observe.span()` creates inspectable operations and automatically opens an implicit run when called outside an active run, so compositions such as `pipeline`, `consensus`, `parallel`, and `swarm` remain traceable when used directly. Manual spans expose `span.setAttributes()` for accumulated metadata and `span.end({ attributes, metrics, status, error })` for terminal data; raw `span.end(attributes)` calls are not part of the contract. Captured run contexts include their start time, and `observe.endRun()` is idempotent per captured run id so serverless resumes cannot emit duplicate terminal roots. `observe.event()`, `observe.artifact()`, and `observe.edge()` attach timestamped detail, payloads, and relations to the active graph context.
+`observe.run()` creates user-facing execution roots. `observe.span()` creates inspectable operations and automatically opens an implicit run when called outside an active run, so compositions such as `pipeline`, `consensus`, `parallel`, and `swarm` remain traceable when used directly. Span families are derived from canonical primitive names at emit time. Manual spans expose `span.setAttributes()` for accumulated metadata and `span.end({ attributes, metrics, status, error })` for terminal data; raw `span.end(attributes)` calls are not part of the contract. Captured run contexts include their start time, and `observe.endRun()` is idempotent per captured run id so serverless resumes cannot emit duplicate terminal roots. `observe.event()`, `observe.artifact()`, and `observe.edge()` attach timestamped detail, payloads, and relations to the active graph context.
 
 Built-in orchestration primitives write the graph contract through the shared agent composition runtime. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. Successful `flow.step` spans also record the step result as an `output` artifact, so step outputs are inspectable from the trace (and back Quality `ctx.step()` access) without re-running the flow. `consensus()` opens `composition.consensus` with voter `agent.run` children directly under that composition span. `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
 

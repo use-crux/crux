@@ -25,7 +25,6 @@ export async function executeAgent<TOutput>(
     return observe.span(
       {
         name: input.label,
-        family: 'flow',
         primitive: 'flow.step',
         attributes: {
           compositionId,
@@ -55,7 +54,6 @@ async function executeAgentRun<TOutput>(
   const agentId = agentIdFor(input)
   const agentSpan = observe.openSpan({
     name: input.label,
-    family: 'agent',
     primitive: 'agent.run',
     attributes: {
       compositionId,
@@ -131,7 +129,6 @@ export async function executeFunctionStep<TOutput>(
   return observe.span(
     {
       name: input.label,
-      family: 'flow',
       primitive: 'flow.step',
       attributes: {
         compositionId,

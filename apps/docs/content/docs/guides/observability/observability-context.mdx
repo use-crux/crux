@@ -20,7 +20,6 @@ import { observe } from '@use-crux/core/observability'
 
 return observe.span({
   name: 'delegate',
-  family: 'delegate',
   primitive: 'delegate.invoke',
   attributes: { delegateId },
 }, async () => {
@@ -40,8 +39,8 @@ The canonical observability runtime reads the active span stack when a `run` or 
 ```ts
 import { observe } from '@use-crux/core/observability'
 
-await observe.span({ name: 'handoff', family: 'handoff', primitive: 'handoff.prepare' }, async () => {
-  await observe.span({ name: 'delegate', family: 'delegate', primitive: 'delegate.invoke' }, async () => {
+await observe.span({ name: 'handoff', primitive: 'handoff.prepare' }, async () => {
+  await observe.span({ name: 'delegate', primitive: 'delegate.invoke' }, async () => {
     // The delegate span's parentSpanId points at the handoff span.
   })
 })
@@ -137,7 +136,6 @@ export async function myBoundary<T>(input: Input, fn: () => Promise<T>): Promise
   return observe.span(
     {
       name: 'my-boundary',
-      family: 'custom',
       primitive: 'custom.operation',
       attributes: { inputKind: input.kind },
     },
@@ -153,7 +151,6 @@ import { observe } from '@use-crux/core/observability'
 
 const span = observe.openSpan({
   name: 'my-stream',
-  family: 'custom',
   primitive: 'custom.operation',
 })
 
@@ -171,7 +168,7 @@ try {
 
 `span.end()` accepts terminal options only. Use `span.setAttributes()` for metadata discovered during the span, or pass terminal metadata as `span.end({ attributes })`; raw attribute bags are rejected so `{ error }` consistently records an error end.
 
-Custom primitive records must use canonical primitive names where possible, or the `custom.*` namespace for app-specific work. The `span:start` and `span:end` records share the same span id; the Go backend uses that id to pair lifecycle records and resolve children that name this span as their parent.
+Custom primitive records must use canonical primitive names where possible, or `custom.operation` for app-specific work. The runtime derives span family from the primitive. The `span:start` and `span:end` records share the same span id; the Go backend uses that id to pair lifecycle records and resolve children that name this span as their parent.
 
 ## Troubleshooting
 

@@ -117,7 +117,6 @@ export function withCostTracking(options: CostTrackingOptions = {}): CostTracker
     const report = buildReport(entries)
     const span = observe.openSpan({
       name: 'cost.record',
-      family: 'cost',
       primitive: 'cost.record',
       attributes: {
         ...costEntryAttributes(entry),

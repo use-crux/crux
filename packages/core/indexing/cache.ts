@@ -68,7 +68,6 @@ export async function runCachedStage<T extends JsonObject | CruxDocument | Chunk
   const startedAt = Date.now()
   const span = observe.openSpan({
     name: `${args.stageKind}:${args.stageName}`,
-    family: 'indexing',
     primitive: 'indexing.pipeline',
     attributes: {
       namespace: args.namespace,

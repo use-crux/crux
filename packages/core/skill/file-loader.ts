@@ -28,7 +28,6 @@ export function fileSkill(filePath: string): Skill {
   const sourceId = basename(dirname(filePath))
   const span = observe.openSpan({
     name: 'skill.file.load',
-    family: 'skill',
     primitive: 'skill.load',
     attributes: {
       loader: 'file',

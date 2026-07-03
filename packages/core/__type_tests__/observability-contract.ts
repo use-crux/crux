@@ -16,6 +16,7 @@ import {
   createCruxSpanId,
   observe,
   propagateAttributes,
+  subscribeObservability,
 } from '../observability'
 
 const runId: CruxRunId = createCruxRunId()
@@ -60,10 +61,60 @@ void channelName
 void subscriber
 void invalidSubscriber
 
-const span = observe.openSpan({ name: 'type-test', family: 'custom', primitive: 'custom.operation' })
+subscribeObservability(['span:start'] as const, (record) => {
+  const narrowedSpanId: CruxSpanId = record.spanId
+  void narrowedSpanId
+
+  // @ts-expect-error Start records do not have terminal timestamps.
+  record.endedAt
+})
+
+subscribeObservability(['run:end', 'span:end'] as const, (record) => {
+  if (record.type === 'span:end') {
+    const narrowedSpanId: CruxSpanId = record.spanId
+    void narrowedSpanId
+  } else {
+    const narrowedRunId: CruxRunId = record.runId
+    void narrowedRunId
+  }
+})
+
+const span = observe.openSpan({ name: 'type-test', primitive: 'custom.operation' })
 const spanAttributes: CruxAttributes = { phase: 'compile' }
 span.end({ attributes: spanAttributes })
 span.setAttributes(spanAttributes)
+span.end({ metrics: { inputTokens: 1, 'gen.duration_ms': 10, 'custom.cache_wait_ms': 2 } })
+
+span.end({
+  metrics: {
+    // @ts-expect-error Custom metric keys must use the custom.* namespace.
+    cacheWaitMs: 2,
+  },
+})
+
+const inferredFamilySpan = observe.openSpan({ name: 'type-test', primitive: 'custom.operation' })
+inferredFamilySpan.end()
+
+observe.openSpan({
+  name: 'typed-generation',
+  primitive: 'generation.call',
+  attributes: { mode: 'text', temperature: 0.2, finishReason: 'stop' },
+})
+
+observe.openSpan({
+  name: 'typed-generation',
+  primitive: 'generation.call',
+  attributes: {
+    mode: 'object',
+    // @ts-expect-error Known primitive attributes keep their declared value types.
+    temperature: 'warm',
+  },
+})
+
+observe.openSpan({
+  name: 'typed-generation',
+  primitive: 'generation.call',
+})
 
 // @ts-expect-error Span attributes must be passed through `attributes` or `setAttributes`, not as raw end options.
 span.end({ phase: 'compile' })

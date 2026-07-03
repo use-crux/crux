@@ -249,7 +249,7 @@ describe("workspace artifacts facet", () => {
     });
     await run.withContext(async () => {
       await observe.span(
-        { name: "producer", family: "custom", primitive: "custom.operation" },
+        { name: "producer", primitive: "custom.operation" },
         async () => {
           await ws.write("/outputs/with-span.md", "With span", {
             status: "draft",
@@ -264,7 +264,7 @@ describe("workspace artifacts facet", () => {
     expect(produced?.producedBy).toMatchObject({
       runId: run.runId,
     });
-    expect(produced?.producedBy?.spanId).toMatch(/^span_/);
+    expect(produced?.producedBy?.spanId).toMatch(/^[0-9a-f]{16}$/);
   });
 
   it("surfaces final artifacts in the manifest without contents", async () => {

@@ -54,7 +54,6 @@ describe('canonical orchestration observability', () => {
       observe.span(
         {
           name: `${agent.id} generate`,
-          family: 'generation',
           primitive: 'generation.call',
           attributes: { agentId: agent.id },
         },

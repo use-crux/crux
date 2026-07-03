@@ -30,7 +30,7 @@ describe('observe runtime', () => {
 
     const result = await observe.run({ name: 'support reply', rootPrimitive: 'custom.operation' }, async () => {
       return await observe.span(
-        { name: 'prepare context', family: 'custom', primitive: 'custom.operation' },
+        { name: 'prepare context', primitive: 'custom.operation' },
         async () => {
           return 'done'
         },
@@ -72,6 +72,22 @@ describe('observe runtime', () => {
     })
   })
 
+  it('filters narrowed subscribers before invoking them', async () => {
+    const records: string[] = []
+    subscribeObservability(['span:start', 'span:end'] as const, (record) => {
+      records.push(record.type)
+    })
+
+    await observe.run({ name: 'subscriber filtered', rootPrimitive: 'custom.operation' }, async () => {
+      await observe.span({ name: 'filtered span', primitive: 'custom.operation' }, async () => 'ok')
+    })
+
+    expect(records).toEqual(['span:start', 'span:end'])
+    expect(observabilityDiagnostics()).toMatchObject({
+      subscriberErrors: 0,
+    })
+  })
+
   it('propagates correlators onto every record and lets nested scopes override shallow fields', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
@@ -96,7 +112,6 @@ describe('observe runtime', () => {
                 await observe.span(
                   {
                     name: 'correlated span',
-                    family: 'custom',
                     primitive: 'custom.operation',
                     attributes: { local: 'span' },
                   },
@@ -182,7 +197,7 @@ describe('observe runtime', () => {
     })
 
     await observe.run({ name: 'subscriber graph', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'producer', family: 'custom', primitive: 'custom.operation' }, async () => {
+      await observe.span({ name: 'producer', primitive: 'custom.operation' }, async () => {
         observe.event({ name: 'phase' })
         const artifactId = observe.artifact({
           kind: 'output',
@@ -267,7 +282,7 @@ describe('observe runtime', () => {
 
     try {
       await observe.run({ name: 'channel subscriber', rootPrimitive: 'custom.operation' }, async () => {
-        await observe.span({ name: 'channel span', family: 'custom', primitive: 'custom.operation' }, async () => 'ok')
+        await observe.span({ name: 'channel span', primitive: 'custom.operation' }, async () => 'ok')
       })
     } finally {
       diagnosticsChannel.unsubscribe(onMessage)
@@ -291,11 +306,11 @@ describe('observe runtime', () => {
     setObservabilityTransport(transport)
 
     await observe.run({ name: 'async run', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'parent', family: 'custom', primitive: 'custom.operation' }, async () => {
+      await observe.span({ name: 'parent', primitive: 'custom.operation' }, async () => {
         const captured = observe.captureContext()
         await new Promise((resolve) => setTimeout(resolve, 0))
         await observe.withContext(captured, async () => {
-          await observe.span({ name: 'child', family: 'custom', primitive: 'custom.operation' }, async () => undefined)
+          await observe.span({ name: 'child', primitive: 'custom.operation' }, async () => undefined)
         })
       })
     })
@@ -310,7 +325,7 @@ describe('observe runtime', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
-    await observe.span({ name: 'standalone', family: 'custom', primitive: 'custom.operation' }, async () => 'ok')
+    await observe.span({ name: 'standalone', primitive: 'custom.operation' }, async () => 'ok')
     await observe.flush()
 
     expect(transport.records.map((record) => record.type)).toEqual(['run:start', 'span:start', 'span:end', 'run:end'])
@@ -322,12 +337,11 @@ describe('observe runtime', () => {
     setObservabilityTransport(transport)
 
     const result = await observe.span(
-      { name: 'router.resolve', family: 'routing', primitive: 'routing.router', implicitRun: false },
+      { name: 'router.resolve', primitive: 'routing.router', implicitRun: false },
       async () => 'resolved',
     )
     const openSpan = observe.openSpan({
       name: 'cascade.resolve',
-      family: 'routing',
       primitive: 'routing.cascade',
       implicitRun: false,
     })
@@ -348,14 +362,14 @@ describe('observe runtime', () => {
     const captured = run.captureContext()
     await run.withContext(async () => {
       await observe.span(
-        { name: 'first turn', family: 'composition', primitive: 'composition.swarm' },
+        { name: 'first turn', primitive: 'composition.swarm' },
         async () => undefined,
       )
     })
 
     await observe.withContext(captured, async () => {
       await observe.span(
-        { name: 'second turn', family: 'composition', primitive: 'composition.swarm' },
+        { name: 'second turn', primitive: 'composition.swarm' },
         async () => undefined,
       )
     })
@@ -434,7 +448,6 @@ describe('observe runtime', () => {
     run.withContext(() => {
       const span = observe.openSpan({
         name: 'manual span',
-        family: 'custom',
         primitive: 'custom.operation',
         attributes: { initial: true, phase: 'start' },
       })
@@ -462,7 +475,7 @@ describe('observe runtime', () => {
 
     const run = observe.openRun({ name: 'manual error option', rootPrimitive: 'custom.operation' })
     run.withContext(() => {
-      const span = observe.openSpan({ name: 'manual span', family: 'custom', primitive: 'custom.operation' })
+      const span = observe.openSpan({ name: 'manual span', primitive: 'custom.operation' })
       span.end({ error: 'someString' })
     })
     run.end()
@@ -482,7 +495,7 @@ describe('observe runtime', () => {
     setObservabilityTransport(transport)
 
     await observe.run({ name: 'artifact run', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'producer', family: 'custom', primitive: 'custom.operation' }, async () => {
+      await observe.span({ name: 'producer', primitive: 'custom.operation' }, async () => {
         observe.event({ name: 'phase', attributes: { value: 'started' } })
         const artifactId = createCruxArtifactId()
         observe.artifact({
@@ -540,7 +553,7 @@ describe('observe runtime', () => {
 
     await expect(
       observe.run({ name: 'failing run', rootPrimitive: 'custom.operation' }, async () => {
-        await observe.span({ name: 'failing span', family: 'custom', primitive: 'custom.operation' }, async () => {
+        await observe.span({ name: 'failing span', primitive: 'custom.operation' }, async () => {
           throw error
         })
       }),
@@ -603,7 +616,7 @@ describe('observe runtime', () => {
 
     const run = observe.openRun({ name: 'manual run', rootPrimitive: 'custom.operation' })
     run.withContext(() => {
-      const span = observe.openSpan({ name: 'manual span', family: 'custom', primitive: 'custom.operation' })
+      const span = observe.openSpan({ name: 'manual span', primitive: 'custom.operation' })
       span.error(error, { phase: 'manual.finish', errorKind: 'manual_error' })
     })
     run.end()
@@ -710,7 +723,7 @@ describe('observe runtime', () => {
 
     const run = observe.openRun({ name: 'live stream', rootPrimitive: 'custom.operation' })
     run.withContext(() => {
-      const span = observe.openSpan({ name: 'child', family: 'custom', primitive: 'custom.operation' })
+      const span = observe.openSpan({ name: 'child', primitive: 'custom.operation' })
       span.end()
     })
     await new Promise((resolve) => queueMicrotask(resolve))
@@ -731,7 +744,7 @@ describe('observe runtime', () => {
 
     const run = observe.openRun({ name: 'convex cleanup', rootPrimitive: 'runtime.convex.action' })
     run.withContext(() => {
-      const span = observe.openSpan({ name: 'cleanup', family: 'runtime', primitive: 'runtime.convex.action' })
+      const span = observe.openSpan({ name: 'cleanup', primitive: 'runtime.convex.action' })
       span.end()
     })
     await expect(observe.flush()).resolves.toBe(true)
@@ -759,7 +772,7 @@ describe('observe runtime', () => {
     await observe.run({ name: 'fanout', rootPrimitive: 'custom.operation' }, async () => {
       await Promise.all(
         Array.from({ length: 8 }, (_, index) =>
-          observe.span({ name: `branch ${index}`, family: 'custom', primitive: 'custom.operation' }, async () => index),
+          observe.span({ name: `branch ${index}`, primitive: 'custom.operation' }, async () => index),
         ),
       )
     })
@@ -862,7 +875,7 @@ describe('observe runtime', () => {
 
     const run = observe.openRun({ name: 'pressure', rootPrimitive: 'custom.operation' })
     run.withContext(() => {
-      const span = observe.openSpan({ name: 'buffered span', family: 'custom', primitive: 'custom.operation' })
+      const span = observe.openSpan({ name: 'buffered span', primitive: 'custom.operation' })
       span.withContext(() => {
         for (let index = 0; index < 4997; index += 1) {
           observe.event({ name: `event ${index}` })
@@ -891,7 +904,7 @@ describe('observe runtime', () => {
 
     const run = observe.openRun({ name: 'remove transport', rootPrimitive: 'custom.operation' })
     run.withContext(() => {
-      const span = observe.openSpan({ name: 'queued', family: 'custom', primitive: 'custom.operation' })
+      const span = observe.openSpan({ name: 'queued', primitive: 'custom.operation' })
       span.end()
     })
     setObservabilityTransport(undefined)
@@ -909,7 +922,7 @@ describe('observe runtime', () => {
 
     const run = observe.openRun({ name: 'reset drops', rootPrimitive: 'custom.operation' })
     run.withContext(() => {
-      const span = observe.openSpan({ name: 'queued reset span', family: 'custom', primitive: 'custom.operation' })
+      const span = observe.openSpan({ name: 'queued reset span', primitive: 'custom.operation' })
       span.end()
     })
 
@@ -930,7 +943,7 @@ describe('observe runtime', () => {
 
     const run = observe.openRun({ name: 'soak', rootPrimitive: 'custom.operation' })
     run.withContext(() => {
-      const span = observe.openSpan({ name: 'soak span', family: 'custom', primitive: 'custom.operation' })
+      const span = observe.openSpan({ name: 'soak span', primitive: 'custom.operation' })
       span.withContext(() => {
         for (let index = 0; index < 99_997; index += 1) {
           observe.event({ name: `event ${index}` })
@@ -1075,7 +1088,7 @@ describe('observe runtime', () => {
     setObservabilityTransport(transport)
 
     await observe.run({ name: 'json hostile preview', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'producer', family: 'custom', primitive: 'custom.operation' }, async () => {
+      await observe.span({ name: 'producer', primitive: 'custom.operation' }, async () => {
         const cyclic: Record<string, unknown> = { id: 'cyclic' }
         cyclic.self = cyclic
         observe.artifact({
@@ -1122,7 +1135,7 @@ describe('observe runtime', () => {
     setObservabilityTransport(transport)
 
     await observe.run({ name: 'partially bad batch', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'producer', family: 'custom', primitive: 'custom.operation' }, async () => {
+      await observe.span({ name: 'producer', primitive: 'custom.operation' }, async () => {
         observe.artifact({
           kind: 'output',
           contentType: 'application/json',

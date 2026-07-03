@@ -77,7 +77,6 @@ async function resolveRouter<M, R>(
   const availableRoutes = Object.keys(config.routes)
   const span = observe.openSpan({
     name: 'router.resolve',
-    family: 'routing',
     primitive: 'routing.router',
     implicitRun: false,
     attributes: {
@@ -188,7 +187,6 @@ async function resolveCascade<M, R>(
   let lastResultWithMeta: (R & { _meta: Record<string, unknown> }) | undefined
   const cascadeSpan = observe.openSpan({
     name: 'cascade.resolve',
-    family: 'routing',
     primitive: 'routing.cascade',
     implicitRun: false,
     attributes: {
@@ -254,7 +252,6 @@ async function resolveCascade<M, R>(
         const modelId = extractModelId(tier.model)
         const tierSpan = observe.openSpan({
           name: 'cascade.tier',
-          family: 'routing',
           primitive: 'routing.cascade',
           implicitRun: false,
           attributes: {

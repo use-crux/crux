@@ -24,7 +24,6 @@ describe('OTel record subscriber', () => {
     await observe.span(
       {
         name: 'search',
-        family: 'tool',
         primitive: 'tool.call',
         attributes: {
           toolCallId: 'tc1',
@@ -68,7 +67,6 @@ describe('OTel record subscriber', () => {
     await observe.span(
       {
         name: 'after-dispose',
-        family: 'tool',
         primitive: 'tool.call',
         attributes: { toolName: 'afterDispose' },
       },
@@ -92,7 +90,6 @@ describe('OTel record subscriber', () => {
       observe.span(
         {
           name: 'generate',
-          family: 'generation',
           primitive: 'generation.call',
           attributes: { provider: 'openai', model: 'gpt-4o', promptId: 'support' },
         },
@@ -107,7 +104,7 @@ describe('OTel record subscriber', () => {
           })
 
           await observe.span(
-            { name: 'validate', family: 'constraint', primitive: 'constraint.check' },
+            { name: 'validate', primitive: 'constraint.check' },
             async () => {
               if (context?.currentSpanId && artifactId) {
                 observe.edge({
@@ -171,7 +168,6 @@ describe('OTel record subscriber', () => {
     await observe.span(
       {
         name: 'lookup',
-        family: 'tool',
         primitive: 'tool.call',
         attributes: {
           toolCallId: 'tc-parity',
@@ -202,7 +198,6 @@ describe('OTel record subscriber', () => {
     await observe.span(
       {
         name: 'identity lookup',
-        family: 'tool',
         primitive: 'tool.call',
         attributes: { toolName: 'identityLookup' },
       },
@@ -228,7 +223,6 @@ describe('OTel record subscriber', () => {
     await observe.span(
       {
         name: 'generate',
-        family: 'generation',
         primitive: 'generation.call',
       },
       async () => {},
@@ -236,7 +230,6 @@ describe('OTel record subscriber', () => {
 
     observe.openSpan({
       name: 'generate with metrics',
-      family: 'generation',
       primitive: 'generation.call',
     }).end({
       metrics: {

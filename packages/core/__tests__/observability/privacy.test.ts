@@ -33,7 +33,6 @@ describe('observability privacy capture policy', () => {
       observe.span(
         {
           name: 'stream answer',
-          family: 'generation',
           primitive: 'generation.stream',
           attributes: {
             text: 'OUTPUT-SPAN-TEXT',
@@ -95,7 +94,6 @@ describe('observability privacy capture policy', () => {
     await observe.span(
       {
         name: 'generate',
-        family: 'generation',
         primitive: 'generation.call',
       },
       async () => {
@@ -142,7 +140,6 @@ describe('observability privacy capture policy', () => {
     await observe.span(
       {
         name: 'generate',
-        family: 'generation',
         primitive: 'generation.call',
       },
       async () => {

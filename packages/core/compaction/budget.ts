@@ -31,7 +31,6 @@ export function createBudgetManager(config: BudgetConfig): BudgetManager {
   function check(): BudgetState {
     const span = observe.openSpan({
       name: 'budget.check',
-      family: 'prompt',
       primitive: 'prompt.budget',
       attributes: {
         limit,

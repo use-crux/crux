@@ -81,7 +81,6 @@ async function runGuards<TPhase extends GuardrailPhase>(
   return observe.span(
     {
       name: `${ctx.phase ?? 'unknown'} guardrails`,
-      family: 'guardrail',
       primitive: 'guardrail.run',
       attributes: {
         phase: ctx.phase,
@@ -108,7 +107,6 @@ async function runGuardsInternal<TPhase extends GuardrailPhase>(
     const span = observe.openSpan(
       {
         name: guard.name,
-        family: 'guardrail',
         primitive: 'guardrail.run',
         attributes: {
           guardrailName: guard.name,

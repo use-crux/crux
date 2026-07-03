@@ -29,7 +29,6 @@ export async function summarizeMessages(config: SummarizeConfig): Promise<Compac
   const { messages, generate, model, maxTokens = 500, focus } = config
   const span = observe.openSpan({
     name: 'compaction.summarize',
-    family: 'compaction',
     primitive: 'compaction.run',
     attributes: {
       compactionKind: 'summary',

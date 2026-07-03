@@ -161,7 +161,6 @@ export function createFeedbackStore(options: FeedbackStoreOptions): FeedbackStor
     record: async (input: FeedbackInput) => {
       const span = observe.openSpan({
         name: 'feedback.record',
-        family: 'feedback',
         primitive: 'feedback.record',
         attributes: feedbackInputAttributes(qualityId, input),
       })

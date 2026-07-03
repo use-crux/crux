@@ -51,7 +51,6 @@ export async function runEmbeddingOperation<T>(args: {
   }
   const span = observe.openSpan({
     name: `${args.name}.${args.operation}`,
-    family: 'embedding',
     primitive: 'embedding.call',
     attributes: {
       embedId,
@@ -157,7 +156,6 @@ async function executeWithCache<T>(args: {
 
   const span = observe.openSpan({
     name: `${args.name}.embedding-cache`,
-    family: 'cache',
     primitive: 'cache.lookup',
     attributes: {
       cacheKind: 'embedding',
