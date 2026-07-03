@@ -1533,6 +1533,11 @@ external observers and degrades to no-op when `node:diagnostics_channel` is unav
 Trace and span IDs use W3C lowercase hex formats, and `emit()` assigns each record a per-run
 monotonic `seq` before validation/fan-out so storage and clients can order records without relying
 on wall-clock timestamps.
+Correlators are carried by the same observability context: `propagateAttributes()` merges
+`sessionId`, `userId`, and flat metadata into active and future run/span scopes. `emit()` stamps
+the scalar correlators onto every record and projects metadata into capped `meta.*` attributes.
+The Go backend stores `session_id` and `user_id` from `run:start`; run-list reads can filter by
+`sessionId` without adding session nodes to the execution graph.
 
 `observe.run()` creates user-facing execution roots. `observe.span()` creates inspectable operations and automatically opens an implicit run when called outside an active run, so compositions such as `pipeline`, `consensus`, `parallel`, and `swarm` remain traceable when used directly. Manual spans expose `span.setAttributes()` for accumulated metadata and `span.end({ attributes, metrics, status, error })` for terminal data; raw `span.end(attributes)` calls are not part of the contract. Captured run contexts include their start time, and `observe.endRun()` is idempotent per captured run id so serverless resumes cannot emit duplicate terminal roots. `observe.event()`, `observe.artifact()`, and `observe.edge()` attach timestamped detail, payloads, and relations to the active graph context.
 

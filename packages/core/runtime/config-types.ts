@@ -154,6 +154,11 @@ export interface CruxDevtoolsConfig {
    * endpoints from their setup helpers. Explicit bridge config wins.
    */
   readonly bridge?: RuntimeBridgeOptions
+  /**
+   * Optional session ID applied as a default observability correlator while the
+   * devtools transport is active.
+   */
+  readonly sessionId?: string
 }
 
 export interface CruxObservabilityConfig {

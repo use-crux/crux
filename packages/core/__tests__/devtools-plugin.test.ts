@@ -73,6 +73,27 @@ describe('withDevtools — CruxPlugin', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('passes the devtools sessionId through as an observability default correlator', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const cleanup = enableDevtools({
+      prompts: [],
+      serverUrl: 'http://localhost:4400',
+      sessionId: 'dev-session',
+    })
+
+    await observe.run({ name: 'devtools session', rootPrimitive: 'custom.operation' }, async () => undefined)
+    await observe.flush()
+    cleanup()
+
+    const recordsCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/api/observability/records'))
+    expect(recordsCall).toBeDefined()
+    const body = JSON.parse(String(recordsCall?.[1]?.body)) as { records: Array<{ sessionId?: string }> }
+    expect(body.records).not.toHaveLength(0)
+    expect(body.records.every((record) => record.sessionId === 'dev-session')).toBe(true)
+  })
+
   it('flushes pending observability records before devtools restore', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }))
     vi.stubGlobal('fetch', fetchMock)

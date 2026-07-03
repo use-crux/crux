@@ -55,6 +55,12 @@ describe('Crux observability graph contract', () => {
         }),
       }),
     )
+    expect(parsed.records[0]).toMatchObject({
+      type: 'run:start',
+      sessionId: 'session_support_001',
+      userId: 'user_support_001',
+      attributes: expect.objectContaining({ 'meta.ticketId': 'ticket_123' }),
+    })
   })
 
   it('validates the golden Node run fixture for RunDetail builders', () => {

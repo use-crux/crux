@@ -27,6 +27,7 @@ import {
 import { normalizeObservedError, observedErrorSummary } from './errors'
 import { applyObservabilityCapturePolicyToRecord } from './capture-policy'
 import { sanitizeRecord } from './sanitize'
+import { applyCruxCorrelators, mergeCruxCorrelators, type CruxCorrelators } from './correlators'
 import {
   hasObservabilitySubscribers,
   observabilitySubscriberErrorCount,
@@ -38,7 +39,9 @@ import { validateRecordForEmission } from './validate-record'
 import { createDeliveryEngine } from './delivery/engine'
 import type { ObservabilityDeliveryOptions, ObservabilityFlushOptions } from './delivery/options'
 import {
+  currentCruxCorrelators,
   currentObservabilityContext,
+  withCruxCorrelators,
   withObservabilityContext,
   type CapturedObservabilityContext,
   type ObservabilityContext,
@@ -54,6 +57,13 @@ export type { ObservabilityDeliveryOptions, ObservabilityFlushOptions } from './
 export interface ConfigureObservabilityOptions {
   transport?: CruxObservabilityTransport
   delivery?: ObservabilityDeliveryOptions
+  /**
+   * Correlators applied when no active observability context provides them.
+   *
+   * Devtools uses this for process-level session grouping. Explicit
+   * `propagateAttributes()` scopes override these defaults.
+   */
+  defaultCorrelators?: CruxCorrelators
 }
 
 export interface ObservabilityDiagnostics {
@@ -179,6 +189,7 @@ interface ObservabilityConfigurationLayer {
   readonly parentToken: number
   readonly previousTransport: CruxObservabilityTransport | undefined
   readonly previousDeliveryOptions: ReturnType<typeof deliveryEngine.deliveryOptions>
+  readonly previousDefaultCorrelators: CruxCorrelators | undefined
 }
 
 let nextConfigurationToken = 0
@@ -187,6 +198,7 @@ const configurationParents = new Map<number, number>()
 
 const maxEndedRunIds = 10_000
 const endedRunIds = new Set<CruxRunId>()
+let defaultCorrelators: CruxCorrelators | undefined
 
 function currentContext(): ObservabilityContext | undefined {
   return currentObservabilityContext()
@@ -204,8 +216,8 @@ function durationSince(startedAtMs: number): number {
   return Math.max(0, Date.now() - startedAtMs)
 }
 
-function emit(record: UnsequencedCruxGraphRecord): void {
-  const sequencedRecord = recordSequencer.assign(record)
+function emit(record: UnsequencedCruxGraphRecord, correlators = effectiveCorrelators()): void {
+  const sequencedRecord = recordSequencer.assign(applyCruxCorrelators(record, correlators))
   const privacy = applyObservabilityCapturePolicyToRecord(sequencedRecord)
   if (!privacy.ok) {
     recordRedactedRecord(privacy.error)
@@ -229,13 +241,17 @@ function emit(record: UnsequencedCruxGraphRecord): void {
   deliveryEngine.enqueue(validated.record)
 }
 
-function emitObserved(createRecord: () => UnsequencedCruxGraphRecord): void {
+function emitObserved(createRecord: () => UnsequencedCruxGraphRecord, correlators?: CruxCorrelators | null): void {
   if (!hasActiveObservabilitySinks()) return
-  emit(createRecord())
+  emit(createRecord(), correlators === null ? undefined : effectiveCorrelators(correlators))
 }
 
 function hasActiveObservabilitySinks(): boolean {
   return deliveryEngine.currentTransport() !== undefined || hasObservabilitySubscribers() || channelHasSubscribers()
+}
+
+function effectiveCorrelators(preferred?: CruxCorrelators): CruxCorrelators | undefined {
+  return preferred ?? currentCruxCorrelators() ?? defaultCorrelators
 }
 
 function recordInvalidRecord(issues: readonly string[]): void {
@@ -321,7 +337,7 @@ function emitObservedErrorEvidence(
     name: 'exception',
     timestamp: now(),
     attributes: eventAttributes,
-  }))
+  }), context.correlators ?? null)
 
   if (stack) {
     emitObserved(() => ({
@@ -338,7 +354,7 @@ function emitObservedErrorEvidence(
       encoding: 'text',
       preview: stack,
       ...(attributes ? { attributes } : {}),
-    }))
+    }), context.correlators ?? null)
   }
 
   emitObserved(() => ({
@@ -355,7 +371,7 @@ function emitObservedErrorEvidence(
     encoding: 'json',
     preview: normalized.raw,
     ...(attributes ? { attributes } : {}),
-  }))
+  }), context.correlators ?? null)
 }
 
 function stringField(record: CruxAttributes | undefined, key: string): string | undefined {
@@ -369,12 +385,16 @@ export function configureObservability(options: ConfigureObservabilityOptions): 
     parentToken: activeConfigurationToken,
     previousTransport: deliveryEngine.currentTransport(),
     previousDeliveryOptions: deliveryEngine.deliveryOptions(),
+    previousDefaultCorrelators: defaultCorrelators,
   }
   nextConfigurationToken = layer.token
   configurationParents.set(layer.token, layer.parentToken)
   activeConfigurationToken = layer.token
   deliveryEngine.setTransport(options.transport)
   deliveryEngine.configureDelivery(options.delivery)
+  if (Object.hasOwn(options, 'defaultCorrelators')) {
+    defaultCorrelators = mergeCruxCorrelators(undefined, options.defaultCorrelators)
+  }
   let restored = false
   return () => {
     if (restored) return
@@ -385,7 +405,26 @@ export function configureObservability(options: ConfigureObservabilityOptions): 
     configurationParents.delete(layer.token)
     deliveryEngine.setTransport(layer.previousTransport)
     deliveryEngine.configureDelivery(layer.previousDeliveryOptions)
+    defaultCorrelators = layer.previousDefaultCorrelators
   }
+}
+
+/**
+ * Run a callback with correlators attached to every observability record.
+ *
+ * Scopes may be nested. Inner scalar fields override outer scalar fields, and
+ * metadata is merged by key with inner values winning. Metadata values are
+ * projected onto record attributes as `meta.<key>` strings capped at 200
+ * characters.
+ *
+ * @param correlators - Session, user, and flat metadata identifiers.
+ * @param fn - Work to run while the correlators are active.
+ * @returns The callback result.
+ */
+export function propagateAttributes<T>(correlators: CruxCorrelators, fn: () => Promise<T>): Promise<T>
+export function propagateAttributes<T>(correlators: CruxCorrelators, fn: () => T): T
+export function propagateAttributes<T>(correlators: CruxCorrelators, fn: () => T | Promise<T>): T | Promise<T> {
+  return withCruxCorrelators(correlators, fn)
 }
 
 function isActiveConfigurationLayer(token: number): boolean {
@@ -438,6 +477,7 @@ export function resetObservabilityRuntime(): void {
   warnedAboutContextlessRecord = false
   endedRunIds.clear()
   recordSequencer.reset()
+  defaultCorrelators = undefined
 }
 
 export function observabilityDeliveryErrors(): readonly unknown[] {
@@ -462,7 +502,13 @@ export const observe = {
     const runId = createCruxRunId()
     const traceId = createCruxTraceId()
     const startedAtMs = Date.now()
-    const context: ObservabilityContext = { runId, traceId, startedAtMs, spanStack: [] }
+    const context: ObservabilityContext = {
+      runId,
+      traceId,
+      startedAtMs,
+      spanStack: [],
+      correlators: effectiveCorrelators(),
+    }
     let ended = false
 
     emitObserved(() => ({
@@ -476,7 +522,7 @@ export const observe = {
       startedAt: now(),
       status: 'running',
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    }))
+    }), context.correlators ?? null)
 
     const finish = (finishOptions: EndObservedRunOptions = {}): void => {
       if (ended) return
@@ -498,7 +544,7 @@ export const observe = {
           ? { error: observedErrorSummary(finishOptions.error, errorContext(finishOptions.attributes)) }
           : {}),
         ...(finishOptions.attributes ? { attributes: finishOptions.attributes } : {}),
-      }))
+      }), context.correlators ?? null)
     }
 
     return {
@@ -533,18 +579,22 @@ export const observe = {
       ...(context.startedAtMs !== undefined ? { durationMs: durationSince(context.startedAtMs) } : {}),
       status,
       ...(options.metrics ? { metrics: options.metrics } : {}),
-      ...(options.error !== undefined
-        ? { error: observedErrorSummary(options.error, errorContext(options.attributes)) }
-        : {}),
+      ...(options.error !== undefined ? { error: observedErrorSummary(options.error, errorContext(options.attributes)) } : {}),
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    }))
+    }), context.correlators ?? null)
   },
 
   async run<T>(options: ObserveRunOptions, fn: () => T | Promise<T>): Promise<T> {
     const runId = createCruxRunId()
     const traceId = createCruxTraceId()
     const startedAtMs = Date.now()
-    const context: ObservabilityContext = { runId, traceId, startedAtMs, spanStack: [] }
+    const context: ObservabilityContext = {
+      runId,
+      traceId,
+      startedAtMs,
+      spanStack: [],
+      correlators: effectiveCorrelators(),
+    }
 
     emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -557,7 +607,7 @@ export const observe = {
       startedAt: now(),
       status: 'running',
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    }))
+    }), context.correlators ?? null)
 
     try {
       const result = await withContext(context, fn)
@@ -572,7 +622,7 @@ export const observe = {
         endedAt: now(),
         durationMs: durationSince(startedAtMs),
         status: 'ok',
-      }))
+      }), context.correlators ?? null)
       return result
     } catch (error) {
       if (endedRunIds.has(runId)) throw error
@@ -587,7 +637,7 @@ export const observe = {
         durationMs: durationSince(startedAtMs),
         status: 'error',
         error: observedErrorSummary(error, errorContext(options.attributes)),
-      }))
+      }), context.correlators ?? null)
       throw error
     }
   },
@@ -628,7 +678,7 @@ export const observe = {
       startedAt: now(),
       status: 'running',
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    }))
+    }), context.correlators ?? null)
 
     try {
       const result = await withContext(nextContext, fn)
@@ -642,7 +692,7 @@ export const observe = {
         endedAt: now(),
         durationMs: durationSince(startedAtMs),
         status: 'ok',
-      }))
+      }), nextContext.correlators ?? null)
       return result
     } catch (error) {
       emitObservedErrorEvidence(nextContext, spanId, error, options.attributes)
@@ -658,7 +708,7 @@ export const observe = {
         status: 'error',
         error: observedErrorSummary(error, errorContext(options.attributes)),
         ...(options.attributes ? { attributes: options.attributes } : {}),
-      }))
+      }), nextContext.correlators ?? null)
       throw error
     }
   },
@@ -692,6 +742,7 @@ export const observe = {
         traceId: createCruxTraceId(),
         startedAtMs: implicitRunStartedAtMs,
         spanStack: [],
+        correlators: effectiveCorrelators(),
       }
       context = implicitContext
       emitObserved(() => ({
@@ -705,7 +756,7 @@ export const observe = {
         startedAt: now(),
         status: 'running',
         ...(options.attributes ? { attributes: options.attributes } : {}),
-      }))
+      }), implicitContext.correlators ?? null)
     }
 
     const spanId = createCruxSpanId()
@@ -732,7 +783,7 @@ export const observe = {
       startedAt: now(),
       status: 'running',
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    }))
+    }), context.correlators ?? null)
 
     const mergeSpanAttributes = (finishAttributes?: CruxAttributes): CruxAttributes | undefined => {
       if (!options.attributes && !accumulatedAttributes && !finishAttributes) return undefined
@@ -766,7 +817,7 @@ export const observe = {
           ? { error: observedErrorSummary(finishOptions.error, errorContext(attributes)) }
           : {}),
         ...(attributes ? { attributes } : {}),
-      }))
+      }), spanContext.correlators ?? null)
       if (openedImplicitRun) {
         const runStatus: Exclude<CruxRunStatus, 'running'> = status === 'skipped' ? 'ok' : status
         if (endedRunIds.has(spanContext.runId)) return
@@ -784,7 +835,7 @@ export const observe = {
           ...(finishOptions.error !== undefined
             ? { error: observedErrorSummary(finishOptions.error, errorContext(attributes)) }
             : {}),
-        }))
+        }), spanContext.correlators ?? null)
       }
     }
 
@@ -831,7 +882,7 @@ export const observe = {
       name: options.name,
       timestamp: now(),
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    }))
+    }), context.correlators ?? null)
   },
 
   artifact(options: ObserveArtifactOptions): CruxArtifactId | undefined {
@@ -862,7 +913,7 @@ export const observe = {
         ...(options.uri ? { uri: options.uri } : {}),
         ...(options.attributes ? { attributes: options.attributes } : {}),
       }
-    })
+    }, context.correlators ?? null)
     return artifactId
   },
 
@@ -885,7 +936,7 @@ export const observe = {
       to: options.to,
       createdAt: now(),
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    }))
+    }), context.correlators ?? null)
   },
 
   captureContext(): CapturedObservabilityContext | undefined {
@@ -895,6 +946,7 @@ export const observe = {
     return {
       runId: context.runId,
       traceId: context.traceId,
+      correlators: context.correlators,
       spanStack: [...context.spanStack],
       ...(currentSpanId ? { currentSpanId } : {}),
     }
@@ -907,6 +959,7 @@ export const observe = {
         runId: context.runId,
         traceId: context.traceId,
         startedAtMs: context.startedAtMs,
+        correlators: context.correlators,
         spanStack: [...context.spanStack],
       },
       fn,

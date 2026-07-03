@@ -24,6 +24,8 @@ func (s *Service) migrate(ctx context.Context) error {
 		`CREATE TABLE IF NOT EXISTS runs (
 			run_id TEXT PRIMARY KEY,
 			trace_id TEXT,
+			session_id TEXT,
+			user_id TEXT,
 			name TEXT,
 			root_primitive TEXT,
 			status TEXT,
@@ -125,8 +127,17 @@ func (s *Service) migrate(ctx context.Context) error {
 	if err := ensureColumn(ctx, s.db, "records", "seq", `ALTER TABLE records ADD COLUMN seq INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
+	if err := ensureColumn(ctx, s.db, "runs", "session_id", `ALTER TABLE runs ADD COLUMN session_id TEXT`); err != nil {
+		return err
+	}
+	if err := ensureColumn(ctx, s.db, "runs", "user_id", `ALTER TABLE runs ADD COLUMN user_id TEXT`); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_records_run_seq ON records(run_id, seq, received_at, record_id)`); err != nil {
 		return fmt.Errorf("create records sequence index: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_id, started_at DESC)`); err != nil {
+		return fmt.Errorf("create runs session index: %w", err)
 	}
 	return nil
 }
@@ -260,10 +271,12 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, record Record) e
 
 func upsertRunStart(ctx context.Context, tx *sql.Tx, run RunStartRecord) error {
 	_, err := tx.ExecContext(ctx, `
-		INSERT INTO runs (run_id, trace_id, name, root_primitive, status, started_at, attributes_json)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO runs (run_id, trace_id, session_id, user_id, name, root_primitive, status, started_at, attributes_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(run_id) DO UPDATE SET
 			trace_id = coalesce(excluded.trace_id, runs.trace_id),
+			session_id = coalesce(excluded.session_id, runs.session_id),
+			user_id = coalesce(excluded.user_id, runs.user_id),
 			name = excluded.name,
 			root_primitive = excluded.root_primitive,
 			status = CASE WHEN runs.status IS NULL OR runs.status = 'running' THEN excluded.status ELSE runs.status END,
@@ -272,7 +285,7 @@ func upsertRunStart(ctx context.Context, tx *sql.Tx, run RunStartRecord) error {
 					WHEN runs.attributes_json IS NOT NULL AND excluded.attributes_json IS NOT NULL THEN json_patch(runs.attributes_json, excluded.attributes_json)
 					ELSE coalesce(excluded.attributes_json, runs.attributes_json)
 				END
-	`, run.RunID, nullIfEmpty(run.TraceID), run.Name, run.RootPrimitive, run.Status, run.StartedAt, nullJSON(run.Attributes))
+	`, run.RunID, nullIfEmpty(run.TraceID), nullIfEmpty(run.SessionID), nullIfEmpty(run.UserID), run.Name, run.RootPrimitive, run.Status, run.StartedAt, nullJSON(run.Attributes))
 	return err
 }
 

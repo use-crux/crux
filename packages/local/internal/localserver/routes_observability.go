@@ -97,6 +97,7 @@ func parseObservabilityRunListOptions(r *http.Request) observability.RunListOpti
 			opts.Offset = parsed
 		}
 	}
+	opts.SessionID = r.URL.Query().Get("sessionId")
 	return opts
 }
 

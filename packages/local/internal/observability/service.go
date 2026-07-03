@@ -100,6 +100,8 @@ func (b *EventBus) Publish(event Event) {
 type RunSummary struct {
 	RunID         string          `json:"runId"`
 	TraceID       string          `json:"traceId"`
+	SessionID     string          `json:"sessionId,omitempty"`
+	UserID        string          `json:"userId,omitempty"`
 	Name          string          `json:"name"`
 	RootPrimitive string          `json:"rootPrimitive"`
 	Status        string          `json:"status"`
@@ -124,6 +126,9 @@ type RunListOptions struct {
 	// negative values request the full history for maintenance/CLI callers.
 	Limit  int
 	Offset int
+	// SessionID restricts the run list to runs that were started with this
+	// correlator. Empty means no session filter.
+	SessionID string
 	// IncludeExpensiveRollups asks list reads to scan span/event metric JSON.
 	// UI list endpoints leave this off; single-run detail reads remain exact.
 	IncludeExpensiveRollups bool

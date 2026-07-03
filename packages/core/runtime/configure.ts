@@ -68,8 +68,13 @@ export interface ConfigureOptions {
      * `true` uses the core default WS peer for long-lived local Node runtimes.
      * Framework integrations such as `@use-crux/convex` can register HTTP bridge
      * endpoints from their setup helpers. Explicit bridge config wins.
-     */
+    */
     bridge?: RuntimeBridgeOptions
+    /**
+     * Optional session ID applied as a default observability correlator while
+     * the devtools transport is active.
+     */
+    sessionId?: string
   }
 
   /** Global middleware wrapping every adapter `generate()` call. */
@@ -234,6 +239,7 @@ export function configure(options: ConfigureOptions): PromptRegistry {
         contexts,
         serverUrl: dt.serverUrl,
         bridge: dt.bridge,
+        sessionId: dt.sessionId,
         paths: paths.size > 0 ? paths : undefined,
         tools: options.tools,
       }),

@@ -317,6 +317,36 @@ func TestServiceRunsWithOptionsLimitsBeforeRollups(t *testing.T) {
 	}
 }
 
+func TestServiceRunsWithOptionsFiltersBySessionID(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	if err := service.Ingest(ctx, mustBatch(t,
+		`{"schemaVersion":1,"recordId":"session-a-start","type":"run:start","runId":"run_session_a","traceId":"trace_session_a","sessionId":"session-a","userId":"user-a","name":"session a","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"session-b-start","type":"run:start","runId":"run_session_b","traceId":"trace_session_b","sessionId":"session-b","userId":"user-b","name":"session b","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:01:00.000Z","status":"running"}`,
+	)); err != nil {
+		t.Fatal(err)
+	}
+
+	runs, err := service.RunsWithOptions(ctx, RunListOptions{SessionID: "session-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(runs), 1; got != want {
+		t.Fatalf("runs len = %d, want %d: %#v", got, want, runs)
+	}
+	if runs[0].RunID != "run_session_a" || runs[0].SessionID != "session-a" || runs[0].UserID != "user-a" {
+		t.Fatalf("filtered run = %#v", runs[0])
+	}
+
+	allRuns, err := service.RunsWithOptions(ctx, RunListOptions{Limit: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(allRuns), 2; got != want {
+		t.Fatalf("all runs len = %d, want %d", got, want)
+	}
+}
+
 func TestRunSignalsForRunsRestrictsRollupToSelectedRuns(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)

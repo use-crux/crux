@@ -26,6 +26,7 @@ config({
   },
   devtools: {
     bridge: true, // optional live-runtime command plane for local Node apps
+    sessionId: process.env.CRUX_DEVTOOLS_SESSION_ID,
   },
 })
 ```
@@ -34,6 +35,10 @@ config({
   The `devtools` key is for local UI/control/tunnel/bridge behavior. Production telemetry and remote collectors stay
   explicit through `observability` config or telemetry plugins.
 </Callout>
+
+`devtools.sessionId` is applied as a default observability correlator. Every record emitted while the
+devtools transport is active carries that `sessionId`, and the local server can filter run lists by
+`sessionId`.
 
 ## What gets instrumented
 
@@ -124,7 +129,7 @@ The visible root should match the user's actual initiating work. Use `flow()` on
 
 The main view is a live trace list showing every `generate()` and `stream()` call as it happens.
 
-- **Session grouping** — traces inside `withSession()` appear as collapsible groups; sessions are metadata/grouping, not execution nodes
+- **Session grouping** — traces with the same `sessionId` appear as collapsible groups; sessions are metadata/grouping, not execution nodes
 - **Flow nesting** — `flow().run()` adds sub-groups with labeled steps within sessions
 - **Status indicators** — running (spinner), success (green), error (red)
 - **Filtering** — filter by prompt ID, model, or session using the search bar

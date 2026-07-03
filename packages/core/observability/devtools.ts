@@ -122,7 +122,10 @@ function buildDevtoolsRuntime(
   const transport = createHttpObservabilityTransport({
     serverUrl: options.serverUrl,
   })
-  const restoreObservability = configureObservability({ transport })
+  const restoreObservability = configureObservability({
+    transport,
+    ...(options.sessionId ? { defaultCorrelators: { sessionId: options.sessionId } } : {}),
+  })
   void registerIndexSnapshot(options)
 
   return {

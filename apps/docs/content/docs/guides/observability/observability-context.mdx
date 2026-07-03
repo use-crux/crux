@@ -51,6 +51,22 @@ In-process this works automatically via AsyncLocalStorage. You don't write code 
 
 When AsyncLocalStorage is not available, such as in browser-like or edge runtimes, Crux still records run lifecycles and synchronous `withContext()` spans. Contextless `observe.event()`, `observe.artifact()`, and `observe.edge()` calls are skipped and counted in `observabilityDiagnostics().contextlessRecords` instead of throwing.
 
+Correlators ride on the same context machinery but do not define execution parentage. Use
+`propagateAttributes({ sessionId, userId, metadata }, fn)` to group records by session or user
+without adding graph nodes:
+
+```ts
+import { observe, propagateAttributes } from '@use-crux/core/observability'
+
+await propagateAttributes(
+  { sessionId: 'checkout-123', userId: 'user-456', metadata: { plan: 'team' } },
+  () => observe.run({ name: 'checkout assistant', rootPrimitive: 'agent.run' }, runCheckout),
+)
+```
+
+Every record emitted inside the callback carries `sessionId` and `userId`. Metadata appears as
+attributes named `meta.plan`, `meta.<key>`, and so on, with values capped for transport safety.
+
 ### 3. Cross-boundary transports pack and unpack the context explicitly
 
 `AsyncLocalStorage` does **not** survive process boundaries — `ctx.runAction()` in Convex, edge-worker `fetch()`, AWS Lambda invocation, an HTTP call to another service. Cross-boundary transports must pack the captured observability context into the call payload and the receiving side must restore it before any SDK call.

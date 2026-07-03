@@ -53,6 +53,8 @@ type RunStartRecord struct {
 	RunID         string          `json:"runId"`
 	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
+	SessionID     string          `json:"sessionId,omitempty"`
+	UserID        string          `json:"userId,omitempty"`
 	Name          string          `json:"name"`
 	RootPrimitive string          `json:"rootPrimitive"`
 	StartedAt     string          `json:"startedAt"`

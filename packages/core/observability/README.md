@@ -39,6 +39,12 @@ Generation terminal span records use the existing `metrics` field for client-sid
 
 These keys do not change the graph shape and do not require a schema-version bump.
 
+## Correlators
+
+`propagateAttributes({ sessionId, userId, metadata }, fn)` attaches logical correlators to every graph record emitted while `fn` runs. Nested scopes merge shallowly; inner `sessionId`, `userId`, and metadata keys win.
+
+`sessionId` and `userId` are top-level graph fields. Metadata is projected into attributes as `meta.<key>` strings capped at 200 characters. `configureObservability({ defaultCorrelators })` applies the same fields when no active scope provides correlators; devtools passes `EnableDevtoolsOptions.sessionId` through this default path.
+
 ## Capture Policy
 
 `config({ observability: { recordInputs, recordOutputs, redactRecord } })` controls payload capture before records reach subscribers, the diagnostics channel, transports, or OTel. `recordInputs` and `recordOutputs` accept `true | false | 'inline' | 'reference' | 'off'`; booleans are sugar for `true -> 'inline'` and `false -> 'reference'`.

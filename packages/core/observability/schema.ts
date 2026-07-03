@@ -83,6 +83,8 @@ const BaseRecordSchema = z.object({
   recordId: CruxRecordIdSchema,
   runId: CruxRunIdSchema,
   seq: z.number().int().positive(),
+  sessionId: z.string().optional(),
+  userId: z.string().optional(),
   traceId: CruxTraceIdSchema.optional(),
 })
 

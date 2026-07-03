@@ -6,12 +6,15 @@
       "type": "run:start",
       "runId": "run_d202cd4d27c2073026a950af",
       "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "sessionId": "session_support_001",
+      "userId": "user_support_001",
       "name": "support reply",
       "rootPrimitive": "generation.call",
       "startedAt": "2026-05-16T18:00:00.000Z",
       "status": "running",
       "attributes": {
-        "environment": "test"
+        "environment": "test",
+        "meta.ticketId": "ticket_123"
       },
       "seq": 1
     },

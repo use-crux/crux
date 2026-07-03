@@ -1,5 +1,6 @@
 import type {
   CruxAttributes,
+  CruxCorrelators,
   CruxArtifactId,
   CruxGraphRecord,
   CruxObservabilityChannelMessage,
@@ -14,6 +15,7 @@ import {
   createCruxRunId,
   createCruxSpanId,
   observe,
+  propagateAttributes,
 } from '../observability'
 
 const runId: CruxRunId = createCruxRunId()
@@ -65,3 +67,16 @@ span.setAttributes(spanAttributes)
 
 // @ts-expect-error Span attributes must be passed through `attributes` or `setAttributes`, not as raw end options.
 span.end({ phase: 'compile' })
+
+const correlators: CruxCorrelators = {
+  sessionId: 'session-1',
+  userId: 'user-1',
+  metadata: { requestId: 'request-1' },
+}
+const propagated: number = propagateAttributes(correlators, () => 1)
+
+// @ts-expect-error Correlator metadata values must be strings.
+const invalidCorrelators: CruxCorrelators = { metadata: { attempt: 1 } }
+
+void propagated
+void invalidCorrelators

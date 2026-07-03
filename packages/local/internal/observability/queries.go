@@ -47,7 +47,8 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 	}
 	row := s.db.QueryRowContext(ctx, `
 		SELECT
-			r.run_id, ifnull(r.trace_id, ''), ifnull(r.name, ''), ifnull(r.root_primitive, ''),
+			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
+			ifnull(r.name, ''), ifnull(r.root_primitive, ''),
 			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
 			'', '', '',`+countProjection+`,
@@ -59,6 +60,8 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 	if err := row.Scan(
 		&run.RunID,
 		&run.TraceID,
+		&run.SessionID,
+		&run.UserID,
 		&run.Name,
 		&run.RootPrimitive,
 		&run.Status,
@@ -96,15 +99,20 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 	limit, offset, limited := normalizeRunListOptions(opts)
 	query := `
 		SELECT
-			r.run_id, ifnull(r.trace_id, ''), ifnull(r.name, ''), ifnull(r.root_primitive, ''),
+			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
+			ifnull(r.name, ''), ifnull(r.root_primitive, ''),
 			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
 			'', '', '',
 			0, 0, 0, 0, 0,
 				r.attributes_json, r.metrics_json, r.error_json
-			FROM runs r
-			ORDER BY r.started_at DESC, r.run_id DESC`
+			FROM runs r`
 	args := []any{}
+	if opts.SessionID != "" {
+		query += ` WHERE r.session_id = ?`
+		args = append(args, opts.SessionID)
+	}
+	query += ` ORDER BY r.started_at DESC, r.run_id DESC`
 	if limited {
 		query += ` LIMIT ? OFFSET ?`
 		args = append(args, limit, offset)
@@ -121,6 +129,8 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 		if err := rows.Scan(
 			&run.RunID,
 			&run.TraceID,
+			&run.SessionID,
+			&run.UserID,
 			&run.Name,
 			&run.RootPrimitive,
 			&run.Status,

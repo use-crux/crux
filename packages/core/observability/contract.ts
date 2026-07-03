@@ -738,6 +738,10 @@ interface CruxRecordBase {
   runId: CruxRunId
   /** Per-run monotonic record sequence used for deterministic graph ordering. */
   seq: number
+  /** Logical session correlator stamped onto every record when configured. */
+  sessionId?: string
+  /** End-user or actor correlator stamped onto every record when configured. */
+  userId?: string
   traceId?: CruxTraceId
 }
 

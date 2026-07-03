@@ -4,12 +4,14 @@ import {
   CRUX_OBSERVABILITY_CHANNEL,
   CRUX_OBSERVABILITY_SCHEMA_VERSION,
   type CruxObservabilityChannelMessage,
+  configureObservability,
   createHttpObservabilityTransport,
   createCruxArtifactId,
   createInMemoryObservabilityTransport,
   observe,
   observabilityDiagnostics,
   observabilityDeliveryErrors,
+  propagateAttributes,
   resetObservabilityRuntime,
   setObservabilityTransport,
   subscribeObservability,
@@ -68,6 +70,109 @@ describe('observe runtime', () => {
       droppedRecords: 0,
       subscriberErrors: 0,
     })
+  })
+
+  it('propagates correlators onto every record and lets nested scopes override shallow fields', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    await propagateAttributes(
+      {
+        sessionId: 'session-1',
+        userId: 'user-outer',
+        metadata: {
+          requestId: 'request-1',
+          phase: 'outer',
+          long: 'x'.repeat(240),
+        },
+      },
+      async () => {
+        await observe.run(
+          { name: 'correlated run', rootPrimitive: 'custom.operation', attributes: { local: 'run' } },
+          async () => {
+            await propagateAttributes(
+              { userId: 'user-inner', metadata: { phase: 'inner' } },
+              async () => {
+                await observe.span(
+                  {
+                    name: 'correlated span',
+                    family: 'custom',
+                    primitive: 'custom.operation',
+                    attributes: { local: 'span' },
+                  },
+                  async () => undefined,
+                )
+              },
+            )
+          },
+        )
+      },
+    )
+    await observe.flush()
+
+    expect(transport.records.every((record) => record.sessionId === 'session-1')).toBe(true)
+
+    const [runStart, spanStart, spanEnd, runEnd] = transport.records
+    expect(runStart).toMatchObject({
+      type: 'run:start',
+      userId: 'user-outer',
+      attributes: {
+        local: 'run',
+        'meta.requestId': 'request-1',
+        'meta.phase': 'outer',
+        'meta.long': 'x'.repeat(200),
+      },
+    })
+    expect(spanStart).toMatchObject({
+      type: 'span:start',
+      userId: 'user-inner',
+      attributes: {
+        local: 'span',
+        'meta.requestId': 'request-1',
+        'meta.phase': 'inner',
+      },
+    })
+    expect(spanEnd).toMatchObject({
+      type: 'span:end',
+      userId: 'user-inner',
+      attributes: {
+        'meta.requestId': 'request-1',
+        'meta.phase': 'inner',
+      },
+    })
+    expect(runEnd).toMatchObject({
+      type: 'run:end',
+      userId: 'user-outer',
+      attributes: {
+        'meta.requestId': 'request-1',
+        'meta.phase': 'outer',
+      },
+    })
+  })
+
+  it('applies configured default correlators only when no active scope provides correlators', async () => {
+    const records: Array<Parameters<Parameters<typeof subscribeObservability>[0]>[0]> = []
+    subscribeObservability((record) => {
+      records.push(record)
+    })
+    const restore = configureObservability({
+      defaultCorrelators: { sessionId: 'default-session', userId: 'default-user' },
+    })
+
+    await observe.run({ name: 'default correlated run', rootPrimitive: 'custom.operation' }, async () => undefined)
+    await propagateAttributes({ sessionId: 'scoped-session' }, async () => {
+      await observe.run({ name: 'scoped correlated run', rootPrimitive: 'custom.operation' }, async () => undefined)
+    })
+    restore()
+    await observe.run({ name: 'after restore', rootPrimitive: 'custom.operation' }, async () => undefined)
+
+    const runStarts = records.filter((record) => record.type === 'run:start')
+    expect(runStarts).toHaveLength(3)
+    expect(runStarts[0]).toMatchObject({ sessionId: 'default-session', userId: 'default-user' })
+    expect(runStarts[1]).toMatchObject({ sessionId: 'scoped-session' })
+    expect(runStarts[1]).not.toHaveProperty('userId')
+    expect(runStarts[2]).not.toHaveProperty('sessionId')
+    expect(runStarts[2]).not.toHaveProperty('userId')
   })
 
   it('delivers every graph record type to subscribers in emission order', async () => {

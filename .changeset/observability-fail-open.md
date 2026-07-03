@@ -1,5 +1,6 @@
 ---
 "@use-crux/core": patch
+"@use-crux/local": patch
 "@use-crux/otel": patch
 ---
 
@@ -20,3 +21,5 @@ Harden OTel runtime projection: late child spans stay parented to the run trace,
 Harden observability privacy capture: input/output capture modes now support `inline`, `reference`, and `off`; payload-shaped event and span attributes are stripped when capture is disabled; `redactRecord()` can fail-closed by dropping records; and the OTel mapper drops known payload attributes by default.
 
 Switch observability trace/span IDs to W3C-compatible lowercase hex, add per-run `seq` ordering to graph records and local raw-record storage, and let lightweight OTel exports reuse Crux span IDs directly.
+
+Add observability correlators with `propagateAttributes({ sessionId, userId, metadata })`, wire devtools `sessionId` as a default correlator, and let the local run list persist and filter runs by session ID.
