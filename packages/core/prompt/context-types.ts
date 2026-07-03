@@ -16,6 +16,7 @@ import type { CruxContextInjectableKind } from '../observability/contract'
 import type { SkillMeta } from '../skill/types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
+import type { ToolMiddleware } from '../tools/types'
 import type { AnyToolSet } from '../types'
 
 // ─────────────────────────────────────────────────────────────────
@@ -315,6 +316,7 @@ export type ContextEntry =
 export interface PromptInjection {
   contexts?: readonly Context<z.ZodType>[]
   tools?: AnyToolSet
+  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
   constraints?: readonly Constraint[]
   guardrails?: readonly Guardrail[]
   metadata?: Readonly<Record<string, unknown>>
@@ -343,6 +345,8 @@ export interface ContributorContribution {
   use?: readonly ContextEntry[]
   /** Tools to merge — name collisions with other entries throw at resolve time. */
   tools?: AnyToolSet
+  /** Middleware applied to tools contributed by the resolved prompt. */
+  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
   constraints?: readonly Constraint[]
   guardrails?: readonly Guardrail[]
   /** Merged into `ResolvedPrompt.metadata` (last write wins per key). */

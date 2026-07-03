@@ -38,6 +38,7 @@ import type {
 import type { ExcludedContext } from './types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
+import type { ToolMiddleware } from '../tools/types'
 import type {
   CruxContextContributionPreview,
   CruxContextInjectableKind,
@@ -141,6 +142,7 @@ export interface Contribution {
   appendContexts?: readonly Context<z.ZodType>[]
   use?: readonly ContextEntry[]
   tools?: AnyToolSet
+  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
   constraints?: readonly Constraint[]
   guardrails?: readonly Guardrail[]
   metadata?: Readonly<Record<string, unknown>>
@@ -211,6 +213,7 @@ export interface MergedResolution {
   memories: MemoryEntry[]
   blackboards: BlackboardEntry[]
   tools: AnyToolSet
+  toolMiddleware: ToolMiddleware[]
   constraints: Constraint[]
   guardrails: Guardrail[]
   metadata: Record<string, unknown>
@@ -225,6 +228,7 @@ export function emptyMergedResolution(): MergedResolution {
     memories: [],
     blackboards: [],
     tools: {},
+    toolMiddleware: [],
     constraints: [],
     guardrails: [],
     metadata: {},

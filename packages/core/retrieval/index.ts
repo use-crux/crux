@@ -14,6 +14,7 @@ export { retrievalRecipe } from './recipe/recipe'
 export { retrievalStep } from './recipe/step'
 export { compressToBudget, expandParents, fanout, rerank, retrieve, rewriteQuery } from './recipe/steps/built-ins'
 export { RetrievalConfigError, RetrievalNotImplementedError, RetrievalRunError } from './errors'
+export { RETRIEVAL_HITS_KIND, isRetrievalToolPayload } from './tools'
 export { grounding } from '../citations'
 
 export type { Grounding } from '../citations'
@@ -48,3 +49,4 @@ export type {
   RetrieverMode,
   RetrieverTools,
 } from './types'
+export type { RetrievalToolDef, RetrievalToolHit, RetrievalToolPayload } from './tools'

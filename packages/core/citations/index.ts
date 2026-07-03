@@ -25,7 +25,9 @@ export type {
   Grounding,
   GroundingResolution,
 } from './types'
+export type { GroundingHitOrigin, GroundingSession } from './session'
 
 export { resolveCitations } from './resolve'
 export { citationConstraint } from './constraint'
+export { createGroundingSession } from './session'
 export { grounding, renderCitationContext } from './grounding'

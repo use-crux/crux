@@ -16,6 +16,8 @@ import {
   getRetrieverVectorStore,
 } from './search'
 import { createIndexedKnowledgeStore } from '../indexed-knowledge'
+import { indexedChunkKey } from '../indexed-knowledge/keys'
+import { indexedChunkToHit } from '../indexed-knowledge/records'
 import type { IndexedChunkSearchQuery } from '../indexed-knowledge'
 import type { CustomRetrieverConfig, DenseStoreBackedRetrieverConfig, RetrieveOptions, Retriever, RetrieverHit } from './types'
 
@@ -98,8 +100,9 @@ function validateDenseStoreBackedConfig(
 function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig): Retriever {
   const defaultMode = deriveStoreBackedMode(config)
   const recordStore = getRetrieverRecordStore(config)
+  const indexerId = config.indexerId ?? config.id
   const records = createIndexedKnowledgeStore({
-    indexerId: config.indexerId ?? config.id,
+    indexerId,
     namespace: config.namespace,
     records: recordStore!,
     vectors: getRetrieverVectorStore(config),
@@ -135,6 +138,11 @@ function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig
     namespace: config.namespace,
     mode: defaultMode,
     retrieve,
+    getSource: async (lookup) => {
+      if (lookup.namespace !== config.namespace) return null
+      const value = await recordStore!.get(indexedChunkKey(indexerId, config.namespace, lookup.sourceId, lookup.chunkId))
+      return indexedChunkToHit({ value: value ?? {}, score: 1 })
+    },
     defaultContext: config.context,
     defaultInject: config.inject,
     defaultTools: config.tools,

@@ -7,6 +7,7 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
+import type { Citation } from '../citations'
 import type { DenseEmbedding } from '../embedding'
 import type { Corpus, CorpusSyncResult, CruxDocument, IndexResult } from '../indexing'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../storage'
@@ -31,12 +32,13 @@ import type {
   RetrievalRecipeSource,
   RetrievalSourceTrace,
   RetrievalStep,
+  RetrievalToolDef,
+  RetrievalToolPayload,
   RetrieveRequest,
   Retriever,
   RetrieverHit,
   RetrieverTools,
 } from '../retrieval'
-import type { ToolDef } from '../types/tool'
 
 declare const corpus: Corpus
 declare const embeddings: DenseEmbedding
@@ -206,7 +208,10 @@ retrievalRecipe({ id: 'bad-federated-source', retriever: [{ weight: 2 }], steps:
 retrievalRecipe({ id: 'bad-source-policy', retriever: [configuredRetriever, custom], onSourceError: 'ignore', steps: [retrieve()] })
 
 const defaultTools = recipe.asTools()
-expectTypeOf(defaultTools).toMatchTypeOf<{ search: ToolDef }>()
+expectTypeOf(defaultTools).toMatchTypeOf<{
+  search: RetrievalToolDef
+}>()
+expectTypeOf<Awaited<ReturnType<typeof defaultTools.search.execute>>>().toEqualTypeOf<RetrievalToolPayload>()
 expectTypeOf(defaultTools).not.toHaveProperty('getSource')
 
 const prefixedTools = recipe.asTools({
@@ -214,17 +219,71 @@ const prefixedTools = recipe.asTools({
   include: ['search', 'getSource'],
 })
 expectTypeOf(prefixedTools).toMatchTypeOf<{
-  docsSearch: ToolDef
-  docsGetSource: ToolDef
+  docsSearch: RetrievalToolDef
+  docsGetSource: RetrievalToolDef
 }>()
 
 expectTypeOf<RetrieverTools<{ prefix: 'kb'; include: readonly ['search'] }>>().toEqualTypeOf<{
-  kbSearch: ToolDef
+  kbSearch: RetrievalToolDef
 }>()
 
 expectTypeOf<RetrieverTools<{ prefix: true; include: readonly ['search'] }>>().toMatchTypeOf<
-  Record<string, ToolDef>
+  Record<string, RetrievalToolDef>
 >()
+
+type AnthropicSearchResultCitation = {
+  cited_text: string
+  source: string
+  title?: string
+  start_char_index?: number
+  end_char_index?: number
+}
+
+type OpenAIResponseAnnotation =
+  | {
+      type: 'url_citation'
+      url: string
+      title?: string
+      start_index: number
+      end_index: number
+    }
+  | {
+      type: 'file_citation'
+      file_id: string
+      index: number
+    }
+
+function fromAnthropicCitation(input: AnthropicSearchResultCitation) {
+  return {
+    sourceId: input.source,
+    chunkId: 'search-result-0',
+    quote: input.cited_text,
+    ...(input.source.startsWith('http') ? { url: input.source } : {}),
+    ...(input.start_char_index !== undefined && input.end_char_index !== undefined
+      ? { span: { start: input.start_char_index, end: input.end_char_index } }
+      : {}),
+    ...(input.title ? { metadata: { title: input.title } } : {}),
+  } satisfies Citation
+}
+
+function fromOpenAIAnnotation(input: OpenAIResponseAnnotation) {
+  if (input.type === 'url_citation') {
+    return {
+      sourceId: input.url,
+      chunkId: 'annotation-0',
+      url: input.url,
+      outputSpan: { start: input.start_index, end: input.end_index },
+      ...(input.title ? { metadata: { title: input.title } } : {}),
+    } satisfies Citation
+  }
+  return {
+    sourceId: input.file_id,
+    chunkId: `annotation-${input.index}`,
+  } satisfies Citation
+}
+
+expectTypeOf(fromAnthropicCitation).returns.toMatchTypeOf<Citation>()
+expectTypeOf(fromOpenAIAnnotation).returns.toMatchTypeOf<Citation>()
 
 recipe.asGrounding({
   citations: {

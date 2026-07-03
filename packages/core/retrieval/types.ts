@@ -12,9 +12,9 @@ import type { z } from 'zod'
 import type { DenseEmbedding, SparseEmbedding } from '../embedding'
 import type { ExactFilter, RecordStore, Storage, VectorStore } from '../storage'
 import type { Context, PromptInjection } from '../prompt/context-types'
-import type { ToolDef } from '../types/tool'
 import type { QueryableCruxEntity } from '../tools/entity'
 import type { RetrieveOptions, RetrieveRequest } from './request'
+import type { RetrievalToolDef } from './tools'
 
 export type { RetrieveOptions, RetrieveRequest } from './request'
 
@@ -30,6 +30,10 @@ export interface RetrievalToolConfig {
   enabled?: boolean
   prefix?: boolean | string
   include?: readonly RetrievalToolName[]
+  filters?: readonly string[]
+  limit?: { default?: number; max?: number }
+  threshold?: { default?: number; min?: number }
+  getSource?: { visibility?: 'discovered' | 'namespace' }
 }
 
 type DefaultRetrievalToolNames = 'search'
@@ -47,7 +51,7 @@ export type RetrieverTools<TConfig extends RetrievalToolConfig | undefined = und
   [TName in IncludedRetrievalToolNames<TConfig> as PrefixedRetrievalToolName<
     TConfig extends { prefix?: infer TPrefix } ? TPrefix : undefined,
     TName
-  >]: ToolDef
+  >]: RetrievalToolDef
 }
 
 /** A single scored retrieval result. */

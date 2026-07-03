@@ -12,6 +12,7 @@
 import type { z } from 'zod'
 import { constraint } from '../safety/constraint'
 import type { Constraint } from '../safety/constraint'
+import type { RetrieverHit } from '../retrieval/types'
 import { resolveCitations } from './resolve'
 import type { CitationConstraintConfig } from './types'
 import { createArtifact, formatCitationFeedback, selectDefaultCitations } from './validation'
@@ -35,11 +36,12 @@ export function citationConstraint<TSchema extends z.ZodType = z.ZodType<unknown
 
   return constraint<TSchema>({
     name: config.name ?? 'grounded-citations',
-    check: (output) => {
+    check: async (output) => {
+      const hits = await allowedHits(config)
       const citations = config.select?.(output) ?? selectDefaultCitations(output.parsed)
       if ((!citations || citations.length === 0) && required) {
         const artifact = createArtifact({
-          hits: config.hits,
+          hits,
           citations: [],
           issues: [
             {
@@ -63,7 +65,7 @@ export function citationConstraint<TSchema extends z.ZodType = z.ZodType<unknown
         }
       }
 
-      const result = resolveCitations(citations ?? [], config.hits, { quotes: quotePolicy })
+      const result = resolveCitations(citations ?? [], hits, { quotes: quotePolicy })
       const artifact = {
         ...result.artifact,
         groundingId: config.groundingId,
@@ -83,4 +85,12 @@ export function citationConstraint<TSchema extends z.ZodType = z.ZodType<unknown
       }
     },
   })
+}
+
+async function allowedHits<TSchema extends z.ZodType>(
+  config: CitationConstraintConfig<TSchema>,
+): Promise<readonly RetrieverHit[]> {
+  if (config.session) return config.session.allowedHits()
+  if (config.hits) return config.hits
+  throw new Error('citationConstraint(): either hits or session must be provided.')
 }

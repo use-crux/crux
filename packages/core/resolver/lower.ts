@@ -386,6 +386,7 @@ function lowerInjectable(entry: InjectableEntry, index: number): LoweredContribu
       return {
         use: injection.contexts ?? [],
         tools: injection.tools,
+        toolMiddleware: injection.toolMiddleware,
         constraints: injection.constraints,
         guardrails: injection.guardrails,
         metadata: injection.metadata,
@@ -454,6 +455,7 @@ function lowerContributorEntry(entry: ContributorEntry<z.ZodType>, index: number
       return {
         use: reenter,
         tools: result.tools,
+        toolMiddleware: result.toolMiddleware,
         constraints: result.constraints,
         guardrails: result.guardrails,
         metadata: result.metadata,

@@ -6,8 +6,7 @@ import { prompt } from '../prompt/prompt'
 import { embedding, embeddingCache, normalizeText } from '../embedding'
 import { retriever, retrievalRecipe, retrievalStep, retrieve } from '../retrieval'
 import { inMemoryRecordStore } from '../storage'
-import type { RetrieverTools } from '../retrieval'
-import type { ToolDef } from '../types/tool'
+import type { RetrievalToolDef, RetrieverTools } from '../retrieval'
 
 const localeContext = context({
   id: 'locale',
@@ -101,15 +100,15 @@ answer.resolve({
 })
 
 const defaultTools = docs.asTools()
-expectTypeOf(defaultTools).toMatchTypeOf<{ search: ToolDef }>()
+expectTypeOf(defaultTools).toMatchTypeOf<{ search: RetrievalToolDef }>()
 expectTypeOf(defaultTools).not.toHaveProperty('getSource')
 
 const selectedTools = docs.asTools({
   include: ['search', 'getSource'],
 })
 expectTypeOf(selectedTools).toMatchTypeOf<{
-  search: ToolDef
-  getSource: ToolDef
+  search: RetrievalToolDef
+  getSource: RetrievalToolDef
 }>()
 
 const prefixedTools = docs.asTools({
@@ -117,12 +116,12 @@ const prefixedTools = docs.asTools({
   include: ['search', 'getSource'],
 })
 expectTypeOf(prefixedTools).toMatchTypeOf<{
-  docsSearch: ToolDef
-  docsGetSource: ToolDef
+  docsSearch: RetrievalToolDef
+  docsGetSource: RetrievalToolDef
 }>()
 
 expectTypeOf<RetrieverTools<{ prefix: 'kb'; include: readonly ['search'] }>>().toEqualTypeOf<{
-  kbSearch: ToolDef
+  kbSearch: RetrievalToolDef
 }>()
 
 const cache = embeddingCache({ records: inMemoryRecordStore(), namespace: 'type-test' })

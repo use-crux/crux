@@ -30,6 +30,7 @@ export function createRetrieverEntity(args: {
   namespace: string
   mode: RetrieverMode
   retrieve: (query: string, options?: RetrieveOptions) => Promise<RetrieverHit[]>
+  getSource?: (lookup: { namespace: string; sourceId: string; chunkId: string }) => Promise<RetrieverHit | null>
   defaultContext?: RetrieverContextConfig
   defaultInject?: RetrievalInjectMode
   defaultTools?: false | RetrievalToolConfig
@@ -86,6 +87,7 @@ export function createRetrieverEntity(args: {
         id: args.id,
         namespace: args.namespace,
         retrieve,
+        getSource: args.getSource,
         config: options,
       }) as RetrieverTools<TConfig>
     },
@@ -124,6 +126,7 @@ export function createRetrieverEntity(args: {
             id: args.id,
             namespace: args.namespace,
             retrieve,
+            getSource: args.getSource,
             config: { ...(toolConfig ?? {}), initialHits },
           })
         }

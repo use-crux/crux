@@ -11,9 +11,13 @@
  */
 
 import { context } from '../prompt/context'
+import { createRetrieverTools, isRetrievalToolPayload } from '../retrieval/tools'
+import type { RetrievalToolHit } from '../retrieval/tools'
 import type { RetrieverHit } from '../retrieval'
+import { toolMiddleware } from '../tools/middleware'
 import type { PromptInjection } from '../prompt/context-types'
 import { citationConstraint } from './constraint'
+import { createGroundingSession } from './session'
 import type { Grounding, GroundingConfig, GroundingResolution } from './types'
 
 /**
@@ -38,22 +42,30 @@ export function grounding(config: GroundingConfig): Grounding {
     throw new Error('grounding(): id must be non-empty.')
   }
   const injectMode = config.inject ?? 'context'
+  if ((injectMode === 'context' || injectMode === 'both') && !config.query) {
+    throw new Error('grounding(): query is required when injecting context.')
+  }
 
   return Object.freeze({
     _tag: 'Grounding' as const,
     id: config.id,
     retriever: config.retriever,
     async inject({ input }: { input: Record<string, unknown>; promptId?: string }): Promise<PromptInjection> {
-      const query = resolveGroundingQuery(config.query, input)
-      const allowedHits: RetrieverHit[] = []
+      const query = config.query ? resolveGroundingQuery(config.query, input) : undefined
+      const session = createGroundingSession()
+      let initialHits: RetrieverHit[] = []
       const contexts = []
       let tools: PromptInjection['tools']
 
       if (injectMode === 'context' || injectMode === 'both') {
-        allowedHits.push(...(await retrieveGroundingHits(config, query, input)))
+        if (!query) {
+          throw new Error('grounding(): query is required when injecting context.')
+        }
+        initialHits = await retrieveGroundingHits(config, query, input)
+        await session.recordHits(initialHits, 'injected')
         const rendered =
-          (await config.render?.({ hits: allowedHits, query, input, retriever: config.retriever })) ??
-          renderCitationContext(allowedHits)
+          (await config.render?.({ hits: initialHits, query, input, retriever: config.retriever })) ??
+          renderCitationContext(initialHits)
         if (rendered) {
           contexts.push(
             context({
@@ -69,12 +81,17 @@ export function grounding(config: GroundingConfig): Grounding {
       if (injectMode === 'tool' || injectMode === 'both') {
         const toolConfig = config.tools === false ? { enabled: false } : config.tools
         if (toolConfig?.enabled !== false) {
-          tools = config.retriever.asTools({
-            ...(toolConfig ?? {}),
-            prefix: toolConfig?.prefix === undefined || toolConfig.prefix === true ? config.id : toolConfig.prefix,
-            initialHits: allowedHits,
+          tools = createRetrieverTools({
+            id: config.retriever.id,
+            namespace: config.retriever.namespace,
+            retrieve: config.retriever.retrieve,
+            session,
+            config: {
+              ...(toolConfig ?? {}),
+              prefix: toolConfig?.prefix === undefined || toolConfig.prefix === true ? config.id : toolConfig.prefix,
+              initialHits,
+            },
           })
-          wrapSearchToolsForGrounding(tools, allowedHits)
         }
       }
 
@@ -84,12 +101,12 @@ export function grounding(config: GroundingConfig): Grounding {
         required || citations
           ? [
               citationConstraint({
-                hits: allowedHits,
+                session,
                 required,
                 quotes: citations?.quotes ?? (required ? 'required' : 'optional'),
                 groundingId: config.id,
                 retrieverId: config.retriever.id,
-                query,
+                ...(query ? { query } : {}),
                 select: citations?.select,
               }),
             ]
@@ -98,13 +115,16 @@ export function grounding(config: GroundingConfig): Grounding {
       return {
         ...(contexts.length ? { contexts } : {}),
         ...(tools && Object.keys(tools).length > 0 ? { tools } : {}),
+        ...(tools && Object.keys(tools).length > 0
+          ? { toolMiddleware: createGroundingToolMiddleware(config.id, session) }
+          : {}),
         ...(constraints.length ? { constraints } : {}),
         metadata: {
           grounding: {
             groundingId: config.id,
             retrieverId: config.retriever.id,
-            query,
-            allowedHits: allowedHits.map((hit) => ({
+            ...(query ? { query } : {}),
+            allowedHits: (await session.allowedHits()).map((hit) => ({
               namespace: hit.namespace,
               sourceId: hit.sourceId,
               chunkId: hit.chunkId,
@@ -115,6 +135,13 @@ export function grounding(config: GroundingConfig): Grounding {
       }
     },
     async resolve(input: Record<string, unknown>): Promise<GroundingResolution> {
+      if (!config.query) {
+        return {
+          groundingId: config.id,
+          retrieverId: config.retriever.id,
+          hits: [],
+        }
+      }
       const query = resolveGroundingQuery(config.query, input)
       const hits = await retrieveGroundingHits(config, query, input)
       return {
@@ -180,45 +207,27 @@ function resolveGroundingQuery(
   return resolved
 }
 
-/**
- * Wrap retrieval search tools so their JSON results feed the allowed-hits set.
- *
- * Lets citation validation learn additional allowed hits discovered via tool
- * calls during generation. Non-JSON tool output is passed through unchanged.
- */
-function wrapSearchToolsForGrounding(tools: NonNullable<PromptInjection['tools']>, allowedHits: RetrieverHit[]): void {
-  for (const tool of Object.values(tools) as Array<{ execute?: unknown }>) {
-    if (typeof tool.execute !== 'function') continue
-    const original = tool.execute
-    tool.execute = async (args: unknown) => {
-      const result = await original(args)
-      if (typeof result === 'string') {
-        try {
-          const parsed = JSON.parse(result)
-          if (Array.isArray(parsed)) {
-            allowedHits.push(...parsed.filter(isRetrieverHitLike))
-          }
-        } catch {
-          // Tool output is still returned to the model; citation validation just
-          // cannot learn additional allowed hits from non-JSON output.
-        }
-      }
-      return result
-    }
-  }
+function createGroundingToolMiddleware(
+  groundingId: string,
+  session: ReturnType<typeof createGroundingSession>,
+): ReturnType<typeof toolMiddleware> {
+  return toolMiddleware({
+    id: `grounding:${groundingId}:retrieval-evidence`,
+    afterExecute: async ({ output }) => {
+      if (!isRetrievalToolPayload(output)) return
+      await session.recordHits(output.hits.map(toolHitToRetrieverHit), 'tool')
+    },
+  })
 }
 
-/** Structural type guard for a retriever hit parsed from tool JSON output. */
-function isRetrieverHitLike(value: unknown): value is RetrieverHit {
-  if (!value || typeof value !== 'object') return false
-  const candidate = value as Partial<RetrieverHit>
-  return (
-    typeof candidate.namespace === 'string' &&
-    typeof candidate.sourceId === 'string' &&
-    typeof candidate.chunkId === 'string' &&
-    typeof candidate.content === 'string' &&
-    typeof candidate.score === 'number' &&
-    typeof candidate.metadata === 'object' &&
-    candidate.metadata !== null
-  )
+function toolHitToRetrieverHit(hit: RetrievalToolHit): RetrieverHit {
+  return {
+    namespace: hit.namespace,
+    sourceId: hit.sourceId,
+    chunkId: hit.chunkId,
+    content: hit.content,
+    metadata: {},
+    score: hit.score,
+    ...(hit.sourceUrl ? { sourceUrl: hit.sourceUrl } : {}),
+  }
 }
