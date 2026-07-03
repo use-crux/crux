@@ -74,6 +74,7 @@ mod runtime {
     pub(crate) mod flow;
     pub(crate) mod join;
     pub(crate) mod memory;
+    pub(crate) mod task;
 }
 mod safety {
     pub(crate) mod facts;

@@ -23,6 +23,13 @@ func Facts(root, projectName string, index store.IndexData) ([]json.RawMessage, 
 	} else {
 		facts = append(facts, marker)
 	}
+	if index.Project != nil {
+		if fact, ok, err := groupedJSONFact("project", index.Project); err != nil {
+			return nil, err
+		} else if ok {
+			facts = append(facts, fact)
+		}
+	}
 	if len(index.Definitions) > 0 {
 		if fact, ok, err := groupedJSONFact("definitions", index.Definitions); err != nil {
 			return nil, err

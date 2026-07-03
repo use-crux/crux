@@ -18,6 +18,8 @@ pub struct StaticIndexPatchFacts {
     pub root: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project: Option<StaticIndexProjectIdentity>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub definitions: Vec<StaticIndexDefinition>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -71,6 +73,19 @@ impl StaticIndexPatchFacts {
             }
         }
     }
+}
+
+/// Project-level identity and configuration flags used by native finalization.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticIndexProjectIdentity {
+    pub root: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_configured: Option<bool>,
 }
 
 /// Fidelity vocabulary shared by definitions and graph edges.

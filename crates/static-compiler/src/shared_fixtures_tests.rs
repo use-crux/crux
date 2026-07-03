@@ -334,7 +334,14 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "routing.missing_stable_id",
             "routing.router_missing_default",
             "routing.unresolved_target",
-            "routing.cascade_unreachable_tier"
+            "routing.cascade_unreachable_tier",
+            "runtime.duplicate_target_name",
+            "runtime.non_literal_target_name",
+            "runtime.target_not_exported",
+            "runtime.closure_defer",
+            "runtime.missing_runtime_config",
+            "flow.nondeterministic_code",
+            "runtime.non_serializable_payload"
         ]
     );
 
@@ -347,7 +354,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             .iter()
             .any(|class| class == "dependencies")
     );
-    assert_eq!(coverage.identities.len(), 18);
+    assert_eq!(coverage.identities.len(), 19);
 
     // The Rust first-party projection manifest must cover exactly these
     // identities, with the same stable replacement identity it stamps when it

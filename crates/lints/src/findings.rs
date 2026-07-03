@@ -43,7 +43,14 @@ fn builtin_index_lint_findings(facts: &StaticIndexPatchFacts) -> Vec<StaticIndex
         .map(|definition| (definition.id.as_str(), definition))
         .collect::<BTreeMap<_, _>>();
     let mut findings = core_lint_findings(&builder, facts, &by_id);
-    findings.extend(runtime_lint_findings(&builder, &facts.definitions));
+    findings.extend(runtime_lint_findings(
+        &builder,
+        &facts.definitions,
+        facts
+            .project
+            .as_ref()
+            .and_then(|project| project.runtime_configured),
+    ));
     findings.extend(injection_lint_findings(&builder, facts, &by_id));
     propagate_findings(findings, &facts.relations)
 }

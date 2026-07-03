@@ -11,6 +11,7 @@ use crate::helpers::metadata_value;
 pub(crate) fn runtime_lint_findings(
     builder: &StaticIndexLintBuilder,
     definitions: &[StaticIndexDefinition],
+    runtime_configured: Option<bool>,
 ) -> Vec<StaticIndexLintFinding> {
     let targets = runtime_targets(definitions);
     let flows = definitions
@@ -21,6 +22,11 @@ pub(crate) fn runtime_lint_findings(
     findings.extend(duplicate_target_name_findings(builder, &targets));
     findings.extend(non_literal_target_name_findings(builder, &targets));
     findings.extend(target_not_exported_findings(builder, &targets));
+    findings.extend(missing_runtime_config_findings(
+        builder,
+        &flows,
+        runtime_configured,
+    ));
     findings.extend(flow_runtime_usage_findings(builder, &flows));
     findings
 }
@@ -205,6 +211,47 @@ fn flow_runtime_usage_findings(
         }
     }
     findings
+}
+
+fn missing_runtime_config_findings(
+    builder: &StaticIndexLintBuilder,
+    flows: &[&StaticIndexDefinition],
+    runtime_configured: Option<bool>,
+) -> Vec<StaticIndexLintFinding> {
+    if runtime_configured != Some(false) {
+        return Vec::new();
+    }
+    flows
+        .iter()
+        .filter_map(|flow| {
+            let usages = runtime_usages(flow);
+            if usages.is_empty() {
+                return None;
+            }
+            builder.finding(StaticIndexLintFindingInput {
+                rule_id: "runtime.missing_runtime_config",
+                key: flow.id.as_str(),
+                message: format!(
+                    "Flow \"{}\" uses runtime-bound APIs, but this project has no runtime configured.",
+                    flow.name
+                ),
+                source: flow.source.as_ref(),
+                primary_definition_id: Some(flow.id.as_str()),
+                related_definition_ids: vec![flow.id.clone()],
+                evidence: vec![
+                    definition_evidence(flow, "Flow uses runtime-bound APIs without runtime config"),
+                    json!({
+                        "kind": "definition",
+                        "label": "Runtime-bound API calls",
+                        "definitionId": flow.id,
+                        "source": flow.source,
+                        "data": { "methods": usages.iter().map(|usage| usage.method.as_str()).collect::<Vec<_>>() },
+                    }),
+                ],
+                fixes: Vec::new(),
+            })
+        })
+        .collect()
 }
 
 fn flow_usage_finding(

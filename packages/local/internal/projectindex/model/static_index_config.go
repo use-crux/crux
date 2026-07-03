@@ -15,6 +15,7 @@ type ProjectStaticIndexConfig struct {
 	StaticSyntaxFrontend string                                 `json:"nativeAstFrontend,omitempty"`
 	Extensions           []ProjectStaticIndexExtensionReference `json:"extensions"`
 	Lint                 json.RawMessage                        `json:"lint,omitempty"`
+	RuntimeConfigured    *bool                                  `json:"runtimeConfigured,omitempty"`
 	Diagnostics          []ProjectStaticIndexConfigDiagnostic   `json:"diagnostics,omitempty"`
 }
 

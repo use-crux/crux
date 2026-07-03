@@ -77,6 +77,8 @@ export interface ProjectStaticSyntaxPlan {
   readonly projectName?: string
   /** Config file selected while planning, if one was discovered. */
   readonly configFile?: string
+  /** Whether the project config loaded successfully and declared a Runtime Engine. */
+  readonly runtimeConfigured?: boolean
   /** Absolute primary and support source files that may be needed by the syntax frontend. */
   readonly files: readonly string[]
   /**
@@ -163,6 +165,7 @@ export async function inspectProjectStaticSyntaxPlan(
     root,
     ...(options.projectName ? { projectName: options.projectName } : {}),
     ...(loaded.loaded.configFile ? { configFile: loaded.loaded.configFile } : {}),
+    ...(loaded.loaded.importFailed ? {} : { runtimeConfigured: Boolean(loaded.loaded.crux?.config.runtime) }),
     files,
     ...(cacheStatus
       ? {

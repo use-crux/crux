@@ -75,6 +75,10 @@ const staticIndexExtractorIds = new Set([
     extension: { name: CRUX_CORE_EXTENSION, version: '*' },
     name: 'flow',
   }),
+  extractorKey({
+    extension: { name: CRUX_CORE_EXTENSION, version: '*' },
+    name: 'runtime.task',
+  }),
 ])
 
 /** Static Index projection coverage for one extractor identity. */

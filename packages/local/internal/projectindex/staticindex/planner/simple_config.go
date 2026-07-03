@@ -14,6 +14,7 @@ var (
 	simpleFrontendPattern     = regexp.MustCompile(`\bfrontend\s*:\s*['"]oxc['"]`)
 	simpleExtensionPattern    = regexp.MustCompile(`\bextensions\s*:`)
 	simpleLintPattern         = regexp.MustCompile(`\blint\s*:`)
+	simpleRuntimePattern      = regexp.MustCompile(`\bruntime\s*:`)
 )
 
 func InspectSimpleConfig(
@@ -51,7 +52,8 @@ func ParseSimpleConfig(
 	// experimental.indexer.nativeAst forms. Complex config falls through to the
 	// TypeScript-owned inspector.
 	if simpleExtensionPattern.MatchString(source) ||
-		simpleLintPattern.MatchString(source) {
+		simpleLintPattern.MatchString(source) ||
+		simpleRuntimePattern.MatchString(source) {
 		return projectindex.ProjectStaticIndexConfig{}, false
 	}
 	match := simpleStaticSyntaxPattern.FindStringSubmatch(source)
@@ -59,11 +61,13 @@ func ParseSimpleConfig(
 		return projectindex.ProjectStaticIndexConfig{}, false
 	}
 	value := strings.TrimSpace(match[1])
+	runtimeConfigured := false
 	config := projectindex.ProjectStaticIndexConfig{
-		Root:        root,
-		ConfigFile:  configFile,
-		Extensions:  []projectindex.ProjectStaticIndexExtensionReference{},
-		Diagnostics: []projectindex.ProjectStaticIndexConfigDiagnostic{},
+		Root:              root,
+		ConfigFile:        configFile,
+		RuntimeConfigured: &runtimeConfigured,
+		Extensions:        []projectindex.ProjectStaticIndexExtensionReference{},
+		Diagnostics:       []projectindex.ProjectStaticIndexConfigDiagnostic{},
 	}
 	switch value {
 	case "true":

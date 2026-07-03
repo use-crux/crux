@@ -50,6 +50,8 @@ export interface ProjectStaticIndexConfig {
   readonly extensions: readonly ProjectStaticIndexExtensionReference[]
   /** Authored lint policy used by first-party graph lints. */
   readonly lint?: CruxLintConfig
+  /** Whether the project config loaded successfully and declared a Runtime Engine. */
+  readonly runtimeConfigured?: boolean
   /** Config-load diagnostics, kept small and JSON-safe for host reporting. */
   readonly diagnostics: readonly IndexDiagnostic[]
 }
@@ -80,6 +82,7 @@ export async function inspectProjectStaticIndexConfig(
       ...(extension.export ? { export: extension.export } : {}),
     })),
     ...(result.loaded.lint ? { lint: result.loaded.lint } : {}),
+    ...(result.loaded.importFailed ? {} : { runtimeConfigured: Boolean(result.loaded.crux?.config.runtime) }),
     diagnostics: result.diagnostics,
   }
 }
