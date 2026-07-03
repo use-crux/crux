@@ -101,6 +101,7 @@ function exportedStaticFacts(
           declaration.initializer,
           localInitializers,
           importBindings,
+          true,
         )
         if (!extracted) continue
         facts.push(extracted)
@@ -233,6 +234,7 @@ function callSiteStaticFacts(
             declaration.initializer,
             scopedInitializers,
             importBindings,
+            false,
           ),
         )
       }
@@ -256,6 +258,7 @@ function callSiteStaticFacts(
           node,
           scopedInitializers,
           importBindings,
+          false,
         ),
       )
     }

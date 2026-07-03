@@ -33,6 +33,7 @@ mod eval {
 mod flow {
     pub(crate) mod facts;
     pub(crate) mod output;
+    pub(crate) mod runtime_metadata;
 }
 mod injection {
     pub(crate) mod injectable;

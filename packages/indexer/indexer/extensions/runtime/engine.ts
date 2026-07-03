@@ -495,6 +495,7 @@ export function createExtractContext(
       root: staticCtx.root,
       file: staticCtx.file,
       variableName: staticCtx.variableName,
+      exported: staticCtx.exported,
       localName: staticCtx.localName,
       safeId: staticCtx.safeId,
     },

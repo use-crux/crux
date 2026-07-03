@@ -39,6 +39,7 @@ export interface StaticFactParser {
     initializer: ts.Expression,
     localInitializers: Map<string, ts.Expression>,
     importBindings?: Map<string, ImportBinding>,
+    exported?: boolean,
   ) => ExtractedFacts | undefined
   /**
    * Attempts extraction from a standalone call expression discovered outside an exported declaration.
@@ -109,6 +110,7 @@ export function createStaticExtractionParser(
       initializer,
       localInitializers,
       importBindings,
+      exported,
     ) =>
       staticFactsFromInitializer(
         extensionRuntime,
@@ -119,6 +121,7 @@ export function createStaticExtractionParser(
         initializer,
         localInitializers,
         importBindings,
+        exported,
       ),
     staticFactsFromCall: (root, file, sourceFile, callName, call, localInitializers, importBindings) =>
       staticFactsFromCall(extensionRuntime, root, file, sourceFile, callName, call, localInitializers, importBindings),

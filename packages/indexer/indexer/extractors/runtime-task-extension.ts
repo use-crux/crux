@@ -6,17 +6,22 @@ export const runtimeTaskIndexExtractor: IndexExtractor = {
   patterns: [{ kind: 'call', name: 'task', importFrom: ['@use-crux/core/runtime'] }],
   extract: (ctx) => {
     const explicitName = ctx.args.string(0)
-    if (!explicitName) return { kind: 'none' }
-    const id = `task:${ctx.source.safeId(explicitName)}`
+    const targetName = explicitName ?? ctx.source.variableName
+    const id = `task:${ctx.source.safeId(explicitName ?? ctx.source.localName)}`
     return facts({
       definitions: [
         ctx.define.definition({
           variableName: ctx.source.variableName,
           id,
           kind: 'task',
-          name: explicitName,
+          name: targetName,
           metadata: {
             exportName: ctx.source.variableName,
+            runtimeTarget: {
+              kind: 'task',
+              nameLiteral: explicitName !== undefined,
+              exported: ctx.source.exported === true,
+            },
             facts: {
               kind: 'task',
               runtime: true,

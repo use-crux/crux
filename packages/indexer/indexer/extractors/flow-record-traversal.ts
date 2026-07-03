@@ -16,6 +16,8 @@ import {
 } from "./flow-record-data-access";
 import { isObjectStyleFlowCall } from "./flow-record-options";
 import type {
+  FlowNondeterministicEvidence,
+  FlowRuntimeUsageEvidence,
   FlowStepEvidence,
   FlowSuspensionEvidence,
   FlowTraversalEvidence,
@@ -37,6 +39,8 @@ export function recordFlowTraversal(
   return {
     steps,
     suspensions: flowSuspensionRefs(roots, stepNames[stepNames.length - 1]),
+    runtimeUsages: roots.flatMap(runtimeUsages),
+    nondeterministicCalls: roots.flatMap(nondeterministicCalls),
   };
 }
 
@@ -136,6 +140,71 @@ function flowSuspensionForCall(
     (call.callee.name === "waitFor" || call.callee.name === "suspend")
     ? { signal, ...(stepName ? { stepName } : {}) }
     : undefined;
+}
+
+function runtimeUsages(
+  root: StaticFunctionValue,
+): readonly FlowRuntimeUsageEvidence[] {
+  return root.calls.flatMap((call): readonly FlowRuntimeUsageEvidence[] => {
+    const method = runtimeMethod(call);
+    if (!method) return [];
+    const payload =
+      method === "defer" ? call.args[1] : method === "after" ? call.args[2] : undefined;
+    return [
+      {
+        method,
+        source: call.source,
+        ...(method === "defer" && call.args[0]?.kind === "function"
+          ? { closureTarget: true }
+          : {}),
+        ...(payload && nonSerializablePayload(payload)
+          ? { nonSerializablePayload: nonSerializablePayload(payload) }
+          : {}),
+      },
+    ];
+  });
+}
+
+function runtimeMethod(
+  call: StaticFunctionCallValue,
+): FlowRuntimeUsageEvidence["method"] | undefined {
+  return call.callee.name === "waitFor" ||
+    call.callee.name === "defer" ||
+    call.callee.name === "after" ||
+    call.callee.name === "untilIdle"
+    ? call.callee.name
+    : undefined;
+}
+
+function nondeterministicCalls(
+  root: StaticFunctionValue,
+): readonly FlowNondeterministicEvidence[] {
+  return root.calls.flatMap((call): readonly FlowNondeterministicEvidence[] => {
+    if (call.callee.name === "now" && staticIdentifierName(call.receiver) === "Date") {
+      return [{ expression: "Date.now", source: call.source }];
+    }
+    if (
+      call.callee.name === "random" &&
+      staticIdentifierName(call.receiver) === "Math"
+    ) {
+      return [{ expression: "Math.random", source: call.source }];
+    }
+    return [];
+  });
+}
+
+function staticIdentifierName(
+  value: StaticSyntaxValue | undefined,
+): string | undefined {
+  return value?.kind === "identifier" ? value.name : undefined;
+}
+
+function nonSerializablePayload(
+  value: StaticSyntaxValue,
+): string | undefined {
+  if (value.kind === "function") return "function";
+  if (value.kind === "unsupported") return value.syntaxKind;
+  return undefined;
 }
 
 function literalString(

@@ -8,6 +8,7 @@ use crate::filter::{StaticIndexLintOptions, apply_lint_filters};
 use crate::injection::rules::injection_lint_findings;
 use crate::propagation::propagate_findings;
 use crate::rules::core::core_lint_findings;
+use crate::rules::runtime::runtime_lint_findings;
 
 /// Appends built-in first-party lint findings to finalized native facts.
 pub fn append_builtin_lint_findings(
@@ -42,6 +43,7 @@ fn builtin_index_lint_findings(facts: &StaticIndexPatchFacts) -> Vec<StaticIndex
         .map(|definition| (definition.id.as_str(), definition))
         .collect::<BTreeMap<_, _>>();
     let mut findings = core_lint_findings(&builder, facts, &by_id);
+    findings.extend(runtime_lint_findings(&builder, &facts.definitions));
     findings.extend(injection_lint_findings(&builder, facts, &by_id));
     propagate_findings(findings, &facts.relations)
 }

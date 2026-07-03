@@ -1,0 +1,27 @@
+---
+title: runtime.duplicate_target_name
+---
+
+## What it checks
+
+Crux emits this finding when two exported `flow()` or runtime `task()` declarations use the same durable target name.
+
+## Why it matters
+
+Runtime target names are persisted routing identities. A wake for one name must resolve to exactly one flow or task.
+
+## How to fix
+
+Rename one target and regenerate artifacts with `crux runtime generate`.
+
+## When to suppress
+
+Suppress only for a temporary migration where duplicate names cannot be reached.
+
+## Rule metadata
+
+- Rule id: `runtime.duplicate_target_name`
+- Category: `runtime`
+- Maturity: `stable`
+- Default profiles: `recommended`, `strict`
+- Default severity: `error`

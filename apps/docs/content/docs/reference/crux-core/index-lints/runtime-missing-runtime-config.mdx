@@ -1,0 +1,27 @@
+---
+title: runtime.missing_runtime_config
+---
+
+## What it checks
+
+Crux emits this finding when runtime-bound flow APIs are used in a project known to have no `runtime` configured.
+
+## Why it matters
+
+Object-bound flows work without runtime config, but event-bound, time-bound, and background APIs require the Runtime Engine.
+
+## How to fix
+
+Add a runtime to `crux.config.ts`, such as `runtime: node()` for local development.
+
+## When to suppress
+
+Suppress when runtime config is supplied dynamically and the lint cannot see it.
+
+## Rule metadata
+
+- Rule id: `runtime.missing_runtime_config`
+- Category: `runtime`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

@@ -184,6 +184,8 @@ export interface SourceView {
    * compiler supplies a deterministic fallback name.
    */
   readonly variableName: string
+  /** Whether this match comes from a top-level named export in the source file. */
+  readonly exported?: boolean
   /**
    * Human-readable fallback name for definitions discovered outside stable exports.
    *

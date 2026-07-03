@@ -1,4 +1,9 @@
-import type { ProjectDefinition, ProjectDefinitionKind, ProjectSourceRef } from '@use-crux/core/project-index'
+import type {
+  ProjectDefinition,
+  ProjectDefinitionKind,
+  ProjectSourceRef,
+  SourceLocation,
+} from '@use-crux/core/project-index'
 import { foldedIndexChild } from '../index-presentation'
 import type { ExtractedFacts } from '../extensions'
 import type { StaticRelationRef } from '../types'
@@ -24,12 +29,26 @@ export interface FlowSuspensionEvidence {
   readonly stepName?: string
 }
 
+export interface FlowRuntimeUsageEvidence {
+  readonly method: 'waitFor' | 'defer' | 'after' | 'untilIdle'
+  readonly source?: SourceLocation
+  readonly closureTarget?: boolean
+  readonly nonSerializablePayload?: string
+}
+
+export interface FlowNondeterministicEvidence {
+  readonly expression: 'Date.now' | 'Math.random' | 'new Date'
+  readonly source?: SourceLocation
+}
+
 /** Immutable traversal evidence needed to project a static flow definition. */
 export interface FlowTraversalEvidence {
   /** Ordered step calls discovered inside the flow handler. */
   readonly steps: readonly FlowStepEvidence[]
   /** Ordered suspension calls discovered inside the flow handler. */
   readonly suspensions: readonly FlowSuspensionEvidence[]
+  readonly runtimeUsages: readonly FlowRuntimeUsageEvidence[]
+  readonly nondeterministicCalls: readonly FlowNondeterministicEvidence[]
 }
 
 /** Function used by parser adapters to build a Project Index definition with their source defaults. */
@@ -52,6 +71,10 @@ export interface FlowFactProjectionInput {
   readonly runtime?: 'convex' | 'node'
   /** Authored flow name from positional or object-style config. */
   readonly explicitName?: string
+  /** Whether the runtime target name came from a literal string. */
+  readonly nameLiteral: boolean
+  /** Whether the source declaration can be imported by generated runtime artifacts. */
+  readonly exported: boolean
   /** Authored argument keys when a static args object exists. */
   readonly args?: readonly string[]
   /** JSON schema projected from the flow args contract. */
@@ -111,11 +134,18 @@ export function flowFactsFromEvidence(input: FlowFactProjectionInput): Extracted
         variableName: input.variableName,
         definition: input.define(id, 'flow', input.explicitName ?? input.variableName, {
           exportName: input.variableName,
+          runtimeTarget: {
+            kind: 'flow',
+            nameLiteral: input.nameLiteral,
+            exported: input.exported,
+          },
           stepNames,
           args: input.args,
           argsSchema: input.argsSchema,
           hasArgs: input.hasArgs,
           signalNames: input.signalNames,
+          runtimeUsages: input.traversal.runtimeUsages,
+          nondeterministicCalls: input.traversal.nondeterministicCalls,
           facts: {
             kind: 'flow',
             stepNames,

@@ -5,6 +5,7 @@ use crate::{
     data::access::{DataAccessRef, data_access_refs_for_value},
     definition::{NativeDefinitionInput, safe_id, static_index_definition},
     flow::output::{flow_fact_metadata, flow_intelligence, flow_references, step_definitions},
+    flow::runtime_metadata::{flow_nondeterministic_calls, flow_runtime_usages},
     protocol::{LiteralValue, StaticFunctionCallValue, StaticSyntaxValue},
     record_values::{direct_string_property, has_property, property_value, resolve_static_value},
     routing::output::extracted_facts,
@@ -30,6 +31,7 @@ pub(crate) fn flow_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) 
     let config = parts.object_arg;
     let explicit_name = string_argument(parts.args.first())
         .or_else(|| config.and_then(|config| direct_string_property(config, "name")));
+    let name_literal = explicit_name.is_some();
     let definition_key = explicit_name
         .clone()
         .unwrap_or_else(|| parts.local_name.to_string());
@@ -60,6 +62,14 @@ pub(crate) fn flow_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) 
         "exportName".to_string(),
         Value::String(parts.variable_name.to_string()),
     );
+    metadata.insert(
+        "runtimeTarget".to_string(),
+        json!({
+            "kind": "flow",
+            "nameLiteral": name_literal,
+            "exported": parts.exported,
+        }),
+    );
     metadata.insert("stepNames".to_string(), json!(step_names));
     if let Some(args) = config.and_then(|config| args_keys(context, config)) {
         metadata.insert("args".to_string(), json!(args));
@@ -89,6 +99,14 @@ pub(crate) fn flow_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) 
     if runtime == "convex" {
         metadata.insert("runtime".to_string(), Value::String("convex".to_string()));
     }
+    metadata.insert(
+        "runtimeUsages".to_string(),
+        json!(flow_runtime_usages(&roots)),
+    );
+    metadata.insert(
+        "nondeterministicCalls".to_string(),
+        json!(flow_nondeterministic_calls(&roots)),
+    );
 
     Some(extracted_facts(
         parts.variable_name,
