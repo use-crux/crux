@@ -46,11 +46,12 @@ type Workbench struct {
 	width  int
 	height int
 
-	activeNav  string
-	screens    map[string]screens.Screen
-	counts     map[string]int
-	stale      map[string]bridge.Domains
-	devContext api.DevtoolsContext
+	activeNav   string
+	screens     map[string]screens.Screen
+	counts      map[string]int
+	stale       map[string]bridge.Domains
+	initialized map[string]bool
+	devContext  api.DevtoolsContext
 
 	pendingPrefix string // for `g…` two-key sequences
 
@@ -67,15 +68,16 @@ type Workbench struct {
 // NewWorkbench constructs the workbench root.
 func NewWorkbench(client screens.DataClient, rawClient DataClient, serverURL string) *Workbench {
 	w := &Workbench{
-		client:    client,
-		rawClient: rawClient,
-		serverURL: serverURL,
-		activeNav: "overview",
-		counts:    map[string]int{},
-		stale:     map[string]bridge.Domains{},
-		palette:   overlays.NewPalette(),
-		help:      overlays.NewHelp(),
-		inspect:   overlays.NewInspect(),
+		client:      client,
+		rawClient:   rawClient,
+		serverURL:   serverURL,
+		activeNav:   "overview",
+		counts:      map[string]int{},
+		stale:       map[string]bridge.Domains{},
+		initialized: map[string]bool{},
+		palette:     overlays.NewPalette(),
+		help:        overlays.NewHelp(),
+		inspect:     overlays.NewInspect(),
 	}
 	w.screens = map[string]screens.Screen{
 		"overview":    screens.NewOverview(),
@@ -104,6 +106,7 @@ func (w *Workbench) SetIngestToken(_ string, path string) {
 // Init is called once to fire initial fetches for the active screen and the
 // devtools context.
 func (w *Workbench) Init() tea.Cmd {
+	w.initialized[w.activeNav] = true
 	return tea.Batch(
 		w.fetchContext(),
 		w.activeScreen().Init(w.client),
@@ -471,6 +474,8 @@ func (w *Workbench) gotoNav(id string) tea.Cmd {
 	if !ok {
 		return nil
 	}
+	stale := w.stale[id]
+	needsInit := !w.initialized[id] || (stale != nil && !stale.Empty())
 	w.activeNav = id
 	delete(w.stale, id)
 	// Best-effort cross-screen selection routing. If a record of the
@@ -481,7 +486,11 @@ func (w *Workbench) gotoNav(id string) tea.Cmd {
 			dest.Focus(string(kind), recID)
 		}
 	}
-	return w.activeScreen().Init(w.client)
+	if !needsInit {
+		return nil
+	}
+	w.initialized[id] = true
+	return dest.Init(w.client)
 }
 
 // runPaletteCommand dispatches a parsed palette command. Verbs map to typed

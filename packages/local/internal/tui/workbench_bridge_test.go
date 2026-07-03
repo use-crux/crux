@@ -30,6 +30,32 @@ func TestWorkbenchBridgeBatchMarksInactiveScreenStaleUntilFocus(t *testing.T) {
 	}
 }
 
+func TestWorkbenchGotoNavDoesNotRefetchCleanInitializedScreen(t *testing.T) {
+	w := NewWorkbench(nil, nil, "http://localhost:4400")
+	overview := &fakeScreen{id: "overview", interest: bridge.NewDomains(bridge.DomainRuns)}
+	insights := &fakeScreen{id: "insights", interest: bridge.NewDomains(bridge.DomainInsights)}
+	w.screens["overview"] = overview
+	w.screens["insights"] = insights
+	w.activeNav = "overview"
+
+	runCmd(w.gotoNav("insights"))
+	if insights.initCalls != 1 {
+		t.Fatalf("first insights focus init calls = %d, want 1", insights.initCalls)
+	}
+	runCmd(w.gotoNav("overview"))
+	runCmd(w.gotoNav("insights"))
+	if insights.initCalls != 1 {
+		t.Fatalf("clean second insights focus init calls = %d, want still 1", insights.initCalls)
+	}
+
+	runCmd(w.gotoNav("overview"))
+	runCmd(w.Update(bridge.Batch{Changed: bridge.NewDomains(bridge.DomainInsights)}))
+	runCmd(w.gotoNav("insights"))
+	if insights.initCalls != 2 {
+		t.Fatalf("stale insights focus init calls = %d, want 2", insights.initCalls)
+	}
+}
+
 func runCmd(cmd tea.Cmd) tea.Msg {
 	if cmd == nil {
 		return nil
