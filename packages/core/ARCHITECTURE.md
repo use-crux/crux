@@ -145,8 +145,10 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── tokenizer.ts    Pluggable token counter (countTokens/setTokenizer; default chars/4)
 │   └── schema-compat.ts  sanitizeJsonSchema() — provider JSON-schema sanitization (@internal)
 ├── observability/
-│   ├── index.ts        Barrel: canonical graph contract, schemas, ID helpers, observe runtime, transports
-│   ├── contract.ts     Run, Span, SpanEvent, Edge, Artifact, RunDetail (incl. optional decisionReport), and realtime notification types; branded IDs; taxonomies
+│   ├── index.ts        Barrel: canonical graph contract, presentation read models, schemas, ID helpers, observe runtime, transports
+│   ├── contract.ts     Wire-only canonical graph records; branded IDs; taxonomies
+│   ├── presentation.ts Presentation read-model barrel, versioned independently from the wire schema
+│   ├── presentation/   RunSummary, SpanSummary, RunDetail, placement, request, and realtime notification types
 │   ├── turn-decision-report/  Per-turn TurnDecisionReport explanation read model (report/items/evidence/source-coverage/targets/shared), barrelled by turn-decision-report.ts
 │   ├── schema.ts       Zod schemas for graph records and batches
 │   ├── ids.ts          Runtime-owned public graph ID helpers

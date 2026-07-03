@@ -464,15 +464,7 @@ export function setObservabilityTransport(
  * {@link teeObservabilityTransport} when a feature needs to fan records out to
  * an additional sink while preserving an already configured transport.
  *
- * @example
- * ```ts
- * const previous = currentObservabilityTransport()
- * const restore = setObservabilityTransport(
- *   previous ? teeObservabilityTransport(capture, previous) : capture,
- * )
- * // later
- * restore()
- * ```
+ * @see {@link teeObservabilityTransport}
  */
 export function currentObservabilityTransport(): CruxObservabilityTransport | undefined {
   return deliveryEngine.currentTransport()

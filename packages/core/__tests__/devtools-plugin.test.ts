@@ -73,6 +73,32 @@ describe('withDevtools — CruxPlugin', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('restores imperative devtools installs by cleanup token', () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 202 })))
+
+    const cleanupFirst = enableDevtools({
+      prompts: [],
+      serverUrl: 'http://localhost:4400',
+    })
+    const firstTransport = getRuntime().observabilityTransport
+
+    const cleanupSecond = enableDevtools({
+      prompts: [],
+      serverUrl: 'http://localhost:4401',
+    })
+    const secondTransport = getRuntime().observabilityTransport
+
+    expect(firstTransport).toBeDefined()
+    expect(secondTransport).toBeDefined()
+    expect(secondTransport).not.toBe(firstTransport)
+
+    cleanupSecond()
+    expect(getRuntime().observabilityTransport).toBe(firstTransport)
+
+    cleanupFirst()
+    expect(getRuntime().observabilityTransport).toBeUndefined()
+  })
+
   it('passes the devtools sessionId through as an observability default correlator', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }))
     vi.stubGlobal('fetch', fetchMock)

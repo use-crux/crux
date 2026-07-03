@@ -453,7 +453,7 @@ Runtime diagnostics throw `CruxRuntimeError` with stable codes:
 | `@use-crux/core/flow`          | Suspendable typed workflows.                                                                                                                 |
 | `@use-crux/core/runtime`       | Runtime Engine composers, port contracts, diagnostics, wake envelopes, kernel composites, outbox dispatch, pure retry/state helpers, and the in-memory runtime store. |
 | `@use-crux/core/runtime/testing` | Runtime Engine store and kernel conformance suites for adapter authors.                                                                    |
-| `@use-crux/core/observability` | Canonical graph records, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model. |
+| `@use-crux/core/observability` | Canonical graph records, presentation read-model types, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model. |
 | `@use-crux/core/project-index` | Public Project Index contracts for local devtools and source intelligence.                                                                   |
 
 See the full [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) for every subpath and API.

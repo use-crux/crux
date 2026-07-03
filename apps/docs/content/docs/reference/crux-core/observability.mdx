@@ -20,6 +20,8 @@ import {
 
 `@use-crux/core/observability` is the canonical graph contract for Crux execution traces. It defines the record shapes emitted by the TypeScript runtime and consumed by the local Go devtools backend.
 
+Wire records, branded IDs, and taxonomies live in the internal `contract.ts` module and are covered by the observability schema version. Presentation/read-model types such as `CruxRunDetail`, `CruxPresentationView`, and live notification payloads are exported from the root observability barrel through `presentation.ts`; those shapes are versioned independently so devtools UI projections can evolve without changing the wire record contract.
+
 The contract is lifecycle based:
 
 - `run:start`
@@ -303,17 +305,15 @@ Use `teeObservabilityTransport()` when a library needs its own capture sink whil
 
 ```ts
 import {
+  createHttpObservabilityTransport,
   createInMemoryObservabilityTransport,
-  currentObservabilityTransport,
   setObservabilityTransport,
   teeObservabilityTransport,
 } from '@use-crux/core/observability'
 
 const capture = createInMemoryObservabilityTransport()
-const previous = currentObservabilityTransport()
-const restore = setObservabilityTransport(
-  previous ? teeObservabilityTransport(capture, previous) : capture,
-)
+const auditSink = createHttpObservabilityTransport({ serverUrl: 'http://localhost:4400' })
+const restore = setObservabilityTransport(teeObservabilityTransport(capture, auditSink))
 
 restore()
 ```

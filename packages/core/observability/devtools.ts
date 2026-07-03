@@ -27,7 +27,7 @@ import type { AnyPrompt } from '../prompt/prompt-types'
 import type { Context } from '../prompt/context-types'
 import type { CruxPlugin, CruxPluginResult } from '../runtime/plugin'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
-import { getRuntime, setRuntime, resetRuntime, type CruxRuntime } from '../runtime/runtime'
+import { getRuntime, setRuntime, type CruxRuntime } from '../runtime/runtime'
 import { configureObservability, observe } from './observe'
 import { createHttpObservabilityTransport } from './transport'
 import { IndexSnapshotSchema } from '../project-index'
@@ -97,8 +97,15 @@ export function withDevtools(options: EnableDevtoolsOptions): CruxPlugin {
   }
 }
 
-let previousRuntime: CruxRuntime | undefined
-let previousDevtoolsDispose: (() => void) | undefined
+interface DevtoolsRuntimeLayer {
+  previousRuntime: Readonly<CruxRuntime>
+  dispose: () => void
+  parentToken: number
+}
+
+let nextDevtoolsToken = 1
+let activeDevtoolsToken = 0
+const devtoolsRuntimeLayers = new Map<number, DevtoolsRuntimeLayer>()
 
 /**
  * Enable devtools instrumentation.
@@ -177,36 +184,62 @@ async function registerIndexSnapshot(options: EnableDevtoolsOptions): Promise<vo
 }
 
 export function enableDevtools(options: EnableDevtoolsOptions): () => void {
-  // Prevent double-enabling
-  if (getRuntime().observabilityTransport) {
-    disableDevtools()
-  }
-
-  // Save entire runtime so we can restore on disable
-  previousRuntime = getRuntime()
+  const token = nextDevtoolsToken++
+  const previousRuntime = getRuntime()
 
   // Build and install all hooks via shared builder
   const { dispose, ...runtimePatch } = buildDevtoolsRuntime(options, previousRuntime)
-  previousDevtoolsDispose = dispose
+  devtoolsRuntimeLayers.set(token, {
+    previousRuntime,
+    dispose: dispose ?? (() => undefined),
+    parentToken: activeDevtoolsToken,
+  })
+  activeDevtoolsToken = token
 
   setRuntime({
     ...runtimePatch,
   })
 
-  return disableDevtools
+  return () => disableDevtools(token)
 }
 
 /**
  * Disable devtools instrumentation and restore previous state.
  *
- * Restores the canonical observability transport and runtime state from before
- * `enableDevtools()` was called.
+ * Restores the runtime state captured by the active enable token. If an older
+ * token is disabled while newer tokens are active, those descendant layers are
+ * disposed first and invalidated with the parent restore.
  */
-export function disableDevtools(): void {
-  previousDevtoolsDispose?.()
+export function disableDevtools(token = activeDevtoolsToken): void {
+  if (token === 0) return
 
-  // Restore the entire previous runtime atomically
-  setRuntime(previousRuntime ?? {})
-  previousRuntime = undefined
-  previousDevtoolsDispose = undefined
+  const layer = devtoolsRuntimeLayers.get(token)
+  if (!layer || !isActiveDevtoolsLayer(token)) return
+
+  const tokensToDispose = activeDevtoolsTokensThrough(token)
+  for (const activeToken of tokensToDispose) {
+    devtoolsRuntimeLayers.get(activeToken)?.dispose()
+    devtoolsRuntimeLayers.delete(activeToken)
+  }
+
+  setRuntime(layer.previousRuntime)
+  activeDevtoolsToken = layer.parentToken
+}
+
+function isActiveDevtoolsLayer(token: number): boolean {
+  for (let currentToken = activeDevtoolsToken; currentToken !== 0; ) {
+    if (currentToken === token) return true
+    currentToken = devtoolsRuntimeLayers.get(currentToken)?.parentToken ?? 0
+  }
+  return false
+}
+
+function activeDevtoolsTokensThrough(token: number): number[] {
+  const tokens: number[] = []
+  for (let currentToken = activeDevtoolsToken; currentToken !== 0; ) {
+    tokens.push(currentToken)
+    if (currentToken === token) return tokens
+    currentToken = devtoolsRuntimeLayers.get(currentToken)?.parentToken ?? 0
+  }
+  return []
 }

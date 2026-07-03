@@ -15,10 +15,8 @@ import type { CruxObservabilityTransport } from './transport'
  * @example
  * ```ts
  * const capture = createInMemoryObservabilityTransport()
- * const previous = currentObservabilityTransport()
- * const restore = setObservabilityTransport(
- *   previous ? teeObservabilityTransport(capture, previous) : capture,
- * )
+ * const auditSink = createHttpObservabilityTransport({ serverUrl: 'http://localhost:4400' })
+ * const restore = setObservabilityTransport(teeObservabilityTransport(capture, auditSink))
  *
  * restore()
  * ```

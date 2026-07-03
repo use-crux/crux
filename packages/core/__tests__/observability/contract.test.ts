@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readFile } from 'node:fs/promises'
 import fixture from '../../observability/fixtures/generation-run.json'
 import goldenNodeRun from '../../observability/fixtures/golden-node-run.json'
 import {
@@ -14,6 +15,16 @@ import {
 } from '../../observability'
 
 describe('Crux observability graph contract', () => {
+  it('keeps presentation read-model exports out of the wire contract module', async () => {
+    const contractSource = await readFile(new URL('../../observability/contract.ts', import.meta.url), 'utf8')
+    const presentationSource = await readFile(new URL('../../observability/presentation.ts', import.meta.url), 'utf8')
+
+    expect(contractSource).not.toMatch(/export\s+(?:interface|type)\s+Crux(?:Presentation|RunSummaryView|SpanSummaryView|RunDetail)/u)
+    expect(presentationSource).toContain(
+      'Presentation read-model — versioned independently of the wire contract; NOT covered by schema-version guarantees.',
+    )
+  })
+
   it('validates the shared generation run fixture', () => {
     const parsed = CruxGraphRecordBatchSchema.parse(fixture)
 
