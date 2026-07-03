@@ -72,7 +72,7 @@ import {
   statusLabel,
   statusTone,
   tabsForKind,
-  tokenDeltaChunks,
+  tokenChunks,
   tokensPerSecond,
   unwrapOutput,
   type InspectionItem,
@@ -224,7 +224,7 @@ function OutputTab({
     (findAttribute(metricSource, 'finishReason') as string | undefined) ??
     resolved.meta?.finishReason ??
     trace?.result?.finishReason
-  const eventChunks = useMemo(() => tokenDeltaChunks(node), [node])
+  const eventChunks = useMemo(() => tokenChunks(node), [node])
   const traceChunks = isRoot ? (trace?.streamProgress?.chunks ?? []) : []
   const streamChunks = eventChunks.length > 0 ? eventChunks : traceChunks
   const streamTextLength = streamChunks.reduce((sum, chunk) => sum + chunk.length, 0)

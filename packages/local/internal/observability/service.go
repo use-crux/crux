@@ -25,6 +25,9 @@ const (
 	defaultMaintenanceTimeout = 15 * time.Second
 	inMemoryMaxOpenConns      = 1
 	fileDatabaseMaxOpenConns  = 8
+	tokenChunkEventName       = "token.chunk"
+	tokenChunkRingLimit       = 512
+	defaultSpanEventListLimit = 200
 	// DefaultRunListLimit is the server-side page size for observability run
 	// lists when callers do not request an explicit limit. Run detail and graph
 	// reads remain exact; only list endpoints use this protection.
@@ -37,6 +40,10 @@ type Service struct {
 	queryTO       time.Duration
 	mutationTO    time.Duration
 	maintenanceTO time.Duration
+
+	tokenMu      sync.Mutex
+	tokenPending map[tokenChunkKey]pendingTokenChunk
+	tokenTimer   *time.Timer
 
 	lifecycleMu         sync.Mutex
 	lifecycleSignatures map[string]string
@@ -137,6 +144,16 @@ type RunListOptions struct {
 	// IncludeExpensiveRollups asks list reads to scan span/event metric JSON.
 	// UI list endpoints leave this off; single-run detail reads remain exact.
 	IncludeExpensiveRollups bool
+}
+
+type SpanEventListOptions struct {
+	// Name restricts the result to one event name. Empty returns all lazy span
+	// events for the span.
+	Name string
+	// After restricts the result to events strictly after this event timestamp.
+	After string
+	// Limit caps the ordered result. Zero uses the lazy endpoint default.
+	Limit int
 }
 
 type Graph struct {

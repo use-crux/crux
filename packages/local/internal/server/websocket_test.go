@@ -61,16 +61,17 @@ func postObservabilityRun(t *testing.T, client *http.Client, baseURL string, run
 	}
 }
 
-func postObservabilityTokenDelta(t *testing.T, client *http.Client, baseURL string) {
+func postObservabilityTokenChunk(t *testing.T, client *http.Client, baseURL string) {
 	t.Helper()
 	body := `{"records":[
 		{"schemaVersion":1,"recordId":"rec_token_run","type":"run:start","runId":"run_token_ws","traceId":"trace_token_ws","name":"ws tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
 		{"schemaVersion":1,"recordId":"rec_token_span","type":"span:start","runId":"run_token_ws","traceId":"trace_token_ws","spanId":"span_token_ws","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"},
-		{"schemaVersion":1,"recordId":"rec_token_delta","type":"span:event","runId":"run_token_ws","traceId":"trace_token_ws","spanId":"span_token_ws","eventId":"event_token_ws_1","name":"token.delta","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"sequence":1,"text":"Hi"}}
+		{"schemaVersion":1,"recordId":"rec_token_chunk_1","type":"span:event","runId":"run_token_ws","traceId":"trace_token_ws","spanId":"span_token_ws","eventId":"event_token_ws_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":2,"text":"Hi","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}},
+		{"schemaVersion":1,"recordId":"rec_token_chunk_2","type":"span:event","runId":"run_token_ws","traceId":"trace_token_ws","spanId":"span_token_ws","eventId":"event_token_ws_2","name":"token.chunk","timestamp":"2026-05-16T18:00:00.200Z","attributes":{"chunkIndex":1,"charCount":1,"text":"!","firstDeltaAt":"2026-05-16T18:00:00.190Z","lastDeltaAt":"2026-05-16T18:00:00.200Z"}}
 	]}`
 	resp, err := client.Post(baseURL+"/api/observability/records", "application/json", strings.NewReader(body))
 	if err != nil {
-		t.Fatalf("POST observability token delta: %v", err)
+		t.Fatalf("POST observability token chunk: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusAccepted {
@@ -315,7 +316,7 @@ func TestWebSocket_broadcasts_quality_run_delete(t *testing.T) {
 	}
 }
 
-func TestWebSocket_broadcasts_token_delta_lane(t *testing.T) {
+func TestWebSocket_broadcasts_token_chunk_lane(t *testing.T) {
 	s := store.NewStore()
 	srv := newTestWSServer(t, s)
 	ts := httptest.NewServer(srv)
@@ -325,10 +326,10 @@ func TestWebSocket_broadcasts_token_delta_lane(t *testing.T) {
 	defer ws.Close()
 	drainSnapshot(t, ws)
 
-	postObservabilityTokenDelta(t, ts.Client(), ts.URL)
+	postObservabilityTokenChunk(t, ts.Client(), ts.URL)
 	for i := 0; i < 2; i++ {
 		event := readObservabilityEvent(t, ws)
-		if event["kind"] != "token.delta" {
+		if event["kind"] != "token.chunk" {
 			continue
 		}
 		if event["action"] != "appended" || event["refId"] != "run_token_ws" {
@@ -338,9 +339,13 @@ func TestWebSocket_broadcasts_token_delta_lane(t *testing.T) {
 		if !ok || payload["spanId"] != "span_token_ws" {
 			t.Fatalf("token payload = %#v", event["payload"])
 		}
+		attrs, ok := payload["attributes"].(map[string]any)
+		if !ok || attrs["text"] != "Hi!" {
+			t.Fatalf("token attrs = %#v", payload["attributes"])
+		}
 		return
 	}
-	t.Fatal("did not receive token.delta observability event")
+	t.Fatal("did not receive token.chunk observability event")
 }
 
 func TestWebSocket_index_snapshot_broadcasts_from_service_channel(t *testing.T) {

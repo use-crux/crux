@@ -99,10 +99,53 @@ func TestObservabilityIngestRouteReportsTransientFailuresAsRetryable(t *testing.
 	}
 }
 
+func TestObservabilitySpanEventsRouteReadsLazyTokenChunks(t *testing.T) {
+	ctx := context.Background()
+	service, err := observability.OpenService(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = service.Close() })
+	if err := service.Ingest(ctx, observability.Batch{Records: []observability.Record{
+		mustObservabilityRecord(t, `{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_span_events_route","traceId":"trace_span_events_route","name":"tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`),
+		mustObservabilityRecord(t, `{"schemaVersion":1,"recordId":"rec_span_start","type":"span:start","runId":"run_span_events_route","traceId":"trace_span_events_route","spanId":"span_generate","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`),
+		mustObservabilityRecord(t, `{"schemaVersion":1,"recordId":"rec_token_1","type":"span:event","runId":"run_span_events_route","traceId":"trace_span_events_route","spanId":"span_generate","eventId":"event_token_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":2,"text":"Hi","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}}`),
+		mustObservabilityRecord(t, `{"schemaVersion":1,"recordId":"rec_token_2","type":"span:event","runId":"run_span_events_route","traceId":"trace_span_events_route","spanId":"span_generate","eventId":"event_token_2","name":"token.chunk","timestamp":"2026-05-16T18:00:00.200Z","attributes":{"chunkIndex":1,"charCount":1,"text":"!","firstDeltaAt":"2026-05-16T18:00:00.190Z","lastDeltaAt":"2026-05-16T18:00:00.200Z"}}`),
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	registerObservabilityRoutes(mux, service, nil)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/observability/runs/run_span_events_route/spans/span_generate/events?name=token.chunk&limit=1", nil)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %s", response.Code, response.Body.String())
+	}
+	var events []observability.SpanEventSummary
+	if err := json.NewDecoder(response.Body).Decode(&events); err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].EventID != "event_token_1" || events[0].Name != "token.chunk" {
+		t.Fatalf("events = %#v", events)
+	}
+}
+
 func performObservabilityIngestRequest(handler http.Handler, body []byte) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(http.MethodPost, "/api/observability/records", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
 	return response
+}
+
+func mustObservabilityRecord(t *testing.T, raw string) observability.Record {
+	t.Helper()
+	var record observability.Record
+	if err := json.Unmarshal([]byte(raw), &record); err != nil {
+		t.Fatal(err)
+	}
+	return record
 }

@@ -36,7 +36,7 @@ export const PAYLOAD_ATTRIBUTE_KEYS = [
 ] as const
 
 /** Span event names that may carry payload text in attributes. */
-export const PAYLOAD_EVENT_NAMES = ['token.delta', 'token.chunk', 'usage.observed'] as const
+export const PAYLOAD_EVENT_NAMES = ['token.chunk', 'usage.observed'] as const
 
 /** Runtime policy for how observability payloads are captured. */
 export interface CruxObservabilityCapturePolicy {

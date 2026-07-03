@@ -25,7 +25,7 @@ export interface StreamSpanFinalizerOptions {
 }
 
 export interface StreamEndOptions {
-  readonly tokenDeltaCount: number
+  readonly tokenChunkCount: number
 }
 
 export interface StreamAbortOptions extends StreamEndOptions {
@@ -55,7 +55,7 @@ export function createStreamSpanFinalizer(options: StreamSpanFinalizerOptions): 
   let streamReported = !options.expectsStream
   let completionReported = !options.expectsCompletion
   let completionMeta: Record<string, unknown> | undefined
-  let streamTokenDeltaCount = 0
+  let streamTokenChunkCount = 0
   let streamCompleted = !options.expectsStream
   let finalized = false
   let graceTimer: ReturnType<typeof setTimeout> | undefined
@@ -77,7 +77,7 @@ export function createStreamSpanFinalizer(options: StreamSpanFinalizerOptions): 
 
   const commonAttributes = (reason?: string) => ({
     streamCompleted,
-    tokenDeltaCount: streamTokenDeltaCount,
+    tokenChunkCount: streamTokenChunkCount,
     ...(reason ? { streamFinalizedReason: reason } : {}),
   })
 
@@ -102,29 +102,29 @@ export function createStreamSpanFinalizer(options: StreamSpanFinalizerOptions): 
   }
 
   return {
-    streamEnded({ tokenDeltaCount }) {
+    streamEnded({ tokenChunkCount }) {
       if (finalized) return
       streamReported = true
       streamCompleted = true
-      streamTokenDeltaCount = tokenDeltaCount
+      streamTokenChunkCount = tokenChunkCount
       if (!completionReported) {
         scheduleGraceTimer()
         return
       }
       maybeFinalize()
     },
-    streamReturned({ tokenDeltaCount }) {
+    streamReturned({ tokenChunkCount }) {
       if (finalized) return
       streamReported = true
       streamCompleted = false
-      streamTokenDeltaCount = tokenDeltaCount
+      streamTokenChunkCount = tokenChunkCount
       finalize('return', 'cancelled')
     },
-    streamErrored({ tokenDeltaCount, error }) {
+    streamErrored({ tokenChunkCount, error }) {
       if (finalized) return
       streamReported = true
       streamCompleted = false
-      streamTokenDeltaCount = tokenDeltaCount
+      streamTokenChunkCount = tokenChunkCount
       finalize('throw', 'error', error)
     },
     completionSettled({ meta }) {

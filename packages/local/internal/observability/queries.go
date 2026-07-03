@@ -931,31 +931,6 @@ func providerFromModelID(modelID string) string {
 	return ""
 }
 
-func (s *Service) listEvents(ctx context.Context, runID string) ([]SpanEventSummary, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT event_id, run_id, ifnull(trace_id, ''), span_id, name, timestamp, attributes_json
-		FROM span_events
-		WHERE run_id = ?
-		ORDER BY timestamp, event_id
-	`, runID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var events []SpanEventSummary
-	for rows.Next() {
-		var event SpanEventSummary
-		var attributes []byte
-		if err := rows.Scan(&event.EventID, &event.RunID, &event.TraceID, &event.SpanID, &event.Name, &event.Timestamp, &attributes); err != nil {
-			return nil, err
-		}
-		event.Attributes = json.RawMessage(attributes)
-		events = append(events, event)
-	}
-	return events, rows.Err()
-}
-
 func (s *Service) listArtifacts(ctx context.Context, runID string) ([]ArtifactSummary, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT artifact_id, run_id, ifnull(trace_id, ''), ifnull(span_id, ''), kind, created_at,

@@ -295,15 +295,22 @@ describe('generation observability', () => {
     expect(chunks).toHaveLength(2)
     await observe.flush()
     expect(transport.records.filter((record) => record.type === 'span:event').map((record) => record.name)).toEqual([
-      'token.delta',
-      'token.delta',
+      'token.chunk',
     ])
+    expect(transport.records.find((record) => record.type === 'span:event' && record.name === 'token.chunk')).toMatchObject({
+      attributes: {
+        text: 'hello',
+        chunkIndex: 0,
+        charCount: 5,
+        firstDeltaAt: expect.any(String),
+        lastDeltaAt: expect.any(String),
+      },
+    })
     expect(transport.records.map((record) => record.type)).toEqual([
       'run:start',
       'span:start',
       'artifact',
       'edge',
-      'span:event',
       'span:event',
     ])
 
@@ -315,7 +322,6 @@ describe('generation observability', () => {
       'span:start',
       'artifact',
       'edge',
-      'span:event',
       'span:event',
       'span:event',
       'artifact',
@@ -330,7 +336,7 @@ describe('generation observability', () => {
       status: 'ok',
       attributes: {
         streamCompleted: true,
-        tokenDeltaCount: 2,
+        tokenChunkCount: 1,
       },
       metrics: expect.objectContaining({
         'gen.duration_ms': expect.any(Number),
@@ -342,6 +348,82 @@ describe('generation observability', () => {
       family: 'generation',
       primitive: 'generation.stream',
     })
+  })
+
+    it('flushes token chunks on the coalescing timer while a stream remains open', async () => {
+    vi.useFakeTimers()
+    try {
+      const transport = createInMemoryObservabilityTransport()
+      setObservabilityTransport(transport)
+
+      const handle = await orchestrateStream(generationSpec('stream'), async () => ({
+        rawStream: delayedStreamChunks([{ text: 'hel' }, { text: 'lo' }], 1_000),
+        extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
+        completion: async () => ({
+          usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
+        }),
+      }))
+
+      const iterator = (handle.rawStream as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+      await expect(iterator.next()).resolves.toMatchObject({ done: false, value: { text: 'hel' } })
+
+      await vi.advanceTimersByTimeAsync(80)
+      await observe.flush()
+
+      const tokenChunks = transport.records.filter(
+        (record) => record.type === 'span:event' && record.name === 'token.chunk',
+      )
+      expect(tokenChunks).toHaveLength(1)
+      expect(tokenChunks[0]).toMatchObject({
+        attributes: {
+          text: 'hel',
+          chunkIndex: 0,
+          charCount: 3,
+        },
+      })
+      expect(transport.records.some((record) => record.type === 'span:end')).toBe(false)
+
+      const nextChunk = iterator.next()
+      await vi.advanceTimersByTimeAsync(1_000)
+      await expect(nextChunk).resolves.toMatchObject({ done: false, value: { text: 'lo' } })
+      await expect(iterator.next()).resolves.toMatchObject({ done: true })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+    it('flushes token chunks immediately when the text cap is reached', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const first = 'a'.repeat(300)
+    const second = 'b'.repeat(212)
+    const handle = await orchestrateStream(generationSpec('stream'), async () => ({
+      rawStream: streamChunks([{ text: first }, { text: second }]),
+      extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
+      completion: async () => ({
+        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
+      }),
+    }))
+
+    const iterator = (handle.rawStream as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+    await iterator.next()
+    await iterator.next()
+    await observe.flush()
+
+    const tokenChunks = transport.records.filter(
+      (record) => record.type === 'span:event' && record.name === 'token.chunk',
+    )
+    expect(tokenChunks).toHaveLength(1)
+    expect(tokenChunks[0]).toMatchObject({
+      attributes: {
+        text: first + second,
+        chunkIndex: 0,
+        charCount: 512,
+      },
+    })
+
+    await iterator.next()
   })
 
     it('ends stream spans once when completion is read before the raw stream drains', async () => {
@@ -373,7 +455,7 @@ describe('generation observability', () => {
       status: 'ok',
       attributes: {
         streamCompleted: true,
-        tokenDeltaCount: 2,
+        tokenChunkCount: 1,
       },
       metrics: expect.objectContaining({
         'gen.output_tokens_per_second': 12,
@@ -508,7 +590,7 @@ describe('generation observability', () => {
       status: 'cancelled',
       attributes: {
         streamCompleted: false,
-        tokenDeltaCount: 1,
+        tokenChunkCount: 1,
         streamFinalizedReason: 'return',
       },
     })
@@ -543,7 +625,7 @@ describe('generation observability', () => {
         status: 'ok',
         attributes: {
           streamCompleted: true,
-          tokenDeltaCount: 2,
+          tokenChunkCount: 1,
           streamFinalizedReason: 'timeout',
         },
       })
@@ -573,6 +655,15 @@ function generationSpec(operation: 'generate' | 'stream'): OrchestrationSpec<Rec
 async function* streamChunks(chunks: readonly unknown[]): AsyncIterable<unknown> {
   for (const chunk of chunks) {
     yield chunk
+  }
+}
+
+async function* delayedStreamChunks(chunks: readonly unknown[], delayMs: number): AsyncIterable<unknown> {
+  for (let index = 0; index < chunks.length; index += 1) {
+    if (index > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+    yield chunks[index]
   }
 }
 

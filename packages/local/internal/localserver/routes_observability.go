@@ -75,6 +75,20 @@ func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Serv
 		writeObservabilityRead(w, detail, err)
 	})
 
+	mux.HandleFunc("GET /api/observability/runs/{runId}/spans/{spanId}/events", func(w http.ResponseWriter, r *http.Request) {
+		if service == nil {
+			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		events, err := service.SpanEvents(
+			r.Context(),
+			r.PathValue("runId"),
+			r.PathValue("spanId"),
+			parseObservabilitySpanEventListOptions(r),
+		)
+		writeObservabilityRead(w, events, err)
+	})
+
 	mux.HandleFunc("GET /api/observability/runs/{runId}/graph", func(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
@@ -107,6 +121,19 @@ func parseObservabilityRunListOptions(r *http.Request) observability.RunListOpti
 		}
 	}
 	opts.SessionID = r.URL.Query().Get("sessionId")
+	return opts
+}
+
+func parseObservabilitySpanEventListOptions(r *http.Request) observability.SpanEventListOptions {
+	opts := observability.SpanEventListOptions{
+		Name:  r.URL.Query().Get("name"),
+		After: r.URL.Query().Get("after"),
+	}
+	if value := r.URL.Query().Get("limit"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil {
+			opts.Limit = parsed
+		}
+	}
 	return opts
 }
 

@@ -77,7 +77,7 @@ describe('Crux observability graph contract', () => {
   it('validates the golden Node run fixture for RunDetail builders', () => {
     const parsed = CruxGraphRecordBatchSchema.parse(goldenNodeRun)
 
-    expect(parsed.records.some((record) => record.type === 'span:event' && record.name === 'token.delta')).toBe(true)
+    expect(parsed.records.some((record) => record.type === 'span:event' && record.name === 'token.chunk')).toBe(true)
     expect(parsed.records.some((record) => record.type === 'edge' && record.edgeType === 'explains')).toBe(true)
     expect(
       parsed.records.filter((record) => record.type === 'span' && record.parentSpanId === '8f3227aa4c6f0565'),

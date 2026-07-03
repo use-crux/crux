@@ -610,6 +610,24 @@ func upsertSpanEvent(ctx context.Context, statements *ingestStatements, event Sp
 	return err
 }
 
+func enforceTokenChunkRing(ctx context.Context, statements *ingestStatements, spanID string) error {
+	_, err := statements.exec(ctx, `
+		DELETE FROM span_events
+		WHERE span_id = ? AND name = ?
+			AND event_id NOT IN (
+				SELECT event_id
+				FROM span_events
+				WHERE span_id = ? AND name = ?
+				ORDER BY timestamp DESC, event_id DESC
+				LIMIT ?
+			)
+	`, spanID, tokenChunkEventName, spanID, tokenChunkEventName, tokenChunkRingLimit)
+	if err != nil {
+		return fmt.Errorf("enforce token chunk ring for span %q: %w", spanID, err)
+	}
+	return nil
+}
+
 func upsertArtifact(ctx context.Context, statements *ingestStatements, artifact ArtifactRecord) error {
 	_, err := statements.exec(ctx, `
 		INSERT INTO artifacts (

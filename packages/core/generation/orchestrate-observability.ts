@@ -16,6 +16,7 @@ import type { OrchestrationSpec } from './orchestrate-types'
 import type { GenerationPerformanceTracker } from './performance-metrics'
 import { generationUsageAttributes } from './result-meta'
 import { createStreamSpanFinalizer, type StreamSpanFinalizer } from './stream-finalizer'
+import { createStreamTokenCoalescer } from './stream-token-coalescer'
 
 export function generationAttributes(
   spec: Pick<
@@ -217,37 +218,39 @@ async function* observedStream(
   finalizer: StreamSpanFinalizer,
   performance: GenerationPerformanceTracker,
 ): AsyncIterable<unknown> {
-  let index = 0
   let completed = false
   let failed = false
+  const tokenChunks = createStreamTokenCoalescer({
+    emit: (attributes) => {
+      void span.withContext(() => {
+        observe.event({
+          name: 'token.chunk',
+          attributes,
+        })
+      })
+    },
+  })
   try {
     for await (const chunk of rawStream) {
       const delta = extractTextDelta(chunk)
       if (delta) {
         performance.recordOutputChunk()
-        await span.withContext(() => {
-          observe.event({
-            name: 'token.delta',
-            attributes: {
-              index,
-              text: delta,
-              length: delta.length,
-            },
-          })
-        })
-        index += 1
+        tokenChunks.add(delta)
       }
       yield chunk
     }
     completed = true
-    finalizer.streamEnded({ tokenDeltaCount: index })
+    tokenChunks.flush()
+    finalizer.streamEnded({ tokenChunkCount: tokenChunks.chunkCount() })
   } catch (error) {
     failed = true
-    finalizer.streamErrored({ tokenDeltaCount: index, error })
+    tokenChunks.flush()
+    finalizer.streamErrored({ tokenChunkCount: tokenChunks.chunkCount(), error })
     throw error
   } finally {
     if (!completed && !failed) {
-      finalizer.streamReturned({ tokenDeltaCount: index })
+      tokenChunks.flush()
+      finalizer.streamReturned({ tokenChunkCount: tokenChunks.chunkCount() })
     }
   }
 }

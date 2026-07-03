@@ -1048,26 +1048,26 @@ export function resolveOutput(
   return {}
 }
 
-export function tokenDeltaChunks(node: ObservabilityRunDetailNode | undefined): readonly string[] {
+export function tokenChunks(node: ObservabilityRunDetailNode | undefined): readonly string[] {
   if (!node) return []
   const events: Array<{ order: number; timestamp: string; text: string }> = []
   function visit(n: ObservabilityRunDetailNode) {
     for (const event of n.events ?? []) {
-      if (event.name !== 'token.delta') continue
+      if (event.name !== 'token.chunk') continue
       const attrs = event.attributes as Record<string, unknown> | null | undefined
       const text = typeof attrs?.text === 'string' ? attrs.text : typeof attrs?.delta === 'string' ? attrs.delta : ''
       if (!text) continue
-      const rawOrder = attrs?.index ?? attrs?.sequence
+      const rawOrder = attrs?.chunkIndex
       const order = typeof rawOrder === 'number' ? rawOrder : Number.MAX_SAFE_INTEGER
       events.push({ order, timestamp: event.timestamp, text })
     }
     for (const detail of n.details ?? []) {
       for (const event of detail.events ?? []) {
-        if (event.name !== 'token.delta') continue
+        if (event.name !== 'token.chunk') continue
         const attrs = event.attributes as Record<string, unknown> | null | undefined
         const text = typeof attrs?.text === 'string' ? attrs.text : typeof attrs?.delta === 'string' ? attrs.delta : ''
         if (!text) continue
-        const rawOrder = attrs?.index ?? attrs?.sequence
+        const rawOrder = attrs?.chunkIndex
         const order = typeof rawOrder === 'number' ? rawOrder : Number.MAX_SAFE_INTEGER
         events.push({ order, timestamp: event.timestamp, text })
       }

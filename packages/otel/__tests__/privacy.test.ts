@@ -58,10 +58,10 @@ describe("workspace OTel privacy", () => {
       },
       async () => {
         observe.event({
-          name: "token.delta",
+          name: "token.chunk",
           attributes: {
             text: "OTEL-TOKEN-TEXT",
-            length: 15,
+            charCount: 15,
           },
         });
       },

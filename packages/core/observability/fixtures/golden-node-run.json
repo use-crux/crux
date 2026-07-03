@@ -108,11 +108,14 @@
       "traceId": "35a77c4be960d1ccb93108c757946d1a",
       "spanId": "0fe2bbc9a127739c",
       "eventId": "event_4e5cb338441cd3f6",
-      "name": "token.delta",
+      "name": "token.chunk",
       "timestamp": "2026-05-16T18:00:00.100Z",
       "attributes": {
-        "sequence": 1,
-        "text": "Hello"
+        "text": "Hello",
+        "chunkIndex": 0,
+        "charCount": 5,
+        "firstDeltaAt": "2026-05-16T18:00:00.090Z",
+        "lastDeltaAt": "2026-05-16T18:00:00.100Z"
       },
       "seq": 6
     },

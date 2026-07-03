@@ -43,11 +43,11 @@ describe('observability privacy capture policy', () => {
         },
         async () => {
           observe.event({
-            name: 'token.delta',
+            name: 'token.chunk',
             attributes: {
-              index: 0,
+              chunkIndex: 0,
               text: 'OUTPUT-TOKEN-TEXT',
-              length: 17,
+              charCount: 17,
             },
           })
           observe.artifact({

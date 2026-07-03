@@ -961,7 +961,7 @@ func TestServiceRunDetailIsRootedTotalAndDumbClientReady(t *testing.T) {
 		`{"schemaVersion":1,"recordId":"rec_prompt","type":"span","runId":"run_detail","traceId":"trace_detail","spanId":"span_prompt","parentSpanId":"span_agent","family":"prompt","primitive":"prompt.resolve","name":"main prompt","startedAt":"2026-05-16T18:00:00.002Z","endedAt":"2026-05-16T18:00:00.012Z","durationMs":10,"status":"ok","promptId":"chat.prompt","attributes":{"presentation":{"ownerSpanId":"span_generate","label":"Chat prompt"}}}`,
 		`{"schemaVersion":1,"recordId":"rec_memory","type":"span","runId":"run_detail","traceId":"trace_detail","spanId":"span_memory","parentSpanId":"span_agent","family":"memory","primitive":"memory.read","name":"facts.find","startedAt":"2026-05-16T18:00:00.013Z","endedAt":"2026-05-16T18:00:00.018Z","durationMs":5,"status":"ok","memoryId":"facts","attributes":{"presentation":{"display":"detail","ownerSpanId":"span_generate"}}}`,
 		`{"schemaVersion":1,"recordId":"rec_generate","type":"span","runId":"run_detail","traceId":"trace_detail","spanId":"span_generate","parentSpanId":"span_agent","family":"generation","primitive":"generation.stream","name":"generate chat","startedAt":"2026-05-16T18:00:00.020Z","endedAt":"2026-05-16T18:00:01.020Z","durationMs":1000,"status":"ok","model":"gpt-4o","provider":"openai","metrics":{"inputTokens":10,"outputTokens":20,"totalTokens":30,"costUsd":0.01}}`,
-		`{"schemaVersion":1,"recordId":"rec_token","type":"span:event","runId":"run_detail","traceId":"trace_detail","spanId":"span_generate","eventId":"event_token_1","name":"token.delta","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"sequence":1,"text":"Hello"}}`,
+		`{"schemaVersion":1,"recordId":"rec_token","type":"span:event","runId":"run_detail","traceId":"trace_detail","spanId":"span_generate","eventId":"event_token_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":5,"text":"Hello","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}}`,
 		`{"schemaVersion":1,"recordId":"rec_tool","type":"span","runId":"run_detail","traceId":"trace_detail","spanId":"span_tool","parentSpanId":"span_agent","family":"tool","primitive":"tool.call","name":"call_abc123","toolName":"searchDocs","startedAt":"2026-05-16T18:00:01.030Z","endedAt":"2026-05-16T18:00:01.130Z","durationMs":100,"status":"ok"}`,
 		`{"schemaVersion":1,"recordId":"rec_late_context","type":"span","runId":"run_detail","traceId":"trace_detail","spanId":"span_late_context","parentSpanId":"span_agent","family":"context","primitive":"context.resolve","name":"late context","startedAt":"2026-05-16T18:00:01.140Z","endedAt":"2026-05-16T18:00:01.145Z","durationMs":5,"status":"ok","contextId":"late.context"}`,
 		`{"schemaVersion":1,"recordId":"rec_artifact","type":"artifact","runId":"run_detail","traceId":"trace_detail","spanId":"span_generate","artifactId":"artifact_output","kind":"output","createdAt":"2026-05-16T18:00:01.020Z","contentType":"text/plain","encoding":"text","sizeBytes":11,"preview":"Hello world"}`,
@@ -1016,8 +1016,8 @@ func TestServiceRunDetailIsRootedTotalAndDumbClientReady(t *testing.T) {
 	if generation.Details[2].SpanID != "span_late_context" || generation.Details[2].Source.PlacementReason != "explains-edge" {
 		t.Fatalf("late context detail = %#v, want explains-edge ownership", generation.Details[2])
 	}
-	if generation.Events[0].Name != "token.delta" {
-		t.Fatalf("generation events = %#v, want token delta", generation.Events)
+	if len(generation.Events) != 0 {
+		t.Fatalf("generation events = %#v, want token chunks excluded from run detail", generation.Events)
 	}
 	if generation.Artifacts[0].ArtifactID != "artifact_output" {
 		t.Fatalf("generation artifacts = %#v", generation.Artifacts)
@@ -1981,7 +1981,7 @@ func TestServicePublishesLifecycleForCompletedRunWithStaleDescendant(t *testing.
 	}
 }
 
-func TestServicePublishesTokenDeltaEvents(t *testing.T) {
+func TestServicePublishesCoalescedTokenChunkEvents(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	service := newTestService(t)
@@ -1989,7 +1989,8 @@ func TestServicePublishesTokenDeltaEvents(t *testing.T) {
 	batch := mustBatch(t,
 		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_tokens","traceId":"trace_tokens","name":"tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
 		`{"schemaVersion":1,"recordId":"rec_generate","type":"span:start","runId":"run_tokens","traceId":"trace_tokens","spanId":"span_generate","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"rec_token","type":"span:event","runId":"run_tokens","traceId":"trace_tokens","spanId":"span_generate","eventId":"event_token_1","name":"token.delta","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"sequence":1,"text":"Hello"}}`,
+		`{"schemaVersion":1,"recordId":"rec_token_1","type":"span:event","runId":"run_tokens","traceId":"trace_tokens","spanId":"span_generate","eventId":"event_token_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":5,"text":"Hello","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}}`,
+		`{"schemaVersion":1,"recordId":"rec_token_2","type":"span:event","runId":"run_tokens","traceId":"trace_tokens","spanId":"span_generate","eventId":"event_token_2","name":"token.chunk","timestamp":"2026-05-16T18:00:00.200Z","attributes":{"chunkIndex":1,"charCount":1,"text":"!","firstDeltaAt":"2026-05-16T18:00:00.190Z","lastDeltaAt":"2026-05-16T18:00:00.200Z"}}`,
 	)
 
 	if err := service.Ingest(ctx, batch); err != nil {
@@ -2000,14 +2001,14 @@ func TestServicePublishesTokenDeltaEvents(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		select {
 		case event := <-events:
-			if event.Kind == "token.delta" {
+			if event.Kind == "token.chunk" {
 				tokenEvent = event
 			}
 		case <-time.After(time.Second):
-			t.Fatal("timed out waiting for token delta event")
+			t.Fatal("timed out waiting for token chunk event")
 		}
 	}
-	if tokenEvent.Kind != "token.delta" || tokenEvent.Action != "appended" || tokenEvent.RefID != "run_tokens" {
+	if tokenEvent.Kind != "token.chunk" || tokenEvent.Action != "appended" || tokenEvent.RefID != "run_tokens" {
 		t.Fatalf("token event = %#v", tokenEvent)
 	}
 	var payload map[string]any
@@ -2015,8 +2016,56 @@ func TestServicePublishesTokenDeltaEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	attrs, ok := payload["attributes"].(map[string]any)
-	if !ok || attrs["text"] != "Hello" || attrs["sequence"] != float64(1) {
+	if !ok || attrs["text"] != "Hello!" || attrs["charCount"] != float64(6) {
 		t.Fatalf("token payload = %#v", payload)
+	}
+	select {
+	case event := <-events:
+		if event.Kind == "token.chunk" {
+			t.Fatalf("received uncoalesced token event: %#v", event)
+		}
+	default:
+	}
+}
+
+func TestServiceCapsTokenChunkEventsPerSpan(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	records := []string{
+		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_token_ring","traceId":"trace_token_ring","name":"tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_generate","type":"span:start","runId":"run_token_ring","traceId":"trace_token_ring","spanId":"span_generate","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`,
+	}
+	for i := 0; i < 600; i++ {
+		records = append(records, fmt.Sprintf(
+			`{"schemaVersion":1,"recordId":"rec_token_%03d","type":"span:event","runId":"run_token_ring","traceId":"trace_token_ring","spanId":"span_generate","eventId":"event_token_%03d","name":"token.chunk","timestamp":"2026-05-16T18:00:%02d.%03dZ","attributes":{"chunkIndex":%d,"charCount":1,"text":"x","firstDeltaAt":"2026-05-16T18:00:%02d.%03dZ","lastDeltaAt":"2026-05-16T18:00:%02d.%03dZ"}}`,
+			i,
+			i,
+			i/1000,
+			i%1000,
+			i,
+			i/1000,
+			i%1000,
+			i/1000,
+			i%1000,
+		))
+	}
+
+	if err := service.Ingest(ctx, mustBatch(t, records...)); err != nil {
+		t.Fatal(err)
+	}
+
+	events, err := service.SpanEvents(ctx, "run_token_ring", "span_generate", SpanEventListOptions{
+		Name:  "token.chunk",
+		Limit: 600,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 512 {
+		t.Fatalf("event count = %d, want 512", len(events))
+	}
+	if events[0].EventID != "event_token_088" || events[len(events)-1].EventID != "event_token_599" {
+		t.Fatalf("event range = %s..%s, want newest capped ring", events[0].EventID, events[len(events)-1].EventID)
 	}
 }
 

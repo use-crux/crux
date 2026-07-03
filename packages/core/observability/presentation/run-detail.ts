@@ -119,12 +119,12 @@ export interface CruxObservabilityRecordsNotification {
   }
 }
 
-/** Websocket notification for live token updates. */
-export interface CruxTokenDeltaNotification {
+/** Websocket notification for live token chunk updates. */
+export interface CruxTokenChunkNotification {
   _tag: 'ObservabilityEvent'
   id: string
   timestamp: number
-  kind: 'token.delta'
+  kind: 'token.chunk'
   action: 'appended'
   severity: 'info'
   refId: CruxRunId | string
@@ -139,7 +139,7 @@ export interface CruxTokenDeltaNotification {
 }
 
 /** Union of local observability websocket notifications. */
-export type CruxObservabilityNotification = CruxObservabilityRecordsNotification | CruxTokenDeltaNotification
+export type CruxObservabilityNotification = CruxObservabilityRecordsNotification | CruxTokenChunkNotification
 
 /** Edge summary attached to a run-detail node or detail. */
 export interface CruxRunDetailRelation {

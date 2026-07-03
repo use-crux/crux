@@ -324,7 +324,7 @@ This separation lets you inspect what the model will see, run the same prompt th
 
 ## Observability Privacy
 
-Generation, streaming, and tool spans emit canonical graph records with latency and throughput metrics such as `gen.duration_ms`, `gen.time_to_first_token_ms`, `gen.output_tokens_per_second`, and `gen.time_per_output_chunk_ms`.
+Generation, streaming, and tool spans emit canonical graph records with latency and throughput metrics such as `gen.duration_ms`, `gen.time_to_first_token_ms`, `gen.output_tokens_per_second`, and `gen.time_per_output_chunk_ms`. Streaming text is coalesced into bounded `token.chunk` span events rather than one record per provider delta.
 
 Manual spans use an explicit terminal API: call `span.end({ attributes, metrics, status })` for terminal metadata, or `span.setAttributes(attributes)` for metadata discovered before the span closes. Raw attribute bags are not accepted by `span.end()`, so `{ error: value }` always means an error end instead of an ambiguous attribute object.
 
