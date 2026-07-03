@@ -134,7 +134,9 @@ async function createReleaseTsconfig() {
   const paths = {}
   for (const pkg of tsPackages) {
     const sourcePrefix = pkg.sourceRoot === '.' ? pkg.dir : `${pkg.dir}/${pkg.sourceRoot}`
-    paths[pkg.name] = [`${sourcePrefix}/index.ts`, `${sourcePrefix}/index.tsx`]
+    const manifest = await readJson(join(repoRoot, pkg.dir, 'package.json'))
+    Object.assign(paths, releasePathMappings(pkg, manifest))
+    if (!paths[pkg.name]) paths[pkg.name] = [`${sourcePrefix}/index.ts`, `${sourcePrefix}/index.tsx`]
     paths[`${pkg.name}/*`] = [`${sourcePrefix}/*`, `${pkg.dir}/*`]
   }
 
@@ -166,6 +168,44 @@ async function createReleaseTsconfig() {
       relative(dirname(releaseTsconfig), file).replaceAll(sep, '/'),
     ),
   }
+}
+
+function releasePathMappings(pkg, manifest) {
+  const mappings = {}
+  if (!manifest.exports || typeof manifest.exports !== 'object' || Array.isArray(manifest.exports)) {
+    return mappings
+  }
+
+  for (const [key, value] of Object.entries(manifest.exports)) {
+    if (!key.startsWith('.') || key === './package.json' || key.includes('*')) continue
+    const target = sourceExportTarget(value)
+    if (!target) continue
+
+    const specifier = key === '.' ? pkg.name : `${pkg.name}/${key.slice(2)}`
+    mappings[specifier] = [normalizeReleaseExportTarget(pkg, target)]
+  }
+
+  return mappings
+}
+
+function sourceExportTarget(target) {
+  if (typeof target === 'string') return target
+  if (!target || typeof target !== 'object' || Array.isArray(target)) return undefined
+
+  for (const condition of ['types', 'import', 'default']) {
+    const resolved = sourceExportTarget(target[condition])
+    if (resolved) return resolved
+  }
+
+  for (const value of Object.values(target)) {
+    const resolved = sourceExportTarget(value)
+    if (resolved) return resolved
+  }
+  return undefined
+}
+
+function normalizeReleaseExportTarget(pkg, target) {
+  return `${pkg.dir}/${target.replace(/^\.\//, '')}`.replaceAll(sep, '/')
 }
 
 async function collectReleaseSourceFiles() {
