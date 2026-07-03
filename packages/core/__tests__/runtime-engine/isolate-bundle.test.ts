@@ -1,0 +1,66 @@
+import { mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { build, type Plugin } from 'esbuild'
+import { describe, expect, it } from 'vitest'
+
+describe('runtime isolate bundle compatibility', () => {
+  it('bundles public runtime subpaths and Convex component sources for platform-neutral isolates', async () => {
+    const repoRoot = resolve('../..')
+    const dir = await mkdtemp(join(tmpdir(), 'crux-runtime-isolate-'))
+    const entry = join(dir, 'entry.ts')
+    await writeFile(
+      entry,
+      [
+        "import '@use-crux/core/runtime'",
+        "import '@use-crux/convex/runtime'",
+        importStatement(repoRoot, 'packages/convex/src/component/runtime/events.ts'),
+        importStatement(repoRoot, 'packages/convex/src/component/runtime/leases.ts'),
+        importStatement(repoRoot, 'packages/convex/src/component/runtime/outbox.ts'),
+        importStatement(repoRoot, 'packages/convex/src/component/runtime/state.ts'),
+        importStatement(repoRoot, 'packages/convex/src/component/runtime/timers.ts'),
+        importStatement(repoRoot, 'packages/convex/src/component/runtime/waiters.ts'),
+      ].join('\n'),
+    )
+
+    const result = await build({
+      entryPoints: [entry],
+      bundle: true,
+      write: false,
+      format: 'esm',
+      platform: 'neutral',
+      packages: 'bundle',
+      logLevel: 'silent',
+      absWorkingDir: repoRoot,
+      plugins: [workspacePackagePlugin(repoRoot)],
+    })
+
+    expect(result.outputFiles).toHaveLength(1)
+  })
+})
+
+function importStatement(root: string, path: string): string {
+  return `import ${JSON.stringify(resolve(root, path))}`
+}
+
+function workspacePackagePlugin(repoRoot: string): Plugin {
+  return {
+    name: 'crux-workspace-package-subpaths',
+    setup(buildApi) {
+      buildApi.onResolve({ filter: /^@use-crux\/core(\/.*)?$/ }, (args) => ({
+        path: resolve(repoRoot, coreSubpath(args.path)),
+      }))
+      buildApi.onResolve({ filter: /^@use-crux\/convex\/runtime$/ }, () => ({
+        path: resolve(repoRoot, 'packages/convex/runtime.ts'),
+      }))
+    },
+  }
+}
+
+function coreSubpath(specifier: string): string {
+  if (specifier === '@use-crux/core') return 'packages/core/index.ts'
+  const subpath = specifier.slice('@use-crux/core/'.length)
+  if (subpath === 'runtime') return 'packages/core/runtime/public.ts'
+  if (subpath === 'storage') return 'packages/core/storage/index.ts'
+  return `packages/core/${subpath}.ts`
+}

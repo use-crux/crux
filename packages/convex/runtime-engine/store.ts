@@ -25,6 +25,7 @@ import {
   decodeWork,
   encodeEvent,
   encodeIdempotency,
+  encodeLease,
   encodeOutboxDate,
   encodeSnapshot,
   encodeTimer,
@@ -174,12 +175,16 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     claim: (resource, lease) =>
       run<unknown>(refs.leases.claim, { ...lease, resource, now: now().getTime() }).then(decodeLease),
     extend: async (lease: Lease, ttlMs) => {
-      const result = await run<unknown>(refs.leases.extend, { lease, ttlMs, now: now().getTime() })
+      const result = await run<unknown>(refs.leases.extend, {
+        lease: encodeLease(lease),
+        ttlMs,
+        now: now().getTime(),
+      })
       const next = decodeLease(result)
       if (!next) throw new Error(`Runtime lease ${lease.resource} could not be extended.`)
       return next
     },
-    release: (lease) => run(refs.leases.release, { lease }).then(noop),
+    release: (lease) => run(refs.leases.release, { lease: encodeLease(lease) }).then(noop),
   }
 
   const transaction: RuntimeStoreTransaction = { state, events, waiters, timers, outbox }
@@ -191,7 +196,7 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
   })
 }
 
-function noop(): void {}
+function noop(): void { }
 
 function cleanArgs<T extends Record<string, unknown>>(args: T): T {
   return Object.fromEntries(Object.entries(args).filter(([, value]) => value !== undefined)) as T

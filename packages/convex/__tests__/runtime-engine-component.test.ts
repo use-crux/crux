@@ -140,6 +140,31 @@ describe('Crux Convex Runtime Engine component', () => {
     expect(duplicateByKey).toEqual(firstByKey)
   })
 
+  it('does not treat caller event ids as internal cursors during duplicate lookup', async () => {
+    const t = convexTest({ schema, modules })
+
+    const generated = await t.mutation(appendEvent, {
+      event: { namespace: 'tenant-a', name: 'generated', payload: { value: 1 } },
+    })
+    const callerSupplied = await t.mutation(appendEvent, {
+      event: {
+        namespace: 'tenant-a',
+        name: 'caller-supplied',
+        payload: { value: 2 },
+        eventId: generated.eventId,
+      },
+    })
+
+    expect(callerSupplied).toMatchObject({
+      eventId: generated.eventId,
+      name: 'caller-supplied',
+      payload: { value: 2 },
+    })
+    await expect(
+      t.run(async (ctx) => await ctx.db.query('runtimeEvents').collect()),
+    ).resolves.toHaveLength(2)
+  })
+
   it('reads after caller-provided event cursors in stable append order', async () => {
     const t = convexTest({ schema, modules })
     await t.mutation(appendEvent, {

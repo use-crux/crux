@@ -184,7 +184,7 @@ export function registerStoreCoordinationTests<
     }
   })
 
-  it('invariant: timers, outbox, and transactions recover from crashes', async () => {
+  it('invariant: timers and outbox delivery are due-time gated and deduplicated', async () => {
     vi.useFakeTimers()
     try {
       vi.setSystemTime(new Date('2026-07-02T00:00:00.000Z'))
@@ -255,19 +255,6 @@ export function registerStoreCoordinationTests<
       ).resolves.toEqual([
         expect.objectContaining({ outboxId: outbox.outboxId, attempts: 1 }),
       ])
-      options.crashBeforeOutboxConfirm(store)
-      await expect(store.outbox.confirm(outbox.outboxId)).rejects.toThrow(
-        'Injected outbox confirm crash',
-      )
-      await expect(
-        store.outbox.claimPending({
-          namespace: 'tenant-a',
-          now: new Date(),
-          limit: 1,
-        }),
-      ).resolves.toEqual([
-        expect.objectContaining({ outboxId: outbox.outboxId, attempts: 2 }),
-      ])
       await store.outbox.confirm(outbox.outboxId)
 
       const dedupeEnvelope = makeConformanceWakeEnvelope(
@@ -298,8 +285,57 @@ export function registerStoreCoordinationTests<
         expect.objectContaining({ outboxId: requeuedWhileDispatched.outboxId }),
       ])
       await store.outbox.confirm(requeuedWhileDispatched.outboxId)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
-      options.failAfterWrites(store, 1)
+  it.skipIf(options.substrateAtomicTransact)(
+    'excluded: outbox confirm crash redelivery requires adapter fault injection (substrate-atomic transact)',
+    async () => {
+      vi.useFakeTimers()
+      try {
+        vi.setSystemTime(new Date('2026-07-02T00:00:00.000Z'))
+        const store = await options.createStore()
+        const work = makeConformanceWorkItem()
+        const outbox = await store.outbox.put(makeConformanceWakeEnvelope(work))
+        await expect(
+          store.outbox.claimPending({
+            namespace: 'tenant-a',
+            now: new Date(),
+            limit: 1,
+          }),
+        ).resolves.toEqual([
+          expect.objectContaining({ outboxId: outbox.outboxId, attempts: 1 }),
+        ])
+        requireFaultHook(
+          options.crashBeforeOutboxConfirm,
+          'crashBeforeOutboxConfirm',
+        )(store)
+        await expect(store.outbox.confirm(outbox.outboxId)).rejects.toThrow(
+          'Injected outbox confirm crash',
+        )
+        await expect(
+          store.outbox.claimPending({
+            namespace: 'tenant-a',
+            now: new Date(),
+            limit: 1,
+          }),
+        ).resolves.toEqual([
+          expect.objectContaining({ outboxId: outbox.outboxId, attempts: 2 }),
+        ])
+      } finally {
+        vi.useRealTimers()
+      }
+    },
+  )
+
+  it.skipIf(options.substrateAtomicTransact)(
+    'excluded: transaction rollback fault injection is replaced by substrate rollback proof (substrate-atomic transact)',
+    async () => {
+      const store = await options.createStore()
+      const work = makeConformanceWorkItem()
+      requireFaultHook(options.failAfterWrites, 'failAfterWrites')(store, 1)
       await expect(
         store.transact(async (tx) => {
           await tx.state.putWork(work)
@@ -316,10 +352,8 @@ export function registerStoreCoordinationTests<
       await expect(
         store.events.read({ namespace: 'tenant-a' }),
       ).resolves.toMatchObject({ events: [] })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
+    },
+  )
 
   it.skipIf(!options.assertSerializedTransactions)(
     'invariant: transactions serialize through one async mutex',
@@ -349,4 +383,12 @@ export function registerStoreCoordinationTests<
       expect(order).toEqual(['first-start', 'first-end', 'second-start'])
     },
   )
+}
+
+function requireFaultHook<TStore extends RuntimeStoreAdapter, TArgs extends unknown[]>(
+  hook: ((store: TStore, ...args: TArgs) => void) | undefined,
+  name: string,
+): (store: TStore, ...args: TArgs) => void {
+  if (hook) return hook
+  throw new Error(`Runtime store conformance requires ${name} unless substrateAtomicTransact is declared.`)
 }

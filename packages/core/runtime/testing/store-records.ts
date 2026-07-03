@@ -23,6 +23,7 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
       namespace: 'tenant-a',
       name: 'document.approved',
       payload,
+      eventId: 'evt_document_approved',
     })
     payload.nested.approved = false
 
