@@ -27,9 +27,10 @@ export type {
 } from './knowledge-base'
 export type { RetrievalModel } from './model'
 export type { MetadataFilter, RetrieveOptions, RetrieveRequest } from './request'
-export type { RecipeTrace, RetrievalRecipe, RetrievalRecipeConfig, StepTrace } from './recipe/recipe'
+export type { RecipeTrace, RetrievalRecipe, RetrievalRecipeConfig, RetrievalRecipeSource, StepTrace } from './recipe/recipe'
 export type {
   PlannedQuery,
+  RetrievalSourceTrace,
   RetrievalStep,
   RetrievalStepConfig,
   RetrievalStepContext,

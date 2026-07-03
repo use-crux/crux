@@ -44,12 +44,26 @@ export type StepInput<TPhase extends StepPhase> = TPhase extends 'queries'
 /** Output payload for a step phase. */
 export type StepOutput<TPhase extends StepPhase> = StepInput<TPhase> & {
   warnings?: readonly string[]
+  sources?: readonly RetrievalSourceTrace[]
+}
+
+/** Per-source retrieve attribution captured on retrieve-step traces. */
+export interface RetrievalSourceTrace {
+  retrieverId: string
+  namespace: string
+  status: 'success' | 'error' | 'skipped'
+  durationMs: number
+  queryCount: number
+  hitCount?: number
+  weight?: number
+  warnings: readonly string[]
+  error?: { message: string; name?: string }
 }
 
 /** Runtime context provided to a retrieval step. */
 export interface RetrievalStepContext {
   recipeId: string
-  sources: ReadonlyArray<{ retrieverId: string; namespace: string }>
+  sources: ReadonlyArray<{ retrieverId: string; namespace: string; weight?: number }>
   originalQuery: string
   request: RetrieveRequest
   model?: RetrievalModel

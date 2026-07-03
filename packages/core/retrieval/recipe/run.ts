@@ -4,14 +4,20 @@
  * @module
  */
 
-import { mapConcurrent } from '../../shared/concurrency'
 import { observe } from '../../observability'
-import { RetrievalRunError, retrievalNotImplemented } from '../errors'
+import { RetrievalRunError } from '../errors'
 import { emitRetrievalHitsArtifact } from '../observability'
 import { normalizeRetrieveRequest, type RetrieveOptions, type RetrieveRequest } from '../request'
-import type { Retriever, RetrieverHit } from '../types'
-import { fuseQueryGroups, mergeRetrieveOptions } from './fusion'
-import { getRetrieveStepConfig, type PlannedQuery, type RetrievalStep, type RetrievalStepContext } from './step'
+import type { RetrieverHit } from '../types'
+import { runFederatedRetrieveStep } from './federation'
+import {
+  getRetrieveStepConfig,
+  type PlannedQuery,
+  type RetrievalSourceTrace,
+  type RetrievalStep,
+  type RetrievalStepContext,
+} from './step'
+import type { NormalizedRecipeSource } from './source'
 import { countStepPayload, serializeRecipeError, type RecipeTrace, type StepTrace } from './trace'
 
 let recipeRunCounter = 0
@@ -19,10 +25,11 @@ let recipeRunCounter = 0
 /** Normalized single-source recipe configuration used by the runner. */
 export interface RecipeRunnerConfig {
   recipeId: string
-  retrievers: readonly Retriever[]
+  sources: readonly NormalizedRecipeSource[]
   steps: readonly RetrievalStep[]
   model?: RetrievalStepContext['model']
   concurrency: number
+  onSourceError: 'fail' | 'skip-with-warning'
 }
 
 /** Execute a recipe and return hits plus a serializable trace. */
@@ -38,8 +45,8 @@ export async function runRetrievalRecipe(
     primitive: 'retrieval.recipe',
     attributes: {
       recipeId: config.recipeId,
-      sourceRetrieverIds: config.retrievers.map((retriever) => retriever.id),
-      namespaceCount: new Set(config.retrievers.map((retriever) => retriever.namespace)).size,
+      sourceRetrieverIds: config.sources.map((source) => source.retriever.id),
+      namespaceCount: new Set(config.sources.map((source) => source.retriever.namespace)).size,
       stepCount: config.steps.length,
       query: request.query,
       ...(request.limit !== undefined ? { limit: request.limit } : {}),
@@ -87,9 +94,9 @@ async function runRetrievalRecipeInternal(
     const trace = buildTrace({ config, traceId, startedAt, request, steps, resultCount: hits.length, errors })
     emitRetrievalHitsArtifact(recipeSpan.spanId, {
       retrievalId: trace.id,
-      retrieverId: config.retrievers[0]?.id ?? '',
+      retrieverId: config.sources[0]?.retriever.id ?? '',
       recipeId: config.recipeId,
-      namespace: config.retrievers[0]?.namespace ?? '',
+      namespace: config.sources[0]?.retriever.namespace ?? '',
       mode: 'recipe',
       query: request.query,
       limit: request.limit,
@@ -105,7 +112,8 @@ async function runRetrievalRecipeInternal(
   } catch (error) {
     const serialized = serializeRecipeError(error)
     errors.push(serialized)
-    throw new RetrievalRunError('step_failed', serialized.message, {
+    const code = error instanceof RetrievalRunError ? error.code : 'step_failed'
+    throw new RetrievalRunError(code, serialized.message, {
       cause: error,
       trace: buildTrace({ config, traceId, startedAt, request, steps, resultCount: 0, errors }),
     })
@@ -128,7 +136,7 @@ function buildTrace(args: {
   return {
     id: args.traceId,
     recipeId: args.config.recipeId,
-    retrieverId: args.config.retrievers[0]?.id ?? '',
+    retrieverId: args.config.sources[0]?.retriever.id ?? '',
     startedAt: args.startedAt,
     durationMs: Date.now() - args.startedAt,
     input: args.request,
@@ -170,9 +178,10 @@ async function runOneStep(args: {
         ? runRetrieveStep(args.config, args.request, args.state, args.step)
         : args.step.run(stepInput(args.state), {
             recipeId: args.config.recipeId,
-            sources: args.config.retrievers.map((retriever) => ({
-              retrieverId: retriever.id,
-              namespace: retriever.namespace,
+            sources: args.config.sources.map((source) => ({
+              retrieverId: source.retriever.id,
+              namespace: source.retriever.namespace,
+              weight: source.weight,
             })),
             originalQuery: args.request.query,
             request: args.request,
@@ -192,6 +201,7 @@ async function runOneStep(args: {
       ...(outputCounts.queryCount !== undefined ? { outputQueryCount: outputCounts.queryCount } : {}),
       ...(outputCounts.hitCount !== undefined ? { outputHitCount: outputCounts.hitCount } : {}),
       warnings: output.warnings ?? [],
+      ...(output.sources ? { sources: output.sources } : {}),
     })
     span.end({
       status: 'success',
@@ -221,22 +231,12 @@ async function runRetrieveStep(
   request: RetrieveRequest,
   state: RecipeState,
   step: RetrievalStep,
-): Promise<{ hits: readonly RetrieverHit[]; warnings?: readonly string[] }> {
+): Promise<{ hits: readonly RetrieverHit[]; warnings?: readonly string[]; sources?: readonly RetrievalSourceTrace[] }> {
   if (state.phase !== 'queries') {
     throw new Error(`Step "${step.id}" cannot retrieve from hit input.`)
   }
-  if (config.retrievers.length !== 1) {
-    return retrievalNotImplemented('phase 3b', 'federated retrievalRecipe retrieve step')
-  }
-
   const stepConfig = getRetrieveStepConfig(step)
-  const retriever = config.retrievers[0]
-  const groups = await mapConcurrent(state.queries, config.concurrency, async (planned) => ({
-    planned,
-    hits: await retriever.retrieve(planned.query, mergeRetrieveOptions(request, planned, stepConfig)),
-  }))
-
-  return { hits: fuseQueryGroups(groups, request.fusion?.k) }
+  return runFederatedRetrieveStep(config, request, state.queries, stepConfig)
 }
 
 function stepInput(state: RecipeState): { queries: readonly PlannedQuery[] } | { hits: readonly RetrieverHit[] } {

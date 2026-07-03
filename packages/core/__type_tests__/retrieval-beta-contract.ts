@@ -28,6 +28,8 @@ import type {
   RecipeTrace,
   RetrievalModel,
   RetrievalRecipe,
+  RetrievalRecipeSource,
+  RetrievalSourceTrace,
   RetrievalStep,
   RetrieveRequest,
   Retriever,
@@ -167,6 +169,41 @@ expectTypeOf(recipe.retrieveWithTrace('refunds')).resolves.toEqualTypeOf<{
   hits: RetrieverHit[]
   trace: RecipeTrace
 }>()
+
+const federatedRecipe = retrievalRecipe({
+  id: 'federated-docs-answer',
+  retriever: [configuredRetriever, custom],
+  onSourceError: 'skip-with-warning',
+  steps: [retrieve({ limit: 20 }), customHitStep],
+})
+
+expectTypeOf(federatedRecipe).toEqualTypeOf<RetrievalRecipe>()
+
+const weightedFederatedRecipe = retrievalRecipe({
+  id: 'weighted-federated-docs-answer',
+  retriever: [
+    { retriever: configuredRetriever, weight: 2 },
+    { retriever: custom, weight: 0.5 },
+  ],
+  steps: [retrieve({ limit: 20 })],
+})
+
+expectTypeOf(weightedFederatedRecipe.retrieve('refunds')).resolves.toEqualTypeOf<RetrieverHit[]>()
+expectTypeOf({ retriever: configuredRetriever, weight: 2 } satisfies RetrievalRecipeSource).toMatchTypeOf<{
+  retriever: Retriever
+  weight?: number
+}>()
+expectTypeOf<RetrievalSourceTrace>().toMatchTypeOf<{
+  retrieverId: string
+  namespace: string
+  status: 'success' | 'error' | 'skipped'
+  queryCount: number
+}>()
+
+// @ts-expect-error federated source entries must include a retriever.
+retrievalRecipe({ id: 'bad-federated-source', retriever: [{ weight: 2 }], steps: [retrieve()] })
+// @ts-expect-error source failure policy is intentionally narrow.
+retrievalRecipe({ id: 'bad-source-policy', retriever: [configuredRetriever, custom], onSourceError: 'ignore', steps: [retrieve()] })
 
 const defaultTools = recipe.asTools()
 expectTypeOf(defaultTools).toMatchTypeOf<{ search: ToolDef }>()

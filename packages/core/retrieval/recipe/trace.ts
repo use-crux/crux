@@ -5,7 +5,7 @@
  */
 
 import type { RetrieveRequest } from '../request'
-import type { RetrievalStepKind } from './step'
+import type { RetrievalSourceTrace, RetrievalStepKind } from './step'
 
 /** Serializable error details captured on failed recipe steps. */
 export interface RecipeTraceError {
@@ -24,6 +24,7 @@ export interface StepTrace {
   inputHitCount?: number
   outputHitCount?: number
   warnings: readonly string[]
+  sources?: readonly RetrievalSourceTrace[]
   error?: RecipeTraceError
 }
 

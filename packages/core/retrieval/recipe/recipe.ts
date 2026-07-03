@@ -15,12 +15,14 @@ import { RetrievalConfigError, retrievalNotImplemented } from '../errors'
 import { normalizeRetrieveRequest } from '../request'
 import { runRetrievalRecipe } from './run'
 import { isBuiltInRetrievalStep, type RetrievalStep } from './step'
+import { normalizeRecipeSources, type NormalizedRecipeSource, type RetrievalRecipeSourceInput } from './source'
 export type { RecipeTrace, StepTrace } from './trace'
+export type { RetrievalRecipeSource } from './source'
 
 /** Configuration for `retrievalRecipe()`. */
 export interface RetrievalRecipeConfig<TSteps extends readonly RetrievalStep[] = readonly RetrievalStep[]> {
   id: string
-  retriever: Retriever | readonly [Retriever, ...Retriever[]] | ReadonlyArray<{ retriever: Retriever; weight?: number }>
+  retriever: RetrievalRecipeSourceInput
   steps: TSteps
   model?: RetrievalModel
   concurrency?: number
@@ -47,15 +49,16 @@ export interface RetrievalRecipe {
 export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
   config: RetrievalRecipeConfig<TSteps>,
 ): RetrievalRecipe {
-  const retrievers = normalizeRetrievers(config.retriever)
-  validateRecipeConfig(config, retrievers)
+  const sources = normalizeRecipeSources(config.retriever)
+  validateRecipeConfig(config, sources)
 
   const runnerConfig = {
     recipeId: config.id,
-    retrievers,
+    sources,
     steps: config.steps,
     ...(config.model ? { model: config.model } : {}),
     concurrency: config.concurrency ?? 4,
+    onSourceError: config.onSourceError ?? 'fail',
   }
   const retrieveWithTrace: RetrievalRecipe['retrieveWithTrace'] = (queryOrRequest, options = {}) =>
     runRetrievalRecipe(runnerConfig, queryOrRequest, options)
@@ -63,7 +66,7 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
     const result = await retrieveWithTrace(queryOrRequest, options)
     return result.hits
   }
-  const recipeRetriever = createRecipeRetriever(config.id, retrievers[0], retrieve)
+  const recipeRetriever = createRecipeRetriever(config.id, sources[0].retriever, retrieve)
 
   return Object.freeze({
     _tag: 'RetrievalRecipe' as const,
@@ -79,29 +82,20 @@ export function retrievalRecipe<const TSteps extends readonly RetrievalStep[]>(
     inspect: () => ({
       id: config.id,
       stepCount: config.steps.length,
-      retrieverIds: retrievers.map((retriever) => retriever.id),
+      retrieverIds: sources.map((source) => source.retriever.id),
     }),
   })
 }
 
-function normalizeRetrievers(
-  input: RetrievalRecipeConfig['retriever'],
-): readonly Retriever[] {
-  if ('id' in input) {
-    return [input]
-  }
-  return input.map((entry) => ('retriever' in entry ? entry.retriever : entry))
-}
-
-function validateRecipeConfig(config: RetrievalRecipeConfig, retrievers: readonly Retriever[]): void {
+function validateRecipeConfig(config: RetrievalRecipeConfig, sources: readonly NormalizedRecipeSource[]): void {
   if (!config.id.trim()) {
     throw new RetrievalConfigError('invalid_step_order', 'Retrieval recipe id must be non-empty.')
   }
-  if (retrievers.length === 0) {
+  if (sources.length === 0) {
     throw new RetrievalConfigError('invalid_step_order', 'Retrieval recipe requires at least one retriever.')
   }
-  for (const retriever of retrievers) {
-    if (retriever.id === config.id) {
+  for (const source of sources) {
+    if (source.retriever.id === config.id) {
       throw new RetrievalConfigError('recipe_id_conflict', 'Retrieval recipe id must be distinct from retriever id.')
     }
   }
