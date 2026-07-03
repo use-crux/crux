@@ -5,11 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
-	"runtime"
-	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -17,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/assets"
+	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/output"
 	"github.com/use-crux/crux/packages/local/internal/server"
@@ -25,103 +22,11 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/tui/bridge"
 )
 
-type startupTracker struct {
-	enabled bool
-	started time.Time
-	mu      sync.Mutex
-	mode    string
-	marks   map[string]time.Time
-}
-
-func newStartupTracker(enabled bool) *startupTracker {
-	return &startupTracker{
-		enabled: enabled,
-		started: time.Now(),
-		marks:   map[string]time.Time{},
-	}
-}
-
-func (s *startupTracker) Enabled() bool {
-	return s != nil && s.enabled
-}
-
-func (s *startupTracker) SetMode(mode string) {
-	if s == nil {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.mode = mode
-}
-
-func (s *startupTracker) Mode() string {
-	if s == nil {
-		return ""
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.mode
-}
-
-func (s *startupTracker) Mark(name string) {
-	if s == nil || !s.enabled {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, exists := s.marks[name]; exists {
-		return
-	}
-	s.marks[name] = time.Now()
-}
-
-func (s *startupTracker) Summary() string {
-	if s == nil || !s.enabled {
-		return ""
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	steps := []struct {
-		name  string
-		label string
-	}{
-		{"Server child spawned", "spawn"},
-		{"First server stdout", "stdout"},
-		{"First server stderr", "stderr"},
-		{"HTTP ready", "http"},
-		{"WebSocket connected", "ws"},
-		{"Initial data loaded", "data"},
-		{"Dashboard visible", "ui"},
-	}
-
-	parts := make([]string, 0, len(steps)+2)
-	if s.mode != "" {
-		parts = append(parts, s.mode)
-	}
-	for _, step := range steps {
-		if at, ok := s.marks[step.name]; ok {
-			parts = append(parts, fmt.Sprintf("%s=%s", step.label, at.Sub(s.started).Round(10*time.Millisecond)))
-		}
-	}
-	parts = append(parts, fmt.Sprintf("total=%s", time.Since(s.started).Round(10*time.Millisecond)))
-	return strings.Join(parts, "  ")
-}
-
-func startupDebugEnabled(flag bool) bool {
-	if flag {
-		return true
-	}
-	switch strings.ToLower(strings.TrimSpace(os.Getenv("CRUX_STARTUP_DEBUG"))) {
-	case "1", "true", "yes", "on":
-		return true
-	default:
-		return false
-	}
-}
-
 // NewDevCmd creates the "crux dev" command for starting the devtools server.
-func NewDevCmd() *cobra.Command {
+func NewDevCmd(f *cli.Factory) *cobra.Command {
+	if f == nil {
+		f = &cli.Factory{}
+	}
 	var port int
 	var tunnel bool
 	var noOpen bool
@@ -136,6 +41,7 @@ func NewDevCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = tuiLegacy // accepted for back-compat; TUI is now the default
 			ctx := cmd.Context()
+			io := f.Streams()
 			startup := newStartupTracker(startupDebugEnabled(startupDebug))
 			serverURL := fmt.Sprintf("http://localhost:%d", port)
 			alreadyRunning := server.IsServerRunning(port)
@@ -144,39 +50,39 @@ func NewDevCmd() *cobra.Command {
 			if alreadyRunning {
 				startup.SetMode("existing-server")
 				startup.Mark("HTTP ready")
-				fmt.Printf("%s Server already running at %s\n",
-					output.Green.Render("OK"),
-					output.BoldCyan.Render(serverURL))
+				devStatusf(io, "%s Server already running at %s\n",
+					devOK(io),
+					devStrong(io, serverURL))
 
 				if tuiMode {
 					// The TUI owns an in-process dev server (DirectClient
 					// talks to native Go services, not HTTP). It can't
 					// reuse a foreign process. Help the user clean up.
-					fmt.Printf("%s The TUI needs to own the dev server it runs against.\n",
-						output.Dim.Render("*"))
+					devStatusf(io, "%s The TUI needs to own the dev server it runs against.\n",
+						devBullet(io))
 					if pid := findListeningPID(port); pid != "" {
-						fmt.Printf("%s Listener on port %d is %s\n",
-							output.Dim.Render("*"), port, output.BoldCyan.Render("pid "+pid))
-						fmt.Printf("    %s %s\n",
-							output.Dim.Render("kill it:"),
-							output.Accent.Render(killCommand(pid)))
+						devStatusf(io, "%s Listener on port %d is %s\n",
+							devBullet(io), port, devStrong(io, "pid "+pid))
+						devStatusf(io, "    %s %s\n",
+							io.Sprint(output.Dim, "kill it:"),
+							devAccent(io, killCommand(pid)))
 					} else {
-						fmt.Printf("%s Find the listener with: %s\n",
-							output.Dim.Render("*"),
-							output.Accent.Render(findListenerHint(port)))
+						devStatusf(io, "%s Find the listener with: %s\n",
+							devBullet(io),
+							devAccent(io, findListenerHint(port)))
 					}
-					fmt.Printf("%s Or run on a different port: %s\n",
-						output.Dim.Render("*"),
-						output.Accent.Render(fmt.Sprintf("crux dev --port %d", port+1)))
-					fmt.Printf("%s Pass %s to use the existing server with the web UI only.\n",
-						output.Dim.Render("*"), output.Accent.Render("--no-tui"))
+					devStatusf(io, "%s Or run on a different port: %s\n",
+						devBullet(io),
+						devAccent(io, fmt.Sprintf("crux dev --port %d", port+1)))
+					devStatusf(io, "%s Pass %s to use the existing server with the web UI only.\n",
+						devBullet(io), devAccent(io, "--no-tui"))
 					return fmt.Errorf("port %d already in use", port)
 				}
 				if !noOpen {
 					openBrowser(serverURL)
 				}
 				if startup.Enabled() {
-					fmt.Printf("%s %s\n", output.Dim.Render("*"), output.Fg.Render(startup.Summary()))
+					devStatusf(io, "%s %s\n", devBullet(io), devText(io, startup.Summary()))
 				}
 				return nil
 			}
@@ -192,8 +98,8 @@ func NewDevCmd() *cobra.Command {
 				if nextPort >= port+10 {
 					return fmt.Errorf("port %d is in use and no free port found in range %d-%d", port, port, port+9)
 				}
-				fmt.Printf("%s Port %d is in use, using %d instead\n",
-					output.Dim.Render("*"), port, nextPort)
+				devStatusf(io, "%s Port %d is in use, using %d instead\n",
+					devBullet(io), port, nextPort)
 				port = nextPort
 				serverURL = fmt.Sprintf("http://localhost:%d", port)
 			}
@@ -215,9 +121,9 @@ func NewDevCmd() *cobra.Command {
 			// When the listener is exposed beyond loopback (CRUX_HOST), surface
 			// the tokenized URL so a manually copied link still authenticates.
 			if devSrv.LocalGated() {
-				fmt.Printf("%s Network exposure enabled — authenticated URL: %s\n",
-					output.Dim.Render("*"),
-					output.BoldCyan.Render(devSrv.LocalURL()))
+				devStatusf(io, "%s Network exposure enabled — authenticated URL: %s\n",
+					devBullet(io),
+					devStrong(io, devSrv.LocalURL()))
 			}
 
 			if tuiMode {
@@ -231,35 +137,35 @@ func NewDevCmd() *cobra.Command {
 				if !noOpen {
 					openBrowser(devSrv.LocalURL())
 				}
-				return runTUI(devSrv, serverURL, port, startup, tunnelReady)
+				return runTUI(io, devSrv, serverURL, port, startup, tunnelReady)
 			}
 
-			printIngestTokenHint(devSrv)
+			printIngestTokenHint(io, devSrv)
 
 			// Non-TUI: start tunnel synchronously (blocks until ready).
 			if tunnel {
-				fmt.Printf("%s Starting tunnel...\n", output.Dim.Render("*"))
+				devStatusf(io, "%s Starting tunnel...\n", devBullet(io))
 				tunnelDone := make(chan string, 1)
 				devSrv.StartTunnel(ctx, func(url string) {
 					tunnelDone <- url
 				})
 				select {
 				case url := <-tunnelDone:
-					fmt.Printf("%s Tunnel: %s\n",
-						output.Green.Render("OK"),
-						output.BoldCyan.Render(url))
+					devStatusf(io, "%s Tunnel: %s\n",
+						devOK(io),
+						devStrong(io, url))
 				case <-time.After(20 * time.Second):
-					fmt.Printf("%s Tunnel failed to start within 20s\n", output.Dim.Render("*"))
+					devStatusf(io, "%s Tunnel failed to start within 20s\n", devBullet(io))
 				}
 			}
 
-			fmt.Printf("%s Server ready at %s (%s)\n",
-				output.Green.Render("OK"),
-				output.BoldCyan.Render(serverURL),
-				output.Accent.Render("go-native"))
+			devStatusf(io, "%s Server ready at %s (%s)\n",
+				devOK(io),
+				devStrong(io, serverURL),
+				devAccent(io, "go-native"))
 
 			if startup.Enabled() {
-				fmt.Printf("%s %s\n", output.Dim.Render("*"), output.Fg.Render(startup.Summary()))
+				devStatusf(io, "%s %s\n", devBullet(io), devText(io, startup.Summary()))
 			}
 			if !noOpen {
 				openBrowser(devSrv.LocalURL())
@@ -267,7 +173,7 @@ func NewDevCmd() *cobra.Command {
 
 			// Wait for shutdown signal (context already wired from main).
 			<-ctx.Done()
-			fmt.Printf("\n%s Shutting down...\n", output.Dim.Render("*"))
+			devStatusf(io, "\n%s Shutting down...\n", devBullet(io))
 			return nil
 		},
 	}
@@ -285,38 +191,38 @@ func NewDevCmd() *cobra.Command {
 	return cmd
 }
 
-func printIngestTokenHint(devSrv *server.DevServer) {
+func printIngestTokenHint(io *output.IO, devSrv *server.DevServer) {
 	if devSrv == nil || devSrv.IngestToken == "" {
 		return
 	}
 	suffix := ""
 	if devSrv.IngestTokenPath != "" {
-		suffix = fmt.Sprintf(" (saved at %s)", output.Fg.Render(devSrv.IngestTokenPath))
+		suffix = fmt.Sprintf(" (saved at %s)", devText(io, devSrv.IngestTokenPath))
 	}
-	fmt.Printf("%s Remote observability ingest: %s%s\n",
-		output.Dim.Render("*"),
-		output.BoldCyan.Render("CRUX_DEVTOOLS_TOKEN="+devSrv.IngestToken),
+	devStatusf(io, "%s Remote observability ingest: %s%s\n",
+		devBullet(io),
+		devStrong(io, "CRUX_DEVTOOLS_TOKEN="+devSrv.IngestToken),
 		suffix)
 }
 
-func runTUI(devSrv *server.DevServer, serverURL string, port int, startup *startupTracker, tunnelReady <-chan string) error {
+func runTUI(io *output.IO, devSrv *server.DevServer, serverURL string, port int, startup *startupTracker, tunnelReady <-chan string) error {
 	// Server is already running (Go native) — no boot wait needed.
 	if devSrv == nil {
 		return fmt.Errorf("native TUI requires an owned dev server")
 	}
-	fmt.Print("\033[K") // Clear line.
+	io.NewStatusLine().Clear()
 
 	// Pre-alt-screen hint. Alt-screen swaps the terminal buffer, so this
 	// line will be visible after the TUI exits — useful for users who
 	// don't recognize they've entered a TUI and panic-^C immediately.
-	fmt.Printf("%s Workbench starting at %s — %s to quit, %s for help · web UI also at %s\n",
-		output.Accent.Render("◆"),
-		output.BoldCyan.Render(serverURL),
-		output.Accent.Render("q"),
-		output.Accent.Render("?"),
-		output.BoldCyan.Render(serverURL),
+	devStatusf(io, "%s Workbench starting at %s — %s to quit, %s for help · web UI also at %s\n",
+		devAccent(io, "◆"),
+		devStrong(io, serverURL),
+		devAccent(io, "q"),
+		devAccent(io, "?"),
+		devStrong(io, serverURL),
 	)
-	printIngestTokenHint(devSrv)
+	printIngestTokenHint(io, devSrv)
 
 	// Phase 3: Launch Bubbletea TUI (server is ready, WS connected).
 	// Promotion spawns the embedded quality worker through the server-owned
@@ -387,21 +293,6 @@ func runTUI(devSrv *server.DevServer, serverURL string, port int, startup *start
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_ = devSrv.Shutdown(shutdownCtx)
-	fmt.Printf("%s Workbench closed. Dev server stopped.\n", output.Dim.Render("*"))
+	devStatusf(io, "%s Workbench closed. Dev server stopped.\n", devBullet(io))
 	return err
-}
-
-func openBrowser(url string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "linux":
-		cmd = exec.Command("xdg-open", url)
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
-	default:
-		return
-	}
-	cmd.Start()
 }

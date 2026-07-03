@@ -60,5 +60,5 @@ func printFlows(io *output.IO, flows []api.RuntimeFlowRun) {
 			io.Sprint(output.Dim, truncate(flow.SessionID, 16)),
 		})
 	}
-	fmt.Fprint(io.Out, tbl.Render())
+	fmt.Fprint(io.Out, io.RenderTable(tbl))
 }

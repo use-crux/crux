@@ -77,8 +77,7 @@ func liveStats(ctx context.Context, c *api.Client, io *output.IO, jsonOut bool) 
 				return nil
 			}
 			if !jsonOut && io.IsStdoutTTY() {
-				// Clear screen and reprint.
-				fmt.Fprint(io.Out, "\033[H\033[2J")
+				io.ClearScreen()
 			}
 			refreshStats(ctx, c, io, jsonOut)
 			time.Sleep(200 * time.Millisecond)
@@ -289,5 +288,5 @@ func printPromptUsage(io *output.IO, usage map[string]api.PromptUsageStat) {
 		})
 	}
 
-	fmt.Fprint(io.Out, tbl.Render())
+	fmt.Fprint(io.Out, io.RenderTable(tbl))
 }

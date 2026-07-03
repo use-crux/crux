@@ -164,7 +164,7 @@ func printDefinitions(io *output.IO, definitions []api.ProjectDefinition) {
 			io.Sprint(output.Dim, truncate(source, 60)),
 		})
 	}
-	fmt.Fprint(io.Out, tbl.Render())
+	fmt.Fprint(io.Out, io.RenderTable(tbl))
 	fmt.Fprintln(io.Out)
 }
 
@@ -181,7 +181,7 @@ func printDiagnostics(io *output.IO, diagnostics []api.IndexDiagnostic) {
 			truncate(d.Message, 80),
 		})
 	}
-	fmt.Fprint(io.Out, tbl.Render())
+	fmt.Fprint(io.Out, io.RenderTable(tbl))
 	fmt.Fprintln(io.Out)
 }
 
@@ -213,7 +213,7 @@ func printPrompts(io *output.IO, prompts []api.PromptMeta) {
 			io.Sprint(output.Dim, tags),
 		})
 	}
-	fmt.Fprint(io.Out, tbl.Render())
+	fmt.Fprint(io.Out, io.RenderTable(tbl))
 	fmt.Fprintln(io.Out)
 }
 
@@ -235,7 +235,7 @@ func printContexts(io *output.IO, contexts []api.ContextMeta) {
 			desc,
 		})
 	}
-	fmt.Fprint(io.Out, tbl.Render())
+	fmt.Fprint(io.Out, io.RenderTable(tbl))
 	fmt.Fprintln(io.Out)
 }
 
@@ -261,7 +261,7 @@ func printTools(io *output.IO, tools []api.ToolMeta) {
 			desc,
 		})
 	}
-	fmt.Fprint(io.Out, tbl.Render())
+	fmt.Fprint(io.Out, io.RenderTable(tbl))
 	fmt.Fprintln(io.Out)
 }
 

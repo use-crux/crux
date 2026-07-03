@@ -89,7 +89,7 @@ func printTraces(io *output.IO, runs []api.ObservabilityRunSummary) {
 	for _, run := range runs {
 		tbl.Rows = append(tbl.Rows, observabilityRunRow(io, run))
 	}
-	fmt.Fprint(io.Out, tbl.Render())
+	fmt.Fprint(io.Out, io.RenderTable(tbl))
 }
 
 func tailTraces(io *output.IO, ctx context.Context, c *api.Client, promptFilter, sessionFilter string, jsonOut bool) error {

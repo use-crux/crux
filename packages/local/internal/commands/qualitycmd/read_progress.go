@@ -84,7 +84,7 @@ func (r *progressRenderer) runsTable(runs []api.QualityEvaluationProgressRun) st
 			delta,
 		})
 	}
-	return table.Render()
+	return r.io.RenderTable(table)
 }
 
 // deltaCell renders a pass-rate delta with a direction arrow, colored green for

@@ -90,6 +90,16 @@ func (t *Table) Render() string {
 	return sb.String()
 }
 
+// RenderTable returns table's formatted text through the command-facing output
+// surface. Commands should use this instead of calling [Table.Render] directly,
+// keeping direct renderer calls inside this package for the Phase 15 guard.
+func (io *IO) RenderTable(table *Table) string {
+	if table == nil {
+		return ""
+	}
+	return table.Render()
+}
+
 // Print renders the table to stdout.
 func (t *Table) Print() {
 	fmt.Print(t.Render())

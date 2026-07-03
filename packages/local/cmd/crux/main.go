@@ -58,7 +58,7 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 	rootCmd.PersistentFlags().IntVar(&f.Port, "port", 4400, "Devtools server port")
 	rootCmd.PersistentFlags().BoolVar(&f.NoColor, "no-color", false, "Disable colored output")
 
-	rootCmd.AddCommand(commands.NewDevCmd())
+	rootCmd.AddCommand(commands.NewDevCmd(f))
 	rootCmd.AddCommand(commands.NewConfigCmd(f))
 	rootCmd.AddCommand(commands.NewTracesCmd(f))
 	rootCmd.AddCommand(commands.NewIndexCmd(f))
