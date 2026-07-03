@@ -12,15 +12,25 @@ func TestWorkbenchGdIsNotDatasetAlias(t *testing.T) {
 	}
 }
 
-// TestWorkbenchGdRoutesToIndex asserts the freed `g d` slot now
-// routes to the Index (definitions) screen — see plan S15.
-func TestWorkbenchGdRoutesToIndex(t *testing.T) {
+// TestWorkbenchGdRoutesToDatasets asserts the Datasets screen owns the
+// natural `g d` mnemonic now that it is part of the nav rail again.
+func TestWorkbenchGdRoutesToDatasets(t *testing.T) {
 	id, ok := navIDByGoKey["d"]
 	if !ok {
-		t.Fatal("navIDByGoKey[\"d\"] missing — should map to index per S15")
+		t.Fatal("navIDByGoKey[\"d\"] missing — should map to datasets")
+	}
+	if id != "datasets" {
+		t.Errorf("navIDByGoKey[\"d\"] = %q, want %q", id, "datasets")
+	}
+}
+
+func TestWorkbenchGpRoutesToIndex(t *testing.T) {
+	id, ok := navIDByGoKey["p"]
+	if !ok {
+		t.Fatal("navIDByGoKey[\"p\"] missing — should map to index")
 	}
 	if id != "index" {
-		t.Errorf("navIDByGoKey[\"d\"] = %q, want %q", id, "index")
+		t.Errorf("navIDByGoKey[\"p\"] = %q, want %q", id, "index")
 	}
 }
 

@@ -84,6 +84,7 @@ func NewWorkbench(client screens.DataClient, rawClient DataClient, serverURL str
 		"insights":    screens.NewInsights(),
 		"runs":        screens.NewRuns(),
 		"experiments": screens.NewExperiments(),
+		"datasets":    screens.NewDatasets(),
 		"baselines":   screens.NewBaselines(),
 		"feedback":    screens.NewFeedback(),
 		"cassettes":   screens.NewCassettes(),
@@ -372,9 +373,10 @@ var navIDByKey = map[string]string{
 	"3": "runs",
 	"4": "experiments",
 	"5": "baselines",
-	"6": "feedback",
-	"7": "cassettes",
-	"8": "index",
+	"6": "datasets",
+	"7": "feedback",
+	"8": "cassettes",
+	"9": "index",
 }
 
 var navIDByGoKey = map[string]string{
@@ -383,9 +385,10 @@ var navIDByGoKey = map[string]string{
 	"r": "runs",
 	"x": "experiments",
 	"b": "baselines",
+	"d": "datasets",
 	"f": "feedback",
 	"k": "cassettes", // `g k` is the mnemonic jump for cassettes
-	"d": "index",     // `g d` = definitions (the Project Index screen)
+	"p": "index",     // `g p` = project index
 }
 
 func (w *Workbench) handleKey(msg tea.KeyPressMsg) tea.Cmd {
@@ -463,6 +466,7 @@ var navKind = map[string]Kind{
 	"insights":    KindInsight,
 	"runs":        KindRun,
 	"experiments": KindExperiment,
+	"datasets":    KindDataset,
 	"baselines":   KindBaseline,
 	"feedback":    KindFeedback,
 	"cassettes":   KindCassette,

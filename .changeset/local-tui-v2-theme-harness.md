@@ -15,3 +15,5 @@ Rebuild the Insights screen on the rect-based kit layout with a virtualized insi
 Rebuild the Experiments screen around the kit table/matrix/diff/progress primitives with running-experiment progress, promotion-ready detail rendering, JSON export fallback, deterministic goldens, and resize-fuzz coverage. Unsupported experiment actions without current service or screen surfaces are hidden for follow-up.
 
 Rebuild the Cassettes, Feedback, and Baselines screens with deterministic fixture data, goldens, and resize-fuzz coverage. Cassettes now surfaces read-only stats and drift context from available cassette summaries, Feedback dismiss writes through the existing annotation status surface, and Baselines can open source experiments or replace a baseline through the existing promote path while deferred Compare actions stay hidden.
+
+Add the Datasets TUI screen with fixture-backed dataset/case/editor rendering, local dirty tracking, undo/discard behavior, in-memory duplicate/assertion edits, deterministic goldens, and resize-fuzz coverage. Service-backed suite/case save and trace-derived case creation remain hidden until the dataset write surface is added.

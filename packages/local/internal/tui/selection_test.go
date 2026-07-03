@@ -44,7 +44,7 @@ func TestSelectionStoreRoundTrips(t *testing.T) {
 func TestSelectionKindsCoverWorkflow(t *testing.T) {
 	required := []Kind{
 		KindRun, KindSpan, KindInsight, KindExperiment,
-		KindBaseline, KindFeedback, KindCassette,
+		KindDataset, KindBaseline, KindFeedback, KindCassette,
 	}
 	seen := make(map[Kind]struct{}, len(required))
 	for _, k := range required {
