@@ -54,6 +54,8 @@ func (s *Feedback) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		return fetchFeedback(c)
 	case dataErrMsg:
 		s.err = string(m)
+	case feedbackAnnotatedMsg:
+		s.applyAnnotation(api.QualityFeedbackAnnotationRecord(m))
 	case tea.KeyPressMsg:
 		switch m.String() {
 		case "j", "down":
@@ -63,56 +65,12 @@ func (s *Feedback) Update(msg tea.Msg, c DataClient) tea.Cmd {
 		case "enter":
 			return s.drillToSourceRun()
 		case "x":
-			return s.dismissStub()
+			return s.dismissFeedback(c)
 		case "f":
 			s.cycleStatusFilter()
-		case "o":
-			return nil // external-viewer stub
 		}
 	}
 	return nil
-}
-
-// drillToSourceRun emits a NavigateRequest staging the feedback's
-// linked TraceID so Runs opens with that record focused.
-func (s *Feedback) drillToSourceRun() tea.Cmd {
-	cur := s.currentFeedback()
-	if cur == nil || cur.TraceID == nil || *cur.TraceID == "" {
-		return nil
-	}
-	runID := *cur.TraceID
-	return func() tea.Msg {
-		return NavigateRequest{NavID: "runs", Kind: "run", ID: runID}
-	}
-}
-
-// dismissStub is the placeholder until c.SetFeedbackStatus lands.
-func (s *Feedback) dismissStub() tea.Cmd {
-	cur := s.currentFeedback()
-	if cur == nil {
-		return nil
-	}
-	id := cur.ID
-	return func() tea.Msg {
-		return feedbackDismissPendingMsg{feedbackID: id}
-	}
-}
-
-type feedbackDismissPendingMsg struct{ feedbackID string }
-
-// cycleStatusFilter advances the status filter through
-// open → resolved → dismissed → all → open.
-func (s *Feedback) cycleStatusFilter() {
-	switch s.StatusFilter() {
-	case "open":
-		s.statusFilter = "resolved"
-	case "resolved":
-		s.statusFilter = "dismissed"
-	case "dismissed":
-		s.statusFilter = "all"
-	default:
-		s.statusFilter = "open"
-	}
 }
 
 func (s *Feedback) Breadcrumb() ([]string, string) {
@@ -127,7 +85,6 @@ func (s *Feedback) Keybinds() []shell.Keybind {
 	return []shell.Keybind{
 		shell.Bind("j/k", "move"), shell.Bind("↵", "open run"),
 		shell.Bind("f", "filter"), shell.Bind("x", "dismiss"),
-		shell.Bind("o", "open in viewer"),
 		shell.Bind(":", "cmd"), shell.Bind("?", "help"),
 	}
 }

@@ -158,16 +158,16 @@ func (c *FixtureClient) ProjectIndex(context.Context) (api.IndexData, error) {
 	return api.IndexData{}, nil
 }
 func (c *FixtureClient) PromotedBaselines(context.Context) ([]api.QualityPromotedBaseline, error) {
-	return nil, nil
+	return c.fixtureBaselines(), nil
 }
 func (c *FixtureClient) CassetteFiles(context.Context) ([]api.QualityCassetteFileRecord, error) {
-	return nil, nil
+	return c.fixtureCassettes(), nil
 }
 func (c *FixtureClient) ScorerStats(context.Context) ([]api.QualityScorerStats, error) {
 	return nil, nil
 }
 func (c *FixtureClient) Feedback(context.Context) ([]api.QualityFeedbackRecord, error) {
-	return nil, nil
+	return c.fixtureFeedback(), nil
 }
 func (c *FixtureClient) DevtoolsContext(context.Context) (api.DevtoolsContext, error) {
 	return api.DevtoolsContext{}, nil

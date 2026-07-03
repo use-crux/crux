@@ -1,10 +1,13 @@
 package screens
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/tui/uitest"
 )
 
 func sampleFeedback() api.QualityFeedbackRecord {
@@ -37,18 +40,23 @@ func TestFeedbackEnterDrillsToSourceRun(t *testing.T) {
 	}
 }
 
-// TestFeedbackXDismissStubEmitsCmd asserts pressing `x` returns a
-// non-nil cmd that will call c.SetFeedbackStatus once the backend
-// method lands. V1 returns a stub.
-func TestFeedbackXDismissStubEmitsCmd(t *testing.T) {
+func TestFeedbackXDismissWritesAnnotationStatus(t *testing.T) {
 	f := NewFeedback()
 	f.items = []api.QualityFeedbackRecord{sampleFeedback()}
 	f.selectedID = "fb-1"
 	f.loaded = true
+	client := &feedbackWriteClient{FixtureClient: uitest.NewFixtureClient()}
 
-	cmd := f.Update(tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}), nil)
+	cmd := f.Update(tea.KeyPressMsg(tea.Key{Text: "x", Code: 'x'}), client)
 	if cmd == nil {
-		t.Error("pressing `x` returned nil; expected dismiss stub")
+		t.Fatal("pressing `x` returned nil; expected feedback annotation write")
+	}
+	msg := cmd()
+	if _, ok := msg.(feedbackAnnotatedMsg); !ok {
+		t.Fatalf("dismiss command returned %T, want feedbackAnnotatedMsg", msg)
+	}
+	if client.req.FeedbackID != "fb-1" || client.req.Status != "dismissed" {
+		t.Fatalf("annotation request = %+v, want feedback fb-1 dismissed", client.req)
 	}
 }
 
@@ -82,4 +90,36 @@ func TestFeedbackKeybindsUseSuiteNotDataset(t *testing.T) {
 			t.Errorf("Feedback keybind still says \"save to dataset\"; canonical noun is suite")
 		}
 	}
+}
+
+func TestFeedbackKeybindsHideUnsupportedActions(t *testing.T) {
+	f := NewFeedback()
+	labels := make([]string, 0, len(f.Keybinds()))
+	for _, bind := range f.Keybinds() {
+		labels = append(labels, bind.Key+" "+bind.Label)
+	}
+	text := strings.Join(labels, " · ")
+	for _, unsupported := range []string{"s save", "l link"} {
+		if strings.Contains(text, unsupported) {
+			t.Fatalf("unsupported feedback action %q is advertised in %q", unsupported, text)
+		}
+	}
+	if !strings.Contains(text, "x dismiss") {
+		t.Fatalf("feedback keybinds missing wired dismiss action: %s", text)
+	}
+}
+
+type feedbackWriteClient struct {
+	*uitest.FixtureClient
+	req api.QualityFeedbackAnnotationPostRequest
+}
+
+func (c *feedbackWriteClient) CreateFeedbackAnnotation(_ context.Context, req api.QualityFeedbackAnnotationPostRequest) (api.QualityFeedbackAnnotationRecord, error) {
+	c.req = req
+	return api.QualityFeedbackAnnotationRecord{
+		Tag:        "QualityFeedbackAnnotation",
+		ID:         "annotation-1",
+		FeedbackID: req.FeedbackID,
+		Status:     req.Status,
+	}, nil
 }

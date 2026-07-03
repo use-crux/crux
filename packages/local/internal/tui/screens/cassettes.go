@@ -153,62 +153,6 @@ func (s *Cassettes) renderListRow(c api.QualityCassetteFileRecord, width int, se
 	return padRow(line1, width) + "\n" + padRow(line2, width)
 }
 
-func (s *Cassettes) renderDetail(width, height int) string {
-	cur := s.currentCassette()
-	if cur == nil {
-		return centerMsg(Size{Width: width, Height: height}, "select a cassette")
-	}
-
-	subtitle := fmt.Sprintf("%d entries · %s", cur.EntryCount, formatBytes(cur.SizeBytes))
-	if cur.Stale {
-		subtitle += " · " + shell.Amber.Render("stale")
-	}
-	header := shell.PaneHeader(width, cur.Name, subtitle, "")
-	var b strings.Builder
-	b.WriteString(header)
-	b.WriteString("\n")
-
-	b.WriteString(" " + shell.SectionTag.Render("FILE"))
-	b.WriteString("\n")
-	b.WriteString(kvRow("path", cur.Path, width))
-	b.WriteString(kvRow("recorded", cur.RecordedAt, width))
-	b.WriteString(kvRow("sdk", cur.SdkVersion, width))
-	b.WriteString(kvRow("size", formatBytes(cur.SizeBytes), width))
-	b.WriteString(kvRow("entries", fmt.Sprintf("%d", cur.EntryCount), width))
-
-	if len(cur.Models) > 0 {
-		b.WriteString("\n " + shell.SectionTag.Render("MODELS"))
-		b.WriteString("\n")
-		for _, m := range cur.Models {
-			b.WriteString(padRow(" "+shell.TextDim.Render(m), width))
-			b.WriteString("\n")
-		}
-	}
-
-	if cur.Stale {
-		b.WriteString("\n " + shell.SectionTag.Render("STALENESS"))
-		b.WriteString("\n")
-		b.WriteString(padRow(" "+shell.Amber.Render("recorded more than 90 days ago — replay refuses stale tapes."), width))
-		b.WriteString("\n")
-		b.WriteString(padRow(" "+shell.TextDim.Render("re-record with `crux quality run --replay refresh`."), width))
-		b.WriteString("\n")
-	}
-
-	hdrH := strings.Count(header, "\n") + 1
-	return kit.PadBlock(b.String(), width, height-hdrH+1)
-}
-
-func formatBytes(n int64) string {
-	switch {
-	case n >= 1<<20:
-		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
-	case n >= 1<<10:
-		return fmt.Sprintf("%.1f KB", float64(n)/(1<<10))
-	default:
-		return fmt.Sprintf("%d B", n)
-	}
-}
-
 func (s *Cassettes) move(delta int) {
 	if len(s.items) == 0 {
 		return
