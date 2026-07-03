@@ -249,7 +249,7 @@ export function emitToolApprovalObservation(
       span.error(args.error, { phase, isError: true })
       return
     }
-    span.end({ phase, approved: phase === 'approved' })
+    span.end({ attributes: { phase, approved: phase === 'approved' } })
   } catch (error) {
     span.error(error)
   }

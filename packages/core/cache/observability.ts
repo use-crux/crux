@@ -92,14 +92,16 @@ export function emitSemanticCacheSkipSpan(args: {
     })
   })
   span.end({
-    cacheKind: 'semantic',
-    cacheOperation: 'skip',
-    cacheId: args.cacheId,
-    promptId: args.promptId,
-    operation: args.operation,
-    scopeHash: args.scopeHash,
-    version: args.version,
-    skipped: true,
-    reason: args.reason,
+    attributes: {
+      cacheKind: 'semantic',
+      cacheOperation: 'skip',
+      cacheId: args.cacheId,
+      promptId: args.promptId,
+      operation: args.operation,
+      scopeHash: args.scopeHash,
+      version: args.version,
+      skipped: true,
+      reason: args.reason,
+    },
   })
 }

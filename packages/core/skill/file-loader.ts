@@ -80,13 +80,15 @@ export function fileSkill(filePath: string): Skill {
     })
     span.withContext(() => emitSkillArtifact(span.spanId, skill))
     span.end({
-      loader: 'file',
-      sourceId,
-      skillId: skill.id,
-      referenceCount: references.length,
-      instructionChars: body.length,
-      tags: meta.tags,
-      version: meta.version,
+      attributes: {
+        loader: 'file',
+        sourceId,
+        skillId: skill.id,
+        referenceCount: references.length,
+        instructionChars: body.length,
+        tags: meta.tags,
+        version: meta.version,
+      },
     })
     return skill
   } catch (error) {

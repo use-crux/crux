@@ -326,6 +326,10 @@ This separation lets you inspect what the model will see, run the same prompt th
 
 Generation, streaming, and tool spans emit canonical graph records with latency and throughput metrics such as `gen.duration_ms`, `gen.time_to_first_token_ms`, `gen.output_tokens_per_second`, and `gen.time_per_output_chunk_ms`.
 
+Manual spans use an explicit terminal API: call `span.end({ attributes, metrics, status })` for terminal metadata, or `span.setAttributes(attributes)` for metadata discovered before the span closes. Raw attribute bags are not accepted by `span.end()`, so `{ error: value }` always means an error end instead of an ambiguous attribute object.
+
+Streaming spans close through a single finalizer. Raw stream drain and provider completion metadata are merged before the terminal `span:end` when both are available; if completion metadata is never awaited, the span closes after a bounded grace window with stream-derived metrics. Early stream cancellation ends the span as `cancelled`.
+
 Metric objects may include optional expressions that evaluate to `undefined`. The observability runtime strips `undefined`, `NaN`, and infinite metric values before records reach subscribers, diagnostics-channel consumers, devtools transports, or OTel, so malformed metrics do not interrupt application code.
 
 Observability delivery is fail-open and bounded. When no subscribers, diagnostics-channel listeners, or transport are active, emitters skip graph-record construction. Active delivery batches records on `observability.delivery.scheduledDelayMs`, chunks requests with the transport's `maxRecordsPerRequest`, retries failed chunks on capped backoff without waiting for another emitted record, and caps queued records with oldest-record drop accounting in `droppedRecords`. Synchronous or asynchronous transport failures are recorded in `observabilityDiagnostics().deliveryErrors` without escaping into application code.

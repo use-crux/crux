@@ -97,7 +97,7 @@ export function indexer(config: IndexerConfig): Indexer {
         })
         return prepared.chunks
       })
-      span.end({ chunkCount: chunks.length })
+      span.end({ attributes: { chunkCount: chunks.length } })
       return chunks
     } catch (error) {
       span.error(error)
@@ -168,7 +168,9 @@ export function indexer(config: IndexerConfig): Indexer {
         })
         return result
       })
-      span.end({ sourceCount: result.sourceCount, chunkCount: result.chunkCount, dryRun: options?.dryRun === true })
+      span.end({
+        attributes: { sourceCount: result.sourceCount, chunkCount: result.chunkCount, dryRun: options?.dryRun === true },
+      })
       return result
     } catch (error) {
       span.error(error)
@@ -237,7 +239,9 @@ export function indexer(config: IndexerConfig): Indexer {
         })
         return result
       })
-      span.end({ sourceCount: result.sourceCount, chunkCount: result.chunkCount, dryRun: options?.dryRun === true })
+      span.end({
+        attributes: { sourceCount: result.sourceCount, chunkCount: result.chunkCount, dryRun: options?.dryRun === true },
+      })
       return result
     } catch (error) {
       span.error(error)

@@ -79,7 +79,7 @@ async function executeAgentRun<TOutput>(
     runWithExecutionContext(stepCtx, async () => {
       try {
         const result = await invokeAgent(input, startedAt)
-        agentSpan.end({ agentId: result.agentId })
+        agentSpan.end({ attributes: { agentId: result.agentId } })
         return result
       } catch (error) {
         agentSpan.error(error)

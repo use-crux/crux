@@ -270,6 +270,107 @@ describe('observe runtime', () => {
     expect(runEnd).toMatchObject({ type: 'run:end', runId: runStart.runId, status: 'ok' })
   })
 
+  it('emits captured run ends once with captured duration', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-03T00:00:00.000Z'))
+    try {
+      const transport = createInMemoryObservabilityTransport()
+      setObservabilityTransport(transport)
+
+      const run = observe.openRun({ name: 'serverless once', rootPrimitive: 'custom.operation' })
+      const captured = run.captureContext()
+
+      vi.advanceTimersByTime(42)
+      observe.endRun(captured)
+      observe.endRun(captured, { status: 'error', error: new Error('late duplicate') })
+      await observe.flush()
+
+      const runEnds = transport.records.filter((record) => record.type === 'run:end')
+      expect(runEnds).toHaveLength(1)
+      expect(runEnds[0]).toMatchObject({
+        type: 'run:end',
+        runId: run.runId,
+        status: 'ok',
+        durationMs: 42,
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('deduplicates captured and owner run end calls across both orders', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const first = observe.openRun({ name: 'owner first', rootPrimitive: 'custom.operation' })
+    const firstCaptured = first.captureContext()
+    first.end()
+    observe.endRun(firstCaptured, { status: 'error', error: new Error('duplicate') })
+
+    const second = observe.openRun({ name: 'captured first', rootPrimitive: 'custom.operation' })
+    const secondCaptured = second.captureContext()
+    observe.endRun(secondCaptured)
+    second.end({ status: 'error', error: new Error('duplicate') })
+
+    await observe.flush()
+
+    const runEnds = transport.records.filter((record) => record.type === 'run:end')
+    expect(runEnds).toHaveLength(2)
+    expect(runEnds.map((record) => record.status)).toEqual(['ok', 'ok'])
+    expect(runEnds.map((record) => record.runId)).toEqual([first.runId, second.runId])
+  })
+
+  it('merges open span attributes with setAttributes and explicit end attributes', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const run = observe.openRun({ name: 'manual attrs', rootPrimitive: 'custom.operation' })
+    run.withContext(() => {
+      const span = observe.openSpan({
+        name: 'manual span',
+        family: 'custom',
+        primitive: 'custom.operation',
+        attributes: { initial: true, phase: 'start' },
+      })
+      span.setAttributes({ phase: 'middle', accumulated: 1 })
+      span.end({ attributes: { final: true } })
+    })
+    run.end()
+    await observe.flush()
+
+    const spanEnd = transport.records.find((record) => record.type === 'span:end')
+    expect(spanEnd).toMatchObject({
+      type: 'span:end',
+      attributes: {
+        initial: true,
+        phase: 'middle',
+        accumulated: 1,
+        final: true,
+      },
+    })
+  })
+
+  it('treats an untyped end error field as an error end instead of raw attributes', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const run = observe.openRun({ name: 'manual error option', rootPrimitive: 'custom.operation' })
+    run.withContext(() => {
+      const span = observe.openSpan({ name: 'manual span', family: 'custom', primitive: 'custom.operation' })
+      span.end({ error: 'someString' })
+    })
+    run.end()
+    await observe.flush()
+
+    const spanEnd = transport.records.find((record) => record.type === 'span:end')
+    expect(spanEnd).toMatchObject({
+      type: 'span:end',
+      status: 'error',
+      error: { message: 'someString' },
+    })
+    expect(spanEnd).not.toMatchObject({ attributes: expect.objectContaining({ error: 'someString' }) })
+  })
+
   it('emits events, artifacts, and edges inside the active span', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)

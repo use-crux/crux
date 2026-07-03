@@ -157,8 +157,10 @@ export function emitSecurityWarningSpan(input: {
     })
   })
   span.end({
-    promptId: input.promptId,
-    field: input.field,
-    pattern: input.pattern,
+    attributes: {
+      promptId: input.promptId,
+      field: input.field,
+      pattern: input.pattern,
+    },
   })
 }

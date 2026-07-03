@@ -173,12 +173,14 @@ export function createFeedbackStore(options: FeedbackStoreOptions): FeedbackStor
           return created
         })
         span.end({
-          qualityId,
-          feedbackId: record.id,
-          status: record.status,
-          traceId: record.traceId,
-          experimentId: record.experimentId,
-          caseId: record.caseId,
+          attributes: {
+            qualityId,
+            feedbackId: record.id,
+            status: record.status,
+            traceId: record.traceId,
+            experimentId: record.experimentId,
+            caseId: record.caseId,
+          },
         })
         return record
       } catch (error) {

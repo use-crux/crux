@@ -15,6 +15,7 @@ import type { ResolvedPrompt } from '../resolver/types'
 import type { OrchestrationSpec } from './orchestrate-types'
 import type { GenerationPerformanceTracker } from './performance-metrics'
 import { generationUsageAttributes } from './result-meta'
+import { createStreamSpanFinalizer, type StreamSpanFinalizer } from './stream-finalizer'
 
 export function generationAttributes(
   spec: Pick<
@@ -150,17 +151,26 @@ export function attachStreamObservability(
   const rawStream = record.rawStream
   const extractTextDelta = record.extractTextDelta
   const observesRawStream = isAsyncIterable(rawStream) && typeof extractTextDelta === 'function'
+  const completion = record.completion
+  const observesCompletion = typeof completion === 'function'
+  const finalizer = createStreamSpanFinalizer({
+    span,
+    performance,
+    expectsStream: observesRawStream,
+    expectsCompletion: observesCompletion,
+  })
+
   if (observesRawStream) {
     record.rawStream = observedStream(
       rawStream,
       extractTextDelta as (chunk: unknown) => string | undefined,
       span,
+      finalizer,
       performance,
     )
   }
 
-  const completion = record.completion
-  if (typeof completion !== 'function') {
+  if (!observesCompletion) {
     if (!observesRawStream) {
       span.end({
         attributes: { streamCompleted: true, completionAvailable: false },
@@ -189,12 +199,12 @@ export function attachStreamObservability(
           linkActiveSpanToArtifact('produced', outputArtifactId)
         }
       })
-      span.end({
-        metrics: performance.metrics(meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : undefined),
+      finalizer.completionSettled({
+        meta: meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : undefined,
       })
       return meta
     } catch (error) {
-      span.error(error)
+      finalizer.completionErrored(error)
       throw error
     }
   }
@@ -204,9 +214,12 @@ async function* observedStream(
   rawStream: AsyncIterable<unknown>,
   extractTextDelta: (chunk: unknown) => string | undefined,
   span: ReturnType<typeof observe.openSpan>,
+  finalizer: StreamSpanFinalizer,
   performance: GenerationPerformanceTracker,
 ): AsyncIterable<unknown> {
   let index = 0
+  let completed = false
+  let failed = false
   try {
     for await (const chunk of rawStream) {
       const delta = extractTextDelta(chunk)
@@ -226,13 +239,16 @@ async function* observedStream(
       }
       yield chunk
     }
-    span.end({
-      attributes: { streamCompleted: true, tokenDeltaCount: index },
-      metrics: performance.metrics(),
-    })
+    completed = true
+    finalizer.streamEnded({ tokenDeltaCount: index })
   } catch (error) {
-    span.error(error)
+    failed = true
+    finalizer.streamErrored({ tokenDeltaCount: index, error })
     throw error
+  } finally {
+    if (!completed && !failed) {
+      finalizer.streamReturned({ tokenDeltaCount: index })
+    }
   }
 }
 

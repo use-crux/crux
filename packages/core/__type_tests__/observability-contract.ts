@@ -1,4 +1,5 @@
 import type {
+  CruxAttributes,
   CruxArtifactId,
   CruxGraphRecord,
   CruxObservabilityChannelMessage,
@@ -12,6 +13,7 @@ import {
   createCruxArtifactId,
   createCruxRunId,
   createCruxSpanId,
+  observe,
 } from '../observability'
 
 const runId: CruxRunId = createCruxRunId('type_test')
@@ -55,3 +57,11 @@ const invalidSubscriber: CruxObservabilitySubscriber = (record: string) => {
 void channelName
 void subscriber
 void invalidSubscriber
+
+const span = observe.openSpan({ name: 'type-test', family: 'custom', primitive: 'custom.operation' })
+const spanAttributes: CruxAttributes = { phase: 'compile' }
+span.end({ attributes: spanAttributes })
+span.setAttributes(spanAttributes)
+
+// @ts-expect-error Span attributes must be passed through `attributes` or `setAttributes`, not as raw end options.
+span.end({ phase: 'compile' })

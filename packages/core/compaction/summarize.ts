@@ -79,14 +79,16 @@ export async function summarizeMessages(config: SummarizeConfig): Promise<Compac
       return summary
     })
     span.end({
-      compactionKind: 'summary',
-      messageCount: messages.length,
-      model: modelLabel(model),
-      maxTokens,
-      focus,
-      tokensBefore: result.tokensBefore,
-      tokensAfter: result.tokensAfter,
-      compressionRatio: result.ratio,
+      attributes: {
+        compactionKind: 'summary',
+        messageCount: messages.length,
+        model: modelLabel(model),
+        maxTokens,
+        focus,
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
+        compressionRatio: result.ratio,
+      },
     })
     return result
   } catch (error) {

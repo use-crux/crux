@@ -53,7 +53,7 @@ export async function runRetrievalOperation(args: {
         hits,
       })
     })
-    span.end({ resultCount: hits.length })
+    span.end({ attributes: { resultCount: hits.length } })
     return hits
   } catch (error) {
     span.error(error, { resultCount: 0 })

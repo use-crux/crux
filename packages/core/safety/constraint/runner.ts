@@ -118,10 +118,12 @@ export async function observeConstraintCheck(
         },
       })
       span.end({
-        pass: result.pass,
-        durationMs,
-        feedback: result.pass ? undefined : result.feedback,
-        metadata: result.metadata,
+        attributes: {
+          pass: result.pass,
+          durationMs,
+          feedback: result.pass ? undefined : result.feedback,
+          metadata: result.metadata,
+        },
       })
       return { constraint: c, result, durationMs }
     })

@@ -555,11 +555,13 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
         })
       })
       span.end({
-        isError: false,
-        outputSize,
-        modelOutputSize,
-        modelOutputType: modelOutput.type,
-        tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+        attributes: {
+          isError: false,
+          outputSize,
+          modelOutputSize,
+          modelOutputType: modelOutput.type,
+          tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+        },
       })
       transcript.push({ t: 'execute.settle', toolCallId: toolCall.id, outcome: 'ok' })
       return {

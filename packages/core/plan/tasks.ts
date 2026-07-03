@@ -193,11 +193,13 @@ async function createTaskList(
     })
     const ctx = getExecutionContext()
     span.end({
-      operation: 'tasklist.create',
-      taskListId: id,
-      planId: input.planId,
-      status: list.status,
-      traceId: ctx?.traceId,
+      attributes: {
+        operation: 'tasklist.create',
+        taskListId: id,
+        planId: input.planId,
+        status: list.status,
+        traceId: ctx?.traceId,
+      },
     })
     return createHandle(id, taskSpecs)
   } catch (error) {
@@ -298,11 +300,13 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
         const ctx = getExecutionContext()
         await repairTaskListState(store, taskListId)
         span.end({
-          operation: 'add',
-          taskListId,
-          taskId: task.id,
-          status: task.status,
-          traceId: ctx?.traceId,
+          attributes: {
+            operation: 'add',
+            taskListId,
+            taskId: task.id,
+            status: task.status,
+            traceId: ctx?.traceId,
+          },
         })
         return task
       } catch (error) {
@@ -375,13 +379,15 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
         const ctx = getExecutionContext()
         await repairTaskListState(store, taskListId)
         span.end({
-          operation: 'update',
-          taskListId,
-          taskId,
-          status: updated.status,
-          progress: updated.progress,
-          durationMs: updated.durationMs,
-          traceId: ctx?.traceId,
+          attributes: {
+            operation: 'update',
+            taskListId,
+            taskId,
+            status: updated.status,
+            progress: updated.progress,
+            durationMs: updated.durationMs,
+            traceId: ctx?.traceId,
+          },
         })
         return updated
       } catch (error) {
@@ -428,12 +434,14 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
         const ctx = getExecutionContext()
         await repairTaskListState(store, taskListId)
         span.end({
-          operation: 'remove',
-          taskListId,
-          taskId,
-          removed: true,
-          previousStatus,
-          traceId: ctx?.traceId,
+          attributes: {
+            operation: 'remove',
+            taskListId,
+            taskId,
+            removed: true,
+            previousStatus,
+            traceId: ctx?.traceId,
+          },
         })
       } catch (error) {
         span.error(error, { operation: 'remove', taskListId, taskId })
@@ -463,10 +471,12 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
         const list = rawList as unknown as TaskList
         if (list.status === 'discarded') {
           span.end({
-            operation: 'tasklist.discard',
-            taskListId,
-            discarded: true,
-            alreadyDiscarded: true,
+            attributes: {
+              operation: 'tasklist.discard',
+              taskListId,
+              discarded: true,
+              alreadyDiscarded: true,
+            },
           })
           return
         }
@@ -504,12 +514,14 @@ export function createHandle(taskListId: string, taskSpecs?: TaskSpecRecord): Ta
 
         const ctx = getExecutionContext()
         span.end({
-          operation: 'tasklist.discard',
-          taskListId,
-          discarded: true,
-          completedCount,
-          remainingCount,
-          traceId: ctx?.traceId,
+          attributes: {
+            operation: 'tasklist.discard',
+            taskListId,
+            discarded: true,
+            completedCount,
+            remainingCount,
+            traceId: ctx?.traceId,
+          },
         })
       } catch (error) {
         span.error(error, { operation: 'tasklist.discard', taskListId })

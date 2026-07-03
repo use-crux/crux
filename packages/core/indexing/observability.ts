@@ -104,7 +104,7 @@ export function emitIngestLoadObservation(
       span.error(new Error(input.error.message))
       return
     }
-    span.end({ warningCount: document?.warnings?.length ?? 0, partCount: document?.parts?.length ?? 0 })
+    span.end({ attributes: { warningCount: document?.warnings?.length ?? 0, partCount: document?.parts?.length ?? 0 } })
   } catch (error) {
     span.error(error)
   }
@@ -353,9 +353,10 @@ export async function runIndexOperation<T extends IndexResult | IndexDryRunResul
         })
       })
       span.end({
-        ...(typeof result === 'number'
-          ? { deletedCount: result }
-          : { sourceCount: result.sourceCount, chunkCount: result.chunkCount }),
+        attributes:
+          typeof result === 'number'
+            ? { deletedCount: result }
+            : { sourceCount: result.sourceCount, chunkCount: result.chunkCount },
       })
     }
     return result

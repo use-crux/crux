@@ -201,15 +201,17 @@ export async function resolveRegistrySkill(
       }
       span.withContext(() => emitRegistrySkillArtifact(span.spanId, identifier, 'cache', result))
       span.end({
-        loader: 'registry',
-        source: 'cache',
-        identifier,
-        cached: true,
-        skillId: result.meta.name,
-        referenceCount: result.references.length,
-        instructionChars: result.instructions.length,
-        tags: result.meta.tags,
-        version: result.meta.version,
+        attributes: {
+          loader: 'registry',
+          source: 'cache',
+          identifier,
+          cached: true,
+          skillId: result.meta.name,
+          referenceCount: result.references.length,
+          instructionChars: result.instructions.length,
+          tags: result.meta.tags,
+          version: result.meta.version,
+        },
       })
       return result
     }
@@ -251,15 +253,17 @@ export async function resolveRegistrySkill(
 
     span.withContext(() => emitRegistrySkillArtifact(span.spanId, identifier, registryName, result))
     span.end({
-      loader: 'registry',
-      source: registryName,
-      identifier,
-      cached: false,
-      skillId: result.meta.name,
-      referenceCount: result.references.length,
-      instructionChars: result.instructions.length,
-      tags: result.meta.tags,
-      version: result.meta.version,
+      attributes: {
+        loader: 'registry',
+        source: registryName,
+        identifier,
+        cached: false,
+        skillId: result.meta.name,
+        referenceCount: result.references.length,
+        instructionChars: result.instructions.length,
+        tags: result.meta.tags,
+        version: result.meta.version,
+      },
     })
     return result
   } catch (error) {

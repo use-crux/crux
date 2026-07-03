@@ -90,12 +90,14 @@ async function createPlan(input: CreatePlanInput): Promise<PlanHandle> {
     })
     const ctx = getExecutionContext()
     span.end({
-      operation: 'create',
-      planId: data.id,
-      title: data.title,
-      version: data.version,
-      hasContent: data.content.length > 0,
-      traceId: ctx?.traceId,
+      attributes: {
+        operation: 'create',
+        planId: data.id,
+        title: data.title,
+        version: data.version,
+        hasContent: data.content.length > 0,
+        traceId: ctx?.traceId,
+      },
     })
     return createPlanHandle(data.id)
   } catch (error) {
@@ -223,11 +225,13 @@ export async function updatePlan(planId: string, update: PlanUpdate): Promise<Pl
     const ctx = getExecutionContext()
 
     span.end({
-      operation: 'update',
-      planId,
-      version: updated.version,
-      changes,
-      traceId: ctx?.traceId,
+      attributes: {
+        operation: 'update',
+        planId,
+        version: updated.version,
+        changes,
+        traceId: ctx?.traceId,
+      },
     })
     return updated
   } catch (error) {

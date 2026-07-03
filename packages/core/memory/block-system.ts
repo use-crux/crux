@@ -456,7 +456,7 @@ function emitMemoryObservation(
         },
       })
     })
-    span.end(omitSnapshot(attributes))
+    span.end({ attributes: omitSnapshot(attributes) })
   } catch (error) {
     span.error(error)
   }
@@ -662,7 +662,7 @@ function emitMemoryRenderObservation(
       }
       observe.event({ name: 'memory.read', attributes })
     })
-    span.end(attributes)
+    span.end({ attributes })
   } catch (error) {
     span.error(error)
   }

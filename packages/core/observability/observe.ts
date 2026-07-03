@@ -61,8 +61,28 @@ export interface OpenObservedSpan {
   readonly traceId: CruxTraceId
   readonly spanId: CruxSpanId
   readonly parentSpanId: CruxSpanId | null
+  /**
+   * Run work with this span as the active observability context.
+   *
+   * Context propagation is best-effort and never changes user-code behavior if
+   * the host runtime does not provide `AsyncLocalStorage`.
+   */
   withContext<T>(fn: () => T | Promise<T>): T | Promise<T>
-  end(options?: CruxAttributes | EndObservedSpanOptions): void
+  /**
+   * Merge attributes into the span end record without ending the span.
+   *
+   * Later calls override earlier keys. Use this for metadata discovered after
+   * span start; terminal attributes can still be passed to {@link end}.
+   */
+  setAttributes(attributes: CruxAttributes): void
+  /**
+   * End the span once.
+   *
+   * Raw attribute bags are intentionally not accepted. Pass terminal attributes
+   * as `{ attributes }`, or call {@link setAttributes} before ending.
+   */
+  end(options?: EndObservedSpanOptions): void
+  /** End the span with status `error` and emit normalized error evidence. */
   error(error: unknown, attributes?: CruxAttributes): void
 }
 
@@ -138,6 +158,7 @@ export interface ObserveEdgeOptions {
 interface ObservabilityContext {
   runId: CruxRunId
   traceId: CruxTraceId
+  startedAtMs?: number
   spanStack: readonly CruxSpanId[]
 }
 
@@ -168,14 +189,8 @@ let nextConfigurationToken = 0
 let activeConfigurationToken = 0
 const configurationParents = new Map<number, number>()
 
-const terminalSpanStatuses = new Set<Exclude<CruxSpanStatus, 'running'>>([
-  'ok',
-  'error',
-  'blocked',
-  'cancelled',
-  'suspended',
-  'skipped',
-])
+const maxEndedRunIds = 10_000
+const endedRunIds = new Set<CruxRunId>()
 function getAls(): AsyncLocalStorageLike<ObservabilityContext> | null {
   if (!alsInitialized) {
     alsInitialized = true
@@ -259,20 +274,6 @@ function shouldWarnAboutInvalidRecords(): boolean {
   }
   const nodeEnv = runtime.process?.env?.NODE_ENV
   return nodeEnv !== 'production' && nodeEnv !== 'test'
-}
-
-function normalizeSpanEndOptions(options?: CruxAttributes | EndObservedSpanOptions): EndObservedSpanOptions {
-  if (!options) return {}
-  const candidate = options as EndObservedSpanOptions
-  if (
-    (candidate.status && terminalSpanStatuses.has(candidate.status)) ||
-    candidate.metrics !== undefined ||
-    candidate.error !== undefined ||
-    candidate.attributes !== undefined
-  ) {
-    return candidate
-  }
-  return { attributes: options as CruxAttributes }
 }
 
 function errorContext(attributes?: CruxAttributes): {
@@ -435,6 +436,7 @@ export function resetObservabilityRuntime(): void {
   configurationParents.clear()
   invalidRecords = 0
   warnedAboutInvalidRecord = false
+  endedRunIds.clear()
 }
 
 export function observabilityDeliveryErrors(): readonly unknown[] {
@@ -457,7 +459,7 @@ export const observe = {
     const runId = createCruxRunId()
     const traceId = createCruxTraceId()
     const startedAtMs = Date.now()
-    const context: ObservabilityContext = { runId, traceId, spanStack: [] }
+    const context: ObservabilityContext = { runId, traceId, startedAtMs, spanStack: [] }
     let ended = false
 
     emitObserved(() => ({
@@ -475,7 +477,9 @@ export const observe = {
 
     const finish = (finishOptions: EndObservedRunOptions = {}): void => {
       if (ended) return
+      if (endedRunIds.has(runId)) return
       ended = true
+      rememberEndedRunId(runId)
       const status = finishOptions.status ?? (finishOptions.error ? 'error' : 'ok')
       emitObserved(() => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -513,6 +517,8 @@ export const observe = {
   },
 
   endRun(context: CapturedObservabilityContext, options: EndObservedRunOptions = {}): void {
+    if (endedRunIds.has(context.runId)) return
+    rememberEndedRunId(context.runId)
     const status = options.status ?? (options.error ? 'error' : 'ok')
     emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -521,6 +527,7 @@ export const observe = {
       runId: context.runId,
       traceId: context.traceId,
       endedAt: now(),
+      ...(context.startedAtMs !== undefined ? { durationMs: durationSince(context.startedAtMs) } : {}),
       status,
       ...(options.metrics ? { metrics: options.metrics } : {}),
       ...(options.error !== undefined
@@ -534,7 +541,7 @@ export const observe = {
     const runId = createCruxRunId()
     const traceId = createCruxTraceId()
     const startedAtMs = Date.now()
-    const context: ObservabilityContext = { runId, traceId, spanStack: [] }
+    const context: ObservabilityContext = { runId, traceId, startedAtMs, spanStack: [] }
 
     emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -551,6 +558,8 @@ export const observe = {
 
     try {
       const result = await withContext(context, fn)
+      if (endedRunIds.has(runId)) return result
+      rememberEndedRunId(runId)
       emitObserved(() => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
@@ -563,6 +572,8 @@ export const observe = {
       }))
       return result
     } catch (error) {
+      if (endedRunIds.has(runId)) throw error
+      rememberEndedRunId(runId)
       emitObserved(() => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
@@ -666,6 +677,7 @@ export const observe = {
           withContext<T>(fn: () => T | Promise<T>): T | Promise<T> {
             return fn()
           },
+          setAttributes(): void {},
           end(): void {},
           error(): void {},
         }
@@ -675,6 +687,7 @@ export const observe = {
       const implicitContext: ObservabilityContext = {
         runId: createCruxRunId(),
         traceId: createCruxTraceId(),
+        startedAtMs: implicitRunStartedAtMs,
         spanStack: [],
       }
       context = implicitContext
@@ -700,6 +713,7 @@ export const observe = {
     }
     const startedAtMs = Date.now()
     let ended = false
+    let accumulatedAttributes: CruxAttributes | undefined
 
     emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -718,9 +732,10 @@ export const observe = {
     }))
 
     const mergeSpanAttributes = (finishAttributes?: CruxAttributes): CruxAttributes | undefined => {
-      if (!options.attributes && !finishAttributes) return undefined
+      if (!options.attributes && !accumulatedAttributes && !finishAttributes) return undefined
       return {
         ...(options.attributes ?? {}),
+        ...(accumulatedAttributes ?? {}),
         ...(finishAttributes ?? {}),
       }
     }
@@ -751,6 +766,8 @@ export const observe = {
       }))
       if (openedImplicitRun) {
         const runStatus: Exclude<CruxRunStatus, 'running'> = status === 'skipped' ? 'ok' : status
+        if (endedRunIds.has(spanContext.runId)) return
+        rememberEndedRunId(spanContext.runId)
         emitObserved(() => ({
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
@@ -776,8 +793,14 @@ export const observe = {
       withContext<T>(fn: () => T | Promise<T>): T | Promise<T> {
         return withContext(spanContext, fn)
       },
-      end(options?: CruxAttributes | EndObservedSpanOptions): void {
-        finish(normalizeSpanEndOptions(options))
+      setAttributes(attributes: CruxAttributes): void {
+        accumulatedAttributes = {
+          ...(accumulatedAttributes ?? {}),
+          ...attributes,
+        }
+      },
+      end(options?: EndObservedSpanOptions): void {
+        finish(options)
       },
       error(error: unknown, attributes?: CruxAttributes): void {
         finish({ status: 'error', error, attributes })
@@ -871,6 +894,7 @@ export const observe = {
       {
         runId: context.runId,
         traceId: context.traceId,
+        startedAtMs: context.startedAtMs,
         spanStack: [...context.spanStack],
       },
       fn,
@@ -884,4 +908,11 @@ export const observe = {
   async shutdown(options: ObservabilityFlushOptions = {}): Promise<boolean> {
     return await deliveryEngine.shutdown(options)
   },
+}
+
+function rememberEndedRunId(runId: CruxRunId): void {
+  endedRunIds.add(runId)
+  if (endedRunIds.size <= maxEndedRunIds) return
+  const oldestRunId = endedRunIds.keys().next().value
+  if (oldestRunId) endedRunIds.delete(oldestRunId)
 }

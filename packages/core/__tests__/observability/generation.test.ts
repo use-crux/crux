@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { orchestrateGenerate, orchestrateStream, type OrchestrationSpec } from '../../generation'
 import type { AnyPromptConfig } from '../../prompt/prompt-types'
 import {
@@ -270,7 +270,7 @@ describe('generation observability', () => {
     })
   })
 
-    it('ends stream spans when the raw stream completes before completion is read', async () => {
+    it('ends stream spans once with usage metrics when drain happens before completion', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -303,17 +303,7 @@ describe('generation observability', () => {
       'edge',
       'span:event',
       'span:event',
-      'span:end',
-      'run:end',
     ])
-    expect(transport.records[6]).toMatchObject({
-      type: 'span:end',
-      status: 'ok',
-      attributes: {
-        streamCompleted: true,
-        tokenDeltaCount: 2,
-      },
-    })
 
     await handle.completion()
     await observe.flush()
@@ -325,16 +315,67 @@ describe('generation observability', () => {
       'edge',
       'span:event',
       'span:event',
-      'span:end',
-      'run:end',
       'span:event',
       'artifact',
       'edge',
+      'span:end',
+      'run:end',
     ])
+    const spanEnds = transport.records.filter((record) => record.type === 'span:end')
+    expect(spanEnds).toHaveLength(1)
+    expect(spanEnds[0]).toMatchObject({
+      type: 'span:end',
+      status: 'ok',
+      attributes: {
+        streamCompleted: true,
+        tokenDeltaCount: 2,
+      },
+      metrics: expect.objectContaining({
+        'gen.duration_ms': expect.any(Number),
+        'gen.output_tokens_per_second': expect.any(Number),
+      }),
+    })
     expect(transport.records[1]).toMatchObject({
       type: 'span:start',
       family: 'generation',
       primitive: 'generation.stream',
+    })
+  })
+
+    it('ends stream spans once when completion is read before the raw stream drains', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const handle = await orchestrateStream(generationSpec('stream'), async () => ({
+      rawStream: streamChunks([{ text: 'hel' }, { text: 'lo' }]),
+      extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
+      completion: async () => ({
+        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
+        streaming: { tokensPerSecond: 12, totalChunks: 2 },
+      }),
+    }))
+
+    await handle.completion()
+    await observe.flush()
+    expect(transport.records.some((record) => record.type === 'span:end')).toBe(false)
+
+    for await (const _chunk of handle.rawStream as AsyncIterable<unknown>) {
+      void _chunk
+    }
+    await observe.flush()
+
+    const spanEnds = transport.records.filter((record) => record.type === 'span:end')
+    expect(spanEnds).toHaveLength(1)
+    expect(spanEnds[0]).toMatchObject({
+      type: 'span:end',
+      status: 'ok',
+      attributes: {
+        streamCompleted: true,
+        tokenDeltaCount: 2,
+      },
+      metrics: expect.objectContaining({
+        'gen.output_tokens_per_second': 12,
+      }),
     })
   })
 
@@ -439,6 +480,74 @@ describe('generation observability', () => {
       type: 'run:end',
       status: 'error',
     })
+  })
+
+    it('ends stream spans as cancelled when the consumer stops early', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const handle = await orchestrateStream(generationSpec('stream'), async () => ({
+      rawStream: streamChunks([{ text: 'hel' }, { text: 'lo' }]),
+      extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
+      completion: async () => ({
+        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
+      }),
+    }))
+
+    for await (const _chunk of handle.rawStream as AsyncIterable<unknown>) {
+      void _chunk
+      break
+    }
+    await observe.flush()
+
+    const spanEnd = transport.records.find((record) => record.type === 'span:end')
+    expect(spanEnd).toMatchObject({
+      type: 'span:end',
+      status: 'cancelled',
+      attributes: {
+        streamCompleted: false,
+        tokenDeltaCount: 1,
+        streamFinalizedReason: 'return',
+      },
+    })
+  })
+
+    it('ends stream spans with available metrics when completion is never awaited', async () => {
+    vi.useFakeTimers()
+    try {
+      const transport = createInMemoryObservabilityTransport()
+      setObservabilityTransport(transport)
+
+      const handle = await orchestrateStream(generationSpec('stream'), async () => ({
+        rawStream: streamChunks([{ text: 'hel' }, { text: 'lo' }]),
+        extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
+        completion: async () => ({
+          usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
+        }),
+      }))
+
+      for await (const _chunk of handle.rawStream as AsyncIterable<unknown>) {
+        void _chunk
+      }
+      await observe.flush()
+      expect(transport.records.some((record) => record.type === 'span:end')).toBe(false)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      await observe.flush()
+
+      const spanEnd = transport.records.find((record) => record.type === 'span:end')
+      expect(spanEnd).toMatchObject({
+        type: 'span:end',
+        status: 'ok',
+        attributes: {
+          streamCompleted: true,
+          tokenDeltaCount: 2,
+          streamFinalizedReason: 'timeout',
+        },
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

@@ -65,13 +65,15 @@ export function resolveCitations(
       emitCitationArtifact(span.spanId, validationResult.artifact)
     })
     span.end({
-      citationCount: validationResult.artifact.summary.citationCount,
-      validCitationCount: validationResult.artifact.summary.validCitationCount,
-      invalidCitationCount: validationResult.artifact.summary.invalidCitationCount,
-      issueCodes: validationResult.artifact.summary.issueCodes,
-      allowedHitCount: hits.length,
-      quotePolicy,
-      valid: validationResult.valid,
+      attributes: {
+        citationCount: validationResult.artifact.summary.citationCount,
+        validCitationCount: validationResult.artifact.summary.validCitationCount,
+        invalidCitationCount: validationResult.artifact.summary.invalidCitationCount,
+        issueCodes: validationResult.artifact.summary.issueCodes,
+        allowedHitCount: hits.length,
+        quotePolicy,
+        valid: validationResult.valid,
+      },
     })
     return validationResult
   } catch (error) {

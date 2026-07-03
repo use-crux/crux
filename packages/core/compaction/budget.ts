@@ -62,15 +62,17 @@ export function createBudgetManager(config: BudgetConfig): BudgetManager {
         })
       })
       span.end({
-        limit,
-        warningThreshold,
-        criticalThreshold,
-        sourceCount: sources.size,
-        used,
-        available,
-        pressure,
-        level,
-        breakdown,
+        attributes: {
+          limit,
+          warningThreshold,
+          criticalThreshold,
+          sourceCount: sources.size,
+          used,
+          available,
+          pressure,
+          level,
+          breakdown,
+        },
       })
 
       return {

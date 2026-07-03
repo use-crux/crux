@@ -143,12 +143,15 @@ try {
   await span.withContext(async () => {
     await streamWork()
   })
-  span.end()
+  span.setAttributes({ chunkCount: 12 })
+  span.end({ attributes: { streamCompleted: true } })
 } catch (error) {
   span.error(error)
   throw error
 }
 ```
+
+`span.end()` accepts terminal options only. Use `span.setAttributes()` for metadata discovered during the span, or pass terminal metadata as `span.end({ attributes })`; raw attribute bags are rejected so `{ error }` consistently records an error end.
 
 Custom primitive records must use canonical primitive names where possible, or the `custom.*` namespace for app-specific work. The `span:start` and `span:end` records share the same span id; the Go backend uses that id to pair lifecycle records and resolve children that name this span as their parent.
 

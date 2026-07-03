@@ -101,18 +101,20 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
           hit: true,
         })
         lookupSpan.end({
-          cacheKind: 'semantic',
-          cacheOperation: 'lookup',
-          cacheId,
-          promptId,
-          operation,
-          scopeHash,
-          version,
-          queryHash,
-          hit: true,
-          score: hit.score,
-          ageMs,
-          durationMs: Date.now() - lookupStarted,
+          attributes: {
+            cacheKind: 'semantic',
+            cacheOperation: 'lookup',
+            cacheId,
+            promptId,
+            operation,
+            scopeHash,
+            version,
+            queryHash,
+            hit: true,
+            score: hit.score,
+            ageMs,
+            durationMs: Date.now() - lookupStarted,
+          },
         })
         if (operation === 'stream') {
           const replayStarted = Date.now()
@@ -140,16 +142,18 @@ export async function performLookup(call: SemanticCacheCall): Promise<Middleware
         },
       })
       lookupSpan.end({
-        cacheKind: 'semantic',
-        cacheOperation: 'lookup',
-        cacheId,
-        promptId,
-        operation,
-        scopeHash,
-        version,
-        queryHash,
-        hit: false,
-        durationMs: Date.now() - lookupStarted,
+        attributes: {
+          cacheKind: 'semantic',
+          cacheOperation: 'lookup',
+          cacheId,
+          promptId,
+          operation,
+          scopeHash,
+          version,
+          queryHash,
+          hit: false,
+          durationMs: Date.now() - lookupStarted,
+        },
       })
       return undefined
     } catch (error) {
