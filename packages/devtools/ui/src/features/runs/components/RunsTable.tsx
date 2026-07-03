@@ -9,7 +9,16 @@ import type { ColumnId, RunRow } from '../types'
 import type { SelectionState } from '../hooks/useRunSelection'
 import { COLUMN_DEFS } from '../lib/run-columns'
 import { summarizeRunGroup, type RunGroup } from '../lib/run-groups'
-import { KIND_DOT_COLOR, KIND_TONE, formatCost, formatLatency, isLiveStatus, statusTone } from '../lib/run-format'
+import {
+  KIND_DOT_COLOR,
+  KIND_TONE,
+  formatCost,
+  formatGraphCounts,
+  formatLatency,
+  graphCountsTitle,
+  isLiveStatus,
+  statusTone,
+} from '../lib/run-format'
 
 interface RunsTableProps {
   groups: readonly RunGroup[]
@@ -432,9 +441,11 @@ function RunCell({ run, col, visibleSet }: { run: RunRow; col: ColumnId; visible
       )
     case 'spans':
       return (
-        <span className="text-right font-mono text-[11.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
-          {run.childCount ?? '-'}
-        </span>
+        <QwTooltip content={graphCountsTitle(run) || 'No graph rollups'}>
+          <span className="text-right font-mono text-[11px]" style={{ color: 'var(--qw-fg-muted)' }}>
+            {formatGraphCounts(run)}
+          </span>
+        </QwTooltip>
       )
     case 'session':
       return run.sessionId ? (

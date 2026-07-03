@@ -3,6 +3,7 @@ import { useObservabilityRuns } from '@/features/observability/hooks/useObservab
 import { useQualityRuns } from '@/shared/hooks/useQualityApi'
 import type { RunRow, RunsFilters } from '../types'
 import {
+  enrichRunRowFromObservability,
   qualityOptionsFromFilters,
   rowFromObservabilityRun,
   rowFromQualityRun,
@@ -34,7 +35,10 @@ export function useRuns(filters: RunsFilters): UseRunsResult {
   const qualityRuns = useQualityRuns(qualityOpts)
 
   const allRows = useMemo<readonly RunRow[]>(() => {
-    const qualityRows = (qualityRuns.data ?? []).map(rowFromQualityRun)
+    const observabilityByRunId = new Map(observabilityRuns.runs.map((run) => [run.runId, run]))
+    const qualityRows = (qualityRuns.data ?? []).map((run) =>
+      enrichRunRowFromObservability(rowFromQualityRun(run), observabilityByRunId.get(run.traceId)),
+    )
     const seen = new Set(qualityRows.map((r) => r.traceId))
     const liveRows: RunRow[] = []
 

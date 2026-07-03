@@ -5,6 +5,7 @@ import type {
   InspectPart,
   ObservabilityRunDetailDetail,
   ObservabilityRunDetailNode,
+  ObservabilitySpanEventSummary,
   Trace,
 } from '@/types'
 
@@ -1048,34 +1049,40 @@ export function resolveOutput(
   return {}
 }
 
+/** Extract token chunks still present on legacy/in-memory run detail payloads. */
 export function tokenChunks(node: ObservabilityRunDetailNode | undefined): readonly string[] {
   if (!node) return []
-  const events: Array<{ order: number; timestamp: string; text: string }> = []
+  const events: TokenChunkEvent[] = []
   function visit(n: ObservabilityRunDetailNode) {
-    for (const event of n.events ?? []) {
-      if (event.name !== 'token.chunk') continue
-      const attrs = event.attributes as Record<string, unknown> | null | undefined
-      const text = typeof attrs?.text === 'string' ? attrs.text : typeof attrs?.delta === 'string' ? attrs.delta : ''
-      if (!text) continue
-      const rawOrder = attrs?.chunkIndex
-      const order = typeof rawOrder === 'number' ? rawOrder : Number.MAX_SAFE_INTEGER
-      events.push({ order, timestamp: event.timestamp, text })
-    }
+    events.push(...n.events)
     for (const detail of n.details ?? []) {
-      for (const event of detail.events ?? []) {
-        if (event.name !== 'token.chunk') continue
-        const attrs = event.attributes as Record<string, unknown> | null | undefined
-        const text = typeof attrs?.text === 'string' ? attrs.text : typeof attrs?.delta === 'string' ? attrs.delta : ''
-        if (!text) continue
-        const rawOrder = attrs?.chunkIndex
-        const order = typeof rawOrder === 'number' ? rawOrder : Number.MAX_SAFE_INTEGER
-        events.push({ order, timestamp: event.timestamp, text })
-      }
+      events.push(...detail.events)
     }
     for (const child of n.children ?? []) visit(child)
   }
   visit(node)
+  return tokenChunksFromEvents(events)
+}
+
+type TokenChunkEvent = Pick<ObservabilitySpanEventSummary, 'name' | 'timestamp' | 'attributes'>
+
+/**
+ * Extract ordered token text chunks from lazy span-event responses.
+ *
+ * `token.chunk` uses `attributes.text`; the legacy `delta` fallback keeps old
+ * local databases readable while the UI consumes the stable chunk vocabulary.
+ */
+export function tokenChunksFromEvents(events: readonly TokenChunkEvent[]): readonly string[] {
   return events
+    .flatMap((event) => {
+      if (event.name !== 'token.chunk') return []
+      const attrs = event.attributes as Record<string, unknown> | null | undefined
+      const text = typeof attrs?.text === 'string' ? attrs.text : typeof attrs?.delta === 'string' ? attrs.delta : ''
+      if (!text) return []
+      const rawOrder = attrs?.chunkIndex
+      const order = typeof rawOrder === 'number' ? rawOrder : Number.MAX_SAFE_INTEGER
+      return [{ order, timestamp: event.timestamp, text }]
+    })
     .sort((a, b) => {
       if (a.order !== b.order) return a.order - b.order
       if (a.timestamp !== b.timestamp) return a.timestamp < b.timestamp ? -1 : 1

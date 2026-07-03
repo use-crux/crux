@@ -26,6 +26,7 @@ import { StreamingChunks, StreamingMeta, hasLiveStream, tokenizedTextCount } fro
 import { CardShell, EmptyHint, KeyValue, PendingFromBackend } from './SpanDetailPanelAtoms'
 import { OutputModeToggle, OutputTextView } from './SpanDetailOutputRenderers'
 import { useNavigation } from '@/app/navigation/useNavigation'
+import { useObservabilitySpanEvents } from '@/features/observability/hooks/useObservabilityGraph'
 import type {
   ObservabilityRunDetail,
   ObservabilityRunDetailNode,
@@ -73,6 +74,7 @@ import {
   statusTone,
   tabsForKind,
   tokenChunks,
+  tokenChunksFromEvents,
   tokensPerSecond,
   unwrapOutput,
   type InspectionItem,
@@ -173,10 +175,12 @@ function OutputTab({
   node,
   trace,
   isRoot,
+  lazyTokenChunks,
 }: {
   node: ObservabilityRunDetailNode
   trace: Trace | undefined
   isRoot: boolean
+  lazyTokenChunks: readonly string[]
 }) {
   const errorArt = findArtifact(node, 'error.stack') ?? findArtifact(node, 'error.raw')
   const resolved = useMemo(() => resolveOutput(node, trace, isRoot), [node, trace, isRoot])
@@ -226,7 +230,7 @@ function OutputTab({
     trace?.result?.finishReason
   const eventChunks = useMemo(() => tokenChunks(node), [node])
   const traceChunks = isRoot ? (trace?.streamProgress?.chunks ?? []) : []
-  const streamChunks = eventChunks.length > 0 ? eventChunks : traceChunks
+  const streamChunks = lazyTokenChunks.length > 0 ? lazyTokenChunks : eventChunks.length > 0 ? eventChunks : traceChunks
   const streamTextLength = streamChunks.reduce((sum, chunk) => sum + chunk.length, 0)
   const isStreaming = node.status === 'running' || (trace?.status === 'running' && isRoot)
   const hasStream = streamChunks.length > 0 || (isRoot && !!trace && hasLiveStream(trace))
@@ -265,7 +269,7 @@ function OutputTab({
           label={isStreaming ? 'Live stream' : 'Stream replay'}
           right={
             <span style={{ color: 'var(--qw-fg-muted)' }}>
-              {streamChunks.length} deltas · {tokenizedTextCount(undefined, streamChunks).toLocaleString()} tokens ·{' '}
+              {streamChunks.length} chunks · {tokenizedTextCount(undefined, streamChunks).toLocaleString()} tokens ·{' '}
               {(trace?.streamProgress?.textLength ?? streamTextLength).toLocaleString()} chars
               {trace?.streamProgress?.ttftMs != null ? ` · TTFT ${trace.streamProgress.ttftMs}ms` : ''}
             </span>
@@ -3150,6 +3154,12 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
   }
 
   const node = findNode(detail.root, selectedNodeId) ?? detail.root
+  const focusedSpanId = node.spanId || node.id
+  const focusedTokenEvents = useObservabilitySpanEvents(detail.run.runId, focusedSpanId, {
+    name: 'token.chunk',
+    limit: 512,
+  })
+  const focusedTokenChunks = useMemo(() => tokenChunksFromEvents(focusedTokenEvents.events), [focusedTokenEvents.events])
   const isRoot = node.id === detail.root.id
   // The root shows *its primitive's* card (agent.run → agent loop, composition
   // → composition card, …), not a generic "run" view (spec §4). `isRoot` still
@@ -3291,7 +3301,9 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
           compact
           resetKey={`${node.id}:${activeTab}`}
         >
-          {activeTab === 'output' && <OutputTab node={node} trace={trace} isRoot={isRoot} />}
+          {activeTab === 'output' && (
+            <OutputTab node={node} trace={trace} isRoot={isRoot} lazyTokenChunks={focusedTokenChunks} />
+          )}
           {activeTab === 'context' && <ContextTab node={node} trace={trace} isRoot={isRoot} />}
           {activeTab === 'tool' &&
             (node.primitive.startsWith('tool.approval') ? <ApprovalCard node={node} /> : <ToolSpanTab node={node} />)}

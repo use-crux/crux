@@ -75,6 +75,11 @@ export const qk = {
     all: ['observability'] as const,
     runs: () => ['observability', 'runs'] as const,
     run: (runId: string | null | undefined) => ['observability', 'run', runId] as const,
+    spanEvents: (
+      runId: string | null | undefined,
+      spanId: string | null | undefined,
+      options?: { name?: string; limit?: number },
+    ) => ['observability', 'span-events', runId, spanId, options ?? null] as const,
     resource: (family: string) => ['observability', 'resource', family] as const,
   },
   runtime: {
