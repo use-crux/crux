@@ -57,7 +57,7 @@ describe('OTel runtime correctness', () => {
     records.forEach(subscriber)
 
     const run = spans.find((span) => span.name === 'late child run')
-    const child = spans.find((span) => span.name === 'crux.tool.lateTool')
+    const child = spans.find((span) => span.name === 'execute_tool lateTool')
 
     expect(run).toBeDefined()
     expect(child).toBeDefined()
@@ -95,7 +95,7 @@ describe('OTel runtime correctness', () => {
 
     expect(spans).toEqual([
       expect.objectContaining({
-        name: 'crux.tool.tool-0',
+        name: 'execute_tool tool-0',
         status: { code: 'UNSET' },
         attributes: expect.objectContaining({ 'crux.expired': true }),
       }),

@@ -8,80 +8,27 @@
  * @module
  */
 
-import type { CruxGraphRecord, CruxPrimitiveName } from '@use-crux/core/observability'
+import type { CruxGraphRecord } from '@use-crux/core/observability'
 import type { CruxObservabilitySubscriber } from '@use-crux/core/observability'
 import type { SpanManager, SpanRef } from './span-manager'
 import type { TelemetryOptions } from './plugin'
-import { CRUX_TOOL_NAME, GEN_AI_REQUEST_MODEL, GEN_AI_SYSTEM } from './attributes'
+import { CRUX_TOOL_NAME } from './attributes'
 import { attributesFor, metricsFor, type OtelAttributes } from './attribute-mapper'
 import { createBoundedRegistry } from './bounded-registry'
+import {
+  GEN_AI_OPERATION_NAME,
+  GEN_AI_PROVIDER_NAME,
+  GEN_AI_REQUEST_MODEL,
+  genAiOperationName,
+  primitiveSpanNames,
+} from './semconv'
+import { messageContentAttributesForArtifact } from './message-content'
 import { createTtlMap } from './ttl-map'
 
 const RECENTLY_ENDED_SPAN_TTL_MS = 30_000
 const RECENTLY_ENDED_SPAN_MAX_ENTRIES = 1_000
 const OPEN_REGISTRY_MAX_ENTRIES = 10_000
 const OPEN_REGISTRY_MAX_AGE_MS = 10 * 60_000
-
-const primitiveSpanNames = {
-  run: 'crux.run',
-  'generation.call': 'crux.generate',
-  'generation.stream': 'crux.stream',
-  'prompt.resolve': 'crux.prompt.resolve',
-  'prompt.budget': 'crux.prompt.budget',
-  'context.resolve': 'crux.context.resolve',
-  'context.predicate': 'crux.context.predicate',
-  'context.cache': 'crux.context.cache',
-  'agent.run': 'crux.agent.run',
-  'flow.run': 'crux.flow',
-  'flow.step': 'crux.flow.step',
-  'flow.suspension': 'crux.flow.suspension',
-  'composition.parallel': 'crux.composition.parallel',
-  'composition.pipeline': 'crux.composition.pipeline',
-  'composition.consensus': 'crux.composition.consensus',
-  'composition.swarm': 'crux.composition.swarm',
-  'composition.branch': 'crux.composition.branch',
-  'composition.join': 'crux.composition.join',
-  'composition.vote': 'crux.composition.vote',
-  'tool.call': 'crux.tool.call',
-  'tool.approval': 'crux.tool.approval',
-  'retrieval.pipeline': 'crux.retrieval.pipeline',
-  'embedding.call': 'crux.embedding',
-  'retrieval.query': 'crux.retrieval',
-  'retrieval.stage': 'crux.retrieval.stage',
-  'memory.read': 'crux.memory.read',
-  'memory.write': 'crux.memory.write',
-  'constraint.check': 'crux.constraint.check',
-  'constraint.retry': 'crux.constraint.retry',
-  'guardrail.run': 'crux.guardrail.run',
-  'routing.router': 'crux.router.select',
-  'routing.cascade': 'crux.cascade.run',
-  'fallback.attempt': 'crux.fallback.attempt',
-  'cache.lookup': 'crux.cache.lookup',
-  'compaction.run': 'crux.compact',
-  'eval.run': 'crux.eval.run',
-  'eval.case': 'crux.eval.case',
-  'scoring.judge': 'crux.judge',
-  'citation.check': 'crux.citation.check',
-  'handoff.prepare': 'crux.handoff.prepare',
-  'delegate.invoke': 'crux.delegate',
-  'plan.operation': 'crux.plan.operation',
-  'task.operation': 'crux.task.operation',
-  'workspace.operation': 'crux.workspace',
-  'indexing.pipeline': 'crux.indexing',
-  'ingest.parse': 'crux.ingest.parse',
-  'corpus.sync': 'crux.corpus.sync',
-  'skill.load': 'crux.skill.load',
-  'security.warning': 'crux.security.warning',
-  'cost.record': 'crux.cost.record',
-  'feedback.record': 'crux.feedback.record',
-  'runtime.convex.action': 'crux.runtime.convex.action',
-  'runtime.convex.query': 'crux.runtime.convex.query',
-  'runtime.convex.mutation': 'crux.runtime.convex.mutation',
-  'runtime.convex.schedule': 'crux.runtime.convex.schedule',
-  'runtime.convex.resume': 'crux.runtime.convex.resume',
-  'runtime.convex.flush': 'crux.runtime.convex.flush',
-  'custom.operation': 'crux.custom.operation',
-} satisfies Record<CruxPrimitiveName, string>
 
 /**
  * Create a subscriber that maps canonical Crux graph records to OTel spans.
@@ -145,7 +92,8 @@ export function createOtelRecordSubscriber(
           'crux.span.id': record.spanId,
           'crux.primitive.family': record.family,
           'crux.primitive.name': record.primitive,
-          ...(record.provider ? { [GEN_AI_SYSTEM]: record.provider } : {}),
+          ...operationAttributes(record),
+          ...(record.provider ? { [GEN_AI_PROVIDER_NAME]: record.provider } : {}),
           ...(record.model ? { [GEN_AI_REQUEST_MODEL]: record.model } : {}),
           ...(record.promptId ? { 'crux.prompt.id': record.promptId } : {}),
           ...(record.toolName ? { [CRUX_TOOL_NAME]: record.toolName } : {}),
@@ -169,6 +117,7 @@ export function createOtelRecordSubscriber(
           'crux.span.id': record.spanId,
           'crux.primitive.family': record.family,
           'crux.primitive.name': record.primitive,
+          ...operationAttributes(record),
           ...attributesFor(record.attributes),
         }, parent?.spanId, { spanId: record.spanId, traceId: record.traceId })
         finishSpan(spanManager, ref, record)
@@ -190,6 +139,10 @@ export function createOtelRecordSubscriber(
           ...(record.sizeBytes != null ? { 'crux.artifact.size_bytes': record.sizeBytes } : {}),
           ...attributesFor(record.attributes),
         })
+        const messageAttributes = messageContentAttributesForArtifact(record, options)
+        if (Object.keys(messageAttributes).length > 0) {
+          spanManager.setAttributes(ref, messageAttributes)
+        }
         break
       }
       case 'edge': {
@@ -210,15 +163,31 @@ export function createOtelRecordSubscriber(
 }
 
 function nameForSpan(record: Extract<CruxGraphRecord, { type: 'span:start' | 'span' }>): string {
-  if (record.primitive === 'tool.call') {
-    const toolName =
+  const operation = genAiOperationName(record.primitive)
+  if (operation) return `${operation} ${spanNameSubject(record, operation)}`
+  return primitiveSpanNames[record.primitive]
+}
+
+function operationAttributes(record: Extract<CruxGraphRecord, { type: 'span:start' | 'span' }>): OtelAttributes {
+  const operation = genAiOperationName(record.primitive)
+  return operation ? { [GEN_AI_OPERATION_NAME]: operation } : {}
+}
+
+function spanNameSubject(
+  record: Extract<CruxGraphRecord, { type: 'span:start' | 'span' }>,
+  operation: NonNullable<ReturnType<typeof genAiOperationName>>,
+): string {
+  if (operation === 'chat' || operation === 'embeddings') {
+    return stringValue('model' in record ? record.model : undefined) ?? stringValue(record.attributes?.model) ?? record.name
+  }
+  if (operation === 'execute_tool') {
+    return (
       stringValue(record.attributes?.toolName) ??
       ('toolName' in record ? stringValue(record.toolName) : undefined) ??
       record.name
-    return `crux.tool.${toolName}`
+    )
   }
-  if (record.primitive === 'tool.approval') return 'crux.tool.approval'
-  return primitiveSpanNames[record.primitive]
+  return record.name
 }
 
 function finishSpan(

@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { TraceSpan, SpanStatus } from './types'
+import type { TraceAttributeValue, TraceSpan, SpanStatus } from './types'
 import type { SpanExporter } from './exporter'
 import { createBoundedRegistry } from './bounded-registry'
 
@@ -25,12 +25,12 @@ interface MutableSpan {
   parentSpanId?: string
   name: string
   startTime: number
-  attributes: Record<string, string | number | boolean>
+  attributes: Record<string, TraceAttributeValue>
   status: SpanStatus
   events: Array<{
     name: string
     time: number
-    attributes?: Record<string, string | number | boolean>
+    attributes?: Record<string, TraceAttributeValue>
   }>
 }
 
@@ -58,20 +58,20 @@ export interface SpanManager {
   /**
    * Start a new span.
    *
-   * @param name - Span name (e.g., 'crux.generate').
+   * @param name - Span name (e.g., 'chat gpt-4o').
    * @param attributes - Initial attributes.
    * @param parentSpanId - Parent span ID for nesting.
    * @returns A reference to the active span.
    */
   startSpan(
     name: string,
-    attributes?: Record<string, string | number | boolean>,
+    attributes?: Record<string, TraceAttributeValue>,
     parentSpanId?: string,
     identity?: SpanIdentity,
   ): SpanRef
 
   /** Set attributes on an active span. */
-  setAttributes(ref: SpanRef, attributes: Record<string, string | number | boolean>): void
+  setAttributes(ref: SpanRef, attributes: Record<string, TraceAttributeValue>): void
 
   /** Set the span status. */
   setStatus(ref: SpanRef, status: SpanStatus): void
@@ -80,7 +80,7 @@ export interface SpanManager {
   recordError(ref: SpanRef, error: Error | string): void
 
   /** Add a point-in-time event to the span. */
-  addEvent(ref: SpanRef, name: string, attributes?: Record<string, string | number | boolean>): void
+  addEvent(ref: SpanRef, name: string, attributes?: Record<string, TraceAttributeValue>): void
 
   /** End the span and export it. */
   endSpan(ref: SpanRef): void

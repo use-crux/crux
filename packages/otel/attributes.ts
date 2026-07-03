@@ -1,7 +1,9 @@
 /**
- * OpenTelemetry GenAI semantic convention attribute constants.
+ * Crux-specific OpenTelemetry attribute constants.
  *
- * @see https://opentelemetry.io/docs/specs/semconv/gen-ai/
+ * GenAI semantic convention names are re-exported from `semconv.ts`, the single
+ * versioned source of truth for development-status `gen_ai.*` keys.
+ *
  * @module
  */
 
@@ -9,35 +11,23 @@
 // GenAI Semantic Conventions
 // ─────────────────────────────────────────────────────────────────
 
-/** The GenAI system (e.g., 'openai', 'anthropic'). */
-export const GEN_AI_SYSTEM = 'gen_ai.system'
-
-/** The model requested by the caller. */
-export const GEN_AI_REQUEST_MODEL = 'gen_ai.request.model'
-
-/** The model actually used (may differ from requested). */
-export const GEN_AI_RESPONSE_MODEL = 'gen_ai.response.model'
-
-/** Number of input tokens consumed. */
-export const GEN_AI_USAGE_INPUT_TOKENS = 'gen_ai.usage.input_tokens'
-
-/** Number of output tokens generated. */
-export const GEN_AI_USAGE_OUTPUT_TOKENS = 'gen_ai.usage.output_tokens'
-
-/** Finish reason(s) for the generation. */
-export const GEN_AI_RESPONSE_FINISH_REASONS = 'gen_ai.response.finish_reasons'
-
-/** End-to-end client-side generation operation duration in milliseconds. */
-export const GEN_AI_CLIENT_DURATION_MS = 'gen_ai.client.duration_ms'
-
-/** Client-observed time to the first streamed output token in milliseconds. */
-export const GEN_AI_CLIENT_TIME_TO_FIRST_TOKEN_MS = 'gen_ai.client.time_to_first_token_ms'
-
-/** Client-observed output token throughput. */
-export const GEN_AI_CLIENT_OUTPUT_TOKENS_PER_SECOND = 'gen_ai.client.output_tokens_per_second'
-
-/** Mean client-observed interval between streamed output chunks in milliseconds. */
-export const GEN_AI_CLIENT_TIME_PER_OUTPUT_CHUNK_MS = 'gen_ai.client.time_per_output_chunk_ms'
+export {
+  GEN_AI_CLIENT_OPERATION_DURATION,
+  GEN_AI_CLIENT_OUTPUT_TOKENS_PER_SECOND,
+  GEN_AI_CLIENT_TIME_PER_OUTPUT_CHUNK_MS,
+  GEN_AI_INPUT_MESSAGES,
+  GEN_AI_OPERATION_NAME,
+  GEN_AI_OUTPUT_MESSAGES,
+  GEN_AI_PROVIDER_NAME,
+  GEN_AI_REQUEST_MODEL,
+  GEN_AI_RESPONSE_FINISH_REASONS,
+  GEN_AI_RESPONSE_MODEL,
+  GEN_AI_SERVER_TIME_TO_FIRST_TOKEN,
+  GEN_AI_SYSTEM_INSTRUCTIONS,
+  GEN_AI_USAGE_INPUT_TOKENS,
+  GEN_AI_USAGE_OUTPUT_TOKENS,
+  SEMCONV_VERSION,
+} from './semconv'
 
 // ─────────────────────────────────────────────────────────────────
 // Crux-specific attributes

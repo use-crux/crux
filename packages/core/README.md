@@ -343,7 +343,7 @@ Observability delivery is fail-open and bounded. When no subscribers, diagnostic
 
 When `AsyncLocalStorage` is unavailable, such as in browser-like or edge runtimes, `observe.run()` and `observe.openRun()` still work. Explicit `withContext()` scopes preserve parent-child relationships for synchronous work, while contextless `event`, `artifact`, and `edge` attempts become counted no-ops via `observabilityDiagnostics().contextlessRecords` instead of throwing.
 
-The OTel plugin follows the same fail-open contract: duplicate `withTelemetry()` installs are ignored after a warn-once diagnostic, open span registries are bounded, and a missing OTel `TracerProvider` falls back to lightweight span tracking instead of producing invalid all-zero span contexts.
+The OTel plugin follows the same fail-open contract: duplicate `withTelemetry()` installs are ignored after a warn-once diagnostic, open span registries are bounded, and a missing OTel `TracerProvider` falls back to lightweight span tracking instead of producing invalid all-zero span contexts. GenAI export uses the pinned `genai-dev-2026-06` semconv table (`gen_ai.provider.name`, seconds-based client timings, array finish reasons), and message content remains opt-in through `captureMessageContent`.
 
 By default, request and response artifacts include bounded previews for local inspection. Configure capture centrally when traces leave a trusted environment:
 

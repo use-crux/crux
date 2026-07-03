@@ -1,9 +1,10 @@
-import type { SpanStatus } from './types'
+import type { TraceAttributeValue, SpanStatus } from './types'
 import { createLightweightSpanManager, type SpanManager } from './span-manager'
 import type { SpanExporter } from './exporter'
 import { createBoundedRegistry } from './bounded-registry'
 
-type OtelAttributeValue = string | number | boolean
+type OtelPrimitiveAttributeValue = string | number | boolean
+type OtelAttributeValue = OtelPrimitiveAttributeValue | OtelPrimitiveAttributeValue[]
 type OtelSpanContextLike = { spanId: string; traceId: string }
 
 const ACTIVE_OTEL_SPAN_MAX_ENTRIES = 10_000
@@ -81,7 +82,7 @@ export function createOpenTelemetrySpanManager(
 
       const parent = parentSpanId ? activeSpans.get(parentSpanId) : undefined
       const parentContext = parent ? api.trace.setSpan(api.context.active(), parent.span) : api.context.active()
-      const span = tracer.startSpan(name, attributes ? { attributes } : undefined, parentContext)
+      const span = tracer.startSpan(name, otelAttributesOption(attributes), parentContext)
       const context = span.spanContext()
       if (!spanContextIsValid(api, context)) {
         span.end()
@@ -99,7 +100,8 @@ export function createOpenTelemetrySpanManager(
         fallbackManager.setAttributes(ref, attributes)
         return
       }
-      activeSpans.get(ref.spanId)?.span.setAttributes(attributes)
+      const normalized = otelAttributes(attributes)
+      if (normalized) activeSpans.get(ref.spanId)?.span.setAttributes(normalized)
     },
 
     setStatus(ref, status) {
@@ -136,7 +138,7 @@ export function createOpenTelemetrySpanManager(
         fallbackManager.addEvent(ref, name, attributes)
         return
       }
-      activeSpans.get(ref.spanId)?.span.addEvent(name, attributes)
+      activeSpans.get(ref.spanId)?.span.addEvent(name, otelAttributes(attributes))
     },
 
     endSpan(ref) {
@@ -172,6 +174,28 @@ export function createOpenTelemetrySpanManager(
 function expireOtelSpan(active: ActiveOtelSpan): void {
   active.span.setAttributes({ 'crux.expired': true })
   active.span.end()
+}
+
+function otelAttributesOption(
+  attributes: Record<string, TraceAttributeValue> | undefined,
+): { readonly attributes?: Record<string, OtelAttributeValue> } | undefined {
+  const normalized = otelAttributes(attributes)
+  return normalized ? { attributes: normalized } : undefined
+}
+
+function otelAttributes(
+  attributes: Record<string, TraceAttributeValue> | undefined,
+): Record<string, OtelAttributeValue> | undefined {
+  if (!attributes) return undefined
+  const normalized: Record<string, OtelAttributeValue> = {}
+  for (const [key, value] of Object.entries(attributes)) {
+    normalized[key] = isPrimitiveAttributeArray(value) ? [...value] : value
+  }
+  return normalized
+}
+
+function isPrimitiveAttributeArray(value: TraceAttributeValue): value is readonly OtelPrimitiveAttributeValue[] {
+  return Array.isArray(value)
 }
 
 function createFallbackSpanManager(exporter?: SpanExporter): SpanManager {

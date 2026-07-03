@@ -14,6 +14,9 @@ export interface SpanStatus {
   message?: string
 }
 
+/** Attribute values accepted by OpenTelemetry span attributes. */
+export type TraceAttributeValue = string | number | boolean | readonly (string | number | boolean)[]
+
 /**
  * Structured span data for the lightweight exporter.
  *
@@ -27,7 +30,7 @@ export interface TraceSpan {
   parentSpanId?: string
   /** Trace ID grouping related spans. */
   traceId: string
-  /** Human-readable span name (e.g., 'crux.generate', 'crux.tool.webSearch'). */
+  /** Human-readable span name (e.g., 'chat gpt-4o', 'execute_tool webSearch'). */
   name: string
   /** Span start time (Unix ms). */
   startTime: number
@@ -36,13 +39,13 @@ export interface TraceSpan {
   /** Duration in milliseconds. */
   durationMs: number
   /** Key-value attributes. */
-  attributes: Record<string, string | number | boolean>
+  attributes: Record<string, TraceAttributeValue>
   /** Span status. */
   status: SpanStatus
   /** Span events (for point-in-time occurrences like budget checks). */
   events?: Array<{
     name: string
     time: number
-    attributes?: Record<string, string | number | boolean>
+    attributes?: Record<string, TraceAttributeValue>
   }>
 }

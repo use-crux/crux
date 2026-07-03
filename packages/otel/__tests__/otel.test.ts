@@ -71,12 +71,13 @@ describe('withTelemetry', () => {
     installed.dispose?.()
 
     const spans = exporter.getFinishedSpans()
-    expect(spans.map((span) => span.name)).toContain('crux.generate')
-    expect(spans.find((span) => span.name === 'crux.generate')?.attributes).toMatchObject({
-      'gen_ai.system': 'openai',
+    expect(spans.map((span) => span.name)).toContain('chat gpt-4o')
+    expect(spans.find((span) => span.name === 'chat gpt-4o')?.attributes).toMatchObject({
+      'gen_ai.operation.name': 'chat',
+      'gen_ai.provider.name': 'openai',
       'gen_ai.request.model': 'gpt-4o',
     })
-    expect(spans.find((span) => span.name === 'crux.generate')?.status.code).toBe(SpanStatusCode.OK)
+    expect(spans.find((span) => span.name === 'chat gpt-4o')?.status.code).toBe(SpanStatusCode.OK)
 
     trace.disable()
     await provider.shutdown()
@@ -120,7 +121,7 @@ describe('withTelemetry', () => {
     second.dispose?.()
     first.dispose?.()
 
-    expect(firstSpans.map((span) => span.name)).toEqual(['crux.tool.double install', 'double install'])
+    expect(firstSpans.map((span) => span.name)).toEqual(['execute_tool double install', 'double install'])
     expect(secondSpans).toEqual([])
     expect(warn).toHaveBeenCalledOnce()
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('already installed'))

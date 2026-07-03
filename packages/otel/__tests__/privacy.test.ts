@@ -25,7 +25,7 @@ describe("workspace OTel privacy", () => {
     await ws.write("/workspace/secret-name.md", "classified");
     installed.dispose?.();
 
-    const workspaceSpan = spans.find((span) => span.name === "crux.workspace");
+    const workspaceSpan = spans.find((span) => span.name === "crux.workspace.operation");
 
     expect(workspaceSpan).toBeDefined();
     expect(Object.values(workspaceSpan?.attributes ?? {})).not.toContain(
@@ -73,7 +73,7 @@ describe("workspace OTel privacy", () => {
     expect(JSON.stringify(spans)).not.toContain("OTEL-MESSAGES-TEXT");
     expect(JSON.stringify(spans)).not.toContain("OTEL-OUTPUT-TEXT");
     expect(JSON.stringify(spans)).not.toContain("OTEL-TOKEN-TEXT");
-    expect(spans.find((span) => span.name === "crux.generate")?.attributes).toMatchObject({
+    expect(spans.find((span) => span.name === "chat generate")?.attributes).toMatchObject({
       "crux.safeLabel": "safe label",
     });
   });
@@ -114,7 +114,7 @@ describe("workspace OTel privacy", () => {
 
     const byOperation = new Map(
       spans
-        .filter((span) => span.name === "crux.workspace")
+        .filter((span) => span.name === "crux.workspace.operation")
         .map((span) => [span.attributes["crux.workspace.operation"], span]),
     );
 
