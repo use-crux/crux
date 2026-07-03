@@ -4,7 +4,7 @@ import { context } from '../prompt/context'
 import { citationSchema, grounding } from '../citations'
 import { prompt } from '../prompt/prompt'
 import { embedding, embeddingCache, normalizeText } from '../embedding'
-import { retriever, retrievalPipeline, retrievalStage } from '../retrieval'
+import { retriever, retrievalRecipe, retrievalStep, retrieve } from '../retrieval'
 import { inMemoryRecordStore } from '../storage'
 import type { RetrieverTools } from '../retrieval'
 import type { ToolDef } from '../types/tool'
@@ -34,23 +34,44 @@ const docs = retriever({
   },
 })
 
-const pipeline = retrievalPipeline(docs, [
-  retrievalStage({
-    name: 'only-public',
-    phase: 'hits',
-    run: ({ hits }) => hits,
-  }),
-])
+const recipe = retrievalRecipe({
+  id: 'product-docs-answer',
+  retriever: docs,
+  steps: [
+    retrieve({ limit: 4 }),
+    retrievalStep({
+      id: 'only-public',
+      phase: { in: 'hits', out: 'hits' },
+      run: ({ hits }) => ({ hits }),
+    }),
+  ],
+})
+
+expectTypeOf(recipe.inspect()).toMatchTypeOf<{
+  id: string
+  stepCount: number
+  retrieverIds: readonly string[]
+}>()
+
+const recipeRetriever = recipe.asRetriever()
 
 const groundedDocs = grounding({
   id: 'docs',
-  retriever: pipeline,
+  retriever: recipeRetriever,
   query: ({ input }) => String(input.question),
   citations: {
     required: true,
     quotes: 'required',
   },
 })
+
+const recipeGrounding = recipe.asGrounding({
+  citations: {
+    required: true,
+    quotes: 'required',
+  },
+})
+void recipeGrounding
 
 const answer = prompt({
   id: 'answer',

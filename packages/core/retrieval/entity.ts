@@ -12,6 +12,7 @@ import { context } from '../prompt/context'
 import type { AnyToolSet } from '../types'
 import type { Context, PromptInjection } from '../prompt/context-types'
 import { createRetrieverTools } from './tools'
+import { normalizeRetrieveRequest } from './request'
 import type {
   RetrievalInjectMode,
   RetrievalToolConfig,
@@ -33,7 +34,10 @@ export function createRetrieverEntity(args: {
   defaultInject?: RetrievalInjectMode
   defaultTools?: false | RetrievalToolConfig
 }): Retriever {
-  const retrieve: Retriever['retrieve'] = (query, options) => args.retrieve(query, options ?? {})
+  const retrieve: Retriever['retrieve'] = (queryOrRequest, options) => {
+    const request = normalizeRetrieveRequest(queryOrRequest, options)
+    return args.retrieve(request.query, request)
+  }
 
   return Object.freeze({
     _tag: 'Retriever' as const,
@@ -74,7 +78,7 @@ export function createRetrieverEntity(args: {
       })
     },
 
-    asTools<const TConfig extends RetrievalToolConfig & { initialHits?: readonly RetrieverHit[] }>(
+    asTools<const TConfig extends RetrievalToolConfig | undefined = undefined>(
       options?: TConfig,
     ): RetrieverTools<TConfig> {
       return createRetrieverTools({

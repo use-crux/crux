@@ -18,7 +18,7 @@ import {
 } from './search'
 import { createIndexedKnowledgeStore } from '../indexed-knowledge'
 import type { IndexedChunkSearchQuery } from '../indexed-knowledge'
-import type { CustomRetrieverConfig, DenseStoreBackedRetrieverConfig, RetrieveOptions, Retriever } from './types'
+import type { CustomRetrieverConfig, DenseStoreBackedRetrieverConfig, RetrieveOptions, Retriever, RetrieverHit } from './types'
 
 /**
  * Create a retriever from a store-backed or custom configuration.
@@ -107,7 +107,7 @@ function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig
     vectors: getRetrieverVectorStore(config),
   })
 
-  const retrieve: Retriever['retrieve'] = async (query, options = {}) => {
+  const retrieve = async (query: string, options: RetrieveOptions = {}): Promise<RetrieverHit[]> => {
     const mode: IndexedChunkSearchQuery['mode'] = options.mode ?? config.search?.mode ?? defaultMode
     const limit = options.limit ?? config.search?.limit
     const threshold = options.threshold ?? config.search?.threshold
@@ -115,7 +115,7 @@ function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig
       ...(config.search?.filter ?? {}),
       ...(options.filter ?? {}),
     }
-    const fusion = options.fusion ?? config.search?.fusion
+    const fusion = normalizeFusion(options.fusion) ?? config.search?.fusion
 
     return runRetrievalOperation({
       retrieverId: config.id,
@@ -162,7 +162,7 @@ async function prepareIndexedChunkSearch(
     ...(config.search?.filter ?? {}),
     ...(options.filter ?? {}),
   }
-  const fusion = options.fusion ?? config.search?.fusion
+  const fusion = normalizeFusion(options.fusion) ?? config.search?.fusion
 
   if (mode === 'dense') {
     return {
@@ -196,6 +196,11 @@ async function prepareIndexedChunkSearch(
   }
 }
 
+function normalizeFusion(fusion: RetrieveOptions['fusion']): 'rrf' | undefined {
+  if (!fusion) return undefined
+  return fusion.strategy
+}
+
 function createCustomRetriever(config: CustomRetrieverConfig): Retriever {
   const rerankers = normalizeRerankers(config.rerank)
   return createRetrieverEntity({
@@ -211,7 +216,7 @@ function createCustomRetriever(config: CustomRetrieverConfig): Retriever {
         limit: options.limit,
         threshold: options.threshold,
         filter: options.filter,
-        fusion: options.fusion,
+        fusion: normalizeFusion(options.fusion),
         run: async () =>
           applyRerankers(rerankers, {
             retrieverId: config.id,

@@ -15,6 +15,7 @@ import { mergeHitGroups, mergeRetrieveOptions } from './fusion'
 import { emitRetrievalHitsArtifact } from './observability'
 import { normalizeHitStageResult, normalizeQueryStageResult, runPipelineStage } from './pipeline-stage'
 import { normalizePlannedQuery, validateStageName } from './stage'
+import { normalizeRetrieveRequest } from './request'
 import type {
   HitRetrievalStage,
   HitStageInput,
@@ -55,8 +56,9 @@ export function retrievalPipeline(
       options,
     })
 
-  const retrieve: Retriever['retrieve'] = async (query, options = {}) => {
-    const result = await retrieveWithTrace(query, options)
+  const retrieve: Retriever['retrieve'] = async (queryOrRequest, options = {}) => {
+    const request = normalizeRetrieveRequest(queryOrRequest, options)
+    const result = await retrieveWithTrace(request.query, request)
     return result.hits
   }
 
@@ -64,7 +66,10 @@ export function retrievalPipeline(
     id: base.id,
     namespace: base.namespace,
     mode: base.mode,
-    retrieve,
+    retrieve: async (query, options = {}) => {
+      const result = await retrieveWithTrace(query, options)
+      return result.hits
+    },
     defaultContext: injection?.context,
     defaultInject: injection?.inject,
     defaultTools: injection?.tools,
@@ -100,7 +105,7 @@ async function runRetrievalPipeline(args: {
       ...(args.options.threshold !== undefined ? { threshold: args.options.threshold } : {}),
       ...(args.options.filter ? { filter: args.options.filter } : {}),
       ...(args.options.mode ? { mode: args.options.mode } : {}),
-      ...(args.options.fusion ? { fusion: args.options.fusion } : {}),
+        ...(args.options.fusion ? { fusion: args.options.fusion.strategy } : {}),
     },
   })
   try {
@@ -114,7 +119,7 @@ async function runRetrievalPipeline(args: {
         mode: 'pipeline',
         query: args.query,
         limit: args.options.limit,
-        fusion: args.options.fusion,
+        fusion: args.options.fusion?.strategy,
         stages: result.trace.stages,
         hits: result.hits,
       }),

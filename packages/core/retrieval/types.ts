@@ -15,6 +15,9 @@ import type { ExactFilter, RecordStore, Storage, VectorStore } from '../storage'
 import type { Context, PromptInjection } from '../prompt/context-types'
 import type { ToolDef } from '../types/tool'
 import type { QueryableCruxEntity } from '../tools/entity'
+import type { RetrieveOptions, RetrieveRequest } from './request'
+
+export type { RetrieveOptions, RetrieveRequest } from './request'
 
 /** How a retriever resolves queries to hits. */
 export type RetrieverMode = 'dense' | 'sparse' | 'hybrid' | 'custom'
@@ -67,15 +70,6 @@ export interface RetrieverHit {
     metadata?: Record<string, unknown>
   }
   provenance?: Record<string, unknown>
-}
-
-/** Per-query retrieval options. */
-export interface RetrieveOptions {
-  limit?: number
-  threshold?: number
-  filter?: ExactFilter
-  mode?: 'dense' | 'sparse' | 'hybrid'
-  fusion?: 'rrf' | 'dbsf'
 }
 
 /** Input passed to a {@link RetrieverReranker}. */
@@ -208,22 +202,19 @@ export interface HitRetrievalStage {
 export type RetrievalPipelineStage = QueryRetrievalStage | HitRetrievalStage
 
 /** A retriever: a queryable knowledge source with context/tool/injection adapters. */
-export interface Retriever extends QueryableCruxEntity {
+export interface Retriever<TFilter extends ExactFilter = ExactFilter> extends QueryableCruxEntity {
   readonly _tag: 'Retriever' | 'RetrievalPipeline'
   readonly id: string
   readonly namespace: string
   readonly mode: RetrieverMode
-  retrieve(query: string, options?: RetrieveOptions): Promise<RetrieverHit[]>
+  retrieve(queryOrRequest: string | RetrieveRequest<TFilter>, options?: RetrieveOptions<TFilter>): Promise<RetrieverHit[]>
   asContext(options?: {
     priority?: number
     query?: string | ((input: Record<string, unknown>) => string)
     limit?: number
     renderContext?: (hits: RetrieverHit[], meta: { query: string; mode: RetrieverMode; namespace: string }) => string
   }): Context<z.ZodType<{}>>
-  asTools(): RetrieverTools
-  asTools<const TConfig extends RetrievalToolConfig & { initialHits?: readonly RetrieverHit[] }>(
-    options: TConfig,
-  ): RetrieverTools<TConfig>
+  asTools<const TConfig extends RetrievalToolConfig | undefined = undefined>(options?: TConfig): RetrieverTools<TConfig>
   inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<PromptInjection>
 }
 
