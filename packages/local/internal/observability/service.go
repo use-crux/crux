@@ -118,6 +118,9 @@ type RunSummary struct {
 	EventCount    int             `json:"eventCount"`
 	ArtifactCount int             `json:"artifactCount"`
 	EdgeCount     int             `json:"edgeCount"`
+	inputTokens   int             `json:"-"`
+	outputTokens  int             `json:"-"`
+	costUSD       float64         `json:"-"`
 	Attributes    json.RawMessage `json:"attributes,omitempty"`
 	Metrics       json.RawMessage `json:"metrics,omitempty"`
 	Error         json.RawMessage `json:"error,omitempty"`

@@ -23,6 +23,12 @@ func (s *Service) Ingest(ctx context.Context, batch Batch) (err error) {
 			}
 		}
 	}()
+	statements := newIngestStatements(tx)
+	defer func() {
+		if closeErr := statements.close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
 	runTraceIDs := make(map[string]string)
 	tokenDeltas := make([]SpanEventRecord, 0)
@@ -36,7 +42,7 @@ func (s *Service) Ingest(ctx context.Context, batch Batch) (err error) {
 		if token, ok := tokenDeltaRecord(record); ok {
 			tokenDeltas = append(tokenDeltas, token)
 		}
-		if err := s.ingestRecord(ctx, tx, record); err != nil {
+		if err := s.ingestRecord(ctx, tx, statements, record); err != nil {
 			return fmt.Errorf("ingest observability record %q: %w", record.RecordID, err)
 		}
 		if record.TraceID != "" {

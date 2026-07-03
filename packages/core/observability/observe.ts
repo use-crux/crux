@@ -70,6 +70,13 @@ export interface ConfigureObservabilityOptions {
 export interface ObservabilityDiagnostics {
   readonly pendingDeliveries: number
   readonly droppedRecords: number
+  /**
+   * Total delivery failures observed since the diagnostics were last reset.
+   *
+   * Unlike `deliveryErrors`, this is not capped; it is intended for health
+   * checks that need an exact monotonic failure count for the current runtime.
+   */
+  readonly deliveryErrorCount: number
   readonly invalidRecords: number
   readonly redactedRecords: number
   readonly contextlessRecords: number
@@ -243,7 +250,11 @@ function emit(record: UnsequencedCruxGraphRecord, correlators = effectiveCorrela
 
 function emitObserved(createRecord: () => UnsequencedCruxGraphRecord, correlators?: CruxCorrelators | null): void {
   if (!hasActiveObservabilitySinks()) return
-  emit(createRecord(), correlators === null ? undefined : effectiveCorrelators(correlators))
+  try {
+    emit(createRecord(), correlators === null ? undefined : effectiveCorrelators(correlators))
+  } catch (error) {
+    recordInvalidRecord(['Observability record construction threw unexpectedly', String(error)])
+  }
 }
 
 function hasActiveObservabilitySinks(): boolean {
@@ -313,33 +324,51 @@ function emitObservedErrorEvidence(
 ): void {
   if (!hasActiveObservabilitySinks()) return
 
-  const normalized = normalizeObservedError(error, errorContext(attributes))
-  const stack = normalized.thrown === 'error' ? normalized.stack : undefined
-  const phase = stringField(attributes, 'phase')
-  const errorKind = stringField(attributes, 'errorKind') ?? normalized.summary.category
-  const eventAttributes: CruxAttributes = {
-    ...attributes,
-    'exception.message': normalized.summary.message,
-    ...(normalized.summary.name ? { 'exception.type': normalized.summary.name } : {}),
-    ...(stack ? { 'exception.stacktrace': stack } : {}),
-    ...(phase ? { 'error.phase': phase } : {}),
-    ...(errorKind ? { 'error.kind': errorKind } : {}),
-  }
+  try {
+    const normalized = normalizeObservedError(error, errorContext(attributes))
+    const stack = normalized.thrown === 'error' ? normalized.stack : undefined
+    const phase = stringField(attributes, 'phase')
+    const errorKind = stringField(attributes, 'errorKind') ?? normalized.summary.category
+    const eventAttributes: CruxAttributes = {
+      ...attributes,
+      'exception.message': normalized.summary.message,
+      ...(normalized.summary.name ? { 'exception.type': normalized.summary.name } : {}),
+      ...(stack ? { 'exception.stacktrace': stack } : {}),
+      ...(phase ? { 'error.phase': phase } : {}),
+      ...(errorKind ? { 'error.kind': errorKind } : {}),
+    }
 
-  emitObserved(() => ({
-    schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-    recordId: createCruxRecordId(),
-    type: 'span:event',
-    runId: context.runId,
-    traceId: context.traceId,
-    spanId,
-    eventId: createCruxSpanEventId(),
-    name: 'exception',
-    timestamp: now(),
-    attributes: eventAttributes,
-  }), context.correlators ?? null)
+    emitObserved(() => ({
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      recordId: createCruxRecordId(),
+      type: 'span:event',
+      runId: context.runId,
+      traceId: context.traceId,
+      spanId,
+      eventId: createCruxSpanEventId(),
+      name: 'exception',
+      timestamp: now(),
+      attributes: eventAttributes,
+    }), context.correlators ?? null)
 
-  if (stack) {
+    if (stack) {
+      emitObserved(() => ({
+        schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+        recordId: createCruxRecordId(),
+        type: 'artifact',
+        runId: context.runId,
+        traceId: context.traceId,
+        spanId,
+        artifactId: createCruxArtifactId(),
+        kind: 'error.stack',
+        createdAt: now(),
+        contentType: 'text/plain',
+        encoding: 'text',
+        preview: stack,
+        ...(attributes ? { attributes } : {}),
+      }), context.correlators ?? null)
+    }
+
     emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: createCruxRecordId(),
@@ -348,30 +377,16 @@ function emitObservedErrorEvidence(
       traceId: context.traceId,
       spanId,
       artifactId: createCruxArtifactId(),
-      kind: 'error.stack',
+      kind: 'error.raw',
       createdAt: now(),
-      contentType: 'text/plain',
-      encoding: 'text',
-      preview: stack,
+      contentType: 'application/json',
+      encoding: 'json',
+      preview: normalized.raw,
       ...(attributes ? { attributes } : {}),
     }), context.correlators ?? null)
+  } catch (normalizationError) {
+    recordInvalidRecord(['Error evidence construction threw unexpectedly', String(normalizationError)])
   }
-
-  emitObserved(() => ({
-    schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-    recordId: createCruxRecordId(),
-    type: 'artifact',
-    runId: context.runId,
-    traceId: context.traceId,
-    spanId,
-    artifactId: createCruxArtifactId(),
-    kind: 'error.raw',
-    createdAt: now(),
-    contentType: 'application/json',
-    encoding: 'json',
-    preview: normalized.raw,
-    ...(attributes ? { attributes } : {}),
-  }), context.correlators ?? null)
 }
 
 function stringField(record: CruxAttributes | undefined, key: string): string | undefined {
@@ -414,10 +429,13 @@ export function configureObservability(options: ConfigureObservabilityOptions): 
   return () => {
     if (restored) return
     restored = true
-    if (!isActiveConfigurationLayer(layer.token)) return
+    if (!isActiveConfigurationLayer(layer.token)) {
+      deleteConfigurationLayerAndDescendants(layer.token)
+      return
+    }
 
     activeConfigurationToken = layer.parentToken
-    configurationParents.delete(layer.token)
+    deleteConfigurationLayerAndDescendants(layer.token)
     deliveryEngine.setTransport(layer.previousTransport)
     deliveryEngine.configureDelivery(layer.previousDeliveryOptions)
     defaultCorrelators = layer.previousDefaultCorrelators
@@ -445,6 +463,24 @@ export function propagateAttributes<T>(correlators: CruxCorrelators, fn: () => T
 function isActiveConfigurationLayer(token: number): boolean {
   for (let currentToken = activeConfigurationToken; currentToken !== 0; ) {
     if (currentToken === token) return true
+    currentToken = configurationParents.get(currentToken) ?? 0
+  }
+  return false
+}
+
+function deleteConfigurationLayerAndDescendants(token: number): void {
+  const tokensToDelete = new Set<number>([token])
+  for (const childToken of [...configurationParents.keys()]) {
+    if (isDescendantConfigurationLayer(childToken, token)) {
+      tokensToDelete.add(childToken)
+    }
+  }
+  for (const tokenToDelete of tokensToDelete) configurationParents.delete(tokenToDelete)
+}
+
+function isDescendantConfigurationLayer(candidateToken: number, ancestorToken: number): boolean {
+  for (let currentToken = configurationParents.get(candidateToken) ?? 0; currentToken !== 0; ) {
+    if (currentToken === ancestorToken) return true
     currentToken = configurationParents.get(currentToken) ?? 0
   }
   return false
@@ -496,6 +532,7 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
   return {
     pendingDeliveries: deliveryDiagnostics.pendingDeliveries,
     droppedRecords: deliveryDiagnostics.droppedRecords,
+    deliveryErrorCount: deliveryDiagnostics.deliveryErrorCount,
     invalidRecords,
     redactedRecords,
     contextlessRecords,

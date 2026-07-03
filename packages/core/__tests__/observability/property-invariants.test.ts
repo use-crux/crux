@@ -25,6 +25,7 @@ const attributeValueArbitrary = fc.oneof(
   fc.boolean(),
   fc.constant(null),
   fc.constant(undefined),
+  fc.constant(hostileToStringValue()),
 )
 
 const attributesArbitrary: fc.Arbitrary<CruxAttributes> = fc.dictionary(
@@ -134,9 +135,20 @@ describe('observability property invariants', () => {
         for (const record of transport.records) {
           expect(CruxGraphRecordSchema.safeParse(record).success).toBe(true)
         }
-        expect(observabilityDiagnostics().invalidRecords).toBeGreaterThanOrEqual(0)
+        const diagnostics = observabilityDiagnostics()
+        expect(
+          transport.records.length + diagnostics.invalidRecords + diagnostics.redactedRecords + diagnostics.droppedRecords,
+        ).toBeGreaterThan(0)
       }),
       { numRuns: 200 },
     )
   })
 })
+
+function hostileToStringValue(): unknown {
+  return {
+    toString() {
+      throw new Error('attribute toString failed')
+    },
+  }
+}

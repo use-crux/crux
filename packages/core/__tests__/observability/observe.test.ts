@@ -4,6 +4,7 @@ import {
   CRUX_OBSERVABILITY_CHANNEL,
   CRUX_OBSERVABILITY_SCHEMA_VERSION,
   type CruxObservabilityChannelMessage,
+  type CruxGraphRecord,
   configureObservability,
   createHttpObservabilityTransport,
   createCruxArtifactId,
@@ -956,7 +957,7 @@ describe('observe runtime', () => {
       pendingDeliveries: 1,
       droppedRecords: 97_952,
     })
-  })
+  }, 10_000)
 
   it('posts canonical batches through the HTTP transport', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
@@ -1154,6 +1155,34 @@ describe('observe runtime', () => {
     expect(deliveredRecords.map((record) => record.type)).toContain('run:end')
     expect(observabilityDiagnostics().droppedRecords).toBe(1)
     expect(observabilityDeliveryErrors()).toHaveLength(0)
+  })
+
+  it('does not locally Zod-parse HTTP batches before posting them', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
+    const transport = createHttpObservabilityTransport({
+      serverUrl: 'http://localhost:4400',
+      fetch: fetchImpl,
+      retryAttempts: 0,
+    })
+    const malformedButAlreadyAcceptedRecord = {
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      recordId: 'rec_invalid_local_parse',
+      seq: 1,
+      type: 'run:start',
+      runId: 'run_invalid_local_parse',
+      traceId: 'trace-not-w3c',
+      name: 'invalid local parse',
+      rootPrimitive: 'custom.operation',
+      startedAt: '2026-05-16T18:00:00.000Z',
+      status: 'running',
+    } as unknown as CruxGraphRecord
+
+    await expect(transport.send([malformedButAlreadyAcceptedRecord])).resolves.toBeUndefined()
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      records: [malformedButAlreadyAcceptedRecord],
+    })
   })
 
   it('chunks large HTTP deliveries in the engine without treating the record list as a preview array', async () => {

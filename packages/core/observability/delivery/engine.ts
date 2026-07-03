@@ -14,10 +14,10 @@ import { deliveryTimeoutSignal } from './timeout'
 
 const DELIVERY_ERROR_RING_CAP = 100
 const FLUSH_FAILURE_RETRY_DELAY_MS = 25
-
 export interface DeliveryEngineDiagnostics {
   readonly pendingDeliveries: number
   readonly droppedRecords: number
+  readonly deliveryErrorCount: number
   readonly deliveryErrors: readonly unknown[]
 }
 
@@ -118,6 +118,7 @@ export function createDeliveryEngine(): DeliveryEngine {
       return {
         pendingDeliveries: state.pendingDeliveries.size,
         droppedRecords: state.droppedRecords,
+        deliveryErrorCount: state.deliveryFailureCount,
         deliveryErrors: state.deliveryErrors,
       }
     },
@@ -157,18 +158,20 @@ function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => voi
 
   let failed = false
   let delivery!: Promise<void>
+  const releasePendingBatch = () => {
+    if (state.pendingDeliveries.delete(delivery)) state.pendingRecordCount -= batch.length
+  }
   delivery = sendBatchInChunks(transport, batch)
     .then((result) => {
       if (result.poisonDropped > 0) state.droppedRecords += result.poisonDropped
       if (result.ok) return
       failed = true
       recordDeliveryError(state, result.error)
+      releasePendingBatch()
       handleDeliveryFailure(state, result.failedRecords, capturedEpoch, scheduleDispatch)
     })
     .finally(() => {
-      if (state.pendingDeliveries.delete(delivery)) {
-        state.pendingRecordCount -= batch.length
-      }
+      if (!failed) releasePendingBatch()
       if (!failed) {
         state.retryAttempt = 0
         if (state.queuedRecords.length > 0) scheduleDispatch()
@@ -291,7 +294,6 @@ async function flushDeliveryState(
     }
   }
   const hookError = await runTransportHook(state.transport, hook)
-  if (hookError === undefined) return true
-  recordDeliveryError(state, hookError)
-  return false
+  if (hookError !== undefined) recordDeliveryError(state, hookError)
+  return hookError === undefined
 }

@@ -6,6 +6,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
   subscribeObservability,
+  type CruxAttributes,
   type CruxGraphRecord,
   type CruxMetrics,
 } from '../../observability'
@@ -131,6 +132,63 @@ describe('observability invariants', () => {
     })
   })
 
+  it('rethrows a hostile user error instead of leaking observability construction failures', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const userError = new Error('fallback')
+    Object.defineProperty(userError, 'message', {
+      get() {
+        throw new Error('message getter failed')
+      },
+    })
+
+    await expect(
+      observe.span(
+        {
+          name: 'hostile user error span',
+          primitive: 'custom.operation',
+        },
+        async () => {
+          throw userError
+        },
+      ),
+    ).rejects.toBe(userError)
+    await observe.flush()
+
+    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'span:start' }))
+    expect(observabilityDiagnostics().invalidRecords).toBeGreaterThan(0)
+  })
+
+  it('counts hostile attribute getters instead of throwing instrumentation failures', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const attributes = hostileGetterAttributes()
+
+    await expect(
+      observe.run({ name: 'hostile attributes', rootPrimitive: 'custom.operation', attributes }, async () => {
+        observe.event({ name: 'hostile event', attributes })
+      }),
+    ).resolves.toBeUndefined()
+    await observe.flush()
+
+    expect(observabilityDiagnostics().invalidRecords).toBeGreaterThan(0)
+  })
+
+  it('handles hostile attribute toString values instead of throwing instrumentation failures', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const attributes: CruxAttributes = { hostile: hostileToStringValue() }
+
+    await expect(
+      observe.run({ name: 'hostile toString attributes', rootPrimitive: 'custom.operation', attributes }, async () => {
+        observe.event({ name: 'hostile toString event', attributes })
+      }),
+    ).resolves.toBeUndefined()
+    await observe.flush()
+
+    expect(transport.records.length + observabilityDiagnostics().invalidRecords).toBeGreaterThan(0)
+  })
+
   it('drops and counts records that remain invalid after coercion', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
@@ -188,3 +246,22 @@ describe('observability invariants', () => {
     expect(transportArtifact).toMatchObject(subscriberArtifact)
   })
 })
+
+function hostileGetterAttributes(): CruxAttributes {
+  const attributes: CruxAttributes = {}
+  Object.defineProperty(attributes, 'throwsOnRead', {
+    enumerable: true,
+    get() {
+      throw new Error('attribute getter failed')
+    },
+  })
+  return attributes
+}
+
+function hostileToStringValue(): unknown {
+  return {
+    toString() {
+      throw new Error('attribute toString failed')
+    },
+  }
+}

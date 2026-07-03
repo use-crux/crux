@@ -15,6 +15,7 @@ import { chaosTransport } from './helpers/chaos-transport'
 describe('observability delivery retry and configuration restore', () => {
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
     resetObservabilityRuntime()
   })
 
@@ -83,6 +84,7 @@ describe('observability delivery retry and configuration restore', () => {
   })
 
   it('tees records to every transport while isolating one failing leg', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const delivered: CruxGraphRecord[] = []
     const failing: CruxObservabilityTransport = {
       send() {
@@ -101,6 +103,79 @@ describe('observability delivery retry and configuration restore', () => {
 
     expect(delivered.map((record) => record.type)).toEqual(['run:start', 'run:end'])
     expect(observabilityDiagnostics().deliveryErrors).toEqual([])
+    expect(warn).toHaveBeenCalledWith(
+      '[crux] observability tee transport leg failed; continuing with successful leg(s).',
+      expect.any(Error),
+    )
+  })
+
+  it('forwards tee transport hooks and exposes the strictest chunk size', async () => {
+    const calls: string[] = []
+    const first: CruxObservabilityTransport = {
+      maxRecordsPerRequest: 8,
+      send: vi.fn(),
+      async flush() {
+        calls.push('first:flush')
+      },
+      async shutdown() {
+        calls.push('first:shutdown')
+      },
+    }
+    const second: CruxObservabilityTransport = {
+      maxRecordsPerRequest: 3,
+      send: vi.fn(),
+      async flush() {
+        calls.push('second:flush')
+      },
+      async shutdown() {
+        calls.push('second:shutdown')
+      },
+    }
+    const tee = teeObservabilityTransport(first, second)
+
+    expect(tee.maxRecordsPerRequest).toBe(3)
+    await expect(tee.flush?.()).resolves.toBeUndefined()
+    await expect(tee.shutdown?.()).resolves.toBeUndefined()
+    expect(calls).toEqual(['first:flush', 'second:flush', 'first:shutdown', 'second:shutdown'])
+  })
+
+  it('does not over-drop a failed in-flight batch when requeueing at the queue bound', async () => {
+    vi.useFakeTimers()
+    let sendCount = 0
+    const delivered: CruxGraphRecord[] = []
+    setObservabilityTransport(
+      {
+        async send(records) {
+          sendCount += 1
+          if (sendCount === 1) throw new Error('temporary pressure failure')
+          delivered.push(...records)
+        },
+      },
+      {
+        maxPendingDeliveries: 1,
+        maxQueuedRecords: 4,
+        maxBatchSize: 4,
+        scheduledDelayMs: 0,
+        retryDelayMs: 1,
+        maxRetryDelayMs: 1,
+      },
+    )
+
+    const run = observe.openRun({ name: 'bounded requeue', rootPrimitive: 'custom.operation' })
+    run.withContext(() => {
+      const span = observe.openSpan({ name: 'queued span', primitive: 'custom.operation' })
+      span.end()
+    })
+    run.end()
+
+    await vi.advanceTimersByTimeAsync(1)
+    await observe.flush()
+
+    expect(delivered.map((record) => record.type)).toEqual(['run:start', 'span:start', 'span:end', 'run:end'])
+    expect(observabilityDiagnostics()).toMatchObject({
+      droppedRecords: 0,
+      deliveryErrorCount: 1,
+    })
   })
 
   it('requeues only the failed and later chunks after a partial transport failure', async () => {

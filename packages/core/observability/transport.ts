@@ -1,5 +1,4 @@
 import type { CruxGraphRecord } from './contract'
-import { CruxGraphRecordBatchSchema } from './schema'
 
 export interface CruxObservabilityTransport {
   /**
@@ -169,8 +168,7 @@ export function createHttpObservabilityTransport(
       await postChunk(records)
 
       async function postChunk(chunk: readonly CruxGraphRecord[]): Promise<void> {
-        const body = CruxGraphRecordBatchSchema.parse({ records: chunk })
-        const payload = JSON.stringify(body)
+        const payload = JSON.stringify({ records: chunk })
         let lastError: unknown
 
         for (let attempt = 0; attempt <= retryAttempts; attempt++) {

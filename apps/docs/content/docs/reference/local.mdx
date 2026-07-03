@@ -45,7 +45,7 @@ public tunnel origin when cloud runtimes need to post records back to your local
 
 The local HTTP API, in-process DirectClient, and WebSocket snapshot payloads share the same backend read-model registry. This keeps route parameters, query parsing, not-found handling, live invalidation messages, and initial snapshot payloads aligned between custom tooling and the embedded devtools UI.
 
-Observability and quality run lists are newest-first pages by default so live web/TUI refreshes stay responsive on large local histories. Single-run detail endpoints remain exact. Use explicit `limit`/`offset` query parameters on the HTTP list endpoints when building custom local tooling that needs a different page size.
+Observability and quality run lists are newest-first pages by default so live web/TUI refreshes stay responsive on large local histories. Observability lists read ingest-time count and usage rollups from SQLite; single-run detail endpoints remain exact. Use explicit `limit`/`offset` query parameters on the HTTP list endpoints when building custom local tooling that needs a different page size.
 
 ## `crux traces`
 

@@ -36,14 +36,17 @@ func (s *Service) Run(ctx context.Context, runID string) (RunSummary, error) {
 func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCounts bool) (RunSummary, error) {
 	var run RunSummary
 	countProjection := `
-			0, 0, 0, 0, 0`
+			0, 0, 0, 0, 0, 0, 0, 0`
 	if includeCounts {
 		countProjection = `
-			(SELECT count(*) FROM records WHERE run_id = r.run_id),
-			(SELECT count(*) FROM spans WHERE run_id = r.run_id),
-			(SELECT count(*) FROM span_events WHERE run_id = r.run_id),
-			(SELECT count(*) FROM artifacts WHERE run_id = r.run_id),
-			(SELECT count(*) FROM edges WHERE run_id = r.run_id)`
+			r.record_count,
+			r.span_count,
+			r.event_count,
+			r.artifact_count,
+			r.edge_count,
+			r.total_input_tokens,
+			r.total_output_tokens,
+			r.total_cost_usd`
 	}
 	row := s.db.QueryRowContext(ctx, `
 		SELECT
@@ -76,6 +79,9 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 		&run.EventCount,
 		&run.ArtifactCount,
 		&run.EdgeCount,
+		&run.inputTokens,
+		&run.outputTokens,
+		&run.costUSD,
 		&attributes,
 		&metrics,
 		&errorJSON,
@@ -104,7 +110,8 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
 			'', '', '',
-			0, 0, 0, 0, 0,
+			r.record_count, r.span_count, r.event_count, r.artifact_count, r.edge_count,
+			r.total_input_tokens, r.total_output_tokens, r.total_cost_usd,
 				r.attributes_json, r.metrics_json, r.error_json
 			FROM runs r`
 	args := []any{}
@@ -145,6 +152,9 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 			&run.EventCount,
 			&run.ArtifactCount,
 			&run.EdgeCount,
+			&run.inputTokens,
+			&run.outputTokens,
+			&run.costUSD,
 			&attributes,
 			&metrics,
 			&errorJSON,
@@ -381,6 +391,7 @@ func (s *Service) enrichRunSummaries(ctx context.Context, runs []RunSummary, inc
 	}
 	if !includeExpensiveRollups {
 		for i := range runs {
+			applyStoredUsageRollups(&runs[i], metricsByRunID[runs[i].RunID])
 			normalizeUsageTotals(metricsByRunID[runs[i].RunID])
 			runs[i].Metrics = metricsRawOrNil(metricsByRunID[runs[i].RunID])
 		}
@@ -461,64 +472,49 @@ func (s *Service) enrichRunSummaryIdentityBatch(ctx context.Context, runIDs []st
 }
 
 func (s *Service) enrichRunSummaryCounts(ctx context.Context, runIDs []string, byRunID map[string]*RunSummary) error {
-	specs := []struct {
-		table string
-		label string
-		apply func(*RunSummary, int)
-	}{
-		{table: "records", label: "record", apply: func(run *RunSummary, count int) { run.RecordCount = count }},
-		{table: "spans", label: "span", apply: func(run *RunSummary, count int) { run.SpanCount = count }},
-		{table: "span_events", label: "span event", apply: func(run *RunSummary, count int) { run.EventCount = count }},
-		{table: "artifacts", label: "artifact", apply: func(run *RunSummary, count int) { run.ArtifactCount = count }},
-		{table: "edges", label: "edge", apply: func(run *RunSummary, count int) { run.EdgeCount = count }},
-	}
-	for _, spec := range specs {
-		for _, batch := range runIDBatches(runIDs, runSummaryRollupBatchSize) {
-			batchCtx, cancel := s.queryContext(ctx)
-			err := s.enrichRunSummaryCountBatch(batchCtx, batch, byRunID, spec.table, spec.label, spec.apply)
+	for _, batch := range runIDBatches(runIDs, runSummaryRollupBatchSize) {
+		batchCtx, cancel := s.queryContext(ctx)
+		rows, err := s.db.QueryContext(batchCtx, `
+			SELECT run_id, record_count, span_count, event_count, artifact_count, edge_count,
+				total_input_tokens, total_output_tokens, total_cost_usd
+			FROM runs
+			WHERE run_id IN (`+queryPlaceholders(len(batch))+`)
+		`, queryArgs(batch)...)
+		if err != nil {
 			cancel()
-			if err != nil {
-				return err
+			return fmt.Errorf("query observability count rollups: %w", err)
+		}
+		for rows.Next() {
+			var runID string
+			var recordCount, spanCount, eventCount, artifactCount, edgeCount int
+			var inputTokens, outputTokens int
+			var costUSD float64
+			if err := rows.Scan(&runID, &recordCount, &spanCount, &eventCount, &artifactCount, &edgeCount, &inputTokens, &outputTokens, &costUSD); err != nil {
+				_ = rows.Close()
+				cancel()
+				return fmt.Errorf("scan observability count rollup: %w", err)
+			}
+			if run := byRunID[runID]; run != nil {
+				run.RecordCount = recordCount
+				run.SpanCount = spanCount
+				run.EventCount = eventCount
+				run.ArtifactCount = artifactCount
+				run.EdgeCount = edgeCount
+				run.inputTokens = inputTokens
+				run.outputTokens = outputTokens
+				run.costUSD = costUSD
 			}
 		}
-	}
-	return nil
-}
-
-func (s *Service) enrichRunSummaryCountBatch(
-	ctx context.Context,
-	runIDs []string,
-	byRunID map[string]*RunSummary,
-	table string,
-	label string,
-	apply func(*RunSummary, int),
-) error {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT run_id, count(*)
-		FROM `+table+`
-		WHERE run_id IN (`+queryPlaceholders(len(runIDs))+`)
-		GROUP BY run_id
-	`, queryArgs(runIDs)...)
-	if err != nil {
-		return fmt.Errorf("query observability %s count rollups: %w", label, err)
-	}
-	for rows.Next() {
-		var runID string
-		var count int
-		if err := rows.Scan(&runID, &count); err != nil {
+		if err := rows.Err(); err != nil {
 			_ = rows.Close()
-			return fmt.Errorf("scan observability %s count rollup: %w", label, err)
+			cancel()
+			return fmt.Errorf("iterate observability count rollups: %w", err)
 		}
-		if run := byRunID[runID]; run != nil {
-			apply(run, count)
+		if err := rows.Close(); err != nil {
+			cancel()
+			return fmt.Errorf("close observability count rollups rows: %w", err)
 		}
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return fmt.Errorf("iterate observability %s count rollups: %w", label, err)
-	}
-	if err := rows.Close(); err != nil {
-		return fmt.Errorf("close observability %s count rollups rows: %w", label, err)
+		cancel()
 	}
 	return nil
 }
