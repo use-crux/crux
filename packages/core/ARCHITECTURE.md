@@ -147,6 +147,7 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── observability/
 │   ├── index.ts        Barrel: canonical graph contract, presentation read models, schemas, ID helpers, observe runtime, transports
 │   ├── contract.ts     Wire-only canonical graph records; branded IDs; taxonomies
+│   ├── VERSIONING.md   Schema-version policy, additive-field rules, and TS/Go conformance checklist
 │   ├── presentation.ts Presentation read-model barrel, versioned independently from the wire schema
 │   ├── presentation/   RunSummary, SpanSummary, RunDetail, placement, request, and realtime notification types
 │   ├── turn-decision-report/  Per-turn TurnDecisionReport explanation read model (report/items/evidence/source-coverage/targets/shared), barrelled by turn-decision-report.ts
@@ -1562,6 +1563,11 @@ configured devtools transport. Token-guarded restore prevents nested config clea
 resurrecting a disposed transport. The HTTP transport posts canonical `{ records }` batches to
 `/api/observability/records`; HTTP, WebSocket, and SSE layers should remain adapters around Go
 services rather than owning graph semantics.
+
+Schema governance lives beside the wire contract in `observability/VERSIONING.md`.
+Known producer fixtures must pass the TypeScript schema and Go conformance tests.
+Forward-compat fixtures prove the Go server stores unknown record types and extra
+fields as raw records without widening the TypeScript producer schema.
 
 Devtools run-detail views poll briefly after a run reaches a terminal status. This keeps Convex/serverless boundary flushes visible when final artifacts or follow-up generation spans arrive just after the terminal run update.
 

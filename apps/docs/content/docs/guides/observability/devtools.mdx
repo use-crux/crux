@@ -267,7 +267,7 @@ When you run `crux dev`:
 5. Builds canonical graph, `RunDetail`, and resource activity read models in Go services
 6. Broadcasts backend-owned read-model updates to connected UIs
 
-The Go process owns the server and read models. Node.js is spawned only for bounded helper workers: Project Index indexing, eval execution, and lazy source resolution.
+The Go process owns the server and read models. Node.js is spawned only for bounded helper workers: Project Index indexing, eval execution, and lazy source resolution. The server stores the raw payload for every accepted graph record, including forward-compatible unknown record types, so newer SDKs can preserve data even when an older local read model skips normalized projection.
 
 ### The SDK
 

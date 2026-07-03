@@ -1,0 +1,15 @@
+{
+  "records": [
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_bbbbbbbbbbbbbbbb_unknown",
+      "type": "future:record",
+      "runId": "run_bbbbbbbbbbbbbbbbbbbbbbbb",
+      "seq": 1,
+      "traceId": "22222222222222222222222222222222",
+      "futureField": {
+        "kept": true
+      }
+    }
+  ]
+}

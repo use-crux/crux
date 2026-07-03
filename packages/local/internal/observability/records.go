@@ -193,6 +193,7 @@ var primitiveFamilyByName = map[string]string{
 	"guardrail.run":           "guardrail",
 	"routing.router":          "routing",
 	"routing.cascade":         "routing",
+	"fallback.attempt":        "routing",
 	"runtime.convex.action":   "runtime",
 	"runtime.convex.query":    "runtime",
 	"runtime.convex.mutation": "runtime",
@@ -200,6 +201,8 @@ var primitiveFamilyByName = map[string]string{
 	"runtime.convex.resume":   "runtime",
 	"runtime.convex.flush":    "runtime",
 	"cache.lookup":            "cache",
+	"compaction.run":          "compaction",
+	"eval.run":                "eval",
 	"eval.case":               "eval",
 	"scoring.judge":           "scoring",
 	"citation.check":          "citation",
@@ -255,6 +258,8 @@ var canonicalArtifactKinds = map[string]struct{}{
 	"tool.result":          {},
 	"retrieval.hits":       {},
 	"memory.snapshot":      {},
+	"memory.recall":        {},
+	"memory.diff":          {},
 	"handoff.payload":      {},
 	"delegate.report":      {},
 	"constraint.report":    {},
@@ -331,9 +336,18 @@ func ValidateRecord(record Record) error {
 	case RecordRunEnd, RecordSpanEnd, RecordSpanEvent:
 		return nil
 	default:
-		return fmt.Errorf("record %s has unknown type %q", record.RecordID, record.Type)
+		return nil
 	}
 	return nil
+}
+
+func isKnownRecordType(recordType RecordType) bool {
+	switch recordType {
+	case RecordRunStart, RecordRunEnd, RecordSpanStart, RecordSpanEnd, RecordSpan, RecordSpanEvent, RecordEdge, RecordArtifact:
+		return true
+	default:
+		return false
+	}
 }
 
 func isCanonicalOrCustom(value string, canonical map[string]struct{}) bool {

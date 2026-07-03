@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -39,6 +40,7 @@ type Service struct {
 
 	lifecycleMu         sync.Mutex
 	lifecycleSignatures map[string]string
+	unknownRecordTypes  atomic.Int64
 }
 
 type Event struct {

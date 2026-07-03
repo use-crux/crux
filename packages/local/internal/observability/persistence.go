@@ -265,7 +265,7 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, record Record) e
 		}
 		return upsertSpan(ctx, tx, span)
 	default:
-		return fmt.Errorf("unsupported record type %q", record.Type)
+		return nil
 	}
 }
 

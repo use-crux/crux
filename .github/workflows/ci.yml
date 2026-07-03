@@ -59,6 +59,10 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Go observability conformance
+        working-directory: packages/local
+        run: go test ./internal/observability/...
+
       - name: Native AST parity gate
         run: pnpm test:native-ast-parity
 
