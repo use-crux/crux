@@ -51,6 +51,9 @@ const explicitObservabilityExport = {
     transport: observabilityTransport,
     delivery: {
       maxPendingDeliveries: 4,
+      maxQueuedRecords: 256,
+      retryDelayMs: 25,
+      maxRetryDelayMs: 250,
     },
   },
 } satisfies CruxConfig

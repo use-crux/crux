@@ -1,5 +1,7 @@
 const DEFAULT_MAX_PENDING_DELIVERIES = 1000
 const DEFAULT_MAX_QUEUED_RECORDS = 2048
+const DEFAULT_RETRY_DELAY_MS = 100
+const DEFAULT_MAX_RETRY_DELAY_MS = 5000
 
 export interface ObservabilityDeliveryOptions {
   /**
@@ -18,11 +20,30 @@ export interface ObservabilityDeliveryOptions {
    * @default 2048
    */
   maxQueuedRecords?: number
+
+  /**
+   * Base delay for delivery retry backoff after a transport failure.
+   *
+   * Retries happen without requiring another emitted record. Each consecutive
+   * failure doubles the delay until `maxRetryDelayMs`.
+   *
+   * @default 100
+   */
+  retryDelayMs?: number
+
+  /**
+   * Maximum delivery retry backoff after repeated transport failures.
+   *
+   * @default 5000
+   */
+  maxRetryDelayMs?: number
 }
 
 export interface NormalizedObservabilityDeliveryOptions {
   readonly maxPendingDeliveries: number
   readonly maxQueuedRecords: number
+  readonly retryDelayMs: number
+  readonly maxRetryDelayMs: number
 }
 
 export interface ObservabilityFlushOptions {
@@ -38,6 +59,8 @@ export function defaultDeliveryOptions(): NormalizedObservabilityDeliveryOptions
   return {
     maxPendingDeliveries: DEFAULT_MAX_PENDING_DELIVERIES,
     maxQueuedRecords: DEFAULT_MAX_QUEUED_RECORDS,
+    retryDelayMs: DEFAULT_RETRY_DELAY_MS,
+    maxRetryDelayMs: DEFAULT_MAX_RETRY_DELAY_MS,
   }
 }
 
@@ -47,5 +70,7 @@ export function normalizeDeliveryOptions(
   return {
     maxPendingDeliveries: Math.max(1, options?.maxPendingDeliveries ?? DEFAULT_MAX_PENDING_DELIVERIES),
     maxQueuedRecords: Math.max(1, options?.maxQueuedRecords ?? DEFAULT_MAX_QUEUED_RECORDS),
+    retryDelayMs: Math.max(0, options?.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS),
+    maxRetryDelayMs: Math.max(0, options?.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS),
   }
 }

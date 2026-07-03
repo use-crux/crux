@@ -28,7 +28,7 @@ import type { Context } from '../prompt/context-types'
 import type { CruxPlugin, CruxPluginResult } from '../runtime/plugin'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
 import { getRuntime, setRuntime, resetRuntime, type CruxRuntime } from '../runtime/runtime'
-import { configureObservability } from './observe'
+import { configureObservability, observe } from './observe'
 import { createHttpObservabilityTransport } from './transport'
 import { IndexSnapshotSchema } from '../project-index'
 import { serializeIndex } from '../project-index/serializers'
@@ -128,6 +128,7 @@ function buildDevtoolsRuntime(
   return {
     observabilityTransport: transport,
     dispose() {
+      void observe.flush({ timeoutMs: 2000 })
       restoreObservability()
     },
   }

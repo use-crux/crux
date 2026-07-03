@@ -17,11 +17,12 @@ describe('withDevtools — CruxPlugin', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     resetObservabilityRuntime()
   })
 
-    it('returns a CruxPlugin with name crux:devtools', () => {
+  it('returns a CruxPlugin with name crux:devtools', () => {
     const plugin = withDevtools({
       prompts: [],
       serverUrl: 'http://localhost:4400',
@@ -31,7 +32,7 @@ describe('withDevtools — CruxPlugin', () => {
     expect(typeof plugin.install).toBe('function')
   })
 
-    it('install() registers the index through the canonical index endpoint', async () => {
+  it('install() registers the index through the canonical index endpoint', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
     const plugin = withDevtools({
@@ -51,7 +52,7 @@ describe('withDevtools — CruxPlugin', () => {
     )
   })
 
-    it('enableDevtools() still works for imperative use', async () => {
+  it('enableDevtools() still works for imperative use', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }))
     vi.stubGlobal('fetch', fetchMock)
     const cleanup = enableDevtools({
@@ -70,4 +71,20 @@ describe('withDevtools — CruxPlugin', () => {
     await observe.run({ name: 'after-cleanup', rootPrimitive: 'custom.operation' }, async () => undefined)
     await observe.flush()
     expect(fetchMock).not.toHaveBeenCalled()
-  })})
+  })
+
+  it('flushes pending observability records before devtools restore', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const flushSpy = vi.spyOn(observe, 'flush')
+
+    const cleanup = enableDevtools({
+      prompts: [],
+      serverUrl: 'http://localhost:4400',
+    })
+
+    cleanup()
+
+    expect(flushSpy).toHaveBeenCalledWith({ timeoutMs: 2000 })
+  })
+})

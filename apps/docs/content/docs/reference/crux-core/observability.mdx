@@ -14,6 +14,7 @@ import {
   observe,
   observabilityDiagnostics,
   subscribeObservability,
+  teeObservabilityTransport,
 } from '@use-crux/core/observability'
 ```
 
@@ -257,7 +258,7 @@ The default runtime path is non-blocking: transport failures are captured as dia
 await observe.flush({ timeoutMs: 5000 })
 ```
 
-Observability delivery is queued into batches. The first delivery starts immediately for live devtools, and later records coalesce per microtask before being sent as bounded concurrent batches. This avoids head-of-line blocking when a collector, tunnel, or Convex network hop is slow. HTTP delivery normalizes unknown preview values into JSON-safe shapes, sends `observability.token` / `CRUX_DEVTOOLS_TOKEN` as bearer auth when configured, and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact does not prevent terminal lifecycle records from reaching the backend. The Go observability backend reconciles out-of-order lifecycle records by stable ids and timestamps. The runtime never blocks user code on normal emits, but `flush()` and `shutdown()` wait for pending deliveries so serverless and Convex actions can preserve span starts, ends, artifacts, and events before the worker exits.
+Observability delivery is queued into batches. The first delivery starts immediately for live devtools, and later records coalesce per microtask before being sent as bounded concurrent batches. This avoids head-of-line blocking when a collector, tunnel, or Convex network hop is slow. Failed batches retry on a capped backoff without waiting for another emitted record, while runtime reset and transport replacement count stale in-flight failures as dropped instead of requeueing them into a later transport. HTTP delivery normalizes unknown preview values into JSON-safe shapes, sends `observability.token` / `CRUX_DEVTOOLS_TOKEN` as bearer auth when configured, and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact does not prevent terminal lifecycle records from reaching the backend. The Go observability backend reconciles out-of-order lifecycle records by stable ids and timestamps. The runtime never blocks user code on normal emits, but `flush()` and `shutdown()` wait for pending deliveries so serverless and Convex actions can preserve span starts, ends, artifacts, and events before the worker exits.
 
 Convex actions can use the helpers from `@use-crux/convex`:
 
@@ -285,6 +286,25 @@ config({
     delivery: { maxPendingDeliveries: 1000 },
   },
 })
+```
+
+Use `teeObservabilityTransport()` when a library needs its own capture sink while preserving an existing transport:
+
+```ts
+import {
+  createInMemoryObservabilityTransport,
+  currentObservabilityTransport,
+  setObservabilityTransport,
+  teeObservabilityTransport,
+} from '@use-crux/core/observability'
+
+const capture = createInMemoryObservabilityTransport()
+const previous = currentObservabilityTransport()
+const restore = setObservabilityTransport(
+  previous ? teeObservabilityTransport(capture, previous) : capture,
+)
+
+restore()
 ```
 
 ### Capture policy

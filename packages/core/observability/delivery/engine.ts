@@ -1,12 +1,14 @@
-import type { CruxGraphRecord } from './contract'
-import type { CruxObservabilityTransport } from './transport'
+import type { CruxGraphRecord } from '../contract'
+import type { CruxObservabilityTransport } from '../transport'
 import {
   defaultDeliveryOptions,
   normalizeDeliveryOptions,
   type NormalizedObservabilityDeliveryOptions,
   type ObservabilityDeliveryOptions,
   type ObservabilityFlushOptions,
-} from './delivery-options'
+} from './options'
+import { clearDeliveryRetryTimer, scheduleDeliveryRetry, type DeliveryRetryState } from './retry'
+import { deliveryTimeoutSignal } from './timeout'
 
 const DELIVERY_ERROR_RING_CAP = 100
 const FLUSH_FAILURE_RETRY_DELAY_MS = 25
@@ -24,9 +26,12 @@ interface DeliveryState {
   pendingRecordCount: number
   readonly deliveryErrors: unknown[]
   readonly queuedRecords: CruxGraphRecord[]
+  retryTimer: DeliveryRetryState['retryTimer']
+  retryAttempt: number
   dispatchScheduled: boolean
   droppedRecords: number
   deliveryFailureCount: number
+  epoch: number
 }
 
 export interface DeliveryEngine {
@@ -59,9 +64,12 @@ export function createDeliveryEngine(): DeliveryEngine {
     pendingRecordCount: 0,
     deliveryErrors: [],
     queuedRecords: [],
+    retryTimer: undefined,
+    retryAttempt: 0,
     dispatchScheduled: false,
     droppedRecords: 0,
     deliveryFailureCount: 0,
+    epoch: 0,
   }
   const microtaskFallback = Promise.resolve()
 
@@ -82,6 +90,7 @@ export function createDeliveryEngine(): DeliveryEngine {
     },
 
     setTransport(transport) {
+      advanceEpoch(state)
       state.transport = transport
     },
 
@@ -146,12 +155,13 @@ function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => voi
   if (state.pendingDeliveries.size >= state.options.maxPendingDeliveries) return
 
   const batch = state.queuedRecords.splice(0, state.queuedRecords.length)
+  const capturedEpoch = state.epoch
   let sendResult: void | Promise<void>
   try {
     sendResult = transport.send(batch)
   } catch (error) {
     recordDeliveryError(state, error)
-    requeueFront(state, batch)
+    handleDeliveryFailure(state, batch, capturedEpoch, scheduleDispatch)
     return
   }
 
@@ -161,18 +171,35 @@ function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => voi
     .catch((error: unknown) => {
       failed = true
       recordDeliveryError(state, error)
-      requeueFront(state, batch)
+      handleDeliveryFailure(state, batch, capturedEpoch, scheduleDispatch)
     })
     .finally(() => {
       if (state.pendingDeliveries.delete(delivery)) {
         state.pendingRecordCount -= batch.length
       }
-      if (!failed && state.queuedRecords.length > 0) scheduleDispatch()
+      if (!failed) {
+        state.retryAttempt = 0
+        if (state.queuedRecords.length > 0) scheduleDispatch()
+      }
     })
 
   state.pendingDeliveries.add(delivery)
   state.pendingRecordCount += batch.length
   trimQueuedRecordsToBound(state)
+}
+
+function handleDeliveryFailure(
+  state: DeliveryState,
+  batch: readonly CruxGraphRecord[],
+  capturedEpoch: number,
+  scheduleDispatch: () => void,
+): void {
+  if (state.epoch !== capturedEpoch) {
+    state.droppedRecords += batch.length
+    return
+  }
+  requeueFront(state, batch)
+  scheduleDeliveryRetry(state, state.options, () => dispatchQueuedRecords(state, scheduleDispatch))
 }
 
 function requeueFront(state: DeliveryState, records: readonly CruxGraphRecord[]): void {
@@ -202,6 +229,7 @@ function recordDeliveryError(state: DeliveryState, error: unknown): void {
 
 function resetDeliveryState(state: DeliveryState): void {
   const droppedOnReset = state.queuedRecords.length
+  advanceEpoch(state)
   state.queuedRecords.length = 0
   state.dispatchScheduled = false
   state.pendingDeliveries.clear()
@@ -209,8 +237,14 @@ function resetDeliveryState(state: DeliveryState): void {
   state.deliveryErrors.length = 0
   state.droppedRecords = droppedOnReset
   state.deliveryFailureCount = 0
+  state.retryAttempt = 0
   state.transport = undefined
   state.options = defaultDeliveryOptions()
+}
+
+function advanceEpoch(state: DeliveryState): void {
+  state.epoch += 1
+  clearDeliveryRetryTimer(state)
 }
 
 async function flushDeliveryState(
@@ -233,7 +267,7 @@ async function flushDeliveryState(
     if (remaining === undefined) {
       completed = await pending
     } else {
-      const timeout = timeoutSignal(remaining)
+      const timeout = deliveryTimeoutSignal(remaining)
       try {
         completed = await Promise.race([pending, timeout.promise])
       } finally {
@@ -256,22 +290,4 @@ async function flushDeliveryState(
     }
   }
   return true
-}
-
-function timeoutSignal(timeoutMs: number): { promise: Promise<false>; cancel: () => void } {
-  let timeout: ReturnType<typeof setTimeout> | undefined
-  const promise = new Promise<false>((resolve) => {
-    timeout = setTimeout(() => {
-      timeout = undefined
-      resolve(false)
-    }, timeoutMs)
-  })
-  return {
-    promise,
-    cancel() {
-      if (timeout === undefined) return
-      clearTimeout(timeout)
-      timeout = undefined
-    },
-  }
 }

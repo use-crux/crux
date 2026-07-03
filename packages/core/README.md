@@ -328,7 +328,7 @@ Generation, streaming, and tool spans emit canonical graph records with latency 
 
 Metric objects may include optional expressions that evaluate to `undefined`. The observability runtime strips `undefined`, `NaN`, and infinite metric values before records reach subscribers, diagnostics-channel consumers, devtools transports, or OTel, so malformed metrics do not interrupt application code.
 
-Observability delivery is fail-open and bounded. Synchronous or asynchronous transport failures are recorded in `observabilityDiagnostics().deliveryErrors` without escaping into application code, and queued records are capped by `observability.delivery.maxQueuedRecords` with oldest-record drop accounting in `droppedRecords`.
+Observability delivery is fail-open and bounded. Synchronous or asynchronous transport failures are recorded in `observabilityDiagnostics().deliveryErrors` without escaping into application code, failed batches retry on a capped backoff without waiting for another emitted record, and queued records are capped by `observability.delivery.maxQueuedRecords` with oldest-record drop accounting in `droppedRecords`.
 
 By default, request and response artifacts include bounded previews for local inspection. Disable payload previews centrally when traces leave a trusted environment:
 

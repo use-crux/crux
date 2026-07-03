@@ -35,12 +35,12 @@ import {
 } from './subscribers'
 import type { CruxObservabilityTransport } from './transport'
 import { validateRecordForEmission } from './validate-record'
-import { createDeliveryEngine } from './delivery-engine'
-import type { ObservabilityDeliveryOptions, ObservabilityFlushOptions } from './delivery-options'
+import { createDeliveryEngine } from './delivery/engine'
+import type { ObservabilityDeliveryOptions, ObservabilityFlushOptions } from './delivery/options'
 
 export { subscribeObservability, type CruxObservabilitySubscriber } from './subscribers'
 export { hasObservabilitySubscribers } from './subscribers'
-export type { ObservabilityDeliveryOptions, ObservabilityFlushOptions } from './delivery-options'
+export type { ObservabilityDeliveryOptions, ObservabilityFlushOptions } from './delivery/options'
 
 export interface ConfigureObservabilityOptions {
   transport?: CruxObservabilityTransport
@@ -155,6 +155,17 @@ let alsInitialized = false
 const deliveryEngine = createDeliveryEngine()
 let invalidRecords = 0
 let warnedAboutInvalidRecord = false
+
+interface ObservabilityConfigurationLayer {
+  readonly token: number
+  readonly parentToken: number
+  readonly previousTransport: CruxObservabilityTransport | undefined
+  readonly previousDeliveryOptions: ReturnType<typeof deliveryEngine.deliveryOptions>
+}
+
+let nextConfigurationToken = 0
+let activeConfigurationToken = 0
+const configurationParents = new Map<number, number>()
 
 const terminalSpanStatuses = new Set<Exclude<CruxSpanStatus, 'running'>>([
   'ok',
@@ -344,14 +355,36 @@ function stringField(record: CruxAttributes | undefined, key: string): string | 
 }
 
 export function configureObservability(options: ConfigureObservabilityOptions): () => void {
-  const previous = deliveryEngine.currentTransport()
-  const previousDeliveryOptions = deliveryEngine.deliveryOptions()
+  const layer: ObservabilityConfigurationLayer = {
+    token: nextConfigurationToken + 1,
+    parentToken: activeConfigurationToken,
+    previousTransport: deliveryEngine.currentTransport(),
+    previousDeliveryOptions: deliveryEngine.deliveryOptions(),
+  }
+  nextConfigurationToken = layer.token
+  configurationParents.set(layer.token, layer.parentToken)
+  activeConfigurationToken = layer.token
   deliveryEngine.setTransport(options.transport)
   deliveryEngine.configureDelivery(options.delivery)
+  let restored = false
   return () => {
-    deliveryEngine.setTransport(previous)
-    deliveryEngine.configureDelivery(previousDeliveryOptions)
+    if (restored) return
+    restored = true
+    if (!isActiveConfigurationLayer(layer.token)) return
+
+    activeConfigurationToken = layer.parentToken
+    configurationParents.delete(layer.token)
+    deliveryEngine.setTransport(layer.previousTransport)
+    deliveryEngine.configureDelivery(layer.previousDeliveryOptions)
   }
+}
+
+function isActiveConfigurationLayer(token: number): boolean {
+  for (let currentToken = activeConfigurationToken; currentToken !== 0; ) {
+    if (currentToken === token) return true
+    currentToken = configurationParents.get(currentToken) ?? 0
+  }
+  return false
 }
 
 export function setObservabilityTransport(
@@ -364,20 +397,17 @@ export function setObservabilityTransport(
 /**
  * Read the currently configured observability transport.
  *
- * Lets wrappers tee records — e.g. the Quality engine captures per-cell
- * records while still forwarding everything to a previously configured
- * devtools transport:
+ * Returns the active transport for diagnostics and adapter composition. Prefer
+ * {@link teeObservabilityTransport} when a feature needs to fan records out to
+ * an additional sink while preserving an already configured transport.
  *
  * @example
  * ```ts
  * const previous = currentObservabilityTransport()
- * const restore = setObservabilityTransport({
- *   send(records) {
- *     capture(records)
- *     return previous?.send(records)
- *   },
- * })
- * // … later
+ * const restore = setObservabilityTransport(
+ *   previous ? teeObservabilityTransport(capture, previous) : capture,
+ * )
+ * // later
  * restore()
  * ```
  */
@@ -388,6 +418,9 @@ export function currentObservabilityTransport(): CruxObservabilityTransport | un
 export function resetObservabilityRuntime(): void {
   deliveryEngine.reset()
   resetObservabilitySubscribers()
+  activeConfigurationToken = 0
+  nextConfigurationToken = 0
+  configurationParents.clear()
   invalidRecords = 0
   warnedAboutInvalidRecord = false
 }

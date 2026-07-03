@@ -346,6 +346,9 @@ the scoped devtools ingest endpoint. When `observability.transport` is set, that
 | `observability.token`                         | `string`                     | `CRUX_DEVTOOLS_TOKEN` when available | Bearer token for tunneled devtools ingest.                      |
 | `observability.transport`                     | `CruxObservabilityTransport` | `undefined`                          | Custom transport with `send(records)`.                          |
 | `observability.delivery.maxPendingDeliveries` | `number`                     | `1000`                               | Maximum in-flight transport sends before records remain queued. |
+| `observability.delivery.maxQueuedRecords`     | `number`                     | `2048`                               | Maximum retained queued plus in-flight records before oldest queued records are dropped and counted. |
+| `observability.delivery.retryDelayMs`         | `number`                     | `100`                                | Base retry delay after a failed transport send.                 |
+| `observability.delivery.maxRetryDelayMs`      | `number`                     | `5000`                               | Maximum capped retry delay after repeated transport failures.   |
 
 ```ts title="crux.config.ts"
 export default config({
@@ -354,6 +357,8 @@ export default config({
     token: process.env.CRUX_DEVTOOLS_TOKEN,
     delivery: {
       maxPendingDeliveries: 250,
+      retryDelayMs: 100,
+      maxRetryDelayMs: 5000,
     },
   },
 })
