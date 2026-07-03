@@ -434,3 +434,51 @@ func TestWebSocket_multiple_clients(t *testing.T) {
 		t.Fatalf("client 2 event = %#v, want run_multi", event2)
 	}
 }
+
+func TestWebSocket_blocked_client_does_not_starve_peers(t *testing.T) {
+	hub := &WSHub{clients: make(map[*wsClient]struct{})}
+	blocked := newQueuedTestClient(hub)
+	healthy := newQueuedTestClient(hub)
+	for i := 0; i < websocketClientSendBuffer; i++ {
+		blocked.send <- []byte(`{"type":"queued"}`)
+	}
+	hub.clients[blocked] = struct{}{}
+	hub.clients[healthy] = struct{}{}
+
+	select {
+	case <-blocked.done:
+		t.Fatal("blocked client was evicted before broadcast")
+	default:
+	}
+
+	hub.Broadcast([]byte(`{"type":"backpressure:test"}`))
+
+	select {
+	case msg := <-healthy.send:
+		var envelope map[string]any
+		if err := json.Unmarshal(msg, &envelope); err != nil {
+			t.Fatalf("healthy client message should be JSON: %v", err)
+		}
+		if envelope["type"] != "backpressure:test" {
+			t.Fatalf("healthy client message = %#v, want backpressure:test", envelope)
+		}
+	default:
+		t.Fatal("healthy client did not receive while another client was blocked")
+	}
+	select {
+	case <-blocked.done:
+	default:
+		t.Fatal("blocked client with a full queue was not evicted")
+	}
+	if got, want := hub.ClientCount(), 1; got != want {
+		t.Fatalf("websocket client count = %d, want %d", got, want)
+	}
+}
+
+func newQueuedTestClient(hub *WSHub) *wsClient {
+	return &wsClient{
+		hub:  hub,
+		send: make(chan []byte, websocketClientSendBuffer),
+		done: make(chan struct{}),
+	}
+}
