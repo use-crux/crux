@@ -2,7 +2,30 @@ import type { CruxGraphRecord } from './contract'
 import { CruxGraphRecordBatchSchema } from './schema'
 
 export interface CruxObservabilityTransport {
+  /**
+   * Deliver a batch of canonical graph records.
+   *
+   * The delivery engine may call this with records that were delivered in an
+   * earlier attempt. Implementations must therefore be idempotent by
+   * `recordId`. The engine does not call a single delivery attempt
+   * re-entrantly.
+   */
   send(records: readonly CruxGraphRecord[]): void | Promise<void>
+  /**
+   * Maximum records the engine should pass to one `send()` call for this
+   * transport. Defaults to 50 when omitted.
+   */
+  maxRecordsPerRequest?: number
+  /**
+   * Drain transport-owned buffers. Called after the engine drains queued and
+   * in-flight records from `observe.flush()`.
+   */
+  flush?(): Promise<void>
+  /**
+   * Final drain and resource release. Called from `observe.shutdown()` after
+   * queued records have been flushed.
+   */
+  shutdown?(): Promise<void>
 }
 
 export interface HttpObservabilityTransportOptions {
@@ -107,6 +130,27 @@ class CruxObservabilityHttpError extends Error {
   }
 }
 
+/**
+ * Reports poison records found by per-record HTTP isolation.
+ *
+ * Delivery treats these failed isolated records as permanently dropped and
+ * continues with later chunks, while preserving at-least-once retry behavior
+ * for ordinary transport failures.
+ */
+export class CruxObservabilityIngestError extends Error {
+  readonly delivered: number
+  readonly failed: number
+  readonly firstError: unknown
+
+  constructor(options: { delivered: number; failed: number; firstError: unknown }) {
+    super(`Crux observability ingest isolated ${options.failed} rejected record(s)`)
+    this.name = 'CruxObservabilityIngestError'
+    this.delivered = options.delivered
+    this.failed = options.failed
+    this.firstError = options.firstError
+  }
+}
+
 export function createHttpObservabilityTransport(
   options: HttpObservabilityTransportOptions = {},
 ): CruxObservabilityTransport {
@@ -119,17 +163,10 @@ export function createHttpObservabilityTransport(
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined
 
   return {
+    maxRecordsPerRequest,
     async send(records) {
       if (!fetchImpl) throw new Error('No fetch implementation available for Crux observability transport')
-
-      const chunks: CruxGraphRecord[][] = []
-      for (let index = 0; index < records.length; index += maxRecordsPerRequest) {
-        chunks.push(records.slice(index, index + maxRecordsPerRequest))
-      }
-
-      for (const chunk of chunks) {
-        await postChunk(chunk)
-      }
+      await postChunk(records)
 
       async function postChunk(chunk: readonly CruxGraphRecord[]): Promise<void> {
         const body = CruxGraphRecordBatchSchema.parse({ records: chunk })
@@ -185,12 +222,11 @@ export function createHttpObservabilityTransport(
               isolatedErrors.push(error)
             }
           }
-          if (deliveredRecords > 0) {
-            return
-          }
-          throw isolatedErrors[0] instanceof Error
-            ? isolatedErrors[0]
-            : new Error(`Crux observability ingest failed: ${String(isolatedErrors[0])}`)
+          throw new CruxObservabilityIngestError({
+            delivered: deliveredRecords,
+            failed: isolatedErrors.length,
+            firstError: isolatedErrors[0],
+          })
         }
 
         throw lastError instanceof Error

@@ -38,3 +38,9 @@ These keys do not change the graph shape and do not require a schema-version bum
 `config({ observability: { recordInputs, recordOutputs } })` controls whether input/output-family artifacts include previews. Both options default to `true`.
 
 When a direction is disabled, `observe.artifact()` emits the artifact as `encoding: 'reference'` with `sizeBytes` and `hash`, and omits `preview`. The artifact record shape is unchanged; consumers should already handle reference artifacts.
+
+## Transport Delivery
+
+`CruxObservabilityTransport.send()` is an at-least-once delivery boundary. Transports must be idempotent by `recordId`; the delivery engine may retry failed chunks while preserving chunks that were already accepted.
+
+The engine owns batching and request chunking. `observability.delivery.scheduledDelayMs` controls the batching window, `observability.delivery.maxBatchSize` bounds each engine batch, and `transport.maxRecordsPerRequest` bounds each `send()` call. `observe.flush()` drains queued records and calls an optional transport `flush()` hook. `observe.shutdown()` drains queued records, calls optional `shutdown()`, and then disables the transport.

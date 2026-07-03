@@ -23,12 +23,13 @@ describe('observability delivery retry and configuration restore', () => {
     const chaos = chaosTransport('flap')
     setObservabilityTransport(chaos.transport, {
       maxPendingDeliveries: 1,
+      scheduledDelayMs: 0,
       retryDelayMs: 10,
       maxRetryDelayMs: 10,
     })
 
     observe.openRun({ name: 'flapping collector', rootPrimitive: 'custom.operation' })
-    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(chaos.sendCount).toBe(1)
     expect(observabilityDiagnostics().deliveryErrors).toHaveLength(1)
@@ -100,5 +101,43 @@ describe('observability delivery retry and configuration restore', () => {
 
     expect(delivered.map((record) => record.type)).toEqual(['run:start', 'run:end'])
     expect(observabilityDiagnostics().deliveryErrors).toEqual([])
+  })
+
+  it('requeues only the failed and later chunks after a partial transport failure', async () => {
+    vi.useFakeTimers()
+    const chaos = chaosTransport('partial-chunk-fail')
+    Object.assign(chaos.transport, { maxRecordsPerRequest: 2 })
+    setObservabilityTransport(chaos.transport, {
+      maxPendingDeliveries: 1,
+      scheduledDelayMs: 1,
+      retryDelayMs: 1,
+      maxRetryDelayMs: 1,
+    })
+
+    const run = observe.openRun({ name: 'chunked delivery', rootPrimitive: 'custom.operation' })
+    run.withContext(() => {
+      for (const label of ['artifact 1', 'artifact 2', 'artifact 3', 'artifact 4']) {
+        observe.artifact({
+          kind: 'output',
+          contentType: 'text/plain',
+          encoding: 'text',
+          preview: label,
+        })
+      }
+    })
+    run.end()
+
+    await vi.advanceTimersByTimeAsync(1)
+    await observe.flush()
+
+    expect(chaos.batches.map((batch) => batch.map((record) => record.type))).toEqual([
+      ['run:start', 'artifact'],
+      ['artifact', 'artifact'],
+      ['artifact', 'artifact'],
+      ['artifact', 'run:end'],
+    ])
+    expect(chaos.batches[1]?.[0]).toMatchObject({ type: 'artifact', preview: 'artifact 2' })
+    expect(chaos.batches[2]?.[0]).toMatchObject({ type: 'artifact', preview: 'artifact 2' })
+    expect(observabilityDiagnostics().deliveryErrors).toHaveLength(1)
   })
 })

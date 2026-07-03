@@ -15,7 +15,7 @@ import {
   type CruxSpanId,
   type CruxTraceId,
 } from './contract'
-import { publishObservabilityChannel } from './channel'
+import { channelHasSubscribers, publishObservabilityChannel } from './channel'
 import {
   createCruxArtifactId,
   createCruxEdgeId,
@@ -29,6 +29,7 @@ import { normalizeObservedError, observedErrorSummary } from './errors'
 import { applyConfiguredObservabilityCapturePolicy } from './capture-policy'
 import { sanitizeRecord } from './sanitize'
 import {
+  hasObservabilitySubscribers,
   observabilitySubscriberErrorCount,
   publishObservabilitySubscribers,
   resetObservabilitySubscribers,
@@ -234,6 +235,15 @@ function emit(record: CruxGraphRecord): void {
   deliveryEngine.enqueue(validated.record)
 }
 
+function emitObserved(createRecord: () => CruxGraphRecord): void {
+  if (!hasActiveObservabilitySinks()) return
+  emit(createRecord())
+}
+
+function hasActiveObservabilitySinks(): boolean {
+  return deliveryEngine.currentTransport() !== undefined || hasObservabilitySubscribers() || channelHasSubscribers()
+}
+
 function recordInvalidRecord(issues: readonly string[]): void {
   invalidRecords += 1
   if (warnedAboutInvalidRecord) return
@@ -288,6 +298,8 @@ function emitObservedErrorEvidence(
   error: unknown,
   attributes?: CruxAttributes,
 ): void {
+  if (!hasActiveObservabilitySinks()) return
+
   const normalized = normalizeObservedError(error, errorContext(attributes))
   const stack = normalized.thrown === 'error' ? normalized.stack : undefined
   const phase = stringField(attributes, 'phase')
@@ -301,7 +313,7 @@ function emitObservedErrorEvidence(
     ...(errorKind ? { 'error.kind': errorKind } : {}),
   }
 
-  emit({
+  emitObserved(() => ({
     schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
     recordId: createCruxRecordId(),
     type: 'span:event',
@@ -312,10 +324,10 @@ function emitObservedErrorEvidence(
     name: 'exception',
     timestamp: now(),
     attributes: eventAttributes,
-  })
+  }))
 
   if (stack) {
-    emit({
+    emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: createCruxRecordId(),
       type: 'artifact',
@@ -329,10 +341,10 @@ function emitObservedErrorEvidence(
       encoding: 'text',
       preview: stack,
       ...(attributes ? { attributes } : {}),
-    })
+    }))
   }
 
-  emit({
+  emitObserved(() => ({
     schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
     recordId: createCruxRecordId(),
     type: 'artifact',
@@ -346,7 +358,7 @@ function emitObservedErrorEvidence(
     encoding: 'json',
     preview: normalized.raw,
     ...(attributes ? { attributes } : {}),
-  })
+  }))
 }
 
 function stringField(record: CruxAttributes | undefined, key: string): string | undefined {
@@ -448,7 +460,7 @@ export const observe = {
     const context: ObservabilityContext = { runId, traceId, spanStack: [] }
     let ended = false
 
-    emit({
+    emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: createCruxRecordId(),
       type: 'run:start',
@@ -459,13 +471,13 @@ export const observe = {
       startedAt: now(),
       status: 'running',
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    })
+    }))
 
     const finish = (finishOptions: EndObservedRunOptions = {}): void => {
       if (ended) return
       ended = true
       const status = finishOptions.status ?? (finishOptions.error ? 'error' : 'ok')
-      emit({
+      emitObserved(() => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: 'run:end',
@@ -479,7 +491,7 @@ export const observe = {
           ? { error: observedErrorSummary(finishOptions.error, errorContext(finishOptions.attributes)) }
           : {}),
         ...(finishOptions.attributes ? { attributes: finishOptions.attributes } : {}),
-      })
+      }))
     }
 
     return {
@@ -502,7 +514,7 @@ export const observe = {
 
   endRun(context: CapturedObservabilityContext, options: EndObservedRunOptions = {}): void {
     const status = options.status ?? (options.error ? 'error' : 'ok')
-    emit({
+    emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: createCruxRecordId(),
       type: 'run:end',
@@ -515,7 +527,7 @@ export const observe = {
         ? { error: observedErrorSummary(options.error, errorContext(options.attributes)) }
         : {}),
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    })
+    }))
   },
 
   async run<T>(options: ObserveRunOptions, fn: () => T | Promise<T>): Promise<T> {
@@ -524,7 +536,7 @@ export const observe = {
     const startedAtMs = Date.now()
     const context: ObservabilityContext = { runId, traceId, spanStack: [] }
 
-    emit({
+    emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: createCruxRecordId(),
       type: 'run:start',
@@ -535,11 +547,11 @@ export const observe = {
       startedAt: now(),
       status: 'running',
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    })
+    }))
 
     try {
       const result = await withContext(context, fn)
-      emit({
+      emitObserved(() => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: 'run:end',
@@ -548,10 +560,10 @@ export const observe = {
         endedAt: now(),
         durationMs: durationSince(startedAtMs),
         status: 'ok',
-      })
+      }))
       return result
     } catch (error) {
-      emit({
+      emitObserved(() => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: 'run:end',
@@ -561,7 +573,7 @@ export const observe = {
         durationMs: durationSince(startedAtMs),
         status: 'error',
         error: observedErrorSummary(error, errorContext(options.attributes)),
-      })
+      }))
       throw error
     }
   },
@@ -588,7 +600,7 @@ export const observe = {
     }
     const startedAtMs = Date.now()
 
-    emit({
+    emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: createCruxRecordId(),
       type: 'span:start',
@@ -602,11 +614,11 @@ export const observe = {
       startedAt: now(),
       status: 'running',
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    })
+    }))
 
     try {
       const result = await withContext(nextContext, fn)
-      emit({
+      emitObserved(() => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: 'span:end',
@@ -616,11 +628,11 @@ export const observe = {
         endedAt: now(),
         durationMs: durationSince(startedAtMs),
         status: 'ok',
-      })
+      }))
       return result
     } catch (error) {
       emitObservedErrorEvidence(nextContext, spanId, error, options.attributes)
-      emit({
+      emitObserved(() => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: 'span:end',
@@ -632,7 +644,7 @@ export const observe = {
         status: 'error',
         error: observedErrorSummary(error, errorContext(options.attributes)),
         ...(options.attributes ? { attributes: options.attributes } : {}),
-      })
+      }))
       throw error
     }
   },
@@ -660,23 +672,24 @@ export const observe = {
       }
       openedImplicitRun = true
       implicitRunStartedAtMs = Date.now()
-      context = {
+      const implicitContext: ObservabilityContext = {
         runId: createCruxRunId(),
         traceId: createCruxTraceId(),
         spanStack: [],
       }
-      emit({
+      context = implicitContext
+      emitObserved(() => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: 'run:start',
-        runId: context.runId,
-        traceId: context.traceId,
+        runId: implicitContext.runId,
+        traceId: implicitContext.traceId,
         name: options.name,
         rootPrimitive: options.primitive,
         startedAt: now(),
         status: 'running',
         ...(options.attributes ? { attributes: options.attributes } : {}),
-      })
+      }))
     }
 
     const spanId = createCruxSpanId()
@@ -688,7 +701,7 @@ export const observe = {
     const startedAtMs = Date.now()
     let ended = false
 
-    emit({
+    emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: createCruxRecordId(),
       type: 'span:start',
@@ -702,7 +715,7 @@ export const observe = {
       startedAt: now(),
       status: 'running',
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    })
+    }))
 
     const mergeSpanAttributes = (finishAttributes?: CruxAttributes): CruxAttributes | undefined => {
       if (!options.attributes && !finishAttributes) return undefined
@@ -720,7 +733,7 @@ export const observe = {
       if (finishOptions.error !== undefined) {
         emitObservedErrorEvidence(spanContext, spanId, finishOptions.error, attributes)
       }
-      emit({
+      emitObserved(() => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
         type: 'span:end',
@@ -735,10 +748,10 @@ export const observe = {
           ? { error: observedErrorSummary(finishOptions.error, errorContext(attributes)) }
           : {}),
         ...(attributes ? { attributes } : {}),
-      })
+      }))
       if (openedImplicitRun) {
         const runStatus: Exclude<CruxRunStatus, 'running'> = status === 'skipped' ? 'ok' : status
-        emit({
+        emitObserved(() => ({
           schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
           recordId: createCruxRecordId(),
           type: 'run:end',
@@ -751,7 +764,7 @@ export const observe = {
           ...(finishOptions.error !== undefined
             ? { error: observedErrorSummary(finishOptions.error, errorContext(attributes)) }
             : {}),
-        })
+        }))
       }
     }
 
@@ -777,7 +790,7 @@ export const observe = {
     const spanId = context?.spanStack[context.spanStack.length - 1]
     if (!context || !spanId) return
 
-    emit({
+    emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: createCruxRecordId(),
       type: 'span:event',
@@ -788,33 +801,35 @@ export const observe = {
       name: options.name,
       timestamp: now(),
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    })
+    }))
   },
 
   artifact(options: ObserveArtifactOptions): CruxArtifactId | undefined {
     const context = currentContext()
     if (!context) return undefined
 
-    const artifact = applyConfiguredObservabilityCapturePolicy(options)
-    const artifactId = artifact.artifactId ?? createCruxArtifactId()
-    const spanId = context.spanStack[context.spanStack.length - 1]
-    emit({
-      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-      recordId: createCruxRecordId(),
-      type: 'artifact',
-      runId: context.runId,
-      traceId: context.traceId,
-      artifactId,
-      ...(spanId ? { spanId } : {}),
-      kind: artifact.kind,
-      createdAt: now(),
-      contentType: artifact.contentType,
-      encoding: artifact.encoding,
-      ...(artifact.sizeBytes !== undefined ? { sizeBytes: artifact.sizeBytes } : {}),
-      ...(artifact.hash ? { hash: artifact.hash } : {}),
-      ...(artifact.preview !== undefined ? { preview: artifact.preview } : {}),
-      ...(artifact.uri ? { uri: artifact.uri } : {}),
-      ...(artifact.attributes ? { attributes: artifact.attributes } : {}),
+    const artifactId = options.artifactId ?? createCruxArtifactId()
+    emitObserved(() => {
+      const artifact = applyConfiguredObservabilityCapturePolicy({ ...options, artifactId })
+      const spanId = context.spanStack[context.spanStack.length - 1]
+      return {
+        schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+        recordId: createCruxRecordId(),
+        type: 'artifact',
+        runId: context.runId,
+        traceId: context.traceId,
+        artifactId,
+        ...(spanId ? { spanId } : {}),
+        kind: artifact.kind,
+        createdAt: now(),
+        contentType: artifact.contentType,
+        encoding: artifact.encoding,
+        ...(artifact.sizeBytes !== undefined ? { sizeBytes: artifact.sizeBytes } : {}),
+        ...(artifact.hash ? { hash: artifact.hash } : {}),
+        ...(artifact.preview !== undefined ? { preview: artifact.preview } : {}),
+        ...(artifact.uri ? { uri: artifact.uri } : {}),
+        ...(artifact.attributes ? { attributes: artifact.attributes } : {}),
+      }
     })
     return artifactId
   },
@@ -823,7 +838,7 @@ export const observe = {
     const context = currentContext()
     if (!context) return
 
-    emit({
+    emitObserved(() => ({
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: createCruxRecordId(),
       type: 'edge',
@@ -835,7 +850,7 @@ export const observe = {
       to: options.to,
       createdAt: now(),
       ...(options.attributes ? { attributes: options.attributes } : {}),
-    })
+    }))
   },
 
   captureContext(): CapturedObservabilityContext | undefined {

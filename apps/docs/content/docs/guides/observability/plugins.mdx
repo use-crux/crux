@@ -115,7 +115,7 @@ Return a `CruxPluginResult` — any subset of `CruxRuntime` fields plus an optio
 | `evalReporter`           | `EvalReporter`                 | Eval run progress                                |
 | `flowEvalReporter`       | `FlowEvalReporter`             | Flow eval progress                               |
 | `observabilityTransport` | `CruxObservabilityTransport`   | Canonical graph transport instance               |
-| `observabilityDelivery`  | `ObservabilityDeliveryOptions` | Non-blocking in-flight and queued-record bounds  |
+| `observabilityDelivery`  | `ObservabilityDeliveryOptions` | Non-blocking batching, retry, and queue bounds   |
 | `dispose`                | `() => void`                   | Cleanup on `registry.dispose()`                  |
 
 ## How composition works

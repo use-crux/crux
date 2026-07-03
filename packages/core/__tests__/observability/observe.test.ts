@@ -445,29 +445,60 @@ describe('observe runtime', () => {
     expect(delivered).toEqual(['run:start', 'run:end'])
   })
 
-  it('starts the first delivery immediately for live devtools updates', () => {
-    const send = vi.fn()
-    setObservabilityTransport({ send })
+  it('calls the transport flush hook after queued records drain', async () => {
+    const delivered: string[] = []
+    const flush = vi.fn<() => Promise<void>>(async () => {
+      delivered.push('flush')
+    })
+    setObservabilityTransport({
+      send(records) {
+        delivered.push(...records.map((record) => record.type))
+      },
+      flush,
+    })
 
-    observe.openRun({ name: 'live run', rootPrimitive: 'custom.operation' })
+    await observe.run({ name: 'flush hook', rootPrimitive: 'custom.operation' }, async () => 'ok')
 
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(send.mock.calls[0][0]).toEqual([expect.objectContaining({ type: 'run:start', name: 'live run' })])
+    await expect(observe.flush()).resolves.toBe(true)
+    expect(flush).toHaveBeenCalledTimes(1)
+    expect(delivered).toEqual(['run:start', 'run:end', 'flush'])
+  })
+
+  it('starts the first delivery after the batching window', async () => {
+    vi.useFakeTimers()
+    try {
+      const send = vi.fn()
+      setObservabilityTransport({ send })
+
+      observe.openRun({ name: 'live run', rootPrimitive: 'custom.operation' })
+
+      expect(send).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(199)
+      expect(send).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(send).toHaveBeenCalledTimes(1)
+      expect(send.mock.calls[0][0]).toEqual([expect.objectContaining({ type: 'run:start', name: 'live run' })])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('dispatches queued live deliveries while an earlier send is still in flight', async () => {
     let resolveFirstSend!: () => void
     const sentBatches: string[][] = []
-    setObservabilityTransport({
-      async send(records) {
-        sentBatches.push(records.map((record) => record.type))
-        if (sentBatches.length === 1) {
-          await new Promise<void>((resolve) => {
-            resolveFirstSend = resolve
-          })
-        }
+    setObservabilityTransport(
+      {
+        async send(records) {
+          sentBatches.push(records.map((record) => record.type))
+          if (sentBatches.length === 1) {
+            await new Promise<void>((resolve) => {
+              resolveFirstSend = resolve
+            })
+          }
+        },
       },
-    })
+      { scheduledDelayMs: 0 },
+    )
 
     const run = observe.openRun({ name: 'live stream', rootPrimitive: 'custom.operation' })
     run.withContext(() => {
@@ -482,39 +513,22 @@ describe('observe runtime', () => {
     expect(sentBatches.flat()).toEqual(['run:start', 'span:start', 'span:end'])
   })
 
-  it('flushes queued deliveries when queueMicrotask is unavailable', async () => {
-    const queueMicrotaskDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'queueMicrotask')
-    Object.defineProperty(globalThis, 'queueMicrotask', { value: undefined, configurable: true })
-
-    let resolveFirstSend!: () => void
+  it('flushes queued deliveries before the batching window elapses', async () => {
     const sentBatches: string[][] = []
     setObservabilityTransport({
-      async send(records) {
+      send(records) {
         sentBatches.push(records.map((record) => record.type))
-        if (sentBatches.length === 1) {
-          await new Promise<void>((resolve) => {
-            resolveFirstSend = resolve
-          })
-        }
       },
     })
 
-    try {
-      const run = observe.openRun({ name: 'convex cleanup', rootPrimitive: 'runtime.convex.action' })
-      run.withContext(() => {
-        const span = observe.openSpan({ name: 'cleanup', family: 'runtime', primitive: 'runtime.convex.action' })
-        span.end()
-      })
-      resolveFirstSend()
-      await expect(observe.flush()).resolves.toBe(true)
-      expect(sentBatches.flat()).toEqual(['run:start', 'span:start', 'span:end'])
-    } finally {
-      if (queueMicrotaskDescriptor) {
-        Object.defineProperty(globalThis, 'queueMicrotask', queueMicrotaskDescriptor)
-      } else {
-        Reflect.deleteProperty(globalThis, 'queueMicrotask')
-      }
-    }
+    const run = observe.openRun({ name: 'convex cleanup', rootPrimitive: 'runtime.convex.action' })
+    run.withContext(() => {
+      const span = observe.openSpan({ name: 'cleanup', family: 'runtime', primitive: 'runtime.convex.action' })
+      span.end()
+    })
+    await expect(observe.flush()).resolves.toBe(true)
+
+    expect(sentBatches.flat()).toEqual(['run:start', 'span:start', 'span:end'])
   })
 
   it('keeps live delivery concurrency bounded while allowing progress behind slow sends', async () => {
@@ -531,7 +545,7 @@ describe('observe runtime', () => {
           activeSends -= 1
         },
       },
-      { maxPendingDeliveries: 3 },
+      { maxPendingDeliveries: 3, scheduledDelayMs: 0 },
     )
 
     await observe.run({ name: 'fanout', rootPrimitive: 'custom.operation' }, async () => {
@@ -589,7 +603,7 @@ describe('observe runtime', () => {
 
   it('contains synchronous transport throws and keeps the failed batch queued', async () => {
     const chaos = chaosTransport('sync-throw')
-    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1 })
+    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1, scheduledDelayMs: 0 })
 
     await expect(observe.run({ name: 'sync throw transport', rootPrimitive: 'custom.operation' }, async () => 'ok'))
       .resolves.toBe('ok')
@@ -632,7 +646,11 @@ describe('observe runtime', () => {
 
   it('drops the oldest queued records when a hung transport fills the bounded queue', async () => {
     const chaos = chaosTransport('hang')
-    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1, maxQueuedRecords: 2048 })
+    setObservabilityTransport(chaos.transport, {
+      maxPendingDeliveries: 1,
+      maxQueuedRecords: 2048,
+      scheduledDelayMs: 0,
+    })
 
     const run = observe.openRun({ name: 'pressure', rootPrimitive: 'custom.operation' })
     run.withContext(() => {
@@ -651,7 +669,7 @@ describe('observe runtime', () => {
     })
 
     const transport = createInMemoryObservabilityTransport()
-    setObservabilityTransport(transport, { maxPendingDeliveries: 2, maxQueuedRecords: 2048 })
+    setObservabilityTransport(transport, { maxPendingDeliveries: 2, maxQueuedRecords: 2048, scheduledDelayMs: 0 })
 
     await expect(observe.flush({ timeoutMs: 1 })).resolves.toBe(false)
     expect(transport.records).toHaveLength(2047)
@@ -661,7 +679,7 @@ describe('observe runtime', () => {
 
   it('counts queued records discarded after the transport is removed', async () => {
     const chaos = chaosTransport('hang')
-    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1, maxQueuedRecords: 16 })
+    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1, maxQueuedRecords: 16, scheduledDelayMs: 0 })
 
     const run = observe.openRun({ name: 'remove transport', rootPrimitive: 'custom.operation' })
     run.withContext(() => {
@@ -679,7 +697,7 @@ describe('observe runtime', () => {
 
   it('counts queued records discarded by runtime reset', () => {
     const chaos = chaosTransport('hang')
-    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1, maxQueuedRecords: 16 })
+    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1, maxQueuedRecords: 16, scheduledDelayMs: 0 })
 
     const run = observe.openRun({ name: 'reset drops', rootPrimitive: 'custom.operation' })
     run.withContext(() => {
@@ -696,7 +714,11 @@ describe('observe runtime', () => {
 
   it('keeps memory bounded during a 100k-record hung-transport soak', () => {
     const chaos = chaosTransport('hang')
-    setObservabilityTransport(chaos.transport, { maxPendingDeliveries: 1, maxQueuedRecords: 2048 })
+    setObservabilityTransport(chaos.transport, {
+      maxPendingDeliveries: 1,
+      maxQueuedRecords: 2048,
+      scheduledDelayMs: 0,
+    })
 
     const run = observe.openRun({ name: 'soak', rootPrimitive: 'custom.operation' })
     run.withContext(() => {
@@ -728,7 +750,7 @@ describe('observe runtime', () => {
     await observe.run({ name: 'http run', rootPrimitive: 'custom.operation' }, async () => 'ok')
     await observe.flush()
 
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(fetchImpl.mock.calls[0][0]).toBe('http://localhost:4400/api/observability/records')
     expect(fetchImpl.mock.calls[0][1]).toMatchObject({
       method: 'POST',
@@ -739,7 +761,10 @@ describe('observe runtime', () => {
       },
     })
     expect(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body))).toMatchObject({
-      records: [{ type: 'run:start', name: 'http run' }],
+      records: [
+        { type: 'run:start', name: 'http run' },
+        { type: 'run:end' },
+      ],
     })
   })
 
@@ -823,7 +848,7 @@ describe('observe runtime', () => {
     await observe.run({ name: 'retry run', rootPrimitive: 'custom.operation' }, async () => 'ok')
     await expect(observe.flush()).resolves.toBe(true)
 
-    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
     expect(observabilityDeliveryErrors()).toHaveLength(0)
     const deliveredRecordTypes = fetchImpl.mock.calls
       .slice(1)
@@ -906,10 +931,11 @@ describe('observe runtime', () => {
       .flat()
     expect(deliveredRecords.map((record) => record.type)).toContain('span:end')
     expect(deliveredRecords.map((record) => record.type)).toContain('run:end')
+    expect(observabilityDiagnostics().droppedRecords).toBe(1)
     expect(observabilityDeliveryErrors()).toHaveLength(0)
   })
 
-  it('chunks large HTTP deliveries without treating the record list as a preview array', async () => {
+  it('chunks large HTTP deliveries in the engine without treating the record list as a preview array', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
     const transport = createHttpObservabilityTransport({
       serverUrl: 'http://localhost:4400',
@@ -917,19 +943,21 @@ describe('observe runtime', () => {
       retryAttempts: 0,
       maxRecordsPerRequest: 50,
     })
-    const endedAt = new Date().toISOString()
+    setObservabilityTransport(transport)
 
-    await transport.send(
-      Array.from({ length: 205 }, (_, index) => ({
-        schemaVersion: 1,
-        recordId: `rec_chunk_${index}`,
-        type: 'run:end',
-        runId: `run_chunk_${index}`,
-        traceId: `trace_chunk_${index}`,
-        endedAt,
-        status: 'ok',
-      })),
-    )
+    const run = observe.openRun({ name: 'chunked http run', rootPrimitive: 'custom.operation' })
+    run.withContext(() => {
+      for (let index = 0; index < 203; index += 1) {
+        observe.artifact({
+          kind: 'output',
+          contentType: 'application/json',
+          encoding: 'json',
+          preview: { index },
+        })
+      }
+    })
+    run.end()
+    await observe.flush()
 
     const deliveredCount = fetchImpl.mock.calls.reduce((count, call) => {
       return count + JSON.parse(String(call[1]?.body)).records.length
@@ -939,7 +967,10 @@ describe('observe runtime', () => {
   })
 
   it('shutdown flushes bounded deliveries and disables later sends', async () => {
-    const transport = createInMemoryObservabilityTransport()
+    const transport = {
+      ...createInMemoryObservabilityTransport(),
+      shutdown: vi.fn(async () => undefined),
+    }
     setObservabilityTransport(transport)
 
     await observe.run({ name: 'before shutdown', rootPrimitive: 'custom.operation' }, async () => 'ok')
@@ -947,6 +978,7 @@ describe('observe runtime', () => {
     await observe.run({ name: 'after shutdown', rootPrimitive: 'custom.operation' }, async () => 'ok')
     await observe.flush()
 
+    expect(transport.shutdown).toHaveBeenCalledTimes(1)
     expect(transport.records.map((record) => record.type)).toEqual(['run:start', 'run:end'])
   })
 })

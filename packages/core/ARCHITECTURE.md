@@ -150,8 +150,8 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── turn-decision-report/  Per-turn TurnDecisionReport explanation read model (report/items/evidence/source-coverage/targets/shared), barrelled by turn-decision-report.ts
 │   ├── schema.ts       Zod schemas for graph records and batches
 │   ├── ids.ts          Runtime-owned public graph ID helpers
-│   ├── observe.ts      Non-blocking runtime emitters, manual/open run lifecycles for serverless resumes, AsyncLocalStorage context propagation, flush/shutdown
-│   ├── delivery/       Functional delivery engine, option normalization, retry timers, and flush timeouts
+│   ├── observe.ts      Non-blocking runtime emitters with a zero-listener fast path, manual/open run lifecycles for serverless resumes, AsyncLocalStorage context propagation, flush/shutdown
+│   ├── delivery/       Functional delivery engine, option normalization, batching/chunking, retry timers, lifecycle hooks, and flush timeouts
 │   ├── errors.ts       Normalized observed error summaries, safe raw capture, stack/cause extraction, redaction, and truncation
 │   ├── transport.ts    Transport interface plus in-memory and HTTP graph transports
 │   ├── devtools.ts     withDevtools() plugin + enableDevtools() — installs the canonical observability transport

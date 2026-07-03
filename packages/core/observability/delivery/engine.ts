@@ -7,6 +7,8 @@ import {
   type ObservabilityDeliveryOptions,
   type ObservabilityFlushOptions,
 } from './options'
+import { sendBatchInChunks } from './chunks'
+import { runTransportHook, type TransportHook } from './hooks'
 import { clearDeliveryRetryTimer, scheduleDeliveryRetry, type DeliveryRetryState } from './retry'
 import { deliveryTimeoutSignal } from './timeout'
 
@@ -27,8 +29,8 @@ interface DeliveryState {
   readonly deliveryErrors: unknown[]
   readonly queuedRecords: CruxGraphRecord[]
   retryTimer: DeliveryRetryState['retryTimer']
+  dispatchTimer: ReturnType<typeof setTimeout> | undefined
   retryAttempt: number
-  dispatchScheduled: boolean
   droppedRecords: number
   deliveryFailureCount: number
   epoch: number
@@ -65,23 +67,24 @@ export function createDeliveryEngine(): DeliveryEngine {
     deliveryErrors: [],
     queuedRecords: [],
     retryTimer: undefined,
+    dispatchTimer: undefined,
     retryAttempt: 0,
-    dispatchScheduled: false,
     droppedRecords: 0,
     deliveryFailureCount: 0,
     epoch: 0,
   }
-  const microtaskFallback = Promise.resolve()
 
   const scheduleDispatch = (): void => {
-    if (state.dispatchScheduled) return
-    state.dispatchScheduled = true
-    const enqueueMicrotask = globalThis.queueMicrotask
-    if (typeof enqueueMicrotask === 'function') {
-      enqueueMicrotask(() => dispatchQueuedRecords(state, scheduleDispatch))
+    if (state.dispatchTimer) return
+    if (state.options.scheduledDelayMs === 0) {
+      dispatchQueuedRecords(state, scheduleDispatch)
       return
     }
-    void microtaskFallback.then(() => dispatchQueuedRecords(state, scheduleDispatch))
+    state.dispatchTimer = setTimeout(() => {
+      state.dispatchTimer = undefined
+      dispatchQueuedRecords(state, scheduleDispatch)
+    }, state.options.scheduledDelayMs)
+    state.dispatchTimer.unref?.()
   }
 
   return {
@@ -108,12 +111,7 @@ export function createDeliveryEngine(): DeliveryEngine {
 
       state.queuedRecords.push(record)
       trimQueuedRecordsToBound(state)
-
-      if (state.pendingDeliveries.size === 0) {
-        dispatchQueuedRecords(state, scheduleDispatch)
-      } else if (state.pendingDeliveries.size < state.options.maxPendingDeliveries) {
-        scheduleDispatch()
-      }
+      scheduleDispatch()
     },
 
     diagnostics() {
@@ -133,11 +131,11 @@ export function createDeliveryEngine(): DeliveryEngine {
     },
 
     async flush(options: ObservabilityFlushOptions = {}) {
-      return await flushDeliveryState(state, scheduleDispatch, options)
+      return await flushDeliveryState(state, scheduleDispatch, 'flush', options)
     },
 
     async shutdown(options: ObservabilityFlushOptions = {}) {
-      const flushed = await flushDeliveryState(state, scheduleDispatch, options)
+      const flushed = await flushDeliveryState(state, scheduleDispatch, 'shutdown', options)
       state.transport = undefined
       return flushed
     },
@@ -145,7 +143,7 @@ export function createDeliveryEngine(): DeliveryEngine {
 }
 
 function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => void): void {
-  state.dispatchScheduled = false
+  clearScheduledDispatch(state)
   const transport = state.transport
   if (!transport) {
     dropQueuedRecords(state)
@@ -154,24 +152,18 @@ function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => voi
   if (state.queuedRecords.length === 0) return
   if (state.pendingDeliveries.size >= state.options.maxPendingDeliveries) return
 
-  const batch = state.queuedRecords.splice(0, state.queuedRecords.length)
+  const batch = state.queuedRecords.splice(0, Math.min(state.queuedRecords.length, state.options.maxBatchSize))
   const capturedEpoch = state.epoch
-  let sendResult: void | Promise<void>
-  try {
-    sendResult = transport.send(batch)
-  } catch (error) {
-    recordDeliveryError(state, error)
-    handleDeliveryFailure(state, batch, capturedEpoch, scheduleDispatch)
-    return
-  }
 
   let failed = false
   let delivery!: Promise<void>
-  delivery = Promise.resolve(sendResult)
-    .catch((error: unknown) => {
+  delivery = sendBatchInChunks(transport, batch)
+    .then((result) => {
+      if (result.poisonDropped > 0) state.droppedRecords += result.poisonDropped
+      if (result.ok) return
       failed = true
-      recordDeliveryError(state, error)
-      handleDeliveryFailure(state, batch, capturedEpoch, scheduleDispatch)
+      recordDeliveryError(state, result.error)
+      handleDeliveryFailure(state, result.failedRecords, capturedEpoch, scheduleDispatch)
     })
     .finally(() => {
       if (state.pendingDeliveries.delete(delivery)) {
@@ -194,6 +186,7 @@ function handleDeliveryFailure(
   capturedEpoch: number,
   scheduleDispatch: () => void,
 ): void {
+  if (batch.length === 0) return
   if (state.epoch !== capturedEpoch) {
     state.droppedRecords += batch.length
     return
@@ -230,8 +223,8 @@ function recordDeliveryError(state: DeliveryState, error: unknown): void {
 function resetDeliveryState(state: DeliveryState): void {
   const droppedOnReset = state.queuedRecords.length
   advanceEpoch(state)
+  clearScheduledDispatch(state)
   state.queuedRecords.length = 0
-  state.dispatchScheduled = false
   state.pendingDeliveries.clear()
   state.pendingRecordCount = 0
   state.deliveryErrors.length = 0
@@ -245,19 +238,27 @@ function resetDeliveryState(state: DeliveryState): void {
 function advanceEpoch(state: DeliveryState): void {
   state.epoch += 1
   clearDeliveryRetryTimer(state)
+  clearScheduledDispatch(state)
+}
+
+function clearScheduledDispatch(state: DeliveryState): void {
+  if (!state.dispatchTimer) return
+  clearTimeout(state.dispatchTimer)
+  state.dispatchTimer = undefined
 }
 
 async function flushDeliveryState(
   state: DeliveryState,
   scheduleDispatch: () => void,
+  hook: TransportHook,
   options: ObservabilityFlushOptions,
 ): Promise<boolean> {
   const deadline = options.timeoutMs === undefined ? undefined : Date.now() + options.timeoutMs
   let failuresThisFlush = 0
 
-  while (state.queuedRecords.length > 0 || state.dispatchScheduled || state.pendingDeliveries.size > 0) {
+  while (state.queuedRecords.length > 0 || state.dispatchTimer || state.pendingDeliveries.size > 0) {
     const failuresBefore = state.deliveryFailureCount
-    if (state.queuedRecords.length > 0 || state.dispatchScheduled) {
+    if (state.queuedRecords.length > 0 || state.dispatchTimer) {
       dispatchQueuedRecords(state, scheduleDispatch)
     }
 
@@ -289,5 +290,8 @@ async function flushDeliveryState(
       )
     }
   }
-  return true
+  const hookError = await runTransportHook(state.transport, hook)
+  if (hookError === undefined) return true
+  recordDeliveryError(state, hookError)
+  return false
 }
