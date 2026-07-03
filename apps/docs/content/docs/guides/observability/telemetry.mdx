@@ -59,6 +59,10 @@ config({
   `@opentelemetry/api` is an optional peer dependency. Install it alongside the OTel SDK when using the standard path.
 </Callout>
 
+<Callout type="warning">
+  Install and start your `TracerProvider` before `withTelemetry()`. If Crux sees invalid OTel span contexts, it warns once and falls back to lightweight span tracking so application code keeps running.
+</Callout>
+
 ### Lightweight (Lambda, Convex, Cloudflare Workers)
 
 For ephemeral runtimes where the full OTel SDK isn't available, pass an `exporter` option:
@@ -84,6 +88,8 @@ withTelemetry({
 ```
 
 The URL exporter uses fire-and-forget HTTP POST (5-second timeout) — failures are silently ignored so telemetry never impacts your application.
+
+`withTelemetry()` is safe to compose defensively: duplicate active installs warn once and become no-ops, and open span registries are bounded. Spans evicted because of registry pressure are force-ended with `crux.expired: true` and `UNSET` status.
 
 ## What gets traced
 

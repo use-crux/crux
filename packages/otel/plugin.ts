@@ -15,6 +15,9 @@ import { createLightweightSpanManager, type SpanManager } from './span-manager'
 import { createOpenTelemetrySpanManager } from './otel-span-manager'
 import { createOtelRecordSubscriber } from './record-mapper'
 
+let telemetryInstalled = false
+let warnedAboutDoubleInstall = false
+
 // ─────────────────────────────────────────────────────────────────
 // Configuration types
 // ─────────────────────────────────────────────────────────────────
@@ -103,12 +106,21 @@ export function withTelemetry(options?: TelemetryOptions): CruxPlugin {
   return {
     name: 'crux:otel',
     install(runtime) {
+      if (telemetryInstalled) {
+        warnAboutDoubleInstall()
+        return {
+          dispose() {},
+        }
+      }
+
+      telemetryInstalled = true
       const spanManager = createSpanManager(opts)
       const unsubscribe = subscribeObservability(createOtelRecordSubscriber(spanManager, opts))
 
       return {
         dispose() {
           unsubscribe()
+          telemetryInstalled = false
           spanManager.shutdown()
         },
       }
@@ -140,4 +152,10 @@ function createSpanManager(options: TelemetryOptions): SpanManager {
       export: () => {},
       shutdown: async () => {},
     })
+}
+
+function warnAboutDoubleInstall(): void {
+  if (warnedAboutDoubleInstall) return
+  warnedAboutDoubleInstall = true
+  console.warn('[crux] @use-crux/otel telemetry is already installed; ignoring duplicate withTelemetry() install.')
 }

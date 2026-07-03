@@ -691,6 +691,8 @@ The plugin system enables composable hook installation. Three key functions:
 
 **Fan-out semantics**: When two plugins install the same hook (e.g., `tool.call start records`), both handlers are called for every event. Neither can suppress the other.
 
+`withTelemetry()` adds an extra process-level guard because duplicate OTel subscribers create duplicate exported span trees. A second active install warns once and returns a no-op dispose handle; disposing the active install clears the guard. The OTel span managers also cap open registries and force-end evicted spans with `crux.expired: true`.
+
 **Layered middleware**: When two plugins install middleware, the later plugin wraps the earlier one. Calling `next()` in the outer middleware invokes the inner middleware.
 
 **Plugin processing in `config()` / `configure()`**:

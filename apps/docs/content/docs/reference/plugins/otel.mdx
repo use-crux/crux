@@ -35,6 +35,12 @@ Payload capture is controlled by the core observability policy:
 
 **Returns:** `CruxPlugin` with name `'crux:otel'`.
 
+`withTelemetry()` has a process-level double-install guard. A second active install warns once and becomes a no-op, preventing duplicate exported span trees.
+
+If the standard OTel path is used without a registered `TracerProvider`, Crux detects the invalid OTel span context, warns once, and falls back to lightweight span tracking. Register a provider before installing the plugin or pass `exporter`.
+
+Open span registries are bounded. Registry-pressure evictions force-end spans with `crux.expired: true` and `UNSET` status.
+
 Crux emits embedding spans as `crux.embedding` with attributes for embedding name, kind, input count, chunk count, dense dimensions, token usage, and cost when available.
 
 Generation and stream spans project Crux graph metrics into GenAI client attributes: `gen_ai.client.duration_ms`, `gen_ai.client.time_to_first_token_ms`, `gen_ai.client.output_tokens_per_second`, and `gen_ai.client.time_per_output_chunk_ms`.

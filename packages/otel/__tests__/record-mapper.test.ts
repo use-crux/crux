@@ -231,4 +231,5 @@ describe('OTel record subscriber', () => {
       'gen_ai.client.time_per_output_chunk_ms': 5,
     })
   })
+
 })

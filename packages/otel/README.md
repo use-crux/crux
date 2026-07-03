@@ -69,6 +69,14 @@ withTelemetry({
 
 The lightweight path uses internal `TraceSpan` objects instead of the OTel SDK. `@opentelemetry/api` is an optional peer dependency — only needed for the standard path.
 
+## Runtime Safety
+
+`withTelemetry()` is guarded against duplicate installation. If the plugin is installed twice in the same process, the second install warns once and becomes a no-op so traces are not exported twice.
+
+Span registries are bounded and lazily swept. Open run/span references and active span managers cap in-memory entries and force-end evicted spans with `crux.expired: true` and `UNSET` status instead of growing without bound.
+
+If the standard OTel path is selected but no `TracerProvider` is registered, Crux detects the invalid OTel span context, warns once, and falls back to the lightweight manager. Register a provider before installing `withTelemetry()` or pass an explicit `exporter` option.
+
 ## Spans
 
 Every instrumented Crux event produces a span:

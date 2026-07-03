@@ -9,6 +9,7 @@
 
 import type { TraceSpan, SpanStatus } from './types'
 import type { SpanExporter } from './exporter'
+import { createBoundedRegistry } from './bounded-registry'
 
 let spanCounter = 0
 
@@ -32,6 +33,9 @@ interface MutableSpan {
     attributes?: Record<string, string | number | boolean>
   }>
 }
+
+const ACTIVE_SPAN_MAX_ENTRIES = 10_000
+const ACTIVE_SPAN_MAX_AGE_MS = 10 * 60_000
 
 /** Handle to an active span. */
 export interface SpanRef {
@@ -68,6 +72,14 @@ export interface SpanManager {
   /** End the span and export it. */
   endSpan(ref: SpanRef): void
 
+  /**
+   * Force-end a span evicted from bounded telemetry registries.
+   *
+   * Expired spans are exported with `crux.expired: true` and `UNSET` status so
+   * collectors can distinguish registry pressure from successful work.
+   */
+  expireSpan(ref: SpanRef): void
+
   /** Shut down the span manager and flush any pending exports. */
   shutdown(): Promise<void>
 }
@@ -80,7 +92,13 @@ export interface SpanManager {
  * @returns A `SpanManager` backed by internal tracking.
  */
 export function createLightweightSpanManager(exporter: SpanExporter): SpanManager {
-  const activeSpans = new Map<string, MutableSpan>()
+  const activeSpans = createBoundedRegistry<string, MutableSpan>({
+    maxEntries: ACTIVE_SPAN_MAX_ENTRIES,
+    maxAgeMs: ACTIVE_SPAN_MAX_AGE_MS,
+    onEvict: (_spanId, span) => {
+      exportSpan(exporter, span, { expired: true, preserveUnsetStatus: true })
+    },
+  })
 
   return {
     startSpan(name, attributes, parentSpanId) {
@@ -142,27 +160,16 @@ export function createLightweightSpanManager(exporter: SpanExporter): SpanManage
     },
 
     endSpan(ref) {
-      const span = activeSpans.get(ref.spanId)
+      const span = activeSpans.delete(ref.spanId)
       if (!span) return
 
-      activeSpans.delete(ref.spanId)
+      exportSpan(exporter, span, { expired: false, preserveUnsetStatus: false })
+    },
 
-      const endTime = Date.now()
-      const traceSpan: TraceSpan = {
-        spanId: span.spanId,
-        traceId: span.traceId,
-        parentSpanId: span.parentSpanId,
-        name: span.name,
-        startTime: span.startTime,
-        endTime,
-        durationMs: endTime - span.startTime,
-        attributes: span.attributes,
-        status: span.status.code === 'UNSET' ? { code: 'OK' } : span.status,
-        events: span.events.length > 0 ? span.events : undefined,
-      }
-
-      // Fire-and-forget
-      exporter.export([traceSpan])
+    expireSpan(ref) {
+      const span = activeSpans.delete(ref.spanId)
+      if (!span) return
+      exportSpan(exporter, span, { expired: true, preserveUnsetStatus: true })
     },
 
     async shutdown() {
@@ -170,4 +177,28 @@ export function createLightweightSpanManager(exporter: SpanExporter): SpanManage
       await exporter.shutdown()
     },
   }
+}
+
+function exportSpan(
+  exporter: SpanExporter,
+  span: MutableSpan,
+  options: { readonly expired: boolean; readonly preserveUnsetStatus: boolean },
+): void {
+  const endTime = Date.now()
+  const attributes = options.expired ? { ...span.attributes, 'crux.expired': true } : span.attributes
+  const traceSpan: TraceSpan = {
+    spanId: span.spanId,
+    traceId: span.traceId,
+    parentSpanId: span.parentSpanId,
+    name: span.name,
+    startTime: span.startTime,
+    endTime,
+    durationMs: endTime - span.startTime,
+    attributes,
+    status: span.status.code === 'UNSET' && !options.preserveUnsetStatus ? { code: 'OK' } : span.status,
+    events: span.events.length > 0 ? span.events : undefined,
+  }
+
+  // Fire-and-forget.
+  exporter.export([traceSpan])
 }

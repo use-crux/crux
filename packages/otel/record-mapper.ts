@@ -14,6 +14,13 @@ import type { SpanManager, SpanRef } from './span-manager'
 import type { TelemetryOptions } from './plugin'
 import { CRUX_TOOL_NAME, GEN_AI_REQUEST_MODEL, GEN_AI_SYSTEM } from './attributes'
 import { attributesFor, metricsFor, type OtelAttributes } from './attribute-mapper'
+import { createBoundedRegistry } from './bounded-registry'
+import { createTtlMap } from './ttl-map'
+
+const RECENTLY_ENDED_SPAN_TTL_MS = 30_000
+const RECENTLY_ENDED_SPAN_MAX_ENTRIES = 1_000
+const OPEN_REGISTRY_MAX_ENTRIES = 10_000
+const OPEN_REGISTRY_MAX_AGE_MS = 10 * 60_000
 
 const primitiveSpanNames: Partial<Record<CruxPrimitiveName, string>> = {
   'generation.call': 'crux.generate',
@@ -57,8 +64,24 @@ export function createOtelRecordSubscriber(
   spanManager: SpanManager,
   options: TelemetryOptions = {},
 ): CruxObservabilitySubscriber {
-  const openRuns = new Map<string, SpanRef>()
-  const openSpans = new Map<string, SpanRef>()
+  const openRuns = createBoundedRegistry<string, SpanRef>({
+    maxEntries: OPEN_REGISTRY_MAX_ENTRIES,
+    maxAgeMs: OPEN_REGISTRY_MAX_AGE_MS,
+    onEvict: (_runId, ref) => {
+      spanManager.expireSpan(ref)
+    },
+  })
+  const openSpans = createBoundedRegistry<string, SpanRef>({
+    maxEntries: OPEN_REGISTRY_MAX_ENTRIES,
+    maxAgeMs: OPEN_REGISTRY_MAX_AGE_MS,
+    onEvict: (_spanId, ref) => {
+      spanManager.expireSpan(ref)
+    },
+  })
+  const recentlyEndedSpans = createTtlMap<string, SpanRef>({
+    maxEntries: RECENTLY_ENDED_SPAN_MAX_ENTRIES,
+    ttlMs: RECENTLY_ENDED_SPAN_TTL_MS,
+  })
 
   return (record) => {
     switch (record.type) {
@@ -73,14 +96,13 @@ export function createOtelRecordSubscriber(
         break
       }
       case 'run:end': {
-        const ref = openRuns.get(record.runId)
+        const ref = openRuns.delete(record.runId)
         if (!ref) break
-        openRuns.delete(record.runId)
         finishSpan(spanManager, ref, record)
         break
       }
       case 'span:start': {
-        const parent = record.parentSpanId ? openSpans.get(record.parentSpanId) : openRuns.get(record.runId)
+        const parent = (record.parentSpanId ? openSpans.get(record.parentSpanId) : undefined) ?? openRuns.get(record.runId)
         const ref = spanManager.startSpan(nameForSpan(record), {
           ...baseAttributes(options),
           'crux.run.id': record.runId,
@@ -97,14 +119,14 @@ export function createOtelRecordSubscriber(
         break
       }
       case 'span:end': {
-        const ref = openSpans.get(record.spanId)
+        const ref = openSpans.delete(record.spanId)
         if (!ref) break
-        openSpans.delete(record.spanId)
+        recentlyEndedSpans.set(record.spanId, ref)
         finishSpan(spanManager, ref, record)
         break
       }
       case 'span': {
-        const parent = record.parentSpanId ? openSpans.get(record.parentSpanId) : openRuns.get(record.runId)
+        const parent = (record.parentSpanId ? openSpans.get(record.parentSpanId) : undefined) ?? openRuns.get(record.runId)
         const ref = spanManager.startSpan(nameForSpan(record), {
           ...baseAttributes(options),
           'crux.run.id': record.runId,
@@ -117,13 +139,13 @@ export function createOtelRecordSubscriber(
         break
       }
       case 'span:event': {
-        const ref = openSpans.get(record.spanId)
+        const ref = openSpans.get(record.spanId) ?? recentlyEndedSpans.get(record.spanId)
         if (!ref) break
         spanManager.addEvent(ref, record.name, attributesFor(record.attributes))
         break
       }
       case 'artifact': {
-        const ref = record.spanId ? openSpans.get(record.spanId) : undefined
+        const ref = record.spanId ? openSpans.get(record.spanId) ?? recentlyEndedSpans.get(record.spanId) : undefined
         if (!ref) break
         spanManager.addEvent(ref, 'crux.artifact', {
           'crux.artifact.kind': record.kind,
@@ -191,11 +213,15 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function spanRefForNode(
-  spans: ReadonlyMap<string, SpanRef>,
-  runs: ReadonlyMap<string, SpanRef>,
+  spans: SpanRefLookup,
+  runs: SpanRefLookup,
   node: Extract<CruxGraphRecord, { type: 'edge' }>['from'],
 ): SpanRef | undefined {
   if (node.kind === 'span') return spans.get(node.id)
   if (node.kind === 'run') return runs.get(node.id)
   return undefined
+}
+
+interface SpanRefLookup {
+  get(key: string): SpanRef | undefined
 }
