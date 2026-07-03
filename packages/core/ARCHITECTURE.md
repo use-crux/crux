@@ -721,9 +721,12 @@ primitive call sites. `emit()` is the event spine: records are sanitized, valida
 coerced when the contract defines a safe fallback, and then delivered to in-process subscribers,
 the Node diagnostics channel, and the async devtools transport from the same graph record. Invalid
 records are dropped with diagnostics instead of throwing into user code.
-Generation and streaming spans also carry `gen.*` performance metrics on terminal span records, and
-`observability.recordInputs` / `observability.recordOutputs` controls whether input/output artifacts
-carry previews or only reference metadata.
+Generation and streaming spans also carry `gen.*` performance metrics on terminal span records.
+`observability.recordInputs` / `observability.recordOutputs` accepts `inline`, `reference`, or `off`
+capture modes for input/output payloads, and the emit pipeline applies that policy before every
+consumer sees the record. Disabled directions strip payload-bearing span/event attributes such as
+`text`, `query`, `messages`, `output`, `body`, and `filter`; `redactRecord()` can replace or drop the
+post-policy record and failures drop the record fail-closed.
 
 The delivery engine is created by `createDeliveryEngine()` and keeps transport state behind a
 functional closure. It starts live delivery immediately, bounds in-flight sends and queued records,
@@ -1536,7 +1539,7 @@ Prompt/context and safety primitives also write the graph contract directly. `pr
 
 Memory primitives write the graph contract from the shared block hook path. `recentMessages`, `workingState`, `episodes`, `facts`, `procedures`, proposal lifecycle operations, `blackboard()`, and custom blocks that use the standard context helpers emit `memory.read` / `memory.write` spans, `memory.snapshot` artifacts, recalled-result `memory.recall` artifacts, write-summary `memory.diff` artifacts, and semantic memory edges. Empty reads keep the `memory.read` span and omit `memory.recall` so clients do not render empty recalled-block cards. The raw namespace is never emitted; traces receive `namespaceHash`.
 
-Retrieval and data-loading primitives write the same graph contract. `retrieval.pipeline`, `retrieval.query`, `retrieval.stage`, `indexing.pipeline`, `ingest.parse`, and `corpus.sync` spans are emitted at the public API boundaries so standalone calls create implicit runs and calls during prompt/corpus work nest under the active span stack. Detailed payloads stay in canonical artifacts: `retrieval.hits`, `embedding.report`, `indexing.report`, `ingest.report`, `corpus.report`, `cache.report`, `routing.report`, `compaction.report`, `score.report`, `citation.report`, `composition.report`, `handoff.payload`, `delegate.report`, `memory.snapshot`, and `security.report`. Routing reports preserve router/cascade/fallback decisions for Run Detail cards; cascade reports include the full ordered ladder, skipped configured tiers, and per-tier evaluator note/confidence/budget when supplied. Production OTel export should keep metadata-only defaults unless a redaction callback opts into content.
+Retrieval and data-loading primitives write the same graph contract. `retrieval.pipeline`, `retrieval.query`, `retrieval.stage`, `indexing.pipeline`, `ingest.parse`, and `corpus.sync` spans are emitted at the public API boundaries so standalone calls create implicit runs and calls during prompt/corpus work nest under the active span stack. Detailed payloads stay in canonical artifacts: `retrieval.hits`, `embedding.report`, `indexing.report`, `ingest.report`, `corpus.report`, `cache.report`, `routing.report`, `compaction.report`, `score.report`, `citation.report`, `composition.report`, `handoff.payload`, `delegate.report`, `memory.snapshot`, and `security.report`. Retrieval hits, memory snapshots/recalls/diffs, stream timelines, and raw error artifacts are output-direction payloads for capture policy, so disabling outputs prevents their preview text from reaching devtools, subscribers, transports, or OTel. Routing reports preserve router/cascade/fallback decisions for Run Detail cards; cascade reports include the full ordered ladder, skipped configured tiers, and per-tier evaluator note/confidence/budget when supplied. Production OTel export should keep metadata-only defaults unless a redaction callback opts into content.
 
 Tool primitives write the graph from the shared adapter loop. This keeps user-defined tools, context-injected tools, skill tools, swarm transfer tools, and approved resume executions on one contract: `tool.request` for model intent, `tool.call` for execution, `tool.args` / `tool.result` artifacts for inspectable payloads, and `tool.approval` for gates. Devtools, subscribers, diagnostics-channel listeners, and `@use-crux/otel` all consume those canonical graph records directly.
 

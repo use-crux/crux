@@ -7,6 +7,7 @@
  * @module
  */
 
+import { PAYLOAD_ATTRIBUTE_KEYS } from "@use-crux/core/observability";
 import {
   CRUX_COST,
   CRUX_PROMPT_ID,
@@ -62,6 +63,7 @@ export function attributesFor(
   const result: OtelAttributes = {};
   const workspaceAttributes = isWorkspaceAttributeSet(attributes);
   for (const [key, value] of Object.entries(attributes)) {
+    if (isPayloadAttributeKey(key)) continue;
     const normalizedKey = attributeKeyFor(key, workspaceAttributes);
     if (!normalizedKey) continue;
     const normalizedValue = attributeValue(value);
@@ -70,6 +72,10 @@ export function attributesFor(
     }
   }
   return result;
+}
+
+function isPayloadAttributeKey(key: string): boolean {
+  return (PAYLOAD_ATTRIBUTE_KEYS as readonly string[]).includes(key);
 }
 
 /** Workspace records need resource-specific keys and must never export legacy raw paths. */

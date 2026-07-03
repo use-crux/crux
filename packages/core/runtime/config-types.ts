@@ -160,23 +160,30 @@ export interface CruxObservabilityConfig {
   /** Set `false` to explicitly disable an already configured observability transport. */
   readonly enabled?: boolean
   /**
-   * Include input-family artifact previews in the canonical observability graph.
+   * Capture input-family payloads in the canonical observability graph.
    *
-   * Set to `false` to emit prompt messages, system/prompt inputs, tool requests,
-   * and tool arguments as reference artifacts with size/hash metadata only.
+   * `true`/`'inline'` keeps payload previews, `false`/`'reference'` emits
+   * reference metadata only, and `'off'` emits no payload metadata.
    *
    * @default true
    */
   readonly recordInputs?: CruxObservabilityCapturePolicy['recordInputs']
   /**
-   * Include output-family artifact previews in the canonical observability graph.
+   * Capture output-family payloads in the canonical observability graph.
    *
-   * Set to `false` to emit generation outputs, stream timelines, and tool
-   * results as reference artifacts with size/hash metadata only.
+   * `true`/`'inline'` keeps payload previews, `false`/`'reference'` emits
+   * reference metadata only, and `'off'` emits no payload metadata.
    *
    * @default true
    */
   readonly recordOutputs?: CruxObservabilityCapturePolicy['recordOutputs']
+  /**
+   * Last-mile redaction hook for canonical graph records.
+   *
+   * Runs after capture modes and before sanitization. Return `null` to drop a
+   * record. Thrown hook errors fail closed and drop the record.
+   */
+  readonly redactRecord?: CruxObservabilityCapturePolicy['redactRecord']
   /**
    * Explicit observability ingest endpoint used to create an HTTP transport.
    *

@@ -26,7 +26,7 @@ import {
   createCruxTraceId,
 } from './ids'
 import { normalizeObservedError, observedErrorSummary } from './errors'
-import { applyConfiguredObservabilityCapturePolicy } from './capture-policy'
+import { applyObservabilityCapturePolicyToRecord } from './capture-policy'
 import { sanitizeRecord } from './sanitize'
 import {
   hasObservabilitySubscribers,
@@ -60,6 +60,7 @@ export interface ObservabilityDiagnostics {
   readonly pendingDeliveries: number
   readonly droppedRecords: number
   readonly invalidRecords: number
+  readonly redactedRecords: number
   readonly contextlessRecords: number
   readonly deliveryErrors: readonly unknown[]
   readonly subscriberErrors: number
@@ -166,8 +167,10 @@ export interface ObserveEdgeOptions {
 
 const deliveryEngine = createDeliveryEngine()
 let invalidRecords = 0
+let redactedRecords = 0
 let contextlessRecords = 0
 let warnedAboutInvalidRecord = false
+let warnedAboutRedactedRecord = false
 let warnedAboutContextlessRecord = false
 
 interface ObservabilityConfigurationLayer {
@@ -201,9 +204,15 @@ function durationSince(startedAtMs: number): number {
 }
 
 function emit(record: CruxGraphRecord): void {
+  const privacy = applyObservabilityCapturePolicyToRecord(record)
+  if (!privacy.ok) {
+    recordRedactedRecord(privacy.error)
+    return
+  }
+
   let validated: ReturnType<typeof validateRecordForEmission>
   try {
-    validated = validateRecordForEmission(sanitizeRecord(record))
+    validated = validateRecordForEmission(sanitizeRecord(privacy.record))
   } catch (error) {
     recordInvalidRecord(['Record validation threw unexpectedly', String(error)])
     return
@@ -234,6 +243,15 @@ function recordInvalidRecord(issues: readonly string[]): void {
 
   warnedAboutInvalidRecord = true
   console.warn('[crux] invalid observability record dropped; continuing without interrupting execution.', issues)
+}
+
+function recordRedactedRecord(error: unknown): void {
+  redactedRecords += 1
+  if (warnedAboutRedactedRecord) return
+  if (!shouldWarnAboutInvalidRecords()) return
+
+  warnedAboutRedactedRecord = true
+  console.warn('[crux] observability record redacted or dropped by privacy policy.', error)
 }
 
 function shouldWarnAboutInvalidRecords(): boolean {
@@ -411,8 +429,10 @@ export function resetObservabilityRuntime(): void {
   nextConfigurationToken = 0
   configurationParents.clear()
   invalidRecords = 0
+  redactedRecords = 0
   contextlessRecords = 0
   warnedAboutInvalidRecord = false
+  warnedAboutRedactedRecord = false
   warnedAboutContextlessRecord = false
   endedRunIds.clear()
 }
@@ -427,6 +447,7 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
     pendingDeliveries: deliveryDiagnostics.pendingDeliveries,
     droppedRecords: deliveryDiagnostics.droppedRecords,
     invalidRecords,
+    redactedRecords,
     contextlessRecords,
     deliveryErrors: deliveryDiagnostics.deliveryErrors,
     subscriberErrors: observabilitySubscriberErrorCount(),
@@ -819,7 +840,6 @@ export const observe = {
 
     const artifactId = options.artifactId ?? createCruxArtifactId()
     emitObserved(() => {
-      const artifact = applyConfiguredObservabilityCapturePolicy({ ...options, artifactId })
       const spanId = context.spanStack[context.spanStack.length - 1]
       return {
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -829,15 +849,15 @@ export const observe = {
         traceId: context.traceId,
         artifactId,
         ...(spanId ? { spanId } : {}),
-        kind: artifact.kind,
+        kind: options.kind,
         createdAt: now(),
-        contentType: artifact.contentType,
-        encoding: artifact.encoding,
-        ...(artifact.sizeBytes !== undefined ? { sizeBytes: artifact.sizeBytes } : {}),
-        ...(artifact.hash ? { hash: artifact.hash } : {}),
-        ...(artifact.preview !== undefined ? { preview: artifact.preview } : {}),
-        ...(artifact.uri ? { uri: artifact.uri } : {}),
-        ...(artifact.attributes ? { attributes: artifact.attributes } : {}),
+        contentType: options.contentType,
+        encoding: options.encoding,
+        ...(options.sizeBytes !== undefined ? { sizeBytes: options.sizeBytes } : {}),
+        ...(options.hash ? { hash: options.hash } : {}),
+        ...(options.preview !== undefined ? { preview: options.preview } : {}),
+        ...(options.uri ? { uri: options.uri } : {}),
+        ...(options.attributes ? { attributes: options.attributes } : {}),
       }
     })
     return artifactId

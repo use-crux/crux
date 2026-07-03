@@ -119,9 +119,11 @@ interface TelemetryOptions {
 ```
 
 Payload capture is configured centrally on the canonical graph stream with
-`config({ observability: { recordInputs, recordOutputs } })`. `@use-crux/otel`
-projects metadata from those graph records and does not expose a separate
-content-recording switch.
+`config({ observability: { recordInputs, recordOutputs, redactRecord } })`.
+`recordInputs` and `recordOutputs` accept `inline`, `reference`, or `off`
+capture modes. `@use-crux/otel` projects metadata from those graph records and
+also drops known payload attribute keys such as `text`, `query`, `messages`,
+`output`, `body`, and `filter` by default as defense in depth.
 
 ## Coexistence with Devtools
 

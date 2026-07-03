@@ -35,9 +35,11 @@ These keys do not change the graph shape and do not require a schema-version bum
 
 ## Capture Policy
 
-`config({ observability: { recordInputs, recordOutputs } })` controls whether input/output-family artifacts include previews. Both options default to `true`.
+`config({ observability: { recordInputs, recordOutputs, redactRecord } })` controls payload capture before records reach subscribers, the diagnostics channel, transports, or OTel. `recordInputs` and `recordOutputs` accept `true | false | 'inline' | 'reference' | 'off'`; booleans are sugar for `true -> 'inline'` and `false -> 'reference'`.
 
-When a direction is disabled, `observe.artifact()` emits the artifact as `encoding: 'reference'` with `sizeBytes` and `hash`, and omits `preview`. The artifact record shape is unchanged; consumers should already handle reference artifacts.
+`'inline'` keeps previews, `'reference'` emits `encoding: 'reference'` with `sizeBytes` and `hash`, and `'off'` omits preview, size, hash, and URI metadata. Disabled directions also strip known payload attribute keys such as `text`, `query`, `prompt`, `messages`, `input`, `output`, `preview`, `content`, `delta`, `body`, and `filter` from span, event, artifact, run, and edge attributes.
+
+`redactRecord(record)` runs after capture modes and before sanitization. Return a replacement record to redact in place, or `null` to drop it. Hook errors fail closed: the record is dropped and counted in `observabilityDiagnostics().redactedRecords`.
 
 ## Transport Delivery
 

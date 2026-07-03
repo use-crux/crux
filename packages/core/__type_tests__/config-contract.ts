@@ -60,14 +60,15 @@ const explicitObservabilityExport = {
 
 const observabilityCapturePolicy = {
   observability: {
-    recordInputs: false,
-    recordOutputs: false,
+    recordInputs: 'reference',
+    recordOutputs: 'off',
+    redactRecord: (record) => (record.type === 'span:event' ? null : record),
   },
 } satisfies CruxConfig
 
-const observabilityRedactIsDeferred = {
+const observabilityRedactRecordMisspelling = {
   observability: {
-    // @ts-expect-error Observability redaction transforms are deferred; use recordInputs/recordOutputs for now.
+    // @ts-expect-error Use redactRecord for canonical observability record redaction.
     redact: (value: unknown) => value,
   },
 } satisfies CruxConfig
@@ -215,7 +216,7 @@ void crux.config.generation?.tokenizer
 void crux
 void explicitObservabilityExport
 void observabilityCapturePolicy
-void observabilityRedactIsDeferred
+void observabilityRedactRecordMisspelling
 void experimentalNativeIndexer
 void experimentalNativeIndexerWithPath
 void experimentalNativeAstIndexer

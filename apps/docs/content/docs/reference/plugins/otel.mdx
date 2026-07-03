@@ -31,7 +31,10 @@ config({
 | `exporter`    | `UrlExporter \| CallbackExporter` | —                  | Export strategy. Omit for standard OTel TracerProvider path |
 
 Payload capture is controlled by the core observability policy:
-`config({ observability: { recordInputs, recordOutputs } })`.
+`config({ observability: { recordInputs, recordOutputs, redactRecord } })`.
+`recordInputs` and `recordOutputs` accept `inline`, `reference`, or `off`.
+The OTel mapper also drops known payload attribute keys by default, even when
+local graph capture is inline.
 
 **Returns:** `CruxPlugin` with name `'crux:otel'`.
 

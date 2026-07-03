@@ -338,20 +338,21 @@ When `AsyncLocalStorage` is unavailable, such as in browser-like or edge runtime
 
 The OTel plugin follows the same fail-open contract: duplicate `withTelemetry()` installs are ignored after a warn-once diagnostic, open span registries are bounded, and a missing OTel `TracerProvider` falls back to lightweight span tracking instead of producing invalid all-zero span contexts.
 
-By default, request and response artifacts include bounded previews for local inspection. Disable payload previews centrally when traces leave a trusted environment:
+By default, request and response artifacts include bounded previews for local inspection. Configure capture centrally when traces leave a trusted environment:
 
 ```ts
 import { config } from "@use-crux/core";
 
 config({
   observability: {
-    recordInputs: false,
-    recordOutputs: false,
+    recordInputs: "reference",
+    recordOutputs: "off",
+    redactRecord: (record) => (record.type === "artifact" && record.kind === "error.raw" ? null : record),
   },
 });
 ```
 
-Disabled input/output artifacts are still emitted as references with `sizeBytes` and `hash`, so devtools, subscribers, diagnostics-channel consumers, and OTel all see the same privacy policy.
+`recordInputs` and `recordOutputs` accept `true | false | "inline" | "reference" | "off"`. `"reference"` keeps only size/hash metadata, while `"off"` removes preview, size, hash, and URI payload metadata. The emit path also strips payload-shaped span/event attributes such as `text`, `query`, `messages`, `output`, `body`, and `filter`. `redactRecord()` runs after capture policy; returning `null` or throwing drops the record and increments `observabilityDiagnostics().redactedRecords`.
 
 ## Runtime Engine
 

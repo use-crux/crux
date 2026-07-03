@@ -144,11 +144,14 @@ events, deliberately configured destinations.
 | `exporter`    | `UrlExporter \| CallbackExporter` | —                  | Export strategy (omit for standard OTel path) |
 
 Payload capture is configured centrally with
-`config({ observability: { recordInputs, recordOutputs } })`, so devtools,
-subscribers, diagnostics-channel listeners, and OTel all observe the same
-redacted or full graph records. The same central emit path also converts
-JSON-hostile values and strips invalid optional metrics before records reach
-those consumers.
+`config({ observability: { recordInputs, recordOutputs, redactRecord } })`.
+`recordInputs` and `recordOutputs` accept `inline`, `reference`, or `off`
+capture modes, so devtools, subscribers, diagnostics-channel listeners, and
+OTel all observe the same redacted or full graph records. The same central emit
+path strips payload-shaped attributes, converts JSON-hostile values, and strips
+invalid optional metrics before records reach those consumers. `redactRecord`
+can replace a graph record or return `null`; hook failures drop the record
+fail-closed.
 
 ## Next steps
 
