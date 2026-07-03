@@ -195,8 +195,8 @@ describe('generation observability', () => {
     it('links resolved context artifacts to the generation span that consumes them', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    const contextArtifactId = createCruxArtifactId('context_profile')
-    const budgetArtifactId = createCruxArtifactId('budget')
+    const contextArtifactId = createCruxArtifactId()
+    const budgetArtifactId = createCruxArtifactId()
 
     await orchestrateGenerate(
       {

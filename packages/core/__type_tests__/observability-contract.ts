@@ -16,9 +16,9 @@ import {
   observe,
 } from '../observability'
 
-const runId: CruxRunId = createCruxRunId('type_test')
-const spanId: CruxSpanId = createCruxSpanId('type_test')
-const artifactId: CruxArtifactId = createCruxArtifactId('type_test')
+const runId: CruxRunId = createCruxRunId()
+const spanId: CruxSpanId = createCruxSpanId()
+const artifactId: CruxArtifactId = createCruxArtifactId()
 
 const sameRunId: CruxRunId = runId
 const sameSpanId: CruxSpanId = spanId

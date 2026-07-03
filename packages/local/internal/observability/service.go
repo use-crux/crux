@@ -466,6 +466,7 @@ type StoredRecord struct {
 	RecordID    string     `json:"recordId"`
 	RunID       string     `json:"runId"`
 	TraceID     string     `json:"traceId"`
+	Seq         int        `json:"seq"`
 	Type        RecordType `json:"type"`
 	PayloadJSON string     `json:"payloadJson"`
 	ReceivedAt  string     `json:"receivedAt"`
@@ -540,6 +541,7 @@ type RunEndRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	EndedAt       string          `json:"endedAt"`
 	DurationMs    float64         `json:"durationMs,omitempty"`
@@ -554,6 +556,7 @@ type SpanEndRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	EndedAt       string          `json:"endedAt"`
@@ -569,6 +572,7 @@ type SpanEventRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	EventID       string          `json:"eventId"`

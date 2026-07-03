@@ -30,6 +30,7 @@ type Record struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	Payload       json.RawMessage `json:"-"`
 }
@@ -50,6 +51,7 @@ type RunStartRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	Name          string          `json:"name"`
 	RootPrimitive string          `json:"rootPrimitive"`
@@ -63,6 +65,7 @@ type SpanStartRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	ParentSpanID  *string         `json:"parentSpanId,omitempty"`
@@ -89,6 +92,7 @@ type SpanRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	ParentSpanID  *string         `json:"parentSpanId,omitempty"`
@@ -119,6 +123,7 @@ type ArtifactRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	ArtifactID    string          `json:"artifactId"`
 	SpanID        string          `json:"spanId,omitempty"`
@@ -138,6 +143,7 @@ type EdgeRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	EdgeID        string          `json:"edgeId"`
 	EdgeType      string          `json:"edgeType"`

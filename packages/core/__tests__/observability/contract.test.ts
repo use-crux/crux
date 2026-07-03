@@ -63,9 +63,11 @@ describe('Crux observability graph contract', () => {
     expect(parsed.records.some((record) => record.type === 'span:event' && record.name === 'token.delta')).toBe(true)
     expect(parsed.records.some((record) => record.type === 'edge' && record.edgeType === 'explains')).toBe(true)
     expect(
-      parsed.records.filter((record) => record.type === 'span' && record.parentSpanId === 'span_golden_parallel'),
+      parsed.records.filter((record) => record.type === 'span' && record.parentSpanId === '8f3227aa4c6f0565'),
     ).toHaveLength(4)
-    const artifactKinds = new Set(parsed.records.flatMap((record) => (record.type === 'artifact' ? [record.kind] : [])))
+    const artifactKinds = new Set(
+      parsed.records.flatMap((record) => (record.type === 'artifact' ? [record.kind] : [])),
+    )
     expect([...artifactKinds]).toEqual(
       expect.arrayContaining([
         'retrieval.hits',
@@ -94,8 +96,9 @@ describe('Crux observability graph contract', () => {
     const spanStart = parsed.records.find((record) => record.type === 'span:start')
 
     expect(spanStart).toMatchObject({
-      runId: 'run_generation_fixture_01',
-      spanId: 'span_generation_fixture_01',
+      runId: 'run_d202cd4d27c2073026a950af',
+      seq: 2,
+      spanId: '841e9c04c4d09a6e',
       family: 'generation',
       primitive: 'generation.call',
       model: 'gpt-4o',
@@ -231,10 +234,11 @@ describe('Crux observability graph contract', () => {
     expect(
       CruxGraphRecordSchema.safeParse({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-        recordId: 'rec_blocked',
+        recordId: 'rec_1111111111111111_1',
         type: 'span',
-        runId: 'run_blocked',
-        spanId: 'span_blocked',
+        runId: 'run_111111111111111111111111',
+        seq: 1,
+        spanId: '1111111111111111',
         family: 'guardrail',
         primitive: 'guardrail.run',
         name: 'pii check',
@@ -247,11 +251,12 @@ describe('Crux observability graph contract', () => {
     expect(
       CruxGraphRecordSchema.safeParse({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-        recordId: 'rec_suspend',
+        recordId: 'rec_2222222222222222_2',
         type: 'span',
-        runId: 'run_suspend',
-        spanId: 'span_suspend',
-        parentSpanId: 'span_flow',
+        runId: 'run_222222222222222222222222',
+        seq: 1,
+        spanId: '2222222222222222',
+        parentSpanId: '3333333333333333',
         family: 'flow',
         primitive: 'flow.suspension',
         name: 'plan-approval',
@@ -270,10 +275,11 @@ describe('Crux observability graph contract', () => {
     expect(
       CruxSpanStartRecordSchema.safeParse({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-        recordId: 'rec_invalid_family',
+        recordId: 'rec_3333333333333333_3',
         type: 'span:start',
-        runId: 'run_invalid_family',
-        spanId: 'span_invalid_family',
+        runId: 'run_333333333333333333333333',
+        seq: 1,
+        spanId: '4444444444444444',
         family: 'tool',
         primitive: 'generation.call',
         name: 'bad family',

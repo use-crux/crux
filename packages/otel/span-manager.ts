@@ -45,6 +45,14 @@ export interface SpanRef {
   readonly traceId: string
 }
 
+/** Preferred W3C identifiers from the upstream Crux graph record. */
+export interface SpanIdentity {
+  /** W3C span ID to use when the manager owns span identity. */
+  readonly spanId?: string
+  /** W3C trace ID to use when the manager owns trace identity. */
+  readonly traceId?: string
+}
+
 /** Span manager for creating and managing spans. */
 export interface SpanManager {
   /**
@@ -55,7 +63,12 @@ export interface SpanManager {
    * @param parentSpanId - Parent span ID for nesting.
    * @returns A reference to the active span.
    */
-  startSpan(name: string, attributes?: Record<string, string | number | boolean>, parentSpanId?: string): SpanRef
+  startSpan(
+    name: string,
+    attributes?: Record<string, string | number | boolean>,
+    parentSpanId?: string,
+    identity?: SpanIdentity,
+  ): SpanRef
 
   /** Set attributes on an active span. */
   setAttributes(ref: SpanRef, attributes: Record<string, string | number | boolean>): void
@@ -101,9 +114,10 @@ export function createLightweightSpanManager(exporter: SpanExporter): SpanManage
   })
 
   return {
-    startSpan(name, attributes, parentSpanId) {
-      const spanId = generateId()
-      const traceId = parentSpanId ? (activeSpans.get(parentSpanId)?.traceId ?? generateId()) : generateId()
+    startSpan(name, attributes, parentSpanId, identity) {
+      const parent = parentSpanId ? activeSpans.get(parentSpanId) : undefined
+      const spanId = identity?.spanId ?? generateId()
+      const traceId = identity?.traceId ?? parent?.traceId ?? generateId()
 
       const span: MutableSpan = {
         spanId,

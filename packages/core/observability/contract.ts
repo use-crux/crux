@@ -736,6 +736,8 @@ interface CruxRecordBase {
   schemaVersion: typeof CRUX_OBSERVABILITY_SCHEMA_VERSION
   recordId: CruxRecordId
   runId: CruxRunId
+  /** Per-run monotonic record sequence used for deterministic graph ordering. */
+  seq: number
   traceId?: CruxTraceId
 }
 

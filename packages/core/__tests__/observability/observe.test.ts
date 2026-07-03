@@ -379,7 +379,7 @@ describe('observe runtime', () => {
     await observe.run({ name: 'artifact run', rootPrimitive: 'custom.operation' }, async () => {
       await observe.span({ name: 'producer', family: 'custom', primitive: 'custom.operation' }, async () => {
         observe.event({ name: 'phase', attributes: { value: 'started' } })
-        const artifactId = createCruxArtifactId('test_output')
+        const artifactId = createCruxArtifactId()
         observe.artifact({
           artifactId,
           kind: 'output',

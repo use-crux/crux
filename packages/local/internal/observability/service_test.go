@@ -20,12 +20,13 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	batch := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, batch)
 
 	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
 
-	run, err := service.Run(ctx, "run_generation_fixture_01")
+	run, err := service.Run(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +50,7 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 		t.Fatalf("counts = spans:%d events:%d artifacts:%d edges:%d", run.SpanCount, run.EventCount, run.ArtifactCount, run.EdgeCount)
 	}
 
-	graph, err := service.Graph(ctx, "run_generation_fixture_01")
+	graph, err := service.Graph(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +118,7 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(runs) != 1 || runs[0].RunID != "run_generation_fixture_01" {
+	if len(runs) != 1 || runs[0].RunID != runID {
 		t.Fatalf("runs = %#v", runs)
 	}
 	if runs[0].PromptID != "support.reply" || len(runs[0].Metrics) == 0 {
@@ -1038,26 +1039,28 @@ func TestServiceRunDetailFoldsCompletionOnlySpansAsDetails(t *testing.T) {
 func TestServiceRunDetailConsumesGoldenNodeFixture(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
-	if err := service.Ingest(ctx, loadGoldenNodeFixture(t)); err != nil {
+	batch := loadGoldenNodeFixture(t)
+	runID := batch.Records[0].RunID
+	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
 
-	detail, err := service.RunDetail(ctx, "run_golden_node_01")
+	detail, err := service.RunDetail(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if detail.Root.Display.Label != "chat" {
 		t.Fatalf("root label = %q, want chat", detail.Root.Display.Label)
 	}
-	if detail.SpanIndex["span_golden_prompt"].Placement != "detail" {
-		t.Fatalf("prompt placement = %#v, want folded detail", detail.SpanIndex["span_golden_prompt"])
+	if detail.SpanIndex["f354f3b6b1e5eeaa"].Placement != "detail" {
+		t.Fatalf("prompt placement = %#v, want folded detail", detail.SpanIndex["f354f3b6b1e5eeaa"])
 	}
-	if detail.SpanIndex["span_golden_parallel"].Placement != "node" {
-		t.Fatalf("parallel placement = %#v, want visible node", detail.SpanIndex["span_golden_parallel"])
+	if detail.SpanIndex["8f3227aa4c6f0565"].Placement != "node" {
+		t.Fatalf("parallel placement = %#v, want visible node", detail.SpanIndex["8f3227aa4c6f0565"])
 	}
 	var parallel *RunDetailNode
 	for i := range detail.Root.Children {
-		if detail.Root.Children[i].SpanID == "span_golden_parallel" {
+		if detail.Root.Children[i].SpanID == "8f3227aa4c6f0565" {
 			parallel = &detail.Root.Children[i]
 			break
 		}
@@ -1765,6 +1768,7 @@ func TestServiceIngestIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	batch := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, batch)
 
 	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
@@ -1773,7 +1777,7 @@ func TestServiceIngestIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	run, err := service.Run(ctx, "run_generation_fixture_01")
+	run, err := service.Run(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1790,8 +1794,11 @@ func TestServicePublishesIngestEvents(t *testing.T) {
 	defer cancel()
 	service := newTestService(t)
 	events := service.Events().Subscribe(ctx)
+	batch := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, batch)
+	traceID := generationFixtureTraceID(t, batch)
 
-	if err := service.Ingest(ctx, loadGenerationFixture(t)); err != nil {
+	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1800,14 +1807,14 @@ func TestServicePublishesIngestEvents(t *testing.T) {
 		if event.Kind != "observability.records" || event.Action != "ingested" {
 			t.Fatalf("event = %#v", event)
 		}
-		if event.RefID != "run_generation_fixture_01" {
+		if event.RefID != runID {
 			t.Fatalf("event ref = %q", event.RefID)
 		}
 		var payload map[string]any
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			t.Fatal(err)
 		}
-		if payload["runId"] != "run_generation_fixture_01" || payload["traceId"] != "trace_generation_fixture_01" {
+		if payload["runId"] != runID || payload["traceId"] != traceID {
 			t.Fatalf("payload = %#v", payload)
 		}
 	case <-time.After(time.Second):
@@ -1956,18 +1963,19 @@ func TestServiceReconcilesOutOfOrderLifecycleRecords(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	fixture := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, fixture)
 	reordered := Batch{Records: []Record{
-		fixtureRecordByID(t, fixture, "rec_run_end_01"),  // run:end before run:start
-		fixtureRecordByID(t, fixture, "rec_span_end_01"), // span:end before span:start
-		fixtureRecordByID(t, fixture, "rec_span_start_01"),
-		fixtureRecordByID(t, fixture, "rec_run_start_01"),
+		fixtureRecordByID(t, fixture, "rec_164c0d7c7e272dd7_d"), // run:end before run:start
+		fixtureRecordByID(t, fixture, "rec_30087e99fc7dcf3b_c"), // span:end before span:start
+		fixtureRecordByID(t, fixture, "rec_c89e3f639b60b2b2_2"),
+		fixtureRecordByID(t, fixture, "rec_b7862451676111a8_1"),
 	}}
 
 	if err := service.Ingest(ctx, reordered); err != nil {
 		t.Fatal(err)
 	}
 
-	run, err := service.Run(ctx, "run_generation_fixture_01")
+	run, err := service.Run(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1975,7 +1983,7 @@ func TestServiceReconcilesOutOfOrderLifecycleRecords(t *testing.T) {
 		t.Fatalf("run = %#v", run)
 	}
 
-	graph, err := service.Graph(ctx, "run_generation_fixture_01")
+	graph, err := service.Graph(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1991,6 +1999,7 @@ func TestServiceRejectsInvalidBatchTransactionally(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	fixture := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, fixture)
 	batch := Batch{Records: []Record{fixture.Records[0], fixture.Records[1]}}
 	batch.Records[1].Payload = []byte(`{
 		"schemaVersion": 1,
@@ -2008,7 +2017,7 @@ func TestServiceRejectsInvalidBatchTransactionally(t *testing.T) {
 	if err := service.Ingest(ctx, batch); err == nil {
 		t.Fatal("expected invalid batch to fail")
 	}
-	if _, err := service.Run(ctx, "run_generation_fixture_01"); !errors.Is(err, ErrNotFound) {
+	if _, err := service.Run(ctx, runID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("expected transactional rollback to leave no run")
 	}
 }
@@ -2043,7 +2052,9 @@ func TestOpenServicePersistsSQLiteDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := service.Ingest(ctx, loadGenerationFixture(t)); err != nil {
+	batch := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, batch)
+	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.Close(); err != nil {
@@ -2060,7 +2071,7 @@ func TestOpenServicePersistsSQLiteDatabase(t *testing.T) {
 		}
 	})
 
-	run, err := reopened.Run(ctx, "run_generation_fixture_01")
+	run, err := reopened.Run(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2216,6 +2227,22 @@ func loadGenerationFixture(t *testing.T) Batch {
 		t.Fatal(err)
 	}
 	return batch
+}
+
+func generationFixtureRunID(t *testing.T, batch Batch) string {
+	t.Helper()
+	if len(batch.Records) == 0 || batch.Records[0].RunID == "" {
+		t.Fatal("generation fixture is missing its run id")
+	}
+	return batch.Records[0].RunID
+}
+
+func generationFixtureTraceID(t *testing.T, batch Batch) string {
+	t.Helper()
+	if len(batch.Records) == 0 || batch.Records[0].TraceID == "" {
+		t.Fatal("generation fixture is missing its trace id")
+	}
+	return batch.Records[0].TraceID
 }
 
 func fixtureRecordByID(t *testing.T, batch Batch, recordID string) Record {

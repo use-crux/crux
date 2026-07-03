@@ -1005,10 +1005,10 @@ func (s *Service) listEdges(ctx context.Context, runID string) ([]EdgeSummary, e
 
 func (s *Service) listRecords(ctx context.Context, runID string) ([]StoredRecord, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT record_id, run_id, ifnull(trace_id, ''), type, payload_json, received_at
+		SELECT record_id, run_id, ifnull(trace_id, ''), seq, type, payload_json, received_at
 		FROM records
 		WHERE run_id = ?
-		ORDER BY received_at, record_id
+		ORDER BY CASE WHEN seq > 0 THEN 0 ELSE 1 END, seq, received_at, record_id
 	`, runID)
 	if err != nil {
 		return nil, err
@@ -1018,7 +1018,7 @@ func (s *Service) listRecords(ctx context.Context, runID string) ([]StoredRecord
 	var records []StoredRecord
 	for rows.Next() {
 		var record StoredRecord
-		if err := rows.Scan(&record.RecordID, &record.RunID, &record.TraceID, &record.Type, &record.PayloadJSON, &record.ReceivedAt); err != nil {
+		if err := rows.Scan(&record.RecordID, &record.RunID, &record.TraceID, &record.Seq, &record.Type, &record.PayloadJSON, &record.ReceivedAt); err != nil {
 			return nil, err
 		}
 		records = append(records, record)

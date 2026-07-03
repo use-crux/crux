@@ -76,8 +76,8 @@ export function createOpenTelemetrySpanManager(
   let fallbackManager: SpanManager | undefined
 
   return {
-    startSpan(name, attributes, parentSpanId) {
-      if (fallbackManager) return fallbackManager.startSpan(name, attributes, parentSpanId)
+    startSpan(name, attributes, parentSpanId, identity) {
+      if (fallbackManager) return fallbackManager.startSpan(name, attributes, parentSpanId, identity)
 
       const parent = parentSpanId ? activeSpans.get(parentSpanId) : undefined
       const parentContext = parent ? api.trace.setSpan(api.context.active(), parent.span) : api.context.active()
@@ -88,7 +88,7 @@ export function createOpenTelemetrySpanManager(
         warnAboutMissingProvider()
         forceLightweightFallback = true
         fallbackManager = createFallbackSpanManager(fallbackExporter)
-        return fallbackManager.startSpan(name, attributes, parentSpanId)
+        return fallbackManager.startSpan(name, attributes, parentSpanId, identity)
       }
       activeSpans.set(context.spanId, { span, statusSet: false })
       return { spanId: context.spanId, traceId: context.traceId }

@@ -332,6 +332,8 @@ Streaming spans close through a single finalizer. Raw stream drain and provider 
 
 Metric objects may include optional expressions that evaluate to `undefined`. The observability runtime strips `undefined`, `NaN`, and infinite metric values before records reach subscribers, diagnostics-channel consumers, devtools transports, or OTel, so malformed metrics do not interrupt application code.
 
+Observability IDs are W3C-compatible at the trace/span boundary: `traceId` is 32 lowercase hex characters and `spanId` is 16 lowercase hex characters. Every graph record also carries a per-run monotonic `seq` used by transports and the local read model for deterministic ordering.
+
 Observability delivery is fail-open and bounded. When no subscribers, diagnostics-channel listeners, or transport are active, emitters skip graph-record construction. Active delivery batches records on `observability.delivery.scheduledDelayMs`, chunks requests with the transport's `maxRecordsPerRequest`, retries failed chunks on capped backoff without waiting for another emitted record, and caps queued records with oldest-record drop accounting in `droppedRecords`. Synchronous or asynchronous transport failures are recorded in `observabilityDiagnostics().deliveryErrors` without escaping into application code.
 
 When `AsyncLocalStorage` is unavailable, such as in browser-like or edge runtimes, `observe.run()` and `observe.openRun()` still work. Explicit `withContext()` scopes preserve parent-child relationships for synchronous work, while contextless `event`, `artifact`, and `edge` attempts become counted no-ops via `observabilityDiagnostics().contextlessRecords` instead of throwing.

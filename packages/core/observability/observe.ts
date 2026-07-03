@@ -4,7 +4,6 @@ import {
   type CruxArtifactId,
   type CruxArtifactKind,
   type CruxEdgeType,
-  type CruxGraphRecord,
   type CruxGraphNodeRef,
   type CruxMetrics,
   type CruxPrimitiveFamily,
@@ -44,6 +43,7 @@ import {
   type CapturedObservabilityContext,
   type ObservabilityContext,
 } from './context'
+import { createRecordSequencer, type UnsequencedCruxGraphRecord } from './sequence'
 
 export { subscribeObservability, type CruxObservabilitySubscriber } from './subscribers'
 export { hasObservabilitySubscribers } from './subscribers'
@@ -166,6 +166,7 @@ export interface ObserveEdgeOptions {
 }
 
 const deliveryEngine = createDeliveryEngine()
+const recordSequencer = createRecordSequencer()
 let invalidRecords = 0
 let redactedRecords = 0
 let contextlessRecords = 0
@@ -203,8 +204,9 @@ function durationSince(startedAtMs: number): number {
   return Math.max(0, Date.now() - startedAtMs)
 }
 
-function emit(record: CruxGraphRecord): void {
-  const privacy = applyObservabilityCapturePolicyToRecord(record)
+function emit(record: UnsequencedCruxGraphRecord): void {
+  const sequencedRecord = recordSequencer.assign(record)
+  const privacy = applyObservabilityCapturePolicyToRecord(sequencedRecord)
   if (!privacy.ok) {
     recordRedactedRecord(privacy.error)
     return
@@ -227,7 +229,7 @@ function emit(record: CruxGraphRecord): void {
   deliveryEngine.enqueue(validated.record)
 }
 
-function emitObserved(createRecord: () => CruxGraphRecord): void {
+function emitObserved(createRecord: () => UnsequencedCruxGraphRecord): void {
   if (!hasActiveObservabilitySinks()) return
   emit(createRecord())
 }
@@ -435,6 +437,7 @@ export function resetObservabilityRuntime(): void {
   warnedAboutRedactedRecord = false
   warnedAboutContextlessRecord = false
   endedRunIds.clear()
+  recordSequencer.reset()
 }
 
 export function observabilityDeliveryErrors(): readonly unknown[] {

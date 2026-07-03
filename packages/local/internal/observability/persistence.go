@@ -14,6 +14,7 @@ func (s *Service) migrate(ctx context.Context) error {
 			record_id TEXT PRIMARY KEY,
 			run_id TEXT NOT NULL,
 			trace_id TEXT,
+			seq INTEGER NOT NULL DEFAULT 0,
 			type TEXT NOT NULL,
 			payload_json TEXT NOT NULL,
 			received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -121,6 +122,42 @@ func (s *Service) migrate(ctx context.Context) error {
 			return fmt.Errorf("execute migration statement: %w", err)
 		}
 	}
+	if err := ensureColumn(ctx, s.db, "records", "seq", `ALTER TABLE records ADD COLUMN seq INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_records_run_seq ON records(run_id, seq, received_at, record_id)`); err != nil {
+		return fmt.Errorf("create records sequence index: %w", err)
+	}
+	return nil
+}
+
+func ensureColumn(ctx context.Context, db *sql.DB, table string, column string, ddl string) error {
+	rows, err := db.QueryContext(ctx, fmt.Sprintf(`PRAGMA table_info(%s)`, table))
+	if err != nil {
+		return fmt.Errorf("inspect columns for %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var columnType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan column info for %s: %w", table, err)
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate columns for %s: %w", table, err)
+	}
+	if _, err := db.ExecContext(ctx, ddl); err != nil {
+		return fmt.Errorf("add %s.%s column: %w", table, column, err)
+	}
 	return nil
 }
 
@@ -155,14 +192,15 @@ func (s *Service) configureSQLite(ctx context.Context) error {
 
 func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, record Record) error {
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO records (record_id, run_id, trace_id, type, payload_json)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO records (record_id, run_id, trace_id, seq, type, payload_json)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(record_id) DO UPDATE SET
 			run_id = excluded.run_id,
 			trace_id = excluded.trace_id,
+			seq = excluded.seq,
 			type = excluded.type,
 			payload_json = excluded.payload_json
-	`, record.RecordID, record.RunID, nullIfEmpty(record.TraceID), record.Type, string(record.Payload)); err != nil {
+	`, record.RecordID, record.RunID, nullIfEmpty(record.TraceID), record.Seq, record.Type, string(record.Payload)); err != nil {
 		return err
 	}
 

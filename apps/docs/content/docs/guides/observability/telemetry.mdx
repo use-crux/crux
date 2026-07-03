@@ -153,6 +153,10 @@ invalid optional metrics before records reach those consumers. `redactRecord`
 can replace a graph record or return `null`; hook failures drop the record
 fail-closed.
 
+Crux emits W3C-format trace and span IDs. Lightweight OTel exports reuse those
+IDs directly; standard OTel exports keep provider-issued IDs and include Crux
+IDs as correlation attributes.
+
 ## Next steps
 
 <Cards>

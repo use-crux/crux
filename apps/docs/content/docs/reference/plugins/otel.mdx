@@ -77,9 +77,9 @@ Structured span data used by the lightweight exporter path.
 
 | Field          | Type                                          | Description                                              |
 | -------------- | --------------------------------------------- | -------------------------------------------------------- |
-| `spanId`       | `string`                                      | Unique span identifier                                   |
+| `spanId`       | `string`                                      | W3C span ID for lightweight exports; provider-issued ID on the standard OTel path |
 | `parentSpanId` | `string?`                                     | Parent span ID for nesting                               |
-| `traceId`      | `string`                                      | Trace ID grouping related spans                          |
+| `traceId`      | `string`                                      | W3C trace ID grouping related spans                      |
 | `name`         | `string`                                      | Span name (e.g., `'crux.generate'`)                      |
 | `startTime`    | `number`                                      | Start time (Unix ms)                                     |
 | `endTime`      | `number`                                      | End time (Unix ms)                                       |

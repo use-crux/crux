@@ -22,6 +22,12 @@ Do not add mandatory code generation. TS and Go stay aligned through this checkl
 
 Built-in edge types and artifact kinds are closed canonical lists. User-defined edge types and artifact kinds must use the `custom.*` namespace so backend read models and UI layouts can distinguish supported semantics from app-specific payloads.
 
+## Identity And Ordering
+
+`createCruxTraceId()` returns a W3C trace ID: 32 lowercase hexadecimal characters, never all zeroes. `createCruxSpanId()` returns a W3C span ID: 16 lowercase hexadecimal characters, never all zeroes.
+
+Run, record, event, edge, and artifact IDs keep Crux prefixes with crypto-random hex suffixes. Every graph record includes `seq`, a per-run monotonic number assigned at emit time and used by local storage/read paths for deterministic raw-record ordering.
+
 ## Generation Metrics
 
 Generation terminal span records use the existing `metrics` field for client-side performance values:

@@ -23,11 +23,13 @@ type runDetailGolden struct {
 func TestRunDetailReadModelGolden(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
-	if err := service.Ingest(ctx, loadGenerationFixture(t)); err != nil {
+	batch := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, batch)
+	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
 
-	detail, err := service.RunDetail(ctx, "run_generation_fixture_01")
+	detail, err := service.RunDetail(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,13 +75,15 @@ func BenchmarkServiceRunsGenerationFixture(b *testing.B) {
 
 func BenchmarkServiceRunDetailGenerationFixture(b *testing.B) {
 	service := newBenchmarkService(b)
-	if err := service.Ingest(context.Background(), loadGenerationFixtureForBenchmark(b)); err != nil {
+	batch := loadGenerationFixtureForBenchmark(b)
+	runID := benchmarkFixtureRunID(b, batch)
+	if err := service.Ingest(context.Background(), batch); err != nil {
 		b.Fatal(err)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := service.RunDetail(context.Background(), "run_generation_fixture_01"); err != nil {
+		if _, err := service.RunDetail(context.Background(), runID); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -110,6 +114,14 @@ func loadGenerationFixtureForBenchmark(b *testing.B) Batch {
 		b.Fatal(err)
 	}
 	return batch
+}
+
+func benchmarkFixtureRunID(b *testing.B, batch Batch) string {
+	b.Helper()
+	if len(batch.Records) == 0 || batch.Records[0].RunID == "" {
+		b.Fatal("generation fixture is missing its run id")
+	}
+	return batch.Records[0].RunID
 }
 
 func assertGoldenJSON(t *testing.T, path string, got any) {

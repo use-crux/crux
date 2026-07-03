@@ -148,3 +148,5 @@ config({
 - **`createOtelRecordSubscriber()`** maps graph records to span lifecycle calls
 - **`SpanManager`** abstracts span lifecycle over both OTel tracer and lightweight `TraceSpan` tracking
 - **Exporters**: `createUrlExporter()` (HTTP POST) and `createCallbackExporter()` (user function)
+
+The lightweight exporter path uses Crux W3C trace/span IDs directly for exported `TraceSpan` objects. The standard OTel provider path keeps provider-issued span context and records Crux IDs as attributes for correlation.

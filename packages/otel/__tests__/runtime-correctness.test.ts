@@ -20,10 +20,10 @@ describe('OTel runtime correctness', () => {
         spans.push(...batch)
       })),
     )
-    const runId = createCruxRunId('late-child-run')
-    const traceId = createCruxTraceId('late-child-trace')
-    const parentSpanId = createCruxSpanId('late-child-parent')
-    const childSpanId = createCruxSpanId('late-child-child')
+    const runId = createCruxRunId()
+    const traceId = createCruxTraceId()
+    const parentSpanId = createCruxSpanId()
+    const childSpanId = createCruxSpanId()
     const now = new Date('2026-07-03T00:00:00.000Z').toISOString()
 
     const records = [
@@ -72,8 +72,8 @@ describe('OTel runtime correctness', () => {
         spans.push(...batch)
       })),
     )
-    const runId = createCruxRunId('registry-cap-run')
-    const traceId = createCruxTraceId('registry-cap-trace')
+    const runId = createCruxRunId()
+    const traceId = createCruxTraceId()
     const now = new Date('2026-07-03T00:00:00.000Z').toISOString()
 
     subscriber(runStart({ runId, traceId, name: 'registry cap run', rootPrimitive: 'tool.call', now }))
@@ -82,7 +82,7 @@ describe('OTel runtime correctness', () => {
       subscriber(spanStart({
         runId,
         traceId,
-        spanId: createCruxSpanId(`registry-cap-span-${index}`),
+        spanId: createCruxSpanId(),
         parentSpanId: null,
         family: 'tool',
         primitive: 'tool.call',
@@ -113,8 +113,9 @@ function runStart(options: {
   return {
     type: 'run:start',
     schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-    recordId: createCruxRecordId(`${options.runId}-start`),
+    recordId: createCruxRecordId(),
     runId: options.runId,
+    seq: 1,
     traceId: options.traceId,
     name: options.name,
     rootPrimitive: options.rootPrimitive,
@@ -132,8 +133,9 @@ function runEnd(options: {
   return {
     type: 'run:end',
     schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-    recordId: createCruxRecordId(options.recordId),
+    recordId: createCruxRecordId(),
     runId: options.runId,
+    seq: 1,
     traceId: options.traceId,
     endedAt: options.now,
     status: 'ok',
@@ -155,8 +157,9 @@ function spanStart(options: {
   return {
     type: 'span:start',
     schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-    recordId: createCruxRecordId(options.recordId ?? `${options.spanId}-start`),
+    recordId: createCruxRecordId(),
     runId: options.runId,
+    seq: 1,
     traceId: options.traceId,
     spanId: options.spanId,
     parentSpanId: options.parentSpanId,
@@ -179,8 +182,9 @@ function spanEnd(options: {
   return {
     type: 'span:end',
     schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-    recordId: createCruxRecordId(options.recordId),
+    recordId: createCruxRecordId(),
     runId: options.runId,
+    seq: 1,
     traceId: options.traceId,
     spanId: options.spanId,
     endedAt: options.now,

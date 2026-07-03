@@ -19,11 +19,20 @@ const nonEmptyString = z.string().min(1)
 const isoTimestamp = z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
   message: 'Expected an ISO-compatible timestamp',
 })
+const w3cTraceId = /^[0-9a-f]{32}$/
+const w3cSpanId = /^[0-9a-f]{16}$/
+const allZeroHex = /^0+$/
 
 export const CruxRecordIdSchema = nonEmptyString.transform((value) => value as CruxRecordId)
 export const CruxRunIdSchema = nonEmptyString.transform((value) => value as CruxRunId)
-export const CruxTraceIdSchema = nonEmptyString.transform((value) => value as CruxTraceId)
-export const CruxSpanIdSchema = nonEmptyString.transform((value) => value as CruxSpanId)
+export const CruxTraceIdSchema = nonEmptyString
+  .regex(w3cTraceId, 'Trace IDs must be 32 lowercase hexadecimal characters')
+  .refine((value) => !allZeroHex.test(value), { message: 'Trace IDs must not be all zeroes' })
+  .transform((value) => value as CruxTraceId)
+export const CruxSpanIdSchema = nonEmptyString
+  .regex(w3cSpanId, 'Span IDs must be 16 lowercase hexadecimal characters')
+  .refine((value) => !allZeroHex.test(value), { message: 'Span IDs must not be all zeroes' })
+  .transform((value) => value as CruxSpanId)
 export const CruxSpanEventIdSchema = nonEmptyString.transform((value) => value as CruxSpanEventId)
 export const CruxEdgeIdSchema = nonEmptyString.transform((value) => value as CruxEdgeId)
 export const CruxArtifactIdSchema = nonEmptyString.transform((value) => value as CruxArtifactId)
@@ -73,6 +82,7 @@ const BaseRecordSchema = z.object({
   schemaVersion: z.literal(CRUX_OBSERVABILITY_SCHEMA_VERSION),
   recordId: CruxRecordIdSchema,
   runId: CruxRunIdSchema,
+  seq: z.number().int().positive(),
   traceId: CruxTraceIdSchema.optional(),
 })
 

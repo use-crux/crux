@@ -191,6 +191,32 @@ describe('OTel record subscriber', () => {
     })
   })
 
+  it('uses Crux W3C span identifiers directly in the lightweight exporter path', async () => {
+    const spans: TraceSpan[] = []
+    const installed = withTelemetry({
+      exporter: (batch) => {
+        spans.push(...batch)
+      },
+    }).install({})
+
+    await observe.span(
+      {
+        name: 'identity lookup',
+        family: 'tool',
+        primitive: 'tool.call',
+        attributes: { toolName: 'identityLookup' },
+      },
+      async () => {},
+    )
+    installed.dispose?.()
+
+    const span = spans.find((item) => item.name === 'crux.tool.identityLookup')
+    expect(span).toBeDefined()
+    expect(span?.spanId).toBe(span?.attributes['crux.span.id'])
+    expect(span?.spanId).toMatch(/^[0-9a-f]{16}$/)
+    expect(span?.traceId).toMatch(/^[0-9a-f]{32}$/)
+  })
+
   it('maps generation performance metrics to GenAI client attributes', async () => {
     const spans: TraceSpan[] = []
     const installed = withTelemetry({

@@ -91,7 +91,7 @@ export function createOtelRecordSubscriber(
           'crux.run.id': record.runId,
           'crux.run.root_primitive': record.rootPrimitive,
           ...attributesFor(record.attributes),
-        })
+        }, undefined, { traceId: record.traceId })
         openRuns.set(record.runId, ref)
         break
       }
@@ -114,7 +114,7 @@ export function createOtelRecordSubscriber(
           ...(record.promptId ? { 'crux.prompt.id': record.promptId } : {}),
           ...(record.toolName ? { [CRUX_TOOL_NAME]: record.toolName } : {}),
           ...attributesFor(record.attributes),
-        }, parent?.spanId)
+        }, parent?.spanId, { spanId: record.spanId, traceId: record.traceId })
         openSpans.set(record.spanId, ref)
         break
       }
@@ -134,7 +134,7 @@ export function createOtelRecordSubscriber(
           'crux.primitive.family': record.family,
           'crux.primitive.name': record.primitive,
           ...attributesFor(record.attributes),
-        }, parent?.spanId)
+        }, parent?.spanId, { spanId: record.spanId, traceId: record.traceId })
         finishSpan(spanManager, ref, record)
         break
       }
