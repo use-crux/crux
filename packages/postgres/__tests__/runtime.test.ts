@@ -8,24 +8,36 @@ import type {
   RuntimeTargetId,
   WorkId,
 } from '@use-crux/core/runtime'
-import { Pool } from 'pg'
 import { postgres, type PostgresRuntimeStore } from '../runtime'
 import { ddlStatements, REQUIRED_COLUMNS } from '../runtime/ddl'
 import {
+  createPostgresTestPool,
   startPostgresTestDatabase,
   type PostgresTestDatabase,
 } from './test-database'
 
+interface TestStore {
+  readonly store: PostgresRuntimeStore
+  readonly close: () => Promise<void>
+}
+
 describe('@use-crux/postgres runtime', () => {
   let testDatabase: PostgresTestDatabase
-  const stores: PostgresRuntimeStore[] = []
+  const stores: TestStore[] = []
   const schemas: string[] = []
 
   async function createStore(): Promise<PostgresRuntimeStore> {
     const schema = `crux_runtime_test_${Date.now()}_${schemas.length}`
     schemas.push(schema)
-    const store = postgres({ url: testDatabase.url, schema })
-    stores.push(store)
+    const pool = createPostgresTestPool(testDatabase.url)
+    const store = postgres({ pool, schema })
+    stores.push({
+      store,
+      close: async () => {
+        await store.close()
+        await pool.end()
+      },
+    })
     await store.setup.apply()
     return store
   }
@@ -37,7 +49,7 @@ describe('@use-crux/postgres runtime', () => {
   afterAll(async () => {
     try {
       await Promise.all(stores.map((store) => store.close()))
-      const cleanup = new Pool({ connectionString: testDatabase.url })
+      const cleanup = createPostgresTestPool(testDatabase.url)
       try {
         for (const schema of schemas) {
           await cleanup.query(
@@ -75,8 +87,15 @@ describe('@use-crux/postgres runtime', () => {
   it('setup check reports missing resources and apply is idempotent', async () => {
     const schema = `crux_runtime_setup_${Date.now()}`
     schemas.push(schema)
-    const store = postgres({ url: testDatabase.url, schema })
-    stores.push(store)
+    const pool = createPostgresTestPool(testDatabase.url)
+    const store = postgres({ pool, schema })
+    stores.push({
+      store,
+      close: async () => {
+        await store.close()
+        await pool.end()
+      },
+    })
 
     await expect(store.setup.check()).resolves.toEqual({
       ok: false,
@@ -101,11 +120,18 @@ describe('@use-crux/postgres runtime', () => {
   it('setup check reports missing additive migration columns', async () => {
     const schema = `crux_runtime_setup_columns_${Date.now()}`
     schemas.push(schema)
-    const store = postgres({ url: testDatabase.url, schema })
-    stores.push(store)
+    const storePool = createPostgresTestPool(testDatabase.url)
+    const store = postgres({ pool: storePool, schema })
+    stores.push({
+      store,
+      close: async () => {
+        await store.close()
+        await storePool.end()
+      },
+    })
     await store.setup.apply()
 
-    const pool = new Pool({ connectionString: testDatabase.url })
+    const pool = createPostgresTestPool(testDatabase.url)
     try {
       await pool.query(
         `ALTER TABLE ${quoteIdent(schema)}.snapshots DROP COLUMN delivered_suspends`,

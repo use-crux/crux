@@ -12,16 +12,21 @@ import {
   type TaskId,
   type WorkId,
 } from '@use-crux/core/runtime'
-import { Pool } from 'pg'
 import { postgres, type PostgresRuntimeStore } from '../runtime'
 import {
+  createPostgresTestPool,
   startPostgresTestDatabase,
   type PostgresTestDatabase,
 } from './test-database'
 
+interface TestStore {
+  readonly store: PostgresRuntimeStore
+  readonly close: () => Promise<void>
+}
+
 describe('Postgres + HTTP wake runtime path', () => {
   let testDatabase: PostgresTestDatabase
-  const stores: PostgresRuntimeStore[] = []
+  const stores: TestStore[] = []
   const schemas: string[] = []
 
   beforeAll(async () => {
@@ -31,7 +36,7 @@ describe('Postgres + HTTP wake runtime path', () => {
   afterAll(async () => {
     try {
       await Promise.all(stores.map((store) => store.close()))
-      const cleanup = new Pool({ connectionString: testDatabase.url })
+      const cleanup = createPostgresTestPool(testDatabase.url)
       try {
         for (const schema of schemas) {
           await cleanup.query(
@@ -131,8 +136,15 @@ describe('Postgres + HTTP wake runtime path', () => {
   async function createStore(): Promise<PostgresRuntimeStore> {
     const schema = `crux_runtime_http_${Date.now()}_${schemas.length}`
     schemas.push(schema)
-    const store = postgres({ url: testDatabase.url, schema })
-    stores.push(store)
+    const pool = createPostgresTestPool(testDatabase.url)
+    const store = postgres({ pool, schema })
+    stores.push({
+      store,
+      close: async () => {
+        await store.close()
+        await pool.end()
+      },
+    })
     await store.setup.apply()
     return store
   }

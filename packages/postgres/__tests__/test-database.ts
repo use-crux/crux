@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:net'
 import EmbeddedPostgres from 'embedded-postgres'
+import { Pool } from 'pg'
 
 export interface PostgresTestDatabase {
   readonly url: string
@@ -48,6 +49,26 @@ export async function startPostgresTestDatabase(): Promise<PostgresTestDatabase>
       )
     },
   }
+}
+
+export function createPostgresTestPool(url: string): Pool {
+  const pool = new Pool({ connectionString: url })
+  pool.on('error', (error: unknown) => {
+    if (isExpectedPoolShutdown(error)) return
+    queueMicrotask(() => {
+      throw error
+    })
+  })
+  return pool
+}
+
+function isExpectedPoolShutdown(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === '57P01'
+  )
 }
 
 async function getFreePort(): Promise<number> {
