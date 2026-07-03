@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { embedding as makeEmbedding } from '../../embedding'
 import { indexer as makeIndexer } from '../../indexing'
 import { retriever as makeRetriever } from '../../retrieval'
-import { reranker as makeReranker } from '../../retrieval/reranker'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 import type { JsonObject, VectorHit } from '../../storage'
 
@@ -101,114 +100,6 @@ describe('retriever', () => {
         content: 'Alpha',
       }),
     ])
-  })
-
-    it('applies rerankers after retrieval', async () => {
-    const reranker = makeReranker({
-      name: 'reverse-top-1',
-      rerank: async ({ query, hits }) => {
-        expect(query).toBe('launch')
-        return [...hits].reverse().slice(0, 1)
-      },
-    })
-
-    const retriever = makeRetriever({
-      id: 'r1',
-      namespace: 'docs',
-      retrieve: async () => [
-        {
-          namespace: 'docs',
-          sourceId: 'doc-1',
-          chunkId: '0',
-          content: 'First result',
-          metadata: {},
-          score: 0.9,
-        },
-        {
-          namespace: 'docs',
-          sourceId: 'doc-2',
-          chunkId: '1',
-          content: 'Second result',
-          metadata: {},
-          score: 0.8,
-        },
-      ],
-      rerank: reranker,
-    })
-
-    const hits = await retriever.retrieve('launch')
-
-    expect(hits).toEqual([
-      {
-        namespace: 'docs',
-        sourceId: 'doc-2',
-        chunkId: '1',
-        content: 'Second result',
-        metadata: {},
-        score: 0.8,
-      },
-    ])
-  })
-
-    it('applies multiple rerankers sequentially', async () => {
-    const addMarker = makeReranker({
-      name: 'add-marker',
-      rerank: ({ hits }) =>
-        hits.map((hit) => ({
-          ...hit,
-          metadata: { ...hit.metadata, reranked: true },
-        })),
-    })
-    const trim = makeReranker({
-      name: 'trim',
-      rerank: ({ hits }) => hits.slice(0, 1),
-    })
-
-    const retriever = makeRetriever({
-      id: 'r1',
-      namespace: 'docs',
-      retrieve: async () => [
-        {
-          namespace: 'docs',
-          sourceId: 'doc-1',
-          chunkId: '0',
-          content: 'First result',
-          metadata: {},
-          score: 0.9,
-        },
-        {
-          namespace: 'docs',
-          sourceId: 'doc-2',
-          chunkId: '1',
-          content: 'Second result',
-          metadata: {},
-          score: 0.8,
-        },
-      ],
-      rerank: [addMarker, trim],
-    })
-
-    const hits = await retriever.retrieve('launch')
-
-    expect(hits).toEqual([
-      {
-        namespace: 'docs',
-        sourceId: 'doc-1',
-        chunkId: '0',
-        content: 'First result',
-        metadata: { reranked: true },
-        score: 0.9,
-      },
-    ])
-  })
-
-    it('reranker requires a non-empty name', () => {
-    expect(() =>
-      makeReranker({
-        name: '   ',
-        rerank: ({ hits }) => hits,
-      }),
-    ).toThrow('Reranker name must be non-empty')
   })
 
     it('retrieves dense hits via vectors.search and forwards user filters', async () => {

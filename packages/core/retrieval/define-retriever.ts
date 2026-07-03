@@ -3,12 +3,11 @@
  *
  * Dispatches between a custom retriever (user-supplied `retrieve`) and a
  * store-backed dense/sparse/hybrid retriever, validating the config and wiring
- * search, reranking, instrumentation, and the shared retriever entity.
+ * search, instrumentation, and the shared retriever entity.
  *
  * @module
  */
 
-import { applyRerankers, normalizeRerankers } from './reranker'
 import { createRetrieverEntity } from './entity'
 import { runRetrievalOperation } from './observability'
 import {
@@ -98,7 +97,6 @@ function validateDenseStoreBackedConfig(
 
 function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig): Retriever {
   const defaultMode = deriveStoreBackedMode(config)
-  const rerankers = normalizeRerankers(config.rerank)
   const recordStore = getRetrieverRecordStore(config)
   const records = createIndexedKnowledgeStore({
     indexerId: config.indexerId ?? config.id,
@@ -127,14 +125,7 @@ function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig
       filter,
       fusion,
       run: async () => {
-        const hits = [...(await records.searchChunks(await prepareIndexedChunkSearch(config, query, options, mode)))]
-        return applyRerankers(rerankers, {
-          retrieverId: config.id,
-          namespace: config.namespace,
-          mode,
-          query,
-          hits,
-        })
+        return [...(await records.searchChunks(await prepareIndexedChunkSearch(config, query, options, mode)))]
       },
     })
   }
@@ -202,7 +193,6 @@ function normalizeFusion(fusion: RetrieveOptions['fusion']): 'rrf' | undefined {
 }
 
 function createCustomRetriever(config: CustomRetrieverConfig): Retriever {
-  const rerankers = normalizeRerankers(config.rerank)
   return createRetrieverEntity({
     id: config.id,
     namespace: config.namespace,
@@ -217,14 +207,7 @@ function createCustomRetriever(config: CustomRetrieverConfig): Retriever {
         threshold: options.threshold,
         filter: options.filter,
         fusion: normalizeFusion(options.fusion),
-        run: async () =>
-          applyRerankers(rerankers, {
-            retrieverId: config.id,
-            namespace: config.namespace,
-            mode: 'custom',
-            query,
-            hits: await config.retrieve(query, options),
-          }),
+        run: async () => config.retrieve(query, options),
       }),
     defaultContext: config.context,
     defaultInject: config.inject,

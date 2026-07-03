@@ -61,8 +61,10 @@ export const CRUX_PRIMITIVE_NAMES = [
   'tool.call',
   'tool.approval',
   'retrieval.pipeline',
+  'retrieval.recipe',
   'retrieval.query',
   'retrieval.stage',
+  'retrieval.step',
   'embedding.call',
   'memory.read',
   'memory.write',
@@ -181,8 +183,10 @@ export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   'tool.call': 'tool',
   'tool.approval': 'tool',
   'retrieval.pipeline': 'retrieval',
+  'retrieval.recipe': 'retrieval',
   'retrieval.query': 'retrieval',
   'retrieval.stage': 'retrieval',
+  'retrieval.step': 'retrieval',
   'embedding.call': 'embedding',
   'memory.read': 'memory',
   'memory.write': 'memory',
@@ -327,6 +331,7 @@ export interface CruxRetrievalHitsPreview {
   kind: 'retrieval.hits'
   query: string
   mode?: string
+  recipeId?: string
   fusion?: string
   limit?: number
   returned: number

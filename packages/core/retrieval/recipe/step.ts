@@ -8,6 +8,7 @@
  */
 
 import type { ExactFilter } from '../../storage'
+import type { RetrieveRequest } from '../request'
 import type { RetrieverHit } from '../types'
 import type { RetrievalModel } from '../model'
 
@@ -48,7 +49,9 @@ export type StepOutput<TPhase extends StepPhase> = StepInput<TPhase> & {
 /** Runtime context provided to a retrieval step. */
 export interface RetrievalStepContext {
   recipeId: string
+  sources: ReadonlyArray<{ retrieverId: string; namespace: string }>
   originalQuery: string
+  request: RetrieveRequest
   model?: RetrievalModel
   concurrency: number
 }
@@ -74,6 +77,14 @@ export interface RetrievalStep<TIn extends StepPhase = StepPhase, TOut extends S
   run(input: StepInput<TIn>, context: RetrievalStepContext): Promise<StepOutput<TOut>> | StepOutput<TOut>
 }
 
+interface RetrieveStepConfig {
+  limit?: number
+  threshold?: number
+}
+
+const retrieveStepConfigs = new WeakMap<RetrievalStep, RetrieveStepConfig>()
+const internalStepIds = new WeakSet<RetrievalStep>()
+
 /** Create a typed retrieval step. */
 export function retrievalStep<const TIn extends StepPhase, const TOut extends StepPhase>(
   config: RetrievalStepConfig<TIn, TOut>,
@@ -89,76 +100,23 @@ export function retrievalStep<const TIn extends StepPhase, const TOut extends St
   })
 }
 
-/** Create a query rewrite step. Runtime execution arrives in phase 3a. */
-export function rewriteQuery(config: { id?: string; model?: RetrievalModel } = {}): RetrievalStep<'queries', 'queries'> {
-  return retrievalStep({
-    id: config.id ?? 'rewrite-query',
-    kind: 'rewrite-query',
-    phase: { in: 'queries', out: 'queries' },
-    model: config.model,
-    needsModel: true,
-    run: (input) => input,
-  })
+/** Return whether a step was created by a built-in recipe helper. Internal. */
+export function isBuiltInRetrievalStep(step: RetrievalStep): boolean {
+  return internalStepIds.has(step)
 }
 
-/** Create a query fanout step. Runtime execution arrives in phase 3a. */
-export function fanout(
-  config: { id?: string; maxQueries?: number; model?: RetrievalModel } = {},
-): RetrievalStep<'queries', 'queries'> {
-  return retrievalStep({
-    id: config.id ?? 'fanout',
-    kind: 'fanout',
-    phase: { in: 'queries', out: 'queries' },
-    model: config.model,
-    needsModel: true,
-    run: (input) => input,
-  })
+/** Mark a step as created by a built-in recipe helper. Internal. */
+export function markBuiltInRetrievalStep<TStep extends RetrievalStep>(step: TStep): TStep {
+  internalStepIds.add(step)
+  return step
 }
 
-/** Built-in retrieve step. Runtime execution arrives in phase 3a. */
-export function retrieve(config: { id?: string; limit?: number } = {}): RetrievalStep<'queries', 'hits'> {
-  return retrievalStep({
-    id: config.id ?? 'retrieve',
-    kind: 'retrieve',
-    phase: { in: 'queries', out: 'hits' },
-    run: () => ({ hits: [] }),
-  })
+/** Return retrieve-step options captured by the built-in helper. Internal. */
+export function getRetrieveStepConfig(step: RetrievalStep): RetrieveStepConfig | undefined {
+  return retrieveStepConfigs.get(step)
 }
 
-/** Create a rerank step. Runtime execution arrives in phase 3a. */
-export function rerank(
-  config: { id?: string; topK?: number; model?: RetrievalModel } = {},
-): RetrievalStep<'hits', 'hits'> {
-  return retrievalStep({
-    id: config.id ?? 'rerank',
-    kind: 'rerank',
-    phase: { in: 'hits', out: 'hits' },
-    model: config.model,
-    needsModel: true,
-    run: (input) => input,
-  })
-}
-
-/** Create a parent expansion step. Runtime execution arrives in phase 3a. */
-export function expandParents(config: { id?: string } = {}): RetrievalStep<'hits', 'hits'> {
-  return retrievalStep({
-    id: config.id ?? 'expand-parents',
-    kind: 'expand-parents',
-    phase: { in: 'hits', out: 'hits' },
-    run: (input) => input,
-  })
-}
-
-/** Create a context compression step. Runtime execution arrives in phase 3a. */
-export function compressToBudget(
-  config: { id?: string; tokens: number; model?: RetrievalModel },
-): RetrievalStep<'hits', 'hits'> {
-  return retrievalStep({
-    id: config.id ?? 'compress',
-    kind: 'compress',
-    phase: { in: 'hits', out: 'hits' },
-    model: config.model,
-    needsModel: true,
-    run: (input) => input,
-  })
+/** Capture built-in retrieve-step options. Internal. */
+export function setRetrieveStepConfig(step: RetrievalStep, config: RetrieveStepConfig): void {
+  retrieveStepConfigs.set(step, config)
 }

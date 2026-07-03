@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { embedding as makeEmbedding } from '../../embedding'
 import { chunker, indexer as makeIndexer, indexingPipeline, transform } from '../../indexing'
-import { retriever as makeRetriever } from '../../retrieval'
-import { parentExpand } from '../../retrieval/parent-expand'
-import { retrievalPipeline } from '../../retrieval/pipeline'
+import { expandParents, retrievalRecipe, retrieve, retriever as makeRetriever } from '../../retrieval'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 import type { JsonObject, RecordPage, RecordStore } from '../../storage'
 
@@ -135,7 +133,11 @@ describe('indexer', () => {
     ])
 
     const docs = makeRetriever({ id: 'docs', namespace: 'kb', records, vectors, dense })
-    const expandedDocs = retrievalPipeline(docs, [parentExpand({ records })])
+    const expandedDocs = retrievalRecipe({
+      id: 'expanded-docs',
+      retriever: docs,
+      steps: [retrieve(), expandParents({ records, indexerId: 'docs' })],
+    }).asRetriever()
     const hits = await expandedDocs.retrieve('Alpha beta')
 
     expect(hits.length).toBeGreaterThan(0)

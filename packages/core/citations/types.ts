@@ -40,7 +40,7 @@ export interface ResolvedCitation extends Citation {
   url?: string
   path?: string
   metadata?: Record<string, unknown>
-  provenance?: Record<string, unknown>
+  provenance?: RetrieverHit['provenance']
   hit: {
     namespace: string
     sourceId: string
@@ -50,7 +50,7 @@ export interface ResolvedCitation extends Citation {
     metadata: Record<string, unknown>
     sourceUrl?: string
     sourcePath?: string
-    provenance?: Record<string, unknown>
+    provenance?: RetrieverHit['provenance']
   }
 }
 

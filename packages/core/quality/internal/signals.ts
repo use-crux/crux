@@ -438,8 +438,10 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         break
       }
       case 'retrieval.pipeline':
+      case 'retrieval.recipe':
       case 'retrieval.query':
-      case 'retrieval.stage': {
+      case 'retrieval.stage':
+      case 'retrieval.step': {
         captured.add('retrieval')
         const preview = artifactPreview(span.spanId, 'retrieval.hits') as CruxRetrievalHitsPreview | undefined
         if (preview?.hits !== undefined) {

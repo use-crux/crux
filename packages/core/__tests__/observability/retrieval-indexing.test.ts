@@ -6,9 +6,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { retriever } from '../../retrieval'
-import { retrievalPipeline } from '../../retrieval/pipeline'
-import { retrievalStage } from '../../retrieval/stage'
+import { retrievalRecipe, retrievalStep, retrieve, retriever } from '../../retrieval'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 import type { RetrieverHit } from '../../retrieval'
 
@@ -74,7 +72,7 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'retrieval.returned' }))
   })
 
-    it('records retrieval pipelines and every stage as canonical child spans', async () => {
+    it('records retrieval recipes and every step as canonical child spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const base = retriever({
@@ -82,36 +80,46 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
       namespace: 'kb',
       retrieve: async () => [hit('refund/a', 'Refund overview', 0.8), hit('billing/b', 'Billing policy', 0.7)],
     })
-    const pipeline = retrievalPipeline(base, [
-      retrievalStage({
-        name: 'top-one',
-        phase: 'hits',
-        run: ({ hits }) => hits.slice(0, 1),
-      }),
-    ])
+    const recipe = retrievalRecipe({
+      id: 'docs-recipe',
+      retriever: base,
+      steps: [
+        retrieve(),
+        retrievalStep({
+          id: 'top-one',
+          phase: { in: 'hits', out: 'hits' },
+          run: ({ hits }) => ({ hits: hits.slice(0, 1) }),
+        }),
+      ],
+    })
 
-    await pipeline.retrieveWithTrace('refund')
+    await recipe.retrieveWithTrace('refund')
     await observe.flush()
 
     const starts = transport.records.filter((record) => record.type === 'span:start')
     expect(starts).toContainEqual(
-      expect.objectContaining({ primitive: 'retrieval.pipeline', name: 'docs.pipeline', parentSpanId: null }),
+      expect.objectContaining({
+        primitive: 'retrieval.recipe',
+        name: 'docs-recipe.recipe',
+        parentSpanId: null,
+        attributes: expect.objectContaining({ recipeId: 'docs-recipe', sourceRetrieverIds: ['docs'] }),
+      }),
     )
     expect(starts).toContainEqual(
       expect.objectContaining({ primitive: 'retrieval.query', name: 'docs.retrieve' }),
     )
     expect(starts).toContainEqual(
       expect.objectContaining({
-        primitive: 'retrieval.stage',
-        name: 'hits:fanout',
-        attributes: expect.objectContaining({ stageName: 'fanout', phase: 'hits' }),
+        primitive: 'retrieval.step',
+        name: 'queries:retrieve',
+        attributes: expect.objectContaining({ recipeId: 'docs-recipe', stepId: 'retrieve', kind: 'retrieve' }),
       }),
     )
     expect(starts).toContainEqual(
       expect.objectContaining({
-        primitive: 'retrieval.stage',
+        primitive: 'retrieval.step',
         name: 'hits:top-one',
-        attributes: expect.objectContaining({ stageName: 'top-one', phase: 'hits' }),
+        attributes: expect.objectContaining({ recipeId: 'docs-recipe', stepId: 'top-one', kind: 'custom' }),
       }),
     )
     expect(transport.records).toContainEqual(
@@ -120,21 +128,11 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
         kind: 'retrieval.hits',
         preview: expect.objectContaining({
           kind: 'retrieval.hits',
-          mode: 'pipeline',
+          mode: 'recipe',
+          recipeId: 'docs-recipe',
           query: 'refund',
           returned: 1,
-          stages: expect.arrayContaining([
-            expect.objectContaining({ name: 'fanout', phase: 'hits' }),
-            expect.objectContaining({ name: 'top-one', phase: 'hits', outHits: 1 }),
-          ]),
         }),
-      }),
-    )
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'artifact',
-        kind: 'output',
-        attributes: expect.objectContaining({ primitive: 'retrieval.stage', stageName: 'top-one' }),
       }),
     )
   })

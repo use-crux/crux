@@ -11,11 +11,13 @@
 export { knowledgeBase } from './knowledge-base'
 export { retriever } from './define-retriever'
 export { retrievalRecipe } from './recipe/recipe'
-export { compressToBudget, expandParents, fanout, rerank, retrievalStep, retrieve, rewriteQuery } from './recipe/step'
-export { RetrievalNotImplementedError } from './errors'
+export { retrievalStep } from './recipe/step'
+export { compressToBudget, expandParents, fanout, rerank, retrieve, rewriteQuery } from './recipe/steps/built-ins'
+export { RetrievalConfigError, RetrievalNotImplementedError, RetrievalRunError } from './errors'
 export { grounding } from '../citations'
 
 export type { Grounding } from '../citations'
+export type { RetrievalConfigErrorCode, RetrievalRunErrorCode } from './errors'
 export type {
   KnowledgeBase,
   KnowledgeBaseConfig,
