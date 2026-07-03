@@ -1079,6 +1079,45 @@ describe('observe runtime', () => {
     expect(deliveredRecordTypes).toContain('run:end')
   })
 
+  it('does not isolate HTTP records one-by-one for retryable 5xx responses', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('busy', { status: 503 }))
+    const transport = createHttpObservabilityTransport({
+      serverUrl: 'http://localhost:4400',
+      fetch: fetchImpl,
+      retryAttempts: 0,
+    })
+    const firstRecord = {
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      recordId: 'rec_5xx_first',
+      seq: 1,
+      type: 'run:start',
+      runId: 'run_5xx_retry',
+      traceId: 'trace_5xx_retry',
+      name: 'retryable',
+      rootPrimitive: 'custom.operation',
+      startedAt: '2026-05-16T18:00:00.000Z',
+      status: 'running',
+    } as unknown as CruxGraphRecord
+    const secondRecord = {
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      recordId: 'rec_5xx_second',
+      seq: 2,
+      type: 'run:end',
+      runId: 'run_5xx_retry',
+      traceId: 'trace_5xx_retry',
+      endedAt: '2026-05-16T18:00:00.010Z',
+      durationMs: 10,
+      status: 'error',
+    } as unknown as CruxGraphRecord
+
+    await expect(transport.send([firstRecord, secondRecord])).rejects.toMatchObject({ status: 503 })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      records: [firstRecord, secondRecord],
+    })
+  })
+
   it('keeps terminal lifecycle records deliverable when late previews contain JSON-hostile values', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
     const transport = createHttpObservabilityTransport({

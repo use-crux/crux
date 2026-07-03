@@ -38,7 +38,7 @@ config({
 
 `@use-crux/convex/server` actions and internal actions flush automatically before returning. This matters because Convex can freeze or tear down the worker after the handler completes.
 
-The HTTP observability transport also protects Convex action lifecycles from late detail payload failures. It normalizes artifact previews to JSON-safe values, chunks records, and isolates rejected records in a failed batch. That means a large generated plan, cyclic metadata object, or invalid detail record should not prevent `span:end` / `run:end` records from arriving at the Go backend.
+The HTTP observability transport also protects Convex action lifecycles from late detail payload failures. It normalizes artifact previews to JSON-safe values, chunks records, and isolates rejected records in a failed batch. The Go ingest endpoint reports parseable batches as `202` with accepted and rejected record counts, while transient storage failures return retryable `503` responses so the SDK retries the whole batch instead of splitting it into one request per record. That means a large generated plan, cyclic metadata object, or invalid detail record should not prevent `span:end` / `run:end` records from arriving at the Go backend.
 
 Thrown errors use the same evidence contract as core Crux: terminal spans keep a compact error summary, failing spans emit an `exception` event, and stack/raw details attach as `error.stack` and `error.raw` artifacts. Convex action wrappers flush those records in `finally`, so tool failures, child action failures, and generation failures reach devtools before the worker can be frozen.
 

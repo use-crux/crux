@@ -22,6 +22,7 @@ func TestObservabilityHTTPIngestAndReadGraph(t *testing.T) {
 	defer ts.Close()
 
 	raw := readGenerationFixture(t)
+	runID, spanID := generationFixtureIDs(t, raw)
 	resp, err := http.Post(ts.URL+"/api/observability/records", "application/json", strings.NewReader(raw))
 	if err != nil {
 		t.Fatalf("POST records error: %v", err)
@@ -49,11 +50,11 @@ func TestObservabilityHTTPIngestAndReadGraph(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&runs); err != nil {
 		t.Fatal(err)
 	}
-	if len(runs) != 1 || runs[0].RunID != "run_generation_fixture_01" {
+	if len(runs) != 1 || runs[0].RunID != runID {
 		t.Fatalf("runs = %#v", runs)
 	}
 
-	resp, err = http.Get(ts.URL + "/api/observability/runs/run_generation_fixture_01/graph")
+	resp, err = http.Get(ts.URL + "/api/observability/runs/" + runID + "/graph")
 	if err != nil {
 		t.Fatalf("GET graph error: %v", err)
 	}
@@ -69,14 +70,14 @@ func TestObservabilityHTTPIngestAndReadGraph(t *testing.T) {
 		t.Fatalf("graph = %#v", graph)
 	}
 	var graphWire map[string]any
-	if err := json.Unmarshal(mustReadGraphBody(t, ts.URL), &graphWire); err != nil {
+	if err := json.Unmarshal(mustReadGraphBody(t, ts.URL, runID), &graphWire); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := graphWire["run"].(map[string]any)["runId"]; !ok {
 		t.Fatalf("graph JSON should use lower camel case keys: %#v", graphWire["run"])
 	}
 
-	resp, err = http.Get(ts.URL + "/api/observability/runs/run_generation_fixture_01")
+	resp, err = http.Get(ts.URL + "/api/observability/runs/" + runID)
 	if err != nil {
 		t.Fatalf("GET run detail error: %v", err)
 	}
@@ -88,15 +89,15 @@ func TestObservabilityHTTPIngestAndReadGraph(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&detail); err != nil {
 		t.Fatal(err)
 	}
-	if detail.Root.SpanID != "span_generation_fixture_01" || detail.SpanIndex["span_generation_fixture_01"].Placement != "node" {
+	if detail.Root.SpanID != spanID || detail.SpanIndex[spanID].Placement != "node" {
 		t.Fatalf("run detail = %#v", detail)
 	}
 
 }
 
-func mustReadGraphBody(t *testing.T, baseURL string) []byte {
+func mustReadGraphBody(t *testing.T, baseURL string, runID string) []byte {
 	t.Helper()
-	resp, err := http.Get(baseURL + "/api/observability/runs/run_generation_fixture_01/graph")
+	resp, err := http.Get(baseURL + "/api/observability/runs/" + runID + "/graph")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,9 +121,23 @@ func TestObservabilityHTTPMapsInvalidAndMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST invalid records error: %v", err)
 	}
+	if resp.StatusCode != http.StatusAccepted {
+		resp.Body.Close()
+		t.Fatalf("invalid POST status = %d, want %d", resp.StatusCode, http.StatusAccepted)
+	}
+	var partial struct {
+		Accepted int `json:"accepted"`
+		Rejected []struct {
+			RecordID string `json:"recordId"`
+		} `json:"rejected"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&partial); err != nil {
+		resp.Body.Close()
+		t.Fatal(err)
+	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("invalid POST status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	if partial.Accepted != 0 || len(partial.Rejected) != 1 || partial.Rejected[0].RecordID != "rec_bad" {
+		t.Fatalf("partial invalid POST response = %#v", partial)
 	}
 
 	resp, err = http.Get(ts.URL + "/api/observability/runs/missing")
@@ -180,4 +195,28 @@ func readGenerationFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return string(raw)
+}
+
+func generationFixtureIDs(t *testing.T, raw string) (string, string) {
+	t.Helper()
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(raw), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if len(batch.Records) == 0 || batch.Records[0].RunID == "" {
+		t.Fatal("generation fixture is missing run id")
+	}
+	for _, record := range batch.Records {
+		var payload struct {
+			SpanID string `json:"spanId"`
+		}
+		if err := json.Unmarshal(record.Payload, &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload.SpanID != "" {
+			return batch.Records[0].RunID, payload.SpanID
+		}
+	}
+	t.Fatal("generation fixture is missing span id")
+	return "", ""
 }

@@ -1745,6 +1745,47 @@ func TestServiceBuildsResourceActivityReadModel(t *testing.T) {
 	}
 }
 
+func TestServiceResourceActivityLimitsLatestWithAttachments(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	started := time.Date(2026, 5, 16, 18, 0, 0, 0, time.UTC)
+	records := []string{
+		`{"schemaVersion":1,"recordId":"rec_activity_limit_run","type":"run:start","runId":"run_activity_limit","traceId":"trace_activity_limit","name":"activity limit","rootPrimitive":"memory.write","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+	}
+	for i := 0; i < 501; i++ {
+		spanID := fmt.Sprintf("span_activity_%03d", i)
+		artifactID := fmt.Sprintf("artifact_activity_%03d", i)
+		timestamp := started.Add(time.Duration(i) * time.Millisecond).Format("2006-01-02T15:04:05.000Z")
+		records = append(records,
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"rec_activity_span_%03d","type":"span","runId":"run_activity_limit","traceId":"trace_activity_limit","spanId":%q,"family":"memory","primitive":"memory.write","name":"activity","startedAt":%q,"endedAt":%q,"durationMs":1,"status":"ok","memoryId":"profile-%03d","attributes":{"memoryId":"profile-%03d"}}`, i, spanID, timestamp, timestamp, i, i),
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"rec_activity_artifact_%03d","type":"artifact","runId":"run_activity_limit","traceId":"trace_activity_limit","spanId":%q,"artifactId":%q,"kind":"memory.snapshot","createdAt":%q,"contentType":"application/json","encoding":"json","preview":{"index":%d}}`, i, spanID, artifactID, timestamp, i),
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"rec_activity_edge_%03d","type":"edge","runId":"run_activity_limit","traceId":"trace_activity_limit","edgeId":"edge_activity_%03d","edgeType":"memory.write","from":{"kind":"span","id":%q},"to":{"kind":"artifact","id":%q},"createdAt":%q}`, i, i, spanID, artifactID, timestamp),
+		)
+	}
+	if err := service.Ingest(ctx, mustBatch(t, records...)); err != nil {
+		t.Fatal(err)
+	}
+
+	activity, err := service.ResourceActivity(ctx, "memory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(activity) != 500 {
+		t.Fatalf("activity count = %d, want latest 500", len(activity))
+	}
+	if activity[0].SpanID != "span_activity_500" {
+		t.Fatalf("first activity span = %q, want latest span_activity_500", activity[0].SpanID)
+	}
+	for _, item := range activity {
+		if item.SpanID == "span_activity_000" {
+			t.Fatalf("activity includes oldest span outside latest limit: %#v", item)
+		}
+		if len(item.Artifacts) != 1 || len(item.Edges) != 1 {
+			t.Fatalf("activity %q attachments = artifacts:%d edges:%d, want 1/1", item.SpanID, len(item.Artifacts), len(item.Edges))
+		}
+	}
+}
+
 func TestServiceMergesSpanStartAndEndAttributesForResourceActivity(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)

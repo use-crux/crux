@@ -40,6 +40,11 @@ config({
 devtools transport is active carries that `sessionId`, and the local server can filter run lists by
 `sessionId`.
 
+`POST /api/observability/records` is intentionally partial-accepting. Parseable batches return `202`
+with accepted and rejected record counts; malformed JSON returns `400`; transient local storage
+failures return `503` with `Retry-After: 1`. The local read models keep broad dashboard/resource
+queries bounded, including latest-500 caps for full-history devtools pulls and resource activity.
+
 ## What gets instrumented
 
 - Every `generate()` / `stream()` call — timing, tokens, results, finish reasons, and rich error evidence when execution throws
