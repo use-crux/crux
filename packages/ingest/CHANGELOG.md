@@ -1,5 +1,23 @@
 # @use-crux/ingest
 
+## 0.4.0
+
+### Patch Changes
+
+- Updated dependencies [01ce116]
+- Updated dependencies [cdc9c16]
+- Updated dependencies [d2b64b4]
+- Updated dependencies [78592f0]
+- Updated dependencies [3b0fb37]
+- Updated dependencies [643751b]
+- Updated dependencies [dcee4fa]
+- Updated dependencies [0ba939b]
+- Updated dependencies [4b29d0c]
+- Updated dependencies [fa1c979]
+- Updated dependencies [41cf753]
+- Updated dependencies [8927775]
+  - @use-crux/core@0.4.0
+
 ## 0.3.0
 
 ### Patch Changes
