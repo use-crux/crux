@@ -292,23 +292,27 @@ describe("first-party Phase 5 native fixtures", () => {
   );
 
   itWithRustOxc(
-    "emits exact native RAG retriever and pipeline facts from Rust/Oxc records",
+    "emits exact native RAG retriever and recipe facts from Rust/Oxc records",
     async () => {
       const source = [
+        "export const docs = knowledgeBase({ id: 'docs' })",
         "export const docsRetriever = retriever({ id: 'docs', namespace: 'public' })",
+        "export const configuredRetriever = docs.retriever({ filter: { section: 'guide' } })",
         "",
-        "export const docsRag = retrievalPipeline(docsRetriever, [",
-        "  { name: 'lookup', retriever: docsRetriever },",
-        "])",
+        "export const docsRag = retrievalRecipe({",
+        "  id: 'docsRag',",
+        "  retriever: configuredRetriever,",
+        "  steps: [{ id: 'lookup', retriever: docsRetriever }],",
+        "})",
       ].join("\n");
       const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
         {
           source,
-          callNames: ["retriever", "retrievalPipeline"],
+          callNames: ["knowledgeBase", "retriever", "retrievalRecipe"],
         },
       );
 
-      expect(record.nativeFacts ?? []).toHaveLength(2);
+      expect(record.nativeFacts ?? []).toHaveLength(4);
       expectNativeExtractionParity(nativeOut, fallbackOut);
     },
     30_000,

@@ -138,8 +138,13 @@ function semanticTargetForDefinitionExpression(
       const name = object ? semanticStringLiteralProperty(object, 'id', view.syntax) : undefined
       return { id: `rag.retriever:${safeId(name ?? variableName ?? 'anonymous')}`, kind: 'rag.retriever' }
     }
-    if (callName === 'retrievalPipeline') {
-      return { id: `rag.pipeline:${safeId(variableName ?? 'anonymous')}`, kind: 'rag.pipeline' }
+    if (callName === 'knowledgeBase') {
+      const name = object ? semanticStringLiteralProperty(object, 'id', view.syntax) : undefined
+      return { id: `rag.knowledgeBase:${safeId(name ?? variableName ?? 'anonymous')}`, kind: 'rag.knowledgeBase' }
+    }
+    if (callName === 'retrievalRecipe') {
+      const name = object ? semanticStringLiteralProperty(object, 'id', view.syntax) : undefined
+      return { id: `rag.recipe:${safeId(name ?? variableName ?? 'anonymous')}`, kind: 'rag.recipe' }
     }
     if (callName === 'scorer' || callName === 'llmJudge') {
       const name = object

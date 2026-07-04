@@ -12,6 +12,7 @@ import { createIndexedKnowledgeStore } from '../../../indexed-knowledge'
 import { mapConcurrent } from '../../../shared/concurrency'
 import type { RecordStore } from '../../../storage'
 import type { RetrievalModel } from '../../model'
+import { judgeReranker, type Reranker } from '../../reranker'
 import type { RetrieverHit } from '../../types'
 import {
   markBuiltInRetrievalStep,
@@ -85,9 +86,9 @@ export function retrieve(config: { id?: string; limit?: number } = {}): Retrieva
   return step
 }
 
-/** Create a model-backed rerank step. */
+/** Create a rerank step backed by an explicit engine or the recipe model. */
 export function rerank(
-  config: { id?: string; topK?: number; model?: RetrievalModel } = {},
+  config: { id?: string; topK?: number; model?: RetrievalModel; engine?: Reranker } = {},
 ): RetrievalStep<'hits', 'hits'> {
   return markBuiltInRetrievalStep(
     retrievalStep({
@@ -95,50 +96,19 @@ export function rerank(
       kind: 'rerank',
       phase: { in: 'hits', out: 'hits' },
       model: config.model,
-      needsModel: true,
+      needsModel: !config.engine,
       async run(input, context) {
-        const model = requireStepModel(config.id ?? 'rerank', context.model)
-        const outputSchema = z.object({
-          hits: z.array(
-            z.object({
-              sourceId: z.string(),
-              chunkId: z.string(),
-              score: z.number().finite().optional(),
-            }),
-          ),
-        })
-        const result = await model.generateObject({
-          system:
-            'Rerank retrieved chunks for relevance to the query. Preserve sourceId and chunkId. Return higher scores for better evidence.',
-          prompt: JSON.stringify({
-            query: context.originalQuery,
-            hits: input.hits.map((hit) => ({
-              sourceId: hit.sourceId,
-              chunkId: hit.chunkId,
-              content: hit.content,
-              score: hit.score,
-            })),
-          }),
-          schema: outputSchema,
-        })
-        const ranked = result.object.hits
-        const byId = new Map(input.hits.map((hit) => [sourceChunkIdentity(hit), hit]))
-        const reranked: RetrieverHit[] = []
-        ranked.forEach((item, index) => {
-          const hit = byId.get(sourceChunkIdentity(item))
-          if (!hit) return
-          const score = item.score ?? 1 - index / Math.max(1, ranked.length)
-          reranked.push({
-            ...hit,
-            score,
-            provenance: {
-              ...hit.provenance,
-              rerankScore: score,
-            },
+        const engine =
+          config.engine ??
+          judgeReranker({
+            model: requireStepModel(config.id ?? 'rerank', context.model),
           })
-          byId.delete(sourceChunkIdentity(item))
+        const reranked = await engine.rerank({
+          query: context.originalQuery,
+          hits: input.hits,
         })
-        return { hits: reranked.slice(0, config.topK ?? reranked.length) }
+        const hits = config.engine ? reranked.map(withRerankProvenance) : reranked
+        return { hits: hits.slice(0, config.topK ?? hits.length) }
       },
     }),
   )
@@ -291,6 +261,16 @@ function normalizePlannedQuery(query: PlannedQuery): PlannedQuery {
     ...(query.filter ? { filter: query.filter } : {}),
     ...(query.weight !== undefined ? { weight: query.weight } : {}),
     ...(query.reason ? { reason: query.reason } : {}),
+  }
+}
+
+function withRerankProvenance(hit: RetrieverHit): RetrieverHit {
+  return {
+    ...hit,
+    provenance: {
+      ...hit.provenance,
+      rerankScore: hit.provenance?.rerankScore ?? hit.score,
+    },
   }
 }
 

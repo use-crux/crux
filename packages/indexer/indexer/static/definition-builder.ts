@@ -222,6 +222,11 @@ function runtimeJoinMetadata(
       spanAttributes.retrieverId = id.slice('rag.retriever:'.length)
       runtimeJoin.retrieverId = spanAttributes.retrieverId
       break
+    case 'rag.recipe':
+      runtimeJoin.primitive = 'retrieval.recipe'
+      spanAttributes.recipeId = id.slice('rag.recipe:'.length)
+      runtimeJoin.recipeId = spanAttributes.recipeId
+      break
     case 'rag.pipeline':
       runtimeJoin.primitive = 'rag.pipeline'
       spanAttributes.ragPipelineId = id.slice('rag.pipeline:'.length)

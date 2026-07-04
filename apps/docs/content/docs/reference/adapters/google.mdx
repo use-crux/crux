@@ -61,6 +61,8 @@ interface GoogleCachedContentCachePort {
 | ---------------------------- | ------------------------------------------------------------------------------------- |
 | `.generate(prompt, options)` | Execute a prompt via Google GenAI with Zod validation (structured) or text generation |
 | `.stream(prompt, options)`   | Stream a prompt execution                                                             |
+| `.retrievalModel(config)`    | Bind Google generation to core retrieval recipe steps                                 |
+| `.reranker(config)`          | Create a judge-backed core `Reranker`                                                 |
 
 ```ts
 import { createGoogle } from '@use-crux/google'
@@ -155,6 +157,29 @@ Stream a prompt execution.
 | `options.extra.cachedContent.ttlSeconds` | `number?`                                      | TTL in seconds for a newly-created cache on this call                               |
 
 **Returns:** Google GenAI stream.
+
+### `adapter.retrievalModel(config)`
+
+Create a core `RetrievalModel` from the adapter instance.
+
+```ts
+const retrievalModel = adapter.retrievalModel({ model: 'gemini-2.5-flash' })
+```
+
+Use it as a recipe-level `model` or step-level `model`.
+
+### `adapter.reranker(config)`
+
+Create a core `Reranker` for `rerank({ engine })`.
+
+```ts
+const engine = adapter.reranker({
+  model: 'gemini-2.5-flash',
+  topN: 12,
+})
+```
+
+Google's direct SDK adapter does not expose a native rerank endpoint. `adapter.reranker()` uses Crux's `judgeReranker()` over the configured Google model, so each rerank call spends generation tokens.
 
 ### `toMessages(sdkMessages)`
 

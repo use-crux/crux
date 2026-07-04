@@ -14,6 +14,7 @@ export { retriever } from './define-retriever'
 export { retrievalRecipe } from './recipe/recipe'
 export { retrievalStep } from './recipe/step'
 export { compressToBudget, expandParents, fanout, rerank, retrieve, rewriteQuery } from './recipe/steps/built-ins'
+export { judgeReranker } from './reranker'
 export { RetrievalConfigError, RetrievalNotImplementedError, RetrievalRunError } from './errors'
 export { RETRIEVAL_HITS_KIND, isRetrievalToolPayload } from './tools'
 export { grounding } from '../citations'
@@ -30,6 +31,7 @@ export type {
   ScopedKnowledgeBase,
 } from './knowledge-base'
 export type { RetrievalModel } from './model'
+export type { JudgeRerankerConfig, Reranker } from './reranker'
 export type { MetadataFilter, RetrieveOptions, RetrieveRequest } from './request'
 export type {
   RecipeTrace,

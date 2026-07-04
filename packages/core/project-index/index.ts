@@ -423,6 +423,9 @@ export type ProjectDefinitionKind =
   | "routing.cascade.tier"
   | "routing.fallback"
   | "routing.fallback.option"
+  | "rag.knowledgeBase"
+  | "rag.recipe"
+  | "rag.recipe.step"
   | "rag.pipeline"
   | "rag.pipeline.stage"
   | "rag.retriever"
@@ -646,7 +649,16 @@ export interface RoutingChildFacts {
 }
 
 export interface RagFacts {
-  kind: "rag.pipeline" | "rag.pipeline.stage" | "rag.retriever";
+  kind:
+    | "rag.knowledgeBase"
+    | "rag.recipe"
+    | "rag.recipe.step"
+    | "rag.pipeline"
+    | "rag.pipeline.stage"
+    | "rag.retriever";
+  knowledgeBaseId?: string;
+  recipeId?: string;
+  stepId?: string;
   retrieverId?: string;
   stageId?: string;
   stageKind?: string;
@@ -1216,6 +1228,9 @@ export const ProjectDefinitionKindSchema = z.enum([
   "routing.cascade.tier",
   "routing.fallback",
   "routing.fallback.option",
+  "rag.knowledgeBase",
+  "rag.recipe",
+  "rag.recipe.step",
   "rag.pipeline",
   "rag.pipeline.stage",
   "rag.retriever",

@@ -857,12 +857,12 @@ export function IndexHero({ def }: { def: ViewDef }) {
     )
   }
 
-  // RAG pipeline
-  if (k === 'rag.pipeline') {
-    const ret = rels.outgoing.find((r) => r.type === 'rag.pipeline.uses_retriever')
+  // RAG recipe / historical pipeline snapshots
+  if (k === 'rag.recipe' || k === 'rag.pipeline') {
+    const ret = rels.outgoing.find((r) => r.type === 'rag.recipe.uses_retriever' || r.type === 'rag.pipeline.uses_retriever')
     return (
       <HeroFrame
-        title="Retrieval pipeline"
+        title={k === 'rag.recipe' ? 'Retrieval recipe' : 'Retrieval pipeline'}
         tone="ok"
         right={
           <Chip tone="muted" mono>
@@ -871,7 +871,7 @@ export function IndexHero({ def }: { def: ViewDef }) {
         }
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          {['embed', 'search', 'rerank', 'assemble'].map((stage, i, a) => (
+          {['plan', 'retrieve', 'rerank', 'assemble'].map((stage, i, a) => (
             <Fragment key={stage}>
               <HNode label={stage} tone="ok" />
               {i < a.length - 1 && <HArrow />}

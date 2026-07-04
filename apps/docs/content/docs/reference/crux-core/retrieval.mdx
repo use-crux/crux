@@ -22,6 +22,7 @@ import type {
   RetrievalRecipe,
   RetrievalStep,
   RetrievalModel,
+  Reranker,
   RetrieveRequest,
   RetrieveOptions,
   Retriever,
@@ -201,6 +202,47 @@ const onlyPublic = retrievalStep({
 ```
 
 Step order is checked at construction. Reserved internal ids such as `retrieve` and `fusion` cannot be reused by custom steps.
+
+## Reranking
+
+`rerank()` is the single recipe step for reordering hits. Without an engine, it uses the recipe or step `RetrievalModel` through the shared `judgeReranker()` implementation.
+
+```ts
+const recipe = retrievalRecipe({
+  id: 'docs-answer',
+  retriever: docs,
+  model: retrievalModel,
+  steps: [retrieve({ limit: 30 }), rerank({ topK: 8 })],
+})
+```
+
+Use `engine` when an adapter or custom provider can return a `Reranker` directly:
+
+```ts
+const recipe = retrievalRecipe({
+  id: 'docs-answer',
+  retriever: docs,
+  steps: [
+    retrieve({ limit: 30 }),
+    rerank({ engine: anthropic.reranker({ model: 'claude-haiku-4-5' }), topK: 8 }),
+  ],
+})
+```
+
+Core exports the provider-neutral contract and judge factory:
+
+```ts
+import { judgeReranker } from '@use-crux/core/retrieval'
+
+const engine = judgeReranker({
+  model: retrievalModel,
+  name: 'docs-judge',
+  topN: 12,
+  document: (hit) => `${hit.sourceId}\n${hit.content}`,
+})
+```
+
+Adapter packages bind the same capability factories beside `generate()` and `stream()`: `retrievalModel(config)` and `reranker(config)`. `@use-crux/ai` uses native AI SDK reranking models. The direct SDK adapters (`@use-crux/anthropic`, `@use-crux/openai`, `@use-crux/google`) use `judgeReranker()` over their own generation model, so those calls spend generation tokens.
 
 ## Tools
 

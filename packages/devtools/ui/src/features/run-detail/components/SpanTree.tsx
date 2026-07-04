@@ -500,6 +500,7 @@ function semanticKindFor(node: SpanNode): SemanticKind {
     case 'retrieval.pipeline':
     case 'retrieval':
     case 'retrieval.stage':
+    case 'retrieval.step':
       return 'retrieval'
     case 'scoring.judge':
     case 'judge':

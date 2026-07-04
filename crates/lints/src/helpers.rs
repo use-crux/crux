@@ -10,6 +10,7 @@ pub(crate) const COVERAGE_TARGET_KINDS: &[&str] = &[
     "prompt",
     "agent",
     "flow",
+    "rag.recipe",
     "rag.pipeline",
     "composition.parallel",
     "composition.pipeline",

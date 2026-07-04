@@ -46,7 +46,7 @@ import type { Prompt, AnyPrompt, Context, ResolvedPrompt, MergedInput, Generatio
 import type { Constraint, Guardrail } from '@use-crux/core/safety'
 import { isValidationExhaustedError } from '@use-crux/core'
 import type { DenseEmbedding } from '@use-crux/core/embedding'
-import type { RetrieverReranker } from '@use-crux/core/retrieval'
+import type { Reranker, RetrievalModel } from '@use-crux/core/retrieval'
 import type { ApprovalRequestInfo, ExecutorModelArg, ExecutorStreamMeta } from '@use-crux/core/adapter'
 import type { ToolMiddleware, FallbackModel } from '@use-crux/core'
 import { isRouter, isCascade, resolveModel } from '@use-crux/core/routing'
@@ -56,7 +56,7 @@ import type { ValidationRetryOptions } from '@use-crux/core'
 import type { SdkGateway } from './src/gateway'
 import { liveSdkGateway } from './src/gateway'
 import type { SdkLoopResultLike } from './src/executor'
-import type { AIEmbeddingConfig, AIRerankerConfig } from './src/extensions'
+import type { AIEmbeddingConfig, AIRerankerConfig, AIRetrievalModelConfig } from './src/extensions'
 import { aiSdkProviderRuntime } from './src/profile'
 import { extractModelInfo } from './src/provider-profile'
 import { createStructuredGenerateObjectFn } from './src/structured-generation'
@@ -249,8 +249,10 @@ export interface CruxAi {
   generateObjectFn: GenerateObjectFn
   /** See the package-level {@link embedding}. */
   embedding(config: AIEmbeddingConfig): DenseEmbedding
+  /** See the package-level {@link retrievalModel}. */
+  retrievalModel(config: AIRetrievalModelConfig): RetrievalModel
   /** See the package-level {@link reranker}. */
-  reranker(config: AIRerankerConfig): RetrieverReranker
+  reranker(config: AIRerankerConfig): Reranker
 }
 
 /** Internal: the loosely-typed view of call opts used by the implementation. */
@@ -440,6 +442,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
     generateTextFn: generateTextFnImpl,
     generateObjectFn: generateObjectFnImpl,
     embedding: executor.embedding,
+    retrievalModel: executor.retrievalModel,
     reranker: executor.reranker,
   }
 }
@@ -551,9 +554,16 @@ export function embedding(config: AIEmbeddingConfig): DenseEmbedding {
 }
 
 /**
+ * Create a bound retrieval model backed by AI SDK `generateText()` and `generateObject()`.
+ */
+export function retrievalModel(config: AIRetrievalModelConfig): RetrievalModel {
+  return defaultAi.retrievalModel(config)
+}
+
+/**
  * Create a Crux retriever reranker backed by AI SDK `rerank()`.
  */
-export function reranker(config: AIRerankerConfig): RetrieverReranker {
+export function reranker(config: AIRerankerConfig): Reranker {
   return defaultAi.reranker(config)
 }
 
@@ -565,7 +575,7 @@ export { liveSdkGateway } from './src/gateway'
 export type { SdkGateway } from './src/gateway'
 export { createAiSdkLoopRuntime } from './src/executor'
 export type { AiSdkLoopRuntime, SdkLoopResultLike, SdkStreamResultLike } from './src/executor'
-export type { AIEmbeddingConfig, AIRerankerConfig, AiSdkRuntimeExtensions } from './src/extensions'
+export type { AIEmbeddingConfig, AIRerankerConfig, AIRetrievalModelConfig, AiSdkRuntimeExtensions } from './src/extensions'
 export { aiSdkProviderRuntime } from './src/profile'
 
 // ─────────────────────────────────────────────────────────────────

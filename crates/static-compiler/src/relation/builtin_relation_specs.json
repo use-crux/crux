@@ -1221,6 +1221,54 @@
     "runtimeJoin": true
   },
   {
+    "type": "rag.recipe.includes_step",
+    "fromKinds": [
+      "rag.recipe"
+    ],
+    "toKinds": [
+      "rag.recipe.step"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "rag.recipe.step.uses_retriever",
+    "fromKinds": [
+      "rag.recipe.step"
+    ],
+    "toKinds": [
+      "rag.retriever"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "rag.recipe.step.uses_scorer",
+    "fromKinds": [
+      "rag.recipe.step"
+    ],
+    "toKinds": [
+      "scorer"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "rag.recipe.uses_retriever",
+    "fromKinds": [
+      "rag.recipe"
+    ],
+    "toKinds": [
+      "rag.retriever"
+    ],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
     "type": "rag.pipeline.includes_stage",
     "fromKinds": [
       "rag.pipeline"

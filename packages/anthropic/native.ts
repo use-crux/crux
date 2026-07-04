@@ -5,6 +5,7 @@ import type {
   NativeProviderPort,
   SingleTurnProviderBundleSpec,
 } from '@use-crux/core/adapter'
+import { judgeReranker, type Reranker, type RetrievalModel, type RetrieverHit } from '@use-crux/core/retrieval'
 import { anthropicTranscript } from './message-codec'
 import {
   anthropicOutputSchema,
@@ -17,6 +18,18 @@ import {
 import { anthropicResponseMeta, anthropicResponseText } from './response'
 import type { AnthropicParsedMessage } from './response'
 import type { AnthropicExtra, AnthropicRequest } from './types'
+
+/** Configuration for `anthropic.retrievalModel()`. */
+export interface AnthropicRetrievalModelConfig {
+  model: string
+}
+
+/** Configuration for `anthropic.reranker()`. */
+export interface AnthropicRerankerConfig extends AnthropicRetrievalModelConfig {
+  name?: string
+  topN?: number
+  document?: (hit: RetrieverHit) => string
+}
 
 /** Anthropic single-turn provider bundle compiled by core. */
 const anthropic = defineSingleTurnProviderBundle({
@@ -66,6 +79,7 @@ const anthropic = defineSingleTurnProviderBundle({
     Record<string, never>,
     Anthropic.MessageParam
   >['profile'],
+  extend: ({ client }) => createAnthropicRuntimeExtensions(client),
 })
 
 /**
@@ -96,6 +110,31 @@ export const createAnthropic = anthropic.create
 
 /** Lightweight helper factory generated from the Anthropic provider runtime. */
 export const anthropicHelpers = anthropic.helpers()
+
+function createAnthropicRuntimeExtensions(client: Anthropic): {
+  retrievalModel(config: AnthropicRetrievalModelConfig): RetrievalModel
+  reranker(config: AnthropicRerankerConfig): Reranker
+} {
+  const retrievalModel = (config: AnthropicRetrievalModelConfig): RetrievalModel => {
+    const generateText = anthropicHelpers.createGenerateTextFn(client, config.model)
+    const generateObject = anthropicHelpers.createGenerateObjectFn(client, config.model)
+    return {
+      generateText: (args) => generateText({ ...args, model: config.model }),
+      generateObject: (args) => generateObject({ ...args, model: config.model }),
+    }
+  }
+  return {
+    retrievalModel,
+    reranker(config) {
+      return judgeReranker({
+        model: retrievalModel(config),
+        name: config.name ?? 'anthropic-judge',
+        topN: config.topN,
+        document: config.document,
+      })
+    },
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

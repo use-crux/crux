@@ -62,6 +62,8 @@ export function semanticRelationsForCandidate(
     case 'composition.swarm':
     case 'composition.consensus':
       return semanticCompositionRelations(candidate, view)
+    case 'rag.recipe':
+      return semanticRetrievalRecipeRelations(candidate, view)
     case 'routing.router':
       return [...semanticRouterRelations(candidate, view), ...accessRelations]
     case 'routing.cascade':
@@ -410,6 +412,48 @@ function semanticPipelineRelations(candidate: SemanticDefinitionCandidate, view:
         relations.push(
           semanticRelation(candidate, stageType, `${candidate.definitionId}:stage:${safeId(stageName)}`, target.id, view),
         )
+      }
+    }
+  })
+  return relations
+}
+
+/**
+ * Resolves retrieval recipe source and step dependencies.
+ */
+function semanticRetrievalRecipeRelations(
+  candidate: SemanticDefinitionCandidate,
+  view: SemanticAnalyzerView,
+): ProjectRelation[] {
+  const relations: ProjectRelation[] = []
+  const retriever = propertyInitializer(candidate.object, 'retriever', view)
+  const retrieverTarget = retriever ? semanticTargetForExpression(retriever, view) : undefined
+  if (retrieverTarget?.kind === 'rag.retriever') {
+    relations.push(semanticRelation(candidate, 'rag.recipe.uses_retriever', candidate.definitionId, retrieverTarget.id, view))
+  }
+
+  const steps = arrayProperty(candidate.object, 'steps', view)
+  if (!steps) return relations
+  view.syntax.arrayElements(steps).forEach((element, index) => {
+    if (!view.syntax.isKind(element, 'objectLiteral')) return
+    const stepName =
+      semanticStringLiteralProperty(element, 'id', view.syntax) ??
+      semanticStringLiteralProperty(element, 'name', view.syntax) ??
+      `step-${index + 1}`
+    const stepId = `${candidate.definitionId}:step:${safeId(stepName)}`
+    relations.push(semanticRelation(candidate, 'rag.recipe.includes_step', candidate.definitionId, stepId, view))
+
+    const stepRetriever = propertyInitializer(element, 'retriever', view)
+    const stepRetrieverTarget = stepRetriever ? semanticTargetForExpression(stepRetriever, view) : undefined
+    if (stepRetrieverTarget?.kind === 'rag.retriever') {
+      relations.push(semanticRelation(candidate, 'rag.recipe.step.uses_retriever', stepId, stepRetrieverTarget.id, view))
+    }
+
+    for (const property of ['scorer', 'judge', 'reranker'] as const) {
+      const scorer = propertyInitializer(element, property, view)
+      const scorerTarget = scorer ? semanticTargetForExpression(scorer, view) : undefined
+      if (scorerTarget?.kind === 'scorer') {
+        relations.push(semanticRelation(candidate, 'rag.recipe.step.uses_scorer', stepId, scorerTarget.id, view))
       }
     }
   })

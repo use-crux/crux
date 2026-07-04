@@ -243,14 +243,26 @@ describe('retrievalRecipe', () => {
     })
     const model: RetrievalModel = {
       generateText: vi.fn(async () => ({ text: '' })),
-      generateObject: vi.fn(async ({ schema }) => ({
-        object: schema.parse({
-          hits: [
-            { sourceId: 'pricing', chunkId: 'a', score: 0.97, excerpts: ['Relevant setup sentence.'] },
-            { sourceId: 'billing', chunkId: 'b', score: 0.12, excerpts: [] },
-          ],
-        }),
-      })),
+      generateObject: vi.fn(async ({ prompt, schema }) => {
+        if (prompt.includes('Return up to')) {
+          return {
+            object: schema.parse({
+              rankings: [
+                { index: 0, score: 0.97 },
+                { index: 1, score: 0.12 },
+              ],
+            }),
+          }
+        }
+        return {
+          object: schema.parse({
+            hits: [
+              { sourceId: 'pricing', chunkId: 'a', excerpts: ['Relevant setup sentence.'] },
+              { sourceId: 'billing', chunkId: 'b', excerpts: [] },
+            ],
+          }),
+        }
+      }),
     }
 
     const { expandParents, compressToBudget } = await import('../../retrieval')

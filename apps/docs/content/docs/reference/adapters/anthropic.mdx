@@ -30,6 +30,8 @@ Create an adapter bound to an Anthropic client.
 | ---------------------------- | ---------------------------------------------------------------------- |
 | `.generate(prompt, options)` | Execute a prompt via `messages.parse` (structured) or `.create` (text) |
 | `.stream(prompt, options)`   | Stream a prompt execution                                              |
+| `.retrievalModel(config)`    | Bind Anthropic generation to core retrieval recipe steps               |
+| `.reranker(config)`          | Create a judge-backed core `Reranker`                                  |
 
 ```ts
 import { createAnthropic } from '@use-crux/anthropic'
@@ -84,6 +86,29 @@ Stream a prompt execution.
 | `options.extra.tool_choice` | `ToolChoice?`                                  | Anthropic-native tool selection                                                     |
 
 **Returns:** Anthropic `MessageStream` (async iterable of `MessageStreamEvent`).
+
+### `adapter.retrievalModel(config)`
+
+Create a core `RetrievalModel` from the adapter instance.
+
+```ts
+const retrievalModel = adapter.retrievalModel({ model: 'claude-haiku-4-5' })
+```
+
+Use it as a recipe-level `model` or step-level `model`.
+
+### `adapter.reranker(config)`
+
+Create a core `Reranker` for `rerank({ engine })`.
+
+```ts
+const engine = adapter.reranker({
+  model: 'claude-haiku-4-5',
+  topN: 12,
+})
+```
+
+Anthropic does not expose a native rerank endpoint in this adapter. `adapter.reranker()` uses Crux's `judgeReranker()` over the configured Anthropic model, so each rerank call spends generation tokens.
 
 ### `toMessages(sdkMessages)`
 

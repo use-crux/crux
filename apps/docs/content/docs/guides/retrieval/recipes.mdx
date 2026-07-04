@@ -62,6 +62,57 @@ const recipe = retrievalRecipe({
 
 If a model-backed step has no model in scope, recipe construction fails before the first query.
 
+## Reranking Engines
+
+There is one recipe step: `rerank()`. You can run it three ways.
+
+Use the recipe model for the zero-config judge path:
+
+```ts
+const recipe = retrievalRecipe({
+  id: 'docs-answer',
+  retriever: docs.retriever(),
+  model: retrievalModel,
+  steps: [retrieve({ limit: 30 }), rerank({ topK: 8 })],
+})
+```
+
+Use an adapter instance when you want that adapter to bind the reranker. Direct SDK adapters use Crux's judge implementation over their generation model:
+
+```ts
+import Anthropic from '@anthropic-ai/sdk'
+import { createAnthropic } from '@use-crux/anthropic'
+
+const anthropic = createAnthropic(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }))
+
+const recipe = retrievalRecipe({
+  id: 'docs-answer',
+  retriever: docs.retriever(),
+  steps: [
+    retrieve({ limit: 30 }),
+    rerank({ engine: anthropic.reranker({ model: 'claude-haiku-4-5' }), topK: 8 }),
+  ],
+})
+```
+
+Use `@use-crux/ai` when the provider has a native AI SDK reranking model:
+
+```ts
+import { cohere } from '@ai-sdk/cohere'
+import { reranker } from '@use-crux/ai'
+
+const recipe = retrievalRecipe({
+  id: 'docs-answer',
+  retriever: docs.retriever(),
+  steps: [
+    retrieve({ limit: 30 }),
+    rerank({ engine: reranker({ model: cohere.reranking('rerank-v3.5') }), topK: 8 }),
+  ],
+})
+```
+
+The adapter surface is uniform: adapters expose the same verbs (`generate`, `stream`) and the same capability factories (`embedding` where available, `retrievalModel`, `reranker`). Native rerank endpoints are dedicated ranking calls. Judge-backed rerankers in Anthropic, OpenAI, and Google spend generation tokens because they ask the model to rank candidates.
+
 ## Custom Steps
 
 Use `retrievalStep()` for product-specific filtering, routing, enrichment, or validation.
