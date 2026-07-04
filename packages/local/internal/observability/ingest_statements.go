@@ -7,14 +7,16 @@ import (
 )
 
 type ingestStatements struct {
-	tx    *sql.Tx
-	cache map[string]*sql.Stmt
+	tx                 *sql.Tx
+	cache              map[string]*sql.Stmt
+	reservedRunRollups map[string]struct{}
 }
 
 func newIngestStatements(tx *sql.Tx) *ingestStatements {
 	return &ingestStatements{
-		tx:    tx,
-		cache: make(map[string]*sql.Stmt),
+		tx:                 tx,
+		cache:              make(map[string]*sql.Stmt),
+		reservedRunRollups: make(map[string]struct{}),
 	}
 }
 

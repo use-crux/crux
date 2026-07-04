@@ -41,7 +41,9 @@ expectTypeOf(plan.config).toMatchTypeOf<Readonly<{ generation?: unknown }>>()
 expectTypeOf(plan.runtimePatch).toMatchTypeOf<Partial<CruxRuntime>>()
 expectTypeOf(plan.configureOptions.prompts).not.toBeAny()
 expectTypeOf(plan.plugins).toMatchTypeOf<RuntimeConfigPlan['plugins']>()
-expectTypeOf(plan.plugins[0]?.install).toMatchTypeOf<((runtime: Readonly<CruxRuntime>) => unknown) | undefined>()
+expectTypeOf(plan.plugins[0]?.install).toMatchTypeOf<
+  ((runtime: Readonly<CruxRuntime>) => unknown) | undefined
+>()
 
 const ports = {
   runtime: {
@@ -55,11 +57,13 @@ const ports = {
   },
   plugins: {
     apply(plugins, runtime) {
-      expectTypeOf(plugins).toMatchTypeOf<ReadonlyArray<{ readonly name: string }>>()
+      expectTypeOf(plugins).toMatchTypeOf<
+        ReadonlyArray<{ readonly name: string }>
+      >()
       expectTypeOf(runtime).toEqualTypeOf<CruxRuntime>()
       return {
         runtime,
-        dispose() {},
+        async dispose() {},
       }
     },
   },

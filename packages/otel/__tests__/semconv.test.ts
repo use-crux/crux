@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { CruxGraphRecordBatch } from '@use-crux/core/observability'
-import { observe, resetObservabilityRuntime } from '@use-crux/core/observability'
+import type {
+  CruxGraphRecord,
+  CruxGraphRecordBatch,
+} from '@use-crux/core/observability'
+import {
+  observe,
+  resetObservabilityRuntime,
+} from '@use-crux/core/observability'
 import { SEMCONV_VERSION } from '../semconv'
 import generationRun from '../../core/observability/fixtures/generation-run.json'
 import { withTelemetry } from '../index'
@@ -8,10 +14,13 @@ import { createCallbackExporter } from '../exporter'
 import { createOtelRecordSubscriber } from '../record-mapper'
 import { createLightweightSpanManager } from '../span-manager'
 import type { TraceSpan } from '../types'
+import { resetRuntime, updateRuntime } from '../../core/runtime/runtime'
+import { messageContentAttributesForArtifact } from '../message-content'
 
 describe('GenAI semconv projection', () => {
   afterEach(() => {
     resetObservabilityRuntime()
+    resetRuntime()
   })
 
   it('exports generation spans with the versioned GenAI semantic convention table', async () => {
@@ -43,7 +52,10 @@ describe('GenAI semconv projection', () => {
     })
     installed.dispose?.()
 
-    const generation = spans.find((candidate) => candidate.attributes['crux.primitive.name'] === 'generation.call')
+    const generation = spans.find(
+      (candidate) =>
+        candidate.attributes['crux.primitive.name'] === 'generation.call',
+    )
 
     expect(SEMCONV_VERSION).toBe('genai-dev-2026-06')
     expect(generation).toMatchObject({
@@ -61,8 +73,12 @@ describe('GenAI semconv projection', () => {
       }),
     })
     expect(generation?.attributes).not.toHaveProperty('gen_ai.system')
-    expect(generation?.attributes).not.toHaveProperty('gen_ai.client.duration_ms')
-    expect(generation?.attributes).not.toHaveProperty('gen_ai.client.time_to_first_token_ms')
+    expect(generation?.attributes).not.toHaveProperty(
+      'gen_ai.client.duration_ms',
+    )
+    expect(generation?.attributes).not.toHaveProperty(
+      'gen_ai.client.time_to_first_token_ms',
+    )
   })
 
   it('exports generation message content only when explicitly enabled', async () => {
@@ -91,9 +107,16 @@ describe('GenAI semconv projection', () => {
     await emitGenerationWithArtifacts()
     capturedInstall.dispose?.()
 
-    const generation = capturedSpans.find((candidate) => candidate.attributes['crux.primitive.name'] === 'generation.call')
-    const inputMessages = JSON.parse(String(generation?.attributes['gen_ai.input.messages']))
-    const outputMessages = JSON.parse(String(generation?.attributes['gen_ai.output.messages']))
+    const generation = capturedSpans.find(
+      (candidate) =>
+        candidate.attributes['crux.primitive.name'] === 'generation.call',
+    )
+    const inputMessages = JSON.parse(
+      String(generation?.attributes['gen_ai.input.messages']),
+    )
+    const outputMessages = JSON.parse(
+      String(generation?.attributes['gen_ai.output.messages']),
+    )
 
     expect(inputMessages).toEqual([
       {
@@ -107,7 +130,121 @@ describe('GenAI semconv projection', () => {
         parts: [{ type: 'text', content: 'Refunds are available.' }],
       },
     ])
-    expect(generation?.attributes['gen_ai.system_instructions']).toBe('You help customers.')
+    expect(generation?.attributes['gen_ai.system_instructions']).toBe(
+      'You help customers.',
+    )
+  })
+
+  it('does not read a bare process global when checking message content env opt-in', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'process')
+    try {
+      Object.defineProperty(globalThis, 'process', {
+        configurable: true,
+        value: undefined,
+      })
+      expect(() =>
+        messageContentAttributesForArtifact(messageArtifact('No process'), {}),
+      ).not.toThrow()
+      expect(
+        messageContentAttributesForArtifact(messageArtifact('No process'), {}),
+      ).toEqual({})
+    } finally {
+      if (descriptor) Object.defineProperty(globalThis, 'process', descriptor)
+    }
+  })
+
+  it('does not export output messages when local output capture is off even with content opt-in', async () => {
+    const spans: TraceSpan[] = []
+    const installed = withTelemetry({
+      captureMessageContent: true,
+      exporter: (batch) => {
+        spans.push(...batch)
+      },
+    }).install({})
+    updateRuntime({
+      observabilityCapture: {
+        recordOutputs: 'off',
+      },
+    })
+
+    await emitGenerationWithArtifacts()
+    installed.dispose?.()
+
+    const serialized = JSON.stringify(spans)
+    const generation = spans.find(
+      (candidate) =>
+        candidate.attributes['crux.primitive.name'] === 'generation.call',
+    )
+    expect(generation?.attributes).not.toHaveProperty('gen_ai.output.messages')
+    expect(serialized).not.toContain('Refunds are available.')
+  })
+
+  it('does not export fixture message content when message content capture is off', () => {
+    const spans: TraceSpan[] = []
+    const spanManager = createLightweightSpanManager(
+      createCallbackExporter((batch) => {
+        spans.push(...batch)
+      }),
+    )
+    const subscriber = createOtelRecordSubscriber(spanManager, {})
+    const batch = generationRun as CruxGraphRecordBatch
+
+    for (const record of batch.records) {
+      subscriber(record)
+    }
+
+    const serialized = JSON.stringify(spans)
+    const generation = spans.find(
+      (candidate) =>
+        candidate.attributes['crux.primitive.name'] === 'generation.call',
+    )
+    expect(generation?.attributes).not.toHaveProperty('gen_ai.input.messages')
+    expect(generation?.attributes).not.toHaveProperty('gen_ai.output.messages')
+    expect(generation?.attributes).not.toHaveProperty(
+      'gen_ai.system_instructions',
+    )
+    expect(serialized).not.toContain('Can I get a refund for my monthly plan?')
+    expect(serialized).not.toContain(
+      'Monthly plans are refundable within 14 days.',
+    )
+    expect(serialized).not.toContain('Refunds are available within 14 days.')
+  })
+
+  it('keeps truncated message content JSON parseable and marks the span truncated', async () => {
+    const spans: TraceSpan[] = []
+    const installed = withTelemetry({
+      captureMessageContent: true,
+      exporter: (batch) => {
+        spans.push(...batch)
+      },
+    }).install({})
+    const longContent = 'x'.repeat(40 * 1024)
+
+    const span = observe.openSpan({
+      name: 'generate long reply',
+      primitive: 'generation.call',
+    })
+    await span.withContext(async () => {
+      observe.artifact({
+        kind: 'output',
+        contentType: 'application/json',
+        encoding: 'json',
+        preview: { text: longContent },
+      })
+    })
+    span.end()
+    installed.dispose?.()
+
+    const generation = spans.find(
+      (candidate) =>
+        candidate.attributes['crux.primitive.name'] === 'generation.call',
+    )
+    const outputMessages = String(
+      generation?.attributes['gen_ai.output.messages'],
+    )
+    expect(() => JSON.parse(outputMessages)).not.toThrow()
+    expect(outputMessages.length).toBeLessThanOrEqual(32 * 1024)
+    expect(generation?.attributes['crux.truncated']).toBe(true)
   })
 
   it('passes homogeneous arrays through and JSON-encodes mixed arrays and objects', async () => {
@@ -133,7 +270,9 @@ describe('GenAI semconv projection', () => {
     )
     installed.dispose?.()
 
-    const span = spans.find((candidate) => candidate.name === 'crux.custom.operation')
+    const span = spans.find(
+      (candidate) => candidate.name === 'crux.custom.operation',
+    )
 
     expect(span?.attributes).toMatchObject({
       'crux.tags': ['alpha', 'beta'],
@@ -145,10 +284,14 @@ describe('GenAI semconv projection', () => {
 
   it('keeps fixture stream projection pinned to the semconv table version', () => {
     const spans: TraceSpan[] = []
-    const spanManager = createLightweightSpanManager(createCallbackExporter((batch) => {
-      spans.push(...batch)
-    }))
-    const subscriber = createOtelRecordSubscriber(spanManager, { captureMessageContent: true })
+    const spanManager = createLightweightSpanManager(
+      createCallbackExporter((batch) => {
+        spans.push(...batch)
+      }),
+    )
+    const subscriber = createOtelRecordSubscriber(spanManager, {
+      captureMessageContent: true,
+    })
     const batch = generationRun as CruxGraphRecordBatch
 
     for (const record of batch.records) {
@@ -333,4 +476,26 @@ async function emitGenerationWithArtifacts(): Promise<void> {
   })
 
   span.end()
+}
+
+function messageArtifact(
+  text: string,
+): Extract<CruxGraphRecord, { type: 'artifact' }> {
+  return {
+    type: 'artifact',
+    schemaVersion: 1,
+    recordId: 'rec_message_env_guard',
+    runId: 'run_message_env_guard',
+    seq: 1,
+    traceId: '11111111111111111111111111111111',
+    spanId: '1111111111111111',
+    artifactId: 'artifact_message_env_guard',
+    kind: 'messages',
+    contentType: 'application/json',
+    encoding: 'json',
+    preview: {
+      messages: [{ role: 'user', content: text }],
+    },
+    createdAt: '2026-07-03T00:00:00.000Z',
+  } as Extract<CruxGraphRecord, { type: 'artifact' }>
 }

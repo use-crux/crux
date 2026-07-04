@@ -99,7 +99,7 @@ func mergePendingTokenChunk(current pendingTokenChunk, next pendingTokenChunk) p
 	nextText := stringAttributeValue(next.attributes, "text")
 	if currentText != "" || nextText != "" {
 		merged.attributes["text"] = currentText + nextText
-		merged.attributes["charCount"] = len(currentText + nextText)
+		merged.attributes["charCount"] = len([]rune(currentText + nextText))
 	}
 	if _, ok := merged.attributes["firstDeltaAt"]; !ok {
 		if first := stringAttributeValue(next.attributes, "firstDeltaAt"); first != "" {

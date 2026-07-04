@@ -1,16 +1,20 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { loopRuntimeAdapter } from '../../adapter'
-import { fakeLoopRuntime, type FakeLoopRuntimeConfig } from '../../adapter/testing'
+import {
+  fakeLoopRuntime,
+  type FakeLoopRuntimeConfig,
+} from '../../adapter/testing'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
   type CruxEdgeRecord,
+  type CruxRunEndRecord,
   type CruxRunStartRecord,
 } from '../../observability'
 import { prompt } from '../../prompt/prompt'
@@ -22,16 +26,35 @@ const tempDirs: string[] = []
 
 afterEach(async () => {
   resetObservabilityRuntime()
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
+  await Promise.all(
+    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+  )
 })
 
 function runStarts(records: readonly unknown[]): CruxRunStartRecord[] {
   return records.filter((record): record is CruxRunStartRecord => {
-    return typeof record === 'object' && record !== null && (record as { type?: unknown }).type === 'run:start'
+    return (
+      typeof record === 'object' &&
+      record !== null &&
+      (record as { type?: unknown }).type === 'run:start'
+    )
   })
 }
 
-function edges(records: readonly unknown[], edgeType: CruxEdgeRecord['edgeType']): CruxEdgeRecord[] {
+function runEnds(records: readonly unknown[]): CruxRunEndRecord[] {
+  return records.filter((record): record is CruxRunEndRecord => {
+    return (
+      typeof record === 'object' &&
+      record !== null &&
+      (record as { type?: unknown }).type === 'run:end'
+    )
+  })
+}
+
+function edges(
+  records: readonly unknown[],
+  edgeType: CruxEdgeRecord['edgeType'],
+): CruxEdgeRecord[] {
   return records.filter((record): record is CruxEdgeRecord => {
     return (
       typeof record === 'object' &&
@@ -72,7 +95,9 @@ describe('Quality runner observability graph edges', () => {
 
     const starts = runStarts(transport.records)
     const evalRun = starts.find((record) => record.rootPrimitive === 'eval.run')
-    const caseRuns = starts.filter((record) => record.rootPrimitive === 'eval.case')
+    const caseRuns = starts.filter(
+      (record) => record.rootPrimitive === 'eval.case',
+    )
     const caseEdges = edges(transport.records, 'eval.case_of')
 
     expect(evalRun).toMatchObject({
@@ -86,13 +111,47 @@ describe('Quality runner observability graph edges', () => {
     expect(caseRuns.map((record) => record.runId).sort()).toEqual(
       [...experiment.perCase.map((cell) => cell.traceIds[0]!)].sort(),
     )
-    expect(new Set(caseRuns.map((record) => record.traceId))).toEqual(new Set([evalRun!.traceId]))
+    expect(new Set(caseRuns.map((record) => record.traceId))).toEqual(
+      new Set([evalRun!.traceId]),
+    )
     expect(caseEdges).toHaveLength(2)
     expect(caseEdges.map((edge) => edge.to)).toEqual([
       { kind: 'run', id: evalRun!.runId },
       { kind: 'run', id: evalRun!.runId },
     ])
-    expect(caseEdges.map((edge) => edge.from.id).sort()).toEqual(caseRuns.map((record) => record.runId).sort())
+    expect(caseEdges.map((edge) => edge.from.id).sort()).toEqual(
+      caseRuns.map((record) => record.runId).sort(),
+    )
+  })
+
+  it('ends the eval.run with error when a post-cell persistence step fails', async () => {
+    const dir = await mkdtemp(
+      join(tmpdir(), 'crux-quality-edges-persist-error-'),
+    )
+    tempDirs.push(dir)
+    await writeFile(join(dir, 'experiments'), 'not a directory', 'utf8')
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const evaluation = evaluate('edges.persist-error', {
+      task: async (input: { q: string }) => input.q,
+      data: [{ input: { q: 'a' } }],
+    })
+
+    await expect(
+      run(evaluation, undefined, { dir, persist: true }),
+    ).rejects.toThrow()
+    await observe.flush()
+
+    const evalRun = runStarts(transport.records).find(
+      (record) => record.rootPrimitive === 'eval.run',
+    )
+    expect(evalRun).toBeDefined()
+    expect(
+      runEnds(transport.records).filter(
+        (record) => record.runId === evalRun!.runId,
+      ),
+    ).toEqual([expect.objectContaining({ status: 'error' })])
   })
 
   it('emits comparison report artifacts with candidate and promoted-baseline run edges', async () => {
@@ -182,13 +241,17 @@ describe('Quality runner observability graph edges', () => {
     })
     await observe.flush()
 
-    const replayRun = await run(evaluation, { replayMode: 'replay-strict' } satisfies RunOverrides<string>, {
-      dir,
-      setup: {
-        ...executorSetup({ loops: [[{ text: 'should not run' }]] }),
-        model: 'fake:m1',
+    const replayRun = await run(
+      evaluation,
+      { replayMode: 'replay-strict' } satisfies RunOverrides<string>,
+      {
+        dir,
+        setup: {
+          ...executorSetup({ loops: [[{ text: 'should not run' }]] }),
+          model: 'fake:m1',
+        },
       },
-    })
+    )
     await observe.flush()
 
     expect(edges(transport.records, 'replay.of')).toEqual([

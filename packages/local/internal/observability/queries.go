@@ -675,7 +675,7 @@ func (s *Service) runSpanSummaryRollup(ctx context.Context, runID string) (map[s
 			attributes_json, metrics_json
 		FROM spans
 		WHERE run_id = ?
-		ORDER BY ifnull(started_at, ''), span_id
+		ORDER BY started_at, span_id
 	`, runID)
 	if err != nil {
 		return nil, "", "", "", err
@@ -855,7 +855,7 @@ func (s *Service) listSpans(ctx context.Context, runID string) ([]SpanSummary, e
 			attributes_json, metrics_json, error_json
 		FROM spans
 		WHERE run_id = ?
-		ORDER BY ifnull(started_at, ''), span_id
+		ORDER BY started_at, span_id
 	`, runID)
 	if err != nil {
 		return nil, err

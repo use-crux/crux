@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -63,12 +64,13 @@ type Event struct {
 }
 
 type lifecycleReconciliation struct {
-	RunID     string
-	Status    string
-	EndedAt   string
-	Reason    string
-	Severity  string
-	Signature string
+	RunID          string
+	Status         string
+	EndedAt        string
+	Reason         string
+	Severity       string
+	Signature      string
+	LastActivityAt string
 }
 
 type EventBus struct {
@@ -711,6 +713,12 @@ func observabilitySQLiteDSN(path string) string {
 }
 
 func (s *Service) Close() error {
+	s.tokenMu.Lock()
+	if s.tokenTimer != nil {
+		s.tokenTimer.Stop()
+		s.tokenTimer = nil
+	}
+	s.tokenMu.Unlock()
 	return s.db.Close()
 }
 
@@ -733,6 +741,7 @@ func (s *Service) StartLifecycleReconciler(ctx context.Context, interval time.Du
 				if err := s.PublishLifecycleReconciliations(ctx); err != nil {
 					// Reconciliation drives presentation freshness only; ingestion and reads
 					// remain the source of canonical data and should never be blocked by it.
+					slog.Debug("observability lifecycle reconciliation failed", "error", err)
 				}
 			}
 		}
@@ -811,12 +820,13 @@ func (s *Service) lifecycleReconciliations(ctx context.Context) ([]lifecycleReco
 			severity = "error"
 		}
 		reconciliations = append(reconciliations, lifecycleReconciliation{
-			RunID:     run.RunID,
-			Status:    status,
-			EndedAt:   endedAt,
-			Reason:    reason,
-			Severity:  severity,
-			Signature: strings.Join([]string{status, endedAt, reason}, "|"),
+			RunID:          run.RunID,
+			Status:         status,
+			EndedAt:        endedAt,
+			Reason:         reason,
+			Severity:       severity,
+			Signature:      strings.Join([]string{status, endedAt, reason}, "|"),
+			LastActivityAt: run.LastActivityAt,
 		})
 	}
 	return reconciliations, nil
@@ -861,8 +871,8 @@ func (s *Service) persistLifecycleReconciliation(ctx context.Context, reconcilia
 	result, err := s.db.ExecContext(ctx, `
 		UPDATE runs
 		SET lifecycle_status = ?, lifecycle_checked_at = ?
-		WHERE run_id = ? AND lifecycle_status IS NULL
-	`, status, checkedAt, reconciliation.RunID)
+		WHERE run_id = ? AND lifecycle_status IS NULL AND ifnull(last_activity_at, '') = ?
+	`, status, checkedAt, reconciliation.RunID, reconciliation.LastActivityAt)
 	if err != nil {
 		return false, fmt.Errorf("persist lifecycle reconciliation for %q: %w", reconciliation.RunID, err)
 	}

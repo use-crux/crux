@@ -39,7 +39,10 @@ export function installRuntimeConfigPlan(
   ports.runtime.update(runtimePatch)
 
   let runtime: CruxRuntime = { ...ports.runtime.get() }
-  const plugins = plan.plugins.length > 0 ? ports.plugins.apply(plan.plugins, runtime) : undefined
+  const plugins =
+    plan.plugins.length > 0
+      ? ports.plugins.apply(plan.plugins, runtime)
+      : undefined
   if (plugins) {
     runtime = { ...plugins.runtime }
     ports.runtime.set(runtime)
@@ -53,7 +56,7 @@ export function installRuntimeConfigPlan(
   const restore = () => {
     if (restored) return
     restored = true
-    plugins?.dispose()
+    void plugins?.dispose()
     restoreObservability?.()
   }
 

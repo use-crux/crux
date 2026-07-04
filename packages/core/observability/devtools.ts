@@ -99,7 +99,7 @@ export function withDevtools(options: EnableDevtoolsOptions): CruxPlugin {
 
 interface DevtoolsRuntimeLayer {
   previousRuntime: Readonly<CruxRuntime>
-  dispose: () => void
+  dispose: () => void | Promise<void>
   parentToken: number
 }
 
@@ -131,22 +131,27 @@ function buildDevtoolsRuntime(
   })
   const restoreObservability = configureObservability({
     transport,
-    ...(options.sessionId ? { defaultCorrelators: { sessionId: options.sessionId } } : {}),
+    ...(options.sessionId
+      ? { defaultCorrelators: { sessionId: options.sessionId } }
+      : {}),
   })
   void registerIndexSnapshot(options)
 
   return {
     observabilityTransport: transport,
     dispose() {
-      void observe.flush({ timeoutMs: 2000 })
+      const flushed = observe.flush({ timeoutMs: 2000 })
       restoreObservability()
+      return flushed.then(() => undefined)
     },
   }
 }
 
 function normalizeServerUrl(serverUrl: string): string {
-  if (serverUrl.startsWith('ws://')) return `http://${serverUrl.slice('ws://'.length)}`
-  if (serverUrl.startsWith('wss://')) return `https://${serverUrl.slice('wss://'.length)}`
+  if (serverUrl.startsWith('ws://'))
+    return `http://${serverUrl.slice('ws://'.length)}`
+  if (serverUrl.startsWith('wss://'))
+    return `https://${serverUrl.slice('wss://'.length)}`
   return serverUrl
 }
 
@@ -154,26 +159,41 @@ function joinUrl(serverUrl: string, endpoint: string): string {
   return `${normalizeServerUrl(serverUrl).replace(/\/+$/u, '')}/${endpoint.replace(/^\/+/u, '')}`
 }
 
-async function registerIndexSnapshot(options: EnableDevtoolsOptions): Promise<void> {
+async function registerIndexSnapshot(
+  options: EnableDevtoolsOptions,
+): Promise<void> {
   const fetchImpl = globalThis.fetch
   if (!fetchImpl) return
 
   const snapshot = IndexSnapshotSchema.parse({
     schemaVersion: 1,
-    ...serializeIndex(options.prompts, options.contexts ?? [], options.paths, options.tools),
+    ...serializeIndex(
+      options.prompts,
+      options.contexts ?? [],
+      options.paths,
+      options.tools,
+    ),
   })
 
   try {
-    const response = await fetchImpl(joinUrl(options.serverUrl ?? 'http://localhost:4400', '/api/index/snapshot'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Bypass-Tunnel-Reminder': 'true',
+    const response = await fetchImpl(
+      joinUrl(
+        options.serverUrl ?? 'http://localhost:4400',
+        '/api/index/snapshot',
+      ),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true',
+        },
+        body: JSON.stringify(snapshot),
       },
-      body: JSON.stringify(snapshot),
-    })
+    )
     if (!response.ok && typeof console !== 'undefined') {
-      console.warn(`[crux] devtools index registration failed with HTTP ${response.status}`)
+      console.warn(
+        `[crux] devtools index registration failed with HTTP ${response.status}`,
+      )
     }
   } catch (error) {
     if (typeof console !== 'undefined') {
@@ -188,7 +208,10 @@ export function enableDevtools(options: EnableDevtoolsOptions): () => void {
   const previousRuntime = getRuntime()
 
   // Build and install all hooks via shared builder
-  const { dispose, ...runtimePatch } = buildDevtoolsRuntime(options, previousRuntime)
+  const { dispose, ...runtimePatch } = buildDevtoolsRuntime(
+    options,
+    previousRuntime,
+  )
   devtoolsRuntimeLayers.set(token, {
     previousRuntime,
     dispose: dispose ?? (() => undefined),
@@ -218,7 +241,7 @@ export function disableDevtools(token = activeDevtoolsToken): void {
 
   const tokensToDispose = activeDevtoolsTokensThrough(token)
   for (const activeToken of tokensToDispose) {
-    devtoolsRuntimeLayers.get(activeToken)?.dispose()
+    void devtoolsRuntimeLayers.get(activeToken)?.dispose()
     devtoolsRuntimeLayers.delete(activeToken)
   }
 

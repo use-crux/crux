@@ -1,8 +1,15 @@
 import { observe, type OpenObservedSpan } from '@use-crux/core/observability'
 import { stringValue } from './lifecycle-utils'
 import { emitStepOutputArtifacts } from './sdk-observability-artifacts'
-import { modelSpanAttributes, normalizeUsageWithCost, numericValue } from './sdk-observability-values'
-import { emitStreamStepEvent, emitUnexecutedToolCallSpans } from './sdk-tool-observability'
+import {
+  modelSpanAttributes,
+  normalizeUsageWithCost,
+  numericValue,
+} from './sdk-observability-values'
+import {
+  emitStreamStepEvent,
+  emitUnexecutedToolCallSpans,
+} from './sdk-tool-observability'
 
 type AgentStepMode = 'generate' | 'stream'
 
@@ -20,12 +27,23 @@ export async function observeConvexAgentStep<T>(
   userCallback: () => Promise<T>,
   activeStep?: ActiveConvexAgentStepSpan,
 ): Promise<T> {
-  const stepNumber = numericValue((step as Record<string, unknown> | undefined)?.stepNumber)
+  const stepNumber = numericValue(
+    (step as Record<string, unknown> | undefined)?.stepNumber,
+  )
   const finishReason =
-    step && typeof step === 'object' ? stringValue((step as Record<string, unknown>).finishReason) : undefined
-  const stepRecord = step && typeof step === 'object' ? (step as Record<string, unknown>) : undefined
-  const usage = stepRecord ? normalizeUsageWithCost(stepRecord.usage, stepRecord) : undefined
-  const stepSpan = activeStep?.span ?? openConvexAgentStepSpan(agentName, step, mode, model).span
+    step && typeof step === 'object'
+      ? stringValue((step as Record<string, unknown>).finishReason)
+      : undefined
+  const stepRecord =
+    step && typeof step === 'object'
+      ? (step as Record<string, unknown>)
+      : undefined
+  const usage = stepRecord
+    ? normalizeUsageWithCost(stepRecord.usage, stepRecord)
+    : undefined
+  const stepSpan =
+    activeStep?.span ??
+    openConvexAgentStepSpan(agentName, step, mode, model).span
   try {
     return await stepSpan.withContext(async () => {
       emitStepOutputArtifacts(step)
@@ -57,16 +75,22 @@ export function openConvexAgentStepSpan(
   mode: AgentStepMode,
   model: unknown,
 ): ActiveConvexAgentStepSpan {
-  const stepNumber = numericValue((step as Record<string, unknown> | undefined)?.stepNumber)
+  const stepNumber = numericValue(
+    (step as Record<string, unknown> | undefined)?.stepNumber,
+  )
   const finishReason =
-    step && typeof step === 'object' ? stringValue((step as Record<string, unknown>).finishReason) : undefined
+    step && typeof step === 'object'
+      ? stringValue((step as Record<string, unknown>).finishReason)
+      : undefined
   const span = observe.openSpan({
-    name: typeof stepNumber === 'number' ? `step ${stepNumber + 1}` : `${mode} step`,
-    family: 'generation',
+    name:
+      typeof stepNumber === 'number'
+        ? `step ${stepNumber + 1}`
+        : `${mode} step`,
     primitive: 'generation.call',
     attributes: {
       agentName,
-      mode,
+      stepMode: mode,
       output: 'text',
       source: 'convex.agent.step',
       ...modelSpanAttributes(model),
@@ -87,7 +111,9 @@ export function takeActiveAgentStepSpan(
 ): ActiveConvexAgentStepSpan | undefined {
   if (activeStepSpans.length === 0) return undefined
   const key = stepKey(step)
-  const index = key ? activeStepSpans.findIndex((entry) => entry.key === key) : 0
+  const index = key
+    ? activeStepSpans.findIndex((entry) => entry.key === key)
+    : 0
   if (index < 0) return activeStepSpans.shift()
   const [entry] = activeStepSpans.splice(index, 1)
   return entry
@@ -117,7 +143,10 @@ export function endRemainingAgentStepSpans(
   }
 }
 
-export function errorRemainingAgentStepSpans(activeStepSpans: ActiveConvexAgentStepSpan[], error: unknown): void {
+export function errorRemainingAgentStepSpans(
+  activeStepSpans: ActiveConvexAgentStepSpan[],
+  error: unknown,
+): void {
   while (activeStepSpans.length > 0) {
     const activeStep = activeStepSpans.shift()
     activeStep?.span.error(error)
@@ -125,6 +154,8 @@ export function errorRemainingAgentStepSpans(activeStepSpans: ActiveConvexAgentS
 }
 
 function stepKey(step: unknown): string | undefined {
-  const stepNumber = numericValue((step as Record<string, unknown> | undefined)?.stepNumber)
+  const stepNumber = numericValue(
+    (step as Record<string, unknown> | undefined)?.stepNumber,
+  )
   return typeof stepNumber === 'number' ? String(stepNumber) : undefined
 }

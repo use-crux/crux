@@ -1,7 +1,7 @@
 ---
-"@use-crux/core": minor
-"@use-crux/local": patch
-"@use-crux/otel": minor
+'@use-crux/core': minor
+'@use-crux/local': patch
+'@use-crux/otel': minor
 ---
 
 Harden observability emission so invalid optional metrics and JSON-hostile payload values are sanitized before fan-out, with invalid records counted instead of thrown into application code.
@@ -47,3 +47,7 @@ Make local devtools websocket broadcasts backpressure-safe with per-client send 
 Update the devtools runs UI to group by root `sessionId`, render backend-owned token/cost/count rollups from the observability list endpoint, and stream focused-span `token.chunk` text through the lazy span-events endpoint.
 
 Promote observability to beta graph coverage for Quality: evaluations now emit an `eval.run` umbrella trace, case runs link with `eval.case_of`, promoted comparisons emit `comparison.report` artifacts plus candidate/baseline edges, and cassette replays emit `replay.of` edges to the originally recorded run when cassette metadata is available.
+
+Ensure Quality `eval.run` umbrella traces end with an error record when post-cell experiment persistence fails.
+
+Close the final stable-beta blockers: artifact preview capture is now exhaustive over canonical artifact kinds, `observe.run({ traceId })` preserves caller-supplied traces, late OTel records for ended spans attach to the run span with `crux.late_for_span`, invented GenAI rate metrics use `crux.gen.*` names, Convex observability call sites compile against the split span-end API without dropping attributes, and the local runtime protects out-of-order rollups, cursors, retention, lifecycle, and Quality fixture IDs under the expanded verification matrix.

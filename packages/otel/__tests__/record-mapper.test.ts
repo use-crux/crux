@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { observe, resetObservabilityRuntime } from '@use-crux/core/observability'
+import {
+  observe,
+  resetObservabilityRuntime,
+} from '@use-crux/core/observability'
 import { withTelemetry } from '../index'
 import type { TraceSpan } from '../types'
 
@@ -44,7 +47,10 @@ describe('OTel record subscriber', () => {
       },
     )
 
-    expect(spans.map((span) => span.name)).toEqual(['execute_tool search', 'search'])
+    expect(spans.map((span) => span.name)).toEqual([
+      'execute_tool search',
+      'search',
+    ])
     expect(spans[0].attributes).toMatchObject({
       'crux.tool.name': 'search',
       'crux.tool.call_id': 'tc1',
@@ -73,7 +79,10 @@ describe('OTel record subscriber', () => {
       async () => {},
     )
 
-    expect(spans.map((span) => span.name)).toEqual(['execute_tool search', 'search'])
+    expect(spans.map((span) => span.name)).toEqual([
+      'execute_tool search',
+      'search',
+    ])
   })
 
   it('preserves parentage and maps artifact, edge, and error records onto spans', async () => {
@@ -91,7 +100,11 @@ describe('OTel record subscriber', () => {
         {
           name: 'generate',
           primitive: 'generation.call',
-          attributes: { provider: 'openai', model: 'gpt-4o', promptId: 'support' },
+          attributes: {
+            provider: 'openai',
+            model: 'gpt-4o',
+            promptId: 'support',
+          },
         },
         async () => {
           const context = observe.captureContext()
@@ -131,7 +144,10 @@ describe('OTel record subscriber', () => {
     expect(run).toBeDefined()
     expect(parent!.parentSpanId).toBe(run!.spanId)
     expect(child!.parentSpanId).toBe(parent!.spanId)
-    expect(child!.status).toMatchObject({ code: 'ERROR', message: 'constraint failed' })
+    expect(child!.status).toMatchObject({
+      code: 'ERROR',
+      message: 'constraint failed',
+    })
     expect(parent!.attributes).toMatchObject({
       'deployment.environment': 'test',
       'gen_ai.operation.name': 'chat',
@@ -179,7 +195,9 @@ describe('OTel record subscriber', () => {
     )
     recordInstall.dispose?.()
 
-    const recordSpan = recordSpans.find((span) => span.name === 'execute_tool lookup')
+    const recordSpan = recordSpans.find(
+      (span) => span.name === 'execute_tool lookup',
+    )
 
     expect(recordSpan).toBeDefined()
     expect(recordSpan?.attributes).toMatchObject({
@@ -206,7 +224,9 @@ describe('OTel record subscriber', () => {
     )
     installed.dispose?.()
 
-    const span = spans.find((item) => item.name === 'execute_tool identityLookup')
+    const span = spans.find(
+      (item) => item.name === 'execute_tool identityLookup',
+    )
     expect(span).toBeDefined()
     expect(span?.spanId).toBe(span?.attributes['crux.span.id'])
     expect(span?.spanId).toMatch(/^[0-9a-f]{16}$/)
@@ -229,27 +249,38 @@ describe('OTel record subscriber', () => {
       async () => {},
     )
 
-    observe.openSpan({
-      name: 'generate with metrics',
-      primitive: 'generation.call',
-    }).end({
-      metrics: {
-        'gen.duration_ms': 42,
-        'gen.time_to_first_token_ms': 12,
-        'gen.output_tokens_per_second': 18,
-        'gen.time_per_output_chunk_ms': 5,
-      },
-    })
+    observe
+      .openSpan({
+        name: 'generate with metrics',
+        primitive: 'generation.call',
+      })
+      .end({
+        metrics: {
+          'gen.duration_ms': 42,
+          'gen.time_to_first_token_ms': 12,
+          'gen.output_tokens_per_second': 18,
+          'gen.time_per_output_chunk_ms': 5,
+        },
+      })
     installed.dispose?.()
 
-    const span = spans.find((candidate) => candidate.name === 'chat generate with metrics' && candidate.attributes['gen_ai.client.operation.duration'] === 0.042)
+    const span = spans.find(
+      (candidate) =>
+        candidate.name === 'chat generate with metrics' &&
+        candidate.attributes['gen_ai.client.operation.duration'] === 0.042,
+    )
 
     expect(span?.attributes).toMatchObject({
       'gen_ai.client.operation.duration': 0.042,
       'gen_ai.server.time_to_first_token': 0.012,
-      'gen_ai.client.output_tokens_per_second': 18,
-      'gen_ai.client.time_per_output_chunk_ms': 5,
+      'crux.gen.output_tokens_per_second': 18,
+      'crux.gen.time_per_output_chunk_ms': 5,
     })
+    expect(span?.attributes).not.toHaveProperty(
+      'gen_ai.client.output_tokens_per_second',
+    )
+    expect(span?.attributes).not.toHaveProperty(
+      'gen_ai.client.time_per_output_chunk_ms',
+    )
   })
-
 })

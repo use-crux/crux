@@ -17,6 +17,7 @@ func TestServiceRetentionDeletesRunsByAgeAndCount(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		insertRetentionRun(t, service, fmt.Sprintf("run_recent_%d", i), now.Add(time.Duration(i)*time.Minute))
 	}
+	insertRetentionRunWithStatus(t, service, "run_old_running", now.AddDate(0, 0, -30), "running")
 
 	deleted, err := service.runRetention(ctx, retentionSettings{
 		MaxRunAge:       14 * 24 * time.Hour,
@@ -29,8 +30,8 @@ func TestServiceRetentionDeletesRunsByAgeAndCount(t *testing.T) {
 	if deleted != 6 {
 		t.Fatalf("deleted = %d, want 6", deleted)
 	}
-	assertRetentionRunIDs(t, service, []string{"run_recent_2", "run_recent_3"})
-	assertRetentionTableCount(t, service, "records", 2)
+	assertRetentionRunIDs(t, service, []string{"run_old_running", "run_recent_2", "run_recent_3"})
+	assertRetentionTableCount(t, service, "records", 3)
 }
 
 func TestServiceRetentionCapsArtifactPreviewAtIngest(t *testing.T) {
@@ -64,11 +65,16 @@ func TestServiceRetentionCapsArtifactPreviewAtIngest(t *testing.T) {
 
 func insertRetentionRun(t *testing.T, service *Service, runID string, started time.Time) {
 	t.Helper()
+	insertRetentionRunWithStatus(t, service, runID, started, "ok")
+}
+
+func insertRetentionRunWithStatus(t *testing.T, service *Service, runID string, started time.Time, status string) {
+	t.Helper()
 	timestamp := started.Format(time.RFC3339Nano)
 	if _, err := service.db.Exec(`
 		INSERT INTO runs (run_id, trace_id, name, root_primitive, status, started_at, last_activity_at)
-		VALUES (?, ?, 'retained', 'agent.run', 'ok', ?, ?)
-	`, runID, "trace_"+runID, timestamp, timestamp); err != nil {
+		VALUES (?, ?, 'retained', 'agent.run', ?, ?, ?)
+	`, runID, "trace_"+runID, status, timestamp, timestamp); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.db.Exec(`

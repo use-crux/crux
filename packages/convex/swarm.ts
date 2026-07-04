@@ -11,10 +11,17 @@
 
 import { createFlowId, getExecutionContext } from '@use-crux/core'
 import type { AnyAgent } from '@use-crux/core/agent'
-import { observe, type CapturedObservabilityContext } from '@use-crux/core/observability'
+import {
+  observe,
+  type CapturedObservabilityContext,
+} from '@use-crux/core/observability'
 import type { ComponentApi } from './src/component/_generated/component'
 import { flushObservability } from './observability'
-import { observeConvexSwarmAgent, observeConvexSwarmEnd, observeConvexSwarmStart } from './swarm-observability'
+import {
+  observeConvexSwarmAgent,
+  observeConvexSwarmEnd,
+  observeConvexSwarmStart,
+} from './swarm-observability'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -146,7 +153,9 @@ function generateSwarmRunId(): string {
   return `swarm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function captureBaseObservabilityContext(): CapturedObservabilityContext | undefined {
+function captureBaseObservabilityContext():
+  | CapturedObservabilityContext
+  | undefined {
   const captured = observe.captureContext()
   if (!captured) return undefined
   return {
@@ -287,7 +296,10 @@ export function createConvexSwarm(
      * @param state - Current swarm state (from table).
      * @param agents - All agents in the swarm (reconstructed in each action).
      */
-    async runTurn(state: ConvexSwarmState, agents: Record<string, AnyAgent>): Promise<ConvexSwarmTurnResult> {
+    async runTurn(
+      state: ConvexSwarmState,
+      agents: Record<string, AnyAgent>,
+    ): Promise<ConvexSwarmTurnResult> {
       const agent = agents[state.currentAgentId]
       if (!agent) {
         const errorState: ConvexSwarmState = {
@@ -496,9 +508,13 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
       reason: string
       context: string
     } | null = null
-    const transferTools = buildTransferTools(agent, agents, (target, reason, context) => {
-      pendingHandoff = { target, reason, context }
-    })
+    const transferTools = buildTransferTools(
+      agent,
+      agents,
+      (target, reason, context) => {
+        pendingHandoff = { target, reason, context }
+      },
+    )
 
     // Merge agent tools + transfer tools
     const mergedTools = {
@@ -541,7 +557,6 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
           return await observe.span(
             {
               name: `swarm ${options.startAgent}`,
-              family: 'composition',
               primitive: 'composition.swarm',
               attributes: { 'swarm.start_agent': options.startAgent },
             },
@@ -551,7 +566,8 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
 
               // Keep the base run context for scheduled resumes instead of
               // the short-lived turn span, so resumed turns remain siblings.
-              state.observability = openedRun?.captureContext() ?? captureBaseObservabilityContext()
+              state.observability =
+                openedRun?.captureContext() ?? captureBaseObservabilityContext()
 
               observeConvexSwarmStart({
                 compositionId: state.swarmRunId,
@@ -562,22 +578,42 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
               })
 
               // Persist initial state
-              await ctx.runMutation(component.swarm.saveState, toSaveArgs(state))
+              await ctx.runMutation(
+                component.swarm.saveState,
+                toSaveArgs(state),
+              )
 
               // Execute first turn
               const agentStart = Date.now()
-              const turn = await inner.runTurn(state, options.agents as Record<string, AnyAgent>)
+              const turn = await inner.runTurn(
+                state,
+                options.agents as Record<string, AnyAgent>,
+              )
 
               // Emit composition:agent
-              observeConvexSwarmAgent(state.swarmRunId, state.currentAgentId, 0, Date.now() - agentStart)
+              observeConvexSwarmAgent(
+                state.swarmRunId,
+                state.currentAgentId,
+                0,
+                Date.now() - agentStart,
+              )
 
               // Persist updated state
-              await ctx.runMutation(component.swarm.saveState, toSaveArgs(turn.state))
+              await ctx.runMutation(
+                component.swarm.saveState,
+                toSaveArgs(turn.state),
+              )
 
               // If completed (no handoff), emit composition:end
               if (!turn.handedOff) {
-                observeConvexSwarmEnd(state.swarmRunId, turn.state, Date.now() - agentStart)
-                openedRun?.end({ status: turn.state.status === 'error' ? 'error' : 'ok' })
+                observeConvexSwarmEnd(
+                  state.swarmRunId,
+                  turn.state,
+                  Date.now() - agentStart,
+                )
+                openedRun?.end({
+                  status: turn.state.status === 'error' ? 'error' : 'ok',
+                })
               }
 
               // Schedule next turn if handoff occurred
@@ -623,47 +659,66 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
         if (!state || state.status !== 'running') return null
         const activeState = state
 
-        return await observe.withContext(activeState.observability, async () => {
-          const agentStart = Date.now()
-          const turn = await observe.span(
-            {
-              name: `swarm ${activeState.currentAgentId}`,
-              family: 'composition',
-              primitive: 'composition.swarm',
-              attributes: {
-                'swarm.run_id': swarmRunId,
-                'swarm.agent_id': activeState.currentAgentId,
-                'swarm.hop': activeState.handoffCount,
+        return await observe.withContext(
+          activeState.observability,
+          async () => {
+            const agentStart = Date.now()
+            const turn = await observe.span(
+              {
+                name: `swarm ${activeState.currentAgentId}`,
+                primitive: 'composition.swarm',
+                attributes: {
+                  'swarm.run_id': swarmRunId,
+                  'swarm.agent_id': activeState.currentAgentId,
+                  'swarm.hop': activeState.handoffCount,
+                },
               },
-            },
-            () => inner.runTurn(activeState, options.agents as Record<string, AnyAgent>),
-          )
+              () =>
+                inner.runTurn(
+                  activeState,
+                  options.agents as Record<string, AnyAgent>,
+                ),
+            )
 
-          // Emit composition:agent
-          observeConvexSwarmAgent(
-            swarmRunId,
-            activeState.currentAgentId,
-            activeState.handoffCount,
-            Date.now() - agentStart,
-            activeState.handoffCount > 0 ? activeState.handoffPath[activeState.handoffPath.length - 2] : undefined,
-          )
+            // Emit composition:agent
+            observeConvexSwarmAgent(
+              swarmRunId,
+              activeState.currentAgentId,
+              activeState.handoffCount,
+              Date.now() - agentStart,
+              activeState.handoffCount > 0
+                ? activeState.handoffPath[activeState.handoffPath.length - 2]
+                : undefined,
+            )
 
-          await ctx.runMutation(component.swarm.saveState, toSaveArgs(turn.state))
+            await ctx.runMutation(
+              component.swarm.saveState,
+              toSaveArgs(turn.state),
+            )
 
-          // If completed or errored, emit composition:end
-          if (!turn.handedOff) {
-            observeConvexSwarmEnd(swarmRunId, turn.state, Date.now() - agentStart)
-            if (activeState.observability) {
-              observe.endRun(activeState.observability, { status: turn.state.status === 'error' ? 'error' : 'ok' })
+            // If completed or errored, emit composition:end
+            if (!turn.handedOff) {
+              observeConvexSwarmEnd(
+                swarmRunId,
+                turn.state,
+                Date.now() - agentStart,
+              )
+              if (activeState.observability) {
+                observe.endRun(activeState.observability, {
+                  status: turn.state.status === 'error' ? 'error' : 'ok',
+                })
+              }
             }
-          }
 
-          if (turn.handedOff) {
-            await ctx.scheduler.runAfter(0, options.resumeAction, { swarmRunId })
-          }
+            if (turn.handedOff) {
+              await ctx.scheduler.runAfter(0, options.resumeAction, {
+                swarmRunId,
+              })
+            }
 
-          return turn.state
-        })
+            return turn.state
+          },
+        )
       } catch (error) {
         if (state?.observability) {
           observe.endRun(state.observability, { status: 'error', error })
@@ -680,14 +735,19 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
     },
 
     /** List swarm runs, optionally filtered by status. */
-    async listRuns(ctx: SwarmActionCtx, options?: { status?: 'running' | 'completed' | 'error'; limit?: number }) {
+    async listRuns(
+      ctx: SwarmActionCtx,
+      options?: { status?: 'running' | 'completed' | 'error'; limit?: number },
+    ) {
       return ctx.runQuery(component.swarm.listRuns, options ?? {})
     },
   }
 }
 
 /** Strip createdAt/updatedAt — managed by the component mutation. */
-function toSaveArgs(state: ConvexSwarmState): Omit<ConvexSwarmState, 'createdAt' | 'updatedAt'> {
+function toSaveArgs(
+  state: ConvexSwarmState,
+): Omit<ConvexSwarmState, 'createdAt' | 'updatedAt'> {
   const { createdAt, updatedAt, ...args } = state
   return args
 }

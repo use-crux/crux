@@ -70,7 +70,7 @@ The rules:
 - **Domain folders own implementation.** Product domains — `prompt/`, `resolver/`, `runtime/`,
   `generation/`, `tools/`, `shared/`, plus the existing `adapter/`, `agent/`, `safety/`,
   `quality/`, `observability/`, `retrieval/`, `indexing/`, `memory/`, and the rest — hold the real
-  code behind curated domain barrels. New root *implementation* files are not added.
+  code behind curated domain barrels. New root _implementation_ files are not added.
 - **Curated barrels, not dumping grounds.** Each domain `index.ts` is a curated barrel or public
   entrypoint, never substantial implementation. Avoid broad `export *` over internals, and put
   implementation that is not a stable intra-package contract under a domain-local `internal/`
@@ -192,7 +192,7 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── embedding/
 │   └── index.ts        embedding() — dense/sparse embedding primitive with batching, governance, and instrumentation
 ├── retrieval/
-│   └── index.ts        retriever(), retrievalPipeline() — query-first retrieval plus advanced query-time RAG composition
+│   └── index.ts        knowledgeBase(), retriever(), retrievalRecipe() — query-first retrieval, RAG facades, and traceable recipe composition
 ├── storage/
 │   └── index.ts        RecordStore, VectorStore, BlobStore, storage(), and in-memory implementations
 ├── workspace/
@@ -602,15 +602,15 @@ Those boundaries are deliberate:
 
 This keeps hybrid support in the correct layer. Dense and sparse are embedding kinds. Hybrid is a retrieval strategy composed through `VectorStore.search({ dense, sparse, fusion })`, not a third embedding kind.
 
-Advanced query-time composition lives in `retrievalPipeline(base, stages)`, not inside store adapters and not as more inline `retriever()` config. The pipeline returns a retriever-compatible object, so direct `retrieve()` and prompt `use: [pipeline]` composition continue to work. Manual `asContext()` and `asTools()` remain available for adapters that need already-expanded context/tool objects. Query stages such as `queryPlanner()` and `multiQuery()` transform typed planned queries before fanout. The fanout calls the base retriever once per planned query, then merges duplicate `namespace/sourceId/chunkId` hits with RRF. Hit stages such as `parentExpand()`, `compress()`, `diversify()`, and `decay()` operate on the merged candidates before final rendering.
+Advanced query-time composition lives in `retrievalRecipe({ retriever, steps })`, not inside store adapters and not as more inline `retriever()` config. Recipes are named, traceable compositions over one or more retriever sources. Query steps such as `rewriteQuery()` and `fanout()` transform planned queries before federated retrieval; hit steps such as `rerank()`, `expandParents()`, and `compressToBudget()` operate on retrieved candidates before final rendering. Recipe handles expose `retrieve()`, `retrieveWithTrace()`, `asRetriever()`, `asTools()`, and `asGrounding()` so prompt composition can consume the same recipe through context, tools, or citation-aware grounding.
 
-Parent expansion relies on write-side metadata but does not duplicate the writer's key contract. Parent/child indexing stores parent refs on child chunks, and `parentExpand()` asks the indexed knowledge boundary to resolve either the stored parent key or a derived parent ref. The stage enriches the child hit with parent content without replacing the child identity or score.
+Parent expansion relies on write-side metadata but does not duplicate the writer's key contract. Parent/child indexing stores parent refs on child chunks, and `expandParents()` asks the indexed knowledge boundary to resolve either the stored parent key or a derived parent ref. The step enriches the child hit with parent content without replacing the child identity or score.
 
-Retrieval observability writes the canonical graph directly. Direct retriever calls open `retrieval.query` spans with `retrieval.hits` artifacts and `retrieval.returned` edges. Retrieval pipelines open a parent `retrieval.pipeline` span, fanout and each query/hit stage open `retrieval.stage` child spans, and stage outputs attach bounded `output` artifacts. Devtools, the TUI, subscribers, diagnostics-channel listeners, and OTel all read from the same graph records; payload capture is controlled centrally by `observability.recordInputs` / `observability.recordOutputs`.
+Retrieval observability writes the canonical graph directly. Direct retriever calls open `retrieval.query` spans with `retrieval.hits` artifacts and `retrieval.returned` edges. Retrieval recipes open a parent `retrieval.recipe` span, and each query/retrieve/hit step opens a `retrieval.step` child span with bounded recipe-step metadata. Devtools, the TUI, subscribers, diagnostics-channel listeners, and OTel all read from the same graph records; payload capture is controlled centrally by `observability.recordInputs` / `observability.recordOutputs`.
 
 Prompt composition uses a generic injectable `use` contract. Plain contexts still contribute system text, but richer primitives can inject context, tools, constraints, guardrails, and metadata in one resolution pass. `context.contribution` artifacts include the specific `injectedTools` names contributed by that context when tools are present, including contexts whose text is later dropped by a token budget. Direct tool producers such as custom injectables, retrievers/grounding, memory, and blackboards also emit tool-only `context.contribution` previews with their source kind, so backend read models can join request tools back to the primitive that supplied them without parsing tool names. Runtime prompt input validation is represented separately by redacted `prompt.input` previews, allowing local read models to compare observed input keys with effective prompt schemas without storing raw values. `context({ use })` nests the same composition model, so product teams can build reusable contexts that bundle retrieval, grounding, memory, and coordination state without forcing prompt authors to call `asContext()` or `asTools()` manually.
 
-Retrievers and retrieval pipelines are injectable. `use: [retriever]` or `use: [retrievalPipeline(...)]` makes retrieval context and/or tools available according to `inject: 'context' | 'tool' | 'both'`. Raw retrieval injection never enforces answer citations. Citation and provenance guarantees live in `grounding()` from `@use-crux/core/citations`, which wraps a retriever or pipeline, injects retrieved evidence, and contributes a citation constraint bound to the exact allowed hits for that generation.
+Retrievers and retrieval recipes are injectable. `use: [retriever]`, a recipe's `asRetriever()`, or `grounding()` makes retrieval context and/or tools available according to the configured surface. Raw retrieval injection never enforces answer citations. Citation and provenance guarantees live in `grounding()`, which wraps a retriever or recipe, injects retrieved evidence, and contributes a citation constraint bound to the exact allowed hits for that generation.
 
 Citation validation is exposed as pure APIs (`resolveCitations()`, `renderCitationContext()`) plus `citationConstraint()` for the generation retry loop. Structured citations are canonical. `resolveCitations()` owns the canonical `citation.check` span and bounded `citation.report` artifact, so citation validity, missing/ambiguous hits, quote failures, optional output-text anchors, and valid/invalid counts are inspectable without UI-specific citation parsing.
 
@@ -670,17 +670,17 @@ Return result to caller
 
 All global hooks live in the `CruxRuntime` object (`runtime/runtime.ts`). Use `setRuntime()` to install atomically, `getRuntime()` to read:
 
-| Hook                   | Scope          | Runtime field                       | Purpose                                               |
-| ---------------------- | -------------- | ----------------------------------- | ----------------------------------------------------- |
-| `PromptMiddleware`     | All prompts    | `runtime.middleware`                | Wrap every generate/stream call                       |
-| `ResolveHook`          | Agent adapter  | `runtime.resolveHook`               | Observe `.resolve()` calls without generation         |
-| `ExecutionHook`        | Agent adapter  | `runtime.executionHook`             | Observe model calls from agent frameworks             |
-| `StreamProgressHook`   | Streaming      | `runtime.streamProgressHook`        | Live streaming metrics (TTFT, chunks)                 |
-| `StreamStartHook`      | Streaming      | `runtime.streamStartHook`           | Eager hook before first chunk                         |
-| `graph-record subscribers` | All primitives | `runtime.observability subscribers`      | Observe memory, compaction, scoring, agent operations |
-| `onPrepare`            | Single prompt  | `prompt({ hooks: { onPrepare } })`  | After system assembly, before generation              |
-| `onGenerate`           | Single prompt  | `prompt({ hooks: { onGenerate } })` | After successful generation                           |
-| `onError`              | Single prompt  | `prompt({ hooks: { onError } })`    | After failed generation                               |
+| Hook                       | Scope          | Runtime field                       | Purpose                                               |
+| -------------------------- | -------------- | ----------------------------------- | ----------------------------------------------------- |
+| `PromptMiddleware`         | All prompts    | `runtime.middleware`                | Wrap every generate/stream call                       |
+| `ResolveHook`              | Agent adapter  | `runtime.resolveHook`               | Observe `.resolve()` calls without generation         |
+| `ExecutionHook`            | Agent adapter  | `runtime.executionHook`             | Observe model calls from agent frameworks             |
+| `StreamProgressHook`       | Streaming      | `runtime.streamProgressHook`        | Live streaming metrics (TTFT, chunks)                 |
+| `StreamStartHook`          | Streaming      | `runtime.streamStartHook`           | Eager hook before first chunk                         |
+| `graph-record subscribers` | All primitives | `runtime.observability subscribers` | Observe memory, compaction, scoring, agent operations |
+| `onPrepare`                | Single prompt  | `prompt({ hooks: { onPrepare } })`  | After system assembly, before generation              |
+| `onGenerate`               | Single prompt  | `prompt({ hooks: { onGenerate } })` | After successful generation                           |
+| `onError`                  | Single prompt  | `prompt({ hooks: { onError } })`    | After failed generation                               |
 
 ### Plugin System (`runtime/plugin.ts`)
 
@@ -1028,7 +1028,7 @@ interface graph-record subscribers {
 }
 ```
 
-` — zero cost when no hooks are installed. Plugins install hooks via the plugin system; `mergeRuntime()` automatically fan-outs multiple handlers for the same hook.
+`— zero cost when no hooks are installed. Plugins install hooks via the plugin system;`mergeRuntime()` automatically fan-outs multiple handlers for the same hook.
 
 The `evalId` field on `onJudgeResult` enables correlation: callers that run judges inside a larger evaluation can pass an id through `JudgeScoreOptions`, and the judge includes it in the hook event so devtools can link individual judge scores back to the run that triggered them. (Quality cells don't need it — judge calls made by `scorers.judge()` nest inside the cell's observed run.)
 
@@ -1258,7 +1258,7 @@ Shared typed scratchpad backed by `RecordStore`. Single store key: `blackboard:{
 
 1. Calls in-process subscribers (registered via `subscribe()`)
 2. Calls the `onUpdate` callback from config
-`
+   `
 
 ### Handoff
 
@@ -1549,7 +1549,7 @@ Prompt/context and safety primitives also write the graph contract directly. `pr
 
 Memory primitives write the graph contract from the shared block hook path. `recentMessages`, `workingState`, `episodes`, `facts`, `procedures`, proposal lifecycle operations, `blackboard()`, and custom blocks that use the standard context helpers emit `memory.read` / `memory.write` spans, `memory.snapshot` artifacts, recalled-result `memory.recall` artifacts, write-summary `memory.diff` artifacts, and semantic memory edges. Empty reads keep the `memory.read` span and omit `memory.recall` so clients do not render empty recalled-block cards. The raw namespace is never emitted; traces receive `namespaceHash`.
 
-Retrieval and data-loading primitives write the same graph contract. `retrieval.pipeline`, `retrieval.query`, `retrieval.stage`, `indexing.pipeline`, `ingest.parse`, and `corpus.sync` spans are emitted at the public API boundaries so standalone calls create implicit runs and calls during prompt/corpus work nest under the active span stack. Detailed payloads stay in canonical artifacts: `retrieval.hits`, `embedding.report`, `indexing.report`, `ingest.report`, `corpus.report`, `cache.report`, `routing.report`, `compaction.report`, `score.report`, `citation.report`, `composition.report`, `handoff.payload`, `delegate.report`, `memory.snapshot`, and `security.report`. Retrieval hits, memory snapshots/recalls/diffs, stream timelines, and raw error artifacts are output-direction payloads for capture policy, so disabling outputs prevents their preview text from reaching devtools, subscribers, transports, or OTel. Routing reports preserve router/cascade/fallback decisions for Run Detail cards; cascade reports include the full ordered ladder, skipped configured tiers, and per-tier evaluator note/confidence/budget when supplied. Production OTel export keeps metadata-only defaults unless the telemetry plugin explicitly opts into GenAI message content with `captureMessageContent`.
+Retrieval and data-loading primitives write the same graph contract. `retrieval.query`, `retrieval.recipe`, `retrieval.step`, `indexing.pipeline`, `ingest.parse`, and `corpus.sync` spans are emitted at the public API boundaries so standalone calls create implicit runs and calls during prompt/corpus work nest under the active span stack. Detailed payloads stay in canonical artifacts: `retrieval.hits`, `embedding.report`, `indexing.report`, `ingest.report`, `corpus.report`, `cache.report`, `routing.report`, `compaction.report`, `score.report`, `citation.report`, `composition.report`, `handoff.payload`, `delegate.report`, `memory.snapshot`, and `security.report`. Retrieval hits, memory snapshots/recalls/diffs, stream timelines, and raw error artifacts are output-direction payloads for capture policy, so disabling outputs prevents their preview text from reaching devtools, subscribers, transports, or OTel. Routing reports preserve router/cascade/fallback decisions for Run Detail cards; cascade reports include the full ordered ladder, skipped configured tiers, and per-tier evaluator note/confidence/budget when supplied. Production OTel export keeps metadata-only defaults unless the telemetry plugin explicitly opts into GenAI message content with `captureMessageContent`.
 
 Tool primitives write the graph from the shared adapter loop. This keeps user-defined tools, context-injected tools, skill tools, swarm transfer tools, and approved resume executions on one contract: `tool.request` for model intent, `tool.call` for execution, `tool.args` / `tool.result` artifacts for inspectable payloads, and `tool.approval` for gates. Devtools, subscribers, diagnostics-channel listeners, and `@use-crux/otel` all consume those canonical graph records directly.
 

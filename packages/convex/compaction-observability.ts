@@ -16,7 +16,6 @@ export async function observeConversationCompaction(
 ): Promise<CompactionResult> {
   const span = observe.openSpan({
     name: 'conversation compaction',
-    family: 'compaction',
     primitive: 'compaction.run',
     attributes: {
       reason: 'conversation-compaction',

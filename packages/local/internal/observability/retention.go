@@ -179,6 +179,7 @@ func (s *Service) retentionRunIDsByAge(ctx context.Context, cutoff time.Time, li
 		SELECT run_id
 		FROM runs
 		WHERE started_at IS NOT NULL AND started_at != '' AND started_at < ?
+			AND ifnull(status, '') != 'running'
 		ORDER BY started_at ASC, run_id ASC
 		LIMIT ?
 	`, cutoff.UTC().Format(time.RFC3339Nano), limit)
@@ -194,7 +195,7 @@ func (s *Service) retentionRunIDsByCount(ctx context.Context, maxRuns int, exclu
 		return nil, nil
 	}
 	var total int
-	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM runs`).Scan(&total); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM runs WHERE ifnull(status, '') != 'running'`).Scan(&total); err != nil {
 		return nil, fmt.Errorf("count observability runs for retention: %w", err)
 	}
 	overflow := total - len(excluded) - maxRuns
@@ -209,10 +210,12 @@ func (s *Service) retentionRunIDsByCount(ctx context.Context, maxRuns int, exclu
 		FROM runs`
 	args := make([]any, 0, len(excluded)+1)
 	if len(excluded) > 0 {
-		query += ` WHERE run_id NOT IN (` + strings.TrimRight(strings.Repeat("?,", len(excluded)), ",") + `)`
+		query += ` WHERE ifnull(status, '') != 'running' AND run_id NOT IN (` + strings.TrimRight(strings.Repeat("?,", len(excluded)), ",") + `)`
 		for _, id := range excluded {
 			args = append(args, id)
 		}
+	} else {
+		query += ` WHERE ifnull(status, '') != 'running'`
 	}
 	query += ` ORDER BY started_at ASC, run_id ASC LIMIT ?`
 	args = append(args, overflow)

@@ -30,6 +30,11 @@ interface SemconvMessage {
   readonly parts: readonly SemconvTextPart[]
 }
 
+interface CappedAttribute {
+  readonly value: string
+  readonly truncated?: boolean
+}
+
 /** Build opt-in GenAI message-content attributes for a generation artifact. */
 export function messageContentAttributesForArtifact(
   record: ArtifactRecord,
@@ -45,7 +50,9 @@ export function messageContentAttributesForArtifact(
   if (record.kind === 'messages') {
     const messages = messagesFromPreview(preview, 'user')
     if (messages.length > 0) {
-      attributes[GEN_AI_INPUT_MESSAGES] = capAttribute(JSON.stringify(messages))
+      const capped = capMessagesAttribute(messages)
+      attributes[GEN_AI_INPUT_MESSAGES] = capped.value
+      if (capped.truncated) attributes['crux.truncated'] = true
     }
     const systemInstructions = systemInstructionsFromPreview(preview)
     if (systemInstructions) {
@@ -56,7 +63,9 @@ export function messageContentAttributesForArtifact(
   if (record.kind === 'output') {
     const messages = messagesFromPreview(preview, 'assistant')
     if (messages.length > 0) {
-      attributes[GEN_AI_OUTPUT_MESSAGES] = capAttribute(JSON.stringify(messages))
+      const capped = capMessagesAttribute(messages)
+      attributes[GEN_AI_OUTPUT_MESSAGES] = capped.value
+      if (capped.truncated) attributes['crux.truncated'] = true
     }
   }
 
@@ -64,13 +73,21 @@ export function messageContentAttributesForArtifact(
 }
 
 function shouldCaptureMessageContent(options: TelemetryOptions): boolean {
-  if (typeof options.captureMessageContent === 'boolean') return options.captureMessageContent
-  return process.env.OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT === 'true'
+  if (typeof options.captureMessageContent === 'boolean')
+    return options.captureMessageContent
+  return (
+    runtimeEnv().OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT === 'true'
+  )
 }
 
-function messagesFromPreview(preview: object, fallbackRole: string): readonly SemconvMessage[] {
+function messagesFromPreview(
+  preview: object,
+  fallbackRole: string,
+): readonly SemconvMessage[] {
   const record = preview as Record<string, unknown>
-  const rawMessages = Array.isArray(record.messages) ? record.messages : undefined
+  const rawMessages = Array.isArray(record.messages)
+    ? record.messages
+    : undefined
   if (rawMessages) {
     return rawMessages.flatMap((item) => messageFromUnknown(item, fallbackRole))
   }
@@ -79,13 +96,19 @@ function messagesFromPreview(preview: object, fallbackRole: string): readonly Se
   return text ? [textMessage(fallbackRole, text)] : []
 }
 
-function messageFromUnknown(value: unknown, fallbackRole: string): readonly SemconvMessage[] {
+function messageFromUnknown(
+  value: unknown,
+  fallbackRole: string,
+): readonly SemconvMessage[] {
   if (typeof value === 'string') return [textMessage(fallbackRole, value)]
   if (!value || typeof value !== 'object') return []
   const record = value as Record<string, unknown>
   const content = textFromRecord(record)
   if (!content) return []
-  const role = typeof record.role === 'string' && record.role.length > 0 ? record.role : fallbackRole
+  const role =
+    typeof record.role === 'string' && record.role.length > 0
+      ? record.role
+      : fallbackRole
   return [textMessage(role, content)]
 }
 
@@ -99,13 +122,16 @@ function textFromRecord(record: Record<string, unknown>): string | undefined {
 
 function systemInstructionsFromPreview(preview: object): string | undefined {
   const record = preview as Record<string, unknown>
-  if (typeof record.system === 'string' && record.system.length > 0) return record.system
+  if (typeof record.system === 'string' && record.system.length > 0)
+    return record.system
   if (Array.isArray(record.systemBlocks)) {
     const text = record.systemBlocks.flatMap((block) => {
       if (typeof block === 'string') return [block]
       if (!block || typeof block !== 'object') return []
       const maybeText = (block as Record<string, unknown>).text
-      return typeof maybeText === 'string' && maybeText.length > 0 ? [maybeText] : []
+      return typeof maybeText === 'string' && maybeText.length > 0
+        ? [maybeText]
+        : []
     })
     return text.length > 0 ? text.join('\n') : undefined
   }
@@ -120,5 +146,52 @@ function textMessage(role: string, content: string): SemconvMessage {
 }
 
 function capAttribute(value: string): string {
-  return value.length > MAX_CONTENT_ATTRIBUTE_LENGTH ? value.slice(0, MAX_CONTENT_ATTRIBUTE_LENGTH) : value
+  return value.length > MAX_CONTENT_ATTRIBUTE_LENGTH
+    ? value.slice(0, MAX_CONTENT_ATTRIBUTE_LENGTH)
+    : value
+}
+
+function capMessagesAttribute(
+  messages: readonly SemconvMessage[],
+): CappedAttribute {
+  const serialized = JSON.stringify(messages)
+  if (serialized.length <= MAX_CONTENT_ATTRIBUTE_LENGTH)
+    return { value: serialized }
+
+  let capped = messages.map((message) => ({
+    ...message,
+    parts: message.parts.map((part) => ({ ...part })),
+  }))
+
+  for (;;) {
+    const next = JSON.stringify(capped)
+    if (next.length <= MAX_CONTENT_ATTRIBUTE_LENGTH)
+      return { value: next, truncated: true }
+    const lastMessage = capped[capped.length - 1]
+    const lastPart = lastMessage?.parts[lastMessage.parts.length - 1]
+    if (!lastMessage || !lastPart || lastPart.content.length === 0)
+      return { value: '[]', truncated: true }
+    const overflow = next.length - MAX_CONTENT_ATTRIBUTE_LENGTH
+    const keepLength = Math.max(0, lastPart.content.length - overflow - 1)
+    capped = [
+      ...capped.slice(0, -1),
+      {
+        ...lastMessage,
+        parts: [
+          ...lastMessage.parts.slice(0, -1),
+          {
+            ...lastPart,
+            content: lastPart.content.slice(0, keepLength),
+          },
+        ],
+      },
+    ]
+  }
+}
+
+function runtimeEnv(): Record<string, string | undefined> {
+  const candidate = (
+    globalThis as { process?: { env?: Record<string, string | undefined> } }
+  ).process
+  return candidate?.env ?? {}
 }

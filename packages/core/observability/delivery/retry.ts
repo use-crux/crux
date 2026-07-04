@@ -1,11 +1,7 @@
 import type { NormalizedObservabilityDeliveryOptions } from './options'
 
-type RetryTimer = ReturnType<typeof setTimeout> & {
-  unref?: () => void
-}
-
 export interface DeliveryRetryState {
-  retryTimer: RetryTimer | undefined
+  retryTimer: ReturnType<typeof setTimeout> | undefined
   retryAttempt: number
 }
 
@@ -26,8 +22,8 @@ export function scheduleDeliveryRetry(
   state.retryTimer = setTimeout(() => {
     state.retryTimer = undefined
     dispatch()
-  }, delayMs) as RetryTimer
-  state.retryTimer.unref?.()
+  }, delayMs)
+  unrefTimer(state.retryTimer)
 }
 
 export function clearDeliveryRetryTimer(state: DeliveryRetryState): void {
@@ -36,6 +32,14 @@ export function clearDeliveryRetryTimer(state: DeliveryRetryState): void {
   state.retryTimer = undefined
 }
 
-function retryDelayMs(attempt: number, options: NormalizedObservabilityDeliveryOptions): number {
+function retryDelayMs(
+  attempt: number,
+  options: NormalizedObservabilityDeliveryOptions,
+): number {
   return Math.min(options.retryDelayMs * 2 ** attempt, options.maxRetryDelayMs)
+}
+
+function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
+  const maybeUnref = (timer as { unref?: unknown }).unref
+  if (typeof maybeUnref === 'function') maybeUnref.call(timer)
 }

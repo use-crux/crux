@@ -51,7 +51,9 @@ export interface StreamSpanFinalizer {
  * abandonment and errors are terminal immediately because the provider metadata
  * can no longer make the stream complete successfully.
  */
-export function createStreamSpanFinalizer(options: StreamSpanFinalizerOptions): StreamSpanFinalizer {
+export function createStreamSpanFinalizer(
+  options: StreamSpanFinalizerOptions,
+): StreamSpanFinalizer {
   let streamReported = !options.expectsStream
   let completionReported = !options.expectsCompletion
   let completionMeta: Record<string, unknown> | undefined
@@ -67,12 +69,18 @@ export function createStreamSpanFinalizer(options: StreamSpanFinalizerOptions): 
   }
 
   const scheduleGraceTimer = (): void => {
-    if (!options.expectsCompletion || completionReported || graceTimer !== undefined || finalized) return
+    if (
+      !options.expectsCompletion ||
+      completionReported ||
+      graceTimer !== undefined ||
+      finalized
+    )
+      return
     graceTimer = setTimeout(() => {
       completionReported = true
       finalize('timeout', 'ok')
     }, completionGraceMs)
-    graceTimer.unref?.()
+    unrefTimer(graceTimer)
   }
 
   const commonAttributes = (reason?: string) => ({
@@ -139,4 +147,9 @@ export function createStreamSpanFinalizer(options: StreamSpanFinalizerOptions): 
       finalize('completion-error', 'error', error)
     },
   }
+}
+
+function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
+  const maybeUnref = (timer as { unref?: unknown }).unref
+  if (typeof maybeUnref === 'function') maybeUnref.call(timer)
 }

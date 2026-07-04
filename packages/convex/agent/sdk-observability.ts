@@ -1,7 +1,14 @@
 import { observe } from '@use-crux/core/observability'
-import { DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS, flushObservability } from '../observability'
+import {
+  DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS,
+  flushObservability,
+} from '../observability'
 import { emitConvexAgentMessagesArtifact } from './sdk-observability-artifacts'
-import { createStreamTimingTracker, emitUsageEvent, modelSpanAttributes } from './sdk-observability-values'
+import {
+  createStreamTimingTracker,
+  emitUsageEvent,
+  modelSpanAttributes,
+} from './sdk-observability-values'
 import {
   endRemainingAgentStepSpans,
   errorRemainingAgentStepSpans,
@@ -14,7 +21,8 @@ import {
 import { emitResultToolCallSpans } from './sdk-tool-observability'
 
 const CONVEX_AGENT_START_FLUSH_TIMEOUT_MS = 1000
-const CONVEX_AGENT_FINAL_FLUSH_TIMEOUT_MS = DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS
+const CONVEX_AGENT_FINAL_FLUSH_TIMEOUT_MS =
+  DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS
 
 type PrepareStepCallback = (options: unknown) => unknown | Promise<unknown>
 type StreamChunkCallback = (event: unknown) => unknown | PromiseLike<unknown>
@@ -28,19 +36,25 @@ export async function observeConvexAgentTextStream<T>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Patched args preserve Convex Agent's overloaded implementation.
   fn: (patchedArgs: any[]) => Promise<T>,
 ): Promise<T> {
-  const threadOpts = args[1] as { threadId?: string; userId?: string | null } | undefined
-  const streamArgs = (args[2] && typeof args[2] === 'object' ? args[2] : {}) as Record<string, unknown>
+  const threadOpts = args[1] as
+    | { threadId?: string; userId?: string | null }
+    | undefined
+  const streamArgs = (
+    args[2] && typeof args[2] === 'object' ? args[2] : {}
+  ) as Record<string, unknown>
   const userPrepareStep = streamArgs.prepareStep
   const userOnStepFinish = streamArgs.onStepFinish
   const userOnChunk = streamArgs.onChunk
   const userOnFinish = streamArgs.onFinish
-  const options = args[3] && typeof args[3] === 'object' ? (args[3] as Record<string, unknown>) : undefined
+  const options =
+    args[3] && typeof args[3] === 'object'
+      ? (args[3] as Record<string, unknown>)
+      : undefined
   const userContextHandler = options?.contextHandler
   const activeStepSpans: ActiveConvexAgentStepSpan[] = []
   const streamTiming = createStreamTimingTracker()
   const span = observe.openSpan({
     name: 'stream response',
-    family: 'generation',
     primitive: 'generation.stream',
     attributes: {
       agentName,
@@ -51,21 +65,27 @@ export async function observeConvexAgentTextStream<T>(
       ...(threadOpts?.userId ? { userId: threadOpts.userId } : {}),
     },
   })
-  const streamContext = await span.withContext(async () => observe.captureContext())
+  const streamContext = await span.withContext(async () =>
+    observe.captureContext(),
+  )
   let ended = false
   const end = async (attributes?: Record<string, unknown>) => {
     if (ended) return
     ended = true
     endRemainingAgentStepSpans(activeStepSpans, attributes)
-    span.end(attributes)
-    await flushObservability({ timeoutMs: CONVEX_AGENT_FINAL_FLUSH_TIMEOUT_MS })
+    span.end(attributes ? { attributes } : undefined)
+    await flushObservability({
+      timeoutMs: CONVEX_AGENT_FINAL_FLUSH_TIMEOUT_MS,
+    })
   }
   const fail = async (error: unknown) => {
     if (ended) return
     ended = true
     errorRemainingAgentStepSpans(activeStepSpans, error)
     span.error(error)
-    await flushObservability({ timeoutMs: CONVEX_AGENT_FINAL_FLUSH_TIMEOUT_MS })
+    await flushObservability({
+      timeoutMs: CONVEX_AGENT_FINAL_FLUSH_TIMEOUT_MS,
+    })
   }
 
   const patchedArgs = [...args]
@@ -83,11 +103,18 @@ export async function observeConvexAgentTextStream<T>(
   patchedArgs[2] = streamArgs
   streamArgs.prepareStep = async (options: unknown) => {
     return await observe.withContext(streamContext, async () => {
-      const activeStep = openConvexAgentStepSpan(agentName, options, 'stream', model)
+      const activeStep = openConvexAgentStepSpan(
+        agentName,
+        options,
+        'stream',
+        model,
+      )
       activeStepSpans.push(activeStep)
       try {
         return await activeStep.span.withContext(async () => {
-          await flushObservability({ timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS })
+          await flushObservability({
+            timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS,
+          })
           if (isPrepareStepCallback(userPrepareStep)) {
             return await userPrepareStep(options)
           }
@@ -108,7 +135,10 @@ export async function observeConvexAgentTextStream<T>(
           step,
           'stream',
           model,
-          async () => (typeof userOnStepFinish === 'function' ? await userOnStepFinish(step) : undefined),
+          async () =>
+            typeof userOnStepFinish === 'function'
+              ? await userOnStepFinish(step)
+              : undefined,
           takeActiveAgentStepSpan(activeStepSpans, step),
         ),
       )
@@ -121,7 +151,10 @@ export async function observeConvexAgentTextStream<T>(
     try {
       streamTiming.recordChunk(event)
       if (isStreamChunkCallback(userOnChunk)) {
-        return await observe.withContext(streamContext, async () => await userOnChunk(event))
+        return await observe.withContext(
+          streamContext,
+          async () => await userOnChunk(event),
+        )
       }
       return undefined
     } catch (error) {
@@ -131,14 +164,17 @@ export async function observeConvexAgentTextStream<T>(
   }
   streamArgs.onFinish = async (result: unknown) => {
     try {
-      const callbackResult = await observe.withContext(streamContext, async () => {
-        await emitResultToolCallSpans(result)
-        emitUsageEvent(result, streamTiming.finish(result))
-        if (typeof userOnFinish === 'function') {
-          return await userOnFinish(result)
-        }
-        return undefined
-      })
+      const callbackResult = await observe.withContext(
+        streamContext,
+        async () => {
+          await emitResultToolCallSpans(result)
+          emitUsageEvent(result, streamTiming.finish(result))
+          if (typeof userOnFinish === 'function') {
+            return await userOnFinish(result)
+          }
+          return undefined
+        },
+      )
       await end({ finish: 'stream' })
       return callbackResult
     } catch (error) {
@@ -150,7 +186,9 @@ export async function observeConvexAgentTextStream<T>(
   try {
     await span.withContext(() => {
       emitConvexAgentMessagesArtifact(args, 'call-args')
-      return flushObservability({ timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS })
+      return flushObservability({
+        timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS,
+      })
     })
     streamTiming.markStarted()
     const result = await span.withContext(() => fn(patchedArgs))
@@ -178,12 +216,16 @@ export async function observeConvexAgentGeneration<T>(
   model: unknown,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const threadOpts = args[1] as { threadId?: string; userId?: string | null } | undefined
+  const threadOpts = args[1] as
+    | { threadId?: string; userId?: string | null }
+    | undefined
   try {
     return await observe.span(
       {
-        name: primitive === 'generation.stream' ? 'stream response' : 'generate response',
-        family: 'generation',
+        name:
+          primitive === 'generation.stream'
+            ? 'stream response'
+            : 'generate response',
         primitive,
         attributes: {
           agentName,
@@ -195,7 +237,9 @@ export async function observeConvexAgentGeneration<T>(
         },
       },
       async () => {
-        await flushObservability({ timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS })
+        await flushObservability({
+          timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS,
+        })
         emitConvexAgentMessagesArtifact(args, 'call-args')
         const result = await fn()
         await emitResultToolCallSpans(result)
@@ -204,7 +248,9 @@ export async function observeConvexAgentGeneration<T>(
       },
     )
   } finally {
-    await flushObservability({ timeoutMs: CONVEX_AGENT_FINAL_FLUSH_TIMEOUT_MS })
+    await flushObservability({
+      timeoutMs: CONVEX_AGENT_FINAL_FLUSH_TIMEOUT_MS,
+    })
   }
 }
 

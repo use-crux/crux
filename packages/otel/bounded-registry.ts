@@ -21,7 +21,11 @@ export interface BoundedRegistryOptions<TKey, TValue> {
   /** Maximum entry age before lazy eviction. */
   readonly maxAgeMs: number
   /** Called for every entry evicted by capacity or age. */
-  readonly onEvict?: (key: TKey, value: TValue, reason: RegistryEvictionReason) => void
+  readonly onEvict?: (
+    key: TKey,
+    value: TValue,
+    reason: RegistryEvictionReason,
+  ) => void
 }
 
 export interface BoundedRegistry<TKey, TValue> {
@@ -48,7 +52,9 @@ export function createBoundedRegistry<TKey, TValue>(
 
   return {
     set(key, value) {
-      sweepExpired(entries, options)
+      if (entries.size >= options.maxEntries) {
+        sweepExpired(entries, options)
+      }
       entries.delete(key)
       entries.set(key, { value, insertedAtMs: Date.now() })
       evictOverCapacity(entries, options)
@@ -88,8 +94,6 @@ function sweepExpired<TKey, TValue>(
     if (isExpired(entry, options.maxAgeMs)) {
       entries.delete(key)
       options.onEvict?.(key, entry.value, 'expired')
-    } else {
-      break
     }
   }
 }
@@ -107,6 +111,9 @@ function evictOverCapacity<TKey, TValue>(
   }
 }
 
-function isExpired<TValue>(entry: RegistryEntry<TValue>, maxAgeMs: number): boolean {
+function isExpired<TValue>(
+  entry: RegistryEntry<TValue>,
+  maxAgeMs: number,
+): boolean {
   return Date.now() - entry.insertedAtMs > maxAgeMs
 }

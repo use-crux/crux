@@ -200,7 +200,8 @@ crux inspect editor.seo --json
 Finds the most recent successful trace for the given prompt ID and displays: system parts breakdown (source and token count per part), dropped contexts (with priority), and total prompt tokens.
 
 <Callout type="info">
-  Inspect data is captured when the devtools middleware is enabled. Run the prompt at least once before inspecting.
+  Inspect data is captured when the devtools middleware is enabled. Run the
+  prompt at least once before inspecting.
 </Callout>
 
 ## `crux lint`
@@ -294,6 +295,11 @@ mode) are served from the output cache and re-scored only — so a scorer or
 `expect` edit reruns instantly without re-executing tasks. `evaluate.only` /
 case `only` narrow the watch set. The same engine is embedded in `crux dev`,
 streaming results to devtools.
+
+Cached or replayed cells may link their `eval.case_of` observability edge to a
+historical case run rather than a run created during the current evaluation.
+Consumers should treat the edge as provenance and not require same-run
+membership.
 
 ### `crux quality progress`
 

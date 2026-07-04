@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -100,9 +101,36 @@ func TestComparisonFixtureToleratesExternalRunEdgeRefs(t *testing.T) {
 	}
 }
 
+func TestSharedTaxonomyFixtureMatchesGoTaxonomy(t *testing.T) {
+	var taxonomy taxonomyFixture
+	raw, err := os.ReadFile("../../../core/observability/fixtures/taxonomy.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &taxonomy); err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(taxonomy.PrimitiveFamilies, primitiveFamilyByName) {
+		t.Fatalf("primitive family taxonomy drift\nfixture=%v\ngo=%v", taxonomy.PrimitiveFamilies, primitiveFamilyByName)
+	}
+	if got := stringSet(taxonomy.ArtifactKinds); !reflect.DeepEqual(got, canonicalArtifactKinds) {
+		t.Fatalf("artifact taxonomy drift\nfixture=%v\ngo=%v", taxonomy.ArtifactKinds, got)
+	}
+	if got := stringSet(taxonomy.EdgeTypes); !reflect.DeepEqual(got, canonicalEdgeTypes) {
+		t.Fatalf("edge taxonomy drift\nfixture=%v\ngo=%v", taxonomy.EdgeTypes, got)
+	}
+}
+
 type conformanceFixture struct {
 	Name  string
 	Batch Batch
+}
+
+type taxonomyFixture struct {
+	PrimitiveFamilies map[string]string `json:"primitiveFamilies"`
+	ArtifactKinds     []string          `json:"artifactKinds"`
+	EdgeTypes         []string          `json:"edgeTypes"`
 }
 
 func loadConformanceFixtures(t *testing.T) []conformanceFixture {
@@ -113,6 +141,9 @@ func loadConformanceFixtures(t *testing.T) []conformanceFixture {
 	}
 	fixtures := make([]conformanceFixture, 0, len(files))
 	for _, file := range files {
+		if filepath.Base(file) == "taxonomy.json" {
+			continue
+		}
 		raw, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
@@ -127,4 +158,12 @@ func loadConformanceFixtures(t *testing.T) []conformanceFixture {
 		})
 	}
 	return fixtures
+}
+
+func stringSet(values []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		set[value] = struct{}{}
+	}
+	return set
 }

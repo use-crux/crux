@@ -37,8 +37,14 @@ func (s *Service) SpanEvents(
 		args = append(args, opts.Name)
 	}
 	if opts.After != "" {
-		query.WriteString(` AND timestamp > ?`)
-		args = append(args, opts.After)
+		afterTimestamp, afterEventID := parseSpanEventAfterCursor(opts.After)
+		if afterEventID != "" {
+			query.WriteString(` AND (timestamp > ? OR (timestamp = ? AND event_id > ?))`)
+			args = append(args, afterTimestamp, afterTimestamp, afterEventID)
+		} else {
+			query.WriteString(` AND timestamp > ?`)
+			args = append(args, afterTimestamp)
+		}
 	}
 	query.WriteString(` ORDER BY timestamp, event_id LIMIT ?`)
 	args = append(args, limit)
@@ -63,6 +69,14 @@ func (s *Service) SpanEvents(
 		return nil, fmt.Errorf("iterate observability span events for run %q span %q: %w", runID, spanID, err)
 	}
 	return events, nil
+}
+
+func parseSpanEventAfterCursor(value string) (string, string) {
+	timestamp, eventID, ok := strings.Cut(value, "|")
+	if !ok {
+		return value, ""
+	}
+	return timestamp, eventID
 }
 
 func (s *Service) listEvents(ctx context.Context, runID string) ([]SpanEventSummary, error) {

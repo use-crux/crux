@@ -1978,7 +1978,7 @@ func TestServicePublishesCoalescedTokenChunkEvents(t *testing.T) {
 	batch := mustBatch(t,
 		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_tokens","traceId":"trace_tokens","name":"tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
 		`{"schemaVersion":1,"recordId":"rec_generate","type":"span:start","runId":"run_tokens","traceId":"trace_tokens","spanId":"span_generate","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"rec_token_1","type":"span:event","runId":"run_tokens","traceId":"trace_tokens","spanId":"span_generate","eventId":"event_token_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":5,"text":"Hello","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}}`,
+		`{"schemaVersion":1,"recordId":"rec_token_1","type":"span:event","runId":"run_tokens","traceId":"trace_tokens","spanId":"span_generate","eventId":"event_token_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":3,"text":"Hi👍","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}}`,
 		`{"schemaVersion":1,"recordId":"rec_token_2","type":"span:event","runId":"run_tokens","traceId":"trace_tokens","spanId":"span_generate","eventId":"event_token_2","name":"token.chunk","timestamp":"2026-05-16T18:00:00.200Z","attributes":{"chunkIndex":1,"charCount":1,"text":"!","firstDeltaAt":"2026-05-16T18:00:00.190Z","lastDeltaAt":"2026-05-16T18:00:00.200Z"}}`,
 	)
 
@@ -2005,7 +2005,7 @@ func TestServicePublishesCoalescedTokenChunkEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	attrs, ok := payload["attributes"].(map[string]any)
-	if !ok || attrs["text"] != "Hello!" || attrs["charCount"] != float64(6) {
+	if !ok || attrs["text"] != "Hi👍!" || attrs["charCount"] != float64(4) {
 		t.Fatalf("token payload = %#v", payload)
 	}
 	select {

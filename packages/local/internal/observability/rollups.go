@@ -116,6 +116,9 @@ func updateRunRollups(ctx context.Context, statements *ingestStatements, delta r
 	if delta.runID == "" {
 		return nil
 	}
+	if err := reserveRunRollup(ctx, statements, delta.runID); err != nil {
+		return err
+	}
 	_, err := statements.exec(ctx, `
 		UPDATE runs
 		SET record_count = record_count + ?,
@@ -139,6 +142,17 @@ func updateRunRollups(ctx context.Context, statements *ingestStatements, delta r
 		delta.lastActivityAt, delta.lastActivityAt, delta.lastActivityAt,
 		delta.recordCount, delta.recordCount, delta.runID)
 	return err
+}
+
+func reserveRunRollup(ctx context.Context, statements *ingestStatements, runID string) error {
+	if _, ok := statements.reservedRunRollups[runID]; ok {
+		return nil
+	}
+	if _, err := statements.exec(ctx, `INSERT INTO runs (run_id) VALUES (?) ON CONFLICT(run_id) DO NOTHING`, runID); err != nil {
+		return err
+	}
+	statements.reservedRunRollups[runID] = struct{}{}
+	return nil
 }
 
 func applyStoredUsageRollups(run *RunSummary, metrics map[string]float64) {

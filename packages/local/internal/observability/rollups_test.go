@@ -123,6 +123,29 @@ func TestServiceMaintainsRunRollupsDuringIngest(t *testing.T) {
 	}
 }
 
+func TestServiceRollupsReserveRunRowsForOutOfOrderRecords(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+
+	if err := service.Ingest(ctx, mustBatch(t,
+		`{"schemaVersion":1,"recordId":"rec_orphan_span","seq":1,"type":"span","runId":"run_orphan_rollup","traceId":"trace_orphan_rollup","spanId":"span_orphan_rollup","family":"generation","primitive":"generation.call","name":"generate","startedAt":"2026-05-16T18:00:00.100Z","endedAt":"2026-05-16T18:00:00.900Z","durationMs":800,"status":"ok","metrics":{"inputTokens":4,"outputTokens":5,"costUsd":0.01}}`,
+	)); err != nil {
+		t.Fatal(err)
+	}
+
+	var recordCount, spanCount, inputTokens, outputTokens int
+	if err := service.db.QueryRow(`
+		SELECT record_count, span_count, total_input_tokens, total_output_tokens
+		FROM runs
+		WHERE run_id = ?
+	`, "run_orphan_rollup").Scan(&recordCount, &spanCount, &inputTokens, &outputTokens); err != nil {
+		t.Fatal(err)
+	}
+	if recordCount != 1 || spanCount != 1 || inputTokens != 4 || outputTokens != 5 {
+		t.Fatalf("reserved rollups = records:%d spans:%d input:%d output:%d", recordCount, spanCount, inputTokens, outputTokens)
+	}
+}
+
 func assertSQLiteColumn(t *testing.T, db *sql.DB, table string, column string) {
 	t.Helper()
 	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)

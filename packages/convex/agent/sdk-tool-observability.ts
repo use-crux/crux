@@ -9,7 +9,8 @@ const MAX_OBSERVED_TOOL_CALL_IDS = 10_000
 
 /** Remember that a real tool invocation already created the canonical span. */
 export function markObservedToolCall(toolCallId: string): void {
-  if (observedConvexToolCallIds.size > MAX_OBSERVED_TOOL_CALL_IDS) observedConvexToolCallIds.clear()
+  if (observedConvexToolCallIds.size > MAX_OBSERVED_TOOL_CALL_IDS)
+    observedConvexToolCallIds.clear()
   observedConvexToolCallIds.add(toolCallId)
 }
 
@@ -22,7 +23,6 @@ export async function observeConvexToolExecution<T>(
 ): Promise<T> {
   const span = observe.openSpan({
     name: toolName ?? toolCallId,
-    family: 'tool',
     primitive: 'tool.call',
     attributes: {
       ...(toolName ? { toolName } : {}),
@@ -51,7 +51,9 @@ export async function observeConvexToolExecution<T>(
   }
 }
 
-export async function emitUnexecutedToolCallSpans(step: unknown): Promise<void> {
+export async function emitUnexecutedToolCallSpans(
+  step: unknown,
+): Promise<void> {
   const toolCalls = collectToolCalls(step)
   for (const toolCall of toolCalls) {
     await emitUnexecutedToolCallSpan(toolCall)
@@ -69,7 +71,10 @@ export function emitStreamStepEvent(step: unknown): void {
   if (!step || typeof step !== 'object') return undefined
   const record = step as Record<string, unknown>
   const stopConditionTool = collectToolCalls(step)
-    .map((toolCall) => stringValue(toolCall.toolName) ?? stringValue(toolCall.name))
+    .map(
+      (toolCall) =>
+        stringValue(toolCall.toolName) ?? stringValue(toolCall.name),
+    )
     .find((toolName) => isStopConditionTool(toolName))
   const finishReason = stringValue(record.finishReason)
   if (!finishReason && !stopConditionTool) return
@@ -82,7 +87,9 @@ export function emitStreamStepEvent(step: unknown): void {
   })
 }
 
-function collectMaterializedResultToolCalls(result: unknown): Record<string, unknown>[] {
+function collectMaterializedResultToolCalls(
+  result: unknown,
+): Record<string, unknown>[] {
   if (!result || typeof result !== 'object') return []
   const toolCalls = collectToolCalls(result)
 
@@ -109,9 +116,13 @@ function collectToolCalls(value: unknown): Record<string, unknown>[] {
   return collected
 }
 
-async function emitUnexecutedToolCallSpan(toolCall: Record<string, unknown>): Promise<void> {
-  const toolCallId = stringValue(toolCall.toolCallId) ?? stringValue(toolCall.id)
-  const toolName = stringValue(toolCall.toolName) ?? stringValue(toolCall.name) ?? toolCallId
+async function emitUnexecutedToolCallSpan(
+  toolCall: Record<string, unknown>,
+): Promise<void> {
+  const toolCallId =
+    stringValue(toolCall.toolCallId) ?? stringValue(toolCall.id)
+  const toolName =
+    stringValue(toolCall.toolName) ?? stringValue(toolCall.name) ?? toolCallId
   if (!toolCallId) return
   emitToolRequestArtifact(toolName, toolCallId, toolCallArgs(toolCall))
   if (observedConvexToolCallIds.has(toolCallId)) return
@@ -120,7 +131,6 @@ async function emitUnexecutedToolCallSpan(toolCall: Record<string, unknown>): Pr
   await observe.span(
     {
       name: toolName ?? toolCallId,
-      family: 'tool',
       primitive: 'tool.call',
       attributes: {
         ...(toolName ? { toolName } : {}),
@@ -136,7 +146,10 @@ async function emitUnexecutedToolCallSpan(toolCall: Record<string, unknown>): Pr
   )
 }
 
-function appendToolCalls(target: Record<string, unknown>[], value: unknown): void {
+function appendToolCalls(
+  target: Record<string, unknown>[],
+  value: unknown,
+): void {
   if (!Array.isArray(value)) return
   for (const toolCall of value) {
     if (!isRecord(toolCall)) continue
@@ -144,7 +157,10 @@ function appendToolCalls(target: Record<string, unknown>[], value: unknown): voi
   }
 }
 
-function appendToolCallsFromContent(target: Record<string, unknown>[], value: unknown): void {
+function appendToolCallsFromContent(
+  target: Record<string, unknown>[],
+  value: unknown,
+): void {
   if (!Array.isArray(value)) return
   for (const part of value) {
     if (!isRecord(part)) continue
@@ -160,7 +176,10 @@ function appendToolCallsFromContent(target: Record<string, unknown>[], value: un
   }
 }
 
-function appendToolCallsFromSteps(target: Record<string, unknown>[], value: unknown): void {
+function appendToolCallsFromSteps(
+  target: Record<string, unknown>[],
+  value: unknown,
+): void {
   if (Array.isArray(value)) {
     for (const step of value) target.push(...collectToolCalls(step))
     return
@@ -175,7 +194,8 @@ function isStopConditionTool(toolName: string | undefined): boolean {
 }
 
 function markObservedToolRequest(toolCallId: string): boolean {
-  if (observedConvexToolRequestIds.size > MAX_OBSERVED_TOOL_CALL_IDS) observedConvexToolRequestIds.clear()
+  if (observedConvexToolRequestIds.size > MAX_OBSERVED_TOOL_CALL_IDS)
+    observedConvexToolRequestIds.clear()
   if (observedConvexToolRequestIds.has(toolCallId)) return false
   observedConvexToolRequestIds.add(toolCallId)
   return true
@@ -188,7 +208,11 @@ function toolCallArgs(toolCall: Record<string, unknown>): unknown {
   return undefined
 }
 
-function emitToolRequestArtifact(toolName: string | undefined, toolCallId: string, args: unknown): void {
+function emitToolRequestArtifact(
+  toolName: string | undefined,
+  toolCallId: string,
+  args: unknown,
+): void {
   if (!markObservedToolRequest(toolCallId)) return
   const spanId = observe.captureContext()?.currentSpanId
   const artifactId = observe.artifact({
@@ -219,7 +243,11 @@ function emitToolRequestArtifact(toolName: string | undefined, toolCallId: strin
   }
 }
 
-function emitToolArgsArtifact(toolName: string | undefined, toolCallId: string, args: unknown): void {
+function emitToolArgsArtifact(
+  toolName: string | undefined,
+  toolCallId: string,
+  args: unknown,
+): void {
   const artifactId = observe.artifact({
     kind: 'tool.args',
     contentType: 'application/json',
@@ -234,7 +262,11 @@ function emitToolArgsArtifact(toolName: string | undefined, toolCallId: string, 
   linkActiveSpanToArtifact('consumed', artifactId)
 }
 
-function emitToolResultArtifact(toolName: string | undefined, toolCallId: string, result: unknown): void {
+function emitToolResultArtifact(
+  toolName: string | undefined,
+  toolCallId: string,
+  result: unknown,
+): void {
   const artifactId = observe.artifact({
     kind: 'tool.result',
     contentType: 'application/json',

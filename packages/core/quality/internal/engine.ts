@@ -33,25 +33,52 @@ import type {
   ScoreAggregate,
   VariantAggregate,
 } from '../experiment'
-import type { QualitySourceFrame, QualitySourceFrameResolver } from '../source-frame'
+import type {
+  QualitySourceFrame,
+  QualitySourceFrameResolver,
+} from '../source-frame'
 import type { GateResult, Gates } from '../gates'
 import type { EvaluationManifest } from '../manifest'
 import { resolveCaseId } from '../manifest'
 import { DATASET_INTERNAL, type DatasetInternal } from '../dataset'
-import { TARGET_INTERNAL, type AnyTarget, type Capability, type GenerateFn, type TargetInternal } from '../target'
+import {
+  TARGET_INTERNAL,
+  type AnyTarget,
+  type Capability,
+  type GenerateFn,
+  type TargetInternal,
+} from '../target'
 import type { StandardSchemaV1 } from '../standard-schema'
 import type { EvaluationDefinition, RawCase, RawDataset } from './definition'
 import { detectTask, type DetectedTask } from './definition'
 import type { EmbedFn } from '../scorers'
 import type { NormalizedCall, ReplayMode } from '../replay'
 import { invokeScorer, type ScorerRunContext } from './scorer-runtime'
-import { CassetteMissError, cassettePath, openCassetteSession, type CassetteSession } from './cassette'
-import { ensureCassetteDispatcher, withCassetteSession } from './cassette-context'
+import {
+  CassetteMissError,
+  cassettePath,
+  openCassetteSession,
+  type CassetteSession,
+} from './cassette'
+import {
+  ensureCassetteDispatcher,
+  withCassetteSession,
+} from './cassette-context'
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction, truncateOutput } from './redact'
-import { failureFromOutcome, isFailureOutcome, redactAssertionOutcomes } from './assertion-outcomes'
-import { resolveAssertionSourceFrames, resolveSourceFrameFromSourceRef } from './source-frames'
-import { runAssertionCallbacks, type AssertionCallback } from './assertion-callbacks'
+import {
+  failureFromOutcome,
+  isFailureOutcome,
+  redactAssertionOutcomes,
+} from './assertion-outcomes'
+import {
+  resolveAssertionSourceFrames,
+  resolveSourceFrameFromSourceRef,
+} from './source-frames'
+import {
+  runAssertionCallbacks,
+  type AssertionCallback,
+} from './assertion-callbacks'
 import { scoreMapFromScores } from './score-map'
 import { persistExperiment } from './persist'
 import { compareVariants, comparePromoted } from './compare'
@@ -83,7 +110,12 @@ import {
   ensureProgrammaticObservability,
   flushProgrammaticObservability,
 } from './programmatic-runtime'
-import { emptyCellSignals, extractCellSignals, installSignalCapture, type CellSignals } from './signals'
+import {
+  emptyCellSignals,
+  extractCellSignals,
+  installSignalCapture,
+  type CellSignals,
+} from './signals'
 import {
   emitComparisonReportEdges,
   emitEvalCaseOfEdge,
@@ -109,7 +141,10 @@ export class QualityDefinitionError extends Error {
   /** Stable diagnostic code for tooling surfaces that render definition failures. */
   readonly code?: ProjectModelDiagnosticCode
 
-  constructor(message: string, options: { code?: ProjectModelDiagnosticCode } = {}) {
+  constructor(
+    message: string,
+    options: { code?: ProjectModelDiagnosticCode } = {},
+  ) {
     super(message)
     this.name = 'QualityDefinitionError'
     this.code = options.code
@@ -153,7 +188,12 @@ export interface EngineOptions {
    * resolution order: CLI overrides > evaluation declaration > these > the
    * engine's built-ins (trials 1, concurrency 5, timeout 60s).
    */
-  defaults?: { trials?: number; concurrency?: number; timeoutMs?: number; replay?: ReplayMode }
+  defaults?: {
+    trials?: number
+    concurrency?: number
+    timeoutMs?: number
+    replay?: ReplayMode
+  }
   /**
    * Output-cache root (typically `<quality dir>/cache`). When set, every
    * successful task execution is cached; `RunOverrides.reuseOutputs` serves
@@ -182,7 +222,12 @@ export interface EngineOptions {
    * every cell, including skipped ones.
    */
   events?: {
-    onCellStart?: (cell: { caseId: string; caseName?: string; variantName: string; trial: number }) => void
+    onCellStart?: (cell: {
+      caseId: string
+      caseName?: string
+      variantName: string
+      trial: number
+    }) => void
     onCellDone?: (cell: ExperimentCell<unknown, unknown>) => void
   }
 }
@@ -201,11 +246,19 @@ function resolveReplay(
   overrides: RunOverrides<string> | undefined,
   options: EngineOptions,
   evaluationId: string,
-): { mode: ReplayMode; name?: string; match?: (call: NormalizedCall) => string } {
+): {
+  mode: ReplayMode
+  name?: string
+  match?: (call: NormalizedCall) => string
+} {
   const ref = definition.replay?.cassette
   const cassetteRef = typeof ref === 'object' ? ref : undefined
   const mode: ReplayMode =
-    overrides?.replayMode ?? cassetteRef?.mode ?? definition.replay?.mode ?? options.defaults?.replay ?? 'live'
+    overrides?.replayMode ??
+    cassetteRef?.mode ??
+    definition.replay?.mode ??
+    options.defaults?.replay ??
+    'live'
   if (mode === 'live') return { mode }
   const declaredName = typeof ref === 'string' ? ref : cassetteRef?.name
   const name = declaredName ?? (evaluationId !== '' ? evaluationId : undefined)
@@ -215,7 +268,11 @@ function resolveReplay(
         "`replay: { mode, cassette: '<name>' }`.",
     )
   }
-  return { mode, name, ...(cassetteRef?.match !== undefined ? { match: cassetteRef.match } : {}) }
+  return {
+    mode,
+    name,
+    ...(cassetteRef?.match !== undefined ? { match: cassetteRef.match } : {}),
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -227,7 +284,11 @@ interface ResolvedCase {
   raw: RawCase
 }
 
-async function validateRow(schema: StandardSchemaV1, value: unknown, where: string): Promise<unknown> {
+async function validateRow(
+  schema: StandardSchemaV1,
+  value: unknown,
+  where: string,
+): Promise<unknown> {
   const result = await schema['~standard'].validate(value)
   if (result.issues !== undefined) {
     throw new QualityDefinitionError(
@@ -251,12 +312,21 @@ function parseCsv(text: string): Record<string, string>[] {
   })
 }
 
-async function loadDataset(dataset: RawDataset, rootDir: string): Promise<RawCase[]> {
-  const internal = (dataset as { [DATASET_INTERNAL]?: DatasetInternal })[DATASET_INTERNAL]
+async function loadDataset(
+  dataset: RawDataset,
+  rootDir: string,
+): Promise<RawCase[]> {
+  const internal = (dataset as { [DATASET_INTERNAL]?: DatasetInternal })[
+    DATASET_INTERNAL
+  ]
   if (internal === undefined) {
-    throw new QualityDefinitionError(`dataset '${dataset.path}': missing internal schemas (not built by dataset()).`)
+    throw new QualityDefinitionError(
+      `dataset '${dataset.path}': missing internal schemas (not built by dataset()).`,
+    )
   }
-  const path = isAbsolute(dataset.path) ? dataset.path : join(rootDir, dataset.path)
+  const path = isAbsolute(dataset.path)
+    ? dataset.path
+    : join(rootDir, dataset.path)
   let text: string
   try {
     text = await readFile(path, 'utf8')
@@ -277,7 +347,9 @@ async function loadDataset(dataset: RawDataset, rootDir: string): Promise<RawCas
   } else {
     const parsed = JSON.parse(text) as unknown
     if (!Array.isArray(parsed)) {
-      throw new QualityDefinitionError(`dataset '${dataset.path}': JSON datasets must be an array of rows.`)
+      throw new QualityDefinitionError(
+        `dataset '${dataset.path}': JSON datasets must be an array of rows.`,
+      )
     }
     rows = parsed
   }
@@ -285,7 +357,9 @@ async function loadDataset(dataset: RawDataset, rootDir: string): Promise<RawCas
   const cases: RawCase[] = []
   for (const [index, row] of rows.entries()) {
     if (row === null || typeof row !== 'object') {
-      throw new QualityDefinitionError(`dataset '${dataset.path}': row ${index} is not an object.`)
+      throw new QualityDefinitionError(
+        `dataset '${dataset.path}': row ${index} is not an object.`,
+      )
     }
     const record = row as Record<string, unknown>
     if (typeof record.expect === 'function') {
@@ -294,11 +368,19 @@ async function loadDataset(dataset: RawDataset, rootDir: string): Promise<RawCas
       )
     }
     const inputSource = record.input !== undefined ? record.input : record
-    const input = await validateRow(internal.input, inputSource, `dataset '${dataset.path}' row ${index}`)
+    const input = await validateRow(
+      internal.input,
+      inputSource,
+      `dataset '${dataset.path}' row ${index}`,
+    )
     const expectedSource = record.expected
     const expected =
       internal.expected !== undefined && expectedSource !== undefined
-        ? await validateRow(internal.expected, expectedSource, `dataset '${dataset.path}' row ${index} (expected)`)
+        ? await validateRow(
+            internal.expected,
+            expectedSource,
+            `dataset '${dataset.path}' row ${index} (expected)`,
+          )
         : expectedSource
     cases.push({
       ...(typeof record.name === 'string' ? { name: record.name } : {}),
@@ -306,18 +388,28 @@ async function loadDataset(dataset: RawDataset, rootDir: string): Promise<RawCas
       ...(expected !== undefined ? { expected } : {}),
       ...(typeof record.trials === 'number' ? { trials: record.trials } : {}),
       ...(Array.isArray(record.tags) ? { tags: record.tags as string[] } : {}),
-      ...(record.skip !== undefined ? { skip: record.skip as boolean | string } : {}),
+      ...(record.skip !== undefined
+        ? { skip: record.skip as boolean | string }
+        : {}),
       ...(record.only !== undefined ? { only: record.only as boolean } : {}),
     })
   }
   return cases
 }
 
-function caseMatchesFilter(resolved: ResolvedCase, filters: readonly string[]): boolean {
+function caseMatchesFilter(
+  resolved: ResolvedCase,
+  filters: readonly string[],
+): boolean {
   return filters.some((filter) => {
     if (filter.includes('*')) {
-      const pattern = new RegExp(`^${filter.split('*').map(escapeRegExp).join('.*')}$`)
-      return pattern.test(resolved.caseId) || (resolved.raw.name !== undefined && pattern.test(resolved.raw.name))
+      const pattern = new RegExp(
+        `^${filter.split('*').map(escapeRegExp).join('.*')}$`,
+      )
+      return (
+        pattern.test(resolved.caseId) ||
+        (resolved.raw.name !== undefined && pattern.test(resolved.raw.name))
+      )
     }
     return resolved.caseId === filter || resolved.raw.name === filter
   })
@@ -331,23 +423,36 @@ function escapeRegExp(text: string): string {
 // Task lifting
 // ─────────────────────────────────────────────────────────────────
 
-type TaskRunner = (input: unknown, params: Record<string, unknown>) => Promise<unknown>
+type TaskRunner = (
+  input: unknown,
+  params: Record<string, unknown>,
+) => Promise<unknown>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object'
 }
 
 /** Unwrap an adapter generate result to the task output (engine contract). */
-function normalizeGenerateResult(result: unknown, structured: boolean): unknown {
+function normalizeGenerateResult(
+  result: unknown,
+  structured: boolean,
+): unknown {
   if (isRecord(result)) {
-    if (structured && 'object' in result && result.object !== undefined) return result.object
-    if (!structured && 'text' in result && typeof result.text === 'string') return result.text
+    if (structured && 'object' in result && result.object !== undefined)
+      return result.object
+    if (!structured && 'text' in result && typeof result.text === 'string')
+      return result.text
   }
   return result
 }
 
-function requireGenerate(params: Record<string, unknown>, setup: EngineSetup | undefined, kind: string): GenerateFn {
-  const generate = (params.generate as GenerateFn | undefined) ?? setup?.generate
+function requireGenerate(
+  params: Record<string, unknown>,
+  setup: EngineSetup | undefined,
+  kind: string,
+): GenerateFn {
+  const generate =
+    (params.generate as GenerateFn | undefined) ?? setup?.generate
   if (typeof generate !== 'function') {
     throw new QualityDefinitionError(
       `${kind} tasks need an explicit adapter generate fn: pass \`generate\` in the eval through target defaults, params, or variants.`,
@@ -357,17 +462,30 @@ function requireGenerate(params: Record<string, unknown>, setup: EngineSetup | u
   return generate
 }
 
-function resolveModel(params: Record<string, unknown>, setup: EngineSetup | undefined): unknown {
+function resolveModel(
+  params: Record<string, unknown>,
+  setup: EngineSetup | undefined,
+): unknown {
   const ref = params.model ?? setup?.model
-  if (typeof ref === 'string' && setup?.models !== undefined && ref in setup.models) return setup.models[ref]
+  if (
+    typeof ref === 'string' &&
+    setup?.models !== undefined &&
+    ref in setup.models
+  )
+    return setup.models[ref]
   return ref
 }
 
-function mockTools(tools: Record<string, unknown> | undefined, mocks: Record<string, unknown> | undefined) {
+function mockTools(
+  tools: Record<string, unknown> | undefined,
+  mocks: Record<string, unknown> | undefined,
+) {
   if (tools === undefined && mocks === undefined) return undefined
   const merged: Record<string, unknown> = { ...(tools ?? {}) }
   for (const [name, mock] of Object.entries(mocks ?? {})) {
-    const original = isRecord(merged[name]) ? (merged[name] as Record<string, unknown>) : {}
+    const original = isRecord(merged[name])
+      ? (merged[name] as Record<string, unknown>)
+      : {}
     merged[name] = {
       ...original,
       execute: typeof mock === 'function' ? mock : () => mock,
@@ -376,10 +494,14 @@ function mockTools(tools: Record<string, unknown> | undefined, mocks: Record<str
   return merged
 }
 
-function createTaskRunner(task: unknown, detected: DetectedTask, setup: EngineSetup | undefined): TaskRunner {
-  const internal = (task as { [TARGET_INTERNAL]?: TargetInternal })[TARGET_INTERNAL as never] as
-    | TargetInternal
-    | undefined
+function createTaskRunner(
+  task: unknown,
+  detected: DetectedTask,
+  setup: EngineSetup | undefined,
+): TaskRunner {
+  const internal = (task as { [TARGET_INTERNAL]?: TargetInternal })[
+    TARGET_INTERNAL as never
+  ] as TargetInternal | undefined
   const primitive = internal?.primitive ?? task
 
   switch (detected.kind) {
@@ -394,14 +516,22 @@ function createTaskRunner(task: unknown, detected: DetectedTask, setup: EngineSe
     case 'prompt': {
       return async (input, params) => {
         const generate = requireGenerate(params, setup, 'prompt')
-        const activePrompt = (params.prompt as AnyPrompt | undefined) ?? (primitive as AnyPrompt)
-        if (params.prompt !== undefined && (params.prompt as AnyPrompt)._tag !== 'Prompt') {
-          throw new QualityDefinitionError('params.prompt must be a Crux prompt.')
+        const activePrompt =
+          (params.prompt as AnyPrompt | undefined) ?? (primitive as AnyPrompt)
+        if (
+          params.prompt !== undefined &&
+          (params.prompt as AnyPrompt)._tag !== 'Prompt'
+        ) {
+          throw new QualityDefinitionError(
+            'params.prompt must be a Crux prompt.',
+          )
         }
         const structured = activePrompt.outputSchema !== undefined
         const opts = {
           input,
-          ...(resolveModel(params, setup) !== undefined ? { model: resolveModel(params, setup) } : {}),
+          ...(resolveModel(params, setup) !== undefined
+            ? { model: resolveModel(params, setup) }
+            : {}),
           ...(isRecord(params.settings) ? params.settings : {}),
         }
         const result = await generate(activePrompt as never, opts as never)
@@ -422,7 +552,8 @@ function createTaskRunner(task: unknown, detected: DetectedTask, setup: EngineSe
           input,
           ...(model !== undefined ? { model } : {}),
           ...(tools !== undefined ? { tools } : {}),
-          maxSteps: typeof params.maxToolSteps === 'number' ? params.maxToolSteps : 15,
+          maxSteps:
+            typeof params.maxToolSteps === 'number' ? params.maxToolSteps : 15,
           ...(isRecord(params.settings) ? params.settings : {}),
         }
         const result = await generate(agentTask.prompt as never, opts as never)
@@ -434,7 +565,9 @@ function createTaskRunner(task: unknown, detected: DetectedTask, setup: EngineSe
         const handle = primitive as FlowHandle<unknown, unknown>
         const result = await handle.run(input)
         if (result.status !== 'completed') {
-          throw new Error(`flow '${handle.name}' did not complete: status '${result.status}'.`)
+          throw new Error(
+            `flow '${handle.name}' did not complete: status '${result.status}'.`,
+          )
         }
         return result.output
       }
@@ -500,7 +633,11 @@ function mergeParams(
   const merged: Record<string, unknown> = { ...base }
   for (const [key, value] of Object.entries(override)) {
     const existing = merged[key]
-    if (ENTRY_MERGED_PARAM_KEYS.has(key) && isRecord(value) && isRecord(existing)) {
+    if (
+      ENTRY_MERGED_PARAM_KEYS.has(key) &&
+      isRecord(value) &&
+      isRecord(existing)
+    ) {
       merged[key] = { ...existing, ...value }
     } else {
       merged[key] = value
@@ -510,7 +647,12 @@ function mergeParams(
 }
 
 function isJsonSerializable(value: unknown): boolean {
-  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
     return true
   }
   if (Array.isArray(value)) return value.every(isJsonSerializable)
@@ -524,7 +666,9 @@ function isJsonSerializable(value: unknown): boolean {
   return false
 }
 
-function serializableOverrides(overrides: Readonly<Record<string, unknown>>): Record<string, unknown> | undefined {
+function serializableOverrides(
+  overrides: Readonly<Record<string, unknown>>,
+): Record<string, unknown> | undefined {
   const projection: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(overrides)) {
     if (isJsonSerializable(value)) projection[key] = value
@@ -541,7 +685,14 @@ function resolveVariantContexts(input: {
   baseTaskFingerprint: string
   setup: EngineSetup | undefined
 }): VariantContext[] {
-  const { definition, detected, baseRunner, baseParams, baseTaskFingerprint, setup } = input
+  const {
+    definition,
+    detected,
+    baseRunner,
+    baseParams,
+    baseTaskFingerprint,
+    setup,
+  } = input
   const declared = Object.entries(definition.variants)
   if (declared.length === 0) {
     return [
@@ -557,7 +708,9 @@ function resolveVariantContexts(input: {
     ]
   }
   return declared.map(([name, overrides]) => {
-    const { task: taskOverride, ...paramOverrides } = overrides as { task?: unknown } & Record<string, unknown>
+    const { task: taskOverride, ...paramOverrides } = overrides as {
+      task?: unknown
+    } & Record<string, unknown>
     let runner = baseRunner
     let taskFingerprint = baseTaskFingerprint
     if (taskOverride !== undefined) {
@@ -592,7 +745,9 @@ function meanOf(values: readonly number[]): number {
 function semOf(values: readonly number[]): number {
   if (values.length < 2) return 0
   const mean = meanOf(values)
-  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1)
+  const variance =
+    values.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
+    (values.length - 1)
   return Math.sqrt(variance / values.length)
 }
 
@@ -618,10 +773,15 @@ function configFingerprintOf(definition: EvaluationDefinition): string {
         only: rawCase.only,
       })),
       datasets: definition.datasets.map((dataset) => dataset.path),
-      scorers: definition.scorers.map((scorer) => scorer.scorerName ?? '(dynamic)'),
+      scorers: definition.scorers.map(
+        (scorer) => scorer.scorerName ?? '(dynamic)',
+      ),
       gates: definition.gates,
       variants: Object.fromEntries(
-        Object.entries(definition.variants).map(([name, overrides]) => [name, Object.keys(overrides)]),
+        Object.entries(definition.variants).map(([name, overrides]) => [
+          name,
+          Object.keys(overrides),
+        ]),
       ),
       paramKeys: Object.keys(definition.params ?? {}),
       // Definition-level (declared-or-1, not config-effective) so an
@@ -633,7 +793,10 @@ function configFingerprintOf(definition: EvaluationDefinition): string {
 }
 
 function taskFingerprintOf(task: unknown, detected: DetectedTask): string {
-  const identity: Record<string, unknown> = { kind: detected.kind, ref: detected.ref }
+  const identity: Record<string, unknown> = {
+    kind: detected.kind,
+    ref: detected.ref,
+  }
   if (detected.kind === 'fn' && typeof task === 'function') {
     identity.source = sha256Hex(task.toString())
   }
@@ -642,7 +805,9 @@ function taskFingerprintOf(task: unknown, detected: DetectedTask): string {
 
 function nearestPackageName(rootDir: string): string | undefined {
   try {
-    const parsed = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8')) as { name?: unknown }
+    const parsed = JSON.parse(
+      readFileSync(join(rootDir, 'package.json'), 'utf8'),
+    ) as { name?: unknown }
     return typeof parsed.name === 'string' ? parsed.name : undefined
   } catch {
     return undefined
@@ -680,13 +845,19 @@ class CellTimeoutError extends Error {
   }
 }
 
-async function withTimeout<T>(fn: () => Promise<T>, timeoutMs: number): Promise<T> {
+async function withTimeout<T>(
+  fn: () => Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
       fn(),
       new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new CellTimeoutError(timeoutMs)), timeoutMs)
+        timer = setTimeout(
+          () => reject(new CellTimeoutError(timeoutMs)),
+          timeoutMs,
+        )
       }),
     ])
   } finally {
@@ -753,8 +924,16 @@ async function executeCell(input: {
 
   // Cache hit (spec 03 §5): skip task execution entirely, reuse the stored
   // output + signals, re-run expects and scorers fresh below.
-  if (input.cache?.reuse === true && cacheKey !== undefined && !Array.isArray(rawCase.turns)) {
-    const cached = await readCellCache(input.cache.dir, input.evaluationId, cacheKey)
+  if (
+    input.cache?.reuse === true &&
+    cacheKey !== undefined &&
+    !Array.isArray(rawCase.turns)
+  ) {
+    const cached = await readCellCache(
+      input.cache.dir,
+      input.evaluationId,
+      cacheKey,
+    )
     if (cached !== undefined) {
       return assembleCell({
         input,
@@ -775,7 +954,11 @@ async function executeCell(input: {
     traceId: input.evaluationTraceId,
     name: `quality:${input.evaluationId || 'adhoc'}#${plan.resolved.caseId}`,
     rootPrimitive: 'eval.case',
-    attributes: { caseId: plan.resolved.caseId, trial: plan.trial, variant: plan.variant.name },
+    attributes: {
+      caseId: plan.resolved.caseId,
+      trial: plan.trial,
+      variant: plan.variant.name,
+    },
   })
 
   let output: unknown
@@ -792,7 +975,10 @@ async function executeCell(input: {
   } else {
     try {
       output = await withTimeout(
-        () => Promise.resolve(run.withContext(() => runner(rawCase.input, effectiveParams))),
+        () =>
+          Promise.resolve(
+            run.withContext(() => runner(rawCase.input, effectiveParams)),
+          ),
         timeoutMs,
       )
       run.end()
@@ -801,12 +987,21 @@ async function executeCell(input: {
         run.error(error)
         throw error
       }
-      const sourceRef = error instanceof Error ? captureSourceRefFromStack(error.stack) : undefined
+      const sourceRef =
+        error instanceof Error
+          ? captureSourceRefFromStack(error.stack)
+          : undefined
       cellError = {
         message: error instanceof Error ? error.message : String(error),
         phase:
-          error instanceof CellTimeoutError ? 'timeout' : error instanceof CassetteMissError ? 'replay' : 'execute',
-        ...(error instanceof CassetteMissError ? { missingCassetteKey: error.key } : {}),
+          error instanceof CellTimeoutError
+            ? 'timeout'
+            : error instanceof CassetteMissError
+              ? 'replay'
+              : 'execute',
+        ...(error instanceof CassetteMissError
+          ? { missingCassetteKey: error.key }
+          : {}),
         ...(sourceRef !== undefined ? { sourceRef } : {}),
       }
       run.error(error)
@@ -822,7 +1017,12 @@ async function executeCell(input: {
 
   // Keep the cache warm (best-effort): redacted but NEVER truncated output —
   // truncation is a record-display concern and would corrupt re-scoring.
-  if (input.cache !== undefined && cacheKey !== undefined && cellError === undefined && !Array.isArray(rawCase.turns)) {
+  if (
+    input.cache !== undefined &&
+    cacheKey !== undefined &&
+    cellError === undefined &&
+    !Array.isArray(rawCase.turns)
+  ) {
     await writeCellCache(input.cache.dir, input.evaluationId, cacheKey, {
       output: applyRedaction(output, input.redactPaths),
       signals: serializeCellSignals(signals),
@@ -872,7 +1072,17 @@ async function assembleCell(args: {
   traceId?: string
   cached: boolean
 }): Promise<ExperimentCell<unknown, unknown>> {
-  const { input, rawCase, plan, capabilities, output, signals, durationMs, traceIds, cached } = args
+  const {
+    input,
+    rawCase,
+    plan,
+    capabilities,
+    output,
+    signals,
+    durationMs,
+    traceIds,
+    cached,
+  } = args
   const { definition } = input
   const { effectiveParams } = plan.variant
   let cellError = args.cellError
@@ -893,7 +1103,11 @@ async function assembleCell(args: {
     variant: { name: plan.variant.name, params: effectiveParams },
     trial: plan.trial,
     score(name, score, metadata) {
-      adHocScores.push({ name, score, ...(metadata !== undefined ? { metadata } : {}) })
+      adHocScores.push({
+        name,
+        score,
+        ...(metadata !== undefined ? { metadata } : {}),
+      })
     },
     step: createStepAccessor(signals) as never,
     trace: { id: args.traceId ?? traceIds[0] ?? '' },
@@ -906,19 +1120,25 @@ async function assembleCell(args: {
 
   let notEvaluated = 0
   if (cellError === undefined) {
-    const callbacks: AssertionCallback<CaseContext<unknown, unknown, unknown, Capability>>[] = []
+    const callbacks: AssertionCallback<
+      CaseContext<unknown, unknown, unknown, Capability>
+    >[] = []
     if (definition.expect !== undefined) {
       callbacks.push({
         phase: 'expect',
         level: 'evaluation',
-        fn: definition.expect as AssertionCallback<CaseContext<unknown, unknown, unknown, Capability>>['fn'],
+        fn: definition.expect as AssertionCallback<
+          CaseContext<unknown, unknown, unknown, Capability>
+        >['fn'],
       })
     }
     if (typeof rawCase.expect === 'function') {
       callbacks.push({
         phase: 'expect',
         level: 'case',
-        fn: rawCase.expect as AssertionCallback<CaseContext<unknown, unknown, unknown, Capability>>['fn'],
+        fn: rawCase.expect as AssertionCallback<
+          CaseContext<unknown, unknown, unknown, Capability>
+        >['fn'],
       })
     }
 
@@ -962,20 +1182,29 @@ async function assembleCell(args: {
           name: result.name,
           score: result.score,
           ...(result.label !== undefined ? { label: result.label } : {}),
-          ...(scorer.costClass !== undefined ? { costClass: scorer.costClass } : {}),
-          ...(result.metadata !== undefined ? { metadata: result.metadata } : {}),
+          ...(scorer.costClass !== undefined
+            ? { costClass: scorer.costClass }
+            : {}),
+          ...(result.metadata !== undefined
+            ? { metadata: result.metadata }
+            : {}),
         })
       } catch (error) {
         if (error instanceof MissingQualityModelBindingError) {
           throw new QualityDefinitionError(error.message, { code: error.code })
         }
-        const sourceRef = error instanceof Error ? captureSourceRefFromStack(error.stack) : undefined
+        const sourceRef =
+          error instanceof Error
+            ? captureSourceRefFromStack(error.stack)
+            : undefined
         cellError = {
           message: `scorer '${scorer.scorerName ?? scorer.name ?? '(dynamic)'}' threw: ${
             error instanceof Error ? error.message : String(error)
           }`,
           phase: error instanceof CassetteMissError ? 'replay' : 'score',
-          ...(error instanceof CassetteMissError ? { missingCassetteKey: error.key } : {}),
+          ...(error instanceof CassetteMissError
+            ? { missingCassetteKey: error.key }
+            : {}),
           ...(sourceRef !== undefined ? { sourceRef } : {}),
         }
         break
@@ -986,7 +1215,13 @@ async function assembleCell(args: {
 
   if (cellError === undefined) {
     const scoreMap = scoreMapFromScores(scores)
-    const assertContext: AssertContext<unknown, unknown, unknown, string, Capability> = {
+    const assertContext: AssertContext<
+      unknown,
+      unknown,
+      unknown,
+      string,
+      Capability
+    > = {
       input: rawCase.input,
       output,
       expected: rawCase.expected,
@@ -1009,19 +1244,25 @@ async function assembleCell(args: {
         ...(signals.usage !== undefined ? { usage: signals.usage } : {}),
       },
     }
-    const callbacks: AssertionCallback<AssertContext<unknown, unknown, unknown, string, Capability>>[] = []
+    const callbacks: AssertionCallback<
+      AssertContext<unknown, unknown, unknown, string, Capability>
+    >[] = []
     if (definition.assert !== undefined) {
       callbacks.push({
         phase: 'assert',
         level: 'evaluation',
-        fn: definition.assert as AssertionCallback<AssertContext<unknown, unknown, unknown, string, Capability>>['fn'],
+        fn: definition.assert as AssertionCallback<
+          AssertContext<unknown, unknown, unknown, string, Capability>
+        >['fn'],
       })
     }
     if (typeof rawCase.assert === 'function') {
       callbacks.push({
         phase: 'assert',
         level: 'case',
-        fn: rawCase.assert as AssertionCallback<AssertContext<unknown, unknown, unknown, string, Capability>>['fn'],
+        fn: rawCase.assert as AssertionCallback<
+          AssertContext<unknown, unknown, unknown, string, Capability>
+        >['fn'],
       })
     }
 
@@ -1051,7 +1292,10 @@ async function assembleCell(args: {
     resolver: input.sourceFrameResolver,
     frameRadius: input.sourceFrameRadius,
   })
-  if (cellError?.sourceRef !== undefined && input.sourceFrameResolver !== undefined) {
+  if (
+    cellError?.sourceRef !== undefined &&
+    input.sourceFrameResolver !== undefined
+  ) {
     cellError = {
       ...cellError,
       sourceFrame: await resolveSourceFrameFromSourceRef({
@@ -1064,9 +1308,14 @@ async function assembleCell(args: {
   }
   const failures = outcomes.filter(isFailureOutcome).map(failureFromOutcome)
   const passed = cellError === undefined && failures.length === 0
-  scores.push({ name: 'pass', score: cellError !== undefined ? 0 : passed ? 1 : 0 })
+  scores.push({
+    name: 'pass',
+    score: cellError !== undefined ? 0 : passed ? 1 : 0,
+  })
 
-  const redactedOutput = truncateOutput(applyRedaction(output, input.redactPaths))
+  const redactedOutput = truncateOutput(
+    applyRedaction(output, input.redactPaths),
+  )
 
   const metadata: Record<string, unknown> = {
     ...(redactedOutput.truncated ? { truncated: true } : {}),
@@ -1081,7 +1330,9 @@ async function assembleCell(args: {
     status: cellError !== undefined ? 'errored' : passed ? 'passed' : 'failed',
     input: applyRedaction(rawCase.input, input.redactPaths),
     ...(cellError === undefined ? { output: redactedOutput.value } : {}),
-    ...(rawCase.expected !== undefined ? { expected: applyRedaction(rawCase.expected, input.redactPaths) } : {}),
+    ...(rawCase.expected !== undefined
+      ? { expected: applyRedaction(rawCase.expected, input.redactPaths) }
+      : {}),
     scores,
     assertions: {
       ran: recorder.ran,
@@ -1099,7 +1350,9 @@ async function assembleCell(args: {
   }
 }
 
-function usageOf(signals: CellSignals): { inputTokens: number; outputTokens: number } | undefined {
+function usageOf(
+  signals: CellSignals,
+): { inputTokens: number; outputTokens: number } | undefined {
   if (signals.usage === undefined) return undefined
   return {
     inputTokens: signals.usage.inputTokens ?? 0,
@@ -1120,7 +1373,14 @@ function evaluateVariantGates(input: {
   comparison: Comparison<string> | undefined
   comparisonBlocking: boolean
 }): GateResult[] {
-  const { gates, cells, aggregate, variantName, comparison, comparisonBlocking } = input
+  const {
+    gates,
+    cells,
+    aggregate,
+    variantName,
+    comparison,
+    comparisonBlocking,
+  } = input
   const results: GateResult[] = []
   const named = (result: Omit<GateResult, 'variantName'>): GateResult => ({
     ...result,
@@ -1164,14 +1424,17 @@ function evaluateVariantGates(input: {
       // Requires a comparison reference (declared baseline variant or a
       // promoted baseline). The delta gate evaluates the PAIRED mean delta.
       const delta = comparison?.deltas.find(
-        (entry) => entry.scoreName === name && (variantName === undefined || entry.variantName === variantName),
+        (entry) =>
+          entry.scoreName === name &&
+          (variantName === undefined || entry.variantName === variantName),
       )
       results.push({
         ...named({
           gate: `scores.${name}.minDeltaVsBaseline`,
           threshold: gate.minDeltaVsBaseline,
           actual: delta?.meanDelta ?? 0,
-          passed: delta !== undefined && delta.meanDelta >= gate.minDeltaVsBaseline,
+          passed:
+            delta !== undefined && delta.meanDelta >= gate.minDeltaVsBaseline,
         }),
         // A drifted (informational) comparison cannot block — the case
         // populations are no longer matched (spec 02 §3).
@@ -1266,8 +1529,15 @@ function evaluateGates(input: {
   const erroredCells = cells.some((cell) => cell.status === 'errored')
 
   if (gates === undefined) {
-    const noFailures = !erroredCells && cells.every((cell) => cell.assertions.failures.length === 0)
-    results.push({ gate: 'default.assertions', threshold: true, actual: noFailures, passed: noFailures })
+    const noFailures =
+      !erroredCells &&
+      cells.every((cell) => cell.assertions.failures.length === 0)
+    results.push({
+      gate: 'default.assertions',
+      threshold: true,
+      actual: noFailures,
+      passed: noFailures,
+    })
   } else {
     for (const name of input.gateVariantNames) {
       const aggregate = input.aggregates[name]
@@ -1287,7 +1557,9 @@ function evaluateGates(input: {
 
   // False-safe: errored cells fail the run regardless of declared gates.
   // Informational results (drifted baseline comparison) never block.
-  const gatesPassed = results.every((result) => result.passed || result.informational === true) && !erroredCells
+  const gatesPassed =
+    results.every((result) => result.passed || result.informational === true) &&
+    !erroredCells
   return { passed: gatesPassed, informational: filteredRun, results }
 }
 
@@ -1303,7 +1575,9 @@ function evaluateGates(input: {
  * @internal
  */
 /** Aggregate one variant's cells (skipped cells included in the counts). */
-function aggregateVariant(cells: readonly ExperimentCell<unknown, unknown>[]): VariantAggregate<string> {
+function aggregateVariant(
+  cells: readonly ExperimentCell<unknown, unknown>[],
+): VariantAggregate<string> {
   const executed = cells.filter((cell) => cell.status !== 'skipped')
   const scoreValues = new Map<string, number[]>()
   for (const cell of executed) {
@@ -1316,7 +1590,11 @@ function aggregateVariant(cells: readonly ExperimentCell<unknown, unknown>[]): V
   }
   const scores: Record<string, ScoreAggregate> = {}
   for (const [name, values] of scoreValues) {
-    scores[name] = { mean: meanOf(values), sem: semOf(values), n: values.length }
+    scores[name] = {
+      mean: meanOf(values),
+      sem: semOf(values),
+      n: values.length,
+    }
   }
 
   const byCase = new Map<string, ExperimentCell<unknown, unknown>[]>()
@@ -1329,15 +1607,20 @@ function aggregateVariant(cells: readonly ExperimentCell<unknown, unknown>[]): V
   const consistency = multiTrial
     ? {
         passAtK:
-          [...byCase.values()].filter((group) => group.some((cell) => cell.status === 'passed')).length / byCase.size,
+          [...byCase.values()].filter((group) =>
+            group.some((cell) => cell.status === 'passed'),
+          ).length / byCase.size,
         passAllTrials:
-          [...byCase.values()].filter((group) => group.every((cell) => cell.status === 'passed')).length / byCase.size,
+          [...byCase.values()].filter((group) =>
+            group.every((cell) => cell.status === 'passed'),
+          ).length / byCase.size,
       }
     : undefined
 
   const durations = executed.map((cell) => cell.durationMs)
   const totalCost = executed.reduce<number | undefined>(
-    (sum, cell) => (cell.costUsd !== undefined ? (sum ?? 0) + cell.costUsd : sum),
+    (sum, cell) =>
+      cell.costUsd !== undefined ? (sum ?? 0) + cell.costUsd : sum,
     undefined,
   )
 
@@ -1347,7 +1630,11 @@ function aggregateVariant(cells: readonly ExperimentCell<unknown, unknown>[]): V
     failed: executed.filter((cell) => cell.status === 'failed').length,
     errored: executed.filter((cell) => cell.status === 'errored').length,
     skipped: cells.length - executed.length,
-    passRate: executed.length === 0 ? 0 : executed.filter((cell) => cell.status === 'passed').length / executed.length,
+    passRate:
+      executed.length === 0
+        ? 0
+        : executed.filter((cell) => cell.status === 'passed').length /
+          executed.length,
     scores,
     ...(consistency !== undefined ? { consistency } : {}),
     latency: { meanMs: meanOf(durations), p95Ms: p95Of(durations) },
@@ -1367,7 +1654,9 @@ export async function runEvaluation(
       ...options,
       rootDir,
       ...(options.sourceFrameResolver === undefined
-        ? { sourceFrameResolver: createProgrammaticSourceFrameResolver(rootDir) }
+        ? {
+            sourceFrameResolver: createProgrammaticSourceFrameResolver(rootDir),
+          }
         : {}),
     })
   } finally {
@@ -1383,7 +1672,8 @@ async function runEvaluationInner(
   const rootDir = options.rootDir ?? process.cwd()
   const qualityDir = options.dir ?? join(rootDir, '.crux/quality')
   const evaluationId = options.evaluationId ?? definition.id ?? ''
-  const qualityId = options.qualityId ?? nearestPackageName(rootDir) ?? 'quality'
+  const qualityId =
+    options.qualityId ?? nearestPackageName(rootDir) ?? 'quality'
   const redactPaths = options.redact ?? []
   const startedAtMs = Date.now()
   const configFingerprint = configFingerprintOf(definition)
@@ -1405,9 +1695,9 @@ async function runEvaluationInner(
   const baseRunner = createTaskRunner(definition.task, detected, options.setup)
   const taskFingerprint = taskFingerprintOf(definition.task, detected)
 
-  const targetInternal = (definition.task as { [TARGET_INTERNAL]?: TargetInternal })[TARGET_INTERNAL as never] as
-    | TargetInternal
-    | undefined
+  const targetInternal = (
+    definition.task as { [TARGET_INTERNAL]?: TargetInternal }
+  )[TARGET_INTERNAL as never] as TargetInternal | undefined
   const baseParams = mergeParams(
     (targetInternal?.defaults as Record<string, unknown> | undefined) ?? {},
     definition.params ?? {},
@@ -1436,11 +1726,15 @@ async function runEvaluationInner(
       }
     }
     const filterSet = new Set(variantFilter)
-    variantContexts = allVariantContexts.filter((context) => filterSet.has(context.name))
+    variantContexts = allVariantContexts.filter((context) =>
+      filterSet.has(context.name),
+    )
     // A variant subset only stays blocking when the baseline variant still
     // runs — paired comparison needs the reference population (spec 03 §4).
     const subset = variantContexts.length < allVariantContexts.length
-    variantSubsetDemotes = subset && (definition.baseline === undefined || !filterSet.has(definition.baseline))
+    variantSubsetDemotes =
+      subset &&
+      (definition.baseline === undefined || !filterSet.has(definition.baseline))
   }
   const selectedVariantNames = variantContexts.map((context) => context.name)
 
@@ -1461,7 +1755,9 @@ async function runEvaluationInner(
     baselineRecord = await readBaselineRecord(qualityDir, evaluationId)
     if (baselineRecord === undefined) {
       const promotedElsewhere = (await listBaselineRecords(qualityDir)).find(
-        (record) => record.configFingerprint === configFingerprint && record.evaluationId !== evaluationId,
+        (record) =>
+          record.configFingerprint === configFingerprint &&
+          record.evaluationId !== evaluationId,
       )
       if (promotedElsewhere !== undefined) {
         throw new QualityDefinitionError(
@@ -1477,27 +1773,42 @@ async function runEvaluationInner(
   for (const dataset of definition.datasets) {
     datasetCases.push(...(await loadDataset(dataset, rootDir)))
   }
-  const allCases: ResolvedCase[] = [...definition.cases, ...datasetCases].map((raw) => ({
-    caseId: resolveCaseId(raw),
-    raw,
-  }))
+  const allCases: ResolvedCase[] = [...definition.cases, ...datasetCases].map(
+    (raw) => ({
+      caseId: resolveCaseId(raw),
+      raw,
+    }),
+  )
 
   const onlyCases = allCases.filter((resolved) => resolved.raw.only === true)
   const caseFilters = overrides?.cases
   const hasFilter = (caseFilters?.length ?? 0) > 0 || onlyCases.length > 0
   const selected = allCases.filter((resolved) => {
-    if (caseFilters !== undefined && caseFilters.length > 0 && !caseMatchesFilter(resolved, caseFilters)) return false
+    if (
+      caseFilters !== undefined &&
+      caseFilters.length > 0 &&
+      !caseMatchesFilter(resolved, caseFilters)
+    )
+      return false
     if (onlyCases.length > 0 && resolved.raw.only !== true) return false
     return true
   })
   const filteredRun =
-    (hasFilter && selected.length < allCases.length) || options.forceFilteredRun === true || variantSubsetDemotes
+    (hasFilter && selected.length < allCases.length) ||
+    options.forceFilteredRun === true ||
+    variantSubsetDemotes
 
   const evaluationSkipped = definition.flags.skip
-  const trialsDefault = overrides?.trials ?? definition.trials ?? options.defaults?.trials ?? 1
+  const trialsDefault =
+    overrides?.trials ?? definition.trials ?? options.defaults?.trials ?? 1
   let trialsCollapsed = false
-  const timeoutMs = definition.timeoutMs ?? options.defaults?.timeoutMs ?? 60_000
-  const concurrency = overrides?.concurrency ?? definition.concurrency ?? options.defaults?.concurrency ?? 5
+  const timeoutMs =
+    definition.timeoutMs ?? options.defaults?.timeoutMs ?? 60_000
+  const concurrency =
+    overrides?.concurrency ??
+    definition.concurrency ??
+    options.defaults?.concurrency ??
+    5
 
   const plans: CellPlan[] = []
   const skippedCells: ExperimentCell<unknown, unknown>[] = []
@@ -1507,7 +1818,9 @@ async function runEvaluationInner(
       if (skip !== undefined && skip !== false) {
         const skippedCell: ExperimentCell<unknown, unknown> = {
           caseId: resolved.caseId,
-          ...(resolved.raw.name !== undefined ? { caseName: resolved.raw.name } : {}),
+          ...(resolved.raw.name !== undefined
+            ? { caseName: resolved.raw.name }
+            : {}),
           variantName: variant.name,
           trial: 0,
           status: 'skipped',
@@ -1543,7 +1856,10 @@ async function runEvaluationInner(
       variantCount: variantContexts.length,
     },
   })
-  const evalRunRef: QualityObservabilityRunRef = { runId: evalRun.runId, traceId: evalRun.traceId }
+  const evalRunRef: QualityObservabilityRunRef = {
+    runId: evalRun.runId,
+    traceId: evalRun.traceId,
+  }
 
   const capture = installSignalCapture()
   const limiter = createLimiter(Math.max(1, concurrency))
@@ -1555,7 +1871,9 @@ async function runEvaluationInner(
           if (overrides?.signal?.aborted === true) {
             const abortedCell = {
               caseId: plan.resolved.caseId,
-              ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
+              ...(plan.resolved.raw.name !== undefined
+                ? { caseName: plan.resolved.raw.name }
+                : {}),
               variantName: plan.variant.name,
               trial: plan.trial,
               status: 'skipped',
@@ -1572,7 +1890,9 @@ async function runEvaluationInner(
           }
           options.events?.onCellStart?.({
             caseId: plan.resolved.caseId,
-            ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
+            ...(plan.resolved.raw.name !== undefined
+              ? { caseName: plan.resolved.raw.name }
+              : {}),
             variantName: plan.variant.name,
             trial: plan.trial,
           })
@@ -1593,11 +1913,19 @@ async function runEvaluationInner(
           // The cassette scope covers scoring too — judge calls record and
           // replay through the same cassette as task calls.
           const cell =
-            cassetteSession === undefined ? await execute() : await withCassetteSession(cassetteSession, execute)
+            cassetteSession === undefined
+              ? await execute()
+              : await withCassetteSession(cassetteSession, execute)
           for (const runId of cell.traceIds) {
             evalRun.withContext(() => {
-              emitEvalCaseOfEdge({ caseRunId: runId, evalRunId: evalRun.runId })
-              if (replay.mode === 'replay-strict' && cassetteSession?.recorded !== undefined) {
+              emitEvalCaseOfEdge({
+                caseRunId: runId,
+                evalRunId: evalRun.runId,
+              })
+              if (
+                replay.mode === 'replay-strict' &&
+                cassetteSession?.recorded !== undefined
+              ) {
                 emitReplayOfEdge({
                   replay: { runId, traceId: evalRun.traceId },
                   recorded: cassetteSession.recorded,
@@ -1616,153 +1944,192 @@ async function runEvaluationInner(
   } finally {
     capture.dispose()
   }
-  cells.push(...skippedCells)
-  await cassetteSession?.flush()
+  try {
+    cells.push(...skippedCells)
+    await cassetteSession?.flush()
 
-  // ── Aggregates, per variant ─────────────────────────────────────
-  const aggregates: Record<string, VariantAggregate<string>> = {}
-  for (const variant of variantContexts) {
-    aggregates[variant.name] = aggregateVariant(cells.filter((cell) => cell.variantName === variant.name))
-  }
-
-  // ── Comparison: declared baseline variant, else promoted baseline ──
-  let comparison: Comparison<string> | undefined
-  let baselineRef: Experiment<unknown, unknown, string, string>['baselineRef']
-  if (definition.baseline !== undefined && selectedVariantNames.includes(definition.baseline)) {
-    comparison = compareVariants({
-      cells,
-      baselineName: definition.baseline,
-      candidateNames: selectedVariantNames.filter((name) => name !== definition.baseline),
-    })
-  } else if (baselineRecord !== undefined) {
-    baselineRef = {
-      baselineId: baselineRecord.baselineId,
-      experimentId: baselineRecord.experimentId,
-      ...(baselineRecord.variantName !== undefined ? { variantName: baselineRecord.variantName } : {}),
+    // ── Aggregates, per variant ─────────────────────────────────────
+    const aggregates: Record<string, VariantAggregate<string>> = {}
+    for (const variant of variantContexts) {
+      aggregates[variant.name] = aggregateVariant(
+        cells.filter((cell) => cell.variantName === variant.name),
+      )
     }
-    comparison = comparePromoted({
-      cells,
-      variantNames: selectedVariantNames,
-      reference: baselineRecord.reference,
-      baselineExperimentId: baselineRecord.experimentId,
-    })
-    if (baselineRecord.configFingerprint !== configFingerprint) {
-      comparison = {
-        ...comparison,
-        demoted: {
-          reason:
-            'cases or definition changed since promotion (configFingerprint mismatch) — ' +
-            'comparison is informational; re-promote to re-arm baseline gates',
-        },
-      }
-    }
-  }
-  const comparisonBlocking = comparison !== undefined && comparison.demoted === undefined
 
-  if (comparison !== undefined) {
-    evalRun.withContext(() => {
-      emitComparisonReportEdges({
-        comparison,
-        candidate: evalRunRef,
-        ...(baselineRecord?.observability !== undefined ? { baseline: baselineRecord.observability } : {}),
+    // ── Comparison: declared baseline variant, else promoted baseline ──
+    let comparison: Comparison<string> | undefined
+    let baselineRef: Experiment<unknown, unknown, string, string>['baselineRef']
+    if (
+      definition.baseline !== undefined &&
+      selectedVariantNames.includes(definition.baseline)
+    ) {
+      comparison = compareVariants({
+        cells,
+        baselineName: definition.baseline,
+        candidateNames: selectedVariantNames.filter(
+          (name) => name !== definition.baseline,
+        ),
       })
-    })
-  }
-
-  // ── Gates: per non-baseline variant (single default keeps Phase 2 shape) ──
-  const gateVariantNames = variantsDeclared
-    ? selectedVariantNames.filter((name) => name !== definition.baseline)
-    : selectedVariantNames
-  const gates = evaluateGates({
-    gates: definition.gates,
-    cells,
-    aggregates,
-    gateVariantNames,
-    variantsDeclared,
-    comparison,
-    comparisonBlocking,
-    filteredRun,
-  })
-  const erroredCells = cells.some((cell) => cell.status === 'errored')
-  // Informational gates never fail a run; errored cells always do.
-  const overallGatePassed = filteredRun ? !erroredCells : gates.passed
-
-  const experiment: Experiment<unknown, unknown, string, string> = {
-    schemaVersion: 1,
-    experimentId: ulid(),
-    evaluationId,
-    qualityId,
-    ...(options.experimentLabel !== undefined ? { experimentLabel: options.experimentLabel } : {}),
-    startedAt: new Date(startedAtMs).toISOString(),
-    endedAt: new Date().toISOString(),
-    configFingerprint,
-    taskFingerprint,
-    observability: evalRunRef,
-    filteredRun,
-    replay: {
-      mode: replay.mode,
-      ...(replay.name !== undefined ? { cassette: replay.name } : {}),
-      ...(trialsCollapsed ? { trialsCollapsed: true as const } : {}),
-      ...(cassetteSession?.staleSince !== undefined ? { staleSince: cassetteSession.staleSince } : {}),
-    },
-    ...(baselineRef !== undefined ? { baselineRef } : {}),
-    variants: variantContexts.map((context) => ({
-      name: context.name,
-      overrideKeys: context.overrideKeys,
-      ...(context.overrides !== undefined ? { overrides: context.overrides } : {}),
-    })),
-    perCase: cells,
-    aggregates: { perVariant: aggregates },
-    ...(comparison !== undefined ? { comparison } : {}),
-    gates: { passed: overallGatePassed, informational: gates.informational, results: gates.results },
-    passed: overallGatePassed && !erroredCells,
-    promote: async (opts?: { id?: string; variant?: string }) => {
-      if (filteredRun) {
-        throw new Error(
-          'filtered runs cannot be promoted — paired baseline statistics need the full case population (spec 03 §4).',
-        )
+    } else if (baselineRecord !== undefined) {
+      baselineRef = {
+        baselineId: baselineRecord.baselineId,
+        experimentId: baselineRecord.experimentId,
+        ...(baselineRecord.variantName !== undefined
+          ? { variantName: baselineRecord.variantName }
+          : {}),
       }
-      let variantName = opts?.variant
-      if (variantName === undefined) {
-        if (selectedVariantNames.length === 1) variantName = selectedVariantNames[0]!
-        else if (definition.baseline !== undefined) variantName = definition.baseline
-        else {
+      comparison = comparePromoted({
+        cells,
+        variantNames: selectedVariantNames,
+        reference: baselineRecord.reference,
+        baselineExperimentId: baselineRecord.experimentId,
+      })
+      if (baselineRecord.configFingerprint !== configFingerprint) {
+        comparison = {
+          ...comparison,
+          demoted: {
+            reason:
+              'cases or definition changed since promotion (configFingerprint mismatch) — ' +
+              'comparison is informational; re-promote to re-arm baseline gates',
+          },
+        }
+      }
+    }
+    const comparisonBlocking =
+      comparison !== undefined && comparison.demoted === undefined
+
+    if (comparison !== undefined) {
+      evalRun.withContext(() => {
+        emitComparisonReportEdges({
+          comparison,
+          candidate: evalRunRef,
+          ...(baselineRecord?.observability !== undefined
+            ? { baseline: baselineRecord.observability }
+            : {}),
+        })
+      })
+    }
+
+    // ── Gates: per non-baseline variant (single default keeps Phase 2 shape) ──
+    const gateVariantNames = variantsDeclared
+      ? selectedVariantNames.filter((name) => name !== definition.baseline)
+      : selectedVariantNames
+    const gates = evaluateGates({
+      gates: definition.gates,
+      cells,
+      aggregates,
+      gateVariantNames,
+      variantsDeclared,
+      comparison,
+      comparisonBlocking,
+      filteredRun,
+    })
+    const erroredCells = cells.some((cell) => cell.status === 'errored')
+    // Informational gates never fail a run; errored cells always do.
+    const overallGatePassed = filteredRun ? !erroredCells : gates.passed
+
+    const experiment: Experiment<unknown, unknown, string, string> = {
+      schemaVersion: 1,
+      experimentId: ulid(),
+      evaluationId,
+      qualityId,
+      ...(options.experimentLabel !== undefined
+        ? { experimentLabel: options.experimentLabel }
+        : {}),
+      startedAt: new Date(startedAtMs).toISOString(),
+      endedAt: new Date().toISOString(),
+      configFingerprint,
+      taskFingerprint,
+      observability: evalRunRef,
+      filteredRun,
+      replay: {
+        mode: replay.mode,
+        ...(replay.name !== undefined ? { cassette: replay.name } : {}),
+        ...(trialsCollapsed ? { trialsCollapsed: true as const } : {}),
+        ...(cassetteSession?.staleSince !== undefined
+          ? { staleSince: cassetteSession.staleSince }
+          : {}),
+      },
+      ...(baselineRef !== undefined ? { baselineRef } : {}),
+      variants: variantContexts.map((context) => ({
+        name: context.name,
+        overrideKeys: context.overrideKeys,
+        ...(context.overrides !== undefined
+          ? { overrides: context.overrides }
+          : {}),
+      })),
+      perCase: cells,
+      aggregates: { perVariant: aggregates },
+      ...(comparison !== undefined ? { comparison } : {}),
+      gates: {
+        passed: overallGatePassed,
+        informational: gates.informational,
+        results: gates.results,
+      },
+      passed: overallGatePassed && !erroredCells,
+      promote: async (opts?: { id?: string; variant?: string }) => {
+        if (filteredRun) {
           throw new Error(
-            `promoting a multi-variant experiment needs a variant — pass { variant } (one of: ${selectedVariantNames.join(', ')}).`,
+            'filtered runs cannot be promoted — paired baseline statistics need the full case population (spec 03 §4).',
           )
         }
-      } else if (!selectedVariantNames.includes(variantName)) {
-        throw new Error(`unknown variant '${variantName}' — this experiment ran: ${selectedVariantNames.join(', ')}.`)
-      }
-      const explicitId = definition.id
-      if (explicitId === undefined && opts?.id === undefined) {
-        const suggested = evaluationId !== '' ? evaluationId : 'your.evaluation.id'
-        throw new Error(
-          `promotion requires an explicit evaluation id — pin it in source: evaluate('${suggested}', { … }), ` +
-            `or pass { id: '${suggested}' } to promote().`,
-        )
-      }
-      const baselineEvaluationId = explicitId ?? opts!.id!
-      const record: BaselineRecord = {
-        schemaVersion: 1,
-        baselineId: ulid(),
-        evaluationId: baselineEvaluationId,
-        experimentId: experiment.experimentId,
-        observability: experiment.observability,
-        ...(variantsDeclared ? { variantName } : {}),
-        promotedAt: new Date().toISOString(),
-        ...(gitUserName(rootDir) !== undefined ? { promotedBy: gitUserName(rootDir) } : {}),
-        configFingerprint,
-        reference: buildBaselineReference(cells, variantName),
-      }
-      const path = await writeBaselineRecord(qualityDir, record)
-      return { baselineId: record.baselineId, path }
-    },
-  }
+        let variantName = opts?.variant
+        if (variantName === undefined) {
+          if (selectedVariantNames.length === 1)
+            variantName = selectedVariantNames[0]!
+          else if (definition.baseline !== undefined)
+            variantName = definition.baseline
+          else {
+            throw new Error(
+              `promoting a multi-variant experiment needs a variant — pass { variant } (one of: ${selectedVariantNames.join(', ')}).`,
+            )
+          }
+        } else if (!selectedVariantNames.includes(variantName)) {
+          throw new Error(
+            `unknown variant '${variantName}' — this experiment ran: ${selectedVariantNames.join(', ')}.`,
+          )
+        }
+        const explicitId = definition.id
+        if (explicitId === undefined && opts?.id === undefined) {
+          const suggested =
+            evaluationId !== '' ? evaluationId : 'your.evaluation.id'
+          throw new Error(
+            `promotion requires an explicit evaluation id — pin it in source: evaluate('${suggested}', { … }), ` +
+              `or pass { id: '${suggested}' } to promote().`,
+          )
+        }
+        const baselineEvaluationId = explicitId ?? opts!.id!
+        const record: BaselineRecord = {
+          schemaVersion: 1,
+          baselineId: ulid(),
+          evaluationId: baselineEvaluationId,
+          experimentId: experiment.experimentId,
+          observability: experiment.observability,
+          ...(variantsDeclared ? { variantName } : {}),
+          promotedAt: new Date().toISOString(),
+          ...(gitUserName(rootDir) !== undefined
+            ? { promotedBy: gitUserName(rootDir) }
+            : {}),
+          configFingerprint,
+          reference: buildBaselineReference(cells, variantName),
+        }
+        const path = await writeBaselineRecord(qualityDir, record)
+        return { baselineId: record.baselineId, path }
+      },
+    }
 
-  if (options.persist !== false) {
-    await persistExperiment(experiment, qualityDir)
+    if (options.persist !== false) {
+      await persistExperiment(experiment, qualityDir)
+    }
+    evalRun.end({
+      attributes: {
+        experimentId: experiment.experimentId,
+        passed: experiment.passed,
+      },
+    })
+    return experiment
+  } catch (error) {
+    evalRun.error(error)
+    throw error
   }
-  evalRun.end({ attributes: { experimentId: experiment.experimentId, passed: experiment.passed } })
-  return experiment
 }

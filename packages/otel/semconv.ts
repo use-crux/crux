@@ -35,16 +35,20 @@ export const GEN_AI_USAGE_OUTPUT_TOKENS = 'gen_ai.usage.output_tokens'
 export const GEN_AI_RESPONSE_FINISH_REASONS = 'gen_ai.response.finish_reasons'
 
 /** End-to-end client-side operation duration in seconds. */
-export const GEN_AI_CLIENT_OPERATION_DURATION = 'gen_ai.client.operation.duration'
+export const GEN_AI_CLIENT_OPERATION_DURATION =
+  'gen_ai.client.operation.duration'
 
 /** Client-observed time to first token in seconds. */
-export const GEN_AI_SERVER_TIME_TO_FIRST_TOKEN = 'gen_ai.server.time_to_first_token'
+export const GEN_AI_SERVER_TIME_TO_FIRST_TOKEN =
+  'gen_ai.server.time_to_first_token'
 
 /** Client-observed output token throughput. */
-export const GEN_AI_CLIENT_OUTPUT_TOKENS_PER_SECOND = 'gen_ai.client.output_tokens_per_second'
+export const CRUX_GEN_OUTPUT_TOKENS_PER_SECOND =
+  'crux.gen.output_tokens_per_second'
 
 /** Mean client-observed interval between streamed output chunks in milliseconds. */
-export const GEN_AI_CLIENT_TIME_PER_OUTPUT_CHUNK_MS = 'gen_ai.client.time_per_output_chunk_ms'
+export const CRUX_GEN_TIME_PER_OUTPUT_CHUNK_MS =
+  'crux.gen.time_per_output_chunk_ms'
 
 /** Opt-in generation input message content. */
 export const GEN_AI_INPUT_MESSAGES = 'gen_ai.input.messages'
@@ -89,9 +93,12 @@ export const primitiveSpanNames = {
   'tool.call': 'crux.tool.call',
   'tool.approval': 'crux.tool.approval',
   'retrieval.pipeline': 'crux.retrieval.pipeline',
+  'retrieval.recipe': 'crux.retrieval.recipe',
+  'retrieval.retrieve': 'crux.retrieval.retrieve',
   'embedding.call': 'crux.embedding.call',
   'retrieval.query': 'crux.retrieval.query',
   'retrieval.stage': 'crux.retrieval.stage',
+  'retrieval.step': 'crux.retrieval.step',
   'memory.read': 'crux.memory.read',
   'memory.write': 'crux.memory.write',
   'constraint.check': 'crux.constraint.check',
@@ -128,12 +135,16 @@ export const primitiveSpanNames = {
 } satisfies Record<CruxPrimitiveName, string>
 
 /** Resolve the GenAI operation for primitives covered by the GenAI convention. */
-export function genAiOperationName(primitive: CruxPrimitiveName): GenAiOperationName | undefined {
-  if (primitive === 'generation.call' || primitive === 'generation.stream') return 'chat'
+export function genAiOperationName(
+  primitive: CruxPrimitiveName,
+): GenAiOperationName | undefined {
+  if (primitive === 'generation.call' || primitive === 'generation.stream')
+    return 'chat'
   if (primitive === 'embedding.call') return 'embeddings'
   if (primitive === 'tool.call') return 'execute_tool'
   if (primitive === 'agent.run') return 'invoke_agent'
-  if (primitive === 'flow.run' || primitive.startsWith('composition.')) return 'invoke_workflow'
+  if (primitive === 'flow.run' || primitive.startsWith('composition.'))
+    return 'invoke_workflow'
   if (primitive.startsWith('retrieval.')) return 'retrieval'
   if (primitive === 'memory.read') return 'search_memory'
   if (primitive === 'memory.write') return 'create_memory'

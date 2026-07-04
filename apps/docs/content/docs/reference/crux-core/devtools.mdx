@@ -57,7 +57,7 @@ function withDevtools(options: DevtoolsOptions): CruxPlugin
 
 ### Returns
 
-`CruxPlugin` with the name `crux:devtools`. The plugin cleanup hook restores the previously installed observability transport.
+`CruxPlugin` with the name `crux:devtools`. The plugin cleanup hook restores the previously installed observability transport and returns a bounded flush promise so plugin runners can wait for queued local records before shutdown.
 
 ## `enableDevtools(options)`
 

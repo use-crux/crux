@@ -34,7 +34,9 @@ export interface IngestParseObservation {
  * The returned observation owns the common span attributes and duration
  * calculation, so parser code only reports parse-specific result counts.
  */
-export function openIngestParseObservation(options: IngestParseObservationOptions): IngestParseObservation {
+export function openIngestParseObservation(
+  options: IngestParseObservationOptions,
+): IngestParseObservation {
   const ingestId = `ingest_${Date.now().toString(36)}_${++ingestCounter}`
   const startedAt = Date.now()
   const attributes = {
@@ -48,7 +50,6 @@ export function openIngestParseObservation(options: IngestParseObservationOption
   }
   const span = observe.openSpan({
     name: `parse ${options.format}`,
-    family: 'ingest',
     primitive: 'ingest.parse',
     attributes,
   })

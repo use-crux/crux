@@ -168,9 +168,7 @@ func isTransientObservabilityIngestError(err error) bool {
 		return false
 	}
 	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "begin observability ingest transaction") ||
-		strings.Contains(message, "commit observability ingest transaction") ||
-		strings.Contains(message, "sqlite_busy") ||
+	return strings.Contains(message, "sqlite_busy") ||
 		strings.Contains(message, "database is locked") ||
 		strings.Contains(message, "database is busy") ||
 		strings.Contains(message, "database is closed")

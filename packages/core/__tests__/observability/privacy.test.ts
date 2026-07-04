@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  CRUX_CANONICAL_ARTIFACT_KINDS,
   createInMemoryObservabilityTransport,
   observabilityDiagnostics,
   observe,
@@ -9,6 +10,18 @@ import {
   type CruxGraphRecord,
 } from '../../observability'
 import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+
+const exemptArtifactKinds = new Set([
+  'error.stack',
+  'routing.report',
+  'cache.report',
+  'embedding.report',
+  'indexing.report',
+  'ingest.report',
+  'corpus.report',
+  'security.report',
+  'constraint.report',
+])
 
 describe('observability privacy capture policy', () => {
   afterEach(() => {
@@ -70,7 +83,9 @@ describe('observability privacy capture policy', () => {
               blocks: [{ preview: 'OUTPUT-MEMORY-CONTENT' }],
             },
           })
-          const error = new Error('provider failed') as Error & { body?: string }
+          const error = new Error('provider failed') as Error & {
+            body?: string
+          }
           error.body = 'OUTPUT-ERROR-RAW-BODY'
           throw error
         },
@@ -110,7 +125,9 @@ describe('observability privacy capture policy', () => {
     )
     await observe.flush()
 
-    const output = transport.records.find((record) => record.type === 'artifact' && record.kind === 'output')
+    const output = transport.records.find(
+      (record) => record.type === 'artifact' && record.kind === 'output',
+    )
     expect(output).toMatchObject({
       type: 'artifact',
       kind: 'output',
@@ -121,7 +138,52 @@ describe('observability privacy capture policy', () => {
     expect(output).not.toHaveProperty('sizeBytes')
     expect(output).not.toHaveProperty('hash')
     expect(output).not.toHaveProperty('uri')
-    expect(JSON.stringify(transport.records)).not.toContain('OUTPUT-OFF-PAYLOAD')
+    expect(JSON.stringify(transport.records)).not.toContain(
+      'OUTPUT-OFF-PAYLOAD',
+    )
+  })
+
+  it('strips previews for every non-exempt canonical artifact kind when capture is disabled', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport, { scheduledDelayMs: 0 })
+    updateRuntime({
+      observabilityCapture: {
+        recordInputs: false,
+        recordOutputs: false,
+      },
+    })
+
+    await observe.span(
+      {
+        name: 'all artifact kinds',
+        primitive: 'generation.call',
+      },
+      async () => {
+        for (const kind of CRUX_CANONICAL_ARTIFACT_KINDS) {
+          observe.artifact({
+            kind,
+            contentType: 'text/plain',
+            encoding: 'text',
+            preview: `PAYLOAD-${kind}`,
+          })
+        }
+        observe.artifact({
+          kind: 'custom.payload',
+          contentType: 'text/plain',
+          encoding: 'text',
+          preview: 'PAYLOAD-custom.payload',
+        })
+      },
+    )
+    await observe.flush()
+
+    const serialized = JSON.stringify(transport.records)
+    for (const kind of CRUX_CANONICAL_ARTIFACT_KINDS) {
+      if (!exemptArtifactKinds.has(kind)) {
+        expect(serialized).not.toContain(`PAYLOAD-${kind}`)
+      }
+    }
+    expect(serialized).not.toContain('PAYLOAD-custom.payload')
   })
 
   it('drops records when redactRecord returns null or throws', async () => {
@@ -130,8 +192,10 @@ describe('observability privacy capture policy', () => {
     updateRuntime({
       observabilityCapture: {
         redactRecord: (record) => {
-          if (record.type === 'span:event' && record.name === 'drop-me') return null
-          if (record.type === 'artifact' && record.kind === 'output') throw new Error('redactor failed')
+          if (record.type === 'span:event' && record.name === 'drop-me')
+            return null
+          if (record.type === 'artifact' && record.kind === 'output')
+            throw new Error('redactor failed')
           return record
         },
       },
@@ -154,8 +218,12 @@ describe('observability privacy capture policy', () => {
     )
     await observe.flush()
 
-    expect(transport.records).not.toContainEqual(expect.objectContaining({ type: 'span:event', name: 'drop-me' }))
-    expect(transport.records).not.toContainEqual(expect.objectContaining({ type: 'artifact', kind: 'output' }))
+    expect(transport.records).not.toContainEqual(
+      expect.objectContaining({ type: 'span:event', name: 'drop-me' }),
+    )
+    expect(transport.records).not.toContainEqual(
+      expect.objectContaining({ type: 'artifact', kind: 'output' }),
+    )
     expect(observabilityDiagnostics().redactedRecords).toBe(2)
   })
 })

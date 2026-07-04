@@ -280,9 +280,9 @@ See [Runtime Engine](/docs/reference/crux-core/runtime-engine) for the API refer
 Persistence config installs explicit runtime records. Crux does not infer durability, tenancy, or data
 locality from source discovery.
 
-| Option                | Type          | Default     | Notes                                                                       |
-| --------------------- | ------------- | ----------- | --------------------------------------------------------------------------- |
-| `persistence.records` | `RecordStore` | `undefined` | Required for durable flows, plans, tasks, and Runtime Bridge record reads.  |
+| Option                | Type          | Default     | Notes                                                                      |
+| --------------------- | ------------- | ----------- | -------------------------------------------------------------------------- |
+| `persistence.records` | `RecordStore` | `undefined` | Required for durable flows, plans, tasks, and Runtime Bridge record reads. |
 
 ```ts title="crux.config.ts"
 import { inMemoryRecordStore } from '@use-crux/core/storage'
@@ -339,16 +339,16 @@ transport for this config instance. When `observability.serverUrl` is set, Crux 
 transport to that server. When `observability.token` is set, that token is sent as bearer auth for
 the scoped devtools ingest endpoint. When `observability.transport` is set, that custom transport wins.
 
-| Option                                        | Type                         | Default                              | Notes                                                           |
-| --------------------------------------------- | ---------------------------- | ------------------------------------ | --------------------------------------------------------------- |
-| `observability.enabled`                       | `boolean`                    | `true`                               | Set `false` to disable an existing configured transport.        |
-| `observability.serverUrl`                     | `string`                     | `undefined`                          | Creates an HTTP observability transport.                        |
-| `observability.token`                         | `string`                     | `CRUX_DEVTOOLS_TOKEN` when available | Bearer token for tunneled devtools ingest.                      |
-| `observability.transport`                     | `CruxObservabilityTransport` | `undefined`                          | Custom transport with `send(records)`.                          |
-| `observability.delivery.maxPendingDeliveries` | `number`                     | `1000`                               | Maximum in-flight transport sends before records remain queued. |
+| Option                                        | Type                         | Default                              | Notes                                                                                                |
+| --------------------------------------------- | ---------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `observability.enabled`                       | `boolean`                    | `true`                               | Set `false` to disable an existing configured transport.                                             |
+| `observability.serverUrl`                     | `string`                     | `undefined`                          | Creates an HTTP observability transport.                                                             |
+| `observability.token`                         | `string`                     | `CRUX_DEVTOOLS_TOKEN` when available | Bearer token for tunneled devtools ingest.                                                           |
+| `observability.transport`                     | `CruxObservabilityTransport` | `undefined`                          | Custom transport with `send(records)`.                                                               |
+| `observability.delivery.maxPendingDeliveries` | `number`                     | `1000`                               | Maximum in-flight transport sends before records remain queued.                                      |
 | `observability.delivery.maxQueuedRecords`     | `number`                     | `2048`                               | Maximum retained queued plus in-flight records before oldest queued records are dropped and counted. |
-| `observability.delivery.retryDelayMs`         | `number`                     | `100`                                | Base retry delay after a failed transport send.                 |
-| `observability.delivery.maxRetryDelayMs`      | `number`                     | `5000`                               | Maximum capped retry delay after repeated transport failures.   |
+| `observability.delivery.retryDelayMs`         | `number`                     | `100`                                | Base retry delay after a failed transport send.                                                      |
+| `observability.delivery.maxRetryDelayMs`      | `number`                     | `5000`                               | Maximum capped retry delay after repeated transport failures.                                        |
 
 ```ts title="crux.config.ts"
 export default config({
@@ -369,7 +369,9 @@ See [Observability](/docs/reference/crux-core/observability).
 ## `plugins`
 
 Plugins install runtime hooks in order. Each plugin receives the cumulative runtime from all previous
-plugins. Cleanup runs when the returned Crux object is disposed.
+plugins. Cleanup runs when the returned Crux object is disposed. Cleanup hooks may return a promise;
+Crux starts cleanup in reverse install order, and plugin runners that expose async disposal wait for
+those promises before reporting shutdown complete.
 
 | Option              | Type                                                   | Default  | Notes                                                  |
 | ------------------- | ------------------------------------------------------ | -------- | ------------------------------------------------------ |

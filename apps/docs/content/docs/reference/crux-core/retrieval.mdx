@@ -36,12 +36,12 @@ import type {
 
 The Retrieval & RAG beta has four public layers:
 
-| Layer | Use it for |
-| --- | --- |
-| `knowledgeBase()` | Indexing lifecycle, storage, embeddings, scoped tenancy, retriever/tools/grounding factories, and inspection. |
-| `retriever()` | Direct search over indexed knowledge or a custom backend. |
-| `retrievalRecipe()` | Named, traceable retrieval composition over one or more retrievers. |
-| `grounding()` | Evidence injection, retrieval tools, grounding sessions, and citation validation. |
+| Layer               | Use it for                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `knowledgeBase()`   | Indexing lifecycle, storage, embeddings, scoped tenancy, retriever/tools/grounding factories, and inspection. |
+| `retriever()`       | Direct search over indexed knowledge or a custom backend.                                                     |
+| `retrievalRecipe()` | Named, traceable retrieval composition over one or more retrievers.                                           |
+| `grounding()`       | Evidence injection, retrieval tools, grounding sessions, and citation validation.                             |
 
 Each layer exposes the layer beneath it.
 
@@ -100,7 +100,12 @@ const docs = retriever({
   vectors,
   dense,
   sparse,
-  search: { mode: 'hybrid', limit: 8, threshold: 0.2, filter: { section: 'planning' } },
+  search: {
+    mode: 'hybrid',
+    limit: 8,
+    threshold: 0.2,
+    filter: { section: 'planning' },
+  },
 })
 ```
 
@@ -139,6 +144,27 @@ await docs.retrieve({
 ```
 
 `RetrieveRequest<TFilter>` includes `query`, `limit`, `threshold`, `filter`, `mode`, `fusion`, `trace`, and `caller`.
+
+## Observability
+
+Retrieval uses the same canonical observability graph as generation, tools, memory, and Quality runs.
+Direct `retrieve()` calls emit a `retrieval.query` span, attach a bounded `retrieval.hits` artifact,
+and connect returned chunks with `retrieval.returned` edges. Recipe calls open a parent
+`retrieval.recipe` span and record query rewrite, fanout, federated retrieval, rerank, parent
+expansion, compression, and custom work as child `retrieval.step` spans.
+
+The local devtools backend and TUI read those records through `RunDetail`; contextual retrieval folds
+into the generation it informed, while operational retrieval inside a tool, flow, composition, agent,
+or runtime boundary stays visible as its own branch. `retrieveWithTrace()` is still useful for
+in-process debugging because it returns recipe and step traces directly, but it is not a separate
+telemetry format.
+
+Output capture policy applies to retrieval payloads. When `observability.recordOutputs` is disabled,
+`retrieval.hits` artifacts keep stable ids, counts, hashes, and sizes but do not expose raw hit
+previews to subscribers, transports, devtools persistence, or OTel export. OTel retrieval spans export
+safe metadata such as recipe id, source retriever ids, step id, step kind, query counts, hit counts,
+warning counts, and status; they do not export query text, hit content, filters, metadata blobs, or
+embeddings by default.
 
 ## `retrievalRecipe(config)`
 
@@ -179,14 +205,14 @@ const recipe = retrievalRecipe({
 
 Built-ins:
 
-| Helper | Phase | Requires model |
-| --- | --- | --- |
-| `rewriteQuery()` | queries -> queries | yes |
-| `fanout()` | queries -> queries | yes |
-| `retrieve()` | queries -> hits | no |
-| `rerank()` | hits -> hits | yes |
-| `expandParents()` | hits -> hits | no |
-| `compressToBudget()` | hits -> hits | yes |
+| Helper               | Phase              | Requires model |
+| -------------------- | ------------------ | -------------- |
+| `rewriteQuery()`     | queries -> queries | yes            |
+| `fanout()`           | queries -> queries | yes            |
+| `retrieve()`         | queries -> hits    | no             |
+| `rerank()`           | hits -> hits       | yes            |
+| `expandParents()`    | hits -> hits       | no             |
+| `compressToBudget()` | hits -> hits       | yes            |
 
 Custom steps:
 
@@ -224,7 +250,10 @@ const recipe = retrievalRecipe({
   retriever: docs,
   steps: [
     retrieve({ limit: 30 }),
-    rerank({ engine: anthropic.reranker({ model: 'claude-haiku-4-5' }), topK: 8 }),
+    rerank({
+      engine: anthropic.reranker({ model: 'claude-haiku-4-5' }),
+      topK: 8,
+    }),
   ],
 })
 ```
@@ -294,13 +323,13 @@ Grounding records injected and tool-discovered hits in a per-generation session.
 
 New retrieval spans use public beta nouns:
 
-| Primitive | Meaning |
-| --- | --- |
+| Primitive             | Meaning                                                   |
+| --------------------- | --------------------------------------------------------- |
 | `knowledge.lifecycle` | `knowledgeBase().index()`, `.reindex()`, and `.remove()`. |
-| `retrieval.retrieve` | A standalone retriever call. |
-| `retrieval.recipe` | A recipe run. |
-| `retrieval.step` | A recipe step. |
-| `citation.check` | Citation validation. |
+| `retrieval.retrieve`  | A standalone retriever call.                              |
+| `retrieval.recipe`    | A recipe run.                                             |
+| `retrieval.step`      | A recipe step.                                            |
+| `citation.check`      | Citation validation.                                      |
 
 Recipe runs attach `retrieval.hits` artifacts with score provenance and step/source attribution.
 

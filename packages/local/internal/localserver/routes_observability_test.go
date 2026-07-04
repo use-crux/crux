@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -99,6 +100,31 @@ func TestObservabilityIngestRouteReportsTransientFailuresAsRetryable(t *testing.
 	}
 }
 
+func TestObservabilityTransientClassifierOnlyRetriesBusyLockedOrClosed(t *testing.T) {
+	retryable := []error{
+		errors.New("sqlite_busy: database is busy"),
+		errors.New("database is locked"),
+		errors.New("database is busy"),
+		errors.New("database is closed"),
+	}
+	for _, err := range retryable {
+		if !isTransientObservabilityIngestError(err) {
+			t.Fatalf("%q should be retryable", err.Error())
+		}
+	}
+
+	permanent := []error{
+		errors.New("begin observability ingest transaction: disk I/O error"),
+		errors.New("commit observability ingest transaction: constraint failed"),
+		errors.New("validation failed"),
+	}
+	for _, err := range permanent {
+		if isTransientObservabilityIngestError(err) {
+			t.Fatalf("%q should not be retryable", err.Error())
+		}
+	}
+}
+
 func TestObservabilitySpanEventsRouteReadsLazyTokenChunks(t *testing.T) {
 	ctx := context.Background()
 	service, err := observability.OpenService(ctx, ":memory:")
@@ -130,6 +156,21 @@ func TestObservabilitySpanEventsRouteReadsLazyTokenChunks(t *testing.T) {
 	}
 	if len(events) != 1 || events[0].EventID != "event_token_1" || events[0].Name != "token.chunk" {
 		t.Fatalf("events = %#v", events)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/observability/runs/run_span_events_route/spans/span_generate/events?name=token.chunk&after=2026-05-16T18:00:00.100Z|event_token_1&limit=1", nil)
+	response = httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %s", response.Code, response.Body.String())
+	}
+	events = nil
+	if err := json.NewDecoder(response.Body).Decode(&events); err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].EventID != "event_token_2" || events[0].Name != "token.chunk" {
+		t.Fatalf("events after compound cursor = %#v", events)
 	}
 }
 

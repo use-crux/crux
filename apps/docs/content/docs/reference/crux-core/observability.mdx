@@ -114,18 +114,18 @@ is absent the existing detail tabs are unaffected. Run Insight is derived by the
 UI from per-turn reports that share the same `runId`; V1 does not define a
 separate run-level `decisionReport` projection.
 
-| Field        | Purpose                                                                                           |
-| ------------ | ------------------------------------------------------------------------------------------------- |
-| `turn`       | Turn metadata and a short, evidence-bound `readout` sentence.                                      |
-| `saw`        | Items that reached the model (`disposition: "active"`).                                            |
-| `considered` | Items checked but not sent (`checked` / `dropped` / `disabled` / `unknown`) with a reason.         |
-| `freshness`  | Whether evidence was current enough (`fresh` / `refreshed` / `stale-used` / `stale-rejected` / ...). |
-| `cache`      | Reuse/write/miss behavior, with `acceptedByFreshness` / `rejectedByFreshness` as the explicit join. |
-| `decisions`  | Routing, fallback, guardrail, security, constraint, cache, and compaction outcomes plus deep-tab targets. |
-| `source`     | Grouped source-definition joins ("what do I change?") with file:line and resolution fidelity.      |
+| Field        | Purpose                                                                                                           |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `turn`       | Turn metadata and a short, evidence-bound `readout` sentence.                                                     |
+| `saw`        | Items that reached the model (`disposition: "active"`).                                                           |
+| `considered` | Items checked but not sent (`checked` / `dropped` / `disabled` / `unknown`) with a reason.                        |
+| `freshness`  | Whether evidence was current enough (`fresh` / `refreshed` / `stale-used` / `stale-rejected` / ...).              |
+| `cache`      | Reuse/write/miss behavior, with `acceptedByFreshness` / `rejectedByFreshness` as the explicit join.               |
+| `decisions`  | Routing, fallback, guardrail, security, constraint, cache, and compaction outcomes plus deep-tab targets.         |
+| `source`     | Grouped source-definition joins ("what do I change?") with file:line and resolution fidelity.                     |
 | `coverage`   | Quality coverage scorecard with stable area `id`, display `label`, status, and optional `suggestion` / `command`. |
-| `gaps`       | Missing or inferred evidence the report could not prove.                                           |
-| `chips`      | Optional stable scan/filter chips for Explain.                                                     |
+| `gaps`       | Missing or inferred evidence the report could not prove.                                                          |
+| `chips`      | Optional stable scan/filter chips for Explain.                                                                    |
 
 Cache and freshness are deliberately separate concepts and types: freshness is
 correctness (was the data current enough?), cache is efficiency (what did reuse
@@ -163,12 +163,12 @@ Generation and streaming orchestration record operation deadlines when a timeout
 
 Generation terminal span records also carry client-side performance metrics in the existing `metrics` field:
 
-| Metric key                         | Meaning                                                    |
-| ---------------------------------- | ---------------------------------------------------------- |
-| `gen.duration_ms`                  | End-to-end generation or stream span duration              |
-| `gen.time_to_first_token_ms`       | Time from stream start to the first observed output chunk  |
-| `gen.output_tokens_per_second`     | Provider token throughput when usage is available, or an observed stream-unit fallback |
-| `gen.time_per_output_chunk_ms`     | Mean interval between observed streamed output chunks      |
+| Metric key                     | Meaning                                                                                |
+| ------------------------------ | -------------------------------------------------------------------------------------- |
+| `gen.duration_ms`              | End-to-end generation or stream span duration                                          |
+| `gen.time_to_first_token_ms`   | Time from stream start to the first observed output chunk                              |
+| `gen.output_tokens_per_second` | Provider token throughput when usage is available, or an observed stream-unit fallback |
+| `gen.time_per_output_chunk_ms` | Mean interval between observed streamed output chunks                                  |
 
 These metrics are additive and do not change the graph schema version.
 Custom metric keys must use the `custom.*` namespace. Span families are derived from canonical primitive names at emit time, so `observe.span()` and `observe.openSpan()` do not accept a separate `family` option.
@@ -192,11 +192,20 @@ Prompt and safety helpers emit the same graph contract automatically:
 ```ts
 import { observe } from '@use-crux/core/observability'
 
-await observe.run({ name: 'support reply', rootPrimitive: 'agent.run' }, async () => {
-  await observe.span({ name: 'retrieve docs', primitive: 'retrieval.query' }, async () => {
-    observe.event({ name: 'query.built', attributes: { terms: ['refund', 'policy'] } })
-  })
-})
+await observe.run(
+  { name: 'support reply', rootPrimitive: 'agent.run' },
+  async () => {
+    await observe.span(
+      { name: 'retrieve docs', primitive: 'retrieval.query' },
+      async () => {
+        observe.event({
+          name: 'query.built',
+          attributes: { terms: ['refund', 'policy'] },
+        })
+      },
+    )
+  },
+)
 ```
 
 The runtime uses async context propagation on Node.js and preserves parent span stacks across normal async work. For async work that crosses a boundary where context is not preserved, pass an explicit captured context:
@@ -206,9 +215,12 @@ const context = observe.captureContext()
 
 queueMicrotask(() => {
   void observe.withContext(context, async () => {
-    await observe.span({ name: 'delegate', primitive: 'delegate.invoke' }, async () => {
-      // delegated work
-    })
+    await observe.span(
+      { name: 'delegate', primitive: 'delegate.invoke' },
+      async () => {
+        // delegated work
+      },
+    )
   })
 })
 ```
@@ -239,9 +251,12 @@ unsubscribe()
 Use the narrowed overload when you only need specific record variants:
 
 ```ts
-const unsubscribeSpanEnds = subscribeObservability(['span:end'] as const, (record) => {
-  console.log(record.spanId, record.status)
-})
+const unsubscribeSpanEnds = subscribeObservability(
+  ['span:end'] as const,
+  (record) => {
+    console.log(record.spanId, record.status)
+  },
+)
 
 unsubscribeSpanEnds()
 ```
@@ -312,8 +327,12 @@ import {
 } from '@use-crux/core/observability'
 
 const capture = createInMemoryObservabilityTransport()
-const auditSink = createHttpObservabilityTransport({ serverUrl: 'http://localhost:4400' })
-const restore = setObservabilityTransport(teeObservabilityTransport(capture, auditSink))
+const auditSink = createHttpObservabilityTransport({
+  serverUrl: 'http://localhost:4400',
+})
+const restore = setObservabilityTransport(
+  teeObservabilityTransport(capture, auditSink),
+)
 
 restore()
 ```
@@ -331,7 +350,7 @@ config({
 })
 ```
 
-When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, `tool.args`, `tool.request`) and output-family artifacts (`output`, `stream.timeline`, `tool.result`) are still emitted, but as `encoding: 'reference'` with `sizeBytes` and `hash` instead of `preview`.
+When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, `tool.args`, `tool.request`) and output-family artifacts are still emitted, but as `encoding: 'reference'` with `sizeBytes` and `hash` instead of `preview`. Output-family artifacts include model outputs, stream timelines, tool results, retrieval hits, memory snapshots/recalls/diffs, guardrail and constraint reports, handoff payloads, delegate reports, composition outputs, compaction summaries, judge reasoning, citation quotes, rendered context, and raw error payloads. The runtime's canonical artifact-kind map is exhaustive, so adding a new built-in artifact kind requires an explicit `input`, `output`, or `exempt` privacy decision before it can compile. Custom artifact kinds default to captured payloads only when the active capture policy allows their declared direction.
 
 The `observability` domain is explicit export configuration. `config()` with no `observability`
 block does not install telemetry, cloud upload, or raw-content capture. Use `devtools` only for local
