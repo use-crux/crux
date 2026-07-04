@@ -28,24 +28,51 @@ export type ConvexFlowSignalName<TSignals extends ConvexFlowSignals> = TSignals 
 type ConvexFlowSignalPayloadArgs<TPayload> = [TPayload] extends [void] ? [] : [payload: TPayload]
 
 /** Payload arguments accepted by a Convex flow handle's `.signal()` method. */
-export type ConvexFlowSignalArgs<TSignals extends ConvexFlowSignals, TName extends string> =
-  TSignals extends FlowSignalMap
-    ? TName extends keyof TSignals
-      ? ConvexFlowSignalPayloadArgs<FlowSignalPayload<TSignals[TName]>>
-      : never
-    : [payload?: JsonValue]
+export type ConvexFlowSignalArgs<
+  TSignals extends ConvexFlowSignals,
+  TName extends string,
+> = TSignals extends FlowSignalMap
+  ? TName extends keyof TSignals
+    ? ConvexFlowSignalPayloadArgs<FlowSignalPayload<TSignals[TName]>>
+    : never
+  : [payload?: JsonValue]
 
 /** Minimal signal-writing surface used by the Convex scheduler wrapper. */
 export interface ConvexFlowSignalSender {
   signal(flowId: string, signalName: string, ...args: JsonValue[]): Promise<void>
 }
 
+const runtimeFlowContexts = new Map<string, unknown[]>()
+
 /** Procedural Convex flow body after action context has been captured. */
-export type ConvexFlowBody<
-  TArgs extends Record<string, unknown>,
-  TResult,
-  TSignals extends ConvexFlowSignals,
-> = (flow: FlowScope<TArgs, TSignals>, input: TArgs) => TResult | Promise<TResult>
+export type ConvexFlowBody<TArgs extends Record<string, unknown>, TResult, TSignals extends ConvexFlowSignals> = (
+  flow: FlowScope<TArgs, TSignals>,
+  input: TArgs,
+) => TResult | Promise<TResult>
+
+/** Run a Runtime Engine flow replay with the Convex action context for the durable flow id. */
+export async function withConvexFlowRuntimeContext<T>(
+  flowId: string | undefined,
+  ctx: unknown,
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (!flowId) return await fn()
+  const stack = runtimeFlowContexts.get(flowId) ?? []
+  stack.push(ctx)
+  runtimeFlowContexts.set(flowId, stack)
+  try {
+    return await fn()
+  } finally {
+    stack.pop()
+    if (stack.length === 0) runtimeFlowContexts.delete(flowId)
+  }
+}
+
+/** Resolve the Convex action context for a Runtime Engine flow replay. */
+export function getConvexFlowRuntimeContext<TCtx>(flowId: string): TCtx | undefined {
+  const stack = runtimeFlowContexts.get(flowId)
+  return stack?.[stack.length - 1] as TCtx | undefined
+}
 
 /**
  * Create the core flow handle used for one Convex action invocation.

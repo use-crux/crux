@@ -10,7 +10,8 @@
 
 import type { JsonValue } from '../../storage'
 import { getRuntime } from '../runtime'
-import { createRuntime, type ResolvedRuntimeEngine } from './create-runtime'
+import type { ResolvedRuntimeEngine } from './create-runtime'
+import { createRuntimeWithHostContext } from './host-context'
 import { runtimeRequiredError } from './runtime-required'
 import {
   runtimeFlowNotFoundError,
@@ -176,7 +177,7 @@ async function withRuntime<T>(
   if (!runtimeDefinition) throw runtimeRequiredError({ api })
 
   const runtimeRef: RuntimeTargetRuntimeRef = {}
-  const runtime = createRuntime({
+  const runtime = createRuntimeWithHostContext({
     runtime: runtimeDefinition,
     targets: runtimeTargetMap(runtimeRef),
     startMaintenance: false,

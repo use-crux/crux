@@ -29,6 +29,7 @@ const IGNORED_DIRECTORIES = new Set([
   '.next',
   '.turbo',
   '.crux',
+  'target',
   'pkg-web',
   'pkg-node',
   // Bundled worker/UI artifacts regenerated from source — source is scanned.

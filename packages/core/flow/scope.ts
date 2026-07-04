@@ -12,10 +12,8 @@
 import { runWithExecutionContext, getExecutionContext } from '../runtime/execution-context'
 import { captureSource } from '../project-index/source'
 import { getRuntime, resolveRecords } from '../runtime/runtime'
-import {
-  createRuntime,
-  type ResolvedRuntimeEngine,
-} from '../runtime/api/create-runtime'
+import type { ResolvedRuntimeEngine } from '../runtime/api/create-runtime'
+import { createRuntimeWithHostContext } from '../runtime/api/host-context'
 import {
   runtimeFlowNotFoundError,
   runtimeFlowNotResumableError,
@@ -1026,9 +1024,9 @@ export function flow(
       throw new Error('No Crux runtime engine is configured.')
     }
     const runtimeRef: RuntimeFlowTargetRef = {}
-    const runtime = createRuntime({
+    const runtime = createRuntimeWithHostContext({
       runtime: runtimeDefinition,
-        targets: runtimeTargetMap(runtimeRef),
+      targets: runtimeTargetMap(runtimeRef),
       newWorkId: createRuntimeWorkIdGenerator(),
       startMaintenance: false,
     })

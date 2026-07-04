@@ -57,7 +57,58 @@ func devServerTestOptions(t *testing.T, port int) DevServerOptions {
 		QualityDir:          filepath.Join(dir, "quality"),
 		ObservabilityDBPath: filepath.Join(dir, "observability.sqlite"),
 		IngestTokenPath:     filepath.Join(dir, ".crux", "devtools", "ingest-token"),
+		RuntimeArtifacts: func(context.Context, string) error {
+			return nil
+		},
 	}
+}
+
+func TestNewDevServerGeneratesRuntimeArtifactsOnStartup(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	calls := make(chan string, 1)
+	opts := devServerTestOptions(t, findFreePort())
+	opts.RuntimeArtifacts = func(_ context.Context, gotRoot string) error {
+		calls <- gotRoot
+		return nil
+	}
+
+	srv := NewDevServer(opts)
+	defer srv.Shutdown(context.Background())
+
+	select {
+	case gotRoot := <-calls:
+		if gotRoot != root {
+			t.Fatalf("runtime artifact root = %q, want %q", gotRoot, root)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("runtime artifact startup generation was not called")
+	}
+}
+
+func TestRuntimeArtifactGeneratorForWorkerReusesWorker(t *testing.T) {
+	worker := &recordingRuntimeArtifactWorker{}
+	generate := runtimeArtifactGeneratorForWorker(worker)
+
+	if err := generate(context.Background(), "/project/one"); err != nil {
+		t.Fatalf("first runtime artifact generation: %v", err)
+	}
+	if err := generate(context.Background(), "/project/two"); err != nil {
+		t.Fatalf("second runtime artifact generation: %v", err)
+	}
+
+	if got, want := worker.roots, []string{"/project/one", "/project/two"}; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("worker roots = %#v, want %#v", got, want)
+	}
+}
+
+type recordingRuntimeArtifactWorker struct {
+	roots []string
+}
+
+func (w *recordingRuntimeArtifactWorker) GenerateRuntimeArtifacts(_ context.Context, root string) (json.RawMessage, error) {
+	w.roots = append(w.roots, root)
+	return json.RawMessage(`{}`), nil
 }
 
 func TestDevServer_start_and_query(t *testing.T) {

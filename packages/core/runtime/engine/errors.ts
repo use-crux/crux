@@ -87,7 +87,7 @@ export function createRuntimeError(input: RuntimeErrorInput): CruxRuntimeError {
 
 /** Return the canonical documentation URL for a runtime error code. */
 export function runtimeErrorDocsUrl(code: CruxRuntimeErrorCode): string {
-  return `https://usecrux.dev/docs/errors/${code}`
+  return `https://cruxjs.dev/docs/errors/${code}`
 }
 
 function formatRuntimeErrorMessage(

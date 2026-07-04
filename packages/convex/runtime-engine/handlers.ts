@@ -1,19 +1,10 @@
 import { v } from 'convex/values'
 import { internalMutationGeneric } from 'convex/server'
-import type {
-  RuntimeHandlerTarget,
-  RuntimeTargetRuntimeRef,
-  WorkId,
-} from '@use-crux/core/runtime'
-import {
-  bindHostRuntime,
-  decodeWakeEnvelope,
-  normalizeRuntimeHandlerTargets,
-  runtimeSignalEventName,
-  type WakeEnvelope,
-} from '@use-crux/core/runtime'
+import type { RuntimeHandlerTarget, RuntimeTargetRuntimeRef, WorkId } from '@use-crux/core/runtime'
+import { bindHostRuntime, normalizeRuntimeHandlerTargets, runtimeSignalEventName } from '@use-crux/core/runtime'
 import { convex, type ConvexRuntimeEngineDefinition } from '../runtime'
 import type { ConvexCtxPort } from '../store'
+import { createConvexWorkIdGenerator, decodeConvexWakeEnvelope } from './helpers'
 import { convexRuntimeStore, type ConvexRuntimeComponent } from './store'
 
 type ConvexSchedulerCtx = ConvexCtxPort & {
@@ -42,8 +33,16 @@ const internalMutation = internalMutationGeneric as ConvexMutationBuilder
 export interface CreateConvexRuntimeHandlersOptions {
   /** Crux Convex component refs, normally `components.crux`. */
   readonly component: ConvexRuntimeComponent
-  /** Exported `flow()` handles and runtime `task()` targets. */
-  readonly targets: readonly RuntimeHandlerTarget[]
+  /** Exported `flow()` handles and runtime `task()` targets for hand-written inline entries. */
+  readonly targets?: readonly RuntimeHandlerTarget[]
+  /**
+   * Convex action reference that executes target code.
+   *
+   * Generated Convex entries pass this so isolate-safe control mutations never
+   * import user target modules. Hand-written entries may omit it and pass
+   * {@link targets} directly when all targets are isolate-safe.
+   */
+  readonly targetExecutor?: unknown
   /** Host-bound runtime declaration. Defaults to `convex()`. */
   readonly runtime?: ConvexRuntimeEngineDefinition
   /** Runtime namespace override for these handlers. */
@@ -52,7 +51,7 @@ export interface CreateConvexRuntimeHandlersOptions {
   readonly newWorkId?: () => WorkId
 }
 
-/** Operational Convex Runtime Engine handlers for `convex/crux.ts`. */
+/** Operational Convex Runtime Engine handlers for the generated Convex control file. */
 export interface ConvexRuntimeHandlers {
   readonly handleWake: ConvexRegisteredMutation<{ envelope: unknown }, unknown>
   readonly deliverSignal: ConvexRegisteredMutation<
@@ -71,11 +70,13 @@ export interface ConvexRuntimeHandlers {
 export function createConvexRuntimeHandlers(options: CreateConvexRuntimeHandlersOptions): ConvexRuntimeHandlers {
   const declaration = options.runtime ?? convex({ namespace: options.namespace })
   const runtimeRef: RuntimeTargetRuntimeRef = {}
-  const targets = normalizeRuntimeHandlerTargets({
-    targets: options.targets,
-    runtimeRef,
-    entry: 'createConvexRuntimeHandlers()',
-  })
+  const targets = options.targets
+    ? normalizeRuntimeHandlerTargets({
+        targets: options.targets,
+        runtimeRef,
+        entry: 'createConvexRuntimeHandlers()',
+      })
+    : {}
 
   const bind = (ctx: ConvexSchedulerCtx) => {
     const runtime = bindHostRuntime(declaration, {
@@ -84,7 +85,7 @@ export function createConvexRuntimeHandlers(options: CreateConvexRuntimeHandlers
       targets,
       newWorkId: options.newWorkId ?? createConvexWorkIdGenerator(),
       createWake: () => async (envelope) => {
-        await ctx.scheduler.runAfter(0, handlers.handleWake, { envelope })
+        await ctx.scheduler.runAfter(0, options.targetExecutor ?? handlers.handleWake, { envelope })
       },
       startMaintenance: false,
     })
@@ -98,6 +99,10 @@ export function createConvexRuntimeHandlers(options: CreateConvexRuntimeHandlers
       returns: v.any(),
       handler: async (ctx, { envelope }) => {
         const wakeEnvelope = decodeConvexWakeEnvelope(envelope)
+        if (options.targetExecutor) {
+          await ctx.scheduler.runAfter(0, options.targetExecutor, { envelope: wakeEnvelope })
+          return { scheduled: true }
+        }
         const runtime = bind(ctx)
         try {
           return await runtime.kernel.handleWake(wakeEnvelope)
@@ -186,19 +191,4 @@ export function createConvexRuntimeHandlers(options: CreateConvexRuntimeHandlers
   }
 
   return Object.freeze(handlers)
-}
-
-function createConvexWorkIdGenerator(): () => WorkId {
-  let counter = 0
-  return () => `work_convex_${Date.now().toString(36)}_${++counter}_${randomWorkIdSuffix()}` as WorkId
-}
-
-function decodeConvexWakeEnvelope(envelope: unknown): WakeEnvelope {
-  return decodeWakeEnvelope(typeof envelope === 'string' ? envelope : JSON.stringify(envelope))
-}
-
-function randomWorkIdSuffix(): string {
-  const cryptoApi = globalThis.crypto
-  if (cryptoApi?.randomUUID) return cryptoApi.randomUUID()
-  return Math.random().toString(36).slice(2, 12)
 }

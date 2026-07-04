@@ -36,13 +36,13 @@ import { tool } from '@use-crux/convex/tools'
 
 `@use-crux/convex` intentionally mirrors core Crux subpaths where possible. Use these imports in Convex code so Crux primitives can late-bind Convex runtime plumbing:
 
-| Subpath                    | Classification                       | Export behavior                                                                                                                   |
-| -------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `@use-crux/convex/context` | Identical re-export                  | Same API as `@use-crux/core/context`.                                                                                             |
+| Subpath                    | Classification                       | Export behavior                                                                                                                    |
+| -------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `@use-crux/convex/context` | Identical re-export                  | Same API as `@use-crux/core/context`.                                                                                              |
 | `@use-crux/convex/skill`   | Identical re-export + Convex adapter | Same skill authoring/session API as `@use-crux/core/skill`; adds `convexSkillActivationPersistence()` for Convex record snapshots. |
-| `@use-crux/convex/memory`  | Convex-bound drop-in                 | Re-exports memory block helpers and changes only `memory()` storage defaults.                                                     |
-| `@use-crux/convex/tools`   | Convex-bound drop-in                 | Mirrors `tool()` and injects Convex runtime metadata into execution.                                                              |
-| `@use-crux/convex/agent`   | Mixed                                | Convex-Agent-compatible `Agent` facade plus the profile-backed `convexAgent()` helper.                                            |
+| `@use-crux/convex/memory`  | Convex-bound drop-in                 | Re-exports memory block helpers and changes only `memory()` storage defaults.                                                      |
+| `@use-crux/convex/tools`   | Convex-bound drop-in                 | Mirrors `tool()` and injects Convex runtime metadata into execution.                                                               |
+| `@use-crux/convex/agent`   | Mixed                                | Convex-Agent-compatible `Agent` facade plus the profile-backed `convexAgent()` helper.                                             |
 
 The package root is curated. It exports Convex APIs plus common prompt authoring helpers (`prompt`, `context`, `createPrompts`, `createContexts`, and sanitization helpers), but it does not blanket re-export every `@use-crux/core` API. If a Convex mirror exists, prefer it; if no mirror exists yet, import the SDK-agnostic primitive from `@use-crux/core`.
 
@@ -59,19 +59,33 @@ export default config({
 })
 ```
 
-Generated `convex/crux.ts` files target `createConvexRuntimeHandlers()`:
+Generated Convex runtime files split isolate-safe control handlers from Node target execution:
 
-```ts
+```ts title="convex/_crux/generated.ts"
+import { makeFunctionReference } from 'convex/server'
 import { createConvexRuntimeHandlers } from '@use-crux/convex/runtime'
-import { components } from './_generated/api'
-import { reviewFlow } from '../src/review'
-import { embedDocument } from '../src/embed'
+import { components } from '../_generated/api'
 
-export const { handleWake, deliverSignal, resumeFlow, runTask, fireTimer } =
-  createConvexRuntimeHandlers({
-    component: components.crux,
-    targets: [reviewFlow, embedDocument],
-  })
+const targetExecutor = makeFunctionReference<'action', { envelope: unknown }, unknown>('_crux/targets:executeTarget')
+
+export const { handleWake, deliverSignal, resumeFlow, runTask, fireTimer } = createConvexRuntimeHandlers({
+  component: components.crux,
+  targetExecutor,
+})
+```
+
+```ts title="convex/_crux/targets.ts"
+'use node'
+
+import { createConvexRuntimeTargetExecutor } from '@use-crux/convex/runtime/node'
+import { components } from '../_generated/api'
+import { reviewFlow } from '../../src/review'
+import { embedDocument } from '../../src/embed'
+
+export const { executeTarget } = createConvexRuntimeTargetExecutor({
+  component: components.crux,
+  targets: [reviewFlow, embedDocument],
+})
 ```
 
 Because `convex()` is host-bound, runtime-backed APIs called from a non-Convex process throw `RUNTIME_HOST_ONLY`. App-facing Convex functions should call Crux APIs inside the Convex host boundary.
@@ -96,7 +110,7 @@ The returned profile exposes:
 
 | Method                               | Classification                | Description                                                                                                  |
 | ------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `storage(ctx)`                       | Convex-only API               | Creates the request-scoped default `Storage`. Returns a promise only when a custom storage factory is async.  |
+| `storage(ctx)`                       | Convex-only API               | Creates the request-scoped default `Storage`. Returns a promise only when a custom storage factory is async. |
 | `run(ctx, target, fn)`               | Convex-bound drop-in boundary | Binds ctx, target, storage, records, namespace, memory, and tools for lower-level Crux work.                 |
 | `convexAgent(config)`                | Convex-only API               | Creates a profile-backed Crux prompt lifecycle helper without repeating component wiring.                    |
 | `bridge(http, cruxConfig, options?)` | Convex-only API               | Registers the HTTP Runtime Bridge through the same profile storage path.                                     |
@@ -255,19 +269,19 @@ const appStorage = convexStorage({
 
 Capability claims are intentionally narrow:
 
-| Adapter | Capability | Value |
-| --- | --- | --- |
-| `convexRecordStore()` | Record TTL | `'lazy'` |
-| `convexRecordStore()` | Record filters | `'scan'` |
-| `convexRecordStore()` | Watch | `false` |
-| `convexRecordStore()` | Batch | `false` |
-| `convexVectorStore()` | Dense search | `true` |
-| `convexVectorStore()` | Sparse search | `false` |
-| `convexVectorStore()` | Hybrid search | `false` |
-| `convexVectorStore()` | Vector filters | `'post'` |
-| `convexVectorStore()` | Consistency | `'strong'` |
-| `convexWorkspaceBlobStore()` | Multipart | `false` |
-| `convexWorkspaceBlobStore()` | Signed URLs | `false` |
+| Adapter                      | Capability     | Value      |
+| ---------------------------- | -------------- | ---------- |
+| `convexRecordStore()`        | Record TTL     | `'lazy'`   |
+| `convexRecordStore()`        | Record filters | `'scan'`   |
+| `convexRecordStore()`        | Watch          | `false`    |
+| `convexRecordStore()`        | Batch          | `false`    |
+| `convexVectorStore()`        | Dense search   | `true`     |
+| `convexVectorStore()`        | Sparse search  | `false`    |
+| `convexVectorStore()`        | Hybrid search  | `false`    |
+| `convexVectorStore()`        | Vector filters | `'post'`   |
+| `convexVectorStore()`        | Consistency    | `'strong'` |
+| `convexWorkspaceBlobStore()` | Multipart      | `false`    |
+| `convexWorkspaceBlobStore()` | Signed URLs    | `false`    |
 
 Convex vector filtering is post-filtered by the component port, so production retrieval paths that require exact filtered top-k results should use a pre-filter-capable vector backend.
 

@@ -115,6 +115,10 @@ await runtime.run(ctx, { threadId }, async ({ records }) => {
 })
 ```
 
+Direct starts of runtime-backed flows or name-bound controls should run inside
+this boundary too. That lets Crux bind the current Convex `ctx`, component refs,
+and scheduler before the durable runtime path starts.
+
 If you also want the profile-backed Crux prompt lifecycle, prefer `createCruxConvex()`. Its `storage()`, `run()`, and `bridge()` methods delegate to this lower-level runtime bridge.
 
 ### Runtime Engine host
@@ -132,18 +136,32 @@ export default config({
 })
 ```
 
-Generated `convex/crux.ts` files target `createConvexRuntimeHandlers()`:
+Generated Convex runtime files split isolate-safe control handlers from Node target execution:
 
-```ts
+```ts title="convex/_crux/generated.ts"
+import { makeFunctionReference } from 'convex/server'
 import { createConvexRuntimeHandlers } from '@use-crux/convex/runtime'
-import { components } from './_generated/api'
-import { reviewFlow } from '../src/review'
+import { components } from '../_generated/api'
 
-export const { handleWake, deliverSignal, resumeFlow, runTask, fireTimer } =
-  createConvexRuntimeHandlers({
-    component: components.crux,
-    targets: [reviewFlow],
-  })
+const targetExecutor = makeFunctionReference<'action', { envelope: unknown }, unknown>('_crux/targets:executeTarget')
+
+export const { handleWake, deliverSignal, resumeFlow, runTask, fireTimer } = createConvexRuntimeHandlers({
+  component: components.crux,
+  targetExecutor,
+})
+```
+
+```ts title="convex/_crux/targets.ts"
+'use node'
+
+import { createConvexRuntimeTargetExecutor } from '@use-crux/convex/runtime/node'
+import { components } from '../_generated/api'
+import { reviewFlow } from '../../src/review'
+
+export const { executeTarget } = createConvexRuntimeTargetExecutor({
+  component: components.crux,
+  targets: [reviewFlow],
+})
 ```
 
 ### Storage Beta adapters

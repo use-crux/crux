@@ -33,15 +33,13 @@ import {
   inMemoryRuntimeStore,
   node,
   runtimeRequiredError,
+  runWithRuntimeHost,
   task,
   taskRunKey,
   waiterTimeoutKey,
 } from '@use-crux/core/runtime'
 import { task as planTask } from '@use-crux/core'
-import {
-  runRuntimeEngineAdapterTests,
-  runStoreAdapterTests,
-} from '@use-crux/core/runtime/testing'
+import { runRuntimeEngineAdapterTests, runStoreAdapterTests } from '@use-crux/core/runtime/testing'
 
 declare const workId: WorkId
 declare const flowId: FlowId
@@ -101,9 +99,7 @@ const deliveredSuspend: RuntimePendingSuspend = {
   waiterId,
   delivered: { eventId: cursor },
 }
-expectTypeOf(deliveredSuspend.delivered?.eventId).toEqualTypeOf<
-  EventCursor | undefined
->()
+expectTypeOf(deliveredSuspend.delivered?.eventId).toEqualTypeOf<EventCursor | undefined>()
 
 const kernel = createRuntimeKernel({
   store: inMemoryRuntimeStore(),
@@ -126,12 +122,8 @@ const runtimeDefinition = node({
   namespace: 'tenant-a',
   autoStartMaintenance: false,
 })
-expectTypeOf(runtimeDefinition).toMatchTypeOf<
-  RuntimeEngineDefinition<InMemoryRuntimeStore>
->()
-expectTypeOf(runtimeDefinition).toMatchTypeOf<
-  InProcessRuntimeEngineDefinition<InMemoryRuntimeStore>
->()
+expectTypeOf(runtimeDefinition).toMatchTypeOf<RuntimeEngineDefinition<InMemoryRuntimeStore>>()
+expectTypeOf(runtimeDefinition).toMatchTypeOf<InProcessRuntimeEngineDefinition<InMemoryRuntimeStore>>()
 expectTypeOf(runtimeDefinition.kind).toEqualTypeOf<'in-process'>()
 const resolvedRuntime = createRuntime({
   runtime: runtimeDefinition,
@@ -139,20 +131,16 @@ const resolvedRuntime = createRuntime({
   newWorkId: () => workId,
   startMaintenance: false,
 })
-expectTypeOf(resolvedRuntime).toMatchTypeOf<
-  ResolvedRuntimeEngine<InMemoryRuntimeStore>
->()
+expectTypeOf(resolvedRuntime).toMatchTypeOf<ResolvedRuntimeEngine<InMemoryRuntimeStore>>()
 expectTypeOf(resolvedRuntime.store).toEqualTypeOf<InMemoryRuntimeStore>()
-expectTypeOf(runtimeRequiredError({ api: 'flow.waitFor()' }).code).toEqualTypeOf<
-  'RUNTIME_REQUIRED'
->()
+expectTypeOf(runtimeRequiredError({ api: 'flow.waitFor()' }).code).toEqualTypeOf<'RUNTIME_REQUIRED'>()
 
 const hostRuntimeDefinition: HostBoundRuntimeEngineDefinition = {
   kind: 'host-bound',
   id: 'convex',
   host: 'convex',
   capabilities: runtimeDefinition.capabilities,
-  entry: 'createConvexRuntimeHandlers({ targets }) in convex/crux.ts',
+  entry: 'createConvexRuntimeHandlers({ targetExecutor }) in convex/_crux/generated.ts',
 }
 expectTypeOf(hostRuntimeDefinition).toMatchTypeOf<RuntimeEngineDefinition>()
 expectTypeOf(hostRuntimeDefinition.kind).toEqualTypeOf<'host-bound'>()
@@ -166,9 +154,14 @@ const hostBoundRuntime = bindHostRuntime(hostRuntimeDefinition, {
   createWake: () => async () => {},
   startMaintenance: false,
 })
-expectTypeOf(hostBoundRuntime).toMatchTypeOf<
-  ResolvedRuntimeEngine<InMemoryRuntimeStore>
->()
+expectTypeOf(hostBoundRuntime).toMatchTypeOf<ResolvedRuntimeEngine<InMemoryRuntimeStore>>()
+runWithRuntimeHost(
+  {
+    host: 'convex',
+    bind: () => hostBoundRuntime,
+  },
+  () => hostBoundRuntime,
+)
 
 runStoreAdapterTests({
   name: 'type-only-memory-store',

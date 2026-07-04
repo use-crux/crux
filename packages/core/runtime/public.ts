@@ -78,6 +78,10 @@ export type {
 
 export { bindHostRuntime } from './api/bind-host-runtime'
 export { createRuntime } from './api/create-runtime'
+export {
+  createRuntimeWithHostContext,
+  runWithRuntimeHost,
+} from './api/host-context'
 export { runtimeHostOnlyError } from './api/runtime-definition'
 export type {
   CreateRuntimeOptions,
@@ -87,6 +91,11 @@ export type {
   RuntimeMaintenanceTickOptions,
 } from './api/create-runtime'
 export type { HostRuntimeBinding } from './api/bind-host-runtime'
+export type {
+  RuntimeHostBinder,
+  RuntimeHostBindingOptions,
+  RuntimeHostContext,
+} from './api/host-context'
 export type {
   HostBoundRuntimeEngineDefinition,
   InProcessRuntimeEngineDefinition,

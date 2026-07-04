@@ -8,17 +8,14 @@ import {
   type CruxPrimitiveName,
   type ObserveSpanOptions,
 } from '@use-crux/core/observability'
-import {
-  getFlowSnapshot,
-  signalFlow,
-  type FlowResult,
-  type FlowScope,
-} from '@use-crux/core/flow'
+import { createFlowId, getFlowSnapshot, signalFlow, type FlowResult, type FlowScope } from '@use-crux/core/flow'
 import type { JsonValue } from '@use-crux/core/storage'
 import { flushObservability } from './observability'
 import {
   createConvexCoreFlowHandle,
   createConvexFlowSignalSender,
+  getConvexFlowRuntimeContext,
+  withConvexFlowRuntimeContext,
   type ConvexFlowSignalArgs,
   type ConvexFlowSignalName,
   type ConvexFlowSignals,
@@ -386,7 +383,9 @@ function createCruxContext(ctx: ConvexLikeCtx): CruxConvexContext {
                       kind: 'schedule' as const,
                       label,
                       ref: String(ref),
-                      parentSpanStack: propagatedContext?.spanStack ? [...propagatedContext.spanStack] : [currentSpanId],
+                      parentSpanStack: propagatedContext?.spanStack
+                        ? [...propagatedContext.spanStack]
+                        : [currentSpanId],
                       leaseExpiresAt: boundaryLeaseExpiresAt(),
                     }
                   : undefined
@@ -582,18 +581,31 @@ export function flow<
   }
   const signals = definition.signals as TSignals
   const signalSender = createConvexFlowSignalSender(definition.name, signals)
+  const runtimeFlowHandle = createConvexCoreFlowHandle<TArgs, TResult, TSignals>(
+    definition.name,
+    signals,
+    (scope, flowInput) => {
+      const ctx = getConvexFlowRuntimeContext<CruxAugmentedCtx<TCtx>>(scope.flowId)
+      if (!ctx) {
+        throw new Error(`Convex flow \`${definition.name}\` is missing its Runtime Engine action context.`)
+      }
+      return definition.handler(scope, flowInput, ctx)
+    },
+  )
 
   const handler = async (
     ctx: CruxAugmentedCtx<TCtx>,
     actionArgs: TArgs & { resume?: string },
   ): Promise<FlowResult<TResult>> => {
     const { resume, ...input } = actionArgs
-    const flowHandle = createConvexCoreFlowHandle<TArgs, TResult, TSignals>(
-      definition.name,
-      signals,
-      (scope, flowInput) => definition.handler(scope, flowInput, ctx),
+    const flowId = resume ?? createFlowId()
+    const runFlow = runtimeFlowHandle.run as unknown as (
+      flowInput: TArgs,
+      options: { flowId: string },
+    ) => Promise<FlowResult<TResult>>
+    const result = await withConvexFlowRuntimeContext(flowId, ctx, async () =>
+      resume ? await runtimeFlowHandle.resume(resume) : await runFlow(input as TArgs, { flowId }),
     )
-    const result = resume ? await flowHandle.resume(resume) : await flowHandle.run(input as TArgs)
     await flushConvexObservability(definition.observabilityFlushTimeoutMs)
     if (resume) {
       const status = runStatusFromResult(result)
